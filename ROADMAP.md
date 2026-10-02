@@ -69,7 +69,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-273 — Das Übernehmen rechnet die Operation noch einmal](#rm-273) | Geometrie, Erkennung und Druckvorbereitung | Gartenschlauchhalter, Versetzen einer Bohrung übernehmen: 16 bis 17,5 s unter Last, davon 9 bis 10 s die Operation in voller Güte nach der Vorschau in Entwurfsgüte (rund 5 s ihre örtliche Nachmessung) — das Vorschauergebnis übernehmen, wo beide Güten dieselbe Geometrie liefern, sonst die Nachmessung im Übernehmen auslassen |
-| [RM-284 — Der exakte Kern baut eine verkleinerte Kantengruppe nicht immer](#rm-284) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Kanten, die OpenCASCADE zusammen nicht baut, einzeln bauen oder wie am Netz auslassen und nennen |
+| [RM-284 — Exakte Rundungsgruppen und ihre Merkmalskennungen](#rm-284) | Geometrie, Erkennung und Druckvorbereitung | Rundungsgruppen und beide Identitätsanschlüsse korrigiert; 1209 Fachtests grün und unabhängiger Review ohne offene Codebefunde. Zentrales Tor und Integration stehen aus |
+| [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Am gs-100-STEP die sechs tragenden Netzrundungen einer exakten Kante zuordnen oder sie einzeln mit Stelle auslassen; R 1 und R 2 |
 | [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Zählung beim Löschen nachführen; Entscheidung zu alten Läufen (Migration) |
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
@@ -2102,21 +2103,58 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-284"></a>
 
-- [ ] **RM-284 — Der exakte Kern baut eine verkleinerte Kantengruppe nicht immer.** Aus dem Release 0.5.1 (Paket kanten, Teil 2 von
-  [RM-279](ROADMAP-ARCHIV.md#rm-279)). Seit 0.5.1 bearbeitet eine Kantengruppe am Netz die
-  Kanten, die das Maß tragen, und nennt die übrigen (`edges.too_narrow`). Der exakte Kern
-  stellt dieselbe Frage und gibt OpenCASCADE nur die tragenden Kanten; baut OpenCASCADE den
-  Rest nicht oder offen, bleibt es dort bei der Absage mit der größten Zahl. Gemessen:
-  Hohlkasten 3 mm, „alle“, R 2 (17 Kanten, jede einzeln baubar, zusammen nicht);
-  pegboard-goot Verrunden (zwei Rundungen, Kanten 212 und 221 tesselliert OpenCASCADE offen,
-  bei jedem Radius und auch einzeln — vorbestehend); gs-100 und pb3041 (die Kanten der
-  Tessellierung decken sich nicht mit den exakten). Ein halbierendes Neubauen war zu langsam
-  (15 bis 37 s je Vorschau) und lieferte an pb3041 einen offenen Körper. Sonden
-  `konzepte/nachweise-release-0.5.1/sonden/kanten/`, Bericht `konzepte/nachweise-release-0.5.1/reports/kanten-schluss.md` §6–7. Weg:
-  die Kanten, die OpenCASCADE zusammen nicht baut, einzeln oder in kleineren Gruppen bauen,
-  oder am exakten Körper dieselbe Auslassung wie am Netz mit Befund. Abnahme: Hohlkasten
-  3 mm „alle“ R 2 rundet am exakten Kern, was am Netz gerundet wird, oder nennt die
-  ausgelassenen Kanten wie das Netz.
+- [~] **RM-284 — Exakte Rundungsgruppen und ihre Merkmalskennungen.** Der
+  Gruppenfix und die erste Herkunftsfortführung stehen mit ihren früheren
+  Nachweisen im [Archiv](ROADMAP-ARCHIV.md#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026).
+  Die Nachprüfung korrigierte Kantenumordnung nach nativer Kopie, gemeinsam
+  verwendete Formen zwischen Kandidaten und eine unbelegte Fortführung ohne
+  Flächenhistorie. 973 betroffene Tests und vier Rechnungen am unveränderten
+  pegboard-goot-STEP sind grün; der frühere abgeschriebene Volumensollwert ist
+  durch hergeleitete Material-, Radius- und Hüllmaßprüfungen ersetzt.
+  **Wieder offen nach Schlussreview:** Der folgende
+  `_unchanged_continuations`-Schritt reserviert belegte Selbstzuordnungen
+  nicht. Eine neue Rundung kann dadurch die Kennung der gerade geänderten
+  Rundung erhalten, während die belegte Rundung umbenannt wird. Dieser
+  Anschluss ist am tatsächlichen `_with_features`- und
+  `History → evaluate`-Weg test-first korrigiert und mit 1206 Fachprüfungen
+  belegt. Der anschließende vollständige Aufruferabgleich fand denselben
+  Aliasfehler noch nach einer korrekten manuellen Merkmalswahl in
+  `_native_reselection`. Der gemeinsame `_native_alias_mapping` schützt jetzt
+  die belegten Selbstzuordnungen und offenen Kennungen in beiden Wegen.
+  Sechs direkte Fälle prüfen echte Auswahl, Lage, Folgeoperationen mit
+  analytischem Volumen sowie den kalten und warmen Verlauf. Der erneute
+  13-Dateien-Fachlauf besteht mit 1209 Tests, 104 releasebedingt abgewählt;
+  der unabhängige Review ist einschließlich notwendiger RM218-Hunks ohne
+  offene Codebefunde. Die zentrale Gegenprüfung fand anschließend automatische
+  Antworten in zwei echten Verlaufstests. Beide sind verschärft; eine
+  unabhängig entzogene Builder-Historie lässt sie genau an der unerwarteten
+  Neuwahl scheitern. Der abschließende kleine Lauf besteht mit 13 Fällen;
+  der enge unabhängige Nachreview ist ebenfalls ohne Befund. Ein weiterer
+  Anschlussfix verhindert, dass verschiedene ausgelassene Stellen im
+  Abschlussbericht zusammenfallen. Der vollständige Befundschlüssel enthält
+  nun Ort, Rand und Zielmerkmale; 21 gezielte Fälle einschließlich echter
+  kalter/warmer Auswertung sowie 610 Sprach-/Wertprüfungen sind grün.
+  Der unabhängige Nachreview ist ohne Befund. Die vorhandene UI-Bündelung
+  bleibt erhalten; neue Mehrstellen-Navigation gehört nicht zu diesem Fix.
+  Die Operationsversionen
+  `fillet_edges` 13 und `resize_feature` 14 sind nach der RM225-Integration
+  eingetragen und über das Register gelesen. Entwicklungstor
+  und Integration stehen aus. RM-322 bleibt ein eigener Zuordnungsrest.
+  [Reproduzierbare bisherige Nachweise](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md).
+
+<a id="rm-322"></a>
+
+- [ ] **RM-322 — Tragende Netzkanten am exakten Körper wiederfinden.** Rest aus RM-284,
+  gemessen an `pegboard-gs-100-v2.step`: bei „senkrecht“, R 1 und R 2 tragen sechs der zehn
+  Netzkanten das Maß; die Mesh-Op rundet sie geschlossen (Volumenänderung bei R 1:
+  −0,009763 mm³). `_group_that_fits` findet für diese sechs keine exakten Gegenkanten und
+  fällt auf alle 18 exakten Senkrechten zurück. Dort lehnt der B-Rep-Kern R 1 ab. Die
+  Messung steht in `konzepte/nachweise-release-0.5.1/laeufe/kanten-gruppe-brep2.txt`; den
+  heutigen Gegenfall hält der Probeaufruf an der Stelle fest. Weg: die tragenden Netzzüge
+  stabil an exakte Kanten binden; wo kein eindeutiger Partner besteht, die betreffende
+  Rundung mit ihrer Stelle melden und die übrigen weiterbauen. Abnahme: bei R 1 und R 2
+  werden die sechs passenden Rundungen nicht mehr durch den Fehlschlag aller 18 Kanten
+  verhindert; das Ergebnis bleibt geschlossen und jede ausgelassene Stelle ist sichtbar.
 
 <a id="rm-287"></a>
 

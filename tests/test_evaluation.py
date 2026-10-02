@@ -29,6 +29,7 @@ from app.core.types import (
     Profile,
     SceneObject,
 )
+from app.core.units import EPS_GEOM
 from app.i18n import _
 from tests.helpers import FakeMesh, stop_evaluation
 
@@ -1257,6 +1258,101 @@ def test_a_changed_number_is_a_changed_sentence() -> None:
     )
 
     assert [entry.values["triangles"] for entry in kept] == [900_000, 400_000]
+
+
+@pytest.mark.parametrize(
+    ("first_fields", "second_fields", "same_place"),
+    [
+        pytest.param(
+            {"location": (0.0, 0.0, 0.0)},
+            {"location": (10.0, 0.0, 0.0)},
+            False,
+            id="different_locations",
+        ),
+        pytest.param(
+            {"location": None}, {"location": (0.0, 0.0, 0.0)}, False, id="unlocated_and_origin"
+        ),
+        pytest.param(
+            {"outline": (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)},
+            {"outline": (((0.0, 0.0, 0.0), (2.0, 0.0, 0.0)),)},
+            False,
+            id="different_outlines_at_same_location",
+        ),
+        pytest.param(
+            {},
+            {"outline": (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)},
+            False,
+            id="missing_outline",
+        ),
+        pytest.param(
+            {"location": None, "feature_ids": ("bore_1",)},
+            {"location": None, "feature_ids": ("bore_2",)},
+            False,
+            id="different_feature_targets",
+        ),
+        pytest.param({}, {}, True, id="identical_locations"),
+        pytest.param(
+            {"outline": (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)},
+            {"outline": (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)},
+            True,
+            id="identical_outlines",
+        ),
+        pytest.param(
+            {"location": (0.0, 0.0, 0.0)},
+            {"location": (EPS_GEOM / 2.0, 0.0, 0.0)},
+            False,
+            id="distinct_location_below_geometric_precision",
+        ),
+        pytest.param(
+            {"location": (0.0, 0.0, 0.0)},
+            {"location": (2.0 * EPS_GEOM, 0.0, 0.0)},
+            False,
+            id="distinct_close_locations",
+        ),
+        pytest.param(
+            {"outline": (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)},
+            {"outline": (((0.0, 0.0, 0.0), (1.0 + EPS_GEOM / 2.0, 0.0, 0.0)),)},
+            False,
+            id="distinct_outline_below_geometric_precision",
+        ),
+        pytest.param(
+            {"outline": (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)},
+            {"outline": (((0.0, 0.0, 0.0), (1.0 + 2.0 * EPS_GEOM, 0.0, 0.0)),)},
+            False,
+            id="distinct_close_outlines",
+        ),
+        pytest.param(
+            {"location": (1.0, 0.0, 0.0)},
+            {"location": (math.nextafter(1.0, math.inf), 0.0, 0.0)},
+            False,
+            id="locations_one_bit_apart",
+        ),
+    ],
+)
+def test_report_repeats_keep_distinct_places_and_the_latest_occurrence(
+    first_fields: dict[str, Any], second_fields: dict[str, Any], same_place: bool
+) -> None:
+    """Ort, Kontur und Merkmal gehören zur Aussage; echte Wiederholungen bleiben zuletzt."""
+    from app.core.scene.evaluate import _without_repeats
+
+    base = Finding(
+        code="test.at_place",
+        severity="warning",
+        message="An dieser Stelle.",
+        object_id="obj_1",
+        location=(0.0, 0.0, 0.0),
+    )
+    first = dataclasses.replace(base, op_id=1, **first_fields)
+    second = dataclasses.replace(base, op_id=2, **second_fields)
+    latest = dataclasses.replace(first, op_id=3)
+
+    kept = _without_repeats([first, second, latest])
+
+    assert [entry.op_id for entry in kept] == ([3] if same_place else [2, 3])
+    assert kept[-1] is latest
+    if not same_place:
+        assert kept[0] is second
+    assert first.op_id == 1 and second.op_id == 2, "rohe Befunde bleiben unverändert"
 
 
 def test_an_earlier_repair_does_not_settle_a_later_import() -> None:

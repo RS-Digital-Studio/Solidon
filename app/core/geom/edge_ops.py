@@ -33,7 +33,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
+from app.core.errors import CANCEL, CORRECT_INPUT, SHOW_LOCATION, GeometryError, ValidationError
 from app.core.geom.boolean import BooleanOutcome, HasVolume
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -224,7 +224,8 @@ class FilletParams(BaseParams):
     # 11: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
     # 12: an einer gemischten Ecke bleibt jede durchgereichte Ecke an ihrem
     # Weltort (RM-274).
-    cache_version="12",
+    # 13: exakte Rundungsgruppen lassen einzeln nicht baubare Kanten gezielt aus (RM-284).
+    cache_version="13",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -729,6 +730,21 @@ def _edge_result(
     )
 
 
+def _exact_group_skipped_finding(place: Vec3, worked: int) -> Finding:
+    """Nennt eine Kante, die OpenCASCADE aus einer Gruppe nicht sicher bauen konnte."""
+    return Finding(
+        code="edges.exact_group_skipped",
+        severity="warning",
+        message=_(
+            "OpenCASCADE konnte diese Kante in der gewählten Gruppe nicht sicher verrunden. "
+            "Sie blieb scharf; die übrigen Kanten wurden verrundet."
+        ),
+        values={"skipped": 1, "worked": worked},
+        location=place,
+        suggestions=(SHOW_LOCATION, CORRECT_INPUT),
+    )
+
+
 def _on_a_solid(
     source: SceneObject,
     size: float,
@@ -755,6 +771,7 @@ def _on_a_solid(
 
     narrow: list[Finding] = []
     asked = selected_edges
+    group_was_fitted = False
     if selected_edges is None and not keys and choice != "named":
         fitted = _group_that_fits(
             source,
@@ -768,18 +785,29 @@ def _on_a_solid(
         )
         if fitted is not None:
             selected_edges, narrow = fitted
+            group_was_fitted = True
+    exact_skipped: tuple[Vec3, ...] = ()
     try:
         if rounded:
-            solid = edit.fillet(
-                cast(Solid, source.mesh),
-                size,
-                choice,
-                keys,
-                selected_edges=selected_edges,
-                rings_by_plane=rings_by_plane,
-                cancelled=cancelled,
-                law=law,
-            )
+            if group_was_fitted and (law is None or law.constant):
+                assert selected_edges is not None
+                solid, exact_skipped = edit.fillet_group(
+                    cast(Solid, source.mesh),
+                    size,
+                    selected_edges,
+                    cancelled=cancelled,
+                )
+            else:
+                solid = edit.fillet(
+                    cast(Solid, source.mesh),
+                    size,
+                    choice,
+                    keys,
+                    selected_edges=selected_edges,
+                    rings_by_plane=rings_by_plane,
+                    cancelled=cancelled,
+                    law=law,
+                )
         else:
             solid = edit.chamfer(
                 cast(Solid, source.mesh),
@@ -807,11 +835,21 @@ def _on_a_solid(
         if explained is None:
             raise
         raise explained from refused
+    if exact_skipped:
+        worked = max(0, len(selected_edges or ()) - len(exact_skipped))
+        narrow = [
+            dataclasses.replace(entry, values={**entry.values, "worked": worked})
+            if "worked" in entry.values
+            else entry
+            for entry in narrow
+        ]
+        narrow.extend(_exact_group_skipped_finding(point, worked) for point in exact_skipped)
     if narrow and cast(Solid, source.mesh).is_watertight and not solid.is_watertight:
         # **Eine verkleinerte Gruppe liefert keinen offenen Körper** (RM-279 (ii)).
         # An pegboard-goot tesselliert OpenCASCADE zwei der übrigen Rundungen
-        # offen, bei jedem Radius und auch einzeln gewählt; vor dem Auslassen
-        # sagte die Gruppe dort ab, und dabei bleibt es mit der größten Zahl.
+        # offen, bei jedem Radius und auch einzeln gewählt. ``fillet_group``
+        # prüft solche Kanten erst nach den Gruppenkandidaten einzeln und baut
+        # die übrigen neu. Bleibt das Ergebnis offen, sagt diese Schranke ab.
         explained = _why_it_does_not_fit(
             source,
             size,

@@ -4927,6 +4927,7 @@
   "Ollama starten": "Iniciar o Ollama",
   "Ollama wird gestartet …": "A iniciar o Ollama …",
   "Online aktivieren": "Ativar online",
+  "OpenCASCADE konnte diese Kante in der gewählten Gruppe nicht sicher verrunden. Sie blieb scharf; die übrigen Kanten wurden verrundet.": "O OpenCASCADE não conseguiu arredondar esta aresta com segurança no grupo selecionado. Ela permaneceu sem arredondamento; as restantes arestas foram arredondadas.",
   "OpenSCAD-Datei": "Ficheiro OpenSCAD",
   "Operation": "Operação",
   "Operation {number}: {operation} — {field}": "Operação {number}: {operation} — {field}",

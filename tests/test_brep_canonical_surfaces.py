@@ -654,8 +654,11 @@ def test_nurbs_radial_edits_keep_the_selected_angular_wall(radius: float) -> Non
         (feature for feature in features_of(source).values() if feature.kind == "fillet"),
         key=lambda feature: feature.params["radius"],
     )
-    result = edit.reround(source, inner.params["centre"], 12.0, radius)
+    result, created_triangles = edit.reround_with_created_triangles(
+        source, inner.params["centre"], 12.0, radius
+    )
     assert result.is_closed and result.solid_count == 1
+    assert created_triangles
     assert result.volume == pytest.approx(17.0 * turn * (16.0**2 - radius**2) / 2.0, abs=EPS_GEOM)
     assert source.volume == pytest.approx(17.0 * turn * (16.0**2 - 12.0**2) / 2.0, abs=EPS_GEOM)
     changed = min(
@@ -663,6 +666,7 @@ def test_nurbs_radial_edits_keep_the_selected_angular_wall(radius: float) -> Non
         key=lambda feature: feature.params["radius"],
     )
     assert changed.params["radius"] == pytest.approx(radius, abs=EPS_GEOM)
+    assert set(created_triangles) <= set(changed.face_indices)
     repeated = edit.reround(result, changed.params["centre"], radius, 12.5)
     assert repeated.is_closed and repeated.solid_count == 1
     assert repeated.volume == pytest.approx(17.0 * turn * (16.0**2 - 12.5**2) / 2.0, abs=EPS_GEOM)

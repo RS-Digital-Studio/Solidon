@@ -43,6 +43,7 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm284-rundungsgruppen-2026-10-02.md`](reports/rm284-rundungsgruppen-2026-10-02.md) | Rundungsgruppen, belegte Merkmalsfortführung und ausdrückliche Neuwahl; analytische Gegenfälle, Kundenmodelle und Schlussreview | RM-284, notwendiger RM-218-Anschluss |
 | [`reports/rm298-hilfsprozessmarken-2026-10-02.md`](reports/rm298-hilfsprozessmarken-2026-10-02.md) | Vorbereitete öffentliche Helfer-Messwege, unverfälschte Marken und Entwicklungskontrollen | RM-298(d) |
 | [`reports/rm298-lifecycle-2026-10-02.md`](reports/rm298-lifecycle-2026-10-02.md) | Aktiver Windows-Elternabbruch, tatsächliche OS-Priorität und Gegenproben | RM-298(d) |
 | [`reports/rm298-poolnachweise-2026-10-02.md`](reports/rm298-poolnachweise-2026-10-02.md) | Integrierte Besitzgrenze, vier lokale Fehleranschlüsse, echte Gegenläufe und Entwicklungstor | RM-298(a) |

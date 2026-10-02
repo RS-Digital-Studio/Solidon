@@ -55,6 +55,15 @@ def test_the_result_carries_no_continuation_unless_the_operation_issued_one() ->
     assert CachedResult(objects=()).continuations == ()
 
 
+def test_operation_continuation_releases_the_displaced_match_candidate() -> None:
+    matched = MatchResult(mapping={"fillet_1": "fillet_8"}, fresh=())
+
+    continued = evaluate_module._continued_match_result(matched, ("fillet_1",))
+
+    assert continued.mapping == {"fillet_1": "fillet_1"}
+    assert continued.fresh == ("fillet_8",)
+
+
 def test_continuations_survive_the_disk_level_per_output(tmp_path: Path) -> None:
     """Zwei Ausgaben, zwei Belegfolgen — die Zuordnung ist ordinal und bleibt es."""
     cache = DiskCache(codec=FakeCodec(), directory=tmp_path)
@@ -324,6 +333,310 @@ def _native_call(
         continuations=continuations,
     )
     return outcome, calls
+
+
+def _rounding_transition(*, changed_neighbour: bool = False) -> tuple[SceneObject, SceneObject]:
+    """Drei echte Rundungen; der linke Nachbar bleibt R2 oder verlangt als R3 eine Wahl."""
+    edit = exact_kernel()
+    from app.core.brep.features import features_of
+
+    def body(corners: tuple[tuple[bool, bool], ...], *, changed: bool) -> SceneObject:
+        solid = edit.box(40.0, 30.0, 20.0)
+        selected = [
+            edit.edge_key(edge)
+            for edge in edit.edges_of(solid)
+            if edge.upright and (edge.middle[0] > 0.0, edge.middle[1] > 0.0) in corners
+        ]
+        assert len(selected) == 3
+        solid = edit.fillet(solid, 2.0, "named", selected)
+        if changed:
+            chosen = next(
+                feature
+                for feature in features_of(solid).values()
+                if feature.kind == "fillet"
+                and feature.params["centre"][0] > 0.0
+                and feature.params["centre"][1] < 0.0
+            )
+            solid = edit.reround(
+                solid,
+                chosen.params["centre"],
+                2.0,
+                12.0,
+                selected_faces=solid.complete_faces_of_triangles(chosen.face_indices),
+            )
+            if changed_neighbour:
+                neighbour = next(
+                    feature
+                    for feature in features_of(solid).values()
+                    if feature.kind == "fillet"
+                    and feature.params["centre"][0] < 0.0
+                    and feature.params["centre"][1] > 0.0
+                )
+                solid = edit.reround(
+                    solid,
+                    neighbour.params["centre"],
+                    2.0,
+                    3.0,
+                    selected_faces=solid.complete_faces_of_triangles(neighbour.face_indices),
+                )
+        by_corner = {
+            (feature.params["centre"][0] > 0.0, feature.params["centre"][1] > 0.0): feature
+            for feature in features_of(solid).values()
+            if feature.kind == "fillet"
+        }
+        assert len(by_corner) == 3
+        features = {
+            f"fillet_{number}": dataclasses.replace(by_corner[corner], id=f"fillet_{number}")
+            for number, corner in enumerate(corners, 1)
+        }
+        return SceneObject(
+            id="obj_1", name="Drei Rundungen", mesh=solid, kind="brep", features=features
+        )
+
+    previous = body(((False, True), (False, False), (True, False)), changed=False)
+    current = body(((True, True), (False, True), (True, False)), changed=True)
+    return previous, current
+
+
+@pytest.mark.parametrize("continued", [False, True])
+def test_unchanged_native_features_do_not_rename_a_proven_changed_rounding(
+    continued: bool,
+) -> None:
+    """Die unveränderte Nachbarrundung darf die belegte Kennung nicht verdrängen."""
+    previous, current = _rounding_transition()
+    matched = evaluate_module.match(
+        previous.features,
+        current.features,
+        current.mesh.bounds.centre,
+        current.mesh.bounds.diagonal,
+    )
+    assert matched.mapping == {"fillet_1": "fillet_2"}
+    assert set(matched.orphaned) == {"fillet_2", "fillet_3"}
+    continuation = FeatureContinuation(FeatureRef("obj_1", "fillet_3"), "fillet_3")
+
+    def bind() -> SceneObject:
+        return evaluate_module._with_features(
+            current,
+            dict(previous.features),
+            Operation(id=2, op="resize_feature", inputs=("obj_1",), outputs=("obj_1",)),
+            lambda question, choices: pytest.fail(f"Unerwartete Zuordnungsfrage: {question}"),
+            [],
+            referenced={"fillet_3"},
+            touches_features=True,
+            needed={"fillet_3": ("Operation 3",)},
+            continuations=(continuation,) if continued else (),
+        )
+
+    if not continued:
+        with pytest.raises(NativeReferenceLost) as stopped:
+            bind()
+        assert stopped.value.references == (FeatureRef("obj_1", "fillet_3"),)
+        return
+
+    result = bind()
+    chosen = result.features["fillet_3"]
+    assert chosen.params["radius"] == pytest.approx(12.0, abs=1e-6, rel=0.0)
+    assert chosen.face_indices == current.features["fillet_3"].face_indices
+    assert result.features["fillet_1"].face_indices == current.features["fillet_2"].face_indices
+    assert result.features["fillet_4"].face_indices == current.features["fillet_1"].face_indices
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_native_reselection_does_not_rename_a_proven_changed_rounding(accepted: bool) -> None:
+    """Die ausdrückliche Wahl links oben lässt die belegte R12 rechts unten stehen."""
+    previous, current = _rounding_transition(changed_neighbour=True)
+    matched = evaluate_module.match(
+        previous.features,
+        current.features,
+        current.mesh.bounds.centre,
+        current.mesh.bounds.diagonal,
+    )
+    # Beide Radiuswechsel brauchen einen Beleg: R12 liefert die Operation,
+    # R3 links oben wird erst durch die ausdrückliche Wahl weitergeführt.
+    assert not matched.mapping
+    assert set(matched.orphaned) == {"fillet_1", "fillet_2", "fillet_3"}
+    assert not evaluate_module._unchanged(
+        previous.features["fillet_1"], current.features["fillet_2"]
+    )
+    continued = evaluate_module._continued_match_result(matched, {"fillet_3"})
+    assert continued.mapping == {"fillet_3": "fillet_3"}
+    assert continued.orphaned == ("fillet_1", "fillet_2")
+    asked: list[tuple[str, ...]] = []
+
+    def choose(question: str, choices: list[str]) -> str:
+        assert "fillet_1" in question
+        assert "fillet_2" in choices and "fillet_3" not in choices
+        asked.append(tuple(choices))
+        return "fillet_2" if accepted else "Nicht weiterführen"
+
+    recorded: dict[str, dict] = {}
+
+    def bind() -> SceneObject:
+        return evaluate_module._with_features(
+            current,
+            dict(previous.features),
+            Operation(id=2, op="resize_feature", inputs=("obj_1",), outputs=("obj_1",)),
+            choose,
+            [],
+            recorded=recorded,
+            referenced={"fillet_1", "fillet_3"},
+            touches_features=True,
+            needed={"fillet_1": ("Operation 3",), "fillet_3": ("Operation 4",)},
+            continuations=(FeatureContinuation(FeatureRef("obj_1", "fillet_3"), "fillet_3"),),
+            scope="rundungsumbau:0",
+        )
+
+    if not accepted:
+        with pytest.raises(NativeReferenceLost) as stopped:
+            bind()
+        assert stopped.value.references == (FeatureRef("obj_1", "fillet_1"),)
+    else:
+        output = bind()
+        assert set(output.features) == {"fillet_1", "fillet_3", "fillet_4"}
+        assert output.features["fillet_3"].params["radius"] == pytest.approx(12.0, abs=1e-6)
+        assert output.features["fillet_3"].face_indices == current.features["fillet_3"].face_indices
+        assert output.features["fillet_1"].params["radius"] == pytest.approx(3.0, abs=1e-6)
+        assert output.features["fillet_1"].face_indices == current.features["fillet_2"].face_indices
+        assert output.features["fillet_4"].face_indices == current.features["fillet_1"].face_indices
+        assert len(recorded) == 1
+        assert next(iter(recorded)).startswith("native-group:")
+    assert len(asked) == 1
+    assert current.features["fillet_3"].params["radius"] == pytest.approx(12.0, abs=1e-6)
+
+
+@pytest.mark.parametrize("reselected", [False, True])
+def test_a_later_radius_change_uses_the_proven_rounding_after_native_renumbering(
+    profile: Profile,
+    reselected: bool,
+) -> None:
+    """Kalt und warm bleiben beide Bezüge richtig, auch nach bestätigter Neuwahl."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY, OperationSpec, Registry
+    from app.core.types import BaseParams, OpContext
+
+    previous, current = _rounding_transition(changed_neighbour=reselected)
+    load_operations()
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+    registry.register(
+        OperationSpec(
+            name="probe_roundings",
+            title="Drei Rundungen",
+            category="primitive",
+            params=BaseParams,
+            fn=lambda ctx: OpResult(outputs=[dataclasses.replace(previous, id="")]),
+            consumes=0,
+            produces=1,
+            touches_features=True,
+        )
+    )
+
+    def rebuild(ctx: OpContext) -> OpResult:
+        source = ctx.inputs[0]
+        return OpResult(
+            outputs=[dataclasses.replace(current, id=source.id)],
+            feature_continuations=(
+                (FeatureContinuation(FeatureRef(source.id, "fillet_3"), "fillet_3"),),
+            ),
+        )
+
+    registry.register(
+        OperationSpec(
+            name="probe_rebuild_roundings",
+            title="Rundungen umbauen",
+            category="prepare",
+            params=BaseParams,
+            fn=rebuild,
+            consumes=1,
+            produces=1,
+            touches_features=True,
+        )
+    )
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document, registry=registry)
+    history.apply("Drei Rundungen", [OperationDraft(op="probe_roundings")])
+    target = project.document.ops[0].outputs[0]
+    history.apply(
+        "Rundungen umbauen", [OperationDraft(op="probe_rebuild_roundings", inputs=(target,))]
+    )
+    if reselected:
+        history.apply(
+            "Gewählte Rundung ändern",
+            [
+                OperationDraft(
+                    op="resize_feature",
+                    inputs=(target,),
+                    params={"at_feature": "fillet_1", "diameter": 8.0},
+                    seed=1,
+                )
+            ],
+        )
+    history.apply(
+        "Belegte Rundung ändern",
+        [
+            OperationDraft(
+                op="resize_feature",
+                inputs=(target,),
+                params={"at_feature": "fillet_3", "diameter": 20.0},
+                seed=1,
+            )
+        ],
+    )
+    cache = ResultCache()
+    asked: list[tuple[str, ...]] = []
+
+    def choose(question: str, choices: list[str]) -> str:
+        assert reselected, f"Unerwartete Zuordnungsfrage: {question}"
+        assert not asked, "Die gespeicherte Wahl muss kalt und warm wiederverwendet werden."
+        assert "fillet_1" in question
+        assert "fillet_2" in choices and "fillet_3" not in choices
+        asked.append(tuple(choices))
+        return "fillet_2"
+
+    for _warm in (False, True):
+        result = evaluate(
+            project.document,
+            profile,
+            registry=registry,
+            sources=ProjectSources(project),
+            cache=cache,
+            ask=choose,
+        )
+        assert result.complete, [
+            (finding.code, dict(finding.values)) for finding in result.scene.report.findings
+        ]
+        assert not result.answers and not result.blocked_references
+        if reselected and not _warm:
+            assert history.record_matches(result.matches)
+        else:
+            assert not result.matches
+        output = result.scene.objects[target]
+        chosen = output.features["fillet_3"]
+        assert chosen.params["centre"][0] > 0.0 and chosen.params["centre"][1] < 0.0
+        assert chosen.params["radius"] == pytest.approx(10.0, abs=1e-6, rel=0.0)
+        neighbours = [
+            feature
+            for name, feature in output.features.items()
+            if feature.kind == "fillet" and name != "fillet_3"
+        ]
+        assert len(neighbours) == 2
+        neighbour_radius = 4.0 if reselected else 2.0
+        for feature in neighbours:
+            assert feature.params["centre"][1] > 0.0
+            radius = neighbour_radius if feature.params["centre"][0] < 0.0 else 2.0
+            assert feature.params["radius"] == pytest.approx(radius, abs=1e-6, rel=0.0)
+        assert output.features["fillet_1"].params["centre"][0] < 0.0
+        # Drei Viertelkreisrundungen über 20 mm: R2, R2 oder R4, und R10.
+        assert output.mesh.volume == pytest.approx(
+            40.0 * 30.0 * 20.0 - (4.0 + neighbour_radius**2 + 100.0) * (1.0 - math.pi / 4.0) * 20.0,
+            abs=1e-6,
+            rel=0.0,
+        )
+        assert output.mesh.is_closed and output.mesh.is_watertight
+        assert output.mesh.solid_count == 1
+    assert cache.statistics.hits >= 3
+    assert len(asked) == int(reselected)
 
 
 def test_a_reference_found_under_the_same_name_passes(monkeypatch: pytest.MonkeyPatch) -> None:

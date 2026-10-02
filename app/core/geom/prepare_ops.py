@@ -6713,7 +6713,8 @@ class ResizeFeatureParams(BaseParams):
     # 10: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 12: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 13: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
-    cache_version="13",
+    # 14: exakte Rundungen führen ihre Kennung nur mit eindeutigem Flächenbeleg fort (RM-284).
+    cache_version="14",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -18178,16 +18179,38 @@ def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float 
         solid = edit.unround(
             body, spot, was, selected_faces=selected_faces, cancelled=ctx.cancelled
         )
+        created_triangles: tuple[int, ...] = ()
     else:
-        solid = edit.reround(
+        solid, created_triangles = edit.reround_with_created_triangles(
             body, spot, was, radius, selected_faces=selected_faces, cancelled=ctx.cancelled
         )
+    features = features_of(solid, cancelled=ctx.cancelled)
+    continued: tuple[FeatureContinuation, ...] = ()
+    if created_triangles:
+        from app.core.perceive.matching import MatchResult, apply_mapping
+
+        detected_fillets = {
+            identifier: candidate
+            for identifier, candidate in features.items()
+            if candidate.kind == "fillet"
+        }
+        generated = set(created_triangles)
+        # Die Builder-Historie benennt die neue Fläche direkt. Ihr
+        # Schwerpunkt wandert mit dem Radius und ist deshalb kein
+        # verlässlicher Maßstab für diesen belegten Übergang. Ohne genau
+        # einen Flächentreffer bleibt die allgemeine Auswertung zuständig.
+        targets = tuple(
+            identifier
+            for identifier, candidate in detected_fillets.items()
+            if generated.intersection(candidate.face_indices)
+        )
+        if len(targets) == 1:
+            matched = MatchResult(mapping={name: targets[0]})
+            features = apply_mapping(features, matched, previous=source.features)
+            continued = (FeatureContinuation(FeatureRef(source.id, name), name),)
     return OpResult(
-        outputs=[
-            dataclasses.replace(
-                exact, mesh=solid, kind="brep", features=features_of(solid, cancelled=ctx.cancelled)
-            )
-        ]
+        outputs=[dataclasses.replace(exact, mesh=solid, kind="brep", features=features)],
+        feature_continuations=(continued,) if continued else (),
     )
 
 

@@ -17,7 +17,7 @@ zugeordnet werden).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, cast
 
@@ -776,8 +776,6 @@ def fillet(
     :data:`~app.core.geom.edges.LAW_SAMPLES`.
     """
     require()
-    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
-
     _check(cancelled)
     varying = law is not None and not law.constant
     if law is not None:
@@ -786,16 +784,160 @@ def fillet(
     working = replace(solid)
     chosen = _edges_for(working, choice, keys, checked, rings_by_plane=rings_by_plane)
 
-    builder = BRepFilletAPI_MakeFillet(working.shape)
     if varying:
+        from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+
+        builder = BRepFilletAPI_MakeFillet(working.shape)
         assert law is not None
         _laid_along(builder, chosen, law)
+        _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
+        return _built(working, builder, "fillet", radius, len(chosen), cancelled=cancelled)
     _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
-    if not varying:
-        for entry in chosen:
-            _check(cancelled)
-            builder.Add(radius, entry.edge)
-    return _built(working, builder, "fillet", radius, len(chosen), cancelled=cancelled)
+    return _build_constant_fillet(working, chosen, radius, cancelled=cancelled)
+
+
+def fillet_group(
+    solid: Solid,
+    radius: float,
+    selected_edges: Sequence[int],
+    *,
+    cancelled: CancelToken | None = None,
+) -> tuple[Solid, tuple[Vec3, ...]]:
+    """Rundet eine vorgeprüfte Kantengruppe und lässt nötigenfalls Kanten aus.
+
+    Eine Gruppe, die am Netz verkleinert wurde, darf am exakten Kern nicht
+    komplett verloren gehen, nur weil OpenCASCADE alle tragenden Kanten
+    gemeinsam ablehnt. Die Auswahl wird deterministisch aufgebaut. Ist die
+    vollständige Gruppe nicht gültig und geschlossen, werden zuerst einzeln
+    offene Kanten ermittelt und gemeinsam ausgelassen. Bleibt das Ergebnis
+    offen, wird jede Einzelauslassung am unveränderten Körper geprüft;
+    bereits gebaute Kantenkombinationen samt Ergebnis werden wiederverwendet.
+    Zurück kommen die Orte ausgelassener Kanten für den Befund.
+    """
+    require()
+    _check(cancelled)
+    checked = solid.checked_edge_indices(selected_edges, cancelled=cancelled)
+    working = replace(solid)
+    _check(cancelled)
+    chosen = _edges_for(working, "all", (), checked)
+    _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
+    source_indices = {id(entry): index for entry, index in zip(chosen, checked, strict=True)}
+
+    first_error: GeometryError | None = None
+    individually_open: list[EdgeInfo] | None = None
+    candidate_results: dict[frozenset[int], Solid | GeometryError] = {}
+
+    def build_candidate(entries: Sequence[EdgeInfo]) -> Solid:
+        """Baut jede Kantenkombination höchstens einmal und hält ihr Ergebnis vor."""
+        _check(cancelled)
+        indices = tuple(source_indices[id(entry)] for entry in entries)
+        key = frozenset(indices)
+        cached = candidate_results.get(key)
+        if isinstance(cached, GeometryError):
+            raise cached
+        if cached is not None:
+            return cached
+        candidate = replace(solid)
+        _check(cancelled)
+        candidate_edges = _edges_for(candidate, "all", (), indices)
+        try:
+            result = _build_constant_fillet(candidate, candidate_edges, radius, cancelled=cancelled)
+        except GeometryError as refused:
+            candidate_results[key] = refused
+            raise
+        candidate_results[key] = result
+        return result
+
+    def try_candidate(entries: Sequence[EdgeInfo]) -> Solid | None:
+        """Baut oder holt eine Kantenkombination, die nur geschlossen gelten darf."""
+        try:
+            result = build_candidate(entries)
+        except GeometryError:
+            return None
+        return result if result.is_watertight else None
+
+    try:
+        complete = build_candidate(chosen)
+    except GeometryError as refused:
+        first_error = refused
+    else:
+        if complete.is_watertight:
+            return complete, ()
+        first_error = GeometryError(
+            detail=_too_large("fillet"),
+            suggestions=(CORRECT_INPUT, CANCEL),
+            values={"size_mm": round(radius, 3), "edges": len(chosen)},
+        )
+        individually_open = _individually_open_fillet_edges(
+            chosen, cancelled=cancelled, build_candidate=build_candidate
+        )
+        if individually_open and len(individually_open) < len(chosen):
+            omitted_ids = {id(entry) for entry in individually_open}
+            remaining = [entry for entry in chosen if id(entry) not in omitted_ids]
+            result = try_candidate(remaining)
+            if result is not None:
+                return result, tuple(entry.middle for entry in individually_open)
+
+    for omitted in chosen:
+        _check(cancelled)
+        remaining = [entry for entry in chosen if entry is not omitted]
+        if not remaining:
+            continue
+        result = try_candidate(remaining)
+        if result is not None:
+            return result, (omitted.middle,)
+
+    if individually_open is None:
+        individually_open = _individually_open_fillet_edges(
+            chosen, cancelled=cancelled, build_candidate=build_candidate
+        )
+
+    if individually_open and len(individually_open) < len(chosen):
+        _check(cancelled)
+        omitted_ids = {id(entry) for entry in individually_open}
+        remaining = [entry for entry in chosen if id(entry) not in omitted_ids]
+        result = try_candidate(remaining)
+        if result is not None:
+            return result, tuple(entry.middle for entry in individually_open)
+
+    raise first_error
+
+
+def _build_constant_fillet(
+    solid: Solid,
+    chosen: Sequence[EdgeInfo],
+    radius: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid:
+    """Baut und prüft eine konstante Rundung auf einer frischen nativen Form."""
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+
+    builder = BRepFilletAPI_MakeFillet(solid.shape)
+    for entry in chosen:
+        _check(cancelled)
+        builder.Add(radius, entry.edge)
+    return _built(solid, builder, "fillet", radius, len(chosen), cancelled=cancelled)
+
+
+def _individually_open_fillet_edges(
+    chosen: Sequence[EdgeInfo],
+    *,
+    cancelled: CancelToken | None,
+    build_candidate: Callable[[Sequence[EdgeInfo]], Solid],
+) -> list[EdgeInfo]:
+    """Findet Kanten, deren eigene exakte Rundung nicht geschlossen tesselliert."""
+    individually_open: list[EdgeInfo] = []
+    for entry in chosen:
+        _check(cancelled)
+        try:
+            single = build_candidate((entry,))
+        except GeometryError:
+            individually_open.append(entry)
+        else:
+            if not single.is_watertight:
+                individually_open.append(entry)
+    return individually_open
 
 
 def _laid_along(builder: Any, chosen: Sequence[EdgeInfo], law: RadiusLaw) -> None:
@@ -1374,26 +1516,7 @@ def boolean(
     shape = parts[0].shape
     slots = parts[0].face_slots
     for other in parts[1:]:
-        operation = boolean_builder(kind, shape, other.shape)
-        operation.Build()
-        if not operation.IsDone():
-            # Nicht „fehlgeschlagen" (Regel 17), und nicht die geerbten
-            # Vorschläge: Mesh-Reparatur und offene Kanten gibt es für einen
-            # B-Rep-Körper nicht. Der häufigste Grund ist eine Berührung
-            # ohne Überlappung — und die behebt eine Bewegung, keine
-            # Reparatur.
-            raise GeometryError(
-                detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
-                suggestions=(CORRECT_INPUT, CANCEL),
-            )
-        result = operation.Shape()
-        sources = [(shape, slots)]
-        if kind != "difference":
-            sources.append((other.shape, other.face_slots))
-        elif cut_slot:
-            sources.append((other.shape, (cut_slot,) * other.face_count))
-        slots = carried_face_slots(result, sources, history=operation)
-        shape = result
+        shape, slots, _operation = _boolean_pair(kind, shape, slots, other, cut_slot=cut_slot)
     return Solid(shape, deflection=parts[0].deflection, face_slots=slots)
 
 
@@ -2991,6 +3114,57 @@ def reround(
     selected_faces: Sequence[int] | None = None,
     cancelled: CancelToken | None = None,
 ) -> Solid:
+    """Ändert den Radius einer Verrundung, ohne den Ausgabevertrag zu ändern."""
+    result, _triangles = _reround(
+        solid,
+        centre,
+        radius,
+        wanted,
+        selected_faces=selected_faces,
+        cancelled=cancelled,
+        collect_triangles=False,
+    )
+    return result
+
+
+def reround_with_created_triangles(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    wanted: float,
+    *,
+    selected_faces: Sequence[int] | None = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[Solid, tuple[int, ...]]:
+    """Gibt neben dem Körper die Dreiecke der belegten neuen Rundungsfläche zurück.
+
+    Im normalen Weg kommt der Herkunftsnachweis aus der vom Builder erzeugten
+    Fläche der scharfen Kante. Beim radialen Weg wird der eindeutige Zylinder
+    mit Sollradius und gleicher Achse auf der versetzten Haut verfolgt; die
+    Belege aus ``Modified`` und ``Generated`` ordnen ihn den Ergebnisdreiecken
+    zu. Fehlt ein eindeutiger Flächenbeleg, bleiben die Dreiecke leer.
+    """
+    return _reround(
+        solid,
+        centre,
+        radius,
+        wanted,
+        selected_faces=selected_faces,
+        cancelled=cancelled,
+        collect_triangles=True,
+    )
+
+
+def _reround(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    wanted: float,
+    *,
+    selected_faces: Sequence[int] | None,
+    cancelled: CancelToken | None,
+    collect_triangles: bool,
+) -> tuple[Solid, tuple[int, ...]]:
     """Ändert den Radius einer Verrundung — wegnehmen, neu verrunden.
 
     Dieselbe Zweiteilung wie am Netz (``geom.edges.reround``), und aus
@@ -3010,20 +3184,148 @@ def reround(
     from app.core.errors import CHANGE_SELECTION
     from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
-    radial = radial_rounding(
-        solid, centre, radius, wanted, selected_faces=selected_faces, cancelled=cancelled
-    )
+    if collect_triangles:
+        radial, triangles = radial_rounding_with_created_triangles(
+            solid, centre, radius, wanted, selected_faces=selected_faces, cancelled=cancelled
+        )
+    else:
+        radial = radial_rounding(
+            solid, centre, radius, wanted, selected_faces=selected_faces, cancelled=cancelled
+        )
+        triangles = ()
     if radial is not None:
-        return radial
+        return radial, triangles
     sharp, edge = _unround(solid, centre, radius, selected_faces, cancelled)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if edge is None:
         raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
-    result = fillet(sharp, wanted, selected_edges=(edge,))
+    if collect_triangles:
+        checked = sharp.checked_edge_indices((edge,))
+        working = replace(sharp)
+        chosen = _edges_at(working, [working._copied_edges[index] for index in checked])
+        _fits_the_wall(working, wanted, chosen, "fillet", cancelled=cancelled)
+        from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+
+        builder = BRepFilletAPI_MakeFillet(working.shape)
+        for entry in chosen:
+            _check(cancelled)
+            builder.Add(wanted, entry.edge)
+        result = _built(working, builder, "fillet", wanted, len(chosen), cancelled=cancelled)
+        triangles = _generated_triangles(result, builder, chosen[0].edge, cancelled=cancelled)
+    else:
+        result = fillet(sharp, wanted, selected_edges=(edge,), cancelled=cancelled)
+        triangles = ()
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    return result
+    return result, triangles
+
+
+def _generated_triangles(
+    result: Solid, builder: Any, source_edge: Any, *, cancelled: CancelToken | None
+) -> tuple[int, ...]:
+    """Ordnet vom Builder erzeugte Flächen der Tessellation des Ergebnisses zu."""
+    return _triangles_for_shapes(
+        result,
+        builder,
+        listed(builder.Generated(source_edge)),
+        cancelled=cancelled,
+    )
+
+
+def _boolean_pair(
+    kind: Literal["union", "difference", "intersection"],
+    shape: Any,
+    slots: tuple[int, ...],
+    other: Solid,
+    *,
+    cut_slot: int = 0,
+    cancelled: CancelToken | None = None,
+) -> tuple[Any, tuple[int, ...], Any]:
+    """Baut einen Booleschen Schritt und gibt Form, Filamentslots und Historie zurück."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    operation = boolean_builder(kind, shape, other.shape)
+    operation.Build()
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if not operation.IsDone():
+        # Nicht „fehlgeschlagen" (Regel 17) oder die geerbten Vorschläge:
+        # Mesh-Reparatur und offene Kanten gibt es für einen B-Rep-Körper
+        # nicht. Bei bloßer Berührung behebt Bewegung die Ursache.
+        raise _boolean_refused()
+    result = operation.Shape()
+    sources = [(shape, slots)]
+    if kind != "difference":
+        sources.append((other.shape, other.face_slots))
+    elif cut_slot:
+        sources.append((other.shape, (cut_slot,) * other.face_count))
+    updated_slots = carried_face_slots(result, sources, history=operation, cancelled=cancelled)
+    return result, updated_slots, operation
+
+
+def _boolean_refused() -> GeometryError:
+    """Der vorhandene Handlungsvorschlag für unvereinbare B-Rep-Körper."""
+    return GeometryError(
+        detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
+def _boolean_with_created_triangles(
+    kind: Literal["difference", "union"],
+    solid: Solid,
+    tool: Solid,
+    source_face: Any,
+    *,
+    cancelled: CancelToken | None,
+) -> tuple[Solid, tuple[int, ...]]:
+    """Ordnet eine Werkzeugfläche über die Boolesche Historie dem Ergebnis zu."""
+    shape, slots, builder = _boolean_pair(
+        kind, solid.shape, solid.face_slots, tool, cancelled=cancelled
+    )
+    result = Solid(shape, deflection=solid.deflection, face_slots=slots)
+    triangles = _history_triangles(result, builder, source_face, cancelled=cancelled)
+    return result, triangles
+
+
+def _history_triangles(
+    result: Solid, builder: Any, source_face: Any, *, cancelled: CancelToken | None
+) -> tuple[int, ...]:
+    """Ordnet eine Quellfläche über unveränderte, geänderte oder erzeugte Flächen zu."""
+    shapes = [source_face]
+    for method_name in ("Modified", "Generated"):
+        method = getattr(builder, method_name, None)
+        if callable(method):
+            shapes.extend(listed(method(source_face)))
+    return _triangles_for_shapes(result, builder, shapes, cancelled=cancelled)
+
+
+def _triangles_for_shapes(
+    result: Solid, builder: Any, shapes: Sequence[Any], *, cancelled: CancelToken | None
+) -> tuple[int, ...]:
+    """Mappt B-Rep-Flächen des Builders durch die Ergebniskopie auf Dreiecke."""
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
+
+    built_faces = ShapeMap()
+    TopExp.MapShapes_s(builder.Shape(), TopAbs_FACE, built_faces)
+    triangles: set[int] = set()
+    for shape in shapes:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if shape.IsNull():
+            continue
+        source_faces = ShapeMap()
+        TopExp.MapShapes_s(shape, TopAbs_FACE, source_faces)
+        for number in range(1, source_faces.Extent() + 1):
+            built_index = int(built_faces.FindIndex(source_faces.FindKey(number))) - 1
+            if not 0 <= built_index < len(result._copied_faces):
+                continue
+            result_index = result._copied_faces[built_index]
+            triangles.update(result.triangles_of_face(result_index))
+    return tuple(sorted(triangles))
 
 
 def radial_rounding(
@@ -3041,6 +3343,50 @@ def radial_rounding(
     sie wie bisher über Lage und Radius gesucht. Eine ausdrückliche Auswahl,
     die keine passende Zylinderfläche ist, löst keine Ersatzsuche aus.
     """
+    result, _triangles = _radial_rounding(
+        solid,
+        centre,
+        radius,
+        wanted,
+        selected_faces=selected_faces,
+        cancelled=cancelled,
+        collect_triangles=False,
+    )
+    return result
+
+
+def radial_rounding_with_created_triangles(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    wanted: float,
+    *,
+    selected_faces: Sequence[int] | None = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[Solid | None, tuple[int, ...]]:
+    """Gibt den radialen Körper und den Beleg seiner neuen Zylinderfläche zurück."""
+    return _radial_rounding(
+        solid,
+        centre,
+        radius,
+        wanted,
+        selected_faces=selected_faces,
+        cancelled=cancelled,
+        collect_triangles=True,
+    )
+
+
+def _radial_rounding(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    wanted: float,
+    *,
+    selected_faces: Sequence[int] | None,
+    cancelled: CancelToken | None,
+    collect_triangles: bool,
+) -> tuple[Solid | None, tuple[int, ...]]:
+    """Versetzt den Mantel und ordnet ihn bei Bedarf über Boolesche Historie zu."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepLib import BRepLib
@@ -3073,10 +3419,10 @@ def radial_rounding(
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
     if face is None:
-        return None
+        return None, ()
     surface = solid.surface(solid.face_index(face), cancelled=cancelled)
     if not isinstance(surface, CylinderSurface) or surface.turn < math.pi - EPS_GEOM:
-        return None
+        return None, ()
     # Linkshändige Zylindersysteme kehren die natürliche Mantelnormale um;
     # die Topologieorientierung allein bezeichnet dort die falsche Seite.
     inward = surface.inward
@@ -3115,11 +3461,57 @@ def radial_rounding(
             suggestions=(CORRECT_INPUT, CANCEL),
         ) from problem
     skin = Solid(skin_shape)
+    tracked_faces = []
+    if collect_triangles:
+        for index, candidate_face in enumerate(skin.faces()):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            candidate = skin.surface(index, cancelled=cancelled)
+            if (
+                isinstance(candidate, CylinderSurface)
+                and is_close(float(candidate.cylinder.Radius()), wanted)
+                and _same_cylinder_axis(surface, candidate)
+            ):
+                tracked_faces.append(candidate_face)
     volume = skin._properties("volume", cancelled=cancelled).mass
     area = skin._properties("surface", cancelled=cancelled).mass
     solid._properties("volume", cancelled=cancelled)
     subtracted = (wanted > actual) == inward
-    result = boolean("difference" if subtracted else "union", [solid, skin])
+    kind: Literal["difference", "union"] = "difference" if subtracted else "union"
+    if collect_triangles and len(tracked_faces) == 1:
+        result, triangles = _boolean_with_created_triangles(
+            kind, solid, skin, tracked_faces[0], cancelled=cancelled
+        )
+    else:
+        result = boolean(kind, [solid, skin])
+        triangles = ()
     result._properties("volume", cancelled=cancelled)
     validate_radial_change(solid, result, volume, area)
-    return result
+    return result, triangles
+
+
+def _same_cylinder_axis(first: CylinderSurface, second: CylinderSurface) -> bool:
+    """Ob zwei analytische Zylinder dieselbe unendliche Achse tragen."""
+    one, two = first.cylinder.Axis(), second.cylinder.Axis()
+    one_point, two_point = one.Location(), two.Location()
+    one_direction, two_direction = one.Direction(), two.Direction()
+    a = (float(one_direction.X()), float(one_direction.Y()), float(one_direction.Z()))
+    b = (float(two_direction.X()), float(two_direction.Y()), float(two_direction.Z()))
+    parallel = (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+    if math.hypot(*parallel) > EPS_GEOM:
+        return False
+    delta = (
+        float(two_point.X() - one_point.X()),
+        float(two_point.Y() - one_point.Y()),
+        float(two_point.Z() - one_point.Z()),
+    )
+    offset = (
+        delta[1] * a[2] - delta[2] * a[1],
+        delta[2] * a[0] - delta[0] * a[2],
+        delta[0] * a[1] - delta[1] * a[0],
+    )
+    return math.hypot(*offset) <= EPS_GEOM

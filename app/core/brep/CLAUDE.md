@@ -14,7 +14,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 | `kernel.py` | `Solid` und sein Weg ins Netz, `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface` |
 | `profiles.py` | Vom Skizzenumriss zum Körper (§30.1): Gewinde, Formschräge, Bahn, Übergang, Querschnitte für Profilklemmen und Dichtnuten (`face_of`, `offset_face`, `face_boolean`, `prism`), `round_cord`, `shell_open_at`, `top_faces_of` |
 | `ops.py` | Die Operationen (§25, §10): `mesh_to_exact`, `brep_to_mesh`, `thread_exact`, `create_brep_box` …; `drill_brep_hole`, `shell_exact` versteckt, `prepare_ops.drill_hole` und `hollow_object` rufen sie |
-| `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
+| `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet_group` erkennt nach einem offenen Gruppenergebnis einzeln offene Kanten und lässt sie gemeinsam aus, bevor einzelne Auslassungen versucht werden; jeder Kandidat entsteht auf frischer Form und nur ein geschlossenes Ergebnis wird übernommen; `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
 | `features.py` | Merkmale aus der Topologie (§21), `features_of`; „durchgehend?" erst nach dem Gewinde (`_ThroughQuestion`) |
 | `canonical.py` | Geprüfte Träger mit wirklichen Grenzen (`surface_sample`, `horizontal_area`); Kegel bis in die Spitze (`_apart_from_the_apex`), gespiegelte Ebene über die Pole (`_pole_plane`) |
 | `thread.py` | Gewinde an importierter Geometrie (§21.1) |
@@ -169,6 +169,14 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   (`checked_edge_indices`, `_edges_for`) geht vor `keys`, ohne Rückfall; die
   Auswertung bindet über `native_edge_indices`, nie über `edges_of`.
   `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge.
+- **`fillet_group`** wird nur für eine von `geom.edge_ops` automatisch
+  verkleinerte Gruppe konstanter Radien aufgerufen. Es misst die Wand einmal,
+  baut zuerst alle verbleibenden Kanten. Bei einem offenen Gruppenergebnis
+  prüft es zuerst jede Kante einzeln und versucht, alle einzeln offenen Kanten
+  gemeinsam auszulassen; danach versucht es jede Einzelauslassung. Nur ein gültiger,
+  geschlossener Körper mit gleicher Körperzahl wird ausgegeben; zusätzliche
+  Auslassungen gehen mit ihrer Stelle an den Op-Befund. Eine ausdrücklich
+  gewählte Kante und ein veränderlicher Radius bleiben beim strikten `fillet`.
 - **Verrunden mit Verlauf** (`fillet(law=)`): `SetLaw` setzt den Builder
   zurück, `Add(R1, R2, E)` ist nicht linear — eine Tabelle je Kante.
 - **Eine Rundung wegnehmen heißt, ihre Fläche zu streichen** (`unround`,
@@ -177,6 +185,15 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   die alte Mitte, sonst `edges.NOT_BETWEEN_TWO_PLANES`. Ohne Auswahl sucht
   `_cylinder_at` über den Radius (`is_close`) und den Abstand zur
   **begrenzten** Fläche, nie über die Achse; unbestimmbar heißt Abbruch.
+  Beim kantengestützten Radiuswechsel liefert `reround_with_created_triangles`
+  die Fläche aus `BRepFilletAPI_MakeFillet.Generated(sharp_edge)` über
+  `_copied_faces` als Ausgabedreiecke; `prepare_ops._exact_fillet` führt den
+  Namen nur bei genau einem Feature-Treffer fort. Der Flächenschwerpunkt darf
+  bei einer großen Radiusänderung nicht als Identitätsbeleg dienen. Der radiale
+  Weg verfolgt den eindeutigen Zylinder mit Sollradius und gleicher Achse auf
+  der versetzten Haut und ordnet ihn über `Modified`/`Generated` der
+  Booleschen Operation den Ausgabedreiecken zu; ohne eindeutigen Flächenbeleg
+  gibt es keine explizite Fortführung.
 - **Radiale Wände** (`radial=True`): `radial_rounding` auf privater Kopie,
   `validate_radial_change`, `OrientClosedSolid` vor der Übernahme;
   Veröffentlichtes wird nie umorientiert oder über einen Betrag berichtigt.
