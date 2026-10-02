@@ -32,6 +32,7 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-02 | [RM-324: Inventarkennung ohne Druckeinstellungen bleibt dialoglokal (02.10.2026)](#rm-324-inventarkennung-ohne-druckeinstellungen-bleibt-dialoglokal-02102026) |
+| 2026-10-02 | [RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)](#rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
 | 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
@@ -34318,3 +34319,26 @@ auf `main` und `origin/main`; sein vollständiges Entwicklungstor
 mypy jeweils Exit 0. Das ist der bestehende RM-300-Nachweis; für RM-324 entsteht
 keine neue Codeänderung, Migration oder Inventarpersistenz. Der eigenständige
 Dokumentabschluss wird unabhängig geprüft und danach separat integriert.
+
+## RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)
+
+<a id="rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026"></a>
+
+Die Migration von Format 38 auf 39 erhält bei älteren
+*Bohrung setzen*- und *Zum Langloch ziehen*-Schritten den gespeicherten
+Bezugsrahmen. Winkel- und Achsausdrücke bleiben an Projektparameter gebunden;
+bei jeder Auswertung wird der Winkel an der aktuellen Achse neu berechnet.
+Netz- und B-Rep-Verlauf behalten den Marker. Längen- und Positionsänderungen
+lassen ihn bestehen; eine echte Richtungsänderung im Griff oder Merkmalfenster
+setzt ihn zurück. Die Platzierungsvorschau und der spätere Schnitt verwenden
+denselben Rahmen. Markerlose Format-39-Projekte behalten ihren gespeicherten
+Winkel; eine fehlende Bindung wird nicht erraten.
+
+**Nachweis:** unabhängige Zweitprüfung und gemeinsames Entwicklungstor
+bestanden (18.758 bestanden, 62 übersprungen).
+Der Code ist mit `22651ccd1821ef195888f5967c81e6d8086d1476`
+auf `main` und `origin/main`. Belege: `commit-langlochbezug.json`,
+`commit-kernpakete-abschluss.json` und
+`commit-tor-kernpakete-final/` unter
+`tmp/review-seit-0.5.1-2026-10-01/`. Die native Viewport-Abnahme der
+Gegenseitenvorschau bleibt separat unter RM-321 für den Release offen.

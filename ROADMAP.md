@@ -84,7 +84,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
-| [RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an einer Bohrung durch beide Material](#rm-319) | Geometrie, Erkennung und Druckvorbereitung | Berührung in der Vorfrage wie Durchdringung behandeln oder nach dem Stopfen innere Flächen entfernen (Laufzeit §31) |
+| [RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an einer Bohrung durch beide Material](#rm-319) | Geometrie, Erkennung und Druckvorbereitung | Klassifikationsgrundlage, Cacheformat 35, Übersetzungen und alle 35 Baustein-Bereichsnachweise im isolierten Kandidaten geprüft; offen: strikter Boolean-/B-Rep-Anschluss, beide Ringfälle und der vollständige Langloch-Kundenweg |
 | [RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am Netz bleibt sein Überstand](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Beide Kerne schneiden die gemessene Länge der Bohrung, wie das Netz |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
@@ -2330,7 +2330,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-319"></a>
 
-- [ ] **RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an
+- [~] **RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an
   einer Bohrung durch beide Material.** Gemessen am 30.09.2026: zwei Platten
   40 x 20 x 10 als eigene Schalen, in z = 10 aufeinander, Bohrung Ø 6 durch
   beide; *Zum Langloch ziehen* auf 12 mm lässt am Netz 12 167,2 mm³ statt
@@ -2345,7 +2345,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ΔV -138,2 vernetzt gegen -138,1 exakt). Vorschlag: Berührung in der Vorfrage
   wie Durchdringung behandeln, oder nach dem Stopfen innere Flächen entfernen.
   Abnahme: die zwei Platten mit 14 714,6 ± 1 mm³ und erkanntem Langloch, an
-  beiden Kernen.
+  beiden Kernen. **Teilabschluss:** Die Kontaktklassifikation, Cacheformat 35
+  und die übersetzten Meldungen wurden im isolierten Kandidaten geprüft. 207
+  fokussierte Tests und 11 gezielte Anschlussprüfungen bestanden. Alle 35
+  Baustein-Bereichsnachweise bestanden; `--check` meldet 35 von 35 und der
+  Wächtertest besteht. **Offen:** Der strikte Boolean-Anschluss mit
+  `require_complete=True` kann beide Ringfälle vor dem Entlüftungssolver
+  abbrechen; sie enden mit `hollow.no_vent`. Der geprüfte
+  Klassifikationskandidat enthält diesen Boolean-/B-Rep-Anschluss nicht und
+  belegt deshalb weder die Ring-Abnahme im Endstand noch den vollständigen
+  Langloch-Kundenweg. Das bleibt Teil von RM-319.
 
 <a id="rm-320"></a>
 
