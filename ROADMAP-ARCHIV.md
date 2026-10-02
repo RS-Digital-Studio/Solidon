@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-346: Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs (02.10.2026)](#rm-346-die-rückfrage-vor-geld--und-veröffentlichungswerkzeugen-greift-nur-bei-einer-schreibweise-des-aufrufs-02102026) |
 | 2026-10-02 | [RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)](#rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026) |
 | 2026-10-02 | [RM-341: Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen* (02.10.2026)](#rm-341-druckeinstellungen-maße-nicht-gewählter-haftungsarten-bleiben-sichtbar-und-sperren-slicen-02102026) |
 | 2026-10-02 | [RM-334: Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht (02.10.2026)](#rm-334-enter-löst-in-rückfragen-den-hauptknopf-aus-auch-wenn-der-fokus-per-tab-auf-abbrechen-steht-02102026) |
@@ -35630,3 +35631,28 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Nachprüfung am Stand `6ce767031`: besteht noch. Sonde d5: bei *Brim* bleiben Skirt- und Raft-Maße sichtbar; 99 in *Raft-Schichten* sperrt *Slicen* mit „99 liegt über der Obergrenze 20.“
 
 **Abschluss:** `print_settings.inactive_paths` als eine Quelle für Sichtbarkeit, Sperre und Suche; Test je Bettart. Umgesetzt von Claude, in main mit `7df4794a7`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-346: Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs (02.10.2026)
+
+<a id="rm-346-die-rückfrage-vor-geld--und-veröffentlichungswerkzeugen-greift-nur-bei-einer-schreibweise-des-aufrufs-02102026"></a>
+<a id="rm-346"></a>
+
+**RM-346 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs.**
+  Review seit 0.5.1, Befund E-M3, Commit `c96a404ea` (Claude).
+  Die `ask`-Regeln in `.claude/settings.json:31–44` nennen wörtlich
+  `.venv/Scripts/python.exe tools/<werkzeug>.py` (Bash) bzw. `.venv\Scripts\python.exe tools/…`
+  (PowerShell); Bash-Regeln sind Präfixregeln. Ein absoluter Interpreterpfad
+  (`"F:/3D Druck/.venv/Scripts/python.exe" tools/upload_website.py`), `"$SUITE_PYTHON" tools/…`
+  (Konvention aus `/pruefen`), `-m tools.upload_website` oder `./tools/…` trifft keine Regel und
+  läuft im Modus `bypassPermissions` ohne Rückfrage. Der PreToolUse-Hook filtert nur
+  Git-Befehle (`settings.json:65`). Betroffen: `run_agent_suite` (kostet Geld),
+  `upload_website`, `deploy_activation_server` (veröffentlichen). Aus Konfiguration und
+  dokumentierter Präfixsemantik belegt, am Rechteprüfer nicht gefahren.
+  **Fix:** Die Prüfung in `.claude/hooks/solidon3d_hooks.py` (`vor-bash`, auch PowerShell) am
+  Werkzeugnamen legen, unabhängig vom Interpreterpfad; die `ask`-Liste darf bleiben. Danach
+  die Codex-Hookfreigabe über `/hooks` erneuern (CLAUDE.md, „Werkzeuge“).
+  **Abnahme:** Test in `tests/test_solidon3d_hooks.py` je Schreibweise (relativ, absolut, Variable,
+  `-m`, `./tools`) für die drei Werkzeuge → Rückfrage. Beleg: `bericht-E.md` (M3).
+  Nachprüfung am Stand `6ce767031`: besteht noch. Absoluter Interpreterpfad, `-m tools.…` und `./tools/…` laufen ohne Rückfrage durch den Hook (leere Ausgabe, Exit 0).
+
+**Abschluss:** Der PreToolUse-Hook erkennt die sechs Geld- und Veröffentlichungswerkzeuge in jeder Schreibweise (ask für Claude, deny für Codex ohne Marker `SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja`); 143 Hooktests. Codex erneuert die Hookfreigabe über `/hooks`. Umgesetzt von Claude, in main mit `457dc09d4`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
