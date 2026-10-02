@@ -23,12 +23,12 @@ dans `website/version.json`.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
 - Vous choisissez la buse dans les réglages d'impression parmi les tailles que connaît votre imprimante, et le slicer reçoit le profil correspondant.
 - Les réglages d'impression demandent dans l'ordre où l'un dépend de l'autre : slicer, imprimante, buse, plateau, filaments et qualité, puis les valeurs.
-- Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Jusqu'ici, cela ne marchait que dans la fenêtre de Creality Print.
+- Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Avant, seule la fenêtre de Creality Print le pouvait. Si 7.3 réarrange le plateau, Solidon le dit.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
 - Les réglages d'impression ne montrent que les cotes d'adhérence du type de plateau choisi. Avec un brim, les champs skirt et raft, sans effet, disparaissent.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
-- Les pièces hautes et fines sur une petite base reçoivent des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
+- Les pièces hautes et fines sur une petite base reçoivent, pour elles seules, des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
 - Solidon ne propose « Paroi extérieure d'abord » que pour la pièce qui en a besoin, et jamais pour une pièce avec supports.
 - Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
@@ -39,12 +39,14 @@ dans `website/version.json`.
 ### Perçages, trous oblongs et découpe
 
 - L'angle d'un trou oblong sur un perçage importé pointe dans la direction attendue et la garde quand vous changez la finesse.
-- Deux plaques qui se touchent gardent leur matière quand vous étirez un trou oblong, et une goupille au-dessus du perçage reste en place.
+- Deux plaques qui se touchent restent un seul corps autour d'un perçage et gardent leur matière, que vous l'étiriez, le modifiiez, le déplaciez ou le fermiez. Une goupille au-dessus reste en place.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
 - Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
+- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Axe d'inclinaison », et « Sur une face » mène la coupe parallèlement à une face plane.
+- Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 
 ### Sculpter, texte et esquisse
 
@@ -62,6 +64,7 @@ dans `website/version.json`.
 ### Générer avec l'IA
 
 - Annuler pendant « Encore un essai » n'arrête que l'essai en cours. Les essais terminés restent au choix.
+- Chaque essai de la liste indique sa phrase ou son image et sa graine. Si votre saisie ne correspond plus à l'essai choisi, la boîte de dialogue dit lequel sera appliqué.
 - Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.
 - Si une erreur de génération indique la configuration comme issue, elle apparaît comme bouton dans la boîte de dialogue.
 - La boîte de dialogue de génération indique le volume à la taille où la pièce arrive.

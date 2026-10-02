@@ -22,12 +22,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
 - O bico escolhe-se nas definições de impressão entre os tamanhos que a sua impressora conhece, e o slicer recebe o perfil correspondente.
 - As definições de impressão perguntam pela ordem em que uma coisa depende da outra: slicer, impressora, bico, placa, filamentos e qualidade, e depois os valores.
-- Com o Creality Print 7.2 e 7.3, «Fatiar» calcula agora sozinho o ficheiro de impressão. Até agora isso só funcionava na janela do Creality Print.
+- Com o Creality Print 7.2 e 7.3, «Fatiar» calcula agora sozinho o ficheiro de impressão. Até agora só a janela do Creality Print o fazia. Se o 7.3 reorganizar a placa, o Solidon di-lo.
 - Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
 - As definições de impressão mostram só as medidas de aderência do tipo de mesa escolhido. Com brim desaparecem os campos de skirt e raft, que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
-- Peças altas e finas sobre uma base pequena recebem paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
+- Peças altas e finas sobre uma base pequena recebem, só para si, paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
 - O Solidon só sugere «Parede exterior primeiro» para a peça que precisa dela, e nunca para uma com suportes.
 - Também na pesquisa rápida, «Orientar para impressão» verifica se uma peça fica de pé com segurança.
 - Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.
@@ -38,12 +38,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Furos, furos oblongos e divisão
 
 - O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura.
-- Duas placas que se tocam mantêm o seu material ao esticar um furo oblongo, e um pino sobre o furo fica no lugar.
+- Duas placas que se tocam continuam um só corpo num furo e mantêm o material, quer o estique, altere, desloque ou feche. Um pino por cima fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
 - Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
+- Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Eixo de inclinação», e «Na face» leva o corte paralelo a uma face plana.
+- Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 
 ### Modelar, texto e esboço
 
@@ -61,6 +63,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Gerar com IA
 
 - Cancelar durante «Mais uma tentativa» só para a tentativa em curso. As terminadas continuam disponíveis para escolher.
+- Cada tentativa da lista indica a sua frase ou imagem e a semente. Se a sua entrada já não corresponder à tentativa escolhida, o diálogo diz qual será aplicada.
 - O modelo de imagem é descarregado por «Configurar modelo de imagem …» mesmo que os outros pesos já existam.
 - Se um erro ao gerar indicar a configuração como saída, ela aparece como botão no diálogo.
 - O diálogo de gerar indica o volume no tamanho com que a peça chega.

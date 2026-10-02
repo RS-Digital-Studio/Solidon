@@ -6988,13 +6988,19 @@ class PrintSettingsDialog(QDialog):
         self._mark_fields_this_slicer_ignores()
         self._refresh_advice()
 
-    def _load_into_editors(self) -> None:
+    def _load_into_editors(self, paths: frozenset[str] | None = None) -> None:
         """Aus dem Modell in die Felder. ``_loading`` hält die Rückmeldung an,
-        sonst schriebe jedes gesetzte Feld sofort wieder zurück."""
+        sonst schriebe jedes gesetzte Feld sofort wieder zurück.
+
+        ``paths`` beschränkt das auf die genannten Felder: Wer nur ein Maß
+        nachträgt, überschreibt keine abgelehnte Zahl in einem anderen Feld.
+        """
         had_refusal = bool(self._first_numeric_refusal())
         self._loading = True
         try:
             for field in FIELDS:
+                if paths is not None and field.path not in paths:
+                    continue
                 value = print_settings.read_path(self.settings, field.path)
                 editor = self._editors[field.path]
                 _set_setting_editor(editor, field, value)
@@ -7105,16 +7111,20 @@ class PrintSettingsDialog(QDialog):
             before = self.settings.explicit
             self.settings = print_settings.with_choice(self.settings, path, value)
             # Eine Haftungsart bringt ihr Maß mit (``print_settings._with_a_measure``);
-            # dessen Feld muss es dann auch zeigen.
-            if self.settings.explicit - before - {path}:
-                self._load_into_editors()
+            # dessen Feld muss es dann auch zeigen — und nur dieses: Alle Felder
+            # neu zu laden, löschte still eine abgelehnte Zahl anderswo.
+            if added := self.settings.explicit - before - {path}:
+                self._load_into_editors(added)
         self._update_inactive_setting_rows()
+        # Der Satz „Ändern Sie die Auswahl …, um dieses Feld anzuzeigen“ wird
+        # eingelöst, gleich wer die Zeile gehoben hat — Suche oder Rückweg
+        # eines Fehlers (:meth:`_lift`). Ein Ziel steht nur bis zum nächsten
+        # Heben oder Suchwort an; die Bedingung an den Suchtreffer ließ den Satz
+        # nach jedem anderen Heben stehen und das Feld hinter der Klappe.
         target = self._search_requirement_target
         if (
             path == self._search_requirement_control
             and target
-            and 0 <= self._search_at < len(self._search_hits)
-            and self._search_hits[self._search_at] == target
             and self._inactive_search_control(target) is None
         ):
             self._search_requirement_target = ""
