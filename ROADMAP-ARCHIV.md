@@ -34729,7 +34729,7 @@ und `test_a_radially_changed_brep_fillet_keeps_its_name_for_the_next_step` in
 wurde separat geprüft: R 1, acht ausgewählte Rundungen, sechs umgesetzt, zwei
 einzeln offene ausgelassen; das Ergebnis blieb mit einer Komponente
 wasserdicht. Der vollständige Entwicklungslauf und das unabhängige Schlussreview
-stehen noch aus. Fenster- und Leistungsläufe bleiben gemäß Projektregel
+standen zu diesem Zeitpunkt noch aus. Fenster- und Leistungsläufe bleiben gemäß Projektregel
 Release-Abnahmen.
 
 **Nachprüfung 02.10.2026:** Drei weitere Fehler wurden vor der Korrektur
@@ -34751,7 +34751,7 @@ und nach ausdrücklicher Merkmalswahl. Beide Anschlüsse sind test-first
 korrigiert; ein gemeinsamer Helfer schützt belegte Selbstzuordnungen und
 offene Namen. Sechs direkte Fälle prüfen die tatsächlichen Folgeoperationen,
 deren Lage und analytisches Volumen sowie kalten und warmen Verlauf.
-Der aktuelle Abschlussrest ist als [RM-284](ROADMAP.md#rm-284) geführt.
+Der folgende Nachgang vervollständigte den damals noch offenen RM284-Abschluss.
 Der erneute Fachlauf bestand mit 1209 Tests, 104 releasebedingt abgewählt;
 der unabhängige Schlussreview gab die Einheit einschließlich ihres notwendigen
 RM218-Anschlusses ohne offene Codebefunde frei. Eine zentrale Gegenprüfung
@@ -34764,11 +34764,20 @@ Entdoppelung. Der echte native Zwei-Auslassungen-Fall prüft die registrierte
 Operation und den kalten/warmen Abschlussbericht; 21 gezielte Fälle und
 610 Sprach-/Wertprüfungen sind grün, der unabhängige Nachreview ist ohne
 Befund. Die bestehende Sammelzeile der Oberfläche bleibt erhalten; eine neue
-Mehrstellenanzeige wird nicht behauptet. Entwicklungstor und Integration
-stehen aus; RM-322 bleibt daneben offen.
+Mehrstellenanzeige wird nicht behauptet. RM-322 bleibt daneben offen.
 Konstruktion, Gegenfälle und Kundenmodell sind im
 [portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md)
 wiederholbar beschrieben.
+
+**Abgeschlossen am 02.10.2026:** Produktcommit
+`57848fa72c4ca229f5dc9bcdd2cca2baf6945987` ist auf `main` und
+`origin/main`; Commit-Dateiliste, verbleibende Hunks und tatsächliche
+Gegenstelle sind unabhängig abgeglichen. Das gemeinsame vollständige
+Entwicklungstor `commit-tor-abschlussrunde-45-final` mit RM320 bestand mit
+19 187 Tests und 62 übersprungenen Fällen; Suite, Ruff, Format und mypy
+jeweils Exit 0, keine Quelldrift. Fenster-, Renderer- und Leistungsabnahmen
+bleiben beim Release. Der notwendige RM218-Anschluss ist enthalten,
+RM218 insgesamt und RM322 bleiben offen.
 
 ## RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)
 
@@ -34792,11 +34801,14 @@ abträgt.
 
 **Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests.
 Unabhängiges Review nach Korrektur der Volumenabnahme ohne weitere Findings.
-Der vollständige Entwicklungslauf ist noch nicht erneut gelaufen; ein Commit
-bleibt bis zu seinem grünen Lauf aus.
+Der vollständige Entwicklungslauf war zu diesem Zeitpunkt noch nicht erneut
+gelaufen; der Commit blieb bis zu seinem grünen Lauf aus.
 
 **Nachprüfung 02.10.2026:** Die einseitige Erstprobe deckte den Sicherheitsweg
-nicht vollständig ab. Der beidseitige Stift, angeschlossene Naben, eine
+nicht vollständig ab. Auch die Gegenprobe am früheren Stand `3fd3b1ace`
+lehnte den durchgesteckten Stift am Netz ab und entfernte ihn exakt vollständig;
+die damalige Korrektur im Arbeitsbaum war noch nicht integriert.
+Der beidseitige Stift, angeschlossene Naben, eine
 negative Innenhaut und vollständig ineinanderliegende positive Körper
 ergaben weitere rote Gegenfälle. Der gemeinsame Menü-/Operationsbeleg prüft
 jetzt den freien Bohrungsträger, vollständige Kontaktfreiheit und die
@@ -34810,8 +34822,8 @@ Der abschließende betroffene Lauf bestand mit 569 Tests, drei abgewählten
 Fällen und Exit 0. Drei Boolean-Gegenfälle und 417 Sprachprüfungen bestanden
 zusätzlich. Sechs Rechnungen an unveränderten Kundenmodellen sowie Ruff,
 Format und mypy waren grün. Der unabhängige Schlussreview hat keine offenen
-Befunde. Der aktuelle [RM-320](ROADMAP.md#rm-320) bleibt bis zum zentralen
-Entwicklungstor und der tatsächlichen Integration offen. Eingangs-Hashes,
+Befunde. Die folgenden Nachgänge vervollständigten den damals noch offenen
+RM320-Abschluss. Eingangs-Hashes,
 analytische Sollwerte, historische Fehlannahmen und Wiederholung stehen im
 [portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
 
@@ -34825,5 +34837,13 @@ Materialfamilien. 19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsfälle
 sind grün. Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt
 abgewählt; die sechs Kundenrechnungen am Endstand sind ebenfalls grün.
 Der unabhängige Schlussreview hat die vollständigen RM320-Hunks ohne offene
-Codebefunde freigegeben. Diese Nachgänge bleiben bis zu Entwicklungstor und
-Integration unter dem aktiven RM-320 geführt.
+Codebefunde freigegeben.
+
+**Abgeschlossen am 02.10.2026:** Produktcommit
+`e3dff190728d4caf447cb3be7927d5d651dee168` ist auf `main` und
+`origin/main`; Commit-Dateiliste, verbleibende Hunks und tatsächliche
+Gegenstelle sind unabhängig abgeglichen. Das gemeinsame vollständige
+Entwicklungstor `commit-tor-abschlussrunde-45-final` mit RM284 bestand mit
+19 187 Tests und 62 übersprungenen Fällen; Suite, Ruff, Format und mypy
+jeweils Exit 0, keine Quelldrift. Fenster-, Renderer- und Leistungsabnahmen
+bleiben beim Release. RM325 bleibt ein eigenständiger Seitenwandfehler.
