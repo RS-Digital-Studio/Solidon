@@ -26,9 +26,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Antes solo se podía en la ventana de Creality Print. Si 7.3 reordena la placa, Solidon lo dice.
 - Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
-- Los ajustes de impresión muestran solo las medidas de adherencia del tipo de cama elegido. Con brim desaparecen los campos de skirt y raft, que no harían nada.
+- Si elige brim, skirt o raft en los ajustes de impresión, solo aparecen las medidas de ese tipo de cama, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
-- Las piezas altas y delgadas sobre una base pequeña reciben, solo para ellas, paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
+- Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
 - Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
 - También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad.
 - Con «Organizar sobre la cama», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
@@ -55,7 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
-- En la ventana, «Fusionar suavemente» muestra la misma forma que en la exportación. Solo con cuerpos muy grandes la vista previa calcula más gruesa y lo dice.
+- En la ventana, «Fusionar suavemente» calcula ahora tan fino como en la exportación, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
 - El destino de «Alinear a la característica» empieza vacío. «Aplicar» espera hasta que esté elegido y ya no coloca el cuerpo sin aviso en el lado equivocado.

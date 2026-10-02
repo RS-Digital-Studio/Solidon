@@ -25,9 +25,9 @@ it into `website/version.json`.
 - With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
-- The print dialog shows only the adhesion settings of the chosen bed type. With a brim, the skirt and raft fields that would do nothing are gone.
+- If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
-- Tall, slender parts on a small footprint get calmer walls suggested for themselves alone, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
+- Tall, slender parts on a small footprint get calmer walls suggested, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
 - Solidon now suggests *Outer wall first* only for the part that needs it, and never for one with supports.
 - In the quick search too, *Orient for printing* checks whether a part stands securely.
 - Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.
@@ -54,7 +54,7 @@ it into `website/version.json`.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
-- In the window, *Blend together* shows the same shape as in the export. Only for very large bodies does the preview work more coarsely, and it says so.
+- In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
 - The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
