@@ -353,11 +353,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 - Fehlt eine genannte Kante oder trifft ein Schlüssel mehrere, hält der ganze
   Schritt an; eine Gruppe überspringt, was nicht `workable` ist. Ob eine
   Rundung passt, fragen beide Kerne vorher gleich (`contact_band_limit`).
-- Exakte Gruppen benötigen `brep.edit.native_edges_of_chains` (siehe BRep-Karte).
-  Der Herkunfts-/Kurvenbeleg wird nach dem Breitenfilter erneuert; nur
-  gemessene Engstellen heißen zu schmal. Ohne belegte Kante sagt die Op ab.
-  Alle ausgelassenen Segmente bleiben als `Finding.outline` mit echtem
-  Konturpunkt in `location` erhalten, auch bei gescheitertem Gruppenbau.
+- Exakte Gruppen: `brep.edit.native_edges_of_chains` (BRep-Karte).
+  Nach Breitenfilter neu belegen; ohne Kante absagen. „Zu schmal“ nur gemessen.
+  Alle Auslassungen auch bei Fehlern als `Finding.outline` mit Konturpunkt
+  `location` erhalten.
 - `_arc_steps` folgt `MAX_FACET_SAG` und `MAX_FACET_ANGLE` wie OpenCASCADE.
   Eckknoten aus `MeshEdge.node_indices`, ein Knoten ohne Körper bekommt keine
   Haube (`_corner_hull`). Den Überstand bekommt, was abgezogen wird, nicht was
