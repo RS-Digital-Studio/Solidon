@@ -556,6 +556,24 @@ def _resolved_crossings() -> str:
     return _mesh_print(_registered("repair", crossing, self_intersections=True))
 
 
+def _differently_split_contact_edge() -> str:
+    """Kantenkontakt zweier Quader mit verschiedener Unterteilung."""
+    from app.core.deferred import trimesh
+    from app.core.geom.repair import parts_that_cross
+
+    first = trimesh.creation.box(extents=(1.0, 1.0, 10.0))
+    first.apply_translation((0.5, 0.5, 5.0))
+    second = trimesh.creation.box(extents=(1.0, 1.0, 5.0))
+    second.apply_translation((-0.5, -0.5, 2.5))
+    touching = trimesh.util.concatenate([first, second])
+    return repr(
+        (
+            parts_that_cross(touching),
+            parts_that_cross(touching, include_face_contacts=True),
+        )
+    )
+
+
 def _plate_without(select: Callable[[np.ndarray, np.ndarray], np.ndarray]) -> Any:
     """Die Platte ohne die Dreiecke, die ``select(mitten, normalen)`` nennt."""
     from app.core.geom.mesh import MeshData
@@ -707,6 +725,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "corner_chamfer": lambda: _worked_corner(False),
     "corner_fillet": lambda: _worked_corner(True),
     "curved_mouth": _curved_mouth,
+    "differently_split_contact_edge": _differently_split_contact_edge,
     "drill_hole": _drilled_along_the_face,
     "fill_band": _bore_wall_band,
     "fill_bridged": _top_with_holes,

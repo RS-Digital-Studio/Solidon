@@ -23,7 +23,7 @@ dans `website/version.json`.
 - Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
 - Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
 - Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
-- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, pattes à vis, crochet de panneau ou pince.
+- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, trous de vis, crochet de panneau ou pince.
 - Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
 - Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
 
@@ -32,9 +32,10 @@ dans `website/version.json`.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
 - Vous choisissez la buse dans les réglages d'impression parmi les tailles que connaît votre imprimante, et le slicer reçoit le profil correspondant.
 - Les réglages d'impression demandent dans l'ordre où l'un dépend de l'autre : slicer, imprimante, buse, plateau, filaments et qualité, puis les valeurs.
-- Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Avant, seule la fenêtre de Creality Print le pouvait. Si 7.3 réarrange le plateau, Solidon le dit.
+- Vous pouvez désormais générer le fichier d'impression directement depuis Solidon avec Creality Print 7.2 et 7.3.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
 - Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
+- Les imprimantes dont l'origine n'est pas dans le coin du plateau, comme delta, BIBO ou Dremel, reçoivent les pièces là où Solidon les pose. Avant, elles étaient au bord ou réorganisées.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
 - Si vous choisissez brim, skirt ou raft dans les réglages d'impression, seules les cotes de ce type de plateau s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
@@ -45,6 +46,7 @@ dans `website/version.json`.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
+- L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 
 ### Perçages, trous oblongs et découpe
 
@@ -53,9 +55,11 @@ dans `website/version.json`.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
 - Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
+- Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
+- Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
-- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Axe d'inclinaison », et « Sur une face » mène la coupe parallèlement à une face plane.
+- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Incliner autour de », et « Sur une face » mène la coupe parallèlement à une face plane.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 
@@ -67,7 +71,7 @@ dans `website/version.json`.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
-- Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
+- Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide. Vous la choisissez dans le champ « Cible », et « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
@@ -86,9 +90,11 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- La case « Créer les cotes comme paramètres » est cochée la première fois, puis retient votre dernier choix, même après un redémarrage.
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
+- L'export, « Trancher » et « Ouvrir dans le slicer … » reçoivent toujours le calcul fin, pas la vue plus grossière de la fenêtre. Congés et cônes arrivent ainsi en pleine résolution.
 - Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
-- La barre des paramètres refuse une cote hors de sa limite et nomme la limite, au lieu de laisser la vue vide.
+- La barre des paramètres refuse une cote hors de sa limite au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
 - Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
@@ -100,8 +106,9 @@ dans `website/version.json`.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
 - Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
-- Un constat qui vise une étape l'ouvre pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
+- Certains constats qui visent une étape l'ouvrent pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
+- L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
 
 ## 0.5.1
 

@@ -1127,11 +1127,13 @@ class _Chooser:
         self.offered: list[list[str]] = []
         self.preview: object = None
         self.candidates: tuple[tuple[str, str], ...] = ()
+        self.previous_reference: tuple[object, str] | None = None
 
     def context(self, preview, candidates) -> None:
         if preview is not None:
             self.preview = preview
             self.candidates = candidates
+            self.previous_reference = preview.question_reference
 
     def __call__(self, question: str, choices: list[str]) -> str:
         self.asked.append(question)
@@ -1172,6 +1174,12 @@ def test_the_customer_chooses_the_face_that_carries_the_reference_on(
     assert result.complete and not result.blocked_references
     assert len(chooser.asked) == 1 and "exakten Körper neu gebaut" in chooser.asked[0]
     assert chooser.offered[0][-1] == "Nicht weiterführen"
+    assert chooser.previous_reference is not None
+    old_body, old_feature = chooser.previous_reference
+    assert old_body.id == "obj_1"
+    assert old_feature == top
+    assert hasattr(old_body.mesh, "raw"), "die Ansichtsdreiecke kommen aus dem Auswertungsarbeiter"
+    assert old_body.features[top].params["centre"][2] == pytest.approx(20.0)
     body = result.scene.objects["obj_1"]
     assert body.mesh.volume == pytest.approx(42000.0, rel=1e-9)
     assert body.features[top].params["centre"][2] == pytest.approx(35.0)

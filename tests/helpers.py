@@ -109,6 +109,28 @@ def exact_kernel() -> Any:
     return edit
 
 
+def open_box() -> Any:
+    """Ein Quader 40 × 30 × 20 ohne Deckel: fünf vernähte Flächen, vier freie Randkanten."""
+    edit = exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    from app.core.brep.kernel import Solid
+    from app.core.units import EPS_GEOM
+
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    faces = TopExp_Explorer(edit.box(40.0, 30.0, 20.0).shape, TopAbs_FACE)
+    kept = 0
+    while faces.More():
+        if kept < 5:
+            sewing.Add(faces.Current())
+        kept += 1
+        faces.Next()
+    sewing.Perform()
+    return Solid(sewing.SewedShape())
+
+
 # --- Platzhalter für Szene und Cache ------------------------------------------------
 
 
@@ -898,7 +920,11 @@ def cube_surface(
 
 
 def rectangle(width_value: str = "@width", height_value: str = "@height") -> Sketch:
-    """Eine leicht verzogene Rechteckskizze mit Maßen aus Projektparametern."""
+    """Ein leicht verzogenes Rechteck mit Maßen aus Projektparametern.
+
+    Die flachen Punktindizes liegen unten (0, 1), rechts (2, 3), oben (4, 5)
+    und links (6, 7).
+    """
     return Sketch(
         plane="plane:xy",
         elements=(

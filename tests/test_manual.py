@@ -192,10 +192,9 @@ def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
     assert "Reparaturkette läuft ohne Nachfrage" in generating
 
     extras = pages["extras"]
-    assert "Lokale KI-Arbeit läuft nacheinander" in extras
-    assert "drei Minuten auf der Grafikkarte" in extras
-    assert "gibt Solidon es vorher frei" in extras
-    assert "nur den Auftrag, den Solidon selbst gestartet hat" in extras
+    assert "Knoten und Modell einrichten" in extras
+    assert "ComfyUI einmal neu starten" in extras
+    assert "drei Minuten auf der Grafikkarte" not in extras
 
 
 @pytest.mark.rendered
@@ -245,18 +244,20 @@ def test_the_website_reference_carries_every_operation_and_parameter(language: s
     ihrer dort einzeln aufgeführten Felder, in allen sechs Sprachfassungen.
     """
     from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+    from app.i18n import source_text
+    from app.i18n.catalog import read_catalog
 
     html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    catalog = read_catalog(language)
     missing: list[str] = []
     for spec in REGISTRY.all():
-        # Das schließende ``h4`` unterscheidet den Referenzeintrag von der
-        # gleichlautenden Kennung in der kurzen Operationsliste davor.
-        marker = f"(<code>{spec.name}</code>)</h4>"
+        # Die unsichtbare Kennung ordnet auch gleichlautende Werkzeugtitel zu.
+        marker = f'<h4 data-operation="{spec.name}"'
         start = html.find(marker)
         if start < 0:
             missing.append(spec.name)
             continue
-        end = html.find("<h4>", start + len(marker))
+        end = html.find("<h4", start + len(marker))
         section = html[start : end if end >= 0 else len(html)]
         parameters = spec.params.spec()
         if spec.category == "parts":
@@ -264,7 +265,9 @@ def test_the_website_reference_carries_every_operation_and_parameter(language: s
                 entry for entry in parameters if entry.name not in PART_PLACEMENT_PARAMS
             )
         for entry in parameters:
-            if f"<code>{entry.name}</code>" not in section:
+            title = source_text(entry.title)
+            label = catalog.get(title, title)
+            if f"<td>{escape(label)}</td>" not in section:
                 missing.append(f"{spec.name}.{entry.name}")
 
     assert not missing, (
@@ -314,8 +317,11 @@ def test_the_website_page_carries_the_generated_reference(language: str) -> None
     für Zeichen zu vergleichen hieße, die Seite im Test noch einmal zu erzeugen,
     und dann prüfte er sich selbst.
     """
+    from dataclasses import replace
+
     from app.core.registry import REGISTRY
     from app.core.registry.params import condition_text
+    from app.core.registry.surfaces import choice_label
     from app.i18n import install_catalog, set_language
     from app.i18n.catalog import read_catalog
 
@@ -335,7 +341,21 @@ def test_the_website_page_carries_the_generated_reference(language: str) -> None
             # mit den Sternchen, die ``caveat_line`` setzt.
             if spec.caveat and escape(str(spec.caveat)) not in html:
                 missing.append(f"{spec.name}: Vorbehalt")
-            schema = spec.params.spec()
+            schema = tuple(
+                replace(
+                    entry,
+                    depends_on=(
+                        entry.depends_on[0],
+                        tuple(
+                            choice_label(value) if isinstance(value, str) else value
+                            for value in entry.depends_on[1]
+                        ),
+                    ),
+                )
+                if entry.depends_on
+                else entry
+                for entry in spec.params.spec()
+            )
             for entry in schema:
                 condition = condition_text(entry, schema)
                 if condition and escape(condition) not in html:
@@ -440,11 +460,11 @@ def test_every_category_has_a_chapter() -> None:
 
 
 def test_every_operation_appears_by_name() -> None:
-    """So viele Einträge wie Operationen. Sonst wäre das Handbuch eine Auswahl."""
+    """Jede Operation erscheint mit dem Kundentitel, ohne interne Befehlsnamen."""
     text = manual.as_markdown()
 
     for spec in REGISTRY.all():
-        assert f"`{spec.name}`" in text, spec.name
+        assert f"(`{spec.name}`)" not in text, spec.name
         assert str(spec.title) in text, spec.name
 
 
@@ -539,7 +559,7 @@ def test_a_chapter_can_be_asked_for_on_its_own() -> None:
 
     assert holes is not None
     assert str(CATEGORIES["holes"]) in str(holes.body)
-    assert "drill_hole" in str(holes.body)
+    assert str(REGISTRY.get("drill_hole").title) in str(holes.body)
 
 
 def test_f1_on_a_taught_operation_opens_its_guide() -> None:
@@ -553,8 +573,8 @@ def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
     """Ohne Anleitung schlägt F1 den Eintrag der Operation in der Referenz auf,
     an seiner Überschrift — für jede Operation im Register, in jeder Kategorie.
 
-    Die Stelle wird im Text gesucht, wie das Fenster ihn zeigt: ohne die
-    Auszeichnung des Registernamens.
+    Das Ziel trägt die Operationskennung unsichtbar: Gleich benannte
+    Operationen bleiben verschiedene Einträge.
     """
     from app.core import guides, markup
 
@@ -568,9 +588,53 @@ def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
         if spec.name in taught:
             continue
         key, spot = manual.help_for(spec.name)
-        if key not in pages or f"### {spot}" not in pages[key]:
+        anchors = dict(manual.reference_anchors(key))
+        if (
+            key not in pages
+            or spot != f"#{manual.operation_anchor(spec.name)}"
+            or anchors.get(spot[1:]) != str(spec.title)
+            or f"### {spec.title}" not in pages[key]
+        ):
             lost.append(f"{spec.name} → {key}: {spot!r}")
     assert not lost, "\n".join(lost)
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_reference_anchors_follow_the_headings_and_keep_duplicate_titles_distinct(
+    language: str,
+) -> None:
+    """Anker und sichtbare Überschriften haben in jeder Sprache dieselbe Ordnung."""
+    from app.i18n import get_language, set_language
+
+    previous = get_language()
+    try:
+        set_language(language)
+        seen: set[str] = set()
+        for page in manual.pages():
+            anchors = manual.reference_anchors(page.key)
+            if not anchors:
+                continue
+            headings = re.findall(r"^### (.+)$", str(page.body), re.MULTILINE)
+            assert [title for _anchor, title in anchors] == headings, page.key
+            for anchor, _title in anchors:
+                assert anchor not in seen, anchor
+                seen.add(anchor)
+        assert len(seen) == len(REGISTRY.all())
+        for first, second in (
+            ("create_brep_cone", "create_cone"),
+            ("create_organizer_rim", "insert_organizer_rim"),
+        ):
+            assert str(REGISTRY.get(first).title) == str(REGISTRY.get(second).title)
+            assert manual.help_for(first) != manual.help_for(second)
+    finally:
+        set_language(previous)
+
+
+def test_only_reference_pages_expose_operation_anchors() -> None:
+    """Eine Erklärseite gleichen Namens oder ein fremder Schlüssel hat kein F1-Ziel."""
+    assert manual.reference_anchors("parts") == ()
+    assert manual.reference_anchors("ref-unknown") == ()
+    assert manual.operation_anchor("create_cone") == "operation-create_cone"
 
 
 def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
@@ -1069,7 +1133,127 @@ def test_a_page_opens_at_the_entry_it_was_asked_for(qt_app: QApplication) -> Non
             window.show_page(page, spot)
             shown = window.current_page()
             assert shown is not None and shown.key == page
-            assert window.text.textCursor().selectedText() == spot
+            assert window.text.textCursor().selectedText() == str(
+                REGISTRY.get("insert_nut_trap").title
+            )
+            assert spot[1:] in window.text.textCursor().charFormat().anchorNames()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("create_brep_cone", "create_cone"),
+        ("create_organizer_rim", "insert_organizer_rim"),
+    ],
+)
+def test_f1_selects_each_duplicate_title_at_its_own_anchor(
+    qt_app: QApplication, names: tuple[str, str]
+) -> None:
+    """Vorwärts und zurück auf derselben Seite: jeder gleiche Titel bleibt sein Ziel."""
+    window = ManualWindow()
+    try:
+        positions: dict[str, int] = {}
+        for name in (*names, *reversed(names)):
+            page, spot = manual.help_for(name)
+            window.show_page(page, spot)
+            cursor = window.text.textCursor()
+            assert cursor.selectedText() == str(REGISTRY.get(name).title)
+            assert cursor.blockFormat().headingLevel() == 3
+            assert spot[1:] in cursor.charFormat().anchorNames()
+            previous = positions.setdefault(name, cursor.selectionStart())
+            assert cursor.selectionStart() == previous
+        assert positions[names[0]] != positions[names[1]]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_f1_anchors_ignore_body_mentions_and_raw_html(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nur echte Überschriften bekommen Ziele; Roh-HTML bleibt sichtbarer Text."""
+    first = manual.operation_anchor("first")
+    second = manual.operation_anchor("second")
+    page = manual.Page(
+        "ref-probe",
+        "Probe",
+        "## Probe\n\nGleicher Titel steht schon im Fließtext.\n\n"
+        f'<a name="{second}" href="file://///fremd.example/x">Gleicher Titel</a>\n\n'
+        "### Gleicher Titel\n\nErster Eintrag.\n\n"
+        "### Gleicher Titel\n\nZweiter Eintrag.",
+        generated=True,
+    )
+    monkeypatch.setattr(manual, "pages", lambda: (page,))
+    monkeypatch.setattr(
+        manual,
+        "reference_anchors",
+        lambda key: ((first, "Gleicher Titel"), (second, "Gleicher Titel")),
+    )
+    window = ManualWindow()
+    try:
+        positions = []
+        for anchor in (first, second):
+            window.show_page(page.key, f"#{anchor}")
+            cursor = window.text.textCursor()
+            assert cursor.selectedText() == "Gleicher Titel"
+            assert cursor.blockFormat().headingLevel() == 3
+            assert cursor.charFormat().anchorNames() == [anchor]
+            positions.append(cursor.selectionStart())
+        assert positions[0] < positions[1]
+        assert 'href="file:' not in window.text.document().toHtml()
+        assert "<a name=" in window.text.document().toPlainText()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_recipe_subheadings_preserve_all_native_reference_anchors(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rezept-Hinweise dürfen trotz ATX und Setext keinen Operationsanker übernehmen."""
+    from dataclasses import replace
+
+    from app.core.registry.registry import Registry
+    from app.core.registry.surfaces import documentation
+
+    own = Registry()
+    first = REGISTRY.get("create_brep_cone")
+    second = REGISTRY.get("create_cone")
+    own.register(
+        replace(
+            first,
+            doc=(
+                f"### {second.title}\n\nEin Hinweis.\n\nWeitere Hinweise\n===\n\nText.\n\n"
+                f"> ### {second.title}\n\n- ### {second.title}"
+            ),
+        )
+    )
+    own.register(second)
+    page = manual.Page(
+        manual.reference_key(first.category),
+        CATEGORIES[first.category],
+        documentation(own, category=first.category, technical=False),
+        generated=True,
+    )
+    anchors_for = manual.reference_anchors
+    monkeypatch.setattr(manual, "pages", lambda: (page,))
+    monkeypatch.setattr(manual, "reference_anchors", lambda key: anchors_for(key, own))
+    window = ManualWindow()
+    try:
+        positions = []
+        for spec in (first, second):
+            key, anchor = manual.help_for(spec.name, own)
+            window.show_page(key, anchor)
+            cursor = window.text.textCursor()
+            assert cursor.selectedText() == str(spec.title)
+            assert anchor[1:] in cursor.charFormat().anchorNames()
+            assert cursor.blockFormat().headingLevel() == 3
+            positions.append(cursor.selectionStart())
+        assert positions[0] != positions[1]
+        assert "Weitere Hinweise" in window.text.document().toPlainText()
     finally:
         window.close()
         window.deleteLater()
@@ -1211,10 +1395,10 @@ def test_a_generated_chapter_shows_its_title_in_the_window_too(qt_app: QApplicat
     """
     window = ManualWindow()
 
-    window.show_page("rules")
+    window.show_page("profiles")
     shown = window.text.toPlainText()
 
-    page = manual.find("rules")
+    page = manual.find("profiles")
     assert page is not None
     assert shown.startswith(str(page.title)), shown[:80]
 
@@ -1485,6 +1669,45 @@ def test_an_additional_language_needs_no_manual_generator_code(
     assert make_manual.page_for("nl") == ("nl/manual.html", "../handbuch/nl")
 
 
+def test_layout_refresh_preserves_released_chapters_and_is_repeatable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine Website-Korrektur darf keine unveröffentlichten Handbuchtexte einführen."""
+    from tools import make_manual
+
+    monkeypatch.setattr(make_manual, "WEBSITE", tmp_path)
+    page = tmp_path / "handbuch.html"
+    chapter = '<h3 id="released">Veröffentlichter Stand</h3><p>Unverändert &amp; lesbar.</p>'
+    navigation = '<nav class="toc" id="toc"><a href="#released">Kapitel</a></nav>'
+    page.write_text(
+        f"<html><head><style>alt</style></head><body><main>{navigation}{chapter}</main></body></html>",
+        encoding="utf-8",
+    )
+    make_manual.refresh_layout("de")
+    first = page.read_text(encoding="utf-8")
+    make_manual.refresh_layout("de")
+    assert page.read_text(encoding="utf-8") == first
+    assert chapter in first
+    assert navigation in first
+    assert first.count('<details class="manual-index"') == 1
+    assert '<body class="manual-page">' in first
+
+
+def test_layout_refresh_leaves_unknown_templates_untouched(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein unbekannter Rahmen wird nicht teilweise überschrieben."""
+    from tools import make_manual
+
+    monkeypatch.setattr(make_manual, "WEBSITE", tmp_path)
+    page = tmp_path / "handbuch.html"
+    original = "<html><head><style>alt</style></head><body>Anderer Aufbau</body></html>"
+    page.write_text(original, encoding="utf-8")
+    with pytest.raises(ValueError, match="Vorlage"):
+        make_manual.refresh_layout("de")
+    assert page.read_text(encoding="utf-8") == original
+
+
 def test_every_chapter_carries_its_own_heading() -> None:
     """Auch die erzeugten. Vier Kapitel hatten keine — und damit keinen Anker.
 
@@ -1626,8 +1849,16 @@ def test_the_knowledge_pages_stand_before_the_reference() -> None:
     kann."""
     keys = [page.key for page in manual.pages()]
     scene = keys.index(manual.reference_key("scene"))
-    assert keys.index("rules") < scene
     assert keys.index("profiles") < scene
+
+
+def test_the_customer_manual_has_no_agent_internal_chapters() -> None:
+    """Die Bedienanleitung zeigt Handlungen und Hilfe, keine Anweisungen an die KI."""
+    pages = manual.pages()
+    keys = {page.key for page in pages}
+    assert not {"rules", "remote-tools"} & keys
+    assert {"chat", "generating", "remote", "models", "profiles", "messages"} <= keys
+    assert not any("manual:remote-tools" in str(page.body) for page in pages)
 
 
 def test_the_remote_page_lists_exactly_what_gets_through() -> None:
@@ -1953,7 +2184,8 @@ def test_f1_in_the_dialog_of_an_operation_without_a_guide_marks_its_entry(
             assert opened is not None and opened.isVisible()
             page = opened.current_page()
             assert page is not None and page.key == key, name
-            assert opened.text.textCursor().selectedText() == spot, name
+            assert opened.text.textCursor().selectedText() == str(REGISTRY.get(name).title), name
+            assert spot[1:] in opened.text.textCursor().charFormat().anchorNames(), name
             dialog.reject()
     finally:
         window.close()

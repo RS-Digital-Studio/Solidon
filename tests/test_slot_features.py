@@ -2401,6 +2401,119 @@ def test_the_split_sentence_names_the_parts_the_body_has_at_the_end(
     assert said == [("bore.splits_the_body", {"count": 4})], said
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_partial_bridge_keeps_the_current_bore_split_in_cold_and_warm_reports(
+    profile: Profile, kernel: str, quality: Quality
+) -> None:
+    """Zwei Schnitte und die echte halbe Brücke: 2 → 4 → 3, auch nach Undo und Cache."""
+    from app.core.registry import Registry
+    from app.core.scene import OperationDraft, ResultCache, evaluate
+
+    project, history, box = _a_cube_cut_in_two(profile, kernel)
+    history.apply(
+        "Zweites Langloch quer",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": 5.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 20.0,
+                    "axis": "z",
+                    "depth": 0.0,
+                    "anchor": "mouth",
+                    "slotted": True,
+                    "slot_length": 100.0,
+                    "slot_angle": 90.0,
+                },
+            )
+        ],
+    )
+    history.apply(
+        "Halbe Brücke",
+        [
+            OperationDraft(
+                op=box,
+                params={
+                    "width": 7.0,
+                    "depth": 20.0,
+                    "height": 4.0,
+                    "x": 6.5,
+                },
+            )
+        ],
+    )
+    history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"))])
+    raw = []
+    bore = REGISTRY.get("drill_hole")
+
+    def recorded(ctx):
+        result = bore.fn(ctx)
+        raw.extend(finding for finding in result.findings if finding.code == "bore.splits_the_body")
+        return result
+
+    own = Registry()
+    for spec in REGISTRY.all():
+        own.register(dataclasses.replace(spec, fn=recorded) if spec.name == bore.name else spec)
+    cache = ResultCache()
+
+    def checked(count):
+        result = evaluate(
+            project.document,
+            profile,
+            registry=own,
+            quality=quality,
+            cache=cache,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+        )
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        assert result.scene.objects["obj_1"].mesh.component_count == count
+        split = [f for f in result.scene.report.findings if f.code == "bore.splits_the_body"]
+        if count == 1:
+            assert split == []
+        else:
+            assert len(split) == 1
+            assert split[0].values == {"count": count}
+            assert split[0].op_id == 3 and split[0].object_id == "obj_1"
+            assert {action.id for action in split[0].suggestions} >= {"correct_input"}
+        assert [dict(f.values) for f in raw] == [{"count": 2}, {"count": 4}]
+        assert all(f.op_id is None for f in raw)
+        return result
+
+    checked(3)
+    hits = cache.statistics.hits
+    checked(3)
+    assert cache.statistics.hits - hits == 5
+    history.undo()
+    history.undo()
+    checked(4)
+    history.redo()
+    history.redo()
+    checked(3)
+    history.apply(
+        "Volle Brücke",
+        [
+            OperationDraft(
+                op=box,
+                params={
+                    "width": 20.0,
+                    "depth": 20.0,
+                    "height": 4.0,
+                },
+            )
+        ],
+    )
+    bridge = project.document.ops[-1].outputs[0]
+    history.apply("Ganz vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", bridge))])
+    checked(1)
+    history.undo()
+    history.undo()
+    checked(3)
+
+
 def _plate_with_a_second_body(
     kernel: str,
     *,
@@ -3077,6 +3190,56 @@ def test_a_through_slot_does_not_cut_a_second_body_past_the_bore(
     assert float(pieces[0].bounds[1, 2]) == pytest.approx(16.0, abs=0.02)
 
 
+def _touching_plates_with_a_bore(kernel: str, profile: Profile) -> SceneObject:
+    """Zwei 40 x 20 x 10 mm große Platten berühren sich bei z = 10 mm."""
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+        from app.core.brep.kernel import Solid
+
+        compound = TopoDS_Compound()
+        builder = BRep_Builder()
+        builder.MakeCompound(compound)
+        lower = edit.box(40.0, 20.0, 10.0)
+        upper = edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, 10.0))
+        builder.Add(compound, lower.shape)
+        builder.Add(compound, upper.shape)
+        bored = edit.cut_bore(
+            Solid(compound),
+            position=(0.0, 0.0, 10.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=22.0,
+        )
+        return SceneObject(
+            id="obj_1", name="Berührplatten", mesh=bored, kind="brep", features=features_of(bored)
+        )
+
+    lower = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    upper.apply_translation((0.0, 0.0, 15.0))
+    shells = MeshData.of(trimesh.util.concatenate([lower, upper]))
+    bored = drill(
+        shells,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        normal=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=0.0,
+        anchor="centre",
+        profile=profile,
+        compensate=False,
+    ).mesh
+    return SceneObject(id="obj_1", name="Berührplatten", mesh=bored, features=detect(bored))
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_a_second_body_in_the_bore_does_not_make_the_pull_a_split(
     profile: Profile, kernel: str
@@ -3102,6 +3265,123 @@ def test_a_second_body_in_the_bore_does_not_make_the_pull_a_split(
 
     assert output.mesh.component_count <= 2, "die Vorbedingung: nichts ist zerfallen"
     assert "bore.splits_the_body" not in {finding.code for finding in findings}, findings
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_pulling_a_bore_through_touching_plates_keeps_one_slot_and_all_material(
+    profile: Profile, kernel: str
+) -> None:
+    """Berührende Schalen sind beim Schließen und Ziehen eine gedruckte Fläche.
+
+    Zwei Platten zu je 8 000 mm³ berühren sich bei z = 10 mm. Die Bohrung geht
+    durch beide; ein Langloch mit Länge 12 und Breite 6 nimmt
+    ``(36 + 9π) · 20`` mm³ weg. Der Wert kommt aus der Rechteckfläche zwischen
+    den Halbkreisen und deren Kreisfläche, nicht aus einem vorigen Lauf.
+    """
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+    from app.core.errors import SHOW_LOCATION
+
+    entry = _touching_plates_with_a_bore(kernel, profile)
+    if kernel == "brep":
+        assert entry.mesh.solid_count == 2, "die Vorbedingung: zwei berührende Körper"
+        original = entry.mesh.volume
+    else:
+        assert entry.mesh.component_count == 2, "die Vorbedingung: zwei berührende Schalen"
+        original = entry.mesh.volume
+    assert original == pytest.approx(15_435.5, abs=2.0)
+
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+
+    expected = 16_000.0 - (36.0 + 9.0 * math.pi) * 20.0
+    slots = [feature for feature in output.features.values() if feature.kind == "slot"]
+    assert output.mesh.volume == pytest.approx(expected, abs=1.0)
+    assert len(slots) == 1, f"ein durchgehendes Langloch erwartet, gefunden: {len(slots)}"
+    assert float(slots[0].params["depth"]) == pytest.approx(20.0, abs=0.1)
+    assert not {"bore.splits_the_body", "slot_hole.feature_lost"} & {
+        finding.code for finding in findings
+    }, findings
+    merge_findings = [finding for finding in findings if finding.code == "boolean.parts_united"]
+    assert len(merge_findings) == 1
+    assert merge_findings[0].severity == "info"
+    assert str(merge_findings[0].message) == (
+        "Teile des Modells wurden vor diesem Schritt zu einem Körper vereinigt."
+    )
+    assert merge_findings[0].location is not None
+    assert merge_findings[0].suggestions == (SHOW_LOCATION,)
+    if kernel == "brep":
+        from app.core.brep.features import features_of
+
+        native_slots = [
+            feature for feature in features_of(output.mesh).values() if feature.kind == "slot"
+        ]
+        assert output.mesh.solid_count == 1
+        assert len(native_slots) == 1, (
+            f"ein exaktes Langloch erwartet, gefunden: {len(native_slots)}"
+        )
+    else:
+        assert output.mesh.component_count == 1
+
+
+def test_brep_slot_pull_reports_when_touching_solids_cannot_be_united(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile
+) -> None:
+    """Ein erfolgloses Fusen darf nicht als vereinigter Körper weiterlaufen."""
+    from app.core.brep import edit
+    from app.core.errors import (
+        BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+        CANCEL,
+        CORRECT_INPUT,
+        SHOW_LOCATIONS,
+        GeometryError,
+    )
+
+    entry = _touching_plates_with_a_bore("brep", profile)
+    monkeypatch.setattr(edit, "fuse_solids", lambda solid, *, cancelled=None: solid)
+
+    with pytest.raises(GeometryError) as caught:
+        run_op_with_findings(
+            "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+        )
+
+    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+    assert caught.value.object_id == entry.id
+    assert caught.value.suggestions == (SHOW_LOCATIONS, CORRECT_INPUT, CANCEL)
+
+
+def test_brep_slot_preflight_does_not_continue_when_search_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile
+) -> None:
+    """Der exakte Kern bekommt denselben Vollständigkeitsvertrag wie der Netzkern."""
+    from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+    from app.core.geom import repair as repair_module
+    from app.core.geom.repair import CROSSING_SEARCH_INCOMPLETE_DETAIL
+
+    entry = _touching_plates_with_a_bore("brep", profile)
+    observed: dict[str, object] = {}
+
+    def incomplete(_body, **kwargs):
+        observed.update(kwargs)
+        raise GeometryError(
+            detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+
+    monkeypatch.setattr(repair_module, "parts_that_cross", incomplete)
+
+    with pytest.raises(GeometryError) as caught:
+        run_op_with_findings(
+            "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+        )
+
+    assert observed["include_face_contacts"] is True
+    assert observed["max_pairs"] is None
+    assert observed["require_complete"] is True
+    assert caught.value.detail == CROSSING_SEARCH_INCOMPLETE_DETAIL
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -3791,173 +4071,6 @@ def test_bores_with_their_own_noise_all_pull_to_the_same_world_direction(
     for angle in angles:
         assert angle is not None, angles
         assert min(angle, 180.0 - angle) == pytest.approx(0.0, abs=0.5), angles
-
-
-def _touching_plates_with_a_bore(kernel: str, profile: Profile) -> SceneObject:
-    """Zwei 40 x 20 x 10 mm große Platten berühren sich bei z = 10 mm."""
-    if kernel == "brep":
-        from tests.helpers import exact_kernel
-
-        exact_kernel()
-        from OCP.BRep import BRep_Builder
-        from OCP.TopoDS import TopoDS_Compound
-
-        from app.core.brep import edit
-        from app.core.brep.features import features_of
-        from app.core.brep.kernel import Solid
-
-        compound = TopoDS_Compound()
-        builder = BRep_Builder()
-        builder.MakeCompound(compound)
-        lower = edit.box(40.0, 20.0, 10.0)
-        upper = edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, 10.0))
-        builder.Add(compound, lower.shape)
-        builder.Add(compound, upper.shape)
-        bored = edit.cut_bore(
-            Solid(compound),
-            position=(0.0, 0.0, 10.0),
-            direction=(0.0, 0.0, 1.0),
-            diameter=6.0,
-            depth=22.0,
-        )
-        return SceneObject(
-            id="obj_1", name="Berührplatten", mesh=bored, kind="brep", features=features_of(bored)
-        )
-
-    lower = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
-    lower.apply_translation((0.0, 0.0, 5.0))
-    upper = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
-    upper.apply_translation((0.0, 0.0, 15.0))
-    shells = MeshData.of(trimesh.util.concatenate([lower, upper]))
-    bored = drill(
-        shells,
-        position=(0.0, 0.0, 10.0),
-        axis="z",
-        normal=(0.0, 0.0, 1.0),
-        diameter=6.0,
-        depth=0.0,
-        anchor="centre",
-        profile=profile,
-        compensate=False,
-    ).mesh
-    return SceneObject(id="obj_1", name="Berührplatten", mesh=bored, features=detect(bored))
-
-
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-def test_pulling_a_bore_through_touching_plates_keeps_one_slot_and_all_material(
-    profile: Profile, kernel: str
-) -> None:
-    """Berührende Schalen sind beim Schließen und Ziehen eine gedruckte Fläche.
-
-    Zwei Platten zu je 8 000 mm³ berühren sich bei z = 10 mm. Die Bohrung geht
-    durch beide; ein Langloch mit Länge 12 und Breite 6 nimmt
-    ``(36 + 9π) · 20`` mm³ weg. Der Wert kommt aus der Rechteckfläche zwischen
-    den Halbkreisen und deren Kreisfläche, nicht aus einem vorigen Lauf.
-    """
-    if kernel == "brep":
-        from tests.helpers import exact_kernel
-
-        exact_kernel()
-    from app.core.errors import SHOW_LOCATION
-
-    entry = _touching_plates_with_a_bore(kernel, profile)
-    if kernel == "brep":
-        assert entry.mesh.solid_count == 2, "die Vorbedingung: zwei berührende Körper"
-        original = entry.mesh.volume
-    else:
-        assert entry.mesh.component_count == 2, "die Vorbedingung: zwei berührende Schalen"
-        original = entry.mesh.volume
-    assert original == pytest.approx(15_435.5, abs=2.0)
-
-    output, findings = run_op_with_findings(
-        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
-    )
-
-    expected = 16_000.0 - (36.0 + 9.0 * math.pi) * 20.0
-    slots = [feature for feature in output.features.values() if feature.kind == "slot"]
-    assert output.mesh.volume == pytest.approx(expected, abs=1.0)
-    assert len(slots) == 1, f"ein durchgehendes Langloch erwartet, gefunden: {len(slots)}"
-    assert float(slots[0].params["depth"]) == pytest.approx(20.0, abs=0.1)
-    assert not {"bore.splits_the_body", "slot_hole.feature_lost"} & {
-        finding.code for finding in findings
-    }, findings
-    merge_findings = [finding for finding in findings if finding.code == "boolean.parts_united"]
-    assert len(merge_findings) == 1
-    assert merge_findings[0].severity == "info"
-    assert str(merge_findings[0].message) == (
-        "Teile des Modells wurden vor diesem Schritt zu einem Körper vereinigt."
-    )
-    assert merge_findings[0].location is not None
-    assert merge_findings[0].suggestions == (SHOW_LOCATION,)
-    if kernel == "brep":
-        from app.core.brep.features import features_of
-
-        native_slots = [
-            feature for feature in features_of(output.mesh).values() if feature.kind == "slot"
-        ]
-        assert output.mesh.solid_count == 1
-        assert len(native_slots) == 1, (
-            f"ein exaktes Langloch erwartet, gefunden: {len(native_slots)}"
-        )
-    else:
-        assert output.mesh.component_count == 1
-
-
-def test_brep_slot_pull_reports_when_touching_solids_cannot_be_united(
-    monkeypatch: pytest.MonkeyPatch, profile: Profile
-) -> None:
-    """Ein erfolgloses Fusen darf nicht als vereinigter Körper weiterlaufen."""
-    from app.core.brep import edit
-    from app.core.errors import (
-        BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
-        CANCEL,
-        CORRECT_INPUT,
-        SHOW_LOCATIONS,
-        GeometryError,
-    )
-
-    entry = _touching_plates_with_a_bore("brep", profile)
-    monkeypatch.setattr(edit, "fuse_solids", lambda solid, *, cancelled=None: solid)
-
-    with pytest.raises(GeometryError) as caught:
-        run_op_with_findings(
-            "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
-        )
-
-    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
-    assert caught.value.object_id == entry.id
-    assert caught.value.suggestions == (SHOW_LOCATIONS, CORRECT_INPUT, CANCEL)
-
-
-def test_brep_slot_preflight_does_not_continue_when_search_is_incomplete(
-    monkeypatch: pytest.MonkeyPatch, profile: Profile
-) -> None:
-    """Der exakte Kern bekommt denselben Vollständigkeitsvertrag wie der Netzkern."""
-    from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
-    from app.core.geom import repair as repair_module
-    from app.core.geom.repair import CROSSING_SEARCH_INCOMPLETE_DETAIL
-
-    entry = _touching_plates_with_a_bore("brep", profile)
-    observed: dict[str, object] = {}
-
-    def incomplete(_body, **kwargs):
-        observed.update(kwargs)
-        raise GeometryError(
-            detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
-            suggestions=(CORRECT_INPUT, CANCEL),
-        )
-
-    monkeypatch.setattr(repair_module, "parts_that_cross", incomplete)
-
-    with pytest.raises(GeometryError) as caught:
-        run_op_with_findings(
-            "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
-        )
-
-    assert observed["include_face_contacts"] is True
-    assert observed["max_pairs"] is None
-    assert observed["require_complete"] is True
-    assert caught.value.detail == CROSSING_SEARCH_INCOMPLETE_DETAIL
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

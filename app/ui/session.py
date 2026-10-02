@@ -64,7 +64,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import read_bounded_payload, read_local_payload, unreadable_file
+from app.core.ingest.loader import read_local_payload, unreadable_file
 from app.core.ingest.plan import (
     ImportPlan,
     import_plan,
@@ -253,6 +253,12 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
 #: Baum, Bericht und Ansicht Unruhe ohne Gewinn.
 PICTURE_FIRST_TRIANGLES: Final = 50_000
 
+#: Wie beim Sitzungsabbau muss ein alter Auswertungsarbeiter sein Ende bestätigen.
+SYNC_EVALUATION_END_WAIT_MS: Final = 10_000
+
+#: Eine überholte Frage bemerkt den Abbruch auch ohne Qt-Zustellung einer Antwort.
+QUESTION_CANCEL_POLL_S: Final = 0.05
+
 
 def _recognition_follows(picture: EvaluationResult) -> bool:
     """Ob nach diesem Bild eine Erkennung von Sekunden läuft.
@@ -322,20 +328,25 @@ class _EvaluationWorker(Worker):
     cancelled = Signal()
     pictureWith = Signal(object)
 
-    def __init__(self, session: Session, *, picture_first: bool = False) -> None:
+    def __init__(
+        self, session: Session, *, picture_first: bool = False, quality: Quality = "draft"
+    ) -> None:
         super().__init__()
         self._session = session
         self._project_generation = session._project_generation
         self._picture_first = picture_first
+        self.quality: Quality = quality
+        """In welcher Güte dieser Lauf rechnet — fest ab dem Start, damit das
+        Ergebnis sagen kann, ob es für Export und Slicer taugt (RM-426)."""
 
     def _evaluate(self, session: Session) -> EvaluationResult:
         """Der ganze Lauf — beim Ladeweg mit dem Bild davor."""
         if not self._picture_first:
-            return session.run_evaluation()
+            return session.run_evaluation(self.quality)
         asked: dict[tuple[str, tuple[str, ...]], str | None] = {}
         session._pending.asked = asked
         try:
-            picture = session.run_evaluation(detect_features=False)
+            picture = session.run_evaluation(self.quality, detect_features=False)
         finally:
             session._pending.asked = None
         if picture.stopped_at is not None and not picture.scene.objects:
@@ -347,7 +358,7 @@ class _EvaluationWorker(Worker):
             self.pictureWith.emit(_as_picture(picture))
         session._pending.replay = asked
         try:
-            result = session.run_evaluation()
+            result = session.run_evaluation(self.quality)
         finally:
             session._pending.replay = None
         # Die Antworten des ersten Laufs trägt auch der zweite: Den Ladeschritt
@@ -406,7 +417,7 @@ class _EvaluationWorker(Worker):
                     if not check.changed:
                         break
                     rewritten = True
-                    result = session.run_evaluation()
+                    result = session.run_evaluation(self.quality)
                 if rewritten:
                     # Erst melden, wenn der Arbeiter mit dem Dokument fertig
                     # ist: Die Slots lesen es im Hauptthread, und die nächste
@@ -1627,8 +1638,13 @@ class Session(QObject):
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
         auf fein (§31)."""
         self._quality_once: Quality | None = None
-        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
+        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`.
+        Verbraucht wird sie beim Start des Arbeiters, nicht in seinem Lauf:
+        Ein Arbeiter, der noch am Stand davor rechnet, nähme sie sonst dem
+        Nachlauf weg, für den sie bestellt war."""
         self.last_result: EvaluationResult | None = None
+        self.last_quality: Quality = "draft"
+        """In welcher Güte :attr:`last_result` gerechnet wurde (RM-426)."""
         self.result_current = False
         """Ob die Szene bereits zum aktuellen Auswertungsauftrag gehört."""
         self._unconfirmed_import: tuple[str, frozenset[int], str] | None = None
@@ -2183,6 +2199,7 @@ class Session(QObject):
         forget_out_of_memory()
         self._dirty = False
         self.last_result = None
+        self.last_quality = "draft"
         self.picture = None
         self._unconfirmed_import = None
         self._coarse_scene = None
@@ -3509,26 +3526,6 @@ class Session(QObject):
         self.project.document.sources.pop(source_id, None)
         self.project.sources.pop(source_id, None)
 
-    def embed_model(self, path: Path) -> str:
-        """Eine Modelldatei ins Projekt holen, ohne sie auf den Stapel zu legen.
-
-        **Der Gegenpart zum Quellenfeld im Operationsdialog.** Wer *Modell
-        laden* aus dem Menü öffnet, sieht dort eine Auswahl der Quellen, die
-        das Projekt schon hat — und in einem frischen Projekt ist die leer.
-        Die Liste klappte auf und zeigte nichts; das liest sich nicht als „hier
-        fehlt etwas", sondern als kaputt (Regel 19: keine Sackgassen).
-
-        Anders als :meth:`import_payload` legt diese Methode **keine**
-        Operation an: Der Dialog, der sie ruft, ist ja gerade dabei, eine zu
-        bauen. Zwei ``load``-Schritte für eine Datei wären das Gegenteil dessen,
-        was der Kunde wollte.
-
-        Dieselbe Bauart wie :meth:`import_image`, und aus demselben Grund an
-        derselben Grenze: Der Weg ändert das Dokument, also gilt Konzept §2 C.
-        """
-        activation.require(activation.CHANGE)
-        return self.embed_model_payload(path.name, read_local_payload(path))
-
     def embed_model_payload(self, name: str, payload: bytes) -> str:
         """Bettet einen bereits begrenzt gelesenen Modellinhalt ein.
 
@@ -3542,25 +3539,6 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
         return source_id
-
-    def import_image(self, path: Path) -> str:
-        """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).
-
-        Eingebettet wie ein Modell, aber ohne load-Operation: ein Bild wird
-        kein Körper, es gehört einer Operation als Wert. Ohne diesen Weg
-        führte kein Bildformat in die Quellen — das Feld „Bild" bot STLs an,
-        und der Befund schlug eine Handlung vor, die es nicht gab.
-
-        **Die Grenze steht hier ausdrücklich**, obwohl keine Operation folgt.
-        Der Weg ändert das Dokument, also gilt Konzept §2 C — und dass er
-        praktisch nur aus einem Operationsdialog erreichbar ist, der ohnehin
-        gesperrt ist, ist ein Zufall der Oberfläche und keine Grenze. Wer sich
-        darauf verlässt, hat eine Zusage, die beim nächsten neuen Aufrufer
-        still verschwindet (`kern.md`: jede Stelle holt den Zustand selbst und
-        wirft selbst).
-        """
-        activation.require(activation.CHANGE)
-        return self.import_image_payload(path.name, read_bounded_payload(path))
 
     def import_image_payload(self, name: str, payload: bytes) -> str:
         """Bettet einen bereits begrenzt gelesenen Bildinhalt ein.
@@ -4510,7 +4488,8 @@ class Session(QObject):
         # Im Hauptthread: Das Fenster rechnet seine Grundlage mit Qt-Objekten,
         # der Arbeiter liest nur das Ergebnis (:attr:`evaluation_profile`).
         self._evaluation_settings = self._current_effective_settings()
-        worker = _EvaluationWorker(self, picture_first=self.picture_first())
+        quality, self._quality_once = self._quality_once or self.quality, None
+        worker = _EvaluationWorker(self, picture_first=self.picture_first(), quality=quality)
         # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
         # fertig, bevor Qt seine Signale zugestellt hat — und in dieser Lücke
         # startet der nächste. Ohne den Absender hielt der Nachzügler seine
@@ -4579,18 +4558,16 @@ class Session(QObject):
         """
         # Ein einmalig angeforderter Lauf gilt für diesen und keinen weiteren:
         # Wer die volle Kette braucht, braucht sie an einer Stelle, und alles
-        # danach soll wieder so schnell sein wie vorher (§31). Das Bild davor
-        # verbraucht ihn nicht — es gehört zum selben Lauf.
-        once = self._quality_once
-        if detect_features:
-            self._quality_once = None
+        # danach soll wieder so schnell sein wie vorher (§31). Die Güte legt
+        # :meth:`evaluate_async` beim Start des Arbeiters fest und gibt sie
+        # jedem seiner Läufe mit — dem Bild davor wie dem ganzen Lauf.
         # Bei einer Einfügemarke der Stand davor (P7.1) — die ganze Oberfläche
         # zeigt und löst gegen ihn auf, bis das Einfügen endet.
         document = self.displayed_document()
         result = evaluate(
             document,
             self.evaluation_profile,
-            quality=quality or once or self.quality,
+            quality=quality or self.quality,
             progress=self.report_progress,
             ask=self.ask_from_worker,
             question_context=self.announce_question,
@@ -4636,6 +4613,34 @@ class Session(QObject):
         self._quality_once = "fine"
         self.evaluate_async()
 
+    @property
+    def fine_current(self) -> bool:
+        """Ob das gezeigte Ergebnis zum Dokument gehört **und** fein gerechnet ist.
+
+        Das Fenster rechnet im Entwurf (§31); Export und Slicer brauchen die
+        feine Rechnung mit der vollen Rückfallkette. Bis 0.5.1 schrieben beide
+        das Entwurfsergebnis — ein verschmolzenes Teil mit einem Viertel der
+        Dreiecke, ein Kegel mit der Hälfte, während der Befund ``blend.draft``
+        versprach, Export und Druckvorbereitung rechneten fein (RM-426).
+        """
+        return self.result_current and not self.busy and self.last_quality == "fine"
+
+    def request_fine(self) -> None:
+        """Einen feinen Lauf bestellen, wenn das gezeigte Ergebnis keiner ist.
+
+        Läuft schon eine Auswertung, rechnet der Nachlauf fein; sie selbst
+        wird abgelöst, denn ihr Ergebnis wäre ohnehin nur der Entwurf.
+        """
+        if self.fine_current or self._quality_once == "fine":
+            return
+        running = self._worker
+        if running is not None and running.quality == "fine" and not self._rerun_pending:
+            # Ein feiner Lauf am heutigen Stand ist schon unterwegs; ihn neu zu
+            # starten, kostete nur seine bisherige Arbeit.
+            return
+        self._quality_once = "fine"
+        self.evaluate_async()
+
     def evaluate_now(self) -> EvaluationResult:
         """Synchroner Durchlauf, für Kommandozeile, Tests und Export (§38).
 
@@ -4646,12 +4651,28 @@ class Session(QObject):
         Bausteinschritt und diesem Lauf stand im Objektbaum die Szene ohne den
         Baustein, und das Fenster hielt eine markierte Zeile für nicht gewählt.
         """
+        worker = self._worker
+        self._rerun_pending = False
+        self._cancel_by_user = False
+        self._superseded = worker
+        if worker is not None:
+            self.cancel_signal.cancel()
+            self.questionInvalidated.emit()
+            if not worker.wait(SYNC_EVALUATION_END_WAIT_MS):
+                raise UserError(
+                    title=_("Die neue Berechnung kann noch nicht starten."),
+                    detail=_(
+                        "Die vorherige Berechnung wurde nicht rechtzeitig beendet. "
+                        "Die neue Berechnung wurde deshalb nicht gestartet."
+                    ),
+                    suggestions=(CANCEL,),
+                )
         self.cancel_signal.reset()
-        self._superseded = self._worker
         self._evaluation_settings = self._current_effective_settings()
         result = self.run_evaluation("fine")
         self.picture = None
         self.last_result = result
+        self.last_quality = "fine"
         # Wie in ``_on_finished``: Mit dem Ergebnis wartet keine Zustimmung mehr.
         self._recognition_answers.clear()
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
@@ -5448,7 +5469,7 @@ class Session(QObject):
         """Überholte Projekt- oder Arbeiterfragen dürfen keine Antwort übernehmen."""
         return (
             request.project_generation in (None, self._project_generation)
-            and not self._outdated(request.worker)
+            and not self._stale(request.worker)
             and not (
                 request.worker is not None
                 and (self._rerun_pending or self.cancel_signal.is_cancelled)
@@ -5546,7 +5567,9 @@ class Session(QObject):
         if not self.question_is_current(request):
             raise OperationCancelled
         self.askRequested.emit(request)
-        request.answered.wait()
+        while not request.answered.wait(QUESTION_CANCEL_POLL_S):
+            if not self.question_is_current(request):
+                raise OperationCancelled
         if not self.question_is_current(request):
             raise OperationCancelled
         asked = getattr(self._pending, "asked", None)
@@ -5612,6 +5635,7 @@ class Session(QObject):
             return
         self.picture = None
         self.last_result = result
+        self.last_quality = finished.quality if finished is not None else self.quality
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
         # dieser Größe genau das, was die Stufe einsparen soll. Eine

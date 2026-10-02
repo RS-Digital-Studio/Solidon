@@ -167,8 +167,9 @@ filterwarnings = [
   # deshalb eng auf dieses Fremdmodul begrenzt statt
   # numpy nach oben zu deckeln — eine Obergrenze hielte das ganze Projekt auf
   # einer alten Version fest. Fällt weg, sobald scikit-image nachgezogen hat; ob
-  # es so weit ist, zeigt der Job „Neueste Versionen“ in `build.yml` bei
-  # Release-Tags oder auf Handstart — solange das Repository öffentlich ist.
+  # es so weit ist, zeigt der Job „Neueste Versionen“ in build.yml bei
+  # öffentlichen v*-Tag-Pushes oder auf Handstart mit check_latest im
+  # öffentlichen Repository.
   'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:skimage\..*',
 ]
 markers = [

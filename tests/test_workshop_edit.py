@@ -370,6 +370,285 @@ def test_sequence_hook_never_replays_the_hero_action_or_inherits_its_voice():
     assert original["scenes"][0]["voice_after"] == "Fertig."
 
 
+def test_sequence_hook_does_not_reuse_hero_audio_targets(tmp_path):
+    plan = {
+        "hero": "apply",
+        "language": "de",
+        "hook": {"title": "Ergebnis", "voice": "Hier ist das Ergebnis."},
+        "short_hook": {"title": "Kurz", "voice": "Das fertige Ergebnis."},
+        "scenes": [
+            {
+                "key": "apply",
+                "short": True,
+                "first_slide": 0,
+                "last_slide": 3,
+                "action_first_slide": 1,
+                "action_last_slide": 2,
+                "voice_before": "Ich ändere das Maß.",
+                "voice_after": "Das Maß ist geändert.",
+                "short_voice_before": "Ich ändere es.",
+                "short_voice_after": "Es ist geändert.",
+                "audio_before": "hero-before.wav",
+                "audio_after": "hero-after.wav",
+                "short_audio_before": "short-hero-before.wav",
+                "short_audio_after": "short-hero-after.wav",
+            }
+        ],
+    }
+    capture = {"complete": True, "slides": [{"seconds": 2.0} for _ in range(3)]}
+    workshop_edit.write(tmp_path / "editorial.json", plan)
+    workshop_edit.write(tmp_path / "capture.json", capture)
+
+    jobs = workshop_edit.read(workshop_sequence_edit.prepare(tmp_path, short=False))["jobs"]
+
+    tutorial_targets = {job["text"]: job["target"] for job in jobs}
+    assert tutorial_targets["Hier ist das Ergebnis."] != tutorial_targets["Ich ändere das Maß."]
+    assert tutorial_targets["Ich ändere das Maß."].endswith("hero-before.wav")
+
+    short_jobs = workshop_edit.read(workshop_sequence_edit.prepare(tmp_path, short=True))["jobs"]
+    short_targets = {job["text"]: job["target"] for job in short_jobs}
+    assert short_targets["Das fertige Ergebnis."] != short_targets["Ich ändere es."]
+    assert short_targets["Ich ändere es."].endswith("short-hero-before.wav")
+
+
+def test_sequence_hook_keeps_only_the_hero_result_image_and_no_action_hold():
+    plan = {
+        "hero": "apply",
+        "hook": {"title": "Ergebnis", "voice": "Hier ist das Ergebnis."},
+        "short_hook": {"title": "Kurz", "voice": "Das Ergebnis."},
+        "scenes": [
+            {
+                "key": "apply",
+                "title": "Maß ändern",
+                "first_slide": 0,
+                "last_slide": 3,
+                "action_first_slide": 1,
+                "action_last_slide": 2,
+                "voice_before": "Ich ändere das Maß.",
+                "voice_after": "Das Maß ist geändert.",
+                "before_model_crop": [0, 0, 100, 100],
+                "after_model_crop": [100, 0, 200, 100],
+                "before_focus": [10, 10, 20, 20],
+                "after_focus": [120, 10, 40, 40],
+                "hold_frames": [{"slide": 0, "seconds": 0.5, "reason": "Vorzustand ist lesbar."}],
+            }
+        ],
+    }
+    scenes = workshop_sequence_edit.scenes_for(plan, short=False)
+    hook = scenes[0]
+    assert hook["model_crop"] == [100, 0, 200, 100]
+    assert hook["focus"] == [120, 10, 40, 40]
+    assert "hold_frames" not in hook
+    assert "audio_before" not in hook and "audio_after" not in hook
+
+    capture = {"slides": [{"seconds": 2.0} for _ in range(3)]}
+    speech = {
+        "hook-before": {
+            "text": "Hier ist das Ergebnis.",
+            "seconds": 1.0,
+            "path": "hook.wav",
+            "engine": "test",
+            "sentences": [],
+        },
+        "apply-before": {
+            "text": "Ich ändere das Maß.",
+            "seconds": 1.0,
+            "path": "before.wav",
+            "engine": "test",
+            "sentences": [],
+        },
+        "apply-after": {
+            "text": "Das Maß ist geändert.",
+            "seconds": 1.0,
+            "path": "after.wav",
+            "engine": "test",
+            "sentences": [],
+        },
+    }
+    phases, _events = workshop_sequence_edit.sequence_plan(scenes, capture, speech)
+    assert phases[0]["first_slide"] == 2
+
+
+def test_control_scene_matches_the_recommended_workshop_editor_schema(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from tools import make_workshop_videos
+
+    class Recorder:
+        frame_size = (1920, 1080)
+
+        def __init__(self):
+            self.slides = []
+
+        def add(self, _title, _detail, seconds, **_kwargs):
+            self.slides.append({"seconds": seconds})
+
+    monkeypatch.setattr(make_workshop_videos, "LANGUAGE", "de")
+    scene = make_workshop_videos.Tutorial.control_scene(
+        SimpleNamespace(recorder=Recorder()),
+        "control",
+        ("Zahl ändern", "Ich ändere die Zahl.", "Die Zahl ist geändert."),
+        ("Change a value", "I change the value.", "The value has changed."),
+        short=True,
+    )
+    plan = {
+        "hero": "control",
+        "language": "de",
+        "hook": {"title": "Ergebnis", "voice": "Die Zahl ist geändert."},
+        "short_hook": {"title": "Kurz", "voice": "Die Zahl stimmt."},
+        "scenes": [scene],
+    }
+    manifest = tmp_path / "editorial.json"
+    workshop_edit.write(manifest, plan)
+    workshop_edit.write(tmp_path / "capture.json", {"complete": True})
+
+    jobs = workshop_edit.read(workshop_edit.prepare(manifest))["jobs"]
+    tutorial_scene = workshop_edit.scene_list(plan, short=False)[1]
+    short_scene = workshop_edit.scene_list(plan, short=True)[1]
+
+    assert scene["short_voice"] == "Ich ändere die Zahl. Die Zahl ist geändert."
+    assert scene["detail"] == scene["voice"]
+    assert tutorial_scene["detail"] == scene["voice"]
+    assert short_scene["voice"] == scene["short_voice"]
+    assert {job["target"] for job in jobs} == {
+        "audio/tutorial-hook.wav",
+        "audio/tutorial-control.wav",
+        "audio/short-hook.wav",
+        "audio/short-control.wav",
+    }
+    assert any(job["text"] == scene["short_voice"] for job in jobs)
+
+
+def test_print_settings_entry_scene_matches_the_workshop_editor_schema(tmp_path, monkeypatch):
+    from tools import make_workshop_videos
+
+    monkeypatch.setattr(make_workshop_videos, "LANGUAGE", "de")
+    scene = make_workshop_videos._print_settings_entry_scene(
+        "settings",
+        first_slide=0,
+        last_slide=2,
+        action_first_slide=1,
+        target_bounds=[1450, 20, 160, 80],
+        model_crop=[400, 200, 800, 500],
+        frame_size=(1920, 1080),
+    )
+    plan = {
+        "hero": scene["key"],
+        "language": "de",
+        "hook": {"title": "Ergebnis", "voice": "Die Werte bleiben prüfbar."},
+        "short_hook": {"title": "Kurz", "voice": "Die Werte sind sichtbar."},
+        "scenes": [scene],
+    }
+    manifest = tmp_path / "editorial.json"
+    workshop_edit.write(manifest, plan)
+    workshop_edit.write(tmp_path / "capture.json", {"complete": True})
+
+    jobs = workshop_edit.read(workshop_edit.prepare(manifest))["jobs"]
+
+    assert scene["short_voice"] == ""
+    assert scene["detail"] == scene["voice"] == "Oben rechts öffne ich Drucker."
+    assert any(job["text"] == scene["voice"] for job in jobs)
+
+
+def test_recipe_scenes_are_completed_at_the_editorial_manifest_boundary(tmp_path):
+    from tools.make_workshop_videos import _editorial_scenes
+
+    captured = [
+        {
+            "key": "operation-entry",
+            "title": "Operation öffnen",
+            "short": True,
+            "voice_before": "Ich öffne die Operation.",
+            "voice_after": "Die Einstellungen stehen bereit.",
+        },
+        {
+            "key": "part-entry",
+            "title": "Baustein wählen",
+            "short": True,
+            "voice": "Ich wähle den Baustein aus.",
+            "detail": "Der Katalog zeigt den gewählten Baustein.",
+        },
+    ]
+    scenes = _editorial_scenes(captured)
+    plan = {
+        "hero": "operation-entry",
+        "language": "de",
+        "hook": {"title": "Ergebnis", "voice": "Die Änderung ist fertig."},
+        "short_hook": {"title": "Kurz", "voice": "Das Ergebnis ist fertig."},
+        "scenes": scenes,
+    }
+    manifest = tmp_path / "editorial.json"
+    workshop_edit.write(manifest, plan)
+    workshop_edit.write(tmp_path / "capture.json", {"complete": True})
+
+    jobs = workshop_edit.read(workshop_edit.prepare(manifest))["jobs"]
+    by_target = {job["target"]: job["text"] for job in jobs}
+
+    assert scenes[0]["voice"] == "Ich öffne die Operation. Die Einstellungen stehen bereit."
+    assert scenes[0]["detail"] == scenes[0]["voice"]
+    assert scenes[0]["short_voice"] == scenes[0]["voice"]
+    assert scenes[1]["detail"] == "Der Katalog zeigt den gewählten Baustein."
+    assert scenes[1]["short_voice"] == scenes[1]["voice"]
+    assert by_target["audio/tutorial-operation-entry.wav"] == scenes[0]["voice"]
+    assert by_target["audio/short-operation-entry.wav"] == scenes[0]["short_voice"]
+    assert by_target["audio/short-part-entry.wav"] == scenes[1]["short_voice"]
+
+
+def test_workshop_frame_bounds_scale_clip_and_cover_print_entry():
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QImage
+
+    from tools.make_workshop_videos import (
+        _entry_frame_bounds,
+        _frame_bounds,
+        _row_focus_bounds,
+        _slot_capture_bounds,
+    )
+
+    class Widget:
+        def __init__(self, origin, size):
+            self.origin = origin
+            self.size = size
+
+        def mapToGlobal(self, point):  # noqa: N802 — Qt-Vertrag des Prüfstellvertreters
+            return QPoint(self.origin[0] + point.x(), self.origin[1] + point.y())
+
+        def width(self):
+            return self.size[0]
+
+        def height(self):
+            return self.size[1]
+
+    window = Widget((100, 50), (800, 600))
+    printer_button = Widget((90, 40), (100, 100))
+    dialog = Widget((250, 150), (300, 200))
+
+    target_bounds, entry_crop = _entry_frame_bounds(window, (1600, 1200), printer_button, dialog)
+    assert target_bounds == [0, 0, 180, 180]
+    assert entry_crop == [0, 0, 900, 600]
+    picture = workshop_edit._cropped(QImage(1600, 1200, QImage.Format.Format_RGB32), entry_crop)
+    assert (picture.width(), picture.height()) == (900, 600)
+
+    lower_right = Widget((840, 630), (100, 100))
+    assert _frame_bounds(window, (1600, 1200), lower_right) == [1480, 1160, 120, 40]
+
+    viewport = Widget((140, 80), (500, 450))
+    measure_box = Widget((600, 110), (180, 220))
+    crop, focus = _slot_capture_bounds(window, (1600, 1200), viewport, measure_box)
+    assert crop == [80, 60, 1280, 900]
+    assert focus == [986, 106, 388, 468]
+    cropped = workshop_edit._cropped(QImage(1600, 1200, QImage.Format.Format_RGB32), crop)
+    assert (cropped.width(), cropped.height()) == (1280, 900)
+
+    row = Widget((630, 180), (60, 30))
+    assert _row_focus_bounds(window, (1600, 1200), measure_box, row) == [
+        1000,
+        236,
+        360,
+        108,
+    ]
+
+
 def test_sequence_can_label_and_shorten_waiting_without_cutting_the_real_action():
     scene = {
         "key": "setup",

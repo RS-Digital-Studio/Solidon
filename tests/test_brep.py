@@ -33,7 +33,7 @@ from app.core.sketch.profile import Profile as Outline
 from app.core.sketch.profile import ProfileSegment as Segment
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
 from app.core.units import EPS_DISPLAY, EPS_GEOM
-from tests.helpers import CountingToken, exact_kernel
+from tests.helpers import CountingToken, exact_kernel, open_box
 
 exact_kernel()
 
@@ -344,6 +344,35 @@ def test_native_boolean_does_not_treat_missing_attributes_as_an_explicit_colour(
     expected = np.where(result.raw.triangles_center[:, 0] >= -EPS_GEOM, 4, 0)
     assert set(expected) == {0, 4}
     assert np.array_equal(np.asarray(result.mesh.slots), expected)
+
+
+def test_fusing_touching_solids_removes_the_shared_face_and_keeps_filament_slots() -> None:
+    """Das Entfernen einer Kontaktfläche behält die Farben der Außenflächen."""
+    from collections import Counter
+
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    lower = edit.box(40.0, 20.0, 10.0)
+    lower = Solid(lower.shape, face_slots=(1,) * lower.face_count)
+    upper = edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, 10.0))
+    upper = Solid(upper.shape, face_slots=(2,) * upper.face_count)
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, lower.shape)
+    builder.Add(compound, upper.shape)
+    source = Solid(
+        compound,
+        face_slots=(1,) * lower.face_count + (2,) * upper.face_count,
+    )
+
+    result = edit.fuse_solids(source)
+
+    assert source.solid_count == 2
+    assert result.solid_count == 1
+    assert result.volume == pytest.approx(16_000.0)
+    assert Counter(result.face_slots) == {1: 5, 2: 5}
 
 
 def _native_affine_shape(source: Solid, diagonal: tuple[float, float, float]) -> Solid:
@@ -1772,24 +1801,6 @@ def _nurbs(solid: Solid) -> Solid:
     return Solid(BRepBuilderAPI_NurbsConvert(solid.shape, True).Shape())
 
 
-def _open_box() -> Solid:
-    """Ein Quader ohne Deckel: fünf Flächen, genäht, vier freie Kanten am Rand."""
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
-    from OCP.TopAbs import TopAbs_FACE
-    from OCP.TopExp import TopExp_Explorer
-
-    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
-    faces = TopExp_Explorer(block().shape, TopAbs_FACE)
-    kept = 0
-    while faces.More():
-        if kept < 5:
-            sewing.Add(faces.Current())
-        kept += 1
-        faces.Next()
-    sewing.Perform()
-    return Solid(sewing.SewedShape())
-
-
 def test_an_open_shell_or_a_lone_face_is_not_closed() -> None:
     """``is_closed`` fragt nach freien Kanten — und fand bis zum 22.09.2026 nie eine.
 
@@ -1808,7 +1819,7 @@ def test_an_open_shell_or_a_lone_face_is_not_closed() -> None:
     assert edit.cylinder(10.0, 5.0).is_closed
     assert edit.sphere(8.0).is_closed
     assert edit.cone(10.0, 0.0, 5.0).is_closed, "die Spitze ist eine entartete Kante, keine freie"
-    assert not _open_box().is_closed
+    assert not open_box().is_closed
     lone = Solid(TopoDS.Face(TopExp_Explorer(block().shape, TopAbs_FACE).Current()))
     assert not lone.is_closed
 
@@ -1872,7 +1883,7 @@ def test_closedness_is_asked_once_per_body() -> None:
     assert solid.is_closed
     assert solid._cache["closed"] is True
     assert solid.is_closed
-    shell = _open_box()
+    shell = open_box()
     assert not shell.is_closed
     assert shell._cache["closed"] is False
     assert not shell.is_closed
@@ -4932,32 +4943,3 @@ def test_only_the_face_that_breaks_the_ladder_takes_the_slow_integral(
     assert measured.mass == pytest.approx(6000.0, rel=properties.INTEGRAL_RELATIVE_ERROR)
     assert measured.mass == pytest.approx(slow.mass, rel=properties.INTEGRAL_RELATIVE_ERROR)
     assert measured.centre == pytest.approx((18.0, 14.0, 10.0), abs=1e-6)
-
-
-def test_fusing_touching_solids_removes_the_shared_face_and_keeps_filament_slots() -> None:
-    """Das Entfernen einer Kontaktfläche behält die Farben der Außenflächen."""
-    from collections import Counter
-
-    from OCP.BRep import BRep_Builder
-    from OCP.TopoDS import TopoDS_Compound
-
-    lower = edit.box(40.0, 20.0, 10.0)
-    lower = Solid(lower.shape, face_slots=(1,) * lower.face_count)
-    upper = edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, 10.0))
-    upper = Solid(upper.shape, face_slots=(2,) * upper.face_count)
-    compound = TopoDS_Compound()
-    builder = BRep_Builder()
-    builder.MakeCompound(compound)
-    builder.Add(compound, lower.shape)
-    builder.Add(compound, upper.shape)
-    source = Solid(
-        compound,
-        face_slots=(1,) * lower.face_count + (2,) * upper.face_count,
-    )
-
-    result = edit.fuse_solids(source)
-
-    assert source.solid_count == 2
-    assert result.solid_count == 1
-    assert result.volume == pytest.approx(16_000.0)
-    assert Counter(result.face_slots) == {1: 5, 2: 5}

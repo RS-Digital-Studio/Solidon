@@ -10,11 +10,72 @@ Gegenprobe gegen die zuvor falsche Profilkennung.
 
 Für diesen Commit liefen 83 gezielte Kernfälle; das damalige vollständige
 zentrale Entwicklungstor meldete 18.771 bestanden und 62 übersprungen.
-Suite, Ruff, Format und mypy endeten jeweils mit Exit 0. Die funktionale
-Sieben-Slicer-Matrix und die native Fensterabnahme beim Release sind davon
-getrennte Nachweise und hier noch offen.
+Suite, Ruff, Format und mypy endeten jeweils mit Exit 0. Die Sieben-Slicer-Matrix
+ist inzwischen durchgelaufen; ihre funktionale Abnahme und die native
+Fensterabnahme beim Release bleiben wegen der nachfolgenden offenen Befunde
+getrennte, noch ausstehende Nachweise.
 
-## Geprüfter Zwischenstand vom 02.10.2026, 07:51 CEST
+## Abschließende Zählung vom 02.10.2026, 17:21 CEST
+
+Der Lauf begann um 03:06:56 und endete um 17:21:20 CEST. Alle 125
+Modellaufträge endeten mit Rückgabecode 0; `.matrix-status` meldet `complete`.
+Die 125 Ergebnisdateien tragen `done=True`, dieselbe Lauf-/Codeidentität und
+die jeweils erwartete Eingabeidentität. Alle enthalten die sieben vollständigen
+Kombinationseinträge. **Das ist ein abgeschlossener Lauf, keine fachliche
+Abnahme:** Eine Eingabe lieferte wegen eines Ladefehlers keine Varianten.
+
+124 Modelle erzeugten insgesamt 2.296 Ergebniszeilen. Eine Zeile bezeichnet
+Modell × Slicer/Drucker × Variante × Platte. 1.870 Zeilen melden `ok=True`
+mit Druckdateipfad, 426 `ok=False` mit `ExternalToolError`. Ein erfolgreicher
+Prozessauftrag oder Druckdateipfad belegt keine fehlerfreie Druckübergabe.
+
+| Slicer | Ergebniszeilen | Druckdateipfad, `ok=True` | `ok=False` | Erfolgreiche Zeilen mit Fehlerbefund |
+|---|---:|---:|---:|---:|
+| ElegooSlicer | 330 | 297 | 33 | 29 |
+| Bambu Studio | 330 | 300 | 30 | 18 |
+| Creality Print | 330 | 279 | 51 | 7 |
+| OrcaSlicer | 310 | 262 | 48 | 23 |
+| PrusaSlicer | 324 | 248 | 76 | 6 |
+| Cura | 322 | 274 | 48 | 49 |
+| SuperSlicer | 350 | 210 | 140 | 17 |
+| **Gesamt** | **2.296** | **1.870** | **426** | **149** |
+
+Die 426 fehlgeschlagenen Zeilen verteilen sich nach dem gespeicherten
+Fehlerdetail auf fünf Gruppen; damit ist ihre Ursache noch nicht geklärt:
+
+- **184:** keine Druckdatei geschrieben.
+- **110:** als Slicerabsturz gemeldet (108 SuperSlicer, 2 OrcaSlicer).
+- **74:** mindestens ein Teil liegt nicht ganz auf der Druckplatte
+  (40 Creality, 28 Orca, je 3 Elegoo und Bambu).
+- **56:** Slicer meldet Teile außerhalb seines Bauraums (PrusaSlicer).
+- **2:** Teil höher als der Druckraum (PrusaSlicer).
+
+Zusätzlich zu diesen 426 Zeilen bleiben zwei Eingangsfehler:
+`image_00001_.glb` meldet `error:op.load.AmbiguityError`, null Körper und
+sieben leere Variantenlisten trotz abgeschlossener Ergebnisdatei.
+`carpet-corner-clip.step` meldet `error:op.orient_for_print.GeometryError`;
+die Varianten wurden anschließend trotzdem berechnet.
+
+Unter den 1.870 technisch erfolgreichen Zeilen tragen **149 einen
+Fehlerbefund**: 103-mal `gcode.off_the_bed`, 52-mal
+`gcode.shorter_than_model`, 5-mal `gcode.spool_left_out`. Das sind 160
+Vorkommen mit Überschneidungen, nicht 160 verschiedene Zeilen. Außerdem haben
+770 erfolgreiche Zeilen mindestens eine vom Läufer als bedeutsam gewertete
+Markierung, etwa Herstellerabweichung, Stützen in Schicht 1, unterbrochenen
+Rand, Zeitabweichung oder zu schnell gedruckte schmale Stege. Diese Hinweise
+sind einzeln einzuordnen. **52 der 149 Zeilen mit Fehlerbefund haben keine
+solche Markierung:** Der Markierungsfilter ersetzt die Auswertung von
+`slice_findings` nicht. Auch die übrigen Zeilen sind damit nicht pauschal
+fachlich freigegeben.
+
+Die Zählung umfasst ausschließlich die 125 Modell-Ergebnisdateien direkt
+unter den Modellordnern, keine Slicer-internen `result.json`. Identitäten und
+Summen wurden unabhängig nachgezählt. Der Lauf gehört zum unten genannten
+Quellstand `129f8ca11`; spätere Korrekturen, darunter RM-341, sind dadurch
+nicht geprüft. Vor Reparaturen sind die Befunde mit dem aktuellen Hauptzweig
+abzugleichen. Die Restarbeit steht unter RM-312 in `ROADMAP.md`.
+
+## Historischer Zwischenstand vom 02.10.2026, 07:51 CEST
 
 Die Sieben-Slicer-Matrix läuft noch. Dieser Stand ist **keine vollständige
 Abnahme**. Er hält nur vollständig geschriebene Modellresultate fest; zwei
@@ -72,7 +133,7 @@ Cura 5.13.0 ist durch die installierte Produktversion belegt; die gehashte
 ist 7.3.0, die ausführbare Datei trägt 6149. OrcaSlicer meldet keine
 Dateiversion; 2.4.2 stammt aus den installierten Produktmetadaten.
 
-## Fehlerstand der 52 vollständigen Modelle
+## Historischer Fehlerstand der ersten 52 vollständigen Modelle
 
 | Slicer | Keine Druckdatei | Absturz | Bauraum | Höhe | Fehler gesamt |
 |---|---:|---:|---:|---:|---:|
@@ -112,8 +173,8 @@ Varianten, nicht verschiedene Dateien:
   übrigen auf Prusa (3) und Creality (2).
 - **Höhe (2):** `宠物便便器.3mf`, beide auf PrusaSlicer.
 
-Die 50 Fälle ohne passende `result.json` werden nach dem vollständigen Lauf
-gegen ihre Prozessdetails geprüft. Bei den 17 Abstürzen ist die Ursache
+Die 50 damaligen Fälle ohne passende `result.json` bleiben gegen ihre
+Prozessdetails zu prüfen. Bei den 17 damals gemeldeten Abstürzen ist die Ursache
 ebenfalls nicht für alle Dateien belegt. Eine genaue Gegenprobe ist für
 `1x1-bin.stl` vorhanden: SuperSlicer 2.5.59.13 endete mit
 `3221225477` (`0xC0000005`, Zugriffsverletzung) nach 1,117 s. Windows meldete
@@ -187,13 +248,18 @@ Schlussfolgerungen aus diesem Bericht nachzuvollziehen:
 
 ## Noch offen
 
-- Dieselbe Matrix zu 125 von 125 vollständigen Modelleingaben fortsetzen und
-  danach sämtliche Variantenfehler gegen Prozessausgaben und Slicerantworten
-  einordnen. Der hier eingefrorene 07:51-Stand ist ein geprüfter Zwischenstand,
-  nicht der aktuelle Laufstand; erst die vollständige Matrix schließt den
-  Bericht ab.
+- Die fünf Gruppen der 426 Variantenfehler am aktuellen Hauptzweig gegen
+  Prozessausgaben, Eingaben und tatsächlich verwendete Profile einordnen;
+  bestätigte Produktfehler beheben und gezielt nachprüfen.
+- Die zwei Eingangsfehler und die Abschlusszählung bei leeren Varianten
+  klären; 125 abgeschlossene Aufträge sind nur 124 Modelle mit Varianten.
+- Die 149 erfolgreichen Ausgaben mit Fehlerbefund und die 770 markierten
+  Ausgaben fachlich prüfen. Fehlerbefunde neben dem Markierungsfilter
+  vollständig berücksichtigen.
 - Den SuperSlicer-Auslöser ohne passende Symbole nicht als geklärt ausgeben.
 - Die fehlenden Druckdateien einzeln klassifizieren; eine fehlende Datei allein
   belegt noch keinen Slicerabsturz.
-- Für die Creality-Schätzung bleibt offen, ob die 7.3-Zeit der realen
-  Druckdauer näher kommt; das ist mit einem tatsächlichen Druck zu belegen.
+- Die verbleibenden 1.353,128 s des ursprünglichen Creality-Versionsunterschieds
+  mit identischen Profilen zuordnen. Ob die 7.3-Zeit der realen Druckdauer
+  näher kommt, ist mit einem tatsächlichen Druck zu belegen.
+- Die native Fensterabnahme der Düsenwahl beim Release steht weiter aus.

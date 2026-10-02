@@ -34,7 +34,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben) |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
-| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten |
+| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); `machine_shift` rechnet Solidons Bettmitte in Maschinenkoordinaten um (`PrinterProfile.bed_origin`); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten |
 | `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): Vorbereitungsfingerabdrücke, Spulenbindungen, werkzeugweise G-Code-Mengen; `costs_for` rechnet Kosten je Währung aus übergebenen Daten. Das Journal schreibt `knowledge/filaments.py` |
 
 - **`Feature.measure_sources`** nennt je Parameter die Wertequelle (`native`,
@@ -108,17 +108,24 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
 
 **Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten,
 Bildanleitungen und Referenz aus dem Register, gegliedert in fünf Teile über
-`OUTLINE`; die erste Seite „Wo fange ich an?“ listet die Anleitungen aus
-`guides.GUIDES`; `help_for` sagt F1, wo eine Operation erklärt ist; die
+`OUTLINE`, der einzigen Quelle für den Teil jeder Seite; die erste Seite „Wo fange ich an?“ listet die Anleitungen aus
+`guides.GUIDES`; `help_for` sagt F1, wo eine Operation erklärt ist, in der
+Referenz über `#operation-…`. `operation_anchor` und `reference_anchors`
+teilen die unsichtbaren Ziele und ihre Reihenfolge mit Website und nativer Ansicht; die
 Referenzkapitel heißen `ref-<kategorie>` (`reference_key`), kein
 Seitenschlüssel kommt zweimal vor;
+die Kundenreferenz nutzt `documentation(technical=False)` mit Feldtiteln und
+Auswahlbeschriftungen statt API-Namen. Agentenregeln und rohe MCP-Werkzeuge
+bleiben außerhalb von `pages()`; alle Kundenausgaben und die Suche lesen diese
+gemeinsame Bediengliederung;
 `spacemouse_access_help`, USB-Regel nur bei bekannter
 Hersteller-/Produktkennung) · `manual_search.py` (die Suche im Handbuch:
 Rangfolge nach Titel, Kurzfassung, Stichwort und Text, Fundstelle je Seite;
 Faltung, Trefferstärke und Kundenwörter aus `registry/search.py`) ·
 `guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf
 die ein Bild zeigt, dazu die Operationen, die eine Anleitung lehrt, und die
-Erklärseiten, an deren Ende `manual.pages` auf sie verweist;
+Erklärseiten, an deren Ende `manual.pages` auf sie verweist; die Zuordnung zum
+Handbuchteil steht nur in `manual.OUTLINE`;
 aufgenommen beim Release in der echten Oberfläche,
 Konzept `konzepte/konzept-handbuch-2026-09.md`) · `figures.py`
 (Abbildungskatalog, dazu je Anleitungsschritt ein Bildschirmfoto) ·
@@ -127,8 +134,12 @@ bleibt vollständig im SVG) · `markup.py` (Markdown → HTML, nur die selbst
 erzeugte Teilmenge) · `examples.py` · `tour.py` (Beispielprojekte und Touren).
 
 **Kundenkontakt — der Weg hinaus** — `updates.py` (fragen, holen, prüfen,
-einspielen, nur auf Klick; **wie**, entscheidet `install_kind()`, nicht die
-Plattform) · `changes.py` (was neu ist) · `report.py` (Fehlerbericht als
+einspielen; die Prüfung läuft auch beim Start, Laden und Einspielen nur auf
+Klick; **wie**, entscheidet `install_kind()`, nicht die Plattform).
+Versionsabfrage und Paketholen teilen den Absender: Quellen und Paketproben
+mit `SOLIDON_UPDATE_TEST=1` senden `Solidon-Test/<version>` und werden von
+`website/api/count.php` nicht gezählt; gewöhnliche Installationen senden
+weiter `Solidon/<version>` · `changes.py` (was neu ist) · `report.py` (Fehlerbericht als
 Ordner: schreibt, sendet nie) · `support.py` (**der einzige Weg hinaus**, an
 einem Knopf) · `licence_service.py` (Aktivierung und Abmeldung, nur nach
 ausdrücklichem Klick) · `feedback.py`: Unter `versions[APP_VERSION]` in

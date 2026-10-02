@@ -448,6 +448,36 @@ def test_the_same_import_works_when_the_unit_is_given(tmp_path: Path) -> None:
     assert load(path).document.ops[0].params["unit"] == "in"
 
 
+def test_a_file_in_metres_is_not_read_as_inches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein Helm von 0,30 × 0,25 × 0,30 (Meter) kam als Zoll an (RM-420).
+
+    Fenster und Operation fragen, weil die Meter-Lesart unter dem doppelten
+    Drucker bleibt; die Kommandozeile rechnete ohne Drucker und nahm still
+    Zoll. Jetzt fragt sie wie die Operation — ohne Terminal mit dem Ausweg
+    „--unit“, mit ihm richtig.
+    """
+    import trimesh
+
+    helmet = tmp_path / "helm.stl"
+    trimesh.creation.box(extents=(0.30, 0.25, 0.30)).export(helmet)
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+
+    def no_one(prompt: str = "") -> str:
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", no_one)
+    assert main(["import", str(path), str(helmet)]) != 0, "keine stille Lesart"
+    said = capsys.readouterr()
+    assert "--unit" in said.out + said.err
+    assert not load(path).document.ops, "nichts gespeichert"
+
+    assert main(["import", str(path), str(helmet), "--unit", "m"]) == 0
+    assert load(path).document.ops[0].params["unit"] == "m"
+
+
 def test_info_describes_the_evaluated_scene(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

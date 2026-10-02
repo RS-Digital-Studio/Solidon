@@ -28,13 +28,9 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Final
 
 from app.i18n import TranslatableText, _
-
-#: In welchem Teil des Handbuchs eine Anleitung steht. Die übrigen Teile
-#: (Funktionen, Hilfe bei Problemen, Nachschlagen) tragen keine Anleitungen.
-GuidePart = Literal["start", "tasks"]
 
 #: Die festen Ziele, die eine Anleitung nennen darf.
 #:
@@ -181,7 +177,6 @@ class Guide:
     key: str
     title: TranslatableText | str
     summary: TranslatableText | str
-    part: GuidePart
     steps: tuple[GuideStep, ...]
     teaches: tuple[str, ...] = ()
     """Die Operationen, die diese Anleitung lehrt, mit ihrem Registernamen.
@@ -231,7 +226,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="window-overview",
         title=_("Das Fenster auf einen Blick"),
         summary=_("Wo was steht, in einem Bild."),
-        part="start",
         steps=(
             legend(
                 _("Jede Nummer im Bild steht für einen Bereich des Fensters."),
@@ -258,7 +252,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="print-a-model",
         title=_("Ein Modell prüfen und drucken"),
         summary=_("Von der heruntergeladenen Datei bis zur Druckdatei."),
-        part="start",
         steps=(
             step(
                 _("Ziehen Sie die Datei auf das Fenster oder klicken Sie auf *Modell öffnen …*."),
@@ -292,7 +285,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="drill-a-hole",
         title=_("Ein Loch bohren"),
         summary=_("Löcher in ein vorhandenes Modell bohren und später verschieben."),
-        part="start",
         steps=(
             step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
             # Nur der Punkt: Mit dem Auswahlfenster am rechten Rand im selben
@@ -335,7 +327,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         summary=_(
             "Vom leeren Projekt zur fertigen Platte, mit einem Baustein für das Schraubenloch."
         ),
-        part="start",
         steps=(
             step(_("Klicken Sie auf dem Startbildschirm auf *Neues Projekt*."), "start.new"),
             step(
@@ -387,7 +378,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         summary=_(
             "Eine Dose aushöhlen, den passenden Deckel erzeugen und beides druckfertig hinlegen."
         ),
-        part="start",
         steps=(
             # Klick und Knopf in je einem Bild: Zusammen wurde der Ausschnitt
             # das ganze Fenster, und *Aushöhlen* war nicht mehr zu lesen
@@ -453,7 +443,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
             "Ein Teil, das nicht auf das Bett passt, in Stücke mit Stiften teilen "
             "und druckfertig hinlegen."
         ),
-        part="start",
         steps=(
             step(
                 _(
@@ -484,7 +473,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="move-and-turn",
         title=_("Ein Teil verschieben und drehen"),
         summary=_("Am Griff im Bild ziehen oder genaue Werte eintippen."),
-        part="tasks",
         steps=(
             step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
             step(_("Unten unter der Ansicht: Klicken Sie auf *Bewegen*."), "tool:transform"),
@@ -518,12 +506,11 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="change-a-dimension",
         title=_("Ein Maß nachträglich ändern"),
         summary=_("Maße als Parameter anlegen und später an einer Stelle ändern."),
-        part="tasks",
         steps=(
             step(
                 _(
                     "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an "
-                    "und haken Sie *Maße als Parameter anlegen* an."
+                    "und lassen Sie *Maße als Parameter anlegen* angehakt."
                 ),
                 "dialog.naming",
             ),
@@ -552,7 +539,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="undo-a-step",
         title=_("Einen Schritt zurücknehmen oder ändern"),
         summary=_("Rückgängig machen, einen Schritt im Verlauf ändern, ausschalten oder löschen."),
-        part="tasks",
         steps=(
             step(
                 _(
@@ -585,7 +571,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="thread-a-hole",
         title=_("Ein Gewinde in eine Bohrung"),
         summary=_("Ein druckbares Innengewinde in eine vorhandene Bohrung setzen."),
-        part="tasks",
         steps=(
             step(
                 _(
@@ -615,7 +600,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         summary=_(
             "Die Kanten eines Teils rund oder schräg machen, mit Vorschau vor dem Übernehmen."
         ),
-        part="tasks",
         steps=(
             step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
             step(_("Rechts unter *Auswahl*: Klappen Sie *Ändern* auf."), "section:shaping"),
@@ -642,7 +626,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="label-a-part",
         title=_("Ein Teil beschriften"),
         summary=_("Text erhaben oder vertieft auf eine Fläche setzen."),
-        part="tasks",
         steps=(
             step(
                 _(
@@ -677,7 +660,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="draw-and-pull",
         title=_("Eine Form zeichnen und hochziehen"),
         summary=_("Einen Umriss zeichnen und daraus ein eigenes Teil machen."),
-        part="tasks",
         steps=(
             step(_("Oben in der Werkzeugleiste: Klicken Sie auf *Zeichnen*."), "toolbar.draw"),
             step(
@@ -717,7 +699,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="two-colours",
         title=_("Zweifarbig drucken"),
         summary=_("Einer Fläche ein zweites Filament geben; der Slicer bekommt den Wechsel mit."),
-        part="tasks",
         steps=(
             step(
                 _(
@@ -748,7 +729,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="repair-a-model",
         title=_("Ein Modell reparieren"),
         summary=_("Was Solidon beim Einlesen selbst repariert, und wie Sie den Rest beheben."),
-        part="tasks",
         steps=(
             step(
                 _(

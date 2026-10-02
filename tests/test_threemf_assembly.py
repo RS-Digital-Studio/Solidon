@@ -900,7 +900,7 @@ def test_with_a_bed_every_part_carries_its_place() -> None:
     denselben G-Code ergaben.
     """
     payload = threemf.write_assembly(
-        [_part((10, 10, 10), "A"), _part((10, 10, 10), "B")], "Platte", bed=(256.0, 256.0)
+        [_part((10, 10, 10), "A"), _part((10, 10, 10), "B")], "Platte", bed_centre=(128.0, 128.0)
     )
 
     text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
@@ -915,7 +915,7 @@ def test_the_geometry_itself_stays_untouched() -> None:
     wer sie als Platte liest, bekommt die Platte — deshalb steht die
     Verschiebung beim gelesenen Körper, nicht bei den Punkten im XML.
     """
-    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
+    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed_centre=(128.0, 128.0))
     text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
 
     coordinates = [float(value) for value in re.findall(r'x="(-?[0-9.]+)"', text)]
@@ -935,7 +935,7 @@ def test_damaged_numbers_are_read_a_second_time(monkeypatch: pytest.MonkeyPatch)
     (lxml verhält sich gleich), nicht die Art der Umwandlung — das geladene
     ``rtree``. Ein zweiter Anlauf trägt.
     """
-    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
+    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed_centre=(128.0, 128.0))
     echt = threemf_reader._read_numbers
     versuche: list[int] = []
 
@@ -962,7 +962,7 @@ def test_numbers_damaged_twice_are_not_silently_dropped(
     das ist richtig. Wortlos zu verschwinden ist es nicht: siebzehn Teile
     kamen als sechzehn zurück, und keine Zeile sagte warum.
     """
-    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
+    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed_centre=(128.0, 128.0))
 
     def immer_beschädigt(vertices: object, triangles: object) -> object:
         raise ValueError("invalid literal for int() with base 10: '98968'")
@@ -985,7 +985,7 @@ def test_numbers_in_blocks_give_the_same_arrays(monkeypatch: pytest.MonkeyPatch)
     zwölf Dreiecken vier und sechs Blöcke — die Nähte liegen also mitten im
     Körper.
     """
-    payload = threemf.write_assembly([_part((10, 20, 30), "A")], bed=(256.0, 256.0))
+    payload = threemf.write_assembly([_part((10, 20, 30), "A")], bed_centre=(128.0, 128.0))
     whole = threemf_reader.read_objects(payload)[0].mesh
     monkeypatch.setattr(threemf_reader, "NUMBER_BLOCK", 2)
     blocked = threemf_reader.read_objects(payload)[0].mesh
@@ -1012,7 +1012,7 @@ def test_the_model_xml_is_read_in_pieces_and_nothing_stays_frozen(
     """
     import gc
 
-    payload = threemf.write_assembly([_part((10, 20, 30), "Würfel")], bed=(256.0, 256.0))
+    payload = threemf.write_assembly([_part((10, 20, 30), "Würfel")], bed_centre=(128.0, 128.0))
     whole = threemf_reader.read_objects(payload)
     assert gc.get_freeze_count() == 0
     monkeypatch.setattr(threemf_reader, "XML_CHUNK", 7)

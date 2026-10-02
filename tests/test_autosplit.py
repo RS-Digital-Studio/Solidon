@@ -2378,14 +2378,14 @@ def test_a_part_that_already_fits_is_not_cut(profile: Profile) -> None:
     assert project.document.ops == []
 
 
-def test_the_sections_of_a_turned_axis_match_the_upright_ones(profile: Profile) -> None:
+def test_sections_across_matches_upright_and_turned_axes(profile: Profile) -> None:
     """Die Drehung muss exakt sein — die Stiftpositionen werden durch sie
     gerechnet.
     """
     plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
 
-    along_z = autosplit.sections_along(plate, "z", np.array([0.0]))[0]
-    along_x = autosplit.sections_along(plate, "x", np.array([0.0]))[0]
+    along_z = autosplit.sections_across(plate, autosplit.AXIS_NORMALS["z"], np.array([0.0]))[0]
+    along_x = autosplit.sections_across(plate, autosplit.AXIS_NORMALS["x"], np.array([0.0]))[0]
 
     assert along_z is not None and along_x is not None
     assert along_z.area == pytest.approx(60.0 * 40.0)

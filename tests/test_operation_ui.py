@@ -1939,6 +1939,45 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     assert np.allclose(edited_preview.mesh.raw.vertices, edited.mesh.raw.vertices)
 
 
+def test_move_feature_acceptance_hits_the_dialog_preview_cache(window: MainWindow) -> None:
+    """Übernehmen rechnet den unveränderten Auftrag aus der Vorschau nicht neu."""
+    from PySide6.QtTest import QTest
+
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle()
+    object_id = select(window)
+    body = window.session.last_result.scene.objects[object_id]
+    bore = next(
+        feature
+        for feature in body.features.values()
+        if feature.kind == "hole" and feature.recognised
+    )
+    centre = tuple(float(value) for value in bore.params["centre"])
+    window.run_operation(
+        REGISTRY.get("move_feature"),
+        {"at_feature": bore.id, "x": centre[0] + 1.0, "y": centre[1], "z": centre[2]},
+    )
+    dialog = window._op_dialog
+    assert dialog is not None
+    QTest.qWait(350)
+    assert window.session.wait_for_idle()
+    QTest.qWait(50)
+    assert dialog.can_accept()
+    approval = window._preview_approval
+    assert approval is not None and approval.order.drafts
+    preview_draft = approval.order.drafts[0]
+    cache = window.session.cache.statistics
+    misses_before_acceptance = cache.misses
+    hits_before_acceptance = cache.hits
+
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    assert window.session.result_current
+    assert cache.misses == misses_before_acceptance, "Übernehmen rechnete die Operation neu"
+    assert cache.hits > hits_before_acceptance, "Übernehmen verwendete keinen Vorschau-Treffer"
+    assert window.session.project.document.ops[-1].seed == preview_draft.seed
+
+
 def test_texture_panel_changes_existing_step_with_live_preview(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2152,7 +2191,7 @@ def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path)
     before = len(window.session.project.document.ops)
 
     def pick() -> tuple[str, str]:
-        source_id = window.session.import_image(picture)
+        source_id = window.session.import_image_payload(picture.name, picture.read_bytes())
         return source_id, picture.name
 
     spec = REGISTRY.get("displace_image")
@@ -2356,12 +2395,16 @@ def test_cancelling_rejects_a_source_already_waiting_in_qt(
 
 
 @pytest.mark.parametrize(
-    ("method", "filename"),
-    [("import_image", "bild.png"), ("embed_model", "teil.stl")],
+    ("reader", "method", "filename"),
+    [
+        ("read_bounded_payload", "import_image_payload", "bild.png"),
+        ("read_local_payload", "embed_model_payload", "teil.stl"),
+    ],
 )
-def test_a_picker_source_is_bounded_before_it_enters_the_document(
+def test_picker_sources_are_bounded_before_they_enter_the_document(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    reader: str,
     method: str,
     filename: str,
 ) -> None:
@@ -2373,7 +2416,8 @@ def test_a_picker_source_is_bounded_before_it_enters_the_document(
     session = Session()
 
     with pytest.raises(ValidationError) as caught:
-        getattr(session, method)(path)
+        payload = getattr(loader, reader)(path)
+        getattr(session, method)(path.name, payload)
 
     assert caught.value.constraint == "file_too_large"
     assert not session.project.document.sources
@@ -4742,6 +4786,114 @@ def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
         QApplication.processEvents()
 
 
+def test_hidden_expression_refusal_keeps_acceptance_locked_with_a_recovery_path(
+    qt_app: QApplication,
+) -> None:
+    """Ein verborgener fx-Ausdruck nennt die Wahl, mit der er sich korrigieren lässt."""
+    dialog = OperationDialog(REGISTRY.get("pattern"), {}, values={"kind": "linear"})
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        angle = dialog._editors["angle"]
+        kind = dialog._editors["kind"]
+        assert isinstance(angle, ValueField)
+        assert angle.isHidden(), "der lineare Zweig blendet den Winkel aus"
+
+        angle.spin.lineEdit().setText("400")
+        assert angle.refusal(), "der verborgene Zahlenwert ist abgelehnt"
+        dialog._follow_source_pending()
+        assert dialog._field_refusal() == "", "verborgene Zahlenwerte tragen nicht"
+        assert dialog._accept_button.isEnabled()
+
+        angle.toggle.setChecked(True)
+        angle.text.setText("=400")
+        QApplication.processEvents()
+        assert angle.refusal(), "der verborgene Ausdruck liegt über 360 Grad"
+        assert not dialog._accept_button.isEnabled()
+        assert not dialog.can_accept()
+        assert dialog._hidden_expression_notice.isVisibleTo(dialog)
+        assert "Winkel" in dialog._hidden_expression_notice.text()
+        assert "Art" in dialog._hidden_expression_notice.text()
+        assert "Kreisförmig" in dialog._hidden_expression_notice.text()
+
+        dialog._hidden_expression_open.click()
+        assert kind.hasFocus(), "der Rückweg setzt den Fokus auf die sichtbare Wahl"
+        assert kind.currentData() == "linear", "der Rückweg ändert die Wahl nicht selbst"
+        kind.setCurrentIndex(kind.findData("circular"))
+        QApplication.processEvents()
+        assert not angle.isHidden()
+        assert angle.refusal()
+        angle.text.setText("=360")
+        QApplication.processEvents()
+        assert not angle.refusal()
+        assert dialog._hidden_expression_notice.isHidden()
+        assert dialog.can_accept()
+
+        angle.text.setText("=400")
+        QApplication.processEvents()
+        assert not angle.isHidden()
+        assert angle.refusal()
+        assert dialog._hidden_expression_notice.isHidden()
+
+        kind.setCurrentIndex(kind.findData("linear"))
+        QApplication.processEvents()
+        assert angle.isHidden()
+        assert not dialog._accept_button.isEnabled()
+        assert dialog._hidden_expression_notice.isVisibleTo(dialog)
+        assert "Kreisförmig" in dialog._hidden_expression_notice.text()
+        dialog._hidden_expression_open.click()
+        assert kind.hasFocus(), "der Wechsel zum sichtbaren Feld wird ohne Tabsprung erklärt"
+        assert kind.currentData() == "linear", "der Hinweis ändert die Wahl nicht selbst"
+
+        kind.setCurrentIndex(kind.findData("circular"))
+        QApplication.processEvents()
+        assert not angle.isHidden()
+        assert angle.refusal()
+        assert dialog._hidden_expression_notice.isHidden()
+        angle.text.setText("=360")
+        QApplication.processEvents()
+        assert dialog.can_accept()
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
+def test_nested_hidden_expression_points_to_a_visible_dependency(
+    qt_app: QApplication,
+) -> None:
+    """Ein fx-Feld führt über verborgene Bedingungen zur sichtbaren Auswahl."""
+    dialog = OperationDialog(
+        REGISTRY.get("insert_screw_hole"),
+        {},
+        values={"countersink": True, "washer": False},
+    )
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        play = dialog._editors["play"]
+        countersink = dialog._editors["countersink"]
+        assert isinstance(play, ValueField)
+        assert play.isHidden()
+
+        play.toggle.setChecked(True)
+        play.text.setText("=3")
+        QApplication.processEvents()
+
+        assert play.refusal()
+        assert not dialog._accept_button.isEnabled()
+        assert dialog._hidden_expression_controller == "countersink"
+        assert dialog._hidden_expression_notice.isVisibleTo(dialog)
+        assert "Senkkopf" in dialog._hidden_expression_notice.text()
+        assert "Unterlegscheibe einlassen" not in dialog._hidden_expression_notice.text()
+
+        dialog._hidden_expression_open.click()
+        assert countersink.hasFocus(), "der Rückweg endet beim sichtbaren Steuerfeld"
+        assert countersink.isChecked(), "der Rückweg ändert die Auswahl nicht selbst"
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
 @pytest.fixture
 def deferred_exact_preview(window: MainWindow, monkeypatch: pytest.MonkeyPatch):
     """Echter exakter Eingang, getrennt zustellbare Rechnung und Bildaufbereitung."""
@@ -5875,6 +6027,14 @@ def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) ->
         assert "Projektparameter" in offered._naming.toolTip()
         offered._naming.setChecked(True)
         assert offered.names_dimensions()
+        remembered = OperationDialog(
+            REGISTRY.get("create_box"), {}, offer_naming=True, naming_default=True
+        )
+        try:
+            assert remembered.names_dimensions(), "das Fenster reicht die letzte Wahl durch"
+            assert remembered.offers_naming() and not plain.offers_naming()
+        finally:
+            remembered.deleteLater()
     finally:
         plain.deleteLater()
         offered.deleteLater()

@@ -22,6 +22,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError
+from app.core.geom import kernel_process
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data, face_components, signed_volume
 from app.core.log import get_logger
@@ -239,7 +240,7 @@ def _clipped_to_the_change(
     try:
         clipped_before = boolean("intersection", [before, box], quality=quality, allow_empty=True)
         clipped_after = boolean("intersection", [after, box], quality=quality, allow_empty=True)
-    except PROGRAMMING_ERRORS:
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten
         _log.info("difference falls back to the whole bodies: %s", problem)
@@ -454,7 +455,7 @@ def _cut_parts(
             mesh, solver = cut
             solvers.append(solver)
         return mesh, tuple(solvers)
-    except PROGRAMMING_ERRORS:
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception as problem:
         _log.warning("component difference could not be computed: %s", problem)
@@ -730,7 +731,7 @@ def _cut(
         # Befund im Prüfbericht daneben — für zwei Zustände, zwischen denen sich
         # schlicht nichts geändert hatte.
         outcome = boolean("difference", [keep, subtract], quality=quality, allow_empty=True)
-    except PROGRAMMING_ERRORS:
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten
         _log.warning("difference could not be computed: %s", problem)

@@ -16,7 +16,7 @@ import pytest
 import trimesh
 
 from app.core.errors import DECIMATE_AND_RETRY, ValidationError
-from app.core.geom import mesh_ops
+from app.core.geom import kernel_process, mesh_ops
 from app.core.geom.hollow import hollow
 from app.core.geom.label_ops import outlines
 from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
@@ -28,7 +28,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import ProjectSources, new_project
-from app.core.types import Document, OpContext, Profile, Scene, SceneObject, Source
+from app.core.types import Document, OpContext, Profile, Quality, Scene, SceneObject, Source
 from app.core.units import EPS_GEOM
 from tests.helpers import exact_kernel
 from tests.helpers import run_operation as run
@@ -45,6 +45,77 @@ def block(width: float = 40.0, depth: float = 40.0, height: float = 40.0) -> Mes
     body = trimesh.creation.box(extents=(width, depth, height))
     body.apply_translation((0.0, 0.0, height / 2.0))
     return MeshData.of(body)
+
+
+# --- ungültige Eingänge beim weichen Verschmelzen ---------------------------------
+
+
+@pytest.mark.parametrize("quality", ("draft", "fine"))
+@pytest.mark.parametrize("invalid", ("empty", "open", "flat"))
+@pytest.mark.parametrize("position", ("first", "second", "both"))
+def test_blending_refuses_invalid_inputs_before_planning_the_grid_or_field(
+    quality: Quality,
+    invalid: str,
+    position: str,
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM434/B02: Auch der Entwurfsweg sagt vor Bounds und Abstandsfeld reparierbar ab."""
+    from app.core.errors import NotManifoldError
+    from app.core.geom import blend
+
+    inputs = []
+    for index, side in enumerate(("first", "second")):
+        raw = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        if position in (side, "both"):
+            if invalid == "empty":
+                raw = trimesh.Trimesh(
+                    vertices=np.empty((0, 3)), faces=np.empty((0, 3), dtype=np.int64), process=False
+                )
+                assert len(raw.faces) == 0
+            elif invalid == "open":
+                raw.update_faces(np.arange(len(raw.faces)) > 1)
+                assert not raw.is_watertight
+            else:
+                raw.vertices[:, 2] = 0.0
+                assert raw.is_watertight, "Die Nullhöhe erhält die geschlossene Topologie."
+                assert MeshData.of(raw).volume == pytest.approx(0.0, abs=EPS_GEOM, rel=0.0)
+        inputs.append(SceneObject(id=f"obj_{index + 1}", name=side, mesh=MeshData.of(raw)))
+
+    original = [(entry.mesh.raw.vertices.copy(), entry.mesh.raw.faces.copy()) for entry in inputs]
+    field_calls = []
+
+    def unexpected_field(*args, **kwargs):
+        field_calls.append((args, kwargs))
+        pytest.fail("Ein ungültiger Eingang darf kein Abstandsfeld starten.")
+
+    monkeypatch.setattr(blend, "distance_field", unexpected_field)
+    spec = REGISTRY.get("blend_union")
+    with pytest.raises(NotManifoldError) as raised:
+        spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry for entry in inputs}),
+                inputs=inputs,
+                params=spec.params(radius=2.0, grid=1.0),
+                profile=profile,
+                quality=quality,
+                seed=None,
+                progress=lambda _fraction, _text: None,
+                ask=lambda _question, _choices: pytest.fail("Unerwartete Rückfrage"),
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    assert {
+        "repair_and_retry",
+        "show_locations",
+        "cancel",
+    } <= {action.id for action in raised.value.suggestions}
+    assert "Erst reparieren" in str(raised.value.detail)
+    assert field_calls == []
+    for entry, (vertices, faces) in zip(inputs, original, strict=True):
+        np.testing.assert_array_equal(entry.mesh.raw.vertices, vertices)
+        np.testing.assert_array_equal(entry.mesh.raw.faces, faces)
 
 
 # --- mirroring ------------------------------------------------------------------
@@ -1331,6 +1402,77 @@ def test_hollowing_leaves_the_wall_and_takes_the_rest(profile: Profile) -> None:
     assert result.removed > 30_000.0, "a 40 mm cube has plenty inside"
     assert result.mesh.volume < 64_000.0 * 0.4
     assert len(result.vents) == 1
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_the_first_hollowing_vent_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Prozessfehler in der ersten Entlüftung ist kein Auftrag für die nächste Stelle."""
+    from importlib import import_module
+
+    hollow_module = import_module("app.core.geom.hollow")
+    body = block()
+    original_vertices, original_faces = body.raw.vertices.copy(), body.raw.faces.copy()
+    original_boolean = hollow_module.boolean
+    original_run = kernel_process.run
+    injected_error = failure_type()
+    vent_phase = False
+    successful_before_vents = []
+    vent_calls = []
+    target_requests = []
+    following = []
+    returned = []
+
+    def progress(fraction, _text):
+        nonlocal vent_phase
+        if target_requests:
+            following.append(("progress", fraction))
+            raise TypeError("RM298: weitere Entlüftungsstelle nach dem Prozessfehler")
+        if fraction >= 0.8:
+            vent_phase = True
+
+    def counted_boolean(kind, meshes, **kwargs):
+        if target_requests:
+            following.append(("boolean", kind))
+            raise TypeError("RM298: weiterer Schnitt nach dem Prozessfehler")
+        if vent_phase:
+            vent_calls.append((kind, len(meshes)))
+        result = original_boolean(kind, meshes, **kwargs)
+        if not vent_phase:
+            successful_before_vents.append(kind)
+        return result
+
+    def failing_vent(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(("kernel", job))
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if vent_phase and job == "boolean" and values["kind"] == "difference":
+            target_requests.append((job, values["kind"], values["bodies"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(hollow_module, "boolean", counted_boolean)
+    monkeypatch.setattr(kernel_process, "run", failing_vent)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(hollow(body, 2.0, vents=2, progress=progress))
+    finally:
+        assert "difference" in successful_before_vents, (
+            "der Hohlraum wurde vorher echt ausgeschnitten"
+        )
+        assert vent_calls == [("difference", 2)], "die echte erste Entlüftung muss erreicht sein"
+        assert target_requests == [("boolean", "difference", 2)]
+
+    assert caught.value is injected_error
+    assert following == [], "keine nächste Entlüftungsstelle und kein weiterer Rechenschritt"
+    assert returned == [], "weder hollow.no_vent noch hollow.done ersetzen den Prozessfehler"
+    np.testing.assert_array_equal(body.raw.vertices, original_vertices)
+    np.testing.assert_array_equal(body.raw.faces, original_faces)
 
 
 def test_a_wall_thicker_than_the_body_leaves_nothing_to_take(profile: Profile) -> None:

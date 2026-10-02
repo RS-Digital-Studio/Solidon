@@ -1018,8 +1018,9 @@ def find_plane(
 ) -> Candidate | None:
     """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
 
-    Die Hülle um :func:`search_plane` für alle, die nur die Ebene wollen —
-    die Suche selbst sagt daneben, ob eine Sperre im Weg stand.
+    Referenz- und Testweg, wenn nur die Ebene interessiert. Die produktive
+    Auto-Split-Planung nutzt :func:`search_plane` direkt, um zusätzlich
+    Sperren und bereits berechnete Hälften zu übernehmen.
     """
     return search_plane(
         mesh,
@@ -2310,11 +2311,6 @@ def upright_normal(normal: Vec3) -> np.ndarray:
         transform.rotation_between(direction, [0.0, 0.0, 1.0]),
         dtype=float,
     )
-
-
-def sections_along(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]:
-    """Querschnitte entlang einer der drei Achsen."""
-    return sections_across(mesh, AXIS_NORMALS[axis], heights)
 
 
 def sections_across(mesh: MeshData, normal: Vec3, heights: np.ndarray) -> list[Any]:

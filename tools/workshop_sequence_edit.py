@@ -38,7 +38,15 @@ from tools.workshop_guided_edit import BACKGROUND, _native, _subtitle  # noqa: E
 def scenes_for(source: dict[str, Any], *, short: bool) -> list[dict[str, Any]]:
     """Das nachgewiesene Ergebnis zuerst zeigen, danach die ausgewählten Lernschritte."""
     hero = next(scene for scene in source["scenes"] if scene["key"] == source["hero"])
-    hook = {**hero, **source["short_hook" if short else "hook"], "key": "hook"}
+    hook = {
+        key: hero[key]
+        for key in ("first_slide", "last_slide", "wide_focus", "marker", "reference_image")
+        if key in hero
+    }
+    hook["model_crop"] = hero.get("after_model_crop", hero.get("model_crop"))
+    hook["focus"] = hero.get("after_focus", hero.get("focus"))
+    hook.update(source["short_hook" if short else "hook"])
+    hook["key"] = "hook"
     if hero.get("action_last_slide", hero["first_slide"]) > hero.get(
         "action_first_slide", hero["first_slide"]
     ):

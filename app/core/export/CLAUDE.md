@@ -20,7 +20,9 @@ stehen in `.claude/rules/dateiformat.md`; Herleitungen in
 ## Drucker aus dem gewählten Slicer
 
 `slicer_profiles.discover_printers` leitet aus vollständigen Maschinenprofilen
-Bauraum, Druckkontur, Sperrzonen und Düse ab, ohne sie zu speichern. Stabile
+Bauraum, Druckkontur, Sperrzonen, Düse und den Nullpunkt der Maschine
+(`PrinterProfile.bed_origin`, Curas `machine_center_is_zero`) ab, ohne sie zu
+speichern. Stabile
 Kennungen unterscheiden Programm, Hersteller und Profil unabhängig vom
 Installationspfad. Bekannte Hardwarezusätze bleiben nur bei exakt passendem
 Modell und gleicher Düse erhalten; native Maße haben Vorrang. Der strikte
@@ -66,7 +68,8 @@ legen dieselbe Grundlage unter (`print_settings.on_base`). PrusaSlicer bekommt
 über `prusa_values` die ganze Kette samt Abweichung (in `write_config` für die
 Konsole, in `writer._plate_config` für die Beilage), ohne Drucker des Bündels
 Solidons ganzen Satz; „Automatisch" als Haftung heißt dort und bei Cura die Art
-aus Solidons Tabelle (`_adhesion_for`), im Bündel die des Profils.
+aus Solidons Tabelle, bei passender Prusa-Grundlage die Art des Profils.
+`effective_adhesion` ist die gemeinsame Auflösung für Dialog und Übergabe.
 `foundation_findings` meldet in Slicen und Export.
 
 **Ohne Herstellerprofil bekommt jede Rolle Solidons Wert**: PrusaSlicer volle
@@ -228,7 +231,11 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
 - **`checked` nimmt einen Bericht entgegen**, statt ihn zweimal zu erheben;
   eine **leere** Liste ist eine Antwort — geprüft wird auf `None`.
 - **Bett**: `wants_bed_coordinates` gilt der Ausgabe, `needs_bed_translation`
-  der Eingabe (CuraEngine versetzt ein zentriertes STL selbst). Ein
+  der Eingabe (CuraEngine versetzt ein zentriertes STL selbst). Wohin, sagt
+  `build_area.machine_shift` — 3MF-Platzierung (`bed_centre`), Prusas
+  Bettform, Curas Ursprung und die Gegenprobe `off_the_bed` ohne Bett in der
+  Druckdatei. Curas Fenster bekommt immer das halbe Bett der aktiven
+  Maschine, denn sein 3MF-Leser zieht es ab, gleich wo der Nullpunkt liegt. Ein
   gescheiterter Anordnungsversuch gilt nur seinem Auftrag, erst eine
   ausdrückliche Ablehnung wird gemerkt; unbrauchbare Bettkonturen sind eine
   Warnung, ein belegter Übertritt geht vor.

@@ -976,6 +976,23 @@ def test_the_stack_tells_which_body_carries_a_fit() -> None:
     assert fit_kinds_for(document, {pin_id}) == ()
 
 
+def test_a_suppressed_fit_step_does_not_suggest_a_slicer_fit() -> None:
+    """Ein ausgeschalteter Einsatz verlangt keine langsame Außenwand."""
+    from app.core.scene.fits import fit_kinds_for
+    from app.core.types import Document, Operation, Suppression
+
+    operation = Operation(id=1, op="insert_nut_trap", outputs=("obj_1",))
+    active = Document(format_version=1, app_version="0.0.1", ops=(operation,))
+    suppressed = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=(replace(operation, suppressed=Suppression()),),
+    )
+
+    assert fit_kinds_for(active, {"obj_1"}) == ("clearance",)
+    assert fit_kinds_for(suppressed, {"obj_1"}) == ()
+
+
 # --- Schrägnaht an runden Außenwänden -------------------------------------------
 
 

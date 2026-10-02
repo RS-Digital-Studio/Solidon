@@ -43,7 +43,7 @@ from app.core.errors import (
     SHOW_HISTORY,
     ValidationError,
 )
-from app.core.geom import lathe, transform
+from app.core.geom import kernel_process, lathe, transform
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -3878,7 +3878,7 @@ def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool
     # Oberfläche — das ist es, was ein Abstand auf der Platte bedeutet.
     try:
         distance = surface_gap(first, second, clearance)
-    except PROGRAMMING_ERRORS:
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception:  # eine Abstandsanfrage an einen kaputten Körper scheitert auf eigene Arten
         return None

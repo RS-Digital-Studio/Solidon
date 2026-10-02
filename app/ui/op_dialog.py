@@ -1599,6 +1599,7 @@ class OperationDialog(QDialog):
         source_objects: Sequence[str] = (),
         edges: Mapping[str, str] | None = None,
         offer_naming: bool = False,
+        naming_default: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1611,7 +1612,8 @@ class OperationDialog(QDialog):
         :meth:`names_dimensions` liest ihn. Der Dialog bietet ihn nur an, wo
         das Fenster es verlangt — bei den Grundkörpern, deren Maße eine
         Vorlage ausmachen, nicht bei einer Bohrung, die ein Maß *am* Körper
-        ist.
+        ist. ``naming_default`` ist sein Anfangszustand — das Fenster reicht
+        die letzte Wahl des Kunden durch (RM-369).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1948,6 +1950,7 @@ class OperationDialog(QDialog):
             # vorn, direkt unter den Maßen, die er benennt (Entscheidung
             # Robert, 14.09.2026).
             naming = RowCheckBox(self)
+            naming.setChecked(naming_default)
             front.addRow(str(tr("Maße als Parameter anlegen")), naming)
             caption = front.labelForField(naming)
             caption_toggles(caption, naming)
@@ -1980,6 +1983,22 @@ class OperationDialog(QDialog):
             # man mit dem Ergebnis noch tun kann, ist keins von beidem — sie
             # gehört dorthin, wo sie getroffen wird.
             front.addRow(extra_label, extra)
+        self._hidden_expression_controller = ""
+        self._hidden_expression_notice = QLabel(self)
+        self._hidden_expression_notice.setWordWrap(True)
+        set_level(self._hidden_expression_notice, "caption")
+        self._hidden_expression_notice.setVisible(False)
+        self._hidden_expression_open = QPushButton(tr("Einstellung anzeigen"), self)
+        self._hidden_expression_open.setAutoDefault(False)
+        self._hidden_expression_open.setVisible(False)
+        self._hidden_expression_open.clicked.connect(
+            weak_slot(self, OperationDialog._open_hidden_expression_controller)
+        )
+        hidden_expression_row = QHBoxLayout()
+        hidden_expression_row.setContentsMargins(0, 0, 0, 0)
+        hidden_expression_row.addWidget(self._hidden_expression_notice, 1)
+        hidden_expression_row.addWidget(self._hidden_expression_open)
+        layout.addLayout(hidden_expression_row)
         if advanced.rowCount() or extra is not None:
             # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
             # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und
@@ -2121,7 +2140,25 @@ class OperationDialog(QDialog):
             isinstance(editor, SealPathField) and not editor.valid
             for editor in self._editors.values()
         )
-        no_count = self._field_refusal()
+        no_count, hidden_controller = self._field_refusal_details()
+        self._hidden_expression_controller = hidden_controller
+        self._hidden_expression_notice.setText(no_count if hidden_controller else "")
+        self._hidden_expression_notice.setVisible(bool(hidden_controller))
+        self._hidden_expression_open.setVisible(bool(hidden_controller))
+        if hidden_controller:
+            controller = next(
+                entry for entry in self.spec.params.spec() if entry.name == hidden_controller
+            )
+            access = str(tr("Zum Feld „{name}“ gehen, das den Ausdruck einblendet.")).format(
+                name=controller.title
+            )
+            self._hidden_expression_open.setToolTip(access)
+            self._hidden_expression_open.setStatusTip(access)
+            self._hidden_expression_open.setAccessibleDescription(access)
+        else:
+            self._hidden_expression_open.setToolTip("")
+            self._hidden_expression_open.setStatusTip("")
+            self._hidden_expression_open.setAccessibleDescription("")
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
@@ -2184,19 +2221,66 @@ class OperationDialog(QDialog):
         Grenze ließ den Knopf aktiv, und der Klick bewirkte nichts
         (Code-Review 0.5.1, U-2).
 
-        Ein ausgeblendetes Feld zählt nicht: Es folgt einer Wahl, bei der es
-        nichts tut, und behält seine abgelehnte Zahl nur für die Rückkehr
-        (``labels._BoundedBehavior.hideEvent``) — wie im Merkmalfenster.
+        Eine ausgeblendete abgelehnte Zahl zählt nicht: ``value()`` liefert
+        weiter den letzten gültigen Modellwert, und beim Einblenden bleibt der
+        Tipp stehen (``labels._BoundedBehavior.hideEvent``). Ein fx-Ausdruck
+        zählt auch im ausgeblendeten Feld: ``values()`` reicht ihn an den Kern,
+        der seine Grenze weiter prüft. Der Dialog hält ihn deshalb fest und
+        zeigt den Weg zu der Wahl, die das Feld einblendet.
         """
-        for editor in self._editors.values():
-            if not isinstance(editor, ValueField) or editor.isHidden():
+        return self._field_refusal_details()[0]
+
+    def _field_refusal_details(self) -> tuple[str, str]:
+        """Liefert Ablehnung und sichtbaren Rückweg für ein verborgenes fx-Feld."""
+        schema = self.spec.params.spec()
+        entries = {entry.name: entry for entry in schema}
+        entered: Mapping[str, Any] | None = None
+        for name, editor in self._editors.items():
+            if not isinstance(editor, ValueField):
+                continue
+            hidden = editor.isHidden()
+            if hidden and not editor.toggle.isChecked():
                 continue
             said = editor.refusal()
             if not said and isinstance(editor, CountField) and not editor.valid:
                 said = editor.problem()
             if said:
-                return said
-        return ""
+                if (
+                    hidden
+                    and editor.toggle.isChecked()
+                    and (entry := entries.get(name)) is not None
+                ):
+                    if entered is None:
+                        entered = self.values()
+                    inactive = inactive_dependency(entry, schema, entered)
+                    seen_controllers: set[str] = set()
+                    while inactive is not None:
+                        controller_name, wanted = inactive
+                        if controller_name in seen_controllers:
+                            break
+                        seen_controllers.add(controller_name)
+                        controller = entries.get(controller_name)
+                        controller_editor = self._editors.get(controller_name)
+                        if controller is not None and controller_editor is not None:
+                            if controller_editor.isHidden():
+                                inactive = inactive_dependency(controller, schema, entered)
+                                continue
+                            condition = _why_inactive(str(controller.title), wanted[0])
+                            notice = str(
+                                tr(
+                                    "{name}: {problem} {condition} Ändern Sie die genannte "
+                                    "Einstellung, um den Ausdruck zu korrigieren."
+                                )
+                            ).format(name=entry.title, problem=said, condition=condition)
+                            return notice, controller_name
+                        break
+                return said, ""
+        return "", ""
+
+    def _open_hidden_expression_controller(self) -> None:
+        """Bringt den Fokus zur sichtbaren Wahl, die das fx-Feld einblendet."""
+        if self._hidden_expression_controller:
+            self.focus_field(self._hidden_expression_controller)
 
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
@@ -2529,6 +2613,7 @@ class OperationDialog(QDialog):
             # Ereignisumlauf später, nicht sofort: siehe ``_resize_to_content``.
             if changed and self.isVisible():
                 self._queue_refit("passive")
+            self._follow_source_pending()
 
         self.valuesChanged.connect(follow)
         self._couplings.append(follow)
@@ -3571,6 +3656,10 @@ class OperationDialog(QDialog):
         nichts zu benennen, und der Aufrufer braucht keinen zweiten Fall.
         """
         return self._naming is not None and self._naming.isChecked()
+
+    def offers_naming(self) -> bool:
+        """Ob der Dialog den Haken *Maße als Parameter anlegen* trägt."""
+        return self._naming is not None
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
