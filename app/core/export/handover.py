@@ -1114,8 +1114,9 @@ class PartSplit:
     plate: PrintSettings
     """Was die ganze Platte bekommt."""
     base: PrintSettings
-    """Die Einstellungen ohne die Übernahmen je Teil: der Stand, an dem der Rat
-    je Körper gefragt wird."""
+    """Die Einstellungen ohne die Übernahmen je Teil — auch ohne die, die der
+    Slicer nur plattenweit annimmt: der Stand, an dem der Rat je Körper gefragt
+    wird."""
     per_part: frozenset[str] = frozenset()
     """Die Pfade, die je Teil geschrieben werden."""
     revert: bool = False
@@ -1192,11 +1193,18 @@ def split_for_parts(
     trimmed = settings
     for path in sorted(per_part):
         trimmed = print_settings.without_choice(trimmed, path, foundation)
+    # **Der Rat je Teil wird ohne jede Übernahme je Teil gefragt**, auch ohne
+    # die, die der Slicer nur plattenweit annimmt. Trug die Grundlage sie
+    # schon, schwieg der Rat an der Stange, und am Block stand bei Cura das
+    # ruhige Innenwandtempo der Stange, ohne dass ein Befund es sagte (RM-430).
+    untouched = trimmed
+    for path in sorted(unavailable):
+        untouched = print_settings.without_choice(untouched, path, foundation)
     if flavour == "cura":
         return PartSplit(
-            settings, trimmed, per_part, revert=True, unavailable=unavailable, accepted=settings
+            settings, untouched, per_part, revert=True, unavailable=unavailable, accepted=settings
         )
-    return PartSplit(trimmed, trimmed, per_part, unavailable=unavailable, accepted=settings)
+    return PartSplit(trimmed, untouched, per_part, unavailable=unavailable, accepted=settings)
 
 
 def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:

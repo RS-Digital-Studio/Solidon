@@ -2249,6 +2249,56 @@ def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile:
         assert key not in values["Block"], (key, values["Block"])
 
 
+def test_cura_names_the_part_that_gets_the_rods_plate_wide_calm_walls(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """RM-430: CuraEngine nimmt Innenwandtempo und Grundbeschleunigung nicht je
+    Netz an. Sie bleiben plattenweit auf den ruhigen Werten der Stange — auch am
+    Block, und kein Befund sagte es: Der Rat je Teil wurde an einer Grundlage
+    gefragt, die die Übernahme schon trug, und schwieg."""
+    stange = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 122.0)))
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [
+        replace(scene_object("obj_1", "Stange"), mesh=stange),
+        replace(scene_object("obj_2", "Block"), mesh=block),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    calm = {
+        "speed.outer_wall": advise.SLENDER_WALL_SPEED,
+        "speed.inner_wall": advise.SLENDER_WALL_SPEED,
+        "speed.outer_wall_acceleration": advise.CAREFUL_ACCELERATION,
+        "speed.acceleration": advise.CAREFUL_ACCELERATION,
+    }
+    for path, value in calm.items():
+        settings = print_settings.with_accepted(settings, path, value)
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Stange", profile=profile, settings=settings, flavour="cura"
+    )
+
+    per_part = {
+        (finding.object_id, finding.values["setting"])
+        for finding in findings
+        if finding.code == "export.part_setting"
+    }
+    assert per_part == {
+        ("obj_1", "speed.outer_wall"),
+        ("obj_1", "speed.outer_wall_acceleration"),
+    }
+    plate_wide = [entry for entry in findings if entry.code == "export.part_setting_unavailable"]
+    assert {(entry.object_id, entry.values["setting"]) for entry in plate_wide} == {
+        ("obj_2", "speed.inner_wall"),
+        ("obj_2", "speed.acceleration"),
+    }
+    for entry in plate_wide:
+        assert entry.severity == "warning"
+        assert "ganze Platte" in str(entry.message)
+        assert str(entry.values["reason"]), "der Grund der Stange bleibt nachprüfbar"
+    meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(written)}
+    assert meshes["Stange-part-1.stl"]["speed_wall_0"] == "60"
+    assert "speed_wall_x" not in meshes["Stange-part-2.stl"], "Cura nimmt es nicht je Netz"
+
+
 def test_the_calm_walls_of_a_slender_rod_keep_the_limit_of_soft_filament() -> None:
     """Eine spätere Regel lockert keine frühere (RM-328).
 

@@ -304,6 +304,14 @@ Arachne, und beide Pfade gehen je Teil. Der Split setzte beide auf Elegoos
 Carbon 2, 29.09.2026). Nur übernommene Werte gehen in die Kette, sonst löste
 ein nicht übernommener Vorschlag eine Folgeregel aus.
 
+Warum Export und Druckdialog den Rat je Teil an einer Stelle fragen: Sonst
+nennt die Zeile im Dialog ein Teil, das die Datei nicht bekommt.
+
+Warum der Rat je Teil auch ohne die plattenweiten Übernahmen gefragt wird:
+Trug die Grundlage sie schon, schwieg er an der Stange, und bei Cura standen
+Innenwandtempo 60 und Grundbeschleunigung 2000 der Stange auch am Block,
+ohne Befund (RM-430, Review 02.10.2026).
+
 Warum der gemessene Überhangwinkel bei anderer Schichthöhe oder Bahnbreite
 zurückfällt: Sonst stützten Analyse und Slicer nach einer Probe, die für
 diesen Druck nichts sagt.

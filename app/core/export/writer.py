@@ -1113,6 +1113,9 @@ class _PartValues:
     """Der Rat, den dieser Slicer je Teil nicht annimmt."""
     effective: PrintSettings | None
     """Womit dieses Teil gedruckt wird — für seine Stützsperre."""
+    asked: tuple[SettingAdvice, ...] = ()
+    """Der Rat dieses Teils zu Pfaden, die der Slicer nur plattenweit annimmt —
+    gleich ob die Platte ihn schon trägt (:func:`_plate_wide_findings`)."""
 
 
 def part_advice(
@@ -1270,8 +1273,13 @@ def _part_values(
         accepted=split.accepted_per_part(),
     )
     applied = [item for item in advice if item.path in split.per_part]
-    unavailable = [item for item in advice if item.path in split.unavailable]
-    return _values_for(split, applied, unavailable, flavour)
+    asked = tuple(item for item in advice if item.path in split.unavailable)
+    # Was die Platte schon mit diesem Wert trägt, bekommt das Teil auch —
+    # nicht erfüllt ist nur ein anderer Wert.
+    unavailable = [
+        item for item in asked if not same_value(item.value, read_path(split.plate, item.path))
+    ]
+    return replace(_values_for(split, applied, unavailable, flavour), asked=asked)
 
 
 def _values_for(
@@ -1516,6 +1524,56 @@ def _part_setting_findings(
     ]
 
 
+def _plate_wide_findings(
+    chosen: Sequence[SceneObject],
+    asked: Mapping[ObjectId, Sequence[SettingAdvice]],
+    split: PartSplit | None,
+) -> list[Finding]:
+    """Wer eine Übernahme mitbekommt, die nur ein anderes Teil verlangt (RM-430).
+
+    Nimmt der Slicer einen Pfad nicht je Teil an — bei CuraEngine Innenwand
+    und Grundbeschleunigung —, bleibt die Übernahme plattenweit. Das Teil, das
+    sie verlangt, ist bedient; die übrigen bekommen sie trotzdem, und das
+    sagt dieser Befund an ihnen, mit dem Grund des verlangenden Teils. Verlangt
+    hier kein Teil den Wert, bleibt es still wie bisher.
+    """
+    if split is None or not split.unavailable:
+        return []
+    findings: list[Finding] = []
+    for path in sorted(split.unavailable):
+        value = read_path(split.plate, path)
+        if same_value(value, read_path(split.base, path)):
+            continue
+        askers = {
+            entry.id: item
+            for entry in chosen
+            for item in asked.get(entry.id, ())
+            if item.path == path
+        }
+        if not askers:
+            continue
+        reason = next(iter(askers.values())).reason
+        findings += [
+            Finding(
+                code="export.part_setting_unavailable",
+                severity="warning",
+                message=_(
+                    "Gilt auch für dieses Teil: Dieser Slicer übernimmt die Einstellung nur "
+                    "für die ganze Platte, nicht für einzelne Teile."
+                ),
+                values={
+                    "setting": path,
+                    "value": _finding_value(value),
+                    "reason": reason,
+                },
+                object_id=entry.id,
+            )
+            for entry in chosen
+            if entry.id not in askers
+        ]
+    return findings
+
+
 #: Um so viel greift die Stützsperre über den Grundriss einer Kanaldecke
 #: hinaus, in mm: eine Bahnbreite der 0,4er Düse, damit auch der Rand, den der
 #: Slicer mit seinem eigenen Winkel noch als Überhang liest, darunter liegt.
@@ -1735,6 +1793,7 @@ def write_assembly(
         )
         for entry in chosen
     }
+    asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
     # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
     # keines des ganzen Auftrags: Verlangt es ein Teil auf einer anderen
@@ -1787,6 +1846,7 @@ def write_assembly(
         [(entry.id, advice) for entry in chosen for advice in part_values[entry.id].unavailable],
         applied=False,
     )
+    findings += _plate_wide_findings(chosen, asked, split)
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag — je Teil mit

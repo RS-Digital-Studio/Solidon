@@ -3729,6 +3729,7 @@
   "Gibt diesem Körper ein eigenes Material. Toleranzen, Schwund und Elefantenfuß werden dann damit gerechnet und nicht mit dem des Projekts.": "Donne à ce corps un matériau à lui. Les tolérances, le retrait et le pied d'éléphant sont alors calculés avec celui-ci et non avec celui du projet.",
   "Gibt einem Objekt einen anderen Namen. Die Geometrie bleibt unberührt.": "Donne un autre nom à un objet. La géométrie reste intacte.",
   "Gibt einer offenen Fläche eine Wand und macht sie damit zu einem Körper. Der Weg für ein Netz, das als Fläche ankommt statt als Volumen.": "Donne une paroi à une surface ouverte et en fait ainsi un corps. La solution pour un maillage qui arrive comme surface au lieu de volume.",
+  "Gilt auch für dieses Teil: Dieser Slicer übernimmt die Einstellung nur für die ganze Platte, nicht für einzelne Teile.": "S'applique aussi à cette pièce : ce slicer ne prend ce réglage que pour tout le plateau, pas pour des pièces isolées.",
   "Gilt bei angehaktem {field}.": "S'applique si {field} est coché.",
   "Gilt bei nicht angehaktem {field}.": "S'applique si {field} n'est pas coché.",
   "Gilt bei {field} = {value}.": "S'applique lorsque {field} = {value}.",
