@@ -190,6 +190,11 @@ class ValueField(QWidget):
     #: rechnet eine Formel", und es braucht keine Übersetzung.
     TOGGLE_TEXT = "fx"
 
+    #: Wie viele Zeichen das Ausdrucksfeld höchstens von sich aus zeigen will.
+    #: „=max(@breite, 2000)“ hat neunzehn; was länger ist, rollt im Feld, und
+    #: der Tooltip nennt es ganz (RM-457).
+    EXPRESSION_CHARS = 40
+
     def __init__(
         self,
         entry: ParamSpec,
@@ -285,6 +290,7 @@ class ValueField(QWidget):
         # Sache selbst: die Namen aus dem Projekt, die Funktionen aus dem
         # Auswerter (Regel: eine Wahrheit, nicht zwei Listen).
         self.text.setToolTip(self._grammar_help())
+        self.text.installEventFilter(self)
         self.text.setStatusTip(str(tr("Ein Ausdruck rechnet mit Projektparametern.")))
         self.text.setAccessibleDescription(self._grammar_help())
 
@@ -371,11 +377,13 @@ class ValueField(QWidget):
         if self.circle_toggle is not None:
             row.addWidget(self.circle_toggle)
         row.addWidget(self.toggle)
+        self._row = row
         # **Der Rest der Zeile gehört dem Leerraum hinter den Knöpfen.** Ohne
         # ihn verteilte Qt ihn zwischen die Teile, sobald das Zahlenfeld an
         # seiner Höchstbreite stand: Das Feld rückte zur Mitte, *fx* an den
         # rechten Rand — je Zeile an eine andere Stelle, weil jedes Feld so
-        # breit ist wie sein Wertebereich.
+        # breit ist wie sein Wertebereich. Steht ein Ausdruck da, gehört der
+        # Rest ihm (:meth:`_switch`).
         row.addStretch(1)
 
         layout = QVBoxLayout(self)
@@ -462,6 +470,9 @@ class ValueField(QWidget):
             self.text.setText(str(value))
             self.toggle.setChecked(True)
             self._switch(True)
+            # Ein gespeicherter Ausdruck wird gelesen, nicht weitergetippt:
+            # Der Anfang mit dem Funktionsnamen steht im Bild (RM-457).
+            self.text.setCursorPosition(0)
             return
         if value is None and self._optional:
             # **Leer heißt hier etwas**, und zwar „nicht gesagt" (RM-154). Ohne
@@ -609,6 +620,8 @@ class ValueField(QWidget):
                         self.spin.setValue(shown)
         self.spin.setVisible(not to_expression)
         self.text.setVisible(to_expression)
+        # Der Leerraum hinter den Knöpfen weicht dem Ausdruck.
+        self._row.setStretch(self._row.count() - 1, 0 if to_expression else 1)
         self.parameter_button.setVisible(to_expression)
         self.hint.setVisible(to_expression)
         if self.circle_toggle is not None:
@@ -623,6 +636,8 @@ class ValueField(QWidget):
             # war die Anzeige, die ihren eigenen Fehler bezeugt.
             self.text.setText(f"={self._number():g}")
         if to_expression:
+            self._fit_expression()
+            self._name_expression()
             # **Der Fokus geht mit.** Ohne diese Zeile bleibt er auf dem
             # Umschalter, und das Textfeld liegt in der Tab-Reihenfolge davor
             # (Spin, Text, Umschalter) — der Kunde muss Umschalt+Tab drücken,
@@ -645,6 +660,10 @@ class ValueField(QWidget):
         """
         if stop_watching_the_dying(self, watched, event):
             return False
+        if watched is self.text and event.type() == QEvent.Type.FocusOut:
+            # Wer das Feld verlässt, liest den Ausdruck wieder von vorn; Qt
+            # ließe ihn dort stehen, wo zuletzt getippt wurde (RM-457).
+            self.text.setCursorPosition(0)
         if watched is self.spin and event.type() == QEvent.Type.KeyPress:
             typed = getattr(event, "text", lambda: "")()
             if typed in (expressions.EXPRESSION_PREFIX, expressions.REFERENCE_PREFIX):
@@ -675,7 +694,34 @@ class ValueField(QWidget):
         self._describe()
         self._offer_references()
 
+    def _fit_expression(self) -> None:
+        """Das Ausdrucksfeld so breit wie sein Ausdruck, mindestens wie das Beispiel.
+
+        Vorher bekam es, was die Zeile übrig ließ, und das war im Schrittdialog
+        weniger als „=max(@breite, 2000)“ (RM-457). Gedeckelt bei
+        :attr:`EXPRESSION_CHARS` Zeichen; nie schmaler als die Zahl, an deren
+        Stelle es steht.
+        """
+        metrics = self.text.fontMetrics()
+        letter = metrics.horizontalAdvance("x")
+        # Rahmen und Innenrand des Felds: was Qts Wunschbreite über ihre
+        # siebzehn Zeichen hinaus rechnet.
+        chrome = max(0, self.text.sizeHint().width() - 17 * letter)
+        wanted = max(
+            metrics.horizontalAdvance(self.text.text()),
+            metrics.horizontalAdvance(self.text.placeholderText()),
+        )
+        wanted = min(wanted, self.EXPRESSION_CHARS * letter)
+        self.text.setMinimumWidth(max(self.spin.minimumWidth(), wanted + chrome + letter))
+
+    def _name_expression(self) -> None:
+        """Der Tooltip nennt den ganzen Ausdruck, darunter, was erlaubt ist."""
+        written = self.text.text().strip()
+        help_text = self._grammar_help()
+        self.text.setToolTip(f"{written}\n\n{help_text}" if written else help_text)
+
     def _on_text(self) -> None:
+        self._name_expression()
         self._describe()
         self._offer_references()
         self.changed.emit()

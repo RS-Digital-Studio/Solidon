@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)](#rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
@@ -36642,3 +36643,18 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
 
 **Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)
+
+<a id="rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026"></a>
+<a id="rm-457"></a>
+
+**RM-457 — Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar.**
+Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfläche (02.10.2026,
+  Sonde zu RM-453): Im Schrittdialog von *Quader anlegen* stand das Ausdrucksfeld der Breite zu
+  schmal, und der Cursor stand am Ende. `=max(@breite, 2000)` erschien als „@breite, 2000)“, der
+  Funktionsname war aus dem Bild geschoben. Das Feld bekam, was die Zeile übrig ließ, und teilte
+  den Rest mit dem Leerraum hinter den Knöpfen; der Tooltip nannte nur die Grammatik.
+  Bauplan §13, §19.
+
+**Abschluss:** Das Ausdrucksfeld (`op_dialog.ValueField`) ist so breit wie sein Ausdruck, mindestens wie das Beispiel im Platzhalter, höchstens 40 Zeichen (`_fit_expression`), nie schmaler als die Zahl, an deren Stelle es steht; der Leerraum hinter den Knöpfen weicht ihm. Ein gespeicherter Ausdruck öffnet mit dem Anfang im Bild, und wer das Feld verlässt, liest ihn wieder von vorn. Der Tooltip nennt den ganzen Ausdruck, darunter die Grammatik (`_name_expression`). Test: `test_operation_ui.py::test_an_expression_field_shows_its_start_and_room_for_it` (rot am Ausgangsstand: 205 Punkte Feld gegen 228 Ausdruck), dazu 24 Ausdrucksfälle der Datei grün. Fenstersonde am echten Fenster (Datei `a453` öffnen, *Schritt korrigieren* aus RM-458): Feld 192 Punkte für 109 Punkte Ausdruck, Cursor vorn, Tooltip mit Ausdruck; Bilder `457-01-schrittdialog.png`, `457-02-feld-ohne-fokus.png`. Umgesetzt von Claude (Thread „Bedienung und KI“).
