@@ -703,7 +703,15 @@ def drill_hole(ctx: OpContext) -> OpResult:
         # Zwilling bleibt für alte Projekte und ``change_kernel`` registriert.
         from app.core.brep.ops import drill_brep_hole
 
-        return drill_brep_hole(ctx)
+        try:
+            return drill_brep_hole(ctx)
+        except GeometryError:
+            # **Lieber das Dreiecksmodell als ein kaputter Körper** (RM-408):
+            # Wo OpenCASCADE auch mit Unschärfe keinen gültigen Körper liefert
+            # (``edit._fuzzy_retry``), bohrt das Netz. Der Körper ist danach
+            # ein Netz, und die Auswertung sagt es
+            # (``evaluate.exact_became_mesh``); Rückgängig stellt ihn her.
+            source = dataclasses.replace(source, mesh=as_mesh_data(source.mesh), kind="mesh")
     shape = bore_shape(params, within=source.mesh)
     result = drill(
         as_mesh_data(source.mesh),

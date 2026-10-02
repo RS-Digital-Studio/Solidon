@@ -60,6 +60,7 @@ scrive in `website/version.json`.
 - Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Inclina attorno a», e «Su faccia» porta il taglio parallelo a una faccia piana.
 - Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
+- Se un foro non si riesce a tagliare in modo pulito in un corpo STEP, Solidon lo esegue sul modello a triangoli invece di passare avanti un corpo difettoso.
 
 ### Modellare, testo e schizzo
 

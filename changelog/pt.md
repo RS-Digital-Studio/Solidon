@@ -60,6 +60,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Inclinar em torno de», e «Na face» leva o corte paralelo a uma face plana.
 - Um corpo STEP continua um corpo STEP ao cortá-lo, com as suas faces, arestas e nomes.
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
+- Se um furo não puder ser cortado de forma limpa num corpo STEP, o Solidon fura-o no modelo de triângulos em vez de passar adiante um corpo danificado.
 
 ### Modelar, texto e esboço
 

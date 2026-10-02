@@ -337,6 +337,31 @@ def test_below_the_budget_the_draft_is_the_fine_body(profile: Profile, pair: int
     assert "blend.draft" not in {entry.code for entry in draft.findings}
 
 
+def test_a_heavy_surface_counts_in_the_draft_budget() -> None:
+    """Das Budget zählt die Oberfläche mit (RM-427).
+
+    Mit 327 680 Dreiecken knapp unter dem Punktebudget rechnete der Entwurf
+    fein und brauchte 3,8 s statt 0,9 s: Die Abstandsfelder kosten mit der
+    Oberfläche, gezählt wurden nur die Rasterpunkte. Dieselben Punkte an einer
+    leichten Kugel bleiben fein.
+    """
+    from app.core.geom import blend
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    box.apply_translation((32.0, 0.0, 0.0))
+    other = MeshData.of(box)
+    heavy = MeshData.of(trimesh.creation.icosphere(subdivisions=7, radius=40.0))
+    light = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=40.0))
+    grid = 4.0
+    while int(np.prod(blend._grid(heavy, other, 4.0, grid - 0.05)[1])) <= blend.DRAFT_SAMPLES:
+        grid -= 0.05
+    samples = int(np.prod(blend._grid(heavy, other, 4.0, grid)[1]))
+    assert samples <= blend.DRAFT_SAMPLES < 2 * samples, "Voraussetzung: knapp unter dem Budget"
+
+    assert blend.draft_grid(heavy, other, 4.0, grid) == pytest.approx(grid * blend.DRAFT_FACTOR)
+    assert blend.draft_grid(light, other, 4.0, grid) == pytest.approx(grid)
+
+
 def test_both_filaments_come_through_the_blend(profile: Profile) -> None:
     """Weich verschmelzen vernetzt neu — und trägt die Filamente hinüber (§20).
 

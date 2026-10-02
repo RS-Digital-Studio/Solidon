@@ -85,6 +85,7 @@ Nutzen da und sonst nichts.
 - Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Neigen um*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.
 - Ein STEP-Körper bleibt beim Abschneiden ein STEP-Körper, mit seinen Flächen, Kanten und Namen.
 - Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
+- Lässt sich eine Bohrung an einem STEP-Körper nicht sauber schneiden, bohrt Solidon sie am Dreiecksmodell, statt einen kaputten Körper weiterzugeben.
 
 ### Formen, Schrift und Zeichnen
 
