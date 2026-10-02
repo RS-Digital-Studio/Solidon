@@ -226,6 +226,14 @@ class PartSpec:
     """Zusätzlicher Trägeraufbau, der vor dem Schnitt mit dem Ziel vereinigt wird."""
     standalone: bool = False
     """Bietet zusätzlich eine Erzeugeroperation ohne Trägerobjekt an."""
+    template: bool = False
+    """Eine Vorlage: Der Erzeuger bietet an, seine Maße als Projektparameter anzulegen (§13).
+
+    Dieselbe Zusage wie bei einem Grundkörper (``offers_naming``): Ein Halter,
+    dessen Breite ein Projektparameter ist, wird über die Parameterleiste zu
+    „derselbe Halter, anderes Maß". Nur zusammen mit :attr:`standalone` —
+    ohne Erzeuger gibt es keinen Dialog, der den Haken trüge.
+    """
     version: str = "1"
     subtractive: bool = False
     """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
@@ -559,6 +567,11 @@ class PartRegistry:
                 detail=f"{spec.name!r} names no provenance features (§24.1)",
                 values={"part": spec.name},
             )
+        if spec.template and not spec.standalone:
+            raise InternalError(
+                detail=f"{spec.name!r} is a template without a creator",
+                values={"part": spec.name},
+            )
 
     def get(self, name: str) -> PartSpec:
         if name not in self._parts:
@@ -644,6 +657,7 @@ def register_part(
     host_cut: HostCut | None = None,
     host_add: HostCut | None = None,
     standalone: bool = False,
+    template: bool = False,
     at_hole_values: HoleValues | None = None,
     at_hole_advice: HoleAdvice | None = None,
     at_face: bool = True,
@@ -695,6 +709,7 @@ def register_part(
                 host_cut=host_cut,
                 host_add=host_add,
                 standalone=standalone,
+                template=template,
                 at_hole_values=at_hole_values,
                 at_hole_advice=at_hole_advice,
                 bodies=bodies,

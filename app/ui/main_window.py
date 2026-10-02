@@ -182,7 +182,7 @@ from app.core.registry import (
     palette_entries,
     variant_members,
 )
-from app.core.registry.params import body_keys
+from app.core.registry.params import body_keys, inactive_dependency
 from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
@@ -1687,13 +1687,16 @@ def _names_a_dimension(entry: ParamSpec) -> bool:
 def offers_naming(spec: OperationSpec) -> bool:
     """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
 
-    Die Grundkörper, und nur sie: Ihre Maße machen aus dem Projekt eine
-    Vorlage — „dieselbe Halterung, andere Maße" ist danach ein Zahlendialog.
-    Eine Bohrung oder eine Fase ist ein Maß *am* Körper; wer das benennen
-    will, tippt ``=@name`` in das Feld, wie bisher. Und ein Grundkörper ohne
-    Millimetermaß vorn bekäme einen Haken, der nichts täte.
+    Die Grundkörper und die Erzeuger der Vorlagen-Bausteine (``PartSpec.template``,
+    die Halter): Ihre Maße machen aus dem Projekt eine Vorlage — „dieselbe
+    Halterung, andere Maße" ist danach ein Zahlendialog. Eine Bohrung oder eine
+    Fase ist ein Maß *am* Körper; wer das benennen will, tippt ``=@name`` in das
+    Feld, wie bisher. Und ein Grundkörper ohne Millimetermaß vorn bekäme einen
+    Haken, der nichts täte.
     """
-    return spec.category == "primitive" and any(
+    part = part_of(spec.name) if spec.consumes == 0 else None
+    template = part is not None and part.template
+    return (spec.category == "primitive" or template) and any(
         _names_a_dimension(entry) for entry in spec.params.spec()
     )
 
@@ -18093,9 +18096,14 @@ class MainWindow(QMainWindow):
             return values, None
         taken = set(self.session.project.document.parameters)
         created: dict[str, Parameter] = {}
-        for entry in spec.params.spec():
+        schema = spec.params.spec()
+        for entry in schema:
             value = values.get(entry.name)
             if not _names_a_dimension(entry) or isinstance(value, bool):
+                continue
+            if inactive_dependency(entry, schema, values) is not None:
+                # Ein Feld, das gerade nichts tut, steht nicht im Dialog — und
+                # wird kein Parameter in der Leiste, der nichts dreht.
                 continue
             if not isinstance(value, int | float):
                 continue

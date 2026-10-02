@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles, standards
 from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts, shapes
 from app.core.knowledge.parts import ops as part_ops
@@ -231,10 +231,14 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     ``seal_groove`` und ``seal_gasket`` kamen am selben Tag dazu: die
     abtragende Dichtnut und die separate Dichtung aus demselben geschlossenen
     Weg, dieselbe Bauart mit Zeichnung und Materialrolle.
+
+    ``holder_u``, ``holder_ring``, ``holder_fork`` und ``holder_shelf`` kamen
+    am 02.10.2026 aus RM-399: die Halter-Vorlage, je Form ein Baustein, damit
+    jeder Bereich unter der Eckengrenze bleibt.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 32
+    assert len(building) == 36
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -294,7 +298,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2666_cartesian_boundaries() -> None:
+def test_the_library_really_has_4202_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -302,9 +306,12 @@ def test_the_library_really_has_2666_cartesian_boundaries() -> None:
     dem Prüfling abgelesen. Seit dem 22.09.2026 kommen 120 dazu: Die
     Klemmschale bietet vier Schraubengrößen statt einer (32 → 128), und der
     Überhangfächer hat für Breite und Auskraglänge eine Obergrenze (8 → 32).
+    Seit dem 02.10.2026 die 1536 der vier Halter (RM-399): U-Form und Ablage
+    je 512, rund und Gabel je 256 — vier Befestigungen mal sieben oder sechs
+    zweiwertige Felder.
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2666
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 4202
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -6682,3 +6689,374 @@ def test_range_wall_failure_translates_its_complete_numeric_frame(
             assert " : 0.835 mm < 0.840 mm" in expected
     finally:
         set_language(previous)
+
+
+# --- Halter (RM-399) --------------------------------------------------------------
+
+
+HOLDERS = ("holder_u", "holder_ring", "holder_fork", "holder_shelf")
+
+
+def _holder(name: str, **values: Any) -> PartResult:
+    """Ein Halter mit dem Spiel, das das Bezugsprofil einsetzt."""
+    spec = PARTS.get(name)
+    return spec.fn(spec.params(**{"play": 0.2, **values}))
+
+
+def _inside(produced: PartResult, *points: tuple[float, float, float]) -> list[bool]:
+    """Ob die Punkte im Körper liegen — Material oder Luft an einer Stelle, die zählt.
+
+    Über die Umlaufzahl des geschlossenen Netzes (Raumwinkel je Dreieck), nicht
+    über ``trimesh.contains``: Das braucht ``rtree``, und das liegt nicht auf
+    jeder Maschine.
+    """
+    raw = as_mesh_data(produced.mesh).raw
+    corners = np.asarray(raw.vertices, dtype=float)[np.asarray(raw.faces)]
+    found = []
+    for point in np.asarray(points, dtype=float):
+        a, b, c = (corners[:, index, :] - point for index in range(3))
+        la, lb, lc = (np.linalg.norm(vector, axis=1) for vector in (a, b, c))
+        volume = np.einsum("ij,ij->i", a, np.cross(b, c))
+        below = (
+            la * lb * lc
+            + np.einsum("ij,ij->i", a, b) * lc
+            + np.einsum("ij,ij->i", b, c) * la
+            + np.einsum("ij,ij->i", c, a) * lb
+        )
+        winding = np.sum(2.0 * np.arctan2(volume, below)) / (4.0 * np.pi)
+        found.append(bool(abs(winding) > 0.5))
+    return found
+
+
+def test_the_holders_are_found_as_one_step_templates_in_the_catalogue() -> None:
+    """Ein Kunde sucht „Halter" und findet vier Vorlagen, die frei entstehen (RM-399).
+
+    Jede steht für sich (``standalone``) und entsteht über ``create_…`` in einem
+    Schritt; ``template`` sagt dem Dialog, dass er *Maße als Parameter anlegen*
+    anbietet. Die Befestigung ist in allen vieren dieselbe Wahl.
+    """
+    from app.core.knowledge.parts import holders
+
+    found = {spec.name for spec in PARTS.search("Halter")}
+    assert set(HOLDERS) <= found
+    for name in HOLDERS:
+        spec = PARTS.get(name)
+        assert spec.standalone and spec.template and not spec.at_face, name
+        assert spec.group == "mounting"
+        creator = REGISTRY.get(part_ops.creation_name(name))
+        assert creator.name == f"create_{name}"
+        assert (creator.consumes, creator.produces) == (0, 1)
+        mount = next(entry for entry in spec.params.spec() if entry.name == "mount")
+        assert tuple(mount.choices) == holders.MOUNTS
+
+
+def test_a_template_without_a_creator_is_refused() -> None:
+    """Eine Vorlage ohne Erzeuger trüge einen Haken in einem Dialog, den es nicht gibt."""
+    from app.core.errors import InternalError
+
+    registry = PartRegistry()
+
+    @op_params
+    class Params(BaseParams):
+        size: float = param(title="x", default=1.0)
+
+    with pytest.raises(InternalError):
+
+        @register_part(
+            name="lonely",
+            title="x",
+            group="mounting",
+            params=Params,
+            features=["plate"],
+            template=True,
+            registry=registry,
+        )
+        def lonely(raw: BaseParams) -> PartResult:  # pragma: no cover - läuft nie
+            raise AssertionError
+
+
+def test_a_u_holder_arises_in_one_step_and_the_parameter_bar_turns_its_inner_width(
+    profile: Profile,
+) -> None:
+    """U-Halter mit Schlüsselloch in einem Schritt, die Leiste dreht die Breite (RM-399).
+
+    Die Maße stehen als Projektparameter in derselben Transaktion wie der
+    Schritt — so legt sie der Haken *Maße als Parameter anlegen* an. Gedreht
+    wird danach nur die Zahl in der Leiste, der Schritt bleibt; ein Strg+Z je
+    Transaktion nimmt alles zurück.
+    """
+    from app.core.knowledge.parts import holders
+    from app.core.scene.history import change_for
+    from app.core.types import Parameter
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    created = {
+        name: Parameter(name=name, value=value, unit="mm")
+        for name, value in (("breite", 40.0), ("tiefe", 30.0), ("hoehe", 40.0))
+    }
+    history.apply(
+        "Halter",
+        [
+            OperationDraft(
+                op="create_holder_u",
+                params={
+                    "width": "=@breite",
+                    "depth": "=@tiefe",
+                    "height": "=@hoehe",
+                    "mount": "keyhole",
+                    "floor": False,
+                    "wall": 3.0,
+                },
+            )
+        ],
+        changes=change_for(history.document, parameters=created),
+    )
+    assert len(history.document.ops) == 1
+
+    def measured() -> tuple[tuple[float, float, float], frozenset[str]]:
+        result = evaluate(history.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+        (body,) = result.scene.objects.values()
+        assert as_mesh_data(body.mesh).is_watertight
+        return body.mesh.bounds.size, frozenset(body.features)
+
+    play = profile.material.clearance
+    (width, depth, height), features = measured()
+    assert width == pytest.approx(40.0 + play + 2.0 * 3.0)
+    assert depth == pytest.approx(holders._thickness("keyhole", 3.0) + 30.0 + play + 3.0)
+    assert height == pytest.approx(40.0)
+    assert {
+        "holder_u_plate_1",
+        "holder_u_front_1",
+        "holder_u_keyhole_1",
+        "holder_u_keyhole_2",
+    } <= features
+
+    history.apply(
+        "Breite",
+        [],
+        changes=change_for(
+            history.document, parameters={"breite": Parameter(name="breite", value=60.0)}
+        ),
+    )
+    (wider, same_depth, _height), _features = measured()
+    assert wider == pytest.approx(width + 20.0), "die Leiste dreht das Innenmaß"
+    assert same_depth == pytest.approx(depth)
+    history.undo()
+    history.undo()
+    assert not history.document.ops
+    assert not history.document.parameters, "Schritt und Maße waren eine Transaktion"
+
+
+def test_the_keyholes_open_at_the_back_and_hold_the_screw_above_the_entrance() -> None:
+    """Das Schlüsselloch schneidet von der Wandseite und lässt vorn eine Wand stehen.
+
+    Der Kopf geht unten durch den Einstieg, der Halter sinkt, und die Schraube
+    sitzt oben am Ende des Schlitzes — gemessen an Luft und Material, nicht an
+    einer Formel.
+    """
+    from app.core.knowledge.parts import holders
+    from app.core.knowledge.parts.mounting import HEAD_CLEARANCE
+
+    wall, height = 3.0, 40.0
+    produced = _holder(
+        "holder_u", mount="keyhole", width=40.0, depth=30.0, height=height, wall=wall, floor=False
+    )
+    keyhole = holders.KEYHOLE
+    thickness = wall + keyhole.depth
+    across = standards.screw(keyhole.size).head + HEAD_CLEARANCE + 0.2
+    plate_width = produced.mesh.bounds.size[0]
+    entrance = height / 2.0 - keyhole.drop / 2.0
+    for side, name in ((-1.0, "keyhole_1"), (1.0, "keyhole_2")):
+        x = side * (plate_width / 2.0 - wall - across / 2.0)
+        centre = produced.features[name].params["centre"]
+        assert centre[0] == pytest.approx(x)
+        assert centre[2] == pytest.approx(entrance + keyhole.drop), "die Schraube sitzt oben"
+        assert -thickness < centre[1] < -wall
+        assert _inside(
+            produced,
+            (x, -thickness + 0.3, entrance),
+            (x, -wall / 2.0, entrance),
+            (x, -thickness + 0.3, entrance + keyhole.drop),
+        ) == [False, True, False], "offen zur Wand, vorn geschlossen, Schlitz nach oben"
+    assert produced.mesh.bounds.minimum[1] == pytest.approx(-thickness)
+
+
+def test_the_holder_plate_holds_the_whole_countersink_and_the_keyhole() -> None:
+    """Die Rückwand ist eine Wandstärke dicker als die Aussparung, die in ihr sitzt.
+
+    Die Senkungstiefe kommt aus derselben Rechnung wie in ``screw_hole`` —
+    hier gegen dessen gemeldetes Merkmal gehalten, damit beide nicht
+    auseinanderlaufen.
+    """
+    from app.core.knowledge.parts import holders
+
+    spec = PARTS.get("screw_hole")
+    tool = spec.fn(spec.params(size=holders.SCREW_SIZE, depth=10.0, countersink=True))
+    sink = float(tool.features["countersink_1"].params["depth"])
+    assert holders._thickness("screws", 3.0) == pytest.approx(3.0 + sink)
+    assert holders._thickness("keyhole", 3.0) == pytest.approx(3.0 + holders.KEYHOLE.depth)
+    assert holders._thickness("pegboard", 3.0) == pytest.approx(3.0)
+    assert holders._thickness("clamp", 3.0) == pytest.approx(3.0)
+
+
+def test_the_screw_holes_sit_in_tabs_beside_the_holder_with_the_countersink_in_front() -> None:
+    """Hinter einer U-Form erreicht kein Schraubendreher die Rückwand — daneben schon."""
+    from app.core.knowledge.parts import holders
+
+    wall = 3.0
+    produced = _holder(
+        "holder_u", mount="screws", width=40.0, depth=30.0, height=40.0, wall=wall, floor=True
+    )
+    screw = standards.screw(holders.SCREW_SIZE)
+    outer = 40.2 + 2.0 * wall
+    tab = screw.countersink + 2.0 * wall
+    thickness = holders._thickness("screws", wall)
+    assert produced.mesh.bounds.size[0] == pytest.approx(outer + 2.0 * tab)
+    for side, name in ((-1.0, "bore_1"), (1.0, "bore_2")):
+        bore = produced.features[name].params
+        x = side * (outer / 2.0 + tab / 2.0)
+        assert bore["centre"][0] == pytest.approx(x)
+        assert bore["through"] is True
+        assert bore["diameter"] == pytest.approx(screw.clearance)
+        radial = (screw.clearance + screw.countersink) / 4.0
+        assert _inside(
+            produced, (x + radial, -0.2, 20.0), (x + radial, -thickness + 0.2, 20.0)
+        ) == [False, True], "die Senkung liegt vorn, hinten nur die Bohrung"
+
+
+def test_the_pegboard_hooks_reach_behind_the_plate_in_the_board_grid_with_the_latch_on_top() -> (
+    None
+):
+    """Zwei Haken im Raster der Lochwand, hinter der Rückwand, die Zunge oben."""
+    from app.core.knowledge.parts import holders
+
+    wall = 4.0
+    produced = _holder(
+        "holder_fork", mount="pegboard", width=25.0, depth=25.0, height=15.0, wall=wall
+    )
+    board = standards.board(holders.HOOKS.system)
+    hooks = [produced.features[f"hook_{index}"].params for index in (1, 2)]
+    latches = [produced.features[f"latch_{index}"].params for index in (1, 2)]
+    assert abs(hooks[0]["centre"][0] - hooks[1]["centre"][0]) == pytest.approx(
+        board.pitch * holders.HOOKS.steps
+    )
+    for hook, latch in zip(hooks, latches, strict=True):
+        assert hook["centre"][1] < -wall - board.thickness, "die Nase greift hinter die Platte"
+        assert tuple(hook["normal"]) == pytest.approx((0.0, -1.0, 0.0))
+        assert latch["centre"][2] > hook["centre"][2], "die Rastzunge sitzt oben"
+    mesh = as_mesh_data(produced.mesh)
+    assert mesh.is_watertight and mesh.component_count == 1
+    assert mesh.bounds.size[0] >= board.pitch + 2.0 * wall
+
+
+def test_the_clamp_gap_is_the_entered_board_thickness() -> None:
+    """Platte, Spalt, Schenkel: Der Spalt hat genau die eingetragene Stärke."""
+    wall = 3.0
+    for board in (12.0, 40.0):
+        produced = _holder(
+            "holder_ring",
+            mount="clamp",
+            board=board,
+            diameter=60.0,
+            height=40.0,
+            wall=wall,
+            floor=True,
+        )
+        clamp = produced.features["clamp_1"].params
+        assert clamp["centre"][1] == pytest.approx(-(wall + board))
+        assert produced.mesh.bounds.minimum[1] == pytest.approx(-(wall + board + wall))
+        assert _inside(
+            produced,
+            (0.0, -wall - board / 2.0, 20.0),
+            (0.0, -wall / 2.0, 20.0),
+            (0.0, -wall - board - wall / 2.0, 20.0),
+            (0.0, -wall - board / 2.0, 40.0 - wall / 2.0),
+        ) == [False, True, True, True], "Luft im Spalt, Rückwand, Schenkel, Bügel"
+
+
+def test_a_fork_whose_prongs_end_before_the_seat_is_refused_with_advice() -> None:
+    """Zinken, die nicht über die Mitte des Grunds reichen, halten keinen Stiel."""
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts import holders
+
+    spec = PARTS.get("holder_fork")
+    values = spec.params(width=60.0, depth=20.0, play=0.2)
+    assert spec.feasible is not None and spec.feasible(values) is holders.FORK_TOO_SHALLOW
+    with pytest.raises(ValidationError) as caught:
+        spec.fn(values)
+    assert caught.value.constraint == "feasible"
+    assert caught.value.suggestions, "Regel 17"
+    assert spec.feasible(spec.params(width=40.0, depth=21.0, play=0.2)) is None
+
+
+def test_the_fork_seat_is_round_and_the_prongs_hold_the_handle() -> None:
+    """Ein runder Stiel liegt im halbrunden Grund und hat seitlich die Zinken."""
+    wall = 4.0
+    produced = _holder("holder_fork", mount="clamp", width=25.0, depth=25.0, height=15.0, wall=wall)
+    radius = 25.2 / 2.0
+    assert _inside(
+        produced,
+        (0.0, radius, 7.5),
+        (radius + wall / 2.0, radius, 7.5),
+        (radius * 0.9, 0.3, 7.5),
+        (0.0, 0.3, 7.5),
+    ) == [False, True, True, False], "Stiel frei, Zinke Material, Grund rund"
+    assert produced.features["prong_1"].params["centre"][0] == pytest.approx(-(radius + wall / 2.0))
+
+
+def test_the_shelf_grows_its_plate_so_the_brace_stays_at_45_degrees() -> None:
+    """Die Stütze unter der Ablage steigt unter 45 Grad und druckt ohne Stützmaterial."""
+    wall = 3.0
+    flat = _holder(
+        "holder_shelf", mount="clamp", width=30.0, depth=40.0, height=12.0, wall=wall, lip=0.0
+    )
+    front = 40.2
+    assert flat.mesh.bounds.size[2] == pytest.approx(front + wall), "die Rückwand wächst"
+    assert flat.mesh.bounds.maximum[1] == pytest.approx(front)
+    assert "lip_1" not in flat.features
+    # Die Schräge läuft von der Rückwand bei z = 0 bis zur Vorderkante: z = y.
+    assert _inside(flat, (0.0, 20.0, 20.5), (0.0, 20.0, 19.5)) == [True, False]
+
+    rim = _holder(
+        "holder_shelf", mount="clamp", width=30.0, depth=40.0, height=60.0, wall=wall, lip=10.0
+    )
+    assert rim.mesh.bounds.size[2] == pytest.approx(70.0), "Z-Form: Rand über der Ablage"
+    assert rim.mesh.bounds.maximum[1] == pytest.approx(front + wall)
+    assert rim.features["lip_1"].params["centre"][2] == pytest.approx(70.0)
+    assert rim.features["shelf_1"].params["centre"][2] == pytest.approx(60.0)
+    assert _inside(rim, (0.0, front / 2.0, 65.0), (0.0, front + wall / 2.0, 65.0)) == [
+        False,
+        True,
+    ], "auf der Ablage Luft, vorn der Rand"
+
+
+def test_the_ring_keeps_a_web_from_the_plate_and_its_seat_is_the_object_plus_play() -> None:
+    """Der Sitz ist der Gegenstand mit Spiel; zur Rückwand bleibt eine halbe Wand Steg."""
+    from app.core.knowledge.parts import holders
+
+    wall = 4.0
+    cup = _holder("holder_ring", mount="screws", diameter=50.0, height=30.0, wall=wall, floor=True)
+    seat = cup.features["seat_1"].params
+    assert seat["diameter"] == pytest.approx(50.2)
+    assert seat["centre"][1] == pytest.approx(holders.ring_centre(50.0, 0.2, wall))
+    assert seat["centre"][1] - 25.1 == pytest.approx(wall / 2.0)
+    assert seat["through"] is False and "floor_1" in cup.features
+    ring = _holder(
+        "holder_ring", mount="screws", diameter=50.0, height=30.0, wall=wall, floor=False
+    )
+    assert ring.features["seat_1"].params["through"] is True
+    assert "floor_1" not in ring.features
+    assert _inside(cup, (0.0, 27.1, 1.0), (0.0, 27.1, wall + 1.0)) == [True, False]
+    assert _inside(ring, (0.0, 27.1, 1.0)) == [False]
+
+
+@pytest.mark.parametrize("name", HOLDERS)
+def test_every_holder_follows_its_dimensions(name: str) -> None:
+    """Eine Parameteränderung wirkt: breiter und höher heißt breiter und höher gebaut."""
+    first = "diameter" if name == "holder_ring" else "width"
+    narrow = _holder(name, mount="clamp", **{first: 30.0}, height=40.0)
+    wide = _holder(name, mount="clamp", **{first: 50.0}, height=60.0)
+    assert wide.mesh.bounds.size[0] == pytest.approx(narrow.mesh.bounds.size[0] + 20.0)
+    assert wide.mesh.bounds.size[2] > narrow.mesh.bounds.size[2]

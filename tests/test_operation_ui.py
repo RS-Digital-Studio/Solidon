@@ -5800,6 +5800,52 @@ def test_aligning_without_a_target_invites_instead_of_teaching_syntax(
     assert "Doppelpunkt" in reason, reason
 
 
+def test_a_holder_template_names_its_dimensions_but_not_an_idle_field() -> None:
+    """Die Halter sind Vorlagen wie die Grundkörper (RM-399, §13).
+
+    Ihr Erzeuger bietet *Maße als Parameter anlegen* an, der eingesetzte
+    Baustein und ein Erzeuger ohne Vorlagenerklärung nicht. Und ein Maß, das
+    gerade nichts tut — die Plattenstärke ohne Klemme —, steht weder im
+    Dialog noch als Parameter in der Leiste. Geprüft am Rechenweg des
+    Fensters, ohne Fenster: ``_named_dimensions`` liest nur das Dokument.
+    """
+    from types import SimpleNamespace
+
+    from app.core.scene.project import new_project
+    from app.ui.main_window import offers_naming
+
+    bootstrap.load_operations()
+    for name in ("holder_u", "holder_ring", "holder_fork", "holder_shelf"):
+        assert offers_naming(REGISTRY.get(f"create_{name}")), name
+        assert not offers_naming(REGISTRY.get(f"insert_{name}")), "eingesetzt ein Maß am Körper"
+    assert not offers_naming(REGISTRY.get("create_organizer_tray")), "nur erklärte Vorlagen"
+
+    window = SimpleNamespace(
+        session=SimpleNamespace(project=new_project("centauri-carbon-2", "petg"))
+    )
+    spec = REGISTRY.get("create_holder_u")
+    defaults = {entry.name: entry.default for entry in spec.params.spec()}
+    values, change = MainWindow._named_dimensions(
+        window,  # type: ignore[arg-type]
+        spec,
+        {**defaults, "mount": "keyhole"},
+        True,
+    )
+    assert change is not None and change.after.parameters is not None
+    assert set(change.after.parameters) == {"breite", "tiefe", "hoehe"}
+    assert values["width"] == "=@breite"
+    assert values["board"] == defaults["board"], "ohne Klemme bleibt die Plattenstärke eine Zahl"
+    values, change = MainWindow._named_dimensions(
+        window,  # type: ignore[arg-type]
+        spec,
+        {**defaults, "mount": "clamp"},
+        True,
+    )
+    assert change is not None and change.after.parameters is not None
+    assert set(change.after.parameters) == {"breite", "tiefe", "hoehe", "plattenstaerke"}
+    assert values["board"] == "=@plattenstaerke"
+
+
 def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) -> None:
     """*Maße als Parameter anlegen* steht bei den Grundkörpern und sonst nirgends (§13).
 
