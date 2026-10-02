@@ -3307,10 +3307,14 @@ class PlacementFlow(QObject):
             )
             entered = self.dialog.values()
             spec = self.spec_of()
-            keeps_old_frame = (
-                spec.name in placement.DRILL_OPERATIONS
-                and bool(entered.get("measured_frame"))
-                and _same_direction(entered, values, normal_fields(spec.params))
+            measured_drill = spec.name in placement.DRILL_OPERATIONS and bool(
+                entered.get("measured_frame")
+            )
+            keeps_old_frame = measured_drill and _same_direction(
+                entered,
+                values,
+                normal_fields(spec.params),
+                resolved_direction=self._tool_context.outward_axis,
             )
             if keeps_old_frame:
                 # Eine Positionsgeste auf derselben Fläche darf die alte Achse
@@ -3326,12 +3330,14 @@ class PlacementFlow(QObject):
                 # neuen Normalen gilt der Rahmen von heute, der Marker fällt.
                 values["measured_frame"] = False
             self.dialog.take_placement(values)
-            refresh_tool = keeps_old_frame and bool(self._tool_context.position_dependent_axis)
+            refresh_tool = measured_drill and (
+                not keeps_old_frame or bool(self._tool_context.position_dependent_axis)
+            )
         finally:
             self._updating = False
         if refresh_tool:
-            # Bei alten Nullachsen hängt der Kernpfad von der neuen Mündung ab.
-            # Der Worker löst Richtung, Werkzeug und Cache-Schlüssel gemeinsam auf.
+            # Ein verworfener Rahmen braucht immer ein neues Werkzeug; beim
+            # Behalten hängt es davon ab, ob dessen Achse ortsabhängig ist.
             self._request_tool()
         return True
 
@@ -5491,22 +5497,51 @@ class PlacementFlow(QObject):
 
 
 def _same_direction(
-    entered: Mapping[str, Any], placed: Mapping[str, Any], fields: Sequence[str]
+    entered: Mapping[str, Any],
+    placed: Mapping[str, Any],
+    fields: Sequence[str],
+    *,
+    resolved_direction: Vec3 | None = None,
 ) -> bool:
     """Ob die gespeicherte Normale dieselbe ist wie die der angeklickten Fläche.
 
-    Ein Ausdruck im gespeicherten Wert gilt als dieselbe Richtung: Er ist eine
-    Bindung des Kunden und wird nicht durch eine Geste ersetzt.
+    Ein Ausdruck in einer gespeicherten Komponente bindet die ganze Richtung und
+    wird nicht durch eine Geste ersetzt. Zahlenvektoren werden vor dem Vergleich
+    normiert, denn ihre Länge ändert ihre Richtung nicht.
     """
+    if not fields:
+        return True
+    if any(field in entered and isinstance(entered[field], str) for field in fields):
+        return True
+
+    stored_direction: list[float] = []
+    placed_direction: list[float] = []
     for field in fields:
         if field not in entered or field not in placed:
             continue
-        stored, new = entered[field], placed[field]
-        if isinstance(stored, str):
-            return True
-        if abs(float(stored) - float(new)) > _same_face_tolerance():
+        stored_direction.append(float(entered[field]))
+        placed_direction.append(float(placed[field]))
+
+    tolerance = _same_face_tolerance()
+    if len(stored_direction) != len(fields):
+        return all(
+            abs(stored - new) <= tolerance
+            for stored, new in zip(stored_direction, placed_direction, strict=True)
+        )
+
+    stored_length = math.hypot(*stored_direction)
+    placed_length = math.hypot(*placed_direction)
+    if stored_length <= EPS_GEOM:
+        if resolved_direction is None:
             return False
-    return True
+        stored_direction = [float(value) for value in resolved_direction]
+        stored_length = math.hypot(*stored_direction)
+    if stored_length <= EPS_GEOM or placed_length <= EPS_GEOM:
+        return False
+    return all(
+        abs(stored / stored_length - new / placed_length) <= tolerance
+        for stored, new in zip(stored_direction, placed_direction, strict=True)
+    )
 
 
 def _same_face_tolerance() -> float:
