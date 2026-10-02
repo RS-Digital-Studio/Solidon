@@ -3813,6 +3813,44 @@ def test_v38_a_slot_keeps_the_world_direction_it_was_cut_with(profile) -> None:
         assert _slot_world_angles(again, name) == pytest.approx([90.0, 90.0], abs=0.5), name
 
 
+def test_v39_a_sculpt_session_keeps_mirroring_about_the_origin_of_the_scene(profile) -> None:
+    """39 → 40: Eine alte Formsitzung behält ihre Form (RM-363).
+
+    ``sculpt_mirror_v39.p3d`` hat der Stand vor der Körpermitte geschrieben:
+    eine Kugel Ø 30, um 40 mm nach +X verschoben (Mitte bei x = 40), ein Zug
+    bei x = 55 mit Symmetrie X. Am Nullpunkt der Szene gespiegelt lag der
+    Zwilling bei x = −55 und traf nichts — so sah das Projekt aus. Nach der
+    Migration trägt der Schritt ``mirror_at_body: False`` und sieht genauso
+    aus; erst der Haken spiegelt an der Mitte.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "sculpt_mirror_v39.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 39
+    assert all(
+        "mirror_at_body" not in entry["params"]
+        for entry in original["ops"]
+        if entry["op"] == "sculpt_strokes"
+    )
+
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    (sculpt,) = [entry for entry in project.document.ops if entry.op == "sculpt_strokes"]
+    assert sculpt.params["mirror_at_body"] is False
+
+    def moved_left_of_the_middle() -> bool:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        vertices = result.scene.objects["obj_1"].mesh.raw.vertices
+        return bool((vertices[:, 0] < 25.0 - 1e-6).any())
+
+    assert not moved_left_of_the_middle(), "wie gespeichert: der Zwilling trifft nichts"
+    History(project.document).change_params(sculpt.id, {**sculpt.params, "mirror_at_body": True})
+    assert moved_left_of_the_middle(), "mit Haken trifft der Zwilling die andere Seite"
+
+
 def test_v38_slot_angles_keep_their_world_direction_on_both_undo_sides() -> None:
     """38 → 39 rechnet jede gespeicherte Bohrung mit Langloch um, auch hinter Strg+Z.
 

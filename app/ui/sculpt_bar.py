@@ -112,7 +112,10 @@ class SculptBar(QWidget):
         for value in PLANES:
             self.symmetry.addItem(choice_label(value), value)
         self.symmetry.setToolTip(
-            tr("Gespiegelt wird am Objektursprung — nicht am Schwerpunkt, der beim Formen wandert.")
+            tr(
+                "Gespiegelt wird an der Mitte des Körpers — nicht am Schwerpunkt, "
+                "der beim Formen wandert."
+            )
         )
 
         # Die erzwungene Etappe aus Entscheidung C. Als Schalter und nicht als

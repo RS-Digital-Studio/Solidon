@@ -166,6 +166,7 @@ Weitere Sonderfälle, je mit eigenem Test:
 | `projects/repair_v34.p3d` | ein Reparaturschritt ohne `self_intersections` | rechnet wie gespeichert (`self_intersections: False`), der Befund bietet das Auflösen an | `test_project.py` |
 | `projects/edge_groups_v36.p3d` | zwei Quader 40 × 30 × 20 mm mit Querbohrung Ø 6, einer als Netz, einer exakt, beide R 1 an „waagerecht“ | die Migration setzt `rings_by_plane: False`, die Mündungen werden wie gespeichert mitgerundet; der exakte Körper rechnet auf die Stelle genau wie beim Schreiben gemessen | `test_project.py` |
 | `projects/slot_angle_frame_v38.p3d` | zwei Platten 80 × 60 × 10 mm, Netz und exakt; je eine Bohrung Ø 6 0,03° neben Z, zum Langloch gezogen (Winkel −40°), und eine Bohrung mit Haken *Langloch* 0,05° neben Z (Winkel 160°), geschrieben vom Stand vor `prepare.slot_frame` | alle vier Langlöcher liegen wie beim Schreiben gemessen entlang +Y (auf 0,5°); die Bohrungen kommen umgerechnet an (≈ 90°), *Zum Langloch ziehen* mit `measured_frame` und hält den Winkel von heute als Antwort fest | `test_project.py` |
+| `projects/sculpt_mirror_v39.p3d` | eine Kugel Ø 30, um 40 mm nach +X verschoben, ein Formzug bei x = 55 mit Symmetrie X, geschrieben vom Stand vor der Körpermitte | die Migration setzt `mirror_at_body: False`, der Zwilling trifft wie gespeichert nichts; mit Haken trifft er die andere Seite | `test_project.py` |
 
 ## Daneben
 

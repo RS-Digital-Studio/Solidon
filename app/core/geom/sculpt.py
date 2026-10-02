@@ -31,7 +31,7 @@ from typing import Any, Final, cast
 import numpy as np
 
 from app.core.deferred import cKDTree, trimesh
-from app.core.errors import CANCEL, ValidationError
+from app.core.errors import CANCEL, SHOW_LOCATION, ValidationError
 from app.core.geom.intersections import crossing_face_pairs
 from app.core.geom.mesh import MeshData, as_mesh_data, ray_hits_batch, read_mesh
 from app.core.registry import op_params, param, register_op
@@ -88,13 +88,28 @@ def stages(strokes: Sequence[Stroke]) -> list[list[Stroke]]:
     return parts
 
 
-def _mirrored(stroke: Stroke) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Punkt und Richtung des Strichs, dazu jede verlangte Spiegelung.
+def mirror_centre(mesh: MeshData) -> np.ndarray:
+    """Wo die Symmetrieebenen eines Körpers liegen: in der Mitte seines
+    Hüllquaders vor den Zügen.
 
-    **Am Objektursprung, nicht am Schwerpunkt.** Der Schwerpunkt wandert beim
-    Sculpten, und eine Symmetrieebene, die sich unter der Hand bewegt, ist die
-    Sorte Überraschung, die Vertrauen kostet.
+    **Nicht am Schwerpunkt** — der wandert beim Formen, und eine
+    Symmetrieebene, die sich unter der Hand bewegt, ist die Sorte
+    Überraschung, die Vertrauen kostet. **Und nicht am Nullpunkt der Szene**:
+    Dort lag sie bis RM-363, und an jedem Körper abseits der Mitte ging die
+    Spiegelung ins Leere — Symmetrie Z an keinem Körper auf dem Bett.
+    Die Mitte des Körpers vor den Zügen steht fest, solange der Schritt
+    davor sich nicht ändert, und wandert mit, wenn er sich bewegt.
     """
+    bounds = np.asarray(mesh.raw.bounds, dtype=float)
+    if bounds.shape != (2, 3) or not np.isfinite(bounds).all():
+        return np.zeros(3)
+    middle: np.ndarray = (bounds[0] + bounds[1]) / 2.0
+    return middle
+
+
+def _mirrored(stroke: Stroke, centre: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Punkt und Richtung des Strichs, dazu jede verlangte Spiegelung an den
+    Ebenen durch ``centre`` (:func:`mirror_centre`)."""
     point = np.asarray(stroke.point, dtype=float)
     direction = np.asarray(stroke.normal, dtype=float)
     places = [(point, direction)]
@@ -103,7 +118,10 @@ def _mirrored(stroke: Stroke) -> list[tuple[np.ndarray, np.ndarray]]:
             continue
         flip = np.ones(3)
         flip[axis] = -1.0
-        places = [*places, *[(place * flip, way * flip) for place, way in places]]
+        places = [
+            *places,
+            *[((place - centre) * flip + centre, way * flip) for place, way in places],
+        ]
     return places
 
 
@@ -143,6 +161,7 @@ def _offsets(
     strokes: Iterable[Stroke],
     missed: list[Stroke] | None = None,
     cancelled: CancelToken | None = None,
+    centre: np.ndarray | None = None,
 ) -> np.ndarray:
     """Das Offsetfeld einer Etappe: alle Striche summiert, ein Durchgang.
 
@@ -158,6 +177,7 @@ def _offsets(
     points = np.asarray(body.vertices, dtype=float)
     normals = np.asarray(body.vertex_normals, dtype=float)
     tree = cKDTree(points)
+    plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
     shift = np.zeros_like(points)
 
     smoothing = [s for s in strokes if s.tool in ORDERED_TOOLS]
@@ -175,7 +195,7 @@ def _offsets(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         touched = False
-        for centre, direction in _mirrored(stroke):
+        for centre, direction in _mirrored(stroke, plane):
             near, weight = _weights(tree, points, centre, stroke.radius)
             if not len(near):
                 continue
@@ -260,6 +280,7 @@ def apply_strokes(
     missed: list[Stroke] | None = None,
     *,
     cancelled: CancelToken | None = None,
+    centre: Vec3 | None = None,
 ) -> MeshData:
     """Die ganze Strichliste auswerten — Etappe für Etappe, jede in einem Zug.
 
@@ -267,13 +288,18 @@ def apply_strokes(
     keines verschwindet. Wer eine feine Falte in ein grobes Netz sculpten will,
     braucht vorher Eckpunkte — dafür gibt es ``remesh_uniform`` (Entscheidung
     E), und der Editor misst und sagt es, bevor jemand vergeblich malt.
+
+    ``centre`` ist der Punkt, durch den die Symmetrieebenen gehen. Ohne
+    Angabe die Mitte von ``mesh`` vor dem ersten Zug (:func:`mirror_centre`)
+    — einmal genommen, nicht je Etappe, damit die Ebene beim Formen steht.
     """
     if not strokes:
         return mesh
+    plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
     body = mesh.raw
     for part in stages(strokes):
         moved = np.asarray(body.vertices, dtype=float) + _offsets(
-            mesh.replacing(body), part, missed, cancelled
+            mesh.replacing(body), part, missed, cancelled, plane
         )
         body = trimesh.Trimesh(vertices=moved, faces=body.faces, process=False)
     return mesh.replacing(body)
@@ -386,6 +412,15 @@ class SculptParams(BaseParams):
             "änderbar — eine fertige Sitzung lässt sich damit symmetrisch machen."
         ),
     )
+    mirror_at_body: bool = param(
+        title=_("An der Körpermitte spiegeln"),
+        default=True,
+        placement="advanced",
+        doc=_(
+            "Die Symmetrieebenen gehen durch die Mitte des Körpers. Ohne Haken gehen "
+            "sie durch den Nullpunkt der Szene, wie in älteren Projekten."
+        ),
+    )
 
 
 @register_op(
@@ -426,7 +461,11 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
         strokes = [replace(stroke, symmetry=stroke.symmetry | extra) for stroke in strokes]
 
     missed: list[Stroke] = []
-    after = apply_strokes(before, strokes, missed, cancelled=ctx.cancelled)
+    centre: Vec3 = (0.0, 0.0, 0.0)
+    if params.mirror_at_body:
+        middle = mirror_centre(before)
+        centre = (float(middle[0]), float(middle[1]), float(middle[2]))
+    after = apply_strokes(before, strokes, missed, cancelled=ctx.cancelled, centre=centre)
     findings = _sculpting_findings(
         before, after, strokes, source.id, missed, ctx.profile, ctx.cancelled
     )
@@ -717,8 +756,9 @@ def _damage_findings(
                     "doppelt. Den Zug schwächer setzen oder zurücknehmen."
                 ),
                 object_id=object_id,
-                values={"pairs": count},
+                values={"triangles": count},
                 location=where,
+                suggestions=(SHOW_LOCATION,),
             )
         ]
 
@@ -737,6 +777,7 @@ def _damage_findings(
             object_id=object_id,
             values={"thickness_mm": round(thickness, 2), "minimum_mm": round(minimum, 2)},
             location=where,
+            suggestions=(SHOW_LOCATION,),
         )
     ]
 
@@ -762,19 +803,19 @@ def _new_crossings(
     touched: np.ndarray,
     cancelled: CancelToken | None,
 ) -> tuple[int, Vec3] | None:
-    """Wie viele Paare mit einem bewegten Dreieck sich jetzt schneiden, wenn es
-    mehr sind als vorher — und wo das erste liegt."""
+    """Wie viele Dreiecke sich jetzt an einem bewegten schneiden, wenn es mehr
+    schneidende Paare sind als vorher — und wo das erste liegt."""
     now = crossing_face_pairs(vertices, local, cancelled)
     hits = touched[now.first] | touched[now.second]
-    count = int(hits.sum())
-    if not count:
+    if not hits.any():
         return None
     then = crossing_face_pairs(earlier, local, cancelled)
-    if count <= int((touched[then.first] | touched[then.second]).sum()):
+    if int(hits.sum()) <= int((touched[then.first] | touched[then.second]).sum()):
         return None
+    crossing = np.unique(np.concatenate([now.first[hits], now.second[hits]]))
     face = int(now.first[np.flatnonzero(hits)[0]])
     centre = vertices[local[face]].mean(axis=0)
-    return count, (float(centre[0]), float(centre[1]), float(centre[2]))
+    return len(crossing), (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
 def _thinned_wall(

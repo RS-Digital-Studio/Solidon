@@ -264,17 +264,33 @@ def test_a_symmetric_stroke_hits_both_sides() -> None:
     assert mirrored.volume > plain.volume
 
 
-def test_mirroring_happens_about_the_origin() -> None:
-    """Die Spiegelebene ist der Objektursprung, nicht der Schwerpunkt.
+def _sphere_at(centre: tuple[float, float, float]) -> MeshData:
+    body = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    body.apply_translation(centre)
+    return MeshData.of(body)
 
-    Der Schwerpunkt wandert beim Sculpten. Eine Symmetrieebene, die sich unter
-    der Hand bewegt, ist die Sorte Überraschung, die Vertrauen kostet.
+
+@pytest.mark.parametrize(("axis", "bit"), [(0, 1), (1, 2), (2, 4)])
+def test_mirroring_happens_about_the_middle_of_the_body(axis: int, bit: int) -> None:
+    """Die Spiegelebene geht durch die Mitte des Körpers (RM-363).
+
+    Bis dahin lag sie im Nullpunkt der Szene: An einer Kugel abseits der
+    Mitte bewegte der Zug 117 Ecken, sein Spiegelbild keine, und Symmetrie Z
+    wirkte an keinem Körper auf dem Bett. Nicht der Schwerpunkt — der wandert
+    beim Formen —, sondern die Mitte des Hüllquaders vor den Zügen.
     """
-    shifted = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
-    shifted.apply_translation((0.0, 30.0, 0.0))
-    base = MeshData.of(shifted)
+    centre = [25.0, -40.0, 30.0]
+    base = _sphere_at((centre[0], centre[1], centre[2]))
+    point = list(centre)
+    point[axis] += 20.0
+    normal = [0.0, 0.0, 0.0]
+    normal[axis] = 1.0
     stroke = Stroke(
-        point=(0.0, 50.0, 0.0), normal=(0.0, 1.0, 0.0), radius=6.0, strength=2.0, symmetry=2
+        point=(point[0], point[1], point[2]),
+        normal=(normal[0], normal[1], normal[2]),
+        radius=6.0,
+        strength=2.0,
+        symmetry=bit,
     )
 
     sculpted = apply_strokes(base, [stroke])
@@ -282,11 +298,27 @@ def test_mirroring_happens_about_the_origin() -> None:
     before = np.asarray(base.raw.vertices, dtype=float)
     after = np.asarray(sculpted.raw.vertices, dtype=float)
     moved = np.linalg.norm(after - before, axis=1) > 1e-9
-    assert moved.any(), "der Strich selbst trifft"
-    # Gespiegelt am Ursprung läge der Zwilling bei y = -50 und damit weit
-    # außerhalb des Körpers, der bei y = 10 endet. Am Schwerpunkt gespiegelt
-    # läge er bei y = 10 und träfe.
-    assert before[moved][:, 1].min() > 0.0, "der Zwilling trifft den Körper nicht"
+    stroke_side = int((before[moved][:, axis] > centre[axis]).sum())
+    mirror_side = int((before[moved][:, axis] < centre[axis]).sum())
+    assert stroke_side > 0, "der Strich selbst trifft"
+    assert mirror_side == stroke_side, "das Spiegelbild trifft genauso viele Ecken"
+
+
+def test_an_old_session_keeps_mirroring_about_the_origin_of_the_scene(profile: Profile) -> None:
+    """Ohne ``mirror_at_body`` spiegelt der Schritt wie vor RM-363 — so behält
+    ein altes Projekt nach dem Öffnen seine Form."""
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=_sphere_at((0.0, 30.0, 0.0)))
+    stroke = Stroke(point=(0.0, 50.0, 0.0), normal=(0.0, 1.0, 0.0), radius=6.0, strength=2.0)
+    text = strokes_to_text([stroke])
+
+    old = run(entry, profile, strokes=text, symmetry="y", mirror_at_body=False)
+    new = run(entry, profile, strokes=text, symmetry="y")
+
+    before = np.asarray(entry.mesh.raw.vertices, dtype=float)
+    for result, hits_the_twin in ((old, False), (new, True)):
+        after = np.asarray(result.outputs[0].mesh.raw.vertices, dtype=float)
+        moved = np.linalg.norm(after - before, axis=1) > 1e-9
+        assert bool((before[moved][:, 1] < 30.0).any()) is hits_the_twin
 
 
 # --- die Zusage, an der alles hängt ---------------------------------------------
@@ -528,7 +560,7 @@ def test_carving_through_the_plate_is_reported(profile: Profile) -> None:
 
     pierced = next(f for f in result.findings if f.code == "sculpt.pierced")
     assert pierced.severity == "warning"
-    assert pierced.values["pairs"] > 0
+    assert pierced.values["triangles"] > 0
     assert pierced.location is not None, "Stelle zeigen fliegt zur Durchdringung"
     assert abs(pierced.location[0]) < 8.0 and abs(pierced.location[1]) < 8.0
 

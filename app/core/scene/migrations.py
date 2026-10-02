@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 39
+FORMAT_VERSION: Final = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -1096,6 +1096,36 @@ def _keep_slot_directions_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_sculpt_mirrors_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """Format 39 → 40: Formsitzungen spiegeln bisher am Nullpunkt der Szene.
+
+    Seit RM-363 gehen die Symmetrieebenen durch die Mitte des Körpers
+    (``mirror_at_body``). Ein altes Projekt mit Symmetrie an einem Körper
+    abseits der Mitte sähe nach dem Öffnen anders aus — deshalb bekommt jeder
+    vorhandene Formschritt den alten Bezug ausdrücklich, auch in den
+    gespeicherten Fassungen ``before`` und ``after`` jeder Änderung. Ein
+    Schritt, der den Schlüssel schon trägt, bleibt, wie er ist. Festgehalten
+    an ``tests/data/projects/sculpt_mirror_v39.p3d``, geschrieben vom Stand
+    vor der Änderung.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "sculpt_strokes":
+            continue
+        params = operation.setdefault("params", {})
+        if isinstance(params, dict):
+            params.setdefault("mirror_at_body", False)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1136,6 +1166,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=36, to_version=37, apply=_keep_edge_groups_as_they_were),
     Step(from_version=37, to_version=38, apply=_place_further_models_freely),
     Step(from_version=38, to_version=39, apply=_keep_slot_directions_as_they_were),
+    Step(from_version=39, to_version=40, apply=_keep_sculpt_mirrors_as_they_were),
 )
 
 
