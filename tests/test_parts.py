@@ -7148,6 +7148,71 @@ def test_the_keyholes_open_at_the_back_and_hold_the_screw_above_the_entrance() -
     assert produced.mesh.bounds.minimum[1] == pytest.approx(-thickness)
 
 
+def test_a_narrow_holder_takes_one_centred_keyhole_and_keeps_its_width() -> None:
+    """Nachbau Modell 1 (RM-443): 20 mm breit mit einem Schlüsselloch, nicht 24,7 mm.
+
+    ``grenuttags_hallare_modell_40x47.stl`` aus dem Korpus ist 20 mm breit und
+    hängt an **einem** Schlüsselloch. Die Vorlage setzte immer zwei
+    nebeneinander und machte die Rückwand dafür breiter als den Halter: 24,7
+    statt 20 mm. Wo zwei Löcher mit Rand nicht in die Breite passen, sitzt
+    jetzt eines in der Mitte, und der Halter bleibt so breit, wie er
+    eingetragen wurde.
+    """
+    from app.core.knowledge.parts import holders
+    from app.core.knowledge.parts.mounting import HEAD_CLEARANCE
+
+    wall, play = 3.0, 0.2
+    # Außenbreite 20 mm: Innenmaß plus Spiel plus zwei Wände.
+    produced = _holder(
+        "holder_u", mount="keyhole", width=20.0 - 2.0 * wall - play, depth=41.0, height=53.0
+    )
+    assert produced.mesh.bounds.size[0] == pytest.approx(20.0)
+    assert "keyhole_1" in produced.features and "keyhole_2" not in produced.features
+    centre = produced.features["keyhole_1"].params["centre"]
+    assert centre[0] == pytest.approx(0.0), "das eine Loch sitzt in der Mitte"
+    keyhole = holders.KEYHOLE
+    entrance = 53.0 / 2.0 - keyhole.drop / 2.0
+    thickness = wall + keyhole.depth
+    assert _inside(
+        produced,
+        (0.0, -thickness + 0.3, entrance),
+        (0.0, -wall / 2.0, entrance),
+        (0.0, -thickness + 0.3, entrance + keyhole.drop),
+    ) == [False, True, False], "offen zur Wand, vorn geschlossen, Schlitz nach oben"
+    mesh = as_mesh_data(produced.mesh)
+    assert mesh.is_watertight and mesh.component_count == 1
+
+    # Zwei Löcher, sobald sie mit Rand in die Breite passen — und keinen
+    # Millimeter vorher.
+    across = standards.screw(keyhole.size).head + HEAD_CLEARANCE + play
+    both = 2.0 * across + 3.0 * wall
+    fits = _holder("holder_u", mount="keyhole", width=both - 2.0 * wall - play, height=53.0)
+    assert {"keyhole_1", "keyhole_2"} <= set(fits.features)
+    assert fits.mesh.bounds.size[0] == pytest.approx(both)
+    short = _holder("holder_u", mount="keyhole", width=both - 2.0 * wall - play - 0.5, height=53.0)
+    assert "keyhole_2" not in short.features
+    assert short.mesh.bounds.size[0] == pytest.approx(both - 0.5)
+
+
+def test_a_holder_narrower_than_one_keyhole_grows_only_for_that_one() -> None:
+    """Schmaler als ein Schlüsselloch mit Rand: Die Rückwand wächst auf genau dieses Maß.
+
+    Ein Kopf von 7,8 mm braucht seinen Durchgang; mehr Platz als für das eine
+    Loch nimmt die Rückwand nicht, und ein zweites kommt nicht dazu.
+    """
+    from app.core.knowledge.parts import holders
+    from app.core.knowledge.parts.mounting import HEAD_CLEARANCE
+
+    wall, play = 3.0, 0.2
+    across = standards.screw(holders.KEYHOLE.size).head + HEAD_CLEARANCE + play
+    produced = _holder("holder_u", mount="keyhole", width=5.0, height=40.0, wall=wall)
+    assert 5.0 + play + 2.0 * wall < across + 2.0 * wall, "die Halteform allein ist zu schmal"
+    assert produced.mesh.bounds.size[0] == pytest.approx(across + 2.0 * wall)
+    assert "keyhole_2" not in produced.features
+    mesh = as_mesh_data(produced.mesh)
+    assert mesh.is_watertight and mesh.component_count == 1
+
+
 def test_the_holder_plate_holds_the_whole_countersink_and_the_keyhole() -> None:
     """Die Rückwand ist eine Wandstärke dicker als die Aussparung, die in ihr sitzt.
 

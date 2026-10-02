@@ -414,3 +414,10 @@ Knoten, ein Modell oder Programm benennt (etwa einen ComfyUI-Ablauf), stellt
 dort die Lizenzfrage — die Prüfung über `pyproject.toml` sieht sie nicht;
 `tests/` prüft die Namen im Ablauf. Zuerst fragen, ob das Zielprogramm es
 selbst kann.
+
+## Eine Zahl, die je nach Wahl anderes misst, bekommt je Bedeutung ein Feld
+
+*Abschneiden* misst die `position` auf der Achse und den `offset` von Fläche,
+Kante oder Punkten (RM-400): Ein gemeinsames Feld behielt beim Umschalten einen
+Wert, der dort etwas anderes hieß. Eine Ebene aus Punkten richtet ihre Normale
+aus (`prepare_ops._upward`), damit „Kleinere Seite“ nicht an der Klickfolge hängt.

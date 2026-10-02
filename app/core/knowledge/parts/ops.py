@@ -487,9 +487,33 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         return insert(ctx, _spec)
 
 
+def _exact_kernel_here() -> bool:
+    """Ob der exakte Kern auf dieser Maschine rechnet — die Probe des Registers, gemerkt."""
+    from app.core.registry.registry import probe_exact_kernel
+
+    return probe_exact_kernel()
+
+
+def _creates_exactly(spec: PartSpec) -> bool:
+    """Ob der Erzeuger dieses Bausteins im exakten Kern baut, wo der Kern da ist.
+
+    **Eine Vorlage entsteht wie ein Grundkörper** (RM-443, ``menu_twins``): Sie
+    ist der Anfang einer Konstruktion — Maße als Parameter, danach Bohrungen,
+    Rundungen, Fasen —, und dafür braucht sie echte Flächen und Kanten. Die
+    Halter bauten bis hierher im Kundenweg immer ein Netz; ihre exakte Fassung
+    war nur im Test erreichbar. Prüfkörper, Organizerteile und Dichtungen sind
+    keine Vorlage und bleiben beim Netz, wie ihre gespeicherten Schritte seit
+    jeher rechnen.
+    """
+    return spec.template and spec.name in EXACT_PARTS
+
+
 def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
     """Erzeugt einen erklärten Prüfkörper ohne einen künstlichen Träger im Projekt."""
     schema = build_params(spec, standalone=True)
+    # exact:1 — eine Vorlage entsteht exakt, wo der Kern da ist (RM-443); ein
+    # Ergebnis von davor wäre ein Netz.
+    version = f"{_result_version(spec)}:guards:2" + (":exact:1" if _creates_exactly(spec) else "")
 
     @register_op(
         name=f"create_{spec.name}",
@@ -500,20 +524,27 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         produces=1,
         touches_features=True,
         doc=spec.doc or spec.title,
-        cache_version=f"{_result_version(spec)}:guards:2",
+        cache_version=version,
         caveat=spec.caveat,
         registry=registry,
     )
     def run(ctx: OpContext) -> OpResult:
+        exact = _creates_exactly(spec) and _exact_kernel_here()
         part_params, produced = _built_part(
             spec,
             ctx.params,
             ctx.profile,
             ctx.quality,
             parameters=resolve_parameters(ctx.scene.parameters),
+            kernel="brep" if exact else "mesh",
         )
         direction = _free_direction(ctx.params)
-        placed = _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
+        solid = _solid_of(produced.mesh) if exact else None
+        placed: Mesh = (
+            _place_solid(solid, ctx.params, direction=direction, cancelled=ctx.cancelled)
+            if solid is not None
+            else _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
+        )
         features = _placed_features(
             produced, spec, ctx.params, (0.0, 0.0, 0.0), 0.0, direction, spec.keeps_up, False
         )
@@ -527,12 +558,16 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         ):
             if finding is not None:
                 findings.append(finding)
-        return OpResult(
-            outputs=[
-                SceneObject(id="", name=source_text(spec.title), mesh=placed, features=features)
-            ],
-            findings=findings,
+        made = SceneObject(
+            id="",
+            name=source_text(spec.title),
+            mesh=placed,
+            kind="brep" if solid is not None else "mesh",
+            features=features,
         )
+        # Am exakten Körper liest niemand sonst die Merkmale nach: die
+        # erklärten suchen ihren Partner in der Topologie (:func:`_read_exactly`).
+        return _read_exactly(ctx, OpResult(outputs=[made], findings=findings))
 
 
 def _result_version(spec: PartSpec) -> str:

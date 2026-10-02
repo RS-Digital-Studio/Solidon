@@ -312,10 +312,12 @@ def test_cura_instance_identity_is_kept_and_cli_unknown_finding_survives(
     engine = _cura(tmp_path)
     setup = handover.SlicerSetup(engine, "cura")
     known = profiles.make_profile("creality-k1-max", "pla")
+    # Ein in Cura vergrößertes Bett: Dieselbe Definition mit demselben Bett
+    # wäre derselbe Drucker und bliebe still (RM-417).
     active = slicer_profiles.CuraActiveMachine(
         name="K1 Max in der Werkstatt",
         definition=Path("creality_k1max.def.json"),
-        bed=(300.0, 300.0),
+        bed=(350.0, 300.0),
     )
     monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _executable: active)
     monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
