@@ -1665,6 +1665,14 @@ kein Tun des Kunden. Das Hauptfenster bestimmt die Grundlage im
 Solidons Tabelle; die Sitzung liest sie über `follow_print_settings`. *Werte übernehmen* nimmt auf einem Herstellerprofil die
 eigene Wahl an allem zurück, was am Filament hängt.
 
+**Kennung des Druckauftrags:** `_plate_job` ergänzt `inventory_project_id`
+im Auftrag, im Dialogsatz und in dessen Vergleichsstand `_opened_with`.
+`has_changes` erkennt dadurch weiterhin nur eigene Änderungen. Ein vorhandener
+Projektprozess erhält über `Session.set_print_settings` seine Kennung; die
+wirksame Dialoggrundlage wird erst nach einer eigenen Änderung gespeichert.
+Der wirkliche Dialogabschluss bewahrt dann dieselbe Kennung und damit den
+Lager-Fingerprint. Ohne eigene Wahl bleiben fehlende Druckeinstellungen `None`.
+
 Der Dialog erscheint, bevor jemand nach Slicern gesucht hat: `_SlicerWorker`
 fragt `discover.find_programs` außerhalb des Qt-Hauptthreads, vorläufig gilt
 der gemerkte Pfad (`_remembered_slicer`), und `_slicers_found` übernimmt Liste

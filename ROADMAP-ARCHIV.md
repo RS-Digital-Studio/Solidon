@@ -32,6 +32,7 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
+| 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
 | 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
 | 2026-10-01 | [RM-282: Profilwerte, die das Programm anders liest, als die Datei sie schreibt (01.10.2026)](#rm-282-profilwerte-die-das-programm-anders-liest-als-die-datei-sie-schreibt-01102026) |
 | 2026-09-29 | [CAD-Ausbau bis 0.5.1: der Weg von RM-188 (29.09.2026)](#cad-ausbau-bis-051-der-weg-von-rm-188-29092026) |
@@ -34139,3 +34140,73 @@ der Kommentar wurde auf die tatsächlich beim Aufruf getrackten Objekte
 präzisiert. Das Follow-up-Review fand keine weiteren Befunde. Das vollständige
 Entwicklungstor bleibt vor dem Commit für den gebündelten Arbeitsstand offen;
 Fenster- und Leistungstests bleiben Release-Prüfungen.
+
+## RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)
+
+<a id="rm-300-nach-dem-ersten-im-slicer-öffnet-rechnet-der-verlauf-neu-01102026"></a>
+
+`_plate_job` erzeugte beim ersten Übergabeklick eine `inventory_project_id` und
+schrieb dafür den gesamten sichtbaren Dialogsatz über
+`Session.set_print_settings` ins Projekt. Der Setter löst selbst keine Auswertung
+aus, aber `projectChanged` erneuert die Druckgrundlage im Hauptfenster. Weil die
+gespeicherten Prozesswerte das wirksame Profil änderten, bekam die
+Herstellergrundlage einen neuen Schlüssel; `_foundation_found` startete danach
+über `evaluation_follows` die zweite Auswertung.
+
+Jetzt ergänzt `_plate_job` die ID im Übergabeauftrag. Existieren bereits
+Projekteinstellungen, übergibt er deren Prozesssatz mit neuer Kennung an den
+echten `Session.set_print_settings`. Dieser markiert das Dokument geändert und
+meldet `projectChanged`; alte `slot_profiles` ohne Identitätsbindung werden
+gegebenenfalls einmalig anhand der vollständigen letzten Szene nachgebunden.
+Bereits vorhandene Bindungen und sämtliche Prozesswerte bleiben gleich. Bei
+`print_settings is None` bleibt der Datensatz absichtlich aus, damit ein bloßer
+Blick in den Dialog nicht Solidons Werte in eine spätere 3MF einführt. Eine
+echte Wahl bleibt im Dialogzustand, gilt für den Übergabeauftrag und wird beim
+Dialogabschluss weiter gespeichert. Auftrag, Dialogsatz und dessen Vergleichsstand
+`_opened_with` tragen dieselbe Kennung. Die Metadaten sind dadurch keine eigene Wahl;
+bei einer echten Änderung speichert der Abschluss die Kennung mit.
+
+Die Tests prüfen beide Speicherzustände und den unveränderten
+`MainWindow._foundation_key`/`_print_foundation`-Pfad. Eine getrennte positive
+Regression führt `MainWindow._foundation_found` mit einer abweichenden
+`Session.evaluation_follows`-Bewertung bis zum `evaluate_async`-Stub aus. Die
+erste Testauswahl bestand mit **4 Fällen**; Ruff, Format und `git diff --check`
+waren grün. Ihr Setterdoppel belegte aber weder die tatsächliche
+Dokumentänderung noch die einmalige Nachbindung alter Filamentplätze. Der
+damalige Reviewbefund wird durch diesen engeren Deckungsumfang begrenzt.
+
+Der Nachgang verwendet am Übergabeauftrag eine echte `Session`. Vier
+Speicherzustände — fehlend, normal, alte Profilplätze, vorhandene Bindungen —
+laufen über das wirkliche `projectChanged`-Signal in `MainWindow._on_project`,
+`_update_header`, `effective_print_settings` und `_print_foundation`; die
+Anzeigeziele sind fensterfreie Doppel. Prozessprofil und Foundation-Schlüssel
+bleiben unverändert, es startet kein Grundlagenarbeiter oder Auswertungslauf.
+Die erwarteten vollständigen Filamentidentitäten und `Session.modified` sind
+ausdrücklich belegt; ein zweiter Auftrag schreibt nichts erneut. Mit dem
+positiven Grundlagenfall und der echten Dialogwahl bestehen **6 fokussierte
+Fälle**. Die betroffene Auswahl einschließlich Roadmap-Wächter bestand mit
+**32 Fällen**, **255** wurden durch den Entwicklungsfilter abgewählt; Ruff,
+Format und `git diff --check` waren grün. Die unabhängige Zweitprüfung dieses Nachgangs und das
+vollständige Entwicklungstor vor der Übernahme nach `origin/main` bleiben offen.
+
+**Zweitreview-Nachgang:** Die erste Fixfassung schrieb bei einer echten Wahl am
+Dialogabschluss den noch kennungslosen Dialogsatz zurück. Das löschte die neue
+Kennung aus dem Dokument; nach dem Wiederöffnen änderte sich für denselben Druck
+der echte Lager-Fingerprint. Der enge Fix führt die Kennung in `self.settings`
+und `_opened_with` nach. Zehn weitere fensterfreie Fälle nutzen den tatsächlichen
+`MainWindow.action_print_settings`-Abschluss, eine echte `Session`, Wiederöffnen
+und `filament_usage.prepare`: fünf Speicherzustände jeweils mit und ohne eigene
+Wahl. Die Fehlergegenprobe war mit **4 roten und 6 grünen Fällen** belegt; nach
+dem Produktfix bestehen **16 fokussierte Fälle**, Ruff und Format. Der breite
+betroffene Nachlauf brach mit einer Windows-Zugriffsverletzung im
+AST-/Pytest-Fehlerformatierer ab (Pytest-Exit `3221225477`, Wrapper-Exit 1).
+Seine Diagnose, unabhängiges Nachreview, vollständiges Tor und Übernahme bleiben
+offen; der Abbruch ist kein grüner Gesamtnachweis.
+
+Offen bleibt als separate Designfrage die Beständigkeit der Kennung, wenn ein
+Projekt noch keine Druckeinstellungen hat und der Kunde keine eigene Dialogwahl
+trifft: Sie bleibt dann dialoglokal und wird beim erneuten Öffnen nicht
+wiederverwendet. Dieses RM erweitert weder das
+Projektformat noch die Inventarpersistenz, um `None` und den 3MF-Vertrag nicht
+umzudeuten. Fenster- und vollständiger Entwicklungslauf sind nicht Bestandteil
+dieses fokussierten Nachweises; der Entwicklungslauf folgt im übergeordneten RM-Gate.

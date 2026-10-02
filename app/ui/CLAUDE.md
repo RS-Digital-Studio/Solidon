@@ -161,7 +161,7 @@ Karte, dort das Gesetz.
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Grenzablehnung direkt am Zahlenfeld; Düsenvariante nach Profilidentität, Modell und Hersteller; am Resin-Drucker nur, was gilt (`_reduce_for_resin`) |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
-**Druckfelder:** Grundlage aus `manufacturer.base_settings`, Feldherkunft und
+**Druckfelder und Kennung:** Grundlage aus `manufacturer.base_settings`, Feldherkunft und
 Rücksetzen: `konzepte/begruendungen/karte-app-ui.md`. `_editor_changed` ändert
 nur das berührte Feld; gerundete Basiswerte anderer Felder bleiben unberührt.
 Suchtreffer in inaktiven Stützen-/Haftungsfeldern nennen den Umschalter,

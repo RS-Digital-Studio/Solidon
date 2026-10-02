@@ -648,6 +648,466 @@ def test_changing_plates_preserves_filament_profile_identity(session: Session) -
         assert made._profiles_for(made._plate_slots()) == expected
 
 
+@pytest.mark.parametrize("stored_state", ["none", "saved", "legacy", "bound"])
+def test_plate_job_adds_its_identity_without_replacing_project_process_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stored_state: str
+) -> None:
+    """Der echte Setter ändert Metadaten, aber weder Druckgrundlage noch Auswertung."""
+    import trimesh
+
+    from app.core.export import manufacturer, threemf
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SlotProfileBinding
+    from app.ui import print_settings_dialog as module
+    from app.ui.main_window import MainWindow
+
+    session = Session()
+    document = session.project.document
+    document.printer = "centauri-carbon-2"
+    document.material = "pla"
+    profile = session.profile
+    saved = replace(
+        print_settings.resolve(profile),
+        layers=replace(
+            print_settings.resolve(profile).layers,
+            layer_height=0.20,
+            line_width=0.45,
+        ),
+    )
+    slots = (
+        MaterialSlot(0, "Schwarz", (0.0, 0.0, 0.0), None, "PLA"),
+        MaterialSlot(1, "Rot", (1.0, 0.0, 0.0), None, "PETG"),
+    )
+    profile_names = ("PLA-Werkstatt", "PETG-Werkstatt")
+    bindings = tuple(
+        SlotProfileBinding(
+            profile_name=name,
+            name=slot.name,
+            colour=slot.colour,
+            material=slot.material,
+            material_type=slot.material_type,
+        )
+        for slot, name in zip(slots, profile_names, strict=True)
+    )
+    if stored_state in {"legacy", "bound"}:
+        saved = replace(
+            saved,
+            slot_profiles=profile_names,
+            slot_profile_bindings=bindings if stored_state == "bound" else None,
+        )
+    document.print_settings = None if stored_state == "none" else saved
+    body = SceneObject(
+        id="obj_1",
+        name="Zweifarbiges Teil",
+        mesh=MeshData(trimesh.creation.box(), slots=(0,) * 6 + (1,) * 6),
+        material_slots=list(slots),
+    )
+    result = EvaluationResult(scene=Scene(objects={body.id: body}))
+    session.last_result = result
+    session.result_current = True
+    session._evaluation_settings = saved
+    # Der Dialog kann bereits die wirksame Herstellergrundlage zeigen. Beim
+    # bloßen Öffnen der Platte ist dieser Unterschied keine Kundenänderung.
+    shown = replace(
+        saved,
+        layers=replace(saved.layers, layer_height=0.12, line_width=0.42),
+    )
+    writes = []
+    foundation_reads = []
+    titles = []
+    signal_errors = []
+    # Nur die Anzeigeziele sind Doppel. Der Signalweg nutzt die echten
+    # _on_project-, _update_header- und Grundlagenmethoden ohne ein Widget.
+    window = SimpleNamespace(
+        session=session,
+        settings=UiSettings(),
+        _close_requested=False,
+        _foundation_pending=None,
+        _foundation_cache=None,
+        _map_request=None,
+        _announcement_document=document,
+        _split_points=(),
+        _quiet_host=None,
+        _drop_feature_preview=lambda: None,
+        viewport=SimpleNamespace(show_protected=lambda _protected: None),
+        _pending_split_reveal=frozenset(),
+        _refresh_parameters=lambda: None,
+        history_panel=SimpleNamespace(show_document=lambda *_args: None),
+        chat=SimpleNamespace(show_document=lambda _document: None),
+        _refresh_applied_bar=lambda: None,
+        setWindowTitle=titles.append,
+        header=SimpleNamespace(show_project=lambda *_args: None, show_profile=lambda *_args: None),
+        _fit_toolbar=lambda: None,
+        _update_actions=lambda: None,
+        filaments=SimpleNamespace(show_scene=lambda *_args: None),
+        _start_print_findings=lambda *_args: None,
+    )
+    window._update_header = lambda: MainWindow._update_header(window)
+    window.effective_print_settings = lambda: MainWindow.effective_print_settings(window)
+    window._update_facts = lambda: foundation_reads.append(window.effective_print_settings())
+    window._print_foundation = lambda quality: MainWindow._print_foundation(window, quality)
+    window._foundation_key = lambda quality: MainWindow._foundation_key(window, quality)
+    foundation_key = MainWindow._foundation_key(window, shown.quality)
+    window._foundation_cache = (foundation_key, manufacturer.Foundation(settings=shown))
+    starts: list[tuple[object, object]] = []
+    runs: list[bool] = []
+
+    def start_foundation(key: object, quality: object) -> None:
+        starts.append((key, quality))
+        window._foundation_pending = key
+
+    window._start_foundation = start_foundation
+    monkeypatch.setattr(session, "evaluate_async", lambda: runs.append(True))
+    dialog = SimpleNamespace(
+        session=session,
+        settings=shown,
+        _opened_with=shown,
+        _handover_project_id="",
+        _plate_slots=lambda: slots,
+        _profiles_for=lambda _slots: saved.slot_profiles,
+    )
+    before = session.profile
+    generation = session.result_generation
+
+    def on_project_changed() -> None:
+        writes.append(document.print_settings)
+        try:
+            MainWindow._on_project(window)
+        except Exception as error:
+            # PySide reicht Ausnahmen eines Signals nicht an emit() zurück.
+            signal_errors.append(error)
+
+    session.projectChanged.connect(on_project_changed)
+    try:
+        job = module.PrintSettingsDialog._plate_job(
+            dialog,
+            (body,),
+            (0,),
+            tmp_path,
+            "Projekt",
+            handover.SlicerSetup(Path("slicer"), "orca"),
+        )
+        first_stored = document.print_settings
+        second_job = module.PrintSettingsDialog._plate_job(
+            dialog,
+            (body,),
+            (0,),
+            tmp_path,
+            "Projekt",
+            handover.SlicerSetup(Path("slicer"), "orca"),
+        )
+    finally:
+        session.projectChanged.disconnect(on_project_changed)
+
+    after = session.profile
+    assert signal_errors == [], "der echte projectChanged-Anschluss muss vollständig durchlaufen"
+    assert job.settings.inventory_project_id
+    assert second_job.settings.inventory_project_id == job.settings.inventory_project_id
+    assert document.print_settings is first_stored, (
+        "weitere Aufträge schreiben die Metadaten nicht neu"
+    )
+    assert job.settings.layers == shown.layers, "die Übergabedatei nutzt die sichtbaren Dialogwerte"
+    assert job.profile == before
+    assert job.slot_profiles == (
+        {
+            threemf.slot_identity(slots[0]): "PLA-Werkstatt",
+            threemf.slot_identity(slots[1]): "PETG-Werkstatt",
+        }
+        if stored_state in {"legacy", "bound"}
+        else {}
+    )
+    assert second_job.slot_profiles == job.slot_profiles
+    assert dialog.settings == replace(shown, inventory_project_id=job.settings.inventory_project_id)
+    assert dialog._opened_with == dialog.settings, (
+        "die Kennung wird auch im Vergleichsstand ohne Änderung der Prozesswerte nachgeführt"
+    )
+    assert not module.PrintSettingsDialog.has_changes(dialog), (
+        "allein die interne Kennung darf beim Schließen keine Einstellungen speichern"
+    )
+    assert after == before, "der Prozessvergleich für eine spätere Auswertung bleibt unverändert"
+    assert MainWindow._foundation_key(window, shown.quality) == foundation_key, (
+        "projectChanged darf keine neue Druckgrundlage und damit keinen Neulauf anfordern"
+    )
+    MainWindow._print_foundation(window, shown.quality)
+    for key, _quality in starts:
+        MainWindow._foundation_found(window, key, manufacturer.Foundation(settings=shown))
+    assert starts == [], "eine Kennungsänderung darf keine neue Druckgrundlage anfordern"
+    assert runs == [], "ohne neue Grundlage erreicht kein Auslöser den Verlaufslauf"
+    assert session.last_result is result and session.result_generation == generation
+    if stored_state != "none":
+        expected = replace(saved, inventory_project_id=job.settings.inventory_project_id)
+        if stored_state == "legacy":
+            expected = replace(expected, slot_profile_bindings=bindings)
+        assert document.print_settings == expected, (
+            "Prozesswerte bleiben gleich; alte Filamentplätze werden einmalig nachgebunden"
+        )
+        assert writes == [expected]
+        assert len(foundation_reads) == 1, "projectChanged erreicht die echte Grundlagenabfrage"
+        assert session.modified, (
+            "die neue Kennung wird als ungespeicherte Dokumentänderung markiert"
+        )
+        assert len(titles) == 2, "Dokument- und Kopfzeilenanschluss aktualisieren den Titel"
+    else:
+        assert document.print_settings is None, (
+            "ohne gespeicherte Werte bleibt das Projekt unverändert"
+        )
+        assert writes == []
+        assert foundation_reads == []
+        assert not session.modified
+
+
+def test_foundation_arrival_runs_history_when_process_values_changed() -> None:
+    """Die spätere Grundlage kann bei veränderten Prozesswerten einen Lauf auslösen."""
+    from types import SimpleNamespace
+
+    from app.core.export import manufacturer
+    from app.core.knowledge import profiles
+    from app.core.knowledge.profiles import for_process
+    from app.core.types import PrintSettings
+    from app.ui.main_window import MainWindow
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    previous = print_settings.resolve(profile)
+    previous = replace(
+        previous,
+        layers=replace(previous.layers, layer_height=0.20, line_width=0.45),
+    )
+    current = replace(
+        previous,
+        layers=replace(previous.layers, layer_height=0.12, line_width=0.42),
+    )
+    document = SimpleNamespace(print_settings=current)
+
+    class SessionState:
+        def __init__(self) -> None:
+            self.project = SimpleNamespace(document=document)
+            self.last_result = object()
+            self.evaluation_profile = for_process(profile, previous)
+
+        @property
+        def profile(self):
+            return for_process(profile, document.print_settings)
+
+        def evaluation_follows(self, settings: PrintSettings) -> bool:
+            return Session.evaluation_follows(self, settings)
+
+    session = SessionState()
+    runs: list[bool] = []
+    session.evaluate_async = lambda: runs.append(True)
+    key = ("grundlage",)
+    window = SimpleNamespace(
+        session=session,
+        _foundation_pending=key,
+        _foundation_cache=None,
+        _close_requested=False,
+        _foundation_key=lambda _quality: key,
+        effective_print_settings=lambda: current,
+    )
+
+    MainWindow._foundation_found(window, key, manufacturer.Foundation(settings=current))
+
+    assert runs == [True], "abweichende Prozesswerte laufen tatsächlich bis evaluate_async"
+
+
+def test_plate_job_keeps_a_real_dialog_choice_for_persistence_and_handover(
+    tmp_path: Path,
+) -> None:
+    """Eine echte Wahl bleibt im Dialog änderbar und wird an den Auftrag übergeben."""
+    from types import SimpleNamespace
+
+    from app.core.knowledge import profiles
+    from app.core.types import PrintSettings
+    from app.ui import print_settings_dialog as module
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    opened = print_settings.resolve(profile)
+    changed = print_settings.with_choice(opened, "shell.wall_count", opened.shell.wall_count + 1)
+    document = SimpleNamespace(print_settings=None)
+    writes: list[PrintSettings] = []
+    session = SimpleNamespace(
+        profile=profile,
+        last_result=None,
+        project=SimpleNamespace(document=document),
+        set_print_settings=lambda settings: writes.append(settings),
+    )
+    dialog = SimpleNamespace(
+        session=session,
+        settings=changed,
+        _opened_with=opened,
+        _handover_project_id="",
+        _plate_slots=lambda: (),
+        _profiles_for=lambda _slots: (),
+    )
+
+    job = module.PrintSettingsDialog._plate_job(
+        dialog,
+        (),
+        (0,),
+        tmp_path,
+        "Projekt",
+        handover.SlicerSetup(Path("slicer"), "orca"),
+    )
+
+    assert job.settings.shell.wall_count == changed.shell.wall_count
+    assert job.settings.inventory_project_id
+    assert module.PrintSettingsDialog.has_changes(dialog), "die echte Wahl bleibt speicherpflichtig"
+    assert writes == [], "nur der Dialogabschluss speichert eine echte Nutzereinstellung"
+
+
+@pytest.mark.parametrize("stored_state", ["none", "saved", "identified", "legacy", "bound"])
+@pytest.mark.parametrize("chosen", [False, True])
+def test_plate_job_keeps_inventory_identity_through_real_close_and_reopening(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stored_state: str, chosen: bool
+) -> None:
+    """Der echte Abschluss behält Kennung, eigene Wahl und Lager-Fingerprint."""
+    from contextlib import nullcontext
+
+    import trimesh
+
+    from app.core import filament_usage
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+    from app.ui import main_window
+    from app.ui import print_settings_dialog as module
+
+    session = Session()
+    document = session.project.document
+    document.printer = "centauri-carbon-2"
+    document.material = "pla"
+    slots = (
+        MaterialSlot(0, "Schwarz", (0.0, 0.0, 0.0), None, "PLA"),
+        MaterialSlot(1, "Rot", (1.0, 0.0, 0.0), None, "PETG"),
+    )
+    body = SceneObject(
+        id="obj_1",
+        name="Zweifarbiges Teil",
+        mesh=MeshData(trimesh.creation.box(), slots=(0,) * 6 + (1,) * 6),
+        material_slots=list(slots),
+    )
+    session.last_result = EvaluationResult(scene=Scene(objects={body.id: body}))
+    saved = print_settings.resolve(session.profile)
+    if stored_state == "identified":
+        saved = replace(saved, inventory_project_id="persistente-projektkennung")
+    if stored_state in {"legacy", "bound"}:
+        saved = replace(saved, slot_profiles=("PLA-Werkstatt", "PETG-Werkstatt"))
+        if stored_state == "bound":
+            saved = handover.bind_slot_profiles(saved, slots)
+    document.print_settings = None if stored_state == "none" else saved
+    signal = SimpleNamespace(connect=lambda *_args: None)
+
+    def make_dialog() -> SimpleNamespace:
+        stored = document.print_settings
+        base = print_settings.resolve(session.profile)
+        opened = print_settings.on_base(stored, base) if stored is not None else base
+        dialog = SimpleNamespace(
+            session=session,
+            settings=opened,
+            _opened_with=opened,
+            _handover_project_id=opened.inventory_project_id,
+            _plate_slots=lambda: slots,
+            slice_comparison=None,
+            sliced=signal,
+            reported=signal,
+            handedOver=signal,
+            setupRequested=signal,
+            filamentsRequested=signal,
+            usage_notice=SimpleNamespace(changed=signal, requests={}),
+            deleteLater=lambda: None,
+        )
+        dialog._profiles_for = lambda _slots: dialog.settings.slot_profiles
+        dialog.has_changes = lambda: module.PrintSettingsDialog.has_changes(dialog)
+        return dialog
+
+    setup = handover.SlicerSetup(Path("slicer"), "orca")
+
+    def plate_job(dialog: SimpleNamespace):
+        return module.PrintSettingsDialog._plate_job(
+            dialog, (body,), (0,), tmp_path, "Projekt", setup
+        )
+
+    dialog = make_dialog()
+    if chosen:
+        dialog.settings = print_settings.with_choice(
+            dialog.settings, "shell.wall_count", dialog.settings.shell.wall_count + 1
+        )
+    jobs = []
+    during = []
+    changed = []
+
+    def execute() -> int:
+        jobs.append(plate_job(dialog))
+        during.append(document.print_settings)
+        changed.append(dialog.has_changes())
+        return 0
+
+    dialog.exec = execute
+    window = SimpleNamespace(
+        session=session,
+        settings=UiSettings(),
+        filaments=SimpleNamespace(return_to_print_button=SimpleNamespace(hide=lambda: None)),
+        usage_notice=SimpleNamespace(offer=lambda *_args, **_kwargs: None),
+        _end_inserting_for_output=lambda: None,
+        _gcode_returned=lambda *_args: None,
+        _slicer_findings=lambda *_args: None,
+        _count_delivery=lambda *_args: None,
+        _refresh_inventory=lambda: None,
+        _store_settings=lambda: None,
+        _offer_support=lambda: None,
+    )
+    monkeypatch.setattr(main_window, "PrintSettingsDialog", lambda *_args: dialog)
+    monkeypatch.setattr(main_window, "waiting", nullcontext)
+    monkeypatch.setattr(main_window, "ensure_print_disclosure", lambda *_args: None)
+
+    main_window.MainWindow.action_print_settings(window)
+
+    first = jobs[0]
+    assert changed == [chosen], "Metadaten sind keine Wahl; eine echte Änderung bleibt eine"
+    if stored_state == "none":
+        assert during == [None], "ein Plattenauftrag führt keinen Prozesssatz ins Projekt ein"
+    else:
+        assert during[0] is not None
+        expected = replace(saved, inventory_project_id=first.settings.inventory_project_id)
+        if stored_state == "legacy":
+            expected = handover.bind_slot_profiles(expected, slots)
+        assert during == [expected], "vor dem Abschluss bleiben gespeicherte Prozesswerte erhalten"
+    after_close = document.print_settings
+    if chosen:
+        assert after_close is not None
+        assert after_close.inventory_project_id == first.settings.inventory_project_id, (
+            "der echte Dialogabschluss darf die neue Kennung nicht wieder löschen"
+        )
+        assert after_close.chosen == frozenset({"shell.wall_count"})
+        assert after_close.shell.wall_count == first.settings.shell.wall_count
+    else:
+        assert after_close is during[0], "reine Metadaten lösen beim Abschluss keinen Setter aus"
+
+    reopened = make_dialog()
+    assert not reopened.has_changes()
+    second = plate_job(reopened)
+    first_usage = filament_usage.prepare(first.objects, first.settings, first.profile, "Projekt")
+    second_usage = filament_usage.prepare(
+        second.objects, second.settings, second.profile, "Projekt"
+    )
+    assert first_usage and second_usage
+    assert first.profile == second.profile
+    assert replace(
+        handover.bind_slot_profiles(first.settings, slots), inventory_project_id=""
+    ) == replace(handover.bind_slot_profiles(second.settings, slots), inventory_project_id="")
+    if stored_state != "none" or chosen:
+        assert second.settings.inventory_project_id == first.settings.inventory_project_id
+        assert first_usage[0].fingerprint == second_usage[0].fingerprint, (
+            "derselbe Druck behält nach dem Wiederöffnen seinen echten Lager-Fingerprint"
+        )
+        if stored_state == "identified":
+            assert first.settings.inventory_project_id == "persistente-projektkennung"
+    else:
+        assert after_close is None, "ohne eigene Wahl bleibt der None-Vertrag unverändert"
+        assert second.settings.inventory_project_id != first.settings.inventory_project_id
+        assert first_usage[0].fingerprint != second_usage[0].fingerprint
+
+
 @pytest.mark.parametrize("same_name", [False, True])
 def test_plate_job_preserves_global_profile_positions_and_full_material_identity(
     session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_name: bool

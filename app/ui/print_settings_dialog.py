@@ -2917,6 +2917,7 @@ class PrintSettingsDialog(QDialog):
         quality = stored.quality if stored is not None else self._remembered_quality()
         table = print_settings.resolve(session.profile, quality)
         self.settings = print_settings.on_base(stored, table) if stored is not None else table
+        self._handover_project_id = self.settings.inventory_project_id
         self._foundation: manufacturer.Foundation | None = None
         """Worauf die Einstellungen gerade stehen — das Herstellerprofil oder
         Solidons Tabelle (:func:`manufacturer.base_settings`)."""
@@ -7946,9 +7947,30 @@ class PrintSettingsDialog(QDialog):
         with_settings: bool = True,
     ) -> _PlateJob:
         """Einen unveränderlichen Auftrag aus dem sichtbaren Dialog bauen."""
-        if not self.settings.inventory_project_id:
-            self.settings = replace(self.settings, inventory_project_id=uuid4().hex)
-            self.session.set_print_settings(self.settings)
+        stored = self.session.project.document.print_settings
+        project_id = (
+            stored.inventory_project_id
+            if stored is not None and stored.inventory_project_id
+            else self.settings.inventory_project_id or self._handover_project_id or uuid4().hex
+        )
+        self._handover_project_id = project_id
+        job_settings = (
+            self.settings
+            if self.settings.inventory_project_id == project_id
+            else replace(self.settings, inventory_project_id=project_id)
+        )
+        # Auch der spätere Dialogabschluss muss dieselbe Kennung speichern.
+        # Beide Vergleichssätze tragen sie, damit Metadaten keine eigene Wahl
+        # vortäuschen und echte Änderungen ihre Kennung nicht wieder verlieren.
+        self.settings = job_settings
+        if self._opened_with.inventory_project_id != project_id:
+            self._opened_with = replace(self._opened_with, inventory_project_id=project_id)
+        # Der Kennung genügt der gespeicherte Projektstand. Die Dialogwerte
+        # gehören erst nach einer echten Wahl ins Dokument: projectChanged
+        # erneuert die Druckgrundlage und kann über _foundation_found eine
+        # vollständige Auswertung auslösen.
+        if stored is not None and stored.inventory_project_id != project_id:
+            self.session.set_print_settings(replace(stored, inventory_project_id=project_id))
         shown = self._plate_slots()
         chosen_profiles = self._profiles_for(shown) if shown else ()
         slot_profiles = {
@@ -7962,7 +7984,7 @@ class PrintSettingsDialog(QDialog):
             folder=folder,
             name=name,
             setup=setup,
-            settings=self.settings,
+            settings=job_settings,
             profile=self.session.profile,
             slot_profiles=slot_profiles,
             with_settings=with_settings,

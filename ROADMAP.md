@@ -77,7 +77,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-297 — Stapel der Erkennung: Reste aus dem Review](#rm-297) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: fünf kleine Stellen und eine Speicheranzeige |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Deckel der Hilfsprozesse, gemeinsamer Speicher unter Linux/macOS, breite Fänge |
-| [RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu](#rm-300) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Ursache der geänderten Prozesswerte |
+| [RM-300 — Nach dem ersten Im Slicer öffnen rechnet der Verlauf neu](#rm-300) | Geometrie, Erkennung und Druckvorbereitung | Prozesswerte bleiben am echten Setter stabil; Abschluss-Rückschritt behoben, Kennung und echter Lager-Fingerprint über Wiederöffnen belegt; Nachreview, vollständiges Tor und Übernahme nach origin/main offen |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -2252,16 +2252,70 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-300"></a>
 
-- [ ] **RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu.** Aus dem Release 0.5.1 (Review von
+- [~] **RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu.** Aus dem Release 0.5.1 (Review von
   `speicher-ohne-prozesswerte`, `konzepte/nachweise-release-0.5.1/reports/review-speicher.md`, F2).
   An Roberts Minigolf-Projekt rechnete nach *Im Slicer öffnen* der ganze Verlauf gut zwei
   Minuten neu, weil sich die Prozesswerte geändert hatten. Seit 0.5.1 behalten Laden,
   Kopieren und Bewegen ihr Ergebnis (`reads_process`); fast die ganze Zeit liegt aber in
   *Druckoptimal ausrichten*, das die Werte zu Recht liest. Offen ist, warum sich die Werte
-  beim Öffnen des Slicers überhaupt ändern. Spur im Code, nicht am Lauf belegt:
-  `evaluate.py:403` überschreibt das wirksame Profil der Sitzung mit den gespeicherten
-  Einstellungen, und `_plate_job` schreibt beim ersten Öffnen die Einstellungen des Dialogs
-  ins Projekt. Abnahme: *Im Slicer öffnen* ohne geänderte Einstellung rechnet nichts neu.
+  beim Öffnen des Slicers überhaupt ändern.
+
+  **Ursache belegt:** `_plate_job` schrieb die vollständigen Dialogwerte nur, um die interne
+  `inventory_project_id` zu erzeugen. `Session.set_print_settings` löst `projectChanged` aus;
+  `MainWindow._on_project` erneuert daraufhin Kopfzeile und Druckgrundlage. Die neuen Werte
+  ändern `Session.profile` und damit den Schlüssel der Herstellergrundlage. Deren Rückkehr
+  startet in `_foundation_found` eine neue Auswertung, sobald `evaluation_follows` die andere
+  Schichthöhe oder Bahnbreite erkennt.
+
+  **Behoben:** Die Kennung wird am Übergabeauftrag ergänzt und für weitere Aufträge im Dialog
+  gehalten. Gibt es bereits gespeicherte Druckeinstellungen, reicht der Auftrag deren Satz mit
+  neuer Kennung an den echten `Session.set_print_settings`. Der Setter markiert das Dokument
+  geändert und löst `projectChanged` aus. Alte `slot_profiles` ohne Identitätsbindungen kann
+  er dabei einmalig anhand der vollständigen letzten Szene nachbinden; bereits gebundene Profile
+  bleiben erhalten. Sämtliche Prozesswerte bleiben gleich. Bei `print_settings is None` bleibt
+  auch das Dokument `None`. Der Vertrag für 3MF ohne Solidon-Einstellungen bleibt damit erhalten.
+  Echte Dialogwahlen bleiben in `self.settings`, gelten für den Übergabeauftrag und werden beim
+  Dialogabschluss weiter gespeichert. Auftrag, Dialogsatz und Vergleichsstand `_opened_with`
+  tragen dieselbe Kennung: Eine Metadatenänderung wird damit keine eigene Wahl, und eine echte
+  Wahl löscht die Kennung beim Speichern nicht wieder.
+
+  **Getrennte offene Frage:** Ohne gespeicherte Druckeinstellungen und ohne eigene Dialogwahl
+  bleibt die neu erzeugte Kennung dialoglokal und wird beim erneuten Öffnen nicht wiederverwendet. Eine
+  beständige Inventarkennung für diesen Fall braucht eine eigene Entwurfsentscheidung, ohne
+  `None` als „Dialog nie geöffnet“ oder den 3MF-Vertrag umzudeuten. Sie ist nicht Voraussetzung
+  für den No-rerun-Fix.
+
+  **Nachweis:** `test_plate_job_adds_its_identity_without_replacing_project_process_values`
+  nutzt eine echte `Session` und prüft vier Speicherzustände: fehlend, normal, alte Profilplätze
+  sowie vorhandene Identitätsbindungen. `projectChanged` erreicht die echten `_on_project`-,
+  `_update_header`- und Grundlagenmethoden; nur Anzeigeziele sind Doppel. Der ganze Prozessprofil-
+  und Foundation-Schlüssel bleibt gleich, kein Grundlagenarbeiter oder Auswertungslauf startet,
+  und ein zweiter Auftrag übernimmt dieselbe Kennung ohne weiteren Setteraufruf. Die erwarteten
+  Filamentbindungen und die Dokumentänderung werden ausdrücklich geprüft.
+  `test_foundation_arrival_runs_history_when_process_values_changed` belegt den positiven Weg
+  über `_foundation_found` bis `evaluate_async`.
+  `test_plate_job_keeps_a_real_dialog_choice_for_persistence_and_handover` prüft echte
+  Nutzereinstellungen. Die sechs fokussierten Testfälle bestanden; die betroffene Auswahl
+  einschließlich Roadmap-Wächter bestand mit **32 Fällen**, **255** wurden durch den
+  Entwicklungsfilter abgewählt. Ruff, Format und `git diff --check` waren grün.
+  Der frühere Vier-Fälle-Nachweis nutzte noch ein Setterdoppel; sein Review ersetzt keine
+  Zweitprüfung dieses Nachgangs. Unabhängiges Zweitreview, vollständiges Entwicklungstor und
+  Übernahme nach `origin/main` stehen noch aus. Die native Fensterabnahme bleibt dem Release
+  vorbehalten.
+
+  **Zweitreview-Nachgang:** Die erste Fixfassung verlor beim tatsächlichen Abschluss
+  `MainWindow.action_print_settings` eine neu erzeugte Kennung, sobald der Kunde etwas
+  geändert hatte. Das Nachführen in Dialog- und Vergleichssatz behebt diesen belegten
+  Rückschritt. Zehn zusätzliche Fälle laufen mit echter `Session` über den tatsächlichen
+  Abschluss und ein Wiederöffnen; `filament_usage.prepare` berechnet den wirklichen
+  Lager-Fingerprint. Fehlende, normale, bereits identifizierte, alte ungebundene und
+  gebundene Einstellungen laufen jeweils mit und ohne eigene Wahl. Vor dem Produktfix
+  waren **4 Fälle rot und 6 grün**; danach bestehen alle **16 fokussierten Fälle** sowie
+  Ruff und Format. Bei eigener Wahl bleiben Werte und Kennung gespeichert, bei reinen
+  Metadaten entsteht keine neue Speicherhandlung. Der breite betroffene Nachlauf brach
+  mit einer Windows-Zugriffsverletzung im AST-/Pytest-Fehlerformatierer ab (Pytest-Exit
+  `3221225477`, Wrapper-Exit 1); daraus folgt kein grüner Nachweis. Diagnose, unabhängiges
+  Nachreview und vollständiges Entwicklungstor vor dem Commit bleiben offen.
 
 <a id="rm-301"></a>
 
