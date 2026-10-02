@@ -4981,7 +4981,10 @@ def slice_model(
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             produced = _find_gcode(target, expected)
-        arranged_by_slicer = keep_arrangement and not wanted_arrangement
+        # Creality Print 7.3 rückt auf der Konsole jede Platte selbst zur Mitte,
+        # auch eine haltende Anordnung (RM-414, :func:`_creality_cli`) — dann
+        # gilt Solidons Plattenbelegung dort nie, und das steht dabei.
+        arranged_by_slicer = keep_arrangement and (not wanted_arrangement or _creality_cli(setup))
         # **Der Familienname bleibt hier stehen, und das ist gemessen.** Die
         # anderen Vergleiche dieser Datei sind am 07.09.2026 auf benannte
         # Prädikate gestellt (`takes_a_machine_profile`); dieser meint eine
