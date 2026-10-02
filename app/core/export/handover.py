@@ -555,8 +555,6 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     Druckerdefinition (:func:`_cura_machine`); fehlt sie, sagt es dieser
     Befund.
     """
-    if setup.flavour == "cura":
-        return _cura_printer_unknown(setup, profile)
     if machine_from_definition(setup.flavour):
         return _cura_printer_unknown(setup, profile)
     if not takes_a_machine_profile(setup.flavour) and setup.flavour != "prusa":
@@ -647,14 +645,23 @@ def cura_active_printer_mismatch(
     *,
     solidon_settings_included: bool = True,
 ) -> Finding | None:
-    """Nennt beide Drucker, wenn Curas aktive Maschine eine andere ist."""
+    """Nennt beide Drucker, wenn Curas aktive Maschine eine andere ist.
+
+    **Dieselbe Druckerdefinition mit demselben Bett ist derselbe Drucker.**
+    :func:`slicer_profiles.chosen_printer` ordnet eine nicht übernommene
+    Cura-Instanz bewusst keinem Solidon-Drucker zu (zwei Instanzen einer
+    Familie bleiben getrennt); daran allein gemessen warnte jeder Lauf mit dem
+    eingebauten Drucker „In Cura ist „Creality K1 Max“ aktiv, in Solidon
+    „Creality K1 Max“" (RM-417). Die Warnung gilt dem Bett, nach dem Curas
+    Fenster ausrichtet — hat der Kunde es in Cura geändert, kommt sie weiter.
+    """
     active = slicer_profiles.cura_active_machine(setup.executable)
     if active is None:
         return None
     known = dict(profiles.printer_profiles())
     known[profile.printer.id] = profile.printer
     active_id = slicer_profiles.chosen_printer("cura", setup.executable, known)
-    if active_id == profile.printer.id:
+    if active_id == profile.printer.id or _same_cura_machine(active, profile.printer):
         return None
     cura_printer = active.name or (
         known[active_id].title
@@ -689,6 +696,22 @@ def cura_active_printer_mismatch(
         values={"cura_printer": cura_printer, "solidon_printer": profile.printer.title},
         suggestions=(OPEN_PRINT_SETTINGS, EXPORT_ONLY),
     )
+
+
+def _same_cura_machine(active: slicer_profiles.CuraActiveMachine, printer: PrinterProfile) -> bool:
+    """Ob Curas aktive Maschine die Definition und das Bett dieses Druckers führt.
+
+    Ein Bett, das die Erbkette nicht als Zahl nennt, entscheidet nichts; dann
+    zählt die Definition allein.
+    """
+    if not printer.cura_definition:
+        return False
+    if slicer_profiles.cura_definition_id(active.definition) != printer.cura_definition:
+        return False
+    if active.bed is None:
+        return True
+    width, depth, _height = printer.build_volume
+    return is_close(active.bed[0], width) and is_close(active.bed[1], depth)
 
 
 def _cura_printer_unknown(setup: SlicerSetup, profile: Profile) -> list[Finding]:

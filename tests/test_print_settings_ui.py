@@ -3587,7 +3587,9 @@ def test_cura_without_an_active_machine_is_not_reported_as_failed_adoption(
     assert result[0].printer_id == ""
     assert not result[0].unreadable
     dialog._cura_printer_found(result[0])
-    assert not dialog.profile_note.text()
+    # Gemeint ist „kein Satz über eine gescheiterte Übernahme“; die Zeile
+    # darf weiter sagen, was der Profilbestand gerade tut (RM-417).
+    assert "ließ sich nicht übernehmen" not in dialog.profile_note.text()
     assert dialog._cura_printer_id == ""
     assert dialog.adopt_printer.isHidden()
 
@@ -4974,6 +4976,9 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
 
         assert candidate.id not in profiles.printer_profiles(), "der Suchlauf speichert nichts"
         assert dialog._cura_printer_candidate == candidate
+        # Erst die Slicersuche abwarten: Ihre späte Antwort startet die
+        # Profilsuche neu und leerte den Kandidaten (RM-417, ``dialog``-Fixture).
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
         assert not dialog.adopt_printer.isHidden()
         title = str(candidate.title)
         assert dialog.adopt_printer.text() == f"{title} übernehmen"

@@ -4246,6 +4246,63 @@ def test_cura_window_without_print_settings_still_reports_the_active_printer(
     assert "slicer.cura_printer_unknown" not in {entry.code for entry in findings}
 
 
+@pytest.mark.parametrize(
+    ("solidon_printer", "cura_bed_width", "warns"),
+    [
+        ("creality-k1-max", None, False),
+        ("centauri-carbon-2", None, True),
+        ("creality-k1-max", 350.0, True),
+    ],
+    ids=["gleicher-drucker", "anderer-drucker", "gleiche-definition-anderes-bett"],
+)
+def test_cura_names_the_active_printer_only_when_it_is_a_different_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    solidon_printer: str,
+    cura_bed_width: float | None,
+    warns: bool,
+) -> None:
+    """RM-417: Curas aktive Instanz „Creality K1 Max“ auf ``creality_k1max`` und
+    Solidons eingebauter K1 Max sind derselbe Drucker. Die Warnung kam trotzdem
+    bei jedem *Im Slicer öffnen*, weil ``chosen_printer`` eine nicht
+    übernommene Instanz keinem Solidon-Drucker zuordnet."""
+    engine = _cura_install(tmp_path)
+    definitions = engine.parent / "share" / "cura" / "resources" / "definitions"
+    (definitions / "creality_k1max.def.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "name": "Creality K1 Max",
+                "inherits": "fdmprinter",
+                "metadata": {"visible": True},
+                "overrides": {
+                    "machine_width": {"default_value": 300},
+                    "machine_depth": {"default_value": 300},
+                    "machine_height": {"default_value": 300},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    _cura_active(tmp_path, monkeypatch, name="Creality K1 Max", definition="creality_k1max")
+    if cura_bed_width is not None:
+        changes = tmp_path / "config" / "cura" / "5.13" / "definition_changes"
+        changes.mkdir()
+        (changes / "Creality+K1+Max_settings.inst.cfg").write_text(
+            f"[general]\nversion = 4\n\n[values]\nmachine_width = {cura_bed_width}\n",
+            encoding="utf-8",
+        )
+    profile = profiles.make_profile(solidon_printer, "pla")
+    setup = handover.SlicerSetup(engine, "cura")
+
+    finding = handover.cura_active_printer_mismatch(setup, profile)
+
+    assert (finding is not None) is warns
+    if finding is not None:
+        assert finding.values["cura_printer"] == "Creality K1 Max"
+        assert finding.values["solidon_printer"] == profile.printer.title
+
+
 def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
     tmp_path: Path, profile: Profile
 ) -> None:
