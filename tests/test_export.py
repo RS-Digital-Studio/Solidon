@@ -2185,6 +2185,113 @@ def test_an_accepted_suggestion_no_part_asks_for_goes_to_every_part(
     assert not [entry for entry in findings if entry.code == "export.part_setting"]
 
 
+def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile: Profile) -> None:
+    """Die ruhigen Wände der schlanken Stange gehören nur an die Stange (RM-328).
+
+    Der Druckdialog fragt mit gemessenen Schichten und nennt nur die Stange
+    (8 × 8 × 122 mm auf 64 mm²). Der Export schnitt den Körper nur, wenn ein
+    Pfad aus Stützen, Haftung oder Wandbild je Teil ging; Wandtempo und
+    Beschleunigung fehlten, der Rat je Teil kam ohne Schnitt und schwieg, und
+    ``_unserved`` legte die übernommenen Werte an jedes Teil — auch an den
+    breiten Block daneben, mit ``export.part_setting_all``.
+    """
+    stange = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 122.0)))
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [
+        replace(scene_object("obj_1", "Stange"), mesh=stange),
+        replace(scene_object("obj_2", "Block"), mesh=block),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    calm = {
+        "speed.outer_wall": advise.SLENDER_WALL_SPEED,
+        "speed.inner_wall": advise.SLENDER_WALL_SPEED,
+        "speed.outer_wall_acceleration": advise.CAREFUL_ACCELERATION,
+        "speed.acceleration": advise.CAREFUL_ACCELERATION,
+    }
+    for path, value in calm.items():
+        assert float(print_settings.read_path(settings, path)) > value, (
+            f"die Vorbedingung des Tests: {path}"
+        )
+        settings = print_settings.with_accepted(settings, path, value)
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Stange", profile=profile, settings=settings
+    )
+
+    assert not [entry for entry in findings if entry.code == "export.part_setting_all"]
+    treffer = {
+        (finding.object_id, finding.values["setting"])
+        for finding in findings
+        if finding.code == "export.part_setting"
+    }
+    assert treffer == {("obj_1", path) for path in calm}, treffer
+    values = _object_values(written, "Metadata/model_settings.config")
+    for key in ("outer_wall_speed", "inner_wall_speed", "default_acceleration"):
+        assert key in values["Stange"], (key, values["Stange"])
+        assert key not in values["Block"], (key, values["Block"])
+
+
+def test_the_calm_walls_of_a_slender_rod_keep_the_limit_of_soft_filament() -> None:
+    """Eine spätere Regel lockert keine frühere (RM-328).
+
+    TPU-95A darf höchstens 30 mm/s fahren (``FLEXIBLE_MAX_SPEED``). Die
+    ruhigen Wände der schlanken Stange kamen danach mit 60 mm/s, verglichen
+    mit den Ausgangswerten statt mit dem schon geltenden Vorschlag, und der
+    Volumenstrom machte 41 mm/s daraus — schneller, als das Filament fördert.
+    """
+    from app.core.slice.analysis import slice_body
+
+    profile = profiles.make_profile("centauri-carbon-2", "tpu-95a")
+    settings = print_settings.resolve(profile, "standard")
+    for path in ("speed.outer_wall", "speed.inner_wall"):
+        settings = print_settings.with_path(settings, path, 100.0)
+    rod = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 122.0)))
+    result = slice_body(rod, settings.layers.layer_height, support_volume=False)
+    assert 0.0 < result.first_layer_area < advise.SMALL_FOOTPRINT, "die Vorbedingung"
+
+    for entries in (
+        advise.advise(settings, profile, result, bounds=rod.bounds, flavour="orca"),
+        advise.for_part(settings, rod.bounds, 64.0, profile=profile, result=result, flavour="orca"),
+    ):
+        speeds = {entry.path: entry.value for entry in entries}
+        assert speeds["speed.outer_wall"] == pytest.approx(advise.FLEXIBLE_MAX_SPEED)
+        assert speeds["speed.inner_wall"] == pytest.approx(advise.FLEXIBLE_MAX_SPEED)
+
+
+def test_every_path_the_cut_decides_makes_the_export_cut_the_part() -> None:
+    """Wächter zu RM-328: Jeder Pfad, den der Rat aus dem Schnitt setzt, steht
+    in ``advise.SLICED_PATHS``. Fehlt einer, fragt der Export den Rat je Teil
+    ohne Schnitt, und der übernommene Wert landet an jedem Teil."""
+    import ast
+    import inspect
+    import textwrap
+
+    from app.core.knowledge.print_settings import read_path
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+
+    def is_path(text: str) -> bool:
+        try:
+            read_path(settings, text)
+        except ValidationError:
+            return False
+        return "." in text
+
+    found: set[str] = set()
+    for rule in (advise._from_geometry, advise._calm_walls):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(rule)))
+        found |= {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and is_path(node.value)
+        }
+
+    assert found, "die Gegenprobe: der Wächter findet Pfade"
+    assert found <= advise.SLICED_PATHS, sorted(found - advise.SLICED_PATHS)
+
+
 def test_cura_keeps_an_accepted_suggestion_no_part_asks_for(
     tmp_path: Path, profile: Profile
 ) -> None:
