@@ -36,6 +36,7 @@ from app.core.types import (
     OpContext,
     PrinterProfile,
     Profile,
+    Quality,
     Scene,
     SceneObject,
 )
@@ -104,7 +105,9 @@ def honeycomb_plate(
     return outcome.mesh, len(cells)
 
 
-def run_op(op: str, entry: SceneObject, **params: object) -> tuple[SceneObject, list[Finding]]:
+def run_op(
+    op: str, entry: SceneObject, *, quality: Quality = "fine", **params: object
+) -> tuple[SceneObject, list[Finding]]:
     """Eine Operation fahren und danach neu erkennen, wie die Auswertung es tut."""
     load_operations()
     spec = REGISTRY.get(op)
@@ -114,7 +117,7 @@ def run_op(op: str, entry: SceneObject, **params: object) -> tuple[SceneObject, 
             inputs=[entry],
             params=spec.params(**params),
             profile=PROFILE,
-            quality="fine",
+            quality=quality,
             seed=7,
             progress=lambda fraction, text: None,
             ask=lambda question, options: options[0],
@@ -154,6 +157,21 @@ def kinds(features: Mapping[FeatureId, Feature]) -> dict[str, int]:
     for feature in features.values():
         counted[feature.kind] = counted.get(feature.kind, 0) + 1
     return counted
+
+
+def _lid_end_face_centres(features: Mapping[FeatureId, Feature]) -> list[float]:
+    """Die Höhen der beiden zusammenhängenden, ebenen Deckelflächen."""
+    centres = []
+    for feature in features.values():
+        if feature.kind != "face":
+            continue
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        if (
+            abs(abs(float(normal[2])) - 1.0) <= EPS_GEOM
+            and float(np.linalg.norm(normal[:2])) <= EPS_GEOM
+        ):
+            centres.append(float(feature.params["centre"][2]))
+    return sorted(centres)
 
 
 # --- Der Halter -------------------------------------------------------------------
@@ -1327,6 +1345,263 @@ def _read_volume(body: trimesh.Trimesh) -> float:
             )
         ).volume()
     )
+
+
+def test_aligning_pattern_facets_keeps_untouched_refinement_and_slots() -> None:
+    """Eine Korrektur am Mantel darf den fernen verfeinerten Quader nicht entkernen."""
+    from app.core.geom.mesh import refined_units
+    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from tests.helpers import rounded_pattern_carrier
+
+    source = rounded_pattern_carrier()
+    before = as_mesh_data(source.mesh)
+    coordinates = before.raw.vertices.copy()
+    changed = _pattern_source_on_measured_facets(source, source.features["pattern_1"])
+    assert changed is not source, "die Herkunftsprobe muss den Ausrichtungspfad erreichen"
+    after = as_mesh_data(changed.mesh)
+    untouched = np.all(before.raw.triangles[:, :, 0] > 40.0, axis=1)
+    previous_origins = refined_units(before.raw)
+    next_origins = refined_units(after.raw)
+    assert previous_origins is not None and next_origins is not None
+    assert untouched.any()
+    assert np.array_equal(next_origins[untouched], previous_origins[untouched])
+    assert np.array_equal(after.raw.triangles[untouched], before.raw.triangles[untouched])
+    assert after.slots == before.slots
+    assert np.array_equal(before.raw.vertices, coordinates), "der Eingang bleibt nur lesend"
+    moved = np.any(after.raw.triangles != before.raw.triangles, axis=(1, 2))
+    assert moved.any()
+    assert np.all(next_origins[moved] < 0), "geänderte Dreiecke erben keine Verfeinerungsherkunft"
+
+
+def test_three_noisy_pattern_facets_cannot_move_a_vertex_along_the_carrier_axis() -> None:
+    """Drei nahezu achsparallele Ebenen dürfen Rundungsreste nicht in 5 mm Hub übersetzen.
+
+    Der offene Prüffächer isoliert den gemeinsamen Eckpunkt dreier Facetten.
+    Je eine Ecke liegt um 0,8 nm neben ihrer Ebene, also noch im Messrauschen;
+    axial ist kein Punkt zu korrigieren. Eine dreidimensionale Lösung bewegte
+    die gemeinsame Ecke trotzdem um 5 mm, weil sie einen Rang drei vermutete.
+    """
+    from app.core import units
+    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+
+    origin = np.array([20.0, 0.0, 0.0])
+    vertices = [origin]
+    faces = []
+    for index in range(3):
+        x, y = units.circle_point(3, index)
+        normal = np.array([x, y, 0.0])
+        tangent = np.array([-y, x, 0.0])
+        base = len(vertices)
+        vertices.extend(
+            [
+                origin + tangent * 10.0 + normal * 0.8e-6,
+                origin + tangent * 10.0 + np.array([0.0, 0.0, 10.0]),
+                origin + np.array([0.0, 0.0, 10.0]),
+            ]
+        )
+        faces.extend([(0, base, base + 1), (0, base + 1, base + 2)])
+    carrier = Feature(
+        id="pin_1",
+        kind="pin",
+        provenance="detected",
+        face_indices=tuple(range(6)),
+        params={"axis": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0), "diameter": 40.0},
+    )
+    pattern = Feature(
+        id="pattern_1",
+        kind="pattern",
+        provenance="detected",
+        params={
+            "carrier": "cylinder",
+            "carrier_axis": (0.0, 0.0, 1.0),
+            "carrier_diameter": 40.0,
+            "normal": (1.0, 0.0, 0.0),
+            "centre": (20.0, 0.0, 5.0),
+        },
+    )
+    source = SceneObject(
+        id="fan",
+        name="Prüffächer",
+        mesh=MeshData.of(trimesh.Trimesh(vertices, faces, process=False)),
+        features={carrier.id: carrier, pattern.id: pattern},
+    )
+    changed = _pattern_source_on_measured_facets(source, pattern)
+    assert np.allclose(
+        changed.mesh.raw.vertices[:, 2], np.asarray(vertices)[:, 2], rtol=0.0, atol=EPS_GEOM
+    )
+
+
+def test_pattern_facet_alignment_invalidates_previous_cavity_geometry() -> None:
+    """Ein Innenraumbeleg der alten Koordinaten gilt nach der Ausrichtung nicht weiter."""
+    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from tests.helpers import rounded_pattern_carrier
+
+    source = rounded_pattern_carrier()
+    mesh = as_mesh_data(source.mesh)
+    inner = MeshData.of(trimesh.creation.box(extents=(2.0, 2.0, 2.0)))
+    source = dataclasses.replace(source, mesh=dataclasses.replace(mesh, cavity=inner))
+    changed = _pattern_source_on_measured_facets(source, source.features["pattern_1"])
+    assert changed is not source
+    assert as_mesh_data(changed.mesh).cavity is None
+    assert as_mesh_data(source.mesh).cavity is inner
+
+
+def test_pattern_facet_alignment_does_not_flatten_a_nonplanar_carrier() -> None:
+    """Eine echte Beule am Träger ist keine zu korrigierende STL-Rundung."""
+    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from tests.helpers import rounded_pattern_carrier
+
+    source = rounded_pattern_carrier()
+    body = source.mesh.raw.copy()
+    vertices = np.array(body.vertices)
+    # Eine Ecke des Zwischenrings bewegt sich 0,01 mm nach außen. Ihre
+    # Nachbarfacetten sind danach nachweislich nicht mehr eben.
+    candidate = int(
+        np.flatnonzero((np.abs(vertices[:, 2] - 8.0) < EPS_GEOM) & (vertices[:, 0] > 19.0))[0]
+    )
+    vertices[candidate, 0] += 0.01
+    body.vertices = vertices
+    source = dataclasses.replace(source, mesh=MeshData.of(body))
+    assert _pattern_source_on_measured_facets(source, source.features["pattern_1"]) is source
+
+
+def test_pattern_facets_join_the_same_plane_across_the_angle_seam() -> None:
+    """Die beiden Normalen um ±180° tragen eine Facette und genau eine Ebene."""
+    frame = patterns.Frame.cylinder(
+        np.array([0.0, 0.0, 1.0]),
+        np.zeros(3),
+        20.0,
+        reference=np.array([1.0, 0.0, 0.0]),
+        sag=0.0,
+    )
+    normals = np.array(
+        [[-1.0, -1e-6, 0.0], [-1.0, 1e-6, 0.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]]
+    )
+    angles, groups = patterns.cylinder_facet_groups(frame, normals)
+    assert len(angles) == len(groups) == 4
+    assert any(set(group) == {0, 1} for group in groups)
+    points = np.array(
+        [
+            normal * 20.0 + shift
+            for normal in normals
+            for shift in (
+                np.array([0.0, 0.0, -1.0]),
+                np.array([0.0, 0.0, 1.0]),
+                np.cross(normal, [0.0, 0.0, 1.0]),
+            )
+        ]
+    )
+    planes = patterns._facet_planes(frame, points, np.arange(len(points)).reshape(-1, 3), normals)
+    assert planes is not None and len(planes[0]) == 4, "der Stopfen liest dieselben vier Facetten"
+
+
+@pytest.mark.parametrize("phase", ["facets", "vertices"])
+def test_pattern_facet_alignment_can_cancel_without_changing_the_source(
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+) -> None:
+    """Abbrechen greift während beider Ausrichtungsschleifen vor der Booleschen Rechnung."""
+    from app.core import units
+    from app.core.errors import OperationCancelled
+    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from app.core.scene.cancel import CancelSignal
+    from tests.helpers import rounded_pattern_carrier
+
+    source = rounded_pattern_carrier()
+    original = source.mesh.raw.vertices.copy()
+    cancelled = CancelSignal()
+    method = "plane_fit" if phase == "facets" else "symmetric_eigen3"
+    calculate = getattr(units, method)
+    calls = 0
+
+    def stop_during_alignment(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        answer = calculate(*args, **kwargs)
+        calls += 1
+        # Jede Facette braucht eine Eigenzerlegung; erst danach beginnt die
+        # Ausgleichsrechnung an den gemeinsamen Ecken der 96 Facetten.
+        if calls == (1 if phase == "facets" else 97):
+            cancelled.cancel()
+        return answer
+
+    monkeypatch.setattr(units, method, stop_during_alignment)
+    with pytest.raises(OperationCancelled):
+        _pattern_source_on_measured_facets(
+            source, source.features["pattern_1"], cancelled=cancelled
+        )
+    assert np.array_equal(source.mesh.raw.vertices, original)
+
+
+def _stl_rounded_fluted_lid() -> tuple[SceneObject, float]:
+    """Ein facettierter Deckel mit 24 Randrillen nach dem binären STL-Weg."""
+    from app.core.ingest.loader import normalise, read_model
+
+    cancel = NeverCancelled()
+    body = trimesh.creation.cylinder(radius=20.0, height=16.0, sections=96)
+    body.apply_translation((0.0, 0.0, 8.0))
+    smooth_carrier_volume = float(body.volume)
+    for index in range(24):
+        angle = math.radians(index * 15.0)
+        groove = trimesh.creation.cylinder(radius=1.1, height=13.0, sections=14)
+        groove.apply_translation((20.0 * math.cos(angle), 20.0 * math.sin(angle), 6.4))
+        body = boolean(
+            "difference",
+            [MeshData.of(body), MeshData.of(groove)],
+            quality="fine",
+            seed=7,
+            cancelled=cancel,
+        ).mesh.raw
+
+    imported = read_model(trimesh.exchange.stl.export_stl(body), ".stl")
+    mesh = normalise(
+        imported,
+        "mm",
+        weld_is_reading=True,
+        mend=False,
+        cancelled=cancel,
+    ).mesh
+    return (
+        SceneObject(id="obj_1", name="Deckel", mesh=mesh, features=detect(mesh)),
+        smooth_carrier_volume,
+    )
+
+
+@pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_stl_rounded_fluted_lid_keeps_pattern_edits_free_of_self_intersections(
+    operation: str,
+    quality: Quality,
+) -> None:
+    """STL-Rundung darf Musterstopfen am Vieleckträger nicht selbst schneiden lassen."""
+    from app.core.geom.repair import self_intersection_check
+
+    source, carrier_volume = _stl_rounded_fluted_lid()
+    pattern = only_pattern(source.features)
+    assert pattern.params["count"] == 24
+    assert self_intersection_check(as_mesh_data(source.mesh), NeverCancelled()) == ((), True)
+
+    params: dict[str, object] = {"at_feature": pattern.id}
+    if operation == "resize_feature":
+        params["pitch"] = 5.9
+    changed, _findings = run_op(operation, source, quality=quality, **params)
+
+    assert changed.mesh.raw.is_watertight
+    assert changed.mesh.component_count == 1
+    assert self_intersection_check(as_mesh_data(changed.mesh), NeverCancelled()) == ((), True)
+    assert np.allclose(
+        _lid_end_face_centres(changed.features), [0.0, 16.0], rtol=0.0, atol=EPS_GEOM
+    )
+    pin = next(feature for feature in changed.features.values() if feature.kind == "pin")
+    assert math.isclose(float(pin.params["diameter"]), 40.0, abs_tol=1e-3)
+    if operation == "remove_feature":
+        assert kinds(changed.features) == {"pin": 1, "face": 2}
+        assert math.isclose(changed.mesh.raw.volume, carrier_volume, abs_tol=0.01)
+    else:
+        assert kinds(changed.features) == {"pin": 1, "face": 2, "pattern": 1}
+        after = only_pattern(changed.features)
+        assert after.params["count"] == 21
+        assert after.params["style"] == pattern.params["style"]
+        assert math.isclose(after.params["pitch"], 2.0 * math.pi * 20.0 / 21.0, abs_tol=1e-3)
 
 
 @pytest.mark.parametrize("pattern", ["rib", "knurl_diamond"])

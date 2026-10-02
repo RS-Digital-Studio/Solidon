@@ -258,6 +258,62 @@ def plate_project() -> Project:
     return made
 
 
+def rounded_pattern_carrier(*, tilted: bool = False) -> SceneObject:
+    """96 Zylinderfacetten mit geteilten Kanten nach float32 wie in einer STL.
+
+    Der Träger Ø 40 × 16 wird für die Ausrichtung isoliert: Das Muster nennt
+    seine gemessene Lage, seine Zellen braucht erst der separate Operationstest.
+    Ein ferner, ebenfalls verfeinerter Quader belegt unberührte Herkunft.
+    """
+    from app.core.geom import lathe, transform
+    from app.core.geom.mesh import remember_refined_units, stable_normals
+
+    cylinder = lathe.cylinder(radius=20.0, height=16.0, sections=96)
+    cylinder.vertices = np.asarray(cylinder.vertices) + np.array([0.0, 0.0, 8.0])
+    vertices, faces = trimesh.remesh.subdivide(cylinder.vertices, cylinder.faces)
+    cylinder = trimesh.Trimesh(vertices.astype(np.float32).astype(np.float64), faces, process=False)
+    side_faces = np.flatnonzero(np.abs(stable_normals(cylinder)[0][:, 2]) < 0.5)
+    far = trimesh.creation.box(extents=(4.0, 6.0, 8.0))
+    far.vertices = np.asarray(far.vertices) + np.array([60.0, 0.0, 4.0])
+    far_vertices, far_faces = trimesh.remesh.subdivide(far.vertices, far.faces)
+    far = trimesh.Trimesh(far_vertices, far_faces, process=False)
+    body = trimesh.util.concatenate((cylinder, far))
+    matrix = (
+        transform.rotation_about((0.3, 0.5, 0.8), (0.0, 0.0, 0.0), 31.0) if tilted else np.eye(4)
+    )
+    body.vertices = transform.moved_points(np.asarray(body.vertices), matrix)
+    axis = tuple(transform.turned(np.array([0.0, 0.0, 1.0]), matrix))
+    normal = tuple(transform.turned(np.array([1.0, 0.0, 0.0]), matrix))
+    centres = transform.moved_points(np.array([[0.0, 0.0, 8.0], [20.0, 0.0, 8.0]]), matrix)
+    origins = np.arange(len(body.faces), dtype=np.int64) // 4
+    remember_refined_units(body, origins)
+    carrier = Feature(
+        id="pin_1",
+        kind="pin",
+        provenance="detected",
+        face_indices=tuple(side_faces),
+        params={"axis": axis, "centre": tuple(centres[0]), "diameter": 40.0},
+    )
+    pattern = Feature(
+        id="pattern_1",
+        kind="pattern",
+        provenance="detected",
+        params={
+            "carrier": "cylinder",
+            "carrier_axis": axis,
+            "carrier_diameter": 40.0,
+            "normal": normal,
+            "centre": tuple(centres[1]),
+        },
+    )
+    return SceneObject(
+        id="obj_1",
+        name="Facettenträger",
+        mesh=MeshData.of(body, slots=tuple(origins % 3)),
+        features={carrier.id: carrier, pattern.id: pattern},
+    )
+
+
 # --- Eine Fläche in fremder Lage ------------------------------------------------
 
 

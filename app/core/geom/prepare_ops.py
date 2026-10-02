@@ -5262,7 +5262,8 @@ class RemoveFeatureParams(BaseParams):
     # 11: die ganze Kette schließt samt gerundeter Mündungskante (RM-259).
     # 12: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 13: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="13",
+    # 14: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
+    cache_version="14",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -6711,7 +6712,8 @@ class ResizeFeatureParams(BaseParams):
     # geschnitten, statt um ihre Mündung gestreckt (Durchsicht 0.5.1, rest-lippe).
     # 10: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 12: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="12",
+    # 13: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
+    cache_version="13",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -14187,6 +14189,157 @@ PATTERN_NOT_READABLE: Final = _(
 )
 
 
+def _pattern_source_on_measured_facets(
+    source: SceneObject, feature: Feature, *, cancelled: CancelToken | None = None
+) -> SceneObject:
+    """Richtet rundungsnahe Trägerpunkte vor dem Schließen eines Zylindermusters aus.
+
+    Binäre STL-Koordinaten liegen nach dem Lesen nur näherungsweise auf den
+    ebenen Mantelfacetten. Der Musterstopfen wird aus den gemessenen Facetten
+    rekonstruiert; bereits der Rundungsabstand ließ die Vereinigung danach
+    Selbstschnitte in den Träger eintriangulieren (RM-225). Nur vollständig
+    belegte, innerhalb ``EPS_GEOM`` ebene Facettengruppen werden angepasst.
+    Gemeinsame Eckpunkte landen auf dem kleinsten Ausgleich der gemessenen
+    Ebenen quer zur Zylinderachse; die Axiallage bleibt erhalten. Dreiecke
+    und Vertex-IDs bleiben gleich.
+    """
+    if feature.params.get("carrier") != "cylinder":
+        return source
+
+    from app.core.geom.attributes import carry_refined_units
+    from app.core.geom.mesh import stable_normals
+    from app.core.perceive import patterns
+
+    check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else lambda: None
+    check_cancelled()
+
+    mesh = as_mesh_data(source.mesh)
+    carrier = patterns.carrier_of(feature, source.features)
+    if carrier is None or not carrier.face_indices:
+        return source
+    body = mesh.raw
+    face_ids = np.asarray(carrier.face_indices, dtype=np.int64)
+    if len(face_ids) == 0 or (face_ids < 0).any() or (face_ids >= len(body.faces)).any():
+        return source
+    face_ids = np.unique(face_ids)
+
+    frame = patterns.frame_for(feature)
+    points = np.asarray(body.vertices, dtype=np.float64)
+    normals = stable_normals(body)[0][face_ids]
+    _angles, groups = patterns.cylinder_facet_groups(
+        frame, normals, check_cancelled=check_cancelled
+    )
+    if len(groups) < 3:
+        return source
+
+    planes_by_vertex: dict[int, list[int]] = {}
+    plane_normals: list[np.ndarray] = []
+    plane_offsets: list[float] = []
+    for group in groups:
+        check_cancelled()
+        group_faces = face_ids[group]
+        vertex_ids = np.unique(np.asarray(body.faces, dtype=np.int64)[group_faces].ravel())
+        facet_points = points[vertex_ids]
+        if len(facet_points) < 3:
+            return source
+        middle, direction, _spread = units.plane_fit(facet_points)
+        centre, normal = np.asarray(middle), np.asarray(direction)
+        relative = facet_points - centre
+        lengths = np.linalg.norm(relative, axis=1)
+        longest = int(np.argmax(lengths))
+        if lengths[longest] <= EPS_GEOM:
+            return source
+        # Drei Punkte auf einer Linie belegen keine Ebene. Die quer zur
+        # längsten Strecke gemessene Breite braucht dieselbe Auflösung.
+        across = np.cross(relative, relative[longest] / lengths[longest])
+        if float(np.max(np.linalg.norm(across, axis=1))) <= EPS_GEOM:
+            return source
+        residual = transform.along(relative, normal)
+        if float(np.max(np.abs(residual))) > EPS_GEOM:
+            return source
+        outward = centre - frame.origin
+        outward -= frame.normal * units.dot3(outward, frame.normal)
+        if units.dot3(normal, outward) < 0.0:
+            normal = -normal
+
+        plane_index = len(plane_normals)
+        plane_normals.append(normal)
+        plane_offsets.append(units.dot3(normal, centre - frame.origin))
+        for vertex_id in vertex_ids:
+            planes_by_vertex.setdefault(int(vertex_id), []).append(plane_index)
+
+    aligned = points.copy()
+    maximum_correction = 0.0
+    all_normals = np.asarray(plane_normals, dtype=np.float64)
+    all_offsets = np.asarray(plane_offsets, dtype=np.float64)
+    for vertex_id, memberships in planes_by_vertex.items():
+        check_cancelled()
+        indices = np.asarray(sorted(set(memberships)), dtype=np.int64)
+        matrix = all_normals[indices]
+        offsets = all_offsets[indices]
+        relative = points[vertex_id] - frame.origin
+        distances = transform.along(matrix, relative) - offsets
+        if float(np.max(np.abs(distances))) > EPS_GEOM:
+            return source
+        # Nur quer zur belegten Zylinderachse korrigieren. Drei durch
+        # Rundungsreste leicht geneigte Mantelfacetten tragen keinen dritten
+        # Freiheitsgrad: Der volle Raumausgleich könnte aus Mikrometerrauschen
+        # mehrere Millimeter Hub entlang der Achse machen (RM-225).
+        radial_rows = np.column_stack(
+            (
+                transform.along(matrix, frame.x_axis),
+                transform.along(matrix, frame.y_axis),
+                np.zeros(len(matrix)),
+            )
+        )
+        expected_rank = min(len(indices), 2)
+        # Der kleinste Ausgleich über die Eigenbasis der eingebetteten
+        # 2x2-Grammatrix, ohne LAPACK. Verworfen wird, was neben deren
+        # Rundungsgrenze ranglos ist.
+        gram = [
+            [math.fsum(float(row[i]) * float(row[j]) for row in radial_rows) for j in range(3)]
+            for i in range(3)
+        ]
+        eigenvalues, eigenvectors = units.symmetric_eigen3(gram)
+        least = eigenvalues[-expected_rank]
+        if least <= max(len(indices), 3) * np.finfo(np.float64).eps * eigenvalues[-1]:
+            return source
+        right = [
+            -math.fsum(
+                float(row[i]) * float(distance)
+                for row, distance in zip(radial_rows, distances, strict=True)
+            )
+            for i in range(3)
+        ]
+        radial_correction = np.zeros(3)
+        for value, vector in zip(
+            eigenvalues[-expected_rank:], eigenvectors[-expected_rank:], strict=True
+        ):
+            radial_correction += np.asarray(vector) * (units.dot3(vector, right) / value)
+        correction = radial_correction[0] * frame.x_axis + radial_correction[1] * frame.y_axis
+        correction_length = math.hypot(*correction)
+        conditioning = math.sqrt(least)
+        maximum_move = EPS_GEOM * math.sqrt(len(indices)) / conditioning
+        if correction_length > maximum_move + EPS_GEOM:
+            return source
+        if (
+            float(np.max(np.abs(transform.along(matrix, relative + correction) - offsets)))
+            > EPS_GEOM
+        ):
+            return source
+        aligned[vertex_id] = points[vertex_id] + correction
+        maximum_correction = max(maximum_correction, correction_length)
+
+    if maximum_correction <= EPS_GEOM:
+        return source
+    adjusted = body.copy()
+    adjusted.vertices = aligned
+    changed = MeshData(raw=adjusted, slots=mesh.slots)
+    carry_refined_units(changed, [mesh])
+    check_cancelled()
+    return dataclasses.replace(source, mesh=changed)
+
+
 def _pattern_plug(source: SceneObject, feature: Feature) -> MeshData:
     """Der Körper, der die Zellen eines Musters füllt oder abträgt — oder der Satz dazu."""
     from app.core.perceive.patterns import plug_for
@@ -14239,6 +14392,7 @@ def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> B
 
 def _remove_pattern(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
     """Ein Muster entfernen: jede Zelle an ihrer Mündung schließen (§21.1, RM-207)."""
+    source = _pattern_source_on_measured_facets(source, feature, cancelled=ctx.cancelled)
     cleared = _pattern_cleared(ctx, source, feature)
     count = int(feature.params.get("count", 0)) + int(feature.params.get("partial", 0))
     findings = [
@@ -14391,6 +14545,7 @@ def _resize_pattern(
     # Steg oder Rille, je nachdem, was an diesem Stil schmaler ist.
     check_printable(generator, new_pitch, new_depth, ctx.profile.printer, cell=drawn_width)
 
+    source = _pattern_source_on_measured_facets(source, feature, cancelled=ctx.cancelled)
     cleared = _pattern_cleared(ctx, source, feature)
     ctx.progress(0.6, str(_("Das Muster wird mit dem neuen Maß gesetzt …")))
     field = field_outline(as_mesh_data(source.mesh), feature, source.features)

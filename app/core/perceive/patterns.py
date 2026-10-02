@@ -1418,10 +1418,10 @@ class Frame:
     ) -> Frame:
         """Um diese Achse, mit ``reference`` als erster Achse — quer zur Achse gestellt."""
         unit = np.asarray(axis, dtype=float)
-        unit = unit / max(float(np.linalg.norm(unit)), EPS_GEOM)
+        unit = unit / max(math.hypot(*unit), EPS_GEOM)
         x_axis = np.asarray(reference, dtype=float)
-        x_axis = x_axis - unit * float(x_axis @ unit)
-        length = float(np.linalg.norm(x_axis))
+        x_axis = x_axis - unit * units.dot3(x_axis, unit)
+        length = math.hypot(*x_axis)
         x_axis = _plane_axes(unit)[0] if length < EPS_GEOM else x_axis / length
         return cls(
             kind="cylinder",
@@ -1696,6 +1696,48 @@ def _facet_sag(frame: Frame, points: np.ndarray, triangles: np.ndarray) -> float
 _REGULAR_FACETS: Final = 0.01
 
 
+def cylinder_facet_groups(
+    frame: Frame,
+    normals: np.ndarray,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """Mantelfacetten nach Normalen gruppieren, auch über die Winkelnaht hinweg.
+
+    Ausrichtung und Musterstopfen lesen dieselben Gruppen. Die Winkel sind
+    plattformgleich gerechnet; benachbarte Normalen unter ``EPS_ANGLE``
+    gehören wie in der Ebenenerkennung zur selben Facette.
+    """
+    from app.core.geom.transform import along
+    from app.core.perceive.features import EPS_ANGLE
+
+    if check_cancelled is not None:
+        check_cancelled()
+    radial = np.flatnonzero(np.abs(along(normals, frame.normal)) < 0.5)
+    degrees = []
+    for index in radial:
+        if check_cancelled is not None:
+            check_cancelled()
+        normal = normals[index]
+        degrees.append(
+            units.exact_atan2_degrees(
+                units.dot3(normal, frame.y_axis), units.dot3(normal, frame.x_axis)
+            )
+        )
+    if not degrees:
+        return np.empty(0), []
+    angles = np.asarray(degrees, dtype=np.float64)
+    order = np.argsort(angles, kind="stable")
+    ordered = angles[order]
+    starts = np.flatnonzero(np.r_[True, np.diff(ordered) > EPS_ANGLE])
+    groups = list(np.split(radial[order], starts[1:]))
+    if len(groups) > 1 and ordered[0] + 360.0 - ordered[-1] <= EPS_ANGLE:
+        groups[0] = np.concatenate((groups[0], groups[-1]))
+        groups.pop()
+        starts = starts[:-1]
+    return ordered[starts] * (math.pi / 180.0), groups
+
+
 def _facet_planes(
     frame: Frame, points: np.ndarray, triangles: np.ndarray, normals: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray] | None:
@@ -1710,15 +1752,6 @@ def _facet_planes(
     """
     if frame.kind == "plane" or len(triangles) == 0:
         return None
-    along = normals @ frame.normal
-    flat = np.abs(along) < 0.5
-    if not flat.any():
-        return None
-    from app.core.perceive.features import EPS_ANGLE
-
-    angles = np.arctan2(normals[flat] @ frame.y_axis, normals[flat] @ frame.x_axis)
-    order = np.argsort(angles, kind="stable")
-    ordered = angles[order]
     # **Dieselbe Facette, solange die Normalen um weniger als ``EPS_ANGLE``
     # auseinanderliegen** — die Grenze, unter der die Erkennung zwei Dreiecke
     # koplanar nennt, und über Ketten statt gerundet. Hier stand eine Rundung
@@ -1727,15 +1760,18 @@ def _facet_planes(
     # Facette Normalen, die 6·10⁻⁵ rad auseinanderliegen. Der Rand eines
     # Schraubdeckels hatte so 159 „Facetten" statt 72, der Median ihrer
     # Schritte war null, und der Stopfen lag auf dem Kreis (23.09.2026).
-    starts = np.flatnonzero(np.r_[True, np.diff(ordered) > math.radians(EPS_ANGLE)])
-    if len(starts) < 3:
+    unique, groups = cylinder_facet_groups(frame, normals)
+    if len(groups) < 3:
         return None
-    unique = ordered[starts]
-    corners = points[triangles[flat][order[starts]]]
+    corners = points[triangles[[group[0] for group in groups]]]
     offsets = np.empty(len(unique))
     for number, (angle, triangle) in enumerate(zip(unique, corners, strict=True)):
-        direction = frame.x_axis * math.cos(float(angle)) + frame.y_axis * math.sin(float(angle))
-        offsets[number] = float(((triangle - frame.origin) @ direction).mean())
+        direction = frame.x_axis * units.exact_cos(float(angle)) + frame.y_axis * units.exact_sin(
+            float(angle)
+        )
+        offsets[number] = units.exact_mean(
+            [units.dot3(point - frame.origin, direction) for point in triangle]
+        )
     return _regular_polygon(np.asarray(unique, dtype=float), offsets)
 
 
@@ -1791,10 +1827,10 @@ def frame_for(
     if params.get("carrier") != "cylinder":
         return Frame.plane(normal)
     axis = np.asarray(params.get("carrier_axis", (0.0, 0.0, 1.0)), dtype=float)
-    axis = axis / max(float(np.linalg.norm(axis)), EPS_GEOM)
+    axis = axis / max(math.hypot(*axis), EPS_GEOM)
     radius = float(params.get("carrier_diameter", 0.0)) / 2.0
-    normal = normal - axis * float(normal @ axis)
-    normal = normal / max(float(np.linalg.norm(normal)), EPS_GEOM)
+    normal = normal - axis * units.dot3(normal, axis)
+    normal = normal / max(math.hypot(*normal), EPS_GEOM)
     centre = np.asarray(params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
     frame = Frame.cylinder(
         axis, centre - normal * radius, radius, reference=normal, sag=units.MAX_FACET_SAG
@@ -1810,9 +1846,9 @@ def frame_for(
     triangles = np.asarray(body.faces, dtype=np.int64)[indices]
     points = np.asarray(body.vertices, dtype=float)
     sag = _facet_sag(frame, points, triangles)
-    facets = _facet_planes(
-        frame, points, triangles, np.asarray(body.face_normals, dtype=float)[indices]
-    )
+    from app.core.geom.mesh import stable_normals
+
+    facets = _facet_planes(frame, points, triangles, stable_normals(body)[0][indices])
     from app.core.geom.transform import along
 
     low, high = _axial_span(points, triangles, frame.normal)

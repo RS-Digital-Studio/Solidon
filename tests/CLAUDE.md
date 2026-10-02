@@ -46,6 +46,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Wird eine gewählte Kante vor dem Verbrauchercache gebunden, und fragt eine Kollision? | `test_edge_binding.py`; die Fensterhälfte in `test_viewport_decisions.py` und `test_ui.py` |
 | Zylinder- und Rundflächenmaße aus den Originalpunkten, stabil unter starrer Bewegung? | `test_cylinder_measurements.py`, `test_round_surface_measurements.py` |
 | Sagen beide Kerne an einer angeschnittenen Bohrung dasselbe? | `test_partial_bores.py` |
+| Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
 | Bekommt ein Gewinde sein Gegenstück am anderen Teil, im Tabellenmaß und als ein Schritt? | `test_thread_counterpart.py`; das Fenster ohne Dialog in `test_counterpart_ui.py` |

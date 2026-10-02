@@ -58,7 +58,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Native Breitensuche als eigener Bauauftrag (C++ freigegeben 23.09.); womit — eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython —, entscheidet Robert |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Drei der vier Beobachtungen behoben (Durchsicht 0.5.1: `remove_feature.gone` einmal, nach *Teilen* kein Verlust für geteilte Flächen, Feldschnitt unter der Deckfläche ohne Frage — `1afc1852d`, `5948a79a5`); offen: die Zuordnungsfrage markiert das alte Merkmal nicht im Bild (`question_context` trägt es noch nicht zur Ansicht) |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
-| [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
+| [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Facettenkorrektur samt Plattformarithmetik, Querachsenbegrenzung, Abbruch und Attributerhalt nachreviewt; 298 betroffene Tests und vier echte Deckelfälle grün. Zentrales Entwicklungstor und Integration folgen |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen; dazu am Langloch die Tiefe mit oder ohne Fase und der zweite Satz einer Kopie über die Kante (Durchsicht 0.5.1) |
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: PLA-Vorgabe 50…100 % je Drucker und Curas Schichtzeitschwelle (80 s aus der Kurve heben den Lüfter in Schicht 1); der Hilfslüfter des Centauri (`M106 P2 S0`) ist Elegoos eigener Wert. Offen außerdem Kammerlüfter und unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
@@ -1584,21 +1584,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-225"></a>
 
-- [ ] **RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen.**
+- [~] **RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen.**
   Seit der Durchsicht 0.5.0 (erkennung B9) ist die Riffelung der
-  Gewürzregal-Deckel ein Muster (24 Mulden um Ø 40, Teilung 5,237). Zwei Wege
-  scheitern daran (erkennung, „Für andere Gebiete"): *Teilung ändern* zeichnet
-  dicht und mit plausiblem Volumen neu, danach ist der Rand aber kein Stift mehr
-  (124 Flächen), und das neue Muster wird nicht wieder gelesen — vermutlich
-  reicht das Feld des Neuzeichnens durch das Band unter den Mulden, sodass die
-  Stege nicht mehr zusammenhängen; am synthetischen Griff mit oben offenen
-  Rillen geht derselbe Weg. *Entfernen* von Mulden, die durch eine Stirnfläche
-  laufen, schließt die Kerben dort mit je einer eigenen Fläche (31 zusätzliche
-  Flächen am Griff) und bringt 1,7 mm³ Überlappung mit. Weg: Test zuerst mit dem
-  Deckel aus `F:\3D Dateien` als nachgebautem Korpusfall; das Feld auf die Tiefe
-  der Mulden begrenzen, die Stirnkappen mit der Stirnfläche verschmelzen.
-  Abnahme: Teilung ändern am Deckel liefert einen Stift mit wieder gelesenem
-  Muster, Entfernen eine Stirnfläche ohne Zusatzflächen und ohne Überlappung.
+  Gewürzregal-Deckel ein Muster (24 Mulden um Ø 40, Teilung 5,237). Die frühere
+  Vermutung, das Neuzeichnungsfeld reiche zu tief und Stirnkappen müssten mit
+  dem Träger verschmolzen werden, war falsch. Beim echten binary STL lagen
+  Mantelvertices durch die 32-Bit-Rundung neben den Ebenen der rekonstruierten
+  Facetten. Boolesche Werkzeuge auf diesen rekonstruierten
+  Ebenen schnitten deshalb den Mantel. `prepare_ops._pattern_source_on_measured_facets`
+  richtet die Quellvertices jetzt an den aus den Rohfacetten gemessenen Ebenen
+  und gemeinsamen Schnittkanten aus; dieselbe ausgerichtete Quelle dient dem
+  Stopfen und dem Neuzeichnen.
+
+  **Nachprüfung 02.10.2026:** Die neue Ausrichtung rechnet plattformgleich,
+  verwendet dieselbe Facettengruppierung wie der Stopfen und erhält Slots sowie
+  unberührte Verfeinerungsherkunft. Abbruch greift in beiden Schleifen. Ein
+  zusätzlicher Gegenfall zeigte knapp 5 mm falschen Axialhub aus 0,8 nm
+  Rundungsrauschen; die Korrektur wird deshalb auf die Ebene quer zur
+  Zylinderachse begrenzt. Cacheversionen: Entfernen 14, Ändern 13, örtliche
+  Erkennung 1. Das unabhängige Schlussreview hat keine offenen Code- oder
+  Testbefunde im RM225-Ausschnitt.
+
+  13 gezielte Schlussfälle und anschließend 298 betroffene Tests bestanden;
+  zusätzlich bestanden 32 Roadmap- und Dokumentkartenprüfungen. Am unveränderten echten Deckel ergeben
+  Entfernen und Ändern in `draft` und `fine` jeweils ein dichtes,
+  selbstschnittfreies Ein-Komponenten-Netz. Nach dem Ändern werden 21 Zellen
+  mit 5,983986 mm Teilung gelesen. Die größte Punktkorrektur beträgt rund
+  9,38 nm; die frühere Mikrometerangabe wird nicht fortgeschrieben.
+  Ruff, Format und mypy der betroffenen Produktmodule bestanden.
+  Das zentrale Entwicklungstor mit Commit/Push steht noch aus.
+  Reproduzierbare Gegenfälle, Eingangs-Hash,
+  Kundenmessung und Grenzen: [Nachweis RM225](konzepte/nachweise-release-0.5.1/reports/rm225-facetten-2026-10-02.md).
 
 <a id="rm-226"></a>
 

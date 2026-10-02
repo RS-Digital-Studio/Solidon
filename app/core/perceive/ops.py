@@ -74,6 +74,8 @@ class DetectRegionParams(BaseParams):
 
 @register_op(
     name="detect_region",
+    # Musterrahmen verwenden plattformgleiche Zylinderachsen (RM-225).
+    cache_version="1",
     title=_("Merkmale an dieser Stelle erkennen"),
     category="holes",
     params=DetectRegionParams,

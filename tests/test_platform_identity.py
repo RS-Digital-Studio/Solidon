@@ -676,6 +676,17 @@ def _curved_mouth() -> str:
     return f"{_mesh_print(plug)}|{_mesh_print(tool)}"
 
 
+def _aligned_pattern_facets(tilted: bool = False) -> str:
+    """Die Facettenkorrektur vor einer Musteränderung, mit unabhängig gebautem Eingang."""
+    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from tests.helpers import rounded_pattern_carrier
+
+    source = rounded_pattern_carrier(tilted=tilted)
+    changed = _pattern_source_on_measured_facets(source, source.features["pattern_1"])
+    assert changed is not source, "die Probe muss die Eckpunkte tatsächlich ausrichten"
+    return _mesh_print(changed.mesh)
+
+
 def _automatic_support_angle() -> str:
     """PrusaSlicers automatische Stützschwelle, in die Grundlage zurückgelesen.
 
@@ -703,6 +714,8 @@ _WAYS: dict[str, Callable[[], str]] = {
     "inverted_hollow": _inverted_hollow,
     "orient_for_print": lambda: _oriented_plate(True),
     "orient_heuristic": lambda: _oriented_plate(False),
+    "pattern_facets": _aligned_pattern_facets,
+    "pattern_facets_tilted": lambda: _aligned_pattern_facets(True),
     "pose_armature": _posed_plate,
     "prusa_support_angle": _automatic_support_angle,
     "remesh_mesh": _refined_plate,
