@@ -37,7 +37,7 @@ scrive in `website/version.json`.
 
 ### Fori, asole e divisione
 
-- L'angolo di un'asola su un foro importato punta nella direzione attesa e la mantiene quando cambi la finezza. Gli angoli salvati mantengono la loro direzione.
+- L'angolo di un'asola su un foro importato punta nella direzione attesa e la mantiene quando cambi la finezza.
 - Due piastre che si toccano conservano il loro materiale quando allunghi un'asola, e una spina sopra il foro resta al suo posto.
 - Allungare un foro che attraversa due corpi non segnala più che il corpo si spezza quando non succede.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
@@ -55,7 +55,7 @@ scrive in `website/version.json`.
 - Nella finestra, «Fondi dolcemente» mostra la stessa forma dell'esportazione. Solo con corpi molto grandi l'anteprima calcola più grossolana e lo dice.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
-- Il bersaglio di «Allinea alla caratteristica» parte vuoto. Il primo clic nella vista lo riempie, e «Applica» aspetta che sia scelto.
+- Il bersaglio di «Allinea alla caratteristica» parte vuoto. «Applica» aspetta che sia scelto e non mette più il corpo in silenzio dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 
 ### Generare con l'IA
