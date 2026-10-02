@@ -370,6 +370,32 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     keine Maschinenseite, und Regel 21 — nicht raten.
     """
     if setup.machine_profile:
+        if setup.flavour == "orca" and profile.printer.id.startswith("slicer-orca-"):
+            available = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+            source_machine = slicer_profiles.machine_for_name(available, profile.printer.title)
+            selected_machine = slicer_profiles.machine_for_name(available, setup.machine_profile)
+            if source_machine is None or selected_machine is None:
+                return ""
+            source_vendor = slicer_profiles.machine_vendor(source_machine).casefold()
+            printer_vendor = profile.printer.vendor.strip().casefold()
+            selected_vendor = slicer_profiles.machine_vendor(selected_machine).casefold()
+            if source_vendor and printer_vendor and source_vendor != printer_vendor:
+                return ""
+            same_identity = slicer_profiles.identity(source_machine) == (
+                slicer_profiles.identity(selected_machine)
+            )
+            same_family = slicer_profiles.same_printer_model(source_machine, selected_machine)
+            if not same_identity and not same_family:
+                return ""
+            if not same_identity and printer_vendor and selected_vendor != printer_vendor:
+                return ""
+            return slicer_profiles.machine_with_nozzle(
+                setup.machine_profile,
+                setup.flavour,
+                setup.executable,
+                profile.printer,
+                available=available,
+            )
         if setup.flavour == "cura":
             selected = profile_source(setup.machine_profile, setup, "machine")
             if isinstance(selected, slicer_profiles.SlicerProfile) and (
@@ -2755,7 +2781,9 @@ def project_settings(
     # darunter — die Verwechslung, die einen Satz Gewürzbehälter gekostet
     # hat.
     if setup.machine_profile:
-        resolved["printer_settings_id"] = _profile_name(setup.machine_profile)
+        resolved["printer_settings_id"] = _source_profile_name(
+            setup.machine_profile, setup, "machine"
+        )
     resolved["print_settings_id"] = f"Solidon {settings.title}"
     resolved["filament_settings_id"] = [
         str(entry.get("name", f"Solidon {settings.title}")) for entry in filament_documents
@@ -2780,7 +2808,11 @@ def window_findings(setup: SlicerSetup) -> list[Finding]:
     """
     if not _is_creality_print(setup):
         return []
-    printer = _profile_name(setup.machine_profile) if setup.machine_profile else ""
+    printer = (
+        _source_profile_name(setup.machine_profile, setup, "machine")
+        if setup.machine_profile
+        else ""
+    )
     message = (
         _(
             "{slicer} fragt beim Öffnen nach dem Drucker. Wählen Sie dort „{printer}“. "
@@ -2820,6 +2852,21 @@ def _profile_name(reference: str) -> str:
     return reference
 
 
+def _source_profile_name(
+    reference: str, setup: SlicerSetup, kind: slicer_profiles.ProfileKind
+) -> str:
+    """Die Kennung bleibt eindeutig; die Datei liefert den Namen für den Slicer."""
+    source = profile_source(reference, setup, kind)
+    if isinstance(source, slicer_profiles.SlicerProfile):
+        return source.name
+    if source is not None:
+        profile = slicer_profiles._read(source, kind, False)
+        if profile is not None:
+            return profile.name
+    # Auch ohne lesbare Quelle bleibt höchstens ein Name, nie der Rechnerpfad.
+    return _profile_name(reference)
+
+
 def _machine_name(setup: SlicerSetup) -> str:
     """Der Name, unter dem Solidons eigenes Maschinenprofil läuft.
 
@@ -2829,7 +2876,11 @@ def _machine_name(setup: SlicerSetup) -> str:
     den Auftrag nicht an, und die Meldung nennt den Drucker — nicht die
     Ursache.
     """
-    printer = _profile_name(setup.machine_profile) if setup.machine_profile else ""
+    printer = (
+        _source_profile_name(setup.machine_profile, setup, "machine")
+        if setup.machine_profile
+        else ""
+    )
     return f"Solidon {printer}" if printer else "Solidon"
 
 

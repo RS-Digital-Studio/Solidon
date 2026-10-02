@@ -7221,5 +7221,11 @@
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "The folder could not be checked. Choose a reachable folder or try again.",
   "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "The key could not be removed. Check your keychain and try again.",
   "Datum zurücksetzen": "Reset date",
-  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "The ComfyUI folder could not be checked after waiting. Choose another reachable folder or try again."
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "The ComfyUI folder could not be checked after waiting. Choose another reachable folder or try again.",
+  "Andere …": "Other …",
+  "Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.": "The selection determines bead width and slicer machine profile.",
+  "Düsenstatus": "Nozzle status",
+  "Eigene Düsengröße eingeben; Bahnbreite und Maschinenprofil folgen dem Wert.": "Enter a custom nozzle size; bead width and machine profile follow this value.",
+  "Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.": "Nozzle {value} selected; bead width and machine profile are updated.",
+  "Düse {value} aus dem Slicerprofil übernommen; Bahnbreite und Maschinenprofil sind angepasst.": "Nozzle {value} adopted from the slicer profile; bead width and machine profile are updated."
 }

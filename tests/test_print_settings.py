@@ -19,7 +19,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from app.core.errors import ExternalToolError, ValidationError
-from app.core.export import handover, slicer_keys
+from app.core.export import handover, slicer_keys, slicer_profiles
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.project import PROJECT_ENTRY, load, new_project, save
 from app.core.slice import advise, gcode
@@ -61,6 +61,32 @@ def _layers(
 
 
 # --- die drei Ebenen (§29) ----------------------------------------------------------
+
+
+def _elegoo_nozzle_profile(root: Path, nozzle: float) -> slicer_profiles.SlicerProfile:
+    """Eine installierte Elegoo-Maschine mit Herstellerbeleg aus ihrem Pfad."""
+    name = f"Elegoo Centauri Carbon 2 {nozzle:.1f} nozzle"
+    filename = "Centauri.json" if nozzle == 0.4 else "Centauri02.json"
+    path = root / "resources" / "profiles" / "Elegoo" / "machine" / "ECC2" / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "type": "machine",
+                "name": name,
+                "instantiation": "true",
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": [f"{nozzle:g}"],
+                "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+                "printable_height": "256",
+                "machine_start_gcode": f"G28 ; Elegoo {nozzle:.1f} nozzle",
+            }
+        ),
+        encoding="utf-8",
+    )
+    profile = slicer_profiles._read(path, "machine", False)
+    assert profile is not None
+    return profile
 
 
 def test_the_stage_names_speak_the_language_of_the_window() -> None:
@@ -4490,7 +4516,7 @@ def test_without_a_chosen_printer_the_slicers_own_selection_counts(tmp_path, mon
 def test_the_same_printer_with_another_nozzle_hands_over_the_fitting_variant(
     monkeypatch, tmp_path
 ) -> None:
-    """Derselbe Drucker, andere Düse — übergeben wird die passende Variante.
+    """Derselbe Drucker, andere Düse — geschrieben wird die passende Herstellerseite.
 
     **Gemessen am 16.09.2026.** ElegooSlicer stand auf „Elegoo Centauri Carbon
     2 0.2 nozzle", das Projekt rechnete auf demselben Gerät mit 0,4. Der
@@ -4501,24 +4527,18 @@ def test_the_same_printer_with_another_nozzle_hands_over_the_fitting_variant(
     **jede** Linienbreite stand auf null, und er meldete „zu geringe
     Linienbreite". Von Solidons Werten kam kein einziger an.
 
-    Die Varianten desselben Geräts unterscheidet die Düse — dieselbe Regel,
-    nach der ``match`` ohne eingestellte Maschine auswählt.
+    Die echten Herstellerdateien tragen kein eigenes ``vendor``-Feld. Ihre
+    Herkunft aus ``resources/profiles/Elegoo/machine/ECC2`` belegt den Hersteller
+    und muss bis in die ausgeschriebene Maschinenseite der 3MF erhalten bleiben.
     """
     from pathlib import Path
 
-    from app.core.export import slicer_profiles
-
-    def maschine(name: str, nozzle: float):
-        datei = tmp_path / f"{name}.json"
-        datei.write_text("{}", encoding="utf-8")
-        return slicer_profiles.SlicerProfile(
-            datei, name, "machine", printer_model="Elegoo Centauri Carbon 2", nozzle=nozzle
-        )
-
     bestand = [
-        maschine("Elegoo Centauri Carbon 2 0.2 nozzle", 0.2),
-        maschine("Elegoo Centauri Carbon 2 0.4 nozzle", 0.4),
+        _elegoo_nozzle_profile(tmp_path, 0.2),
+        _elegoo_nozzle_profile(tmp_path, 0.4),
     ]
+    assert all(not entry.vendor for entry in bestand)
+    assert all(slicer_profiles.machine_vendor(entry) == "Elegoo" for entry in bestand)
     monkeypatch.setattr(
         slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.2 nozzle"
     )
@@ -4528,7 +4548,88 @@ def test_the_same_printer_with_another_nozzle_hands_over_the_fitting_variant(
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
     assert profile.printer.nozzle_diameter == 0.4, "sonst prüft der Fall etwas anderes"
 
-    assert handover.machine_for(setup, profile) == "Elegoo Centauri Carbon 2 0.4 nozzle"
+    selected = handover.machine_for(setup, profile)
+    assert selected == str(bestand[1].path), (
+        "die gewählte Variante bleibt über ihre Datei eindeutig"
+    )
+
+    machine_page = handover.project_settings(
+        print_settings.resolve(profile, "standard"), profile, setup
+    )
+    assert machine_page["printer_settings_id"] == bestand[1].name
+    assert machine_page["machine_start_gcode"] == "G28 ; Elegoo 0.4 nozzle"
+    assert machine_page["nozzle_diameter"] == ["0.4"]
+    machine_file = handover._orca_machine(replace(setup, machine_profile=selected))
+    assert machine_file["name"] == f"Solidon {bestand[1].name}"
+    assert machine_file["machine_start_gcode"] == "G28 ; Elegoo 0.4 nozzle"
+
+
+def test_source_profile_name_resolves_a_prusa_bundle_reference(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine portable Prusa-Abschnittskennung liefert den echten Profilnamen."""
+    path = tmp_path / "PrusaResearch.ini"
+    path.write_text("[printer:Original Prusa MK4S HF0.4]\n", encoding="utf-8")
+    profile = slicer_profiles.SlicerProfile(
+        path=path,
+        name="Original Prusa MK4S HF0.4",
+        kind="machine",
+        section="printer:Original Prusa MK4S HF0.4",
+    )
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: [profile])
+    setup = handover.SlicerSetup(Path("prusa-slicer.exe"), "prusa")
+
+    assert (
+        handover._source_profile_name(slicer_profiles.identity(profile), setup, "machine")
+        == profile.name
+    )
+
+
+def test_source_profile_name_resolves_a_cura_instance_reference(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine Cura-Instanzkennung bleibt intern und wird beim Schreiben lesbar."""
+    path = tmp_path / "machine_instances" / "Centauri.def.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{}", encoding="utf-8")
+    profile = slicer_profiles.SlicerProfile(
+        path=path,
+        name="Elegoo Centauri Carbon 2 Werkstatt",
+        kind="machine",
+        section="Werkstatt",
+        cura_instance=tmp_path / "machine_instances" / "Centauri.global.cfg",
+    )
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: [profile])
+    setup = handover.SlicerSetup(Path("cura.exe"), "cura")
+
+    assert (
+        handover._source_profile_name(slicer_profiles.identity(profile), setup, "machine")
+        == profile.name
+    )
+
+
+def test_source_profile_name_does_not_guess_between_duplicate_profiles(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Mehrdeutige Namen bleiben Namen, keiner der gleichnamigen Pfade gewinnt."""
+    profiles_with_same_name = []
+    for relative in ("a/maschine.json", "b/maschine.json"):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps({"type": "machine", "name": "Meine Maschine", "instantiation": "true"}),
+            encoding="utf-8",
+        )
+        profiles_with_same_name.append(
+            slicer_profiles.SlicerProfile(path, "Meine Maschine", "machine")
+        )
+    monkeypatch.setattr(
+        slicer_profiles, "find_profiles", lambda *_args, **_kwargs: profiles_with_same_name
+    )
+    setup = handover.SlicerSetup(Path("orca.exe"), "orca")
+
+    assert handover.profile_source("Meine Maschine", setup, "machine") is None
+    assert handover._source_profile_name("Meine Maschine", setup, "machine") == "Meine Maschine"
 
 
 def test_a_nozzle_that_no_variant_offers_hands_over_no_machine(monkeypatch, tmp_path) -> None:
@@ -4541,19 +4642,7 @@ def test_a_nozzle_that_no_variant_offers_hands_over_no_machine(monkeypatch, tmp_
     """
     from pathlib import Path
 
-    from app.core.export import slicer_profiles
-
-    datei = tmp_path / "Elegoo Centauri Carbon 2 0.2 nozzle.json"
-    datei.write_text("{}", encoding="utf-8")
-    nur_klein = [
-        slicer_profiles.SlicerProfile(
-            datei,
-            "Elegoo Centauri Carbon 2 0.2 nozzle",
-            "machine",
-            printer_model="Elegoo Centauri Carbon 2",
-            nozzle=0.2,
-        )
-    ]
+    nur_klein = [_elegoo_nozzle_profile(tmp_path, 0.2)]
     monkeypatch.setattr(
         slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.2 nozzle"
     )

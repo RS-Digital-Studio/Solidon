@@ -7221,5 +7221,11 @@
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Não foi possível verificar a pasta. Escolha uma pasta acessível ou tente novamente.",
   "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "Não foi possível remover a chave. Verifique o porta-chaves e tente novamente.",
   "Datum zurücksetzen": "Repor data",
-  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Não foi possível verificar a pasta do ComfyUI após a espera. Escolha outra pasta acessível ou tente novamente."
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Não foi possível verificar a pasta do ComfyUI após a espera. Escolha outra pasta acessível ou tente novamente.",
+  "Andere …": "Outra …",
+  "Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.": "A seleção determina a largura do cordão e o perfil da máquina do fatiador.",
+  "Düsenstatus": "Estado do bico",
+  "Eigene Düsengröße eingeben; Bahnbreite und Maschinenprofil folgen dem Wert.": "Introduza um diâmetro de bico personalizado; a largura do cordão e o perfil da máquina seguirão esse valor.",
+  "Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.": "Bico de {value} selecionado; a largura do cordão e o perfil da máquina foram atualizados.",
+  "Düse {value} aus dem Slicerprofil übernommen; Bahnbreite und Maschinenprofil sind angepasst.": "Bico de {value} obtido do perfil do fatiador; a largura do cordão e o perfil da máquina foram atualizados."
 }

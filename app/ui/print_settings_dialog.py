@@ -142,6 +142,7 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     TIGHT,
     WIDE,
     ContentFitIntent,
@@ -1453,6 +1454,7 @@ class FilamentOverrideDialog(QDialog):
         self.setWindowTitle(f"{tr('Druckeinstellungen')} — {name}")
         self.setMinimumWidth(620)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
 
         heading = QWidget(self)
         heading_layout = QHBoxLayout(heading)
@@ -1587,6 +1589,9 @@ class FilamentOverrideDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             parent=self,
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._ok_button = ok
         ok.setText(tr("Übernehmen"))
@@ -2856,6 +2861,9 @@ class PrintSettingsDialog(QDialog):
         """Hält ausgelaufene Arbeiter, bis Qt mit ihnen durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
         self._profiles: list[slicer_profiles.SlicerProfile] = []
+        self._nozzle_user_changed = False
+        self._nozzle_printer_id = session.profile.printer.id
+        self._nozzle_sizes = slicer_profiles.COMMON_NOZZLE_SIZES
         self._needs_profiles = False
         """Ob der gefundene Slicer Profile verlangt (nur die Orca-Familie)."""
         self._profiles_pending = False
@@ -2944,6 +2952,7 @@ class PrintSettingsDialog(QDialog):
         self._slicer_path = self._remembered_slicer()
 
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         self._scroll = DialogScrollArea(self)
         contents = QWidget(self._scroll)
         layout = QVBoxLayout(contents)
@@ -2969,6 +2978,7 @@ class PrintSettingsDialog(QDialog):
             self.slicer_choice,
             self.printer_choice,
             self.adopt_printer,
+            self.nozzle_choice,
             self.nozzle,
             self.nozzle_count,
             self.plate_choice,
@@ -3161,13 +3171,30 @@ class PrintSettingsDialog(QDialog):
         # Zahl aus dem Feld, also einen Anzeigewert. Bei eingestellten Zoll
         # käme darüber 0,0157 als Düsendurchmesser an.
         self.nozzle.valueChangedMm.connect(self._nozzle_changed)
+        self.nozzle_choice = QComboBox(self)
+        self.nozzle_choice.setAccessibleName(tr("Düsendurchmesser"))
+        self.nozzle_choice.setToolTip(self.nozzle.toolTip())
+        self.nozzle_choice.setAccessibleDescription(self.nozzle.accessibleDescription())
+        self.nozzle_choice.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.nozzle_choice.setMinimumContentsLength(8)
+        self.nozzle_choice.activated.connect(self._nozzle_choice_activated)
         self.nozzle_control = QWidget(self)
         nozzle_layout = QVBoxLayout(self.nozzle_control)
         nozzle_layout.setContentsMargins(0, 0, 0, 0)
         nozzle_layout.setSpacing(0)
+        nozzle_layout.addWidget(self.nozzle_choice)
         nozzle_layout.addWidget(self.nozzle)
+        self.nozzle.hide()
         self._header_refusals["nozzle"] = _make_refusal_label(self.nozzle, self.nozzle_control)
         nozzle_layout.addWidget(self._header_refusals["nozzle"])
+        self.nozzle_state = QLabel("", self.nozzle_control)
+        self.nozzle_state.setWordWrap(True)
+        self.nozzle_state.setAccessibleName(tr("Düsenstatus"))
+        set_level(self.nozzle_state, "caption")
+        self.nozzle_state.setText(tr("Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil."))
+        nozzle_layout.addWidget(self.nozzle_state)
         callback = weak_slot(self, PrintSettingsDialog._refresh_header_refusal, "nozzle")
         self.nozzle.valueRefused.connect(callback)
         self.nozzle.lineEdit().textEdited.connect(callback)
@@ -3265,7 +3292,7 @@ class PrintSettingsDialog(QDialog):
         # Das Durchmesserzeichen sagt dasselbe auf einem Viertel der Breite;
         # vorgelesen wird der ``accessibleName``.
         nozzle_label = QLabel(tr("Düse ⌀"), self)
-        nozzle_label.setBuddy(self.nozzle)
+        nozzle_label.setBuddy(self.nozzle_choice)
         self.nozzle_label = nozzle_label
         nozzle_count_label = QLabel(tr("Düsen"), self)
         nozzle_count_label.setBuddy(self.nozzle_count)
@@ -3348,6 +3375,9 @@ class PrintSettingsDialog(QDialog):
             return
         for widget in self._fdm_only_widgets():
             widget.show()
+        self.nozzle.setVisible(
+            self.nozzle_choice.currentIndex() >= 0 and self.nozzle_choice.currentData() is None
+        )
         self.filament_label.setText(tr("Filamente"))
         self.material_link.setText(tr("Filamente …"))
         make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
@@ -3363,6 +3393,7 @@ class PrintSettingsDialog(QDialog):
             self.share_settings,
             self.nozzle_label,
             self.nozzle_control,
+            self.nozzle_choice,
             self.nozzle,
             self.nozzle_count_label,
             self.nozzle_count_control,
@@ -3567,18 +3598,81 @@ class PrintSettingsDialog(QDialog):
         wanted = set(self._chosen_plates())
         return [entry for entry in result.scene.objects.values() if entry.plate in wanted]
 
-    def _show_nozzle(self) -> None:
-        """Die Düse des gewählten Druckers ins Feld, ohne es als Änderung zu lesen."""
-        entry = profiles.printer(str(self.printer_choice.currentData()))
-        # ``finally``, weil ein gesetzter Zustand auf **jedem** Weg zurückgeht
-        # (``test_a_state_that_is_set_is_taken_back_on_every_path``): Wirft das
-        # Setzen, bliebe das Feld sonst für den Rest der Sitzung stumm, und
-        # eine geänderte Düse käme nirgends an.
+    def _set_nozzle_options(
+        self, sizes: Sequence[float], value: float, *, preserve_custom_entry: bool = False
+    ) -> None:
+        """Die Auswahl erneuern und eine offene eigene Eingabe erhalten."""
+        bounded = tuple(
+            size for size in sizes if _NOZZLE_RANGE_MM[0] <= size <= _NOZZLE_RANGE_MM[1]
+        )
+        if len(bounded) < 2:
+            bounded = slicer_profiles.COMMON_NOZZLE_SIZES
+        self._nozzle_sizes = bounded
+        line = self.nozzle.lineEdit()
+        draft_text = line.text() if preserve_custom_entry else ""
+        draft_modified = line.isModified() if preserve_custom_entry else False
+        draft_cursor = line.cursorPosition() if preserve_custom_entry else 0
+        selection_start = line.selectionStart() if preserve_custom_entry else -1
+        selected_text = line.selectedText() if preserve_custom_entry else ""
+        with QSignalBlocker(self.nozzle_choice):
+            self.nozzle_choice.clear()
+            for size in bounded:
+                self.nozzle_choice.addItem(length(size), size)
+            self.nozzle_choice.addItem(tr("Andere …"), None)
+            other = self.nozzle_choice.count() - 1
+            index = (
+                other
+                if preserve_custom_entry
+                else next(
+                    (i for i, size in enumerate(bounded) if is_close(size, value)),
+                    other,
+                )
+            )
+            self.nozzle_choice.setCurrentIndex(index)
         blocked = self.nozzle.blockSignals(True)
         try:
-            self.nozzle.set_value_mm(entry.nozzle_diameter)
+            if preserve_custom_entry:
+                line.setText(draft_text)
+                line.setModified(draft_modified)
+                if selection_start >= 0:
+                    line.setSelection(selection_start, len(selected_text))
+                else:
+                    line.setCursorPosition(draft_cursor)
+            else:
+                self.nozzle.set_value_mm(value)
         finally:
             self.nozzle.blockSignals(blocked)
+        self.nozzle.setVisible(preserve_custom_entry or index == other)
+        self._refresh_header_refusal("nozzle")
+
+    def _nozzle_choice_activated(self, index: int) -> None:
+        """Eine sichtbare Wahl stellt Bahnbreite und Maschinenvariante nach."""
+        if index < 0:
+            return
+        value = self.nozzle_choice.itemData(index)
+        if value is None:
+            self._nozzle_user_changed = True
+            self.nozzle.show()
+            self.nozzle.setEnabled(valid_printer_choice(self.printer_choice))
+            self.nozzle.setFocus()
+            self.nozzle.lineEdit().selectAll()
+            self.nozzle_state.setText(
+                tr("Eigene Düsengröße eingeben; Bahnbreite und Maschinenprofil folgen dem Wert.")
+            )
+            return
+        self.nozzle.hide()
+        blocked = self.nozzle.blockSignals(True)
+        try:
+            self.nozzle.set_value_mm(float(value))
+        finally:
+            self.nozzle.blockSignals(blocked)
+        self._refresh_header_refusal("nozzle")
+        self._nozzle_changed(float(value))
+
+    def _show_nozzle(self) -> None:
+        """Die Düse des gewählten Druckers anzeigen, ohne sie als Änderung zu lesen."""
+        entry = profiles.printer(str(self.printer_choice.currentData()))
+        self._set_nozzle_options(self._nozzle_sizes, entry.nozzle_diameter)
 
     def _show_nozzle_count(self) -> None:
         """Die Düsenzahl des gewählten Druckers ins Feld, ohne sie als Änderung zu lesen."""
@@ -3604,7 +3698,13 @@ class PrintSettingsDialog(QDialog):
             return
         self._scene_profile_changed()
 
-    def _nozzle_changed(self, value: float) -> None:
+    def _nozzle_changed(
+        self,
+        value: float,
+        *,
+        user_initiated: bool = True,
+        state_text: str | None = None,
+    ) -> bool:
         """Eine andere Düse ist eine Änderung **am Drucker**, nicht am Projekt.
 
         Sie wird deshalb im Druckerprofil abgelegt (``save_printer`` unter
@@ -3618,38 +3718,60 @@ class PrintSettingsDialog(QDialog):
         stehen — ``print_settings.resolve`` deckelt sie ohnehin am
         Düsendurchmesser.
         """
+        if user_initiated:
+            self._nozzle_user_changed = True
         if not valid_printer_choice(self.printer_choice):
-            return
+            return False
         entry = profiles.printer(str(self.printer_choice.currentData()))
-        if abs(entry.nozzle_diameter - value) < 1e-9:
-            return
+        if is_close(entry.nozzle_diameter, value):
+            self.nozzle_state.setText(
+                state_text
+                or tr(
+                    "Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst."
+                ).replace("{value}", length(value))
+            )
+            return True
         if not self._saved_printer(
-            replace(entry, nozzle_diameter=value, extrusion_width=round(value * 1.05, 3))
+            replace(entry, nozzle_diameter=value, extrusion_width=round(value * 1.05, 3)),
+            inline_nozzle=True,
         ):
             self._show_nozzle()
-            return
+            return False
+        machine = self._current_machine()
+        if machine is not None and not is_close(machine.nozzle, value):
+            # Die alte Auswahl gehört zur vorherigen Düse. Sonst würde sie
+            # beim Nachfüllen vor der passenden Geschwistervariante gewinnen.
+            with QSignalBlocker(self.machine_choice):
+                self.machine_choice.setCurrentIndex(-1)
+            self.ui_settings.slicer_machine_profile = ""
         self._scene_profile_changed()
+        self.nozzle_state.setText(
+            state_text
+            or tr("Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.").replace(
+                "{value}", length(value)
+            )
+        )
+        return True
 
-    def _saved_printer(self, entry: Any) -> bool:
+    def _saved_printer(self, entry: Any, *, inline_nozzle: bool = False) -> bool:
         """Das geänderte Druckerprofil ablegen — oder sagen, warum es nicht ging.
 
         ``save_printer`` schreibt in das Nutzerprofil, und das kann scheitern:
         ein voller Datenträger, ein schreibgeschützter Ordner. Die Ausnahme
         lief bis hierher aus dem Slot heraus, das Feld zeigte die neue Düse
         und der Drucker rechnete weiter mit der alten — ein Widerspruch ohne
-        Satz (Regel 17). Jetzt steht der Grund in der Zustandszeile, und das
-        Feld zeigt wieder, was gilt.
+        Satz (Regel 17). Beim Düsendurchmesser steht der Grund direkt an der
+        Düsenwahl; bei der Düsenzahl bleibt er in der Zustandszeile.
         """
         try:
             profiles.save_printer(entry)
         except AppError as problem:
             _log.warning("printer profile could not be saved: %s", problem)
-            self.state.setText(
-                tr(
-                    "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien "
-                    "Speicherplatz und die Schreibrechte, und ändern Sie den Wert erneut."
-                )
+            message = tr(
+                "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien "
+                "Speicherplatz und die Schreibrechte, und ändern Sie den Wert erneut."
             )
+            (self.nozzle_state if inline_nozzle else self.state).setText(message)
             self._state_shows_reason = False
             return False
         return True
@@ -3687,6 +3809,13 @@ class PrintSettingsDialog(QDialog):
             return
         document = self.session.project.document
         printer_id = str(self.printer_choice.currentData())
+        if printer_id != self._nozzle_printer_id:
+            self._nozzle_printer_id = printer_id
+            self._nozzle_user_changed = False
+            self._nozzle_sizes = slicer_profiles.COMMON_NOZZLE_SIZES
+            self.nozzle_state.setText(
+                tr("Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.")
+            )
         self.session.change_scene_profile(
             printer_id,
             profiles.material_for(printer_id, document.material or profiles.DEFAULT_MATERIAL),
@@ -4498,6 +4627,8 @@ class PrintSettingsDialog(QDialog):
         es auch für die Wege, die vorzeitig zurückkehren.
         """
         self._profiles = []
+        self._nozzle_sizes = slicer_profiles.COMMON_NOZZLE_SIZES
+        self._show_nozzle()
         self._forget_filament_profile()
         for combo in (self.machine_choice, self.process_choice):
             with QSignalBlocker(combo):
@@ -4587,6 +4718,34 @@ class PrintSettingsDialog(QDialog):
         self._open_slicer_section(intent="passive")
         self._show_slicer_state()
 
+    def _slicer_machine_for_project(
+        self, found: list[slicer_profiles.SlicerProfile]
+    ) -> tuple[slicer_profiles.SlicerProfile | None, bool]:
+        """Das aktive Maschinenprofil und ob es zum gewählten Drucker gehört."""
+        if self._slicer_path is None:
+            return None, False
+        flavour = slicer_keys.flavour_of(self._slicer_path.name)
+        if flavour is None:
+            return None, False
+        name = slicer_profiles.chosen_machine(flavour, self._slicer_path)
+        machine = slicer_profiles.machine_for_name(found, name)
+        if machine is None:
+            return None, False
+        current = self.session.profile.printer
+        source_machine = slicer_profiles.machine_for_name(found, current.title)
+        if source_machine is not None:
+            belongs = slicer_profiles.identity(source_machine) == slicer_profiles.identity(
+                machine
+            ) or slicer_profiles.same_printer_model(source_machine, machine)
+            return machine, belongs
+        if current.id.startswith("slicer-"):
+            return machine, False
+        known = dict(profiles.printer_profiles())
+        known[current.id] = current
+        return machine, slicer_profiles.chosen_printer(
+            flavour, self._slicer_path, known
+        ) == current.id
+
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
         if isinstance(self.sender(), _ProfileWorker) and self.sender() is not self._profile_worker:
             return
@@ -4598,6 +4757,11 @@ class PrintSettingsDialog(QDialog):
         # ersten Eintrag des Bestands für die Wahl des Nutzers.
         already = str(self.machine_choice.currentData() or "")
         already_shown = self.machine_choice.currentText()
+        nozzle_choice_index = self.nozzle_choice.currentIndex()
+        nozzle_choice_value = self.nozzle_choice.currentData()
+        custom_nozzle_selected = nozzle_choice_index >= 0 and nozzle_choice_value is None
+        pending_custom_edit = custom_nozzle_selected and self.nozzle.lineEdit().isModified()
+        nozzle_user_choice = self._nozzle_user_changed or pending_custom_edit
         self._profiles = found
         self._profiles_pending = False
         machines = slicer_profiles.machines(found)
@@ -4621,8 +4785,62 @@ class PrintSettingsDialog(QDialog):
                     "danach steht sein Profil hier."
                 )
             )
+            self.nozzle_state.setText(
+                tr("Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.")
+            )
             self._show_slicer_state()
             return
+
+        source_mark = (
+            discover.program_mark(self._slicer_path.name) if self._slicer_path is not None else ""
+        )
+        chosen, process = slicer_profiles.match(
+            found, self.session.profile.printer, source=source_mark
+        )
+        own = (
+            self.ui_settings.slicer_machine_profile
+            if self.ui_settings.slicer_profile_printer in ("", self.session.profile.printer.id)
+            and self.ui_settings.slicer_profile_slicer in ("", str(self._slicer_path or ""))
+            else ""
+        )
+        remembered = already or own
+        remembered_machine = slicer_profiles.machine_for_name(found, remembered)
+        slicer_machine, slicer_machine_is_current = self._slicer_machine_for_project(found)
+        nozzle_machine = remembered_machine or (
+            slicer_machine if slicer_machine_is_current else chosen
+        )
+        nozzle_sizes = slicer_profiles.nozzle_sizes_for_machine(found, nozzle_machine)
+        preferred_slicer_machine: slicer_profiles.SlicerProfile | None = None
+        if (
+            slicer_machine is not None
+            and slicer_machine_is_current
+            and not remembered
+            and not nozzle_user_choice
+            and _NOZZLE_RANGE_MM[0] <= slicer_machine.nozzle <= _NOZZLE_RANGE_MM[1]
+        ):
+            self._set_nozzle_options(nozzle_sizes, slicer_machine.nozzle)
+            state_text = tr(
+                "Düse {value} aus dem Slicerprofil übernommen; Bahnbreite und Maschinenprofil "
+                "sind angepasst."
+            ).replace("{value}", length(slicer_machine.nozzle))
+            if is_close(self.session.profile.printer.nozzle_diameter, slicer_machine.nozzle):
+                self.nozzle_state.setText(state_text)
+                preferred_slicer_machine = slicer_machine
+            elif self._nozzle_changed(
+                slicer_machine.nozzle, user_initiated=False, state_text=state_text
+            ):
+                return
+        else:
+            if custom_nozzle_selected and nozzle_user_choice:
+                self._set_nozzle_options(
+                    nozzle_sizes,
+                    self.session.profile.printer.nozzle_diameter,
+                    preserve_custom_entry=True,
+                )
+            elif nozzle_user_choice and nozzle_choice_value is not None:
+                self._set_nozzle_options(nozzle_sizes, float(nozzle_choice_value))
+            else:
+                self._set_nozzle_options(nozzle_sizes, self.session.profile.printer.nozzle_diameter)
 
         # ``QSignalBlocker`` und nicht das Paar von Hand: Zwischen Sperren und
         # Freigeben laufen ``_machines_worth_showing`` und ``entry.title`` über
@@ -4642,6 +4860,15 @@ class PrintSettingsDialog(QDialog):
                 self.machine_choice.addItem(
                     entry.title(tr("eigenes")), slicer_profiles.identity(entry)
                 )
+            if (
+                preferred_slicer_machine is not None
+                and self.machine_choice.findData(slicer_profiles.identity(preferred_slicer_machine))
+                < 0
+            ):
+                self.machine_choice.addItem(
+                    preferred_slicer_machine.title(tr("eigenes")),
+                    slicer_profiles.identity(preferred_slicer_machine),
+                )
             # **Eine Wahl, die der neue Fund nicht kennt, bleibt trotzdem stehen.**
             # Das Leeren darf nur den Bestand ersetzen, nicht die Entscheidung des
             # Nutzers wegwerfen: Wer wählt, während die Suche noch läuft, hätte
@@ -4652,12 +4879,6 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice.setEnabled(True)
         self.process_choice.setEnabled(True)
 
-        source_mark = (
-            discover.program_mark(self._slicer_path.name) if self._slicer_path is not None else ""
-        )
-        chosen, process = slicer_profiles.match(
-            found, self.session.profile.printer, source=source_mark
-        )
         # **Eine getroffene Wahl bleibt stehen.** Die Profilsuche läuft in einem
         # Arbeiter und antwortet nachgereicht; wer in der Zwischenzeit selbst
         # eine Maschine gewählt hat, sah sie danach auf etwas anderes springen —
@@ -4673,14 +4894,9 @@ class PrintSettingsDialog(QDialog):
         # (:func:`remembered_setup`). Ohne sie trug ein Projekt auf dem
         # allgemeinen Drucker das Maschinenprofil des Centauri Carbon 2: Der
         # Slicer rechnete mit 256 mm Bett, Solidon mit 220.
-        own = (
-            self.ui_settings.slicer_machine_profile
-            if self.ui_settings.slicer_profile_printer in ("", self.session.profile.printer.id)
-            and self.ui_settings.slicer_profile_slicer in ("", str(self._slicer_path or ""))
-            else ""
-        )
-        remembered = already or own
         index = self.machine_choice.findData(remembered) if remembered else -1
+        if index < 0 and preferred_slicer_machine is not None:
+            index = self.machine_choice.findData(slicer_profiles.identity(preferred_slicer_machine))
         if index < 0 and chosen is not None:
             index = self.machine_choice.findData(slicer_profiles.identity(chosen))
         # **Kein Rückfall auf den ersten Eintrag.** Der war „Afinia H+1(HS) 0.4
@@ -4698,6 +4914,9 @@ class PrintSettingsDialog(QDialog):
         self._fill_processes(process)
 
         if chosen is None:
+            self.nozzle_state.setText(
+                tr("Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.")
+            )
             # **Eine Aufforderung ist noch keine Auskunft.** Hier stand „Zu
             # diesem Drucker passt kein Profil von selbst — bitte auswählen.":
             # wahr, und es ließ offen, *welcher* Drucker gemeint ist und warum
@@ -5000,6 +5219,19 @@ class PrintSettingsDialog(QDialog):
         Der Herstellername hilft dabei nicht weiter: Er ist genau bei dem
         Drucker leer, bei dem diese Stufe überhaupt greift.
         """
+        source_machine = slicer_profiles.machine_for_name(
+            machines, self.session.profile.printer.title
+        )
+        if source_machine is not None:
+            family = [
+                entry
+                for entry in machines
+                if slicer_profiles.identity(entry) == slicer_profiles.identity(source_machine)
+                or slicer_profiles.same_printer_model(entry, source_machine)
+            ]
+            if family:
+                return family
+
         mine = self.session.profile.printer.id
         known = profiles.printer_profiles()
         # Eine eigene, nicht zugeordnete Maschine darf gewählt bleiben. Die
@@ -5749,6 +5981,9 @@ class PrintSettingsDialog(QDialog):
 
     def _build_buttons(self) -> QDialogButtonBox:
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # Qt beschriftet seine Standardknöpfe selbst, und zwar in der Sprache
         # des Systems — Regel 20 verlangt, dass auch dieser Text durch tr() geht.
         close = buttons.button(QDialogButtonBox.StandardButton.Close)
@@ -5913,7 +6148,9 @@ class PrintSettingsDialog(QDialog):
         self._check_print_result()
         selection_issue = self._printer_selection_issue()
         field_refusal = self._first_numeric_refusal()
-        self.nozzle.setEnabled(valid_printer_choice(self.printer_choice))
+        printer_valid = valid_printer_choice(self.printer_choice)
+        self.nozzle_choice.setEnabled(printer_valid)
+        self.nozzle.setEnabled(printer_valid)
         self.nozzle_count.setEnabled(valid_printer_choice(self.printer_choice))
         if self._gcode and self._result_context == self._print_context():
             self._release_the_save()

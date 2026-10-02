@@ -1536,7 +1536,12 @@ def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
 
 
 def machine_with_nozzle(
-    machine: str, flavour: SlicerFlavour, executable: Path, printer: PrinterProfile
+    machine: str,
+    flavour: SlicerFlavour,
+    executable: Path,
+    printer: PrinterProfile,
+    *,
+    available: Sequence[SlicerProfile] | None = None,
 ) -> str:
     """Dieselbe Maschine, aber mit der Düse, für die das Projekt rechnet.
 
@@ -1571,13 +1576,16 @@ def machine_with_nozzle(
             return machine
     machines_here = [
         entry
-        for entry in find_profiles(executable, flavour, ("machine",))
+        for entry in (
+            available if available is not None else find_profiles(executable, flavour, ("machine",))
+        )
         if entry.kind == "machine"
     ]
     fits = [entry for entry in machines_here if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
-    current = [
-        entry for entry in machines_here if entry.name == machine or identity(entry) == machine
-    ]
+    current = [entry for entry in machines_here if identity(entry) == machine]
+    if not current:
+        named = [entry for entry in machines_here if entry.name == machine]
+        current = named if len(named) == 1 else []
     if current and any(entry in fits for entry in current):
         return machine
     if not current or all(entry.nozzle <= 0.0 for entry in current):
@@ -1587,15 +1595,19 @@ def machine_with_nozzle(
         # (Regel 21): Die bisherige Prüfung über den Drucker bleibt dann die
         # ganze Auskunft.
         return machine
+    current_machine = current[0]
     same_printer = [
         entry
         for entry in fits
-        if _names_the_printer(entry.printer_model, printer.title)
-        or _names_the_printer(entry.name, printer.title)
+        if identity(entry) == identity(current_machine)
+        or same_printer_model(entry, current_machine)
     ]
     if not same_printer:
         return ""
-    return min(same_printer, key=lambda entry: (not entry.from_user, entry.name)).name
+    chosen = min(same_printer, key=lambda entry: (not entry.from_user, entry.name))
+    # Namen können bei verschiedenen Herstellern gleich sein. Die nächste
+    # Stufe schreibt das Profil aus; sie braucht deshalb dessen Kennung.
+    return identity(chosen)
 
 
 def _load(path: Path, documents: ProfileDocuments | None = None) -> dict[str, Any] | None:
@@ -2941,6 +2953,65 @@ def machines(profiles: list[SlicerProfile]) -> list[SlicerProfile]:
     )
 
 
+#: Übliche Düsen, wenn der Slicer für das gewählte Gerät keine Varianten kennt.
+COMMON_NOZZLE_SIZES: Final[tuple[float, ...]] = (0.2, 0.4, 0.6, 0.8)
+
+
+def machine_for_name(profiles: list[SlicerProfile], name: str) -> SlicerProfile | None:
+    """Das Maschinenprofil, das der Slicer als aktiv meldet, sofern es eindeutig ist."""
+    if not name:
+        return None
+    found = [
+        entry
+        for entry in machines(profiles)
+        if entry.name == name or identity(entry) == name or entry.printer_id == name
+    ]
+    return found[0] if len(found) == 1 else None
+
+
+def same_printer_model(first: SlicerProfile, second: SlicerProfile) -> bool:
+    """Ob zwei Maschinenvarianten dasselbe Modell und denselben Hersteller führen."""
+    first_vendor = machine_vendor(first)
+    second_vendor = machine_vendor(second)
+    return bool(
+        first.printer_model
+        and second.printer_model
+        and first_vendor
+        and second_vendor
+        and _printer_name(first.printer_model) == _printer_name(second.printer_model)
+        and first_vendor.casefold() == second_vendor.casefold()
+    )
+
+
+def machine_vendor(entry: SlicerProfile) -> str:
+    """Der belegte Hersteller des Maschinenprofils; eigene Profile bleiben offen."""
+    return entry.vendor.strip() or ("" if entry.from_user else _vendor_of(entry.path, "machine"))
+
+
+def nozzle_sizes_for_machine(
+    profiles: list[SlicerProfile], machine: SlicerProfile | None
+) -> tuple[float, ...]:
+    """Die verschiedenen Düsengrößen dieses Slicer-Modells, sonst die üblichen.
+
+    Die Maschine selbst ist die Quelle: Namen wie „0.4 High-Speed nozzle"
+    dürfen nicht versehentlich ein zweites Maß ergeben, und ein fremdes Modell
+    gehört nicht in dieselbe Auswahl. Ein einzelner Wert ist keine
+    Variantenliste; dann bleibt die Auswahl bei den üblichen Größen.
+    """
+    if machine is None or not machine.printer_model:
+        return COMMON_NOZZLE_SIZES
+    values = sorted(
+        entry.nozzle
+        for entry in machines(profiles)
+        if same_printer_model(entry, machine) and math.isfinite(entry.nozzle) and entry.nozzle > 0.0
+    )
+    unique: list[float] = []
+    for value in values:
+        if not any(math.isclose(value, known, rel_tol=0.0, abs_tol=1e-6) for known in unique):
+            unique.append(value)
+    return tuple(unique) if len(unique) > 1 else COMMON_NOZZLE_SIZES
+
+
 #: So tief wird eine Erbkette verfolgt. Drei bis vier Stufen sind üblich; eine
 #: Grenze schützt vor einem Kreis in einem selbst angelegten Profil.
 MAX_INHERITANCE: Final = 12
@@ -3192,12 +3263,11 @@ def match(
     dieses. Die Namenssuche traf dort am MINI und XL die abgelösten Profile
     ohne Input Shaper und den SV06 gar nicht (27.09.2026).
     """
-    native = [entry for entry in machines(profiles) if entry.printer_id == printer.id]
+    all_machines = machines(profiles)
+    native = [entry for entry in all_machines if entry.printer_id == printer.id]
     if not native and source:
         native = [
-            entry
-            for entry in machines(profiles)
-            if matches_saved_cura_printer(entry, printer, source)
+            entry for entry in all_machines if matches_saved_cura_printer(entry, printer, source)
         ]
     if (
         printer.id.startswith("slicer-cura-")
@@ -3207,24 +3277,36 @@ def match(
         return None, None
     named_in_bundle = [
         entry
-        for entry in machines(profiles)
+        for entry in all_machines
         if printer.prusaslicer_printer and entry.name == printer.prusaslicer_printer
     ]
     defined_in_cura = [
         entry
-        for entry in machines(profiles)
+        for entry in all_machines
         if printer.cura_definition
         and entry.printer_model == printer.cura_definition
         and entry.path.name.endswith(".def.json")
         and entry.cura_instance is None
     ]
+    source_machine = machine_for_name(profiles, printer.title)
+    source_family = (
+        [
+            entry
+            for entry in all_machines
+            if identity(entry) == identity(source_machine)
+            or same_printer_model(entry, source_machine)
+        ]
+        if source_machine is not None
+        else []
+    )
     candidates = (
         native
         or named_in_bundle
         or defined_in_cura
+        or source_family
         or [
             entry
-            for entry in machines(profiles)
+            for entry in all_machines
             if _names_the_printer(entry.printer_model, printer.title)
             or _names_the_printer(entry.name, printer.title)
         ]
@@ -3243,6 +3325,12 @@ def match(
     candidates = own_model or candidates
 
     exact = [entry for entry in candidates if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
+    if source_family and not exact:
+        # Ein exakt erkanntes importiertes Profil belegt seine Gerätefamilie,
+        # aber nicht, welche fremde Düse an diesem Gerät aufgeschraubt ist.
+        # Ohne passende Variante bleibt die Auswahl leer statt am Nachbarmaß
+        # weiterzurechnen.
+        return None, None
     # Bei gleicher Düse die Grundausführung, wie bei :func:`match_filament`:
     # OrcaSlicer führt den Sovol SV06 als „0.4 nozzle“ und als „0.4 High-Speed
     # nozzle“, und ohne diese Regel entschied die Reihenfolge im Ordner — ein

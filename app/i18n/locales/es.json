@@ -7221,5 +7221,11 @@
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "No se pudo comprobar la carpeta. Elija una carpeta accesible o inténtelo de nuevo.",
   "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "No se pudo eliminar la clave. Compruebe el llavero y vuelva a intentarlo.",
   "Datum zurücksetzen": "Restablecer fecha",
-  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "No se pudo comprobar la carpeta de ComfyUI después de esperar. Elija otra carpeta accesible o inténtelo de nuevo."
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "No se pudo comprobar la carpeta de ComfyUI después de esperar. Elija otra carpeta accesible o inténtelo de nuevo.",
+  "Andere …": "Otra …",
+  "Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.": "La selección determina el ancho de cordón y el perfil de máquina del laminador.",
+  "Düsenstatus": "Estado de la boquilla",
+  "Eigene Düsengröße eingeben; Bahnbreite und Maschinenprofil folgen dem Wert.": "Introduzca un diámetro de boquilla personalizado; el ancho de cordón y el perfil de máquina seguirán ese valor.",
+  "Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.": "Boquilla de {value} seleccionada; se han actualizado el ancho de cordón y el perfil de máquina.",
+  "Düse {value} aus dem Slicerprofil übernommen; Bahnbreite und Maschinenprofil sind angepasst.": "Boquilla de {value} tomada del perfil del laminador; se han actualizado el ancho de cordón y el perfil de máquina."
 }

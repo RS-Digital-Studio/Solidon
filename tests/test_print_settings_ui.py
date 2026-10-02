@@ -1055,9 +1055,22 @@ def test_filament_dialog_contains_only_values_that_belong_to_the_spool(
 
 def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> None:
     """Ein Haken je Bereich statt neunzehn versteckter Einzelentscheidungen."""
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.ui.style import SPACE, WIDE
+
     settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
     slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
     dialog = FilamentOverrideDialog(slot, settings)
+    layout = dialog.layout()
+    assert layout is not None
+    margins = layout.contentsMargins()
+    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (WIDE,) * 4
+    buttons = dialog.findChild(QDialogButtonBox)
+    assert buttons is not None
+    button_layout = buttons.layout()
+    assert button_layout is not None
+    assert button_layout.spacing() == SPACE
 
     def settle() -> None:
         for _ in range(8):
@@ -1188,6 +1201,11 @@ def test_the_printer_header_refuses_out_of_range_numbers(
     dialog.show()
     qt_app.processEvents()
     try:
+        other = dialog.nozzle_choice.count() - 1
+        assert dialog.nozzle_choice.itemData(other) is None
+        dialog.nozzle_choice.setCurrentIndex(other)
+        dialog.nozzle_choice.activated.emit(other)
+        assert not dialog.nozzle.isHidden(), "„Andere …“ öffnet das eigene Maß an der Düsenzeile"
         for path, editor, boundary in (
             ("nozzle", dialog.nozzle, dialog.nozzle.maximum()),
             ("nozzle_count", dialog.nozzle_count, dialog.nozzle_count.maximum()),
@@ -3569,6 +3587,223 @@ def test_the_found_profiles_fill_both_choices(dialog: PrintSettingsDialog) -> No
     assert dialog.process_choice.count() == 2
 
 
+def test_the_active_slicer_variant_and_nozzle_choice_stay_in_step(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Aktive CC2-Düse, Bahnbreite und Maschinenvariante folgen derselben Wahl."""
+    from app.core.export import slicer_profiles
+    from app.core.knowledge import profiles
+
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    monkeypatch.setattr(profiles, "_printers", None)
+    session = Session()
+    session.start_new("centauri-carbon-2", "pla")
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    dialog.wait_for_workers()
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog._slicer_path = Path("ElegooSlicer.exe")
+    dialog._profiles_pending = False
+    dialog.machine_choice.setCurrentIndex(-1)
+    dialog.ui_settings.slicer_machine_profile = ""
+    dialog.ui_settings.slicer_profile_printer = ""
+    dialog.ui_settings.slicer_profile_slicer = ""
+    found = [
+        _profile(
+            f"Elegoo Centauri Carbon 2 {diameter:.1f} nozzle",
+            "machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=diameter,
+        )
+        for diameter in (0.2, 0.4, 0.6, 0.8)
+    ]
+    active = found[2]
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: active.name)
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_printer", lambda *_args: dialog.session.profile.printer.id
+    )
+    monkeypatch.setattr(dialog, "_machines_worth_showing", lambda machines: machines)
+
+    dialog._profiles_found(found)
+
+    assert tuple(
+        dialog.nozzle_choice.itemData(index) for index in range(dialog.nozzle_choice.count() - 1)
+    ) == (0.2, 0.4, 0.6, 0.8)
+    assert dialog.nozzle_choice.currentData() == pytest.approx(0.6)
+    printer = profiles.printer("centauri-carbon-2")
+    assert printer.nozzle_diameter == pytest.approx(0.6)
+    assert printer.extrusion_width == pytest.approx(0.63)
+    assert dialog.machine_choice.currentData() == slicer_profiles.identity(active)
+
+    chosen = dialog.nozzle_choice.findData(0.2)
+    assert chosen >= 0
+    dialog.nozzle_choice.setCurrentIndex(chosen)
+    dialog.nozzle_choice.activated.emit(chosen)
+
+    printer = profiles.printer("centauri-carbon-2")
+    assert printer.nozzle_diameter == pytest.approx(0.2)
+    assert printer.extrusion_width == pytest.approx(0.21)
+    assert dialog.machine_choice.currentData() == slicer_profiles.identity(found[0])
+
+
+def test_profile_search_preserves_a_pending_custom_nozzle_draft(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Eine passive Profilantwort ersetzt den noch nicht bestätigten eigenen Wert nicht."""
+    from PySide6.QtTest import QTest
+
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    monkeypatch.setattr(profiles, "_printers", None)
+    session = Session()
+    session.start_new("centauri-carbon-2", "pla")
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers()
+    dialog.wait_for_workers()
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog._slicer_path = Path("OrcaSlicer.exe")
+    dialog._profiles_pending = False
+    dialog.machine_choice.setCurrentIndex(-1)
+    other = dialog.nozzle_choice.count() - 1
+    dialog.nozzle_choice.setCurrentIndex(other)
+    dialog.nozzle_choice.activated.emit(other)
+    line = dialog.nozzle.lineEdit()
+    line.setFocus()
+    line.selectAll()
+    QTest.keyClicks(line, dialog.nozzle.locale().toString(0.55, "f", dialog.nozzle.decimals()))
+    line.setCursorPosition(2)
+    expected = (line.text(), line.isModified(), line.cursorPosition())
+    found = [
+        _profile(
+            f"Elegoo Centauri Carbon 2 {diameter:.1f} nozzle",
+            "machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            vendor="Elegoo",
+            nozzle=diameter,
+        )
+        for diameter in (0.4, 0.6)
+    ]
+    monkeypatch.setattr(dialog, "_slicer_machine_for_project", lambda _found: (found[1], True))
+    monkeypatch.setattr(dialog, "_machines_worth_showing", lambda machines: machines)
+
+    dialog._profiles_found(found)
+
+    assert dialog.nozzle_choice.currentData() is None
+    assert dialog.nozzle.isVisibleTo(dialog)
+    assert (line.text(), line.isModified(), line.cursorPosition()) == expected
+
+
+def test_changing_printers_clears_the_previous_nozzle_success_message(
+    dialog: PrintSettingsDialog,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Status zur alten Maschine bleibt nach dem Druckerwechsel nicht stehen."""
+    generic = tr("Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.")
+    dialog.nozzle_state.setText(
+        tr("Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.").replace(
+            "{value}", dialog.nozzle.text()
+        )
+    )
+    monkeypatch.setattr(dialog, "_refill_slicer_profiles", lambda: None)
+    index = dialog.printer_choice.findData("centauri-carbon-2")
+    assert index >= 0
+
+    dialog.printer_choice.setCurrentIndex(index)
+
+    assert dialog.nozzle_state.text() == generic
+
+
+def test_imported_printer_identity_limits_nozzle_choices_to_its_model_and_vendor(
+    dialog: PrintSettingsDialog,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein importierter Slicer-Drucker erkennt Geschwister, aber keinen fremden Hersteller."""
+    from app.core.export import slicer_profiles
+
+    source = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        vendor="Elegoo",
+        nozzle=0.4,
+    )
+    foreign = _profile(
+        "Other Centauri Carbon 2 0.6 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        vendor="Other",
+        nozzle=0.6,
+    )
+    active = _profile(
+        "Elegoo Centauri Carbon 2 0.6 nozzle",
+        "machine",
+        printer_model="elegoo centauri carbon 2",
+        vendor="ELEGOO",
+        nozzle=0.6,
+    )
+    found = [source, foreign, active]
+    dialog.session.profile = replace(
+        dialog.session.profile,
+        printer=slicer_profiles._discovered_printer(
+            source,
+            "orca",
+            {
+                "printer_technology": "FFF",
+                "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+                "printable_height": "256",
+                "nozzle_diameter": ["0.4"],
+            },
+            {},
+            "OrcaSlicer",
+        ),
+    )
+    dialog._slicer_path = Path("OrcaSlicer.exe")
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args, **_kwargs: active.name)
+
+    machine, belongs = dialog._slicer_machine_for_project(found)
+
+    assert machine is active
+    assert belongs
+    assert dialog._machines_worth_showing(slicer_profiles.machines(found)) == [source, active]
+
+
+def test_refitting_fdm_controls_keeps_a_standard_nozzle_editor_closed(
+    dialog: PrintSettingsDialog,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das erneute Anzeigen der FDM-Felder öffnet „Andere …“ nicht mit."""
+    standard = dialog.nozzle_choice.findData(0.6)
+    assert standard >= 0
+    monkeypatch.setattr(dialog, "_nozzle_changed", lambda _value: True)
+
+    dialog.nozzle_choice.setCurrentIndex(standard)
+    dialog.nozzle_choice.activated.emit(standard)
+    assert dialog.nozzle.isHidden()
+
+    dialog._fit_to_technology()
+
+    assert dialog.nozzle.isHidden()
+
+
 _PRUSA_BUNDLE = """[vendor]
 name = Prusa Research
 
@@ -4363,6 +4598,7 @@ def test_the_nozzle_is_settable_and_reaches_the_computation(
     Geprüft wird über das Feld und nicht über ``_nozzle_changed``: Am Signal
     hängt die halbe Zusicherung (`.claude/rules/tests.md`, „Am Weg vorbei").
     """
+    from app.core.export import slicer_profiles
     from app.core.knowledge import print_settings, profiles
 
     # **In einen eigenen Ordner, sonst erbt die halbe Datei diese Düse.** Die
@@ -4371,12 +4607,22 @@ def test_the_nozzle_is_settable_and_reaches_the_computation(
     # und sechs von ihnen wurden rot — isoliert gefahren alle grün.
     monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
     monkeypatch.setattr(profiles, "_printers", None)
-
     dialog = PrintSettingsDialog(session, UiSettings())
     before = profiles.printer(str(dialog.printer_choice.currentData()))
     assert dialog.nozzle.value_mm() == pytest.approx(before.nozzle_diameter), (
         "das Feld zeigt die Düse des gewählten Druckers"
     )
+    assert (
+        tuple(
+            dialog.nozzle_choice.itemData(index)
+            for index in range(dialog.nozzle_choice.count() - 1)
+        )
+        == slicer_profiles.COMMON_NOZZLE_SIZES
+    )
+    other = dialog.nozzle_choice.count() - 1
+    dialog.nozzle_choice.setCurrentIndex(other)
+    dialog.nozzle_choice.activated.emit(other)
+    assert not dialog.nozzle.isHidden(), "eigene Düsengröße bleibt erreichbar"
 
     dialog.nozzle.set_value_mm(0.6)
 
@@ -7519,7 +7765,8 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
             dialog.tabs_box,
             dialog.advice_box,
             dialog.quality,
-            dialog.nozzle,
+            dialog.nozzle_control,
+            dialog.nozzle_choice,
             dialog.nozzle_count,
             dialog.share_settings,
             dialog.slice_button,
@@ -7527,6 +7774,7 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
             dialog.search,
         )
         assert all(widget.isHidden() for widget in hidden)
+        assert not dialog.nozzle_state.isVisibleTo(dialog)
         assert not dialog.open_button.isHidden() and not dialog.printer_choice.isHidden()
         assert dialog.filament_label.text() == tr("Material")
         assert dialog.open_button.font().bold(), "Öffnen ist der Hauptknopf"
@@ -7548,6 +7796,7 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
             "PLA statt Harz, sobald ein Filamentdrucker dasteht"
         )
         assert all(not widget.isHidden() for widget in hidden)
+        assert dialog.nozzle_state.isVisibleTo(dialog)
         assert dialog.filament_label.text() == tr("Filamente")
 
         dialog.printer_choice.setCurrentIndex(
@@ -7556,6 +7805,7 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
         assert session.profile.printer.is_resin
         assert session.profile.material.id == profiles.DEFAULT_RESIN_MATERIAL
         assert all(widget.isHidden() for widget in hidden)
+        assert not dialog.nozzle_state.isVisibleTo(dialog)
     finally:
         dialog.close()
         dialog.deleteLater()
@@ -7579,13 +7829,17 @@ def test_a_printer_that_cannot_be_saved_says_so_and_shows_what_holds(
     monkeypatch.setattr(profiles, "save_printer", refuse)
     before = profiles.printer(str(dialog.printer_choice.currentData()))
     if field == "nozzle":
+        other = dialog.nozzle_choice.count() - 1
+        dialog.nozzle_choice.setCurrentIndex(other)
+        dialog.nozzle_choice.activated.emit(other)
         dialog.nozzle.set_value_mm(before.nozzle_diameter + 0.2)
-        dialog._nozzle_changed(before.nozzle_diameter + 0.2)
         assert dialog.nozzle.value_mm() == pytest.approx(before.nozzle_diameter)
+        message = dialog.nozzle_state.text()
     else:
         dialog.nozzle_count.setValue(before.nozzles + 1)
         assert dialog.nozzle_count.value() == before.nozzles
-    assert "Drucker" in dialog.state.text() and "speichern" in dialog.state.text()
+        message = dialog.state.text()
+    assert "Drucker" in message and "speichern" in message
     assert profiles.printer(before.id) == before
 
 
@@ -7615,6 +7869,51 @@ def test_switching_print_tabs_keeps_the_outer_size_and_scrolls_the_current_page(
     for _ in range(16):
         qt_app.processEvents()
     assert dialog.width() == chosen_width
+
+
+def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
+    dialog: PrintSettingsDialog, qt_app: QApplication
+) -> None:
+    """„Andere …“ zeigt ein Feld, ohne den Außenrahmen springen zu lassen."""
+    from app.ui.style import SPACE, WIDE
+
+    dialog.show()
+    for _ in range(16):
+        qt_app.processEvents()
+    layout = dialog.layout()
+    assert layout is not None
+    margins = layout.contentsMargins()
+    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (WIDE,) * 4
+    button_layout = dialog._buttons.layout()
+    assert button_layout is not None
+    assert button_layout.spacing() == SPACE
+    page = dialog._scroll.widget()
+    assert page is not None
+    closed_size = dialog.size()
+    closed_content_height = page.sizeHint().height()
+    assert dialog.nozzle.isHidden()
+
+    other = dialog.nozzle_choice.count() - 1
+    dialog.nozzle_choice.setCurrentIndex(other)
+    dialog.nozzle_choice.activated.emit(other)
+    for _ in range(16):
+        qt_app.processEvents()
+
+    assert not dialog.nozzle.isHidden()
+    assert page.sizeHint().height() > closed_content_height
+    assert dialog.size() == closed_size, "der Rollbereich nimmt die zusätzliche Zeile auf"
+    expanded_content_height = page.sizeHint().height()
+
+    standard = dialog.nozzle_choice.findData(0.4)
+    assert standard >= 0
+    dialog.nozzle_choice.setCurrentIndex(standard)
+    dialog.nozzle_choice.activated.emit(standard)
+    for _ in range(16):
+        qt_app.processEvents()
+
+    assert dialog.nozzle.isHidden()
+    assert page.sizeHint().height() < expanded_content_height
+    assert dialog.size() == closed_size, "Zuklappen lässt den Außenrahmen ruhig stehen"
 
 
 def test_every_setting_field_carries_its_name_and_its_unit_once(

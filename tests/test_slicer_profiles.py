@@ -542,6 +542,334 @@ def test_the_nozzle_decides_between_variants(slicer: Path) -> None:
     assert machine is not None and machine.nozzle == pytest.approx(0.6)
 
 
+def test_nozzle_choices_follow_distinct_variants_of_the_same_printer_model() -> None:
+    """Eine Namensvariante zählt nicht doppelt, ein fremdes Modell zählt nicht mit."""
+    found = [
+        sp.SlicerProfile(
+            path=Path("cc2-04.json"),
+            name="Elegoo Centauri Carbon 2 0.4 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.4,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("cc2-04-high-speed.json"),
+            name="Elegoo Centauri Carbon 2 0.4 High-Speed nozzle",
+            kind="machine",
+            printer_model="elegoo centauri carbon 2",
+            nozzle=0.4000004,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("cc2-02.json"),
+            name="Elegoo Centauri Carbon 2 0.2 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.2,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("cc2-06.json"),
+            name="Elegoo Centauri Carbon 2 0.6 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.6,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("cc2-08.json"),
+            name="Elegoo Centauri Carbon 2 0.8 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.8,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("neptune-08.json"),
+            name="Elegoo Neptune 4 0.8 nozzle",
+            kind="machine",
+            printer_model="Elegoo Neptune 4",
+            nozzle=0.8,
+            vendor="Elegoo",
+        ),
+    ]
+    active = sp.machine_for_name(found, "Elegoo Centauri Carbon 2 0.6 nozzle")
+    assert active is not None
+    assert sp.same_printer_model(found[0], active)
+    assert sp.nozzle_sizes_for_machine(found, active) == pytest.approx((0.2, 0.4, 0.6, 0.8))
+
+
+def test_same_printer_model_keeps_manufacturers_separate() -> None:
+    """Ein gleich benanntes Modell eines anderen Herstellers ist keine Variante."""
+    elegoo = sp.SlicerProfile(
+        path=Path("elegoo-04.json"),
+        name="Centauri 0.4 nozzle",
+        kind="machine",
+        printer_model="Centauri",
+        nozzle=0.4,
+        vendor="Elegoo",
+    )
+    other = replace(
+        elegoo,
+        path=Path("other-06.json"),
+        name="Centauri 0.6 nozzle",
+        nozzle=0.6,
+        vendor="Other",
+    )
+    unknown_vendor = replace(elegoo, vendor="", from_user=True)
+
+    assert sp.same_printer_model(elegoo, replace(elegoo, nozzle=0.6))
+    assert not sp.same_printer_model(elegoo, other)
+    assert not sp.same_printer_model(elegoo, unknown_vendor)
+    unknown_first = replace(elegoo, vendor="", from_user=True)
+    unknown_second = replace(unknown_first, path=Path("user/other-06.json"), nozzle=0.6)
+    assert not sp.same_printer_model(unknown_first, unknown_second)
+
+
+def test_cura_native_instance_wins_over_a_same_family_title_match() -> None:
+    """Die gespeicherte Cura-Identität geht vor der nur ähnlich benannten Familie."""
+    title_match = sp.SlicerProfile(
+        path=Path("cura/instance-a.cfg"),
+        name="Elegoo Centauri Carbon 2 0.4 nozzle",
+        kind="machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+        vendor="Elegoo",
+        printer_id="slicer-cura-instance-a",
+        cura_instance=Path("cura/instance-a.inst.cfg"),
+    )
+    active_instance = replace(
+        title_match,
+        path=Path("cura/instance-b.cfg"),
+        name="Elegoo Centauri Carbon 2 0.4 nozzle (Werkstatt B)",
+        printer_id="slicer-cura-instance-b",
+        cura_instance=Path("cura/instance-b.inst.cfg"),
+    )
+    printer = PrinterProfile(
+        id=active_instance.printer_id,
+        title=title_match.name,
+        build_volume=(256.0, 256.0, 256.0),
+        nozzle_diameter=0.4,
+    )
+
+    machine, _process = sp.match([title_match, active_instance], printer)
+
+    assert machine is active_instance
+
+
+def test_imported_orca_handover_uses_only_its_vendor_nozzle_family(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die gewählte Herstellerdatei bleibt bis zum ausgeschriebenen Startcode eindeutig."""
+    from app.core.export import handover
+
+    def machine(vendor: str, nozzle: float) -> sp.SlicerProfile:
+        name = f"Elegoo Centauri Carbon 2 {nozzle:.1f} nozzle"
+        path = tmp_path / "profiles" / vendor / "machine" / f"{name}.json"
+        _write(
+            path,
+            {
+                "type": "machine",
+                "instantiation": "true",
+                "name": name,
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": [str(nozzle)],
+                "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+                "printable_height": "256",
+                "machine_start_gcode": f"{vendor.upper()}_START",
+            },
+        )
+        result = sp._read(path, "machine", False)
+        assert result is not None
+        return result
+
+    source = machine("Elegoo", 0.4)
+    elegoo_06 = machine("Elegoo", 0.6)
+    other_vendor_06 = machine("Other", 0.6)
+    imported = sp._discovered_printer(
+        source,
+        "orca",
+        sp.resolve_profile(source),
+        {},
+        "OrcaSlicer",
+    )
+    imported = replace(
+        imported,
+        nozzle_diameter=0.6,
+        extrusion_width=0.63,
+    )
+    monkeypatch.setattr(
+        sp,
+        "find_profiles",
+        lambda *_args, **_kwargs: [source, elegoo_06, other_vendor_06],
+    )
+    profile = Profile(printer=imported, material=profiles.material("pla"))
+
+    handover_setup = handover.SlicerSetup(
+        Path("orca.exe"), "orca", machine_profile=str(source.path)
+    )
+    selected = handover.machine_for(handover_setup, profile)
+    assert selected == str(elegoo_06.path)
+    written_machine = handover._orca_machine(replace(handover_setup, machine_profile=selected))
+    assert written_machine["machine_start_gcode"] == "ELEGOO_START"
+    assert written_machine["name"] == "Solidon Elegoo Centauri Carbon 2 0.6 nozzle"
+
+    selected_sibling = replace(handover_setup, machine_profile=str(elegoo_06.path))
+    assert handover.machine_for(selected_sibling, profile) == str(elegoo_06.path)
+
+    foreign_sibling = replace(handover_setup, machine_profile=str(other_vendor_06.path))
+    assert handover.machine_for(foreign_sibling, profile) == ""
+
+
+def test_an_imported_variant_selects_its_requested_nozzle_only_within_its_family() -> None:
+    """Ein Orca-Anzeigename führt zur eigenen Modellfamilie und richtigen Düse."""
+    found = [
+        sp.SlicerProfile(
+            path=Path("elegoo-04.json"),
+            name="Elegoo Centauri Carbon 2 0.4 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.4,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("other-06.json"),
+            name="Elegoo Centauri Carbon 2 0.6 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.6,
+            vendor="Other",
+        ),
+        sp.SlicerProfile(
+            path=Path("elegoo-06.json"),
+            name="Elegoo Centauri Carbon 2 0.6 nozzle",
+            kind="machine",
+            printer_model="elegoo centauri carbon 2",
+            nozzle=0.6,
+            vendor="ELEGOO",
+        ),
+        sp.SlicerProfile(
+            path=Path("other-08.json"),
+            name="Other Centauri Carbon 2 0.8 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.8,
+            vendor="Other",
+        ),
+    ]
+    imported = sp._discovered_printer(
+        found[0],
+        "orca",
+        {
+            "printer_technology": "FFF",
+            "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+            "printable_height": "256",
+            "nozzle_diameter": ["0.4"],
+        },
+        {},
+        "OrcaSlicer",
+    )
+
+    assert imported.id.startswith("slicer-orca-")
+    assert imported.title == found[0].name
+    assert imported.vendor == "Elegoo"
+
+    assert imported.nozzle_diameter == pytest.approx(0.4)
+    machine, _process = sp.match(found, replace(imported, nozzle_diameter=0.6))
+
+    assert machine is found[2]
+    assert sp.nozzle_sizes_for_machine(found, found[0]) == pytest.approx((0.4, 0.6))
+
+
+def test_an_imported_variant_does_not_guess_a_different_nozzle_or_vendor() -> None:
+    """Ohne passende eigene Variante bleibt die Maschinenwahl offen."""
+    found = [
+        sp.SlicerProfile(
+            path=Path("elegoo-04.json"),
+            name="Elegoo Centauri Carbon 2 0.4 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.4,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("other-06.json"),
+            name="Elegoo Centauri Carbon 2 0.6 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.6,
+            vendor="Other",
+        ),
+    ]
+    imported = replace(
+        _printer(nozzle=0.6),
+        id="slicer-orca-728a0359c367ad7652e8",
+        title="Elegoo Centauri Carbon 2 0.4 nozzle",
+    )
+
+    assert sp.match(found, imported) == (None, None)
+
+
+def test_machine_with_nozzle_uses_the_selected_profiles_family(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die gespeicherte Maschinenkennung und neue Düse treffen dieselbe Familie."""
+    found = [
+        sp.SlicerProfile(
+            path=Path("elegoo-04.json"),
+            name="Elegoo Centauri Carbon 2 0.4 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.4,
+            vendor="Elegoo",
+        ),
+        sp.SlicerProfile(
+            path=Path("other-06.json"),
+            name="Elegoo Centauri Carbon 2 0.6 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.6,
+            vendor="Other",
+        ),
+        sp.SlicerProfile(
+            path=Path("elegoo-06.json"),
+            name="Elegoo Centauri Carbon 2 0.6 nozzle",
+            kind="machine",
+            printer_model="elegoo centauri carbon 2",
+            nozzle=0.6,
+            vendor="ELEGOO",
+        ),
+    ]
+    monkeypatch.setattr(sp, "find_profiles", lambda *_args, **_kwargs: found)
+
+    selected = sp.machine_with_nozzle(
+        str(found[0].path), "orca", Path("orca.exe"), _printer(nozzle=0.6)
+    )
+
+    assert selected == sp.identity(found[2])
+
+
+@pytest.mark.parametrize("machine", [None, "unbekannt", "einzelne Variante"])
+def test_nozzle_choices_fall_back_to_common_sizes_without_variants(
+    machine: str | None,
+) -> None:
+    """Ohne ein passendes Variantenpaar bleibt eine brauchbare Auswahl."""
+    found: list[sp.SlicerProfile] = []
+    selected = None
+    if machine == "einzelne Variante":
+        selected = sp.SlicerProfile(
+            path=Path("one.json"),
+            name="Centauri 0.4 nozzle",
+            kind="machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.4,
+        )
+        found.append(selected)
+    assert sp.nozzle_sizes_for_machine(found, selected) == sp.COMMON_NOZZLE_SIZES
+
+
 def test_the_plain_machine_wins_over_a_variant_with_the_same_nozzle(
     slicer: Path, bestand: Path
 ) -> None:

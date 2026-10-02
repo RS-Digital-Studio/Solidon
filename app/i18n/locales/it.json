@@ -7221,5 +7221,11 @@
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Impossibile verificare la cartella. Scegli una cartella raggiungibile o riprova.",
   "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "Impossibile rimuovere la chiave. Controlla il portachiavi e riprova.",
   "Datum zurücksetzen": "Reimposta data",
-  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Non è stato possibile controllare la cartella di ComfyUI dopo l'attesa. Scegli un'altra cartella raggiungibile o riprova."
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Non è stato possibile controllare la cartella di ComfyUI dopo l'attesa. Scegli un'altra cartella raggiungibile o riprova.",
+  "Andere …": "Altra …",
+  "Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.": "La selezione determina la larghezza del cordone e il profilo macchina dello slicer.",
+  "Düsenstatus": "Stato dell'ugello",
+  "Eigene Düsengröße eingeben; Bahnbreite und Maschinenprofil folgen dem Wert.": "Inserisci un diametro personalizzato dell'ugello; la larghezza del cordone e il profilo macchina seguiranno questo valore.",
+  "Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.": "Ugello da {value} selezionato; la larghezza del cordone e il profilo macchina sono aggiornati.",
+  "Düse {value} aus dem Slicerprofil übernommen; Bahnbreite und Maschinenprofil sind angepasst.": "Ugello da {value} acquisito dal profilo dello slicer; la larghezza del cordone e il profilo macchina sono aggiornati."
 }

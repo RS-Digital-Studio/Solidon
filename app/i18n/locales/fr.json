@@ -7221,5 +7221,11 @@
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Impossible de vérifier le dossier. Choisissez un dossier accessible ou réessayez.",
   "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "Impossible de supprimer la clé. Vérifiez le trousseau et réessayez.",
   "Datum zurücksetzen": "Réinitialiser la date",
-  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Le dossier ComfyUI n’a pas pu être vérifié après l’attente. Choisissez un autre dossier accessible ou réessayez."
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Le dossier ComfyUI n’a pas pu être vérifié après l’attente. Choisissez un autre dossier accessible ou réessayez.",
+  "Andere …": "Autre …",
+  "Die Auswahl bestimmt Bahnbreite und Slicer-Maschinenprofil.": "La sélection détermine la largeur de cordon et le profil de machine du trancheur.",
+  "Düsenstatus": "État de la buse",
+  "Eigene Düsengröße eingeben; Bahnbreite und Maschinenprofil folgen dem Wert.": "Saisissez un diamètre de buse personnalisé ; la largeur de cordon et le profil de machine suivront cette valeur.",
+  "Düse {value} gewählt; Bahnbreite und Maschinenprofil sind angepasst.": "Buse de {value} sélectionnée ; la largeur de cordon et le profil de machine sont mis à jour.",
+  "Düse {value} aus dem Slicerprofil übernommen; Bahnbreite und Maschinenprofil sind angepasst.": "Buse de {value} reprise du profil du trancheur ; la largeur de cordon et le profil de machine sont mis à jour."
 }
