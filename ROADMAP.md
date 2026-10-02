@@ -88,7 +88,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-381 — Boolesche Ops an mehrschaligen Modellen sind seit `eab5f4f47` 8- bis 15-mal langsamer und nicht abbrechbar](#rm-381) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Kandidaten über räumlichen Index, Deckel mit Befund, `cancelled` durchreichen; Zeitmessung Besenhalter |
 | [RM-382 — Ein Mehrschaler mit einer selbstkreuzenden Schale lässt sich seit `eab5f4f47` gar nicht mehr bearbeiten](#rm-382) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Entscheidung Robert, ob nur gehalten wird, wenn das Werkzeug die kaputte Schale berührt; Kennung und Satz mit Grund |
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
-| [RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart](#rm-384) | Geometrie, Erkennung und Druckvorbereitung | Konstruktor-Nachgang behoben und unabhängig ohne Befund geprüft; 106 Entwicklungsfälle grün, zentrales Tor und Integration ausstehend |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
 | [RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch](#rm-386) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-b`)** — Review 02.10.: Folge zu RM-319 (archiviert); berührende Schalen an allen schließenden Wegen beider Kerne verbinden, je Zwilling ein Test |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
@@ -2369,6 +2368,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Registerabgleich 02.10. (Stand `3fd3b1ace`): (a) ist mit `a45730c79` in HEAD und `origin/main`; der Satz „Commit/origin/main stehen aus“ und die Registerzelle sind damit veraltet, offen sind (b)–(f). Neu dabei: `test_the_workers_of_the_window_use_the_helper` hängt von der Reihenfolge ab (RM-380). Beleg `F:\solidon-review-reports\register-geometrie.md`.
   Review 02.10. von `a45730c79`: Ein Hilfsprozess, der erst nach der 5-s-Frist endet, sperrt alle Kernrechnungen bis zum Neustart — eigener Punkt RM-384.
 
+  **Anschlussnachtrag 02.10.2026, (a)/RM384:** Die im Stand
+  `a45730c79` noch vorhandene Dauersperre nach einem erst später beendeten
+  Helfer ist durch `686abf9e63ed8708d15fdc642add170cb1d2c14f` auf dem tatsächlichen
+  `origin/main` behoben. Nach bestätigtem Ende sammelt die nächste öffentliche
+  `run`-/`take`-Anfrage den Rest ein, ohne vorheriges `shutdown`; lebende
+  Stoppreste und bleibende Start-/Helferabsagen sperren weiterhin angemessen.
+  [Datierter RM384-Abschluss](ROADMAP-ARCHIV.md#rm-384) und
+  [portabler Anschlussbeleg](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md).
+  Native Windows-Killlatenz, POSIX-, Paket-, Fenster-/Renderer- und
+  Leistungsabnahmen bleiben offen; RM298 als Gesamtpunkt bleibt `[~]`.
+
   **Teilstand 02.10.2026, (d), Windows-Prozesswächter:** Neue getrennte Kernfälle
   prüfen den Helfer während einer wirklichen öffentlichen run-Rechnung und lesen
   seine Priorität nach dem normalen serve-Start beim Betriebssystem. Endstand
@@ -2679,45 +2689,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zum Fall passt.
   **Abnahme:** Test 300 getrennte Würfel: Bohren durch einen Würfel rechnet, Volumen stimmt.
   Bauplan §2.7, Regel 17. Beleg: Sonde `r_vielteile_bohren.txt`.
-
-<a id="rm-384"></a>
-
-- [~] **RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart.**
-  Review 02.10.2026 von `a45730c79`, Fund 6. `raise_if_stop_failed`
-  (`app/core/geom/kernel_process.py:615–619`) prüft nie, ob das Kind nach der 5-s-Frist doch noch
-  beendet ist; der Pool bleibt gesperrt, jede weitere Rechnung — auch `face_components` und die
-  Anzeigeausdünnung — meldet `KernelHelperStopError` („Speichern Sie Ihr Projekt, starten Sie
-  Solidon neu …“), bis `shutdown` läuft.
-  **Fehlerfall (Attrappe, nicht am echten Prozess):** Kind endet nach der Frist → `discard` →
-  `KernelHelperStopError`, `disabled: True`, „Kind lebt noch: False“; drei weitere `run` scheitern
-  gleich; erst `shutdown` hebt die Sperre.
-  **Fix:** Vor dem Sperren und bei jedem `run` prüfen, ob der Prozess inzwischen fort ist, und die
-  Sperre dann aufheben.
-  **Abnahme:** Test für das späte Prozessende: nach dem Ende des Kinds rechnet der nächste `run`
-  wieder. Bauplan §2.7, §2.8. Beleg: Sonde `r_kernel_spaetes_ende.txt`, `review-3fd3b1ace.md`.
-
-  **Teilstand 02.10.2026:** Die nächste öffentliche Rechnung beziehungsweise
-  Reservierung sammelt einen inzwischen toten Stopprest über den bestehenden
-  Stopweg ein. Ein noch lebender Rest sperrt weiter; dauerhafte Start-/Helferabsagen
-  bleiben erhalten. Reservierung und Shutdown behalten ihre Generationsgrenze.
-  Der zentrale Zweitreview fand nach der ersten lokalen Freigabe einen weiteren
-  Konstruktoranschluss: Die ursprüngliche Startursache bleibt nun über beide
-  Stopfehlertypen erhalten. Erwartete Fehlstarts verbrauchen ihr Kontingent trotz
-  spätem Ende; unerwartete Ursachen zählen nicht als gewöhnliche Startabsage.
-  14 erweiterte Ressourcen-/Anschlussfälle waren zuvor 10 rot und 4 grün, ohne
-  Setup-/Teardownfehler oder Skips, danach alle grün. Sie führen jeweils bis
-  zum nächsten echten Arbeiter-/take-Auftrag und prüfen den Shutdown-Reset.
-  Alle 27 neuen Attrappenfälle und der verstärkte bestehende Generationsfall
-  bestehen im vollständigen Entwicklungsmodul: 106 grün, 1 Fenstertest abgewählt,
-  Exit 0; Quell-/Testhashes während des Laufs stabil. Die sechs isolierten
-  Fehlvarianten wurden am Nachgangstand erneut gefahren: 16 erwartete
-  Testfehlschläge und 4 passende Kontrollen grün, keine Setup-/Teardownfehler/Skips.
-  Ruff, Format und Diffcheck jeweils Exit 0. Auch der Konstruktor-P2 ist im
-  unabhängigen Nachreview ohne weitere Befunde geschlossen.
-  [Portabler Endstands- und Gegenlaufbeleg](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md).
-  Zentrales vollständiges Entwicklungstor und Integration stehen noch aus.
-  Kein echter Fristüberschreitungs-, Fenster-, Leistungs- oder Plattformnachweis.
-  Nachprüfung am Stand `7f0de659d`: besteht noch — `d9f830aec` ändert keine Produktdatei; Sonde am Abzug zeigt unverändert dreimal `KernelHelperStopError` und `disabled: True`, erst `shutdown` hebt die Sperre (`sonden\r2_kernel_spaetes_ende.txt`). Die neuen Tests laufen mit eigenem Pool und können den Fall nicht finden. Eine Behebung liegt ungesichert im Arbeitsbaum.
 
 <a id="rm-385"></a>
 

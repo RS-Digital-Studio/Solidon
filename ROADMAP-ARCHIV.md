@@ -35,6 +35,7 @@ entfernt hat.
 | 2026-10-02 | [RM-333: Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“ (02.10.2026)](#rm-333-eine-nicht-eindeutige-bambu-düsenvariante-meldet-prozessprofil-ließ-sich-nicht-lesen-02102026) |
 | 2026-10-02 | [RM-331: Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer (02.10.2026)](#rm-331-creality-print-73-platten-deren-anordnung-nicht-hält-gehen-ohne-anordnung-an-den-slicer-02102026) |
 | 2026-10-02 | [RM-346: Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs (02.10.2026)](#rm-346-die-rückfrage-vor-geld--und-veröffentlichungswerkzeugen-greift-nur-bei-einer-schreibweise-des-aufrufs-02102026) |
+| 2026-10-02 | [RM-384: Die nächste Rechnung sammelt einen inzwischen beendeten Helfer ein (02.10.2026)](#rm-384-die-nächste-rechnung-sammelt-einen-inzwischen-beendeten-helfer-ein-02102026) |
 | 2026-10-02 | [RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)](#rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026) |
 | 2026-10-02 | [RM-341: Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen* (02.10.2026)](#rm-341-druckeinstellungen-maße-nicht-gewählter-haftungsarten-bleiben-sichtbar-und-sperren-slicen-02102026) |
 | 2026-10-02 | [RM-334: Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht (02.10.2026)](#rm-334-enter-löst-in-rückfragen-den-hauptknopf-aus-auch-wenn-der-fokus-per-tab-auf-abbrechen-steht-02102026) |
@@ -35582,6 +35583,87 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Nachprüfung am Stand `6ce767031`: besteht noch, die Mutation bleibt grün (7 passed). Folgevermerk zum Fix: Das genannte Szenario `[9]*3+[1]*5` trennt nicht (Median ohne Zuschnitt 1,0, nicht 5,0); trennscharf ist `[9]*5+[1]*3`, damit wird der Kontrollfall unter der Mutation rot.
 
 **Abschluss:** Test des Zuschnitts beim Lesen über `measure`; Mutation `_runs_of` ohne Zuschnitt macht ihn rot. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-384: Die nächste Rechnung sammelt einen inzwischen beendeten Helfer ein (02.10.2026)
+
+<a id="rm-384"></a>
+
+- [x] **RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart.**
+  Review 02.10.2026 von `a45730c79`, Fund 6. `raise_if_stop_failed`
+  (`app/core/geom/kernel_process.py:615–619`) prüft nie, ob das Kind nach der 5-s-Frist doch noch
+  beendet ist; der Pool bleibt gesperrt, jede weitere Rechnung — auch `face_components` und die
+  Anzeigeausdünnung — meldet `KernelHelperStopError` („Speichern Sie Ihr Projekt, starten Sie
+  Solidon neu …“), bis `shutdown` läuft.
+  **Fehlerfall (Attrappe, nicht am echten Prozess):** Kind endet nach der Frist → `discard` →
+  `KernelHelperStopError`, `disabled: True`, „Kind lebt noch: False“; drei weitere `run` scheitern
+  gleich; erst `shutdown` hebt die Sperre.
+  **Fix:** Vor dem Sperren und bei jedem `run` prüfen, ob der Prozess inzwischen fort ist, und die
+  Sperre dann aufheben.
+  **Abnahme:** Test für das späte Prozessende: nach dem Ende des Kinds rechnet der nächste `run`
+  wieder. Bauplan §2.7, §2.8. Beleg: Sonde `r_kernel_spaetes_ende.txt`, `review-3fd3b1ace.md`.
+
+  **Historischer lokaler Teilstand 02.10.2026, vor der Integration:** Die nächste öffentliche Rechnung beziehungsweise
+  Reservierung sammelt einen inzwischen toten Stopprest über den bestehenden
+  Stopweg ein. Ein noch lebender Rest sperrt weiter; dauerhafte Start-/Helferabsagen
+  bleiben erhalten. Reservierung und Shutdown behalten ihre Generationsgrenze.
+  Der zentrale Zweitreview fand nach der ersten lokalen Freigabe einen weiteren
+  Konstruktoranschluss: Die ursprüngliche Startursache bleibt nun über beide
+  Stopfehlertypen erhalten. Erwartete Fehlstarts verbrauchen ihr Kontingent trotz
+  spätem Ende; unerwartete Ursachen zählen nicht als gewöhnliche Startabsage.
+  14 erweiterte Ressourcen-/Anschlussfälle waren zuvor 10 rot und 4 grün, ohne
+  Setup-/Teardownfehler oder Skips, danach alle grün. Sie führen jeweils bis
+  zum nächsten echten Arbeiter-/take-Auftrag und prüfen den Shutdown-Reset.
+  Alle 27 neuen Attrappenfälle und der verstärkte bestehende Generationsfall
+  bestehen im vollständigen Entwicklungsmodul: 106 grün, 1 Fenstertest abgewählt,
+  Exit 0; Quell-/Testhashes während des Laufs stabil. Die sechs isolierten
+  Fehlvarianten wurden am Nachgangstand erneut gefahren: 16 erwartete
+  Testfehlschläge und 4 passende Kontrollen grün, keine Setup-/Teardownfehler/Skips.
+  Ruff, Format und Diffcheck jeweils Exit 0. Auch der Konstruktor-P2 ist im
+  unabhängigen Nachreview ohne weitere Befunde geschlossen.
+  [Portabler Endstands- und Gegenlaufbeleg](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md).
+  Zentrales vollständiges Entwicklungstor und Integration stehen noch aus.
+  Kein echter Fristüberschreitungs-, Fenster-, Leistungs- oder Plattformnachweis.
+
+  **Fremder datierter Vorherbefund vom 02.10.2026:** Die folgende Schlusszeile
+  wurde unverändert aus dem offenen RM384-Punkt übernommen. Sie beschreibt
+  den geprüften älteren Stand `7f0de659d` und den damaligen Abzug nach
+  `d9f830aec`, nicht den nachfolgend dokumentierten Integrationsstand.
+  Nachprüfung am Stand `7f0de659d`: besteht noch — `d9f830aec` ändert keine Produktdatei; Sonde am Abzug zeigt unverändert dreimal `KernelHelperStopError` und `disabled: True`, erst `shutdown` hebt die Sperre (`sonden\r2_kernel_spaetes_ende.txt`). Die neuen Tests laufen mit eigenem Pool und können den Fall nicht finden. Eine Behebung liegt ungesichert im Arbeitsbaum.
+
+  **Abschluss 02.10.2026:** Die Korrektur ist mit
+  `686abf9e63ed8708d15fdc642add170cb1d2c14f` auf `main` und dem tatsächlichen Remote-
+  Hauptzweig enthalten. Der tatsächliche Remote-Stand
+  `4cf460e87f8d93e2d950602c9fe25ce34e6b5eb9` und die Commit-Abstammung wurden getrennt geprüft:
+  getrennte Abfragen von `HEAD`, `origin/main` und `git ls-remote origin refs/heads/main` ergaben am 02.10.2026 um 11:52:21 UTC denselben vollständigen Stand; `git merge-base --is-ancestor` für den Fixcommit gegen alle drei Ziele jeweils Exit 0.
+  Die nächste öffentliche `run`-/`take`-Anfrage sammelt einen inzwischen
+  tatsächlich als tot bestätigten Stopprest ein, ohne vorheriges `shutdown`.
+  Noch lebende Reste sperren weiter; dauerhafte Start-/Helferabsagen und die
+  Generationsgrenze bleiben erhalten. Der Konstruktoranschluss hält die
+  ursprüngliche Ursache, das Startkontingent und die einmalige Ressourcenfreigabe.
+  Dies ist der Entwicklungsabschluss des nachgestellten Kontrollflussfehlers.
+
+  Das wiederholte zentrale Entwicklungstor am ausgewählten Stand
+  `commit-tor-abschlussrunde-47-v2-final` bestand mit 19.269 bestandenen Fällen und
+  62 Überspringungen;
+  Suite/Ruff/Format/mypy: Exit 0 / Exit 0 /
+  Exit 0 / Exit 0.
+  Vollständige Roh-/JUnit-/Exit-Belege: `bash .claude/scripts/suite-getrennt.sh`: 19.269 bestanden, 62 übersprungen, 412,39 s, Exit 0; `python -m ruff check .`, `python -m ruff format --check .` und `python -m mypy` jeweils Exit 0. Zentraler Rohlog und die vier Exit-JSONs sind lokal unter `tmp/review-seit-0.5.1-2026-10-01/commit-tor-abschlussrunde-47-v2-final/` erhalten. Dieser zentrale Torlauf erzeugt kein JUnit; die lokalen JUnit-Belege `kernel-file-constructor-final.xml`, `new-cases-constructor-final.xml`, `constructor-cause-before.xml`/`constructor-cause-after.xml` und `counter-final-*.xml` gehören getrennt zu den im Bericht ausgewiesenen Kontrollfällen.
+  Prüfstand und Hashzuordnung blieben erhalten: zentraler Vorher-/Nachhervergleich `changed_during_gate: []`; bei der getrennten Integrationsprüfung um 11:52:21 UTC stimmten übernommener Git-Blob und Arbeitsbaum für `kernel_process.py` und `test_kernel_process.py` bytegleich zu den im portablen RM384-Bericht vollständig genannten finalen lokalen SHA256.
+  Unabhängiger Dokumentabschlussreview: 02.10.2026: unabhängig freigegeben nach Abgleich der tatsächlichen Git-/Tor-/JUnit-Belege und aller neun eigenen Hunks; beide Dokumentnachgänge korrigiert, Nachprüfung ohne weitere Befunde.
+  Der [portable Bericht](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md)
+  trägt den endgültigen Integrationsnachtrag. Der ursprüngliche Poolnachweis
+  von RM298(a) erhält einen datierten Anschluss; seine früheren 80 Fälle und
+  das damalige Tor werden nicht nachträglich zum RM384-Nachweis umgedeutet.
+
+  **Abnahmegrenzen:** Tatsächliche native Windows-Killlatenz, wirkliche
+  Überschreitung der Stoppfrist beziehungsweise erst späteres Ende eines
+  echten Betriebssystemkinds sind nicht nachgewiesen. Die Windows-Prozess-/
+  Prioritätsfälle aus RM298(d) belegen andere Eigenschaften.
+  POSIX-Speicherbesitz, ENOSPC/SIGBUS und Crashbereinigung, Linux/macOS,
+  Paketwege und Paketrauchtestfrist, der Fensternachweis zu RM380 sowie
+  Fenster-/Renderer-/§31-Leistungsabnahmen bleiben offen und in
+  [RM-298](ROADMAP.md#rm-298) beziehungsweise ihren eigenen Punkten geführt.
+  RM298 als Gesamtpunkt bleibt offen; es wurde kein Release nachgewiesen.
 
 ## RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)
 
