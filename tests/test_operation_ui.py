@@ -1012,7 +1012,7 @@ def test_the_feature_list_only_offers_what_the_operation_takes(window: MainWindo
     Eine Pflicht-Auswahl trägt keinen Leereintrag und steht damit auf ihrem
     ersten. Das liest sich als Vorschlag der Anwendung und ist keiner.
 
-    ``applies_to`` ist dieselbe Zuordnung, über die das Kontextmenü am Merkmal
+    ``applies_to`` ist dieselbe Zuordnung, über die das Auswahlfenster am Merkmal
     die Operation findet (§10) — hier nur andersherum gelesen. Wo sie fehlt,
     wird nicht gefiltert: Raten wäre schlechter als Anbieten.
     """
@@ -4770,7 +4770,9 @@ def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QAppl
         said = field.refusal()
         assert "Obergrenze" in said, said
         assert not dialog._accept_button.isEnabled(), "der Knopf ist gesperrt"
-        assert dialog._accept_button.toolTip() == said
+        # Am Knopf steht das Feld davor (RM-342, D-N2).
+        named = tr("{name}: {value}", name=count.title, value=said)
+        assert dialog._accept_button.toolTip() == named
         assert not dialog.can_accept(), "und Knopf und Klick sagen dasselbe"
     finally:
         dialog.deleteLater()

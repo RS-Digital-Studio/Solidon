@@ -121,8 +121,8 @@ Alles Weitere ist Ausbau dieser vier. Sie müssen ohne Handbuch gehen.
 **Weg 1 — Fremdes Modell anpassen** (der häufigste Fall)
 Datei ziehen und ablegen → Einheitenrückfrage, falls nötig → Modell steht,
 Prüfbericht sichtbar → Fläche oder Bohrung anklicken → im Chat sagen, was
-werden soll, oder aus dem Kontextmenü wählen → Vorschau als
-Vorher/Nachher → übernehmen → exportieren.
+werden soll, oder rechts im Auswahlfenster am Merkmal die passende Operation
+wählen → Vorschau als Vorher/Nachher → übernehmen → exportieren.
 
 **Weg 2 — Neu konstruieren**
 Neues Projekt → Grundformen, Bausteine oder Skizzen wählen, oder dem Agenten
@@ -1474,7 +1474,11 @@ nicht anderen Modellen. Sie bleibt beim erneuten Auswerten, Speichern und
 Spätere Bearbeitungsschritte fragen nicht erneut: Die Zustimmung gilt dem
 Körper, und seine Folgeschritte erkennen bis 5 000 000 Dreiecken vollständig
 nach; nach einer Absage prüfen sie oberhalb der automatischen Grenze bekannte
-Merkmale lokal. Scheiterte die Vollerkennung am Arbeitsspeicher, versucht es
+Merkmale lokal. Die Absage vererbt sich an die Körper, die ein teilender
+Schritt aus dem abgelehnten macht (*Auto Split*, *Teilen*, Zerlegen), auch
+wenn jedes Stück unter der automatischen Grenze liegt; der Prüfbericht sagt es
+am Stück, und „Alle Merkmale erkennen“ nimmt die Wahl am Ladeschritt des
+Ursprungs zurück (Entscheidung Robert 02.10.2026). Scheiterte die Vollerkennung am Arbeitsspeicher, versucht es
 kein Folgeschritt mit mindestens so vielen Dreiecken noch einmal. Nur ein
 Merkmal, das ein späterer Schritt oder eine Passung braucht, hält einen
 Schritt an, wenn es sich lokal nicht nachmessen lässt. Mehrere große Körper

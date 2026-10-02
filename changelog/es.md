@@ -65,6 +65,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 - Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.
+- Si eligió «Cargar ahora», las piezas de *Dividir el modelo* tampoco inician un reconocimiento de minutos; «Reconocer todas las características» lo recupera.
 
 ### Modelar, texto y dibujo
 
@@ -77,7 +78,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
-- El destino de «Alinear a la característica» empieza vacío. Se elige en el campo «Destino», y «Aplicar» espera hasta entonces en vez de poner el cuerpo sin aviso en el lado equivocado.
+- El destino de «Alinear a la característica» empieza vacío, y el primer clic en la vista lo rellena. «Aplicar» espera hasta entonces en vez de poner el cuerpo en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 - Otro trazo en una cavidad recién excavada la hace más profunda, también con un pincel pequeño. Hasta ahora no surtía efecto y contaba como fallido.
 

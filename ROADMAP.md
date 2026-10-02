@@ -46,6 +46,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Workflow-Pins und Lizenzbeilage auf 3.14.8, Lauf auf allen vier Paketplattformen, danach die Arbeitsplätze |
+| [RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf](#rm-469) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Pin heben und beide Mac-Jobs mit Fenster- und Rendererfällen fahren |
+| [RM-470 — Marching Cubes ohne scikit-image](#rm-470) | Plattformen, Pakete und Grafik | Aus RM-467: `Manifold.level_set` statt `skimage.measure.marching_cubes` an vier Stellen, zuerst am größten Voxelfall messen |
+| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Satz über uharfbuzz, Konturen über fontTools, eigene Schriftsuche je Plattform |
+| [RM-472 — Zeichnungsimport ohne lxml](#rm-472) | Plattformen, Pakete und Grafik | Aus RM-467: SVG über `xml.etree` und svg.path selbst lesen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -95,7 +100,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Review 02.10.: Nachbau Modell 1 wird 24,7 statt 20 mm breit; Korpusabnahme an drei Haltern, Kundenweg zum exakten Halter |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-z`). Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
-| [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
+| [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-z`). Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
 | [RM-409 — Auto Split bricht ganz ab, wenn eine einzige Stiftbohrung beim Beurteilen scheitert](#rm-409) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10. (Modelltest): `GeometryError` im Kandidaten als „unbekannt teuer“ werten; Zwilling zu RM-382 |
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
@@ -141,17 +146,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ein einfacher Klick bleibt normal; echte Züge ab `CLICK_SLACK` auf Bohrung oder Senkfläche werden vor Platzierung und Navigator mit dem passenden Handlungshinweis abgefangen; Regressionen und unabhängiges Review grün, native Abnahme am Wabenhalter bleibt offen |
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
+| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
-| [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
@@ -163,21 +166,18 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
-| [RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht](#rm-415) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-334 (archiviert); `_typed_to` über den Fensterwechsel behalten, mit Test |
-| [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
-| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
+| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“ (Teil 1 und 3 mit RM-371). Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
 | [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
-| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10.: Befund des Aushöhlens bekommt *Diesen Schritt ändern*; `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
+| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) erledigt: `hollow.done` trägt *Diesen Schritt ändern*; offen (b) `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -195,6 +195,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
+| [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10.: 18 neue Fassungen, pypdf mit sechs Sicherheitsmeldungen zuerst |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -669,6 +670,94 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     wieder herausgenommen; laut Übergabe der Durchsicht hängt schon das gerade Einsetzen an
     der Plattform. Weg: die Platzierung über `transform.composed`, danach den Weg einchecken.
   Review 02.10. (`7f0de659d`): Restposten plattformabhängiger Rechnung neben der neuen Ausrichtung: `app/core/geom/patterns.py:1405` (`np.linalg.norm` ohne Achse), `:1491` und `:1534` (`np.cos`/`np.sin`).
+
+<a id="rm-468"></a>
+
+- [ ] **RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit.**
+  Aus RM-467, erster Lauf 02.10.2026. 3.14.8 erschien am 30.09.2026, `actions/python-versions`
+  führt es. Jedes Paket trägt den Interpreter seines CI-Baus, und alle drei Workflows nennen
+  `python-version: "3.14.7"`. Für Solidon zählen: `zipfile` begrenzt das Entpacken je Lesevorgang
+  jetzt auch für bzip2, LZMA und Zstandard (eine fremde 3MF ist ein ZIP-Archiv), `tarfile` schließt
+  einen Pfadausbruch beim Entpacken, der Windows-Bau bringt OpenSSL 3.5.9 für Update-Abfrage und
+  Support über HTTPS, dazu libexpat 2.8.5 und CVE-2026-15806 (`HTTPPasswordMgr`). Zurückgestellt bis
+  nach 0.5.2: Der Wechsel berührt die Tabellen der Lizenzbeilage (CPython- und OpenSSL-Fassungen in
+  `third_party_licenses.toml`, `make_sbom.WINDOWS_LIBFFI_VERSIONS`, `tests/test_sbom.py`), belegt
+  wird er erst von einem Lauf auf allen vier Paketplattformen, und auf den Arbeitsplätzen ersetzt
+  die Installation `python314.dll` unter jeder laufenden Umgebung.
+  **Umbau:** alle `python-version`-Pins; die drei Tabellen mit den Fassungen von OpenSSL, libffi und
+  Expat aus den CPython-Quellen zum Tag `v3.14.8`; `CLAUDE.md`, `README.md` und Kopf von
+  `constraints.txt`; danach die drei Arbeitsplätze, wenn keine Sitzung rechnet.
+  **Abnahme:** Taglauf oder Handstart mit allen Paketen grün, die Releaseakte nennt 3.14.8.
+
+<a id="rm-469"></a>
+
+- [ ] **RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf.** Aus RM-467, erster Lauf
+  02.10.2026. rubicon-objc kommt nur auf macOS über wgpu in den Baum, für die Metal-Oberfläche der
+  Ansicht. 0.5.7 (30.09.2026) wirft für unbekannte C-Typen `ValueError` statt `AttributeError` und
+  verlangt ein funktionierendes `platform.processor()`, was im gefrorenen Mac-Paket nicht belegt
+  ist. Weder das lokale Tor noch die Push-CI (nur Ubuntu) fahren macOS. Zurückgestellt bis nach
+  0.5.2, damit der Mac-Renderer im Release nicht ungeprüft wechselt (vgl. RM-051).
+  **Umbau:** den Plattformpin in `constraints.txt` heben (`check_env --freeze` auf Windows behält
+  ihn, also von Hand) und einen Lauf mit beiden Mac-Jobs samt Fenster- und Rendererfällen fahren.
+  **Abnahme:** beide Mac-Jobs grün, die Ansicht des gebauten Mac-Pakets zeichnet.
+
+<a id="rm-470"></a>
+
+- [ ] **RM-470 — Marching Cubes ohne scikit-image.** Aus RM-467 (Auftrag Robert: Was eigener Code
+  oder eine andere Bibliothek besser kann, wird ersetzt). scikit-image dient allein
+  `measure.marching_cubes`: direkt in `geom/blend.py` und `geom/lattice.py`, mittelbar über
+  `trimesh.voxel.ops.matrix_to_marching_cubes` in `geom/boolean.py` (Voxelstufe, §17.2) und
+  `geom/hollow.py`. Dafür reisen scikit-image (22 MB installiert), tifffile und lazy-loader in
+  jedem Paket mit, und `pyproject.toml` klammert seinetwegen eine numpy-Warnung aus. Der bessere
+  Weg ist `manifold3d.Manifold.level_set`, schon Abhängigkeit: Marching Tetrahedra auf einem
+  raumzentrierten Gitter liefert garantiert mannigfaltige Netze, Marching Cubes an mehrdeutigen
+  Zellen nicht zwingend, und jede folgende Boolesche Op braucht die Mannigfaltigkeit. Gitter und
+  Verblendung haben eine geschlossene Feldfunktion, die Voxelstufen werten ihr Raster dreilinear
+  aus. Der Rückruf läuft je Gitterpunkt durch Python, darum zuerst am größten Voxelfall messen; ist
+  er zu langsam, ein eigenes vektorisiertes Marching Cubes neben `slice/_chain.pyx`.
+  `geom/displace.py` liest das Höhenbild dann über Pillow, das ohnehin mitkommt, und imageio
+  entfällt mit.
+  **Plattformfolgen:** vier Pakete weniger auf allen drei Plattformen und keine Abhängigkeit von
+  scikit-image-Rädern bei der nächsten Python-Fassung; `level_set` steckt in allen Zielrädern von
+  manifold3d. Lizenzliste, Lizenzbeilage und SBOM werden kürzer.
+  **Abnahme:** Geometrietests der vier Stellen mit Kennzahlen gegen den heutigen Stand (Volumen,
+  wasserdicht, Komponenten), Laufzeit am größten Voxelfall nicht schlechter; scikit-image, imageio,
+  tifffile und lazy-loader fehlen in `pyproject.toml`, `constraints.txt` und im Paket.
+
+<a id="rm-471"></a>
+
+- [ ] **RM-471 — Schriftzüge ohne matplotlib.** Aus RM-467. matplotlib dient allein den
+  Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
+  (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
+  reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
+  kiwisolver, cycler, pyparsing, python-dateutil und six mit. TextPath setzt ohne Shaping: keine
+  Ligaturen, keine kontextabhängigen Formen, Kerning nur aus der alten `kern`-Tabelle. Der bessere
+  Weg: uharfbuzz für den Satz (kommt mit pygfx ohnehin ins Paket) und fontTools für die
+  Glyphenkonturen über einen Pen (kommt heute über matplotlib mit), dazu eine eigene Schriftsuche
+  über die Namenstabellen.
+  **Plattformfolgen:** Die Schriftsuche braucht je Plattform ihre Ordner: Windows
+  `%WINDIR%\Fonts` und den Nutzerordner, macOS `/System/Library/Fonts`, `/Library/Fonts` und
+  `~/Library/Fonts`, Linux fontconfig oder die XDG-Ordner, im Flatpak zusätzlich `/run/host/fonts`;
+  die mitgelieferten DejaVu-Schriften bleiben der Rückfall. uharfbuzz und fontTools wandern in die
+  Gruppe `geom`, weil der Kern sie ohne Oberfläche braucht. Sieben Pakete weniger.
+  **Abnahme:** Schriftzugtests an Netz und exaktem Kern mit unveränderten Kennzahlen für
+  lateinischen Text, ein Test mit Ligatur, je Plattform ein Fall der Schriftsuche nach Familie und
+  Schnitt; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
+
+<a id="rm-472"></a>
+
+- [ ] **RM-472 — Zeichnungsimport ohne lxml.** Aus RM-467. lxml wird nur noch für den SVG-Import
+  gebraucht: `ingest/outline.py` ruft `trimesh.load_path`, und trimeshs SVG-Leser parst mit lxml.
+  Solidons 3MF-Leser und -Schreiber nutzen `xml.etree`. lxml bündelt libxml2 und libxslt, zwei
+  C-Bibliotheken mit regelmäßigen Sicherheitsmeldungen, für eine Datei, die `outline.py` vorher
+  ohnehin mit `xml.etree` öffnet (`_svg_defaults`). Der bessere Weg: die SVG-Elemente (`path`,
+  `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, verschachtelte `transform`) selbst
+  über `xml.etree` lesen, die Pfaddaten wie heute über svg.path, und daraus den `Path2D` bauen.
+  **Plattformfolgen:** ein natives Paket weniger auf allen drei Plattformen und weniger fremder
+  C-Code beim Öffnen einer fremden Datei; `xml.etree` kommt mit CPython und dessen Expat. DXF
+  bleibt bei trimesh.
+  **Abnahme:** die SVG-Fälle aus `tests/data/` ergeben dieselben Konturen (Anzahl, Fläche, Löcher);
+  lxml fehlt in allen Abhängigkeitsdateien und im Paket.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -4320,18 +4409,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Render- und Leistungsabnahme bleibt dem Release vorbehalten.
   Registerabgleich 02.10. (Stand `4449e3370`): Oberfläche und Kommandozeile erledigt, beide Doppelpunkt-Wächter grün; offen nur die Modelltexte (Abnahme kostet Geld, nicht gefahren).
 
-<a id="rm-286"></a>
-
-- [~] **RM-286 — Grenzablehnung in allen Zahlenfeldern.** Aus dem Release 0.5.1
-  (Oberflächenpaket, Code-Review U-5, U-6, U-8). Die Grenzablehnung ist in Parameterleiste,
-  Operationsdialog, Merkmalfenster und Druckeinstellungen umgesetzt; der `fx`-Rückweg erhält
-  auch einen Ausdruck jenseits der Grenze, und die Kurzhilfe nennt geänderte Parametergrenzen.
-  Die regulären Prüfungen sind grün. Offen bleibt die native Fensterabnahme an allen vier Orten,
-  die laut Projektregel erst beim Release läuft.
-  Registerabgleich 02.10.: umgesetzt (`BoundedSpin` in Merkmalfenster, Druckeinstellungen und Operationsdialog), offen nur die Fensterabnahme; Titel und Registerzeile („fehlt noch in Merkmalfenster und Druckeinstellungen“) sind veraltet.
-  Druckeinstellungen: Die zwölf Offscreen-Fenstertests der Grenzablehnung in `tests/test_print_settings_ui.py` sind grün, seit Aus- und Einblenden die abgelehnte Zahl nicht mehr verwerfen, ein Heben außerhalb der Suche seinen Umschaltersatz einlöst und ein nachgetragenes Haftungsmaß nur sein eigenes Feld lädt. Die native Fensterabnahme bleibt an allen vier Orten offen.
-  Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
-
 <a id="rm-291"></a>
 
 - [ ] **RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht.** Aus der Durchsicht v0.5.1 (Inventar 1.4,
@@ -4510,6 +4587,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bauplan §19, §4.1, §2.7.
   Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
   Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
+  **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
 
 <a id="rm-358"></a>
 
@@ -4565,32 +4643,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
   doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
   Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
-
-<a id="rm-360"></a>
-
-- [ ] **RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters.**
-  Review 02.10.2026, Gebietsprüfung Weg 1 (I-4); Entscheidung Robert 02.10.2026: „§2.2 anpassen“.
-  `3d-agent-bauplan.md:124` (§2.2, Weg 1) sagt „im Chat sagen, was werden soll, oder aus dem
-  Kontextmenü wählen“. §2.6 und §18.5 legen fest: Die passenden Ops stehen rechts im
-  Auswahlfenster am Merkmal, der Rechtsklick führt keine Operation aus und zeigt nur, was es dort
-  gibt (Ursprungsschritt, Zeichnen auf der Fläche, Ausblenden).
-  **Umfang (nur Wortlaut, die App bleibt unverändert):**
-  - `3d-agent-bauplan.md:124` — „oder aus dem Kontextmenü wählen“ durch die Wahl im
-    Auswahlfenster am Merkmal ersetzen (etwa „oder im Auswahlfenster am Merkmal die passende
-    Operation wählen“).
-  - Folgestellen mit demselben veralteten Satz „das Kontextmenü am Merkmal ist der Ort für
-    Weg 1 (§18.5)“: `.claude/rules/ansicht.md:35–36`, `konzepte/begruendungen/regel-ansicht.md:38–40`,
-    Docstrings und Kommentare `app/ui/viewport.py:17061–17063`, `app/ui/panels.py:2873–2875`,
-    `app/ui/main_window.py:17476–17478`, `tests/test_analysis_ui.py:2293`,
-    `tests/test_selection.py:1453–1457`, `tests/test_way_one.py:7–8` („hier kommt die Operation
-    aus dem Kontextmenü“). Die Aussage über den ungestuften Rechtsklick bleibt richtig, nur der
-    Ort der Operationen wird berichtigt.
-  - Handbuch (`app/core/manual.py`, `website/handbuch.html`) und README: geprüft, kein Satz nennt
-    das Kontextmenü als Ort der Operationen von Weg 1; die Treffer dort betreffen *Diesen Schritt
-    ändern*, *Löschen* im Verlauf und die STEP-Umstellung und bleiben.
-  **Abnahme:** `git grep -n "Kontextmenü"` findet keinen Satz mehr, der Operationen für Weg 1 im
-  Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
-  Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
 
 <a id="rm-366"></a>
 
@@ -4793,35 +4845,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Laufzeit am pegboard-goot im Budget. Bauplan §2.7, §2.8, §31.
   Belege: `review-e3dff1907.md`, Sonde `r3_rundungsgruppe.py`.
 
-<a id="rm-415"></a>
-
-- [ ] **RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht.**
-  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-334, das im Arbeitsbaum archiviert ist.
-  Tab + Enter folgt seit `2dc4ce0ce` dem Fokus in allen Rückfragen.
-  **Fehlerfall:** Rückfrage öffnen, Tab auf „Abbrechen“, zu einem anderen Fenster und zurück
-  wechseln, Enter → `confirm_discard` gibt `True`, `confirm_unsaved` `'save'`; die Leertaste löst
-  „Abbrechen“ aus, und ohne Solidons Zuhörer klickt Qt selbst „Abbrechen“.
-  **Ursache:** `app/ui/style.py` — `FocusOut` setzt `_typed_to` zurück, und
-  `ActiveWindowFocusReason` gilt nicht als Tastaturwahl.
-  **Fix:** `_typed_to` über den Fensterwechsel behalten (bzw. beim Zurückkehren den Fokusknopf als
-  Tastaturwahl werten).
-  **Abnahme:** Test je Rückfrage mit Fensterwechsel: Enter löst den fokussierten Knopf aus.
-  Bauplan §19.2, Regel 19. Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`,
-  Sonden `v4u_rm334_fensterwechsel.py`, `v4u_rm334_qt_nativ.py`.
-
-<a id="rm-418"></a>
-
-- [ ] **RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen.**
-  Review 02.10.2026 am Stand `4cf460e87`; beide Ursprungspunkte sind im Arbeitsbaum archiviert.
-  - **Slicerpfad nur in Groß-/Kleinschreibung verschieden:** Die Wahl springt in Erststart und
-    Einstellungen auf „Später auswählen“ — die Liste fasst Schreibweisen über `Path` zusammen,
-    `select_data`/`findData` sucht den exakten Text. Dieselben Textvergleiche in
-    `app/ui/print_settings_dialog.py` (`_choose_slicer`) und `app/ui/filament_picker.py:538`.
-  - **Zweites „Abbrechen“ beim Erzeugen:** Solange der Abbruch von Versuch 2 noch ausläuft, schließt
-    ein zweiter Klick den Dialog und verwirft Versuch 1; der Knopf bleibt in dieser Zeit frei.
-  **Abnahme:** je Rest ein Test (Pfad `c:\…` gegen `C:\…` bleibt gewählt; zweiter Klick während des
-  Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
-
 <a id="rm-431"></a>
 
 - [ ] **RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten.**
@@ -4888,22 +4911,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
-<a id="rm-448"></a>
-
-- [ ] **RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**
-  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (echter Filterweg); Folgepunkt zu
-  RM-437 (archiviert; Leerzeichen in Rückmeldebogen und Chat sind behoben). Besteht schon in 0.5.1,
-  keine Regression.
-  **Fehlerfall:** Solange eine Vorschau mit Differenz läuft, nehmen Haken, Auswahlpunkte und Knöpfe in
-  jedem Fenster die Leertaste nicht an, auch die Skala des Rückmeldebogens
-  (`app/ui/viewport.py:3714–3727`, anwendungsweiter Tastenfilter).
-  **Fix:** Der Filter der Ansicht greift nur, wenn die Ansicht den Fokus hat.
-  **Abnahme:** Test über die Oberfläche: Vorschau offen, Leertaste auf einem Haken im Dialog und im
-  Rückmeldebogen schaltet. Bauplan §19.2 (Tastaturbedienung). Nebenbei: Die Zählkommentare der
-  Bausteine in `selection_operations.py`/`catalog.py` sind seit RM-398/399 wieder falsch (gemessen
-  26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
-  Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
-
 <a id="rm-456"></a>
 
 - [ ] **RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test.**
@@ -4921,6 +4928,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
   macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
   Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
 
 ## KI und Generatoren
 
@@ -5066,6 +5074,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
   Release-Lauf. Bauplan §2.7, §15.5.
   Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2219`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
+  **Stand 02.10.2026 abends:** (a) erledigt (Claude, Thread „Bedienung und KI“): Beide `hollow.done` tragen *Diesen Schritt ändern* mit `field: wall`, `MEINT_DEN_SCHRITT` nennt sie. Offen (b).
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -5488,6 +5497,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Argumentlisten), im Zweifel fragen.
   **Abnahme:** Test je genannter Form → Rückfrage; Lesen/Prüfen bleibt still. Beleg:
   `verif-70e9b3145-oberflaeche.md`, Sonden `v5u_rm346_*`.
+
+<a id="rm-467"></a>
+
+- [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
+  Auftrag Robert 02.10.2026, übernommen: Bibliotheken alle 3 Tage aktualisieren. Je Lauf werden die
+  festen Versionen aus `constraints.txt` (Laufzeit und Entwicklung, mit den Plattformpins), die
+  Werkzeuge in `.github/workflows/` und die Paketlaufzeiten gegen ihre neueste Fassung abgefragt;
+  eine neue Fassung zählt nur mit cp314-Rädern für Windows x64, Linux x86_64 und beide Macs.
+  Reihenfolge: Sicherheitsmeldungen, dann Patch und Minor, dann Hauptversionen. Jede Aktualisierung
+  geht einzeln durch das Entwicklungstor und, wo sie die Oberfläche oder den Renderer berührt,
+  durch die echte Anwendung; danach `tools/check_env.py --freeze`. Was den 0.5.2-Stand gefährdet,
+  bleibt festgelegt und bekommt einen eigenen Punkt mit dem nötigen Umbau. Ergänzt RM-313: Der
+  CI-Wächter „Neueste Versionen“ läuft nur öffentlich, dieser Lauf lokal und regelmäßig.
+  **Abnahme je Lauf:** geprüft, übernommen und zurückgestellt mit Commit im Archiv; der Punkt
+  bleibt offen, solange der Auftrag gilt.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

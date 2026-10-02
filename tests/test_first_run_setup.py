@@ -511,6 +511,62 @@ def test_a_remembered_slicer_with_forward_slashes_is_read_in_the_native_form(
         discover.remember_path("slicer", "")
 
 
+#: Nur Windows liest Pfade ohne Rücksicht auf Groß- und Kleinschreibung; dort
+#: allein kann derselbe Slicer in zwei Schreibweisen ankommen (RM-418).
+_CASE_BLIND = pytest.mark.skipif(
+    Path("A") != Path("a"), reason="Pfade unterscheiden hier Groß- und Kleinschreibung"
+)
+
+
+def _other_case(path: Path) -> str:
+    """Derselbe Pfad mit anders geschriebenem Laufwerk — so nennt ihn mancher Dateidialog."""
+    text = str(path)
+    return text[0].swapcase() + text[1:]
+
+
+@_CASE_BLIND
+def test_a_slicer_in_another_case_stays_chosen_in_the_first_run(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Liste fasst das Laufwerk ``c:`` und ``C:`` über ``Path`` zusammen, gesucht
+    wurde der exakte Text: Die Wahl sprang auf „Später auswählen“ (RM-418)."""
+    monkeypatch.setattr(first_run.slicer_profiles, "discover_printers", lambda *_args: ())
+    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
+    found = tmp_path / "OrcaSlicer.exe"
+    setup_dialog._fill_slicers((Path(_other_case(found)),))
+    setup_dialog.slicer.setCurrentIndex(1)
+    assert setup_dialog.wait_for_survey()
+    setup_dialog._fill_slicers((found,))
+    assert setup_dialog.slicer.currentIndex() != 0, "nicht „Später auswählen“"
+    assert Path(setup_dialog.slicer.currentData()) == found
+    assert setup_dialog.slicer.count() == 2, "eine Zeile je Programm"
+
+
+@_CASE_BLIND
+def test_a_remembered_slicer_in_another_case_is_the_one_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Druckdialog und Filamentwähler nahmen bei abweichender Schreibweise den
+    ersten Fund statt des gemerkten Slicers (RM-418)."""
+    from app.ui import filament_picker
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    first = tmp_path / "PrusaSlicer.exe"
+    remembered = tmp_path / "OrcaSlicer.exe"
+    found = (first, remembered)
+    monkeypatch.setattr(discover, "remembered_path", lambda _key: _other_case(remembered))
+    assert PrintSettingsDialog._choose_slicer(mock.Mock(), found) == remembered
+
+    used: list[Path] = []
+    monkeypatch.setattr(filament_picker.discover, "find_programs", lambda *_args: found)
+    monkeypatch.setattr(
+        filament_picker, "detect", lambda path: used.append(path) or mock.Mock(flavour="orca")
+    )
+    monkeypatch.setattr(filament_picker.slicer_profiles, "find_profiles", lambda *_a, **_k: ())
+    filament_picker.slicer_filaments()
+    assert used == [remembered]
+
+
 def test_custom_printer_is_saved_with_entered_dimensions_before_inventory_opens(
     setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
