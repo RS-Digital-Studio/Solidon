@@ -47,6 +47,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
+- SuperSlicer ya no se bloquea con piezas redondas: ya no recibe la costura en bisel que no conoce.
+- La preselección de filamento toma Generic o la marca de su impresora en lugar de un filamento especial ajeno, por ejemplo Generic PETG en vez de BETA PETG en la Bambu A1.
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
 - *Orientar para imprimir*, *Girar* y *Trasladar* funcionan también con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte. El cuerpo sigue exacto.
 

@@ -71,6 +71,8 @@ Nutzen da und sonst nichts.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
+- SuperSlicer stürzt bei runden Teilen nicht mehr ab: Die Schrägnaht, die er nicht kennt, bekommt er nicht mehr.
+- Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - *Druckoptimal ausrichten*, *Drehen* und *Verschieben* gelingen auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen. Der Körper bleibt exakt.
 

@@ -46,6 +46,8 @@ scrive in `website/version.json`.
 - Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
+- SuperSlicer non si blocca più con i pezzi rotondi: non riceve più la cucitura a sciarpa che non conosce.
+- La preselezione del filamento prende Generic o la marca della tua stampante invece di un filamento speciale di terzi, ad esempio Generic PETG invece di BETA PETG sulla Bambu A1.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 - *Orienta per la stampa*, *Ruota* e *Sposta* funzionano anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte. Il corpo resta esatto.
 

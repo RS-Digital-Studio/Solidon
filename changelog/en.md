@@ -46,6 +46,8 @@ it into `website/version.json`.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
+- SuperSlicer no longer crashes on round parts: it no longer receives the scarf seam it does not know.
+- The filament preselection takes Generic or your printer's brand instead of a third-party special filament, for example Generic PETG instead of BETA PETG on the Bambu A1.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 - *Orient for printing*, *Rotate* and *Move* now also work on STEP surface models, for turns of almost 180° and on partly recognised faces. The body stays exact.
 

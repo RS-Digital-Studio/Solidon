@@ -47,6 +47,8 @@ dans `website/version.json`.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
+- SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
+- La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 - *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent aussi sur les surfaces STEP, pour des rotations de près de 180°, sur des faces reconnues en partie. Le corps reste exact.
 
