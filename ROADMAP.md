@@ -181,7 +181,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts](#rm-313) | Tests und Entwicklungswerkzeuge | Lauf nur auf Release-Tag oder öffentlichen Handstart; erster echter Ergebnisbericht steht aus |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | Die gesperrten Zwillinge nachziehen, die dünnen Hüllen auf ihren Produktionsweg umstellen, die Nur-Test-Kernfunktionen einzeln entscheiden |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `rendering`-Fälle in der Release-CI auf Linux und macOS und in `latest` fahren — oder Roberts Entscheidung festhalten und Wächter nachziehen |
-| [RM-346 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs](#rm-346) | Tests und Entwicklungswerkzeuge | **In Arbeit: Claude, gebaut (`63a25d24d`), wartet auf Roberts Freigabe (Hooks, settings.json)** — Review seit 0.5.1: Prüfung am Werkzeugnamen in den PreToolUse-Hook legen; Test je Schreibweise |
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, Regel mit Datum, veraltete Regeln und Registerzellen |
 | [RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung](#rm-350) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `continue-on-error: true` am Job `latest` oder eigener Workflow; Wächter in `test_packaging.py` |
 | [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
@@ -5120,26 +5119,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bauplan §35, §38. Beleg: `bericht-E.md` (M1), `sonden\e_collect_rendering_only.txt`,
   `e_collect_render_core.txt`.
   Nachprüfung am Stand `6ce767031`: besteht noch. Von 110 Renderfällen laufen 107 nur in der Windows-Release-CI; Wächter fehlt, Kommentar und README veraltet. Belege `F:\solidon-review-reports\verif-E.md`.
-
-<a id="rm-346"></a>
-
-- [ ] **RM-346 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs.**
-  Review seit 0.5.1, Befund E-M3, Commit `c96a404ea` (Claude).
-  Die `ask`-Regeln in `.claude/settings.json:31–44` nennen wörtlich
-  `.venv/Scripts/python.exe tools/<werkzeug>.py` (Bash) bzw. `.venv\Scripts\python.exe tools/…`
-  (PowerShell); Bash-Regeln sind Präfixregeln. Ein absoluter Interpreterpfad
-  (`"F:/3D Druck/.venv/Scripts/python.exe" tools/upload_website.py`), `"$SUITE_PYTHON" tools/…`
-  (Konvention aus `/pruefen`), `-m tools.upload_website` oder `./tools/…` trifft keine Regel und
-  läuft im Modus `bypassPermissions` ohne Rückfrage. Der PreToolUse-Hook filtert nur
-  Git-Befehle (`settings.json:65`). Betroffen: `run_agent_suite` (kostet Geld),
-  `upload_website`, `deploy_activation_server` (veröffentlichen). Aus Konfiguration und
-  dokumentierter Präfixsemantik belegt, am Rechteprüfer nicht gefahren.
-  **Fix:** Die Prüfung in `.claude/hooks/solidon3d_hooks.py` (`vor-bash`, auch PowerShell) am
-  Werkzeugnamen legen, unabhängig vom Interpreterpfad; die `ask`-Liste darf bleiben. Danach
-  die Codex-Hookfreigabe über `/hooks` erneuern (CLAUDE.md, „Werkzeuge“).
-  **Abnahme:** Test in `tests/test_solidon3d_hooks.py` je Schreibweise (relativ, absolut, Variable,
-  `-m`, `./tools`) für die drei Werkzeuge → Rückfrage. Beleg: `bericht-E.md` (M3).
-  Nachprüfung am Stand `6ce767031`: besteht noch. Absoluter Interpreterpfad, `-m tools.…` und `./tools/…` laufen ohne Rückfrage durch den Hook (leere Ausgabe, Exit 0).
 
 <a id="rm-349"></a>
 
