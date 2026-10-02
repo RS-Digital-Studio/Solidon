@@ -19831,3 +19831,46 @@ def test_changing_a_migrated_slot_angle_returns_it_to_the_current_frame() -> Non
     assert changed_angle.change_values == {"slot_angle": 0.0, "measured_frame": False}
     assert changed_length is not None
     assert changed_length.change_values == {"slot_length": 25.0}
+
+
+def test_three_arrow_steps_in_the_parameter_bar_turn_the_number_by_three(
+    window: MainWindow,
+) -> None:
+    """Dreimal ↑ in *Breite* sind drei Millimeter, und der Fokus bleibt im Feld (RM-355).
+
+    Die Leiste baute nach jeder Änderung alle Zeilen neu, und das bediente
+    Feld ging unter: Nach dem ersten ↑ war der Fokus weg, ein zweites traf
+    nichts mehr — 61 statt 62. Jetzt bleibt das Feld dasselbe Widget.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.i18n import _
+
+    session = window.session
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert session.wait_for_idle(30_000)
+    assert session.add_parameter(Parameter(name="breite", value=60.0, unit="mm", title=_("Breite")))
+    session.wait_for_idle()
+    QApplication.processEvents()
+    editor = window.parameters._editors["breite"]
+    editor.setSingleStep(1.0)
+    window.activateWindow()
+    editor.setFocus()
+    QApplication.processEvents()
+    assert editor.hasFocus(), "das Feld empfängt die Taste"
+
+    for _step in range(3):
+        focused = QApplication.focusWidget()
+        assert focused is not None, "der Fokus ist noch da"
+        QTest.keyClick(focused, Qt.Key.Key_Up)
+        for _round in range(3):
+            QApplication.processEvents()
+        session.wait_for_idle()
+        QApplication.processEvents()
+
+    assert session.project.document.parameters["breite"].value == pytest.approx(63.0)
+    assert window.parameters._editors["breite"] is editor, "dieselbe Zeile, kein Neubau"
+    focus = QApplication.focusWidget()
+    assert focus is editor or editor.isAncestorOf(focus), "der Fokus bleibt in Breite"
