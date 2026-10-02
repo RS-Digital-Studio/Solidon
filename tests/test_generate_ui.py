@@ -2278,9 +2278,7 @@ def test_cancelling_a_further_try_keeps_the_finished_ones(qt_app: QApplication) 
         assert ok(dialog).text() == "Übernehmen"
 
         cancel.click()
-        assert closed == [GenerateDialog.DialogCode.Rejected.value], (
-            "das zweite Abbrechen schließt"
-        )
+        assert closed == [GenerateDialog.DialogCode.Rejected.value], "das zweite Abbrechen schließt"
     finally:
         dialog.release()
         dialog.deleteLater()
