@@ -165,6 +165,144 @@ def test_settings_slicer_changes_ignore_old_printers_and_do_not_write_on_cancel(
         dialog.deleteLater()
 
 
+def _settings_with_slicer(
+    monkeypatch: pytest.MonkeyPatch, remembered: str, found: tuple[Path, ...]
+):
+    """Einstellungen mit gestellter Programm- und Druckersuche."""
+    from app.core.knowledge import profiles
+    from app.ui import settings_dialog as module
+    from app.ui.first_run import PrinterChoices
+
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: remembered)
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(found))
+    monkeypatch.setattr(
+        module._PrinterSurvey,
+        "work",
+        lambda worker: worker.done.emit(
+            PrinterChoices(worker.executable, (profiles.DEFAULT_PRINTER,), profiles.DEFAULT_PRINTER)
+        ),
+    )
+    return module
+
+
+def test_a_slicer_chosen_with_forward_slashes_frees_save_in_the_settings(
+    qt_app, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der Dateidialog nennt ``C:/…``, die Druckersuche ``C:\\…``: „Speichern“
+    blieb gesperrt, und ein so gemerkter Pfad sprang nach der Programmsuche auf
+    „Später auswählen“ (RM-335)."""
+    from PySide6.QtWidgets import QDialogButtonBox, QFileDialog
+
+    from app.ui.settings import UiSettings
+
+    remembered = tmp_path / "remembered" / "orca-slicer.exe"
+    chosen = tmp_path / "portable" / "prusa-slicer.exe"
+    module = _settings_with_slicer(monkeypatch, remembered.as_posix(), (remembered,))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_args: (chosen.as_posix(), ""))
+    dialog = module.SettingsDialog(UiSettings())
+    try:
+        assert dialog.wait_for_survey(5000)
+        assert Path(dialog.slicer_path) == remembered
+        dialog._choose_slicer_file()
+        assert dialog.wait_for_survey(5000)
+        assert Path(dialog.slicer_path) == chosen
+        buttons = dialog.findChild(QDialogButtonBox)
+        assert buttons is not None
+        assert buttons.button(QDialogButtonBox.StandardButton.Save).isEnabled()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("stored", "chosen", "profile_slicer", "forgets"),
+    [
+        ("", "", "orca/", False),
+        ("", "orca/", "orca", False),
+        ("orca", "orca/", "", False),
+        ("", "prusa/", "orca", True),
+        ("orca/", "", "orca/", True),
+        ("", "orca/", "", True),
+    ],
+)
+def test_only_another_slicer_forgets_the_slicer_profiles(
+    tmp_path: Path, stored: str, chosen: str, profile_slicer: str, forgets: bool
+) -> None:
+    """Die Entscheidung hinter „Speichern“ — gleich in welcher Schreibweise (RM-337).
+
+    ``name/`` steht für die Schreibweise des Dateidialogs mit ``/``, ``name``
+    für die des Systems.
+    """
+    from app.ui.settings_dialog import forgets_slicer_profiles
+
+    def written(token: str) -> str:
+        if not token:
+            return ""
+        path = tmp_path / f"{token.rstrip('/')}.exe"
+        return path.as_posix() if token.endswith("/") else str(path)
+
+    assert (
+        forgets_slicer_profiles(written(stored), written(chosen), written(profile_slicer))
+        is forgets
+    )
+
+
+@pytest.mark.parametrize(
+    ("choice", "kept"), [("unchanged", True), ("same", True), ("other", False)]
+)
+def test_saving_the_settings_keeps_the_slicer_profiles_unless_the_slicer_changes(
+    qt_app, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, choice: str, kept: bool
+) -> None:
+    """Nur ein anderer Slicer verwirft Maschine, Prozess und Filament.
+
+    Der Druckdialog merkt sich die Profile auch für einen nur gefundenen,
+    nie gespeicherten Slicer. Wer danach in den Einstellungen allein das Thema
+    wechselte oder genau diesen Slicer wählte, verlor sie (RM-337).
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui.settings import UiSettings
+
+    profile_slicer = tmp_path / "orca-slicer.exe"
+    other = tmp_path / "prusa-slicer.exe"
+    module = _settings_with_slicer(monkeypatch, "", (profile_slicer, other))
+    settings = UiSettings(
+        slicer_profile_slicer=str(profile_slicer),
+        slicer_machine_profile="Elegoo Centauri Carbon 2 0.4 nozzle",
+        slicer_base_process="0.20mm Standard",
+        slicer_base_filament="Elegoo PLA",
+    )
+    target = {"same": profile_slicer, "other": other}.get(choice)
+    if target is not None:
+        monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_args: (target.as_posix(), ""))
+    dialog = module.SettingsDialog(settings)
+    try:
+        assert dialog.wait_for_survey(5000)
+        dialog.theme.setCurrentIndex((dialog.theme.currentIndex() + 1) % dialog.theme.count())
+        if target is not None:
+            dialog._choose_slicer_file()
+            assert dialog.wait_for_survey(5000)
+        dialog.apply_to(settings)
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+    profiles_kept = (
+        settings.slicer_machine_profile,
+        settings.slicer_base_process,
+        settings.slicer_base_filament,
+    )
+    if kept:
+        assert profiles_kept == (
+            "Elegoo Centauri Carbon 2 0.4 nozzle",
+            "0.20mm Standard",
+            "Elegoo PLA",
+        )
+        assert Path(settings.slicer_profile_slicer) == profile_slicer
+    else:
+        assert profiles_kept == ("", "", "")
+        assert Path(settings.slicer_profile_slicer) == other
+
+
 def test_settings_keep_imported_printers_local_until_the_selected_one_is_saved(
     qt_app, monkeypatch: pytest.MonkeyPatch
 ) -> None:

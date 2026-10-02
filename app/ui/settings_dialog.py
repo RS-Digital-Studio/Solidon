@@ -637,7 +637,7 @@ class SettingsDialog(QDialog):
         try:
             if profile is not None and profiles.printer_profiles().get(chosen) != profile:
                 profiles.save_printer(profile)
-            if discover.remembered_path("slicer") != self.slicer_path:
+            if not discover.same_program(discover.remembered_path("slicer"), self.slicer_path):
                 discover.remember_path("slicer", self.slicer_path)
         except OSError as problem:
             raise FileWriteError(detail=str(problem), suggestions=(RETRY, CANCEL)) from problem
@@ -654,7 +654,7 @@ class SettingsDialog(QDialog):
         if self._closed or self.sender() is not self._slicer_worker:
             return
         self._slicer_worker = None
-        chosen = self.slicer_path
+        chosen = discover.program_path(self.slicer_path)
         discovered = tuple(found) if isinstance(found, tuple | list) else ()
         paths = dict.fromkeys((*discovered, *((Path(chosen),) if chosen else ())))
         with QSignalBlocker(self.slicer):
@@ -750,7 +750,10 @@ class SettingsDialog(QDialog):
         if self._closed or self.sender() is not self._printer_survey:
             return
         assert isinstance(found, PrinterChoices)
-        if str(found.executable) != self.slicer_path:
+        if not discover.same_program(str(found.executable), self.slicer_path):
+            # Nie still verwerfen: Eine Suche ohne Antwort sperrt „Speichern“
+            # für immer (RM-335).
+            self._slicer_changed()
             return
         self._printer_survey = None
         self._discovered_printers = {profile.id: profile for profile in found.profiles}
@@ -817,8 +820,8 @@ class SettingsDialog(QDialog):
         settings.diff_palette = str(self.diff_palette.currentData())
         settings.shortcut_scheme = str(self.shortcuts.currentData())
         chosen_slicer = self.slicer_path
-        if self._stored_slicer_path != chosen_slicer or (
-            settings.slicer_profile_slicer and settings.slicer_profile_slicer != chosen_slicer
+        if forgets_slicer_profiles(
+            self._stored_slicer_path, chosen_slicer, settings.slicer_profile_slicer
         ):
             settings.slicer_machine_profile = ""
             settings.slicer_base_process = ""
@@ -873,6 +876,19 @@ class SettingsDialog(QDialog):
         self.ai_disclosure_reset.setEnabled(False)
         self.ai_disclosure_reset.setText(tr("Wird vor der nächsten KI-Anfrage angezeigt"))
         self.ai_disclosure_reset.setAccessibleName(self.ai_disclosure_reset.text())
+
+
+def forgets_slicer_profiles(stored: str, chosen: str, profile_slicer: str) -> bool:
+    """Ob Speichern die gemerkten Slicerprofile verwirft.
+
+    Nur wenn in diesem Dialog ein anderer Slicer gewählt wurde als der, für den
+    die Profile gelten. Der Druckdialog merkt Profile auch für einen nur
+    gefundenen, nie gespeicherten Slicer; wer danach allein das Thema änderte
+    oder genau diesen Slicer wählte, verlor sie (RM-337).
+    """
+    if discover.same_program(stored, chosen):
+        return False
+    return not profile_slicer or not discover.same_program(profile_slicer, chosen)
 
 
 def _choices(parent: QWidget, entries: Mapping[str, str | TranslatableText]) -> QComboBox:

@@ -955,7 +955,7 @@ class FirstRunDialog(QDialog):
     def _carry_over(self, settings: UiSettings) -> bool:
         """Bewahrt Antworten beim Sprachwechsel, ohne die Einrichtung abzuschließen."""
         chosen = str(self.slicer.currentData() or "")
-        if chosen and chosen != discover.remembered_path("slicer"):
+        if chosen and not discover.same_program(chosen, discover.remembered_path("slicer")):
             try:
                 discover.remember_path("slicer", chosen)
             except OSError as problem:
@@ -1325,7 +1325,10 @@ class FirstRunDialog(QDialog):
         if self.sender() is not self._printer_survey:
             return
         assert isinstance(found, PrinterChoices)
-        if str(found.executable) != self.slicer.currentData():
+        if not discover.same_program(str(found.executable), str(self.slicer.currentData() or "")):
+            # Die laufende Suche gehört nicht zur sichtbaren Wahl: neu suchen,
+            # nie still verwerfen — sonst bleibt die Liste grau stehen (RM-335).
+            self._slicer_changed()
             return
         self._printer_survey = None
         self._discovered_printers = {profile.id: profile for profile in found.profiles}
@@ -1367,6 +1370,7 @@ def choose_slicer_file(parent: QWidget, box: QComboBox) -> None:
     filename, _ = QFileDialog.getOpenFileName(parent, tr("Slicer-Programm auswählen"))
     if not filename:
         return
+    filename = discover.program_path(filename)
     if box.findData(filename) < 0:
         box.addItem(slicer_title(Path(filename)), filename)
         box.setItemData(box.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)

@@ -475,6 +475,42 @@ def test_custom_slicer_path_is_selected_and_only_remembered_when_applied(
     assert discover.remembered_path("slicer") == str(path)
 
 
+def test_a_slicer_chosen_with_forward_slashes_ends_its_printer_search(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dateidialog nennt unter Windows ``C:/…``, die Suche antwortet mit ``C:\\…``.
+
+    Verglich der Dialog beide als Text, verwarf er die Antwort und ließ die
+    Druckerliste grau mit „werden gesucht …“ stehen; „Speichern und starten“
+    tat danach nichts mehr (RM-335).
+    """
+    path = tmp_path / "portable" / "orca-slicer.exe"
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_args: (path.as_posix(), ""))
+    monkeypatch.setattr(first_run.slicer_profiles, "discover_printers", lambda *_args: ())
+    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
+    setup_dialog._choose_slicer_file()
+    assert setup_dialog.wait_for_survey()
+    assert setup_dialog._printer_survey is None
+    assert setup_dialog.printer.isEnabled()
+    assert Path(setup_dialog.slicer.currentData()) == path
+    setup_dialog.apply_to(setup_dialog.settings)
+    assert Path(discover.remembered_path("slicer")) == path
+
+
+def test_a_remembered_slicer_with_forward_slashes_is_read_in_the_native_form(
+    tmp_path: Path,
+) -> None:
+    """Ein Pfad, den 0.5.1 mit ``/`` gemerkt hat, kommt in der Schreibweise des
+    Systems zurück — sonst findet ihn keine Liste wieder, deren Einträge die
+    Programmsuche in dieser Schreibweise anlegt (RM-335)."""
+    path = tmp_path / "orca-slicer.exe"
+    discover.remember_path("slicer", path.as_posix())
+    try:
+        assert discover.remembered_path("slicer") == str(path)
+    finally:
+        discover.remember_path("slicer", "")
+
+
 def test_custom_printer_is_saved_with_entered_dimensions_before_inventory_opens(
     setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

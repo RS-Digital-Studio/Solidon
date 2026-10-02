@@ -188,14 +188,31 @@ def _typed_key(tool_id: str, kind: str) -> str:
     return f"{tool_id}:{kind}"
 
 
+def program_path(text: str) -> str:
+    """Ein Programmpfad in der Schreibweise des Systems; leer bleibt leer.
+
+    Der Dateidialog nennt unter Windows ``C:/…``, die Programmsuche ``C:\\…``.
+    Wer beide als Text vergleicht oder in einer Liste nachschlägt, findet die
+    eigene Wahl nicht wieder (RM-335).
+    """
+    return str(Path(text)) if text else ""
+
+
+def same_program(first: str, second: str) -> bool:
+    """Zwei Programmpfade meinen dieselbe Datei, gleich in welcher Schreibweise."""
+    if not first or not second:
+        return first == second
+    return Path(first) == Path(second)
+
+
 def remembered_path(tool_id: str) -> str:
     """Der gewählte Programmpfad, mit Rückfall auf das alte gemeinsame Feld."""
     entries = _load()
     chosen = entries.get(_typed_key(tool_id, "path"), "")
     if chosen:
-        return chosen
+        return program_path(chosen)
     legacy = entries.get(tool_id, "")
-    return legacy if "://" not in legacy else ""
+    return program_path(legacy) if "://" not in legacy else ""
 
 
 def _remote_address(entries: dict[str, str], tool_id: str) -> str:
