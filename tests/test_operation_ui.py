@@ -5462,7 +5462,12 @@ def test_refining_a_dense_body_says_the_count_instead_of_computing(
     assert "geschätzt" in note and "Dreiecke" in note, note
     assert dialog.can_accept()
     dialog.accept()
-    assert window.session.wait_for_idle()
+    # Übernommen wird die echte Verfeinerung (0,5 mm an der ganzen Platte) im
+    # Hilfsprozess des Netzkerns. Das dauert, was es dauert; zugesagt ist nur,
+    # dass der Klick nicht auf die Vorschau wartet. Mit der Vorgabe von zehn
+    # Sekunden riss die Frist bei voller Rechnerlast ab (Release-Tor 0.5.2);
+    # im Wechsel mit 0.5.1 gemessen, braucht das Übernehmen dort gleich lang.
+    assert window.session.wait_for_idle(120_000)
     assert [entry.op for entry in window.session.project.document.ops] == ["load", "remesh_mesh"]
 
 
