@@ -284,6 +284,12 @@ zurück und vor, die Vorher-Seite baut `change_for()`. Ein
   (§21.3). Ein ungültiger Vorschlag ändert nichts; ein Plan über einem
   inzwischen geänderten Dokument wird abgesagt (`RevisionPlan.mark`), nicht
   nachgebessert.
+- **Ein Ablauf ist ein Rückgängig-Schritt** (§15.5): Was der Kunde mit einem
+  Klick auslöst — Erzeugen, eine Sammelzeile je Körper —, wird **eine**
+  Transaktion, deren Schritte einzeln im Verlauf stehen; sonst nimmt ein
+  Strg+Z ein Drittel zurück. Folgeschritte am neuen Körper nennen ihn über
+  `History.next_object_id`, mehrere `apply` der Oberfläche sammelt
+  `Session.one_step`.
 - **Die Grenze ist die Auswertung**: Was sie beeinflusst, gehört in die
   Transaktion; Druckeinstellungen (reisen zum Slicer) und Sichtbarkeit
   (gehört der Ansicht) nicht.

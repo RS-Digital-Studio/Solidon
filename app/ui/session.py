@@ -18,7 +18,8 @@ import threading
 import time
 import traceback
 import weakref
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
@@ -1486,6 +1487,28 @@ def _plans_in_worker(name: str, size: int) -> bool:
     return size > limit
 
 
+@dataclass(slots=True)
+class _Gathering:
+    """Was :meth:`Session.one_step` einsammelt, bevor es eine Transaktion wird."""
+
+    title: TranslatableText | str | None
+    drafts: list[OperationDraft] = field(default_factory=list)
+    origin: Origin | None = None
+
+    def add(
+        self,
+        title: TranslatableText | str,
+        drafts: Sequence[OperationDraft],
+        origin: Origin | None,
+    ) -> None:
+        """Die Schritte eines Aufrufs anhängen; Titel und Herkunft gibt der erste."""
+        if self.title is None:
+            self.title = title
+        if self.origin is None:
+            self.origin = origin
+        self.drafts.extend(drafts)
+
+
 class Session(QObject):
     """Hält das offene Projekt und die Oberfläche im Gleichschritt mit ihm."""
 
@@ -1668,6 +1691,8 @@ class Session(QObject):
         """Die Einfügemarke (P7.1): Neue Schritte kommen vor diesen, und die
         Oberfläche zeigt den Stand davor. Kein Dokumentzustand — sie gehört
         der Sitzung und reist nicht in die Datei."""
+        self._gathering: _Gathering | None = None
+        """Die laufende Sammlung von :meth:`one_step`, sonst ``None``."""
         self._leash = WorkerLeash(self)
         """Hält jeden ausgelaufenen Arbeiter, bis Qt mit ihm durch ist.
 
@@ -2217,7 +2242,14 @@ class Session(QObject):
         isoliert gerechneter Umbau (:meth:`_insert`). Der Rückgabewert heißt
         dann: angenommen und unterwegs; ein ungültiger Vorschlag meldet sich
         über ``failed`` und ändert nichts.
+
+        **Innerhalb von** :meth:`one_step` wird gesammelt statt geschrieben:
+        Die Schritte gehen am Ende als eine Transaktion in den Verlauf.
         """
+        gathering = self._gathering
+        if gathering is not None and drafts and changes is None:
+            gathering.add(title, drafts, origin)
+            return True
         if self._insert_before is not None and drafts:
             return self._insert(title, drafts, origin, changes, raise_on_error=raise_on_error)
         try:
@@ -2238,6 +2270,35 @@ class Session(QObject):
             return False
         self._changed()
         return True
+
+    @contextmanager
+    def one_step(self, title: TranslatableText | str | None = None) -> Iterator[None]:
+        """Was darin über :meth:`apply` geht, wird **eine** Transaktion (§15.5, RM-372).
+
+        Für einen Ablauf, den der Kunde als eine Handlung empfindet, der aber
+        mehrere Aufrufe macht: Eine Sammelzeile des Prüfberichts führt *Kleine
+        Teile entfernen* oder *Auf den Bauraum verkleinern* je gewähltem
+        Körper aus, und jeder Körper war ein eigener Rückgängig-Schritt — ein
+        Strg+Z nahm einen von dreien zurück. Gesammelt werden die Schritte und
+        am Ende mit einem Aufruf angewandt; Halt, Einfügemarke und Absage
+        gelten dann für alle zusammen, und gerechnet wird einmal.
+
+        ``title`` ist der Titel im Verlauf, ohne ihn der des ersten Aufrufs.
+        Eine Änderung ohne Schritt (``changes``) geht ihren eigenen Weg, und
+        verschachtelt sammelt der äußere Aufruf. Wirft der Block, wird nichts
+        angewandt.
+        """
+        if self._gathering is not None:
+            yield
+            return
+        gathering = _Gathering(title)
+        self._gathering = gathering
+        try:
+            yield
+        finally:
+            self._gathering = None
+        if gathering.drafts:
+            self.apply(gathering.title or "", gathering.drafts, gathering.origin)
 
     def _bundle_stays_exact(self) -> bool:
         """Ob der nächste Zug in den vorigen aufgehen darf (§15.5).
@@ -3516,9 +3577,9 @@ class Session(QObject):
     def add_generated(self, result: GeneratedMesh) -> str:
         """Weg 3: einen erzeugten Körper einbetten, laden, reparieren (§2.2).
 
-        Die zwei Transaktionen entstehen im Kern; was hier passiert, ist das
-        Neuzeichnen danach — genau wie bei einem Import. Und wie dort kommt
-        hinter einen Halt kein Schritt (:meth:`halt_in_the_way`).
+        Die eine Transaktion entsteht im Kern (RM-372); was hier passiert,
+        ist das Neuzeichnen danach — genau wie bei einem Import. Und wie dort
+        kommt hinter einen Halt kein Schritt (:meth:`halt_in_the_way`).
         """
         refusal = self.halt_in_the_way()
         if refusal is not None:

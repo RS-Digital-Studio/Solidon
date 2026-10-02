@@ -26,6 +26,7 @@ from typing import Final
 
 from app.core import activation
 from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
+from app.core.errors import AppError
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, checksum, embedded_source_path, next_source_id
@@ -57,6 +58,16 @@ GENERATED_REPAIR: dict[str, bool] = {
 #: aus jede Richtung gleich weit ist: ein Möbel im Puppenhausmaßstab liegt
 #: darunter, ein Gehäuse darüber, und beides ist ein Schritt.
 WORKING_SIZE_MM = 100.0
+
+#: Die Titel, unter denen eine Erzeugung bis RM-372 ihre Schritte als eigene
+#: Transaktionen anlegte. Neue Projekte tragen sie nicht mehr; gespeicherte
+#: schon (der Titel reist als ``msgid``), und ihr Verlauf soll in jeder
+#: Sprache lesbar bleiben — deshalb stehen sie hier für die Kataloge.
+EARLIER_TITLES: Final = (
+    _("Auf Arbeitsgröße bringen"),
+    _("Reparaturkette"),
+    _("Auf Arbeitsauflösung bringen"),
+)
 
 
 def working_volume(body: Mesh) -> float:
@@ -159,8 +170,8 @@ def from_image(
 
 
 def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Generation:
-    """Datei einbetten, laden, reparieren — zwei Schritte im Verlauf, beide
-    rücknehmbar.
+    """Datei einbetten, laden, auf Maß bringen, reparieren, aufsetzen — als
+    **eine** Transaktion, deren Schritte einzeln im Verlauf stehen (§15.5).
 
     Getrennt von den zwei Aufrufen darüber, damit eine Oberfläche, die schon
     ein Ergebnis hat — weil sie den Generator auf ihrem eigenen Thread laufen
@@ -178,11 +189,11 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Modell ist das kein kleiner Rest: Die Quelle trägt Prompt und Startwert
     # im `SourceOrigin`, also die Anfrage des Kunden.
     #
-    # Ein Rücknahmepfad wie in `Session.import_model` ginge hier nicht mit
-    # einer Zeile — es folgen mehrere Transaktionen. Die Frage vorzuziehen ist
-    # billiger und deckt den gemeldeten Fall vollständig: Zwischen hier und
-    # dem ersten `apply` ändert sich der Freischaltzustand nicht.
-    # Gefunden von 3d-druck-46 im Lizenz-Audit.
+    # Die Frage vorzuziehen deckt den gemeldeten Fall vollständig: Zwischen
+    # hier und dem `apply` ändert sich der Freischaltzustand nicht. Lehnt
+    # `apply` aus einem anderen Grund ab, nimmt der Rücknahmepfad unten die
+    # Quelle wieder heraus — seit die Erzeugung eine Transaktion ist, ist das
+    # eine Zeile. Gefunden von 3d-druck-46 im Lizenz-Audit.
     activation.require(activation.CHANGE)
 
     source_id = next_source_id(document.sources)
@@ -210,52 +221,49 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # (§26.4). Welcher Generator es war, gehört zur Quelle — dort bleibt es
     # lesbar.
     origin = Origin(by="user")
-    loading = history.apply(
-        _("Modell erzeugen"),
-        [
-            OperationDraft(
-                op="load",
-                params={
-                    "source": source_id,
-                    "unit": "mm",
-                    # **Eine erzeugte GLB steht auf glTF-Achsen** (RM-086).
-                    # Hier stand „Rohachsen", und gemessen war das nie:
-                    # TripoSG schreibt Y-oben wie jede glTF-Datei — der
-                    # Drache aus ``image_00001_.glb`` und die vier
-                    # Puppenhausmöbel tragen ihre Höhe auf Y. Roh gelesen lag
-                    # jeder erzeugte Körper auf dem Rücken. Gedreht wird wie
-                    # beim Import; die Meter der Spezifikation gelten dagegen
-                    # nicht: Die Einheit bleibt ``mm``, die Größe setzt der
-                    # eigene Schritt ``fit_to_size`` darunter. Ältere Projekte
-                    # behalten ``legacy_raw`` über die Migration (24 → 25).
-                    "coordinates": (
-                        "gltf" if result.suffix.lower() in (".glb", ".gltf") else "legacy_raw"
-                    ),
-                    "name": short,
-                    # Beim Laden nichts bereinigen, solange das Modell winzig
-                    # ist. Die Reparaturkette unten holt jeden dieser Schritte
-                    # nach — dann aber auf hundert Millimetern, wo dieselben
-                    # Toleranzen das Richtige treffen.
-                    #
-                    # Beide Stufen messen absolut: das Verschweißen sucht
-                    # Punkte, deren Abstand unter der Toleranz liegt, das
-                    # Entarten sucht Dreiecke, deren Fläche darunter liegt. Bei
-                    # zwei Millimetern Modellgröße ist das nicht der
-                    # Doppelpunkt und nicht die Nadel, sondern die halbe Lehne
-                    # und achtundachtzig Dreiecke, die die Hülle schließen.
-                    # Vier von vier erzeugten Netzen gingen hier auf, ohne dass
-                    # jemand eine Absicht hatte — und danach half nichts mehr:
-                    # Löcher füllen schließt eine Naht, aber keine, die quer
-                    # durch das Modell läuft.
-                    "weld": False,
-                    "remove_degenerate": False,
-                    "unify_normals": False,
-                },
-            )
-        ],
-        origin,
+    # **Eine Erzeugung ist ein Rückgängig-Schritt** (RM-372, §15.5). Hier
+    # standen drei bis vier Transaktionen: Nach dem ersten Strg+Z änderte sich
+    # bei einem dichten Netz nichts Sichtbares, nach dem zweiten lag ein
+    # Krümel von zwei Millimetern da, erst der dritte nahm das Modell weg. Die
+    # Schritte bleiben einzeln im Verlauf und änderbar — nur die Rücknahme
+    # nimmt sie zusammen. Der Körper bekommt seine Kennung vorab, damit die
+    # Schritte nach dem Laden ihn in derselben Transaktion nennen können.
+    object_id = history.next_object_id()
+    loading = OperationDraft(
+        op="load",
+        outputs=(object_id,),
+        params={
+            "source": source_id,
+            "unit": "mm",
+            # **Eine erzeugte GLB steht auf glTF-Achsen** (RM-086). Hier stand
+            # „Rohachsen", und gemessen war das nie: TripoSG schreibt Y-oben
+            # wie jede glTF-Datei — der Drache aus ``image_00001_.glb`` und die
+            # vier Puppenhausmöbel tragen ihre Höhe auf Y. Roh gelesen lag
+            # jeder erzeugte Körper auf dem Rücken. Gedreht wird wie beim
+            # Import; die Meter der Spezifikation gelten dagegen nicht: Die
+            # Einheit bleibt ``mm``, die Größe setzt der eigene Schritt
+            # ``fit_to_size`` darunter. Ältere Projekte behalten
+            # ``legacy_raw`` über die Migration (24 → 25).
+            "coordinates": ("gltf" if result.suffix.lower() in (".glb", ".gltf") else "legacy_raw"),
+            "name": short,
+            # Beim Laden nichts bereinigen, solange das Modell winzig ist. Die
+            # Reparaturkette unten holt jeden dieser Schritte nach — dann aber
+            # auf hundert Millimetern, wo dieselben Toleranzen das Richtige
+            # treffen.
+            #
+            # Beide Stufen messen absolut: das Verschweißen sucht Punkte, deren
+            # Abstand unter der Toleranz liegt, das Entarten sucht Dreiecke,
+            # deren Fläche darunter liegt. Bei zwei Millimetern Modellgröße ist
+            # das nicht der Doppelpunkt und nicht die Nadel, sondern die halbe
+            # Lehne und achtundachtzig Dreiecke, die die Hülle schließen. Vier
+            # von vier erzeugten Netzen gingen hier auf, ohne dass jemand eine
+            # Absicht hatte — und danach half nichts mehr: Löcher füllen
+            # schließt eine Naht, aber keine, die quer durch das Modell läuft.
+            "weld": False,
+            "remove_degenerate": False,
+            "unify_normals": False,
+        },
     )
-    object_id = document.ops[-1].outputs[0]
 
     # Erst die Größe, dann die Reparatur — und diese Reihenfolge ist das
     # Gegenteil einer Geschmacksfrage.
@@ -277,83 +285,61 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Geraten wird beim Maß nichts (Regel 21): dass ein Stuhl 75 mm hoch
     # werden soll und ein Schrank 250, weiß nur der Nutzer. Was hier entsteht,
     # ist eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß
-    # kommt — und weil es eine eigene Transaktion ist, nimmt ein Undo sie
-    # zurück.
-    sizing = history.apply(
-        _("Auf Arbeitsgröße bringen"),
-        [
-            OperationDraft(
-                op="fit_to_size",
-                inputs=(object_id,),
-                outputs=(object_id,),
-                # **Und erst am fertigen Maß wird gelegt** (Robert,
-                # 28.09.2026): Ein erzeugtes Modell ist aus Kundensicht ein
-                # weiteres Modell — aufgesetzt an die erste freie Stelle,
-                # nach derselben Regel wie beim Einfügen (§17.1, Schritt 6).
-                # In einem leeren Projekt heißt das: mittig auf Platte 1.
-                params={"largest": WORKING_SIZE_MM, "free_spot": True},
-            )
-        ],
-        origin,
+    # kommt — der Befund des Schritts trägt dafür *Größe ändern* (RM-374).
+    sizing = OperationDraft(
+        op="fit_to_size",
+        inputs=(object_id,),
+        outputs=(object_id,),
+        # **Und erst am fertigen Maß wird gelegt** (Robert, 28.09.2026): Ein
+        # erzeugtes Modell ist aus Kundensicht ein weiteres Modell — aufgesetzt
+        # an die erste freie Stelle, nach derselben Regel wie beim Einfügen
+        # (§17.1, Schritt 6). In einem leeren Projekt heißt das: mittig auf
+        # Platte 1.
+        params={"largest": WORKING_SIZE_MM, "free_spot": True},
     )
-
-    # **Und zuletzt wieder aufs Bett.** Die Stelle steht seit ``fit_to_size``
-    # fest, die Höhe nicht: Die Reparaturkette nimmt lose Krümel weg, und lag
-    # einer unter dem Körper, schwebte er danach — gemessen 5,21 mm über dem
-    # Bett (Review F8). Aufgesetzt wird deshalb nach der ganzen Kette, in der
-    # Transaktion ihres letzten Schritts: Als eigene nahm ein Strg+Z nur das
-    # Aufsetzen zurück, und im Normalfall änderte sich nichts Sichtbares
-    # (Review N5).
-    seating = OperationDraft(op="place_on_bed", inputs=(object_id,), outputs=(object_id,))
-    too_fine = result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT
-    repairing = history.apply(
-        _("Reparaturkette"),
-        [
-            OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR)),
-            *(() if too_fine else (seating,)),
-        ],
-        origin,
-    )
-    # Und ein vierter Schritt, wenn das Netz zu fein ist, um damit zu arbeiten.
+    repairing = OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))
+    # Und ein eigener Schritt, wenn das Netz zu fein ist, um damit zu arbeiten.
     #
     # Ein Generator liefert typisch anderthalb Millionen Dreiecke. Damit hat
     # niemand ein Problem, außer der Merkmalserkennung — sie steigt oberhalb
     # von :data:`GENERATED_TRIANGLE_LIMIT` aus, und ohne Merkmale gibt es
     # nichts, worauf ein Klick oder der Agent zeigen könnte: keine Bohrung,
     # keinen Baustein, keine Passung. Der Ausweg stand bisher als Nebensatz im
-    # Prüfbericht („Netz → Dezimieren"), und niemand ging ihn.
-    #
-    # Als eigene Transaktion und nicht als stiller Teil der Reparatur: ein
-    # Undo nimmt sie zurück, der Stapel zeigt sie, und wer die volle Auflösung
-    # braucht, hat sie einen Klick entfernt.
-    # **Vollständig, und das war es nicht.** fit_to_size fehlte hier, und
-    # damit rollte der erste Rückroller — wer immer die Liste abarbeitet — die
-    # Erzeugung nur zu drei Vierteln zurück: Der Körper blieb als Transaktion
-    # stehen, auf 100 mm gebracht, ohne die Quelle, aus der er kam. Was in
-    # einem Zug entstanden ist, gehört vollständig in die Liste.
-    steps = [loading.id, sizing.id, repairing.id]
-    if too_fine:
-        decimating = history.apply(
-            _("Auf Arbeitsauflösung bringen"),
-            [
-                OperationDraft(
-                    op="decimate_mesh",
-                    inputs=(object_id,),
-                    outputs=(object_id,),
-                    params={"triangles": GENERATED_TRIANGLE_TARGET},
-                ),
-                seating,
-            ],
-            origin,
+    # Prüfbericht („Netz → Dezimieren"), und niemand ging ihn. Als Schritt und
+    # nicht als stiller Teil der Reparatur: Der Verlauf zeigt ihn, und wer die
+    # volle Auflösung braucht, schaltet ihn aus.
+    thinning: tuple[OperationDraft, ...] = ()
+    if result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT:
+        thinning = (
+            OperationDraft(
+                op="decimate_mesh",
+                inputs=(object_id,),
+                outputs=(object_id,),
+                params={"triangles": GENERATED_TRIANGLE_TARGET},
+            ),
         )
-        steps.append(decimating.id)
+    # **Und zuletzt wieder aufs Bett.** Die Stelle steht seit ``fit_to_size``
+    # fest, die Höhe nicht: Die Reparaturkette nimmt lose Krümel weg, und lag
+    # einer unter dem Körper, schwebte er danach — gemessen 5,21 mm über dem
+    # Bett (Review F8). Aufgesetzt wird deshalb nach der ganzen Kette.
+    seating = OperationDraft(op="place_on_bed", inputs=(object_id,), outputs=(object_id,))
+    try:
+        made = history.apply(
+            _("Modell erzeugen"), [loading, sizing, repairing, *thinning, seating], origin
+        )
+    except AppError:
+        # Abgelehnt heißt: nichts geschrieben — auch die Quelle nicht, die
+        # sonst als Waise mit der Anfrage des Kunden ins Projekt reiste.
+        del document.sources[source_id]
+        project.sources.pop(source_id, None)
+        raise
 
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)
     return Generation(
         source_id=source_id,
         object_id=object_id,
         result=result,
-        transactions=tuple(steps),
+        transactions=(made.id,),
     )
 
 

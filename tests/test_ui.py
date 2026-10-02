@@ -9586,6 +9586,82 @@ def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) ->
     assert "correct_input" in {a.id for a in offered_actions(with_step, handlers)}
 
 
+def test_a_bundle_row_acting_on_each_body_is_one_undo_step(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-372: Eine Sammelzeile führt eine Handlung je Körper aus — und jeder
+    Körper war ein eigener Rückgängig-Schritt.
+
+    Zwei Leisten aus einer 3MF ragen über den Bauraum; die Zeile „steht über
+    den Bauraum hinaus“ trägt beide. *Auf den Bauraum verkleinern* lief für
+    jede einzeln durch ``error_handlers``, und ein Strg+Z nahm nur die zweite
+    zurück. Jetzt ist der Klick eine Transaktion mit beiden Schritten, und ein
+    Strg+Z stellt beide wieder her.
+    """
+    import trimesh
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+    from app.ui import panels
+
+    monkeypatch.setattr(
+        panels.BodyChoiceDialog, "ask", lambda parent, title, ids, names: tuple(ids)
+    )
+    parts = []
+    for index in range(2):
+        mesh = trimesh.creation.box((300.0, 20.0, 20.0))
+        mesh.apply_translation((0.0, 40.0 * index, 10.0))
+        parts.append(threemf.AssemblyPart(mesh=MeshData.of(mesh), name=f"Leiste {index + 1}"))
+    assert window.session.import_payload("leisten.3mf", threemf.write_assembly(parts))
+    assert window.session.wait_for_idle()
+    document = window.session.project.document
+    bodies = document.ops[-1].outputs
+    assert len(bodies) == 2
+    window.report.show_result(window.session.last_result, document)
+
+    listing = window.report.list
+    item = next(
+        (
+            listing.item(row)
+            for row in range(listing.count())
+            if listing.item(row).data(Qt.ItemDataRole.UserRole).code
+            == "arrange.out_of_build_volume"
+        ),
+        None,
+    )
+    assert item is not None, [
+        listing.item(row).data(Qt.ItemDataRole.UserRole).code for row in range(listing.count())
+    ]
+    assert set(item.data(panels._BODIES_ROLE) or ()) == set(bodies), "eine Zeile für beide"
+    listing.setCurrentItem(item)
+    QApplication.processEvents()
+    button = next(
+        child
+        for child in window.report._offers.findChildren(QPushButton)
+        if child.text() == str(errors.SCALE_TO_FIT.label)
+    )
+
+    def longest() -> list[float]:
+        objects = window.session.last_result.scene.objects
+        return [max(objects[key].mesh.bounds.size) for key in bodies]
+
+    assert longest() == pytest.approx([300.0, 300.0])
+    transactions = len(document.transactions)
+    button.click()
+    assert window.session.wait_for_idle()
+
+    assert len(document.transactions) == transactions + 1, "ein Klick, ein Rückgängig-Schritt"
+    by_id = {entry.id: entry for entry in document.ops}
+    made = [by_id[op_id] for op_id in document.transactions[-1].ops]
+    assert sorted(entry.inputs[0] for entry in made) == sorted(bodies)
+    assert all(size < 300.0 for size in longest()), longest()
+
+    window.action_undo()
+    assert window.session.wait_for_idle()
+    assert longest() == pytest.approx([300.0, 300.0]), "ein Strg+Z stellt beide wieder her"
+
+
 @pytest.mark.parametrize("count", [2, 8])
 @pytest.mark.parametrize("changed", [False, True])
 def test_import_bed_action_keeps_the_import_group_and_ignores_selection(

@@ -130,8 +130,8 @@ def way_two() -> Project:
 def way_three() -> Project:
     """Ein erzeugtes Netz aufbereiten: Reparaturkette, dann auf das Bett (§2.2).
 
-    Der Weg ist der echte — dieselben zwei Transaktionen, die eine Erzeugung
-    macht, mit Prompt und Startwert in der Quelle (§27). Nur der Generator ist
+    Der Weg ist der echte — dieselbe Transaktion, die eine Erzeugung macht
+    (RM-372), mit Prompt und Startwert in der Quelle (§27). Nur der Generator ist
     geskriptet: ein Beispielprojekt, für dessen Bau eine Grafikkarte nötig ist,
     ist kein Beispiel.
 

@@ -163,19 +163,20 @@ def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Pr
 
 
 def test_the_repair_is_one_step_that_can_be_taken_back(project: Project, profile: Profile) -> None:
-    """Sie läuft automatisch, und das ist nicht dasselbe wie unvermeidlich."""
+    """Sie läuft automatisch, und das ist nicht dasselbe wie unvermeidlich.
+
+    Seit die Erzeugung **ein** Rückgängig-Schritt ist (RM-372), nimmt ein
+    Strg+Z das ganze Modell; die Reparatur bleibt trotzdem ein eigener Schritt
+    im Verlauf, den man ändern kann — hier ohne jede Bereinigung.
+    """
     from_text(project, backend(), "eine kleine Figur", seed=7)
     with_repair = evaluated(project, profile)
     object_id = next(iter(with_repair.scene.objects))
     repaired = with_repair.scene.objects[object_id].mesh.triangle_count
 
-    # Zwei Undo: das Auf-Maß-Bringen und die Reparatur. Seit die Generierung
-    # ihren Körper auf Arbeitsgröße bringt, liegt zwischen dem Laden und dem
-    # Ergebnis ein Schritt mehr — und nur einer zurückzunehmen ließe die
-    # Reparatur stehen, um die es hier geht.
     history = History(project.document)
-    history.undo()
-    history.undo()
+    repair = next(entry for entry in history.operations if entry.op == "repair")
+    history.change_params(repair.id, dict.fromkeys(repair.params, False))
     without = evaluated(project, profile)
 
     assert without.complete
@@ -390,7 +391,14 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Figur", seed=7)
 
-    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren samt Aufsetzen"
+    assert len(generation.transactions) == 1, "eine Erzeugung ist ein Rückgängig-Schritt (RM-372)"
+    assert [entry.op for entry in project.document.ops] == [
+        "load",
+        "fit_to_size",
+        "repair",
+        "decimate_mesh",
+        "place_on_bed",
+    ], "Dezimieren nach der Reparatur, Aufsetzen zuletzt"
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
@@ -421,7 +429,8 @@ def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Vase", seed=7)
 
-    assert len(generation.transactions) == 3, (
+    assert len(generation.transactions) == 1, "eine Erzeugung ist ein Rückgängig-Schritt"
+    assert "decimate_mesh" not in [entry.op for entry in project.document.ops], (
         "Laden, Größe, Reparieren samt Aufsetzen — keine Dezimierung"
     )
 
@@ -561,21 +570,80 @@ def test_a_generated_model_stays_seated_when_the_repair_takes_a_crumb_below_it(
     assert [operation.op for operation in project.document.ops][-1] == "place_on_bed"
 
 
-def test_one_undo_takes_the_last_chain_step_and_the_seating_together(project: Project) -> None:
-    """Review N5 (Sonde p16): Das Aufsetzen stand als eigene Transaktion am
-    Ende. Ein Strg+Z nahm nur sie, und im Normalfall änderte sich nichts
-    Sichtbares. Es gehört in die Transaktion des letzten Kettenschritts: ein
-    Strg+Z nimmt Reparatur und Aufsetzen zusammen, wie vor dem Aufsetzen."""
+def _fingerprints(result) -> dict[str, str]:
+    """Je Körper ein Abdruck seiner Ecken und Dreiecke — bitgleich oder nicht."""
+    import hashlib
+
+    from app.core.geom.mesh import as_mesh_data
+
+    prints = {}
+    for object_id, entry in result.scene.objects.items():
+        raw = as_mesh_data(entry.mesh).raw
+        digest = hashlib.sha256(np.asarray(raw.vertices, dtype=np.float64).tobytes())
+        digest.update(np.asarray(raw.faces, dtype=np.int64).tobytes())
+        prints[object_id] = digest.hexdigest()
+    return prints
+
+
+def test_a_generation_is_one_step_in_the_history(project: Project, profile: Profile) -> None:
+    """RM-372: Eine Erzeugung legte drei bis vier Transaktionen an. Nach dem
+    ersten Strg+Z änderte sich bei einem dichten Netz nichts Sichtbares, nach
+    dem zweiten lag ein Krümel von zwei Millimetern da, erst der dritte nahm
+    das Modell weg (Review N5 hatte nur das Aufsetzen in die Reparatur gelegt).
+
+    Jetzt ist sie eine Transaktion mit dem Titel der Erzeugung; die Schritte
+    stehen einzeln im Verlauf, ein Strg+Z nimmt das ganze Modell, Strg+Y legt
+    es bitgleich wieder hin.
+    """
+    from app.core.scene import ResultCache
+
     generation = from_text(project, _sphere_backend(), "eine Kugel", seed=7)
-    last = next(
-        entry for entry in project.document.transactions if entry.id == generation.transactions[-1]
-    )
+
+    transactions = project.document.transactions
+    assert [entry.id for entry in transactions] == list(generation.transactions)
+    assert len(transactions) == 1, [str(entry.title) for entry in transactions]
+    assert str(transactions[0].title) == "Modell erzeugen"
     by_id = {operation.id: operation.op for operation in project.document.ops}
-    assert [by_id[op_id] for op_id in last.ops] == ["repair", "place_on_bed"]
+    assert [by_id[op_id] for op_id in transactions[0].ops] == [
+        "load",
+        "fit_to_size",
+        "repair",
+        "place_on_bed",
+    ], "die Schritte bleiben einzeln im Verlauf"
+    before = _fingerprints(evaluate(project.document, profile, sources=ProjectSources(project)))
+    assert generation.object_id in before
 
-    History(project.document).undo()
+    history = History(project.document)
+    history.undo()
+    taken_back = evaluate(
+        project.document, profile, sources=ProjectSources(project), cache=ResultCache()
+    )
+    assert project.document.ops == [], "ein Strg+Z nimmt das ganze Modell"
+    assert not taken_back.scene.objects
 
-    assert [operation.op for operation in project.document.ops] == ["load", "fit_to_size"]
+    history.redo()
+    again = evaluate(
+        project.document, profile, sources=ProjectSources(project), cache=ResultCache()
+    )
+    assert _fingerprints(again) == before, "Strg+Y legt das Modell bitgleich wieder hin"
+
+
+def test_the_agent_takes_a_generation_back_as_one_step(project: Project) -> None:
+    """Der Agentenweg derselben Erzeugung (RM-372): „Nimm das Modell zurück“
+    nennt die Transaktion der Erzeugung, und die Rücknahme erfasst genau sie —
+    keine Ankündigung, dass drei jüngere mitgehen (``agent.undo_sweeps``)."""
+    from app.core.agent.apply import accept, sweep_for
+    from app.core.agent.proposal import Proposal
+
+    generation = from_text(project, _sphere_backend(), "eine Kugel", seed=7)
+    (made,) = generation.transactions
+
+    assert sweep_for(project.document, made) == (made,)
+    history = History(project.document)
+    accept(Proposal(request="nimm das Modell zurück", undo_of=made, undo_sweeps=(made,)), history)
+
+    assert project.document.ops == []
+    assert project.document.transactions == []
 
 
 def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(

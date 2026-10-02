@@ -635,6 +635,18 @@ class History:
                 return transaction
         return None
 
+    def next_object_id(self) -> ObjectId:
+        """Die Kennung, die der nächste neue Körper bekäme — vergeben wird nichts.
+
+        Für einen Ablauf, der einen Körper anlegt und ihn in **derselben**
+        Transaktion weiterbearbeitet (§15.5, RM-372): Der erste Entwurf nennt
+        sie als ``outputs``, die folgenden als Eingang. Gezählt wird wie bei
+        der Vergabe (:meth:`_reseed`), also auch über zurückgenommene
+        Kennungen hinweg; ``_plan`` lehnt eine Kennung ab, die inzwischen
+        jemand trägt.
+        """
+        return f"obj_{self._highest_object_index() + 1}"
+
     # --- Schreiben -------------------------------------------------------------
 
     def apply(

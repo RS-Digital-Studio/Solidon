@@ -12,6 +12,7 @@ import dataclasses
 import math
 import weakref
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from functools import partial
 from itertools import pairwise
 from typing import Any, Final, NamedTuple, cast
@@ -721,6 +722,20 @@ def actions_for(finding: Finding) -> tuple[Action, ...]:
     if finding.code.startswith(_FROM_AN_OPERATION) and finding.op_id is not None:
         return (CORRECT_INPUT,)
     return ()
+
+
+def _one_step(widget: QWidget) -> AbstractContextManager[None]:
+    """Die Sammlung der Sitzung, in deren Fenster das Panel steckt (RM-372).
+
+    Ohne Fenster mit Sitzung — ein Panel für sich, etwa in einem Test — gibt
+    es nichts zu sammeln, und jeder Handler schreibt wie bisher selbst.
+    """
+    session = getattr(widget.window(), "session", None)
+    gather = getattr(session, "one_step", None)
+    if callable(gather):
+        gathering: AbstractContextManager[None] = gather()
+        return gathering
+    return nullcontext()
 
 
 def _object_for_finding(finding: Finding, document: Document | None) -> ObjectId | None:
@@ -5237,8 +5252,12 @@ class ReportPanel(QWidget):
                 return
             members: dict[str, Finding] = item.data(_MEMBERS_ROLE) or {}
             if handler is not None:
-                for body in chosen:
-                    handler(as_error(members.get(body, finding), self._document))
+                # **Ein Klick, ein Rückgängig-Schritt** (RM-372): Je Körper
+                # legte der Handler eine eigene Transaktion an, und ein Strg+Z
+                # nahm einen von dreien zurück. Die Sitzung sammelt sie.
+                with _one_step(self):
+                    for body in chosen:
+                        handler(as_error(members.get(body, finding), self._document))
             return
         if finding is not None and handler is not None:
             if action_id == REPAIR_AND_RETRY.id:

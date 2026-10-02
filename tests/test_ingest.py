@@ -2731,3 +2731,35 @@ def test_parts_apart_or_with_play_keep_the_plain_sentence() -> None:
     loose = normalise(MeshData.of(trimesh.util.concatenate([pin, ring])), "mm")
     finding = next(f for f in loose.findings if f.code == "ingest.multiple_components")
     assert str(finding.message) == "Das Modell besteht aus mehreren Teilen."
+
+
+def test_an_import_with_its_repair_is_one_undo_step(profile: Profile) -> None:
+    """RM-372: Einfügen samt Reparatur ist ein Rückgängig-Schritt.
+
+    Die Bereinigung beim Einlesen (Verschweißen, Normalen, Löcher) steht im
+    Ladeschritt und nicht in einem zweiten; ein Strg+Z nimmt das reparierte
+    Modell ganz zurück, und ein Strg+Y legt es wieder hin. Geprüft am offenen
+    Netz, an dem die Reparatur tatsächlich etwas tut.
+    """
+    payload = (MESHES / "broken_open.stl").read_bytes()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/broken_open.stl", sha256=checksum(payload)
+    )
+    project.sources["src_1"] = payload
+    plan = import_plan("src_1", "broken_open.stl", payload, "mm", first_model=True)
+    history = History(project.document)
+    history.apply(plan.title, [plan.draft])
+
+    assert len(project.document.transactions) == 1
+    loaded = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert loaded.complete
+    codes = {finding.code for finding in loaded.scene.report.findings}
+    assert "repair.holes_filled" in codes, "die Reparatur lief im Ladeschritt"
+    assert {finding.op_id for finding in loaded.scene.report.findings} <= {1, None}
+
+    history.undo()
+    assert project.document.ops == []
+    history.redo()
+    again = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert set(again.scene.objects) == set(loaded.scene.objects)
