@@ -2433,6 +2433,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bleiben im Release zu prüfen; RM-298 bleibt offen.
   Review 02.10. (`7f0de659d`): Der neue Bericht `rm298-poolnachweise-2026-10-02.md` (Z. 22, 26, 61) erklärt (a) für geschlossen, ohne zu sagen, dass nur `shutdown` die Sperre nach einem späten Prozessende aufhebt (RM-384).
 
+  **Teilstand 02.10.2026, (f), Rauchtest-Endebudget:** Das Prüfwerkzeug
+  übernimmt vor den Paketphasen sein eigenes freiwilliges Endebudget von
+  30 s. Die Herkunft ist der bestehende unabhängige Endetest; die
+  Produktfrist bleibt 0,5 s. Tatsächlich zuvor 1 Testkörperfehler und
+  2 grüne Kontrollen, danach 4 reine Prozessattrappen-/Anschlussfälle
+  grün, jeweils ohne Aufbau-/Abbaufehler oder Skips und mit fünf stabilen
+  Hashes. Erzwungener Tod bleibt rot, weiterlebende Kinder behalten
+  Besitz und Stopfehler; Rücksetzen nur des Werkzeugbudgets erzeugt den
+  alten Fehler erneut. Ruff, eigene Formatbereiche und unabhängiger
+  Quell-/Nachweisreview sind grün.
+  [Portabler Werkzeug-/Gegenlaufbeleg](konzepte/nachweise-release-0.5.1/reports/rm298-rauchtest-2026-10-02.md).
+  Zentrales Tor und tatsächliche Git-Integration dieser Einheit stehen
+  aus. Wirklicher Paketlauf, langsamer macOS-Runner und native
+  Ende-/Killlatenz sind weiter Releaseabnahmen; RM298 bleibt `[~]`.
+
   **Teilstand 02.10.2026, (b), Transfermangel:** ENOSPC bleibt als
   `OSError` vom tatsächlichen Speichermangel getrennt; ein abgewiesener
   Eltern-Eingangs- oder Helfer-Eingangs-/Ergebnistransfer nimmt den bestehenden

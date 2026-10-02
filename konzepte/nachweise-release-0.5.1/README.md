@@ -43,6 +43,7 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm298-rauchtest-2026-10-02.md`](reports/rm298-rauchtest-2026-10-02.md) | Eigenes Rauchtest-Endebudget am echten Werkzeug-/Poolanschluss; verzögert sauberes Ende, Killfehler und Rückbudgetkontrolle | RM-298(f) |
 | [`reports/remote-48106-geometrie.md`](reports/remote-48106-geometrie.md) | Unveränderter historischer Review am festen Stand `48106c57a`: feine Ausgabe, Eingangsprüfung vor Entwurfsbudget und Spiegelsymmetrie | RM-352, RM-434, RM-425 |
 | [`reports/remote-48106-geometrie-proben.json`](reports/remote-48106-geometrie-proben.json), [`reports/remote-48106-spiegel-probe.json`](reports/remote-48106-spiegel-probe.json) | Unveränderte Messdaten und Quellenhashes dieses Reviews; für die Symmetrie ist der getrennte Radius-16-Nachlauf maßgeblich | RM-352, RM-434, RM-425 |
 | [`reports/rm298-sitzungsabbruch-2026-10-02.md`](reports/rm298-sitzungsabbruch-2026-10-02.md) | Bestätigtes Ende vor synchronem Ersetzen, ungültige alte Kernfragen und korrigierter Fehlervertrag mit allen Katalogen | RM-298(e) |
