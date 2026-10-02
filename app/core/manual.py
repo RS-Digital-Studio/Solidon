@@ -613,7 +613,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Für genaue Maße** setzt *Auf Maß bringen* ein Zielmaß, der Dialog von "
             "*Skalieren* verzerrt je Achse. Zwei Teile setzt *An Merkmal ausrichten* "
             "aneinander, Fläche auf Fläche oder Bohrung auf Bohrung. Sein Ziel ist "
-            "anfangs leer; der erste Klick ins Bild wählt es.\n\n"
+            "anfangs leer, und *Übernehmen* wartet, bis Sie es gewählt haben.\n\n"
             "**Farbe kommt über das Filament.** *Filament zuweisen* nimmt den ganzen "
             "Körper, *Filament auf eine Fläche* die angeklickte Fläche, auch eine "
             "gerundete Seite wie den Bogen eines Buchstabens. Gewählt wird ein Filament "

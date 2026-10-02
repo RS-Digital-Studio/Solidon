@@ -38,7 +38,7 @@ dans `website/version.json`.
 
 ### Perçages, trous oblongs et découpe
 
-- L'angle d'un trou oblong sur un perçage importé pointe dans la direction attendue et la garde quand vous changez la finesse. Les angles enregistrés gardent leur direction.
+- L'angle d'un trou oblong sur un perçage importé pointe dans la direction attendue et la garde quand vous changez la finesse.
 - Deux plaques qui se touchent gardent leur matière quand vous étirez un trou oblong, et une goupille au-dessus du perçage reste en place.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
@@ -56,7 +56,7 @@ dans `website/version.json`.
 - Dans la fenêtre, « Fusionner en douceur » montre la même forme qu'à l'export. Seuls les très grands corps sont prévisualisés plus grossièrement, et l'aperçu le dit.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
-- La cible d'« Aligner sur une caractéristique » est d'abord vide. Le premier clic dans la vue la remplit, et « Appliquer » attend qu'elle soit choisie.
+- La cible d'« Aligner sur une caractéristique » est d'abord vide. « Appliquer » attend qu'elle soit choisie et ne pose plus le corps sans rien dire du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 
 ### Générer avec l'IA
