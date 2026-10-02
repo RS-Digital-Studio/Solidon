@@ -2,10 +2,14 @@
 
 Säule A beginnt hier: ohne einen Weg, einen ersten Körper in eine leere Szene
 zu setzen, hat „bau mir eine Halterung" nichts, worauf es stehen könnte.
-Quader, Zylinder, Kegel, Kugel und Ring decken die analytischen Grundformen;
-Zusammengesetztes entsteht daraus über Boolesche Ops oder als Baustein aus der
-Bibliothek. Die Regelsammlung priorisiert geeignete Bausteine vor dem Aufbau
-einzelner Primitive (§39).
+Quader, Zylinder, Kegel, Kugel, Ring und Rohr decken die analytischen
+Grundformen; Zusammengesetztes entsteht daraus über Boolesche Ops oder als
+Baustein aus der Bibliothek. Die Regelsammlung priorisiert geeignete Bausteine
+vor dem Aufbau einzelner Primitive (§39).
+
+**Das Rohr kam mit RM-398 dazu.** Drei Nachbauten (Rohrschelle,
+Kartuschendeckel, Rankenclip) bauten es aus Zylinder und *Bohrung setzen* —
+zwei Schritte und ein Bohrdialog für die Form, die ein Ring mit Loch ist.
 
 **Hier stand bis zum 26.08.2026 auch der OpenSCAD-Körper.** Er war die
 Rückfallebene aus §24.1, für Formen, die kein Baustein und kein Primitiv
@@ -37,8 +41,10 @@ from app.core.sketch.planes import frame_of
 from app.core.types import (
     BaseParams,
     Feature,
+    Finding,
     OpContext,
     OpResult,
+    Profile,
     Quality,
     SceneObject,
     Transform,
@@ -101,6 +107,42 @@ def tube_fits_the_ring(outer_diameter: float, tube_diameter: float) -> None:
             constraint="crosses_axis",
             values={"maximum_mm": outer_diameter / 2.0},
         )
+
+
+def tube_bore(
+    outer_diameter: float, wall: float, inner_diameter: float, inner_given: bool
+) -> float:
+    """Der Innendurchmesser eines Rohrs — und die Absage, wo keiner bleibt (beide Kerne).
+
+    Wer den Innendurchmesser angibt, bekommt ihn; sonst folgt er aus der
+    Wandstärke. Verglichen wird über ``is_greater``, nie mit ``==`` (Regel 6):
+    Eine Wand, die genau die Hälfte des Außenmaßes ist, lässt keine Öffnung.
+    """
+    if inner_given:
+        if not is_greater(outer_diameter, inner_diameter):
+            raise ValidationError(
+                "inner_diameter",
+                _(
+                    "Der Innendurchmesser ist nicht kleiner als der Außendurchmesser. "
+                    "Einen kleineren Innendurchmesser eintragen."
+                ),
+                value=inner_diameter,
+                constraint="maximum",
+                values={"maximum_mm": outer_diameter},
+            )
+        return inner_diameter
+    if not is_greater(outer_diameter, 2.0 * wall):
+        raise ValidationError(
+            "wall",
+            _(
+                "Die Wand ist für diesen Außendurchmesser zu dick — sie muss dünner "
+                "als dessen Hälfte sein."
+            ),
+            value=wall,
+            constraint="maximum",
+            values={"maximum_mm": outer_diameter / 2.0},
+        )
+    return outer_diameter - 2.0 * wall
 
 
 def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality) -> MeshData:
@@ -173,6 +215,24 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
             (outer_diameter - tube_diameter) / 2.0, minor_radius, segments, segments
         )
         body.apply_translation([0.0, 0.0, minor_radius])
+        return MeshData.of(body)
+    if name == "create_tube":
+        from app.core.geom import lathe
+
+        outer_diameter = float(values["outer_diameter"])
+        inner_diameter = tube_bore(
+            outer_diameter,
+            float(values["wall"]),
+            float(values["inner_diameter"]),
+            bool(values["inner_given"]),
+        )
+        height = float(values["height"])
+        # Wie der Zylinder: die eingetragenen Segmente, Ecken auf den Achsen
+        # (``lathe``, RM-187), beide Kreise einbeschrieben.
+        body = lathe.annulus(
+            inner_diameter / 2.0, outer_diameter / 2.0, height, sections=int(values["segments"])
+        )
+        body.apply_translation([0.0, 0.0, height / 2.0])
         return MeshData.of(body)
     raise ValueError(f"unknown mesh primitive: {name}")
 
@@ -510,6 +570,124 @@ def create_torus(ctx: OpContext) -> OpResult:
     params = cast(TorusParams, ctx.params)
     mesh = primitive_local_tool("create_torus", params.as_dict(), ctx.quality)
     return OpResult(outputs=[_object(params.name or _("Ring"), mesh, params)])
+
+
+#: Die Felder des Rohrs, die beide Kerne gleich tragen (P2.8). Der Netz-Zwilling
+#: hat dazu ``segments``; Lage, Richtung und Drehung kommen aus
+#: :class:`PositionedPrimitiveParams`.
+TUBE_OUTER_DOC = _("Durchmesser von Außenkante zu Außenkante. Das Rohr steht auf dem Druckbett.")
+TUBE_INNER_GIVEN_DOC = _(
+    "Aus: Die Wandstärke bestimmt die Öffnung. An: Der Innendurchmesser bestimmt sie, "
+    "und die Wand ergibt sich daraus."
+)
+TUBE_WALL_DOC = _(
+    "Dicke der Rohrwand. Ist sie dünner, als der Drucker sie legen kann, sagt es ein Befund."
+)
+TUBE_INNER_DOC = _("Durchmesser der Öffnung. Er muss kleiner sein als der Außendurchmesser.")
+TUBE_HEIGHT_DOC = _("Länge des Rohrs nach oben, von der Standfläche aus.")
+
+
+@op_params
+class TubeParams(PositionedPrimitiveParams):
+    outer_diameter: float = param(
+        title=_("Außendurchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=TUBE_OUTER_DOC,
+    )
+    inner_given: bool = param(
+        title=_("Innendurchmesser angeben"),
+        default=False,
+        doc=TUBE_INNER_GIVEN_DOC,
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.05,
+        maximum=500.0,
+        depends_on=("inner_given", (False,)),
+        doc=TUBE_WALL_DOC,
+    )
+    inner_diameter: float = param(
+        title=_("Innendurchmesser"),
+        default=16.0,
+        unit="mm",
+        minimum=0.05,
+        maximum=1000.0,
+        depends_on=("inner_given", (True,)),
+        doc=TUBE_INNER_DOC,
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=TUBE_HEIGHT_DOC,
+    )
+    segments: int = param(
+        title=_("Segmente"),
+        default=SEGMENTS,
+        minimum=8,
+        maximum=256,
+        placement="advanced",
+        doc=_("Mehr Segmente heißt runder und langsamer."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=NAME_DOC,
+    )
+
+
+@register_op(
+    name="create_tube",
+    title=_("Rohr anlegen"),
+    category="primitive",
+    params=TubeParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Legt ein Rohr an, stehend auf dem Druckbett — einen Zylinder mit durchgehender "
+        "Öffnung, bemaßt über die Wandstärke oder den Innendurchmesser."
+    ),
+)
+def create_tube(ctx: OpContext) -> OpResult:
+    params = cast(TubeParams, ctx.params)
+    mesh = primitive_local_tool("create_tube", params.as_dict(), ctx.quality)
+    return OpResult(
+        outputs=[_object(params.name or _("Rohr"), mesh, params)],
+        findings=tube_findings(
+            params.outer_diameter,
+            params.wall,
+            params.inner_diameter,
+            params.inner_given,
+            ctx.profile,
+        ),
+    )
+
+
+def tube_findings(
+    outer_diameter: float,
+    wall: float,
+    inner_diameter: float,
+    inner_given: bool,
+    profile: Profile | None,
+) -> list[Finding]:
+    """Trägt der Drucker die Wand? Dieselbe Frage und Quelle wie beim Aushöhlen (§39).
+
+    Eine Schemagrenze kann das nicht beantworten — das Profil kommt erst mit
+    dem Auftrag (``hollow.below_printable_wall``). Beide Kerne fragen hier.
+    """
+    from app.core.geom.hollow import below_printable_wall
+
+    inner = tube_bore(outer_diameter, wall, inner_diameter, inner_given)
+    thin = below_printable_wall((outer_diameter - inner) / 2.0, profile)
+    return [thin] if thin is not None else []
 
 
 def placement_transform(params: PositionedPrimitiveParams) -> Transform:

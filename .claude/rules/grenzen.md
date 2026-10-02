@@ -251,7 +251,7 @@ rechnen“, „Als Dreiecksmodell rechnen“). Zwei Sperren vor dem Klick: in de
 exakten Kern nur, wenn er da ist (sonst fehlt der Eintrag; das Fenster prüft den
 direkten Aufruf ein zweites Mal); ins Netz nur, wenn kein späterer Schritt
 bearbeitbare Flächen braucht (`needs_exact`). Getauscht wird nur zwischen den
-fünf Grundkörpern aus `PRIMITIVE_TWINS` — an Bohren und Aushöhlen liefe ein
+Grundkörpern aus `PRIMITIVE_TWINS` — an Bohren und Aushöhlen liefe ein
 Wechsel ins Leere, dort entscheidet der Körper, und beliebige Operationen
 gegeneinander wären ein Umschreiben der Geschichte.
 
@@ -299,7 +299,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Einundvierzig von hundertzweiundvierzig Operationen tragen einen (die Zahl prüft
+Einundvierzig von hundertvierundvierzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),

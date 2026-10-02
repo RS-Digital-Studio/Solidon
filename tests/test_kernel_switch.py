@@ -43,7 +43,7 @@ def _kernel() -> None:
 
 
 def test_new_primitives_are_exact_where_the_kernel_is_present() -> None:
-    """Sichtbar ist der exakte Erzeuger, versteckt der Netz-Zwilling — für alle fünf."""
+    """Sichtbar ist der exakte Erzeuger, versteckt der Netz-Zwilling — für alle sechs."""
     _kernel()
     for mesh, brep in PRIMITIVE_TWINS:
         assert MENU_TWINS[mesh] == brep, f"{mesh} ist nicht mehr der versteckte Zwilling"
@@ -179,6 +179,143 @@ def test_the_exact_primitives_stand_where_their_mesh_twins_stand(profile: Profil
     assert caught.value.constraint == "crosses_axis"
     with pytest.raises(ValidationError):
         run("create_brep_cone", None, profile, bottom_diameter=0.0, top_diameter=0.0, height=5.0)
+
+
+#: Drei Ringe aus dem Nachbau (RM-398) und ein Rohr über die Wandstärke:
+#: Rankenclip 21,7/16,7 mal 14, Klemmschelle 22,9/16,9 mal 30, Kragen des
+#: Kartuschendeckels 34,3/31,1 mal 6,4 — je Außen-, Innendurchmesser und Höhe.
+TUBES = [
+    pytest.param(
+        {"outer_diameter": 21.7, "inner_given": True, "inner_diameter": 16.7, "height": 14.0},
+        16.7,
+        id="rankenclip",
+    ),
+    pytest.param(
+        {"outer_diameter": 22.9, "inner_given": True, "inner_diameter": 16.9, "height": 30.0},
+        16.9,
+        id="klemmschelle",
+    ),
+    pytest.param(
+        {"outer_diameter": 34.3, "inner_given": True, "inner_diameter": 31.1, "height": 6.4},
+        31.1,
+        id="kartuschendeckel",
+    ),
+    pytest.param({"outer_diameter": 20.0, "wall": 2.0, "height": 20.0}, 16.0, id="wand"),
+]
+
+
+@pytest.mark.parametrize(("values", "inner"), TUBES)
+def test_a_tube_has_its_analytic_shape_in_both_kernels(
+    profile: Profile, values: dict[str, Any], inner: float
+) -> None:
+    """Ein Rohr ist ein Ring mit durchgehender Öffnung — an beiden Kernen mit den
+    eingetragenen Maßen, auf dem Bett stehend, und die Öffnung ist eine Bohrung.
+
+    Exakt trifft das Volumen die Analytik; das Netz ist um genau die zwei
+    einbeschriebenen Vielecke kleiner, nicht um irgendetwas daneben.
+    """
+    from app.core.perceive.features import detect
+
+    _kernel()
+    outer, height = float(values["outer_diameter"]), float(values["height"])
+    segments = 96
+    exact = run("create_brep_tube", None, profile, **values)
+    mesh = run("create_tube", None, profile, **values, segments=segments)
+    solid, net = exact.outputs[0], mesh.outputs[0]
+    assert solid.kind == "brep" and net.kind == "mesh"
+    assert not exact.findings and not mesh.findings
+
+    ring = math.pi / 4.0 * (outer**2 - inner**2) * height
+    assert float(solid.mesh.volume) == pytest.approx(ring, rel=1e-9)
+    assert solid.mesh.is_closed and solid.mesh.solid_count == 1
+    low, high = solid.mesh.bounds.minimum, solid.mesh.bounds.maximum
+    assert tuple(low) == pytest.approx((-outer / 2.0, -outer / 2.0, 0.0), abs=1e-6)
+    assert tuple(high) == pytest.approx((outer / 2.0, outer / 2.0, height), abs=1e-6)
+    bores = [f for f in solid.features.values() if f.kind == "hole"]
+    assert len(bores) == 1
+    assert bores[0].params["diameter"] == pytest.approx(inner, abs=1e-6)
+    assert bores[0].params["through"] is True
+
+    polygon = segments / 2.0 * math.sin(2.0 * math.pi / segments)
+    assert float(net.mesh.volume) == pytest.approx(
+        polygon * ((outer / 2.0) ** 2 - (inner / 2.0) ** 2) * height, rel=1e-9
+    )
+    assert net.mesh.is_watertight and net.mesh.component_count == 1
+    assert float(net.mesh.bounds.maximum[0]) == pytest.approx(outer / 2.0, abs=1e-9)
+    assert float(net.mesh.bounds.minimum[2]) == pytest.approx(0.0, abs=1e-9)
+    assert float(net.mesh.bounds.maximum[2]) == pytest.approx(height, abs=1e-9)
+    found = [f for f in detect(net.mesh).values() if f.kind == "hole"]
+    assert len(found) == 1
+    assert found[0].params["diameter"] == pytest.approx(inner, abs=0.05)
+
+
+def test_a_tube_without_an_opening_is_refused_in_both_kernels(profile: Profile) -> None:
+    """Keine Öffnung, kein Rohr — beide Kerne sagen es am Feld, das schuld ist."""
+    _kernel()
+    for name in ("create_tube", "create_brep_tube"):
+        with pytest.raises(ValidationError) as inner:
+            run(
+                name,
+                None,
+                profile,
+                outer_diameter=20.0,
+                inner_given=True,
+                inner_diameter=20.0,
+                height=5.0,
+            )
+        assert inner.value.field == "inner_diameter"
+        with pytest.raises(ValidationError) as wall:
+            run(name, None, profile, outer_diameter=20.0, wall=10.0, height=5.0)
+        assert wall.value.field == "wall"
+
+
+def test_a_tube_thinner_than_the_printer_lays_says_so_in_both_kernels(profile: Profile) -> None:
+    """Die Wand nach dem Materialprofil: dieselbe Frage wie beim Aushöhlen (§39)."""
+    _kernel()
+    thin = profile.minimum_wall_thickness / 2.0
+    for name in ("create_tube", "create_brep_tube"):
+        result = run(name, None, profile, outer_diameter=20.0, wall=thin, height=5.0)
+        codes = {finding.code for finding in result.findings}
+        assert codes & {"hollow.wall_below_nozzle", "hollow.wall_below_minimum"}, name
+        given = run(
+            name,
+            None,
+            profile,
+            outer_diameter=20.0,
+            inner_given=True,
+            inner_diameter=20.0 - 2.0 * thin,
+            height=5.0,
+        )
+        assert {finding.code for finding in given.findings} == codes, name
+
+
+def test_the_exact_tube_stands_where_its_mesh_twin_stands(profile: Profile) -> None:
+    """Lage, Richtung und Drehung wirken an beiden Zwillingen gleich (P2.8)."""
+    _kernel()
+    placed = {
+        "outer_diameter": 30.0,
+        "wall": 3.0,
+        "height": 12.0,
+        "x": 5.0,
+        "y": -3.0,
+        "z": 2.0,
+        "nx": 1.0,
+        "ny": 0.0,
+        "nz": 0.0,
+        "angle": 30.0,
+    }
+    exact = run("create_brep_tube", None, profile, **placed).outputs[0]
+    mesh = run("create_tube", None, profile, **placed, segments=96).outputs[0]
+    # Liegend entlang +X: die Länge in X, der Durchmesser in Y und Z.
+    assert exact.mesh.bounds.minimum[0] == pytest.approx(5.0, abs=1e-6)
+    assert exact.mesh.bounds.maximum[0] == pytest.approx(17.0, abs=1e-6)
+    for axis in range(3):
+        assert exact.mesh.bounds.minimum[axis] == pytest.approx(
+            mesh.mesh.bounds.minimum[axis], abs=0.02
+        )
+        assert exact.mesh.bounds.maximum[axis] == pytest.approx(
+            mesh.mesh.bounds.maximum[axis], abs=0.02
+        )
 
 
 def test_the_exact_box_knows_the_corner_anchor(profile: Profile) -> None:

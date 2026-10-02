@@ -188,6 +188,14 @@ CASES = [
         2.0 * math.pi**2 * 16.0 * 16.0,
     ),
     Case(
+        "create_brep_tube",
+        "none",
+        {"outer_diameter": 22.9, "inner_given": True, "inner_diameter": 16.9, "height": 30.0},
+        CREATE_EXACT,
+        "volume",
+        math.pi / 4.0 * (22.9**2 - 16.9**2) * 30.0,
+    ),
+    Case(
         "create_cone",
         "none",
         {"bottom_diameter": 20.0, "top_diameter": 10.0, "height": 12.0, "segments": 96},
@@ -268,6 +276,14 @@ CASES = [
         CREATE_MESH,
         "volume",
         80.0 * math.pi**2,
+    ),
+    Case(
+        "create_tube",
+        "none",
+        {"outer_diameter": 20.0, "wall": 2.0, "height": 20.0, "segments": 96},
+        CREATE_MESH,
+        "volume",
+        math.pi / 4.0 * (20.0**2 - 16.0**2) * 20.0,
     ),
     Case(
         "cut_away", "box", {"axis": "z", "position": 5.0, "keep": "below"}, MESH, "volume", 1600.0
