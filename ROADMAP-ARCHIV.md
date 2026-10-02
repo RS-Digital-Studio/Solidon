@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-358: Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz (02.10.2026)](#rm-358-weg-1-export-nennt-den-umfang-nicht-die-differenz-trägt-kein-muster-zahlen-und-ablegen-ohne-satz-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -36867,3 +36868,37 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
 **Abschluss:** Am Fenster nachgestellt (drei 300-mm-Leisten aus einer 3MF, Sammelzeile „(3) Ein Objekt steht über den Bauraum hinaus.“, *Modell teilen*, Körperwahl mit allen): am Stand `origin/main` geteilt nur die erste, eine Transaktion. Jetzt reicht die Sammelzeile alle gewählten Körper an das Fenster (`split_objects`), und `MainWindow.split_in_turn` teilt sie nacheinander: Der nächste startet, wenn der Arbeiter des vorigen ausgelaufen ist (`_on_split_busy`, Sperre `_split_next_due` gegen einen Doppelstart während `wait_for_idle`). Der Fortschritt nennt „Körper 2 von 3 · …“, *Abbrechen* hält auch die wartenden Körper an, jede Teilung bleibt ein eigener Rückgängig-Schritt wie beim einzelnen *Modell teilen*, die Befunde der Suchen sammeln sich über die Reihe, am Ende steht „3 von 3 Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.“ (Abbruch nach geteilten Körpern: eigener Satz). Tests: `test_ui.py::test_a_bundle_row_splits_every_chosen_body_in_turn` (Knopf der Sammelzeile, beide geteilt, zwei Transaktionen, kein „läuft schon“, ein Strg+Z nimmt eine Teilung zurück; am Ausgangsstand rot), `test_cancelling_a_turn_of_splits_leaves_the_rest_whole`, Nachbar `test_a_bundle_row_acting_on_each_body_is_one_undo_step` grün. Fenstersonde am echten Fenster (Klick auf *Modell teilen*, Körperwahl mit Klick auf den Hauptknopf): am Stand `origin/main` 3 von 5, danach 7 von 7. Drei neue Texte in allen Katalogen. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-358: Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz (02.10.2026)
+
+<a id="rm-358-weg-1-export-nennt-den-umfang-nicht-die-differenz-trägt-kein-muster-zahlen-und-ablegen-ohne-satz-02102026"></a>
+<a id="rm-358"></a>
+
+**RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
+  Review 02.10.2026, Gebietsprüfung Weg 1, am HEAD `6ce767031`.
+  - **W1-4 — Strg+E nach einem Merkmalklick exportiert still nur diesen Körper.** Zwei Körper im
+    Bild, die 3MF enthält einen, Quittung „Exportiert: projekt.3mf“. `main_window.py:7693–7698`,
+    `:7811–7816` exportieren die Auswahl; Menütipp (`:3830`), Dialogtitel (`:7764`) und Quittung
+    (`:8011–8019`) nennen den Umfang nicht. Fix ohne Rückfrage: Titel und Quittung nennen „1 von
+    2 Körpern“. §29, §2.8. Sonde `w1_export_auswahl.py`.
+  - **W1-3 — Die Differenzansicht zeichnet ihr Muster nicht.** `Encoding.pattern`
+    (`app/ui/palette.py:182–184`, `:213–229`) wird in `app/ui` nirgends gelesen;
+    `viewport.py:13021–13026` und `_add_body` (`:13156–13171`) unterscheiden Hinzugekommenes und
+    Entferntes nur über Farbe und Deckkraft. `tests/test_palette.py:24–30` prüft eine Zusage, die
+    keine Ansicht einlöst. Fix: `hatch_lines` (`viewport.py:1047`) an die Differenzkörper hängen.
+    Regel 18, §18.7, §19.1 (nur aus der Quelle belegt, Renderer nicht gefahren).
+  - **W1-1 — Die Einheitenfrage schreibt Zahlen mit Punkt und immer in mm**: deutsch „Zoll (in):
+    177.80 × 177.80 × 38.10 mm“, auch bei gewählter Anzeigeeinheit Zoll.
+    `app/core/ingest/ops.py:750–751` (`format_length`), `app/ui/dialogs.py:161` übernimmt;
+    `app.i18n.format_decimal` (`app/i18n/__init__.py:242`) bleibt ungenutzt. §17.1, §19.3,
+    `oberflaeche.md` „Zahlen“. Sonde `w1_einheit.py` Teil A.
+  - **W1-6 — `.f3d`, `.blend`, `.scad`, `.skp`, `.gcode` bekommen beim Ziehen nur das
+    Verbotszeichen.** `start_screen.py:509–528` filtert nach Endung, `main_window.py:22628–22634`
+    nimmt dann nicht an; für Web-Adressen ist dasselbe schon behoben (`start_screen.py:477–490`).
+    Fix: jede lokale Datei annehmen und mit einem Satz samt Weg antworten (G-Code → *G-Code
+    prüfen*). §2.7, §2.3. Sonde `w1_ablegen.py`.
+  **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
+  `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
+  Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
+
+**Abschluss:** Alle vier Funde behoben. **W1-4:** `main_window.export_scope` nennt den Umfang, sobald nicht die ganze Szene hinausgeht; der Dateidialog heißt „Exportieren: 1 von 2 Körpern“, die Quittung „Exportiert: auswahl.3mf · 1 von 2 Körpern“ (auch für mehrere Dateien). **W1-3:** Die Differenzkörper tragen ihr Muster aus `Encoding.pattern`: `viewport.body_hatch` schraffiert je Hauptrichtung der Flächen, Hinzugekommenes unter +45, Entferntes unter −45 Grad (`hatch_lines(turn=…)`, jetzt je Ebene vektorisiert; 327 680 Dreiecke in 0,25 s), Strichfarbe auf dem deckenden Körper die lesbare Gegenfarbe, auf dem durchscheinenden die eigene; gemerkt je Netz. **W1-1:** Die Anzeigeeinheit liegt als Zustand in `app.i18n` (die Oberfläche greift weiter über `labels.set_display_unit`/`display_unit`), und `unit_question` schreibt Zahlen mit dem Dezimalzeichen der Sprache in der Anzeigeeinheit; die Kommandozeile stellt dieselbe Frage samt Größen statt einer ohne. **W1-6:** Startbildschirm, Ablagefeld und Fenster nehmen jede lokale Datei an (`start_screen.dropped_file`); `open_path` schickt G-Code zu *G-Code prüfen* (`check_gcode`), ein Bild zum Relief und sagt sonst „„figur.blend“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem Programm als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.“ — auf dem Startbildschirm zusätzlich im Ablagefeld, weil die Quittung dort hinter ihm liegt. Tests: `test_ui.py::test_the_export_scope_is_empty_only_for_the_whole_scene`, `test_exporting_a_selection_names_its_scope_in_title_and_receipt`, `test_a_dropped_file_solidon_cannot_read_gets_a_sentence_with_the_way` (f3d, blend, scad, skp), `test_a_dropped_gcode_file_is_checked`, `test_the_start_screen_takes_every_local_file`, `test_the_start_screen_says_the_way_where_the_file_was_dropped`, angepasst `test_a_part_file_drop_reaches_open_path_but_json_does_not`; `test_ingest.py::test_the_question_writes_its_sizes_in_the_display_unit`, angepasst `test_the_question_says_how_big_each_answer_would_be` (hielt „101.60“ fest); `test_viewport_decisions.py::test_a_turned_hatch_runs_diagonally_and_mirrors_with_the_other_turn`, `test_the_difference_bodies_carry_their_pattern`; Renderertest einzeln `test_render_contract.py::test_the_hatch_of_an_added_body_shows_on_its_surface` (grün am echten pygfx). Fenstersonde am echten Fenster (Ablegen über echte `QDropEvent`, Strg+E mit Tastendruck, Einheitenfrage im auf Zoll gestellten Fenster, Vorschau von *Verschieben* mit 12 mm): am Stand `origin/main` 2 von 12, danach 14 von 14; im Bildschirmfoto der Vorschau steht der verschobene Körper blau mit Schrägschraffur. Regeln `kern.md` (Zahlen in fertigem Kerntext) und `oberflaeche.md` nachgezogen. Umgesetzt von Claude (Thread „Bedienung und KI“).

@@ -57,6 +57,11 @@ Regeln 6, 7 und 9 gelten wörtlich; die Griffe sind `units.is_close`/`is_zero`
 statt `==`, `auto:<material>` und `ctx.seed` mit `deterministic=False` — ohne
 beides ist eine randomisierte Prozedur falsch, auch wenn sie funktioniert.
 
+Text, den der Kern **fertig** ausliefert (eine Frage über `ctx.ask`), schreibt
+Zahlen wie die Oberfläche: `format_decimal` bzw. `decimal_separator()` und
+Längen in `app.i18n.display_unit()` — sonst liest der Kunde „177.80 mm“ in
+einem auf Zoll gestellten deutschen Fenster (`unit_question`).
+
 ## Dieselbe Datei, dasselbe Teil — auf jeder Maschine
 
 Was zu Geometrie wird oder zwischen Lagen, Flächen oder Kandidaten

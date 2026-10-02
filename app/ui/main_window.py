@@ -366,7 +366,7 @@ from app.ui.sketch_editor import (
 )
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
-from app.ui.start_screen import StartScreen, accepted_path, accepted_paths, accepted_url
+from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
 from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
@@ -1735,6 +1735,18 @@ def _format_from_filter(chosen_filter: str) -> ExportFormat | None:
         if f"*{ending}" in chosen_filter:
             return name
     return None
+
+
+def export_scope(chosen: int, total: int) -> str:
+    """Wie viel der Szene ein Export schreibt — leer, wenn es alles ist (RM-358 W1-4).
+
+    Exportiert wird die Auswahl, ohne Auswahl alles. Nach einem Klick auf ein
+    Merkmal ist ein Körper gewählt, und Strg+E schrieb still nur ihn; Titel
+    und Quittung nennen den Umfang deshalb, sobald es nicht alles ist.
+    """
+    if chosen >= total:
+        return ""
+    return tr("{count} von {total} Körpern", count=chosen, total=total)
 
 
 def _export_target(
@@ -6152,11 +6164,35 @@ class MainWindow(QMainWindow):
         Statuszeile wird ausdrücklich neu gezeichnet, bevor das Lesen den
         Hauptthread belegt (§2.8). Ein Modell liest die Sitzung dagegen im
         Arbeiter (RM-224, ``Session.import_model_async``).
+
+        Abgelegt wird jede lokale Datei (RM-358 W1-6). Was kein Modell ist,
+        geht seinen eigenen Weg: G-Code zu *G-Code prüfen*, ein Bild zum
+        Relief, alles andere bekommt den Satz, wie das Modell hereinkommt.
         """
-        if path.suffix.lower() == PART_FILE_SUFFIX:
+        suffix = path.suffix.lower()
+        if suffix in GCODE_SUFFIXES:
+            if self._begin_from_the_start_screen():
+                self.check_gcode(path)
+            return
+        if suffix in IMAGE_SUFFIXES:
+            self._drop_image(path)
+            return
+        if suffix not in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
+            said = tr(
+                "„{name}“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem "
+                "Programm als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.",
+                name=path.name,
+            )
+            self.announce(said)
+            if self.stack.currentWidget() is self.start_screen:
+                # Die Quittung liegt über der Ansicht, also hinter dem
+                # Startbildschirm; der Satz steht dort, wo abgelegt wurde.
+                self.start_screen.drop_area.say(said)
+            return
+        if suffix == PART_FILE_SUFFIX:
             self._open_part_file(path)
             return
-        project_file = path.suffix.lower() == PROJECT_SUFFIX
+        project_file = suffix == PROJECT_SUFFIX
         if project_file and not self._may_discard():
             return
         # Vom Startbildschirm aus ersetzt ein Modell das offene Projekt — und
@@ -7717,8 +7753,18 @@ class MainWindow(QMainWindow):
         )
         if not name:
             return
+        self.check_gcode(Path(name))
 
-        path = Path(name)
+    def check_gcode(self, path: Path) -> None:
+        """Eine G-Code-Datei gegenprüfen, deren Ort schon feststeht.
+
+        Der Weg des Menüs nach dem Dateidialog, und der Weg einer abgelegten
+        Datei: Wer G-Code auf das Fenster zieht, meint dieselbe Handlung
+        (RM-358 W1-6).
+        """
+        if self._gcode_worker is not None:
+            self.announce(tr("Eine G-Code-Datei wird bereits gegenprüft."))
+            return
         target = self.object_tree.selected()
         worker = _GcodeWorker(path)
         self._gcode_worker = worker
@@ -8010,7 +8056,9 @@ class MainWindow(QMainWindow):
         suggested_name = f"{base}{FORMAT_SUFFIX[wanted]}"
         folder = self.settings.export_dir(self.session.path)
         start = str(folder / suggested_name) if folder is not None else suggested_name
-        name, chosen_filter = QFileDialog.getSaveFileName(self, tr("Exportieren"), start, filters)
+        scope = export_scope(len(objects), len(result.scene.objects))
+        title = tr("Exportieren: {scope}", scope=scope) if scope else tr("Exportieren")
+        name, chosen_filter = QFileDialog.getSaveFileName(self, title, start, filters)
         if not name:
             return
         target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
@@ -8310,23 +8358,37 @@ class MainWindow(QMainWindow):
             self._focus_report()
         if not written:
             return
-        self._announce_written(written)
+        self._announce_written(
+            written, scope=export_scope(len(worker._objects), len(worker._all_objects))
+        )
 
-    def _announce_written(self, written: Sequence[Path]) -> None:
+    def _announce_written(self, written: Sequence[Path], *, scope: str = "") -> None:
         """Was geschrieben wurde und wohin — mit *Ordner zeigen* daneben.
 
         Eine Stelle für den Export und den Variantengenerator: Beide legen
-        Dateien ab, und nach beiden fragt der Kunde dasselbe.
+        Dateien ab, und nach beiden fragt der Kunde dasselbe. ``scope`` nennt
+        den Umfang, wenn nur ein Teil der Szene hinausging (:func:`export_scope`).
         """
-        self.announce(
-            tr("Exportiert: {file}", file=written[0].name)
-            if len(written) == 1
-            else tr(
+        if len(written) == 1:
+            said = (
+                tr("Exportiert: {file} · {scope}", file=written[0].name, scope=scope)
+                if scope
+                else tr("Exportiert: {file}", file=written[0].name)
+            )
+        elif scope:
+            said = tr(
+                "Exportiert: {count} Dateien → {folder} · {scope}",
+                count=len(written),
+                folder=written[0].parent,
+                scope=scope,
+            )
+        else:
+            said = tr(
                 "Exportiert: {count} Dateien → {folder}",
                 count=len(written),
                 folder=written[0].parent,
             )
-        )
+        self.announce(said)
         self._export_folder = written[0].parent
         self.reveal_export.setToolTip(str(self._export_folder))
         self.reveal_export.setStatusTip(str(self._export_folder))
@@ -23366,11 +23428,10 @@ class MainWindow(QMainWindow):
             self.session.recover(candidate, path)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if (
-            accepted_path(event) is not None
-            or accepted_url(event) is not None
-            or _image_path(event) is not None
-        ):
+        # Jede lokale Datei wird angenommen, auch eine, die Solidon nicht
+        # liest: Sie bekommt beim Ablegen einen Satz statt des
+        # Verbotszeichens (RM-358 W1-6).
+        if dropped_file(event) is not None or accepted_url(event) is not None:
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
@@ -23390,6 +23451,11 @@ class MainWindow(QMainWindow):
         url = accepted_url(event)
         if url is not None:
             self.download_model(url)
+            event.acceptProposedAction()
+            return
+        other = dropped_file(event)
+        if other is not None:
+            self.open_path(other)
             event.acceptProposedAction()
 
     def _say_files_left_out(self, count: int) -> None:

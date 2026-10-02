@@ -103,8 +103,29 @@ def test_the_question_says_how_big_each_answer_would_be() -> None:
         label = str(UNIT_NAMES.get(unit, unit))
         assert any(line.startswith(f"{label}:") for line in lines[1:]), unit
     # Vier Zoll sind 101,6 mm — die Zahl, an der man die Antwort erkennt.
-    assert "101.60" in question
-    assert "40.00" in question, "und in Zentimetern wären es vierzig"
+    assert "101,60" in question
+    assert "40,00" in question, "und in Zentimetern wären es vierzig"
+    assert "101.60" not in question, "die Zahl steht, wie die Sprache sie schreibt (RM-358 W1-1)"
+
+
+def test_the_question_writes_its_sizes_in_the_display_unit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Im auf Zoll gestellten Fenster stehen die Maße der Frage in Zoll (RM-358 W1-1).
+
+    Deutsch las „Zoll (in): 177.80 × 177.80 × 38.10 mm“ — Punkt statt Komma und
+    Millimeter, obwohl das Fenster in Zoll schreibt. Die Antwort „Zoll“ heißt
+    hier vier Zoll, und so steht es jetzt da.
+    """
+    import app.i18n
+
+    monkeypatch.setattr(app.i18n, "_DISPLAY_UNIT", "in")
+    bounds = mesh_of("bracket_inch.stl").bounds
+    question = unit_question(bounds.size, ("mm", "in"))
+
+    lines = question.splitlines()
+    inch = next(line for line in lines if line.startswith(str(UNIT_NAMES["in"])))
+    assert "4,0000" in inch and inch.endswith(" in"), inch
+    assert "101" not in inch and "mm" not in inch.split(":", 1)[1], inch
+    assert "7.00" not in question and "4.0000" not in question
 
 
 # --- reading --------------------------------------------------------------------

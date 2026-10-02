@@ -13,7 +13,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 from PySide6.QtCore import QDate, QDateTime, QEvent, QLocale, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QShowEvent, QValidator
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app import i18n
 from app.core.activation import Activation
 from app.core.geom.mesh import MeshData, face_components
 from app.core.perceive.actions import measure_explanation, measure_qualifier
@@ -129,12 +130,13 @@ def fill_parameter_units(box: QComboBox, selected: str = "mm") -> None:
 #: Durch vierundzwanzig Konstruktoren zu reichen war der Weg dorthin, und er
 #: hätte beim nächsten Widget wieder eine Stelle vergessen — ``labels.length``
 #: rufen Funktionen ohne Widget (die Merkmalsbeschriftung steht in der
-#: Überlagerung, im Objektbaum und in der Statusleiste). Deshalb liegt die
-#: Einheit hier, wie ``QLocale`` für das Dezimaltrennzeichen daneben.
+#: Überlagerung, im Objektbaum und in der Statusleiste). Deshalb ist die
+#: Einheit ein Prozesszustand. Er liegt in ``app.i18n`` neben der Sprache,
+#: weil auch der Kern Text mit Längen fertig ausliefert (die Einheitenfrage
+#: beim Einlesen, RM-358 W1-1); hier steht nur der Zugang der Oberfläche.
 #:
 #: **Ein ausdrücklich übergebenes Argument gewinnt.** Das ist kein zweites
 #: Verzeichnis, sondern ein Vorrang: Wer eine Einheit nennt, meint sie.
-_DISPLAY_UNIT: LengthUnit = "mm"
 
 
 def set_display_unit(unit: LengthUnit) -> None:
@@ -143,13 +145,12 @@ def set_display_unit(unit: LengthUnit) -> None:
     Der Kern bleibt bei Millimetern — hier wird nur geschrieben, nicht
     gerechnet.
     """
-    global _DISPLAY_UNIT
-    _DISPLAY_UNIT = unit
+    i18n.set_display_unit(unit)
 
 
 def display_unit() -> LengthUnit:
     """Die eingestellte Anzeigeeinheit."""
-    return _DISPLAY_UNIT
+    return cast(LengthUnit, i18n.display_unit())
 
 
 def read_number(text: str) -> float | None:
@@ -982,16 +983,16 @@ def length(value_mm: float, unit: LengthUnit | None = None, with_unit: bool = Tr
     """Eine Länge, wie die Oberfläche sie schreibt.
 
     Ohne ``unit`` gilt die eingestellte Anzeigeeinheit — siehe
-    :data:`_DISPLAY_UNIT`. Vorher stand hier „mm" als Vorgabe, und damit war
+    :func:`display_unit`. Vorher stand hier „mm" als Vorgabe, und damit war
     jede Ausgabe, die keine Einheit durchgereicht bekam, gegen die Einstellung
     stumm.
     """
-    return localised(format_length(value_mm, unit or _DISPLAY_UNIT, with_unit))
+    return localised(format_length(value_mm, unit or display_unit(), with_unit))
 
 
 def length_bound(value_mm: float, *, upper: bool) -> str:
     """Eine numerische Längenschranke mit Anzeigeeinheit und gerichteter Rundung."""
-    return localised(format_length_bound(value_mm, _DISPLAY_UNIT, upper=upper))
+    return localised(format_length_bound(value_mm, display_unit(), upper=upper))
 
 
 def compact_length(value_mm: float, unit: LengthUnit | None = None) -> str:
@@ -1007,7 +1008,7 @@ def compact_length(value_mm: float, unit: LengthUnit | None = None) -> str:
     :func:`length` — eine Anzeige, die zwischen zwei Schreibweisen springt,
     weil das Fenster schmaler wurde, ist schlimmer als eine lange.
     """
-    text = format_length(value_mm, unit or _DISPLAY_UNIT, with_unit=False)
+    text = format_length(value_mm, unit or display_unit(), with_unit=False)
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return localised(text or "0")
@@ -1016,12 +1017,12 @@ def compact_length(value_mm: float, unit: LengthUnit | None = None) -> str:
 def area(value_mm2: float, unit: LengthUnit | None = None) -> str:
     """Eine Fläche, wie der Nutzer sie liest — in seiner Einheit und mit
     seinem Trennzeichen."""
-    return localised(format_area(value_mm2, unit or _DISPLAY_UNIT))
+    return localised(format_area(value_mm2, unit or display_unit()))
 
 
 def volume(value_mm3: float, unit: LengthUnit | None = None) -> str:
     """Ein Volumen, wie die Oberfläche es schreibt."""
-    return localised(format_volume(value_mm3, unit or _DISPLAY_UNIT))
+    return localised(format_volume(value_mm3, unit or display_unit()))
 
 
 #: Grundfarben nach Farbton, in Grad. Die Grenze gilt bis zu diesem Wert.

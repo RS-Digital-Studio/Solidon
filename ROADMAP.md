@@ -153,7 +153,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
 | [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
-| [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
@@ -4587,35 +4586,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
   **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
 
-<a id="rm-358"></a>
-
-- [ ] **RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
-  Review 02.10.2026, Gebietsprüfung Weg 1, am HEAD `6ce767031`.
-  - **W1-4 — Strg+E nach einem Merkmalklick exportiert still nur diesen Körper.** Zwei Körper im
-    Bild, die 3MF enthält einen, Quittung „Exportiert: projekt.3mf“. `main_window.py:7693–7698`,
-    `:7811–7816` exportieren die Auswahl; Menütipp (`:3830`), Dialogtitel (`:7764`) und Quittung
-    (`:8011–8019`) nennen den Umfang nicht. Fix ohne Rückfrage: Titel und Quittung nennen „1 von
-    2 Körpern“. §29, §2.8. Sonde `w1_export_auswahl.py`.
-  - **W1-3 — Die Differenzansicht zeichnet ihr Muster nicht.** `Encoding.pattern`
-    (`app/ui/palette.py:182–184`, `:213–229`) wird in `app/ui` nirgends gelesen;
-    `viewport.py:13021–13026` und `_add_body` (`:13156–13171`) unterscheiden Hinzugekommenes und
-    Entferntes nur über Farbe und Deckkraft. `tests/test_palette.py:24–30` prüft eine Zusage, die
-    keine Ansicht einlöst. Fix: `hatch_lines` (`viewport.py:1047`) an die Differenzkörper hängen.
-    Regel 18, §18.7, §19.1 (nur aus der Quelle belegt, Renderer nicht gefahren).
-  - **W1-1 — Die Einheitenfrage schreibt Zahlen mit Punkt und immer in mm**: deutsch „Zoll (in):
-    177.80 × 177.80 × 38.10 mm“, auch bei gewählter Anzeigeeinheit Zoll.
-    `app/core/ingest/ops.py:750–751` (`format_length`), `app/ui/dialogs.py:161` übernimmt;
-    `app.i18n.format_decimal` (`app/i18n/__init__.py:242`) bleibt ungenutzt. §17.1, §19.3,
-    `oberflaeche.md` „Zahlen“. Sonde `w1_einheit.py` Teil A.
-  - **W1-6 — `.f3d`, `.blend`, `.scad`, `.skp`, `.gcode` bekommen beim Ziehen nur das
-    Verbotszeichen.** `start_screen.py:509–528` filtert nach Endung, `main_window.py:22628–22634`
-    nimmt dann nicht an; für Web-Adressen ist dasselbe schon behoben (`start_screen.py:477–490`).
-    Fix: jede lokale Datei annehmen und mit einem Satz samt Weg antworten (G-Code → *G-Code
-    prüfen*). §2.7, §2.3. Sonde `w1_ablegen.py`.
-  **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
-  `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
-  Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
-
 <a id="rm-359"></a>
 
 - [ ] **RM-359 — Weg 2: Reste aus der Gebietsprüfung.**
@@ -4696,7 +4666,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stand stehen, ein eigener Knopf setzt bei Bedarf die Einfügemarke dorthin.
   **Stellen:** Verlaufsleiste und Einfügemarke in `app/ui/panels.py` (Verlauf) und
   `app/ui/main_window.py`; Vorschau über den vorhandenen Auswertungs-Cache (`scene/cache.py`),
-  Differenzdarstellung `viewport.py:13021–13026` (Muster aus RM-358 W1-3 mitnehmen).
+  Differenzdarstellung `Viewport._redraw_difference` (trägt seit RM-358 W1-3 ihr Muster, `_add_body`).
   **Abnahme:** Test: Regler hat so viele Rasten wie Transaktionen; Ziehen ändert weder Dokument
   noch Verlauf; jede Raste zeigt die Objekt-Hashes des Stands nach dieser Transaktion; Tastatur
   (Pfeile) bedient ihn, zugänglicher Name gesetzt. Bauplan §18.7, §2.1, §2.8 (Vorschau aus dem

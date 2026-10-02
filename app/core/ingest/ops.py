@@ -53,8 +53,8 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import UNIT_NAMES, LengthUnit, format_length, is_zero, to_mm
-from app.i18n import _
+from app.core.units import DISPLAY_UNITS, UNIT_NAMES, LengthUnit, format_length, is_zero, to_mm
+from app.i18n import _, decimal_separator, display_unit
 
 _UNIT_CHOICES = ("auto", "mm", "cm", "in", "m")
 
@@ -746,9 +746,19 @@ def unit_question(size: Vec3, candidates: Sequence[LengthUnit]) -> str:
     niemand beantworten kann, ist aber nur die halbe Regel.
     """
     lines = [str(_("In welcher Einheit ist diese Datei gespeichert?"))]
+    # Der Kern liefert diesen Text fertig aus, also schreibt er die Zahlen,
+    # wie die Oberfläche es täte: im Format der Sprache und in der
+    # eingestellten Einheit (RM-358 W1-1, §19.3).
+    shown = cast(LengthUnit, display_unit()) if display_unit() in DISPLAY_UNITS else "mm"
+    separator = decimal_separator()
     for unit in candidates:
-        measures = " × ".join(format_length(to_mm(value, unit), with_unit=False) for value in size)
-        lines.append(f"{UNIT_NAMES.get(unit, unit)}: {measures} mm")
+        measures = " × ".join(
+            format_length(to_mm(value, unit), shown, with_unit=False).replace(".", separator)
+            for value in size
+        )
+        lines.append(
+            str(_("{name}: {value}", name=UNIT_NAMES.get(unit, unit), value=f"{measures} {shown}"))
+        )
     return "\n".join(lines)
 
 

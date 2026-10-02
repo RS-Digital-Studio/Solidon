@@ -513,13 +513,17 @@ def _chosen_unit(payload: bytes, name: str, requested: str, reach: float) -> str
     (:func:`plausible_reach`). Ohne ihn nahm die Kommandozeile einen Helm in
     Metern still als Zoll, wo Fenster und Operation fragen (RM-420).
     """
+    from app.core.ingest.ops import unit_question
+
     if requested != "auto":
         return requested
-    guess = detect_unit(read_model(payload, Path(name).suffix).bounds.diagonal, reach)
+    bounds = read_model(payload, Path(name).suffix).bounds
+    guess = detect_unit(bounds.diagonal, reach)
     if guess.unit is not None:
         return guess.unit
+    # Dieselbe Frage wie im Fenster, mit der Größe je Antwort (§17.1).
     return terminal_ask(
-        tr("In welcher Einheit ist diese Datei gespeichert?"),
+        unit_question(bounds.size, guess.candidates),
         [str(candidate) for candidate in guess.candidates],
     )
 

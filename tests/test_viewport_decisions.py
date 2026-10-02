@@ -4350,6 +4350,68 @@ def test_the_hatch_stays_within_its_limit() -> None:
     assert len(hoehen) >= 10, "und nicht plötzlich gar keine mehr"
 
 
+def test_a_turned_hatch_runs_diagonally_and_mirrors_with_the_other_turn() -> None:
+    """Vorwärts und rückwärts schraffiert — zwei Muster, die man ohne Farbe trennt (RM-358 W1-3)."""
+    import numpy as np
+
+    from app.ui.viewport import hatch_lines
+
+    def richtung(turn: float) -> np.ndarray:
+        segmente = hatch_lines(quadrat("z"), (0.0, 0.0, 1.0), 2.0, turn=turn)
+        assert segmente, "auch schräg trägt die Fläche Striche"
+        start, ende = (np.asarray(punkt) for punkt in segmente[0])
+        weg = ende - start
+        return weg / np.linalg.norm(weg)
+
+    vor, rueck = richtung(math.pi / 4), richtung(-math.pi / 4)
+    assert abs(vor[0]) == pytest.approx(abs(vor[1]), abs=1e-6), "unter 45 Grad"
+    assert abs(float(vor @ rueck)) < 1e-6, "die zwei Muster stehen quer zueinander"
+
+
+def test_the_difference_bodies_carry_their_pattern(qt_app: QApplication) -> None:
+    """Hinzugekommenes und Entferntes tragen eine Schraffur, nicht nur eine Farbe (RM-358 W1-3).
+
+    ``Encoding.pattern`` versprach „vorwärts“ und „rückwärts“, gelesen hat es
+    keine Ansicht: Die Differenzkörper unterschieden sich nur über Farbe und
+    Deckkraft (Regel 18). Jetzt hängt an jedem eine Schraffur in seiner
+    Richtung, und die zwei stehen quer zueinander.
+    """
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view.show_scene(_scene_with_two_holes())
+    added = MeshData(trimesh.creation.box(extents=(20.0, 20.0, 10.0)))
+    removed = MeshData(trimesh.creation.box(extents=(12.0, 12.0, 6.0)))
+    try:
+        view.show_difference(
+            SceneDifference(entries={"obj_1": Difference("obj_1", added=added, removed=removed)})
+        )
+        _finish_difference(view, qt_app)
+        names = renderer.names()
+        assert "hatch:added:obj_1" in names and "hatch:removed:obj_1" in names, names
+
+        def richtung(name: str) -> np.ndarray:
+            punkte = renderer.item_of(name).points.reshape(-1, 2, 3)
+            assert len(punkte) > 4, f"{name}: zu wenige Striche"
+            hoch = punkte[:, :, 2].max()
+            oben = punkte[np.all(np.isclose(punkte[:, :, 2], hoch, atol=1e-3), axis=1)]
+            assert len(oben), f"{name}: keine Striche auf der Oberseite"
+            weg = oben[0, 1] - oben[0, 0]
+            return weg / np.linalg.norm(weg)
+
+        assert abs(float(richtung("hatch:added:obj_1") @ richtung("hatch:removed:obj_1"))) < 1e-3
+        view.show_difference(None)
+        with pytest.raises(AssertionError):
+            renderer.item_of("hatch:added:obj_1")  # mit der Vorschau geht ihr Muster
+    finally:
+        view.release()
+        view.renderer = None
+        view.deleteLater()
+
+
 def test_a_protected_face_is_remembered_and_released(qt_app: QApplication) -> None:
     """Sperren, freigeben, und die Auskunft dazu (T8, §22.3).
 

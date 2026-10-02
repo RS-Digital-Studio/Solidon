@@ -347,9 +347,9 @@ des Themas; was die leistet, ist eine Frage an das Thema.
 
 ### Die Anzeigeeinheit ist ein Zustand, wie die Sprache einer ist
 
-`labels.set_display_unit`, `display_unit()` — nicht durch Konstruktoren
-gereicht, denn `labels.length` rufen auch Funktionen ohne Widget; ein
-übergebenes Argument hat Vorrang.
+`labels.set_display_unit`, `display_unit()` (gehalten in `app.i18n`, auch für
+den Kern) — nicht durch Konstruktoren gereicht, denn `labels.length` rufen
+auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
 
 - **Was in ein Eingabefeld geschrieben wird, bleibt in Millimetern**
   (`measured_expression`; umgerechnet wäre es ein Datenfehler), auch beim

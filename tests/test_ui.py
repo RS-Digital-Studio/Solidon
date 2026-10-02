@@ -12718,7 +12718,9 @@ def test_the_export_offers_its_folder(
     monkeypatch.setattr(
         dialogs.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True
     )
-    worker = object()
+    from types import SimpleNamespace
+
+    worker = SimpleNamespace(_objects=("obj_1",), _all_objects=("obj_1",))
     window._export_worker = worker
     try:
         window._export_done(worker, [tmp_path / "dose.3mf"], [])
@@ -12731,6 +12733,60 @@ def test_the_export_offers_its_folder(
 
     window.announce("etwas anderes")
     assert window.reveal_export.isHidden(), "eine neue Ankündigung nimmt ihn mit"
+
+
+def test_the_export_scope_is_empty_only_for_the_whole_scene() -> None:
+    """Der Umfang steht da, sobald nicht alles hinausgeht (RM-358 W1-4)."""
+    from app.ui.main_window import export_scope
+
+    assert export_scope(2, 2) == ""
+    assert export_scope(1, 2) == tr("{count} von {total} Körpern", count=1, total=2)
+    assert "1" in export_scope(1, 2) and "2" in export_scope(1, 2)
+
+
+def test_exporting_a_selection_names_its_scope_in_title_and_receipt(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Strg+E nach einem Klick exportierte still nur den gewählten Körper (RM-358 W1-4).
+
+    Zwei Körper im Bild, einer gewählt: Der Dateidialog heißt „Exportieren:
+    1 von 2 Körpern“, und die Quittung nennt denselben Umfang. Ohne Auswahl
+    bleibt beides wie bisher.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from tests.ui_helpers import export_anyway
+
+    export_anyway(monkeypatch)
+    for _index in range(2):
+        window.session.apply("Anlegen", [OperationDraft(op="create_box")])
+        assert window.session.wait_for_idle()
+    titles: list[str] = []
+
+    def save_as(_parent: object, title: str, *_args: object, **_kwargs: object) -> tuple[str, str]:
+        titles.append(title)
+        return str(tmp_path / f"teil-{len(titles)}.3mf"), "3MF (*.3mf)"
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(save_as))
+    scope = tr("{count} von {total} Körpern", count=1, total=2)
+
+    window.object_tree.select_object("obj_1")
+    window.action_export()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+    assert titles[-1] == tr("Exportieren: {scope}", scope=scope)
+    assert window._announcement == tr(
+        "Exportiert: {file} · {scope}", file="teil-1.3mf", scope=scope
+    )
+
+    window.object_tree.select_object(None)
+    window.action_export()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+    assert titles[-1] == tr("Exportieren")
+    assert window._announcement == tr("Exportiert: {file}", file="teil-2.3mf")
 
 
 # --- die Tour durch ein Beispiel (§37.2) ------------------------------------------
@@ -15093,9 +15149,90 @@ def test_a_part_file_drop_reaches_open_path_but_json_does_not(
     generic_drop = _drag([generic.as_uri()])
     window.dropEvent(generic_drop)  # type: ignore[arg-type]
 
-    assert opened == [part]
+    assert opened == [part, generic], "jede lokale Datei bekommt eine Antwort (RM-358 W1-6)"
     assert part_drop.accepted
-    assert not generic_drop.accepted
+    assert generic_drop.accepted
+
+
+@pytest.mark.parametrize("name", ["gehaeuse.f3d", "figur.blend", "halter.scad", "haus.skp"])
+def test_a_dropped_file_solidon_cannot_read_gets_a_sentence_with_the_way(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Statt des Verbotszeichens ein Satz samt Weg (RM-358 W1-6).
+
+    ``.f3d``, ``.blend``, ``.scad`` und ``.skp`` bekamen beim Ziehen nur das
+    Verbotszeichen. Jetzt nimmt das Fenster jede lokale Datei an und sagt, wie
+    das Modell hereinkommt; das offene Projekt bleibt, wie es war.
+    """
+    said: list[str] = []
+    monkeypatch.setattr(window, "announce", lambda text, *args, **kwargs: said.append(str(text)))
+    path = tmp_path / name
+    path.write_bytes(b"fremd")
+    entering = _drag([path.as_uri()])
+    window.dragEnterEvent(entering)  # type: ignore[arg-type]
+    drop = _drag([path.as_uri()])
+    window.dropEvent(drop)  # type: ignore[arg-type]
+
+    assert entering.accepted and drop.accepted
+    assert said and said[-1] == tr(
+        "„{name}“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem Programm "
+        "als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.",
+        name=name,
+    )
+    assert not window.session.project.document.ops, "nichts wurde eingelesen"
+
+
+def test_a_dropped_gcode_file_is_checked(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine G-Code-Datei auf dem Fenster geht den Weg von *G-Code prüfen* (RM-358 W1-6)."""
+    checked: list[Path] = []
+    monkeypatch.setattr(window, "check_gcode", checked.append)
+    path = tmp_path / "platte.gcode"
+    path.write_text("; gcode\n", encoding="utf-8")
+    drop = _drag([path.as_uri()])
+
+    window.dropEvent(drop)  # type: ignore[arg-type]
+
+    assert drop.accepted
+    assert checked == [path]
+
+
+def test_the_start_screen_takes_every_local_file(tmp_path: Path, qt_app: QApplication) -> None:
+    """Auch das Ablagefeld des Startbildschirms nimmt jede lokale Datei an (RM-358 W1-6)."""
+    from app.ui.start_screen import DropArea
+
+    area = DropArea()
+    dropped: list[Path] = []
+    area.fileDropped.connect(dropped.append)
+    path = tmp_path / "figur.blend"
+    entering = _drag([path.as_uri()])
+    area.dragEnterEvent(entering)  # type: ignore[arg-type]
+    drop = _drag([path.as_uri()])
+    area.dropEvent(drop)  # type: ignore[arg-type]
+    area.deleteLater()
+
+    assert entering.accepted and drop.accepted
+    assert dropped == [path]
+
+
+def test_the_start_screen_says_the_way_where_the_file_was_dropped(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Auf dem Startbildschirm steht der Satz im Ablagefeld (RM-358 W1-6).
+
+    Die Quittung des Fensters liegt über der Ansicht, also hinter dem
+    Startbildschirm; dort war nur die Statuszeile zu lesen.
+    """
+    window._show_start_screen(True)
+    path = tmp_path / "figur.blend"
+    window.open_path(path)
+
+    note = window.start_screen.drop_area.note
+    assert not note.isHidden() and "figur.blend" in note.text()
+    entering = _drag([path.as_uri()])
+    window.start_screen.drop_area.dragEnterEvent(entering)  # type: ignore[arg-type]
+    assert note.isHidden(), "der nächste Zug beginnt ohne den alten Satz"
 
 
 def test_a_bad_address_says_so_before_a_worker_starts(
