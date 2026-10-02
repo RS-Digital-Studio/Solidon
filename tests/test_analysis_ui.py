@@ -2290,7 +2290,7 @@ def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
 
 
 def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
-    """§18.5: das Kontextmenü am Merkmal ist der Ort für Weg 1.
+    """§18.5: Weg 1 zeigt auf die Stelle, die stört — der Rechtsklick antwortet.
 
     Ein fremdes Modell wird angepasst, indem man auf die Stelle zeigt, die
     stört. Bis hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das
