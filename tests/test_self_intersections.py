@@ -264,6 +264,91 @@ def test_the_separation_never_drops_a_pair_that_crosses() -> None:
     assert separated[flat_fan].all(), np.flatnonzero(flat_fan & ~separated)[:10]
 
 
+@pytest.mark.parametrize("offset", [0.0, 1e7], ids=["ursprung", "weit-verschoben"])
+def test_a_shallow_crossing_survives_translation_at_representable_precision(
+    offset: float,
+) -> None:
+    """Ein flacher Schnitt bleibt trotz Koordinatenverschiebung sichtbar."""
+    first, second = _pairs_at_the_tolerance()
+    shift = np.array([offset, -offset, offset])
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    vertices = np.concatenate((first[0] + shift, second[0] + shift))
+    surface = intersections._surface(vertices, faces)
+    assert surface is not None
+    one, other = np.array([0]), np.array([1])
+    separated, _ = intersections._separated(surface, one, other)
+    crossing = intersections.crossing_pairs(
+        surface.triangles[one],
+        surface.triangles[other],
+        surface.faces[one],
+        surface.faces[other],
+    )
+
+    assert crossing.tolist() == [True]
+    assert separated.tolist() == [False]
+
+
+@pytest.mark.parametrize("angle", [0, 17, 41, 73])
+@pytest.mark.parametrize("offset", [0.0, 1000.0, 1e7])
+def test_a_shared_split_edge_survives_rotation_and_translation(angle: int, offset: float) -> None:
+    """Eine gemeinsam unterteilte Kante bleibt nach starrer Bewegung Berührung."""
+    first = np.array([(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0)])
+    second = np.array([(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 2.0)])
+    rotation = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))[:3, :3]
+    shift = np.array([offset, -offset, offset])
+    first = first @ rotation.T + shift
+    second = second @ rotation.T + shift
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+
+    for one, other, one_faces, other_faces in (
+        (first[None, ...], second[None, ...], faces[:1], faces[1:]),
+        (second[None, ...], first[None, ...], faces[1:], faces[:1]),
+    ):
+        crossing = intersections.crossing_pairs(one, other, one_faces, other_faces)
+        assert crossing.tolist() == [False]
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["vorwaerts", "vertauscht"])
+def test_a_short_split_edge_survives_large_translation(reverse: bool) -> None:
+    """Eine kurze Teilkante bleibt auch bei großer Weltlage als Kontakt erkennbar."""
+    first = np.array([(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0)])
+    second = np.array([(0.0, 0.0, 0.0), (0.03, 0.0, 0.0), (0.0, 0.0, 2.0)])
+    rotation = trimesh.transformations.rotation_matrix(math.radians(17), (1.0, 2.0, 3.0))[:3, :3]
+    shift = np.array([1e7, -1e7, 1e7])
+    first = first @ rotation.T + shift
+    second = second @ rotation.T + shift
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    if reverse:
+        first, second = second, first
+        faces = faces[::-1]
+
+    crossing = intersections.crossing_pairs(
+        first[None, ...], second[None, ...], faces[:1], faces[1:]
+    )
+
+    assert crossing.tolist() == [False]
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["vorwaerts", "vertauscht"])
+def test_a_diagonal_split_edge_survives_axis_rounding(reverse: bool) -> None:
+    """Rundung auf der großen x-Koordinate zählt nach der Projektion auch in y."""
+    first = np.array([(0.0, 0.0, 0.0), (2.0, 2.0, 0.0), (-2.0, 2.0, 0.0)])
+    second = np.array([(0.0, 0.0, 0.0), (0.03, 0.03, 0.0), (0.0, 0.0, 2.0)])
+    shift = np.array([1e7, 0.0, 0.0])
+    first += shift
+    second += shift
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    if reverse:
+        first, second = second, first
+        faces = faces[::-1]
+
+    crossing = intersections.crossing_pairs(
+        first[None, ...], second[None, ...], faces[:1], faces[1:]
+    )
+
+    assert crossing.tolist() == [False]
+
+
 def test_a_fan_of_needles_is_searched_to_the_end() -> None:
     """Ein Zylinder mit Fächerdeckeln: alle Nadeln eines Deckels treffen sich in der Mitte.
 
@@ -307,6 +392,134 @@ def test_a_shared_corner_does_not_excuse_a_crossing() -> None:
     faces = np.array([[0, 1, 2], [0, 3, 4]])
     mesh = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
 
+    assert repair.self_intersecting_faces(mesh) == (0, 1)
+
+
+def test_an_empty_interval_without_a_shared_corner_avoids_infinite_subtraction() -> None:
+    """Ein leerer Ebenenschnitt im Toleranzrand darf keine ``inf - inf``-Warnung bilden."""
+    first = np.array([(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)])
+    offset = EPS_GEOM
+    second = np.array([(-offset, 0.0, -1.0), (-offset, 1.0, -1.0), (-offset, 0.0, 1.0)])
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+
+    with np.errstate(invalid="raise"):
+        crossing = intersections.crossing_pairs(
+            first[None, ...], second[None, ...], faces[:1], faces[1:]
+        )
+
+    assert crossing.tolist() == [False]
+
+
+def test_a_shared_seal_corner_is_not_a_crossing_in_either_order() -> None:
+    """Der Rundungsspalt an der gemeinsamen Ecke einer Dichtung bleibt Berührung (RM-253)."""
+    first = np.array(
+        [
+            (-18.870467011105653, 2.781334266010068, -5.103946401036175),
+            (-18.890537819624416, 2.793251832855135, -4.942537485237902),
+            (-18.979628571612047, 2.08232456242732, -4.942537485237902),
+        ]
+    )
+    second = np.array(
+        [
+            (-18.645305537921594, 3.773701241787261, -5.469249075111665),
+            (-18.89479814146909, 2.776519282303077, -4.933001532405608),
+            (-18.890537819624416, 2.793251832855135, -4.942537485237902),
+        ]
+    )
+    vertices = np.concatenate((first, second))
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    mesh = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    for one, other, one_faces, other_faces in (
+        (first[None, ...], second[None, ...], faces[:1], faces[1:]),
+        (second[None, ...], first[None, ...], faces[1:], faces[:1]),
+    ):
+        assert intersections.crossing_pairs(one, other, one_faces, other_faces).tolist() == [False]
+
+    assert not intersections.intersects(vertices, faces)
+    assert repair.self_intersecting_faces(mesh) == ()
+
+
+def test_a_shared_way3_edge_is_not_a_crossing_in_either_order() -> None:
+    """Zwei Flächen am Weg-3-Beispiel teilen nur eine Kante (RM-319)."""
+    first = np.array(
+        [
+            (16.099135451238062, -16.49400907830801, 5.901074220107633),
+            (17.81101445226286, -13.595227806940587, 5.395225543643059),
+            (17.599560675816612, -13.488778107452099, 5.867010584911972),
+        ]
+    )
+    second = np.array(
+        [
+            (16.099135451238062, -16.49400907830801, 5.901074220107633),
+            (17.599560675816612, -13.488778107452099, 5.867010584911972),
+            (16.855078504523135, -12.905306552904513, 7.711928833866507),
+        ]
+    )
+    vertices = np.concatenate((first, second))
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    mesh = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    for one, other, one_faces, other_faces in (
+        (first[None, ...], second[None, ...], faces[:1], faces[1:]),
+        (second[None, ...], first[None, ...], faces[1:], faces[:1]),
+    ):
+        assert intersections.crossing_pairs(one, other, one_faces, other_faces).tolist() == [False]
+
+    assert not intersections.intersects(vertices, faces)
+    assert repair.self_intersecting_faces(mesh) == ()
+
+
+def test_a_tolerance_gap_has_the_same_answer_in_either_order() -> None:
+    """Ein Spalt über dem Rechenrauschen bleibt innerhalb EPS_GEOM reihenfolgestabil (RM-319)."""
+    x = 2**23
+    gap = 2**-28
+    first = np.array([(x - 1, 0, 0), (x, 1, 0), (x, -1, 0)], dtype=np.float64)
+    second = np.array([(x + gap, 0, 0), (x + 1, 0, 1), (x + 1, 0, -1)], dtype=np.float64)
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+
+    for one, other, one_faces, other_faces in (
+        (first[None, ...], second[None, ...], faces[:1], faces[1:]),
+        (second[None, ...], first[None, ...], faces[1:], faces[:1]),
+    ):
+        assert intersections.crossing_pairs(one, other, one_faces, other_faces).tolist() == [True]
+
+
+def test_vertices_inside_the_partner_triangles_do_not_hide_a_crossing() -> None:
+    """Innere Punkte einer echten Schnittstrecke sind keine gemeinsamen Randpunkte (RM-319)."""
+    first = np.array([(-1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (1.0, -1.0, 0.0)])
+    second = np.array([(0.0, 0.0, 0.0), (-2.0, 0.0, 1.0), (-2.0, 0.0, -1.0)])
+    vertices = np.concatenate((first, second))
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    mesh = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    for one, other, one_faces, other_faces in (
+        (first[None, ...], second[None, ...], faces[:1], faces[1:]),
+        (second[None, ...], first[None, ...], faces[1:], faces[:1]),
+    ):
+        crossing = intersections.crossing_pairs(one, other, one_faces, other_faces)
+        assert crossing.tolist() == [True]
+
+    assert intersections.intersects(vertices, faces)
+    assert repair.self_intersecting_faces(mesh) == (0, 1)
+
+
+def test_boundary_endpoints_do_not_hide_an_interior_crossing() -> None:
+    """Zwei Randpunkte machen eine innere Schnittstrecke nicht zum Kantenkontakt (RM-319)."""
+    first = np.array([(-1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, -1.0, 0.0)])
+    second = np.array([(0.0, 0.0, 0.0), (-1.0, 0.0, 1.0), (-1.0, 0.0, -1.0)])
+    vertices = np.concatenate((first, second))
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    mesh = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    for one, other, one_faces, other_faces in (
+        (first[None, ...], second[None, ...], faces[:1], faces[1:]),
+        (second[None, ...], first[None, ...], faces[1:], faces[:1]),
+    ):
+        crossing = intersections.crossing_pairs(one, other, one_faces, other_faces)
+        assert crossing.tolist() == [True]
+
+    assert intersections.intersects(vertices, faces)
     assert repair.self_intersecting_faces(mesh) == (0, 1)
 
 

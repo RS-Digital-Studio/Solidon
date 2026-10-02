@@ -24,6 +24,8 @@ import numpy as np
 from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
     GIVE_THICKNESS,
     LEAVE_OPEN,
     PROGRAMMING_ERRORS,
@@ -31,6 +33,7 @@ from app.core.errors import (
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SPLIT_BODIES,
+    GeometryError,
     OperationCancelled,
 )
 from app.core.geom.attributes import transfer
@@ -1146,12 +1149,12 @@ class _Shells:
         ]
         if not len(near):
             return False
-        found, spent = _first_crossing_between(
+        found, _spent, complete = _first_crossing_between(
             self.triangles, self.faces, low, high, one, near, CROSSING_PARTS_PAIRS
         )
         if found is not None:
             return True
-        return None if spent >= CROSSING_PARTS_PAIRS else False
+        return False if complete else None
 
 
 def turn_shells_outward(body: trimesh.Trimesh) -> bool:
@@ -1296,7 +1299,8 @@ def nested_part_families(body: trimesh.Trimesh) -> list[np.ndarray]:
 #: Wie viele Dreieckspaare das Einlesen höchstens prüft, ob die Teile eines
 #: Körpers ineinanderstecken (:func:`parts_that_cross`). Die Frage wählt nur
 #: den Satz und die Knöpfe am Befund; wo das Budget nicht reicht, bleibt der
-#: schlichte Satz, und *Reparieren* sucht vollständig.
+#: schlichte Satz. Aufrufer können Vollständigkeit verlangen; *Reparieren*
+#: sucht vollständig.
 CROSSING_PARTS_PAIRS: Final = 200_000
 
 #: Über so vielen Teilen fragt das Einlesen nicht nach — eine Dreieckssuppe
@@ -1306,6 +1310,12 @@ CROSSING_PARTS_MAX: Final = 256
 #: Wie viele Kandidaten der Vorfilter entlang einer Achse je Block erzeugt.
 CROSSING_BLOCK: Final = 65_536
 
+CROSSING_SEARCH_INCOMPLETE_DETAIL: Final = _(
+    "Die Teile konnten vor dieser Bearbeitung nicht vollständig auf Überschneidungen und "
+    "Berührflächen geprüft werden. Vereinigen Sie sie in Ihrem CAD- oder Netzprogramm und "
+    "importieren Sie das Modell erneut."
+)
+
 
 def parts_that_cross(
     body: trimesh.Trimesh,
@@ -1313,6 +1323,8 @@ def parts_that_cross(
     cancelled: CancelToken | None = None,
     *,
     max_pairs: int = CROSSING_PARTS_PAIRS,
+    include_face_contacts: bool = False,
+    require_complete: bool = False,
 ) -> tuple[float, float, float] | None:
     """Wo zwei Teile des Körpers einander durchdringen — oder ``None``.
 
@@ -1331,12 +1343,27 @@ def parts_that_cross(
     — und die Suche hört beim ersten Treffer auf. Über alle Dreiecke gefragt
     kostete sie am Korpus ``F:\\3D Dateien`` 14 der 96 Sekunden aller Importe,
     am Piratenschiff eine Sekunde je Körper, fast alles für Paare innerhalb
-    eines Teils. Reicht das Budget (:data:`CROSSING_PARTS_PAIRS`) nicht, heißt
-    die Antwort ``None`` — kein Satz, der mehr behauptet, als gesucht wurde.
-    Die Vorfrage wählt nur Satz und Knöpfe, sie rechnet keine Geometrie.
+    eines Teils. Reicht das Budget (:data:`CROSSING_PARTS_PAIRS`) nicht, gibt
+    die Vorfrage ohne ``require_complete`` ``None`` zurück — kein Satz, der mehr
+    behauptet, als gesucht wurde. Wer ``require_complete`` setzt, lässt bei
+    unvollständiger Suche mit Handlungsvorschlag anhalten, weil ein nicht
+    geprüfter Kontakt sonst einen unsicheren Solverlauf erlauben könnte. Die
+    Vorfrage wählt nur Satz und Knöpfe, sie rechnet keine Geometrie.
+
+    ``include_face_contacts`` nimmt für eine Vereinigung auch positive
+    koplanare Flächenüberdeckung auf. Kanten- und Eckkontakt bleiben außen vor;
+    die normale Vorfrage und ihre Befunde behalten damit ihre bisherige
+    Bedeutung.
     """
     pieces = face_components(body) if pieces is None else pieces
-    if not 2 <= len(pieces) <= CROSSING_PARTS_MAX:
+    if len(pieces) < 2:
+        return None
+    if len(pieces) > CROSSING_PARTS_MAX:
+        if require_complete:
+            raise GeometryError(
+                detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
         return None
     vertices = np.asarray(body.vertices, dtype=np.float64)
     faces = np.asarray(body.faces, dtype=np.int64)
@@ -1363,15 +1390,27 @@ def parts_that_cross(
             near.append(piece[inside])
         if not len(near[0]) or not len(near[1]):
             continue
-        found, spent = _first_crossing_between(
-            triangles, faces, low, high, near[0], near[1], budget
+        found, spent, complete = _first_crossing_between(
+            triangles,
+            faces,
+            low,
+            high,
+            near[0],
+            near[1],
+            budget,
+            include_face_contacts=include_face_contacts,
         )
         if found is not None:
             middle = (triangles[found[0]].mean(axis=0) + triangles[found[1]].mean(axis=0)) / 2.0
             return (float(middle[0]), float(middle[1]), float(middle[2]))
-        budget -= spent
-        if budget <= 0:
+        if not complete:
+            if require_complete:
+                raise GeometryError(
+                    detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
+                    suggestions=(CORRECT_INPUT, CANCEL),
+                )
             return None
+        budget -= spent
     return None
 
 
@@ -1383,25 +1422,36 @@ def _first_crossing_between(
     one: np.ndarray,
     other: np.ndarray,
     budget: int,
-) -> tuple[tuple[int, int] | None, int]:
+    *,
+    include_face_contacts: bool = False,
+) -> tuple[tuple[int, int] | None, int, bool]:
     """Das erste Paar aus ``one`` und ``other``, das quer durchdringt, und wie viele geprüft wurden.
 
-    Ein Durchlauf entlang X über die nach ihrer Untergrenze sortierten
-    Dreiecke von ``other``; was sich auch in Y und Z überdeckt, geht blockweise
-    in die Schnittprüfung. Über dem Budget kommt ``None`` zurück, wie ohne Fund.
+    Ein Durchlauf auf der Achse mit den wenigsten einseitig überdeckten
+    Kandidaten. Was sich auch in den beiden übrigen Achsen überdeckt, geht
+    blockweise in die Schnittprüfung. Der letzte Wert unterscheidet einen
+    vollständigen Lauf vom Abbruch am Budget.
     """
     from app.core.geom.intersections import crossing_pairs
 
-    order = other[np.argsort(low[other, 0], kind="stable")]
-    starts = low[order, 0]
-    back = float((high[other, 0] - low[other, 0]).max()) + EPS_GEOM
-    begin = np.searchsorted(starts, low[one, 0] - back, side="left")
-    end = np.searchsorted(starts, high[one, 0] + EPS_GEOM, side="right")
-    counts = (end - begin).astype(np.int64)
-    if int(counts.sum()) > 20 * budget:
-        # Ein langes Dreieck im anderen Teil macht aus dem Vorfilter alle
-        # Paare; das Budget wäre ohnehin gerissen.
-        return None, budget
+    best: tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None = None
+    for axis in range(3):
+        axis_order = other[np.argsort(low[other, axis], kind="stable")]
+        starts = low[axis_order, axis]
+        back = float((high[other, axis] - low[other, axis]).max()) + EPS_GEOM
+        axis_begin = np.searchsorted(starts, low[one, axis] - back, side="left")
+        axis_end = np.searchsorted(starts, high[one, axis] + EPS_GEOM, side="right")
+        axis_counts = (axis_end - axis_begin).astype(np.int64)
+        candidate_count = int(axis_counts.sum())
+        if best is None or candidate_count < best[0]:
+            best = (candidate_count, axis_order, axis_begin, axis_end, axis_counts)
+    if best is None:
+        return None, 0, True
+    best_count, order, begin, _, counts = best
+    if best_count > 20 * budget:
+        # Auch die beste Achse liefert zu viele Grobkandidaten; der Lauf bleibt
+        # ausdrücklich unvollständig, statt die Sicherheitsgrenze zu lockern.
+        return None, budget, False
     total = np.cumsum(counts)
     spent = 0
     position = 0
@@ -1425,17 +1475,18 @@ def _first_crossing_between(
         first, second = first[overlap], second[overlap]
         spent += len(first)
         if spent > budget:
-            return None, spent
+            return None, spent, False
         if not len(first):
             continue
         hit, flat = crossing_pairs(
             triangles[first], triangles[second], faces[first], faces[second], with_coplanar=True
         )
-        across = np.flatnonzero(np.asarray(hit) & ~np.asarray(flat))
+        eligible = np.ones(len(hit), dtype=bool) if include_face_contacts else ~np.asarray(flat)
+        across = np.flatnonzero(np.asarray(hit) & eligible)
         if len(across):
             index = int(across[0])
-            return (int(first[index]), int(second[index])), spent
-    return None, spent
+            return (int(first[index]), int(second[index])), spent, True
+    return None, spent, True
 
 
 def parts_can_be_merged(mesh: MeshData) -> bool:

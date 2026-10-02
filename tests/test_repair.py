@@ -12,13 +12,16 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
 from app.core.geom.mesh import MeshCodec, MeshData, edge_table, read_mesh
 from app.core.geom.repair import (
+    _first_crossing_between,
     branching_edge_count,
     fill_boundary_loops,
     fill_holes,
     merge_vertices,
     open_edge_count,
+    parts_that_cross,
     remove_degenerate_faces,
     remove_small_components,
     repair,
@@ -181,6 +184,105 @@ def _corner_to_corner() -> trimesh.Trimesh:
     second = first.copy()
     second.apply_translation((10.0 + 1e-8, 10.0, 10.0))
     return trimesh.util.concatenate([_with_a_torn_triangle(first, upwards=True), second])
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e7], ids=["ursprung", "weit-verschoben"])
+def test_a_differently_split_touching_edge_is_not_a_crossing(offset: float) -> None:
+    """Ein Eckpunkt auf der fremden Kante bleibt Kantenkontakt (RM-319)."""
+    first = trimesh.creation.box(extents=(1.0, 1.0, 10.0))
+    first.apply_translation((0.5, 0.5, 5.0))
+    second = trimesh.creation.box(extents=(1.0, 1.0, 5.0))
+    second.apply_translation((-0.5, -0.5, 2.5))
+    shift = np.array([offset, -offset, offset])
+    first.apply_translation(shift)
+    second.apply_translation(shift)
+    touching_edge = trimesh.util.concatenate([first, second])
+
+    assert parts_that_cross(touching_edge) is None
+    assert parts_that_cross(touching_edge, include_face_contacts=True) is None
+
+
+def test_aligned_triangle_edges_do_not_hide_a_real_crossing() -> None:
+    """Eine echte Volumenüberschneidung bleibt bei gemeinsamer Kante sichtbar."""
+    first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second.apply_translation((1.0, 1.0, 0.0))
+    crossing = trimesh.util.concatenate([first, second])
+
+    assert parts_that_cross(crossing) is not None
+    assert parts_that_cross(crossing, include_face_contacts=True) is not None
+
+
+def test_required_crossing_search_rejects_an_exhausted_pair_budget() -> None:
+    """Ein abgebrochener Paarlauf darf bei einer Booleschen Op nicht wie Entwarnung aussehen."""
+    first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second = first.copy()
+    second.apply_translation((1.0, 1.0, 0.0))
+    crossing = trimesh.util.concatenate([first, second])
+
+    assert parts_that_cross(crossing, max_pairs=1) is None
+    with pytest.raises(GeometryError, match="nicht vollständig") as error:
+        parts_that_cross(crossing, max_pairs=1, require_complete=True)
+
+    assert [action.id for action in error.value.suggestions] == [
+        CORRECT_INPUT.id,
+        CANCEL.id,
+    ]
+
+
+def test_crossing_preflight_uses_the_axis_with_fewer_candidates() -> None:
+    """Eine lockere X-Vorauswahl darf eine vollständige, enge Y-Suche nicht abbrechen."""
+    triangles = []
+    for base in range(10):
+        y = 3.0 * base
+        triangles.append([(0.0, y, 0.0), (1.0, y, 0.0), (0.0, y + 1.0, 0.0)])
+    for base in range(10):
+        y = 100.0 + 3.0 * base
+        triangles.append([(0.0, y, 0.0), (1.0, y, 0.0), (0.0, y + 1.0, 0.0)])
+    values = np.asarray(triangles, dtype=np.float64)
+    faces = np.arange(values.shape[0] * 3, dtype=np.int64).reshape(-1, 3)
+    low, high = values.min(axis=1), values.max(axis=1)
+
+    found, spent, complete = _first_crossing_between(
+        values,
+        faces,
+        low,
+        high,
+        np.arange(10, dtype=np.int64),
+        np.arange(10, 20, dtype=np.int64),
+        budget=1,
+    )
+
+    assert found is None
+    assert spent == 0
+    assert complete
+
+
+def test_required_crossing_search_rejects_too_many_components() -> None:
+    """Die Teilegrenze ist ein abgebrochener Lauf, keine belegte Entwarnung."""
+    first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second = first.copy()
+    second.apply_translation((1.0, 1.0, 0.0))
+    distant = []
+    for index in range(255):
+        piece = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        piece.apply_translation((100.0 + 3.0 * index, 0.0, 0.0))
+        distant.append(piece)
+    body = trimesh.util.concatenate([first, second, *distant])
+
+    assert parts_that_cross(body) is None
+    with pytest.raises(GeometryError, match="nicht vollständig"):
+        parts_that_cross(body, require_complete=True)
+
+
+def test_required_crossing_search_accepts_a_complete_no_contact_result() -> None:
+    """Vollständig getrennte Hüllkörper bleiben eine belegte Antwort."""
+    first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second = first.copy()
+    second.apply_translation((3.0, 0.0, 0.0))
+    separated = trimesh.util.concatenate([first, second])
+
+    assert parts_that_cross(separated, require_complete=True) is None
 
 
 @pytest.mark.parametrize("as_soup", [False, True], ids=["indexed", "soup"])

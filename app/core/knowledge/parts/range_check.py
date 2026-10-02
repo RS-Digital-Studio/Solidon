@@ -410,7 +410,13 @@ def check(
                 elif measured < minimum - EPS_GEOM:
                     add(
                         entered,
-                        f"{_('dünner als druckbar')!s}: {measured:.3f} mm < {minimum:.3f} mm",
+                        str(
+                            _(
+                                "dünner als druckbar: {measured} mm < {minimum} mm",
+                                measured=f"{measured:.3f}",
+                                minimum=f"{minimum:.3f}",
+                            )
+                        ),
                     )
             announce(index, 2)
             if _is_cancelled(token):

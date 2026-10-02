@@ -1473,6 +1473,24 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
+def test_format_34_repair_results_are_not_reused_after_crossing_changes(
+    tmp_path: Path,
+) -> None:
+    """Ein Reparaturergebnis aus dem alten Schnittstand wird verworfen (RM-253/RM-319)."""
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("repair", result())
+    index = disk._folder("repair") / "objects.json"
+    historical = json.loads(index.read_text(encoding="utf-8"))
+    # Format 34 liegt vor der geänderten Schnitt- und Kontaktklassifikation.
+    historical["format_version"] = 34
+    index.write_text(json.dumps(historical), encoding="utf-8")
+    cache = ResultCache(disk=disk)
+
+    assert cache.get("repair") is None
+    assert cache.statistics.disk_hits == 0
+    assert cache.statistics.misses == 1
+
+
 @pytest.mark.parametrize("previous_version", range(5, CACHE_FORMAT_VERSION))
 def test_old_recognition_results_are_not_read_from_disk(
     tmp_path: Path, previous_version: int

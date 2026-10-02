@@ -39,6 +39,7 @@ from app.core.registry import REGISTRY, op_params, param
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import BaseParams, PartResult, Profile
+from app.i18n.catalog import available_languages
 from tests.helpers import plate_project as project_with_plate
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -6640,3 +6641,44 @@ def test_a_placed_part_tool_is_where_its_step_cuts_and_knows_when_it_misses(
         float(tool.bounds.minimum[0]) + 100.0, abs=1e-9
     )
     assert not part_ops.lands_on(box.mesh, beside), "daneben landet der Baustein nicht"
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_range_wall_failure_translates_its_complete_numeric_frame(
+    language: str,
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die echte Bereichsprüfung erhält drei Nachkommastellen und Sprachabstände."""
+    import trimesh
+
+    from app.core.knowledge.parts import range_check
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
+
+    @op_params
+    class SolidParams(BaseParams):
+        pass
+
+    def solid(_values: BaseParams) -> PartResult:
+        return PartResult(mesh=MeshData.of(trimesh.creation.box(extents=(2.0, 2.0, 2.0))))
+
+    monkeypatch.setattr(range_check, "local_wall_thickness", lambda _mesh, _token: 0.835)
+    monkeypatch.setattr(range_check, "has_self_intersections", lambda _mesh, _token: False)
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    try:
+        report = range_check.check(SolidParams, solid, profile)
+        expected = tr(
+            "dünner als druckbar: {measured} mm < {minimum} mm",
+            measured="0.835",
+            minimum="0.840",
+        )
+        assert not report.passed
+        assert [failure.reason for failure in report.failures] == [expected]
+        assert "0.835 mm < 0.840 mm" in expected
+        if language == "fr":
+            assert " : 0.835 mm < 0.840 mm" in expected
+    finally:
+        set_language(previous)

@@ -35,14 +35,15 @@ Gerechnet wird in drei Stufen:
   Nummernvergleich, dass die genaue Prüfung folgt.
 * **Das Paar selbst**, je Block als ``(m, 3, 3)``: Ecken beider Dreiecke, die
   innerhalb ``EPS_GEOM`` zusammenfallen, sind *ein* topologischer Punkt und
-  werden auf ihre gemeinsame Mitte gelegt — eine gemeinsame Kante ist
-  Nachbarschaft, keine Durchdringung. Dann die Ebenenseiten, und je nachdem,
-  ob die Ebenen zusammenfallen:
+  werden auf ihre gemeinsame Mitte gelegt. Ein Eckpunkt, der auf einer Kante
+  des anderen Dreiecks liegt, ist ebenfalls gemeinsam — auch bei abweichender
+  Unterteilung bleibt ein Kantenkontakt Nachbarschaft. Dann die Ebenenseiten,
+  und je nachdem, ob die Ebenen zusammenfallen:
 
   * **nicht koplanar:** die Schnittstrecken beider Dreiecke auf der
     Schnittgeraden ihrer Ebenen. Überdecken sie sich, ist das ein Schnitt —
-    es sei denn, die Überdeckung liegt ganz in den gemeinsamen Punkten
-    (Nachbarn an Kante oder Ecke).
+    es sei denn, die Überdeckung liegt ganz auf einer gemeinsamen Kante oder
+    besteht nur aus einem gemeinsamen Eckpunkt.
   * **koplanar:** positive Flächenüberdeckung nach dem Trennachsensatz. Reiner
     Kanten- oder Eckkontakt hat auf einer Trennachse die Breite null und
     bleibt erlaubt; **zwei deckungsgleiche Dreiecke** mit eigenen Ecken sind
@@ -156,9 +157,59 @@ def _numeric(span: float | np.ndarray) -> np.ndarray:
     """Ab welchem Abstand eine Ecke nicht mehr *in* der Ebene des Partners liegt.
 
     Die Grenze aus :func:`_intervals_on_line`, für ein Dreieck der Diagonale
-    ``span`` — dort und in :func:`_separated` dieselbe Zahl.
+    ``span``. Die Schnittgerade wird auf einen gemeinsamen Ursprung bezogen,
+    damit große Weltkoordinaten diese Grenze nicht aufblasen.
     """
     return np.asarray(64.0 * np.finfo(float).eps * np.maximum(1.0, span))
+
+
+def _half_ulp(values: np.ndarray) -> np.ndarray:
+    """Die halbe Float64-Schrittweite je gespeicherter Koordinate."""
+    return 0.5 * np.abs(np.spacing(values))
+
+
+def _point_on_line_with_rounding(
+    point: np.ndarray, start: np.ndarray, end: np.ndarray
+) -> np.ndarray:
+    """Prüft Kollinearität mit projizierter Rundung der drei gespeicherten Punkte."""
+    direction = end - start
+    relative = point - start
+    direction_squared = (
+        direction[:, 0] * direction[:, 0]
+        + direction[:, 1] * direction[:, 1]
+        + direction[:, 2] * direction[:, 2]
+    )
+    numerator = (
+        relative[:, 0] * direction[:, 0]
+        + relative[:, 1] * direction[:, 1]
+        + relative[:, 2] * direction[:, 2]
+    )
+    parameter = np.divide(
+        numerator,
+        direction_squared,
+        out=np.zeros_like(numerator),
+        where=direction_squared > 0.0,
+    )
+    residual = relative - parameter[:, None] * direction
+    local_span = np.linalg.norm(relative, axis=1) + np.abs(parameter) * np.linalg.norm(
+        direction, axis=1
+    )
+    input_rounding = (
+        _half_ulp(point)
+        + np.abs(1.0 - parameter[:, None]) * _half_ulp(start)
+        + np.abs(parameter[:, None]) * _half_ulp(end)
+        + _half_ulp(relative)
+        + np.abs(parameter[:, None]) * _half_ulp(direction)
+    )
+    direction_length = np.sqrt(np.where(direction_squared > 0.0, direction_squared, 1.0))
+    unit = direction / direction_length[:, None]
+    projection_rounding = np.abs(np.eye(3)[None, :, :] - unit[:, :, None] * unit[:, None, :])
+    bound = _dot_rows(projection_rounding, input_rounding)
+    bound += _numeric(local_span)[:, None]
+    return np.asarray(
+        (direction_squared > 0.0) & np.all(np.abs(residual) <= bound, axis=1),
+        dtype=bool,
+    )
 
 
 def _check(cancelled: CancelToken | None) -> None:
@@ -568,7 +619,10 @@ def _candidates(
 
 
 def _intervals_on_line(
-    triangle: np.ndarray, distance: np.ndarray, direction: np.ndarray
+    triangle: np.ndarray,
+    distance: np.ndarray,
+    direction: np.ndarray,
+    origin: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Wo jedes Dreieck die Ebene des Partners schneidet, auf deren Schnittgerade projiziert.
 
@@ -576,7 +630,7 @@ def _intervals_on_line(
     Grenze ihres Dreiecks liegt; dazu kommt jede Kante mit echtem
     Vorzeichenwechsel. Ohne beides ist das Intervall leer (``inf``/``-inf``).
     """
-    projection = _dot_rows(triangle, direction)
+    projection = _dot_rows(triangle - origin[:, None, :], direction)
     numeric = _numeric(np.linalg.norm(np.ptp(triangle, axis=1), axis=1))
     low = np.full(len(triangle), np.inf)
     high = np.full(len(triangle), -np.inf)
@@ -641,7 +695,11 @@ def crossing_pairs(
     *,
     with_coplanar: bool = False,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
-    """Je Paar, ob die zwei Dreiecke einander über ihre gemeinsamen Punkte hinaus schneiden.
+    """Je Paar, ob die zwei Dreiecke sich durchdringen.
+
+    Ein gemeinsamer Einzelpunkt ist eine Berührung. Bei einer Schnittstrecke
+    zählt sie nur dann als Berührung, wenn die ganze Strecke auf einer Kante
+    beider Dreiecke liegt.
 
     ``first`` und ``second`` sind ``(m, 3, 3)``, ``*_faces`` die Eckennummern
     je Dreieck ``(m, 3)`` — nur für die doppelte Zelle gebraucht. Mit
@@ -716,25 +774,175 @@ def crossing_pairs(
     if not len(steep):
         return (hit, flat) if with_coplanar else hit
     unit = direction[steep] / direction_length[steep, None]
-    first_low, first_high = _intervals_on_line(first[steep], first_distance[steep], unit)
-    second_low, second_high = _intervals_on_line(second[steep], second_distance[steep], unit)
+    first_anchor, second_anchor = first[steep, 0], second[steep, 0]
+    same_sign = np.signbit(first_anchor) == np.signbit(second_anchor)
+    origin = np.empty_like(first_anchor)
+    origin[same_sign] = 0.5 * first_anchor[same_sign] + 0.5 * second_anchor[same_sign]
+    origin[~same_sign] = 0.5 * (first_anchor[~same_sign] + second_anchor[~same_sign])
+
+    first_steep, second_steep = first[steep], second[steep]
+    first_rounding = _half_ulp(first_steep).max(axis=1)
+    second_rounding = _half_ulp(second_steep).max(axis=1)
+    origin_rounding = _half_ulp(origin)
+    coordinate_rounding = (
+        np.abs(unit[:, 0])
+        * (first_rounding[:, 0] + second_rounding[:, 0] + 2.0 * origin_rounding[:, 0])
+        + np.abs(unit[:, 1])
+        * (first_rounding[:, 1] + second_rounding[:, 1] + 2.0 * origin_rounding[:, 1])
+        + np.abs(unit[:, 2])
+        * (first_rounding[:, 2] + second_rounding[:, 2] + 2.0 * origin_rounding[:, 2])
+    )
+    pair_span = np.maximum(
+        np.linalg.norm(np.ptp(first_steep, axis=1), axis=1),
+        np.linalg.norm(np.ptp(second_steep, axis=1), axis=1),
+    )
+    line_rounding = _numeric(pair_span) + coordinate_rounding
+
+    first_low, first_high = _intervals_on_line(first_steep, first_distance[steep], unit, origin)
+    second_low, second_high = _intervals_on_line(second_steep, second_distance[steep], unit, origin)
+
+    # Gemeinsame Ecken liegen mathematisch auf beiden Schnittintervallen.
+    # Ihre Projektion berichtigt die berechneten Endpunkte bei Rundungsfehlern.
+    common = np.all(first_steep[:, :, None, :] == second_steep[:, None, :, :], axis=-1)
+    common_projection = np.broadcast_to(
+        _dot_rows(first_steep - origin[:, None, :], unit)[:, :, None], common.shape
+    )
+    common_low = np.min(np.where(common, common_projection, np.inf), axis=(1, 2))
+    common_high = np.max(np.where(common, common_projection, -np.inf), axis=(1, 2))
+    shared_point = np.isfinite(common_low)
+    shared_edge = np.zeros(len(steep), dtype=bool)
+    for shared_first_edge in range(3):
+        shared_first_end = (shared_first_edge + 1) % 3
+        first_distinct = np.any(
+            first_steep[:, shared_first_edge] != first_steep[:, shared_first_end], axis=1
+        )
+        for shared_second_edge in range(3):
+            shared_second_end = (shared_second_edge + 1) % 3
+            second_distinct = np.any(
+                second_steep[:, shared_second_edge] != second_steep[:, shared_second_end], axis=1
+            )
+            same_direction = (
+                common[:, shared_first_edge, shared_second_edge]
+                & common[:, shared_first_end, shared_second_end]
+            )
+            reverse_direction = (
+                common[:, shared_first_edge, shared_second_end]
+                & common[:, shared_first_end, shared_second_edge]
+            )
+            shared_edge |= first_distinct & second_distinct & (same_direction | reverse_direction)
+
+    # Zwei verschiedene gemeinsame Ecken bestimmen die ganze Ebenenschnitt-
+    # geraden: Beide Dreiecke tragen dort dieselbe Kante.
+    first_low[shared_edge], first_high[shared_edge] = (
+        common_low[shared_edge],
+        common_high[shared_edge],
+    )
+    second_low[shared_edge], second_high[shared_edge] = (
+        common_low[shared_edge],
+        common_high[shared_edge],
+    )
+
+    # Bei genau einer gemeinsamen Ecke wird je Dreieck der nähere berechnete
+    # Intervallendpunkt auf deren Projektion gesetzt. Der andere Endpunkt
+    # bleibt erhalten, sofern er außerhalb EPS_GEOM liegt, damit eine echte
+    # Schnittstrecke durch die Ecke sichtbar ist.
+    single_point = shared_point & ~shared_edge
+    for interval_low, interval_high in (
+        (first_low, first_high),
+        (second_low, second_high),
+    ):
+        finite = np.isfinite(interval_low) & np.isfinite(interval_high)
+        missing = single_point & ~finite
+        interval_low[missing] = common_low[missing]
+        interval_high[missing] = common_high[missing]
+        present = single_point & finite
+        # Paare ohne gemeinsame Ecke tragen hier ``inf`` als common_low.
+        # Deren Abstand ist bedeutungslos und darf nicht ``inf - inf`` bilden.
+        near_low = np.zeros(len(steep), dtype=bool)
+        low_close = np.zeros(len(steep), dtype=bool)
+        high_close = np.zeros(len(steep), dtype=bool)
+        near_low[present] = np.abs(interval_low[present] - common_low[present]) <= np.abs(
+            interval_high[present] - common_low[present]
+        )
+        low_close[present] = np.abs(interval_low[present] - common_low[present]) <= EPS_GEOM
+        high_close[present] = np.abs(interval_high[present] - common_low[present]) <= EPS_GEOM
+        snap_low = present & (near_low | low_close)
+        snap_high = present & (~near_low | high_close)
+        interval_low[snap_low] = common_low[snap_low]
+        interval_high[snap_high] = common_low[snap_high]
+
     low = np.maximum(first_low, second_low)
     high = np.minimum(first_high, second_high)
     crossing = np.isfinite(low) & np.isfinite(high) & (high >= low - EPS_GEOM)
-    steep, low, high, unit = steep[crossing], low[crossing], high[crossing], unit[crossing]
+    gap = high < low
+    steep, low, high, unit, origin, gap, line_rounding, shared_edge = (
+        steep[crossing],
+        low[crossing],
+        high[crossing],
+        unit[crossing],
+        origin[crossing],
+        gap[crossing],
+        line_rounding[crossing],
+        shared_edge[crossing],
+    )
 
-    # Was die beiden Dreiecke teilen, liegt auf der Schnittgeraden: Eine
-    # Überdeckung, die ganz darin liegt, ist Nachbarschaft.
-    shared = first_matched[steep]
-    projection = _dot_rows(first[steep], unit)
-    shared_low = np.min(np.where(shared, projection, np.inf), axis=1)
-    shared_high = np.max(np.where(shared, projection, -np.inf), axis=1)
+    first_steep, second_steep = first[steep], second[steep]
     point = high - low <= EPS_GEOM
-    middle = (high + low) / 2.0
-    point_elsewhere = np.all(~shared | (np.abs(projection - middle[:, None]) > EPS_GEOM), axis=1)
-    reaches_past = (low < shared_low - EPS_GEOM) | (high > shared_high + EPS_GEOM)
-    beyond = np.where(point, point_elsewhere, reaches_past)
-    hit[steep] = np.where(shared.any(axis=1), beyond, True)
+    # Koordinaten-ULPs gehen in die Rundungsgrenze ein. Die Kandidaten werden
+    # nur nach Projektionsüberdeckung gewählt: Eine kurze Kante kann die
+    # Richtungsrundung beim Verlängern stark verstärken.
+    first_projection = _dot_rows(first_steep - origin[:, None, :], unit)
+    second_projection = _dot_rows(second_steep - origin[:, None, :], unit)
+    first_edge_low = np.minimum(first_projection, np.roll(first_projection, -1, axis=1))
+    first_edge_high = np.maximum(first_projection, np.roll(first_projection, -1, axis=1))
+    second_edge_low = np.minimum(second_projection, np.roll(second_projection, -1, axis=1))
+    second_edge_high = np.maximum(second_projection, np.roll(second_projection, -1, axis=1))
+    first_edge_covers = (first_edge_low <= low[:, None] + line_rounding[:, None]) & (
+        first_edge_high >= high[:, None] - line_rounding[:, None]
+    )
+    second_edge_covers = (second_edge_low <= low[:, None] + line_rounding[:, None]) & (
+        second_edge_high >= high[:, None] - line_rounding[:, None]
+    )
+    first_edge_candidates = first_edge_covers
+    second_edge_candidates = second_edge_covers
+    edge_contact = np.zeros(len(steep), dtype=bool)
+    for first_edge in range(3):
+        first_start = first_steep[:, first_edge]
+        first_end = first_steep[:, (first_edge + 1) % 3]
+        for second_edge in range(3):
+            possible = first_edge_candidates[:, first_edge] & second_edge_candidates[:, second_edge]
+            if not np.any(possible):
+                continue
+            rows = np.flatnonzero(possible)
+            second_start = second_steep[:, second_edge]
+            second_end = second_steep[:, (second_edge + 1) % 3]
+            intervals_meet = np.minimum(
+                first_edge_high[rows, first_edge], second_edge_high[rows, second_edge]
+            ) >= (
+                np.maximum(first_edge_low[rows, first_edge], second_edge_low[rows, second_edge])
+                - line_rounding[rows]
+            )
+            rows = rows[intervals_meet]
+            if not len(rows):
+                continue
+            collinear = (
+                _point_on_line_with_rounding(
+                    first_start[rows], second_start[rows], second_end[rows]
+                )
+                & _point_on_line_with_rounding(
+                    first_end[rows], second_start[rows], second_end[rows]
+                )
+                & _point_on_line_with_rounding(
+                    second_start[rows], first_start[rows], first_end[rows]
+                )
+                & _point_on_line_with_rounding(second_end[rows], first_start[rows], first_end[rows])
+            )
+            edge_contact[rows] |= collinear
+    # Ein einzelner Punkt und ein innerhalb der Rundungsgrenze liegender Spalt
+    # belegen keine Durchdringung. Ein größerer, bis EPS_GEOM reichender Spalt
+    # bleibt ein Schnitt; ein Segment braucht beide tragenden Randkanten.
+    resolvable_gap = gap & (low - high > line_rounding)
+    hit[steep] = ~shared_edge & ~edge_contact & (resolvable_gap | ~point)
     return (hit, flat) if with_coplanar else hit
 
 

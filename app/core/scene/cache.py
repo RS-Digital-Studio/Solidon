@@ -138,7 +138,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   davor neu.
 #: - 34 (RM-308): sich kreuzende Schnittsegmente tragen ihre Fläche und
 #:   Innenlöcher; alte Ausrichtungen und daraus erzeugte Körper rechnen neu.
-CACHE_FORMAT_VERSION: Final = 34
+#: - 35 (RM-253/RM-319): Die Schnitt- und Kontaktklassifikation hat sich
+#:   geändert. Ältere Reparaturergebnisse müssen neu berechnet werden.
+CACHE_FORMAT_VERSION: Final = 35
 
 
 @dataclass(frozen=True, slots=True)
