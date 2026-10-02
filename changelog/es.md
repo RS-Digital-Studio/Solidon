@@ -25,6 +25,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los ajustes de impresión preguntan en el orden en que una cosa depende de otra: slicer, impresora, boquilla, placa, filamentos y calidad, y después los valores.
 - Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Antes solo se podía en la ventana de Creality Print. Si 7.3 reordena la placa, Solidon lo dice.
 - Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
+- Cura lamina ahora con la boquilla que usted eligió, también en impresoras de la lista de Cura, y las impresoras con el origen en el centro de la cama lo conservan.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
 - Si elige brim, skirt o raft en los ajustes de impresión, solo aparecen las medidas de ese tipo de cama, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
@@ -46,6 +47,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
 - Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» y «Eje de inclinación», y «En la cara» lleva el corte paralelo a una cara plana.
+- Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 
 ### Modelar, texto y dibujo
@@ -72,6 +74,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Manejo y sistema
 
 - Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
+- Una exportación durante un cálculo en curso espera al resultado nuevo. Antes el archivo podía llevar todavía la medida antigua.
+- La barra de parámetros rechaza una medida fuera de su límite y nombra el límite, en vez de dejar la vista vacía.
+- En la barra de parámetros cuenta cada paso de flecha, y el foco se queda en el campo.
+- Si un paso espera una pregunta, «Aplicar» sigue disponible y la pregunta aparece.
 - En el diálogo de una operación las etiquetas forman una columna, los campos tienen el mismo ancho y cada interruptor está antes de lo que activa.
 - Las marcas de las listas se leen en cada fila, y los colores aparecen como un punto redondo al lado.
 - La paleta de comandos explica herramientas y acciones de archivo en una frase.

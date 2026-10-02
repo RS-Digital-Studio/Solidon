@@ -49,6 +49,7 @@ Nutzen da und sonst nichts.
 - Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.
 - Mit Creality Print 7.2 und 7.3 rechnet *Slicen* die Druckdatei jetzt selbst. Bisher ging das nur im Fenster von Creality Print. Ordnet 7.3 die Platte dabei selbst an, sagt Solidon es.
 - Mit Cura übernimmt Solidon auf Wunsch den Drucker, den Cura gerade nutzt, samt eigener Düse. Ein in Cura umbenannter Drucker wird wiedererkannt.
+- Cura rechnet jetzt mit der Düse, die Sie gewählt haben, auch bei Druckern aus Curas eigener Liste, und Drucker mit dem Nullpunkt in der Bettmitte behalten ihn.
 - An Bambu Studio gehen Düsenvariante und die Temperaturen Ihrer Spulen mit, bis in die 3MF-Datei.
 - Wählen Sie im Druckdialog Brim, Skirt oder Raft, stehen dort nur die Maße dieser Bettart, ohne Felder, die nichts bewirken würden.
 - Eine Zahl außerhalb ihrer Grenze bleibt im Feld stehen, die Grenze steht daneben, und *Slicen* wartet, bis sie stimmt. Bisher wurde sie still gekürzt.
@@ -70,6 +71,7 @@ Nutzen da und sonst nichts.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Kippachse*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.
+- Ein STEP-Körper bleibt beim Abschneiden ein STEP-Körper, mit seinen Flächen, Kanten und Namen.
 - Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
 
 ### Formen, Schrift und Zeichnen
@@ -96,6 +98,10 @@ Nutzen da und sonst nichts.
 ### Bedienung und System
 
 - Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt.
+- Ein Export während einer laufenden Berechnung wartet auf das neue Ergebnis. Bisher konnte die Datei noch das alte Maß tragen.
+- Ein Maß jenseits seiner Grenze lehnt die Parameterleiste ab und nennt die Grenze, statt das Bild leer stehen zu lassen.
+- In der Parameterleiste zählt jeder Pfeilschritt, und der Fokus bleibt im Feld.
+- Wartet ein Schritt auf eine Rückfrage, bleibt *Übernehmen* frei, und die Frage kommt.
 - Im Dialog einer Operation stehen die Beschriftungen in einer Spalte, die Felder gleich breit, und jeder Schalter vor dem, was er schaltet.
 - Haken in Listen sind in jeder Zeile lesbar, und Farben stehen als runder Punkt daneben.
 - Die Befehlspalette erklärt Werkzeuge und Dateiaktionen in einem Satz.

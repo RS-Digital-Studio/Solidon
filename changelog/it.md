@@ -24,6 +24,7 @@ scrive in `website/version.json`.
 - Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.
 - Con Creality Print 7.2 e 7.3, «Affetta» calcola ora da sé il file di stampa. Finora funzionava solo nella finestra di Creality Print. Se 7.3 riordina il piatto, Solidon lo dice.
 - Con Cura, Solidon riprende su richiesta la stampante che Cura sta usando, con il suo ugello. Una stampante rinominata in Cura viene riconosciuta.
+- Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
 - Se scegli brim, skirt o raft nelle impostazioni di stampa, compaiono solo le misure di quel tipo di piano, senza campi che non avrebbero effetto.
 - Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.
@@ -45,6 +46,7 @@ scrive in `website/version.json`.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Asse di inclinazione», e «Su faccia» porta il taglio parallelo a una faccia piana.
+- Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 
 ### Modellare, testo e schizzo
@@ -71,6 +73,10 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
+- Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
+- La barra dei parametri rifiuta una misura oltre il suo limite e nomina il limite, invece di lasciare la vista vuota.
+- Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
+- Se un passo attende una domanda, «Applica» resta disponibile e la domanda compare.
 - Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.
 - Le spunte negli elenchi si leggono in ogni riga, e i colori compaiono come un pallino rotondo accanto.
 - La tavolozza dei comandi spiega strumenti e azioni sui file in una frase.
