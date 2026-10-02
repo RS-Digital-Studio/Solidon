@@ -41,37 +41,16 @@ Kantenwerkzeuge rechnen Längen über `_length`, kleine Systeme über
 
 Der Normalweg dieses Gebiets; Stufen und Vermerke stehen im Docstring von
 `boolean.py` und in `operationen.md`, `tests/test_boolean.py` erzwingt jede.
-Ineinandersteckende Teile eines Szeneneingangs gehen vereinigt hinein
-(`_parts_united_first`). Bei Vereinigungen werden weitere Szeneneingänge mit
-Objektkennung geprüft; ausdrücklich interne Werkzeuge (`None`) gehen
-unverändert an den Solver, weil ihre Teilstücke konstruktionsbedingt
-überlappen können. Nur beim Schließen einer alten Höhlung vereinigt
-`merge_face_contacts=True` zusätzlich flächig berührende Schalen — an jeder
-schließenden Vereinigung, auch für Ketten, Abschnitte, Wulst und Musterzellen;
-am exakten Kern dasselbe über `prepare_ops._exact_closing_base` (Ketten:
-`_exact_closing_chain`). Kanten- und Eckkontakt bleiben getrennt. Der Vereinigungsmodus gehört zum
-Booleschen Cache-Schlüssel. Für die Vorfrage erkennt
-`parts_that_cross(include_face_contacts=True)` Flächenkontakt auch bei
-unterschiedlich unterteilten Netzen; eine gemeinsame Kante zählt nur innerhalb
-der lokalen Rundungsgrenze als gemeinsamer Punkt, nicht mit der breiteren
-`EPS_GEOM`-Toleranz. Die Endpunkte beider Randkanten werden direkt gegen die
-jeweils andere Linie geprüft; die ganze Schnittstrecke muss von beiden Kanten
-getragen werden. Die Vorauswahl verwendet nur die Projektionsüberdeckung,
-  weil eine kurze Kante die Richtungsrundung beim Verlängern stark verstärken
-  kann. Der direkte Punkt-zu-Linie-Nachweis berücksichtigt deshalb die
-  koordinatenweise halbe ULP jedes Endpunkts und den Verlängerungsfaktor. Die
-  Rundungsgrenze wird mit dem Betrag der orthogonalen Projektionsmatrix auf
-  jede Residualachse fortgepflanzt; x-Rundung kann so auch y-Abstand erklären.
-  Die drei Komponenten werden in fester Reihenfolge summiert, ohne `einsum`.
-Projektionen ziehen vorher einen gemeinsamen Ursprung ab, damit lokale
-Vektorprodukte unabhängig von der Weltlage bleiben; die separate ULP-Grenze
-  bildet die Genauigkeit der gespeicherten Koordinaten ab.
-
-Das Paarbudget von `parts_that_cross` begrenzt nur optionale Befunde. Vor
-`boolean()` und beim exakten Schließen verlangt der Aufrufer mit
-`max_pairs=None, require_complete=True` die vollständige Prüfung; die
-Teilegrenze bleibt ein sicherer Abbruch. Die Suche prüft den Abbruch während
-der Achsenauswahl und nach jedem Kandidatenblock.
+Vor der Kette vereinigt `_parts_united_first` die Teile jedes Szeneneingangs,
+die einander durchdringen oder ineinanderliegen, beim Schließen einer alten
+Höhlung (`merge_face_contacts=True`) auch flächig berührende; am exakten Kern
+dasselbe über `prepare_ops._exact_closing_base` (Ketten:
+`_exact_closing_chain`). Die Vorfrage ist `repair.parts_that_cross`: Paare aus
+Hüllquaderbäumen (`intersections.BoxTree`, `box_pairs_between`), geprüft mit
+`intersections.crossing_pairs` — Rundungsgrenzen und Ursprung stehen dort im
+Docstring. Was sich nicht vereinigen lässt, geht unverändert weiter;
+`_meets_the_shells` fragt, ob ein Werkzeug eine Schale trifft, die sich selbst
+kreuzt (`repair.self_crossing_shells`).
 
 **Nach jeder gelungenen Stufe bekommt das Ergebnis die Darstellung seiner
 Eingänge zurück** (`attributes.in_source_layout`): Ein bitgleich übernommenes
@@ -114,7 +93,8 @@ Wert; `lifted_caps`, Zwilling von `brep.edit.collared`) · `boolean.py` ·
 `attributes.py` (Slots durch eine Operation, §20; `transfer`, `with_slots`,
 `carry_refined_units`) · `lathe.py` · `enclosure.py` (Verschachtelung ohne
 `rtree`) · `intersections.py` (Selbstdurchdringung als Feld, für Karte und
-Bereichstest) · `repair.py` (unten) · `deviation.py` (Grenzen ausgefüllter
+Bereichstest; Hüllquaderpaare zwischen zwei Mengen) · `repair.py` (unten) ·
+`deviation.py` (Grenzen ausgefüllter
 Originaldreiecke zu einem belegten `SurfacePatch`, Budget je Dreieck; keine
 neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
@@ -261,14 +241,9 @@ Richtung, `opposite_side`)
   normalisiert seinen Winkel auf eine halbe Umdrehung; zerlegte Teile
   nummeriert `_loose_parts` nach gerundetem Volumenverhältnis, dann nach Lage.
 - **Muster am importierten Zylinder**: Vor dem Schließen richtet
-  `_pattern_source_on_measured_facets` die Punkte auf die gemessenen Ebenen
-  der rohen Mantelfacetten aus; gemeinsame Facettenecken liegen auf deren
-  Schnittkanten. Stopfen und Neuzeichnen verwenden denselben ausgerichteten
-  Quellkörper und `patterns.cylinder_facet_groups` auch über die Winkelnaht.
-  Ebenen und Ausgleich rechnen plattformgleich und abbrechbar; korrigiert wird
-  nur quer zur Zylinderachse, die Axiallage bleibt erhalten. Dreiecks- und
-  Vertex-IDs sowie Slots bleiben; nur bitgleich unberührte Dreiecke behalten
-  ihre Verfeinerungsherkunft, ein alter Innenraumbeleg verfällt.
+  `_aligned_facets` die Trägerpunkte auf die gemessenen Mantelfacetten aus
+  (Bedingungen im Docstring); Stopfen und Neuzeichnen nehmen denselben
+  Quellkörper und `patterns.cylinder_facet_groups`.
 
 **Schnitte** (`section.py`): Eine Ebene, die erst im Schnitt verzweigte Kanten
 erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche

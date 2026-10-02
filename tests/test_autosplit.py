@@ -1712,8 +1712,9 @@ def loaded(profile: Profile) -> tuple[Project, MeshData]:
     return project, result.scene.objects["obj_1"].mesh
 
 
+@pytest.mark.parametrize("refusal", ["chain", "crossing_shell"])
 def test_a_seam_whose_connectors_fail_does_not_end_the_search(
-    monkeypatch: pytest.MonkeyPatch, profile: Profile
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, refusal: str
 ) -> None:
     """Scheitert an einer Naht der Bau der Stifte, ist sie nicht zu beurteilen — mehr nicht.
 
@@ -1724,12 +1725,21 @@ def test_a_seam_whose_connectors_fail_does_not_end_the_search(
     Teilung nichts ändern konnten (KUNDE-10). Eine Naht ohne messbare Stifte
     kostet unbekannt viel — wie eine Hälfte ohne Lage —, und die übrigen Nähte
     werden weiter beurteilt. Hält der Schritt danach selbst an, sagt es der
-    Bericht an ihm, mit *Reparieren und erneut versuchen* davor.
+    Bericht an ihm.
+
+    **Jede Absage der Geometrie, nicht nur die der Rückfallkette** (RM-409):
+    Eine Stiftbohrung durch eine Schale, die sich selbst kreuzt, hält vor dem
+    Kern mit ``GeometryError`` an — der Oberklasse von ``BooleanFailedError``.
+    Am Laptopständer brach damit wieder die ganze Suche ab.
     """
+    from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
     from app.core.geom import pins as connectors
+    from app.core.geom.boolean import CROSSING_SHELL_IN_THE_WAY
 
     def failing(*_args: object, **_kwargs: object) -> None:
-        raise BooleanFailedError(detail="Stifte", attempted=("direct", "welded"))
+        if refusal == "chain":
+            raise BooleanFailedError(detail="Stifte", attempted=("direct", "welded"))
+        raise GeometryError(detail=CROSSING_SHELL_IN_THE_WAY, suggestions=(CORRECT_INPUT, CANCEL))
 
     monkeypatch.setattr(connectors, "add_pins", failing)
 

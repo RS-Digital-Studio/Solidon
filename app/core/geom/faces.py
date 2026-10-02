@@ -33,7 +33,6 @@ from app.core.errors import (
     CHANGE_SELECTION,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
-    BooleanFailedError,
     GeometryError,
     ValidationError,
 )
@@ -739,9 +738,11 @@ def _checked_tools(
             return parts[0]
         try:
             return solved(boolean("union", parts, quality=quality, cancelled=cancelled)).mesh
-        except BooleanFailedError:
+        except GeometryError:
             # Im Entwurf endet die Kette nach Stufe 2; die Prüfung lässt dann
-            # nach, statt die Operation scheitern zu lassen.
+            # nach, statt die Operation scheitern zu lassen. Ebenso, wo die
+            # Kette vor dem Kern an einer Schale anhält, die sich selbst
+            # kreuzt (RM-382): Die Prüfung beurteilt, sie entscheidet nicht.
             exact[0] = False
             return None
 
@@ -752,7 +753,7 @@ def _checked_tools(
             outcome = boolean(
                 kind, [first, second], quality=quality, allow_empty=True, cancelled=cancelled
             )
-        except BooleanFailedError:
+        except GeometryError:
             exact[0] = False
             return 0.0
         return float(solved(outcome).mesh.volume)

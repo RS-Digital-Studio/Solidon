@@ -51,6 +51,7 @@ it into `website/version.json`.
 - Two plates that touch stay one body at a hole and keep their material, whether you pull, change, move or close the hole. A pin above it stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
+- If a step hits a part whose surface crosses itself, it stops and shows the spot. Elsewhere it keeps calculating and warns that the parts could not be joined.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt about*, and *At face* runs the cut parallel to a flat face.

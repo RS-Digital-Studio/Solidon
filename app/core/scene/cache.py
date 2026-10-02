@@ -140,7 +140,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Innenlöcher; alte Ausrichtungen und daraus erzeugte Körper rechnen neu.
 #: - 35 (RM-253/RM-319): Die Schnitt- und Kontaktklassifikation hat sich
 #:   geändert. Ältere Reparaturergebnisse müssen neu berechnet werden.
-CACHE_FORMAT_VERSION: Final = 35
+#: - 36 (RM-381/RM-382/RM-383): Die Boolesche Vorvereinigung prüft auch
+#:   Szenenkörper als Werkzeug, rechnet an nicht vereinbaren Teilen mit Befund
+#:   statt anzuhalten, und der Ort von ``boolean.parts_united`` kommt aus der
+#:   Suche über Hüllquaderbäume. Gespeicherte Ergebnisse trügen alte Befunde.
+CACHE_FORMAT_VERSION: Final = 36
 
 
 @dataclass(frozen=True, slots=True)

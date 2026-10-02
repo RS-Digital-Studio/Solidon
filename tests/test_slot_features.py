@@ -3353,35 +3353,39 @@ def test_brep_slot_pull_reports_when_touching_solids_cannot_be_united(
     assert caught.value.suggestions == (SHOW_LOCATIONS, CORRECT_INPUT, CANCEL)
 
 
-def test_brep_slot_preflight_does_not_continue_when_search_is_incomplete(
-    monkeypatch: pytest.MonkeyPatch, profile: Profile
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_touching_plates_are_united_although_the_body_has_more_parts_than_the_import_limit(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, kernel: str
 ) -> None:
-    """Der exakte Kern bekommt denselben Vollständigkeitsvertrag wie der Netzkern."""
-    from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+    """Über der Teilegrenze verbindet der Zug berührende Platten trotzdem (RM-383).
+
+    Die Grenze (:data:`~app.core.geom.repair.CROSSING_PARTS_MAX`) gilt dem
+    Einlesen; eine vollständige Vorfrage hielt über ihr bis RM-383 mit „nicht
+    vollständig geprüft" an — an beiden Kernen. Gesenkt auf ein Teil, steht
+    der Fall mit zwei Platten genau darüber. Sollwert wie beim Zug ohne Grenze:
+    ``16 000 − (36 + 9π) · 20`` mm³, ein Langloch, ein Körper.
+    """
     from app.core.geom import repair as repair_module
-    from app.core.geom.repair import CROSSING_SEARCH_INCOMPLETE_DETAIL
 
-    entry = _touching_plates_with_a_bore("brep", profile)
-    observed: dict[str, object] = {}
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
 
-    def incomplete(_body, **kwargs):
-        observed.update(kwargs)
-        raise GeometryError(
-            detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
-            suggestions=(CORRECT_INPUT, CANCEL),
-        )
+        exact_kernel()
+    entry = _touching_plates_with_a_bore(kernel, profile)
+    monkeypatch.setattr(repair_module, "CROSSING_PARTS_MAX", 1)
 
-    monkeypatch.setattr(repair_module, "parts_that_cross", incomplete)
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
 
-    with pytest.raises(GeometryError) as caught:
-        run_op_with_findings(
-            "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
-        )
-
-    assert observed["include_face_contacts"] is True
-    assert observed["max_pairs"] is None
-    assert observed["require_complete"] is True
-    assert caught.value.detail == CROSSING_SEARCH_INCOMPLETE_DETAIL
+    expected = 16_000.0 - (36.0 + 9.0 * math.pi) * 20.0
+    assert output.mesh.volume == pytest.approx(expected, abs=1.0)
+    assert len([feature for feature in output.features.values() if feature.kind == "slot"]) == 1
+    assert "boolean.parts_united" in {finding.code for finding in findings}
+    if kernel == "brep":
+        assert output.mesh.solid_count == 1
+    else:
+        assert output.mesh.component_count == 1
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -4150,116 +4154,3 @@ def test_the_migration_marker_is_not_offered_to_the_agent(operation: str) -> Non
     spec = REGISTRY.get(operation)
     assert any(entry.name == "measured_frame" and entry.internal for entry in spec.params.spec())
     assert "measured_frame" not in json_schema(spec.params)["properties"]
-
-
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-@pytest.mark.parametrize("quality", ["draft", "fine"])
-def test_a_partial_bridge_keeps_the_current_bore_split_in_cold_and_warm_reports(
-    profile: Profile, kernel: str, quality: Quality
-) -> None:
-    """Zwei Schnitte und die echte halbe Brücke: 2 → 4 → 3, auch nach Undo und Cache."""
-    from app.core.registry import Registry
-    from app.core.scene import OperationDraft, ResultCache, evaluate
-
-    project, history, box = _a_cube_cut_in_two(profile, kernel)
-    history.apply(
-        "Zweites Langloch quer",
-        [
-            OperationDraft(
-                op="drill_hole",
-                inputs=("obj_1",),
-                params={
-                    "diameter": 5.0,
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 20.0,
-                    "axis": "z",
-                    "depth": 0.0,
-                    "anchor": "mouth",
-                    "slotted": True,
-                    "slot_length": 100.0,
-                    "slot_angle": 90.0,
-                },
-            )
-        ],
-    )
-    history.apply(
-        "Halbe Brücke",
-        [
-            OperationDraft(
-                op=box,
-                params={
-                    "width": 7.0,
-                    "depth": 20.0,
-                    "height": 4.0,
-                    "x": 6.5,
-                },
-            )
-        ],
-    )
-    history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"))])
-    raw = []
-    bore = REGISTRY.get("drill_hole")
-
-    def recorded(ctx):
-        result = bore.fn(ctx)
-        raw.extend(finding for finding in result.findings if finding.code == "bore.splits_the_body")
-        return result
-
-    own = Registry()
-    for spec in REGISTRY.all():
-        own.register(dataclasses.replace(spec, fn=recorded) if spec.name == bore.name else spec)
-    cache = ResultCache()
-
-    def checked(count):
-        result = evaluate(
-            project.document,
-            profile,
-            registry=own,
-            quality=quality,
-            cache=cache,
-            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
-        )
-        assert result.complete, [str(f.message) for f in result.scene.report.findings]
-        assert result.scene.objects["obj_1"].mesh.component_count == count
-        split = [f for f in result.scene.report.findings if f.code == "bore.splits_the_body"]
-        if count == 1:
-            assert split == []
-        else:
-            assert len(split) == 1
-            assert split[0].values == {"count": count}
-            assert split[0].op_id == 3 and split[0].object_id == "obj_1"
-            assert {action.id for action in split[0].suggestions} >= {"correct_input"}
-        assert [dict(f.values) for f in raw] == [{"count": 2}, {"count": 4}]
-        assert all(f.op_id is None for f in raw)
-        return result
-
-    checked(3)
-    hits = cache.statistics.hits
-    checked(3)
-    assert cache.statistics.hits - hits == 5
-    history.undo()
-    history.undo()
-    checked(4)
-    history.redo()
-    history.redo()
-    checked(3)
-    history.apply(
-        "Volle Brücke",
-        [
-            OperationDraft(
-                op=box,
-                params={
-                    "width": 20.0,
-                    "depth": 20.0,
-                    "height": 4.0,
-                },
-            )
-        ],
-    )
-    bridge = project.document.ops[-1].outputs[0]
-    history.apply("Ganz vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", bridge))])
-    checked(1)
-    history.undo()
-    history.undo()
-    checked(3)

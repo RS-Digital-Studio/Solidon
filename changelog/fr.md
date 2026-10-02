@@ -52,6 +52,7 @@ dans `website/version.json`.
 - Deux plaques qui se touchent restent un seul corps autour d'un perçage et gardent leur matière, que vous l'étiriez, le modifiiez, le déplaciez ou le fermiez. Une goupille au-dessus reste en place.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
+- Si une étape touche une pièce dont la surface se croise elle-même, elle s'arrête et montre l'endroit. Ailleurs, elle continue le calcul et signale que les pièces n'ont pas pu être réunies.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
 - Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Incliner autour de », et « Sur une face » mène la coupe parallèlement à une face plane.

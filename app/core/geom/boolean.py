@@ -29,8 +29,8 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import (
-    BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
+    CHANGE_SELECTION,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     SHOW_LOCATION,
@@ -45,7 +45,13 @@ from app.core.geom.attributes import (
     in_source_layout,
     transfer,
 )
-from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume, without_faces
+from app.core.geom.mesh import (
+    MeshData,
+    enclosed_volume,
+    face_components,
+    signed_volume,
+    without_faces,
+)
 from app.core.geom.repair import (
     CROSSING_PARTS_MAX,
     merge_vertices,
@@ -53,6 +59,7 @@ from app.core.geom.repair import (
     parts_that_cross,
     remove_degenerate_faces,
     resolve_self_intersections,
+    self_crossing_shells,
 )
 from app.core.log import get_logger
 from app.core.types import (
@@ -186,16 +193,21 @@ def boolean(
     einmal zu hören, macht aus einer Tatsache eine Ausnahme, die der Aufrufer
     auseinandernehmen muss.
 
-    Lassen sich Teile, die der Eingang nachweislich vereinigen muss, nicht
-    sicher verschmelzen, hält die Operation an, bevor eine Solverstufe
-    startet. Diese kann aus unveränderten, ineinanderliegenden Teilen kein
-    verlässliches boolesches Ergebnis machen.
+    Lassen sich Teile eines Eingangs nicht vereinigen, rechnet die Kette mit
+    den Teilen, wie sie sind, und sagt es (``boolean.parts_not_united``) — wie
+    vor RM-253. **Angehalten wird nur, wo ein Werkzeug eine Schale trifft, die
+    sich belegt selbst kreuzt** (RM-382, Entscheidung Robert: „Das Beste für
+    Kunden, damit sie bearbeiten können."): Dort rechnet der Kern an
+    unveränderten, einander durchdringenden Teilen nichts Verlässliches — am
+    Laptop-Ständer blieb in einer versetzten Bohrung Material stehen (RM-253).
+    Eine Bohrung abseits dieser Schale rechnet dagegen wie an jedem Körper;
+    seit ``eab5f4f47`` hielt sie an jeder Stelle an, auch wo sie nichts traf.
 
     ``object_ids`` bindet jeden Eingang an das Szenenobjekt, aus dem er stammt.
-    Interne Werkzeuge tragen ``None``; bei einer Vereinigung bleiben solche
-    zusätzlichen Werkzeuge unverändert für den Solver, denn ihre Teile dürfen
-    sich konstruktionsbedingt überschneiden. Szenenkörper mit Kennung werden
-    weiterhin vorab geprüft.
+    Interne Werkzeuge tragen ``None`` und gehen unverändert an den Solver, denn
+    ihre Teile dürfen sich konstruktionsbedingt überschneiden. Szenenkörper mit
+    Kennung werden vorab geprüft, auch als Werkzeug einer Differenz; ein Halt
+    nennt den Körper mit der kaputten Schale.
     """
     if len(meshes) < 2:
         raise ValueError("a boolean operation needs at least two bodies")
@@ -204,24 +216,37 @@ def boolean(
 
     chain = stages if stages is not None else (FULL_CHAIN if quality == "fine" else DRAFT_CHAIN)
     given = meshes
-    meshes, united = _parts_united_first(
+    meshes, united, stuck = _parts_united_first(
         kind,
         meshes,
         cancelled,
         merge_face_contacts=merge_face_contacts,
         object_ids=object_ids,
     )
-    stuck = next(
-        (finding for finding in united if finding.code == "boolean.parts_not_united"),
-        None,
-    )
-    if stuck is not None:
+    for index, joined in stuck:
+        if not joined.crossing:
+            continue
+        others = [mesh for number, mesh in enumerate(meshes) if number != index]
+        met = _meets_the_shells(others, meshes[index], joined.crossing, cancelled)
+        if met is None:
+            continue
+        # Gebunden an den Körper mit der kaputten Schale; ohne Kennung gibt es
+        # keine Karte, die *Stellen zeigen* öffnen könnte. Der Ort ist der, an
+        # dem das Werkzeug die Schale trifft. Ist das Werkzeug ein Szenenkörper,
+        # wählt man andere Objekte, sonst eine andere Stelle im Schritt.
+        owner = object_ids[index] if object_ids is not None else None
+        internal = object_ids is None or all(
+            object_ids[number] is None for number in range(len(meshes)) if number != index
+        )
         raise GeometryError(
-            detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
-            suggestions=(SHOW_LOCATIONS, CANCEL)
-            if stuck.object_id is not None
-            else (CORRECT_INPUT, CANCEL),
-            object_id=stuck.object_id,
+            detail=CROSSING_SHELL_IN_THE_WAY,
+            suggestions=(
+                *((SHOW_LOCATIONS,) if owner is not None else ()),
+                CORRECT_INPUT if internal else CHANGE_SELECTION,
+                CANCEL,
+            ),
+            object_id=owner,
+            values={"location": met},
         )
     attempted: list[SolverStage] = []
     emptied = False
@@ -350,6 +375,28 @@ def boolean(
 _UNITED_KEY: Final = "solidon_parts_united"
 _UNITED_FACE_CONTACT_KEY: Final = "solidon_parts_united_with_face_contacts"
 
+#: Der Halt, wenn ein Werkzeug eine Schale trifft, die sich selbst kreuzt
+#: (RM-382). Grund und Ausweg in einem Satz; *Reparieren* steht nicht dabei,
+#: denn die Reparatur löst eine Eigenkreuzung nicht auf (``repair.self_crossing``)
+#: — der Knopf endete am selben Halt.
+CROSSING_SHELL_IN_THE_WAY: Final = _(
+    "Der Schritt trifft ein Teil, dessen Oberfläche sich selbst kreuzt. Dort lässt er sich "
+    "nicht verlässlich rechnen. Setzen Sie ihn an eine andere Stelle oder reparieren Sie das "
+    "Teil in einem Netzprogramm."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _Joined:
+    """Was die Vorvereinigung an einem Eingang gefunden hat."""
+
+    body: MeshData | None
+    """Der Eingang mit vereinigten Teilen — ``None``, wenn es nicht ging."""
+    place: Vec3
+    """Wo sich Teile treffen oder berühren."""
+    crossing: tuple[np.ndarray, ...] = ()
+    """Ging es nicht, die Schalen, die sich belegt selbst kreuzen — je Schale ihre Dreiecke."""
+
 
 def _parts_united_first(
     kind: BooleanKind,
@@ -358,7 +405,7 @@ def _parts_united_first(
     *,
     merge_face_contacts: bool = False,
     object_ids: Sequence[ObjectId | None] | None = None,
-) -> tuple[list[MeshData], list[Finding]]:
+) -> tuple[list[MeshData], list[Finding], list[tuple[int, _Joined]]]:
     """Teile eines Eingangs vorab vereinigen — und es sagen.
 
     **An Schalen, die einander durchdringen, rechnet der Kern nichts
@@ -389,48 +436,39 @@ def _parts_united_first(
     8 154 statt 7 434 mm³ stehen — das innere Teil zählte weiter doppelt.
     Vereinigt wird es wie gedruckt (:func:`_nested_united`).
 
-    **Und was sich nicht vereinigen lässt, hält die Operation an**
-    (``boolean.parts_not_united``). Kreuzt sich eine Schale selbst, lehnt das
-    Auflösen ab. Die Kette stoppt dann vor dem Solver, statt an den
-    unveränderten, einander durchdringenden Teilen weiterzurechnen. Am
-    Laptop-Ständer (21 Teile, eines kreuzt sich 1 121-mal selbst) blieb in
-    einer um 1,5 mm versetzten Bohrung Material stehen, und der Bericht sagte
-    nur „geht nicht mehr durch" (RM-253).
+    **Was sich nicht vereinigen lässt, geht unverändert weiter und wird
+    gesagt** (``boolean.parts_not_united``); zurück kommt es außerdem als
+    dritter Wert, damit :func:`boolean` fragen kann, ob ein Werkzeug eine
+    Schale trifft, die sich selbst kreuzt (RM-382). Am Laptop-Ständer
+    (21 Teile, eines kreuzt sich 1 121-mal selbst) lehnt das Auflösen ab.
 
-    **Gefragt wird der Körper, an dem gearbeitet wird** — bei Differenz und
-    Schnittmenge der erste Eingang, bei der Vereinigung jeder. Was danach
-    kommt, ist dort ein Werkzeug, das Solidon selbst baut: Das Gitter von
+    **Gefragt wird jeder Szenenkörper** — der Körper, an dem gearbeitet wird,
+    bei der Vereinigung jeder Eingang, und mit ``object_ids`` auch ein
+    Szenenkörper als Werkzeug einer Differenz oder Schnittmenge: Er bringt
+    seine Teile so ungeprüft in den Kern wie der Körper selbst (Review RM-253,
+    Fund 5). Interne Werkzeuge (``None``) baut Solidon selbst: Das Gitter von
     *Gitter füllen* besteht aus Streben, die sich an jedem Knoten
-    überschneiden, und über ihm stand sonst ein Satz über Teile, die der
-    Kunde nie hatte.
+    überschneiden, und über ihm stand sonst ein Satz über Teile, die der Kunde
+    nie hatte.
     """
     prepared: list[MeshData] = []
     place: Vec3 | None = None
-    stuck: Vec3 | None = None
-    stuck_object_id: ObjectId | None = None
+    stuck: list[tuple[int, _Joined]] = []
     for index, mesh in enumerate(meshes):
-        if index and kind != "union":
-            prepared.append(mesh)
-            continue
-        # Ein internes Werkzeug darf an Knoten oder Nähten absichtlich aus
-        # sich überschneidenden Teilen bestehen. Der Solver verarbeitet es als
-        # Werkzeug; die Vorvereinigung beurteilt nur Szenenkörper.
-        if index and object_ids is not None and object_ids[index] is None:
+        scene_body = object_ids[index] is not None if object_ids is not None else None
+        if index and (scene_body is False or (scene_body is None and kind != "union")):
             prepared.append(mesh)
             continue
         united = _united_parts(mesh, cancelled, merge_face_contacts=merge_face_contacts)
         if united is None:
             prepared.append(mesh)
             continue
-        body, where = united
-        if body is None:
+        if united.body is None:
             prepared.append(mesh)
-            if stuck is None:
-                stuck = where
-                stuck_object_id = object_ids[index] if object_ids is not None else None
+            stuck.append((index, united))
             continue
-        prepared.append(body)
-        place = where if place is None else place
+        prepared.append(united.body)
+        place = united.place if place is None else place
     findings: list[Finding] = []
     if place is not None:
         findings.append(
@@ -443,50 +481,55 @@ def _parts_united_first(
                 suggestions=(SHOW_LOCATION,),
             )
         )
-    if stuck is not None:
+    if stuck:
+        index, first = stuck[0]
+        crossing = any(joined.crossing for _number, joined in stuck)
         findings.append(
             Finding(
                 code="boolean.parts_not_united",
                 severity="warning",
                 message=(
                     _(
-                        "Teile des Modells ließen sich vor diesem Schritt nicht vereinigen. "
-                        "Der Schritt kann Material stehen lassen."
-                    )
-                    if merge_face_contacts
-                    else _(
                         "Teile des Modells stecken ineinander und ließen sich nicht vereinigen, "
                         "weil sich eine Oberfläche selbst kreuzt. Wo der Schritt durch beide "
                         "Teile geht, kann Material stehen bleiben."
                     )
+                    if crossing
+                    else _(
+                        "Teile des Modells ließen sich vor diesem Schritt nicht vereinigen. "
+                        "Der Schritt kann Material stehen lassen."
+                    )
                 ),
-                object_id=stuck_object_id,
-                location=stuck,
-                suggestions=(SHOW_LOCATION,),
+                object_id=object_ids[index] if object_ids is not None else None,
+                location=first.place,
+                # *Stellen zeigen* öffnet die Netzfehlerkarte, und die färbt die
+                # Eigenkreuzung; die Stelle des Kontakts fliegt *Stelle zeigen* an.
+                suggestions=(SHOW_LOCATIONS, SHOW_LOCATION) if crossing else (SHOW_LOCATION,),
             )
         )
-    return (prepared if place is not None else meshes), findings
+    return (prepared if place is not None else meshes), findings, stuck
 
 
 def _united_parts(
     mesh: MeshData, cancelled: CancelToken | None, *, merge_face_contacts: bool = False
-) -> tuple[MeshData | None, Vec3] | None:
+) -> _Joined | None:
     """Der Eingang mit vereinigten Teilen und ein Ort des Kontakts — oder ``None``.
 
     Treffen oder berühren sich Teile, lassen sich aber nicht vereinigen, kommt
-    statt des Körpers ``None`` mit dem Ort zurück (:func:`_parts_united_first`
-    sagt es dann). Einmal je Netz: Die Antwort liegt im Cache des Netzes und
-    verfällt mit seiner Geometrie. Die Vorschau fragt denselben Körper bei
-    jeder getippten Zahl, und ein Körper aus einem Stück kostet nur die
-    gemerkte Teilezahl.
+    statt des Körpers ``None`` mit dem Ort zurück und, wo es der Grund ist, mit
+    den Schalen, die sich selbst kreuzen (:func:`_parts_united_first` sagt es
+    dann). Einmal je Netz: Die Antwort liegt im Cache des Netzes und verfällt
+    mit seiner Geometrie. Die Vorschau fragt denselben Körper bei jeder
+    getippten Zahl, und ein Körper aus einem Stück kostet nur die gemerkte
+    Teilezahl.
     """
     if mesh.triangle_count == 0 or mesh.component_count < 2:
         return None
     cache = getattr(mesh.raw, "_cache", None)
     cache_key = _UNITED_FACE_CONTACT_KEY if merge_face_contacts else _UNITED_KEY
     if cache is not None and cache_key in cache:
-        return cast("tuple[MeshData | None, Vec3] | None", cache[cache_key])
-    answer: tuple[MeshData | None, Vec3] | None = None
+        return cast("_Joined | None", cache[cache_key])
+    answer: _Joined | None = None
     place = parts_that_cross(
         mesh.raw,
         cancelled=cancelled,
@@ -496,12 +539,72 @@ def _united_parts(
     )
     if place is not None:
         resolved, done = resolve_self_intersections(mesh, cancelled)
-        answer = (resolved if done else None, place)
+        answer = (
+            _Joined(resolved, place)
+            if done
+            else _Joined(None, place, tuple(self_crossing_shells(mesh)))
+        )
     elif mesh.component_count <= CROSSING_PARTS_MAX:
-        answer = _nested_united(mesh, cancelled)
+        nested = _nested_united(mesh, cancelled)
+        answer = _Joined(*nested) if nested is not None else None
     if cache is not None:
         cache[cache_key] = answer
     return answer
+
+
+def _meets_the_shells(
+    tools: Sequence[MeshData],
+    body: MeshData,
+    shells: Sequence[np.ndarray],
+    cancelled: CancelToken | None,
+) -> Vec3 | None:
+    """Wo eines der Werkzeuge eine der Schalen trifft — ``None``, wenn keines (RM-382).
+
+    Treffen heißt: Eine Werkzeugfläche schneidet eine Schalenfläche oder liegt
+    flächig auf ihr (:func:`~app.core.geom.intersections.crossing_pairs` mit
+    Flächenkontakt), gesucht über zwei Hüllquaderbäume — oder das Werkzeug
+    liegt ganz in der Schale; das sagt ein Strahl von einer Ecke je
+    Werkzeugteil, und wo der Strahl nichts entscheidet, gilt es als getroffen.
+    Eine Schale, die ganz im Werkzeug liegt, trifft es nicht: Ihre Dreiecke
+    fallen dort als Ganzes heraus oder bleiben als Ganzes stehen. Der Ort ist
+    die Mitte des ersten getroffenen Paars, sonst die Ecke des Werkzeugs.
+    """
+    from app.core.geom.intersections import BoxTree, box_pairs_between, crossing_pairs
+    from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+
+    corners = np.asarray(body.raw.triangles, dtype=np.float64)
+    chosen = np.concatenate(shells)
+    own = corners[chosen]
+    own_faces = np.asarray(body.raw.faces, dtype=np.int64)[chosen]
+    shell_tree = BoxTree(np.arange(len(chosen)), own.min(axis=1), own.max(axis=1))
+    # Fremde Eckennummern dürfen nie wie eigene aussehen: Gleiche Nummern sind
+    # für die Schnittprüfung eine doppelte Fläche, kein Kontakt.
+    offset = len(body.raw.vertices)
+    walls = [(corners[faces], _triangle_bounds(corners[faces])) for faces in shells]
+    for tool in tools:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        triangles = np.asarray(tool.raw.triangles, dtype=np.float64)
+        if not len(triangles):
+            continue
+        faces = np.asarray(tool.raw.faces, dtype=np.int64) + offset
+        tool_tree = BoxTree(np.arange(len(triangles)), triangles.min(axis=1), triangles.max(axis=1))
+        for first, second in box_pairs_between(tool_tree, shell_tree, cancelled):
+            hit = np.flatnonzero(
+                crossing_pairs(triangles[first], own[second], faces[first], own_faces[second])
+            )
+            if len(hit):
+                index = int(hit[0])
+                middle = (
+                    triangles[first[index]].mean(axis=0) + own[second[index]].mean(axis=0)
+                ) / 2.0
+                return (float(middle[0]), float(middle[1]), float(middle[2]))
+        for piece in face_components(tool.raw):
+            point = triangles[int(piece[0]), 0]
+            for wall, bounds in walls:
+                if _point_inside_shell(point, wall, bounds) is not False:
+                    return (float(point[0]), float(point[1]), float(point[2]))
+    return None
 
 
 def _nested_united(mesh: MeshData, cancelled: CancelToken | None) -> tuple[MeshData, Vec3] | None:

@@ -1456,19 +1456,24 @@ def nested_part_families(body: trimesh.Trimesh) -> list[np.ndarray]:
     return families
 
 
-#: Wie viele Dreieckspaare das Einlesen höchstens prüft, ob die Teile eines
-#: Körpers ineinanderstecken (:func:`parts_that_cross`). Die Frage wählt nur
-#: den Satz und die Knöpfe am Befund; wo das Budget nicht reicht, bleibt der
+#: Wie viele Dreieckspaare das Einlesen höchstens genau prüft, ob die Teile
+#: eines Körpers ineinanderstecken (:func:`parts_that_cross`). Die Frage wählt
+#: nur den Satz und die Knöpfe am Befund; wo das Budget nicht reicht, bleibt der
 #: schlichte Satz. Aufrufer können Vollständigkeit verlangen; *Reparieren*
 #: sucht vollständig.
 CROSSING_PARTS_PAIRS: Final = 200_000
 
 #: Über so vielen Teilen fragt das Einlesen nicht nach — eine Dreieckssuppe
-#: hat Hunderte, und keine Antwort darauf ändert, was der Kunde tut.
+#: hat Hunderte, und keine Antwort darauf ändert, was der Kunde tut. Wer die
+#: Antwort braucht (``require_complete``), sucht ohne diese Grenze: Getrennte
+#: Teile kosten über die Hüllquaderbäume nichts (RM-383).
 CROSSING_PARTS_MAX: Final = 256
 
-#: Wie viele Kandidaten der Vorfilter entlang einer Achse je Block erzeugt.
-CROSSING_BLOCK: Final = 65_536
+#: Bis zu so vielen Dreieckspaaren gehen zwei Teile ohne Baum in die Suche —
+#: alle Paare beider Teile als ein Feld, viele kleine Teilepaare zusammen. Eine
+#: Dreieckssuppe aus Tausenden Teilen kostet so einen Feldaufruf statt
+#: Tausender Bäume.
+CROSSING_SMALL_PAIRS: Final = 256
 
 CROSSING_SEARCH_INCOMPLETE_DETAIL: Final = _(
     "Die Teile konnten vor dieser Bearbeitung nicht vollständig auf Überschneidungen und "
@@ -1498,148 +1503,242 @@ def parts_that_cross(
     Fläche berühren, stecken nicht ineinander, und ein Kettenglied mit Spiel
     um das nächste hat überlappende Hüllquader und keine einzige gemeinsame
     Stelle. Geprüft werden nur Paare aus zwei **verschiedenen** Teilen, deren
-    Dreiecke im Überlapp der Hüllquader beider Teile liegen, mit der
-    Schnittprüfung der Reparatur (:func:`~app.core.geom.intersections.crossing_pairs`)
-    — und die Suche hört beim ersten Treffer auf. Über alle Dreiecke gefragt
-    kostete sie am Korpus ``F:\\3D Dateien`` 14 der 96 Sekunden aller Importe,
-    am Piratenschiff eine Sekunde je Körper, fast alles für Paare innerhalb
-    eines Teils. Reicht das Budget (:data:`CROSSING_PARTS_PAIRS`) nicht, gibt
-    die Vorfrage ohne ``require_complete`` ``None`` zurück — kein Satz, der mehr
-    behauptet, als gesucht wurde. ``max_pairs=None`` hebt nur dieses Paarbudget
-    auf; die Teilegrenze bleibt bestehen. Wer ``require_complete`` setzt,
-    lässt bei unvollständiger Suche mit Handlungsvorschlag anhalten, weil ein
-    nicht geprüfter Kontakt sonst einen unsicheren Solverlauf erlauben könnte.
-    Boolesche Vorprüfungen suchen deshalb ohne Paarbudget und bleiben je
-    Achsenlauf und Kandidatenblock abbrechbar. Die Vorfrage wählt nur Satz und
-    Knöpfe, sie rechnet keine Geometrie.
+    Hüllquader sich überdecken, mit der Schnittprüfung der Reparatur
+    (:func:`~app.core.geom.intersections.crossing_pairs`) — und die Suche hört
+    beim ersten Treffer auf. Über alle Dreiecke gefragt kostete sie am Korpus
+    ``F:\\3D Dateien`` 14 der 96 Sekunden aller Importe, am Piratenschiff eine
+    Sekunde je Körper, fast alles für Paare innerhalb eines Teils.
+
+    **Die Paare kommen aus Hüllquaderbäumen** (RM-381): Zuerst die Teile, deren
+    Hüllen sich überdecken, dann je Teil ein Baum über seine Dreiecke im
+    Überlapp (:class:`~app.core.geom.intersections.BoxTree`), und je Teilepaar
+    steigen beide Bäume gemeinsam ab. Der frühere Lauf entlang einer Achse
+    zählte am Besenhalter 55,7 Millionen Grobkandidaten für 14 058 Paare, deren
+    Hüllquader sich wirklich überdecken — mit Budget brach er sofort ab und
+    sagte nichts, ohne Budget kostete er 3,9 s vor jeder Booleschen Operation.
+    Kleine Teilepaare gehen ohne Baum, alle zusammen in einem Feld
+    (:data:`CROSSING_SMALL_PAIRS`).
+
+    Das Budget (:data:`CROSSING_PARTS_PAIRS`) zählt genaue Prüfungen. Reicht
+    es nicht, gibt die Vorfrage ohne ``require_complete`` ``None`` zurück —
+    kein Satz, der mehr behauptet, als gesucht wurde; mit ``require_complete``
+    hält sie mit Handlungsvorschlag an. ``max_pairs=None`` sucht ohne Budget,
+    und wer ``require_complete`` setzt, sucht auch über
+    :data:`CROSSING_PARTS_MAX` Teilen. Abbrechbar ist die Suche je
+    Frontstück der Bäume und je Block genauer Prüfungen. Die Vorfrage wählt
+    nur Satz und Knöpfe, sie rechnet keine Geometrie.
 
     ``include_face_contacts`` nimmt für eine Vereinigung auch positive
     koplanare Flächenüberdeckung auf. Kanten- und Eckkontakt bleiben außen vor;
     die normale Vorfrage und ihre Befunde behalten damit ihre bisherige
     Bedeutung.
+
+    **Eine vollständige Antwort merkt sich das Netz**, je Modus, solange die
+    Teile die eigenen sind (``pieces`` leer): Der Trennbeleg im Merkmalfenster
+    und die Boolesche Vorprüfung desselben Schritts fragen dasselbe Netz
+    (Review RM-381), und die Antwort verfällt mit seiner Geometrie.
     """
+    cache = getattr(body, "_cache", None) if pieces is None else None
+    remembered = _CROSSING_FACES_KEY if include_face_contacts else _CROSSING_KEY
+    if cache is not None:
+        cache.verify()
+        if remembered in cache:
+            return cast("tuple[float, float, float] | None", cache[remembered])
     pieces = face_components(body) if pieces is None else pieces
-    if len(pieces) < 2:
+    members = [np.asarray(piece, dtype=np.int64) for piece in pieces if len(piece)]
+    if len(members) < 2:
         return None
-    if len(pieces) > CROSSING_PARTS_MAX:
+    if len(members) > CROSSING_PARTS_MAX and not require_complete:
+        return None
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    vertices = np.asarray(body.vertices, dtype=np.float64)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    triangles = vertices[faces]
+    low = triangles.min(axis=1)
+    high = triangles.max(axis=1)
+    # Je Teil die Hülle; die Teile liegen hintereinander, ``reduceat`` fasst
+    # sie ohne Schleife über die Teile zusammen.
+    sizes = np.asarray([len(piece) for piece in members], dtype=np.int64)
+    owned = np.concatenate(members)
+    starts = np.cumsum(sizes) - sizes
+    part_low = np.minimum.reduceat(low[owned], starts, axis=0)
+    part_high = np.maximum.reduceat(high[owned], starts, axis=0)
+    touching = _touching_parts(part_low, part_high, cancelled)
+    place: tuple[float, float, float] | None = None
+    complete = True
+    if len(touching):
+        found, _spent, complete = _first_crossing(
+            triangles,
+            faces,
+            _part_pairs(members, low, high, part_low, part_high, touching, cancelled),
+            max_pairs,
+            cancelled=cancelled,
+            include_face_contacts=include_face_contacts,
+        )
+        if found is not None:
+            middle = (triangles[found[0]].mean(axis=0) + triangles[found[1]].mean(axis=0)) / 2.0
+            place = (float(middle[0]), float(middle[1]), float(middle[2]))
+            complete = True
+    if not complete:
         if require_complete:
             raise GeometryError(
                 detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         return None
-    vertices = np.asarray(body.vertices, dtype=np.float64)
-    faces = np.asarray(body.faces, dtype=np.int64)
-    triangles = vertices[faces]
-    low = triangles.min(axis=1)
-    high = triangles.max(axis=1)
-    part_low = np.array([low[piece].min(axis=0) for piece in pieces])
-    part_high = np.array([high[piece].max(axis=0) for piece in pieces])
-    reach = EPS_GEOM
-    touching = np.all(part_low[:, None, :] <= part_high[None, :, :] + reach, axis=2) & np.all(
-        part_low[None, :, :] <= part_high[:, None, :] + reach, axis=2
-    )
-    firsts, seconds = np.nonzero(np.triu(touching, 1))
-    budget = max_pairs
-    for one, other in zip(firsts.tolist(), seconds.tolist(), strict=True):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        box_low = np.maximum(part_low[one], part_low[other]) - reach
-        box_high = np.minimum(part_high[one], part_high[other]) + reach
-        near: list[np.ndarray] = []
-        for number in (one, other):
-            piece = np.asarray(pieces[number], dtype=np.int64)
-            inside = np.all(low[piece] <= box_high, axis=1) & np.all(high[piece] >= box_low, axis=1)
-            near.append(piece[inside])
-        if not len(near[0]) or not len(near[1]):
-            continue
-        found, spent, complete = _first_crossing_between(
-            triangles,
-            faces,
-            low,
-            high,
-            near[0],
-            near[1],
-            budget,
-            cancelled=cancelled,
-            include_face_contacts=include_face_contacts,
-        )
-        if found is not None:
-            middle = (triangles[found[0]].mean(axis=0) + triangles[found[1]].mean(axis=0)) / 2.0
-            return (float(middle[0]), float(middle[1]), float(middle[2]))
-        if not complete:
-            if require_complete:
-                raise GeometryError(
-                    detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
-                    suggestions=(CORRECT_INPUT, CANCEL),
-                )
-            return None
-        if budget is not None:
-            budget -= spent
-    return None
+    if cache is not None:
+        cache[remembered] = place
+    return place
 
 
-def _first_crossing_between(
-    triangles: np.ndarray,
-    faces: np.ndarray,
+#: Wo :func:`parts_that_cross` seine vollständige Antwort im Cache des Netzes
+#: ablegt — ohne und mit Flächenkontakt.
+_CROSSING_KEY: Final = "solidon_parts_that_cross"
+_CROSSING_FACES_KEY: Final = "solidon_parts_that_cross_with_faces"
+
+
+def _touching_parts(
+    part_low: np.ndarray, part_high: np.ndarray, cancelled: CancelToken | None
+) -> np.ndarray:
+    """Die Teilepaare ``(eins, anderes)`` mit ``eins < anderes``, deren Hüllen sich überdecken.
+
+    In der Reihenfolge der Teilenummern, wie früher die Zeilen der
+    Überdeckungsmatrix — über einen Baum statt der Matrix, die bei
+    Tausenden Teilen quadratisch wuchs.
+    """
+    from app.core.geom.intersections import BoxTree, box_pairs_between
+
+    numbers = np.arange(len(part_low), dtype=np.int64)
+    parts = BoxTree(numbers, part_low, part_high)
+    found = [
+        np.stack((first, second), axis=1)[first < second]
+        for first, second in box_pairs_between(parts, parts, cancelled)
+    ]
+    if not found:
+        return np.zeros((0, 2), dtype=np.int64)
+    pairs = np.concatenate(found)
+    return pairs[np.lexsort((pairs[:, 1], pairs[:, 0]))]
+
+
+def _part_pairs(
+    members: Sequence[np.ndarray],
     low: np.ndarray,
     high: np.ndarray,
-    one: np.ndarray,
-    other: np.ndarray,
+    part_low: np.ndarray,
+    part_high: np.ndarray,
+    touching: np.ndarray,
+    cancelled: CancelToken | None,
+) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+    """Blockweise die Dreieckspaare verschiedener Teile, deren Hüllquader sich überdecken.
+
+    Teilepaar für Teilepaar in der Reihenfolge von ``touching``, und erst,
+    wenn die Suche dort ankommt: Wer beim ersten Treffer aufhört, hat für die
+    übrigen Paare nichts gerechnet. Gefragt werden nur die Dreiecke im
+    Überlapp beider Hüllen — wessen Hüllquader ihn nicht berührt, berührt kein
+    Dreieck des anderen Teils. Liegt ein ganzes Teil darin, etwa das innere
+    zweier verschachtelter Röhren, gilt sein Baum für jeden Partner.
+
+    Kleine Paare (:data:`CROSSING_SMALL_PAIRS`) gehen ohne Baum, jedes Dreieck
+    gegen jedes, gesammelt in einem Feld: Eine Dreieckssuppe aus Tausenden
+    Teilen kostet so wenige Feldaufrufe statt Tausender Bäume.
+    """
+    from app.core.geom.intersections import TREE_PAIR_BLOCK, BoxTree, box_pairs_between
+
+    gathered: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    whole: dict[int, BoxTree] = {}
+    waiting: list[tuple[np.ndarray, np.ndarray]] = []
+    waiting_pairs = 0
+
+    def near(number: int, box_low: np.ndarray, box_high: np.ndarray) -> tuple[np.ndarray, bool]:
+        piece = members[number]
+        if number not in gathered:
+            gathered[number] = (low[piece], high[piece])
+        own_low, own_high = gathered[number]
+        inside = np.all(own_low <= box_high, axis=1) & np.all(own_high >= box_low, axis=1)
+        return piece[inside], bool(inside.all())
+
+    def tree(number: int, chosen: np.ndarray, complete: bool) -> BoxTree:
+        if not complete:
+            return BoxTree(chosen, low, high)
+        if number not in whole:
+            whole[number] = BoxTree(chosen, low, high)
+        return whole[number]
+
+    for one, other in touching.tolist():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        box_low = np.maximum(part_low[one], part_low[other]) - EPS_GEOM
+        box_high = np.minimum(part_high[one], part_high[other]) + EPS_GEOM
+        near_one, whole_one = near(one, box_low, box_high)
+        near_other, whole_other = near(other, box_low, box_high)
+        if not len(near_one) or not len(near_other):
+            continue
+        if len(near_one) * len(near_other) <= CROSSING_SMALL_PAIRS:
+            waiting.append((near_one, near_other))
+            waiting_pairs += len(near_one) * len(near_other)
+            if waiting_pairs >= TREE_PAIR_BLOCK:
+                yield from _every_pair(waiting, low, high)
+                waiting, waiting_pairs = [], 0
+            continue
+        if waiting:
+            yield from _every_pair(waiting, low, high)
+            waiting, waiting_pairs = [], 0
+        yield from box_pairs_between(
+            tree(one, near_one, whole_one), tree(other, near_other, whole_other), cancelled
+        )
+    if waiting:
+        yield from _every_pair(waiting, low, high)
+
+
+def _every_pair(
+    groups: Sequence[tuple[np.ndarray, np.ndarray]], low: np.ndarray, high: np.ndarray
+) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+    """Je Gruppe jedes Dreieck des einen gegen jedes des anderen, mit überdeckenden Hüllquadern.
+
+    Alle Gruppen in einem Feld, in ihrer Reihenfolge; herausgegeben in Blöcken
+    wie die Bäume (:data:`~app.core.geom.intersections.TREE_PAIR_BLOCK`).
+    """
+    from app.core.geom.intersections import TREE_PAIR_BLOCK, _boxes_meet
+
+    ones = np.concatenate([one for one, _other in groups])
+    others = np.concatenate([other for _one, other in groups])
+    size_one = np.asarray([len(one) for one, _other in groups], dtype=np.int64)
+    size_other = np.asarray([len(other) for _one, other in groups], dtype=np.int64)
+    begin_one = np.cumsum(size_one) - size_one
+    begin_other = np.cumsum(size_other) - size_other
+    combos = size_one * size_other
+    row = np.repeat(np.arange(len(groups), dtype=np.int64), combos)
+    step = np.arange(int(combos.sum()), dtype=np.int64) - np.repeat(
+        np.cumsum(combos) - combos, combos
+    )
+    first = ones[begin_one[row] + step // size_other[row]]
+    second = others[begin_other[row] + step % size_other[row]]
+    meet = _boxes_meet(low[first], high[first], low[second], high[second])
+    first, second = first[meet], second[meet]
+    for offset in range(0, len(first), TREE_PAIR_BLOCK):
+        yield first[offset : offset + TREE_PAIR_BLOCK], second[offset : offset + TREE_PAIR_BLOCK]
+
+
+def _first_crossing(
+    triangles: np.ndarray,
+    faces: np.ndarray,
+    candidates: Iterator[tuple[np.ndarray, np.ndarray]],
     budget: int | None,
     *,
     cancelled: CancelToken | None = None,
     include_face_contacts: bool = False,
 ) -> tuple[tuple[int, int] | None, int, bool]:
-    """Das erste Paar aus ``one`` und ``other``, das quer durchdringt, und wie viele geprüft wurden.
+    """Das erste Kandidatenpaar, das quer durchdringt, wie viele gezählt wurden, und ob alle.
 
-    Ein Durchlauf auf der Achse mit den wenigsten einseitig überdeckten
-    Kandidaten. Was sich auch in den beiden übrigen Achsen überdeckt, geht
-    blockweise in die Schnittprüfung. Der letzte Wert unterscheidet einen
-    vollständigen Lauf vom Abbruch am Budget.
+    Gezählt werden die Paare, die in die genaue Prüfung gehen — und zwar
+    blockweise vorher: Ein Block, der das Budget überschreitet, wird nicht
+    mehr geprüft, und der Lauf ist ausdrücklich unvollständig.
     """
     from app.core.geom.intersections import crossing_pairs
 
-    best: tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None = None
-    for axis in range(3):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        axis_order = other[np.argsort(low[other, axis], kind="stable")]
-        starts = low[axis_order, axis]
-        back = float((high[other, axis] - low[other, axis]).max()) + EPS_GEOM
-        axis_begin = np.searchsorted(starts, low[one, axis] - back, side="left")
-        axis_end = np.searchsorted(starts, high[one, axis] + EPS_GEOM, side="right")
-        axis_counts = (axis_end - axis_begin).astype(np.int64)
-        candidate_count = int(axis_counts.sum())
-        if best is None or candidate_count < best[0]:
-            best = (candidate_count, axis_order, axis_begin, axis_end, axis_counts)
-    if best is None:
-        return None, 0, True
-    best_count, order, begin, _, counts = best
-    if budget is not None and best_count > 20 * budget:
-        # Auch die beste Achse liefert zu viele Grobkandidaten; der Lauf bleibt
-        # ausdrücklich unvollständig, statt die Sicherheitsgrenze zu lockern.
-        return None, budget, False
-    total = np.cumsum(counts)
     spent = 0
-    candidate_start = 0
-    while candidate_start < best_count:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        candidate_stop = min(candidate_start + CROSSING_BLOCK, best_count)
-        candidates = np.arange(candidate_start, candidate_stop, dtype=np.int64)
-        rows = np.searchsorted(total, candidates, side="right")
-        row_starts = np.zeros(len(candidates), dtype=np.int64)
-        has_previous = rows > 0
-        row_starts[has_previous] = total[rows[has_previous] - 1]
-        steps = candidates - row_starts
-        first = one[rows]
-        second = order[begin[rows] + steps]
-        candidate_start = candidate_stop
-        overlap = np.all(low[first] <= high[second] + EPS_GEOM, axis=1) & np.all(
-            low[second] <= high[first] + EPS_GEOM, axis=1
-        )
-        first, second = first[overlap], second[overlap]
+    for first, second in candidates:
         spent += len(first)
         if budget is not None and spent > budget:
             return None, spent, False
@@ -1656,6 +1755,38 @@ def _first_crossing_between(
             index = int(across[0])
             return (int(first[index]), int(second[index])), spent, True
     return None, spent, True
+
+
+def _first_crossing_between(
+    triangles: np.ndarray,
+    faces: np.ndarray,
+    low: np.ndarray,
+    high: np.ndarray,
+    one: np.ndarray,
+    other: np.ndarray,
+    budget: int | None,
+    *,
+    cancelled: CancelToken | None = None,
+    include_face_contacts: bool = False,
+) -> tuple[tuple[int, int] | None, int, bool]:
+    """Das erste Paar aus ``one`` und ``other``, das quer durchdringt, und wie viele geprüft wurden.
+
+    Die Kandidaten sind genau die Paare mit überdeckenden Hüllquadern, aus
+    zwei Bäumen (:func:`~app.core.geom.intersections.box_pairs_between`). Der
+    letzte Wert unterscheidet einen vollständigen Lauf vom Abbruch am Budget.
+    """
+    from app.core.geom.intersections import BoxTree, box_pairs_between
+
+    if not len(one) or not len(other):
+        return None, 0, True
+    return _first_crossing(
+        triangles,
+        faces,
+        box_pairs_between(BoxTree(one, low, high), BoxTree(other, low, high), cancelled),
+        budget,
+        cancelled=cancelled,
+        include_face_contacts=include_face_contacts,
+    )
 
 
 def parts_can_be_merged(mesh: MeshData) -> bool:
@@ -4229,12 +4360,50 @@ def _remember_self_crossing(mesh: MeshData, shells: Sequence[np.ndarray]) -> Non
 
 def _known_to_cross_itself(mesh: MeshData) -> bool:
     """Ob eine Schale dieses Netzes schon einmal belegt sich selbst gekreuzt hat."""
+    return bool(self_crossing_shells(mesh))
+
+
+def self_crossing_shells(mesh: MeshData) -> list[np.ndarray]:
+    """Die Schalen dieses Netzes, die sich belegt selbst kreuzen — je Schale ihre Dreiecke.
+
+    Belegt heißt: :func:`resolve_self_intersections` hat an ihnen ein
+    schräges Paar in derselben Schale gefunden und sie sich gemerkt
+    (:func:`_remember_self_crossing`), an diesem oder einem früheren Netz.
+    Die Boolesche Kette fragt danach, wenn sie Teile nicht vereinigen konnte:
+    Gehalten wird nur, wo ein Werkzeug eine dieser Schalen trifft (RM-382).
+    Die Abdrücke der Schalen merkt sich das Netz (:func:`_shell_prints`):
+    Die Frage kommt beim Auflösen und danach noch einmal beim Halt.
+    """
     with _SELF_CROSSING_LOCK:
         if not _SELF_CROSSING:
-            return False
+            return []
         known = set(_SELF_CROSSING)
+    shells = face_components(mesh.raw)
+    return [
+        faces
+        for faces, print_ in zip(shells, _shell_prints(mesh, shells), strict=True)
+        if print_ in known
+    ]
+
+
+#: Wo :func:`_shell_prints` die Abdrücke im Cache des Netzes ablegt.
+_SHELL_PRINTS_KEY: Final = "solidon_shell_prints"
+
+
+def _shell_prints(mesh: MeshData, shells: Sequence[np.ndarray]) -> tuple[bytes, ...]:
+    """Je Schale ihr Abdruck (:func:`_shell_print`) — einmal je Netz, im Cache des Netzes."""
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if _SHELL_PRINTS_KEY in cache:
+            known = cast("tuple[bytes, ...]", cache[_SHELL_PRINTS_KEY])
+            if len(known) == len(shells):
+                return known
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
-    return any(_shell_print(triangles[faces]) in known for faces in face_components(mesh.raw))
+    prints = tuple(_shell_print(triangles[faces]) for faces in shells)
+    if cache is not None:
+        cache[_SHELL_PRINTS_KEY] = prints
+    return prints
 
 
 def _intersections_resolvable(mesh: MeshData, crossings: Crossings | None = None) -> str | None:

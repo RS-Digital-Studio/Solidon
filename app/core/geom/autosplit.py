@@ -36,7 +36,7 @@ import numpy as np
 from app.core import units
 from app.core.build_area import placement_offset, printable_area, printable_height
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS, SPLIT_ALONG_LINE, BooleanFailedError
+from app.core.errors import PROGRAMMING_ERRORS, SPLIT_ALONG_LINE, GeometryError
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import NoFittingOrientationError
@@ -1923,15 +1923,21 @@ def _support_after_cut(
                 cancelled=cancelled,
                 batch=True,
             )
-        except BooleanFailedError:
+        except GeometryError:
             # **Eine Naht, an der die Stifte nicht zu bauen sind, kostet
             # unbekannt viel** — wie eine Hälfte ohne Lage darunter. Die
             # Ausnahme brach sonst die ganze Suche ab, und der Kunde las über
             # seiner Teilung einen Satz über „die schnelle Vorschau", dessen
             # Knöpfe an ihr nichts ändern konnten (KUNDE-10, Laptopständer).
             # Die übrigen Nähte werden weiter beurteilt; scheitert der
-            # Schritt danach selbst, hält er im Verlauf an und bietet
-            # *Reparieren und erneut versuchen* an.
+            # Schritt danach selbst, hält er im Verlauf an und sagt, warum.
+            #
+            # **Jede Absage der Geometrie, nicht nur die der Rückfallkette**
+            # (RM-409): Eine Stiftbohrung durch eine Schale, die sich selbst
+            # kreuzt, hält vor dem Kern mit ``GeometryError`` an, der
+            # Oberklasse von ``BooleanFailedError`` — am Laptop-Ständer brach
+            # damit wieder die ganze Suche ab. Abbruch und ein verlorener
+            # Hilfsprozess sind keine ``GeometryError`` und gehen weiter.
             return float("inf")
         if cancelled is not None:
             cancelled.raise_if_cancelled()

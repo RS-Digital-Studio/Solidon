@@ -59,6 +59,7 @@ from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
 from app.core.types import (
     BoundingBox,
+    CancelToken,
     Finding,
     Mesh,
     ObjectId,
@@ -780,6 +781,8 @@ def resize_bore(
     quality: Quality = "fine",
     seed: int | None = None,
     end_planes: tuple[SectionPlane, ...] = (),
+    cancelled: CancelToken | None = None,
+    object_id: ObjectId | None = None,
 ) -> BoreResult:
     """Ändert eine erkannte zylindrische Bohrung in genau einem Booleschritt.
 
@@ -889,7 +892,14 @@ def resize_bore(
     transform.moved(tool, to_world)
     if capped:
         tool.vertices = _onto_planes(np.asarray(tool.vertices, dtype=np.float64), capped)
-    outcome = boolean(kind, [mesh, MeshData.of(tool)], quality=quality, seed=seed)
+    outcome = boolean(
+        kind,
+        [mesh, MeshData.of(tool)],
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+        object_ids=(object_id, None),
+    )
     resized = outcome.mesh
     findings = list(outcome.findings)
     nothing = without_effect(mesh, resized, kind, profile)
@@ -974,6 +984,8 @@ def slot_bore(
     overlap: float,
     quality: Quality = "fine",
     seed: int | None = None,
+    cancelled: CancelToken | None = None,
+    object_id: ObjectId | None = None,
 ) -> BoreResult:
     """Zieht eine erkannte Bohrung zu einem Langloch auseinander.
 
@@ -1083,7 +1095,14 @@ def slot_bore(
     # Hin- und Rückweg des ganzen Körpers versetzte jede Ecke, die das
     # Langloch nicht berührt.
     transform.moved(tool, _in_world(frame))
-    outcome = boolean("difference", [mesh, MeshData.of(tool)], quality=quality, seed=seed)
+    outcome = boolean(
+        "difference",
+        [mesh, MeshData.of(tool)],
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+        object_ids=(object_id, None),
+    )
     slotted = outcome.mesh
     findings = list(outcome.findings)
     nothing = without_effect(mesh, slotted, "difference", profile)
@@ -1757,6 +1776,8 @@ def drill(
     seed: int | None = None,
     slot_length: float = 0.0,
     slot_angle: float = 0.0,
+    cancelled: CancelToken | None = None,
+    object_id: ObjectId | None = None,
 ) -> BoreResult:
     """Schneidet eine Bohrung mit optionaler Aufweitung. Tiefe null bohrt ganz durch.
 
@@ -1863,7 +1884,14 @@ def drill(
         cylinder = tool.raw.copy()
         cylinder.apply_translation((0.0, 0.0, mouth))
         transform.moved(cylinder, _in_world(frame))
-        outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
+        outcome = boolean(
+            "difference",
+            [mesh, MeshData.of(cylinder)],
+            quality=quality,
+            seed=seed,
+            cancelled=cancelled,
+            object_ids=(object_id, None),
+        )
         result = outcome.mesh
         findings = list(outcome.findings)
         nothing = without_effect(mesh, result, "difference", profile)
@@ -1939,7 +1967,14 @@ def drill(
             to_the_middle = into * height / 2.0
         cylinder.apply_translation(offset)
 
-    outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
+    outcome = boolean(
+        "difference",
+        [mesh, MeshData.of(cylinder)],
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+        object_ids=(object_id, None),
+    )
     findings = list(outcome.findings)
     # Eine Bohrung, die den Körper nicht getroffen hat, sagt das (§2.7).
     nothing = without_effect(mesh, outcome.mesh, "difference", profile)
@@ -1979,6 +2014,8 @@ def countersink(
     anchor: BoreAnchor = "mouth",
     profile: Profile | None = None,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
+    object_id: ObjectId | None = None,
 ) -> BoreResult:
     """Bricht die Mündung einer Bohrung mit einem Kegel, damit ein
     Schraubenkopf bündig sitzt (§25).
@@ -2024,7 +2061,13 @@ def countersink(
     transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
     cone.apply_translation(at)
 
-    outcome = boolean("difference", [mesh, MeshData.of(cone)], quality=quality)
+    outcome = boolean(
+        "difference",
+        [mesh, MeshData.of(cone)],
+        quality=quality,
+        cancelled=cancelled,
+        object_ids=(object_id, None),
+    )
     findings = [*outcome.findings, *findings]
     # Dieselbe Auskunft wie beim Bohren: eine Senkung neben dem Körper sagt es
     # (§2.7). Sie war der eigentliche Schaden an der festen Richtung — der
@@ -2221,6 +2264,8 @@ def plug(
     profile: Profile | None = None,
     compensate: bool = True,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
+    object_id: ObjectId | None = None,
 ) -> BoreResult:
     """Füllt eine Bohrung wieder auf (§25, „verschließen").
 
@@ -2259,8 +2304,19 @@ def plug(
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
-    inner = boolean("intersection", [mesh.replacing(cylinder), shell(mesh)], quality=quality)
-    outcome = boolean("union", [mesh, inner.mesh], quality=quality)
+    inner = boolean(
+        "intersection",
+        [mesh.replacing(cylinder), shell(mesh)],
+        quality=quality,
+        cancelled=cancelled,
+    )
+    outcome = boolean(
+        "union",
+        [mesh, inner.mesh],
+        quality=quality,
+        cancelled=cancelled,
+        object_ids=(object_id, None),
+    )
     findings = list(outcome.findings)
     # Dieselbe Auskunft wie beim Bohren, nur andersherum: ein Stopfen an einer
     # Stelle ohne Bohrung ändert nichts, und das stand nirgends. Zurück blieb

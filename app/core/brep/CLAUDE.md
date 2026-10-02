@@ -60,8 +60,8 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   kehrt `triangles_of_face` geprüft um. Verschweißt wird je Körper
   (`_welded_per_solid`): Berührende Körper bleiben zwei Schalen. Nur wo eine
   Operation flächigen Kontakt ausdrücklich auflösen muss, vereinigt
-  `fuse_solids` die nativen Körper vorübergehend und erhält dabei belegte
-  Flächen- und Filamenthistorie.
+  `fuse_solids` die nativen Körper — das Ergebnis bleibt ein Körper — und
+  erhält dabei belegte Flächen- und Filamenthistorie.
 - **`transformed_with_faces`** bleibt bei Maßstab, Spiegelung, Scherung exakt
   (`gp_GTrsf`; `gp_Trsf.SetValues` orthogonalisiert); Matrix endlich, affin,
   umkehrbar; Körperzahl, Geschlossenheit, Gültigkeit halten. Starr belegt

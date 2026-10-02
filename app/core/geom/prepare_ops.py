@@ -722,6 +722,8 @@ def drill_hole(ctx: OpContext) -> OpResult:
         seed=ctx.seed,
         slot_length=shape.slot_length,
         slot_angle=shape.slot_angle,
+        cancelled=ctx.cancelled,
+        object_id=source.id,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh)],
@@ -3735,9 +3737,10 @@ def _hole_has_separate_contents_read(
         return False
     check_cancelled()
     try:
+        # Ohne eigene Teileliste: Die Antwort bleibt am Netz, und die Boolesche
+        # Vorprüfung von *Zum Langloch ziehen* liest sie dort (RM-381).
         contact = parts_that_cross(
             mesh.raw,
-            groups,
             cancelled=cancelled,
             max_pairs=None,
             include_face_contacts=True,
@@ -8084,6 +8087,8 @@ def resize_hole(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             overlap=0.0,
+            cancelled=ctx.cancelled,
+            object_id=source.id,
         )
     elif redrilled:
         # **An der neuen Stelle wird gebohrt, nicht geändert.** Die alte ist
@@ -8109,6 +8114,8 @@ def resize_hole(ctx: OpContext) -> OpResult:
             compensate=False,
             quality=ctx.quality,
             seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            object_id=source.id,
         )
     else:
         from app.core.perceive.relations import cavity_chain_at
@@ -8148,6 +8155,8 @@ def resize_hole(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             end_planes=end_planes,
+            cancelled=ctx.cancelled,
+            object_id=source.id,
         )
     # Gestopft oder abschnittsweise geschlossen wurde vielleicht; gezählt wird
     # gegen den Körper vor dem Schritt (:func:`_split_counted_from`).
@@ -8867,6 +8876,8 @@ def slot_hole(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         overlap=overlap,
+        cancelled=ctx.cancelled,
+        object_id=source.id,
     )
     # Zerfallen ist, was mehr Teile hat als vor dem Schritt — nicht mehr als der Stopfen.
     result = _split_counted_from(as_mesh_data(source.mesh), result)
@@ -15842,6 +15853,8 @@ def countersink_hole(ctx: OpContext) -> OpResult:
         anchor=cast(BoreAnchor, params.anchor),
         profile=ctx.profile,
         quality=ctx.quality,
+        cancelled=ctx.cancelled,
+        object_id=source.id,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh)],
@@ -15998,6 +16011,8 @@ def plug_hole(ctx: OpContext) -> OpResult:
         profile=ctx.profile,
         compensate=params.compensate,
         quality=ctx.quality,
+        cancelled=ctx.cancelled,
+        object_id=source.id,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
