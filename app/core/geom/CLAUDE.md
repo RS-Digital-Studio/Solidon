@@ -274,8 +274,7 @@ Richtung, `opposite_side`)
 erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche
 und Modellwand treffen sich längs einer Linie. `CutContactError` zeigt zum
 Verschieben auf das Lagefeld. `split_at_plane` prüft beide Hälften, `cut_away`
-nur die behaltene; seine Ebene hängt an Achse, Fläche, Kante oder drei Punkten
-(`plane`). War der Eingang schon offen, bleibt seine eigene
+nur die behaltene. War der Eingang schon offen, bleibt seine eigene
 Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten bei Konturzahl
 und Vorauswahl aus und nennt den Grund, falls keine verwendbare Lage bleibt.
 Die reine Schnittansicht darf die unveränderte Berührung zeigen.
@@ -307,7 +306,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   befragt auch negative Häute und verlangt vollständig entschiedene,
   alternierende Elternketten mit positiven Wurzeln. Eine positive Insel im
   Hohlraum bleibt eine eigene Familie. Dichtheit und Kontaktfreiheit belegt
-  der Aufrufer; `None` gibt keine Familie frei. Beide optionalen Abbruchtoken
+  der Aufrufer; `None` gibt keine Familie frei.
+  `material_part_count` zählt Familien nach vollständigem Vorbeleg.
+  Beide optionalen Abbruchtoken
   reichen durch `_Shells` bis in Gitterzertifikat und genaue Kreuzungssuche;
   Diagnose und boolesche Familien behalten ihre Standardschnittstelle.
 

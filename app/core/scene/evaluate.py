@@ -51,7 +51,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.geom.boolean import body_split
+from app.core.geom.boolean import body_split, pieces
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
@@ -127,6 +127,7 @@ from app.core.types import (
     AskFn,
     BaseParams,
     BoundingBox,
+    BRepBody,
     CancelToken,
     Document,
     Feature,
@@ -277,6 +278,13 @@ class EvaluationResult:
     ``progress`` und ``cancelled`` sie im Hintergrund nach — die Schritte
     selbst treffen dort den Cache, es rechnet nur die Erkennung. Leer heißt:
     Der Merker kannte alles, oder es gab nichts zu erkennen."""
+    question_reference: tuple[SceneObject, FeatureId] | None = None
+    """Das bisherige Merkmal einer offenen Zuordnungsfrage samt seinem Körper.
+
+    Nur vorübergehend für die Ansicht; es gehört weder zur Szene noch zum
+    gespeicherten Projekt. Bei exakten Körpern liegen die Ansichtsdreiecke
+    bereits aus dem Auswertungsarbeiter vor. Die Vorschau zeigt damit alte und
+    mögliche neue Fläche gleichzeitig (§21.3, RM-217)."""
 
     @property
     def complete(self) -> bool:
@@ -289,7 +297,9 @@ oder eine Kante als :class:`EdgeTarget` (P1.4c), das statt einer Kennung ein
 Antworttoken und seinen Zug trägt."""
 
 type QuestionContext = Callable[[EvaluationResult | None, tuple[QuestionCandidate, ...]], None]
-type FeatureQuestionContext = Callable[[SceneObject | None, tuple[FeatureId, ...]], None]
+type FeatureQuestionContext = Callable[
+    [SceneObject | None, tuple[FeatureId, ...], FeatureId | None], None
+]
 #: Wer die Antwort auf die Frage vor der langen Vollerkennung sofort erfährt:
 #: Ladeschritt, Schlüssel und Eintrag, wie ``record_matches`` sie nimmt.
 type RecognitionAnswered = Callable[[OpId, str, Mapping[str, Any]], None]
@@ -988,12 +998,13 @@ def _evaluate(
         def announce_candidates(
             current: SceneObject | None,
             candidates: tuple[FeatureId, ...],
+            previous_feature: FeatureId | None = None,
             *,
             operation: Operation = operation,
             result: CachedResult = result,
             prepared_objects: dict[ObjectId, SceneObject] = prepared_objects,
         ) -> None:
-            """Zeigt echte Ausgabegeometrie ausschließlich als vergänglichen Fragekontext."""
+            """Zeigt Ausgabe und bisherigen Bezug nur als vergänglichen Fragekontext."""
             if question_context is None:
                 return
             if current is None:
@@ -1009,6 +1020,20 @@ def _evaluate(
                 )
             preview_objects.update(prepared_objects)
             preview_objects[current.id] = current
+            previous_reference: tuple[SceneObject, FeatureId] | None = None
+            previous_body = objects.get(current.id)
+            if (
+                previous_feature is not None
+                and previous_body is not None
+                and previous_feature in previous_body.features
+            ):
+                previous_mesh = previous_body.mesh
+                to_mesh = getattr(previous_mesh, "to_mesh", None)
+                if callable(to_mesh):
+                    previous_mesh = to_mesh()
+                if previous_mesh is not previous_body.mesh:
+                    previous_body = dataclasses.replace(previous_body, mesh=previous_mesh)
+                previous_reference = (previous_body, previous_feature)
             question_context(
                 EvaluationResult(
                     scene=Scene(
@@ -1028,6 +1053,7 @@ def _evaluate(
                         if name in preview_objects and name not in operation.outputs
                     },
                     object_names={name: str(body.name) for name, body in preview_objects.items()},
+                    question_reference=previous_reference,
                 ),
                 tuple((current.id, candidate) for candidate in candidates),
             )
@@ -1378,15 +1404,15 @@ def _evaluate(
     settled = _without_split_echoes(
         _without_repeats(
             _without_undone_placements(
-                _without_outdated(_without_settled(findings), scene),
+                _without_outdated(_without_settled(findings), scene, cancelled=token),
                 scene,
                 placed=stopped_at is None and bool(objects),
             )
         ),
         scene,
     )
-    if len(settled) != len(findings):
-        scene = dataclasses.replace(scene, report=Report(tuple(settled)))
+    # Auch eine ersetzte Teilezahl ändert den Bericht bei gleicher Zeilenzahl.
+    scene = dataclasses.replace(scene, report=Report(tuple(settled)))
     token.raise_if_cancelled()
     # Erst nach sämtlichen Abschlussprüfungen ist der Durchlauf vollständig.
     # Abbruch davor veröffentlicht weder einen Teilcache noch eine Fertigmeldung.
@@ -1520,14 +1546,28 @@ CLOSED_STATE_CODES: Final = frozenset(
     }
 )
 
+#: Befunde über lose Materialteile. Innenhäute eines Hohlraums sind keine
+#: weiteren Teile; ohne vollständigen Materialbeleg bleibt der Befund stehen.
+MATERIAL_PART_CODES: Final = frozenset(
+    {
+        "bore.splits_the_body",
+        "label.fell_apart",
+        "texture.fell_apart",
+        "parts.hanging_loose",
+        "blend.still_apart",
+        "sketch.join_apart",
+    }
+)
+
 #: Und die, die „mehr als ein Teil" aussagen — am Endstand gestrichen, wenn
 #: der Körper dort aus einem Stück besteht. Ein Teil im Teil gehört dazu:
 #: Ohne zweite Schale gibt es keines. Ebenso der Zerfall an einem Schritt, den
 #: ein späterer wieder zu einem Stück vereinigt hat — ob die Bohrung ihn meldet
 #: (``bore.splits_the_body``) oder die Auswertung (``feature.body_split``).
-ONE_PIECE_CODES: Final = frozenset(
+#: Nur :data:`MATERIAL_PART_CODES` fragen Materialteile; die übrigen alten
+#: Befunde behalten ihre Bedeutung als Zahl zusammenhängender Netzkomponenten.
+ONE_PIECE_CODES: Final = MATERIAL_PART_CODES | frozenset(
     {
-        "bore.splits_the_body",
         "feature.body_split",
         "ingest.multiple_components",
         "ingest.small_components",
@@ -1540,12 +1580,12 @@ ONE_PIECE_CODES: Final = frozenset(
 #: Sie fallen auch an einem Körper, der am Endstand aus **anderen** vielen
 #: Teilen besteht: „69 Teile, von denen manche ineinanderstecken" stand über
 #: dem Bohrmaschinenhalter, den *Überschneidungen auflösen* zu vier Teilen
-#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13). Ebenso „Anzahl 8"
-#: über einer Wanne, die ein späterer Schritt zu drei Teilen überbrückt hatte.
+#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13).
+#: Die Bohrungszahl wird dagegen am Endstand nachgeführt, solange mehr als
+#: ein Materialteil belegt ist; sie steht deshalb nicht in dieser Tabelle.
 #: **Nicht** ``feature.body_split``: Bei einem Baustein mit lösbarem Teil zählt
 #: sein „Nachher" nur die Stücke des Trägers, der Körper hat eines mehr.
 COUNTED_PARTS: Final[dict[str, str]] = {
-    "bore.splits_the_body": "count",
     "ingest.multiple_components": "components",
     "repair.part_inside": "components",
     "mesh.components_split": "after_components",
@@ -1799,7 +1839,9 @@ def _without_undone_placements(
     return kept
 
 
-def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding]:
+def _without_outdated(
+    findings: Sequence[Finding], scene: Scene, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Streicht Zustandsbefunde, die am fertigen Körper nicht mehr stimmen.
 
     „Das Modell ist nicht geschlossen" steht im Präsens; ist der Körper am
@@ -1812,7 +1854,15 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
     —, und gegeneinander zeigende Außenseiten an einem einheitlich gewickelten
     (:data:`WOUND_STATE_CODES`). Ein Befund ohne Körper oder an einem Körper,
     den es am Ende nicht mehr gibt, bleibt — über ihn weiß der Endstand nichts.
+
+    Nur :data:`MATERIAL_PART_CODES` fragen belegte Materialteile statt Schalen;
+    die native Topologie zählt über ``solid_count``. Die Bohrungszahl wird bei
+    weiter mehreren Teilen in einem frischen Befund nachgeführt. Ein unbekannter
+    Endstand erhält den bisherigen Befund, die rohen Operationsbefunde bleiben
+    unverändert. Beide Zählarten werden getrennt einmal je Objekt ermittelt.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if not any(
         entry.code in CLOSED_STATE_CODES
         or entry.code in ONE_PIECE_CODES
@@ -1822,6 +1872,7 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
         return list(findings)
     closed: dict[ObjectId, bool] = {}
     parts: dict[ObjectId, int | None] = {}
+    material_parts: dict[ObjectId, int | None] = {}
     wound: dict[ObjectId, bool] = {}
 
     def body_of(entry: Finding) -> SceneObject | None:
@@ -1832,6 +1883,8 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
 
     kept: list[Finding] = []
     for entry in findings:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         body = body_of(entry)
         # Gefragt wird, was der Körper von sich weiß; wer es nicht weiß (ein
         # Körper ohne diese Auskunft), behält seinen Befund.
@@ -1840,7 +1893,29 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
                 closed[body.id] = getattr(body.mesh, "is_watertight", False) is True
             if closed[body.id]:
                 continue
-        if body is not None and entry.code in ONE_PIECE_CODES:
+        if body is not None and entry.code in MATERIAL_PART_CODES:
+            if body.id not in material_parts:
+                if isinstance(body.mesh, BRepBody):
+                    # Die native Topologie zählt Materialkörper einschließlich
+                    # ihrer Innenhäute; Null oder eine offene Form belegt nichts.
+                    native_count = (
+                        pieces(body.mesh) if getattr(body.mesh, "is_closed", False) is True else 0
+                    )
+                    material_parts[body.id] = native_count if native_count > 0 else None
+                elif isinstance(body.mesh, MeshData):
+                    from app.core.geom.repair import material_part_count
+
+                    material_parts[body.id] = material_part_count(body.mesh, cancelled=cancelled)
+                else:
+                    material_parts[body.id] = None
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            current = material_parts[body.id]
+            if current == 1:
+                continue
+            if entry.code == "bore.splits_the_body" and current is not None:
+                entry = dataclasses.replace(entry, values={**dict(entry.values), "count": current})
+        elif body is not None and entry.code in ONE_PIECE_CODES:
             if body.id not in parts:
                 count = getattr(body.mesh, "component_count", None)
                 parts[body.id] = count if isinstance(count, int) else None
@@ -3107,12 +3182,12 @@ def _answer_matches(
                 )
                 try:
                     if question_context is not None:
-                        question_context(entry, available)
+                        question_context(entry, available, old_id)
                     chosen = ask(question, [*available, noncontinuation])
                     watch.raise_if_cancelled()
                 finally:
                     if question_context is not None:
-                        question_context(None, ())
+                        question_context(None, (), None)
                 if chosen == noncontinuation:
                     decisions[old_id] = None
                 elif chosen in available:

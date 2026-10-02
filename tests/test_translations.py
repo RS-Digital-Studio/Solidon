@@ -138,6 +138,24 @@ def test_italian_sculpt_manual_names_the_actual_modify_menu() -> None:
     assert catalog["Dreiecke angleichen"] in body
 
 
+def test_italian_painted_strokes_are_painted_again_not_redrawn() -> None:
+    """Was der Formpinsel malt, malt der Kunde neu — er zeichnet es nicht.
+
+    „Ridisegna" ist das Wort für eine neu gezeichnete Kontur; im selben Satz
+    hieß der Zug eben noch „dipinto". Jeder Text, der in der Quelle vom Malen
+    spricht, bleibt im Italienischen beim Malen (RM-436).
+    """
+    catalog = read_catalog("it")
+    painted = {
+        key: value
+        for key, value in catalog.items()
+        if isinstance(value, str) and re.search(r"\b(malen|gemalt)\b", key)
+    }
+    assert painted, "kein Quelltext spricht mehr vom Malen — stimmt das Muster noch?"
+    redrawn = [key for key, value in painted.items() if "disegn" in value.lower()]
+    assert not redrawn, redrawn
+
+
 #: Statische Meldungsfenster-Aufrufe. Nur an QMessageBox gezählt —
 #: ``log.warning`` ist kein Dialog.
 BOX_CALLS = frozenset({"information", "question", "warning", "critical"})

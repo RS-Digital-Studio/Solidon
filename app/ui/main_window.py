@@ -198,6 +198,7 @@ from app.core.scene import (
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import change_for, repair_is_available
+from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
 from app.core.scene.placement import seat_on_face, seats_on
@@ -7468,6 +7469,9 @@ class MainWindow(QMainWindow):
         deshalb nicht in die gemeinsamen Druckempfehlungen.
         """
         self._end_inserting_for_output()
+        # Der Slicer bekommt die feine Rechnung (RM-426). Bestellt wird sie
+        # schon beim Öffnen, damit ein Klick auf *Slicen* selten warten muss.
+        self.session.request_fine()
         # §29: Was Solidon hier rechnet, reist mit einer gespeicherten 3MF und
         # mit der Übergabe an den Slicer. Der Hinweis sagt das einmal je
         # Textfassung und lässt dabei wählen, ob es so sein soll; danach steht
@@ -7815,6 +7819,9 @@ class MainWindow(QMainWindow):
         landen im Prüfbericht. „Wer trotzdem exportieren will, kann das — er
         weiß dann nur, was er tut", sagt §29.
 
+        Geschrieben wird die feine Rechnung, nicht der Entwurf des Fensters
+        (§31, RM-426); :meth:`_start_export` wartet auf sie.
+
         Gerechnet und geschrieben wird im Arbeiter (§2.8): Prüfung, Aufbau der
         Baugruppe und das Schreiben zusammen sind bei mehreren großen Körpern
         mehr als zwei Sekunden. Hier bleiben der Dateidialog und das
@@ -7941,14 +7948,19 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
-        if self.session.busy or not self.session.result_current:
+        if not self.session.fine_current:
             # **Erst das Ergebnis, dann die Datei** (RM-352). Geschrieben
             # wurde das vorige Ergebnis mit dem neuen Dokument: Bild und
             # Verlauf zeigten 100 mm, die Datei war 80 mm breit, und die
             # Quittung meldete Erfolg. Der Auftrag wartet wie ein Klick vor
             # der Vorschau, die Statuszeile sagt es, *Abbrechen* nimmt ihn
             # zurück.
+            #
+            # **Und das feine Ergebnis** (RM-426): Das Fenster rechnet im
+            # Entwurf, die Datei braucht die feine Rechnung mit der vollen
+            # Rückfallkette (§31). Bestellt wird sie hier, gewartet wie oben.
             self._export_waiting = (target, export_format, self.session.project)
+            self.session.request_fine()
             text = tr("Export wartet auf die laufende Berechnung … {name}").format(name=target.name)
             self._set_progress_state(
                 "export",
@@ -8064,12 +8076,18 @@ class MainWindow(QMainWindow):
         dem Stand vor dem Halt und sähe aus wie das Bild, wäre es aber nicht.
         """
         waiting = self._export_waiting
-        if waiting is None or self.session.busy or not self.session.result_current:
+        if waiting is None or self.session.busy:
             return
         self._export_waiting = None
         self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
         target, export_format, project = waiting
         if self._close_requested or project is not self.session.project:
+            return
+        if not self.session.fine_current:
+            # Die feine Rechnung kam nicht zu Ende — abgebrochen oder
+            # gescheitert, beides steht schon im Fenster. Geschrieben wird
+            # nicht der Entwurf an ihrer Stelle (RM-426).
+            self.announce(tr("Export abgebrochen."))
             return
         result = self.session.last_result
         if result is None or result.stopped_at is not None:
@@ -17357,7 +17375,16 @@ class MainWindow(QMainWindow):
         self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
         if self._ask_candidates:
-            self.viewport.show_candidates(self._ask_candidates)
+            request = self._ask_request
+            previous = (
+                request.preview.question_reference
+                if request is not None and request.preview is not None
+                else None
+            )
+            if previous is None:
+                self.viewport.show_candidates(self._ask_candidates)
+            else:
+                self.viewport.show_candidates(self._ask_candidates, previous_reference=previous)
 
     def action_theme(self, theme: str) -> None:
         application = QApplication.instance()
@@ -18086,17 +18113,44 @@ class MainWindow(QMainWindow):
             return str(error)
         remote = Origin(by="agent", model=REMOTE_ORIGIN)
         if tool == ADD_PARAMETER:
+            # Titel und Grenzen bietet das Werkzeugschema an, also kommen sie
+            # an — wie im Chat (RM-447). Sie gingen hier verloren.
+            limits: dict[str, float] = {}
+            for limit in ("minimum", "maximum"):
+                if values.get(limit) is None:
+                    continue
+                try:
+                    limits[limit] = parse_number(values[limit])
+                except ValueError as error:
+                    return str(error)
+            title = values.get("title")
             made = self.session.add_parameter(
-                Parameter(name=name, value=number, unit=str(values.get("unit", "mm"))),
+                Parameter(
+                    name=name,
+                    value=number,
+                    unit=str(values.get("unit", "mm")),
+                    title=str(title) if title else None,
+                    minimum=limits.get("minimum"),
+                    maximum=limits.get("maximum"),
+                ),
                 origin=remote,
             )
             if not made:
                 return tr("Der Parameter wurde nicht angelegt — den Grund zeigt das Fenster.")
             return tr("Parameter angelegt: {name} = {value}", name=name, value=number)
-        if name not in self.session.project.document.parameters:
+        document = self.session.project.document
+        existing = document.parameters.get(name)
+        if existing is None:
             return tr("Diesen Parameter gibt es nicht: {name}", name=name)
-        if not self.session.change_parameter(name, number, origin=remote):
+        if is_close(existing.value, number):
             return tr("Der Wert ist schon so eingestellt.")
+        # Die Grenze steht in der Antwort, nicht nur im Fenster, das der
+        # Aufrufer nicht sieht (RM-447).
+        beyond = bounds_refusal(document, name, number)
+        if not self.session.change_parameter(name, number, origin=remote):
+            if beyond is not None:
+                return str(beyond)
+            return tr("Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.")
         return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
 
     def _draw_sketch_in_space(
@@ -20465,11 +20519,11 @@ class MainWindow(QMainWindow):
         mehr tut, ist die Liste der Weg zurück. Die Liste selbst heißt
         „Zuletzt geöffnet" und nicht „Projekte"; sie stimmt also weiter.
         """
-        geladen, self._pending_download = self._pending_download, ""
-        eingelesen, self._pending_import = self._pending_import, None
+        downloaded, self._pending_download = self._pending_download, ""
+        imported, self._pending_import = self._pending_import, None
         if accepted:
             self._show_start_screen(False)
-            if eingelesen is not None:
+            if imported is not None:
                 # **Erst wenn das Modell steht** (KUNDE-12): Eine Datei, die
                 # den Plan passiert und am Ladeschritt scheitert, stand sonst
                 # in der Liste. ``importConfirmed`` trägt sie nach. Eine Datei
@@ -20477,24 +20531,24 @@ class MainWindow(QMainWindow):
                 # die Sitzung merkt sich nur den letzten Import.
                 if self._recent_candidate is not None:
                     self._on_import_confirmed()
-                self._recent_candidate = eingelesen
+                self._recent_candidate = imported
                 if not self.session.import_unconfirmed:
                     self._on_import_confirmed()
-            if geladen:
-                self.announce(tr("Geladen: {name}", name=geladen))
+            if downloaded:
+                self.announce(tr("Geladen: {name}", name=downloaded))
         else:
             self.status_message.setText(self._announcement)
 
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
-        eingelesen, self._recent_candidate = self._recent_candidate, None
-        if eingelesen is None:
+        imported, self._recent_candidate = self._recent_candidate, None
+        if imported is None:
             return
         operations = self.session.project.document.ops
         if operations and operations[-1].outputs:
             self._plate_of_import = operations[-1].outputs[0]
             self._show_the_plate_of_the_import()
-        self.settings.remember(eingelesen)
+        self.settings.remember(imported)
         self._store_settings()
         self._show_recent()
 
@@ -21196,7 +21250,7 @@ class MainWindow(QMainWindow):
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3).
 
-        **Und die Kandidaten stehen dabei hervorgehoben in der Ansicht.** Der
+        **Kandidaten und bisheriger Bezug stehen dabei hervorgehoben in der Ansicht.** Der
         Bauplan verlangt es wörtlich, gebaut war es bis zum 03.09.2026 nicht:
         Wer eine Projektdatei öffnete, deren Verweis mehrdeutig geworden war,
         bekam ``hole_1``, ``hole_2``, ``hole_3`` zur Wahl und sollte zwischen
@@ -21247,7 +21301,15 @@ class MainWindow(QMainWindow):
             if ready:
                 self._ask_candidates = tuple(request.candidates)
                 if self._ask_candidates:
-                    self.viewport.show_candidates(self._ask_candidates)
+                    previous = (
+                        request.preview.question_reference if request.preview is not None else None
+                    )
+                    if previous is None:
+                        self.viewport.show_candidates(self._ask_candidates)
+                    else:
+                        self.viewport.show_candidates(
+                            self._ask_candidates, previous_reference=previous
+                        )
                     self._emphasise_candidate(dialog.list.currentItem(), None)
 
         def scene_failed(detail: str) -> None:
@@ -21377,9 +21439,19 @@ class MainWindow(QMainWindow):
         if isinstance(current, QListWidgetItem):
             chosen = str(current.data(Qt.ItemDataRole.UserRole) or "")
         matching = [entry for entry in self._ask_candidates if _candidate_token(entry) == chosen]
-        self.viewport.show_candidates(
-            self._ask_candidates, matching[0] if len(matching) == 1 else None
+        request = self._ask_request
+        previous = (
+            request.preview.question_reference
+            if request is not None and request.preview is not None
+            else None
         )
+        emphasis = matching[0] if len(matching) == 1 else None
+        if previous is None:
+            self.viewport.show_candidates(self._ask_candidates, emphasis)
+        else:
+            self.viewport.show_candidates(
+                self._ask_candidates, emphasis, previous_reference=previous
+            )
 
     def _on_error(self, error: AppError) -> None:
         """§33.1: ein Fehler des Nutzers sieht anders aus als ein Fehler im
@@ -22180,25 +22252,26 @@ class MainWindow(QMainWindow):
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
         field = str(error.values.get("field", ""))
-        # **Liest das Feld ein Maß, wird das Maß korrigiert** (RM-354). Der
-        # Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl trennte
-        # still die Bindung; der Wert gehört in die Zeile der Parameterleiste.
+        # **Ist das Feld an ein Maß gebunden, wird das Maß korrigiert** (RM-354).
+        # Der Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl
+        # trennte still die Bindung; der Wert gehört in die Zeile der
+        # Parameterleiste. **Nur die nackte Bindung** (RM-453): Bei
+        # „=max(@breite, 2000)“ behebt keine Breite den Fehler, korrigierbar
+        # ist der Ausdruck im Schritt.
         from app.core import expressions
 
         try:
             raw = self.session.history.operation(error.op_id).params.get(field)
         except AppError:
             raw = None
-        read = expressions.references(raw) if expressions.is_expression(raw) else frozenset()
-        if len(read) == 1:
-            (name,) = read
-            if self.parameters.focus_parameter(name):
-                self.announce(
-                    tr(
-                        "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
-                    ).format(name=name)
-                )
-                return
+        name = expressions.bound_name(raw)
+        if name is not None and self.parameters.focus_parameter(name):
+            self.announce(
+                tr(
+                    "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
+                ).format(name=name)
+            )
+            return
         self.edit_operation(error.op_id, field)
 
     def _show_feature_after_error(self, error: AppError) -> None:
@@ -22500,7 +22573,11 @@ class MainWindow(QMainWindow):
         ):
             self._refresh_parameters()
             return
-        self.session.change_parameter(name, value)
+        if not self.session.change_parameter(name, value):
+            # Abgelehnt — etwa weil ein abgeleitetes Maß ein Feld über seine
+            # Grenze triebe: Die Leiste zeigt wieder, was gilt, statt der
+            # getippten Zahl, die nie ins Dokument kam (RM-447).
+            self._refresh_parameters()
 
     def _on_parameter_unit_edited(self, name: str, unit: str) -> None:
         """Die feste Einheitenauswahl als rücknehmbare Dokumentänderung.

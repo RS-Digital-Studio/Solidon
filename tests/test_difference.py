@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.geom import kernel_process
 from app.core.geom.difference import compare, compare_scenes
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import apply, translation
@@ -24,6 +25,39 @@ def cube(size: float = 20.0) -> MeshData:
 
 def plate() -> MeshData:
     return normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def _fail_rm298_difference_kernel(monkeypatch, failure_type, target_kind):
+    """Beobachtet die echte Kette; nur ihre erreichte Kernelrechnung wirft."""
+    from importlib import import_module
+
+    difference_module = import_module("app.core.geom.difference")
+    original_boolean = difference_module.boolean
+    original_run = kernel_process.run
+    injected_error = failure_type()
+    boolean_calls = []
+    target_requests = []
+    following = []
+
+    def counted_boolean(kind, meshes, **kwargs):
+        if target_requests:
+            following.append(("boolean", kind, len(meshes)))
+            raise TypeError("RM298: weiterer Vergleichsversuch nach dem Prozessfehler")
+        boolean_calls.append((kind, len(meshes)))
+        return original_boolean(kind, meshes, **kwargs)
+
+    def failing_run(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(("kernel", job))
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if job == "boolean" and values["kind"] == target_kind:
+            target_requests.append((job, values["kind"], values["bodies"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(difference_module, "boolean", counted_boolean)
+    monkeypatch.setattr(kernel_process, "run", failing_run)
+    return injected_error, boolean_calls, target_requests, following
 
 
 def test_a_body_that_grew_shows_the_added_volume() -> None:
@@ -89,6 +123,53 @@ def test_a_local_change_is_compared_inside_its_box_with_the_same_answer(monkeypa
     assert clipped.added_volume == pytest.approx(whole.added_volume, rel=1e-6)
     assert clipped.removed_volume > 1.0, "eine Bohrung von 4 auf 5 mm nimmt Material"
     assert clipped.changed
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_clipping_a_local_comparison_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der erste Boxschnitt darf Prozessfehler nicht durch Ganzkörperrechnung ersetzen."""
+    from app.core.bootstrap import load_operations
+    from app.core.geom.prepare import drill
+    from app.core.knowledge.profiles import make_profile
+
+    load_operations()
+    profile = make_profile("centauri-carbon-2", "petg")
+    # Derselbe Korpusaufbau wie beim bestehenden Kontrollfall zum Boxschnitt.
+    raw = plate().raw
+    for _step in range(2):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    body = MeshData.of(raw)
+    top = float(body.bounds.maximum[2])
+    before = drill(body, position=(0.0, 0.0, top), axis="z", diameter=4.0, profile=profile).mesh
+    after = drill(body, position=(0.0, 0.0, top), axis="z", diameter=5.0, profile=profile).mesh
+    original_arrays = [
+        (mesh.raw.vertices.copy(), mesh.raw.faces.copy()) for mesh in (before, after)
+    ]
+    error, calls, target, following = _fail_rm298_difference_kernel(
+        monkeypatch, failure_type, "intersection"
+    )
+    returned = []
+
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(compare(before, after, profile=profile))
+    finally:
+        assert calls == [("intersection", 2)], "der echte erste Boxschnitt muss erreicht sein"
+        assert target == [("boolean", "intersection", 2)]
+
+    assert caught.value is error
+    assert following == [], "kein zweiter Boxschnitt und kein Ganzkörpervergleich"
+    assert returned == [], "keine unvollständige Ersatzvorschau"
+    for mesh, (vertices, faces) in zip((before, after), original_arrays, strict=True):
+        np.testing.assert_array_equal(mesh.raw.vertices, vertices)
+        np.testing.assert_array_equal(mesh.raw.faces, faces)
 
 
 def test_a_change_over_half_the_body_is_compared_whole(monkeypatch) -> None:
@@ -209,6 +290,49 @@ def test_unchanged_overlap_still_masks_material_removed_from_another_shell() -> 
     assert not result.findings
     assert result.removed_volume == pytest.approx((5 + 1) * 20 * 20)
     assert result.added_volume < result.noise_volume
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_uniting_changed_comparison_parts_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei geänderte Schalen erreichen die echte Vereinigung in _cut_parts."""
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(10.0, 20.0, 20.0))
+    distant_first = first.copy()
+    distant_first.apply_translation((40.0, 0.0, 0.0))
+    distant_second = second.copy()
+    distant_second.apply_translation((40.0, 0.0, 0.0))
+    shield = trimesh.creation.box(extents=(4.0, 20.0, 20.0))
+    shield.apply_translation((8.0, 0.0, 0.0))
+    before = MeshData.of(trimesh.util.concatenate([first, distant_first, shield]))
+    after = MeshData.of(trimesh.util.concatenate([second, distant_second, shield]))
+    original_arrays = [
+        (mesh.raw.vertices.copy(), mesh.raw.faces.copy()) for mesh in (before, after)
+    ]
+    error, calls, target, following = _fail_rm298_difference_kernel(
+        monkeypatch, failure_type, "union"
+    )
+    returned = []
+
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(compare(before, after))
+    finally:
+        # Der unveränderte Schild wird echt ausgeklammert; zwei Schalen bleiben.
+        assert calls == [("union", 2)], "kein Ersatz von _cut_parts durch eine Attrappe"
+        assert target == [("boolean", "union", 2)]
+
+    assert caught.value is error
+    assert following == [], "weder die andere Vergleichsseite noch weitere Maskenschnitte"
+    assert returned == [], "kein difference.incomplete als Ersatz für den Prozessfehler"
+    for mesh, (vertices, faces) in zip((before, after), original_arrays, strict=True):
+        np.testing.assert_array_equal(mesh.raw.vertices, vertices)
+        np.testing.assert_array_equal(mesh.raw.faces, faces)
 
 
 def test_negative_inner_shell_stays_a_cavity_in_the_comparison() -> None:
@@ -412,6 +536,39 @@ def test_an_incomplete_difference_is_not_a_reshaped_preview(
     assert not difference.changed
     assert entry.retriangulated is None, "unvollständig bleibt unvollständig"
     assert not difference.reshaped
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_cutting_a_comparison_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der öffentliche Vergleich durchläuft _cut und den umgebenden _cut_parts-Fang."""
+    before, after = cube(20.0), cube(16.0)
+    original_arrays = [
+        (mesh.raw.vertices.copy(), mesh.raw.faces.copy()) for mesh in (before, after)
+    ]
+    error, calls, target, following = _fail_rm298_difference_kernel(
+        monkeypatch, failure_type, "difference"
+    )
+    returned = []
+
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(compare(before, after))
+    finally:
+        assert calls == [("difference", 2)], "der erste echte _cut muss rechnen"
+        assert target == [("boolean", "difference", 2)]
+
+    assert caught.value is error
+    assert following == [], "keine Rechnung der Gegenseite nach dem Prozessfehler"
+    assert returned == [], "kein difference.incomplete als Ersatz für den Prozessfehler"
+    for mesh, (vertices, faces) in zip((before, after), original_arrays, strict=True):
+        np.testing.assert_array_equal(mesh.raw.vertices, vertices)
+        np.testing.assert_array_equal(mesh.raw.faces, faces)
 
 
 def test_a_scene_that_did_not_change_says_so() -> None:

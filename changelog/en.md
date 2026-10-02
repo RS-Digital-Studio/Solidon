@@ -22,7 +22,7 @@ it into `website/version.json`.
 - New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.
 - New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.
 - New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
-- Four holders are made in one step with true faces and edges: U-shaped, round, fork and shelf, fixed with a keyhole, screw tabs, a pegboard hook or a clamp.
+- Four holders are made in one step with true faces and edges: U-shaped, round, fork and shelf, fixed with a keyhole, screw holes, a pegboard hook or a clamp.
 - An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
 - New bodies appear on the bed or on the chosen flat face, no longer where a previously selected body was, and are selected afterwards.
 
@@ -31,9 +31,10 @@ it into `website/version.json`.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
-- With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
+- You can now create print files directly from Solidon with Creality Print 7.2 and 7.3.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
 - Cura now slices with the nozzle you chose, also for printers from Cura's own list, and printers with their origin in the middle of the bed keep it.
+- Printers whose origin is not in the bed corner, such as deltas, BIBO or Dremel, get the parts where Solidon puts them. Until now they sat at the edge, or the slicer rearranged them.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
 - If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
@@ -44,6 +45,7 @@ it into `website/version.json`.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
+- Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 
 ### Holes, slots and splitting
 
@@ -65,7 +67,7 @@ it into `website/version.json`.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
-- In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
+- In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
 - The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
@@ -85,8 +87,9 @@ it into `website/version.json`.
 ### Operation and system
 
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
+- Export, *Slice* and *Open in slicer …* always get the fine calculation, not the coarser view of the window. Fillets and cones reach the file at full resolution.
 - An export during a running calculation waits for the new result. Until now the file could still carry the old size.
-- The parameter bar rejects a dimension beyond its limit and names the limit, instead of leaving the view empty.
+- The parameter bar rejects a dimension beyond its limit instead of leaving the view empty.
 - In the parameter bar every arrow step counts, and the focus stays in the field.
 - If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
@@ -100,6 +103,7 @@ it into `website/version.json`.
 - Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
 - A finding that refers to a step opens it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
+- Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.
 
 ## 0.5.1
 

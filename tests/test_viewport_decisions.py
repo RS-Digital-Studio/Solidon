@@ -4842,6 +4842,46 @@ def test_the_candidates_of_a_question_are_shown_and_taken_back(
     assert viewport.candidates == (), "eine neue Auswertung räumt die Frage weg"
 
 
+def test_an_assignment_question_shows_the_previous_feature_with_its_candidate(
+    qt_app: QApplication,
+) -> None:
+    """Der bisherige Bezug bleibt im Bild, während die neue Fläche gewählt wird (RM-217)."""
+    import dataclasses
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+    from app.ui.viewport import SELECTED_COLOUR, Viewport
+
+    old_result = _box_scene()
+    old_body = old_result.scene.objects["obj_1"]
+    moved_mesh = old_body.mesh.raw.copy()
+    moved_mesh.apply_translation((0.0, 0.0, 5.0))
+    current_body = dataclasses.replace(old_body, mesh=MeshData(moved_mesh))
+    current = EvaluationResult(scene=Scene(objects={"obj_1": current_body}))
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_scene(current)
+    viewport.show_candidates(
+        (("obj_1", "face_1"),),
+        previous_reference=(old_body, "face_1"),
+    )
+
+    assert "candidate-previous" in renderer.names()
+    assert renderer.colour_of("candidate-previous") == SELECTED_COLOUR
+    assert ["Bisher"] in renderer.labelled
+    old_patch = renderer.item_of("candidate-previous")
+    new_patch = renderer.item_of("candidate:0")
+    assert old_patch.points[:, 2].mean() == pytest.approx(5.0, abs=0.2)
+    assert new_patch.points[:, 2].mean() == pytest.approx(10.0, abs=0.2)
+
+    previous_actor = renderer.item_of("candidate-previous")
+    viewport.show_candidates()
+    assert previous_actor in renderer.removed
+
+
 def test_transparent_bodies_are_drawn_from_back_to_front(qt_app: QApplication) -> None:
     """Ein durchsichtiges Bild darf nicht davon abhängen, in welcher
     Reihenfolge die Körper entstanden sind: der ferne zuerst, der nahe zuletzt.

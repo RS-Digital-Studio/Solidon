@@ -22,7 +22,7 @@ scrive in `website/version.json`.
 - Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.
 - Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.
 - Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.
-- Quattro supporti nascono in un passo con facce e spigoli veri: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, alette a vite, gancio per pannello o morsetto.
+- Quattro supporti nascono in un passo con facce e spigoli veri: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, fori per viti, gancio per pannello o morsetto.
 - Una scena vuota mostra come iniziare: parallelepipedo, cilindro, disegno, blocchi o un file che trascini dentro.
 - I nuovi corpi nascono sul piano o sulla faccia piana scelta, non più dove stava un corpo selezionato prima, e restano selezionati.
 
@@ -31,9 +31,10 @@ scrive in `website/version.json`.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
 - Scegli l'ugello nelle impostazioni di stampa tra le misure che la tua stampante conosce, e lo slicer riceve il profilo corrispondente.
 - Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.
-- Con Creality Print 7.2 e 7.3, «Affetta» calcola ora da sé il file di stampa. Finora funzionava solo nella finestra di Creality Print. Se 7.3 riordina il piatto, Solidon lo dice.
+- Ora puoi generare i file di stampa direttamente da Solidon con Creality Print 7.2 e 7.3.
 - Con Cura, Solidon riprende su richiesta la stampante che Cura sta usando, con il suo ugello. Una stampante rinominata in Cura viene riconosciuta.
 - Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
+- Le stampanti con l'origine fuori dall'angolo del piano, come delta, BIBO o Dremel, ricevono i pezzi dove Solidon li mette. Prima finivano sul bordo o lo slicer li ridisponeva.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
 - Se scegli brim, skirt o raft nelle impostazioni di stampa, compaiono solo le misure di quel tipo di piano, senza campi che non avrebbero effetto.
 - Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.
@@ -44,6 +45,7 @@ scrive in `website/version.json`.
 - Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
+- Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 
 ### Fori, asole e divisione
 
@@ -65,7 +67,7 @@ scrive in `website/version.json`.
 - Un tratto sul piano di simmetria agisce una volta invece di due.
 - La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
 - Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
-- Nella finestra, «Fondi dolcemente» calcola ora fine come nell'esportazione, finché il corpo non è molto grande.
+- Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
 - La destinazione di «Allinea alla caratteristica» parte vuota. La scegli nel campo «Destinazione», e «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
@@ -85,8 +87,9 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
+- Esportazione, «Affetta» e «Apri nello slicer …» ricevono sempre il calcolo fine, non la vista più grossolana della finestra. Raccordi e coni arrivano nel file a piena risoluzione.
 - Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
-- La barra dei parametri rifiuta una misura oltre il suo limite e nomina il limite, invece di lasciare la vista vuota.
+- La barra dei parametri rifiuta una misura oltre il suo limite invece di lasciare la vista vuota.
 - Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
 - Se un passo attende una domanda, «Applica» resta disponibile e la domanda compare.
 - Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.
@@ -100,6 +103,7 @@ scrive in `website/version.json`.
 - Gli spazi arrivano in ogni campo di testo, anche nel questionario di feedback e nella chat, mentre una finestra di dialogo mostra l'anteprima.
 - Un rilievo che riguarda un passo lo apre per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
 - Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
+- L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
 
 ## 0.5.1
 

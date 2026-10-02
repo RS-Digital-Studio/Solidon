@@ -86,6 +86,7 @@ from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import estimate
 from app.core.slice.findings import remembered_analysis
 from app.core.types import (
+    AdhesionType,
     BoundingBox,
     CancelToken,
     Document,
@@ -2891,6 +2892,10 @@ class PrintSettingsDialog(QDialog):
         self._advice_timer.setInterval(200)
         self._advice_timer.timeout.connect(self._start_advice)
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
+        self._waiting_for_fine: Callable[[], None] | None = None
+        """Der Klick auf *Slicen* oder *Im Slicer öffnen*, der auf die feine
+        Rechnung wartet (RM-426). Warten ist keine Sperre: Der Knopf bleibt
+        frei, der Klick bindet sich an das Ergebnis."""
         self._profile_worker: _ProfileWorker | None = None
         self._cura_printer_worker: _CuraPrinterWorker | None = None
         self._cura_printer_pending = False
@@ -3084,6 +3089,7 @@ class PrintSettingsDialog(QDialog):
         session.sceneChanged.connect(self._advice_scene_changed)
         session.projectChanged.connect(self._advice_scene_changed)
         session.busyChanged.connect(self._advice_scene_changed)
+        session.busyChanged.connect(self._fine_arrived)
         self.machine_choice.currentIndexChanged.connect(self._advice_scene_changed)
         self.process_choice.currentIndexChanged.connect(self._advice_scene_changed)
         # Zuletzt, wenn jede Zeile steht: eine Beschriftungsspalte für den
@@ -4163,7 +4169,7 @@ class PrintSettingsDialog(QDialog):
             .replace("{count}", localised(str(len(self._search_hits))))
         )
 
-    def _lift(self, path: str) -> None:
+    def _lift(self, path: str, *, focus: bool = True, reveal: bool = True) -> None:
         """Eine Zeile in den Blick holen und hervorheben — höchstens eine."""
         for old in (self._lifted, path):
             if old and old in self._labels:
@@ -4191,19 +4197,20 @@ class PrintSettingsDialog(QDialog):
         label = self._labels.get(path)
         if field is None or editor is None or label is None:
             return
-        self._search_revealing = True
-        try:
-            if field.front:
-                if self.front_toggle is not None:
-                    self.front_toggle.setChecked(True)
-            else:
-                if self.tabs_toggle is not None and not self.tabs_toggle.isChecked():
-                    self.tabs_toggle.setChecked(True)
-                index = GROUPS.index(field.group) if field.group in GROUPS else -1
-                if index >= 0:
-                    self.tabs.setCurrentIndex(index)
-        finally:
-            self._search_revealing = False
+        if reveal:
+            self._search_revealing = True
+            try:
+                if field.front:
+                    if self.front_toggle is not None:
+                        self.front_toggle.setChecked(True)
+                else:
+                    if self.tabs_toggle is not None and not self.tabs_toggle.isChecked():
+                        self.tabs_toggle.setChecked(True)
+                    index = GROUPS.index(field.group) if field.group in GROUPS else -1
+                    if index >= 0:
+                        self.tabs.setCurrentIndex(index)
+            finally:
+                self._search_revealing = False
         # **Die Füllfarbe füllt, sie schreibt nicht.** Als Schriftfarbe auf der
         # Dialogfläche brachte ``select`` im hellen Thema 1,70 — die am
         # schlechtesten lesbare Zeile des Dialogs war ausgerechnet die gesuchte.
@@ -4219,8 +4226,38 @@ class PrintSettingsDialog(QDialog):
             f"background: {ROLES['select']}; color: {colours['highlight_text']};"
             " font-weight: 600; border-radius: 3px; padding: 0 4px;"
         )
-        editor.setFocus(Qt.FocusReason.OtherFocusReason)
-        QTimer.singleShot(0, self, self._show_search_target)
+        if focus:
+            editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        if reveal:
+            QTimer.singleShot(0, self, self._show_search_target)
+
+    def _refresh_search_target_for_conditions(self) -> None:
+        """Hält den aktiven Suchtreffer bei geänderten Feldbedingungen aktuell."""
+        if not self._search_term or not 0 <= self._search_at < len(self._search_hits):
+            return
+        target = self._search_hits[self._search_at]
+        if self._lifted != target and self._search_requirement_target != target:
+            return
+        control = self._inactive_search_control(target)
+        if (control or "") == self._search_requirement_control and (
+            control is None or self._search_requirement_target == target
+        ):
+            return
+        self._lift(target, focus=False, reveal=self._search_target_is_open(target))
+
+    def _search_target_is_open(self, path: str) -> bool:
+        """Ob der Nutzer gerade noch im Formular des Suchtreffers arbeitet."""
+        field = next((entry for entry in FIELDS if entry.path == path), None)
+        if field is None:
+            return False
+        if field.front:
+            return self.front_toggle is None or self.front_toggle.isChecked()
+        index = GROUPS.index(field.group) if field.group in GROUPS else -1
+        return (
+            index >= 0
+            and (self.tabs_toggle is None or self.tabs_toggle.isChecked())
+            and self.tabs.currentIndex() == index
+        )
 
     def _inactive_search_control(self, path: str) -> str | None:
         """Führt zu einem sichtbaren Umschalter, wenn dessen Detailfeld ruht."""
@@ -4234,13 +4271,32 @@ class PrintSettingsDialog(QDialog):
 
     def _inactive_paths(self) -> frozenset[str]:
         """Was bei der sichtbaren Wahl nichts tut — gefragt im Kern (RM-341)."""
+        settings = self.settings
+        settings = replace(
+            settings,
+            adhesion=replace(
+                settings.adhesion,
+                kind=cast(
+                    AdhesionType,
+                    _setting_editor_value(
+                        self._editors["adhesion.kind"], self._fields["adhesion.kind"]
+                    ),
+                ),
+            ),
+        )
+        flavour = self._current_flavour()
+        if flavour is not None:
+            settings = handover.effective_adhesion(
+                settings,
+                self.session.profile,
+                flavour,
+                self._foundation_for_current_setup(),
+            )
         return print_settings.inactive_paths(
             str(
                 _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
             ),
-            str(
-                _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
-            ),
+            settings.adhesion.kind,
         )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
@@ -6570,8 +6626,13 @@ class PrintSettingsDialog(QDialog):
         self._slicers_pending = False
         self._slicers = tuple(found)
         before = self._slicer_path
+        before_flavour = self._current_flavour()
         self._slicer_path = self._choose_slicer(self._slicers)
         self._fill_slicer_choice()
+        if self._current_flavour() != before_flavour:
+            self._refresh_auto_adhesion_values()
+            self._update_inactive_setting_rows()
+            self._refresh_search_target_for_conditions()
         if self._slicer_path == before:
             # Der gemerkte Slicer hat sich bestätigt: Seine Profilsuche läuft
             # seit dem Aufbau, es fehlt nur noch die Knopffreigabe.
@@ -6680,10 +6741,15 @@ class PrintSettingsDialog(QDialog):
         if not 0 <= index < len(self._slicers):
             return
         chosen = self._slicers[index]
+        flavour_changed = slicer_keys.flavour_of(chosen.name) != self._current_flavour()
         if chosen != self._slicer_path:
             self._forget_result()
         discover.remember_path("slicer", str(chosen))
         self._slicer_path = chosen
+        if flavour_changed:
+            self._refresh_auto_adhesion_values()
+            self._update_inactive_setting_rows()
+            self._refresh_search_target_for_conditions()
         self._clear_profile_choices()
         self._show_slicer_state()
         self._start_profile_search()
@@ -6846,6 +6912,10 @@ class PrintSettingsDialog(QDialog):
             self._load_into_editors()
             self._mark_fields_this_slicer_ignores()
             self._refresh_advice()
+        else:
+            self._refresh_auto_adhesion_values()
+            self._update_inactive_setting_rows()
+        self._refresh_search_target_for_conditions()
         self._mark_origins()
         self._show_foundation()
 
@@ -6854,6 +6924,48 @@ class PrintSettingsDialog(QDialog):
         if self._foundation is not None:
             return self._foundation.settings
         return print_settings.resolve(self.session.profile, self.settings.quality)
+
+    def _foundation_for_current_setup(self) -> manufacturer.Foundation | None:
+        """Gibt nur die Grundlage der derzeit sichtbaren Profilwahl zurück."""
+        setup = self._setup_snapshot()
+        key = (setup, self.session.profile, self.settings.quality)
+        if key != self._foundation_key:
+            return None
+        return self._foundation
+
+    def _effective_adhesion(self, settings: PrintSettings) -> PrintSettings:
+        """Löst Automatisch für die gerade gewählte Slicergrundlage auf."""
+        flavour = self._current_flavour()
+        if flavour is None:
+            return settings
+        return handover.effective_adhesion(
+            settings,
+            self.session.profile,
+            flavour,
+            self._foundation_for_current_setup(),
+        )
+
+    def _refresh_auto_adhesion_values(self) -> None:
+        """Zeigt die wirksamen Maße, ohne sie als eigene Wahl zu speichern."""
+        if self.settings.adhesion.kind != "auto":
+            return
+        effective = self._effective_adhesion(self.settings)
+        was_loading = self._loading
+        self._loading = True
+        try:
+            for name in ("skirt_loops", "brim_width", "raft_layers"):
+                path = f"adhesion.{name}"
+                editor = self._editors[path]
+                if isinstance(editor, BoundedSpin) and editor.refusal():
+                    continue
+                _set_setting_editor(
+                    editor,
+                    self._fields[path],
+                    print_settings.read_path(effective, path),
+                )
+        finally:
+            self._loading = was_loading
+        self._refresh_all_refusals()
 
     def _mark_origins(self) -> None:
         """Eigene Wahl und übernommener Vorschlag sind zu sehen — an der fetten
@@ -6989,19 +7101,22 @@ class PrintSettingsDialog(QDialog):
         self._refresh_advice()
 
     def _load_into_editors(self, paths: frozenset[str] | None = None) -> None:
-        """Aus dem Modell in die Felder. ``_loading`` hält die Rückmeldung an,
-        sonst schriebe jedes gesetzte Feld sofort wieder zurück.
+        """Lädt Modellwerte in Felder, ohne andere abgelehnte Eingaben zu löschen.
 
-        ``paths`` beschränkt das auf die genannten Felder: Wer nur ein Maß
-        nachträgt, überschreibt keine abgelehnte Zahl in einem anderen Feld.
+        ``paths`` beschränkt das Laden auf die genannten Felder. Ein neu
+        mitgewähltes Maß überschreibt so keine abgelehnte Zahl an anderer
+        Stelle. ``_loading`` hält die Rückmeldung an, sonst schriebe jedes
+        gesetzte Feld sofort wieder zurück.
         """
         had_refusal = bool(self._first_numeric_refusal())
         self._loading = True
         try:
+            effective = self._effective_adhesion(self.settings)
             for field in FIELDS:
                 if paths is not None and field.path not in paths:
                     continue
-                value = print_settings.read_path(self.settings, field.path)
+                source = self.settings if field.path == "adhesion.kind" else effective
+                value = print_settings.read_path(source, field.path)
                 editor = self._editors[field.path]
                 _set_setting_editor(editor, field, value)
         finally:
@@ -7107,14 +7222,23 @@ class PrintSettingsDialog(QDialog):
             return
         field = self._fields[path]
         value = _setting_editor_value(self._editors[path], field)
-        if not print_settings.same_value(value, print_settings.read_path(self.settings, path)):
+        current_value = print_settings.read_path(self.settings, path)
+        if self.settings.adhesion.kind == "auto" and path in {
+            "adhesion.skirt_loops",
+            "adhesion.brim_width",
+            "adhesion.raft_layers",
+        }:
+            current_value = print_settings.read_path(self._effective_adhesion(self.settings), path)
+        if not print_settings.same_value(value, current_value):
             before = self.settings.explicit
             self.settings = print_settings.with_choice(self.settings, path, value)
             # Eine Haftungsart bringt ihr Maß mit (``print_settings._with_a_measure``);
             # dessen Feld muss es dann auch zeigen — und nur dieses: Alle Felder
             # neu zu laden, löschte still eine abgelehnte Zahl anderswo.
             if added := self.settings.explicit - before - {path}:
-                self._load_into_editors(added)
+                self._load_into_editors(frozenset(added))
+        if path == "adhesion.kind":
+            self._refresh_auto_adhesion_values()
         self._update_inactive_setting_rows()
         # Der Satz „Ändern Sie die Auswahl …, um dieses Feld anzuzeigen“ wird
         # eingelöst, gleich wer die Zeile gehoben hat — Suche oder Rückweg
@@ -7935,6 +8059,10 @@ class PrintSettingsDialog(QDialog):
         if problem:
             self.state.setText(problem)
             return None
+        return self._setup_snapshot()
+
+    def _setup_snapshot(self) -> handover.SlicerSetup | None:
+        """Liest die Slicer- und Profilfelder ohne Validierung oder Nebenwirkung."""
         found = self._slicer_path
         if found is None:
             return None
@@ -7973,6 +8101,8 @@ class PrintSettingsDialog(QDialog):
         """
         if self._first_numeric_refusal():
             self._show_slicer_state()
+            return
+        if self._wait_for_fine(self._open_in_slicer):
             return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
@@ -8024,9 +8154,40 @@ class PrintSettingsDialog(QDialog):
         self._worker = worker
         self._leash.start(worker)
 
+    def _wait_for_fine(self, action: Callable[[], None]) -> bool:
+        """Ob der Auftrag auf die feine Rechnung warten muss — dann wartet er.
+
+        Das Fenster rechnet im Entwurf, der Slicer bekommt die feine Rechnung
+        mit der vollen Rückfallkette (§31, RM-426). Bis 0.5.1 bekam er den
+        Entwurf: ein weich verschmolzenes Teil mit einem Viertel der Dreiecke.
+        """
+        if self.session.fine_current:
+            return False
+        self._waiting_for_fine = action
+        self.session.request_fine()
+        self.state.setText(tr("Wartet auf die feine Berechnung des Modells …"))
+        self._state_shows_reason = True
+        return True
+
+    def _fine_arrived(self, *_args: object) -> None:
+        """Ein wartender Klick läuft, sobald die feine Rechnung steht."""
+        action = self._waiting_for_fine
+        if action is None or self.session.busy:
+            return
+        self._waiting_for_fine = None
+        if self.session.fine_current:
+            action()
+            return
+        # Abgebrochen oder gescheitert: Das Fenster sagt schon, warum. Der
+        # Entwurf geht nicht an seiner Stelle hinaus.
+        self.state.setText(tr("Abgebrochen."))
+        self._state_shows_reason = False
+
     def _slice(self) -> None:
         if self._first_numeric_refusal():
             self._show_slicer_state()
+            return
+        if self._wait_for_fine(self._slice):
             return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []

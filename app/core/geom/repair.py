@@ -34,7 +34,6 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SPLIT_BODIES,
     GeometryError,
-    OperationCancelled,
 )
 from app.core.geom.attributes import transfer
 from app.core.geom.intersections import Crossings
@@ -997,7 +996,9 @@ def _shell_volumes(body: trimesh.Trimesh, labels: np.ndarray, count: int) -> np.
 _SHELL_VOLUMES_KEY: Final = "solidon_shell_volumes"
 
 
-def _labelled_shells(body: trimesh.Trimesh) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
+def _labelled_shells(
+    body: trimesh.Trimesh, *, cancelled: CancelToken | None = None
+) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
     """Die Schalen eines Netzes, je Dreieck die Nummer seiner Schale, und je Schale ihr Volumen.
 
     **Einmal je Netz** (Durchsicht 0.5.1): Das Füllen fragt nach, ob es eine
@@ -1008,10 +1009,12 @@ def _labelled_shells(body: trimesh.Trimesh) -> tuple[list[np.ndarray], np.ndarra
     die Volumen liegen daneben; beides verfällt mit der Geometrie und reist
     mit einer Kopie samt Cache.
     """
-    components = face_components(body)
+    components = face_components(body, cancelled=cancelled)
     count = len(components)
     labels = np.empty(len(body.faces), dtype=np.int64)
     for index, members in enumerate(components):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         labels[members] = index
     cache = getattr(body, "_cache", None)
     if cache is not None and _SHELL_VOLUMES_KEY in cache:
@@ -1019,6 +1022,8 @@ def _labelled_shells(body: trimesh.Trimesh) -> tuple[list[np.ndarray], np.ndarra
         if len(known) == count:
             return components, labels, known
     volumes = _shell_volumes(body, labels, count)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if cache is not None:
         cache[_SHELL_VOLUMES_KEY] = volumes
     return components, labels, volumes
@@ -1047,7 +1052,7 @@ class _Shells:
             cancelled.raise_if_cancelled if cancelled is not None else lambda: None
         )
         self._check_cancelled()
-        self.components, labels, self.volumes = _labelled_shells(body)
+        self.components, labels, self.volumes = _labelled_shells(body, cancelled=cancelled)
         self._check_cancelled()
         count = len(self.components)
         self.faces = np.asarray(body.faces, dtype=np.int64)
@@ -1284,6 +1289,58 @@ def has_nested_parts(body: trimesh.Trimesh, *, cancelled: CancelToken | None = N
         elif depth >= 1:
             return True
     return None if undecided else False
+
+
+def material_part_count(mesh: MeshData, *, cancelled: CancelToken | None = None) -> int | None:
+    """Belegte Materialteile eines Netzes; ``None`` ohne vollständigen Vorprüfbeleg.
+
+    Eine negative Innenhaut gehört zu ihrem äußeren Materialteil, eine freie
+    positive Insel in dessen Hohlraum ist ein weiteres Teil. Diese Zuordnung
+    trifft :func:`material_part_families`; hier werden ihre Voraussetzungen
+    mit den vorhandenen Reparaturprüfungen belegt. Ein unverschweißtes STL
+    wird dafür mit :func:`merge_vertices` lesend normalisiert. Geometrie und
+    Dreiecksattribute des Eingangs bleiben unverändert.
+
+    Offene, uneinheitlich gerichtete oder sich selbst schneidende Schalen,
+    Kontakte zwischen Schalen und ungeklärte Einschließung ergeben keine
+    Zahl. Dasselbe gilt, sobald ein vorhandenes Prüfbudget erschöpft ist.
+    Nur diese bekannte Unvollständigkeit wird zu ``None``; andere Fehler
+    und der Abbruch bleiben Fehler bzw. Abbruch.
+    """
+    check = cancelled.raise_if_cancelled if cancelled is not None else lambda: None
+    check()
+    if not len(mesh.raw.faces) or not np.isfinite(mesh.raw.vertices).all():
+        return None
+    normalized, _merged = merge_vertices(mesh)
+    check()
+    body = normalized.raw
+    if not body.is_watertight or not body.is_winding_consistent:
+        return None
+    components = face_components(body, cancelled=cancelled)
+    check()
+    crossed, complete = self_intersection_check(normalized, cancelled=cancelled)
+    check()
+    if crossed or not complete:
+        return None
+    try:
+        contact = parts_that_cross(
+            body,
+            components,
+            cancelled=cancelled,
+            include_face_contacts=True,
+            require_complete=True,
+        )
+    except GeometryError as error:
+        check()
+        if error.detail != CROSSING_SEARCH_INCOMPLETE_DETAIL:
+            raise
+        return None
+    check()
+    if contact is not None:
+        return None
+    families = material_part_families(body, cancelled=cancelled)
+    check()
+    return len(families) if families else None
 
 
 def material_part_families(
@@ -4251,6 +4308,7 @@ def resolve_self_intersections(
     Eingängen und kann nichts schneiden, was es vorher nicht schnitt. Bis
     dahin lief nach jeder Vereinigung eine zweite vollständige Suche.
     """
+    from app.core.geom import kernel_process
     from app.core.geom.boolean import boolean
 
     if cancelled is not None:
@@ -4275,7 +4333,7 @@ def resolve_self_intersections(
         rebuilt = boolean("union", operands, stages=("direct",), cancelled=cancelled).mesh
     except PROGRAMMING_ERRORS:
         raise
-    except OperationCancelled:
+    except kernel_process.NOT_A_KERNEL_FAILURE:
         raise
     except Exception as problem:  # pragma: no cover - kernspezifisch
         _log.warning("could not resolve self-intersections: %s", problem)

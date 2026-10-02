@@ -261,8 +261,8 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   Mitte zuordnen; `moved_hole` statt Volumenvergleich.** Das Maß bleibt das
   gemessene; `bore.compensated` hängt der Versetzweg eigens an.
 - **Ein Langloch ist parametrisch** (`PARAMETRIC_KINDS`), sein ganzer Umriss
-  wird gefüllt; **null Grad ist eine Richtung** (`slot_angle`). Durchgänge
-  schneiden im Änderungsweg über den ganzen Zielkörper.
+  wird gefüllt; **null Grad ist eine Richtung** (`slot_angle`).
+  `slot_hole` nutzt in Baugruppen die Merkmaltiefe, am Einzelkörper die Hülle.
 
 ## Wulst und Kehle schließen je Kern anders, ein Gewinde wird nicht bewegt
 
@@ -333,7 +333,6 @@ Zugabe dort ist ein Maßfehler.
 gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
 Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Stolperfalle:
 `FEATURE_OVERLAP` deckt den Vieleckverlust zu — ohne sie fehlt die Deckung.
-
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,

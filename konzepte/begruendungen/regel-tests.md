@@ -92,8 +92,9 @@ darunter Ausnahmen — eng, und nur unter drei Bedingungen: sie nennen den
 Meldungstext *und* das auslösende Modul, nicht bloß die Kategorie; der eigene
 Code löst die Warnung nachweislich nicht aus; und der Kommentar sagt, wann die
 Ausnahme wieder wegfällt. Eine Ausnahme ohne Modulangabe verdeckt irgendwann
-einen eigenen Fehler. Wann eine überflüssig geworden ist, zeigt der
-wöchentliche CI-Lauf gegen die neuesten Versionen.
+einen eigenen Fehler. Der Job „Neueste Versionen" prüft den Stand ohne
+Versionspins bei öffentlichen v*-Tag-Pushes oder nach einem Handstart mit
+check_latest im öffentlichen Repository.
 
 *Ursprünglich unter „Die Isolation deckt Qt, Verzeichnisse, die Fremdprogramme
 und das Netz ab“*

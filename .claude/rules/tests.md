@@ -77,8 +77,8 @@ Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
   unterdrückt. Ausnahmen nur für unbehebbaren Fremdcode, mit Meldungstext
   **und** auslösendem Modul, dem Nachweis, dass eigener Code sie nicht
   auslöst, und einem Kommentar, wann sie wegfällt (das zeigt der Job „Neueste
-  Versionen“ in `build.yml`, der nur läuft, solange das Repository öffentlich
-  ist).
+  Versionen“ in `build.yml`, der nur öffentliche `v*`-Tag-Pushes und
+  Handstarts mit `check_latest` im öffentlichen Repository ausführt).
 
 ### Isolation heißt Betriebslage, nicht Nullzustand
 

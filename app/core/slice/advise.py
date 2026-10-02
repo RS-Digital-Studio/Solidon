@@ -697,7 +697,7 @@ UNANCHORED: Final = frozenset({"skirt", "auto", "none"})
 #: ``auto_brim`` aus Höhe, Flächenmomenten der Grundfläche und Tempo, bis 18 mm
 #: breit (OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups``).
 #: PrusaSlicer und CuraEngine kennen keinen; dort heißt „automatisch“ die Art
-#: aus Solidons Tabelle (``handover._adhesion_for`` fragt dieselbe Menge).
+#: aus Solidons Tabelle (``handover.effective_adhesion`` fragt dieselbe Menge).
 AUTO_BRIM_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"orca"})
 
 

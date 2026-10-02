@@ -43,18 +43,28 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm298-rauchtest-2026-10-02.md`](reports/rm298-rauchtest-2026-10-02.md) | Eigenes Rauchtest-Endebudget am echten Werkzeug-/Poolanschluss; verzögert sauberes Ende, Killfehler und Rückbudgetkontrolle | RM-298(f) |
+| [`reports/remote-48106-geometrie.md`](reports/remote-48106-geometrie.md) | Unveränderter historischer Review am festen Stand `48106c57a`: feine Ausgabe, Eingangsprüfung vor Entwurfsbudget und Spiegelsymmetrie | RM-352, RM-434, RM-425 |
+| [`reports/remote-6c942-geometrie.md`](reports/remote-6c942-geometrie.md) | Unveränderter Quellenreview am festen Stand `6c9420b1f`: mehrdeutige Restfläche beim exakten Abschneiden; Gegenfall nicht ausgeführt | G-CUT-01 im Register |
+| [`reports/remote-6c942-oberflaeche.md`](reports/remote-6c942-oberflaeche.md) | Unveränderter Quellenreview am festen Stand `6c9420b1f`: Export nach Abbruch, Ansichtsfilter, Projektwechsel und Ausdruckskorrektur; Gegenfälle nicht ausgeführt | RM-352; R6C942-01–04 im Register |
+| [`reports/remote-18c76-sculpt.md`](reports/remote-18c76-sculpt.md) | Quellenreview der parallelen Formkorrektur: wirksamer Spiegelzug ohne erforderliche Etappe; Gegenfall nicht ausgeführt | RM-454 |
+| [`reports/remote-48106-geometrie-proben.json`](reports/remote-48106-geometrie-proben.json), [`reports/remote-48106-spiegel-probe.json`](reports/remote-48106-spiegel-probe.json) | Unveränderte Messdaten und Quellenhashes dieses Reviews; für die Symmetrie ist der getrennte Radius-16-Nachlauf maßgeblich | RM-352, RM-434, RM-425 |
+| [`reports/rm298-sitzungsabbruch-2026-10-02.md`](reports/rm298-sitzungsabbruch-2026-10-02.md) | Bestätigtes Ende vor synchronem Ersetzen, ungültige alte Kernfragen und korrigierter Fehlervertrag mit allen Katalogen | RM-298(e) |
 | [`reports/rm298-enospc-2026-10-02.md`](reports/rm298-enospc-2026-10-02.md) | ENOSPC gegen echte Speicherabsage am direkten und öffentlichen Transferanschluss; Ursachen, Rückfall und Ressourcenzähler | RM-298(b) |
 | [`reports/rm322-native-edge-binding-2026-10-02.md`](reports/rm322-native-edge-binding-2026-10-02.md) | Belegte native Kantenzuordnung, vollständige Abdeckung, Fehlerorte, analytischer Verlauf und echter gs-100-Nachlauf | RM-322 |
+| [`reports/rm434-blend-inputs-2026-10-02.md`](reports/rm434-blend-inputs-2026-10-02.md) | Eingangsprüfung vor Bounds und Entwurfsbudget, echte registrierte Fehlerfälle und erhaltene gültige Rasterentscheidungen | RM-434 |
+| [`reports/rm327-final-report-parts-2026-10-02.md`](reports/rm327-final-report-parts-2026-10-02.md) | Aktuelle Teilezahl im Abschlussbericht, getrennte Material-/Schalenzählung, tatsächliche Ausgeber, Cache und Abbruch | RM-327 |
 | [`reports/rm384-spaetes-helferende-2026-10-02.md`](reports/rm384-spaetes-helferende-2026-10-02.md) | Späteres Helferende am öffentlichen Kernweg, erhaltene Startursache, Startkontingent, Generation und tatsächliche Gegenläufe | RM-384 |
 | [`reports/rm320-baugruppen-2026-10-02.md`](reports/rm320-baugruppen-2026-10-02.md) | Begrenzter Langlochzug mit freien Stiften und Innenkammern, tatsächlicher Arbeiterabbruch sowie analytische und reale Modellbelege | RM-320 |
 | [`reports/rm284-rundungsgruppen-2026-10-02.md`](reports/rm284-rundungsgruppen-2026-10-02.md) | Rundungsgruppen, belegte Merkmalsfortführung und ausdrückliche Neuwahl; analytische Gegenfälle, Kundenmodelle und Schlussreview | RM-284, notwendiger RM-218-Anschluss |
+| [`reports/rm218-kundenpassung-2026-10-02.md`](reports/rm218-kundenpassung-2026-10-02.md) | Vollständige Passungsnamen und sechs echte STEP-Umbauten mit Pin, Warmcache, direktem Undo und unverändertem Quellstand | RM-218 |
 | [`reports/rm298-hilfsprozessmarken-2026-10-02.md`](reports/rm298-hilfsprozessmarken-2026-10-02.md) | Vorbereitete öffentliche Helfer-Messwege, unverfälschte Marken und Entwicklungskontrollen | RM-298(d) |
 | [`reports/rm298-lifecycle-2026-10-02.md`](reports/rm298-lifecycle-2026-10-02.md) | Aktiver Windows-Elternabbruch, tatsächliche OS-Priorität und Gegenproben | RM-298(d) |
 | [`reports/rm298-poolnachweise-2026-10-02.md`](reports/rm298-poolnachweise-2026-10-02.md) | Integrierte Besitzgrenze, vier lokale Fehleranschlüsse, echte Gegenläufe und Entwicklungstor | RM-298(a) |
 | [`reports/rm285-textnachweise-2026-10-02.md`](reports/rm285-textnachweise-2026-10-02.md) | Integrierte UI-/CLI-/Bereichsprüfertexte, tatsächliche Tore und Abnahmegrenze | RM-285, RM-347 |
 | [`reports/rm285-modelltexte-2026-10-02.md`](reports/rm285-modelltexte-2026-10-02.md) | Fortsetzbare Liste der 42 Modelltextausdrücke mit 43 Texttrennern, Wirkung und Quellenhashes | RM-285, RM-347 |
 | [`reports/rm290-textnachweise-2026-10-02.md`](reports/rm290-textnachweise-2026-10-02.md) | Abschluss a–h, wirkliche Wächter/Altgegenproben und Commit-/Tor-Nachweis | RM-290, RM-347 |
-| [`reports/rm312-slicer-matrix-2026-10-02.md`](reports/rm312-slicer-matrix-2026-10-02.md) | Unabhängig geprüfter Zwischenbericht: 52/125 Matrixläufe, Messmethoden, Profile und offene Grenzen | RM-312, RM-347 |
+| [`reports/rm312-slicer-matrix-2026-10-02.md`](reports/rm312-slicer-matrix-2026-10-02.md) | Unabhängig nachgezählter Abschluss: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund; Abnahme offen | RM-312, RM-347 |
 | [`RESTE-INVENTAR.md`](RESTE-INVENTAR.md) | Inventar der Reste der Durchsicht, Quelle jedes „Inventar 1.x“ im Register | RM-292 und die Punkte „Aus der Durchsicht v0.5.1 (Inventar …)“ |
 | [`laeufe/kanten-dicht.txt`](laeufe/kanten-dicht.txt) | Messlauf des Pakets kanten (Ausgabe der gleichnamigen Sonde) | RM-284 |
 | [`laeufe/kanten-gruppe-brep.txt`](laeufe/kanten-gruppe-brep.txt) | Messlauf des Pakets kanten (Ausgabe der gleichnamigen Sonde) | RM-284 |
@@ -66,7 +76,9 @@ einem neuen Lauf anzupassen.
 | [`laeufe/rev-code-t11.txt`](laeufe/rev-code-t11.txt) | Beleg T-11 des Code-Reviews: Stücknummern nach gelöschtem Schnitt | RM-287 |
 | [`laeufe/rev-code-u1.txt`](laeufe/rev-code-u1.txt) | Beleg U-1 des Code-Reviews: `op_dialog._switch` klemmt still | RM-286 |
 | [`reports/3mf-schluss.md`](reports/3mf-schluss.md) | Schlussbericht Paket 3mf: Qt-Takt beim Import großer 3MF | RM-258 |
+| [`reports/rm392-bausteinabbruch-2026-10-02.md`](reports/rm392-bausteinabbruch-2026-10-02.md) | Randvergleich beider Bausteinkerne abbrechen; echte Gegenläufe, finale RM327-Basis und unabhängige Freigaben | RM-392 / P2G03 |
 | [`reports/ast-flake.md`](reports/ast-flake.md) | Bericht zu den sporadischen Abrissen, Befund an der Maschine | RM-272 |
+| [`reports/rm346-aufrufvarianten-2026-10-02.md`](reports/rm346-aufrufvarianten-2026-10-02.md) | Tatsächliche Werkzeugstarts, behobene Parser- und Parameterbindungslücken, stabile Gegenläufe und offene Clientfreigabe | RM-346 |
 | [`reports/bohren-schluss.md`](reports/bohren-schluss.md) | Schlussbericht Paket bohren, §6–7 Vorschlag zu `_without_scars` | RM-187 |
 | [`reports/fenster.md`](reports/fenster.md) | Bericht Paket fenster der Durchsicht, Empfehlung zum Fadenkreuz | RM-291 |
 | [`reports/kanten-schluss.md`](reports/kanten-schluss.md) | Schlussbericht Paket kanten, §6–7 Registertext und Nicht behoben | RM-284 |
@@ -75,6 +87,7 @@ einem neuen Lauf anzupassen.
 | [`reports/review-einfuegen.md`](reports/review-einfuegen.md) | Review von `einfuegen-freier-platz` (F11 bis F15, N8) | RM-303 bis RM-306 |
 | [`reports/review-gesamt-dd95985e5.md`](reports/review-gesamt-dd95985e5.md) | Review des Gesamtprüfungspakets bis `3018613e6` (B1 bis B10) | RM-289 |
 | [`reports/review-handbuch.md`](reports/review-handbuch.md) | Code-Review des Handbuchumbaus | RM-299, Handbuchkonzept |
+| [`reports/rm298-weitergabe-2026-10-02.md`](reports/rm298-weitergabe-2026-10-02.md) | Sieben fatalen Prozessfehlern durch geometrische Fänge folgen; öffentliche Gegenläufe, finale Basis und tatsächlicher Cacheanschluss | RM-298(c) |
 | [`reports/review-hilfsprozess.md`](reports/review-hilfsprozess.md) | Review des Pakets hilfsprozess | RM-298 |
 | [`reports/review-kopien.md`](reports/review-kopien.md) | Review von `merkmale-an-kopien` | RM-210, RM-302 |
 | [`reports/review-speicher.md`](reports/review-speicher.md) | Review von `speicher-ohne-prozesswerte` (F2) | RM-300 |

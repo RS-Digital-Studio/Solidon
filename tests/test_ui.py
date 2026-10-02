@@ -13658,6 +13658,54 @@ def test_the_parameter_card_survives_getting_parameters(qt_app: QApplication) ->
     assert "breite" in panel._editors
 
 
+def test_another_project_does_not_inherit_a_refused_number(qt_app: QApplication) -> None:
+    """Gleiche Zeilen sind nicht dasselbe Projekt (RM-452).
+
+    A und B tragen *Breite* 60 mit Obergrenze 100. Die in A abgelehnte 150
+    stand nach dem Öffnen von B weiter im Feld, samt Grenzsatz, weil die
+    Leiste gleiche Zeilen ohne Blick auf das Dokument weiterverwendete. In A
+    selbst bleibt das Feld dasselbe Widget (RM-355).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.core.types import Document, Parameter
+    from app.ui.panels import ParameterPanel
+
+    def project() -> Document:
+        document = Document(format_version=1, app_version="0.0.1")
+        document.parameters["breite"] = Parameter(
+            name="breite", value=60.0, unit="mm", title="Breite", maximum=100.0
+        )
+        return document
+
+    first, second = project(), project()
+    panel = ParameterPanel()
+    panel.show_document(first)
+    panel.show()
+    QApplication.processEvents()
+    editor = panel._editors["breite"]
+
+    panel.show_document(first)
+    assert panel._editors["breite"] is editor, "dasselbe Projekt behält sein Feld"
+
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), "150")
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    QApplication.processEvents()
+    assert panel.refusal_text(), "A lehnt 150 ab"
+
+    panel.show_document(second)
+    QApplication.processEvents()
+
+    shown = panel._editors["breite"]
+    assert panel.refusal_text() == "", "B kennt die Ablehnung aus A nicht"
+    assert shown.refused_value() is None
+    assert shown.lineEdit().text().startswith("60"), shown.lineEdit().text()
+    panel.close()
+
+
 def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> None:
     """Neue Zeilen dürfen nicht in der Höhe des leeren Zustands landen.
 
@@ -20127,6 +20175,44 @@ def test_correcting_a_field_that_reads_a_parameter_goes_to_the_parameter_bar(
     assert window._op_dialog is None, "kein Schrittdialog mit „=@breite“"
 
 
+def test_correcting_a_composed_expression_opens_the_step_and_not_the_parameter(
+    window: MainWindow,
+) -> None:
+    """„=max(@breite, …)“ über der Feldgrenze: *Eingabe korrigieren* öffnet den Schritt (RM-453).
+
+    Keine Breite behebt diesen Fehler, die Leiste wäre eine Sackgasse;
+    korrigierbar ist der Ausdruck im Feld *Breite* des Quaders. Der Halt
+    wird am Dokument erzwungen, wie eine ältere Datei ihn mitbringt.
+    """
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    composed = f"=max(@breite, {high + 1000.0:g})"
+    document = window.session.project.document
+    box = document.ops[0]
+    document.ops[0] = dataclasses.replace(box, params={**box.params, "width": composed})
+    assert window.session.evaluate_now().stopped_at == 1
+    QApplication.processEvents()
+    window.activateWindow()
+
+    error = errors.ValidationError(
+        field="width", detail="zu breit", constraint="maximum", values={"maximum": high}
+    )
+    error.op_id = 1
+    window._correct_after_error(error)
+    QApplication.processEvents()
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Schritt ist zum Korrigieren offen"
+    try:
+        assert not window.parameters._editors["breite"].hasFocus()
+        assert composed.replace(" ", "") in str(dialog.values()["width"]).replace(" ", "")
+    finally:
+        dialog.reject()
+        QApplication.processEvents()
+
+
 def test_a_new_expression_beyond_its_field_is_refused_too(session: Session) -> None:
     """*Parameter ändern …* mit einem Ausdruck über der Feldgrenze: dieselbe Absage (RM-354)."""
     import dataclasses
@@ -20169,6 +20255,118 @@ def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> 
     shown = window.viewport._requested_result
     assert shown is not None and "obj_1" in shown.scene.objects, "der Körper bleibt im Bild"
     assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
+
+
+def _a_stored_width_beyond_its_field(window: MainWindow) -> float:
+    """*Breite* jenseits der Feldgrenze, wie eine Datei sie mitbringt — zurück die Grenze."""
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    window._on_scene(window.session.evaluate_now())
+    window._refresh_parameters()
+    QApplication.processEvents()
+    return high
+
+
+def _type_into(window: MainWindow, name: str, number: float) -> None:
+    """Eine Zahl in die Zeile der Leiste tippen und mit der Eingabetaste übernehmen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    editor = window.parameters._editors[name]
+    window.activateWindow()
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), str(int(number)))
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    for _round in range(3):
+        QApplication.processEvents()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+
+def test_a_stored_number_beyond_its_field_shows_and_takes_the_correction(
+    window: MainWindow,
+) -> None:
+    """Die Leiste zeigt die Zahl aus der Datei und nimmt die Korrektur an (RM-447).
+
+    Qt klemmte 5000 auf die Feldgrenze 1000: Die Leiste zeigte 1000, 1000 +
+    Enter war keine Änderung, und der Halt blieb — obwohl *Eingabe
+    korrigieren* genau in dieses Feld führt. In 0.5.1 stand dort 5000.
+    """
+    high = _a_stored_width_beyond_its_field(window)
+    editor = window.parameters._editors["breite"]
+    assert editor.value() == pytest.approx(high + 4000.0), "die gespeicherte Zahl steht da"
+    said = window.parameters.refusal_text()
+    assert str(int(high)) in said.replace(".", "").replace(",", ""), said
+
+    _type_into(window, "breite", high)
+
+    document = window.session.project.document
+    assert document.parameters["breite"].value == pytest.approx(high)
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None, "der Halt ist gelöst"
+    assert window.parameters.refusal_text() == "", "und der Satz zur Grenze geht"
+
+
+def test_a_refused_derived_change_shows_the_valid_number_again(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lehnt die Sitzung eine Zahl ab, zeigt die Leiste wieder, was gilt (RM-447).
+
+    *Breite* hat keine eigene Grenze, das Feld liest sie verdoppelt. 600 nimmt
+    das Feld an, die Sitzung lehnt ab — die Leiste zeigte weiter 600.
+    """
+    from app.core.scene import OperationDraft
+
+    shown: list[errors.AppError] = []
+    monkeypatch.setattr(main_window_module, "show_error", lambda error, *_args: shown.append(error))
+    window.show()
+    session = window.session
+    assert session.add_parameter(Parameter(name="breite", value=100.0, unit="mm"))
+    assert session.add_parameter(
+        Parameter(name="doppelt", value=200.0, unit="mm", expression="=@breite*2")
+    )
+    session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@doppelt"})])
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    _type_into(window, "breite", 600.0)
+
+    assert shown and getattr(shown[-1], "constraint", None) == "maximum", "die Sitzung lehnt ab"
+    assert session.project.document.parameters["breite"].value == pytest.approx(100.0)
+    assert window.parameters._editors["breite"].value() == pytest.approx(100.0)
+
+
+def test_remote_parameters_name_the_limit_and_keep_title_and_bounds(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fernsteuerung sagt die Grenze und behält Titel und Grenzen (RM-447).
+
+    ``set_parameter`` über der Grenze antwortete „Der Wert ist schon so
+    eingestellt.“, und ``add_parameter`` verlor ``minimum``, ``maximum`` und
+    ``title``, obwohl das Werkzeugschema sie anbietet.
+    """
+    monkeypatch.setattr(main_window_module, "show_error", lambda *_args: None)
+    high = _bound_width_project(window.session)
+
+    said = window._remote_parameter("set_parameter", {"name": "breite", "value": high + 4000.0})
+    assert str(int(high)) in said.replace(".", "").replace(",", ""), said
+    assert window.session.project.document.parameters["breite"].value == pytest.approx(60.0)
+    same = window._remote_parameter("set_parameter", {"name": "breite", "value": 60.0})
+    assert same == tr("Der Wert ist schon so eingestellt.")
+
+    window._remote_parameter(
+        "add_parameter",
+        {"name": "hoehe", "value": 30.0, "minimum": 10.0, "maximum": 50.0, "title": "Höhe"},
+    )
+    made = window.session.project.document.parameters["hoehe"]
+    assert (made.minimum, made.maximum, str(made.title)) == (10.0, 50.0, "Höhe")
 
 
 def _width_bound_box(session: Session) -> None:
@@ -20231,6 +20429,97 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
 
     assert window._export_waiting is None
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
+
+
+def _a_cone_in_draft(window: MainWindow) -> None:
+    """Ein Kegel, der im Entwurf mit halb so vielen Dreiecken steht wie fein."""
+    assert window.session.apply(
+        "Kegel",
+        [
+            OperationDraft(
+                op="create_cone",
+                params={
+                    "bottom_diameter": 30.0,
+                    "top_diameter": 10.0,
+                    "height": 20.0,
+                    "segments": 64,
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
+
+
+def _fine_triangles(window: MainWindow) -> int:
+    """Die Dreiecke der feinen Rechnung desselben Dokuments, unabhängig vom Fenster."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources
+
+    session = window.session
+    fine = evaluate(
+        session.project.document,
+        session.profile,
+        sources=ProjectSources(session.project),
+        quality="fine",
+    )
+    return sum(as_mesh_data(entry.mesh).triangle_count for entry in fine.scene.objects.values())
+
+
+def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Path) -> None:
+    """Die Datei trägt die feine Rechnung, nicht den Entwurf des Fensters (RM-426).
+
+    Das Fenster rechnet im Entwurf (§31). Geschrieben wurde dieser Entwurf —
+    ein Kegel mit der Hälfte seiner Dreiecke, ein verschmolzenes Teil mit
+    einem Viertel —, während der Befund ``blend.draft`` versprach, der
+    Export rechne fein.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import as_mesh_data
+
+    _a_cone_in_draft(window)
+    result = window.session.last_result
+    assert result is not None
+    draft = sum(as_mesh_data(entry.mesh).triangle_count for entry in result.scene.objects.values())
+    fine = _fine_triangles(window)
+    assert fine > draft, "Voraussetzung: fein und Entwurf unterscheiden sich"
+    target = tmp_path / "kegel.stl"
+
+    window._start_export(target, "stl")
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+
+    written = sum(len(trimesh.load(path, force="mesh").faces) for path in tmp_path.glob("*.stl"))
+    assert written == fine, (written, fine, draft)
+    assert window.session.last_quality == "fine"
+
+
+def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:
+    """Ein Klick auf *Slicen* bindet sich an die feine Rechnung (RM-426).
+
+    Warten ist keine Sperre: Der Auftrag merkt sich den Klick, bestellt die
+    feine Rechnung und läuft, sobald sie steht — den Entwurf bekommt der
+    Slicer nicht.
+    """
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    _a_cone_in_draft(window)
+    dialog = PrintSettingsDialog(window.session, window.settings, window)
+    ran: list[str] = []
+
+    assert dialog._wait_for_fine(lambda: ran.append(window.session.last_quality))
+    assert dialog.state.text() == tr("Wartet auf die feine Berechnung des Modells …")
+    assert not ran, "der Klick wartet"
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    assert ran == ["fine"], "der Klick läuft einmal, auf der feinen Rechnung"
+    assert not dialog._wait_for_fine(lambda: ran.append("zweimal")), "fein steht schon"
+    dialog.close()
 
 
 def test_an_empty_scene_invites_to_start_and_steps_aside_for_the_first_body(

@@ -22,7 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Nova é a forma base «Criar um tubo»: diâmetro exterior e altura, mais espessura de parede ou diâmetro interior, num só passo.
 - Novo é o bloco «Patilha com furo»: uma patilha plana em qualquer face, com furo e medidas à medida do parafuso de M3 a M8.
 - Nova é a «Abraçadeira de tubo» para tubos comuns de 15 a 40 mm ou qualquer medida própria até 110 mm, com parafuso de aperto M3 a M6 e a folga do seu material.
-- Quatro suportes nascem num passo com faces e arestas verdadeiras: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, patilhas, gancho de painel ou grampo.
+- Quatro suportes nascem num passo com faces e arestas verdadeiras: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, furos para parafusos, gancho de painel ou grampo.
 - Uma cena vazia mostra como começar: paralelepípedo, cilindro, desenho, blocos ou um ficheiro que arraste para dentro.
 - Os corpos novos aparecem na mesa ou na face plana escolhida, já não onde estava um corpo selecionado antes, e ficam selecionados.
 
@@ -31,9 +31,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
 - O bico escolhe-se nas definições de impressão entre os tamanhos que a sua impressora conhece, e o slicer recebe o perfil correspondente.
 - As definições de impressão perguntam pela ordem em que uma coisa depende da outra: slicer, impressora, bico, placa, filamentos e qualidade, e depois os valores.
-- Com o Creality Print 7.2 e 7.3, «Fatiar» calcula agora sozinho o ficheiro de impressão. Até agora só a janela do Creality Print o fazia. Se o 7.3 reorganizar a placa, o Solidon di-lo.
+- Agora pode gerar ficheiros de impressão diretamente a partir do Solidon com o Creality Print 7.2 e 7.3.
 - Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
 - O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
+- As impressoras com a origem fora do canto da mesa, como delta, BIBO ou Dremel, recebem as peças onde o Solidon as põe. Antes ficavam na borda ou o fatiador reorganizava-as.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
 - Se escolher brim, skirt ou raft nas definições de impressão, só aparecem as medidas desse tipo de mesa, sem campos que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
@@ -44,6 +45,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
+- Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
 
 ### Furos, furos oblongos e divisão
 
@@ -65,7 +67,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um traço sobre o plano de simetria atua uma vez em vez de duas.
 - A barra de modelação chama agora «Intensidade» ao valor do pincel, em vez de «Espessura», que fazia pensar numa parede.
 - Se um traço de modelação fura a parede ou a deixa fina demais, o relatório indica-o, com «Mostrar o ponto».
-- Na janela, «Fundir suavemente» calcula agora tão fino como na exportação, desde que o corpo não seja muito grande.
+- Na janela, «Fundir suavemente» calcula agora fino, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
 - O destino de «Alinhar à característica» começa vazio. Escolhe-o no campo «Destino», e «Aplicar» espera até lá em vez de pôr o corpo sem aviso do lado errado.
@@ -85,8 +87,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Utilização e sistema
 
 - Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
+- A exportação, «Fatiar» e «Abrir no slicer …» recebem sempre o cálculo fino, não a vista mais grosseira da janela. Arredondamentos e cones chegam ao ficheiro com resolução completa.
 - Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
-- A barra de parâmetros recusa uma medida fora do seu limite e indica o limite, em vez de deixar a vista vazia.
+- A barra de parâmetros recusa uma medida fora do seu limite em vez de deixar a vista vazia.
 - Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
 - Se um passo espera uma pergunta, «Aplicar» continua disponível e a pergunta aparece.
 - No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
@@ -100,6 +103,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os espaços chegam a todos os campos de texto, também ao questionário de opinião e ao chat, enquanto uma caixa de diálogo mostra a pré-visualização.
 - Uma constatação que se refere a um passo abre-o para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
+- A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.
 
 ## 0.5.1
 

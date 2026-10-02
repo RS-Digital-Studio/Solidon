@@ -12,6 +12,7 @@ import trimesh
 
 from app.core.errors import BooleanFailedError, ValidationError
 from app.core.export import threemf as writer
+from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.ingest import threemf as reader
 from app.core.scene import History, OperationDraft, evaluate
@@ -495,6 +496,67 @@ def test_a_failed_cut_keeps_the_kernels_way_out(monkeypatch: pytest.MonkeyPatch)
     assert [entry.code for entry in findings] == ["ingest.negative_kept_out"]
     assert findings[0].suggestions, "der Ausweg des Rechenkerns reist mit"
     assert findings[0].values["detail"]
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_a_native_negative_part_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der öffentliche 3MF-Import hält beim Prozessfehler seiner ersten Aussparung an."""
+    from app.core.geom import boolean as boolean_module
+
+    first_cutter = trimesh.creation.box(extents=(0.5, 0.5, 0.5))
+    first_cutter.apply_translation((0.5, 0.0, 0.0))
+    second_cutter = trimesh.creation.box(extents=(0.5, 0.5, 0.5))
+    second_cutter.apply_translation((-0.5, 0.0, 0.0))
+    payload = _native(
+        extra={"3": ("negative_part", first_cutter), "4": ("negative_part", second_cutter)}
+    )
+    original_boolean = boolean_module.boolean
+    original_run = kernel_process.run
+    injected_error = failure_type()
+    boolean_calls = []
+    target_requests = []
+    following = []
+    findings: list[Finding] = []
+    returned = []
+
+    def counted_boolean(kind, meshes, **kwargs):
+        if target_requests:
+            following.append(("boolean", kind))
+            raise TypeError("RM298: weitere Aussparung nach dem Prozessfehler")
+        boolean_calls.append((kind, len(meshes), kwargs.get("allow_empty")))
+        return original_boolean(kind, meshes, **kwargs)
+
+    def failing_difference(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(("kernel", job))
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if job == "boolean" and values["kind"] == "difference":
+            target_requests.append((job, values["kind"], values["bodies"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    # _carved holt boolean weiterhin selbst erst beim Aussparen; kein Importersatz.
+    monkeypatch.setattr(boolean_module, "boolean", counted_boolean)
+    monkeypatch.setattr(kernel_process, "run", failing_difference)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(reader.read_objects(payload, findings))
+    finally:
+        assert boolean_calls == [("difference", 2, True)], (
+            "der echte erste Aussparungsfang muss rechnen"
+        )
+        assert target_requests == [("boolean", "difference", 2)]
+
+    assert caught.value is injected_error
+    assert following == [], "kein zweiter Aussparungsversuch"
+    assert findings == [], "kein ingest.negative_kept_out als Ersatz für den Prozessfehler"
+    assert returned == [], "kein teilweise geladenes Ersatzobjekt"
 
 
 def test_a_negative_part_that_touches_nothing_is_said_so() -> None:

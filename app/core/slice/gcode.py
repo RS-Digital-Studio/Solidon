@@ -623,17 +623,6 @@ def _bambu_amounts(
         assigned.add(name)
 
 
-def parse(
-    text: str,
-    *,
-    densities: Sequence[float | None] = (),
-    diameters: Sequence[float | None] = (),
-    firmware: str | None = None,
-) -> GcodeMetrics:
-    """Liest eine G-Code-Datei. Was nicht darin steht, bleibt unbekannt."""
-    return analyze(text, densities=densities, diameters=diameters, firmware=firmware).metrics
-
-
 def analyze(
     text: str,
     *,
@@ -1121,81 +1110,6 @@ def _motion_fallback(
     total = _complete_sum(amounts)
     if metrics.filament_mm is None or replaced_placeholder:
         metrics.filament_mm = total
-
-
-def extrudes(text: str) -> bool:
-    """Fördert diese Datei überhaupt Material?
-
-    Format-unabhängig gefragt: nicht am Kommentar, den jeder Slicer anders
-    schreibt, sondern an der Bewegung selbst. Eine Datei ohne eine einzige
-    Bahn mit Vorschub ist kein Druck — sie ist ein Leerlauf über die Platte,
-    und sie entsteht, wenn der Slicer das Modell nicht gefunden oder
-    verworfen hat. Groß ist sie trotzdem, und ohne diese Frage sähe sie aus
-    wie ein geglückter Lauf. Wo eine erste Schicht markiert ist, zählt erst der
-    Modellbereich danach; eine bewegte Reinigungsbahn davor ist kein Modell.
-    """
-    return analyze(text).extrudes
-
-
-def printed_extent(text: str) -> BoundingBox | None:
-    """Wohin diese Datei wirklich druckt — aus den Bahnen, nicht aus dem Kopf.
-
-    ``None``, wenn keine einzige Bahn Material fördert; dann sagt
-    :func:`extrudes` das Nötige.
-
-    **Warum aus den Bahnen.** Dieselbe Überlegung wie bei :func:`extrudes`: Der
-    Kopf ist das, was ein Slicer über sich behauptet, die Bewegung ist, was der
-    Drucker tut. CuraEngine schreibt in seinen Kopf ``;MINX:2.14748e+06`` — den
-    unbesetzten Anfangswert —, weil dort sonst das Cura-Fenster nachträglich
-    einträgt; von der Kommandozeile aus bleibt er stehen.
-
-    **Und wozu.** Weil ein Slicer eine Datei schreiben kann, die neben der
-    Platte druckt; wer davon nur aus dem Kopf erfährt, erfährt es nie.
-    :func:`app.core.export.handover.off_the_bed` beurteilt das Maß, das hier
-    herauskommt, und dort steht die Messung.
-
-    Die Stelle wird über alle Bewegungen nachgeführt, auch über die leeren,
-    denn Z steht so gut wie nie in derselben Zeile wie die Bahn. Relative
-    Bewegungen werden nur dann aufgelöst, wenn ihr Ausgangspunkt bekannt ist.
-
-    **Eine Bahn muss sich bewegen.** ``G1 E6 F120`` fördert sechs Millimeter
-    Material, ohne einen Millimeter zu fahren — das ist die Reinigung vor dem
-    Druck und keine Bahn. Der ElegooSlicer setzt sie an ``Y -1,2``, also
-    außerhalb des Betts, das er selbst nennt; ohne diese Bedingung stand der
-    ganze Druck 1,2 mm neben der Platte, und die Meldung dazu kam bei **jedem**
-    Orca-Lauf.
-    """
-    return analyze(text).extent
-
-
-def stated_bed(text: str) -> BoundingBox | None:
-    """Das Bett, das die Datei **selbst** nennt — ``None``, wenn sie schweigt.
-
-    Dieselbe Haltung wie bei :func:`verify`: Die einzige Auskunft, die vom
-    Programm selbst kommt, ist die, die es in seine Datei schreibt. Gemessen an
-    den drei Familien:
-
-    * die Orca-Familie schreibt ``printable_area`` **und** ``bed_shape``, dazu
-      ``printable_height``,
-    * PrusaSlicer schreibt ``bed_shape`` und ``max_print_height`` — bei ihm
-      genau das, was Solidon ihm gegeben hat,
-    * CuraEngine schreibt nichts davon; dort bleibt es bei dem, was Solidon
-      selbst gesetzt hat (:func:`app.core.export.handover.off_the_bed`).
-
-    **Und das ist der Unterschied zwischen einer wahren und einer geratenen
-    Aussage.** Bei der Orca-Familie kommt das Maschinenprofil aus dem Bestand
-    des Slicers (§29: es wird nicht erfunden). Gegen Solidons eigenen Bauraum
-    gemessen heißt „außerhalb des Bauraums" dort zweierlei — der Druck liegt
-    daneben, oder die zwei Profile meinen verschiedene Maschinen —, und
-    unterscheiden ließe sich das nicht.
-
-    Die Ecken stehen als ``0x0,256x0,256x256,0x256``; gelesen wird die
-    Hüllbox, nicht das Vieleck. Ein ausgeschnittenes Eck (``bed_exclude_area``)
-    bleibt damit außen vor: Es ist eine Verbotszone innerhalb des Betts, und
-    ein Druck, der sie berührt, ist ein anderer Befund als einer, der über den
-    Rand hinausfährt.
-    """
-    return analyze(text).bed
 
 
 def _path_points(

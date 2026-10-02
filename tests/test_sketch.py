@@ -24,10 +24,6 @@ from app.core.sketch.planes import (
 )
 from app.core.sketch.profile import _LEAST_STEPS, curves_of
 from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement, SolvedSketch
-
-# Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
-# ziehen die Ecken zusammen, die Maße kommen aus Projektparametern.
-# Flache Punktindizes: unten (0,1), rechts (2,3), oben (4,5), links (6,7).
 from tests.helpers import assert_sketch_gradients, exact_kernel, rectangle
 
 PARAMS = {"width": 40.0, "height": 20.0}

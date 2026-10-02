@@ -161,9 +161,12 @@ def from_image(
     progress: ProgressFn = _silent,
     cancelled: CancelledFn | None = None,
 ) -> Generation:
-    """Erzeugt einen Körper aus einem Bild und legt ihn ins Projekt.
+    """Kopfloser Prüfweg: Bildbytes zu einem Körper im Projekt.
 
-    ``cancelled`` wie bei :func:`from_text` — derselbe Weg, dieselbe Zusage.
+    Der produktive Dialog lässt ``image_to_mesh`` in seinem Arbeiter laufen und
+    übernimmt das Ergebnis über ``Session.add_generated``. Dieser synchrone
+    Adapter prüft denselben Kernweg ohne Fenster; ``cancelled`` gilt wie bei
+    :func:`from_text`.
     """
     result = backend.image_to_mesh(image, seed=seed, progress=progress, cancelled=cancelled)
     return into_project(project, result, name or str(_("Aus Bild")))

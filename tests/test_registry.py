@@ -125,6 +125,171 @@ def test_variable_counts_are_readable_in_the_reference(registry: Registry) -> No
     assert "Objekte: -1" not in reference
 
 
+def test_customer_documentation_keeps_the_controls_without_the_api(registry: Registry) -> None:
+    """Die Bedienhilfe erklärt die Handlung, ohne ihre Aufrufschlüssel zu zeigen."""
+    text = documentation(registry, technical=False)
+
+    assert "### Bohrung ändern\n" in text
+    assert "Ändert den Durchmesser einer erkannten Bohrung." in text
+    assert "**Ort:**" in text
+    assert "Kürzel `Ctrl+Shift+B`" in text
+    assert "Gilt für: Bohrung" in text
+    assert "Durchmesser" in text and "0,1" in text and "mm" in text
+    for internal in (
+        "resize_hole",
+        "diameter",
+        "Objekte:",
+        "umkehrbar",
+        "ohne Zufall",
+        "Startwert",
+    ):
+        assert internal not in text
+
+
+def test_documentation_remains_technical_by_default(registry: Registry) -> None:
+    """CLI und technische Aufrufer behalten ihre vollständige Referenz."""
+    text = documentation(registry)
+
+    assert text == documentation(registry, technical=True)
+    assert "### Bohrung ändern (`resize_hole`)" in text
+    assert "Durchmesser `diameter`" in text
+    assert "Objekte: 1 → 1" in text
+    assert "umkehrbar" in text and "mit Startwert" in text
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "# Stifte verteilen\n\nZusätzlicher Hinweis.",
+        "## Stifte verteilen\n\nZusätzlicher Hinweis.",
+        "### Stifte verteilen\n\nZusätzlicher Hinweis.",
+        "  ### Stifte verteilen\n\nZusätzlicher Hinweis.",
+        "Stifte verteilen\n===\n\nZusätzlicher Hinweis.",
+        "Stifte verteilen\n---\n\nZusätzlicher Hinweis.",
+    ],
+)
+def test_customer_description_headings_stay_below_the_operation(
+    registry: Registry, description: str
+) -> None:
+    """Rezeptbeschreibungen dürfen keinen anderen Referenzeintrag vortäuschen."""
+    import re
+    from dataclasses import replace
+
+    from app.core import markup
+
+    first = registry.get("resize_hole")
+    second = registry.get("scatter_pins")
+    registry.remove(first.name)
+    registry.remove(second.name)
+    registry.register(replace(first, doc=description))
+    registry.register(replace(second, category=first.category))
+    customer = documentation(registry, technical=False)
+    assert re.findall(r"^### (.+)$", customer, re.MULTILINE) == [
+        "Bohrung ändern",
+        "Stifte verteilen",
+    ]
+    assert "#### Stifte verteilen" in customer
+    assert "Zusätzlicher Hinweis." in customer
+    html = markup.to_html(customer)
+    assert html.count("<h4>Stifte verteilen</h4>") == 1
+    assert "<h5>Stifte verteilen</h5>" in html
+    assert description in documentation(registry), "technische Ausgabe bleibt unverändert"
+
+
+def test_description_heading_levels_keep_their_order_and_leave_code_alone() -> None:
+    """Unterpunkte bleiben Unterpunkte; Codebeispiele werden nicht umgeschrieben."""
+    from app.core import markup
+
+    body = "# Eins\n\n## Zwei\n\n### Drei\n\n```text\n### Beispiel\n```\n"
+    shown = markup.below_heading(body, 3)
+    assert "#### Eins" in shown and "##### Zwei" in shown and "###### Drei" in shown
+    assert "```text\n### Beispiel\n```" in shown
+    html = markup.to_html(shown)
+    assert "<pre><code>### Beispiel</code></pre>" in html
+    assert "<h4>Beispiel</h4>" not in html
+    assert markup.below_heading("Mehrzeiliger\nHinweis\n===", 3) == "#### Mehrzeiliger Hinweis"
+    assert markup.below_heading("Ein Absatz.\n\n---", 3) == "Ein Absatz.\n\n---"
+
+
+def test_headings_in_quotes_and_lists_stay_below_the_operation_title() -> None:
+    """Qt liest eine Überschrift im Zitat oder Listenpunkt ohne Zitatebene.
+
+    Bliebe sie auf Ebene 3, stünde sie für das Handbuchfenster neben dem
+    Operationstitel, und die Sprungziele der Referenz fielen aus.
+    """
+    from app.core import markup
+
+    shown = markup.below_heading("### Eins\n\n> ### Zitat\n\n- ### Punkt\n\n1. ## Zahl", 3)
+    assert shown.split("\n\n") == [
+        "##### Eins",
+        "> ##### Zitat",
+        "- ##### Punkt",
+        "1. #### Zahl",
+    ]
+    assert markup.below_heading("    ### eingerückter Code", 3) == "    ### eingerückter Code"
+
+
+def test_customer_parameter_table_names_choices_and_their_conditions() -> None:
+    """Vorgabe, Auswahl und abhängige Felder sprechen wie derselbe Dialog."""
+    from app.core.registry.surfaces import parameter_table
+    from app.core.types import ParamSpec
+
+    schema = (
+        ParamSpec("kind", "enum", "Art", default="circular", choices=("linear", "circular")),
+        ParamSpec("enabled", "bool", "Nutzen", default=True, depends_on=("kind", ("circular",))),
+        ParamSpec(
+            "span",
+            "float",
+            "Abstand",
+            default=2.5,
+            unit="mm",
+            minimum=0.2,
+            doc="Von Mitte zu Mitte.",
+            depends_on=("enabled", (True,)),
+        ),
+        ParamSpec("armature", "armature", "Skelett", default="", placement="advanced"),
+        ParamSpec("faces", "features", "Flächen", default=()),
+    )
+    customer = "\n".join(parameter_table(schema, technical=False))
+    technical = "\n".join(parameter_table(schema))
+
+    assert "Kreisförmig" in customer
+    assert "Geradlinig, Kreisförmig" in customer
+    assert "Gilt bei Art = Kreisförmig." in customer
+    assert "Gilt bei angehaktem Nutzen." in customer
+    assert "Von Mitte zu Mitte." in customer
+    assert "2,5" in customer and "0,2" in customer and "mm" in customer
+    assert "| Skelett |" in customer, "ein wirklicher Editor ist kein internes Übergabefeld"
+    assert "`" not in customer and "circular" not in customer and "linear" not in customer
+    assert "()" not in customer
+    assert "Art `kind`" in technical and "linear, circular" in technical
+    assert "Flächen `faces`" in technical and "()" in technical
+    assert "Gilt bei Art = circular." in technical
+
+
+def test_choice_names_are_shared_and_measurements_keep_the_ui_formatter() -> None:
+    """Eine Tabelle, aber im Fenster weiterhin dessen Einheit und Zahlenschreibweise."""
+    from app.core.registry import surfaces
+
+    pytest.importorskip("PySide6")
+    from app.ui import labels
+
+    assert labels._CHOICE_NAMES is surfaces._CHOICE_NAMES
+    assert surfaces.choice_label("circular") == labels.choice_label("circular") == "Kreisförmig"
+    assert surfaces.choice_label("M4") == "M4"
+    assert surfaces.choice_label("608") == "608 · 8,00 × 22,00 × 7,00 mm"
+
+    previous = labels.display_unit()
+    try:
+        labels.set_display_unit("in")
+        assert labels.choice_label("608") == (
+            f"608 · {labels.length(8.0, with_unit=False)} × "
+            f"{labels.length(22.0, with_unit=False)} × {labels.length(7.0)}"
+        )
+    finally:
+        labels.set_display_unit(previous)
+
+
 def test_every_operation_reaches_every_surface(registry: Registry) -> None:
     """Die Tabelle aus §10: eine Deklaration, sechs Ausgaben."""
     names = {spec.name for spec in registry.all()}

@@ -16,9 +16,11 @@ darstellt.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Container
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
+from app.core import figures, markup
+from app.core.errors import AppError
 from app.core.registry.params import condition_text, json_schema
 from app.core.registry.registry import (
     CATEGORIES,
@@ -38,6 +40,308 @@ from app.core.registry.registry import (
 )
 from app.core.types import ParamSpec
 from app.i18n import TranslatableText, _, format_decimal, sort_key
+
+#: Wie eine Seite heißt, in die eine Richtung zeigt — je Achse positiv, negativ.
+#: Gemeinsam für Flächennamen, Rückfragen, Auswahlfelder und Handbuch.
+SIDE_NAMES: Final[tuple[tuple[TranslatableText, TranslatableText], ...]] = (
+    (_("Rechte Seite"), _("Linke Seite")),
+    (_("Rückseite"), _("Vorderseite")),
+    (_("Oberseite"), _("Unterseite")),
+)
+
+#: Auswahlwerte, die selbst kein Name sind. Der Schlüssel bleibt englisch, weil
+#: er in der Projektdatei steht (§4.2); gezeigt wird der übersetzte Text. Was
+#: schon ein Name ist — „M4", „PLA", „z" — steht hier nicht.
+#: Wie ein Auswahlwert heißt, wenn er nicht schon sein eigener Name ist.
+#:
+#: Die Liste ist flach, und das ist eine Entscheidung: derselbe Schlüssel
+#: bedeutet in dieser Anwendung überall dasselbe. Wo das einmal nicht mehr
+#: stimmt, bekommt der Wert einen eigenen Schlüssel — nicht diese Liste eine
+#: zweite Ebene.
+_CHOICE_NAMES: dict[str, TranslatableText] = {
+    "whole_face": _("Gesamte Fläche"),
+    "keep": _("Nur Bohrungsdurchmesser"),
+    # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
+    # die geht mit (RM-271) — der Name nennt, was mitgehen kann.
+    "follow": _("Senkung, Stufen und Verengung mitnehmen"),
+    "legacy_raw": _("Unveränderte Quellachsen"),
+    "gltf": _("glTF: Y nach oben"),
+    "clearance": _("Spielpassung"),
+    "press": _("Presspassung"),
+    "thread": _("Gewindepassung"),
+    "flush": _("Bündige Passung"),
+    "mouth": _("Mündung"),
+    "centre": _("Mitte"),
+    # Bei Mehrfachauswahl setzt das Fenster ihn auf die Mitte der
+    # gemeinsamen Hülle; im Dialog trägt ihn ein, wer eine bestimmte
+    # Stelle im Sinn hat. „Genannter Punkt" und nicht „Pivot": Das
+    # Fachwort kennt, wer aus dem CAD kommt, und sonst niemand.
+    "point": _("Genannter Punkt"),
+    # Die acht Texturmuster standen als „knurl_diamond" und „voronoi" im
+    # Dialog: englische Schlüssel, unübersetzt, und damit gegen Regel 20 dem
+    # Geist nach. Die Namen kommen aus dem Abbildungskatalog, der dieselben
+    # Kacheln beschriftet — zwei Listen wären eine Frage der Zeit.
+    **figures.TEXTURE_NAMES,
+    # Ein gelesenes Muster, das Solidon nicht selbst zeichnet — so steht es
+    # in *Merkmal ändern* vorbelegt, bis der Kunde einen der acht Stile wählt.
+    "other": _("Fremdes Muster"),
+    # Und dieselbe Sorte Fund im selben Dialog eine Zeile tiefer: „Art:
+    # raised", „Auflegen: flat". Über das ganze Register waren es
+    # sechsundzwanzig Werte; ``tests/test_translations.py`` hält sie jetzt
+    # zusammen.
+    # Die Symmetrieebenen des Formens. „xz" ist für den Kern der richtige
+    # Schlüssel und für den Dialog kein Wort — „ohne" und „X- und Z-Ebene"
+    # sagen dasselbe in lesbar. Die einzelnen Achsen bleiben, wie sie sind:
+    # ein „x" ist selbst schon der Name (siehe ``SELF_NAMING`` in der Suite).
+    "none": _("Ohne"),
+    "xy": _("X- und Y-Ebene"),
+    "xz": _("X- und Z-Ebene"),
+    "yz": _("Y- und Z-Ebene"),
+    "xyz": _("Alle drei Ebenen"),
+    # Die drei Projektionen des Reliefs. „planar" ist kein Wort, das jemand
+    # in einem Auswahlfeld erwartet, und „spherical" schon gar nicht — benannt
+    # wird, was passiert, nicht wie die Rechnung heißt.
+    "planar": _("Von oben"),
+    "cylindrical": _("Um die Achse"),
+    "spherical": _("Über die Kugel"),
+    "face": _("Auf eine Fläche"),
+    "raised": _("Erhaben"),
+    "engraved": _("Vertieft"),
+    # Die Schnitte einer Beschriftungsschrift. Der Schlüssel ist englisch, weil
+    # er in der Projektdatei steht; der Name hier ist es nicht, denn „bold" ist
+    # kein Wort, das eine deutsche Oberfläche stehen lässt.
+    "regular": _("Normal"),
+    "bold": _("Fett"),
+    "italic": _("Kursiv"),
+    "bold_italic": _("Fett kursiv"),
+    "flat": _("Flach"),
+    "cylinder": _("Umlaufend"),
+    "all": _("Alle"),
+    "top": _("Oben"),
+    "bottom": _("Unten"),
+    "side": _("Seitlich"),
+    "horizontal": _("Waagerecht"),
+    "vertical": _("Senkrecht"),
+    "linear": _("Geradlinig"),
+    "circular": _("Kreisförmig"),
+    # Die dritte Art des Merkmalsmusters (P6.7).
+    "mirror": _("Gespiegelt"),
+    # Wohin die Wand beim Aushöhlen wächst (P6.3).
+    "inside": _("Innen"),
+    "outside": _("Außen"),
+    # Was geschieht, wenn der exakte Kern keine Innenwand findet (P6.3).
+    "raster": _("Am Dreiecksmodell"),
+    "unchanged": _("Teil unverändert lassen"),
+    "origin": _("Ursprung"),
+    "bed": _("Druckbett"),
+    "corner": _("Ecke"),
+    # Wie eine Kollision geprüft wurde: genau am Netz oder nur über die
+    # Hüllquader. Der Befund trug „exact" und „box" als rohes Englisch in
+    # den Tooltip — dieselbe Sorte Fund wie bei den Texturmustern.
+    "exact": _("Genau"),
+    "box": _("Über den Hüllquader"),
+    # Woher der obere Umriss eines Übergangs kommt (RM-147 E2). „scaled" und
+    # „drawn" sind Schlüssel des Registers; im Dialog steht, was der Kunde
+    # bekommt — eine gerechnete Kopie oder seine zweite Zeichnung.
+    "scaled": _("Aus dem unteren gerechnet"),
+    "drawn": _("Eigene Zeichnung"),
+    "arc": _("Gleichmäßiger Bogen"),
+    # Die sechste Kantenauswahl (RM-147 E4): nicht nach der Lage, sondern
+    # einzeln — die Antwort auf „diese eine Ecke".
+    "named": _("Einzeln gewählt"),
+    "pin": _("Stift"),
+    "bore": _("Bohrung"),
+    # Der Standfuß kann beides, und beide Werte sind englische Schlüssel: Was
+    # der Kunde wählt, heißt „Fuß" oder „Tasche" — die Tasche nimmt einen
+    # gekauften Gummifuß auf, der Fuß wird gedruckt.
+    "foot": _("Fuß"),
+    "pocket": _("Tasche"),
+    "rectangle": _("Rechteck"),
+    "circle": _("Kreis"),
+    "polygon": _("Vieleck"),
+    "slot": _("Langloch"),
+    "hexagon": _("Sechseck"),
+    "staggered": _("Versetzte Reihen"),
+    # Die zwei Lochbilder. Sie stehen bei den Grundformen, weil sie dasselbe
+    # sind — ein Umriss, den die Operation hochzieht oder ausschneidet —, nur
+    # dass es mehrere davon sind.
+    "bolt_circle": _("Lochkreis"),
+    "hole_grid": _("Lochraster"),
+    # Die vier Verbinder. „round" und „hex" wären als Schlüssel noch zu
+    # erraten, „dovetail" und „snap" nicht — und das sind die beiden, für die
+    # man sich bewusst entscheidet.
+    "round": _("Rund"),
+    "ellipse": _("Oval"),
+    "lower": _("Untere Hälfte"),
+    "upper": _("Obere Hälfte"),
+    "below": _("Kleinere Seite"),
+    "above": _("Größere Seite"),
+    # Woran die Ebene von *Abschneiden* hängt (RM-400). Eigene Schlüssel: „face“
+    # heißt oben schon „Auf eine Fläche“.
+    "along_axis": _("An einer Achse"),
+    "at_face": _("An einer Fläche"),
+    "through_edge": _("Durch eine Kante"),
+    "through_points": _("Durch drei Punkte"),
+    "hex": _("Sechskant"),
+    "dovetail": _("Schwalbenschwanz"),
+    "snap": _("Schnapper"),
+    "honeycomb": _("Wabe"),
+    "cubic": _("Würfelgitter"),
+    "auto": _("Automatisch"),
+    # Die drei Antworten auf die Frage, was mit den übrigen Abschnitten eines
+    # Hohlraums geschieht (``remove_feature.sections``). „Nachfragen“ ist die
+    # Vorgabe: Der Kern entscheidet die Mehrdeutigkeit nicht selbst (Regel 21).
+    "ask": _("Nachfragen"),
+    "ask_side": _("Nachfragen"),
+    # Die Anfangsrichtung eines Kanals und der Drehsinn eines Übergangs, die
+    # beim Schnitt mit Werkzeug zur Wahl stehen (P6.5b/c).
+    "ask_twist": _("Nachfragen"),
+    "counterclockwise": _("Linksherum"),
+    "clockwise": _("Rechtsherum"),
+    "down": _("Nach unten"),
+    "up": _("Nach oben"),
+    "equal_distances": _("Gleiche Breite"),
+    "two_distances": _("Zwei Abstände"),
+    "distance_angle": _("Abstand und Winkel"),
+    # Der Verlauf einer Verrundung (P6.1): ein Radius oder einer, der sich
+    # entlang der Kante ändert.
+    "constant_radius": _("Gleichbleibend"),
+    "variable_radius": _("Mit Verlauf"),
+    # Die Entformungsrichtung der Formschräge (P6.4): in welche Richtung das
+    # Teil schmaler wird, benannt wie die Seiten am Druckbett.
+    "pull_up": _("Nach oben"),
+    "pull_down": _("Nach unten"),
+    "pull_right": _("Nach rechts"),
+    "pull_left": _("Nach links"),
+    "pull_back": _("Nach hinten"),
+    "pull_front": _("Nach vorn"),
+    "neutral_start": _("Am Anfang"),
+    "neutral_end": _("Am Ende"),
+    "neutral_height": _("Auf einer Höhe"),
+    "right_side": SIDE_NAMES[0][0],
+    "left_side": SIDE_NAMES[0][1],
+    "back_side": SIDE_NAMES[1][0],
+    "front_side": SIDE_NAMES[1][1],
+    "top_side": SIDE_NAMES[2][0],
+    "bottom_side": SIDE_NAMES[2][1],
+    "chain": _("Ganzer Hohlraum"),
+    "single": _("Nur das gewählte Merkmal"),
+    # **Die Druckeinstellungen waren die zweite Feldquelle, und sie stand hier
+    # nicht drin.** ``tests/test_translations.py`` prüft Regel 20 für
+    # Auswahlwerte am Operationsregister; die sechsundfünfzig Felder des
+    # Druckdialogs (``print_settings_dialog.FIELDS``) sind eine eigene Liste
+    # und liefen an der Prüfung vorbei. Im deutschen Fenster stand deshalb
+    # „Naht: aligned", „Wandbahnen: arachne", „Druckbetthaftung: brim" — und im
+    # Füllmuster englische Schlüssel **neben** deutschen Namen: grid, lines,
+    # triangles, Wabe, Würfelgitter.
+    #
+    # Wo der englische Begriff der ist, unter dem der Kunde ihn in seinem
+    # Slicer wiederfindet, steht er in Klammern dahinter — dasselbe Muster wie
+    # „Exakter Körper (B-Rep)".
+    "aligned": _("Ausgerichtet"),
+    "nearest": _("Nächstgelegen"),
+    "random": _("Zufällig"),
+    # Nicht „Hinten" und nicht „Rückseite": Das erste ist die **Rückansicht**
+    # im Ansichtsmenü (Strg+2, englisch „Back"), das zweite der Name einer
+    # **Fläche**, deren Normale nach hinten zeigt (``_SIDES``). Ein
+    # Katalogschlüssel trägt genau eine Bedeutung — mit einem für zwei bekäme
+    # eine von ihnen das falsche Wort. (``TranslatableText`` kennt ein
+    # ``context``-Feld, aber der Extraktor liest es nicht; siehe ROADMAP.)
+    "rear": _("Auf der Rückseite"),
+    "classic": _("Klassisch"),
+    # Eigennamen wie „Gyroid": so heißt der Algorithmus, in jedem Slicer und in
+    # jeder Sprache. Dasselbe gilt für die drei Haftarten — im Dialog heißen die
+    # Felder daneben „Skirt-Runden", „Brim-Breite" und „Raft-Schichten", und ein
+    # Wert, der anders heißt als sein Feld, ist eine Fährte ins Nichts.
+    "arachne": _("Arachne"),
+    "gyroid": _("Gyroid"),
+    "grid": _("Gitter"),
+    "lines": _("Linien"),
+    "triangles": _("Dreiecke"),
+    "tree": _("Baum"),
+    "everywhere": _("Überall"),
+    "build_plate": _("Nur vom Bett"),
+    "skirt": _("Skirt"),
+    "brim": _("Brim"),
+    "raft": _("Raft"),
+    # Die zwei Wege von *Dreiecke verringern* (``mesh_ops.DECIMATE_METHODS``).
+    "measured": _("Gemessen"),
+    "fast": _("Schnell"),
+    "keyhole": _("Schlüsselloch"),
+    "screws": _("Schraublöcher"),
+    "pegboard": _("Lochwand-Haken"),
+    "clamp": _("Klemme"),
+}
+
+
+def _choice_measure(value: float, with_unit: bool) -> str:
+    """Ein Normteilmaß für die Dokumentation, in lokalisierten Millimetern."""
+    text = format_decimal(value, 2)
+    return f"{text} mm" if with_unit else text
+
+
+def choice_label(value: str, *, format_measure: Callable[[float, bool], str] | None = None) -> str:
+    """Ein Auswahlwert, wie der Nutzer ihn lesen kann.
+
+    Normteilschlüssel sind englisch und kurz, weil sie Schlüssel sind — im
+    Dialog standen sie aber als Beschriftung: „cable-5", „ptfe-4x2". Das tippt
+    niemand ab und niemand erkennt es, ohne die Tabelle danebenzulegen.
+
+    Erzeugt aus den Maßen und nicht als zweite Liste gepflegt: sonst hätte ein
+    neues Normteil einen Namen an einer Stelle und keinen an der anderen. Was
+    die Tabelle nicht kennt — „M4", „PLA", „z" —, bleibt, wie es ist; diese
+    Werte sind selbst schon der Name.
+
+    Ohne ``format_measure`` stehen Maße in Millimetern im Handbuch. Die
+    Oberfläche reicht ihren Zahlenformatierer samt gewählter Anzeigeeinheit
+    herein; Qt bleibt dort.
+    """
+    from app.core.knowledge import standards
+
+    measure = format_measure or _choice_measure
+    named = _CHOICE_NAMES.get(value)
+    if named is not None:
+        return str(named)
+    try:
+        insert = standards.insert(value)
+    except AppError:
+        pass
+    else:
+        # M4 ist nicht nur eine Buchse, sondern auch Schraube, Mutter und
+        # Gewinde. ``choice_label`` kennt das Feld nicht; eine Buchsenlänge an
+        # **jedem** M4 wäre daher falsch. Nur die kurzen Buchsen haben einen
+        # eigenen Tabellenschlüssel. Dort ersetzt die lesbare Länge das
+        # technische S, bei den gemeinsamen Schlüsseln bleibt M4 einfach M4.
+        if insert.size != insert.thread:
+            return f"{insert.thread} · {measure(insert.length, True)}"
+        return value
+    try:
+        bearing = standards.bearing(value)
+    except AppError:
+        pass
+    else:
+        # Die Lagernummer bleibt zum Abgleichen mit der Beschriftung erhalten;
+        # die drei Maße daneben machen sie ohne Tabellenwissen verständlich.
+        inner = measure(bearing.inner, False)
+        outer = measure(bearing.outer, False)
+        return f"{bearing.size} · {inner} × {outer} × {measure(bearing.width, True)}"  # noqa: RUF001
+    try:
+        board = standards.board(value)
+    except AppError:
+        pass
+    else:
+        # **Ohne den Markennamen**, und das ist eine Entscheidung: „SKÅDIS"
+        # gehört einem Möbelhaus, das Rastermaß gehört niemandem. Was der
+        # Kunde erkennen muss, ist die Platte vor ihm, und die erkennt er am
+        # Raster. Wessen sie ist, steht in der Beschreibung des Bausteins.
+        return f"{_('Lochwand')} {measure(board.pitch, True)}"
+    try:
+        tube = standards.tube(value)
+    except AppError:
+        return value
+    if tube.inner > 0.0:
+        return f"{_('Schlauch')} {measure(tube.outer, False)} × {measure(tube.inner, True)}"  # noqa: RUF001
+    return f"{_('Rundkabel')} Ø{measure(tube.outer, True)}"
 
 
 def menu_tree(
@@ -638,12 +942,15 @@ def part_placement_params(spec: OperationSpec) -> frozenset[str]:
     )
 
 
-def documentation(registry: Registry | None = None, category: str = "") -> str:
+def documentation(
+    registry: Registry | None = None, category: str = "", *, technical: bool = True
+) -> str:
     """Der Referenzteil der Dokumentation — erzeugt, nie von Hand geschrieben.
 
     Mit ``category`` nur ein Bereich. Das Handbuchfenster zeigt eine Kategorie
-    je Seite und liest denselben Text, den die Kommandozeile ausgibt: eine
-    zweite Quelle wäre eine, die veraltet.
+    je Seite. ``technical=False`` zeigt Bediennamen und Auswahlbeschriftungen;
+    die Vorgabe erhält die Schlüssel und Verträge für Kommandozeile und API.
+    Beide Fassungen lesen dieselbe Deklaration.
     """
     lines: list[str] = []
     source = registry or REGISTRY
@@ -672,12 +979,14 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                     )
                 )
                 lines.append("")
-                lines.extend(parameter_table(shared))
+                lines.extend(parameter_table(shared, technical=technical))
         for spec in entries:
-            lines.append(f"### {spec.title} (`{spec.name}`)")
+            suffix = f" (`{spec.name}`)" if technical else ""
+            lines.append(f"### {spec.title}{suffix}")
             lines.append("")
             if spec.doc:
-                lines.append(str(spec.doc))
+                description = str(spec.doc)
+                lines.append(description if technical else markup.below_heading(description, 3))
                 lines.append("")
             # **Wo man sie findet.** Von 142 Einträgen nannten zwei ihren Ort in
             # der Oberfläche (konzepte/nachweise-handbuch-2026-09/findbarkeit.md,
@@ -695,21 +1004,23 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 # dasselbe, und ein zweites Vorwort daneben wäre eines zu viel.
                 lines.append(caveat_line(spec, markup=True))
                 lines.append("")
-            facts = [
-                str(
-                    _(
-                        "Objekte: {consumes} → {produces}",
-                        consumes=(
-                            f"≥ {spec.minimum_inputs}"
-                            if spec.consumes == VARIABLE
-                            else spec.consumes
-                        ),
-                        produces="…" if spec.produces == VARIABLE else spec.produces,
-                    )
-                ),
-                str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),
-                str(_("ohne Zufall") if spec.deterministic else _("mit Startwert")),
-            ]
+            facts = []
+            if technical:
+                facts = [
+                    str(
+                        _(
+                            "Objekte: {consumes} → {produces}",
+                            consumes=(
+                                f"≥ {spec.minimum_inputs}"
+                                if spec.consumes == VARIABLE
+                                else spec.consumes
+                            ),
+                            produces="…" if spec.produces == VARIABLE else spec.produces,
+                        )
+                    ),
+                    str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),
+                    str(_("ohne Zufall") if spec.deterministic else _("mit Startwert")),
+                ]
             if spec.shortcut:
                 facts.append(f"{_('Kürzel')} `{spec.shortcut}`")
             if spec.applies_to:
@@ -718,8 +1029,9 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 # Register, keine aus einem Handbuch.
                 named = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to)
                 facts.append(str(_("Gilt für: {kinds}", kinds=named)))
-            lines.append(" · ".join(facts))
-            lines.append("")
+            if facts:
+                lines.append(" · ".join(facts))
+                lines.append("")
             parameters = spec.params.spec()
             if name == "parts":
                 # Die geteilten Ortsangaben stehen einmal am Kategoriekopf.
@@ -727,7 +1039,7 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                     entry for entry in parameters if entry.name not in part_placement_params(spec)
                 )
             if parameters:
-                lines.extend(parameter_table(parameters))
+                lines.extend(parameter_table(parameters, technical=technical))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -747,10 +1059,10 @@ def _meaning_of(entry: ParamSpec, schema: tuple[ParamSpec, ...]) -> str:
     return f"{meaning} {condition}".strip()
 
 
-def _span_of(entry: ParamSpec) -> str:
+def _span_of(entry: ParamSpec, *, technical: bool = True) -> str:
     """Der zulässige Bereich als Text, oder nichts."""
     if entry.choices:
-        return ", ".join(entry.choices)
+        return ", ".join(entry.choices if technical else map(choice_label, entry.choices))
     if entry.minimum is None and entry.maximum is None:
         return ""
     low = "" if entry.minimum is None else format_decimal(entry.minimum)
@@ -758,7 +1070,7 @@ def _span_of(entry: ParamSpec) -> str:
     return f"{low} … {high}"
 
 
-def _default_of(entry: ParamSpec) -> str:
+def _default_of(entry: ParamSpec, *, technical: bool = True) -> str:
     """Die Vorgabe, wie ein Mensch sie liest.
 
     ``True`` und ``False`` standen so in der Tabelle — Pythons Schreibweise in
@@ -777,31 +1089,58 @@ def _default_of(entry: ParamSpec) -> str:
         return str(_("an") if entry.default else _("aus"))
     if entry.default is None:
         return ""
+    if not technical and isinstance(entry.default, (tuple, list)) and not entry.default:
+        return ""
     if isinstance(entry.default, (int, float)):
         return format_decimal(entry.default)
+    if not technical and entry.choices and entry.default in entry.choices:
+        return choice_label(str(entry.default))
     return f"{entry.default}"
 
 
-def parameter_table(parameters: tuple[ParamSpec, ...]) -> list[str]:
+def parameter_table(parameters: tuple[ParamSpec, ...], *, technical: bool = True) -> list[str]:
     """Die Parametertabelle einer Operation, als Markdown-Zeilen.
 
     **Der Titel steht vorn, der Schlüssel dahinter.** Vorher war es umgekehrt:
     die Spalte „Parameter" trug ``fill_holes``, ``small_components``,
     ``self_intersections`` — die internen englischen Namen, in Monospace, in
     einem deutschen Handbuch —, und was sie bedeuten, stand ganz rechts. Der
-    Schlüssel bleibt stehen: Kommandozeile und Agent brauchen ihn, nur ist er
-    nicht das Erste, was man liest.
+    Schlüssel bleibt in der technischen Ausgabe stehen: Kommandozeile und
+    Agent brauchen ihn. ``technical=False`` zeigt nur den Kundentitel und
+    benennt Vorgaben, Auswahlwerte und Bedingungen wie der Dialog.
 
     **Leere Spalten fallen weg.** Bei der Reparatur waren „Einheit" und
     „Bereich" über die ganze Tabelle leer; eine Spalte, die nichts trägt, ist
     kein Platzhalter für später, sondern eine Frage, die der Leser sich selbst
     stellt.
     """
+    if not technical:
+        # Nur die Textansicht erhält übersetzte Bedingungswerte. Die gemeinsame
+        # Satzbildung verfolgt weiterhin dieselben verschachtelten Bedingungen;
+        # die eigentlichen Schemata behalten ihre gespeicherten Schlüssel.
+        parameters = tuple(
+            replace(
+                entry,
+                depends_on=(
+                    entry.depends_on[0],
+                    tuple(
+                        choice_label(value) if isinstance(value, str) else value
+                        for value in entry.depends_on[1]
+                    ),
+                ),
+            )
+            if entry.depends_on is not None
+            else entry
+            for entry in parameters
+        )
     columns: tuple[tuple[str, Callable[[ParamSpec], str]], ...] = (
-        (str(_("Parameter")), lambda entry: f"{entry.title} `{entry.name}`"),
+        (
+            str(_("Parameter")),
+            lambda entry: f"{entry.title} `{entry.name}`" if technical else str(entry.title),
+        ),
         (str(_("Einheit")), lambda entry: entry.unit or ""),
-        (str(_("Vorgabe")), _default_of),
-        (str(_("Bereich")), _span_of),
+        (str(_("Vorgabe")), lambda entry: _default_of(entry, technical=technical)),
+        (str(_("Bereich")), lambda entry: _span_of(entry, technical=technical)),
         (str(_("Bedeutung")), lambda entry: _meaning_of(entry, parameters)),
     )
     shown = [

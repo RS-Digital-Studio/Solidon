@@ -23,7 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.
 - Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.
 - Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.
-- Cuatro soportes se crean en un paso con caras y aristas reales: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, pestañas, gancho de panel o pinza.
+- Cuatro soportes se crean en un paso con caras y aristas reales: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, agujeros para tornillos, gancho de panel o pinza.
 - Una escena vacía muestra cómo empezar: caja, cilindro, dibujo, bloques o un archivo que arrastre dentro.
 - Los cuerpos nuevos aparecen sobre la cama o sobre la cara plana elegida, ya no donde estaba un cuerpo seleccionado antes, y quedan seleccionados.
 
@@ -32,9 +32,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
 - La boquilla se elige en los ajustes de impresión entre los tamaños que conoce su impresora, y el slicer recibe el perfil que le corresponde.
 - Los ajustes de impresión preguntan en el orden en que una cosa depende de otra: slicer, impresora, boquilla, placa, filamentos y calidad, y después los valores.
-- Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Antes solo se podía en la ventana de Creality Print. Si 7.3 reordena la placa, Solidon lo dice.
+- Ahora puede generar archivos de impresión directamente desde Solidon con Creality Print 7.2 y 7.3.
 - Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
 - Cura lamina ahora con la boquilla que usted eligió, también en impresoras de la lista de Cura, y las impresoras con el origen en el centro de la cama lo conservan.
+- Las impresoras con el origen fuera de la esquina de la cama, como delta, BIBO o Dremel, reciben las piezas donde Solidon las pone. Antes quedaban en el borde o el laminador las reorganizaba.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
 - Si elige brim, skirt o raft en los ajustes de impresión, solo aparecen las medidas de ese tipo de cama, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
@@ -45,6 +46,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
+- Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
 
 ### Taladros, ranuras y división
 
@@ -66,7 +68,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
-- En la ventana, «Fusionar suavemente» calcula ahora tan fino como en la exportación, mientras el cuerpo no sea muy grande.
+- En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
 - El destino de «Alinear a la característica» empieza vacío. Se elige en el campo «Destino», y «Aplicar» espera hasta entonces en vez de poner el cuerpo sin aviso en el lado equivocado.
@@ -86,8 +88,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Manejo y sistema
 
 - Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
+- La exportación, «Laminar» y «Abrir en el slicer …» reciben siempre el cálculo fino, no la vista más gruesa de la ventana. Redondeos y conos llegan al archivo con resolución completa.
 - Una exportación durante un cálculo en curso espera al resultado nuevo. Antes el archivo podía llevar todavía la medida antigua.
-- La barra de parámetros rechaza una medida fuera de su límite y nombra el límite, en vez de dejar la vista vacía.
+- La barra de parámetros rechaza una medida fuera de su límite en vez de dejar la vista vacía.
 - En la barra de parámetros cuenta cada paso de flecha, y el foco se queda en el campo.
 - Si un paso espera una pregunta, «Aplicar» sigue disponible y la pregunta aparece.
 - En el diálogo de una operación las etiquetas forman una columna, los campos tienen el mismo ancho y cada interruptor está antes de lo que activa.
@@ -101,6 +104,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los espacios llegan a todos los campos de texto, también al cuestionario de opinión y al chat, mientras un diálogo muestra su vista previa.
 - Un aviso que se refiere a un paso lo abre para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
+- La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
 
 ## 0.5.1
 

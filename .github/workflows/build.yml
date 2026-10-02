@@ -8,9 +8,9 @@
 # sie nur. Fenster und Renderer laufen je Datei in einem frischen Prozess. Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
 # Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
-# `latest`) löst frei auf und meldet, was eine neue Version bricht — bei
-# Release-Tags und auf Handstart mit `check_latest`, solange das Repository
-# öffentlich ist (siehe unten).
+# `latest`) löst frei auf und meldet, was eine neue Version bricht — auf
+# öffentlichen `v*`-Tag-Pushes und beim ausdrücklichen Handstart mit
+# `check_latest` im öffentlichen Repository (siehe unten).
 #
 # Ein Push prüft nur Ubuntu; die volle Matrix mit Paketen läuft bei Tags und
 # beim Handstart. Signiert wird getrennt davon: Windows lokal über
@@ -1449,8 +1449,15 @@ jobs:
     #
     # Nur Ubuntu: private Minuten sind gezählt, und für diese Frage genügt
     # eine Plattform. Er hängt an keinem anderen Job und blockiert nichts —
-    # er meldet. Beim Handstart wird er ausdrücklich zugeschaltet.
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.check_latest == true)
+    # er meldet. Tag-Pushes gelten nur für öffentliche v*-Tags; Handstarts
+    # brauchen ein öffentliches Repository und das gesetzte check_latest.
+    if: >-
+      github.event.repository.private == false && (
+      (github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' &&
+      inputs.check_latest == true)
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:

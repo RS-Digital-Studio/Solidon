@@ -145,7 +145,8 @@ def test_f1_in_the_local_editor_opens_the_manual_at_its_operation(local_window, 
     # Scharf: Bekommt *Bohrung ändern* eine Anleitung, wird ``spot`` leer, und
     # die Markierung wäre ohne dieses Assert nicht mehr geprüft.
     assert spot
-    assert opened.text.textCursor().selectedText() == spot
+    assert opened.text.textCursor().selectedText() == str(REGISTRY.get("resize_hole").title)
+    assert spot[1:] in opened.text.textCursor().charFormat().anchorNames()
     dialog.reject()
 
 

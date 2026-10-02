@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QLabel
 
 from app.core.ingest import plan as ingest_plan
 from app.core.registry.params import body_keys
@@ -59,6 +59,19 @@ def test_every_body_of_the_file_is_listed_and_chosen(qt_app: QApplication) -> No
         # Regel 18: Die Farbe steht auch als Wort im Tooltip, nicht nur im Farbfeld.
         assert dialog.bodies.item(0).toolTip()
         _until(qt_app, lambda: dialog.preview.renderer().isValid())
+    finally:
+        _dispose(dialog, qt_app)
+
+
+def test_both_columns_use_the_same_heading_level(qt_app: QApplication) -> None:
+    """Körperliste und Baugruppenbild beginnen auf derselben visuellen Stufe."""
+    chosen = ingest_plan.import_plan("src_1", "instances.step", _payload("instances"))
+    dialog = StepBodiesDialog(_payload("instances"), "instances", choices=chosen.choices)
+    try:
+        expected = {"Körper", "Lage in der Baugruppe"}
+        headings = [label for label in dialog.findChildren(QLabel) if label.text() in expected]
+        assert {label.text() for label in headings} == expected
+        assert all(label.property("level") == "section" for label in headings)
     finally:
         _dispose(dialog, qt_app)
 

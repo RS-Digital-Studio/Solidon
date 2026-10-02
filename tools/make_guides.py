@@ -77,7 +77,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QToolTip
 from app.branding import APP_NAME, APP_VERSION
 from app.core import figures, guides
 from app.core.bootstrap import load_operations
-from app.i18n import install_catalog, set_language
+from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import read_catalog
 from tools import make_figures as shots
 from tools import make_web_images as web
@@ -117,17 +117,13 @@ OPEN_MODEL: Final = MESHES / "partially_open.stl"
 #: Zwei Teile, die ineinanderstecken: Der Bericht bietet an, sie aufzulösen.
 CROSSING_MODEL: Final = MESHES / "broken_selfint.stl"
 
-#: Die zwei Spulen von *Zweifarbig drucken*, je Sprache benannt: Einen Namen,
-#: den die Aufnahme selbst anlegt, übersetzt die Anwendung nicht.
-SPOOLS: Final[dict[str, tuple[str, str]]] = {
-    "de": ("PLA weiß", "PLA rot"),
-    "en": ("PLA white", "PLA red"),
-    "es": ("PLA blanco", "PLA rojo"),
-    "fr": ("PLA blanc", "PLA rouge"),
-    "it": ("PLA bianco", "PLA rosso"),
-    "pt": ("PLA branco", "PLA vermelho"),
-}
 SPOOL_COLOURS: Final = ("#f2f2ee", "#c8372d")
+
+
+def _spool_names() -> tuple[str, str]:
+    """Die Namen der Aufnahme aus dem aktiven Katalog bilden."""
+    return f"PLA {tr('Weiß').lower()}", f"PLA {tr('Rot').lower()}"
+
 
 #: Wie breit ein Schrittbild höchstens gespeichert wird. Die Bilder reisen mit
 #: der Anwendung, sechs Sprachen lang; das Handbuchfenster zeigt sie ohnehin
@@ -1489,10 +1485,9 @@ def story_two_colours(run: GuideRun) -> None:
     """Körper weiß, Oberseite rot: *Filament auf eine Fläche* mit einer zweiten Spule."""
     from app.core.knowledge import filaments
     from app.core.scene import OperationDraft
-    from app.i18n import get_language
     from app.ui import guide_targets
 
-    names = SPOOLS.get(get_language(), SPOOLS["en"])
+    names = _spool_names()
     for name, colour in zip(names, SPOOL_COLOURS, strict=True):
         filaments.save(filaments.CatalogueFilament(name=name, colour=colour, material_type="PLA"))
     _import(run, PLATE_MODEL)

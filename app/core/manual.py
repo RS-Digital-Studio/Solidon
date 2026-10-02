@@ -118,6 +118,27 @@ def reference_key(category: str) -> str:
     return f"{REFERENCE_PAGE_PREFIX}{category}"
 
 
+def operation_anchor(operation: str) -> str:
+    """Die unsichtbare, sprachunabhängige Sprungmarke eines Referenzeintrags."""
+    return f"operation-{operation}"
+
+
+def reference_anchors(key: str, registry: Registry | None = None) -> tuple[tuple[str, str], ...]:
+    """Sprungmarke und Kundentitel in derselben Reihenfolge wie die Referenz.
+
+    Gleiche Titel bleiben verschiedene Ziele. Die Oberfläche setzt die
+    Anker nach ihrem sicheren Markdownimport, die Website als HTML-Kennung;
+    im Lesetext erscheint keiner davon.
+    """
+    if not key.startswith(REFERENCE_PAGE_PREFIX):
+        return ()
+    category = key.removeprefix(REFERENCE_PAGE_PREFIX)
+    return tuple(
+        (operation_anchor(spec.name), str(spec.title))
+        for spec in (registry or REGISTRY).by_category().get(category, ())
+    )
+
+
 _SPACEMOUSE_LINUX = _(
     "**Linux (USB oder USB-Empfänger, mit systemd-logind)**\n\n"
     "Ein gefundenes Gerät kann noch für Ihren Benutzer gesperrt sein. Mit "
@@ -180,19 +201,21 @@ def spacemouse_access_help(platform: str, device: tuple[int, int] | None = None)
 def _where_to_start_page() -> Page:
     """Die erste Seite: welche Anleitung zu welchem Vorhaben führt.
 
-    Die zwei Listen entstehen aus :data:`guides.GUIDES` und nicht aus einem
-    Satz, der sie aufzählt: Eine neue Anleitung steht ohne Nachtrag hier, und
-    jeder Verweis heißt in jeder Sprache wie die Seite, auf die er führt. Was
-    die frühere erste Seite als einzige wusste, steht kurz darunter, mit ihren
-    vier Bildschirmfotos: die Fragen beim ersten Start, welche Dateien Solidon
-    liest, das Auswählen in zwei Stufen, der Dialog einer Handlung und der
-    Prüfbericht. ``main-window`` ist zugleich das Vorschaubild der Website
+    Die zwei Listen entstehen aus :data:`OUTLINE`; ihre Einträge werden in
+    :data:`guides.GUIDES` aufgelöst. Eine neue Anleitung steht ohne Nachtrag
+    hier, wenn sie in der Gliederung steht, und jeder Verweis heißt in jeder
+    Sprache wie die Seite, auf die er führt. Was die frühere erste Seite als
+    einzige wusste, steht kurz darunter, mit ihren vier Bildschirmfotos: die
+    Fragen beim ersten Start, welche Dateien Solidon liest, das Auswählen in
+    zwei Stufen, der Dialog einer Handlung und der Prüfbericht.
+    ``main-window`` ist zugleich das Vorschaubild der Website
     (``og:image`` in ``tools/make_manual.py``).
     """
 
-    def listed(part: guides.GuidePart) -> str:
+    def listed(part: Part) -> str:
         # Der Doppelpunkt gehört zum übersetzten Satz: Französisch setzt davor
         # ein Leerzeichen.
+        guide_by_key = {guide.key: guide for guide in guides.GUIDES}
         return "\n".join(
             "* "
             + str(
@@ -202,8 +225,8 @@ def _where_to_start_page() -> Page:
                     summary=guide.summary,
                 )
             )
-            for guide in guides.GUIDES
-            if guide.part == part
+            for key in dict(OUTLINE)[part]
+            if (guide := guide_by_key.get(key)) is not None
         )
 
     blocks = [
@@ -227,7 +250,10 @@ def _where_to_start_page() -> Page:
                 "findet Ihren schnell. Steht er nicht darin, nehmen Sie einen ähnlichen; "
                 "die Maße lassen sich später ändern. *Später einstellen* geht auch. Alles "
                 "ändern Sie jederzeit in den Einstellungen. Filamente aus Ihrem Slicer "
-                "übernehmen Sie im Filamentlager als eigene Spulen."
+                "übernehmen Sie im Filamentlager als eigene Spulen. Solange die Szene leer "
+                "ist, zeigt sie die Einstiege: Quader, Zylinder, *Zeichnen*, *Bausteine* "
+                "und mit KI-Zugang *Im Chat beschreiben*; eine Datei ziehen Sie einfach "
+                "hinein."
             )
         ),
         "![](figure:start-screen)",
@@ -1273,13 +1299,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Blau, was dazukäme, und in Orange, was verschwände. *Übernehmen* trägt ihn "
             "als eine Transaktion in den Verlauf ein, ein Strg+Z nimmt ihn ganz zurück, "
             "*Verwerfen* lässt nichts zurück.\n\n"
-            "**Drei Regeln hat er mitbekommen:** Bausteine vor selbst gebauten Formen, "
-            "benannte Parameter vor eingetippten Zahlen, fragen statt raten. Hat Ihre "
-            "Anfrage zwei Lesarten, kommt eine Rückfrage.\n\n"
             "**Er sieht einen Steckbrief:** Maße, erkannte Merkmale, Projektparameter, "
-            "Auswahl und Prüfbericht. Nach einem Strg+Z gilt sein Beitrag als verworfen. "
-            "Am Schritt im Verlauf steht, welches Modell ihn vorgeschlagen hat, mit "
-            "welcher Version seiner Anweisungen und der Regelsammlung.\n\n"
+            "Auswahl und Prüfbericht. Nach einem Strg+Z gilt sein Beitrag als verworfen.\n\n"
             "**Er braucht ein Sprachmodell**, einen eigenen Schlüssel (*Bearbeiten → Chat "
             "einrichten*, abgelegt im Schlüsselbund des Systems, nie in der Projektdatei) "
             "oder ein lokales Ollama ([Zusätzliche Programme einrichten](manual:extras)). "
@@ -1294,9 +1315,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Sie beschreiben ein Teil oder geben ein Bild, und ein Generator macht daraus "
             "ein Netz: **Datei → Modell erzeugen.**\n\n"
             "Gerechnet wird in einem lokalen **ComfyUI** auf Port 8188; läuft keines, "
-            "bleibt der Eintrag ausgegraut und sagt warum. Welche Knoten benutzt werden, "
-            "steht in zwei Dateien neben dem Programm, ein anderer Generator braucht also "
-            "eine andere Datei, keinen anderen Quelltext. Die Einrichtung steht in "
+            "bleibt der Eintrag ausgegraut und sagt warum. Die Einrichtung steht in "
             "[Zusätzliche Programme einrichten](manual:extras).\n\n"
             "**Was zurückkommt, ist eine Oberfläche, keine Konstruktion**, ohne Bohrungen "
             "und Passungen und oft nicht geschlossen. Bohrungen und Passungen entstehen "
@@ -1372,19 +1391,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "mit rund 6,9 GB. Ein abgebrochener Lauf setzt fort, wo er stand. **Danach "
             "ComfyUI einmal neu starten**, sonst bleibt *Modell erzeugen* ausgegraut. "
             "Während einer Erzeugung zeigt Solidon die verstrichene Zeit; bricht etwas "
-            "ab, steht der Satz von ComfyUI im Dialog.\n\n"
-            "**Lokale KI-Arbeit läuft nacheinander.** Ollama und ComfyUI teilen sich oft "
-            "eine Grafikkarte, also startet Solidon nie beide zugleich. Nach einem "
-            "Vorschlag bleibt das Ollama-Modell drei Minuten auf der Grafikkarte, damit "
-            "die nächste Frage nicht wartet; braucht eine Erzeugung die Karte, gibt "
-            "Solidon es vorher frei. Nach jeder Erzeugung, auch nach Fehler oder Abbruch, "
-            "gibt ComfyUI Modell und Zwischenspeicher frei. Ein Abbruch entfernt nur den "
-            "Auftrag, den Solidon selbst gestartet hat; Dienste auf einem anderen Rechner "
-            "bleiben unberührt.\n\n"
-            "## Was mitkommt\n\n"
-            "OpenCASCADE hält Flächen und Kanten einzeln bearbeitbar, V-HACD zeigt, wo "
-            "ein Körper von selbst auseinanderfällt. Beide liegen dem Installationspaket "
-            "bei."
+            "ab, steht der Satz von ComfyUI im Dialog."
         ),
     ),
     Page(
@@ -1469,11 +1476,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Was hereinkommt, ist eine Transaktion wie jede andere:** Der Verlauf zeigt "
             "sie mit dem Vermerk, dass sie von außen kam, und Strg+Z nimmt sie zurück. "
             "Nichts, was wie ein Dateipfad aussieht, geht durch die Leitung, denn ein "
-            "fremdes Programm soll nicht bestimmen, was hier gelesen wird.\n\n"
-            "**Welche Werkzeuge es gibt**, listet [Die Werkzeuge der "
-            "Fernsteuerung](manual:remote-tools): jede Operation mit denselben Parametern "
-            "und Grenzen wie im Dialog, dazu die Werkzeuge zum Lesen und Zurücknehmen und "
-            "was gesperrt ist. Die Liste entsteht aus dem Programm selbst."
+            "fremdes Programm soll nicht bestimmen, was hier gelesen wird."
         ),
     ),
     Page(
@@ -2192,16 +2195,11 @@ def models_text() -> str:
 
 
 def knowledge_pages() -> tuple[Page, ...]:
-    """Die zwei Seiten, die zeigen, *wonach* gerechnet wird.
+    """Bedienrelevantes Nachschlagen: Modelle wählen, Druckwerte und Meldungen verstehen.
 
-    Bis hierher stand im Handbuch, was die Anwendung tut, und in den Tabellen
-    unter ``knowledge/data/``, mit welchen Werten sie es tut — sichtbar war nur
-    das Ergebnis. Wer wissen wollte, ab wann eine Wand als zu dünn gilt oder
-    welches Spiel PETG bekommt, fand es nirgends.
-
-    Erzeugt und nicht geschrieben, aus demselben Grund wie die Referenz: Eine
-    zweite Liste veraltet. Ändert jemand eine Toleranz, ändert sich diese Seite
-    mit — sonst stünde hier eine Zahl, nach der niemand mehr rechnet.
+    Regeln und Werkzeugverträge für den Agenten gehören nicht zur Bedienung.
+    Ihre Textausgaben bleiben separat abrufbar, erscheinen aber nicht in den
+    Seiten, der Suche oder den Kundenausgaben des Handbuchs.
     """
 
     def titled(title: object, body: str) -> str:
@@ -2210,9 +2208,7 @@ def knowledge_pages() -> tuple[Page, ...]:
         # springt hin, statt ins Leere zu zeigen.
         return f"## {title}\n\n{body}"
 
-    rules_title = _("Wonach Solidon urteilt")
     profiles_title = _("Material, Drucker, Normteile")
-    remote_title = _("Die Werkzeuge der Fernsteuerung")
     messages_title = _("Meldungen im Wortlaut")
     models_title = _("Welche Modelle Solidon benutzt")
     return (
@@ -2223,21 +2219,9 @@ def knowledge_pages() -> tuple[Page, ...]:
             generated=True,
         ),
         Page(
-            key="rules",
-            title=rules_title,
-            body=titled(rules_title, rules_text()),
-            generated=True,
-        ),
-        Page(
             key="profiles",
             title=profiles_title,
             body=titled(profiles_title, profiles_text()),
-            generated=True,
-        ),
-        Page(
-            key="remote-tools",
-            title=remote_title,
-            body=titled(remote_title, remote_text()),
             generated=True,
         ),
         Page(
@@ -2319,6 +2303,14 @@ OUTLINE: Final[tuple[tuple[Part, tuple[str, ...]], ...]] = (
 )
 
 
+def _part_for_page(key: str) -> Part:
+    """Liefert den Handbuchteil aus der einen Gliederung."""
+    for part, keys in OUTLINE:
+        if key in keys:
+            return part
+    raise KeyError(f"Die Handbuchgliederung kennt die Seite {key!r} nicht.")
+
+
 def guide_page(guide: guides.Guide) -> Page:
     """Eine Bildanleitung als Handbuchseite: je Schritt ein Satz und sein Bild.
 
@@ -2346,7 +2338,7 @@ def guide_page(guide: guides.Guide) -> Page:
         title=guide.title,
         summary=guide.summary,
         body="\n\n".join(blocks),
-        part=guide.part,
+        part=_part_for_page(guide.key),
     )
 
 
@@ -2357,7 +2349,7 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         Page(
             key=reference_key(category),
             title=CATEGORIES[category],
-            body=documentation(source, category=category),
+            body=documentation(source, category=category, technical=False),
             generated=True,
         )
         for category in source.by_category()
@@ -2404,16 +2396,16 @@ def help_for(operation: str, registry: Registry | None = None) -> tuple[str, str
 
     Lehrt eine Anleitung die Operation (``Guide.teaches``), ist es ihre Seite,
     von oben. Sonst ist es der Eintrag in der Referenz ihrer Kategorie, an
-    seiner Überschrift, so wie das Handbuchfenster sie zeigt: Titel und
-    Registername, ohne die Auszeichnung des Namens. F1 im Operationsdialog
-    fragt hier und nicht in der Oberfläche, damit die Antwort ohne Fenster
-    prüfbar ist.
+    seiner unsichtbaren Sprungmarke. Gleich benannte Operationen haben damit
+    eigene Ziele, während das Handbuch nur den Kundentitel zeigt. F1 im
+    Operationsdialog fragt hier und nicht in der Oberfläche, damit die
+    Antwort ohne Fenster prüfbar ist.
     """
     for guide in guides.GUIDES:
         if operation in guide.teaches:
             return guide.key, ""
     spec = (registry or REGISTRY).get(operation)
-    return reference_key(spec.category), f"{spec.title} ({spec.name})"
+    return reference_key(spec.category), f"#{operation_anchor(spec.name)}"
 
 
 def titled(page: Page, text: str) -> str:

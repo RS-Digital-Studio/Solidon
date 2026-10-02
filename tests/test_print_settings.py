@@ -61,9 +61,6 @@ def _layers(
     )
 
 
-# --- die drei Ebenen (§29) ----------------------------------------------------------
-
-
 def _elegoo_nozzle_profile(root: Path, nozzle: float) -> slicer_profiles.SlicerProfile:
     """Eine installierte Elegoo-Maschine mit Herstellerbeleg aus ihrem Pfad."""
     name = f"Elegoo Centauri Carbon 2 {nozzle:.1f} nozzle"
@@ -88,6 +85,9 @@ def _elegoo_nozzle_profile(root: Path, nozzle: float) -> slicer_profiles.SlicerP
     profile = slicer_profiles._read(path, "machine", False)
     assert profile is not None
     return profile
+
+
+# --- die drei Ebenen (§29) ----------------------------------------------------------
 
 
 def test_the_stage_names_speak_the_language_of_the_window() -> None:
@@ -553,7 +553,7 @@ CALM_WALLS: Final = {
 
 @pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
 def test_a_slender_part_on_a_small_foot_is_slowed_down_even_under_an_auto_brim(
-    flavour: str,
+    flavour: slicer_keys.SlicerFlavour,
 ) -> None:
     """Roberts Fahnenstangen (29.09.2026): Ø 7,7 × 122 mm auf 46,5 mm². Elegoos
     Auto-Brim lag fest, die Stangen rissen bei 200 mm/s und 5000 bis
@@ -6411,6 +6411,36 @@ def test_prusa_and_cura_get_the_bed_of_the_machine_not_of_the_document(tmp_path:
     assert cura["machine_center_is_zero"] == "false"
     assert cura["z_seam_x"] == f"{width / 2.0:g}", "hinten in der Mitte, in Bettkoordinaten"
     assert cura["z_seam_y"] == f"{depth:g}"
+    assert "mesh_position_x" not in cura and "mesh_position_y" not in cura
+
+
+def test_prusa_and_cura_get_a_bed_around_the_machines_own_origin() -> None:
+    """RM-424: Ohne Druckerprofil des Bündels beschreibt Solidon die Maschine
+    selbst — und schrieb jedem Drucker ein Bett ab der Ecke, auch dem BIBO
+    (``bed_shape = -107x-93,…``) oder einem Delta. Die Teile kommen um dessen
+    Nullpunkt (``build_area.machine_shift``), also muss die Bettform es auch."""
+    base = profiles.make_profile("prusa-mk4s", "pla")
+    bibo = replace(base.printer, build_volume=(214.0, 186.0, 160.0), bed_origin=(0.0, 0.0))
+    centred = replace(base, printer=bibo)
+
+    prusa = handover._machine_keys(centred, "prusa")
+    assert prusa["bed_shape"] == "-107x-93,107x-93,107x93,-107x93"
+    cura = handover._machine_keys(centred, "cura")
+    assert cura["machine_center_is_zero"] == "true"
+    assert (cura["z_seam_x"], cura["z_seam_y"]) == ("0", "93"), "hinten in der Mitte"
+    assert "mesh_position_x" not in cura
+
+    # Der Dremel 3D45: weder Ecke noch Mitte. Cura kennt dafür keinen
+    # Schalter; ``mesh_position`` verschiebt jedes Netz um den Rest — von
+    # CuraEngines halbem Bett (112,5 / 77,5) zurück auf (-15 / 0).
+    dremel = replace(base.printer, build_volume=(225.0, 155.0, 170.0), bed_origin=(15.0, 0.0))
+    offset = replace(base, printer=dremel)
+    prusa = handover._machine_keys(offset, "prusa")
+    assert prusa["bed_shape"] == "-127.5x-77.5,97.5x-77.5,97.5x77.5,-127.5x77.5"
+    cura = handover._machine_keys(offset, "cura")
+    assert cura["machine_center_is_zero"] == "false"
+    assert (cura["mesh_position_x"], cura["mesh_position_y"]) == ("-127.5", "-77.5")
+    assert (cura["z_seam_x"], cura["z_seam_y"]) == ("-15", "77.5")
 
 
 def test_slot_advice_uses_inherited_values_and_the_adopted_group_reaches_both_outputs(
@@ -7066,3 +7096,49 @@ def test_only_the_measures_of_the_chosen_bed_type_are_active(kind: str, active: 
     assert set(print_settings.ADHESION_DETAILS) - inactive == active
     assert not inactive & set(print_settings.SUPPORT_DETAILS), "Stützen sind an"
     assert set(print_settings.SUPPORT_DETAILS) <= print_settings.inactive_paths("none", kind)
+
+
+@pytest.mark.parametrize(
+    ("material_id", "flavour", "effective_kind", "active"),
+    [
+        ("pla", "orca", "auto", {"adhesion.brim_width"}),
+        ("petg", "orca", "auto", {"adhesion.brim_width"}),
+        ("pla", "prusa", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("petg", "prusa", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("pla", "cura", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("petg", "cura", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("pla", "other", "auto", {"adhesion.brim_width"}),
+    ],
+)
+def test_auto_adhesion_uses_the_slicer_effective_type_for_active_measures(
+    material_id: str,
+    flavour: slicer_keys.SlicerFlavour,
+    effective_kind: str,
+    active: set[str],
+) -> None:
+    """RM-341: Auto-Brim und Materialrückfall zeigen nur wirksame Maße."""
+    profile = profiles.make_profile("centauri-carbon-2", material_id)
+    automatic = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+
+    effective = handover.effective_adhesion(automatic, profile, flavour)
+    inactive = print_settings.inactive_paths("auto", effective.adhesion.kind)
+
+    assert effective.adhesion.kind == effective_kind
+    assert set(print_settings.ADHESION_DETAILS) - inactive == active
+
+
+@pytest.mark.parametrize(("flavour", "key"), [("prusa", "skirts"), ("cura", "skirt_line_count")])
+def test_auto_adhesion_preserves_an_explicit_zero_measure(
+    flavour: slicer_keys.SlicerFlavour, key: str
+) -> None:
+    """RM-341: Ein ausdrücklich gewählter Nullwert gilt auch bei Auto-Rückfall."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    automatic = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    chosen = print_settings.with_choice(automatic, "adhesion.skirt_loops", 0)
+
+    effective = handover.effective_adhesion(chosen, profile, flavour)
+    values = handover.values_for(chosen, profile, flavour)
+
+    assert effective.adhesion.kind == "skirt"
+    assert effective.adhesion.skirt_loops == 0
+    assert values[key] == "0"

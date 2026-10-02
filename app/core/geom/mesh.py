@@ -924,7 +924,9 @@ def _carry_face_measures(
         into[name] = values
 
 
-def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
+def face_components(
+    mesh: trimesh.Trimesh, *, cancelled: CancelToken | None = None
+) -> list[np.ndarray]:
     """Zusammenhängende Komponenten als Dreiecksindizes.
 
     Mit Absicht über die Flächen-Nachbarschaft statt ``Trimesh.split``: das
@@ -965,6 +967,8 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     Netzes und verfallen mit seiner Geometrie; sie sind schreibgeschützt,
     die Liste darum ist je Aufruf neu.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     count = len(mesh.faces)
     if count == 0:
         return []
@@ -980,12 +984,16 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
 
     edges = np.asarray(_adjacency_by_place(mesh), dtype=np.int64).reshape(-1, 2)
     labels = kernel_process.run(
-        "component_labels", {"edges": edges}, {"count": count}, weight=count
+        "component_labels", {"edges": edges}, {"count": count}, weight=count, cancelled=cancelled
     )[0]["labels"]
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     pieces = tuple(
         np.asarray(piece, dtype=np.int64) for piece in trimesh.grouping.group(labels, min_len=1)
     )
     for piece in pieces:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         piece.flags.writeable = False
     if cache is not None:
         cache[_COMPONENTS_KEY] = pieces

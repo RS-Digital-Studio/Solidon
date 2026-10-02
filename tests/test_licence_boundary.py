@@ -623,27 +623,21 @@ def test_a_refused_import_leaves_nothing_behind(
 
 
 def test_an_image_needs_the_same_permission_as_everything_else(
-    monkeypatch: pytest.MonkeyPatch, qt_app: object, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Auch ohne Operation ist ein eingebettetes Bild eine Änderung (§2 C).
+    """Auch eine Bildquelle ändert das Dokument (§2 C).
 
-    ``import_image`` legt eine Quelle ins Dokument und fragte niemanden.
-    Erreichbar war der Weg praktisch nur aus einem Operationsdialog, und die
-    sind gesperrt — aber das ist ein Zufall der Oberfläche und keine Grenze.
-    Wer sich darauf verlässt, hat eine Zusage, die beim nächsten Aufrufer still
-    verschwindet; `kern.md` verlangt deshalb, dass jede schreibende Stelle den
-    Zustand selbst holt und selbst wirft.
+    Der Payload-Einstieg prüft die Freischaltung selbst; jeder schreibende Weg
+    holt den Zustand an seiner Grenze und wirft dort.
     """
     from app.core.errors import LicenceRequired
     from app.ui.session import Session
 
-    bild = tmp_path / "relief.png"
-    bild.write_bytes(bytes([137]) + b"PNG" + b"0" * 64)
     session = Session()
     set_test_license(monkeypatch, active=False)
 
     with pytest.raises(LicenceRequired):
-        session.import_image(bild)
+        session.import_image_payload("relief.png", bytes([137]) + b"PNG" + b"0" * 64)
 
     assert not session.project.document.sources, "abgelehnt heißt: nichts geschrieben"
 

@@ -25,7 +25,7 @@ Anlässe dieser Karte: `konzepte/begruendungen/karte-website.md`.
 Von Hand: `index.html`, `funktionen.html`, `ki-modelle.html`,
 `security.html` (je Sprache), `offline-aktivierung.html` und
 `activation.js` (ausgeliefert von `tools/deploy_activation_server.py`),
-`style.css`, `site.js`, `.htaccess`, `api/`, `fonts/`, die Datei zur
+`style.css`, `site.js`, `.htaccess`, `api/`, `fonts/`, `release-dates.json`, die Datei zur
 Bestätigung bei der Suchmaschine, die Rechtstext-**Quellen** im
 Wurzelverzeichnis (`EULA.md`, `AGB.md`, `WIDERRUF.md`, `DATENSCHUTZ.md`), die
 Schaustücke in `bilder/`, die gezeichnete `bilder/fernsteuerung-mcp.svg`
@@ -67,8 +67,26 @@ Impressum und Datenschutz) aus den Katalogen unter `app/i18n/locales/` —
 nichts davon wird in `make_manual.py` je Sprache abgeschrieben. Eine weitere
 vollständige Katalogdatei erzeugt so ihre vollständige Handbuchseite.
 
+Das Handbuchregister bleibt am Desktop als eigene Scrollspalte sichtbar;
+auf schmalen Schirmen öffnet ein fest erreichbares `details` denselben Inhalt.
+`site.js` markiert die Lesestelle und gibt nach der mobilen Kapitelwahl den
+Lesebereich frei. Reine Layoutkorrekturen laufen über
+`tools/make_manual.py --layout-only`: Die veröffentlichten Kapiteltexte,
+Abbildungen und PDFs bleiben dabei erhalten. Danach die Inhaltsstempel erneuern.
+Inhaltliche Handbuchkorrekturen erzeugt `--web-only` ohne neue Bildaufnahmen
+oder PDFs. Die Kundenreferenz nennt Bedienorte, Feldtitel und Auswahltexte;
+interne Operationen stehen ausschließlich als `data-operation` am Eintrag für
+den Vollständigkeitsnachweis, nicht sichtbar im Text. KI-Regeln und rohe
+MCP-Werkzeuglisten gehören nicht ins Bedienhandbuch.
+
 ## Was beim Ausliefern schiefgeht
 
+- **`release-dates.json` nennt ausschließlich belegte Veröffentlichungstage**
+  (Kalendertag in Europe/Berlin), weder Versionssprung noch Paketbau oder erste
+  Update-Prüfung. Bei der Veröffentlichung den Tag ergänzen und die Datei mit
+  hochladen. Ohne Beleg bleibt eine Version unbekannt; die Statistik erfindet
+  keinen Starttermin. `website/README.md` beschreibt die Auswertung und die
+  Testkennung des Update-Clients.
 - **`api/support.php` muss nach `httpdocs/api/`.** Fehlt es dort, scheitert
   das Senden aus der Anwendung — erst beim Kunden.
 - **Die Aktivierungs-Endpunkte brauchen ihren Zustand außerhalb von

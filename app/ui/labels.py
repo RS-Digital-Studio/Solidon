@@ -29,15 +29,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import figures
 from app.core.activation import Activation
-from app.core.errors import AppError
 from app.core.geom.mesh import MeshData, face_components
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
-from app.core.scene.placement import SIDE_NAMES
+from app.core.registry.surfaces import _CHOICE_NAMES as _CHOICE_NAMES
+from app.core.registry.surfaces import SIDE_NAMES
+from app.core.registry.surfaces import choice_label as _choice_label
 from app.core.types import (
     Feature,
     FeatureId,
@@ -1091,233 +1091,7 @@ def colour_name(value: str) -> str:
     return value
 
 
-#: Auswahlwerte, die selbst kein Name sind. Der Schlüssel bleibt englisch, weil
-#: er in der Projektdatei steht (§4.2); gezeigt wird der übersetzte Text. Was
-#: schon ein Name ist — „M4", „PLA", „z" — steht hier nicht.
-#: Wie ein Auswahlwert heißt, wenn er nicht schon sein eigener Name ist.
-#:
-#: Die Liste ist flach, und das ist eine Entscheidung: derselbe Schlüssel
-#: bedeutet in dieser Anwendung überall dasselbe. Wo das einmal nicht mehr
-#: stimmt, bekommt der Wert einen eigenen Schlüssel — nicht diese Liste eine
-#: zweite Ebene.
-_CHOICE_NAMES: dict[str, TranslatableText] = {
-    "whole_face": _("Gesamte Fläche"),
-    "keep": _("Nur Bohrungsdurchmesser"),
-    # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
-    # die geht mit (RM-271) — der Name nennt, was mitgehen kann.
-    "follow": _("Senkung, Stufen und Verengung mitnehmen"),
-    "legacy_raw": _("Unveränderte Quellachsen"),
-    "gltf": _("glTF: Y nach oben"),
-    "clearance": _("Spielpassung"),
-    "press": _("Presspassung"),
-    "thread": _("Gewindepassung"),
-    "flush": _("Bündige Passung"),
-    "mouth": _("Mündung"),
-    "centre": _("Mitte"),
-    # Bei Mehrfachauswahl setzt das Fenster ihn auf die Mitte der
-    # gemeinsamen Hülle; im Dialog trägt ihn ein, wer eine bestimmte
-    # Stelle im Sinn hat. „Genannter Punkt" und nicht „Pivot": Das
-    # Fachwort kennt, wer aus dem CAD kommt, und sonst niemand.
-    "point": _("Genannter Punkt"),
-    # Die acht Texturmuster standen als „knurl_diamond" und „voronoi" im
-    # Dialog: englische Schlüssel, unübersetzt, und damit gegen Regel 20 dem
-    # Geist nach. Die Namen kommen aus dem Abbildungskatalog, der dieselben
-    # Kacheln beschriftet — zwei Listen wären eine Frage der Zeit.
-    **figures.TEXTURE_NAMES,
-    # Ein gelesenes Muster, das Solidon nicht selbst zeichnet — so steht es
-    # in *Merkmal ändern* vorbelegt, bis der Kunde einen der acht Stile wählt.
-    "other": _("Fremdes Muster"),
-    # Und dieselbe Sorte Fund im selben Dialog eine Zeile tiefer: „Art:
-    # raised", „Auflegen: flat". Über das ganze Register waren es
-    # sechsundzwanzig Werte; ``tests/test_translations.py`` hält sie jetzt
-    # zusammen.
-    # Die Symmetrieebenen des Formens. „xz" ist für den Kern der richtige
-    # Schlüssel und für den Dialog kein Wort — „ohne" und „X- und Z-Ebene"
-    # sagen dasselbe in lesbar. Die einzelnen Achsen bleiben, wie sie sind:
-    # ein „x" ist selbst schon der Name (siehe ``SELF_NAMING`` in der Suite).
-    "none": _("Ohne"),
-    "xy": _("X- und Y-Ebene"),
-    "xz": _("X- und Z-Ebene"),
-    "yz": _("Y- und Z-Ebene"),
-    "xyz": _("Alle drei Ebenen"),
-    # Die drei Projektionen des Reliefs. „planar" ist kein Wort, das jemand
-    # in einem Auswahlfeld erwartet, und „spherical" schon gar nicht — benannt
-    # wird, was passiert, nicht wie die Rechnung heißt.
-    "planar": _("Von oben"),
-    "cylindrical": _("Um die Achse"),
-    "spherical": _("Über die Kugel"),
-    "face": _("Auf eine Fläche"),
-    "raised": _("Erhaben"),
-    "engraved": _("Vertieft"),
-    # Die Schnitte einer Beschriftungsschrift. Der Schlüssel ist englisch, weil
-    # er in der Projektdatei steht; der Name hier ist es nicht, denn „bold" ist
-    # kein Wort, das eine deutsche Oberfläche stehen lässt.
-    "regular": _("Normal"),
-    "bold": _("Fett"),
-    "italic": _("Kursiv"),
-    "bold_italic": _("Fett kursiv"),
-    "flat": _("Flach"),
-    "cylinder": _("Umlaufend"),
-    "all": _("Alle"),
-    "top": _("Oben"),
-    "bottom": _("Unten"),
-    "side": _("Seitlich"),
-    "horizontal": _("Waagerecht"),
-    "vertical": _("Senkrecht"),
-    "linear": _("Geradlinig"),
-    "circular": _("Kreisförmig"),
-    # Die dritte Art des Merkmalsmusters (P6.7).
-    "mirror": _("Gespiegelt"),
-    # Wohin die Wand beim Aushöhlen wächst (P6.3).
-    "inside": _("Innen"),
-    "outside": _("Außen"),
-    # Was geschieht, wenn der exakte Kern keine Innenwand findet (P6.3).
-    "raster": _("Am Dreiecksmodell"),
-    "unchanged": _("Teil unverändert lassen"),
-    "origin": _("Ursprung"),
-    "bed": _("Druckbett"),
-    "corner": _("Ecke"),
-    # Wie eine Kollision geprüft wurde: genau am Netz oder nur über die
-    # Hüllquader. Der Befund trug „exact" und „box" als rohes Englisch in
-    # den Tooltip — dieselbe Sorte Fund wie bei den Texturmustern.
-    "exact": _("Genau"),
-    "box": _("Über den Hüllquader"),
-    # Woher der obere Umriss eines Übergangs kommt (RM-147 E2). „scaled" und
-    # „drawn" sind Schlüssel des Registers; im Dialog steht, was der Kunde
-    # bekommt — eine gerechnete Kopie oder seine zweite Zeichnung.
-    "scaled": _("Aus dem unteren gerechnet"),
-    "drawn": _("Eigene Zeichnung"),
-    "arc": _("Gleichmäßiger Bogen"),
-    # Die sechste Kantenauswahl (RM-147 E4): nicht nach der Lage, sondern
-    # einzeln — die Antwort auf „diese eine Ecke".
-    "named": _("Einzeln gewählt"),
-    "pin": _("Stift"),
-    "bore": _("Bohrung"),
-    # Der Standfuß kann beides, und beide Werte sind englische Schlüssel: Was
-    # der Kunde wählt, heißt „Fuß" oder „Tasche" — die Tasche nimmt einen
-    # gekauften Gummifuß auf, der Fuß wird gedruckt.
-    "foot": _("Fuß"),
-    "pocket": _("Tasche"),
-    "rectangle": _("Rechteck"),
-    "circle": _("Kreis"),
-    "polygon": _("Vieleck"),
-    "slot": _("Langloch"),
-    "hexagon": _("Sechseck"),
-    "staggered": _("Versetzte Reihen"),
-    # Die zwei Lochbilder. Sie stehen bei den Grundformen, weil sie dasselbe
-    # sind — ein Umriss, den die Operation hochzieht oder ausschneidet —, nur
-    # dass es mehrere davon sind.
-    "bolt_circle": _("Lochkreis"),
-    "hole_grid": _("Lochraster"),
-    # Die vier Verbinder. „round" und „hex" wären als Schlüssel noch zu
-    # erraten, „dovetail" und „snap" nicht — und das sind die beiden, für die
-    # man sich bewusst entscheidet.
-    "round": _("Rund"),
-    "ellipse": _("Oval"),
-    "lower": _("Untere Hälfte"),
-    "upper": _("Obere Hälfte"),
-    "below": _("Kleinere Seite"),
-    "above": _("Größere Seite"),
-    # Woran die Ebene von *Abschneiden* hängt (RM-400). Eigene Schlüssel: „face“
-    # heißt oben schon „Auf eine Fläche“.
-    "along_axis": _("An einer Achse"),
-    "at_face": _("An einer Fläche"),
-    "through_edge": _("Durch eine Kante"),
-    "through_points": _("Durch drei Punkte"),
-    "hex": _("Sechskant"),
-    "dovetail": _("Schwalbenschwanz"),
-    "snap": _("Schnapper"),
-    "honeycomb": _("Wabe"),
-    "cubic": _("Würfelgitter"),
-    "auto": _("Automatisch"),
-    # Die drei Antworten auf die Frage, was mit den übrigen Abschnitten eines
-    # Hohlraums geschieht (``remove_feature.sections``). „Nachfragen“ ist die
-    # Vorgabe: Der Kern entscheidet die Mehrdeutigkeit nicht selbst (Regel 21).
-    "ask": _("Nachfragen"),
-    "ask_side": _("Nachfragen"),
-    # Die Anfangsrichtung eines Kanals und der Drehsinn eines Übergangs, die
-    # beim Schnitt mit Werkzeug zur Wahl stehen (P6.5b/c).
-    "ask_twist": _("Nachfragen"),
-    "counterclockwise": _("Linksherum"),
-    "clockwise": _("Rechtsherum"),
-    "down": _("Nach unten"),
-    "up": _("Nach oben"),
-    "equal_distances": _("Gleiche Breite"),
-    "two_distances": _("Zwei Abstände"),
-    "distance_angle": _("Abstand und Winkel"),
-    # Der Verlauf einer Verrundung (P6.1): ein Radius oder einer, der sich
-    # entlang der Kante ändert.
-    "constant_radius": _("Gleichbleibend"),
-    "variable_radius": _("Mit Verlauf"),
-    # Die Entformungsrichtung der Formschräge (P6.4): in welche Richtung das
-    # Teil schmaler wird, benannt wie die Seiten am Druckbett.
-    "pull_up": _("Nach oben"),
-    "pull_down": _("Nach unten"),
-    "pull_right": _("Nach rechts"),
-    "pull_left": _("Nach links"),
-    "pull_back": _("Nach hinten"),
-    "pull_front": _("Nach vorn"),
-    "neutral_start": _("Am Anfang"),
-    "neutral_end": _("Am Ende"),
-    "neutral_height": _("Auf einer Höhe"),
-    "right_side": SIDE_NAMES[0][0],
-    "left_side": SIDE_NAMES[0][1],
-    "back_side": SIDE_NAMES[1][0],
-    "front_side": SIDE_NAMES[1][1],
-    "top_side": SIDE_NAMES[2][0],
-    "bottom_side": SIDE_NAMES[2][1],
-    "chain": _("Ganzer Hohlraum"),
-    "single": _("Nur das gewählte Merkmal"),
-    # **Die Druckeinstellungen waren die zweite Feldquelle, und sie stand hier
-    # nicht drin.** ``tests/test_translations.py`` prüft Regel 20 für
-    # Auswahlwerte am Operationsregister; die sechsundfünfzig Felder des
-    # Druckdialogs (``print_settings_dialog.FIELDS``) sind eine eigene Liste
-    # und liefen an der Prüfung vorbei. Im deutschen Fenster stand deshalb
-    # „Naht: aligned", „Wandbahnen: arachne", „Druckbetthaftung: brim" — und im
-    # Füllmuster englische Schlüssel **neben** deutschen Namen: grid, lines,
-    # triangles, Wabe, Würfelgitter.
-    #
-    # Wo der englische Begriff der ist, unter dem der Kunde ihn in seinem
-    # Slicer wiederfindet, steht er in Klammern dahinter — dasselbe Muster wie
-    # „Exakter Körper (B-Rep)".
-    "aligned": _("Ausgerichtet"),
-    "nearest": _("Nächstgelegen"),
-    "random": _("Zufällig"),
-    # Nicht „Hinten" und nicht „Rückseite": Das erste ist die **Rückansicht**
-    # im Ansichtsmenü (Strg+2, englisch „Back"), das zweite der Name einer
-    # **Fläche**, deren Normale nach hinten zeigt (``_SIDES``). Ein
-    # Katalogschlüssel trägt genau eine Bedeutung — mit einem für zwei bekäme
-    # eine von ihnen das falsche Wort. (``TranslatableText`` kennt ein
-    # ``context``-Feld, aber der Extraktor liest es nicht; siehe ROADMAP.)
-    "rear": _("Auf der Rückseite"),
-    "classic": _("Klassisch"),
-    # Eigennamen wie „Gyroid": so heißt der Algorithmus, in jedem Slicer und in
-    # jeder Sprache. Dasselbe gilt für die drei Haftarten — im Dialog heißen die
-    # Felder daneben „Skirt-Runden", „Brim-Breite" und „Raft-Schichten", und ein
-    # Wert, der anders heißt als sein Feld, ist eine Fährte ins Nichts.
-    "arachne": _("Arachne"),
-    "gyroid": _("Gyroid"),
-    "grid": _("Gitter"),
-    "lines": _("Linien"),
-    "triangles": _("Dreiecke"),
-    "tree": _("Baum"),
-    "everywhere": _("Überall"),
-    "build_plate": _("Nur vom Bett"),
-    "skirt": _("Skirt"),
-    "brim": _("Brim"),
-    "raft": _("Raft"),
-    # Die zwei Wege von *Dreiecke verringern* (``mesh_ops.DECIMATE_METHODS``).
-    "measured": _("Gemessen"),
-    "fast": _("Schnell"),
-    # Die vier Befestigungen der Halter (``parts/holders.py``, RM-399).
-    "keyhole": _("Schlüsselloch"),
-    "screws": _("Schraublöcher"),
-    "pegboard": _("Lochwand-Haken"),
-    "clamp": _("Klemme"),
-}
-
-
-#: Was ein Auswahlwert **bewirkt** — der Satz zum Namen darüber.
+#: Was ein Auswahlwert **bewirkt** — der Satz zum Namen aus ``surfaces.py``.
 #:
 #: Der Name benennt, der Satz erklärt: „Würfelgitter" sagt einem Kunden nicht,
 #: wann er es wählen soll, und „Arachne" ist ein Eigenname ohne jede Auskunft.
@@ -2407,62 +2181,10 @@ def by_title(entries: Mapping[str, Any]) -> list[tuple[str, Any]]:
 
 
 def choice_label(value: str) -> str:
-    """Ein Auswahlwert, wie der Nutzer ihn lesen kann.
-
-    Normteilschlüssel sind englisch und kurz, weil sie Schlüssel sind — im
-    Dialog standen sie aber als Beschriftung: „cable-5", „ptfe-4x2". Das tippt
-    niemand ab und niemand erkennt es, ohne die Tabelle danebenzulegen.
-
-    Erzeugt aus den Maßen und nicht als zweite Liste gepflegt: sonst hätte ein
-    neues Normteil einen Namen an einer Stelle und keinen an der anderen. Was
-    die Tabelle nicht kennt — „M4", „PLA", „z" —, bleibt, wie es ist; diese
-    Werte sind selbst schon der Name.
-    """
-    from app.core.knowledge import standards
-
-    named = _CHOICE_NAMES.get(value)
-    if named is not None:
-        return str(named)
-    try:
-        insert = standards.insert(value)
-    except AppError:
-        pass
-    else:
-        # M4 ist nicht nur eine Buchse, sondern auch Schraube, Mutter und
-        # Gewinde. ``choice_label`` kennt das Feld nicht; eine Buchsenlänge an
-        # **jedem** M4 wäre daher falsch. Nur die kurzen Buchsen haben einen
-        # eigenen Tabellenschlüssel. Dort ersetzt die lesbare Länge das
-        # technische S, bei den gemeinsamen Schlüsseln bleibt M4 einfach M4.
-        if insert.size != insert.thread:
-            return f"{insert.thread} · {length(insert.length)}"
-        return value
-    try:
-        bearing = standards.bearing(value)
-    except AppError:
-        pass
-    else:
-        # Die Lagernummer bleibt zum Abgleichen mit der Beschriftung erhalten;
-        # die drei Maße daneben machen sie ohne Tabellenwissen verständlich.
-        inner = length(bearing.inner, with_unit=False)
-        outer = length(bearing.outer, with_unit=False)
-        return f"{bearing.size} · {inner} × {outer} × {length(bearing.width)}"
-    try:
-        board = standards.board(value)
-    except AppError:
-        pass
-    else:
-        # **Ohne den Markennamen**, und das ist eine Entscheidung: „SKÅDIS"
-        # gehört einem Möbelhaus, das Rastermaß gehört niemandem. Was der
-        # Kunde erkennen muss, ist die Platte vor ihm, und die erkennt er am
-        # Raster. Wessen sie ist, steht in der Beschreibung des Bausteins.
-        return f"{tr('Lochwand')} {length(board.pitch)}"
-    try:
-        tube = standards.tube(value)
-    except AppError:
-        return value
-    if tube.inner > 0.0:
-        return f"{tr('Schlauch')} {length(tube.outer, with_unit=False)} × {length(tube.inner)}"
-    return f"{tr('Rundkabel')} Ø{length(tube.outer)}"
+    """Die gemeinsame Auswahlbeschriftung mit der Anzeigeeinheit des Fensters."""
+    return _choice_label(
+        value, format_measure=lambda size, with_unit: length(size, with_unit=with_unit)
+    )
 
 
 def choice_note(value: str) -> str | None:
@@ -2508,7 +2230,7 @@ def explain_choices(box: QComboBox) -> None:
 #: Wie eine Fläche heißt, deren Normale in diese Richtung zeigt. Die Reihenfolge
 #: ist die der Achsen; ein Vorzeichen entscheidet zwischen den beiden Namen.
 #:
-#: Die Tabelle steht im Kern (``scene.placement.SIDE_NAMES``), weil *Bohrung
+#: Die Tabelle steht im Kern (``registry.surfaces.SIDE_NAMES``), weil *Bohrung
 #: ändern* mit denselben Namen fragt, welche Seite offen bleibt — dort als
 #: ``_()``-Literale, damit der Extraktor sie sieht.
 _SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = SIDE_NAMES

@@ -764,3 +764,134 @@ def test_a_cutting_part_within_its_face_stays_quiet(profile, box_op: str, top: s
     assert result.complete
     codes = {entry.code for entry in result.scene.report.findings}
     assert "part.over_the_edge" not in codes
+
+
+@pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("cancel_during_rays", [False, True], ids=["complete", "cancelled"])
+def test_a_cutting_parts_rim_check_obeys_its_context_cancellation(
+    profile, monkeypatch, box_op: str, quality: str, cancel_during_rays: bool
+) -> None:
+    """Beide Einfügewege verwerfen einen wirklich unterbrochenen Strahlenstand.
+
+    Der Quader und die Seitenfläche stammen aus dem benachbarten Randfall.
+    Kleine Strahlenblöcke erlauben den gesteuerten Abbruch nach dem ersten
+    echten Rechenschritt; es gibt keine Uhr und kein Leistungsziel.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.geom import mesh as mesh_module
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import CancelSignal
+    from app.core.types import BRepBody, OpContext
+
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op=box_op, params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    host = evaluate(project.document, profile, sources=ProjectSources(project), quality=quality)
+    assert host.complete and len(host.scene.objects) == 1
+    source = host.scene.objects["obj_1"]
+    exact = box_op == "create_brep_box"
+    assert isinstance(source.mesh, BRepBody) is exact
+    assert "face_3" in source.features
+
+    token = CancelSignal()
+    operation = REGISTRY.get("insert_keyhole")
+
+    def unexpected_question(question, choices):
+        pytest.fail(f"Die ausdrücklich gewählte Seitenfläche braucht keine Rückfrage: {question}")
+
+    context = OpContext(
+        scene=host.scene,
+        inputs=[source],
+        params=operation.params(at_feature="face_3"),
+        profile=profile,
+        quality=quality,
+        seed=None,
+        progress=lambda fraction, text: None,
+        ask=unexpected_question,
+        cancelled=token,
+    )
+    real_rim = ops._over_the_rim
+    real_rays = mesh_module.ray_hits_batch
+    real_pairs = mesh_module._ray_triangle_parameters
+    rim_active = False
+    rim_tokens = []
+    ray_records = []
+
+    def observed_rim(body, tool, anchor, direction, **kwargs):
+        nonlocal rim_active
+        assert not rim_active
+        assert isinstance(body, BRepBody) is exact, "Der gewählte Kern erreicht den Randvergleich."
+        rim_tokens.append(kwargs.get("cancelled"))
+        rim_active = True
+        try:
+            result = real_rim(body, tool, anchor, direction, **kwargs)
+            # Ein erst späterer Abbruch im Einfügen oder im Auswerter könnte
+            # den fehlenden Nachtest sonst verdecken. Dieser Wächter wirft
+            # bewusst AssertionError, niemals den erwarteten Abbruch.
+            assert not token.is_cancelled, (
+                "Der Randvergleich gab nach dem Abbruch einen Teilstand als Befund zurück."
+            )
+            return result
+        finally:
+            rim_active = False
+
+    def observed_rays(triangles, origins, directions, **kwargs):
+        if not rim_active:
+            return real_rays(triangles, origins, directions, **kwargs)
+        assert not token.is_cancelled, "Abgebrochen wird erst im echten Strahlenlauf."
+        assert len(origins) > 0 and len(triangles) > 1
+        record = {
+            "rays": len(origins),
+            "triangles": len(triangles),
+            "blocks": 0,
+            "token": kwargs.get("cancelled"),
+            "returned": False,
+        }
+        ray_records.append(record)
+
+        def after_a_real_block(*args, **pair_kwargs):
+            result = real_pairs(*args, **pair_kwargs)
+            record["blocks"] += 1
+            if cancel_during_rays and record["blocks"] == 1:
+                token.cancel()
+            return result
+
+        # Nur die Portionierung wird gesteuert. Umriss, Dreiecke, Strahlen,
+        # Treffertest und Teilstand kommen vollständig aus dem Produktcode.
+        with monkeypatch.context() as limited:
+            limited.setattr(mesh_module, "RAY_CULL_PAIRS", len(triangles) * len(origins))
+            limited.setattr(mesh_module, "RAY_BATCH_PAIRS", 1)
+            limited.setattr(mesh_module, "_ray_triangle_parameters", after_a_real_block)
+            result = real_rays(triangles, origins, directions, **kwargs)
+        record["returned"] = True
+        assert result[0].shape == result[1].shape == (len(origins),)
+        return result
+
+    monkeypatch.setattr(ops, "_over_the_rim", observed_rim)
+    monkeypatch.setattr(mesh_module, "ray_hits_batch", observed_rays)
+
+    if cancel_during_rays:
+        with pytest.raises(OperationCancelled) as caught:
+            operation.fn(context)
+        assert type(caught.value) is OperationCancelled
+    else:
+        result = operation.fn(context)
+        assert len(result.outputs) == 1
+        output = result.outputs[0]
+        assert isinstance(output.mesh, BRepBody) is exact
+        assert output.mesh.volume < source.mesh.volume
+        over = [entry for entry in result.findings if entry.code == "part.over_the_edge"]
+        assert len(over) == 1 and over[0].severity == "warning"
+        assert over[0].location is not None
+
+    assert len(rim_tokens) == len(ray_records) == 1
+    record = ray_records[0]
+    assert record["returned"], "Der echte Strahlenhelfer hat seinen Stand zurückgegeben."
+    assert record["blocks"] == (1 if cancel_during_rays else record["triangles"])
+    assert token.is_cancelled is cancel_during_rays
+    if cancel_during_rays:
+        assert rim_tokens[0] is context.cancelled
+        assert record["token"] is context.cancelled

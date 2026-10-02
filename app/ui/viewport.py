@@ -5194,6 +5194,7 @@ class Viewport(QWidget):
         je Eintrag Körper und Merkmal, denn dieselbe Kennung gibt es in
         mehreren Körpern."""
         self._candidate_emphasis: tuple[str, str] | EdgeTarget | None = None
+        self._candidate_previous: tuple[SceneObject, FeatureId] | None = None
         self._candidate_actors: list[Any] = []
         self._snap_owner: str = ""
         """Der Körper unter dem Zeiger, im Bild gefragt — damit die Marke dort
@@ -7193,6 +7194,7 @@ class Viewport(QWidget):
         # mit dem nächsten Aufruf zurück.
         self._candidates = ()
         self._candidate_emphasis = None
+        self._candidate_previous = None
         # Die Fangmarke gehört zu einer Geometrie, die es gleich nicht mehr
         # gibt. Die Maße bleiben (sie überleben eine Auswertung, §18.3), die
         # Marke nicht: Sie zeigt auf eine Ecke, die dieser Schritt entfernt
@@ -11213,6 +11215,8 @@ class Viewport(QWidget):
         self,
         candidates: Sequence[tuple[str, str] | EdgeTarget] = (),
         emphasis: tuple[str, str] | EdgeTarget | None = None,
+        *,
+        previous_reference: tuple[SceneObject, FeatureId] | None = None,
     ) -> None:
         """Zeigt, zwischen welchen Merkmalen eine Frage entscheiden lässt (§21.3).
 
@@ -11231,6 +11235,10 @@ class Viewport(QWidget):
         er wird deckender gezeichnet. Ein zweiter Aufruf ersetzt den ersten —
         der Dialog ruft bei jedem Zeilenwechsel neu, und das kostet nichts.
 
+        ``previous_reference`` zeigt zusätzlich das Merkmal vor dem Umbau,
+        wenn die Antwort es einem neuen Kandidaten zuordnet (RM-217). Text
+        und Auswahlfarbe kennzeichnen es unabhängig voneinander.
+
         Eine leere Folge nimmt alles weg. Kennungen, die es in der laufenden
         Auswertung nicht gibt, werden still übergangen: Die Auswertung, die
         gefragt hat, kann eine andere sein als die, die im Bild steht.
@@ -11242,6 +11250,7 @@ class Viewport(QWidget):
         """
         self._candidates = tuple(candidates)
         self._candidate_emphasis = emphasis
+        self._candidate_previous = previous_reference
         self._redraw_candidates()
 
     def _patch_lift(self) -> float:
@@ -11381,10 +11390,11 @@ class Viewport(QWidget):
         return clip_triangles(corners, plane, second)
 
     def _redraw_candidates(self) -> None:
-        """Die Merkmale einer offenen Frage im Bild hervorheben (§21.3).
+        """Kandidaten und bisherigen Bezug einer offenen Frage hervorheben (§21.3).
 
         Je Kandidat seine Dreiecke, etwas über der Fläche, dazu die Kennung
-        als Beschriftung; das betonte Merkmal deckender als die anderen.
+        als Beschriftung; der bisherige Bezug trägt „Bisher“ und die
+        Auswahlfarbe, der betonte Kandidat wird deckender als die anderen.
         """
         if self.renderer is None:
             return
@@ -11398,6 +11408,51 @@ class Viewport(QWidget):
         import numpy as np
 
         marks: list[tuple[Vec3, str]] = []
+        previous = self._candidate_previous
+        if previous is not None:
+            body, feature_id = previous
+            feature = body.features.get(feature_id)
+            raw = getattr(body.mesh, "raw", None)
+            if (
+                feature is not None
+                and raw is not None
+                and feature.face_indices
+                and all(0 <= face < len(raw.faces) for face in feature.face_indices)
+                and self._in_pick_view(body.id, body)
+            ):
+                chosen = np.asarray(feature.face_indices, dtype=np.int64)
+                corners = self._lifted_corners(
+                    raw,
+                    chosen,
+                    self._patch_lift(),
+                    self._shown_offset(body, self._result),
+                )
+                if len(corners):
+                    self._candidate_actors.append(
+                        self.renderer.add_surface(
+                            corners,
+                            _triangle_faces(len(corners) // 3),
+                            name="candidate-previous",
+                            style=SurfaceStyle(
+                                colour=SELECTED_COLOUR,
+                                opacity=EMPHASIS_OPACITY,
+                                backface_colour=SELECTED_COLOUR,
+                                lighting=False,
+                                pickable=False,
+                            ),
+                        )
+                    )
+                    middle = corners.mean(axis=0)
+                    self._candidate_actors.append(
+                        self.renderer.add_labels(
+                            np.asarray([middle], dtype=float),
+                            [tr("Bisher")],
+                            name="candidate-previous-label",
+                            style=LabelStyle(
+                                text_colour=SELECTED_COLOUR, font_size=12, always_visible=True
+                            ),
+                        )
+                    )
         for index, candidate in enumerate(self._candidates):
             if isinstance(candidate, EdgeTarget):
                 self._draw_edge_candidate(index, candidate, marks)

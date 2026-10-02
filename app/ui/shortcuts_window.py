@@ -325,8 +325,8 @@ class ShortcutsWindow(QDialog):
                 # Unterhalb von ``childCount`` gibt es jedes Kind. Ob die Stubs
                 # das auch sagen, wechselt: Die Version aus `constraints.txt`
                 # gibt ``QTreeWidgetItem`` zurück, die neueste
-                # ``QTreeWidgetItem | None`` — der wöchentliche Lauf gegen die
-                # neuesten Versionen meldete hier zwei ``union-attr``. Ein
+                # QTreeWidgetItem | None — der Lauf ohne constraints.txt in
+                # build.yml meldete hier zwei union-attr. Ein
                 # ``if child is None`` gilt der einen als unerreichbar
                 # (``warn_unreachable``), ein ``type: ignore`` der anderen als
                 # unbenutzt. Das ``or continue`` ist wahr für beide: eine

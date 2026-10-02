@@ -50,6 +50,10 @@ STARTUP_SECONDS = 120.0
 #: Wie lange die Rechnung im Hilfsprozess höchstens dauert, in Sekunden.
 JOB_SECONDS = 120.0
 
+#: Prüfspielraum für das freiwillige Ende des Pakets, in Sekunden.
+#: Die Produktfrist bleibt 0,5 s; hier wird der Lebenszyklus geprüft.
+END_SECONDS = 30.0
+
 
 def application(dist: Path, name: str) -> Path:
     """Die gebaute Anwendung, wie sie beim Kunden liegt — je Plattform."""
@@ -223,6 +227,7 @@ def check(executable: Path, temp: Path, report: dict[str, Any]) -> list[str]:
     shared_before = shared_memory_names()
     kernel_process.OFFLOAD_ABOVE = 0
     vars(kernel_process)["STARTUP_SECONDS"] = STARTUP_SECONDS
+    vars(kernel_process)["GRACEFUL_SECONDS"] = END_SECONDS
     began = time.perf_counter()
     with as_the_package(executable):
         ready = kernel_process.warm_up()

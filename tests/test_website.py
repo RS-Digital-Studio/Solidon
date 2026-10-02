@@ -153,7 +153,7 @@ def _loaded() -> None:
 def _published_operations() -> frozenset[str]:
     """Liest die Registerreferenz des veröffentlichten Pakets, nicht dessen Nachfolger."""
     manual = (WEBSITE / "handbuch.html").read_text(encoding="utf-8")
-    names = re.findall(r"<h4>[^<]*\(<code>([a-z0-9_]+)</code>\)</h4>", manual)
+    names = re.findall(r'<h4 data-operation="([a-z0-9_]+)"', manual)
     assert names, "Die veröffentlichte Operationsreferenz fehlt."
     assert len(names) == len(set(names)), "Doppelte Operation in der Referenz."
     return frozenset(names)

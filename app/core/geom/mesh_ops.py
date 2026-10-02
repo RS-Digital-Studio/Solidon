@@ -173,7 +173,12 @@ def deviation(before: MeshData, after: MeshData, *, cancelled: CancelToken | Non
 
 
 def decimate(mesh: MeshData, target: int) -> MeshData:
-    """Weniger Dreiecke für dieselbe Form, soweit das möglich ist.
+    """Kopfloser Prüfweg: weniger Dreiecke für dieselbe Form.
+
+    Die produktive Register-Op ``decimate_mesh`` nutzt im gemessenen Modus
+    ``_decimate_with_solver`` für den Befund, im schnellen Modus
+    ``_decimated_fast``. Diese Hülle hat keinen Produktionsaufrufer und bleibt
+    für Tests des Dezimierers und der Materialübertragung erhalten.
 
     Die Materialslots reisen mit (§20). Sie taten es nicht: Die Dreiecke, die
     herauskommen, sind nicht die, die hineingingen, und ``replacing`` lässt eine
