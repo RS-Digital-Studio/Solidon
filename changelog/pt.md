@@ -105,7 +105,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No projeto de exemplo do segundo caminho, os furos dos parafusos seguem a largura e a espessura.
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
 - O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
-- Os espaços chegam a todos os campos de texto, também ao questionário de opinião e ao chat, enquanto uma caixa de diálogo mostra a pré-visualização.
+- Enquanto um diálogo mostra a pré-visualização, os espaços chegam a todos os campos de texto, também ao questionário e ao chat, e caixas e botões aceitam a barra de espaço.
+- Ao «Escalar», um corpo fica assente na mesa em vez de se afundar sob a placa, e a vista volta a enquadrá-lo quando cresce.
 - Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
 - A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.

@@ -139,6 +139,11 @@ Schemata — ein Nachbau, der neigt, wo sein Vorbild es nicht tut, ist keiner.
 * **Eine frische Teilung rahmt einmal neu**: `MainWindow._reveal_split_result`
   ruft vor dem Auseinanderziehen `Viewport.frame_next_scene` (alle Körper, ohne
   Auswahl, mit Versatz); danach bleibt die Kamera.
+* **Ein Größenschritt rahmt einmal nach, wenn er über den Rahmen wächst**
+  (RM-280): `MainWindow._frame_after_resizing` meldet eine neue Transaktion mit
+  `RESIZING_OPERATIONS` an `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die
+  Körper gewachsen sind und über `_fitted_bounds` hinausreichen (`reaches_beyond`).
+  Verkleinern, Verschieben und Undo lassen die Kamera in Ruhe.
 * **Im Skizzenmodus weicht die Kamera der Werkzeugkarte**: Orthografisch
   verschiebt `occluded_view_shift` Position und Fokus um die halbe unten
   verdeckte Bildhöhe (gemeldet über `set_zone_margins`), ohne Richtung und

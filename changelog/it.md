@@ -105,7 +105,8 @@ scrive in `website/version.json`.
 - Nel progetto di esempio della seconda via, i fori per le viti seguono larghezza e spessore.
 - La finestra «Novità» e il sito mostrano le evidenziazioni come testo marcato invece che con asterischi.
 - Inglese e spagnolo usano una sola parola per il gioco di accoppiamento, e i messaggi seguono la punteggiatura di ogni lingua.
-- Gli spazi arrivano in ogni campo di testo, anche nel questionario di feedback e nella chat, mentre una finestra di dialogo mostra l'anteprima.
+- Mentre una finestra mostra l'anteprima, gli spazi arrivano in ogni campo di testo, anche nel questionario e nella chat, e caselle e pulsanti accettano la barra spaziatrice.
+- Con «Scala» un corpo resta appoggiato sul piano invece di affondare sotto la piastra, e la vista lo reinquadra quando cresce.
 - Alcuni rilievi che riguardano un passo lo aprono per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
 - Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
 - L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
