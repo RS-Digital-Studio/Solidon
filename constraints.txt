@@ -11,7 +11,8 @@
 # Paket installiert wird, nicht *dass* es installiert wird. Der
 # Windows-Eintrag (pywin32-ctypes) greift auf Linux deshalb einfach nicht.
 #
-# Entwicklung und CI verwenden CPython 3.14.7. Der Paketbaum enthält pygfx;
+# Die Pins gelten für jedes CPython 3.14, die CI baut mit 3.14.8.
+# Der Paketbaum enthält pygfx;
 # VTK, PyVista, PyVistaQt und deren Adapterabhängigkeiten entfallen (RM-050,
 # 23.09.2026 — VTK war zuletzt nur noch die Geometriebibliothek der
 # Bausteinbereichsprüfung, jetzt ``app.core.geom.mesh.ray_hits_batch``).
