@@ -31,6 +31,27 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-334: Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht (02.10.2026)](#rm-334-enter-löst-in-rückfragen-den-hauptknopf-aus-auch-wenn-der-fokus-per-tab-auf-abbrechen-steht-02102026) |
+| 2026-10-02 | [RM-335: Ein über „Benutzerdefiniert …“ gewählter Slicer lässt Erststart und Einstellungen in „wird gesucht“ hängen (02.10.2026)](#rm-335-ein-über-benutzerdefiniert--gewählter-slicer-lässt-erststart-und-einstellungen-in-wird-gesucht-hängen-02102026) |
+| 2026-10-02 | [RM-337: „Speichern“ in den Einstellungen löscht die Profilwahl des Slicers, ohne dass der Slicer wechselte (02.10.2026)](#rm-337-speichern-in-den-einstellungen-löscht-die-profilwahl-des-slicers-ohne-dass-der-slicer-wechselte-02102026) |
+| 2026-10-02 | [RM-339: Ein langer Fehlerstatus der ComfyUI-Einrichtung schiebt Rahmen und Knöpfe über den Bildschirm (02.10.2026)](#rm-339-ein-langer-fehlerstatus-der-comfyui-einrichtung-schiebt-rahmen-und-knöpfe-über-den-bildschirm-02102026) |
+| 2026-10-02 | [RM-340: Nach dem Erzeugen liegen Versuchsliste und „Noch ein Versuch“ unter dem sichtbaren Bereich (02.10.2026)](#rm-340-nach-dem-erzeugen-liegen-versuchsliste-und-noch-ein-versuch-unter-dem-sichtbaren-bereich-02102026) |
+| 2026-10-02 | [RM-343: „Bildmodell einrichten …“ holt das Bildmodell nicht, wenn die Gewichte schon liegen, und meldet „Eingerichtet“ (02.10.2026)](#rm-343-bildmodell-einrichten--holt-das-bildmodell-nicht-wenn-die-gewichte-schon-liegen-und-meldet-eingerichtet-02102026) |
+| 2026-10-02 | [RM-353: Eine Meter-Datei mit 0,40 bis 0,88 Einheiten Diagonale wird ohne Frage als Zoll gelesen (02.10.2026)](#rm-353-eine-meter-datei-mit-040-bis-088-einheiten-diagonale-wird-ohne-frage-als-zoll-gelesen-02102026) |
+| 2026-10-02 | [RM-357: Im Beispiel Weg 2 folgen die Schraubenlöcher weder Breite noch Stärke (02.10.2026)](#rm-357-im-beispiel-weg-2-folgen-die-schraubenlöcher-weder-breite-noch-stärke-02102026) |
+| 2026-10-02 | [RM-362: Weg 3: Abbrechen verwirft fertige Versuche, Ausweg nur als Text, Prompt-Dateinamen ohne Endung (02.10.2026)](#rm-362-weg-3-abbrechen-verwirft-fertige-versuche-ausweg-nur-als-text-prompt-dateinamen-ohne-endung-02102026) |
+| 2026-10-02 | [RM-363: Die Symmetrie beim Formen spiegelt am Weltursprung statt am Körper (02.10.2026)](#rm-363-die-symmetrie-beim-formen-spiegelt-am-weltursprung-statt-am-körper-02102026) |
+| 2026-10-02 | [RM-364: Ein Zug *Abtragen* sticht durch die Platte oder dünnt die Wand, ohne Befund (02.10.2026)](#rm-364-ein-zug-abtragen-sticht-durch-die-platte-oder-dünnt-die-wand-ohne-befund-02102026) |
+| 2026-10-02 | [RM-392: Ein abtragender Baustein läuft über den Rand der Fläche hinaus, ohne Befund (02.10.2026)](#rm-392-ein-abtragender-baustein-läuft-über-den-rand-der-fläche-hinaus-ohne-befund-02102026) |
+| 2026-10-02 | [RM-394: *An Merkmal ausrichten* wählt das Ziel still vor und nimmt den ersten Bildklick nicht an (02.10.2026)](#rm-394-an-merkmal-ausrichten-wählt-das-ziel-still-vor-und-nimmt-den-ersten-bildklick-nicht-an-02102026) |
+| 2026-10-02 | [RM-325: Das Langlochwerkzeug aus Kennzahlen liegt an einer Seitenwand ±X um 90° verdreht (02.10.2026)](#rm-325-das-langlochwerkzeug-aus-kennzahlen-liegt-an-einer-seitenwand-x-um-90-verdreht-02102026) |
+| 2026-10-02 | [RM-391: „Länge“ nach einer Zeichnung streckt sie um ihre Mitte, der Körper hebt ab und ist nicht wasserdicht (02.10.2026)](#rm-391-länge-nach-einer-zeichnung-streckt-sie-um-ihre-mitte-der-körper-hebt-ab-und-ist-nicht-wasserdicht-02102026) |
+| 2026-10-02 | [RM-332: Geometrie: Reste aus dem Review seit 0.5.1 (02.10.2026)](#rm-332-geometrie-reste-aus-dem-review-seit-051-02102026) |
+| 2026-10-02 | [RM-376: Der Formpinsel wirkt nur auf die Vorderseite (02.10.2026)](#rm-376-der-formpinsel-wirkt-nur-auf-die-vorderseite-02102026) |
+| 2026-10-02 | [RM-378: Ein Zug auf der Symmetrieebene wirkt nicht doppelt (02.10.2026)](#rm-378-ein-zug-auf-der-symmetrieebene-wirkt-nicht-doppelt-02102026) |
+| 2026-10-02 | [RM-379: *Weich verschmelzen* rechnet im Fenster nur bei Budgetüberschreitung gröber (02.10.2026)](#rm-379-weich-verschmelzen-rechnet-im-fenster-nur-bei-budgetüberschreitung-gröber-02102026) |
+| 2026-10-02 | [RM-345: Die Schrittauswahl wählt für Python-Dateien außerhalb von `app/`, `tools/` und `tests/` keinen Test (02.10.2026)](#rm-345-die-schrittauswahl-wählt-für-python-dateien-außerhalb-von-app-tools-und-tests-keinen-test-02102026) |
+| 2026-10-02 | [RM-348: Der Fenstertest der Leistungsmarken prüft den Zuschnitt beim Lesen nicht mehr (02.10.2026)](#rm-348-der-fenstertest-der-leistungsmarken-prüft-den-zuschnitt-beim-lesen-nicht-mehr-02102026) |
 | 2026-10-02 | [RM-225: Muster auf importierten Zylinderfacetten bleiben bearbeitbar (02.10.2026)](#rm-225-muster-auf-importierten-zylinderfacetten-bleiben-bearbeitbar-02102026) |
 | 2026-10-02 | [RM-347: Offene Punkte tragen ihre Nachweise im Repository (02.10.2026)](#rm-347-offene-punkte-tragen-ihre-nachweise-im-repository-02102026) |
 | 2026-10-02 | [RM-290: Übersetzungen und Wortlaute sind abgeschlossen (02.10.2026)](#rm-290-übersetzungen-und-wortlaute-sind-abgeschlossen-02102026) |
@@ -38,14 +59,18 @@ entfernt hat.
 | 2026-10-02 | [RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)](#rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
 | 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
-| 2026-10-01 | [RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)](#rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-erhalten-01102026) |
-| 2026-10-01 | [RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)](#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026) |
-| 2026-10-01 | [RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)](#rm-311-superslicer-vergleicht-g-code-werte-semantisch-01102026) |
-| 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
-| 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
-| 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
 | 2026-10-01 | [RM-282: Profilwerte, die das Programm anders liest, als die Datei sie schreibt (01.10.2026)](#rm-282-profilwerte-die-das-programm-anders-liest-als-die-datei-sie-schreibt-01102026) |
+| 2026-10-01 | [RM-253: Eine selbstkreuzende Schale stoppt vor dem Solver (01.10.2026)](#rm-253-eine-selbstkreuzende-schale-stoppt-vor-dem-solver-01102026) |
+| 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
+| 2026-10-01 | [RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)](#rm-311-superslicer-vergleicht-g-code-werte-semantisch-01102026) |
+| 2026-10-01 | [RM-273: Das Übernehmen nutzt die Vorschau für die verschobene Bohrung (01.10.2026)](#rm-273-das-übernehmen-nutzt-die-vorschau-für-die-verschobene-bohrung-01102026) |
+| 2026-10-01 | [RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)](#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026) |
+| 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
+| 2026-10-01 | [RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)](#rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-erhalten-01102026) |
+| 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
 | 2026-09-30 | [RM-319: Zwei berührende Platten behalten ihr Material beim Langlochzug (30.09.2026)](#rm-319-zwei-berührende-platten-behalten-ihr-material-beim-langlochzug-30092026) |
+| 2026-09-30 | [RM-218: Bohrungen am exakten Körper folgen ihrem Merkmal (30.09.2026)](#rm-218-bohrungen-am-exakten-körper-folgen-ihrem-merkmal-30092026) |
+| 2026-09-30 | [RM-217: das alte Merkmal erscheint in der Zuordnungsfrage (30.09.2026)](#rm-217-das-alte-merkmal-erscheint-in-der-zuordnungsfrage-30092026) |
 | 2026-09-29 | [CAD-Ausbau bis 0.5.1: der Weg von RM-188 (29.09.2026)](#cad-ausbau-bis-051-der-weg-von-rm-188-29092026) |
 | 2026-09-29 | [Handbuch bis 0.5.1: der Weg von RM-283 (29.09.2026)](#handbuch-bis-051-der-weg-von-rm-283-29092026) |
 | 2026-09-29 | [Tragende Nachweise im Repository: ein Punkt geschlossen (29.09.2026)](#tragende-nachweise-im-repository-ein-punkt-geschlossen-29092026) |
@@ -34089,6 +34114,185 @@ aller hier als implementiert geführten Pakete gehört zum Release (RM-213).
 | Zeichnen Z0/Z1 | **implementiert, Release-Abnahme offen** — aus der Bedienabnahme „Zeichnen“ (Robert, 23.09.2026, Bericht zeichnen-bedienung): Hochziehen auf einer gewählten Fläche geht und wird Teil des Körpers (`sketch_join`), eine Tasche außerhalb des Ursprungs schneidet dort, wo gezeichnet, Verrunden und Fase lassen das bemaßte Rechteck stehen, *Fertig* hat eine Bedeutung (die übrigen Arten unter *Mehr*), Escape verwirft keine Zeichnung, Zeichnen gilt einem Körper (Nachbarn ausgeblendet, *Nachbarn zeigen* mit N), *Hier zeichnen* und *Loch oder Aussparung zeichnen …* im Auswahlfenster, *Zeichnung weiterverwenden* im Verlauf | `4406137f` (zeichnenbau) |
 | Zeichnen Z2–Z6 | **offen** — Z2 Erstellen im Bild (Palette am Umriss statt Dialog, Drehachse gemeinsam mit P6.5), Z3 Bemaßen und Fang, Z4 Auswählen/Verschieben/Drehen (Links-Ziehen zeichnet), Z5 Werkzeuge mit P6.6a (900-Punkte-Grenze der Leiste), Z6 Ansicht und Texte, danach die Handbuchseite „Zeichnen“ einmal neu. Dazu die sechs Hinweise aus P6.6 für den Umbau: Werkzeugzeile mit 872 von 900 Bildpunkten voll, Entf löscht bei einem gewählten Splinepunkt das ganze Element, der Hilfspunkt einer Tangente ohne Stoß bleibt sichtbar, Ellipsenachsen nur als Punktabstand bemaßbar, Laufrichtung des Ellipsenbogens beim Zug unsichtbar, lange Bedingungszeile bei zwei Kurven | Reihenfolge und Abnahme je Etappe: Bericht zeichnen-bedienung §8, zeichnenbau „Vorschlag Etappe 2“, p66 „Für den Zeichnen-Umbau“ |
 
+## RM-217: das alte Merkmal erscheint in der Zuordnungsfrage (30.09.2026)
+
+<a id="rm-217-das-alte-merkmal-erscheint-in-der-zuordnungsfrage-30092026"></a>
+
+Die vier Beobachtungen dieses Punkts: Entfernen meldet ein Merkmal nur einmal,
+Teilen meldet geteilte Ausgangsflächen nicht als verloren, ein Feldschnitt zwei
+Millimeter unter der Deckfläche fragt nicht nach, und bei einer nötigen
+Neuzuordnung zeigt die Ansicht jetzt das alte Merkmal neben seinen Kandidaten.
+Die ersten drei Korrekturen stammten aus der Durchsicht 0.5.1. Der Feldschnitt
+wurde mit dem vorhandenen Fall für `@d = -2 mm` erneut geprüft: `face_top` bleibt
+benannt, und es gibt keine Frage.
+
+`EvaluationResult.question_reference` trägt Körper und Kennung nur bis zur
+Antwort. Bei exakten Körpern erzeugt der Auswertungsarbeiter die Ansichtsdreiecke;
+der Fensterthread zeichnet die alte Fläche anschließend mit eigener Kontur und
+dem übersetzten Text „Bisher“. Die Kandidaten behalten ihre bisherige Auswahl.
+Antwort, Abbruch und neue Auswertung räumen die vorübergehenden Marken ab.
+
+Das Review hat außerdem einen Aufrufpfad ohne Altmerkmal geprüft: Er nutzt
+weiterhin den bisherigen Zweiparameter-Aufruf. Der erste Implementierungsentwurf
+hätte die Vernetzung eines exakten Körpers im Fensterthread ausgeführt; die
+Vernetzung wurde vor dem Abschluss des Reviews in den Auswertungsarbeiter
+verlegt.
+
+**Nachweis:** 373 Tests in `test_native_references.py`,
+`test_matching_answers.py`, `test_viewport_decisions.py` sowie den gezielten
+Feldschnitt-, Teilungs- und Entfernungsfällen bestanden; weitere drei gezielte
+Ansichts- und Fensterpfadtests bestanden. `test_language_rules.py` und
+`test_translations.py`: 572 bestanden. Ruff und Format grün; mypy auf
+`app/core/scene/evaluate.py` grün. Der breitere mypy-Aufruf meldet einen Fehler
+in der bereits zuvor geänderten Datei `app/ui/filament_picker.py:870`, die zu
+diesem Punkt nicht gehört.
+
+Der echte Fensterbeleg bleibt für die Release-Abnahme unter RM-213 offen. Bis
+dahin bleibt RM-217 in der Roadmap teilweise umgesetzt.
+
+## RM-218: Bohrungen am exakten Körper folgen ihrem Merkmal (30.09.2026)
+
+<a id="rm-218-bohrungen-am-exakten-körper-folgen-ihrem-merkmal-30092026"></a>
+
+Der exakte Leser vergibt Bohrungskennungen nach Lage. Beim Verlauf-Umbau kann
+eine neu eingefügte Bohrung deshalb die rohe Kennung einer vorhandenen
+übernehmen. `scene.evaluate._with_features` gleicht bei einem Schritt, der
+Merkmale einführt, nun alle Vorgänger ab: Nur ein eindeutiger Treffer, dessen
+Geometrie `_unchanged` innerhalb `EPS_GEOM` bestätigt, behält seine bisherige
+Kennung. Bei anderen Schritten bleibt die bisherige Prüfung auf noch benötigte
+Verweise begrenzt. Geänderte und mehrdeutige Merkmale gehen weiter durch die
+Frage beziehungsweise den Halt nach §21.3. Ein Kommentar, der die verwendete
+Toleranz zuvor als „bitgleich“ bezeichnete, wurde präzisiert.
+
+Am echten `F:\3D Dateien\build_tray_v3.step` (Baugruppe mit fünf Körpern,
+`1#1` / `build_trayv22`, 187 Flächen und 176 Ausgangsmerkmalen) wurden zwei
+Bohrungen Ø5 mm auf dem Innenboden angelegt und die rechte auf Ø8 mm erweitert.
+Danach rechneten alle drei Verläufe: B vor A; eine Bohrung bei x = 0 mm
+zwischen A bei −50 mm und B bei 50 mm; sowie eine Bohrung bei x = 80 mm rechts
+von B. In jedem Fall blieb Ø8 mm bei der physischen rechten Bohrung, und eine
+Passung folgte deren aktueller Kennung. Der Prüfbericht enthielt
+`history.reference_followed`. Strg+Z stellte jeweils den serialisierten
+Projektinhalt ohne den monotonen Verlaufzähler sowie sämtliche Objekt-Hashes
+wieder her.
+
+Ein unabhängiger Code-Review fand keinen Funktionsbefund. Er bemerkte die
+ungenauere „bitgleich“-Beschreibung; die Dokumentation nennt jetzt die
+`EPS_GEOM`-Toleranz ausdrücklich. Gezielter Lauf über
+`test_native_references.py`, `test_revision.py`, `test_matching_answers.py`,
+`test_brep.py` und `test_exact_feature_ops.py`: **357 bestanden**. Ruff und
+Format bestanden; mypy auf `app/core/scene/evaluate.py` ohne Befund. Die
+Fensterabnahme bleibt Release-Sache. Der vollständige Entwicklungslauf ist
+nicht Teil dieses Nachweises.
+
+## RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)
+
+<a id="rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026"></a>
+
+Beim seitlich offenen Prüfkasten, Radius 2 mm und Auswahl „alle“ konnte
+OpenCASCADE die 17 tragenden Kanten gemeinsam nicht bauen, obwohl jede
+einzeln baubar war. Der reproduzierende Körper ist ein 40 × 30 × 20 mm
+Quader mit einem um (3; 3) mm versetzten Innenraum 34 × 24 × 17 mm:
+3 mm Boden, zwei 6-mm-Seitenwände und zwei offene Seiten. Die frühere
+Beschreibung als Kasten mit durchgehend 3 mm Wand war falsch.
+`fillet_group` baut den vollständigen Satz zuerst auf
+frischer Form, baut jede Kantenkombination im Rückfall höchstens einmal und
+lässt bei Bedarf jeweils eine einzelne Kante aus. Der
+Prüfkasten ergibt nun einen geschlossenen Körper mit unverändert einer
+Komponente und dem gemessenen Volumen 9 951,972135 mm³: 16 Kanten werden
+gerundet, die eine zusätzliche Auslassung wird mit ihrem Ort gemeldet. Die
+ursprünglich zu schmalen vier Kanten behalten ihren eigenen Befund. Direkte
+exakte Einzelwahl und veränderlicher Radius bleiben strikt.
+Das Ergebnisvolumen ist ein Messwert, kein unabhängig hergeleiteter Sollwert.
+Die Abnahme prüft stattdessen das aus den Quadern hergeleitete Quellvolumen
+10 128 mm³, erhaltene Außenmaße und Höhe, native R2-Rundungen sowie acht
+Materialproben an Wandmitten, Hohlraum und beiden Seiten der Kreisquerschnitte.
+
+Am pegboard-goot (senkrechte Kanten, R 1) blieb die ganze Gruppe zwar gültig,
+aber die Tessellierung war offen. Auch jede Gruppe mit einer einzelnen
+Auslassung blieb offen. Die Einzelprüfung erkannte die zwei problematischen
+Kanten 212 und 221; nach ihrem gemeinsamen Ausschluss sind die übrigen sechs
+geschlossen. Der aktuelle STEP-Probeaufruf ergibt ein geschlossenes Bauteil mit
+einer Komponente, Volumen 26 798,415436 mm³ und zwei ausgelassenen Stellen.
+Andere Kanten, die das Netz rundet, finden auf `pegboard-gs-100-v2.step` bei
+R 1 und R 2 noch keine exakte Gegenkante; dieser abgetrennte Zuordnungsrest ist
+als RM-322 offen.
+
+Der Schlusslauf deckte außerdem auf, dass große exakte Radiusänderungen an
+kantengestützten und radialen NURBS-Rundungen ihre Merkmalskennung verlieren
+konnten. Der Builder-Beleg aus `Generated` beziehungsweise die eindeutig
+ermittelte Zylinderfläche samt `Modified`/`Generated` wird über die Kopie auf
+die Ausgabedreiecke abgebildet. `resize_feature` setzt die Kennung nur fort,
+wenn genau ein passendes gerundetes Merkmal belegt ist; ohne eindeutigen
+Flächenbeleg bleibt die allgemeine Zuordnung zuständig. Beide Varianten
+behalten ihren Namen über zwei aufeinanderfolgende Radiusänderungen.
+
+**Nachweis:** `test_both_kernels_ask_the_same_question_of_a_thin_walled_box`,
+`test_a_fillet_group_omits_each_individually_open_edge`,
+`test_a_failed_single_edge_exclusion_is_not_built_twice`,
+`test_a_single_edge_probe_is_reused_by_the_group_exclusion`,
+`test_a_fillet_group_omits_two_edges_that_the_kernel_cannot_build` und
+`test_a_failed_combined_fillet_exclusion_is_not_built_twice` in
+`tests/test_brep.py`,
+`test_a_changed_fillet_keeps_its_name_for_the_next_step` (beide Kernvarianten)
+und `test_a_radially_changed_brep_fillet_keeps_its_name_for_the_next_step` in
+`tests/test_mesh_edges.py`,
+`test_nurbs_radial_edits_keep_the_selected_angular_wall` in
+`tests/test_brep_canonical_surfaces.py` und
+`test_operation_continuation_releases_the_displaced_match_candidate` in
+`tests/test_native_references.py` bestanden gezielt. Der echte pegboard-goot-STEP
+wurde separat geprüft: R 1, acht ausgewählte Rundungen, sechs umgesetzt, zwei
+einzeln offene ausgelassen; das Ergebnis blieb mit einer Komponente
+wasserdicht. Der vollständige Entwicklungslauf und das unabhängige Schlussreview
+standen zu diesem Zeitpunkt noch aus. Fenster- und Leistungsläufe bleiben gemäß Projektregel
+Release-Abnahmen.
+
+**Nachprüfung 02.10.2026:** Drei weitere Fehler wurden vor der Korrektur
+reproduziert: Eine echte native Kopie konnte die ausgewählten Kanten umordnen;
+mehrere Bauversuche teilten dieselbe native Form; ohne Flächenhistorie wurde
+eine allgemeine Merkmalszuordnung als verbindlicher Herkunftsbeleg ausgegeben.
+Jeder neue Kandidat nutzt jetzt eine frische Kopie und deren Kantenhistorie.
+Eine Fortführung entsteht nur aus einem nichtleeren Flächenbeleg mit genau
+einem passenden Merkmal. Die fünf direkten Gegenfälle bestanden nach der
+Korrektur. Der betroffene Fachlauf bestand mit 973 Tests, 104 releasebedingt
+abgewählten Fällen und Exit 0; Ruff und Format für neun Dateien waren grün.
+Der unveränderte pegboard-goot-STEP bestand in beiden Kernen und beiden Güten:
+jeweils dicht und eine Komponente; exakt sechs gerundete und zwei zusätzlich
+ausgelassene Stellen, am Netz acht gerundete Stellen mit Solver `direct`.
+Nach der bestätigten RM225-Integration sind die Cacheversionen `fillet_edges`
+13 und `resize_feature` 14 eingetragen. Der unabhängige Schlussreview fand
+noch Kennungskollisionen beim folgenden Umbenennen unveränderter Nachbarn
+und nach ausdrücklicher Merkmalswahl. Beide Anschlüsse sind test-first
+korrigiert; ein gemeinsamer Helfer schützt belegte Selbstzuordnungen und
+offene Namen. Sechs direkte Fälle prüfen die tatsächlichen Folgeoperationen,
+deren Lage und analytisches Volumen sowie kalten und warmen Verlauf.
+Der folgende Nachgang vervollständigte den damals noch offenen RM284-Abschluss.
+Der erneute Fachlauf bestand mit 1209 Tests, 104 releasebedingt abgewählt;
+der unabhängige Schlussreview gab die Einheit einschließlich ihres notwendigen
+RM218-Anschlusses ohne offene Codebefunde frei. Eine zentrale Gegenprüfung
+entdeckte danach noch automatische Antworten in zwei Verlaufstests. Beide
+Normalwege sind nun strikt; ein unabhängig entzogener Builder-Beleg lässt
+sie genau an der unerwarteten Neuwahl scheitern. 13 abschließende gezielte
+Fälle und der unabhängige enge Nachreview sind grün. Der anschließende
+Berichtsfix erhält verschiedene Orte, Ränder und Zielmerkmale bei der
+Entdoppelung. Der echte native Zwei-Auslassungen-Fall prüft die registrierte
+Operation und den kalten/warmen Abschlussbericht; 21 gezielte Fälle und
+610 Sprach-/Wertprüfungen sind grün, der unabhängige Nachreview ist ohne
+Befund. Die bestehende Sammelzeile der Oberfläche bleibt erhalten; eine neue
+Mehrstellenanzeige wird nicht behauptet. RM-322 bleibt daneben offen.
+Konstruktion, Gegenfälle und Kundenmodell sind im
+[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md)
+wiederholbar beschrieben.
+
+**Abgeschlossen am 02.10.2026:** Produktcommit
+`57848fa72c4ca229f5dc9bcdd2cca2baf6945987` ist auf `main` und
+`origin/main`; Commit-Dateiliste, verbleibende Hunks und tatsächliche
+Gegenstelle sind unabhängig abgeglichen. Das gemeinsame vollständige
+Entwicklungstor `commit-tor-abschlussrunde-45-final` mit RM320 bestand mit
+19 187 Tests und 62 übersprungenen Fällen; Suite, Ruff, Format und mypy
+jeweils Exit 0, keine Quelldrift. Fenster-, Renderer- und Leistungsabnahmen
+bleiben beim Release. Der notwendige RM218-Anschluss ist enthalten,
+RM218 insgesamt und RM322 bleiben offen.
+
 ## RM-319: Zwei berührende Platten behalten ihr Material beim Langlochzug (30.09.2026)
 
 <a id="rm-319-zwei-berührende-platten-behalten-ihr-material-beim-langlochzug-30092026"></a>
@@ -34212,56 +34416,142 @@ Bambu Studio speichert Tempo-, Maschinen- und Filamentwerte je Düsenvariante al
 
 **Gezielte Verifikation:** `tests/test_manufacturer.py tests/test_slicer_profiles.py tests/test_print_settings.py -q`: 705 bestanden, 4 übersprungen, Exit 0. Ruff, Formatprüfung und `git diff --check` für die Änderung waren grün. Das unabhängige Schlussreview fand keine weiteren bestätigten Befunde; es führte den 3MF-Regressionstest mit 1 bestandenem Fall aus. Fenster- und Leistungstests bleiben Release-Abnahmen. Das gemeinsame Entwicklungstor für den stabilen Gesamtstand steht vor dem Commit noch aus.
 
-## RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)
+## RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)
 
-<a id="rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026"></a>
+<a id="rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-01102026"></a>
 
-Die gemeinsamen Testhelfer ersetzen die privaten Querimporte zwischen Testdateien. Die
-Inline-Wächter des exakten Kerns verwenden `tests.helpers.exact_kernel()`: ein nicht
-installiertes OpenCASCADE überspringt den betreffenden Test, ein Importfehler im eigenen
-Kernelmodul bleibt dagegen sichtbar. Die Zwischen-Allowlist für private Importe ist entfernt;
-der AST-Wächter verbietet sie vollständig. `cube`, `rectangle`, `blind_cylinder`, `bore_seed`,
-`SOURCE` und die Qt-Wartehilfe liegen an den gemeinsamen Stellen. Auch der doppelte
-Viewport-Szenenbauer nutzt die gemeinsame `ui_helpers`-Fassung; seine zehn Aufrufe bleiben
-über den bisherigen lokalen Namen gebunden.
+Beim Ziehen einer Bohrung im Langloch über mehrere Körper nutzte der exakte
+Kern die ganze Baugruppen-Hülltiefe. Ein zweiter Stift in der Bohrung wurde
+deshalb auch oberhalb der Platte abgeschnitten; am Netz blieb sein Überstand.
+Bei mehreren Körpern nutzt *Zum Langloch ziehen* jetzt die gemessene
+Bohrungstiefe. Den Hüllkörperdurchgang behält der Einzelkörperweg.
 
-**Nachweis:** Der RM-315-Commit `8cb4eae960abcc596117c5c0412965be06caaf9e` liegt auf
-`main` und `origin/main`. Das vollständige Entwicklungstor des exakt zusammengesetzten
-Prüfstands bestand **18 732 Tests**, übersprang **62**; Ruff, Formatprüfung und mypy endeten
-jeweils mit Exit 0. Das unabhängige Review wurde nach Beseitigung der letzten doppelten
-Testhilfe fortgesetzt. Der AST-Wächter bestand; die Sammlung der betroffenen
-Viewport-Entscheidungstests ergab **306 Tests**. Fenster-, Render- und Leistungsprüfungen
-bleiben der Release-Abnahme vorbehalten.
+Die Regression baut eine Platte 40 × 20 × 10 mm mit Bohrung Ø 6 mm und einen
+Stift Ø 5 × 15 mm. Beide Kerne liefern danach zwei Körper, der Stift reicht
+von z = 10 bis 15 mm. Die Erstprobe maß am Netz 97,6 mm³ für den Stift und
+7 357,6 mm³ für die Platte. Diese Messwerte sind keine unabhängigen Sollwerte;
+die Nachprüfung vom 02.10. verwendet π × 2,5² × 5 mm³ für den Stift
+(Netz ±1 mm³, exakt ±0,000001 mm³) und 8000 − (36 + 9π) × 10 mm³ für die
+Netzplatte (±2 mm³). Die Abweichung umfasst Facettierung und die
+0,02-mm-Verlängerung des Netz-Durchzugs, die am Stiftende 0,01 mm zusätzlich
+abträgt.
 
-## RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)
+**Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests.
+Unabhängiges Review nach Korrektur der Volumenabnahme ohne weitere Findings.
+Der vollständige Entwicklungslauf war zu diesem Zeitpunkt noch nicht erneut
+gelaufen; der Commit blieb bis zu seinem grünen Lauf aus.
 
-<a id="rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026"></a>
+**Nachprüfung 02.10.2026:** Die einseitige Erstprobe deckte den Sicherheitsweg
+nicht vollständig ab. Auch die Gegenprobe am früheren Stand `3fd3b1ace`
+lehnte den durchgesteckten Stift am Netz ab und entfernte ihn exakt vollständig;
+die damalige Korrektur im Arbeitsbaum war noch nicht integriert.
+Der beidseitige Stift, angeschlossene Naben, eine
+negative Innenhaut und vollständig ineinanderliegende positive Körper
+ergaben weitere rote Gegenfälle. Der gemeinsame Menü-/Operationsbeleg prüft
+jetzt den freien Bohrungsträger, vollständige Kontaktfreiheit und die
+dreiwertige Materialeinschließung; nur ein entschieden freier Beleg erlaubt
+den Schnitt. Die Einzelkörperfrage zählt positive Außenkörper. Der Abbruch
+erreicht auch das vorhandene Gitterzertifikat, wofür zuletzt ein eigener
+roter Gegenfall ergänzt wurde. Die allgemeine Bohrungssicherheitsfrage bleibt
+unverändert; nur `slot_hole` nutzt die Sonderfreigabe, mit Cacheversion 15.
 
-Der Ebenenschnitt übergibt jetzt schreibbare und zusammenhängende Vertex-,
-Face- und Höhenpuffer an den übersetzten Kern. `np.ascontiguousarray` reichte
-schreibgeschützte Ansichten unverändert weiter; die neue Anforderung kopiert
-nur, wenn Schreibbarkeit oder Layout fehlen.
+Der abschließende betroffene Lauf bestand mit 569 Tests, drei abgewählten
+Fällen und Exit 0. Drei Boolean-Gegenfälle und 417 Sprachprüfungen bestanden
+zusätzlich. Sechs Rechnungen an unveränderten Kundenmodellen sowie Ruff,
+Format und mypy waren grün. Der unabhängige Schlussreview hat keine offenen
+Befunde. Die folgenden Nachgänge vervollständigten den damals noch offenen
+RM320-Abschluss. Eingangs-Hashes,
+analytische Sollwerte, historische Fehlannahmen und Wiederholung stehen im
+[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
 
-`threemf._reading_trees` zählt parallele Leser. Jeder Leser gibt zuerst seine
-Elemente frei; die eingefrorene GC-Generation wird erst aufgetaut, wenn der
-letzte Leser fertig ist. `leash.undisturbed` schützt denselben
-prozessweiten GC-Zustand mit Sperre und Referenzzähler und stellt den Zustand
-wieder her, den es beim ersten Eintritt vorgefunden hat. Der Mehrfaden-Test
-prüft beide Anfangszustände.
+Die nachfolgende zentrale Zweitprüfung fand noch den fehlenden Tokenanschluss
+aus den tatsächlichen Erkennungsarbeitern durch `actions_for` und
+`feature_answers`. Acht direkte Arbeiterfälle belegen jetzt Abbruch während
+Kontakt-/Einschließungsprüfung, vor der Merkerspeicherung sowie beim
+Ersatzauftrag und Fensterende. Ein weiterer Nachgang erlaubt eine gültige
+negative Innenhaut zusammen mit einem freien Stift über entschiedene
+Materialfamilien. 19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsfälle
+sind grün. Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt
+abgewählt; die sechs Kundenrechnungen am Endstand sind ebenfalls grün.
+Der unabhängige Schlussreview hat die vollständigen RM320-Hunks ohne offene
+Codebefunde freigegeben.
 
-Außerdem beschreibt `ProgressTiming.remaining` jetzt die seit dem letzten
-Fortschrittsanteil verbleibende Strecke einschließlich pausenkorrigierter Zeit.
-Der Größenkommentar zum Merkmalsindex nennt gut 90 statt 75 MB.
+**Abgeschlossen am 02.10.2026:** Produktcommit
+`e3dff190728d4caf447cb3be7927d5d651dee168` ist auf `main` und
+`origin/main`; Commit-Dateiliste, verbleibende Hunks und tatsächliche
+Gegenstelle sind unabhängig abgeglichen. Das gemeinsame vollständige
+Entwicklungstor `commit-tor-abschlussrunde-45-final` mit RM284 bestand mit
+19 187 Tests und 62 übersprungenen Fällen; Suite, Ruff, Format und mypy
+jeweils Exit 0, keine Quelldrift. Fenster-, Renderer- und Leistungsabnahmen
+bleiben beim Release. RM325 bleibt ein eigenständiger Seitenwandfehler.
 
-**Gezielte Verifikation:** `tests/test_slice.py` bestand mit 93 Tests,
-`tests/test_threemf_assembly.py` mit 56 und die neue GC-Gegenprobe in
-`tests/test_leash.py` mit 2. `tests/test_directory_docs.py` bestand mit 23
-Tests; Ruff, Formatprüfung und `git diff --check` waren grün.
-Das unabhängige Review fand zunächst eine ungenaue Aussage zu `gc.freeze`;
-der Kommentar wurde auf die tatsächlich beim Aufruf getrackten Objekte
-präzisiert. Das Follow-up-Review fand keine weiteren Befunde. Das vollständige
-Entwicklungstor bleibt vor dem Commit für den gebündelten Arbeitsstand offen;
-Fenster- und Leistungstests bleiben Release-Prüfungen.
+## RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)
+
+<a id="rm-311"></a>
+
+SuperSlicer 2.5.59.13 schrieb den Startcode mit maskierten Anführungszeichen in die
+Konfiguration und gab ihn mit gewöhnlichen Anführungszeichen im G-Code zurück. Die
+Gegenprobe meldete dadurch fälschlich `slicer.setting_ignored`. Die Normalisierung gilt
+jetzt nur für Schlüssel, die auf `_gcode` enden, sowohl in `verify_settings` als auch in
+`profile_differences`. Ein tatsächlich abweichender G-Code bleibt ein Befund; ein
+Nicht-G-Code-Wert mit wörtlichem Backslash wird ebenfalls nicht versehentlich verborgen.
+
+Die reale Gegenprobe verwendete `Wedge-Lock (Base).stl`, SuperSlicer 2.5.59.13 und
+PrusaSlicer 2.9.6 mit `Original Prusa MINI & MINI+`, Prozess `0.15mm QUALITY @MINI`
+und Filament `Prusament PLA`. Die konfigurierte Anweisung `M862.3 P "[printer_model]"`
+kam in beiden G-Code-Dateien als `M862.3 P "MINI"` an. Keiner meldete
+`slicer.setting_ignored`; beide meldeten außerdem `slicer.handover` als Information. Die
+Laufzeiten nach der Zeitmessungskorrektur waren 1,324 s und 1,508 s. Ein separater negativer
+Test prüft, dass ein geänderter Startcode weiter als ignoriert gemeldet wird.
+
+Die echte Gegenprobe machte außerdem eine falsche Laufzeitangabe sichtbar: Der Aufruf
+überschrieb den monotonen Startwert der Laufzeitmessung mit einem Epoch-Zeitstempel, so dass
+`SliceOutcome.seconds` negativ wurde. Beide Uhrwerte sind jetzt getrennt. Eine Regression
+setzt die monotone Uhr auf 12,000 s und 12,375 s, während die Ergebnisuhr 1 800 000 000 s
+meldet; ausgegeben werden 0,375 s.
+
+**Gezielte Verifikation (01.10.2026):** `tests/test_print_settings.py` bestand mit 509
+Tests, 4 übersprungen; `tests/test_roadmap.py` und `tests/test_directory_docs.py` bestanden
+mit 23 Tests. Ruff und Format für die geänderten Python-Dateien, `git diff --check` sowie
+mypy für 333 Quelldateien waren grün. Das unabhängige Code-Review fand keine bestätigten
+Funktionsfehler.
+
+**Abschluss am 02.10.2026:** Der unabhängige Review fand keine bestätigten Funktionsfehler.
+Die gezielten Regressionen und die reale Gegenprobe sind oben dokumentiert. Die logischen
+Commits `8b0078fac` und `1ca91baa6` sind auf `main` und `origin/main`.
+Das vollständige Tor `commit-tor-slicer-tooltip-final` bestand mit 18.869 Tests und
+62 übersprungenen Tests; Suite, Ruff, Format und mypy endeten jeweils mit Exit 0, ohne
+Quellabweichung. Die funktionale Sieben-Slicer-Matrix bleibt eine getrennte offene
+Abnahme unter RM-312; sie hält die Gesamtprüfung der Slicerübergabe offen, nicht RM-311.
+
+Fenster- und Leistungsläufe bleiben Release-Abnahmen.
+
+## RM-273: Das Übernehmen nutzt die Vorschau für die verschobene Bohrung (01.10.2026)
+
+<a id="rm-273-das-übernehmen-nutzt-die-vorschau-für-die-verschobene-bohrung-01102026"></a>
+
+Die Durchsicht 0.5.1 hatte am Gartenschlauchhalter 16 bis 17,5 s je Übernahme
+unter Last gemessen; der Auftrag wurde nach der Dialogvorschau erneut gerechnet.
+Im heutigen normalen Dialogpfad erhalten Vorschau und Übernahme denselben
+`_PreviewOrder` mit demselben Seed. Der Cache trennt weiterhin verschiedene
+Qualitätsstufen; der reguläre Dialog bleibt auf Entwurfsqualität. Eine
+referenzierte Bohrung wird auch bei `detect_features=False` als benötigtes
+Merkmal erkannt.
+
+Der Session-Durchlauf am Originalmodell mit 392 532 Dreiecken und 289 Merkmalen
+maß 25,52 s für den Import, 18,73 s für die Vorschau und 0,22 s für das
+Übernehmen von `hole_10` nach z = 123 mm. Die Cache-Zähler stiegen beim
+Übernehmen um zwei Treffer und null Fehl-Treffer; die Sitzung meldete danach
+ein aktuelles Ergebnis. Die UI-Regression auf `plate_holes.stl` bestätigt den
+gleichen Seed aus Vorschau und Dialogannahme sowie das Ausbleiben eines neuen
+Cache-Miss. Die Vorschau bleibt die längere Wartephase. Weder die Güte des
+Cacheschlüssels noch die Vollerkennung nach der Operation wurden gelockert.
+
+**Nachweis:** Der gezielte Dialogtest bestand in 2,38 s; die betroffene
+Testauswahl bestand mit 342 Tests, 186 releasegebundene oder release-only Tests
+blieben ausgelassen. Ruff, Format und `git diff --check` für den neuen Test und
+die Roadmap-Dateien waren grün. Das unabhängige Review fand keine Befunde. Das
+vollständige Entwicklungstor steht vor dem Commit noch aus.
 
 ## RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)
 
@@ -34351,6 +34641,132 @@ Die getrennte Produktfrage ist unter [RM-324](#rm-324) abgeschlossen:
 Robert hat „Dialoglokal lassen“ entschieden. Bei bisher `None` und ohne eigene
 Dialogwahl bleibt die Kennung dialoglokal; Format und Prozessvorgaben erhalten
 keine zusätzliche Persistenz.
+
+## RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)
+
+<a id="rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026"></a>
+
+Der Ebenenschnitt übergibt jetzt schreibbare und zusammenhängende Vertex-,
+Face- und Höhenpuffer an den übersetzten Kern. `np.ascontiguousarray` reichte
+schreibgeschützte Ansichten unverändert weiter; die neue Anforderung kopiert
+nur, wenn Schreibbarkeit oder Layout fehlen.
+
+`threemf._reading_trees` zählt parallele Leser. Jeder Leser gibt zuerst seine
+Elemente frei; die eingefrorene GC-Generation wird erst aufgetaut, wenn der
+letzte Leser fertig ist. `leash.undisturbed` schützt denselben
+prozessweiten GC-Zustand mit Sperre und Referenzzähler und stellt den Zustand
+wieder her, den es beim ersten Eintritt vorgefunden hat. Der Mehrfaden-Test
+prüft beide Anfangszustände.
+
+Außerdem beschreibt `ProgressTiming.remaining` jetzt die seit dem letzten
+Fortschrittsanteil verbleibende Strecke einschließlich pausenkorrigierter Zeit.
+Der Größenkommentar zum Merkmalsindex nennt gut 90 statt 75 MB.
+
+**Gezielte Verifikation:** `tests/test_slice.py` bestand mit 93 Tests,
+`tests/test_threemf_assembly.py` mit 56 und die neue GC-Gegenprobe in
+`tests/test_leash.py` mit 2. `tests/test_directory_docs.py` bestand mit 23
+Tests; Ruff, Formatprüfung und `git diff --check` waren grün.
+Das unabhängige Review fand zunächst eine ungenaue Aussage zu `gc.freeze`;
+der Kommentar wurde auf die tatsächlich beim Aufruf getrackten Objekte
+präzisiert. Das Follow-up-Review fand keine weiteren Befunde. Das vollständige
+Entwicklungstor bleibt vor dem Commit für den gebündelten Arbeitsstand offen;
+Fenster- und Leistungstests bleiben Release-Prüfungen.
+
+## RM-253: Eine selbstkreuzende Schale stoppt vor dem Solver (01.10.2026)
+
+<a id="rm-253-eine-selbstkreuzende-schale-stoppt-vor-dem-solver-01102026"></a>
+
+`boolean()` rechnete bisher weiter, wenn die Vorvereinigung überlappender Teile wegen
+einer sich selbst kreuzenden Schale abgelehnt wurde. Auf `parametric-laptop-riser.stl`
+gab das beim Versetzen einer Bohrung ein Ergebnis, das Material stehen ließ. Jetzt hält
+die Operation mit einer übersetzten Handlungsempfehlung vor jeder Solverstufe an.
+Der Fehler trägt die Kennung des betroffenen Szenenobjekts. `union_objects` reicht seine
+Eingangskennungen mit; die lokalen Differenzen in `_check_liner_frame` ordnen synthetische
+Werkzeuge und echte Einlagen ihren tatsächlichen Eingängen zu.
+
+Die Regression baut eine geschlossene, selbstkreuzende Schale und einen zweiten Körper,
+der sie überschneidet. Sie lässt die echte Vorprüfung und Reparaturentscheidung laufen,
+verlangt den Abbruch vor `_run_stage` und prüft anschließend den betroffenen Körper sowie
+die verfügbare Handlung *Stellen zeigen*. Ein Aufruf ohne Objektkennung bekommt diese
+Handlung nicht angeboten; so kann der Fehlerdialog nicht ersatzweise die aktuelle Auswahl
+als Ziel öffnen. Ein weiterer Test verhindert, dass eine nicht passende `object_ids`-Liste
+still einen falschen Körper markiert.
+
+Am unveränderten Kundenmodell `F:\3D Dateien\parametric-laptop-riser.stl` wurde der
+vollständige Import- und Auswertungsweg erneut ausgeführt. `move_feature` für `hole_11`
+um 1,5 mm quer zur Achse hielt mit `GeometryError`, `object_id=obj_1` und den Handlungen
+`show_locations` und `cancel` an. Der Lauf durchlief den Kettenzweig, der `_closed_at`
+umgeht; eine neue Regression prüft die Kennung an dessen Verschlussvereinigung. Der
+Detailtext empfiehlt die Reparatur im CAD- oder Netzprogramm. Die Schutzkorrektur repariert
+die Eigenkreuzung nicht und erfüllt deshalb die ursprünglichen Abnahmeschritte für Kippen,
+Versetzen und Verdoppeln noch nicht.
+
+**Gezielte Verifikation:** `tests/test_boolean.py`, `tests/test_profile_clamps.py` und
+`tests/test_finding_actions.py`, `tests/test_errors.py`, `tests/test_translations.py` und
+`tests/test_language_rules.py`: **1 051 bestanden**. Ruff und Formatprüfung der geänderten
+Booleschen Geometriedatei und ihrer Regressionstests waren grün. Das erste unabhängige Review
+fand einen P2-Fehler: ohne Objektkennung war die Handlung *Stellen zeigen* irreführend.
+Nach der bedingten Anzeige der Handlung bestand das unabhängige Nachreview ohne weitere
+Code- oder Katalogbefunde; dessen engere Wiederholung bestand vier gezielte
+Kreuzschalenprüfungen und 155 Übersetzungstests. Der gezielte Mypy-Aufruf meldete drei
+Unreachable-Befunde in der parallel geänderten `app/core/perceive/refine.py`; für diesen
+Stand liegt daher kein grüner Mypy-Nachweis vor. Das vollständige Entwicklungstor und die
+Geometriereparatur bleiben offen. RM-253 bleibt als teilweise offen markiert.
+
+**Nachtrag (02.10.2026):** Der gespeicherte Kundenlauf
+`.claude/.state/rm-246-laptop-staender-2026-09-25/probe_rm253_object_id.py`
+liest das unveränderte Originalmodell vollständig ein und versetzt `hole_11` um
+1,5 mm quer zur Achse. Er endet mit Exit 0, `object_id=obj_1` und den Handlungen
+`show_locations` und `cancel`. Damit ist auch der Kettenzweig belegt, der
+`_closed_at` umgeht; `test_moving_a_countersunk_bore_passes_the_source_id_to_its_chain_union`
+deckt dessen Verschlussvereinigung ab. Der abschließende unabhängige Review fand
+keine offenen Befunde. Der gezielte Mypy-Lauf meldet insgesamt 21 Fehler nur in
+parallel geänderten Dateien `app/core/perceive/refine.py`,
+`app/core/knowledge/parts/exact.py` und `app/core/perceive/actions.py`; in den
+beiden geprüften Geometriemodulen gab es keine Mypy-Befunde. Das Entwicklungstor
+und die Geometriereparatur stehen weiterhin aus.
+
+**Reparaturprüfung (02.10.2026):** Der unveränderte Original-STL-Hash war
+`30f3c37a1f244f26a139d9f394f59099739556bfbb7eb241e2e23a3c63def7ad`. Ein frischer
+Import fand in der geschlossenen, konsistent gewickelten Schale mit 9 166
+Dreiecken 1 243 Schnittpaare an 631 Flächen; die vollständige Suche endete. Ein
+Paar aus den Original-STL-Flächen 109 912 und 171 057 kreuzt sich tatsächlich
+(Strecke 0,003608 mm, Ebenendurchtritt 0,009865 mm, Winkel 89,999757°). Die ältere
+Zahl 1 121 im RM-267-Nachtrag stammt aus einer früheren Messung.
+
+Blenders exakter Eigenüberschneidungs-Boolean wurde ausschließlich an einer
+Kopie versucht: Er erzeugte 28 Komponenten, 76 Verzweigungskanten und 1 611
+Schnittpaare; der Export war nicht wasserdicht. Ein Voxelremesh mit 0,2 mm
+lieferte zwar ein geschlossenes Netz mit einer Komponente, vergrößerte den
+Bestand aber von 9 166 auf 1 098 220 Dreiecke. Die größte Außenmaßverschiebung
+betrug 0,083878 mm und überschritt damit `MAX_FACET_SAG = 0,05 mm`; die Höhe
+verkleinerte sich um 0,143410 mm, das orientierte Volumen sank um 15,879894 mm³
+(0,059764 %). Die Kreuzungsfreiheit wurde nicht belegt: Die Suche brach nach
+20,102 s am Zeitlimit ab. Die lokale Erkennung fand `hole_11` (Ø 6,500007 mm,
+Tiefe 0,900065 mm) und `cone_51` (Ø 8,100010 mm, 90,000084°) in anderen,
+unveränderten Schalen. Am Original und an `hole_11` fand keine Bearbeitung statt;
+beide Reparaturkandidaten wurden verworfen. RM-253 bleibt teilweise offen.
+
+## RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)
+
+<a id="rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026"></a>
+
+Die gemeinsamen Testhelfer ersetzen die privaten Querimporte zwischen Testdateien. Die
+Inline-Wächter des exakten Kerns verwenden `tests.helpers.exact_kernel()`: ein nicht
+installiertes OpenCASCADE überspringt den betreffenden Test, ein Importfehler im eigenen
+Kernelmodul bleibt dagegen sichtbar. Die Zwischen-Allowlist für private Importe ist entfernt;
+der AST-Wächter verbietet sie vollständig. `cube`, `rectangle`, `blind_cylinder`, `bore_seed`,
+`SOURCE` und die Qt-Wartehilfe liegen an den gemeinsamen Stellen. Auch der doppelte
+Viewport-Szenenbauer nutzt die gemeinsame `ui_helpers`-Fassung; seine zehn Aufrufe bleiben
+über den bisherigen lokalen Namen gebunden.
+
+**Nachweis:** Der RM-315-Commit `8cb4eae960abcc596117c5c0412965be06caaf9e` liegt auf
+`main` und `origin/main`. Das vollständige Entwicklungstor des exakt zusammengesetzten
+Prüfstands bestand **18 732 Tests**, übersprang **62**; Ruff, Formatprüfung und mypy endeten
+jeweils mit Exit 0. Das unabhängige Review wurde nach Beseitigung der letzten doppelten
+Testhilfe fortgesetzt. Der AST-Wächter bestand; die Sammlung der betroffenen
+Viewport-Entscheidungstests ergab **306 Tests**. Fenster-, Render- und Leistungsprüfungen
+bleiben der Release-Abnahme vorbehalten.
 
 ## RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)
 
@@ -34460,47 +34876,6 @@ auf `main` und `origin/main`. Belege: `commit-langlochbezug.json`,
 `commit-tor-kernpakete-final/` unter
 `tmp/review-seit-0.5.1-2026-10-01/`. Die native Viewport-Abnahme der
 Gegenseitenvorschau bleibt separat unter RM-321 für den Release offen.
-
-## RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)
-
-<a id="rm-311"></a>
-
-SuperSlicer 2.5.59.13 schrieb den Startcode mit maskierten Anführungszeichen in die
-Konfiguration und gab ihn mit gewöhnlichen Anführungszeichen im G-Code zurück. Die
-Gegenprobe meldete dadurch fälschlich `slicer.setting_ignored`. Die Normalisierung gilt
-jetzt nur für Schlüssel, die auf `_gcode` enden, sowohl in `verify_settings` als auch in
-`profile_differences`. Ein tatsächlich abweichender G-Code bleibt ein Befund; ein
-Nicht-G-Code-Wert mit wörtlichem Backslash wird ebenfalls nicht versehentlich verborgen.
-
-Die reale Gegenprobe verwendete `Wedge-Lock (Base).stl`, SuperSlicer 2.5.59.13 und
-PrusaSlicer 2.9.6 mit `Original Prusa MINI & MINI+`, Prozess `0.15mm QUALITY @MINI`
-und Filament `Prusament PLA`. Die konfigurierte Anweisung `M862.3 P "[printer_model]"`
-kam in beiden G-Code-Dateien als `M862.3 P "MINI"` an. Keiner meldete
-`slicer.setting_ignored`; beide meldeten außerdem `slicer.handover` als Information. Die
-Laufzeiten nach der Zeitmessungskorrektur waren 1,324 s und 1,508 s. Ein separater negativer
-Test prüft, dass ein geänderter Startcode weiter als ignoriert gemeldet wird.
-
-Die echte Gegenprobe machte außerdem eine falsche Laufzeitangabe sichtbar: Der Aufruf
-überschrieb den monotonen Startwert der Laufzeitmessung mit einem Epoch-Zeitstempel, so dass
-`SliceOutcome.seconds` negativ wurde. Beide Uhrwerte sind jetzt getrennt. Eine Regression
-setzt die monotone Uhr auf 12,000 s und 12,375 s, während die Ergebnisuhr 1 800 000 000 s
-meldet; ausgegeben werden 0,375 s.
-
-**Gezielte Verifikation (01.10.2026):** `tests/test_print_settings.py` bestand mit 509
-Tests, 4 übersprungen; `tests/test_roadmap.py` und `tests/test_directory_docs.py` bestanden
-mit 23 Tests. Ruff und Format für die geänderten Python-Dateien, `git diff --check` sowie
-mypy für 333 Quelldateien waren grün. Das unabhängige Code-Review fand keine bestätigten
-Funktionsfehler.
-
-**Abschluss am 02.10.2026:** Der unabhängige Review fand keine bestätigten Funktionsfehler.
-Die gezielten Regressionen und die reale Gegenprobe sind oben dokumentiert. Die logischen
-Commits `8b0078fac` und `1ca91baa6` sind auf `main` und `origin/main`.
-Das vollständige Tor `commit-tor-slicer-tooltip-final` bestand mit 18.869 Tests und
-62 übersprungenen Tests; Suite, Ruff, Format und mypy endeten jeweils mit Exit 0, ohne
-Quellabweichung. Die funktionale Sieben-Slicer-Matrix bleibt eine getrennte offene
-Abnahme unter RM-312; sie hält die Gesamtprüfung der Slicerübergabe offen, nicht RM-311.
-
-Fenster- und Leistungsläufe bleiben Release-Abnahmen.
 
 
 ## RM-290: Übersetzungen und Wortlaute sind abgeschlossen (02.10.2026)
@@ -34670,180 +35045,534 @@ enthält die Gegenfälle, den Eingangs-Hash, die genaue Kundenmessung und die
 Wiederholung. Fenster-, Renderer- und Leistungsprüfungen bleiben gemäß
 Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
 
-## RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)
+## RM-334: Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht (02.10.2026)
 
-<a id="rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026"></a>
+<a id="rm-334-enter-löst-in-rückfragen-den-hauptknopf-aus-auch-wenn-der-fokus-per-tab-auf-abbrechen-steht-02102026"></a>
+<a id="rm-334"></a>
 
-Beim seitlich offenen Prüfkasten, Radius 2 mm und Auswahl „alle“ konnte
-OpenCASCADE die 17 tragenden Kanten gemeinsam nicht bauen, obwohl jede
-einzeln baubar war. Der reproduzierende Körper ist ein 40 × 30 × 20 mm
-Quader mit einem um (3; 3) mm versetzten Innenraum 34 × 24 × 17 mm:
-3 mm Boden, zwei 6-mm-Seitenwände und zwei offene Seiten. Die frühere
-Beschreibung als Kasten mit durchgehend 3 mm Wand war falsch.
-`fillet_group` baut den vollständigen Satz zuerst auf
-frischer Form, baut jede Kantenkombination im Rückfall höchstens einmal und
-lässt bei Bedarf jeweils eine einzelne Kante aus. Der
-Prüfkasten ergibt nun einen geschlossenen Körper mit unverändert einer
-Komponente und dem gemessenen Volumen 9 951,972135 mm³: 16 Kanten werden
-gerundet, die eine zusätzliche Auslassung wird mit ihrem Ort gemeldet. Die
-ursprünglich zu schmalen vier Kanten behalten ihren eigenen Befund. Direkte
-exakte Einzelwahl und veränderlicher Radius bleiben strikt.
-Das Ergebnisvolumen ist ein Messwert, kein unabhängig hergeleiteter Sollwert.
-Die Abnahme prüft stattdessen das aus den Quadern hergeleitete Quellvolumen
-10 128 mm³, erhaltene Außenmaße und Höhe, native R2-Rundungen sowie acht
-Materialproben an Wandmitten, Hohlraum und beiden Seiten der Kreisquerschnitte.
+**RM-334 — Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht.**
+  Review seit 0.5.1, Befund C-H1, Commit `2385fa72a` (Claude).
+  `app/ui/style.py:617–651` (`_FocusTakesNoAccent.eventFilter`) nimmt jedem fokussierten
+  Nebenknopf `autoDefault` (`:642`), app-weit über `_keep_the_primary`. Ohne `autoDefault` reicht
+  `QPushButton` Enter an `QDialog.keyPressEvent` weiter, das den Default klickt.
+  **Fehlerfall:** Drei Schritte rückgängig, dann eine Änderung → „Abgeschnittene Schritte
+  verwerfen?“ (`app/ui/dialogs.py:4008–4036`) → Tab auf „Abbrechen“, Enter → **„Verwerfen“**, die
+  Redo-Schritte sind unwiederbringlich weg. Fenster schließen mit ungesicherten Änderungen
+  (`confirm_unsaved`, `dialogs.py:3895–3921`) → Tab auf „Verwerfen“ oder „Abbrechen“, Enter →
+  **„Speichern“** überschreibt die Projektdatei (`main_window.py:6067–6072`). Vor dem Export
+  (`dialogs.py:3984–4005`): Tab auf „Abbrechen“, Enter → **„Trotzdem exportieren“**. Genau die
+  Rückfragen, die Regel 19 zulässt, entscheiden damit gegen die sichtbare Fokuswahl
+  (Tastatur, Bildschirmleser, §19.2).
+  **Fix:** Den Zuhörer bei `TabFocusReason`/`BacktabFocusReason` und in `QMessageBox` nicht
+  anwenden; den Anlassfall des Erzeugen-Dialogs gezielt lösen (Fokus beim Sperren auf den
+  Hauptknopf zurück oder dort Nebenknöpfe ohne `autoDefault` bauen).
+  **Abnahme:** Test je Rückfrage (`confirm_discard`, `confirm_unsaved`, `confirm_export`): Tab
+  auf den Nebenknopf + Enter klickt den fokussierten Knopf; die bestehenden Akzenttests
+  (`test_style.py::test_no_button_takes_the_accent_when_it_gets_the_focus`,
+  `test_generate_ui.py::test_the_main_button_stays_the_default_through_the_run`) bleiben grün.
+  Bauplan §19.2, §15.5. Beleg: `bericht-C.md` (H1), Sonde `c_fokus_enter.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. Echte Rückfragen (`sonden\verif\c_fokus_enter_echt.py`, Exit 0): Tab auf „Abbrechen“ + Enter → `confirm_discard` gibt `True` (Verwerfen); `confirm_unsaved` gibt nach Tab auf „Verwerfen“ oder „Abbrechen“ + Enter `'save'`. Belege `F:\solidon-review-reports\verif-C.md`.
 
-Am pegboard-goot (senkrechte Kanten, R 1) blieb die ganze Gruppe zwar gültig,
-aber die Tessellierung war offen. Auch jede Gruppe mit einer einzelnen
-Auslassung blieb offen. Die Einzelprüfung erkannte die zwei problematischen
-Kanten 212 und 221; nach ihrem gemeinsamen Ausschluss sind die übrigen sechs
-geschlossen. Der aktuelle STEP-Probeaufruf ergibt ein geschlossenes Bauteil mit
-einer Komponente, Volumen 26 798,415436 mm³ und zwei ausgelassenen Stellen.
-Andere Kanten, die das Netz rundet, finden auf `pegboard-gs-100-v2.step` bei
-R 1 und R 2 noch keine exakte Gegenkante; dieser abgetrennte Zuordnungsrest ist
-als RM-322 offen.
+**Abschluss:** Enter gehört in jedem Dialog dem per Tab gewählten Knopf; 7 neue Fenstertests rot vor, grün nach dem Fix. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
-Der Schlusslauf deckte außerdem auf, dass große exakte Radiusänderungen an
-kantengestützten und radialen NURBS-Rundungen ihre Merkmalskennung verlieren
-konnten. Der Builder-Beleg aus `Generated` beziehungsweise die eindeutig
-ermittelte Zylinderfläche samt `Modified`/`Generated` wird über die Kopie auf
-die Ausgabedreiecke abgebildet. `resize_feature` setzt die Kennung nur fort,
-wenn genau ein passendes gerundetes Merkmal belegt ist; ohne eindeutigen
-Flächenbeleg bleibt die allgemeine Zuordnung zuständig. Beide Varianten
-behalten ihren Namen über zwei aufeinanderfolgende Radiusänderungen.
+## RM-335: Ein über „Benutzerdefiniert …“ gewählter Slicer lässt Erststart und Einstellungen in „wird gesucht“ hängen (02.10.2026)
 
-**Nachweis:** `test_both_kernels_ask_the_same_question_of_a_thin_walled_box`,
-`test_a_fillet_group_omits_each_individually_open_edge`,
-`test_a_failed_single_edge_exclusion_is_not_built_twice`,
-`test_a_single_edge_probe_is_reused_by_the_group_exclusion`,
-`test_a_fillet_group_omits_two_edges_that_the_kernel_cannot_build` und
-`test_a_failed_combined_fillet_exclusion_is_not_built_twice` in
-`tests/test_brep.py`,
-`test_a_changed_fillet_keeps_its_name_for_the_next_step` (beide Kernvarianten)
-und `test_a_radially_changed_brep_fillet_keeps_its_name_for_the_next_step` in
-`tests/test_mesh_edges.py`,
-`test_nurbs_radial_edits_keep_the_selected_angular_wall` in
-`tests/test_brep_canonical_surfaces.py` und
-`test_operation_continuation_releases_the_displaced_match_candidate` in
-`tests/test_native_references.py` bestanden gezielt. Der echte pegboard-goot-STEP
-wurde separat geprüft: R 1, acht ausgewählte Rundungen, sechs umgesetzt, zwei
-einzeln offene ausgelassen; das Ergebnis blieb mit einer Komponente
-wasserdicht. Der vollständige Entwicklungslauf und das unabhängige Schlussreview
-standen zu diesem Zeitpunkt noch aus. Fenster- und Leistungsläufe bleiben gemäß Projektregel
-Release-Abnahmen.
+<a id="rm-335-ein-über-benutzerdefiniert--gewählter-slicer-lässt-erststart-und-einstellungen-in-wird-gesucht-hängen-02102026"></a>
+<a id="rm-335"></a>
 
-**Nachprüfung 02.10.2026:** Drei weitere Fehler wurden vor der Korrektur
-reproduziert: Eine echte native Kopie konnte die ausgewählten Kanten umordnen;
-mehrere Bauversuche teilten dieselbe native Form; ohne Flächenhistorie wurde
-eine allgemeine Merkmalszuordnung als verbindlicher Herkunftsbeleg ausgegeben.
-Jeder neue Kandidat nutzt jetzt eine frische Kopie und deren Kantenhistorie.
-Eine Fortführung entsteht nur aus einem nichtleeren Flächenbeleg mit genau
-einem passenden Merkmal. Die fünf direkten Gegenfälle bestanden nach der
-Korrektur. Der betroffene Fachlauf bestand mit 973 Tests, 104 releasebedingt
-abgewählten Fällen und Exit 0; Ruff und Format für neun Dateien waren grün.
-Der unveränderte pegboard-goot-STEP bestand in beiden Kernen und beiden Güten:
-jeweils dicht und eine Komponente; exakt sechs gerundete und zwei zusätzlich
-ausgelassene Stellen, am Netz acht gerundete Stellen mit Solver `direct`.
-Nach der bestätigten RM225-Integration sind die Cacheversionen `fillet_edges`
-13 und `resize_feature` 14 eingetragen. Der unabhängige Schlussreview fand
-noch Kennungskollisionen beim folgenden Umbenennen unveränderter Nachbarn
-und nach ausdrücklicher Merkmalswahl. Beide Anschlüsse sind test-first
-korrigiert; ein gemeinsamer Helfer schützt belegte Selbstzuordnungen und
-offene Namen. Sechs direkte Fälle prüfen die tatsächlichen Folgeoperationen,
-deren Lage und analytisches Volumen sowie kalten und warmen Verlauf.
-Der folgende Nachgang vervollständigte den damals noch offenen RM284-Abschluss.
-Der erneute Fachlauf bestand mit 1209 Tests, 104 releasebedingt abgewählt;
-der unabhängige Schlussreview gab die Einheit einschließlich ihres notwendigen
-RM218-Anschlusses ohne offene Codebefunde frei. Eine zentrale Gegenprüfung
-entdeckte danach noch automatische Antworten in zwei Verlaufstests. Beide
-Normalwege sind nun strikt; ein unabhängig entzogener Builder-Beleg lässt
-sie genau an der unerwarteten Neuwahl scheitern. 13 abschließende gezielte
-Fälle und der unabhängige enge Nachreview sind grün. Der anschließende
-Berichtsfix erhält verschiedene Orte, Ränder und Zielmerkmale bei der
-Entdoppelung. Der echte native Zwei-Auslassungen-Fall prüft die registrierte
-Operation und den kalten/warmen Abschlussbericht; 21 gezielte Fälle und
-610 Sprach-/Wertprüfungen sind grün, der unabhängige Nachreview ist ohne
-Befund. Die bestehende Sammelzeile der Oberfläche bleibt erhalten; eine neue
-Mehrstellenanzeige wird nicht behauptet. RM-322 bleibt daneben offen.
-Konstruktion, Gegenfälle und Kundenmodell sind im
-[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md)
-wiederholbar beschrieben.
+**RM-335 — Ein über „Benutzerdefiniert …“ gewählter Slicer lässt Erststart und Einstellungen in „wird gesucht“ hängen.**
+  Review seit 0.5.1, Befund C-H2, Commit `48ffcf145` (Codex); `034e8999d` (Claude) hat
+  `choose_slicer_file` zusammengelegt, ohne den Pfad zu normieren.
+  `app/ui/first_run.py:1364–1373` legt den QFileDialog-Text (`C:/…`) unverändert ab,
+  `:1328–1329` (`_printers_found`) vergleicht `str(found.executable)` (`C:\…`) damit und kehrt bei
+  Ungleichheit zurück, ohne `_printer_survey` zu leeren; `_await_printer_survey` (`:881–902`)
+  lässt danach nichts mehr durch (`accept`, `_open`, `_open_inventory`, `apply_to` brechen still
+  ab). Zwilling: `app/ui/settings_dialog.py:753–755`, `:714`, `:786–789`, `:653–668`, `:633–643`.
+  **Fehlerfall:** Windows, Erststart, Slicer nicht gefunden, die Seite empfiehlt
+  „Benutzerdefiniert …“, Kunde wählt `orca-slicer.exe` → Druckerliste bleibt grau mit „Drucker
+  des gewählten Slicers werden gesucht …“, „Speichern und starten“, „Eigenes Modell öffnen …“ und
+  „Filamentlager öffnen …“ tun nichts und sagen nichts; einziger Ausgang „Später einstellen“
+  verliert die Wahl. In den Einstellungen bleibt „Speichern“ gesperrt; ein so gemerkter Pfad
+  springt dort nach der Programmsuche auf „Später auswählen“. Sackgasse im allerersten Dialog
+  (Regel 17).
+  **Fix:** In `choose_slicer_file` `str(Path(filename))` ablegen, alle Vergleiche über
+  `Path(...) == Path(...)` (beide `_printers_found`, `select_data` nach dem Neuaufbau der
+  Slicerliste); eine verworfene Antwort nur verwerfen, wenn sie zu einer älteren Wahl gehört.
+  **Abnahme:** Tests mit `fake.as_posix()` als Rückgabe des Dateidialogs in
+  `test_first_run_setup.py` und `test_ui_settings.py`: Erhebung schließt, Speichern frei, Wahl
+  bleibt gemerkt. Bauplan §2.3, §38, §2.7. Beleg: `bericht-C.md` (H2), Sonden
+  `c_dateidialog_pfadform.py`, `c_benutzerdefinierter_slicer.py`, `c_einstellungen_slicer.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. `c_benutzerdefinierter_slicer.py` (Exit 0): Pfad mit `/` lässt die Druckersuche offen, `accept()` gibt 0, nichts gemerkt; in den Einstellungen bleibt „Speichern“ gesperrt. Ursache unverändert `first_run.py:1328` und `:1364–1373`.
 
-**Abgeschlossen am 02.10.2026:** Produktcommit
-`57848fa72c4ca229f5dc9bcdd2cca2baf6945987` ist auf `main` und
-`origin/main`; Commit-Dateiliste, verbleibende Hunks und tatsächliche
-Gegenstelle sind unabhängig abgeglichen. Das gemeinsame vollständige
-Entwicklungstor `commit-tor-abschlussrunde-45-final` mit RM320 bestand mit
-19 187 Tests und 62 übersprungenen Fällen; Suite, Ruff, Format und mypy
-jeweils Exit 0, keine Quelldrift. Fenster-, Renderer- und Leistungsabnahmen
-bleiben beim Release. Der notwendige RM218-Anschluss ist enthalten,
-RM218 insgesamt und RM322 bleiben offen.
+**Abschluss:** Programmpfade in der Schreibweise des Systems, Vergleich über `discover.same_program`; Fenstertests rot/grün. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
-## RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)
+## RM-337: „Speichern“ in den Einstellungen löscht die Profilwahl des Slicers, ohne dass der Slicer wechselte (02.10.2026)
 
-<a id="rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-01102026"></a>
+<a id="rm-337-speichern-in-den-einstellungen-löscht-die-profilwahl-des-slicers-ohne-dass-der-slicer-wechselte-02102026"></a>
+<a id="rm-337"></a>
 
-Beim Ziehen einer Bohrung im Langloch über mehrere Körper nutzte der exakte
-Kern die ganze Baugruppen-Hülltiefe. Ein zweiter Stift in der Bohrung wurde
-deshalb auch oberhalb der Platte abgeschnitten; am Netz blieb sein Überstand.
-Bei mehreren Körpern nutzt *Zum Langloch ziehen* jetzt die gemessene
-Bohrungstiefe. Den Hüllkörperdurchgang behält der Einzelkörperweg.
+**RM-337 — „Speichern“ in den Einstellungen löscht die Profilwahl des Slicers, ohne dass der Slicer wechselte.**
+  Review seit 0.5.1, Befund C-M1, Commit `48ffcf145` (Codex).
+  `app/ui/settings_dialog.py:819–829` (`apply_to`) löscht, wenn `_stored_slicer_path !=
+  chosen_slicer` **oder** `slicer_profile_slicer` gesetzt und `!= chosen_slicer`. Der Druckdialog
+  schreibt `slicer_profile_slicer` auch für einen nur gefundenen, nie gemerkten Slicer
+  (`print_settings_dialog.py:7728–7729`, `:6364–6367`); die Einstellungen zeigen dann
+  „Später auswählen“ (`settings_dialog.py:318–323`).
+  **Fehlerfall:** Erststart übersprungen, im Druckdialog den automatisch gefundenen Slicer mit
+  Maschine, Prozess und Filament benutzt; danach in den Einstellungen nur das Thema ändern und
+  speichern → `slicer_machine_profile`, `slicer_base_process`, `slicer_base_filament`,
+  `slicer_bed_plate`, `slicer_filament_per_material` sind leer, der Druckdialog ordnet neu zu,
+  unter Umständen ein anderes Profil. Wählt der Kunde genau diesen Slicer, wird ebenfalls gelöscht.
+  **Fix:** Nur löschen, wenn die Wahl in diesem Dialog geändert wurde und der gewählte Slicer
+  (genormt, RM-335) nicht der ist, für den die Profile gelten.
+  **Abnahme:** Tests in `test_ui_settings.py` mit gemerktem Profilslicer und leerem
+  `remembered_path`: Thema ändern → Profile bleiben; denselben Slicer wählen → bleiben; anderen
+  Slicer wählen → gelöscht. Bauplan §29, §38. Beleg: `bericht-C.md` (M1), Sonde
+  `c_einstellungen_slicer.py` (Fälle A und C).
+  Nachprüfung am Stand `6ce767031`: besteht noch. `c_einstellungen_slicer.py` Fall A (Exit 0): bloßes Speichern leert Maschinenprofil, Prozess, Filament je Material und `slicer_profile_slicer` (`settings_dialog.py:819–829`).
 
-Die Regression baut eine Platte 40 × 20 × 10 mm mit Bohrung Ø 6 mm und einen
-Stift Ø 5 × 15 mm. Beide Kerne liefern danach zwei Körper, der Stift reicht
-von z = 10 bis 15 mm. Die Erstprobe maß am Netz 97,6 mm³ für den Stift und
-7 357,6 mm³ für die Platte. Diese Messwerte sind keine unabhängigen Sollwerte;
-die Nachprüfung vom 02.10. verwendet π × 2,5² × 5 mm³ für den Stift
-(Netz ±1 mm³, exakt ±0,000001 mm³) und 8000 − (36 + 9π) × 10 mm³ für die
-Netzplatte (±2 mm³). Die Abweichung umfasst Facettierung und die
-0,02-mm-Verlängerung des Netz-Durchzugs, die am Stiftende 0,01 mm zusätzlich
-abträgt.
+**Abschluss:** `forgets_slicer_profiles` verwirft Profile nur bei einem anderen Slicer; fensterlose und Fenstertests rot/grün. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
-**Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests.
-Unabhängiges Review nach Korrektur der Volumenabnahme ohne weitere Findings.
-Der vollständige Entwicklungslauf war zu diesem Zeitpunkt noch nicht erneut
-gelaufen; der Commit blieb bis zu seinem grünen Lauf aus.
+## RM-339: Ein langer Fehlerstatus der ComfyUI-Einrichtung schiebt Rahmen und Knöpfe über den Bildschirm (02.10.2026)
 
-**Nachprüfung 02.10.2026:** Die einseitige Erstprobe deckte den Sicherheitsweg
-nicht vollständig ab. Auch die Gegenprobe am früheren Stand `3fd3b1ace`
-lehnte den durchgesteckten Stift am Netz ab und entfernte ihn exakt vollständig;
-die damalige Korrektur im Arbeitsbaum war noch nicht integriert.
-Der beidseitige Stift, angeschlossene Naben, eine
-negative Innenhaut und vollständig ineinanderliegende positive Körper
-ergaben weitere rote Gegenfälle. Der gemeinsame Menü-/Operationsbeleg prüft
-jetzt den freien Bohrungsträger, vollständige Kontaktfreiheit und die
-dreiwertige Materialeinschließung; nur ein entschieden freier Beleg erlaubt
-den Schnitt. Die Einzelkörperfrage zählt positive Außenkörper. Der Abbruch
-erreicht auch das vorhandene Gitterzertifikat, wofür zuletzt ein eigener
-roter Gegenfall ergänzt wurde. Die allgemeine Bohrungssicherheitsfrage bleibt
-unverändert; nur `slot_hole` nutzt die Sonderfreigabe, mit Cacheversion 15.
+<a id="rm-339-ein-langer-fehlerstatus-der-comfyui-einrichtung-schiebt-rahmen-und-knöpfe-über-den-bildschirm-02102026"></a>
+<a id="rm-339"></a>
 
-Der abschließende betroffene Lauf bestand mit 569 Tests, drei abgewählten
-Fällen und Exit 0. Drei Boolean-Gegenfälle und 417 Sprachprüfungen bestanden
-zusätzlich. Sechs Rechnungen an unveränderten Kundenmodellen sowie Ruff,
-Format und mypy waren grün. Der unabhängige Schlussreview hat keine offenen
-Befunde. Die folgenden Nachgänge vervollständigten den damals noch offenen
-RM320-Abschluss. Eingangs-Hashes,
-analytische Sollwerte, historische Fehlannahmen und Wiederholung stehen im
-[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
+**RM-339 — Ein langer Fehlerstatus der ComfyUI-Einrichtung schiebt Rahmen und Knöpfe über den Bildschirm.**
+  Review seit 0.5.1, Befund D-H2. `ba8c08b14` (Claude) führte Rollbereich und `WrappedNote`
+  ein, ließ den Status aber im äußeren Layout; `b837a73f8` (Codex) setzte die Regel „Lange
+  Statusmeldungen bleiben im Rollbereich“ und stellte auf passive Anpassung um, ohne den Status zu
+  verlegen.
+  `app/ui/comfy_dialog.py:230` (`self.state = WrappedNote(self)`), `:275–282` (außerhalb von
+  `content_scroll`), `:685` (`_refused`); die Meldung enthält jede Ausgabezeile des gescheiterten
+  Prozesses (`backends/comfy_setup.py:540`).
+  **Fehlerfall:** pip- oder git-Schritt scheitert → das Fenster wächst von 668 × 300 auf
+  668 × 1920 bei 800 px Bildschirmhöhe, Knopfleiste bei y = 2161; *Einrichten*, *Schließen* und
+  die Supportzeile am Ende der Meldung sind nicht erreichbar, es gibt keinen Rollbalken
+  (`fenster.md:364`).
+  **Fix:** `state` und `progress` in `content_layout` verlegen.
+  **Abnahme:** Test lange Meldung → Rahmengröße unverändert, Rollbalken > 0, Knöpfe im Fenster.
+  Bauplan §2.8, §19.3. Beleg: `bericht-D.md` (H2), Sonde d2 in `test_d_sonden.py`
+  (`d_sonden_lauf2.txt`).
+  Nachprüfung am Stand `6ce767031`: besteht noch. Sonde d2 (`test_d_sonden.py`): Fenster wächst bei 800 px Bildschirmhöhe von 668×300 auf 668×1920, Knopfleiste endet bei y 2161, Status nicht im Rollbereich.
 
-Die nachfolgende zentrale Zweitprüfung fand noch den fehlenden Tokenanschluss
-aus den tatsächlichen Erkennungsarbeitern durch `actions_for` und
-`feature_answers`. Acht direkte Arbeiterfälle belegen jetzt Abbruch während
-Kontakt-/Einschließungsprüfung, vor der Merkerspeicherung sowie beim
-Ersatzauftrag und Fensterende. Ein weiterer Nachgang erlaubt eine gültige
-negative Innenhaut zusammen mit einem freien Stift über entschiedene
-Materialfamilien. 19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsfälle
-sind grün. Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt
-abgewählt; die sechs Kundenrechnungen am Endstand sind ebenfalls grün.
-Der unabhängige Schlussreview hat die vollständigen RM320-Hunks ohne offene
-Codebefunde freigegeben.
+**Abschluss:** Status und Fortschritt der ComfyUI-Einrichtung im Rollbereich; Fenstertest rot/grün. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
-**Abgeschlossen am 02.10.2026:** Produktcommit
-`e3dff190728d4caf447cb3be7927d5d651dee168` ist auf `main` und
-`origin/main`; Commit-Dateiliste, verbleibende Hunks und tatsächliche
-Gegenstelle sind unabhängig abgeglichen. Das gemeinsame vollständige
-Entwicklungstor `commit-tor-abschlussrunde-45-final` mit RM284 bestand mit
-19 187 Tests und 62 übersprungenen Fällen; Suite, Ruff, Format und mypy
-jeweils Exit 0, keine Quelldrift. Fenster-, Renderer- und Leistungsabnahmen
-bleiben beim Release. RM325 bleibt ein eigenständiger Seitenwandfehler.
+## RM-340: Nach dem Erzeugen liegen Versuchsliste und „Noch ein Versuch“ unter dem sichtbaren Bereich (02.10.2026)
+
+<a id="rm-340-nach-dem-erzeugen-liegen-versuchsliste-und-noch-ein-versuch-unter-dem-sichtbaren-bereich-02102026"></a>
+<a id="rm-340"></a>
+
+**RM-340 — Nach dem Erzeugen liegen Versuchsliste und „Noch ein Versuch“ unter dem sichtbaren Bereich.**
+  Review seit 0.5.1, Befund D-M1. `b837a73f8` (Codex) bricht die Zusage aus `bad4a1963` (Claude).
+  `app/ui/generate_dialog.py:1002–1006` ruft `self._grow_soon()` mit dem Kommentar „Neue Zeilen,
+  neue Höhe …“; das führt seit `b837a73f8` `_grow_to_content("passive")` aus (`:541–587`), und
+  `ContentHeight` setzt bei `passive` keine Größe (`style.py:404–405`).
+  **Fehlerfall:** Dialog in natürlicher Größe → *Erzeugen* → nach dem Lauf bleibt der Rahmen
+  480 × 201, die Liste liegt bei y = 171…291 in einem Viewport von 149 px, *Noch ein Versuch* bei
+  y = 299 — beide verdeckt. Sichtbar bleibt der Satz „ein weiterer Versuch kostet nichts als Zeit“,
+  der auf einen unsichtbaren Knopf verweist (Weg 3). `test_after_a_run_…` bleibt grün, weil er nur
+  zwei Dialoge vergleicht.
+  **Fix:** Das Erscheinen der Versuche als ausdrückliche Folge anpassen
+  (`_grow_to_content("explicit")`) oder mindestens `self._scroll.ensureWidgetVisible(self.again)`;
+  Kommentar korrigieren.
+  **Abnahme:** Test „nach dem Lauf stehen Liste und Knopf im Viewport“. Bauplan §2.2 Weg 3, §2.8.
+  Beleg: `bericht-D.md` (M1), Sonde d1.
+  Nachprüfung am Stand `6ce767031`: besteht noch. Sonde d1: Versuchsliste bei y 171…291 in einem 149 px hohen Sichtbereich, „Noch ein Versuch“ bei y 299.
+
+**Abschluss:** Versuchsliste und „Noch ein Versuch“ nach dem Lauf im sichtbaren Bereich; Fenstertest rot/grün. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-343: „Bildmodell einrichten …“ holt das Bildmodell nicht, wenn die Gewichte schon liegen, und meldet „Eingerichtet“ (02.10.2026)
+
+<a id="rm-343-bildmodell-einrichten--holt-das-bildmodell-nicht-wenn-die-gewichte-schon-liegen-und-meldet-eingerichtet-02102026"></a>
+<a id="rm-343"></a>
+
+**RM-343 — „Bildmodell einrichten …“ holt das Bildmodell nicht, wenn die Gewichte schon liegen, und meldet „Eingerichtet“.**
+  Review seit 0.5.1, Befund D-H1. Entstanden mit `4fd6f45d6`, von `ba8c08b14` (Claude) beim
+  Neubau des Einrichtungsdialogs übernommen.
+  `app/ui/comfy_dialog.py:330` (`setChecked(not weights_there and …)` — vorhandene Gewichte
+  heißen „aus“), `:591` (`weights_wanted = self.weights.isChecked()` → `False`),
+  `app/core/backends/comfy_setup.py:1504` (`if not weights: return Result(...)` vor
+  `fetch_image_model`, `:1524`).
+  **Fehlerfall:** Erzeugen-Dialog im Zustand NO_MODEL („Für den Weg aus Text fehlt noch das
+  Bildmodell …“, `generate_dialog.py:746/750`) → *Bildmodell einrichten …* → „Modell ist schon da“
+  (aus), „Bildmodell … laden — rund 6,9 GB“ (an) → *Einrichten* → der Kern läuft bis
+  `nodes_load` und kehrt zurück → „Eingerichtet. ComfyUI einmal neu starten …“; das Bildmodell
+  fehlt weiter, `recheck` zeigt wieder NO_MODEL. Genau der beworbene Fall (Bildweg läuft, Textweg
+  fehlt) ist der mit vorhandenen Gewichten; die Oberfläche bietet keinen Ausweg (Weg 3).
+  **Fix:** Im Kern das Bildmodell unabhängig von `weights` holen
+  (`if not weights and not image_model: return …`, `fetch_background`/`fetch_weights` nur bei
+  `weights`), oder im Dialog „schon da“ von „nicht gewünscht“ trennen.
+  **Abnahme:** Test Gewichte vorhanden, Bildmodell fehlt, Häkchen an → `fetch_image_model` läuft,
+  danach kein NO_MODEL. Bauplan §27, §2.2 Weg 3. Beleg: `bericht-D.md` (H1), Sonde d10
+  (`d_sonden_lauf4.txt`).
+  Nachprüfung am Stand `6ce767031`: besteht noch. Sonde d10: Schritte enden bei `nodes_load`, `fetch_image_model` läuft nicht, der Dialog meldet „Eingerichtet“.
+
+**Abschluss:** `comfy_setup.setup` holt das Bildmodell unabhängig von den Gewichten; Test schrieb vorher das alte Verhalten fest. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-353: Eine Meter-Datei mit 0,40 bis 0,88 Einheiten Diagonale wird ohne Frage als Zoll gelesen (02.10.2026)
+
+<a id="rm-353-eine-meter-datei-mit-040-bis-088-einheiten-diagonale-wird-ohne-frage-als-zoll-gelesen-02102026"></a>
+<a id="rm-353"></a>
+
+**RM-353 — Eine Meter-Datei mit 0,40 bis 0,88 Einheiten Diagonale wird ohne Frage als Zoll gelesen.**
+  Review 02.10.2026, Gebietsprüfung Weg 1 (W1-2), am HEAD `6ce767031`.
+  `app/core/ingest/loader.py:464–479`: Die Erweiterung bis zur doppelten Bauraumdiagonale
+  (`plausible_reach`, 886,8 mm bei 256³) gilt nur für mm; im Band 0,394–0,886 Dateieinheiten
+  bleibt allein „in“ übrig und gewinnt als sicher. Bei 0,30 ist „m“ sicher, bei 0,39 wird
+  gefragt, ab 0,40 nicht mehr.
+  **Fehlerfall:** Ein Blender-Helm 0,30 × 0,25 × 0,30 (Meter, Blender-Vorgabe) kommt ohne
+  Rückfrage mit 7,62 × 6,35 × 7,62 mm an; einziger Hinweis ist `ingest.scaled` (info) „Die Datei
+  wurde in Millimeter umgerechnet.“ Gegenprobe 0,20 × 0,15 × 0,20 fragt richtig. Verstößt gegen
+  Regel 21 (nie still raten) und §17.1 Schritt 1.
+  **Fix:** fragen, sobald eine zweite Lesart innerhalb von `plausible_reach` liegt; die
+  mm-Ausnahme bleibt.
+  **Abnahme:** `assert not detect_unit(0.52, plausible_reach((256, 256, 256))).certain`, dazu der
+  Helm aus der Sonde fragt mit „m“ unter den Antworten. Bauplan §17.1, Leitprinzip 6.
+  Belege: `gebiet-weg1.md`, Sonde `w1_einheit.py` (Teile B–D).
+
+**Abschluss:** `detect_unit` fragt, sobald eine zweite Lesart in `plausible_reach` liegt; Helm-STL fragt mit „m“. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-357: Im Beispiel Weg 2 folgen die Schraubenlöcher weder Breite noch Stärke (02.10.2026)
+
+<a id="rm-357-im-beispiel-weg-2-folgen-die-schraubenlöcher-weder-breite-noch-stärke-02102026"></a>
+<a id="rm-357"></a>
+
+**RM-357 — Im Beispiel Weg 2 folgen die Schraubenlöcher weder Breite noch Stärke.**
+  Review 02.10.2026, Gebietsprüfung Weg 2 (F10), am HEAD `6ce767031`.
+  `tools/make_examples.py:98–111`: Bohrungen fest bei x = ±20 mit `depth: 6.0`. Die Tour
+  (`app/core/tour.py:314–318`) verspricht „die Schraubenlöcher bleiben, wo sie hingehören“ und
+  gilt bei jeder Änderung als erfüllt; der Abschluss empfiehlt *Varianten erzeugen*.
+  **Fehlerfall:** Breite 40 → Bohrung halb offen an der Kante, ohne Befund; Breite 30 → Löcher
+  fehlen, gemeldet nur `boolean.without_effect`; Stärke 10 → Löcher gehen nicht mehr durch, ohne
+  Befund. Verstößt gegen Regel 8 und §13.
+  **Fix:** `x = "=∓@breite/2 ± 10"` (bzw. ein eigener Randabstand-Parameter),
+  `depth = "=@staerke"`, danach `tools/make_examples.py` fahren.
+  **Abnahme:** Breite 30/40/90 und Stärke 4/10 → beide Bohrungen gehen durch und liegen ganz im
+  Material (Test in `test_way_two.py` oder `test_examples.py`). Bauplan §2.2, §37.
+  Belege: `gebiet-weg2.md`, Sonden `w2_beispiel_kante.py`, `w2_beispiel_masse.py`,
+  `w2_beispiel_staerke.py`.
+
+**Abschluss:** Schraubenlöcher im Beispiel Weg 2 an `@breite` und `@staerke` gebunden; Test für Breite 30/40/90 und Stärke 4/10. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-362: Weg 3: Abbrechen verwirft fertige Versuche, Ausweg nur als Text, Prompt-Dateinamen ohne Endung (02.10.2026)
+
+<a id="rm-362-weg-3-abbrechen-verwirft-fertige-versuche-ausweg-nur-als-text-prompt-dateinamen-ohne-endung-02102026"></a>
+<a id="rm-362"></a>
+
+**RM-362 — Weg 3: Abbrechen verwirft fertige Versuche, Ausweg nur als Text, Prompt-Dateinamen ohne Endung.**
+  Review 02.10.2026, Gebietsprüfung Weg 3, am HEAD `6ce767031`.
+  - **W3-2 — Abbrechen eines weiteren Versuchs verwirft auch die fertigen.** Während *Noch ein
+    Versuch* läuft, ist *Übernehmen* gesperrt (`app/ui/generate_dialog.py:859–872`); *Abbrechen*
+    schließt den ganzen Dialog (`:1091–1099`), Versuch 1 ist verloren (`MainWindow._generate` fügt
+    nur bei `Accepted` hinzu). Fix: Abbrechen bricht nur den laufenden Versuch, die fertigen
+    bleiben wählbar. §2.8, §2.1. Sonde `w3_abbruch.py`.
+  - **W3-3 — Der Ausweg eines Generatorfehlers steht als Text da, nicht als Knopf.** `_on_failed`
+    (`generate_dialog.py:1060–1068`) hängt „Zusätzliche Programme …“ als Zeile an; der
+    Einrichten-Knopf hängt nur an der Bereitschaft (`:765–768`), die weiter „bereit“ meldet (Fall:
+    ComfyUI antwortet beim Lauf nicht mehr, `backends/mesh.py:509`); die Menüs liegen hinter dem
+    modalen Dialog. `test_a_failure_says_why_and_what_helps` prüft nur den Text. Fix: Vorschlag
+    als Knopf. §2.7. Sonde `w3_dialog.py` Teil A.
+  - **W3-5 — Ein Prompt, der auf „/“ endet oder nur aus Punkten besteht, liefert einen Körper, der
+    nicht lädt.** Der Quellname wird aus dem Prompt gebildet (`app/core/generate.py:189`, `:194`,
+    `app/core/scene/project.py:460`): „Rohrhalter für 20/“ → `.glb`, „..“/„...“ verlieren die
+    Endung; `load` hält mit der falschen Auskunft „Dieses Dateiformat kann nicht gelesen werden.“
+    Nebenbei: „Halter für 1/2 Zoll Rohr“ → Quelle `2 Zoll Rohr.glb`. Fix: Quellname säubern und
+    bei leerem Stamm auf „Erzeugt“ fallen. §2.7, §17.1. Sonde `w3_promptnamen.py`.
+  **Abnahme:** je Fund ein Test — Abbrechen von Versuch 2 lässt Versuch 1 übernehmbar; ein
+  Laufzeitfehler zeigt einen Knopf mit Handlung; Prompts „Rohrhalter für 20/“, „..“, „...“ laden.
+  Beleg: `F:\solidon-review-reports\gebiet-weg3.md`.
+
+**Abschluss:** W3-2 Abbrechen behält fertige Versuche, W3-3 Einrichten als Knopf, W3-5 Quellname aus dem Prompt bereinigt; Tests rot/grün. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-363: Die Symmetrie beim Formen spiegelt am Weltursprung statt am Körper (02.10.2026)
+
+<a id="rm-363-die-symmetrie-beim-formen-spiegelt-am-weltursprung-statt-am-körper-02102026"></a>
+<a id="rm-363"></a>
+
+**RM-363 — Die Symmetrie beim Formen spiegelt am Weltursprung statt am Körper.**
+  Review 02.10.2026, Gebietsprüfung Weg 4 (W4-1), am HEAD `6ce767031`.
+  `app/core/geom/sculpt.py:89–105` spiegelt die Züge an der Weltebene; die Leiste verspricht „am
+  Objektursprung“ (`app/ui/sculpt_bar.py:115`).
+  **Fehlerfall:** Kugel 40 mm aus der Mitte versetzt, Symmetrie X, ein Zug: Zugseite 117 Ecken
+  bewegt, Spiegelseite 0; mittig liegend 117/117. Symmetrie Z wirkt bei keinem Körper auf dem
+  Bett. Der Prüfbericht meldet nur `sculpt.applied`, kein Hinweis, dass die Spiegelung ins Leere
+  ging.
+  **Fix:** Spiegelebene durch den Objektursprung (bzw. die Körpermitte, wie die Leiste es nennt)
+  — gespeichert im Parameter, damit der Zug reproduzierbar bleibt (Regel 2); alte Projekte mit
+  Weltebene über `format_version`/Migration oder `cache_version` behandeln.
+  **Abnahme:** Test an versetzter Kugel für X, Y und Z: Spiegelseite bewegt so viele Ecken wie
+  die Zugseite. Bauplan §2.2 (Weg 4), §2.7.
+  Belege: `F:\solidon-review-reports\gebiet-weg4.md`, Sonde `w4_symmetrie.py`.
+
+**Abschluss:** Spiegelebene durch die Mitte des Körpers; Format 40 mit Beispieldatei `sculpt_mirror_v39.p3d`. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-364: Ein Zug *Abtragen* sticht durch die Platte oder dünnt die Wand, ohne Befund (02.10.2026)
+
+<a id="rm-364-ein-zug-abtragen-sticht-durch-die-platte-oder-dünnt-die-wand-ohne-befund-02102026"></a>
+<a id="rm-364"></a>
+
+**RM-364 — Ein Zug *Abtragen* sticht durch die Platte oder dünnt die Wand, ohne Befund.**
+  Review 02.10.2026, Gebietsprüfung Weg 4 (W4-2), am HEAD `6ce767031`.
+  `app/core/geom/sculpt.py:484–651`; die Prüfung „aufgerissen“ (`sculpt.torn`) kann nie
+  auslösen, weil Formen die Topologie nicht ändert (Kommentar `main_window.py:949`). Die
+  Gegenmaßnahme R6 aus dem Formkonzept ist nicht gebaut.
+  **Fehlerfall:** 4-mm-Platte, ein Zug *Abtragen* → 76 sich durchdringende Dreieckspaare (vorher
+  0); flacher Zug → Restwand 0,44 mm bei Mindestwand 0,84 mm (die Wandkarte der Sitzung zeigt 2
+  zu dünne Dreiecke). Nach *Fertig* meldet der Prüfbericht nur `mesh.evened`, `mesh.deviation`,
+  `sculpt.applied` (und `arrange.below_bed`); der Export läuft ohne Warnung.
+  **Fix:** Nach der Formsitzung Selbstdurchdringung (`intersections.crossing_face_pairs`) und
+  Mindestwand gegen das Materialprofil prüfen und als Befund mit Handlung melden (*Zug
+  zurücknehmen*, *Stelle zeigen*).
+  **Abnahme:** Test 4-mm-Platte mit durchstechendem Zug → Befund `sculpt.pierced` (o. ä.);
+  dünnender Zug → Befund zur Mindestwand. Bauplan §2.2, §17.3.
+  Belege: `gebiet-weg4.md`, Sonden `w4_durchstich.py`, `w4_duenn.py`.
+
+**Abschluss:** Befunde `sculpt.pierced` und `sculpt.thin_wall` mit Stelle; Test an der 4-mm-Platte. Umgesetzt von Claude, in main mit `38006b338`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-392: Ein abtragender Baustein läuft über den Rand der Fläche hinaus, ohne Befund (02.10.2026)
+
+<a id="rm-392-ein-abtragender-baustein-läuft-über-den-rand-der-fläche-hinaus-ohne-befund-02102026"></a>
+<a id="rm-392"></a>
+
+**RM-392 — Ein abtragender Baustein läuft über den Rand der Fläche hinaus, ohne Befund.**
+  Review 02.10.2026, Nachbau-Test F2, am HEAD `4449e3370`.
+  **Fehlerfall:** Quader 40 × 30 × 10 → Vorderseite → *Baustein einsetzen …* → Schlüsselloch mit
+  Vorgaben (M4, Einhängeweg 8) → *Einsetzen*: Kopfteil in Flächenmitte (z = 5), der Schlitz endet
+  bei z = 13 über der Oberkante 10, die Oberseite verliert 26,3 mm² — die Schraube rutscht nach
+  oben heraus. Prüfbericht leer.
+  **Stellen:** Für Bohrungen gibt es `bore.over_the_edge` (`app/core/geom/prepare.py:727`); beim
+  Einsetzen am Merkmal (`app/core/knowledge/parts/ops.py`, Schlüsselloch
+  `app/core/knowledge/parts/mounting.py:611`) fehlt die Prüfung.
+  **Fix:** Umriss des abtragenden Bausteins gegen die Fläche prüfen, Befund mit *Eingabe
+  korrigieren*; beim Schlüsselloch die Lage so vorschlagen, dass der Einhängeweg in der Fläche
+  liegt.
+  **Abnahme:** Test: Schlüsselloch an der Vorderseite eines 10 mm hohen Quaders → Befund mit
+  Handlung bzw. Lage im Material. Bauplan §24.3, §17.3, §2.7.
+  Beleg: `nachbau\bericht.md`, Sonde `f2_schluesselloch_rand.py`.
+
+**Abschluss:** Befund `part.over_the_edge` für jeden abtragenden Baustein an beiden Kernen; rund 2 000 Bausteintests ohne Fehlalarm. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-394: *An Merkmal ausrichten* wählt das Ziel still vor und nimmt den ersten Bildklick nicht an (02.10.2026)
+
+<a id="rm-394-an-merkmal-ausrichten-wählt-das-ziel-still-vor-und-nimmt-den-ersten-bildklick-nicht-an-02102026"></a>
+<a id="rm-394"></a>
+
+**RM-394 — *An Merkmal ausrichten* wählt das Ziel still vor und nimmt den ersten Bildklick nicht an.**
+  Review 02.10.2026, Nachbau-Test F8, am HEAD `4449e3370`.
+  **Fehlerfall:** zwei Quader, linke Seite von B anklicken → *An Merkmal ausrichten*: „Ziel“ steht
+  schon auf `obj_1:face_1` (linke Seite von A, erster Listeneintrag). Der Bildklick auf die rechte
+  Seite von A landet beim Feld „Merkmal“; ohne vorheriges Anklicken des Felds „Ziel“ landet B
+  links an A statt rechts — still, ohne Befund.
+  **Stellen:** `app/ui/op_dialog.py:2916–2926` (Pflichtziel ohne leeren Eintrag, die Liste wählt
+  ihren ersten), `_target_missing` (`:2336`) greift so nie.
+  **Fix:** Pflichtziel leer beginnen („— im Bild wählen —“, *Übernehmen* gesperrt mit Satz); der
+  Bildklick füllt das erste noch leere Merkmalsfeld.
+  **Abnahme:** Test: Dialog öffnet mit leerem Ziel und gesperrtem *Übernehmen*; ein Bildklick auf
+  die rechte Seite von A füllt „Ziel“, B sitzt bündig rechts. Bauplan §2.6, Regel 21.
+  Beleg: `nachbau\bericht.md`, Sonde `a1_ausrichten.py`.
+
+**Abschluss:** Pflichtziel beginnt leer, der erste Bildklick füllt es; Fenstertest rot/grün. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-325: Das Langlochwerkzeug aus Kennzahlen liegt an einer Seitenwand ±X um 90° verdreht (02.10.2026)
+
+<a id="rm-325-das-langlochwerkzeug-aus-kennzahlen-liegt-an-einer-seitenwand-x-um-90-verdreht-02102026"></a>
+<a id="rm-325"></a>
+
+**RM-325 — Das Langlochwerkzeug aus Kennzahlen liegt an einer Seitenwand ±X um 90° verdreht.**
+  Review seit 0.5.1, Befund A-H1 (Fehler älter; die Vereinheitlichung aus `8ec41793d`
+  (Claude) und `22651ccd1` (Codex) hat genau diesen Verbraucher ausgelassen).
+  `app/core/geom/prepare_ops.py:939` nimmt den Langlochwinkel im Rahmen von `prepare.slot_frame`
+  (`prepare.py:1453`), `:952–953` dreht das Profil aber mit `transform.rotation_between((0,0,1),
+  Achse)`. Verbraucher: `_closed_at` (`:2224–2225`) und `_tool_for` (`:2506`).
+  **Fehlerfall (Netzkern):** Quader 60 × 100 × 60, Langloch Ø 6 auf 20 mm bei 30° durch die
+  Seitenwand mit Normale +X. *Zum Langloch ziehen* auf 14 mm: Volumen bleibt 353 265,69 mm³ statt
+  ≈ 355 423,5, Befund `slot_hole.feature_lost`, der alte Umriss wird nicht geschlossen. Auf 0°
+  gedreht: vier Verrundungen statt eines Langlochs. Dieselben Schritte an +Y, +Z und am exakten
+  Kern sind richtig, die Kerne sagen also Verschiedenes (`operationen.md`). Nach Rechnung ist jede
+  Achse außerhalb der YZ-Ebene betroffen, gemessen ist ±X.
+  **Fix:** In `_feature_solid` die Basis aus `slot_frame(direction)` (`x_axis`, `y_axis`,
+  `normal`) nehmen statt `rotation_between`. Dabei `SLOT_ACROSS_LIMIT` (`prepare.py:1414`)
+  trennen: Er ist zugleich Drehschwelle (`prepare_ops._slot_turned`, `:9013`) und Rahmenkegel;
+  wer die Schwelle nachstellt, verdreht gespeicherte Winkel ohne Migration — eigene Konstante
+  für den Kegel, mit Vermerk „Änderung braucht Migration“.
+  **Abnahme:** Test „Langloch an Seitenwand ±X kürzen und drehen“ an beiden Kernen, Volumen und
+  genau ein Langlochmerkmal. Bauplan §21.1, §25, §30.
+  Belege: `F:\solidon-review-reports\bericht-A.md` (H1, N4), Sonden
+  `a_langloch_seitlich_kuerzen.py`, `a_langloch_seitlich_drehen_verlauf.py`,
+  `a_langloch_seitlich_gegenprobe.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. Netzkern an +X: 353 265,69 statt ≈ 355 423,54 mm³ und `slot_hole.feature_lost`; auf 0° zwei `curved_face` und vier `fillet` statt eines `slot`; exakter Kern und +Z richtig. `prepare_ops.py:939`, `:952–953` unverändert. Belege `F:\solidon-review-reports\verif-A.md`, Sondenausgaben `sonden\*_6ce.txt`.
+
+**Abschluss:** Langlochwerkzeug im Rahmen von `slot_frame`, eigene Konstante `SLOT_FRAME_CONE`; Test an ±X, +Y, beiden Kernen. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-391: „Länge“ nach einer Zeichnung streckt sie um ihre Mitte, der Körper hebt ab und ist nicht wasserdicht (02.10.2026)
+
+<a id="rm-391-länge-nach-einer-zeichnung-streckt-sie-um-ihre-mitte-der-körper-hebt-ab-und-ist-nicht-wasserdicht-02102026"></a>
+<a id="rm-391"></a>
+
+**RM-391 — „Länge“ nach einer Zeichnung streckt sie um ihre Mitte, der Körper hebt ab und ist nicht wasserdicht.**
+  Review 02.10.2026, Nachbau-Test F6, am HEAD `4449e3370`.
+  **Fehlerfall:** *Zeichnen* → geschlossener Linienzug 44,2 × 47 mit Schräge → *Fertig* → im Dialog
+  *Grundform hochziehen* „Länge 40“ → *Übernehmen*: Die Zeichnung wird gleichmäßig um ihre Mitte
+  gestreckt (auch die Breite 47 → 42,53), der Körper hebt 2,23 mm vom Bett ab und ist nicht
+  wasserdicht (`is_watertight = False`; ebenso auf XY und mit „Breite 40“); ohne Änderung dicht.
+  Nach dem Strecken schließt der Linienzug nur noch auf 3,6·10⁻¹⁵. Der Prüfbericht nennt nur die
+  offenen Zeichnungsmaße bzw. „schwebt“. Dazu: nach einer Zeichnung steht weiter „Grundform:
+  Rechteck“, und „Länge/Breite“ meinen die Zeichnungsmaße auch beim seitlichen Hochziehen.
+  **Stellen:** `app/ui/op_dialog.py:2593` (`stretch`) → `app/core/sketch/edit.py:2358` (`scaled`).
+  **Fix:** Strecken hält gemeinsame Punkte gemeinsam (Koinzidenzen nach dem Strecken lösen bzw.
+  auf den Startpunkt einrasten) und bleibt am Bezugspunkt der Zeichnung; Befund, wenn ein Körper
+  undicht entsteht; Feldnamen und „Grundform“ nach einer Zeichnung passend.
+  **Abnahme:** Test: Linienzug strecken → Körper dicht, auf dem Bett, nur die gemeinte Richtung
+  ändert sich. Bauplan §30.1, §17.3, Regel 6.
+  Belege: `nachbau\bericht.md`, Sonden `f6b_laenge_skaliert.py`, `f6_seitenprofil.txt`.
+
+**Abschluss:** Zeichnung streckt nur in der getippten Richtung am Bezugspunkt, Enden rasten ein, Befund bei undichtem Körper. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-332: Geometrie: Reste aus dem Review seit 0.5.1 (02.10.2026)
+
+<a id="rm-332-geometrie-reste-aus-dem-review-seit-051-02102026"></a>
+<a id="rm-332"></a>
+
+**RM-332 — Geometrie: Reste aus dem Review seit 0.5.1.**
+  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-A.md`), je einzeln abnehmbar:
+  - **N3, `cef44ccaa` (Claude):** *Auf beiden Seiten* setzt die Rückseite an einem hohlen
+    Körper an die Hohlraumwand. `app/core/geom/label_ops.py:802–842` (`opposite_side`, „der erste
+    Austritt“ `:834–837`), Aufrufer `:944` (exakt) und `:1045` (Netz). Fehlerfall: Quader
+    40 × 30 × 20 mit eingeschlossenem Hohlraum 30 × 20 × 10, Schrift vorn bei x = +20 → Rückseite
+    bei x = +15 im Hohlraum, Außenseite leer, kein Befund. Fix: den letzten Austritt nehmen oder
+    Austritte in einen eingeschlossenen Hohlraum (`detect_voids`) überspringen, sonst
+    `label.no_back_side`. Abnahme: Test hohler Quader, Rückseite bei x = −20. Sonde
+    `a_schrift_rueckseite_hohl.py`.
+  - **N5, `22651ccd1` (Codex), zuerst `8ec41793d`:** Der Migrationsmarker `measured_frame` steht
+    als Haken „Richtung aus einem älteren Projekt“ unter „Weitere Einstellungen“ jeder neuen
+    Langlochbohrung und im Agentenschema (`prepare_ops.py:496` `DrillParams`, `:8145`
+    `SlotHoleParams`; `json_schema` enthält ihn für `drill_hole` und `slot_hole`). Fix: aus
+    Dialog und `json_schema` nehmen (internes Feld wie `_NOT_A_FIELD`). Abnahme: Schema- und
+    Dialogtest ohne das Feld, Migration 38 → 39 unverändert grün.
+  - **N6, `22651ccd1` (Codex):** Eine migrierte Langlochbohrung behält beim Umsetzen auf eine
+    andere Fläche die alte Bohrrichtung (`app/ui/placement_flow.py:3310–3314` überschreibt die
+    Flächennormale mit der gespeicherten). Aus dem Code gelesen, am Fenster nicht geprüft. Fix:
+    die gespeicherte Normale nur halten, wenn die neue Fläche dieselbe Normale trägt, sonst
+    Flächennormale übernehmen und Marker löschen (wie `main_window.py:12691`). Abnahme: Test
+    Projekt Format 38, Langlochbohrung oben, auf Seitenfläche umsetzen → Richtung der Seitenfläche.
+  - **N7, `f8a42f602` (Codex):** `tests/test_refine.py:258–265`
+    (`test_the_batch_chunk_respects_its_measured_peak`) rechnet die Formel aus
+    `perceive/refine.py:458–461` nach und hält `BATCH_PEAK_FACTOR >= 12` fest — prüft den
+    Ist-Zustand (`tests.md`). Fix: streichen oder gegen eine gemessene Spitze halten.
+  Bauplan §18.11, §21.1, §16.2, §35.
+  Nachprüfung am Stand `6ce767031`: alle Reste offen. N3: Rückseite am hohlen Quader bei x = +15 statt −20, ohne Befund. N5: `measured_frame` steht im Agentenschema von `drill_hole` und `slot_hole` und als Feld unter „Weitere Einstellungen“ (Sonde `v_measured_frame_schema.py`). N6: nur am Code, `placement_flow.py:3310–3314` unverändert. N7: jetzt `test_refine.py:257–263`, rechnet weiter nur die Formel nach.
+
+**Abschluss:** N3 Rückseite außen am hohlen Körper, N5 `ParamSpec.internal`, N6 Altrichtung nur auf derselben Fläche, N7 Formeltest gestrichen. Umgesetzt von Claude, in main mit `7a988c217`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-376: Der Formpinsel wirkt nur auf die Vorderseite (02.10.2026)
+
+<a id="rm-376-der-formpinsel-wirkt-nur-auf-die-vorderseite-02102026"></a>
+<a id="rm-376"></a>
+
+**RM-376 — Der Formpinsel wirkt nur auf die Vorderseite.**
+  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 4).
+  Der Pinsel greift alle Eckpunkte in der Kugel (`app/core/geom/sculpt.py:108–119`, `_weights`;
+  Anwendung `:177`), auch die Rückseite einer dünnen Wand: *Abtragen* auf einer 4-mm-Platte
+  drückt die Unterseite 3,7 mm unter das Bett (`sonden\w4_durchstich.out.txt`).
+  **Ablauf:** Nur Eckpunkte, deren Normale zur Strichnormale zeigt (Skalarprodukt über einer
+  Schwelle), werden bewegt; die Schwelle steht im Parameter des Zugs, damit alte Züge
+  reproduzierbar bleiben (Regel 2; alte Projekte ohne Wert behalten das alte Verhalten oder
+  migrieren mit `format_version`).
+  **Abnahme:** Test: 4-mm-Platte, *Abtragen* von oben → Unterseite bleibt bei z = 0, keine
+  Selbstdurchdringung; Kugel → Wirkung wie bisher. Bauplan §2.2 (Weg 4), Regel 2, Regel 9.
+  Zusammen mit RM-364 (Befund) umsetzen.
+  **Vorgabe Robert 02.10.2026 — allgemein:** Vorderseitenfilter für alle Pinsel (Auftragen, Abtragen, Glätten, Ziehen); Abnahme an mindestens drei unterschiedlichen Modellen (dünne Platte, Figur, Hohlkörper).
+
+**Abschluss:** Vorderseitenfilter für alle Pinsel, geprüft an Platte, Hohlkugel und Figur; Format 41. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-378: Ein Zug auf der Symmetrieebene wirkt nicht doppelt (02.10.2026)
+
+<a id="rm-378-ein-zug-auf-der-symmetrieebene-wirkt-nicht-doppelt-02102026"></a>
+<a id="rm-378"></a>
+
+**RM-378 — Ein Zug auf der Symmetrieebene wirkt nicht doppelt.**
+  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 4).
+  Ein Zug genau auf der Symmetrieebene wird mit seiner Spiegelung zweimal am selben Ort angewandt
+  (`app/core/geom/sculpt.py:89–105`); die Stärke verdoppelt sich, je näher der Zug an der Ebene
+  liegt.
+  **Ablauf:** Überdecken sich Zug und Spiegelzug, wird die Gewichtung zur Ebene hin so
+  ausgeblendet, dass die Summe der Wirkung der eines einzelnen Zugs entspricht; reproduzierbar aus
+  den Parametern (Regel 2), alte Projekte über `cache_version`/Migration.
+  **Abnahme:** Test: Zug auf der Ebene verschiebt die Ecken so weit wie derselbe Zug ohne
+  Symmetrie; Zug weit weg von der Ebene unverändert doppelt. Nach RM-363 (Ebene am Körper)
+  umsetzen. Bauplan §2.2 (Weg 4), Regel 2.
+  **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jede Symmetrieachse und jeden Pinsel; Abnahme an mindestens drei unterschiedlichen Körpern.
+
+**Abschluss:** Stärkste Kopie je Eckpunkt bei gespiegelten Zügen; Test für jede Achse an drei Körpern. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-379: *Weich verschmelzen* rechnet im Fenster nur bei Budgetüberschreitung gröber (02.10.2026)
+
+<a id="rm-379-weich-verschmelzen-rechnet-im-fenster-nur-bei-budgetüberschreitung-gröber-02102026"></a>
+<a id="rm-379"></a>
+
+**RM-379 — *Weich verschmelzen* rechnet im Fenster nur bei Budgetüberschreitung gröber.**
+  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 4).
+  `app/core/geom/blend.py:376` rechnet im Entwurf mit doppelter Rasterweite
+  (`params.grid * DRAFT_FACTOR`); die Figur im Fenster weicht bis 2 mm vom Export ab. §31 erlaubt
+  die gröbere Entwurfsauflösung, der Kunde sieht aber nicht, dass er einen Entwurf formt.
+  **Ablauf:** Den Entwurfsfaktor nur anwenden, wenn die feine Rasterweite das Punktbudget aus §31
+  sprengt; wo er greift, sagt ein Befund bzw. die Statuszeile „Entwurfsauflösung — der Export
+  rechnet fein“.
+  **Abnahme:** Test: kleine Figur unter dem Budget → Entwurf und fein gleich (Hash); große Figur
+  über dem Budget → Entwurf gröber und Hinweis sichtbar; Laufzeit im Budget §31. Bauplan §31,
+  §2.8. Verwandt: RM-365 (Festschreiben im Entwurf).
+  **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Budgetregel für jede Op mit Entwurfsfaktor (nicht nur *Weich verschmelzen*); Abnahme an mindestens drei unterschiedlichen Modellen.
+
+**Abschluss:** Entwurfsraster nur über `DRAFT_SAMPLES`, Befund `blend.draft`; Test an drei Körperpaaren. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-345: Die Schrittauswahl wählt für Python-Dateien außerhalb von `app/`, `tools/` und `tests/` keinen Test (02.10.2026)
+
+<a id="rm-345-die-schrittauswahl-wählt-für-python-dateien-außerhalb-von-app-tools-und-tests-keinen-test-02102026"></a>
+<a id="rm-345"></a>
+
+**RM-345 — Die Schrittauswahl wählt für Python-Dateien außerhalb von `app/`, `tools/` und `tests/` keinen Test.**
+  Review seit 0.5.1, Befund E-M2. `436e1ce0f` und `5a6a695a4` (Codex) vergrößern eine ältere
+  Lücke in `tools/affected_tests.py:316–336` (zuletzt umgebaut in `c56bd9918`, Codex): Für eine
+  `.py`-Datei außerhalb der drei Pakete erreicht `affected()` den Namensleser `_named_readers`
+  nie (`:337` nur für Nicht-Python-Dateien).
+  **Fehlerfall:** `tools/affected_tests.py --why
+  .claude/.state/uebergabe-gesamt-2026-09-27/einheit.py
+  .claude/.state/uebergabe-matrix-2026-09-27/gcode_lesen.py` → „Keine Testdatei hängt an dieser
+  Änderung.“, obwohl `tests/test_delivery_tools.py` und `tests/test_delivery_matrix_review.py`
+  diese Dateien per `spec_from_file_location` laden. Dasselbe für
+  `.claude/hooks/solidon3d_hooks.py` (geladen von `tests/test_solidon3d_hooks.py:18–25`).
+  Außerdem hängt die Suite jetzt an zwei `.state`-Ordnern, die nach `.claude/README.md:19`
+  entfernt werden, sobald nur noch das Archiv sie nennt — das Aufräumen macht die Tests rot.
+  **Fix:** Im `.py`-Zweig für Dateien außerhalb von `PACKAGES` auf `_named_readers` zurückfallen;
+  Matrixläufer samt `gcode_lesen` nach `tools/` ziehen oder seine Tests aus der Suite nehmen.
+  Dabei klären (Befund E-U1, unbelegt): ein einziges nicht ladbares Modell macht heute den ganzen
+  Modelllauf unauswertbar (`einheit.py` `main()`, `treiber.py:423–475`), und der Bericht nennt
+  den Ladefehler nicht.
+  **Abnahme:** Test bekannten Ausgangs für `.claude/hooks/solidon3d_hooks.py` und den
+  Matrixläufer. AGENTS.md „Arbeitsweise“, Bauplan §35. Beleg: `bericht-E.md` (M2, U1),
+  `sonden\e_affected_state.txt`, `e_affected_hookpy.txt`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. Für `solidon3d_hooks.py`, `einheit.py` und `gcode_lesen.py` meldet die Auswahl „Keine Testdatei hängt an dieser Änderung“ (Exit 0).
+
+**Abschluss:** `affected_tests` fällt für Skripte außerhalb der Pakete auf `_named_readers` zurück. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-348: Der Fenstertest der Leistungsmarken prüft den Zuschnitt beim Lesen nicht mehr (02.10.2026)
+
+<a id="rm-348-der-fenstertest-der-leistungsmarken-prüft-den-zuschnitt-beim-lesen-nicht-mehr-02102026"></a>
+<a id="rm-348"></a>
+
+**RM-348 — Der Fenstertest der Leistungsmarken prüft den Zuschnitt beim Lesen nicht mehr.**
+  Review seit 0.5.1, Befund F-M2, Commit `0f82c4a04` (Claude).
+  `tests/test_performance_marks.py:161–174` (`test_measure_cuts_a_stored_window_to_length`) prüft
+  nach dem Umbau nur die geschriebene Liste; `measure` schneidet beim Schreiben selbst
+  (`[*runs, taken][-WINDOW:]`). Mutation: `_runs_of` ohne `[-WINDOW:]` → der Test bleibt grün,
+  der gelesene Median fällt von 5,0 auf 3,5; der alte Test
+  (`test_a_stored_window_is_cut_to_length`) war unter derselben Mutation rot. Praktisch, sobald
+  `WINDOW` einmal verkleinert wird.
+  **Fix:** Gespeichert `[9.0]*3 + [1.0]*5` (`WINDOW = 5`), neuer Lauf 1,3 → mit Zuschnitt Median
+  1,0, Überschreitung, `strikes == 1`; ohne Zuschnitt Median 5,0, `strikes == 0`.
+  **Abnahme:** Test grün, Mutation `_runs_of` ohne Zuschnitt rot. Bauplan §31.
+  Beleg: `bericht-F.md` (M2), Sonde `fenster_mutation.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch, die Mutation bleibt grün (7 passed). Folgevermerk zum Fix: Das genannte Szenario `[9]*3+[1]*5` trennt nicht (Median ohne Zuschnitt 1,0, nicht 5,0); trennscharf ist `[9]*5+[1]*3`, damit wird der Kontrollfall unter der Mutation rot.
+
+**Abschluss:** Test des Zuschnitts beim Lesen über `measure`; Mutation `_runs_of` ohne Zuschnitt macht ihn rot. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
