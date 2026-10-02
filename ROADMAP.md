@@ -57,6 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Native Breitensuche als eigener Bauauftrag (C++ freigegeben 23.09.); womit — eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython —, entscheidet Robert |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
+| [RM-218 — Bohrungskennungen beim Umbau des exakten Verlaufs erhalten](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Begrenzter Anschluss mit RM284 auf origin/main; die Gesamtfreigabe und der vollständige Passungsnachweis am Kundenteil bleiben offen, Fensterabnahme im Release |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen; dazu am Langloch die Tiefe mit oder ohne Fase und der zweite Satz einer Kopie über die Kante (Durchsicht 0.5.1) |
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: PLA-Vorgabe 50…100 % je Drucker und Curas Schichtzeitschwelle (80 s aus der Kurve heben den Lüfter in Schicht 1); der Hilfslüfter des Centauri (`M106 P2 S0`) ist Elegoos eigener Wert. Offen außerdem Kammerlüfter und unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
@@ -1657,7 +1658,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-218"></a>
 
-- [x] **RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen.**
+- [~] **RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen.**
   Gemessen beim Bau von P7.1–P7.3 (Bericht p7verlauf, Abschnitte 3 und 7) an
   `build_tray_v3.step`: `drill_brep_hole` nummeriert Bohrungen nach Lage. Wer
   eine Bohrung vor eine andere schiebt oder eine dritte dazwischen einfügt,
@@ -1672,7 +1673,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bohrung B vor A, Einfügen zwischen und rechts rechnen durch, Namen und
   Passungen folgen ihrem Merkmal, Strg+Z stellt Projektinhalt und Objekt-Hashes
   wieder her; ein monotoner interner Verlaufszähler darf weiterlaufen.
-  **Erledigt 30.09.2026:** Feature-einführende exakte Schritte behalten alle
+  **Umgesetzt und teilweise geprüft 30.09.2026:** Feature-einführende exakte Schritte behalten alle
   eindeutig zugeordneten Vorgänger, deren Geometrie innerhalb `EPS_GEOM`
   unverändert ist; geänderte oder mehrdeutige Merkmale bleiben im bestehenden
   Frage-/Haltweg. An `F:\3D Dateien\build_tray_v3.step`, Körper `1#1`, rechneten
@@ -1686,7 +1687,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   für `evaluate.py` grün. Der vollständige Entwicklungslauf und die
   Fensterabnahme sind damit nicht behauptet.
   Nachprüfung (Review 02.10., Arbeitsbaum ungesichert): am echten `build_tray_v3.step` behoben — B vor A, Einfügen bei x = 0 und x = 80 rechnen durch, Strg+Z stellt Inhalt und Hashes her (main hält x = 80 noch an). Die Passung ist nur über den Test belegt, nicht am echten Modell. Belege `F:\solidon-review-reports\verif-E.md`.
-  Registerabgleich 02.10.: steht als `[x]` noch im Abschnitt statt im Archiv.
+  **Abgeglichener Stand 02.10.:** Der notwendige begrenzte RM218-Anschluss wurde mit
+  `57848fa72c4ca229f5dc9bcdd2cca2baf6945987` nach `main` und `origin/main` übernommen.
+  Der [RM284-Abschluss](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md#abschluss-auf-dem-hauptzweig)
+  nennt dessen Entwicklungsprüfung und schließt RM218 insgesamt ausdrücklich nicht ab.
+  Die vorstehende Nachprüfung beschreibt ihren früheren Hauptzweigstand; ihre offene
+  Gegenprobe zur Passung am echten Kundenteil wird dadurch nicht nachträglich grün.
+  **Offen:** vollständiger Passungsnachweis am Kundenteil für die drei Umbauten und die
+  Gesamtfreigabe von RM218. Die Fensterabnahme bleibt beim Release unter RM-213.
 
 <a id="rm-226"></a>
 

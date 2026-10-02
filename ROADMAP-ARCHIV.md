@@ -34211,6 +34211,17 @@ Format bestanden; mypy auf `app/core/scene/evaluate.py` ohne Befund. Die
 Fensterabnahme bleibt Release-Sache. Der vollständige Entwicklungslauf ist
 nicht Teil dieses Nachweises.
 
+**Abgrenzung vom 02.10.2026:** Dieser historische Fachnachweis ist keine
+Gesamtfreigabe von RM218. Der notwendige begrenzte Anschluss und seine
+Regressionen wurden im RM284-Produktcommit
+`57848fa72c4ca229f5dc9bcdd2cca2baf6945987` nach `origin/main` übernommen;
+der [RM284-Abschluss](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md#abschluss-auf-dem-hauptzweig)
+grenzt RM218 ausdrücklich aus. Die spätere unabhängige Nachprüfung des
+Kundenteils bestätigt die drei Umbauten und Undo, hat den Passungsbezug am
+echten Modell jedoch nicht nachgeprüft. Dieser vollständige Passungsnachweis
+und die Gesamtfreigabe bleiben unter [RM218 in der Roadmap](ROADMAP.md#rm-218)
+offen; die Fensterabnahme gehört zum Release.
+
 ## RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)
 
 <a id="rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026"></a>
