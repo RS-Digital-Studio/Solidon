@@ -166,6 +166,7 @@ from app.ui.labels import (
     fill_parameter_units,
     kind_requirement,
     length,
+    limit_sentence,
     localised,
     spoiled_the_exact_body,
     value_line,
@@ -3224,6 +3225,10 @@ class ParameterPanel(QWidget):
         """Zu welchem Maß die Ablehnungszeile gehört — leer ohne."""
         self._document: Document | None = None
         """Das Dokument, dessen Maße die Zeilen zeigen — Werte setzen nur in ihm (RM-452)."""
+        self._limits: dict[str, tuple[float, float]] = {}
+        """Die wirksamen Grenzen je Zahlenfeld (:meth:`_bounds`). Das Qt-Feld
+        reicht darüber hinaus, wenn das Dokument eine Zahl jenseits trägt
+        (RM-447)."""
         self._refusal: QWidget | None = None
         """Die Zeile unter einem Feld, das eine getippte Zahl abgelehnt hat — oder nichts.
 
@@ -3449,6 +3454,45 @@ class ParameterPanel(QWidget):
         label = self._refusal.findChild(QLabel)
         return label.text() if label is not None else ""
 
+    def _stored_beyond(self, name: str, editor: QDoubleSpinBox, unit: str) -> str:
+        """Der Satz zu einer **gespeicherten** Zahl jenseits der Grenze — leer, wenn sie passt.
+
+        Eine Datei kann *Breite* 5000 tragen, wo *Quader* höchstens 1000 mm
+        breit wird; die Kette hält dann an. Das Feld zeigt die 5000 und nimmt
+        die Korrektur an, und hier steht, warum die Zahl nicht geht (RM-447).
+        """
+        low, high = self._limits.get(name, (editor.minimum(), editor.maximum()))
+        value = editor.value()
+        slack = 0.5 * 10.0 ** -editor.decimals()
+        if low - slack <= value <= high + slack:
+            return ""
+        above = value > high
+        suffix = f" {unit}" if unit else ""
+        return limit_sentence(
+            editor.textFromValue(value) + suffix,
+            editor.textFromValue(high if above else low) + suffix,
+            above=above,
+        )
+
+    def _set_limits(self, editor: QDoubleSpinBox, document: Document, name: str) -> None:
+        """Grenzen setzen, ohne eine gespeicherte Zahl jenseits davon zu klemmen (RM-447).
+
+        Qt klemmte 5000 auf die Feldgrenze 1000: Die Leiste zeigte 1000, und
+        1000 + Enter war keine Änderung — der Halt blieb, obwohl *Eingabe
+        korrigieren* genau in dieses Feld führte. In 0.5.1 stand dort 5000.
+        Das Qt-Feld reicht deshalb bis zur gespeicherten Zahl; der Satz der
+        Ablehnung nennt die wirksame Grenze.
+        """
+        low, high = self._bounds(document, name)
+        self._limits[name] = (low, high)
+        stored = document.parameters[name].value
+        shown_low, shown_high = min(low, stored), max(high, stored)
+        if editor.minimum() != shown_low or editor.maximum() != shown_high:
+            with QSignalBlocker(editor):
+                editor.setRange(shown_low, shown_high)
+        if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
+            editor.name_limits(low, high)
+
     def _show_refusal(self, name: str) -> None:
         """Nennt unter dem Feld die Grenze, an der die getippte Zahl scheitert.
 
@@ -3459,11 +3503,14 @@ class ParameterPanel(QWidget):
         """
         editor = self._editors.get(name)
         unit = self._unit_editors.get(name)
+        unit_text = str(unit.currentData() or "") if unit is not None else ""
         said = (
-            editor.refusal(str(unit.currentData() or "") if unit is not None else "")
+            editor.refusal(unit_text)
             if isinstance(editor, (BoundedSpin, BoundedLengthSpin))
             else ""
         )
+        if not said and editor is not None:
+            said = self._stored_beyond(name, editor, unit_text)
         if self._refusal is not None:
             self._form.removeRow(self._refusal)
             self._refusal = None
@@ -3613,22 +3660,41 @@ class ParameterPanel(QWidget):
         self._document = document
         if not same:
             self._rebuild(document)
-            return
-        if self._refresh_in_place(document):
-            return
-        focus = QApplication.focusWidget()
-        focused = next(
-            (
-                name
-                for name, editor in self._editors.items()
-                if focus is not None and (editor is focus or editor.isAncestorOf(focus))
-            ),
-            "",
-        )
-        self._rebuild(document)
-        editor = self._editors.get(focused)
-        if editor is not None:
-            editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        elif not self._refresh_in_place(document):
+            focus = QApplication.focusWidget()
+            focused = next(
+                (
+                    name
+                    for name, editor in self._editors.items()
+                    if focus is not None and (editor is focus or editor.isAncestorOf(focus))
+                ),
+                "",
+            )
+            self._rebuild(document)
+            editor = self._editors.get(focused)
+            if editor is not None:
+                editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._mark_stored_beyond()
+
+    def _mark_stored_beyond(self) -> None:
+        """Eine gespeicherte Zahl jenseits ihrer Grenze bekommt ihren Satz (RM-447).
+
+        Eine getippte Ablehnung geht vor: Sie ist das, woran gerade gearbeitet wird.
+        """
+        if self._refusal is not None and self._refused_name in self._editors:
+            editor = self._editors[self._refused_name]
+            if isinstance(editor, (BoundedSpin, BoundedLengthSpin)) and editor.refused_value():
+                return
+        for name, editor in self._editors.items():
+            unit = self._unit_editors.get(name)
+            if self._stored_beyond(name, editor, str(unit.currentData() or "") if unit else ""):
+                self._show_refusal(name)
+                return
+        if self._refusal is not None:
+            self._form.removeRow(self._refusal)
+            self._refusal = None
+            self._refused_name = ""
+            self._fit()
 
     def focus_parameter(self, name: str) -> bool:
         """Setzt den Fokus in die Zeile eines Maßes — ``False``, wenn es keine gibt.
@@ -3715,10 +3781,7 @@ class ParameterPanel(QWidget):
                 row = label.parentWidget()
             else:
                 editor = self._editors[name]
-                low, high = self._bounds(document, name)
-                if editor.minimum() != low or editor.maximum() != high:
-                    with QSignalBlocker(editor):
-                        editor.setRange(low, high)
+                self._set_limits(editor, document, name)
                 if not is_close(editor.value(), parameter.value):
                     # Ohne Signal: Der Wert kommt aus dem Dokument und ist keine
                     # neue Eingabe. Eine abgelehnte Zahl darunter gilt nicht mehr.
@@ -3799,7 +3862,7 @@ class ParameterPanel(QWidget):
             editor = BoundedSpin(self)
             wheel_needs_focus(editor)
             editor.setDecimals(2)
-            editor.setRange(*self._bounds(document, name))
+            self._set_limits(editor, document, name)
             editor.setValue(parameter.value)
             editor.setKeyboardTracking(False)
             # Der Wertebereich bestimmt sonst die Mindestbreite der Spinbox:

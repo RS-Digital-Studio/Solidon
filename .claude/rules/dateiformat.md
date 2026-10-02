@@ -243,11 +243,11 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   und Cura bekommen je Platte eine Datei, der Konsolenlauf (*Slicen*) je
   Platte eine Druckdatei. Solidons Anordnung reist nur mit, wenn sie auf
   **jeder** gewählten Platte hält (`arrangement_holds`).
-- **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`): Teile um den
-  halben Bauraum verschoben **und** ein Bett ab der Ecke, in derselben
-  Übergabe. Wer das eine ändert, ändert das andere mit — beides fragt dasselbe
-  Prädikat. Cura mit `machine_center_is_zero` behält den Ursprung in der Mitte
-  (`CuraMachine.origin_at_centre`).
+- **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`): Teile um
+  `build_area.machine_shift` verschoben **und** ein Bett um denselben
+  Nullpunkt (`PrinterProfile.bed_origin`, sonst die Ecke), in derselben
+  Übergabe — beides fragt dasselbe Prädikat. Eine Cura-Definition behält
+  ihren Ursprung (`CuraMachine.shift`).
 - **Ohne Familie STL um den Ursprung** (`other`): nichts übersetzt, nichts
   gerechnet; der Konsolenweg sagt ab, das Öffnen läuft.
 - **Ein exakter Körper geht so fein hinaus, wie der Drucker es braucht**:
