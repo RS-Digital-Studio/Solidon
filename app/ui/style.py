@@ -621,6 +621,12 @@ _KEYBOARD_REASONS: Final = frozenset(
     {Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason}
 )
 
+#: Die Fokusgründe, mit denen ein Fenster den Fokus abgibt und zurückbekommt,
+#: ohne dass im Fenster jemand gewählt hätte: Fensterwechsel und Menü.
+_WINDOW_REASONS: Final = frozenset(
+    {Qt.FocusReason.ActiveWindowFocusReason, Qt.FocusReason.PopupFocusReason}
+)
+
 
 def enter_belongs_to_focus(reason: Qt.FocusReason, *, forced: bool) -> bool:
     """Ob Enter dem Knopf gehört, der mit diesem Grund den Fokus bekam.
@@ -690,10 +696,16 @@ class _FocusTakesNoAccent(QObject):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt gibt den Namen
         kind = event.type()
+        # **Ein Fensterwechsel ist keine neue Wahl** (RM-415): Wer mit Tab auf
+        # *Abbrechen* ging, kurz in ein anderes Fenster wechselte und
+        # zurückkam, meinte mit Enter weiter *Abbrechen*. Qt meldet Gehen und
+        # Wiederkommen als ``ActiveWindowFocusReason`` (ein Menü als
+        # ``PopupFocusReason``); dabei bleibt die Wahl der Tastatur stehen.
+        away = isinstance(event, QFocusEvent) and event.reason() in _WINDOW_REASONS
         if kind == QEvent.Type.FocusOut:
             if isinstance(watched, QWidget):
                 self._forced = not (watched.isEnabled() and watched.isVisible())
-            if watched is self._typed_to:
+            if watched is self._typed_to and not away:
                 self._typed_to = None
             return False
         if kind == QEvent.Type.FocusIn:
@@ -701,6 +713,8 @@ class _FocusTakesNoAccent(QObject):
             if isinstance(watched, QPushButton) and not watched.isDefault():
                 if watched.autoDefault():
                     watched.setAutoDefault(False)
+                if away and watched is self._typed_to:
+                    return False
                 typed = isinstance(event, QFocusEvent) and enter_belongs_to_focus(
                     event.reason(), forced=forced
                 )

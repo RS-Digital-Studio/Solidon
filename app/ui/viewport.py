@@ -3327,7 +3327,8 @@ class ViewBar(QFrame):
 
 
 #: Die Grundkörper, mit denen die leere Szene einlädt — Namen aus dem Register,
-#: ihre Beschriftung ist der Registertitel (RM-370).
+#: ihre Beschriftung ist der Registertitel (RM-370). Gestartet wird der Zwilling,
+#: den das Menü zeigt (``MainWindow._on_invitation`` über ``menu_twins``).
 INVITED_PRIMITIVES: Final = ("create_box", "create_cylinder")
 
 
@@ -3694,13 +3695,32 @@ def types_text(widget: QWidget | None) -> bool:
     return isinstance(widget, QComboBox) and widget.isEditable()
 
 
+def answers_space(widget: QWidget | None) -> bool:
+    """Ob dieses Widget die Leertaste selbst braucht (RM-448).
+
+    Neben jedem Textfeld schaltet sie Haken und Auswahlpunkte, drückt Knöpfe,
+    klappt Auswahllisten auf, wählt Zeilen einer Liste und schaltet einen
+    ankreuzbaren Rahmen. Der Vergleich der Vorschau hängt an der Anwendung;
+    er nahm all diesen Bedienelementen in jedem Fenster die Taste, solange
+    eine Vorschau mit Differenz lief.
+    """
+    from PySide6.QtWidgets import QAbstractButton, QAbstractItemView, QComboBox, QGroupBox
+
+    if types_text(widget):
+        return True
+    if isinstance(widget, QAbstractButton | QComboBox | QAbstractItemView):
+        return True
+    return isinstance(widget, QGroupBox) and widget.isCheckable()
+
+
 class HoldToCompare(QWidget):
     """Leertaste halten heißt: kurz das Vorher sehen.
 
     Als Filter auf der Anwendung, nicht als Tastenkürzel — ein Kürzel feuert
     beim Drücken und weiß vom Loslassen nichts. Und nicht am Viewport selbst:
     solange ein Operationsdialog offen ist, liegt der Fokus dort, und genau
-    dann will man vergleichen.
+    dann will man vergleichen — wo der Fokus auf keinem Bedienelement liegt,
+    das die Taste selbst braucht (:func:`answers_space`).
 
     Auto-Repeat wird verworfen. Eine gehaltene Taste schickt eine Folge aus
     Press und Release, nicht einen langen Druck; ohne diese Prüfung flackerte
@@ -3720,8 +3740,14 @@ class HoldToCompare(QWidget):
             return False
         # ``watched`` ist bei einer Taste das Widget mit dem Fokus. Es zu
         # nehmen statt ``QApplication.focusWidget()`` ist nicht nur kürzer: es
-        # ist die Frage, um die es geht — wer bekommt diesen Anschlag?
-        if types_text(watched):
+        # ist die Frage, um die es geht — wer bekommt diesen Anschlag? Braucht
+        # er sie selbst, bekommt er sie: Text, Haken, Knopf, Liste (RM-448).
+        # Die Ansicht, ein Dialoghintergrund oder eine Beschriftung brauchen
+        # sie nicht, dort bleibt sie der Vergleich. Ein gehaltener Vergleich
+        # endet beim Loslassen auch dann, wenn der Fokus inzwischen gewandert ist.
+        if answers_space(watched):
+            if kind == QEvent.Type.KeyRelease:
+                self._viewport.hold_before(False)
             return False
         self._viewport.hold_before(kind == QEvent.Type.KeyPress)
         return True

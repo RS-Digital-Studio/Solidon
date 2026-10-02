@@ -339,8 +339,9 @@ macht sich beim Fokus zum Default. Der Zuhörer `style._FocusTakesNoAccent`
 Nebenknopf beim Fokus `autoDefault`; ohne das gäbe der Knopf Enter an den
 Default weiter. Den per Tab/Umschalt+Tab erreichten Knopf klickt der Zuhörer
 bei Enter deshalb selbst (`style.enter_belongs_to_focus`), der Akzent bleibt.
-Maus, Fensterwechsel, `setFocus` und vom gesperrten oder verborgenen Knopf
-vertriebener Fokus (Qt meldet ihn als Tab) lassen Enter beim Hauptknopf. Kein
+Maus, `setFocus` und vom gesperrten oder verborgenen Knopf vertriebener Fokus
+(Qt meldet ihn als Tab) lassen Enter beim Hauptknopf; ein Fensterwechsel
+ändert die Wahl nicht. Kein
 Dialog tut dafür etwas selbst. Wächter: `tests/test_enter_key.py` und
 `test_no_button_takes_the_accent_when_it_gets_the_focus` (Fokus zugestellt —
 mit `WA_DontShowOnScreen` wird kein Fenster aktiv).

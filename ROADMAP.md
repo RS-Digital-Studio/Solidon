@@ -161,13 +161,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
-| [RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht](#rm-415) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-334 (archiviert); `_typed_to` über den Fensterwechsel behalten, mit Test |
 | [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
 | [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“ (Teil 1 und 3 mit RM-371). Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -4755,22 +4753,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Laufzeit am pegboard-goot im Budget. Bauplan §2.7, §2.8, §31.
   Belege: `review-e3dff1907.md`, Sonde `r3_rundungsgruppe.py`.
 
-<a id="rm-415"></a>
-
-- [ ] **RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht.**
-  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-334, das im Arbeitsbaum archiviert ist.
-  Tab + Enter folgt seit `2dc4ce0ce` dem Fokus in allen Rückfragen.
-  **Fehlerfall:** Rückfrage öffnen, Tab auf „Abbrechen“, zu einem anderen Fenster und zurück
-  wechseln, Enter → `confirm_discard` gibt `True`, `confirm_unsaved` `'save'`; die Leertaste löst
-  „Abbrechen“ aus, und ohne Solidons Zuhörer klickt Qt selbst „Abbrechen“.
-  **Ursache:** `app/ui/style.py` — `FocusOut` setzt `_typed_to` zurück, und
-  `ActiveWindowFocusReason` gilt nicht als Tastaturwahl.
-  **Fix:** `_typed_to` über den Fensterwechsel behalten (bzw. beim Zurückkehren den Fokusknopf als
-  Tastaturwahl werten).
-  **Abnahme:** Test je Rückfrage mit Fensterwechsel: Enter löst den fokussierten Knopf aus.
-  Bauplan §19.2, Regel 19. Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`,
-  Sonden `v4u_rm334_fensterwechsel.py`, `v4u_rm334_qt_nativ.py`.
-
 <a id="rm-418"></a>
 
 - [ ] **RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen.**
@@ -4849,22 +4831,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
-
-<a id="rm-448"></a>
-
-- [ ] **RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**
-  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (echter Filterweg); Folgepunkt zu
-  RM-437 (archiviert; Leerzeichen in Rückmeldebogen und Chat sind behoben). Besteht schon in 0.5.1,
-  keine Regression.
-  **Fehlerfall:** Solange eine Vorschau mit Differenz läuft, nehmen Haken, Auswahlpunkte und Knöpfe in
-  jedem Fenster die Leertaste nicht an, auch die Skala des Rückmeldebogens
-  (`app/ui/viewport.py:3714–3727`, anwendungsweiter Tastenfilter).
-  **Fix:** Der Filter der Ansicht greift nur, wenn die Ansicht den Fokus hat.
-  **Abnahme:** Test über die Oberfläche: Vorschau offen, Leertaste auf einem Haken im Dialog und im
-  Rückmeldebogen schaltet. Bauplan §19.2 (Tastaturbedienung). Nebenbei: Die Zählkommentare der
-  Bausteine in `selection_operations.py`/`catalog.py` sind seit RM-398/399 wieder falsch (gemessen
-  26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
-  Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
 
 <a id="rm-456"></a>
 

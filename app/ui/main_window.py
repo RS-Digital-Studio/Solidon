@@ -20183,9 +20183,23 @@ class MainWindow(QMainWindow):
         elif chosen == "parts":
             self.action_catalog()
         elif chosen == "chat":
+            # **Der Chat kommt nach vorn, dann bekommt er den Cursor** (RM-448):
+            # Stand der Reiter auf dem Prüfbericht oder war die Spalte
+            # ausgeblendet, landete der Fokus in einem verborgenen Feld, und
+            # wer zu tippen begann, schrieb ins Nichts.
+            if not self.right_column.isVisible():
+                self.right_column.setVisible(True)
+                self.settings.right_panel_visible = True
+                self._store_settings()
+                self._mark_status_alerts()
+            switch(self.right, self.chat)
             self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
         elif REGISTRY.has(chosen):
-            self.run_operation(REGISTRY.get(chosen))
+            # Gleich beschriftet heißt gleich gemacht: *Quader anlegen* aus der
+            # Einladung ist der Quader des Menüs — exakt, wo der Kern da ist
+            # (``menu_twins``, RM-448), sonst entstand hier ein Netz und im
+            # Menü ein Körper mit echten Kanten.
+            self.run_operation(REGISTRY.get(menu_twins().get(chosen, chosen)))
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
