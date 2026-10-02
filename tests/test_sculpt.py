@@ -24,7 +24,13 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.mesh_ops import uniform
-from app.core.geom.sculpt import apply_strokes, stages, strokes_from_text, strokes_to_text
+from app.core.geom.sculpt import (
+    apply_strokes,
+    stages,
+    stroke_at,
+    strokes_from_text,
+    strokes_to_text,
+)
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
@@ -168,6 +174,113 @@ def test_the_first_stroke_never_wastes_a_stage() -> None:
     """Ein Glättungsstrich am Anfang teilt nichts — davor liegt nichts."""
     assert len(stages([on_ball(1.0, 0.0, 0.0, tool="smooth")])) == 1
     assert len(stages([on_ball(1.0, 0.0, 0.0, cut=True)])) == 1
+
+
+def _pit_depth(base: MeshData, sculpted: MeshData, index: int) -> float:
+    """Wie tief der Eckpunkt ``index`` gegenüber der Kugel abgetragen ist."""
+    before = float(np.linalg.norm(np.asarray(base.raw.vertices)[index]))
+    return before - float(np.linalg.norm(np.asarray(sculpted.raw.vertices)[index]))
+
+
+def test_a_second_carve_into_the_first_pit_deepens_it(profile: Profile) -> None:
+    """RM-438: Ein Zug in die Mulde, die der Zug davor gegraben hat, wirkt.
+
+    Geklickt wird auf die Fläche, die die Vorschau zeigt — also auf den Grund
+    der Mulde. In derselben Etappe misst der Zug aber gegen die Fläche vor
+    der Etappe, und ist die Stärke größer als der Radius, liegt die weiter als
+    einen Radius entfernt: Der Zug griff nichts, die Mulde blieb, und der
+    Bericht meldete einen verfehlten Zug. Gemessen an einer Kundensitzung
+    (0.5.1) und an diesem Fall: Stärke 4 bei Radius 3 blieb bei 4 mm Tiefe.
+    """
+    base = ball()
+    points = np.asarray(base.raw.vertices, dtype=float)
+    index = int(np.argmax(points[:, 0]))
+    brush = {"radius": 3.0, "strength": 4.0, "tool": "carve"}
+
+    first = stroke_at(base, tuple(points[index]), **brush)  # type: ignore[arg-type]
+    pit = apply_strokes(base, [first])
+    assert _pit_depth(base, pit, index) == pytest.approx(4.0, abs=0.01), "Voraussetzung"
+
+    bottom = tuple(float(value) for value in np.asarray(pit.raw.vertices)[index])
+    second = stroke_at(base, bottom, before=[first], **brush)  # type: ignore[arg-type]
+
+    assert second.cut, "der Zug erreicht die Fläche vor der Etappe nicht und beginnt eine eigene"
+    assert np.allclose(
+        second.normal, np.asarray(pit.raw.vertex_normals, dtype=float)[index], atol=1e-9
+    ), "die Richtung kommt von der Fläche, auf der der Zug wirkt"
+    deeper = apply_strokes(base, [first, second])
+    assert _pit_depth(base, deeper, index) == pytest.approx(8.0, abs=0.5)
+
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=base)
+    result = run(entry, profile, strokes=strokes_to_text([first, second]))
+    assert "sculpt.strokes_missed" not in {f.code for f in result.findings}
+    assert np.allclose(
+        np.asarray(result.outputs[0].mesh.raw.vertices), np.asarray(deeper.raw.vertices)
+    ), "die Operation rechnet aus den Zügen dasselbe wie die Vorschau"
+
+
+def test_a_stroke_that_reaches_its_stage_stays_in_it() -> None:
+    """Eine Etappe kostet einen Durchgang; sie beginnt nur, wo sie nötig ist.
+
+    Ein zweiter Zug abseits des ersten greift die Fläche vor der Etappe — er
+    bleibt in ihr, wie bisher (Entscheidung C), und nimmt seine Richtung
+    weiter von dieser Fläche.
+    """
+    base = ball()
+    first = stroke_at(base, (20.0, 0.0, 0.0), radius=3.0, strength=4.0, tool="carve")
+    beside = stroke_at(
+        base, (0.0, 20.0, 0.0), radius=3.0, strength=4.0, tool="carve", before=[first]
+    )
+
+    assert not beside.cut
+    assert len(stages([first, beside])) == 1
+    assert beside == stroke_at(base, (0.0, 20.0, 0.0), radius=3.0, strength=4.0, tool="carve")
+
+
+def test_the_remembered_stage_never_answers_for_another_session() -> None:
+    """Die gemerkte Etappenfläche spart die zweite Auswertung je Klick — und
+    darf nach einem Rückgängig oder einer neuen Folge nie das Falsche sagen.
+
+    Gegenprobe je Klick: mit Gedächtnis und frisch gerechnet ist derselbe Zug.
+    """
+    from app.core.geom import sculpt
+
+    base = ball()
+    brush = {"radius": 3.0, "strength": 4.0, "tool": "carve"}
+    points = np.asarray(base.raw.vertices, dtype=float)
+    spots = [int(np.argmax(points[:, axis])) for axis in range(3)]
+
+    def click(before: list[Stroke], spot: int) -> Stroke:
+        """Ein Klick auf die Fläche, die die Vorschau gerade zeigt."""
+        shown = np.asarray(apply_strokes(base, before).raw.vertices, dtype=float)[spot]
+        where = (float(shown[0]), float(shown[1]), float(shown[2]))
+        remembered = stroke_at(base, where, before=before, **brush)  # type: ignore[arg-type]
+        kept = list(sculpt._last_stage)
+        sculpt._last_stage.clear()
+        fresh = stroke_at(base, where, before=before, **brush)  # type: ignore[arg-type]
+        sculpt._last_stage[:] = kept
+        assert remembered == fresh
+        return remembered
+
+    strokes: list[Stroke] = []
+    for spot in (spots[0], spots[1], spots[0], spots[2], spots[0]):
+        strokes.append(click(strokes, spot))
+    assert sum(stroke.cut for stroke in strokes) == 2, "Voraussetzung: zwei Etappen in der Mulde"
+    del strokes[1:]  # Rückgängig bis auf den ersten Zug
+    for spot in (spots[1], spots[1], spots[0], spots[2], spots[1]):
+        strokes.append(click(strokes, spot))
+    assert sum(stroke.cut for stroke in strokes) == 2
+
+    # Eine gemerkte Fläche, deren Züge zwar vorn stehen, aber mitten in einer
+    # Etappe enden, gilt nicht: Dort summiert sich der nächste Zug mit ihnen.
+    first, again = (stroke_at(base, tuple(points[spots[0]]), **brush) for _ in range(2))  # type: ignore[arg-type]
+    plane = (0.0, 0.0, 0.0)
+    sculpt._last_stage[:] = [(base, (first,), apply_strokes(base, [first], centre=plane))]
+    together = sculpt._completed(base, (first, again), plane)
+    assert np.allclose(
+        np.asarray(together.raw.vertices),
+        np.asarray(apply_strokes(base, [first, again], centre=plane).raw.vertices),
+    )
 
 
 # --- die Werkzeuge --------------------------------------------------------------
