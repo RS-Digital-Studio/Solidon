@@ -244,9 +244,10 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   Platte eine Druckdatei. Solidons Anordnung reist nur mit, wenn sie auf
   **jeder** gewählten Platte hält (`arrangement_holds`).
 - **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`): Teile um den
-  halben Bauraum verschoben **und** ein Bett ab der Ecke (etwa `0` bis `256`),
-  in derselben Übergabe. Wer das eine ändert, ändert das andere mit — beides
-  fragt dasselbe Prädikat.
+  halben Bauraum verschoben **und** ein Bett ab der Ecke, in derselben
+  Übergabe. Wer das eine ändert, ändert das andere mit — beides fragt dasselbe
+  Prädikat. Cura mit `machine_center_is_zero` behält den Ursprung in der Mitte
+  (`CuraMachine.origin_at_centre`).
 - **Ohne Familie STL um den Ursprung** (`other`): nichts übersetzt, nichts
   gerechnet; der Konsolenweg sagt ab, das Öffnen läuft.
 - **Ein exakter Körper geht so fein hinaus, wie der Drucker es braucht**:
@@ -435,8 +436,7 @@ Curas Fenster nimmt Einstellungen nur als `.curaprofile`
 (`handover.cura_profile_beside`); sein Importer setzt sie auf die **aktive
 Maschine** um, lehnt fremde Qualitätsstufen ab und importiert solche ohne
 passende Düse und Spule des ersten Fachs unsichtbar. Die Stufe kommt deshalb
-aus `slicer_profiles.cura_active_machine` (`cura.cfg` → Maschinenstapel →
-Definition; erstes Fach → Düse und Spule) und
+aus `slicer_profiles.cura_active_machine` und
 `cura_quality_types(…, variant=…, material_type=…)`, nie aus `fdmprinter` für
 eine Maschine mit eigenen Stufen. Passt kein eingerichteter Drucker, entsteht
 **keine Datei**, sondern `handover.cura_profile_unbound`.

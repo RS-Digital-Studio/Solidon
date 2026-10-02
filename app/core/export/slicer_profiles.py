@@ -2998,10 +2998,28 @@ def _incomplete_profile(path: Path) -> ExternalToolError:
         tool=path.name,
         detail=_(
             "Das Slicer-Profil „{name}“ ist unvollständig. Prüfen Sie seine Vorlagen im Slicer.",
-            name=path.stem,
+            name=_shown_name(path),
         ),
         suggestions=(CHECK_SLICER_PROFILE,),
     )
+
+
+#: Curas doppelte Dateiendungen; ``Path.stem`` nähme nur die letzte ab.
+_CURA_SUFFIXES: Final = (".def.json", ".global.cfg", ".extruder.cfg", ".inst.cfg")
+
+
+def _shown_name(path: Path) -> str:
+    """Der Profilname aus dem Dateinamen, ganz — auch mit Punkten darin.
+
+    „Snapmaker 2.0 A350“ bleibt so stehen: Abgenommen wird nur die Endung,
+    bei Cura die doppelte. Curas Stapeldateien tragen ihren Namen kodiert
+    (``Snapmaker+2.0+A350.global.cfg``).
+    """
+    for suffix in _CURA_SUFFIXES:
+        if path.name.endswith(suffix):
+            name = path.name.removesuffix(suffix)
+            return unquote_plus(name) if suffix.endswith(".cfg") else name
+    return path.stem
 
 
 def machines(profiles: list[SlicerProfile]) -> list[SlicerProfile]:
@@ -3038,6 +3056,17 @@ def same_printer_model(first: SlicerProfile, second: SlicerProfile) -> bool:
         and _printer_name(first.printer_model) == _printer_name(second.printer_model)
         and first_vendor.casefold() == second_vendor.casefold()
     )
+
+
+def _nozzle_is_a_value(entry: SlicerProfile) -> bool:
+    """Ob die Düse an dieser Maschine ein Wert ist statt einer eigenen Profildatei.
+
+    Cura führt eine Maschine als Definition oder eingerichtete Instanz und die
+    Düse darin als ``machine_nozzle_size``; seine Düsenvarianten sind Zusätze,
+    keine Maschinen. Die Übergabe schreibt Solidons Durchmesser darüber. Orca-
+    und Prusa-Bestände führen dagegen je Düse ein eigenes Maschinenprofil.
+    """
+    return entry.cura_instance is not None or entry.path.name.endswith(".def.json")
 
 
 def machine_vendor(entry: SlicerProfile) -> str:
@@ -3391,11 +3420,13 @@ def match(
     candidates = own_model or candidates
 
     exact = [entry for entry in candidates if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
-    if source_family and not exact and cura_instance is None:
+    if source_family and not exact and not any(_nozzle_is_a_value(entry) for entry in candidates):
         # Ein exakt erkanntes importiertes Profil belegt seine Gerätefamilie,
         # aber nicht, welche fremde Düse an diesem Gerät aufgeschraubt ist.
         # Ohne passende Variante bleibt die Auswahl leer statt am Nachbarmaß
-        # weiterzurechnen.
+        # weiterzurechnen. Das gilt nur, wo jede Düse ein eigenes
+        # Maschinenprofil hat; an einer Cura-Maschine gibt es keine Variante
+        # zu verfehlen (RM-329).
         return None, None
     # Bei gleicher Düse die Grundausführung, wie bei :func:`match_filament`:
     # OrcaSlicer führt den Sovol SV06 als „0.4 nozzle“ und als „0.4 High-Speed

@@ -40,9 +40,12 @@ fehlender oder unvollständiger gespeicherter Stapel fällt nicht auf Werkswerte
 zurück. Bei gleich benannten Profilen verschiedener Slicer bleibt die vom
 Nutzer gewählte Druckerkennung maßgeblich.
 
-Eine gefundene Cura-Instanz bleibt die Maschine, auch wenn Solidon eine andere
-Düse gewählt hat: `match` hält die native Instanz fest und `write_config`
-schreibt Solidons Durchmesser als `machine_nozzle_size`. `cura_instance_is_present`
+Eine gefundene Cura-Instanz oder -Definition bleibt die Maschine, auch wenn
+Solidon eine andere Düse gewählt hat: Die Düse ist dort ein Wert, kein eigenes
+Profil (`_nozzle_is_a_value`); `match` wendet die Familienregel nur auf
+Profile mit Düsenvarianten an, und `write_config` schreibt Solidons Durchmesser
+als `machine_nozzle_size`. Den Ursprung behält die Maschine
+(`CuraMachine.origin_at_centre`, Regel in `dateiformat.md`). `cura_instance_is_present`
 trennt eine entfernte Instanz von einem vorhandenen, aber unvollständigen
 Stapel; beide Fehler behalten den vollständigen Druckernamen. Der Anzeigename
 der aktiven Maschine kommt aus `machine_instances/*.global.cfg`, nicht aus der
