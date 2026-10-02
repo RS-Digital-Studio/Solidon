@@ -286,7 +286,7 @@ CASES = [
         math.pi / 4.0 * (20.0**2 - 16.0**2) * 20.0,
     ),
     Case(
-        "cut_away", "box", {"axis": "z", "position": 5.0, "keep": "below"}, MESH, "volume", 1600.0
+        "cut_away", "box", {"axis": "z", "position": 5.0, "keep": "below"}, KEEP, "volume", 1600.0
     ),
     Case("decimate_mesh", "sphere", {"triangles": 500}, MESH, "decimated", 500),
     Case("delete_object", "box", {}, (("mesh", ()), ("brep", ())), "deleted", None),

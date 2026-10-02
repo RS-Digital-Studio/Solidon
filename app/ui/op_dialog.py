@@ -2158,9 +2158,13 @@ class OperationDialog(QDialog):
         und :meth:`can_accept` fragten das getrennt: Eine Stückzahl über der
         Grenze ließ den Knopf aktiv, und der Klick bewirkte nichts
         (Code-Review 0.5.1, U-2).
+
+        Ein ausgeblendetes Feld zählt nicht: Es folgt einer Wahl, bei der es
+        nichts tut, und behält seine abgelehnte Zahl nur für die Rückkehr
+        (``labels._BoundedBehavior.hideEvent``) — wie im Merkmalfenster.
         """
         for editor in self._editors.values():
-            if not isinstance(editor, ValueField):
+            if not isinstance(editor, ValueField) or editor.isHidden():
                 continue
             said = editor.refusal()
             if not said and isinstance(editor, CountField) and not editor.valid:

@@ -304,6 +304,22 @@ def _advice(
     )
 
 
+#: Tempi und Beschleunigungen, die ein Vorschlag nur senkt. Die Leerfahrt
+#: fehlt: Sie hebt die Maschinenregel auf das, was der Drucker kann.
+_BRAKING_PATHS: Final = frozenset(
+    {
+        "speed.outer_wall",
+        "speed.inner_wall",
+        "speed.infill",
+        "speed.top_surface",
+        "speed.first_layer",
+        "speed.bridge",
+        "speed.acceleration",
+        "speed.outer_wall_acceleration",
+    }
+)
+
+
 def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[SettingAdvice]:
     """Ein Vorschlag je Einstellung, und ``was`` ist immer der Ausgangswert.
 
@@ -312,9 +328,24 @@ def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[Settin
     weiter. Zwei Zeilen für dieselbe Einstellung wären keine zwei Vorschläge,
     sondern eine Liste, die sich selbst widerspricht: die spätere Regel hat den
     Stand der früheren gesehen, also gewinnt sie.
+
+    **Eine Bremse lockert keine frühere** (RM-328): Nicht jede Regel rechnet
+    gegen den Stand ihrer Vorgänger. Die ruhigen Wände einer schlanken Stange
+    (60 mm/s) kamen nach der Materialregel für TPU (30 mm/s) und hoben deren
+    Grenze auf. Auf :data:`_BRAKING_PATHS` bleibt deshalb der kleinere Wert,
+    mit dem Grund der Regel, die ihn verlangt.
     """
     by_path: dict[str, SettingAdvice] = {}
     for entry in advice:
+        earlier = by_path.get(entry.path)
+        if (
+            earlier is not None
+            and entry.path in _BRAKING_PATHS
+            and isinstance(earlier.value, int | float)
+            and isinstance(entry.value, int | float)
+            and earlier.value < entry.value
+        ):
+            continue
         by_path[entry.path] = replace(entry, was=settings_table.read_path(settings, entry.path))
     # Vorschläge, die nach dem Zusammenführen nichts mehr ändern, fallen weg.
     return [entry for entry in by_path.values() if _differs(entry.value, entry.was)]
@@ -1424,6 +1455,32 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+    }
+)
+
+#: Was nur der Schnitt des Körpers sagen kann (:func:`_from_geometry` samt
+#: :func:`_calm_walls`). Der Export schneidet ein Teil eigens, wenn einer
+#: dieser Pfade je Teil geht (``writer._part_values``); fehlt hier ein Pfad,
+#: schweigt der Rat je Teil ohne Schnitt, und der übernommene Wert landet an
+#: jedem Teil (RM-328). ``tests/test_export.py`` hält die Liste gegen die
+#: Pfade, die diese Regeln setzen.
+SLICED_PATHS: Final = frozenset(
+    {
+        "support.style",
+        "support.placement",
+        "support.block_channels",
+        "adhesion.kind",
+        "shell.wall_generator",
+        "shell.outer_wall_first",
+        "shell.scarf_seam",
+        "layers.line_width",
+        "speed.outer_wall",
+        "speed.inner_wall",
+        "speed.outer_wall_acceleration",
+        "speed.acceleration",
+        "speed.first_layer",
+        "speed.bridge",
+        "cooling.minimum_layer_time",
     }
 )
 

@@ -21,6 +21,7 @@ fragen. Vertrauenswürdig macht sie, was drumherum passiert.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import re
 from collections.abc import Callable, Container, Sequence
 from dataclasses import dataclass, field, replace
@@ -777,12 +778,37 @@ class AgentSession:
             proposal.invalid_calls += 1
             return str(error)
 
-        parameter = Parameter(
-            name=key,
-            value=value,
-            unit=str(arguments.get("unit", existing.unit if existing else "mm")),
-            title=str(arguments.get("title", existing.title if existing else "")),
-        )
+        bounds: dict[str, float] = {}
+        for limit in ("minimum", "maximum"):
+            if arguments.get(limit) is None:
+                continue
+            try:
+                bounds[limit] = parse_number(arguments[limit])
+            except ValueError as error:
+                proposal.invalid_calls += 1
+                return str(error)
+        if existing is not None and name == SET_PARAMETER:
+            # **Ändern heißt den Wert ändern** (RM-354): Der Agent baute das Maß
+            # neu und warf dabei die Grenzen weg, die der Kunde gesetzt hatte.
+            # Ein Ausdruck weicht wie bisher der genannten Zahl.
+            parameter = dataclasses.replace(
+                existing,
+                value=value,
+                expression=None,
+                unit=str(arguments.get("unit", existing.unit)),
+                title=arguments.get("title", existing.title),
+                minimum=bounds.get("minimum", existing.minimum),
+                maximum=bounds.get("maximum", existing.maximum),
+            )
+        else:
+            parameter = Parameter(
+                name=key,
+                value=value,
+                unit=str(arguments.get("unit", existing.unit if existing else "mm")),
+                title=str(arguments.get("title", existing.title if existing else "")),
+                minimum=bounds.get("minimum"),
+                maximum=bounds.get("maximum"),
+            )
         proposal.parameters[key] = parameter
         working.parameters[key] = parameter
         # Der Steckbrief liest die ausgewertete Szene, und die entsteht erst

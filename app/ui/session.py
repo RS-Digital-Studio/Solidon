@@ -92,6 +92,7 @@ from app.core.scene import (
 )
 from app.core.scene.evaluate import conversion_finding, evaluate
 from app.core.scene.history import Dependencies, MoveTarget, RevisionPlan, StepNeed, change_for
+from app.core.scene.parameter_usage import bounds_refusal, bounds_refusal_with
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -783,6 +784,11 @@ class _PreviewWorker(Worker):
     #: danach, Obergrenze, gezählt)``, wo die Operation die Form zusagt
     #: (``OperationSpec.retriangulates``). Das ist die Auskunft ihrer Vorschau.
     counted = Signal(int, object)
+    #: Die Vorschau hielt an einer Rückfrage (:class:`_QuestionPending`) — kommt
+    #: **vor** :attr:`explained`. Das ist keine Absage: Die Frage stellt erst
+    #: *Übernehmen*, und deshalb darf der Satz im Band den Knopf nicht sperren
+    #: (RM-389).
+    asked = Signal(int)
 
     def __init__(
         self, session: Session, generation: int, compute: Any, cancel: CancelSignal
@@ -797,6 +803,7 @@ class _PreviewWorker(Worker):
         try:
             _scene, difference, reason = self._compute()
         except _QuestionPending:
+            self.asked.emit(self._generation)
             self.explained.emit(
                 self._generation,
                 str(_("Eine Rückfrage steht an — sie kommt beim Übernehmen.")),
@@ -2462,6 +2469,14 @@ class Session(QObject):
         if problem is not None and _unresolvable(parameters) is None:
             self.failed.emit(problem)
             return False
+        # **Und an den Grenzen der Felder, die das Maß lesen** (RM-354). Breite
+        # 5000 lief durch, die Kette hielt an *Quader* an, und die Ansicht stand
+        # leer. Wie oben nur, wenn genau diese Zahl das Problem ist.
+        document = self.project.document
+        beyond = bounds_refusal(document, name, value)
+        if beyond is not None and bounds_refusal(document, name, existing.value) is None:
+            self.failed.emit(beyond)
+            return False
         try:
             self.history.apply(
                 _parameter_title(changed),
@@ -2583,6 +2598,13 @@ class Session(QObject):
                 # hier ist sie schärfer: Der Parameter steht schon darin, also
                 # kann er sich jetzt selbst nennen.
                 expressions.resolution_order({**parameters, name: parameter})
+            # Ein neuer Ausdruck treibt ein lesendes Feld so über seine Grenze
+            # wie eine getippte Zahl (RM-354) — gesagt nur, wenn erst diese
+            # Änderung das Problem ist.
+            document = self.project.document
+            beyond = bounds_refusal_with(document, {**parameters, name: parameter}, name)
+            if beyond is not None and bounds_refusal_with(document, parameters, name) is None:
+                raise beyond
             self.history.apply(
                 _parameter_title(parameter),
                 changes=change_for(self.project.document, parameters={name: parameter}),
@@ -3753,6 +3775,7 @@ class Session(QObject):
         progressed: Any = None,
         refused: Any = None,
         counted: Any = None,
+        asked: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -3773,7 +3796,9 @@ class Session(QObject):
         (§2.8), und :meth:`cancel_preview` hält die Rechnung an.
         ``refused`` bekommt die Absage samt Werten und Handlungen (ein
         ``AppError`` oder den ``Finding`` des Halts), ``counted`` die
-        Dreieckszahlen eines Schritts, der nur das Netz ändert.
+        Dreieckszahlen eines Schritts, der nur das Netz ändert. ``asked``
+        bekommt ``None``, wenn die Vorschau an einer Rückfrage anhielt — vor
+        dem Satz dazu, der dann keine Absage ist (RM-389).
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -3850,6 +3875,8 @@ class Session(QObject):
             worker.counted.connect(
                 lambda stamp, numbers: self._preview_done(stamp, numbers, counted)
             )
+        if asked is not None:
+            worker.asked.connect(lambda stamp: self._preview_done(stamp, None, asked))
         if progressed is not None:
             worker.progressed.connect(
                 lambda stamp, fraction, text: self._preview_done(

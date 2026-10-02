@@ -22,10 +22,10 @@ it into `website/version.json`.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
-- With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window.
+- With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
-- The print dialog shows only the adhesion settings of the chosen bed type. With a brim, the skirt and raft fields that would do nothing are gone.
+- If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
 - Tall, slender parts on a small footprint get calmer walls suggested, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
 - Solidon now suggests *Outer wall first* only for the part that needs it, and never for one with supports.
@@ -37,13 +37,15 @@ it into `website/version.json`.
 
 ### Holes, slots and splitting
 
-- The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness. Saved angles keep their direction.
-- Two plates that touch keep their material when you pull a slot, and a pin above the hole stays in place.
+- The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness.
+- Two plates that touch stay one body at a hole and keep their material, whether you pull, change, move or close the hole. A pin above it stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
 - Patterns on cylindrical faces of imported models stay closed when you change them.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
+- Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt axis*, and *At face* runs the cut parallel to a flat face.
+- A freshly created screw lid is no longer reported as too tight for its neck.
 
 ### Sculpting, text and sketching
 
@@ -52,15 +54,16 @@ it into `website/version.json`.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
-- In the window, *Blend together* shows the same shape as in the export. Only for very large bodies does the preview work more coarsely, and it says so.
+- In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
-- The target of *Align to feature* starts out empty. The first click in the view fills it, and *Apply* waits until it is chosen.
+- The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 
 ### Generating with AI
 
 - Cancelling during *One more try* only stops the running attempt. The finished ones remain to choose from.
+- Every attempt in the list names its sentence or image and its seed. If your input no longer matches the chosen attempt, the dialog says which one will be applied.
 - The image model is now fetched by *Set up image model …* even when the other weights are already there.
 - If an error while generating names the setup as the way out, it appears as a button in the dialog.
 - The generate dialog states the volume at the size the part will arrive in.

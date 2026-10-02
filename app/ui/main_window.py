@@ -2079,6 +2079,9 @@ class _PreviewApproval:
     pending_click: Callable[[], object] | None = None
     """Ein Klick auf *Übernehmen*, der vor dem Bild kam und auf es wartet
     (:meth:`MainWindow._apply_when_previewed`) — der letzte gilt."""
+    questioned: bool = False
+    """Die Vorschau hielt an einer Rückfrage: Ein Bild gibt es erst nach der
+    Antwort, und *Übernehmen* stellt sie (RM-389)."""
 
 
 def _candidate_token(entry: tuple[str, str] | EdgeTarget) -> str:
@@ -2318,6 +2321,12 @@ class MainWindow(QMainWindow):
         self._announcement = ""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._last_complete: tuple[Any, EvaluationResult] | None = None
+        """Das letzte durchgerechnete Ergebnis und sein Projekt — das Bild, das
+        bei einem Halt am ersten Schritt stehen bleibt (§15.3, RM-354)."""
+        self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
+        """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
+        Format und das Projekt, für das er gemeint war (RM-352)."""
         self._halted = False
         """Ob die stehende Meldung von einer angehaltenen Kette stammt.
 
@@ -7817,6 +7826,27 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
+        if self.session.busy or not self.session.result_current:
+            # **Erst das Ergebnis, dann die Datei** (RM-352). Geschrieben
+            # wurde das vorige Ergebnis mit dem neuen Dokument: Bild und
+            # Verlauf zeigten 100 mm, die Datei war 80 mm breit, und die
+            # Quittung meldete Erfolg. Der Auftrag wartet wie ein Klick vor
+            # der Vorschau, die Statuszeile sagt es, *Abbrechen* nimmt ihn
+            # zurück.
+            self._export_waiting = (target, export_format, self.session.project)
+            text = tr("Export wartet auf die laufende Berechnung … {name}").format(name=target.name)
+            self._set_progress_state(
+                "export",
+                active=True,
+                text=text,
+                minimum=0,
+                maximum=0,
+                value=0,
+                accessible_description=text,
+                cancellable=True,
+                cancel_enabled=True,
+            )
+            return
         self._end_inserting_for_output()
         result = self.session.last_result
         if result is None or not result.scene.objects:
@@ -7912,8 +7942,37 @@ class MainWindow(QMainWindow):
         self._update_actions()
         self._leash.start(worker)
 
+    def _export_when_current(self) -> None:
+        """Den wartenden Export schreiben, sobald das Ergebnis zum Dokument gehört (RM-352).
+
+        Hält die Kette an, wird nichts geschrieben: Die Datei entstünde aus
+        dem Stand vor dem Halt und sähe aus wie das Bild, wäre es aber nicht.
+        """
+        waiting = self._export_waiting
+        if waiting is None or self.session.busy or not self.session.result_current:
+            return
+        self._export_waiting = None
+        self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
+        target, export_format, project = waiting
+        if self._close_requested or project is not self.session.project:
+            return
+        result = self.session.last_result
+        if result is None or result.stopped_at is not None:
+            self.announce(tr("Nicht exportiert: Die Kette hält an — siehe Prüfbericht."))
+            return
+        self._start_export(target, export_format)
+
     def _cancel_export(self) -> None:
         """Der bestehende Abbrechenknopf hält nur eine noch laufende Vorprüfung an."""
+        if self._export_waiting is not None:
+            # Ein wartender Export hat noch nichts geschrieben; zurückgenommen
+            # ist er mit dem Klick.
+            self._export_waiting = None
+            self._set_progress_state(
+                "export", active=False, cancellable=False, cancel_enabled=False
+            )
+            self.announce(tr("Export abgebrochen."))
+            return
         if self._close_requested:
             self._export_attempt = None
             self._write_failure = None
@@ -18253,7 +18312,11 @@ class MainWindow(QMainWindow):
             and previous.order == order
             and self._preview_is_current(previous)
         ):
-            if getattr(owner, "requires_displayed_preview", False) and previous.required is False:
+            if (
+                getattr(owner, "requires_displayed_preview", False)
+                and previous.required is False
+                and not previous.questioned
+            ):
                 previous.required = True
                 self._refresh_preview_block()
             return previous
@@ -18484,6 +18547,12 @@ class MainWindow(QMainWindow):
                     failed(None)
                 else:
                     self._show_preview(None)
+                    # Ein Klick, der vor der Antwort kam und auf ein Bild
+                    # wartete, das es nicht geben kann (:func:`asked`), läuft
+                    # jetzt — er stellt die Rückfrage.
+                    click, approval.pending_click = approval.pending_click, None
+                    if click is not None:
+                        click()
                 return
             # **Ein Satz zu einem Ergebnis ist kein Problem.** Der Arbeiter meldet
             # ``explained`` auch dann, wenn ein Bild kommt — „Flächenbearbeitung
@@ -18533,6 +18602,20 @@ class MainWindow(QMainWindow):
             """Die Absage mit ihren Werten — der Dialog zeigt, was er davon einlöst."""
             self._preview_refused(approval, problem)
 
+        def asked(_nothing: object) -> None:
+            """Eine anstehende Rückfrage ist keine Absage: *Übernehmen* stellt sie (RM-389).
+
+            Die stille Vorschau fragt nicht, sie hält an und sagt es im Band.
+            Wo das Bild Pflicht war — eine Zeichnung auf einer Fläche, ein
+            exakter Eingang —, galt dieser Satz als Problem: Der Knopf blieb
+            grau, der Klick tat nichts, und die Frage kam nie (Nachbau F7,
+            *Tasche schneiden* auf einem Drehdeckel). Ohne Antwort gibt es kein
+            Bild; der Schritt geht über den echten Weg, der fragt.
+            """
+            approval.questioned = True
+            approval.required = False
+            approval.problem = ""
+
         clear_refusal = getattr(approval.owner, "show_refusal", None)
         if clear_refusal is not None:
             clear_refusal(None)
@@ -18544,6 +18627,7 @@ class MainWindow(QMainWindow):
             "progressed": still(self._preview_progressed),
             "refused": still(refused),
             "counted": still(self._preview_counted),
+            "asked": still(asked),
         }
         if order.changes is not None:
             kwargs["changes"] = order.changes
@@ -19685,6 +19769,32 @@ class MainWindow(QMainWindow):
             self._showing_scene = False
             self._pending_scene = None
         self._show_the_plate_of_the_import()
+        self._export_when_current()
+
+    def _picture_for(self, result: EvaluationResult) -> EvaluationResult:
+        """Was die Ansicht zeigt: das Ergebnis — oder bei einem Halt ohne Körper das letzte Bild.
+
+        §15.3: Der Viewport zeigt den letzten vollständig gerechneten Zustand,
+        nie ein leeres Fenster. Ein Halt hinter dem ersten Schritt erfüllt das
+        von selbst, die Auswertung liefert den Stand davor. Am ersten Schritt
+        ist dieser Stand leer — *Breite* 5000 am Beispiel Weg 2 ließ die
+        Ansicht leer stehen (RM-354). Dann bleibt das letzte durchgerechnete
+        Ergebnis desselben Projekts im Bild; Baum, Verlauf und Bericht zeigen
+        den angehaltenen Stand und sagen, warum.
+        """
+        project = self.session.project
+        if result.stopped_at is None:
+            self._last_complete = (project, result)
+            return result
+        kept = self._last_complete
+        if (
+            not result.scene.objects
+            and kept is not None
+            and kept[0] is project
+            and kept[1].scene.objects
+        ):
+            return kept[1]
+        return result
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
@@ -19803,7 +19913,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
-        self.viewport.show_scene(result)
+        self.viewport.show_scene(self._picture_for(result))
         self._reveal_split_result(result)
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone
@@ -20422,6 +20532,7 @@ class MainWindow(QMainWindow):
         if not busy:
             self._resume_preview_after_idle()
             self._resume_map_after_idle()
+            self._export_when_current()
 
     def _resume_map_after_idle(self) -> None:
         """Die gewählte Analysekarte kommt nach der Rechnung wieder.
@@ -21585,7 +21696,27 @@ class MainWindow(QMainWindow):
             return
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
-        self.edit_operation(error.op_id, str(error.values.get("field", "")))
+        field = str(error.values.get("field", ""))
+        # **Liest das Feld ein Maß, wird das Maß korrigiert** (RM-354). Der
+        # Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl trennte
+        # still die Bindung; der Wert gehört in die Zeile der Parameterleiste.
+        from app.core import expressions
+
+        try:
+            raw = self.session.history.operation(error.op_id).params.get(field)
+        except AppError:
+            raw = None
+        read = expressions.references(raw) if expressions.is_expression(raw) else frozenset()
+        if len(read) == 1:
+            (name,) = read
+            if self.parameters.focus_parameter(name):
+                self.announce(
+                    tr(
+                        "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
+                    ).format(name=name)
+                )
+                return
+        self.edit_operation(error.op_id, field)
 
     def _show_feature_after_error(self, error: AppError) -> None:
         """*Merkmal zeigen*: das Merkmal des Befunds wählen, wie ein Klick im Baum.

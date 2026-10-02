@@ -169,6 +169,48 @@ def test_the_screw_lid_flow_pairs_the_outer_and_inner_threads(profile: Profile) 
     assert project.document.fits == [], "Undo nimmt Drehdeckel und Passung gemeinsam zurück"
 
 
+def _screw_lid_fit_findings(profile: Profile, **params: object) -> list[object]:
+    """Dose Ø 40 aushöhlen, Drehdeckel über den Ablauf, Passungen prüfen."""
+    from app.core.scene.fits import check as check_fits
+
+    project = new_project("centauri-carbon-2", "petg")
+    container = _round_container(project.document)
+    apply_lid(
+        project.document,
+        container,
+        {"height": 8.0, "wall": 2.4, "thickness": 2.4, **params},
+        op="screw_lid",
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    return list(check_fits(result.scene, profile, document=project.document))
+
+
+@pytest.mark.parametrize("pitch", [3.0, 3.5])
+def test_a_fresh_screw_lid_fits_its_own_neck(profile: Profile, pitch: float) -> None:
+    """Jeder Drehdeckel meldete seine eigene Passung als zu eng (RM-393).
+
+    Hals- und Deckelgewinde trugen denselben Nenndurchmesser, obwohl die
+    Kappe um das Spiel weiter geschnitten ist — gemessen wurde „0,00 mm statt
+    0,25 mm“. Das Kappengewinde nennt jetzt seinen gebauten Durchmesser; ein
+    Deckel mit dem Spiel aus dem Material passt ohne Befund, ein künstlich
+    verengter meldet sich.
+    """
+    fresh = _screw_lid_fit_findings(profile, pitch=pitch)
+    assert not [entry.code for entry in fresh if entry.code.startswith("fit.")], [
+        (entry.code, dict(entry.values)) for entry in fresh
+    ]
+
+    narrowed = [
+        entry
+        for entry in _screw_lid_fit_findings(profile, pitch=pitch, clearance=0.1)
+        if entry.code == "fit.violated"
+    ]
+    assert len(narrowed) == 1
+    assert narrowed[0].values["actual"] == "0.10 mm", dict(narrowed[0].values)
+    assert "enger" in str(narrowed[0].message)
+
+
 def test_the_fit_is_actually_measurable(profile: Profile) -> None:
     """Eine Passung, die nur dasteht, ist die halbe Zusicherung.
 

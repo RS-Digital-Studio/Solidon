@@ -7124,3 +7124,222 @@ def test_a_ray_along_a_large_mesh_hits_what_the_full_comparison_hits() -> None:
                     chosen = ray_hits_along(triangles, origin, direction, minimum_travel=travel)
                     assert np.array_equal(full[1], chosen[1])
                     assert np.array_equal(full[0], chosen[0])
+
+
+def _cut(document: Document, profile: Profile, name: str, **params: object):
+    project, history = loaded(document, name)
+    history.apply(
+        _("Abschneiden"),
+        [OperationDraft(op="cut_away", inputs=("obj_1",), params=params)],
+    )
+    return evaluate(document, profile, sources=ProjectSources(project))
+
+
+def test_cutting_away_at_a_slant_keeps_the_analytic_volume(
+    document: Document, profile: Profile
+) -> None:
+    """*Abschneiden* kannte nur Achsebenen (RM-400). Der Würfel 20 mm, bei z = 2
+    um 30° um X geneigt geschnitten: Die Ebene bleibt im Würfel (2 ± 5,77), der
+    geneigte Anteil hebt sich auf, unten bleiben 20·20·12 = 4800 mm³ —
+    geschlossen, ein Körper, jeder Punkt unter der Ebene."""
+    import math
+
+    result = _cut(
+        document,
+        profile,
+        "cube_clean.stl",
+        axis="z",
+        position=2.0,
+        keep="below",
+        tilt=30.0,
+        tilt_axis="x",
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight and body.component_count == 1
+    assert body.volume == pytest.approx(4800.0, rel=1e-6)
+    normal = (0.0, -math.sin(math.radians(30.0)), math.cos(math.radians(30.0)))
+    heights = body.raw.vertices @ normal
+    assert heights.max() <= 2.0 * normal[2] + 1e-6
+
+
+@pytest.mark.parametrize(
+    "name", ["clean_figure.stl", "plate_holes.stl", "block_with_rounded_edge.stl"]
+)
+def test_a_slanted_cut_works_on_any_closed_body(
+    document: Document, profile: Profile, name: str
+) -> None:
+    """Dieselbe Schräge an drei verschiedenen Korpuskörpern: dicht, ein Körper,
+    kleiner als vorher, und nichts über der geneigten Ebene durch die Mitte."""
+    import math
+
+    from app.core.geom.mesh import read_mesh
+
+    whole = read_mesh((MESHES / name).read_bytes(), ".stl")
+    low, high = whole.raw.bounds
+    middle = (low + high) / 2.0
+    result = _cut(
+        document,
+        profile,
+        name,
+        axis="z",
+        position=float(middle[2]),
+        keep="below",
+        tilt=20.0,
+        tilt_axis="y",
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight and body.component_count >= 1
+    assert 0.0 < body.volume < whole.volume
+    normal = (math.sin(math.radians(20.0)), 0.0, math.cos(math.radians(20.0)))
+    limit = sum(n * m for n, m in zip(normal, middle, strict=True))
+    assert (body.raw.vertices @ normal).max() <= limit + 1e-6
+
+
+def test_a_tilt_about_the_cutting_axis_itself_is_refused(
+    document: Document, profile: Profile
+) -> None:
+    """Um die eigene Schnittachse geneigt ändert sich die Ebene nicht — das ist
+    eine Eingabe ohne Wirkung und wird mit dem Feld gesagt (Regel 17)."""
+    result = _cut(
+        document, profile, "cube_clean.stl", axis="z", position=2.0, tilt=30.0, tilt_axis="z"
+    )
+
+    assert not result.complete
+    codes = {f.code for f in result.scene.report.findings}
+    assert any("cut_away" in code for code in codes), codes
+
+
+def _box_of_kind(document: Document, kind: str):
+    """Ein Quader 40 × 30 × 20 als Netz oder als exakter Körper."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    history = History(document)
+    history.apply(
+        _("Quader"),
+        [
+            OperationDraft(
+                op="create_box" if kind == "mesh" else "create_brep_box",
+                params={"width": 40.0, "depth": 30.0, "height": 20.0},
+            )
+        ],
+    )
+    return project, history, document.ops[-1].outputs[0]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("params", "volume"),
+    [
+        ({"axis": "z", "position": 10.0}, 12000.0),
+        # Um X durch die Mitte geneigt: Die Schräge hebt sich auf, die Hälfte bleibt.
+        ({"axis": "z", "position": 10.0, "tilt": 30.0, "tilt_axis": "x"}, 12000.0),
+        # Um Y geneigt, nah am Boden: Die Ebene z = 4 - tan 10° · x bleibt über
+        # x ∈ [-20, 20] zwischen 0,47 und 7,53 mm; im Mittel bleiben 4 mm.
+        ({"axis": "z", "position": 4.0, "tilt": 10.0, "tilt_axis": "y"}, 40.0 * 30.0 * 4.0),
+        ({"face": "top", "position": -2.0}, 21600.0),
+    ],
+)
+def test_cutting_away_keeps_the_kind_of_its_body(
+    document: Document, profile: Profile, kind: str, params: dict[str, object], volume: float
+) -> None:
+    """Ein exakter Körper bleibt beim Abschneiden exakt (RM-400).
+
+    Vorher machte *Abschneiden* aus jedem exakten Körper ein Netz, mit
+    Hinweis, aber ohne Flächen, Kanten und STEP. Gerade, geneigt und parallel
+    zu einer Fläche: dieselbe Rechnung an beiden Kernen, dasselbe Volumen,
+    und der Körper behält seine Art.
+    """
+    if kind == "brep":
+        exact_kernel()
+    project, history, made = _box_of_kind(document, kind)
+    wanted = dict(params)
+    if wanted.pop("face", None) == "top":
+        first = evaluate(document, profile, sources=ProjectSources(project))
+        wanted["at_feature"] = next(
+            name
+            for name, feature in first.scene.objects[made].features.items()
+            if feature.kind == "face"
+            and feature.params.get("normal") is not None
+            and float(feature.params["normal"][2]) > 0.99
+        )
+    history.apply(
+        _("Abschneiden"),
+        [OperationDraft(op="cut_away", inputs=(made,), params={**wanted, "keep": "below"})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects[made]
+    assert entry.kind == kind
+    assert "evaluate.exact_became_mesh" not in {f.code for f in result.scene.report.findings}
+    body = as_mesh_data(entry.mesh)
+    assert body.is_watertight
+    assert body.volume == pytest.approx(volume, rel=1e-6)
+
+
+def test_cutting_away_a_body_of_several_shells_cuts_each(
+    document: Document, profile: Profile
+) -> None:
+    """Ein Körper aus mehreren Schalen: Die Ebene schneidet jede, die sie trifft,
+    und keine fällt weg, die ganz auf der bleibenden Seite liegt (RM-400)."""
+    from app.core.geom.mesh import read_mesh
+
+    whole = read_mesh((MESHES / "two_components.stl").read_bytes(), ".stl")
+    assert whole.component_count == 2
+    low, high = whole.raw.bounds
+    middle = float((low[2] + high[2]) / 2.0)
+    result = _cut(
+        document,
+        profile,
+        "two_components.stl",
+        axis="z",
+        position=middle,
+        keep="below",
+        tilt=15.0,
+        tilt_axis="x",
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight
+    assert body.component_count == 2, "beide Schalen bleiben, je um ihren oberen Teil gekürzt"
+    assert 0.0 < body.volume < whole.volume
+
+
+def test_cutting_away_parallel_to_a_face_takes_off_a_layer(
+    document: Document, profile: Profile
+) -> None:
+    """Die Ebene kann einer ebenen Fläche folgen statt einer Achse (RM-400):
+    −2 an der Oberseite des Würfels nimmt 2 mm ab, 20·20·18 = 7200 mm³ bleiben."""
+    project, history = loaded(document)
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    top = next(
+        name
+        for name, feature in first.scene.objects["obj_1"].features.items()
+        if feature.kind == "face"
+        and feature.params.get("normal") is not None
+        and float(feature.params["normal"][2]) > 0.99
+    )
+    history.apply(
+        _("Abschneiden"),
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=("obj_1",),
+                params={"at_feature": top, "position": -2.0, "keep": "below"},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight
+    assert body.volume == pytest.approx(7200.0, rel=1e-6)
+    assert body.bounds.maximum[2] == pytest.approx(8.0, abs=1e-6)

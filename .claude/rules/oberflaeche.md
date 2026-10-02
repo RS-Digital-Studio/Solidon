@@ -62,7 +62,7 @@ er:** `skirt`, `brim`, `raft` mit „Skirt-Runden“, „Brim-Breite“,
 anders heißt als sein Feld, ist eine Fährte ins Nichts.
 
 **Jedes Feld sagt, was es tut — und zwar alle**, sonst lernt niemand, dass es
-hier Sätze gibt: die Druckeinstellungen über `note`, die 1435 Parameter der 147
+hier Sätze gibt: die Druckeinstellungen über `note`, die 1438 Parameter der 147
 Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
@@ -193,7 +193,10 @@ an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
 `valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas
 (`limit_sentence`, `name_limits`) und, wo sie änderbar ist, den Weg dorthin;
 der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
-(`OperationDialog._field_refusal`). Eine Nachkommastelle zu viel wird wie
+(`OperationDialog._field_refusal`). Fokuswechsel, Aus- und Einblenden lassen die
+abgelehnte Zahl stehen, weil Qt sonst still den alten Wert zurückschreibt; ein
+ausgeblendetes Feld sperrt dafür nichts, es wirkt gerade nicht. Eine
+Nachkommastelle zu viel wird wie
 überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. Das
 **Merkmalfenster** nutzt denselben Validator für Zahlen, Anzahlen und Längen;
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
