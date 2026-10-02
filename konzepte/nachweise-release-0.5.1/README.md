@@ -43,6 +43,7 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm298-sitzungsabbruch-2026-10-02.md`](reports/rm298-sitzungsabbruch-2026-10-02.md) | Bestätigtes Ende vor synchronem Ersetzen, ungültige alte Kernfragen und korrigierter Fehlervertrag mit allen Katalogen | RM-298(e) |
 | [`reports/rm298-enospc-2026-10-02.md`](reports/rm298-enospc-2026-10-02.md) | ENOSPC gegen echte Speicherabsage am direkten und öffentlichen Transferanschluss; Ursachen, Rückfall und Ressourcenzähler | RM-298(b) |
 | [`reports/rm322-native-edge-binding-2026-10-02.md`](reports/rm322-native-edge-binding-2026-10-02.md) | Belegte native Kantenzuordnung, vollständige Abdeckung, Fehlerorte, analytischer Verlauf und echter gs-100-Nachlauf | RM-322 |
 | [`reports/rm327-final-report-parts-2026-10-02.md`](reports/rm327-final-report-parts-2026-10-02.md) | Aktuelle Teilezahl im Abschlussbericht, getrennte Material-/Schalenzählung, tatsächliche Ausgeber, Cache und Abbruch | RM-327 |

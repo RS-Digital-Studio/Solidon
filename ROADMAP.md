@@ -2446,6 +2446,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Paket- und Release-Abnahmen bleiben offen; RM298(b) ist damit nur teilweise
   bearbeitet, RM298 als Gesamtpunkt bleibt `[~]`.
 
+  **Teilstand 02.10.2026, (e), synchrones Ersetzen:** Die Session fordert
+  das alte Arbeiterende an und bestätigt es vor Reset und neuem feinen
+  Lauf. Ein unbestätigtes Ende hält Arbeiter/Abbruch/Ergebnis und sagt
+  die neue Rechnung über UserError mit Abbrechen ab. Wartende alte
+  Kernfragen erkennen Verfall ohne Antwortempfänger; nach Reset oder
+  später Antwort bleiben sie ungültig. Zuvor sechs Testkörperfehler,
+  danach sechs reine Namespace-/Ereignis-/Fadenfälle grün. Der konkrete
+  Fehlerklassenfund wurde vorwärts korrigiert; frisch bestehen sieben
+  Fälle einschließlich unverändertem Wächter, das Auswertungsmodul mit
+  190 Fällen und die Sprachgruppe nach beiden neuen Schlüsseln mit
+  628 Fällen (je Exit 0, keine Fehler/Skips, Hashes stabil). Finales
+  Ruff/Format/Diffcheck und erneuter unabhängiger Produktreview sind grün.
+  [Portabler Session-/Fragenbeleg](konzepte/nachweise-release-0.5.1/reports/rm298-sitzungsabbruch-2026-10-02.md).
+  Der historische Modulgegenlauf mit einem fremden RM327-Fehler bleibt
+  erhalten. Zentrales Tor und tatsächliche Integration dieser Einheit
+  stehen aus; native Qt-/Fenster-/Abbruchlatenz bleibt Releaseabnahme.
+  B01-Export-/Sliceranschlüsse sind separat abgestimmt; RM298 bleibt `[~]`.
+
 <a id="rm-301"></a>
 
 - [ ] **RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons.** Aus dem Release 0.5.1 (Gesamtprüfung, Sichtprüfung B5 im
