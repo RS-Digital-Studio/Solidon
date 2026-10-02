@@ -19727,6 +19727,39 @@ def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
     marks = [call for call in calls if call[0] == "mark"]
     assert marks == [("mark", (place, "Offen", "obj_1", rim))], marks
 
+    # Auch eine abgesagte Kantengruppe trägt alle getrennten Stellen durch
+    # den echten Bericht und seine Handlung bis zum gemeinsamen Ansichtsweg.
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+    from app.ui.panels import actions_for_document, as_error
+
+    omitted = (
+        ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0)),
+        ((10.0, 0.0, 0.0), (12.0, 0.0, 0.0)),
+        ((20.0, 0.0, 0.0), (22.0, 0.0, 0.0)),
+    )
+    target = (1.0, 0.0, 0.0)
+    failure = errors.GeometryError(
+        title="Nicht verrundet",
+        values={"location": target, "outline": omitted, "skipped": 3},
+        object_id="obj_1",
+        suggestions=(errors.SHOW_LOCATION, errors.CORRECT_INPUT),
+    )
+    operation = Operation(id=9, op="fillet_edges", inputs=("obj_1",), outputs=("obj_1",), params={})
+    finding = _finding_from(failure, operation)
+    calls.clear()
+    MainWindow._show_error_place(view, as_error(finding))  # type: ignore[arg-type]
+
+    assert calls == [
+        ("clear", None),
+        ("fly", ((101.0, 0.0, 0.0), 70.0)),
+        ("mark", (target, "Nicht verrundet", "obj_1", omitted)),
+    ], "Fehler und Abschlussbericht müssen alle ausgelassenen Stellen bis zur Marke tragen"
+    assert errors.SHOW_LOCATION in actions_for_document(finding, None)
+    assert finding.object_id == "obj_1" and finding.op_id == 9
+    assert "location" not in finding.values and "outline" not in finding.values
+    assert failure.values["location"] == target and failure.values["outline"] == omitted
+
 
 def test_a_closing_window_takes_no_late_feature_answer(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch

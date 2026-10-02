@@ -2089,7 +2089,7 @@ def test_a_feature_without_an_axis_gets_no_distances():
 
 
 def _bore_history(profile, kind, **values):
-    """Eine echte Bohrung mit ursprünglichem Schritt, nicht nur hingeschriebener Herkunft."""
+    """Eine echte Bohrung oder ein Langloch mit ursprünglichem Schritt."""
     if kind == "brep":
         exact_kernel()
     from app.core.scene import History, OperationDraft
@@ -2132,12 +2132,13 @@ def _bore_history(profile, kind, **values):
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete
     step = project.document.ops[-1]
+    feature_kind = "slot" if values.get("slotted") else "hole"
     holes = [
         f
         for f in result.scene.objects[owner].features.values()
-        if f.kind == "hole" and f.created_by == step.id
+        if f.kind == feature_kind and f.created_by == step.id
     ]
-    assert holes, "die echte Bohrung muss ihre Herkunft tragen"
+    assert holes, "das echte Merkmal muss seine Herkunft tragen"
     return project, history, result, step, FeatureRef(owner, holes[0].id)
 
 
@@ -3907,6 +3908,7 @@ def test_migrated_drill_preview_keeps_parameter_bound_axis_through_request(profi
             if feature.kind == "slot" and feature.created_by == step.id
         )
         prepared = []
+        refresh_requests = []
         dialog_values = dict(step.params)
 
         def placement_async(compute, done, *_callbacks, prepared=prepared):
@@ -3925,6 +3927,9 @@ def test_migrated_drill_preview_keeps_parameter_bound_axis_through_request(profi
             _tool_angle=None,
             _epoch=1,
             spec_of=lambda step=step: REGISTRY.get(step.op),
+            _request_tool=lambda requests=refresh_requests, values=dialog_values: requests.append(
+                dict(values)
+            ),
             _source_feature=lambda source=source: (source, None),
             dialog=SimpleNamespace(
                 values=lambda values=dialog_values: dict(values),
@@ -4004,6 +4009,8 @@ def test_migrated_drill_preview_keeps_parameter_bound_axis_through_request(profi
             (0.0, 0.0, 1.0)
         )
         assert dialog_values["measured_frame"] is False
+        assert len(refresh_requests) == 1
+        assert refresh_requests[0]["measured_frame"] is False
 
     assert checked == {("drill_hole", "mesh"), ("drill_hole", "brep")}
 
@@ -4015,6 +4022,12 @@ def test_migrated_drill_preview_keeps_parameter_bound_axis_through_request(profi
         ({"nx": 0.0005, "ny": 0.0, "nz": 1.0}, {"nx": 0.0, "ny": 0.0, "nz": 1.0}, True),
         ({"nx": 0.0, "ny": 0.0, "nz": 1.0}, {"nx": 1.0, "ny": 0.0, "nz": 0.0}, False),
         ({"nx": "=@kipp", "ny": 0.0, "nz": 1.0}, {"nx": 1.0, "ny": 0.0, "nz": 0.0}, True),
+        (
+            {"nx": 0.001, "ny": 0.0, "nz": 2.0},
+            {"nx": 0.0005, "ny": 0.0, "nz": 1.0},
+            True,
+        ),
+        ({"nx": 0.0, "ny": 0.0, "nz": 2.0}, {"nx": 0.0, "ny": 0.0, "nz": -1.0}, False),
     ],
 )
 def test_an_old_slot_direction_only_stays_on_the_same_face(
@@ -4027,3 +4040,237 @@ def test_an_old_slot_direction_only_stays_on_the_same_face(
     from app.ui.placement_flow import _same_direction
 
     assert _same_direction(stored, placed, ("nx", "ny", "nz")) is same
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [("nx", "ny", "nz"), ("surface_nx", "surface_ny", "surface_nz")],
+    ids=["operation", "recipe"],
+)
+@pytest.mark.parametrize(("bound_axis", "axis_name"), [(0, "x"), (1, "y"), (2, "z")])
+def test_a_bound_normal_component_survives_replacing_the_surface(fields, bound_axis, axis_name):
+    """Ein gebundener Achsenwert bleibt auch hinter einer abweichenden Komponente erhalten."""
+    from app.ui.placement_flow import _same_direction
+
+    old = dict(zip(fields, (0.0005, 0.0, 1.0), strict=True))
+    old[fields[bound_axis]] = f"=@tilt_{axis_name}"
+    new_surface = dict(zip(fields, (1.0, 0.0, 0.0), strict=True))
+
+    assert _same_direction(old, new_surface, fields)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_measured_slot_preview_rebuilds_on_a_new_face_and_undo_restores_the_cut(profile, kind):
+    """Ein Flächenwechsel zeigt den neuen Schnitt; Undo stellt den alten Schritt her."""
+    from types import SimpleNamespace
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.sketch.planes import frame_of
+    from app.core.units import MAX_FACET_SAG
+    from app.ui import placement_flow
+    from app.ui.placement_flow import PlacementFlow
+
+    project, history, original, step, selected = _bore_history(
+        profile,
+        kind,
+        slotted=True,
+        slot_length=16.0,
+        slot_angle=0.0,
+        nx=0.0005,
+        ny=0.0,
+        nz=1.0,
+        measured_frame=True,
+    )
+    original_params = dict(step.params)
+    original_body = original.scene.objects[selected.object_id]
+    original_feature = original_body.features[selected.feature_id]
+    dialog_values = dict(original_params)
+    prepared = []
+
+    class RendererStub:
+        def add_surface(self, *_args, **_kwargs):
+            return object()
+
+    def placement_async(compute, done, _failed, _refused=None):
+        tool = compute()
+        prepared.append(tool)
+        done(tool)
+
+    flow = SimpleNamespace(
+        active=True,
+        _disposed=False,
+        _tool_busy=False,
+        _tool_again=False,
+        _tool_context=None,
+        _tool_axis=None,
+        _tool_angle=None,
+        _tool_key="",
+        _epoch=1,
+        _surface=None,
+        _own_mouth=None,
+        _updating=False,
+        _measure_group=None,
+        _change_op=step,
+        _showing_input=False,
+        _accept_pending=False,
+        _refused_note=None,
+        _tool=None,
+        _addition=None,
+        spec_of=lambda: REGISTRY.get(step.op),
+        _source_feature=lambda: (original_body, original_feature),
+        dialog=SimpleNamespace(
+            values=lambda: dict(dialog_values),
+            take_placement=lambda values: dialog_values.update(values),
+        ),
+        session=SimpleNamespace(
+            profile=profile,
+            project=SimpleNamespace(document=project.document),
+            placement_async=placement_async,
+        ),
+        viewport=SimpleNamespace(
+            renderer=RendererStub(), _diff_palette="blue_orange", _object_colour="blue"
+        ),
+        _remove_tools=lambda: None,
+        _tool_legend=SimpleNamespace(setText=lambda _text: None, show=lambda: None),
+        redraw=lambda: None,
+    )
+    flow._set_values = lambda: PlacementFlow._set_values(flow)
+    flow._request_tool = lambda: PlacementFlow._request_tool(flow)
+
+    PlacementFlow._request_tool(flow)
+    assert len(prepared) == 1
+    old_tool = flow._tool_context
+    assert old_tool is prepared[0]
+
+    new_normal = (1.0, 0.0, 0.0)
+    surface = SimpleNamespace(
+        point=(20.0, 0.0, 10.0),
+        normal=new_normal,
+        frame=frame_of(new_normal, (20.0, 0.0, 10.0)),
+    )
+    flow._surface = surface
+    assert PlacementFlow._set_values(flow)
+
+    assert len(prepared) == 2, "der neue Flächenrahmen braucht ein neu vorbereitetes Werkzeug"
+    assert flow._tool_context is prepared[-1] and flow._tool_context is not old_tool
+    assert dialog_values["measured_frame"] is False
+    assert (dialog_values["nx"], dialog_values["ny"], dialog_values["nz"]) == pytest.approx(
+        new_normal
+    )
+    assert project.document.ops[-1].params == original_params, (
+        "die Vorschau ändert den Schritt nicht"
+    )
+
+    axes = PlacementFlow._tool_axes(flow, surface)
+    outline = np.asarray(
+        placement_flow.placement.mouth_outline(flow._tool_context), dtype=np.float64
+    )
+    segments = np.roll(outline, -1, axis=0) - outline
+    longest = segments[np.argmax(np.sum(segments * segments, axis=1))]
+    preview_direction = np.column_stack(axes) @ np.r_[longest, 0.0]
+    preview_direction /= np.linalg.norm(preview_direction)
+
+    history.change_params(step.id, {**original_params, **dialog_values})
+    changed = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert changed.complete, changed.findings
+    changed_feature = next(
+        feature
+        for body in changed.scene.objects.values()
+        for feature in body.features.values()
+        if feature.created_by == step.id and feature.kind == "slot"
+    )
+    actual_direction = np.asarray(changed_feature.params["direction"], dtype=np.float64)
+    actual_direction /= np.linalg.norm(actual_direction)
+    difference = math.degrees(
+        math.acos(min(1.0, abs(float(np.dot(preview_direction, actual_direction)))))
+    )
+    outline_length = float(np.linalg.norm(longest))
+    allowed_difference = math.degrees(math.atan2(2.0 * MAX_FACET_SAG, outline_length))
+    assert difference <= allowed_difference
+
+    history.undo()
+    restored = project.document.ops[-1]
+    assert restored.id == step.id
+    assert restored.params == original_params
+    replayed = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert replayed.complete, replayed.findings
+    restored_feature = next(
+        feature
+        for body in replayed.scene.objects.values()
+        for feature in body.features.values()
+        if feature.created_by == step.id and feature.kind == "slot"
+    )
+    assert restored_feature.params["direction"] == pytest.approx(
+        original_feature.params["direction"]
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_resolved_zero_axis_stays_bound_on_the_same_face(profile, kind):
+    """Die aufgelöste Achse unterscheidet eine Positionsgeste vom Flächenwechsel."""
+    from types import SimpleNamespace
+
+    from app.core.scene import placement
+    from app.core.sketch.planes import frame_of
+    from app.ui.placement_flow import PlacementFlow
+
+    _project, _history, result, step, _selected = _bore_history(
+        profile,
+        kind,
+        axis="z",
+        slotted=True,
+        slot_length=16.0,
+        slot_angle=0.0,
+        nx=0.0,
+        ny=0.0,
+        nz=0.0,
+        measured_frame=True,
+    )
+    source = next(iter(result.scene.objects.values()))
+    values = dict(step.params)
+    context = placement.prepare_tool(REGISTRY.get(step.op), values, profile, source=source)
+    assert context.outward_axis == pytest.approx((0.0, 0.0, 1.0))
+    assert context.position_dependent_axis
+
+    def surface(point, normal):
+        return placement.SurfacePlacement(
+            point=point,
+            normal=normal,
+            frame=frame_of(normal, point),
+            planar=True,
+            face_indices=(),
+            edges=(),
+            centres=(),
+        )
+
+    refreshes = []
+    flow = SimpleNamespace(
+        _measure_group=None,
+        _surface=surface((4.0, 0.0, 20.0), (0.0, 0.0, 1.0)),
+        _tool_context=context,
+        _own_mouth=None,
+        _updating=False,
+        spec_of=lambda: REGISTRY.get(step.op),
+        _source_feature=lambda: (source, None),
+        dialog=SimpleNamespace(
+            values=lambda: dict(values),
+            take_placement=lambda placed: values.update(placed),
+        ),
+        _request_tool=lambda: refreshes.append(dict(values)),
+    )
+    flow._set_values = lambda: PlacementFlow._set_values(flow)
+
+    assert PlacementFlow._set_values(flow)
+    assert values["measured_frame"] is True
+    assert (values["nx"], values["ny"], values["nz"]) == (0.0, 0.0, 0.0)
+    assert values["x"] == pytest.approx(4.0)
+    assert len(refreshes) == 1, "die ortsabhängige Achse wird an der neuen Stelle neu bestimmt"
+    assert refreshes[0]["measured_frame"] is True
+    assert (refreshes[0]["nx"], refreshes[0]["ny"], refreshes[0]["nz"]) == (0.0, 0.0, 0.0)
+
+    flow._surface = surface((20.0, 0.0, 10.0), (1.0, 0.0, 0.0))
+    assert PlacementFlow._set_values(flow)
+    assert values["measured_frame"] is False
+    assert (values["nx"], values["ny"], values["nz"]) == pytest.approx((1.0, 0.0, 0.0))
+    assert len(refreshes) == 2, "ein wirklicher Flächenwechsel bereitet das Werkzeug neu vor"

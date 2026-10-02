@@ -1,6 +1,6 @@
 # RM-384: Die nächste Rechnung sammelt einen inzwischen beendeten Helfer ein
 
-Stand: 02.10.2026. Nach dem zentralen Zweitreview ist der Konstruktoranschluss gezielt nachgebessert, geprüft und unabhängig ohne weitere Befunde freigegeben. Das vollständige zentrale Entwicklungstor und die Integration dieser Einheit stehen an diesem Berichtstand noch aus.
+Stand der lokalen Entwicklungsprüfung: 02.10.2026. Nach dem zentralen Zweitreview ist der Konstruktoranschluss gezielt nachgebessert, geprüft und unabhängig ohne weitere Befunde freigegeben. Das damals noch ausstehende zentrale Entwicklungstor und die spätere Integration sind im datierten Integrationsnachtrag dieses Berichts dokumentiert. Die folgenden lokalen Gegenlaufzahlen bleiben Nachweise ihres jeweiligen Prüfstands.
 
 ## Befund und Korrektur
 
@@ -86,3 +86,44 @@ Die Importgraph-Auswahl umfasst 356 von 381 Testdateien und wird vom Werkzeug au
 Eigenreview und unabhängiger vollständiger Quell-/Testnachreview einschließlich aller drei P2-Korrekturen und des vorhandenen Generationsfalls sind ohne offene Befunde abgeschlossen. Der unabhängige Reviewer hat die tatsächlichen JUnit-/Rohbelege und stabilen Endstandshashes geprüft, selbst keine Tests ausgeführt und keine Dateien geändert. Die frühere unvollständige Freigabe ersetzt diesen Nachreview nicht.
 
 Das bestätigt die nachgestellten Kontrollflüsse. Eine wirkliche Überschreitung der Windows-Stoppfrist, Linux/macOS, der Fenstertest RM-380, Leistungsmarken und das gebaute Paket sind hier nicht nachgewiesen. Die weiter offenen Teilaufgaben des Gesamtpunkts RM-298 behalten ihre eigene Abnahme.
+
+## Integrationsnachtrag 02.10.2026
+
+RM384 ist als nachgestellter Kontrollflussfehler abgeschlossen. Die Korrektur
+liegt mit `686abf9e63ed8708d15fdc642add170cb1d2c14f` auf `main` und dem tatsächlichen
+Remote-Hauptzweig. Nach dem Abgleich der zwischenzeitlichen Remote-Änderungen
+wurden das Tor wiederholt und die Übernahme getrennt geprüft.
+
+| Nachweis | Tatsächlich verifizierter Stand |
+|---|---|
+| Fixcommit(s) | `686abf9e63ed8708d15fdc642add170cb1d2c14f` |
+| Tatsächlicher Remote-Hauptzweig und Abstammung | `4cf460e87f8d93e2d950602c9fe25ce34e6b5eb9`; getrennte Abfragen von `HEAD`, `origin/main` und `git ls-remote origin refs/heads/main` ergaben am 02.10.2026 um 11:52:21 UTC denselben vollständigen Stand; `git merge-base --is-ancestor` für den Fixcommit gegen alle drei Ziele jeweils Exit 0 |
+| Ausgewählter Wiederholungs-Torstand | `commit-tor-abschlussrunde-47-v2-final` |
+| Vollständiges Entwicklungstor | 19.269 bestanden, 62 übersprungen |
+| Suite / Ruff / Format / mypy | Exit 0 / Exit 0 / Exit 0 / Exit 0 |
+| Rohbelege, JUnit und endgültige Exit-Werte | `bash .claude/scripts/suite-getrennt.sh`: 19.269 bestanden, 62 übersprungen, 412,39 s, Exit 0; `python -m ruff check .`, `python -m ruff format --check .` und `python -m mypy` jeweils Exit 0. Zentraler Rohlog und die vier Exit-JSONs sind lokal unter `tmp/review-seit-0.5.1-2026-10-01/commit-tor-abschlussrunde-47-v2-final/` erhalten. Dieser zentrale Torlauf erzeugt kein JUnit; die lokalen JUnit-Belege `kernel-file-constructor-final.xml`, `new-cases-constructor-final.xml`, `constructor-cause-before.xml`/`constructor-cause-after.xml` und `counter-final-*.xml` gehören getrennt zu den im Bericht ausgewiesenen Kontrollfällen |
+| Unveränderter Prüfstand und Zuordnung der RM384-Hashes | zentraler Vorher-/Nachhervergleich `changed_during_gate: []`; bei der getrennten Integrationsprüfung um 11:52:21 UTC stimmten übernommener Git-Blob und Arbeitsbaum für `kernel_process.py` und `test_kernel_process.py` bytegleich zu den im portablen RM384-Bericht vollständig genannten finalen lokalen SHA256 |
+| Quellhash am übernommenen RM384-Stand | `17a71e75b3a1d31a9fda09111dc5528516aeb850d7dc52fdb2e8827180e0f4d0` |
+| Testhash am übernommenen RM384-Stand | `f174d569340f09180a0ccaa786f4d171d60781f663d4fde83af2e1020c3b183e` |
+| Unabhängiger Dokumentabschlussreview | 02.10.2026: unabhängig freigegeben nach Abgleich der tatsächlichen Git-/Tor-/JUnit-Belege und aller neun eigenen Hunks; beide Dokumentnachgänge korrigiert, Nachprüfung ohne weitere Befunde |
+
+Die historischen 94/15 Fälle, die ursprünglichen acht Fehlkontrollen und die
+erste unvollständige Freigabe werden durch diesen Nachtrag nicht ersetzt.
+Der kanonische lokale Nachgang bleibt getrennt zugeordnet: 10 rot/4 grün →
+14 grün, alle 27 neuen Fälle grün, 106 Modul-Entwicklungsfälle grün bei einem
+abgewählten Fenstertest; sechs Gegenvarianten mit 16 erwarteten Testfehlschlägen
+und vier passenden grünen Kontrollen ohne Setup-/Teardownfehler oder Skips.
+
+Der [Archivabschluss](../../../ROADMAP-ARCHIV.md#rm-384) bewahrt außerdem die
+fremde Nachprüfung vom 02.10.2026 am älteren Stand `7f0de659d`. Deren Aussage
+über die damals noch bestehende Sperre nach `d9f830aec` ist ein Vorherbefund;
+sie wird nicht zur Aussage über den hier übernommenen Fixstand gemacht.
+
+Dieser Abschluss bestätigt die nachgestellten Kontrollflüsse und die geprüfte
+Integration. Echte native Windows-Killlatenz, eine wirkliche Überschreitung der
+Stoppfrist beziehungsweise ein tatsächlich verspätetes OS-Kindende sind weiterhin
+nicht nachgewiesen. POSIX-Speicherbesitz, ENOSPC/SIGBUS, Crashbereinigung,
+Linux/macOS, Paketwege und Paketrauchtestfrist, Fenster-/Rendererabnahmen
+(einschließlich RM380) sowie §31-Leistungsabnahmen bleiben offen.
+[RM298](../../../ROADMAP.md#rm-298) bleibt als Gesamtpunkt offen. Es gibt keinen
+Release- oder Laufzeitnachweis aus diesem Entwicklungsabschluss.

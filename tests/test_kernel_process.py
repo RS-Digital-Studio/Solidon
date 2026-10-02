@@ -2727,3 +2727,243 @@ def test_pool_ready_failures_survive_failed_stops_on_public_take(
     assert len(made) == ready_failures == limit
     assert calls == {"local": 1, "helper": 0}
     assert pool.counts.get("stopped", 0) == limit
+
+
+_TRANSFER_FAILURES = (
+    "enospc",
+    "enomem",
+    "windows-8",
+    "windows-14",
+    "windows-1450",
+    "windows-1455",
+    "memory",
+)
+
+
+def _transfer_allocation_problem(failure: str) -> BaseException:
+    """Stellt Fehlercodes ohne plattformabhängigen OSError-Konstruktor."""
+    if failure == "enospc":
+        return OSError(errno.ENOSPC, "Platzattrappe")
+    if failure == "enomem":
+        return OSError(errno.ENOMEM, "Speicherattrappe")
+    if failure == "memory":
+        return MemoryError("Eigenständige Speicherattrappe")
+    code = int(failure.removeprefix("windows-"))
+
+    class ReportedWindowsError(OSError):
+        @property
+        def winerror(self) -> int:
+            return code
+
+    # errno trägt absichtlich keinen Speicherfehler: Nur winerror zählt.
+    # Diese lokale Klasse wird nur als Ursache genutzt; _opened wandelt
+    # sie vor dem Helferprotokoll in den gewöhnlichen MemoryError um.
+    return ReportedWindowsError(errno.EINVAL, "Windows-Speicherattrappe")
+
+
+@pytest.mark.parametrize("entry", ("pack", "copied"))
+@pytest.mark.parametrize("failure", _TRANSFER_FAILURES)
+def test_shared_memory_transfer_keeps_space_and_memory_failures_distinct(
+    monkeypatch: pytest.MonkeyPatch, entry: str, failure: str
+) -> None:
+    """ENOSPC bleibt derselbe OSError; Speichermangel behält seine Ursache."""
+    problem = _transfer_allocation_problem(failure)
+    attempts: list[dict[str, Any]] = []
+    source = {"marker": np.array([11, 22], dtype=np.int64)}
+
+    def refusing(**arguments: Any) -> Any:
+        attempts.append(arguments)
+        raise problem
+
+    def transfer() -> Any:
+        if entry == "pack":
+            return kernel_jobs.pack(source)
+        layout = [("marker", source["marker"].dtype.str, (2,), 0)]
+        return kernel_jobs.copied("input-attrappe", layout)
+
+    monkeypatch.setattr(kernel_jobs.shared_memory, "SharedMemory", refusing)
+    if failure == "enospc":
+        with pytest.raises(OSError) as caught:
+            transfer()
+        assert caught.value is problem and caught.value.errno == errno.ENOSPC
+    else:
+        with pytest.raises(MemoryError) as caught:
+            transfer()
+        assert caught.value.args == (str(problem),)
+        if failure == "memory":
+            assert caught.value is problem and caught.value.__cause__ is None
+        else:
+            assert caught.value.__cause__ is problem
+    expected = (
+        {"track": False, "create": True, "size": source["marker"].nbytes}
+        if entry == "pack"
+        else {"track": False, "name": "input-attrappe"}
+    )
+    assert attempts == [expected]
+
+
+class _TransferBufferHandle:
+    """Nur NumPy-Puffer und Aufrufzähler, keine echten Speichergriffe."""
+
+    def __init__(self, owner: Any, name: str, buf: bytearray) -> None:
+        self.owner, self.name, self.buf = owner, name, buf
+        self.closed = 0
+        self.unlinked = 0
+
+    def close(self) -> None:
+        self.closed += 1
+
+    def unlink(self) -> None:
+        self.unlinked += 1
+        self.owner.buffers.pop(self.name, None)
+
+
+class _TransferMemory:
+    """Unterscheidet die drei tatsächlichen Aufrufe des Speicherherstellers."""
+
+    def __init__(self, stage: str, problem: BaseException) -> None:
+        self.stage, self.problem = stage, problem
+        self.in_helper = False
+        self.buffers: dict[str, bytearray] = {}
+        self.handles: list[_TransferBufferHandle] = []
+        self.attempts: list[str] = []
+
+    def __call__(self, **arguments: Any) -> _TransferBufferHandle:
+        assert arguments.get("track") is False
+        creating = arguments.get("create", False)
+        where = "parent-input"
+        if self.in_helper:
+            where = "helper-output" if creating else "helper-input"
+        self.attempts.append(where)
+        if where == self.stage:
+            raise self.problem
+        if creating:
+            name = f"transfer-{len(self.buffers)}"
+            self.buffers[name] = bytearray(arguments["size"])
+        else:
+            name = arguments["name"]
+        handle = _TransferBufferHandle(self, name, self.buffers[name])
+        self.handles.append(handle)
+        return handle
+
+
+@pytest.mark.parametrize("stage", ("parent-input", "helper-input", "helper-output"))
+@pytest.mark.parametrize("failure", _TRANSFER_FAILURES)
+def test_public_run_distinguishes_enospc_from_memory_in_both_transfers(
+    monkeypatch: pytest.MonkeyPatch, stage: str, failure: str
+) -> None:
+    """Der echte Call-/Serve-Anschluss fällt nur bei ENOSPC dauerhaft lokal zurück."""
+    from types import SimpleNamespace
+
+    problem = _transfer_allocation_problem(failure)
+    memory = _TransferMemory(stage, problem)
+    pool = kernel_process._Pool()
+    made: list[_PoolHelper] = []
+    calls = {"local": 0, "helper": 0}
+    source = {"marker": np.array([11, 22], dtype=np.int64)}
+    actual_call = kernel_process._Helper.call
+
+    def job(arrays: Any, _values: Any, check: Callable[[], None]) -> Any:
+        check()
+        same_bytes(source, arrays)
+        where = "helper" if memory.in_helper else "local"
+        calls[where] += 1
+        marker = 222 if memory.in_helper else 111
+        return {"marker": np.array([marker], dtype=np.int64)}, {"executed": where}
+
+    class TransferHelper(_PoolHelper):
+        call = actual_call
+
+        def __init__(self) -> None:
+            super().__init__()
+            made.append(self)
+            self.connection = SimpleNamespace(send=self.send)
+            self.lines: list[_Line] = []
+            self.replies: list[tuple[Any, ...]] = []
+
+        def send(self, message: tuple[Any, ...]) -> None:
+            assert message[0] == "job", "Diese Fälle enden vor einer Ergebnisbestätigung."
+            line = _Line([message], broken_at="")
+            self.lines.append(line)
+            memory.in_helper = True
+            try:
+                # Ein wirklicher serve-Aufruf bis EOF: kein nachgebautes
+                # refused-Protokoll, aber auch kein Prozess oder OS-Speicher.
+                kernel_jobs.serve(line)
+            finally:
+                memory.in_helper = False
+            self.replies = [reply for reply in line.sent if reply[0] != "ready"]
+
+        def _receive(self, _cancelled: Any, _deadline: float | None) -> tuple[Any, ...]:
+            assert self.replies, "serve hat eine tatsächliche Antwort geliefert."
+            return self.replies.pop(0)
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", TransferHelper)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "enospc_transfer_probe", job)
+    monkeypatch.setattr(kernel_jobs.shared_memory, "SharedMemory", memory)
+    monkeypatch.setattr(kernel_jobs, "_yield_to_the_window", lambda: None)
+    monkeypatch.setattr(kernel_jobs, "_without_a_temp_folder", lambda: None)
+    monkeypatch.setattr(kernel_jobs.multiprocessing, "parent_process", lambda: None)
+
+    def run() -> Any:
+        return in_a_worker(
+            lambda: kernel_process.run("enospc_transfer_probe", source, {}, weight=1),
+            timeout=10.0,
+        )
+
+    helper_calls = int(stage == "helper-output")
+    expected_attempts = ["parent-input"]
+    if stage != "parent-input":
+        expected_attempts.append("helper-input")
+    if stage == "helper-output":
+        expected_attempts.append("helper-output")
+    try:
+        if failure == "enospc":
+            got = run()
+            same_bytes({"marker": np.array([111], dtype=np.int64)}, got[0])
+            assert got[1] == {"executed": "local"}
+            assert calls == {"local": 1, "helper": helper_calls}
+            assert pool.counts == {"started": 1, "stopped": 1, "fallback": 1}
+            assert pool.disabled and pool.processes() == []
+            got = run()
+            same_bytes({"marker": np.array([111], dtype=np.int64)}, got[0])
+            assert got[1] == {"executed": "local"}
+            assert calls == {"local": 2, "helper": helper_calls}
+            assert pool.counts == {"started": 1, "stopped": 1, "fallback": 1, "in_process": 1}
+            assert pool.disabled and pool.take(None) is None
+        else:
+            with pytest.raises(MemoryError) as caught:
+                run()
+            assert caught.value.args == (str(problem),)
+            if stage == "parent-input":
+                if failure == "memory":
+                    assert caught.value is problem and caught.value.__cause__ is None
+                else:
+                    assert caught.value.__cause__ is problem
+            else:
+                assert any(
+                    "im Hilfsprozess des Kerns (42)" in note
+                    for note in getattr(caught.value, "__notes__", ())
+                )
+            assert calls == {"local": 0, "helper": helper_calls}
+            assert pool.counts == {"started": 1, "stopped": 1}
+            assert not pool.disabled and pool.processes() == []
+        assert len(made) == 1 and not made[0].alive
+        assert memory.attempts == expected_attempts and not memory.buffers
+        assert all(handle.closed == 1 for handle in memory.handles)
+        assert [handle.unlinked for handle in memory.handles] == (
+            [] if stage == "parent-input" else [1] if stage == "helper-input" else [1, 0]
+        )
+        if stage == "parent-input":
+            assert made[0].lines == []
+        else:
+            assert len(made[0].lines) == 1
+            assert [reply[0] for reply in made[0].lines[0].sent] == (
+                ["ready", "refused"]
+                if stage == "helper-input"
+                else ["ready", "accepted", "refused"]
+            )
+    finally:
+        pool.shutdown()

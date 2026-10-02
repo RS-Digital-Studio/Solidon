@@ -48,6 +48,7 @@ from app.core.geom.edges import (
     EdgeSide,
     EdgeSides,
     LawOnChain,
+    MeshEdge,
     RadiusLaw,
     chamfer_reaches,
     check_varying_radius,
@@ -60,10 +61,11 @@ from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
 from app.core.geom.edges import named_edges as edges_named
 from app.core.geom.edges import wanted as edges_wanted
+from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.types import BoundingBox, CancelToken, PlaneFrame, Point2, Transform, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, exact_centre, is_close
+from app.core.units import EPS_DISPLAY, EPS_GEOM, dot3, exact_centre, is_close, weld_tolerance
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -378,16 +380,222 @@ def edge_points(entry: EdgeInfo, deflection: float = DEFLECTION) -> tuple[Vec3, 
     """
     require()
     from OCP.BRepAdaptor import BRepAdaptor_Curve
+
+    points = _sampled_edge_points(entry, deflection)
+    if points:
+        return points
+    curve = BRepAdaptor_Curve(entry.edge)
+    first = curve.Value(curve.FirstParameter())
+    last = curve.Value(curve.LastParameter())
+    return ((first.X(), first.Y(), first.Z()), (last.X(), last.Y(), last.Z()))
+
+
+def _sampled_edge_points(entry: EdgeInfo, deflection: float) -> tuple[Vec3, ...]:
+    """Eine vollständige Abtastung; bloße Endpunkte sind kein Zuordnungsbeleg."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GCPnts import GCPnts_QuasiUniformDeflection
 
     curve = BRepAdaptor_Curve(entry.edge)
     sampler = GCPnts_QuasiUniformDeflection(curve, max(deflection, EPS_GEOM))
     if not sampler.IsDone() or sampler.NbPoints() < 2:
-        first = curve.Value(curve.FirstParameter())
-        last = curve.Value(curve.LastParameter())
-        return ((first.X(), first.Y(), first.Z()), (last.X(), last.Y(), last.Z()))
+        return ()
     points = (sampler.Value(index) for index in range(1, sampler.NbPoints() + 1))
     return tuple((point.X(), point.Y(), point.Z()) for point in points)
+
+
+def native_edges_of_chains(
+    solid: Solid,
+    mesh: MeshData,
+    chains: Sequence[MeshEdge],
+    *,
+    cancelled: CancelToken | None = None,
+) -> tuple[tuple[int, ...], ...]:
+    """Bindet vollständige Netzzüge über Flächenherkunft und tatsächlichen Verlauf.
+
+    Eine leere Bindung heißt unbekannt, niemals alle Kanten oder glatt. Auch
+    innerhalb einer einzigen nativen Fläche kann ein geometrischer Knick
+    liegen. Teilen zwei Flächen mehrere native Kanten, muss jedes Segment
+    räumlich zu genau einer passen. Und jede gebundene native Kante muss
+    vollständig von den gewählten Zügen abgedeckt sein: Ein Ausschnitt darf
+    nicht zur Bearbeitung der ganzen Kurve werden.
+    """
+    from itertools import pairwise
+
+    import numpy as np
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+
+    from app.core.brep.kernel import face_sources
+
+    _check(cancelled)
+    sources = face_sources(mesh)
+    if len(sources) != mesh.triangle_count or np.any((sources < 0) | (sources >= solid.face_count)):
+        return tuple(() for _chain in chains)
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    _check(cancelled)
+    entries = edges_of(solid)
+    indices = native_edge_indices(solid, entries)
+    by_faces: dict[tuple[int, ...], list[int]] = {}
+    for index, entry in zip(indices, entries, strict=True):
+        _check(cancelled)
+        faces = tuple(
+            sorted({solid.face_index(face) for face in listed(neighbours.FindFromKey(entry.edge))})
+        )
+        if len(faces) == 2 and faces[0] >= 0:
+            by_faces.setdefault(faces, []).append(index)
+    native = dict(zip(indices, entries, strict=True))
+    selected_segments: set[tuple[int, int]] = set()
+    for chain in chains:
+        _check(cancelled)
+        selected_segments.update((min(pair), max(pair)) for pair in pairwise(chain.node_indices))
+    face_pairs: dict[tuple[int, int], tuple[int, ...]] = {}
+    adjacency = np.asarray(mesh.raw.face_adjacency, dtype=np.int64)
+    for nodes, triangles in zip(np.asarray(mesh.raw.face_adjacency_edges), adjacency, strict=True):
+        _check(cancelled)
+        key = (int(min(nodes)), int(max(nodes)))
+        if key in selected_segments:
+            face_pairs[key] = tuple(sorted(set(map(int, sources[triangles]))))
+
+    # Zwei Sehnenzüge dürfen je um ihre Tessellierungsgrenze abweichen;
+    # verschweißte Ecken zusätzlich um die vorhandene Schweißgrenze.
+    join_tolerance = weld_tolerance(mesh.bounds.diagonal)
+    reach = 2.0 * max(solid.deflection, EPS_GEOM) + join_tolerance
+    sampled: dict[int, tuple[Vec3, ...]] = {}
+    claims: list[tuple[int, ...]] = []
+    for chain in chains:
+        _check(cancelled)
+        chain_segments = tuple(pairwise(chain.points))
+        if len(chain.node_indices) != len(chain.points) or not chain_segments:
+            claims.append(())
+            continue
+        found: list[int] = []
+        for nodes, segment in zip(pairwise(chain.node_indices), chain_segments, strict=True):
+            _check(cancelled)
+            faces = face_pairs.get((min(nodes), max(nodes)), ())
+            candidates = []
+            for index in by_faces.get(faces, ()):
+                _check(cancelled)
+                if index not in sampled:
+                    sampled[index] = _sampled_edge_points(native[index], solid.deflection)
+                    _check(cancelled)
+                points = sampled[index]
+                if points and _curve_is_covered(
+                    segment, tuple(pairwise(points)), reach, join_tolerance, cancelled
+                ):
+                    candidates.append(index)
+            if len(candidates) != 1:
+                found = []
+                break
+            found.append(candidates[0])
+        claims.append(tuple(found))
+    while True:
+        covered: dict[int, list[tuple[Vec3, Vec3]]] = {}
+        for chain, claimed in zip(chains, claims, strict=True):
+            _check(cancelled)
+            if claimed:
+                for index, segment in zip(claimed, pairwise(chain.points), strict=True):
+                    covered.setdefault(index, []).append(segment)
+        complete: set[int] = set()
+        for index, segments in covered.items():
+            _check(cancelled)
+            points = sampled[index]
+            if _curve_is_covered(points, segments, reach, join_tolerance, cancelled):
+                complete.add(index)
+        retained = [claim if all(index in complete for index in claim) else () for claim in claims]
+        if retained == claims:
+            return tuple(tuple(dict.fromkeys(claim)) for claim in retained)
+        # Ein verworfener Zug darf die Abdeckung einer anderen nativen Kante
+        # nicht weiterhin belegen. Jede Runde entfernt mindestens einen Zug.
+        claims = retained
+
+
+def _curve_is_covered(
+    points: Sequence[Vec3],
+    segments: Sequence[tuple[Vec3, Vec3]],
+    reach: float,
+    join_tolerance: float,
+    cancelled: CancelToken | None,
+) -> bool:
+    """Jede Sehne ist durchgehend gedeckt, nicht bloß an einzelnen Proben.
+
+    Die Projektion eines Gegenstücks begrenzt sein Intervall auf der Sehne.
+    Liegen beide Intervallenden im Abstand ``reach`` vom Gegenstück, gilt
+    das auch dazwischen: Der Abstand zu einer Strecke ist konvex. Die
+    Vereinigungsintervalle dürfen nur um die Schweißgrenze auseinanderliegen;
+    das Sehnenband selbst darf fehlende ausgewählte Strecken nicht auffüllen.
+    """
+    from itertools import pairwise
+
+    if len(points) < 2:
+        return False
+    for start, end in pairwise(points):
+        _check(cancelled)
+        span = tuple(after - before for before, after in zip(start, end, strict=True))
+        square = dot3(span, span)
+        if square <= EPS_GEOM * EPS_GEOM:
+            return False
+        intervals = []
+        for first, second in segments:
+            _check(cancelled)
+            shares = [
+                dot3(tuple(value - base for value, base in zip(point, start, strict=True)), span)
+                / square
+                for point in (first, second)
+            ]
+            lower, upper = max(0.0, min(shares)), min(1.0, max(shares))
+            if upper <= lower:
+                continue
+            ends = tuple(
+                cast(
+                    Vec3, tuple(base + share * step for base, step in zip(start, span, strict=True))
+                )
+                for share in (lower, upper)
+            )
+            if _points_follow_segments(ends, ((first, second),), reach, cancelled):
+                intervals.append((lower, upper))
+        if not intervals:
+            return False
+        joined = 0.0
+        gap = join_tolerance / math.sqrt(square)
+        for lower, upper in sorted(intervals):
+            _check(cancelled)
+            if lower > joined + gap:
+                return False
+            joined = max(joined, upper)
+        if joined < 1.0 - gap:
+            return False
+    return True
+
+
+def _points_follow_segments(
+    points: Sequence[Vec3],
+    segments: Sequence[tuple[Vec3, Vec3]],
+    reach: float,
+    cancelled: CancelToken | None,
+) -> bool:
+    """Jeder Punkt liegt im Sehnenband; kleine Produkte ohne BLAS oder FMA."""
+    for point in points:
+        _check(cancelled)
+        for start, end in segments:
+            _check(cancelled)
+            span = tuple(after - before for before, after in zip(start, end, strict=True))
+            offset = tuple(value - before for before, value in zip(start, point, strict=True))
+            square = dot3(span, span)
+            if square <= EPS_GEOM * EPS_GEOM:
+                continue
+            share = min(max(dot3(offset, span) / square, 0.0), 1.0)
+            difference = tuple(
+                value - share * direction for value, direction in zip(offset, span, strict=True)
+            )
+            if dot3(difference, difference) <= reach * reach:
+                break
+        else:
+            return False
+    return True
 
 
 @dataclass(frozen=True, slots=True)
