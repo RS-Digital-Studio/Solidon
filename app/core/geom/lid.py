@@ -1289,7 +1289,8 @@ class ScrewLidParams(BaseParams):
     # in jeder Sprache, und am exakten Gehäuse entstehen Hals und Kappe exakt
     # (P2.8).
     # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
-    cache_version="4",
+    # 5: Das Kappengewinde nennt seinen gebauten Durchmesser (RM-393).
+    cache_version="5",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -1435,7 +1436,12 @@ def screw_lid(ctx: OpContext) -> OpResult:
         kind="thread",
         provenance="generated",
         params={
-            "diameter": round(major, 4),
+            # **Der gebaute Durchmesser, nicht der des Halses** (RM-393). Die
+            # Kappe ist um das Spiel weiter geschnitten (``_cap_sizes``: Kern
+            # plus Spiel, die Nut eine Gangtiefe darüber); mit dem Nennmaß des
+            # Halses maß die Passung 0,00 mm und meldete jeden frischen Deckel
+            # als zu eng.
+            "diameter": round(major + clearance, 4),
             "pitch": round(params.pitch, 4),
             "handedness": "right",
             "centre": (0.0, 0.0, (params.height + SKIRT_RELIEF) / 2.0),

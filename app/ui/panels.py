@@ -130,6 +130,7 @@ from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, sho
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
+from app.core.scene.parameter_usage import field_bounds
 from app.core.types import (
     CancelToken,
     Document,
@@ -3191,6 +3192,15 @@ class ParameterPanel(QWidget):
         self._unit_editors: dict[str, QComboBox] = {}
         self._detail_buttons: dict[str, QToolButton] = {}
         """Der sichtbare Weg zu Grenzen, Einheit und Ausdruck jeder Zeile."""
+        self._derived: dict[str, QLabel] = {}
+        """Die Anzeige je abgeleitetem Maß — sein Ausdruck besitzt den Wert."""
+        self._titles: dict[str, QLabel] = {}
+        """Die Beschriftung je Zeile, die auch „Nicht verwendet“ sagt."""
+        self._layout: tuple[object, ...] | None = None
+        """Was die Zeilen ausmacht (:meth:`_layout_of`) — gleich, so werden nur
+        die Werte gesetzt und kein Feld verliert den Fokus (RM-355)."""
+        self._refused_name = ""
+        """Zu welchem Maß die Ablehnungszeile gehört — leer ohne."""
         self._refusal: QWidget | None = None
         """Die Zeile unter einem Feld, das eine getippte Zahl abgelehnt hat — oder nichts.
 
@@ -3434,6 +3444,7 @@ class ParameterPanel(QWidget):
         if self._refusal is not None:
             self._form.removeRow(self._refusal)
             self._refusal = None
+            self._refused_name = ""
         if editor is None:
             return
         editor.setAccessibleDescription(said)
@@ -3467,6 +3478,7 @@ class ParameterPanel(QWidget):
         layout.addWidget(change)
         self._form.insertRow(row_index + 1, refusal)
         self._refusal = refusal
+        self._refused_name = name
         self._fit()
 
     def _details_clicked(self) -> None:
@@ -3504,17 +3516,25 @@ class ParameterPanel(QWidget):
         layout.addWidget(details)
         self._detail_buttons[name] = details
         label = QLabel(title, self)
+        label.setWordWrap(True)
+        fit_wrapped(label)
+        self._titles[name] = label
+        self._form.addRow(label, row)
+        self._remember_row(name, row)
+        self._show_usage(name, title, row)
+
+    def _show_usage(self, name: str, title: str, row: QWidget) -> None:
+        """Beschriftung und Kurzhilfe einer Zeile nach dem jüngsten Ergebnis."""
+        label = self._titles[name]
         uses = self._usage_result.parameter_usage if self._usage_result is not None else None
         if uses is not None and name in uses and not uses[name]:
             label.setText(f"{title}\n{tr('Nicht verwendet')}")
-        label.setWordWrap(True)
-        fit_wrapped(label)
+        else:
+            label.setText(title)
         note = self._usage_note(name)
         label.setToolTip(note)
         label.setAccessibleDescription(note)
         row.setToolTip(note)
-        self._form.addRow(label, row)
-        self._remember_row(name, row)
 
     def _usage_note(self, name: str) -> str:
         """Belegte Operationsfelder nennen; eine ausstehende Prüfung urteilt nicht."""
@@ -3546,16 +3566,153 @@ class ParameterPanel(QWidget):
         return "\n".join(lines)
 
     def show_document(self, document: Document, result: EvaluationResult | None = None) -> None:
+        """Zeigt die Maße des Dokuments — **bestehende Zeilen behalten ihr Feld** (RM-355).
+
+        Nach jeder Änderung baute die Leiste alle Zeilen neu, und das gerade
+        bediente Feld ging dabei unter: Ein zweites ↑ in *Breite* traf nichts
+        mehr, gedreht wurde 61 statt 62, und Mausrad, gehaltener Pfeilknopf
+        und Tab brachen genauso ab — an der Geste, für die Weg 2 da ist.
+        Bleibt die Gestalt der Zeilen gleich (:meth:`_layout_of`), werden nur
+        Werte und Hinweise gesetzt; sonst wird neu gebaut, und der Fokus geht
+        an dasselbe Maß zurück.
+        """
         self._usage_result = result
         self._usage_operations = {operation.id: operation for operation in document.ops}
+        if self._refresh_in_place(document):
+            return
+        focus = QApplication.focusWidget()
+        focused = next(
+            (
+                name
+                for name, editor in self._editors.items()
+                if focus is not None and (editor is focus or editor.isAncestorOf(focus))
+            ),
+            "",
+        )
+        self._rebuild(document)
+        editor = self._editors.get(focused)
+        if editor is not None:
+            editor.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def focus_parameter(self, name: str) -> bool:
+        """Setzt den Fokus in die Zeile eines Maßes — ``False``, wenn es keine gibt.
+
+        Der Weg von *Eingabe korrigieren*, wenn das Feld des angehaltenen
+        Schritts ein Maß liest (RM-354): Im Schrittdialog stand „=@breite“,
+        und wer dort eine Zahl tippte, trennte still die Bindung. Ein
+        abgeleitetes Maß hat kein Zahlenfeld; dort führt der Fokus auf den
+        Knopf zu seinem Ausdruck.
+        """
+        target: QWidget | None = self._editors.get(name) or self._detail_buttons.get(name)
+        if target is None:
+            return False
+        open_section(self)
+        self._scroll.ensureWidgetVisible(target)
+        target.setFocus(Qt.FocusReason.OtherFocusReason)
+        editor = self._editors.get(name)
+        if editor is not None:
+            editor.selectAll()
+        return True
+
+    @staticmethod
+    def _bounds(document: Document, name: str) -> tuple[float, float]:
+        """Die wirksamen Grenzen einer Zeile: die eigenen und die der Felder, die sie lesen.
+
+        Ohne eigene Grenzen fiel *Breite* auf ±100 000 zurück, und 5000 lief
+        durch, obwohl *Quader* höchstens 1000 mm breit wird — die Kette hielt
+        an, die Ansicht stand leer (RM-354). Jetzt lehnt das Feld die Zahl ab
+        und nennt die Grenze (:class:`BoundedSpin`); was über einen Ausdruck
+        liest, prüft :meth:`Session.change_parameter`.
+        """
+        parameter = document.parameters[name]
+        low, high = field_bounds(document, name)
+        if parameter.minimum is not None:
+            low = parameter.minimum if low is None else max(low, parameter.minimum)
+        if parameter.maximum is not None:
+            high = parameter.maximum if high is None else min(high, parameter.maximum)
+        least = low if low is not None else -100_000.0
+        most = high if high is not None else 100_000.0
+        return least, max(least, most)
+
+    @staticmethod
+    def _layout_of(document: Document) -> tuple[object, ...]:
+        """Was eine Zeile ausmacht: Name, Titel, Wert oder Ausdruck, Einheit, Grenzen."""
+        return tuple(
+            (
+                name,
+                str(parameter.title or name),
+                bool(parameter.expression),
+                str(parameter.unit or ""),
+                parameter.minimum,
+                parameter.maximum,
+            )
+            for name, parameter in document.parameters.items()
+        )
+
+    def _refresh_in_place(self, document: Document) -> bool:
+        """Setzt Werte und Hinweise in die bestehenden Zeilen.
+
+        ``False`` heißt: Die Gestalt hat sich geändert, es wird neu gebaut.
+        """
+        layout = self._layout_of(document)
+        if not layout or layout != self._layout:
+            return False
+        problem: AppError | None = None
+        try:
+            values = expressions.resolve(document.parameters)
+        except AppError as error:
+            values = {}
+            problem = error
+        for name, parameter in document.parameters.items():
+            title = f"{parameter.title or name}"
+            if parameter.expression:
+                label = self._derived[name]
+                value = values.get(name)
+                label.setText(
+                    localised(f"{value:.2f}") if value is not None else tr("Ausdruck prüfen")
+                )
+                note = parameter.expression
+                if problem is not None:
+                    note += f"\n{problem}"
+                label.setToolTip(note)
+                label.setAccessibleDescription(note)
+                row = label.parentWidget()
+            else:
+                editor = self._editors[name]
+                low, high = self._bounds(document, name)
+                if editor.minimum() != low or editor.maximum() != high:
+                    with QSignalBlocker(editor):
+                        editor.setRange(low, high)
+                if not is_close(editor.value(), parameter.value):
+                    # Ohne Signal: Der Wert kommt aus dem Dokument und ist keine
+                    # neue Eingabe. Eine abgelehnte Zahl darunter gilt nicht mehr.
+                    with QSignalBlocker(editor):
+                        editor.setValue(parameter.value)
+                    editor.setMinimumWidth(least_number_width(editor))
+                    if self._refused_name == name and self._refusal is not None:
+                        self._form.removeRow(self._refusal)
+                        self._refusal = None
+                        self._refused_name = ""
+                row = editor.parentWidget()
+            if row is not None:
+                self._show_usage(name, title, row)
+        self._fit()
+        return True
+
+    def _rebuild(self, document: Document) -> None:
+        """Alle Zeilen neu — wenn Maße dazukommen, gehen oder ihre Gestalt ändern."""
         while self._form.rowCount():
             self._form.removeRow(0)
         self._editors.clear()
         self._unit_editors.clear()
         self._detail_buttons.clear()
+        self._derived.clear()
+        self._titles.clear()
+        self._layout = self._layout_of(document)
         # Die Zeile der Ablehnung geht mit den Zeilen (``removeRow``); der neue
         # Stand kennt keine abgelehnte Zahl mehr.
         self._refusal = None
+        self._refused_name = ""
         # **Vor dem Neuaufbau leeren, nicht danach.** ``removeRow`` löscht die
         # Widgets der alten Zeilen; ein Eintrag, der auf ein totes C++-Objekt
         # zeigt, beantwortet den nächsten Rechtsklick mit einem Absturz.
@@ -3594,6 +3751,7 @@ class ParameterPanel(QWidget):
                 # allein „42,00“ die Karte breiter als ihre vorgesehenen
                 # 260 Pixel, obwohl die echte Schrift dort bequem hineinpasst.
                 label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+                self._derived[name] = label
                 self._add_parameter_row(name, f"{parameter.title or name}", label, unit)
                 # Auch die abgeleitete Zeile: Ihr Ausdruck ist genau das, was
                 # man an ihr ändern will, und bearbeiten lässt sie sich sonst
@@ -3605,8 +3763,7 @@ class ParameterPanel(QWidget):
             editor = BoundedSpin(self)
             wheel_needs_focus(editor)
             editor.setDecimals(2)
-            editor.setMinimum(parameter.minimum if parameter.minimum is not None else -100_000.0)
-            editor.setMaximum(parameter.maximum if parameter.maximum is not None else 100_000.0)
+            editor.setRange(*self._bounds(document, name))
             editor.setValue(parameter.value)
             editor.setKeyboardTracking(False)
             # Der Wertebereich bestimmt sonst die Mindestbreite der Spinbox:

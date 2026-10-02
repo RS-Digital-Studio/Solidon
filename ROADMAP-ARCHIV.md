@@ -31,6 +31,15 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-354: Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden (02.10.2026)](#rm-354-ein-hauptmaß-jenseits-der-grenze-der-operation-lässt-das-modell-verschwinden-02102026) |
+| 2026-10-02 | [RM-355: In der Parameterleiste geht nur ein Pfeilschritt, danach ist der Fokus weg (02.10.2026)](#rm-355-in-der-parameterleiste-geht-nur-ein-pfeilschritt-danach-ist-der-fokus-weg-02102026) |
+| 2026-10-02 | [RM-389: „Eine Rückfrage steht an — sie kommt beim Übernehmen“, und *Übernehmen* ist gesperrt (02.10.2026)](#rm-389-eine-rückfrage-steht-an--sie-kommt-beim-übernehmen-und-übernehmen-ist-gesperrt-02102026) |
+| 2026-10-02 | [RM-329: Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen (02.10.2026)](#rm-329-ein-aus-cura-übernommener-drucker-lässt-sich-nach-einem-düsenwechsel-nicht-mehr-slicen-02102026) |
+| 2026-10-02 | [RM-330: An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“ (02.10.2026)](#rm-330-an-cura-maschinen-mit-ursprung-in-der-bettmitte-gilt-jeder-druck-als-über-den-bauraum-hinaus-02102026) |
+| 2026-10-02 | [RM-373: Die Versuchsliste nennt je Versuch Satzanfang und Startwert (02.10.2026)](#rm-373-die-versuchsliste-nennt-je-versuch-satzanfang-und-startwert-02102026) |
+| 2026-10-02 | [RM-393: Jeder Drehdeckel meldet seine eigene Passung als zu eng (02.10.2026)](#rm-393-jeder-drehdeckel-meldet-seine-eigene-passung-als-zu-eng-02102026) |
+| 2026-10-02 | [RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)](#rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026) |
+| 2026-10-02 | [RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)](#rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026) |
 | 2026-10-02 | [RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)](#rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026) |
 | 2026-10-02 | [RM-333: Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“ (02.10.2026)](#rm-333-eine-nicht-eindeutige-bambu-düsenvariante-meldet-prozessprofil-ließ-sich-nicht-lesen-02102026) |
 | 2026-10-02 | [RM-331: Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer (02.10.2026)](#rm-331-creality-print-73-platten-deren-anordnung-nicht-hält-gehen-ohne-anordnung-an-den-slicer-02102026) |
@@ -35738,4 +35747,211 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Beleg: `bericht-B.md` (B-3).
   Nachprüfung am Stand `6ce767031`: besteht noch, nur am Codeweg belegt: Code unverändert, kein Test mit `keep_arrangement=False`; am echten Creality Print 7.3 weiter nicht nachgestellt.
 
-**Abschluss:** Gemessen an Creality Print 7.3 (V7.3.0.6149, Ender-3 V3 SE) mit Ring und Kern, schwebendem Teil, Teil über dem Rand und zwei überlappenden Teilen: Die Konsole ordnet in allen vier Fällen selbst an, kein Abbruch -50, kein `gcode.off_the_bed`. Kein Fehler — eine Absage hätte gelingende Läufe verhindert. Ein Test hält das Verhalten fest, Docstring und Karte sind korrigiert. Folgebefund unter [RM-414](ROADMAP.md#rm-414). Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+**Abschluss:** Gemessen an Creality Print 7.3 (V7.3.0.6149, Ender-3 V3 SE) mit Ring und Kern, schwebendem Teil, Teil über dem Rand und zwei überlappenden Teilen: Die Konsole ordnet in allen vier Fällen selbst an, kein Abbruch -50, kein `gcode.off_the_bed`. Kein Fehler — eine Absage hätte gelingende Läufe verhindert. Ein Test hält das Verhalten fest, Docstring und Karte sind korrigiert. Folgebefund unter [RM-414](#rm-414). Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)
+
+<a id="rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026"></a>
+<a id="rm-386"></a>
+
+**RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 3; Folgepunkt zu RM-319, das im Arbeitsbaum
+  inzwischen archiviert ist. Der Abnahmefall von RM-319 ist behoben (Netz 14 715,2, exakt
+  14 714,5 mm³, je ein Langloch). Offen:
+  - **Netz:** eine gesenkte Bohrung durch die zwei Berührplatten versetzen → −2 516,3 mm³ ohne
+    Befund; der Kettenzweig schließt ohne `merge_face_contacts`
+    (`app/core/geom/prepare_ops.py:3867`, ebenso `:3211`).
+  - **Exakt:** *Bohrung ändern* Ø 8 mit Versatz lässt einen losen Zylinder von 502,7 mm³ in der
+    Bohrung stehen, der Körper ist undicht, kein Befund (`prepare_ops.py:7667`).
+  - **Exakt:** *Merkmal verschieben* und *Merkmal drehen* sagen mit falschem Rat ab; das Netz
+    rechnet dieselben Fälle inzwischen richtig (Kerne sagen Verschiedenes, `operationen.md`).
+  **Fix:** berührende Schalen an allen schließenden Wegen beider Kerne verbinden.
+  **Abnahme:** je Zwilling ein Test an beiden Kernen (Volumen, ein Körper, dicht, kein loser
+  Rest). Ob `796c6d003` („Gekoppelte Senkbohrungen fangen ungültige Langlochzüge ab“) einen Teil
+  davon abdeckt, ist noch nicht geprüft. Bauplan §21.1, §25, §30, Regel 17.
+  Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_beruehrplatten_*.txt`.
+
+**Abschluss:** `merge_face_contacts` an jeder schließenden Vereinigung am Netz (Versetzen, Versetzen mit Richtung, Entfernen, Kippen, `_section_closed`, Senkung ändern, Einlauf mitnehmen, Wulst/Kehle als Hohlraum, Musterzellen); am exakten Kern `_exact_closing_base`, `_exact_closing_chain` und `_exact_entrance_context`, der Langlochzug läuft über denselben Helfer. Zwei parametrisierte Tests an beiden Kernen (30 Fälle, am Stand davor 21 rot). Laufzeit am Besenhalter unverändert. Vorbestehender Fund am exakten Versetzen mit Richtung unter [RM-423](ROADMAP.md#rm-423). Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)
+
+<a id="rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026"></a>
+<a id="rm-414"></a>
+
+**RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht.**
+  Messung 02.10.2026 zu RM-331 (Claude, Unteragent): Creality Print 7.3 (V7.3.0.6149) ordnet auf der
+  Konsole jede Platte selbst an, mit und ohne `plate`-Block — Solidons Plattenbelegung gilt dort nie.
+  Der Befund `slicer.arranged_itself` fehlt trotzdem, und `tests/test_print_settings.py:3017ff` sichert
+  das Fehlen zu. **Fix:** in `handover.slice_model` `arranged_by_slicer = keep_arrangement and (not
+  wanted_arrangement or _creality_cli(setup))`, Zusicherung im Test umdrehen. **Abnahme:** Test mit
+  haltender Anordnung an `_creality_cli` meldet `slicer.arranged_itself`. Bauplan §29.
+
+**Abschluss:** `slice_model` setzt `slicer.arranged_itself` auch für Creality Print 7.3 auf der Konsole; die Zusicherung im Test ist umgedreht, 7.2 mit `--arrange 0` bleibt still. Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-373: Die Versuchsliste nennt je Versuch Satzanfang und Startwert (02.10.2026)
+
+<a id="rm-373-die-versuchsliste-nennt-je-versuch-satzanfang-und-startwert-02102026"></a>
+<a id="rm-373"></a>
+
+**RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert.**
+  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
+  Jede Zeile der Versuchsliste (`app/ui/generate_dialog.py`) nennt nur Dreiecke, Volumen und
+  dicht. Wer zwischen zwei Versuchen den Satz ändert, sieht nicht, welcher Versuch zu welchem
+  Satz gehört; *Übernehmen* übernimmt trotz geändertem Satz den gewählten alten Versuch.
+  **Ablauf:** Jede Zeile trägt den Satzanfang (gekürzt, voller Satz im Tooltip) bzw. den
+  Bildnamen und den Startwert (Regel 9, `deterministic=False`); ist der Satz seit dem gewählten
+  Versuch geändert, sagt eine Zeile über *Übernehmen*, dass der alte Satz übernommen wird.
+  **Stellen:** `generate_dialog.py` (Listeneinträge, Zustand um `:859–872`), Kataloge.
+  **Abnahme:** Test: zwei Versuche mit verschiedenen Sätzen → zwei unterscheidbare Zeilen mit
+  Startwert; Satz geändert → Hinweis sichtbar; übernommen wird der gewählte Versuch mit seinem
+  Startwert im Schritt. Bauplan §2.8, Regel 9.
+  **Vorgabe Robert 02.10.2026 — allgemein:** Unterscheidbarkeit für jede Versuchsliste (Text, Bild, Varianten); Abnahme an mindestens drei unterschiedlichen Versuchsreihen.
+
+**Abschluss:** Jede Zeile der Versuchsliste nennt in einer zweiten Zeile den gekürzten Satz (voller Satz im Tooltip) bzw. den Bildnamen und den Startwert; passt die Eingabe nicht mehr zum gewählten Versuch, steht über *Übernehmen*, welcher Versuch kommt und dass *Noch ein Versuch* die neue Eingabe erzeugt. Übernommen wird der gewählte Versuch mit seinem Startwert. Drei Fenstertests für Sätze, Bilder und Varianten eines Satzes, je einmal gefahren. Umgesetzt von Claude, in main mit `0c7a6193f`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-393: Jeder Drehdeckel meldet seine eigene Passung als zu eng (02.10.2026)
+
+<a id="rm-393-jeder-drehdeckel-meldet-seine-eigene-passung-als-zu-eng-02102026"></a>
+<a id="rm-393"></a>
+
+**RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng.**
+  Review 02.10.2026, Nachbau-Test F5, am HEAD `4449e3370`.
+  **Fehlerfall:** Dose aushöhlen, *Drehdeckel erzeugen* (Weg `lid_flow.apply_lid`): Befund „Die
+  Passung sitzt enger als vorgesehen.“ mit `actual 0.00 mm, expected 0.25 mm` — an exaktem und
+  Netzkörper, bei P 3 und P 3,5. Hals- und Deckelgewinde tragen denselben Nenndurchmesser
+  (`lid_neck_thread` 45,0, `lid_cap_thread` 45,0), obwohl die Operation 0,25 mm Spiel eingebaut hat.
+  **Stellen:** Merkmale in `app/core/geom/lid.py` ab `:1420` (`NECK_THREAD_FEATURE`,
+  `CAP_THREAD_FEATURE`), Passung `app/core/lid_flow.py:82`.
+  **Fix:** Deckelgewinde mit seinem wirksamen Durchmesser beschreiben oder die Passungsprüfung für
+  Gewinde das gebaute Spiel lesen lassen.
+  **Abnahme:** Test an beiden Kernen: frischer Drehdeckel ohne Passungswarnung; ein künstlich
+  verengter meldet. Bauplan §14, §2.7.
+  Beleg: `nachbau\bericht.md`, Sonde `f5_passung_ablauf.py`.
+
+**Abschluss:** Das Kappengewinde nennt seinen gebauten Durchmesser (Hals plus Spiel, `_cap_sizes`); ein frischer Drehdeckel meldet an Netz und exaktem Kern keine Passung mehr, ein auf 0,1 mm verengter meldet „enger“. Tests an beiden Kernen (P 3 und 3,5), rot vor, grün nach dem Fix; Cache-Version `screw_lid` 5. Umgesetzt von Claude, in main mit `0c7a6193f`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-354: Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden (02.10.2026)
+
+<a id="rm-354-ein-hauptmaß-jenseits-der-grenze-der-operation-lässt-das-modell-verschwinden-02102026"></a>
+<a id="rm-354"></a>
+
+**RM-354 — Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden.**
+  Review 02.10.2026, Gebietsprüfung Weg 2 (F2), am HEAD `6ce767031`.
+  Hauptmaße ohne eigene Grenzen fallen in der Leiste auf ±100 000 zurück
+  (`app/ui/panels.py:3604–3608`); `Session.change_parameter` (`session.py:2425`) prüft die
+  Schemagrenzen der gebundenen Felder nicht; `add_parameter` des Agenten kennt kein
+  `minimum`/`maximum` (`agent/tools.py:568–578`).
+  **Fehlerfall:** Beispiel Weg 2, Breite `5000`, Enter: angenommen; die Kette hält an Schritt 1
+  (`op.create_box.ValidationError`), Ansicht leer, Objektbaum 0 Zeilen (`main_window.py:19788`)
+  gegen §15.3; *Exportieren* sagt „Dafür braucht es einen Körper in der Szene.“; die Berichtszeile
+  nennt weder Wert noch Grenze; *Eingabe korrigieren* öffnet den Schrittdialog mit „=@breite“
+  (`main_window.py:21542–21566`) — wer dort eine Zahl tippt, trennt still die Bindung.
+  **Fix:** wirksame Grenzen (Schemagrenzen aller Felder mit `=@name`) in der Leiste und in
+  `change_parameter` ablehnen, mit Grenze im Satz; bei einem Halt an Schritt 1 das letzte
+  vollständige Bild stehen lassen; *Eingabe korrigieren* an einem `=@`-Feld führt zur Zeile der
+  Leiste.
+  **Abnahme:** Breite 5000 → abgelehnt, Grenze im Satz, Dokument unverändert; bei erzwungenem
+  Halt an Schritt 1 behält die Ansicht `obj_1`. Bauplan §13, §15.3, §2.7.
+  Belege: `gebiet-weg2.md`, Sonden `w2_fenster2.py`–`w2_fenster4.py`.
+
+**Abschluss:** Die Parameterleiste nimmt die Grenzen der Felder, die ein Maß unverändert lesen (`parameter_usage.field_bounds`); `change_parameter` und *Parameter ändern …* prüfen jeden Wert, auch über abgeleitete Maße (`bounds_refusal`), und nennen Schritt, Feld und Grenze. Hält die Kette doch am ersten Schritt an, bleibt das letzte durchgerechnete Bild (§15.3). *Eingabe korrigieren* an einem Feld mit `=@name` führt in die Zeile der Leiste. Der Agent behält beim Setzen die Grenzen eines Maßes und kann sie beim Anlegen nennen. Kern-, Sitzungs- und Fenstertests, rot vor dem Fix. Umgesetzt von Claude, in main mit `52cc9fd66`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
+
+## RM-355: In der Parameterleiste geht nur ein Pfeilschritt, danach ist der Fokus weg (02.10.2026)
+
+<a id="rm-355-in-der-parameterleiste-geht-nur-ein-pfeilschritt-danach-ist-der-fokus-weg-02102026"></a>
+<a id="rm-355"></a>
+
+**RM-355 — In der Parameterleiste geht nur ein Pfeilschritt, danach ist der Fokus weg.**
+  Review 02.10.2026, Gebietsprüfung Weg 2 (F3), am HEAD `6ce767031`.
+  `ParameterPanel.show_document` baut nach jeder Änderung alle Zeilen neu
+  (`app/ui/panels.py:3547–3631`, über `main_window.py:21848`); das fokussierte Feld wird
+  gelöscht, der Fokus ist danach `None`.
+  **Fehlerfall:** Ins Feld *Breite* klicken, ↑, ↑ → 61 statt 62; Mausrad, gehaltener Pfeilknopf
+  und Tab brechen genauso ab. „An einer Zahl drehen“ ist die Geste von Weg 2.
+  **Fix:** vorhandene Zeilen wiederverwenden und nur den Wert setzen, sonst den Fokus zurückgeben.
+  **Abnahme:** dreimal ↑ → Wert +3, Fokus bleibt auf *Breite*. Bauplan §2.2 (Weg 2), §13.
+  Beleg: `gebiet-weg2.md`, Sonde `w2_drehen.py`.
+
+**Abschluss:** Bleibt die Gestalt der Zeilen gleich, setzt die Leiste nur Werte und Hinweise; muss sie neu bauen, geht der Fokus an dasselbe Maß zurück. Fenstertest dreimal ↑ = +3 mit Fokus im Feld, rot vor, grün nach dem Fix. Umgesetzt von Claude, in main mit `52cc9fd66`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
+
+## RM-389: „Eine Rückfrage steht an — sie kommt beim Übernehmen“, und *Übernehmen* ist gesperrt (02.10.2026)
+
+<a id="rm-389-eine-rückfrage-steht-an--sie-kommt-beim-übernehmen-und-übernehmen-ist-gesperrt-02102026"></a>
+<a id="rm-389"></a>
+
+**RM-389 — „Eine Rückfrage steht an — sie kommt beim Übernehmen“, und *Übernehmen* ist gesperrt.**
+  Review 02.10.2026, Nachbau-Test F7, am HEAD `4449e3370`.
+  **Fehlerfall:** Dose Ø 40 × 52 aushöhlen, Drehdeckel, Deckeloberseite → *Loch oder Aussparung
+  zeichnen …* → Kreis Ø 8 → *Fertig*. Dialog *Tasche schneiden*: Knopf grau
+  (`can_accept() == False`), Band „Eine Rückfrage steht an — sie kommt beim Übernehmen.“; der
+  Klick tut nichts, kein Schritt entsteht, die Frage kommt nie. Gleich bei Lochkreis und
+  Lochraster.
+  **Stellen:** `app/ui/session.py:798–804` (Zweig `_QuestionPending` meldet `explained` ohne
+  `advised`), `app/ui/main_window.py:19047` (`_block_apply` sperrt bei anstehendem Rat aus
+  `_APPLY_BLOCKING_ADVICE`).
+  **Fix:** Eine anstehende Rückfrage gibt *Übernehmen* immer frei (oder die Frage kommt schon in
+  der Vorschau).
+  **Abnahme:** Test mit genau diesem Weg: Klick auf *Übernehmen* stellt die Frage, nach der Antwort
+  entsteht der Schritt. Bauplan §2.1, §2.7, §15.7, Regel 21.
+  Beleg: `nachbau\bericht.md`, Sonde `f7_rueckfrage_sackgasse.py`.
+
+**Abschluss:** Die Vorschau meldet eine anstehende Rückfrage eigens (`asked`); das Fenster gibt *Übernehmen* frei, auch wo das Bild Pflicht ist, ein früher Klick läuft nach, und der echte Weg stellt die Frage. Fenstertest mit Pflichtvorschau, rot vor, grün nach dem Fix. Umgesetzt von Claude, in main mit `52cc9fd66`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
+
+## RM-329: Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen (02.10.2026)
+
+<a id="rm-329-ein-aus-cura-übernommener-drucker-lässt-sich-nach-einem-düsenwechsel-nicht-mehr-slicen-02102026"></a>
+<a id="rm-329"></a>
+
+**RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen.**
+  Review seit 0.5.1, Befund B-1. `8374885ae` (Codex) bricht den Instanzweg aus `088b9b160` (Codex).
+  `app/core/export/slicer_profiles.py:3291–3333` (`match`): Für einen übernommenen Cura-Drucker
+  trifft `machine_for_name` die Instanz selbst, `source_family = [Instanz]`, danach
+  `if source_family and not exact: return None, None` — eine Cura-Instanz hat keine
+  Düsen-Geschwister, die Familienregel ist für sie nie erfüllbar. `app/core/export/handover.py:3852–3859`
+  (`_cura_machine`) wirft dann `_incomplete_profile(Path(profile.printer.title))`.
+  **Fehlerfall:** Drucker „Meine Werkstatt“ aus einer Cura-Instanz (0,6 mm) übernommen, im
+  Druckdialog Düse 0,4 gewählt oder in Cura umgestellt → *Slicen* mit CuraEngine:
+  „Das Slicer-Profil „Meine Werkstatt“ ist unvollständig.“ Vor `8374885ae` lief derselbe Fall mit
+  `machine_nozzle_size = 0.4`. Fehlt die Instanz (zweiter Rechner, in Cura gelöscht), kommt
+  dieselbe Absage mit falschem Grund (Regel 17). `Path(title).stem` kürzt Namen mit Punkt:
+  „Snapmaker 2.0 A350“ → „Snapmaker 2“ (`slicer_profiles.py:2938–2947`).
+  **Fix:** In `match` gewinnt eine native Cura-Instanz unabhängig von der Düse (Familienregel nur
+  für Profile mit Düsenvarianten). `_cura_machine` unterscheidet „Instanz fehlt hier — in Cura
+  einrichten“ von „unvollständig“, Titel als Wert statt über `Path`.
+  **Abnahme:** Test übernommene Instanz 0,6, Druckerdüse 0,4 → `write_config` gelingt mit
+  `machine_nozzle_size = 0.4`; Test gelöschte Instanz → eigener Satz mit Ausweg; Name mit Punkt
+  bleibt ganz. Bauplan §29, §2.7.
+  Beleg: `bericht-B.md` (B-1), Sonden `test_probe_cura_nozzle.py` (+ `out_cura_nozzle.txt`),
+  `old_sp_before_8374885ae.py`, `probe_incomplete_name.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch, alle drei Teile. Instanz 0,6 bei Düse 0,4 meldet „Meine Werkstatt ist unvollständig“; eine fehlende Instanz bekommt denselben Satz; „Snapmaker 2.0 A350“ wird zu „Snapmaker 2“ gekürzt.
+
+**Abschluss:** Die Familienregel in `slicer_profiles.match` gilt nur noch Profilen mit Datei je Düse; Cura-Instanzen und Werksdefinitionen (`_nozzle_is_a_value`) gewinnen unabhängig von der Düse — mit Cura 5.13 fanden vorher 595 von 634 übernommenen Druckern keine Maschine, jetzt 0. Namen bleiben ganz (`_shown_name`, „Snapmaker 2.0 A350“). „Fehlt“ und „unvollständig“ hatte Codex in `29ff469b5` getrennt. Umgesetzt von Claude, in main mit `52cc9fd66`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
+
+## RM-330: An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“ (02.10.2026)
+
+<a id="rm-330-an-cura-maschinen-mit-ursprung-in-der-bettmitte-gilt-jeder-druck-als-über-den-bauraum-hinaus-02102026"></a>
+<a id="rm-330"></a>
+
+**RM-330 — An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“.**
+  Review seit 0.5.1, Befund B-2, Commit `088b9b160` (Codex).
+  `app/core/export/handover.py:3894–3916` (`_cura_hardware_values`) übernimmt
+  `machine_center_is_zero` der Instanz, `:2491–2492` (`flat |= machine.settings`) überschreibt
+  das `"false"` aus `_machine_keys` (`:1482`); `off_the_bed` (`:4239–4242`) verschiebt die
+  Druckfläche trotzdem immer um den halben Bauraum. Zwilling nicht mitgezogen (`dateiformat.md`:
+  „Bettkoordinaten für jede Familie … Wer das eine ändert, ändert das andere mit“).
+  **Fehlerfall:** Instanz einer Maschine mit `machine_center_is_zero = true` (in Cura 5.13 61
+  sichtbare Definitionen, u. a. `anycubic_kossel_linear_plus`, `atom3`, `dagoma_sigma`). Der
+  G-Code liegt richtig um 0, die Gegenprobe misst gegen 0…Breite und meldet für jedes Teil links
+  oder vorn der Mitte `gcode.off_the_bed` mit Schwere *error* (20-mm-Quadrat um den Ursprung →
+  `excess_mm 10.0`, `printed -10.0..10.0`, `allowed 0.0..240.0`). Der Nahtpunkt wird auf (0, 0)
+  gesetzt; Curas Formel aus `fdmprinter.def.json` ergibt für „hinten“ (0, Tiefe/2). Der Test
+  `tests/test_slicer_profiles.py:2131` schreibt den falschen Wert fest.
+  **Fix:** Den wirksamen Ursprung in `CuraMachine`/`SlicerConfig` tragen, `off_the_bed` danach
+  verschieben oder nicht; Nahtpunkt aus Solidons Eckwerten um (Breite/2, Tiefe/2) verschieben.
+  **Abnahme:** Test mit zentrierter Instanz: Gegenprobe ohne Befund, Naht (0, Tiefe/2); den
+  Sollwert in `test_slicer_profiles.py:2131` aus Curas Formel herleiten. Bauplan §29, §28.1.
+  Beleg: `bericht-B.md` (B-2), Sonden `test_probe_cura_center_zero.py` (+ `out_cura_center_zero.txt`),
+  `cura_center_zero.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
+
+**Abschluss:** Der wirksame Ursprung reist als `CuraMachine.origin_at_centre`/`SlicerConfig.origin_at_centre`; `off_the_bed` und die Naht (`_cura_seam`, Curas Formel) rechnen danach. Am echten CuraEngine 5.13 belegt (Malyan M180, Kossel Mini, Snapmaker-Instanz). Derselbe Fehler bei Orca und PrusaSlicer steht unter [RM-424](ROADMAP.md#rm-424). Umgesetzt von Claude, in main mit `52cc9fd66`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).

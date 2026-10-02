@@ -23,10 +23,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
 - La boquilla se elige en los ajustes de impresión entre los tamaños que conoce su impresora, y el slicer recibe el perfil que le corresponde.
 - Los ajustes de impresión preguntan en el orden en que una cosa depende de otra: slicer, impresora, boquilla, placa, filamentos y calidad, y después los valores.
-- Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Hasta ahora solo se podía en la ventana de Creality Print.
+- Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Antes solo se podía en la ventana de Creality Print. Si 7.3 reordena la placa, Solidon lo dice.
 - Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
-- Los ajustes de impresión muestran solo las medidas de adherencia del tipo de cama elegido. Con brim desaparecen los campos de skirt y raft, que no harían nada.
+- Si elige brim, skirt o raft en los ajustes de impresión, solo aparecen las medidas de ese tipo de cama, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
 - Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
 - Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
@@ -38,13 +38,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Taladros, ranuras y división
 
-- El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura. Los ángulos guardados conservan su dirección.
-- Dos placas que se tocan conservan su material al estirar una ranura, y un pasador sobre el taladro se queda en su sitio.
+- El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura.
+- Dos placas que se tocan siguen siendo un cuerpo en un taladro y conservan su material, al estirarlo, cambiarlo, desplazarlo o cerrarlo. Un pasador encima se queda en su sitio.
 - Estirar un taladro que atraviesa dos cuerpos ya no informa de que el cuerpo se rompe cuando no ocurre.
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
 - Los patrones sobre caras cilíndricas de modelos importados siguen cerrados al modificarlos.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
+- Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» y «Eje de inclinación», y «En la cara» lleva el corte paralelo a una cara plana.
+- Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 
 ### Modelar, texto y dibujo
 
@@ -53,15 +55,16 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
-- En la ventana, «Fusionar suavemente» muestra la misma forma que en la exportación. Solo con cuerpos muy grandes la vista previa calcula más gruesa y lo dice.
+- En la ventana, «Fusionar suavemente» calcula ahora tan fino como en la exportación, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
-- El destino de «Alinear a la característica» empieza vacío. El primer clic en la vista lo rellena, y «Aplicar» espera hasta que esté elegido.
+- El destino de «Alinear a la característica» empieza vacío. «Aplicar» espera hasta que esté elegido y ya no coloca el cuerpo sin aviso en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 
 ### Generar con IA
 
 - Cancelar durante «Otro intento» solo detiene el intento en curso. Los terminados siguen disponibles para elegir.
+- Cada intento de la lista indica su frase o su imagen y su semilla. Si su entrada ya no coincide con el intento elegido, el diálogo dice cuál se aplicará.
 - El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén.
 - Si un error al generar nombra la configuración como salida, aparece como botón en el diálogo.
 - El diálogo de generar indica el volumen al tamaño con que llega la pieza.

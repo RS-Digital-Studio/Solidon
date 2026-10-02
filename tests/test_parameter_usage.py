@@ -275,3 +275,84 @@ def test_each_nested_payload_is_parsed_once(
 
     assert uses["width"] == (ParameterUse(1, "sketch"), ParameterUse(2, "pose"))
     assert reads == [sketch, "[]", pose]
+
+
+def _box_width() -> tuple[float, float]:
+    """Die Schemagrenzen von *Quader* → *Breite* — aus dem Register, nicht abgeschrieben."""
+    from app.core.registry import REGISTRY
+
+    entry = {item.name: item for item in REGISTRY.get("create_box").params.spec()}["width"]
+    assert entry.minimum is not None and entry.maximum is not None
+    return entry.minimum, entry.maximum
+
+
+def test_a_bare_reference_gives_the_parameter_the_bounds_of_its_field(document: Document) -> None:
+    """*Breite* ohne eigene Grenzen nimmt die Grenzen des Felds, das sie liest (RM-354)."""
+    from app.core.scene.parameter_usage import field_bounds
+
+    document.parameters = {"width": _parameter("width"), "half": _parameter("half", "=@width/2")}
+    document.ops = [
+        Operation(id=1, op="create_box", params={"width": "=@width"}, outputs=("obj_1",)),
+        Operation(id=2, op="create_box", params={"depth": "=@half"}, outputs=("obj_2",)),
+    ]
+
+    from app.core.registry import REGISTRY
+
+    depth = {item.name: item for item in REGISTRY.get("create_box").params.spec()}["depth"]
+    assert field_bounds(document, "width") == _box_width()
+    assert field_bounds(document, "half") == (depth.minimum, depth.maximum)
+
+
+def test_a_value_beyond_a_reading_field_is_refused_with_step_field_and_limit(
+    document: Document,
+) -> None:
+    """5000 als Breite hielt die Kette an *Quader* an, und die Ansicht stand leer (RM-354).
+
+    Die Prüfung rechnet, was die Auswertung rechnen würde — auch über ein
+    abgeleitetes Maß —, und nennt Schritt, Feld und Grenze.
+    """
+    from app.core.scene.parameter_usage import bounds_refusal
+
+    low, high = _box_width()
+    document.parameters = {"width": _parameter("width"), "twice": _parameter("twice", "=@width*2")}
+    document.ops = [
+        Operation(id=1, op="create_box", params={"width": "=@width"}, outputs=("obj_1",)),
+        Operation(id=2, op="create_box", params={"depth": "=@twice"}, outputs=("obj_2",)),
+    ]
+
+    assert bounds_refusal(document, "width", 20.0) is None
+    beyond = bounds_refusal(document, "width", high + 10.0)
+    assert beyond is not None and beyond.constraint == "maximum"
+    assert beyond.values["number"] == 1
+    assert beyond.values["maximum"] == pytest.approx(high)
+    detail = str(beyond.detail)
+    assert "1" in detail and str(int(high)) in detail.replace(".", "").replace(",", "")
+
+    # Über das abgeleitete Maß: Die halbe Grenze passt in *Breite*, aber das
+    # Doppelte nicht mehr in *Tiefe* von Schritt 2.
+    derived = bounds_refusal(document, "width", high * 0.75)
+    assert derived is not None and derived.values["number"] == 2
+
+    below = bounds_refusal(document, "width", low - 1.0)
+    assert below is not None and below.constraint == "minimum"
+
+
+def test_a_switched_off_step_does_not_limit_the_parameter(document: Document) -> None:
+    """Was nicht rechnet, setzt keine Grenze."""
+    from app.core.scene.parameter_usage import bounds_refusal, field_bounds
+    from app.core.types import Suppression
+
+    _low, high = _box_width()
+    document.parameters = {"width": _parameter("width")}
+    document.ops = [
+        Operation(
+            id=1,
+            op="create_box",
+            params={"width": "=@width"},
+            outputs=("obj_1",),
+            suppressed=Suppression(chosen=True),
+        )
+    ]
+
+    assert field_bounds(document, "width") == (None, None)
+    assert bounds_refusal(document, "width", high + 10.0) is None

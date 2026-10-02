@@ -576,6 +576,14 @@ def extra_tools() -> tuple[dict[str, Any], ...]:
                     "value": {"type": "number"},
                     "unit": {"type": "string", "description": str(_("Standard ist mm."))},
                     "title": {"type": "string"},
+                    "minimum": {
+                        "type": "number",
+                        "description": str(_("Kleinster Wert, den die Parameterleiste annimmt.")),
+                    },
+                    "maximum": {
+                        "type": "number",
+                        "description": str(_("Größter Wert, den die Parameterleiste annimmt.")),
+                    },
                 },
                 "required": ["name", "value"],
             },

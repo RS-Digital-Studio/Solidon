@@ -47,10 +47,10 @@ Nutzen da und sonst nichts.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
 - Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
 - Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.
-- Mit Creality Print 7.2 und 7.3 rechnet *Slicen* die Druckdatei jetzt selbst. Bisher ging das nur im Fenster von Creality Print.
+- Mit Creality Print 7.2 und 7.3 rechnet *Slicen* die Druckdatei jetzt selbst. Bisher ging das nur im Fenster von Creality Print. Ordnet 7.3 die Platte dabei selbst an, sagt Solidon es.
 - Mit Cura übernimmt Solidon auf Wunsch den Drucker, den Cura gerade nutzt, samt eigener Düse. Ein in Cura umbenannter Drucker wird wiedererkannt.
 - An Bambu Studio gehen Düsenvariante und die Temperaturen Ihrer Spulen mit, bis in die 3MF-Datei.
-- Im Druckdialog stehen nur die Haftungsmaße der gewählten Bettart. Bei Brim fehlen also Skirt- und Raft-Felder, die nichts bewirken würden.
+- Wählen Sie im Druckdialog Brim, Skirt oder Raft, stehen dort nur die Maße dieser Bettart, ohne Felder, die nichts bewirken würden.
 - Eine Zahl außerhalb ihrer Grenze bleibt im Feld stehen, die Grenze steht daneben, und *Slicen* wartet, bis sie stimmt. Bisher wurde sie still gekürzt.
 - Hohe, schlanke Teile auf kleinem Fuß bekommen ruhigere Wände vorgeschlagen, mit 60 mm/s und weniger Beschleunigung. Solche Stangen rissen sonst am Centauri Carbon 2 ab.
 - Solidon schlägt *Außenwand zuerst* nur noch für das Teil vor, das es braucht, und nie für eines mit Stützen.
@@ -62,13 +62,15 @@ Nutzen da und sonst nichts.
 
 ### Bohrungen, Langlöcher und Teilen
 
-- Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern. Gespeicherte Winkel behalten ihre Richtung.
-- Zwei Platten, die sich berühren, behalten beim Langlochzug ihr Material, und ein Stift über der Bohrung bleibt stehen.
+- Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern.
+- Zwei Platten, die sich berühren, bleiben an einer Bohrung ein Körper und behalten ihr Material, ob Sie sie ziehen, ändern, versetzen oder schließen. Ein Stift darüber bleibt stehen.
 - Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
 - Muster auf Zylinderflächen eingelesener Modelle bleiben beim Ändern geschlossen.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
+- Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Kippachse*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.
+- Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
 
 ### Formen, Schrift und Zeichnen
 
@@ -77,15 +79,16 @@ Nutzen da und sonst nichts.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
 - Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
 - Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
-- Im Fenster zeigt *Weich verschmelzen* dieselbe Form wie im Export. Nur bei sehr großen Körpern rechnet die Vorschau gröber und sagt es.
+- Im Fenster rechnet *Weich verschmelzen* jetzt so fein wie beim Export, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
-- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. Der erste Klick ins Bild füllt es, und *Übernehmen* wartet, bis es gewählt ist.
+- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. *Übernehmen* wartet, bis es gewählt ist, und setzt den Körper nicht mehr still an die falsche Seite.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 
 ### Erzeugen mit KI
 
 - Abbrechen während *Noch ein Versuch* bricht nur den laufenden Versuch ab. Die fertigen bleiben zur Wahl.
+- Jeder Versuch in der Liste nennt seinen Satz oder sein Bild und den Startwert. Passt Ihre Eingabe nicht mehr zum gewählten Versuch, sagt der Dialog, welcher übernommen wird.
 - Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind.
 - Nennt ein Fehler beim Erzeugen die Einrichtung als Ausweg, steht sie als Knopf im Dialog.
 - Der Erzeugen-Dialog nennt das Volumen in der Größe, in der das Teil ankommt.
