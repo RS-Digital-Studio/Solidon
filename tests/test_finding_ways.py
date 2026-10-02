@@ -174,3 +174,69 @@ def test_every_error_and_warning_has_a_way() -> None:
     )
     unused = sorted(set(OHNE_KNOPF) - used)
     assert not unused, f"Ausnahmen ohne Befund — austragen: {unused}"
+
+
+#: Befunde, die sagen, was ein Schritt mit einem änderbaren Wert getan hat
+#: (RM-374, Vorgabe Robert 02.10.2026). Sie tragen den Knopf, der genau diesen
+#: Schritt zum Ändern öffnet (``errors.CHANGE_*``, Kennung ``change_step``).
+#: Wer einen solchen Befund baut, trägt ihn hier ein — mit dem Feld, in das
+#: der Cursor gehört, oder ``None`` für den Schritt als Ganzes.
+MEINT_DEN_SCHRITT: dict[str, str | None] = {
+    "transform.fitted": "largest",
+    "transform.without_effect": None,
+    "lattice.filled": "cell",
+    "displace.applied": "strength",
+}
+
+
+def _suggestion_names(node: ast.expr) -> set[str]:
+    """Die Namen der Handlungen in ``suggestions=(…)``."""
+    if isinstance(node, ast.Tuple | ast.List):
+        return {element.id for element in node.elts if isinstance(element, ast.Name)}
+    return set()
+
+
+def test_a_finding_about_a_step_value_opens_that_step() -> None:
+    """RM-374: „Auf Maß gebracht.“ meldete die Arbeitsgröße ohne Weg zum
+    gemeinten Maß. Jeder Befund, der einen änderbaren Schritt meint, bringt
+    jetzt den Knopf mit, der diesen Schritt öffnet — gelesen am Quelltext,
+    jede Stelle, an der der Befund entsteht."""
+    from app.core import errors
+
+    changes = {
+        name
+        for name, value in vars(errors).items()
+        if isinstance(value, errors.Action) and value.id == "change_step"
+    }
+    assert len(changes) >= 3, changes
+    root = Path(app.core.__file__).parent
+    found: dict[str, int] = {}
+    without: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Finding"
+            ):
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            code = keywords.get("code")
+            if not (isinstance(code, ast.Constant) and code.value in MEINT_DEN_SCHRITT):
+                continue
+            found[code.value] = found.get(code.value, 0) + 1
+            where = f"app/core/{path.relative_to(root).as_posix()}:{node.lineno} {code.value}"
+            if not _suggestion_names(keywords.get("suggestions", ast.Tuple(elts=[]))) & changes:
+                without.append(f"{where}: ohne Knopf zum Ändern des Schritts")
+            field = MEINT_DEN_SCHRITT[code.value]
+            values = keywords.get("values")
+            named = None
+            if isinstance(values, ast.Dict):
+                for key, value in zip(values.keys, values.values, strict=True):
+                    if isinstance(key, ast.Constant) and key.value == "field":
+                        named = value.value if isinstance(value, ast.Constant) else "?"
+            if named != field:
+                without.append(f"{where}: Feld {named!r} statt {field!r}")
+    assert set(found) == set(MEINT_DEN_SCHRITT), f"Befund nicht gefunden: {found}"
+    assert not without, "\n".join(without)

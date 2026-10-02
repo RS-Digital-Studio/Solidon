@@ -2726,3 +2726,74 @@ def test_generating_is_checked_before_the_dialog_opens(
     else:
         assert labels, "die Lizenzsperre nennt ihren Weg"
         assert opened == [], "gesperrt öffnet kein Dialog, der erst nach Minuten absagt"
+
+
+# --- Der Befund „Auf Maß gebracht“ trägt *Größe ändern* (RM-374) ---------------
+
+
+def test_the_fitted_finding_of_a_generation_changes_its_size(
+    qt_app: QApplication, window: Any, generator: ScriptedMeshBackend
+) -> None:
+    """RM-374, Abnahme am Fenster: Erzeugung → Befund mit *Größe ändern*; der
+    Klick öffnet ``fit_to_size`` dieses Körpers mit dem aktuellen Maß, und
+    150 mm dort machen den Körper 150 mm groß — ein normaler Parameter."""
+    import time
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    session = window.session
+    object_id = session.add_generated(generator.text_to_mesh("eine kleine Figur", seed=3))
+    assert session.wait_for_idle()
+    window.report.show_result(session.last_result, session.project.document)
+
+    listing = window.report.list
+    item = next(
+        (
+            listing.item(row)
+            for row in range(listing.count())
+            if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "transform.fitted"
+        ),
+        None,
+    )
+    assert item is not None, "der Befund steht im Bericht"
+    listing.setCurrentItem(item)
+    qt_app.processEvents()
+    button = next(
+        (
+            child
+            for child in window.report._offers.findChildren(QPushButton)
+            if child.text() == "Größe ändern"
+        ),
+        None,
+    )
+    assert button is not None, [b.text() for b in window.report._offers.findChildren(QPushButton)]
+    button.click()
+    qt_app.processEvents()
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Klick öffnet den Schritt"
+    try:
+        assert dialog.spec.name == "fit_to_size"
+        spin = dialog._editors["largest"].findChild(QDoubleSpinBox)
+        assert spin is not None
+        assert spin.value() == pytest.approx(100.0), "mit dem aktuellen Maß"
+        spin.setValue(150.0)
+        assert session.wait_for_idle(30_000)
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not (
+            dialog._accept_button.isEnabled() and dialog.can_accept()
+        ):
+            qt_app.processEvents()
+            time.sleep(0.01)
+        assert dialog._accept_button.isEnabled(), "die Vorschau steht, Übernehmen frei"
+        dialog.accept()
+    finally:
+        if window._op_dialog is dialog:
+            dialog.reject()
+    assert session.wait_for_idle()
+
+    body = session.last_result.scene.objects[object_id]
+    assert max(body.mesh.bounds.size) == pytest.approx(150.0, abs=1e-3)
+    sizing = next(entry for entry in session.history.operations if entry.op == "fit_to_size")
+    assert sizing.params["largest"] == pytest.approx(150.0)

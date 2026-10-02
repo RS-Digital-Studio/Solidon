@@ -21084,6 +21084,10 @@ class MainWindow(QMainWindow):
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
+            # Derselbe Weg an einem Befund, der sagt, was ein Schritt getan hat
+            # (RM-374): *Größe ändern* öffnet ``fit_to_size`` mit dem Cursor im
+            # Maß — der Wert ist danach ein gewöhnlicher Parameter.
+            "change_step": self._correct_after_error,
             # **Eine unlesbare Zeichenebene** (``sketch.planes._unreadable``):
             # Der Schritt geht mit dem Cursor im Ebenenfeld auf, das der Kern
             # nennt — dort wird die andere Ebene gewählt. Bis zum 22.09.2026

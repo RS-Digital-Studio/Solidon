@@ -146,7 +146,7 @@ from app.core.types import (
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
-from app.ui.dialogs import NEEDS_OP, handlers_of, unhandled_advice
+from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
     BoundedLengthSpin,
@@ -1317,14 +1317,20 @@ def _setting_line(finding: Finding) -> str:
 
 def _value_lines(finding: Finding) -> list[str]:
     """Die Werte eines Befunds als „Beschriftung: Wert" — eine Einstellung je
-    Teil mit Feldname und Wert statt Pfad und Rohwert (:func:`_setting_line`)."""
+    Teil mit Feldname und Wert statt Pfad und Rohwert (:func:`_setting_line`).
+
+    Was dem Code gilt (``dialogs.ADDRESS_VALUES``: das Feld, in das ein Knopf
+    den Cursor setzt), steht nicht da — „Feld: largest“ ist keine Auskunft.
+    """
     if finding.code in PART_SETTING_CODES and "setting" in finding.values:
         return [_setting_line(finding)] + [
             value_line(key, value)
             for key, value in finding.values.items()
-            if key not in ("setting", "value")
+            if key not in ("setting", "value") and key not in ADDRESS_VALUES
         ]
-    return [value_line(key, value) for key, value in finding.values.items()]
+    return [
+        value_line(key, value) for key, value in finding.values.items() if key not in ADDRESS_VALUES
+    ]
 
 
 def _origin_text(created_by: int | None, document: Document | None) -> str:

@@ -2983,6 +2983,8 @@ NEEDS_OP: Final = frozenset(
         "decimate_and_retry",
         # Und vor ein umgeschlagenes *Glätten* das Verfeinern (Durchsicht 0.5.1).
         "remesh_and_retry",
+        # Öffnet den Schritt, den ein Befund meint (RM-374, *Größe ändern*).
+        "change_step",
     }
 )
 
@@ -3181,7 +3183,7 @@ def spoken_values(error: AppError) -> list[str]:
     return [
         value_line(key, value)
         for key, value in error.values.items()
-        if key not in _ADDRESSES
+        if key not in ADDRESS_VALUES
         and value is not None
         and value != ""
         and value != []
@@ -3189,8 +3191,10 @@ def spoken_values(error: AppError) -> list[str]:
     ]
 
 
-#: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden.
-_ADDRESSES = frozenset({"field", "constraint", "feature_ids"})
+#: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden —
+#: auch im Hinweis einer Befundzeile (``panels._value_lines``), wo ein
+#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374).
+ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids"})
 
 
 def problem_text(

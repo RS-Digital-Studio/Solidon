@@ -392,3 +392,85 @@ def test_every_handler_that_reads_the_body_of_a_finding_is_listed() -> None:
         if reads_the_body(body) and key.value not in NEEDS_LIVE_BODY | reasoned:
             missing.append(key.value)
     assert not missing, missing
+
+
+def _run(op: str, entry: SceneObject, profile: Profile, **params: object) -> OpResult:
+    """Eine Operation so fahren, wie die Auswertung sie fährt — ohne Stapel."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Scene
+
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def _change_step(finding: Finding) -> list[str]:
+    """Die Beschriftungen der Handlung, die den Schritt des Befunds öffnet."""
+    from app.ui.panels import actions_for_document
+
+    return [
+        str(action.label)
+        for action in actions_for_document(finding, None)
+        if action.id == "change_step"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "code", "label", "field"),
+    [
+        # Weg 3: der Generatorwürfel auf 100 mm, und der kürzeste Weg zum
+        # gemeinten Maß ist der Schritt selbst (RM-374).
+        ("fit_to_size", {"largest": 50.0}, "transform.fitted", "Größe ändern", "largest"),
+        # Die Vorgabe des Dialogs übernommen: Der Körper steht, wo er stand.
+        ("translate_object", {}, "transform.without_effect", "Diesen Schritt ändern", None),
+    ],
+)
+def test_a_finding_about_what_a_step_did_opens_that_step(
+    profile: Profile, op: str, params: dict[str, object], code: str, label: str, field: str | None
+) -> None:
+    """RM-374: Ein Befund, der einen änderbaren Schritt meint, trägt den Knopf,
+    der genau diesen Schritt zum Ändern öffnet — mit dem Cursor im Feld, um
+    das es geht (``values["field"]``, wie bei *Eingabe korrigieren*)."""
+    from app.ui.dialogs import NEEDS_OP
+
+    result = _evaluated(profile, _cube(), op, params)
+
+    finding = _only(result, code)
+    assert finding.op_id == 2, "ohne Schritt öffnet der Knopf nichts"
+    assert _change_step(finding) == [label]
+    assert finding.values.get("field") == field
+    assert "change_step" in NEEDS_OP, "ohne Schrittkennung wird der Knopf nicht angeboten"
+    loose = dataclasses.replace(finding, op_id=None)
+    assert _change_step(loose) == [], "ohne Schritt kein Knopf"
+
+
+def test_a_filled_lattice_offers_its_cell_size(profile: Profile) -> None:
+    """Der dritte Befund derselben Art: „Der Hohlraum trägt jetzt eine
+    Gitterstruktur.“ — der Wert, nach dem man danach fragt, ist die Zellgröße."""
+    import trimesh
+
+    from app.core.geom.hollow import hollow
+    from app.core.geom.mesh import MeshData
+
+    body = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    body.apply_translation((0.0, 0.0, 20.0))
+    hollowed = hollow(MeshData.of(body), 3.0, vents=1).mesh
+    entry = SceneObject(id="obj_1", name="Dose", mesh=hollowed)
+
+    result = _run("lattice_fill", entry, profile, structure="cubic", cell=8.0, wall=1.2)
+
+    filled = next(finding for finding in result.findings if finding.code == "lattice.filled")
+    attached = dataclasses.replace(filled, op_id=2, object_id="obj_1")
+    assert _change_step(attached) == ["Zellgröße ändern"]
+    assert filled.values.get("field") == "cell"

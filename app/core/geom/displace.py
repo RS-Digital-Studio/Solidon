@@ -28,6 +28,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import (
+    CHANGE_RELIEF_HEIGHT,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     Action,
@@ -402,7 +403,7 @@ class DisplaceParams(BaseParams):
     result_kind="mesh",
     # 2 seit dem 22.09.2026: Nur die zugewandten Eckpunkte tragen das Bild, in
     # Richtung der Projektion (``_moving``, ``_directions``).
-    cache_version="2",
+    cache_version="3",
     title=_("Relief auflegen"),
     category="surface",
     params=DisplaceParams,
@@ -488,7 +489,14 @@ def _displacement_findings(
             severity="info",
             message=_("Das Bild wurde als Höhe auf die Oberfläche gelegt."),
             object_id=object_id,
-            values={"height_mm": round(params.strength, 3), "pixels": int(field.shape[0])},
+            values={
+                "height_mm": round(params.strength, 3),
+                "pixels": int(field.shape[0]),
+                "field": "strength",
+            },
+            # Ob das Relief trägt, sieht man erst daran: Der Weg ist die Höhe
+            # in diesem Schritt (RM-374).
+            suggestions=(CHANGE_RELIEF_HEIGHT,),
         )
     ]
 

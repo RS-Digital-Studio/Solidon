@@ -30,7 +30,12 @@ import numpy as np
 
 from app.core import units
 from app.core.deferred import trimesh
-from app.core.errors import CORRECT_INPUT, ValidationError, require_positive
+from app.core.errors import (
+    CHANGE_CELL_SIZE,
+    CORRECT_INPUT,
+    ValidationError,
+    require_positive,
+)
 from app.core.geom.mesh import MeshData, concatenated
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -383,7 +388,7 @@ NO_CAVITY: Final = _(
     result_kind="mesh",
     # 2: Die Wabe teilt ihre Wände (``_honeycomb``); 3: interne Gitterwerkzeuge
     # umgehen die Vorprüfung überlappender Szenenteile (RM-319).
-    cache_version="3",
+    cache_version="4",
     title=_("Gitter füllen"),
     category="surface",
     params=LatticeParams,
@@ -483,6 +488,9 @@ def lattice_fill(ctx: OpContext) -> OpResult:
                 code="lattice.filled",
                 severity="info",
                 message=_("Der Hohlraum trägt jetzt eine Gitterstruktur."),
+                # Was man danach fragt, ist die Zellgröße (RM-374).
+                values={"field": "cell"},
+                suggestions=(CHANGE_CELL_SIZE,),
             ),
         ],
     )

@@ -232,6 +232,13 @@ was jetzt geht (§2.7, §33.1; `tests/test_errors.py`). `UserError`
 (Hinweis auf die Einstellung), `InternalError` (Fehlerbericht): Ein
 Programmfehler sieht nie wie ein Bedienfehler aus, und umgekehrt.
 
+**Ein Befund, der sagt, was ein Schritt mit seinem Wert getan hat, öffnet
+diesen Schritt** (RM-374): `suggestions=(errors.CHANGE_…,)` mit der Kennung
+`change_step`, das Feld in `values["field"]`, eingetragen in
+`MEINT_DEN_SCHRITT` (`tests/test_finding_ways.py`). Ändert sich ein Befund
+einer Operation, steigt ihre `cache_version` — der Plattencache gäbe ihn sonst
+alt zurück.
+
 Ins Protokoll gehen Kennzahlen, nie Geometriedaten; hinaus nur, wenn der
 Nutzer es selbst anhängt (§33.2) — sonst wäre es Telemetrie. **Der einzige Weg
 hinaus ist `support.send()`** (`app/core/support.py`), und die Grenze zur

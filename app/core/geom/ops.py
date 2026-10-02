@@ -10,7 +10,16 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
-from app.core.errors import CANCEL, CHOOSE, CORRECT_INPUT, Action, AppError, GeometryError
+from app.core.errors import (
+    CANCEL,
+    CHANGE_SIZE,
+    CHANGE_THIS_STEP,
+    CHOOSE,
+    CORRECT_INPUT,
+    Action,
+    AppError,
+    GeometryError,
+)
 from app.core.geom.align import align_matrix
 from app.core.geom.attributes import used_slots
 from app.core.geom.boolean import (
@@ -306,6 +315,9 @@ def _stood_still(matrix: object) -> list[Finding]:
             code="transform.without_effect",
             severity="info",
             message=_("Der Körper steht danach genau dort, wo er stand."),
+            # Die Vorgabe des Dialogs übernommen: Der Weg ist derselbe Schritt
+            # mit anderen Werten (RM-374).
+            suggestions=(CHANGE_THIS_STEP,),
         )
     ]
 
@@ -314,7 +326,7 @@ def _stood_still(matrix: object) -> list[Finding]:
     name="translate_object",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
-    cache_version="2",
+    cache_version="3",
     title=_("Verschieben"),
     category="transform",
     params=TranslateParams,
@@ -404,7 +416,7 @@ class RotateParams(BaseParams):
     name="rotate_object",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
-    cache_version="2",
+    cache_version="3",
     title=_("Drehen"),
     category="transform",
     params=RotateParams,
@@ -512,7 +524,7 @@ class ScaleParams(BaseParams):
 
 @register_op(
     name="scale_object",
-    cache_version="3",
+    cache_version="4",
     title=_("Skalieren"),
     category="transform",
     params=ScaleParams,
@@ -583,7 +595,7 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="2",
+    cache_version="3",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,
@@ -643,7 +655,11 @@ def fit_to_size(ctx: OpContext) -> OpResult:
                 code="transform.fitted",
                 severity="info",
                 message=_("Auf Maß gebracht."),
-                values={"from_mm": round(current, 3), "to_mm": params.largest},
+                # Das Maß ist eine Vorgabe — beim Generatorwürfel die
+                # Arbeitsgröße —, und der Weg zum gemeinten ist dieser Schritt
+                # (RM-374): *Größe ändern* öffnet ihn mit dem Cursor im Maß.
+                values={"from_mm": round(current, 3), "to_mm": params.largest, "field": "largest"},
+                suggestions=(CHANGE_SIZE,),
                 source="internal",
             ),
             *placed,

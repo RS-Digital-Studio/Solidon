@@ -36,6 +36,16 @@ RESTORE_BACKUP = Action("restore_backup", _("Letzten lesbaren Stand zurückholen
 SET_ASIDE_FILE = Action("set_aside_file", _("Beschädigte Datei beiseitelegen"))
 SHOW_DETAILS = Action("show_details", _("Details anzeigen"))
 CORRECT_INPUT = Action("correct_input", _("Eingabe korrigieren"), primary=True)
+#: Den Schritt öffnen, den ein Befund meint — an einem Befund, der nichts
+#: Falsches meldet, sondern sagt, was ein Schritt mit seinem Wert getan hat
+#: (RM-374). „Auf Maß gebracht.“ stand ohne Weg da, und der kürzeste vom
+#: Generatorwürfel zum gemeinten Maß ist der Schritt selbst. Eine Kennung für
+#: alle, eingelöst wie *Eingabe korrigieren*; die Beschriftung nennt den Wert,
+#: und ``values["field"]`` setzt den Cursor dorthin.
+CHANGE_SIZE = Action("change_step", _("Größe ändern"), primary=True)
+CHANGE_THIS_STEP = Action("change_step", _("Diesen Schritt ändern"), primary=True)
+CHANGE_RELIEF_HEIGHT = Action("change_step", _("Reliefhöhe ändern"), primary=True)
+CHANGE_CELL_SIZE = Action("change_step", _("Zellgröße ändern"), primary=True)
 USE_SUGGESTED_NAME = Action("use_suggested_name", _("Freien Namen verwenden"), primary=True)
 #: Für einen Schritt, den diese Fassung nicht rechnen kann (§16.2).
 #:
