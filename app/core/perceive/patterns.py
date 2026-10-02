@@ -70,7 +70,7 @@ import functools
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, NamedTuple
 
 import numpy as np
 
@@ -1344,6 +1344,29 @@ def _straight_share(
 # --- Die Abwicklung des Trägers ----------------------------------------------------
 
 
+class FacetPolygon(NamedTuple):
+    """Das Vieleck eines Zylinderträgers im Querschnitt: seine Facetten und ihre Ecken.
+
+    Je Facette der Winkel ihrer Normalen um die Achse (aufsteigend, im
+    Bogenmaß), ihr Abstand von der Achse und ``corners``: wie weit hinter
+    ihrer Normalen sie an die nächste Facette stößt (:func:`_facet_corners`).
+    Die Ecke liegt am **Schnitt** der beiden Facetten, nicht auf der
+    Winkelhalbierenden — dort lägen zwei Facetten mit verschiedenem Abstand um
+    dessen Unterschied auseinander.
+    """
+
+    angles: np.ndarray
+    offsets: np.ndarray
+    corners: np.ndarray
+
+
+class EndPlane(NamedTuple):
+    """Eine Stirnfläche des Trägers in der Welt: ``normal · p = offset``."""
+
+    normal: np.ndarray
+    offset: float
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class Frame:
     """Die Abwicklung eines Trägers: zwei Achsen darin, eine Höhe darüber.
@@ -1379,8 +1402,8 @@ class Frame:
     radius: float = 0.0
     sag: float = 0.0
     """Wie weit die Facetten des Trägers unter seiner Fläche liegen — null bei der Ebene."""
-    facets: tuple[np.ndarray, np.ndarray] | None = None
-    """Die Facettenebenen eines Zylinders: ihre Winkel um die Achse, sortiert, und ihre Abstände.
+    facets: FacetPolygon | None = None
+    """Die Facettenebenen eines Zylinders: Winkel um die Achse, sortiert, Abstände und Ecken.
 
     Ein Netz hat keinen Kreis, es hat ein Vieleck. Wer einen Körper auf den
     Mantel legt — den Stopfen, der eine Zelle füllt —, legt ihn auf dieses
@@ -1397,6 +1420,16 @@ class Frame:
     Am Zylinder von Stirnfläche zu Stirnfläche (:func:`_axial_span`) — dort
     endet ein Stopfen, der eine Zelle füllt. ``None``, wenn der Träger nicht
     bekannt ist.
+    """
+    ends: tuple[EndPlane | None, EndPlane | None] | None = None
+    """Die Stirnflächen an beiden Enden von :attr:`span`, wie die Erkennung sie gemessen hat.
+
+    Ein Stopfen, der durch eine Stirnfläche läuft, endet **in** ihr
+    (:meth:`world` mit ``faceted``), nicht quer zur gemessenen Achse: Die steht
+    an einer STL um ihr Rauschen schräg — fern vom Ursprung 1,9·10⁻⁸ rad —,
+    und ein Stopfenende quer zu ihr lag an der Unterseite eines Deckels bis
+    4·10⁻⁷ mm neben ihr. Unter jeder Rille blieb danach eine eigene Fläche
+    stehen (RM-404). ``None`` je Ende, an dem keine ebene Stirnfläche steht.
     """
 
     @classmethod
@@ -1477,7 +1510,8 @@ class Frame:
 
         Mit ``faceted`` liegt die Höhe null auf den Facetten des Trägers
         statt auf seinem Kreis (:attr:`facets`); ohne bekannte Facetten
-        bleibt es der Kreis.
+        bleibt es der Kreis. Ein Punkt an einem Ende von :attr:`span` liegt
+        dann auch in der Stirnfläche dort (:attr:`ends`).
         """
         flat = np.atleast_2d(np.asarray(flat, dtype=float))
         heights = np.broadcast_to(np.asarray(height, dtype=float), (len(flat),))
@@ -1490,23 +1524,47 @@ class Frame:
         theta = flat[:, 0] / self.radius
         radial = np.outer(np.cos(theta), self.x_axis) + np.outer(np.sin(theta), self.y_axis)
         base = self._facet_radius(theta) if faceted else self.radius
-        return self.origin + np.outer(flat[:, 1], self.normal) + radial * (base + heights)[:, None]
+        points = (
+            self.origin + np.outer(flat[:, 1], self.normal) + radial * (base + heights)[:, None]
+        )
+        return self._onto_the_ends(points, flat[:, 1]) if faceted else points
+
+    def _onto_the_ends(self, points: np.ndarray, levels: np.ndarray) -> np.ndarray:
+        """Punkte an einem Ende von :attr:`span` entlang der Achse in die Stirnfläche dort.
+
+        Am Ende heißt: auf ``EPS_GEOM`` genau dort, wo :func:`_within_span` den
+        Umriss des Stopfens abschneidet. Entlang der Achse, nicht senkrecht zur
+        Stirnfläche — so bleibt ein Punkt auf seiner Facette, denn die Facetten
+        laufen parallel zur Achse.
+        """
+        if self.ends is None or self.span is None:
+            return points
+        from app.core.geom.transform import along
+
+        placed = np.array(points, dtype=float)
+        for end, edge in zip(self.ends, self.span, strict=True):
+            if end is None:
+                continue
+            chosen = np.abs(levels - edge) <= EPS_GEOM
+            facing = units.dot3(end.normal, self.normal)
+            if not chosen.any() or abs(facing) <= EPS_GEOM:
+                continue
+            reach = (end.offset - along(placed[chosen], end.normal)) / facing
+            placed[chosen] = placed[chosen] + reach[:, None] * self.normal[None, :]
+        return placed
 
     def _facet_borders(self, along: np.ndarray) -> np.ndarray:
         """Die Facettengrenzen als Lagen in der Abwicklung, so weit ``along`` reicht.
 
+        Eine Grenze liegt an der Ecke zweier Facetten (:attr:`FacetPolygon.corners`).
         Über die Naht hinaus fortgesetzt: Eine Zelle über der Naht liegt in
         der Abwicklung jenseits von ``±π·R``, und dort liegen dieselben
         Facetten noch einmal.
         """
         if self.facets is None or len(along) == 0:
             return np.zeros(0)
-        angles = self.facets[0]
-        borders = (angles[:-1] + angles[1:]) / 2.0
-        if len(angles) > 1:
-            borders = np.append(
-                borders, angles[-1] + (angles[0] + 2.0 * math.pi - angles[-1]) / 2.0
-            )
+        angles, _offsets, corners = self.facets
+        borders = angles + corners if len(angles) > 1 else np.zeros(0)
         turns = np.concatenate([borders - 2.0 * math.pi, borders, borders + 2.0 * math.pi])
         positions = turns * self.radius
         low, high = float(along.min()), float(along.max())
@@ -1515,21 +1573,20 @@ class Frame:
     def _facet_radius(self, theta: np.ndarray) -> np.ndarray | float:
         """Der Abstand der Facette von der Achse an diesen Winkeln — der Kreis, wo keine ist.
 
-        Die Facette eines Punktes ist die mit der nächsten Normalen, denn die
-        Grenze zwischen zwei Facetten liegt in der Mitte ihrer Winkel. Liegt
-        die nächste weiter als eine Facettenbreite weg, deckt der Träger den
+        Die Facette eines Punktes ist die, in deren Abschnitt zwischen ihren
+        beiden Ecken er liegt (:attr:`FacetPolygon.corners`). Liegt ihre
+        Normale weiter als eine Facettenbreite weg, deckt der Träger den
         Winkel nicht, und es gilt der Kreis.
         """
         if self.facets is None:
             return self.radius
-        angles, offsets = self.facets
+        angles, offsets, corners = self.facets
         wrapped = (theta + math.pi) % (2.0 * math.pi) - math.pi
         after = np.searchsorted(angles, wrapped) % len(angles)
         before = (after - 1) % len(angles)
-        gap_after = np.abs((angles[after] - wrapped + math.pi) % (2.0 * math.pi) - math.pi)
-        gap_before = np.abs((angles[before] - wrapped + math.pi) % (2.0 * math.pi) - math.pi)
-        chosen = np.where(gap_after <= gap_before, after, before)
-        gap = np.minimum(gap_after, gap_before)
+        past = (wrapped - angles[before]) % (2.0 * math.pi)
+        chosen = np.where(past >= corners[before], after, before)
+        gap = np.abs((angles[chosen] - wrapped + math.pi) % (2.0 * math.pi) - math.pi)
         step = float(np.median(np.diff(angles))) if len(angles) > 1 else math.pi
         away = np.cos(wrapped - angles[chosen])
         base = offsets[chosen] / np.maximum(away, EPS_GEOM)
@@ -1695,6 +1752,27 @@ def _facet_sag(frame: Frame, points: np.ndarray, triangles: np.ndarray) -> float
 #: damit die fehlenden ergänzt werden — als Anteil des Facettenschritts.
 _REGULAR_FACETS: Final = 0.01
 
+#: Wie genau eine Ecke aus einer STL auf ihrer Fläche liegt, relativ zur
+#: größten Koordinate des Körpers: das Achtfache der Rundung eines
+#: ``float32``, in dem jede binäre STL ihre Ecken speichert (2⁻²³). Dieselbe
+#: Zahl wie ``brep.from_mesh.PLANAR_SPAN``. Die feste Grenze ``EPS_GEOM``
+#: (1 nm) riss schon ab 16 mm Koordinate, wo das Raster 1,9 nm misst (RM-404).
+FACET_RASTER_SHARE: Final = 8.0 * 2.0**-23
+
+
+def facet_tolerance(points: np.ndarray) -> float:
+    """Die Auflösung, in der die Ecken dieses Körpers gespeichert sein können.
+
+    Aus den heutigen Koordinaten und nicht aus der Datei: Ein späteres
+    Aufsetzen verschiebt die Ecken in doppelter Genauigkeit, ihre Rundung von
+    damals bleibt. Der Faktor acht deckt dabei auch einen Körper, der vorher
+    deutlich weiter vom Ursprung lag. Danach fragen die Ausrichtung der
+    Facetten (``prepare_ops._aligned_facets``) und ob eine Fläche die
+    Stirnfläche des Trägers ist (:func:`_end_planes`).
+    """
+    reach = float(np.max(np.abs(points))) if len(points) else 0.0
+    return max(EPS_GEOM, FACET_RASTER_SHARE * reach)
+
 
 def cylinder_facet_groups(
     frame: Frame,
@@ -1738,17 +1816,120 @@ def cylinder_facet_groups(
     return ordered[starts] * (math.pi / 180.0), groups
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class FacetLine:
+    """Eine Mantelfacette im Querschnitt: die Ausgleichsgerade ihrer Ecken, quer zur Achse.
+
+    Die Facette ist achsparallel gelesen, denn so legt der Stopfen sich auf
+    sie (:meth:`Frame.world`). Eine Ebene durch alle Ecken stand an einer STL
+    bis 10⁻⁷ rad gegen die Achse geneigt; auf sie ausgerichtet lag der Mantel
+    an den Stirnenden bis 1,5·10⁻⁶ mm neben dem Stopfen (RM-404).
+    """
+
+    angle: float
+    """Der Winkel der Normalen um die Achse, im Bogenmaß gegen die erste Achse der Abwicklung."""
+    normal: tuple[float, float]
+    """Die Normale nach außen, in den beiden Achsen der Abwicklung quer zur Achse."""
+    offset: float
+    """Der Abstand der Facette von der Achse."""
+    vertices: np.ndarray
+    """Die Ecken der Facette, als Nummern im Körper."""
+    residual: float
+    """Wie weit die fernste Ecke quer zur Achse neben der Geraden liegt."""
+    extent: float
+    """Wie weit die fernste Ecke quer zur Achse von der Mitte der Ecken liegt."""
+
+
+def cylinder_facet_lines(
+    frame: Frame,
+    points: np.ndarray,
+    triangles: np.ndarray,
+    normals: np.ndarray,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[FacetLine | None]:
+    """Die Facetten eines Zylinderträgers als Geraden quer zur Achse, in der Folge der Gruppen.
+
+    **Ausrichtung und Stopfen lesen hier dieselbe Facette** — die Ausrichtung
+    (``prepare_ops._aligned_facets``) legt die Ecken auf diese Geraden, der
+    Stopfen (:func:`_facet_planes`) liest sie danach am ausgerichteten Körper
+    wieder und bekommt dieselben bis auf die Rundung. Gelesen wird aus allen
+    Ecken der Gruppe (:func:`cylinder_facet_groups`), nicht aus einem
+    Dreieck: Ein Dreieck einer STL trägt das Rauschen seiner drei Ecken.
+
+    ``points`` sind die Ecken des Körpers, ``triangles`` und ``normals`` die
+    Dreiecke des Trägers. ``None`` steht für eine Gruppe, deren Ecken quer zur
+    Achse in einen Punkt fallen — sie belegt keine Gerade. Gerechnet wird
+    plattformgleich: Summen über NumPys paarweise Summe, Wurzeln, der Winkel
+    über :func:`units.exact_atan2_degrees`.
+    """
+    _angles, groups = cylinder_facet_groups(frame, normals, check_cancelled=check_cancelled)
+    corners = np.asarray(triangles, dtype=np.int64)
+    positions = np.asarray(points, dtype=np.float64)
+    lines: list[FacetLine | None] = []
+    for group in groups:
+        if check_cancelled is not None:
+            check_cancelled()
+        vertices = np.unique(corners[group].ravel())
+        lines.append(_facet_line(frame, positions[vertices], vertices))
+    return lines
+
+
+def _facet_line(frame: Frame, positions: np.ndarray, vertices: np.ndarray) -> FacetLine | None:
+    """Die Ausgleichsgerade dieser Ecken im Querschnitt — oder ``None`` ohne Ausdehnung.
+
+    Der kleinste Ausgleich senkrecht zur Geraden über die symmetrische
+    2x2-Streumatrix: Ihr kleinerer Eigenwert und dessen Eigenrichtung in
+    geschlossener Form, aus Grundrechenarten und Wurzeln (RM-187).
+    """
+    from app.core.geom.transform import along
+
+    relative = positions - frame.origin
+    first_axis = along(relative, frame.x_axis)
+    second_axis = along(relative, frame.y_axis)
+    count = len(vertices)
+    middle_x = float(np.sum(first_axis)) / count
+    middle_y = float(np.sum(second_axis)) / count
+    dx = first_axis - middle_x
+    dy = second_axis - middle_y
+    xx = float(np.sum(dx * dx))
+    yy = float(np.sum(dy * dy))
+    xy = float(np.sum(dx * dy))
+    half = (xx - yy) / 2.0
+    least = (xx + yy) / 2.0 - math.hypot(half, xy)
+    # Jede Zeile der Matrix minus Eigenwert steht senkrecht auf der gesuchten
+    # Richtung; um einen rechten Winkel gedreht, ist sie diese Richtung — die
+    # Normale der Geraden. Die längere der beiden ist die genauere.
+    first = (xy, least - xx)
+    second = (least - yy, xy)
+    x, y = first if math.hypot(*first) >= math.hypot(*second) else second
+    length = math.hypot(x, y)
+    if length <= 0.0:
+        return None
+    x, y = x / length, y / length
+    if x * middle_x + y * middle_y < 0.0:
+        x, y = -x, -y
+    return FacetLine(
+        angle=units.exact_atan2_degrees(y, x) * (math.pi / 180.0),
+        normal=(x, y),
+        offset=x * middle_x + y * middle_y,
+        vertices=vertices,
+        residual=float(np.max(np.abs(dx * x + dy * y))),
+        extent=float(np.max(np.sqrt(dx * dx + dy * dy))),
+    )
+
+
 def _facet_planes(
     frame: Frame, points: np.ndarray, triangles: np.ndarray, normals: np.ndarray
-) -> tuple[np.ndarray, np.ndarray] | None:
-    """Die Facettenebenen eines Zylinderträgers: Winkel um die Achse und Abstand von ihr.
+) -> FacetPolygon | None:
+    """Die Facettenebenen eines Zylinderträgers: Winkel um die Achse, Abstand von ihr, Ecken.
 
     Jede Facette ist eine Ebene, und ihre Dreiecke teilen eine Normale — auch
     nach einer Booleschen Rechnung, die den Streifen in Stücke geschnitten
-    hat. Der Winkel der Normalen um die Achse benennt die Facette, der
-    Abstand ihrer Ecken von der Achse in Richtung der Normalen ihre Ebene
-    (``R·cos(Δ/2)`` an einem regelmäßigen Vieleck). ``None``, wenn der Träger
-    keine Facetten hat, die sich so lesen lassen.
+    hat. Gelesen wird sie als Gerade quer zur Achse aus allen ihren Ecken
+    (:func:`cylinder_facet_lines`), wie die Ausrichtung sie vor dem Schließen
+    gelegt hat. ``None``, wenn der Träger keine Facetten hat, die sich so
+    lesen lassen.
     """
     if frame.kind == "plane" or len(triangles) == 0:
         return None
@@ -1760,19 +1941,17 @@ def _facet_planes(
     # Facette Normalen, die 6·10⁻⁵ rad auseinanderliegen. Der Rand eines
     # Schraubdeckels hatte so 159 „Facetten" statt 72, der Median ihrer
     # Schritte war null, und der Stopfen lag auf dem Kreis (23.09.2026).
-    unique, groups = cylinder_facet_groups(frame, normals)
-    if len(groups) < 3:
+    lines = [
+        line for line in cylinder_facet_lines(frame, points, triangles, normals) if line is not None
+    ]
+    if len(lines) < 3:
         return None
-    corners = points[triangles[[group[0] for group in groups]]]
-    offsets = np.empty(len(unique))
-    for number, (angle, triangle) in enumerate(zip(unique, corners, strict=True)):
-        direction = frame.x_axis * units.exact_cos(float(angle)) + frame.y_axis * units.exact_sin(
-            float(angle)
-        )
-        offsets[number] = units.exact_mean(
-            [units.dot3(point - frame.origin, direction) for point in triangle]
-        )
-    return _regular_polygon(np.asarray(unique, dtype=float), offsets)
+    lines.sort(key=lambda line: line.angle)
+    angles, offsets = _regular_polygon(
+        np.array([line.angle for line in lines], dtype=np.float64),
+        np.array([line.offset for line in lines], dtype=np.float64),
+    )
+    return FacetPolygon(angles, offsets, _facet_corners(angles, offsets))
 
 
 def _regular_polygon(angles: np.ndarray, offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1785,8 +1964,12 @@ def _regular_polygon(angles: np.ndarray, offsets: np.ndarray) -> tuple[np.ndarra
     nach dem Entfernen standen 103 Flächen, wo ein Zylinder war (23.09.2026).
     Liegen alle gefundenen Facetten auf einem regelmäßigen Vieleck — jede
     höchstens :data:`_REGULAR_FACETS` Schritte neben ihrem Platz, alle mit
-    demselben Abstand von der Achse —, kommen die fehlenden an ihren Platz;
-    sonst bleibt es bei den gefundenen.
+    demselben Abstand von der Achse —, kommen die fehlenden an ihren Platz,
+    mit dem Median der gemessenen Abstände; sonst bleibt es bei den gefundenen.
+
+    **Die gefundenen bleiben, wie sie gemessen sind.** Bis RM-404 kam das ganze
+    Vieleck aus dem Raster, und der Stopfen lag um das Rauschen der STL neben
+    dem Mantel, den die Ausrichtung auf seine gemessenen Facetten gelegt hatte.
     """
     steps = np.diff(np.r_[angles, angles[0] + 2.0 * math.pi])
     step = float(np.min(steps))
@@ -1801,10 +1984,42 @@ def _regular_polygon(angles: np.ndarray, offsets: np.ndarray) -> tuple[np.ndarra
         return angles, offsets
     if float(offsets.max() - offsets.min()) > _REGULAR_FACETS * spacing * float(offsets.mean()):
         return angles, offsets
-    grid = angles[0] + spacing * np.arange(count)
+    missing = np.setdiff1d(np.arange(count), np.round(slots).astype(np.int64) % count)
+    grid = angles[0] + spacing * missing
     grid = (grid + math.pi) % (2.0 * math.pi) - math.pi
-    order = np.argsort(grid, kind="stable")
-    return grid[order], np.full(count, float(np.median(offsets)))
+    completed = np.concatenate((angles, grid))
+    distances = np.concatenate((offsets, np.full(len(missing), float(np.median(offsets)))))
+    order = np.argsort(completed, kind="stable")
+    return completed[order], distances[order]
+
+
+def _facet_corners(angles: np.ndarray, offsets: np.ndarray) -> np.ndarray:
+    """Je Facette, wie weit hinter ihrer Normalen sie an die nächste stößt — im Bogenmaß.
+
+    Zwei Facetten im Winkel ``d`` mit den Abständen ``a`` und ``b`` schneiden
+    sich ``t`` hinter der ersten Normalen, mit
+    ``tan t = (b - a·cos d) / (a·sin d)``; bei gleichem Abstand ist das die
+    Winkelhalbierende. Wo sich zwei nicht vor der Achse treffen (``d`` ab
+    einem halben Umlauf) oder der Schnitt außerhalb ihres Winkels läge, bleibt
+    es bei der Halbierenden. Kosinus, Sinus und Arkustangens sind
+    plattformgleich (``units``).
+    """
+    count = len(angles)
+    gaps = np.asarray((np.roll(angles, -1) - angles) % (2.0 * math.pi), dtype=np.float64)
+    corners: np.ndarray = gaps / 2.0
+    for index in range(count if count > 1 else 0):
+        gap = float(gaps[index])
+        if gap <= 0.0 or gap >= math.pi:
+            continue
+        first = float(offsets[index])
+        second = float(offsets[(index + 1) % count])
+        if first <= 0.0:
+            continue
+        ratio = (second - first * units.exact_cos(gap)) / (first * units.exact_sin(gap))
+        corner = units.exact_atan_degrees(ratio) * (math.pi / 180.0)
+        if 0.0 < corner < gap:
+            corners[index] = corner
+    return corners
 
 
 def frame_for(
@@ -1853,7 +2068,64 @@ def frame_for(
 
     low, high = _axial_span(points, triangles, frame.normal)
     level = float(along(frame.origin, frame.normal))
-    return dataclasses.replace(frame, sag=sag, facets=facets, span=(low - level, high - level))
+    span = (low - level, high - level)
+    corners = points[np.unique(triangles)]
+    reach = along(corners, frame.normal)
+    rims = (corners[int(np.argmin(reach))], corners[int(np.argmax(reach))])
+    return dataclasses.replace(
+        frame,
+        sag=sag,
+        facets=facets,
+        span=span,
+        ends=_end_planes(frame, features, span, rims, facet_tolerance(points)),
+    )
+
+
+def _end_planes(
+    frame: Frame,
+    features: Mapping[FeatureId, Feature],
+    span: tuple[float, float],
+    rims: tuple[np.ndarray, np.ndarray],
+    tolerance: float,
+) -> tuple[EndPlane | None, EndPlane | None]:
+    """Die ebenen Stirnflächen an beiden Enden des Trägers, so wie die Erkennung sie gemessen hat.
+
+    Eine Stirnfläche ist eine ebene Fläche quer zur Achse — gekippt höchstens
+    um :data:`SAME_MEASURE`, wie :func:`_cylinder_carrier_of` Achsen
+    vergleicht —, deren Mitte auf ``MAX_FACET_SAG`` genau am Ende des Trägers
+    liegt, wie :func:`_through_the_ends` fragt, was dort liegt. Und der Mantel
+    endet in ihr: Die äußerste Ecke des Trägers an diesem Ende (``rims``)
+    liegt auf ihrer Ebene, so genau, wie die Datei runden kann
+    (``tolerance``, :func:`facet_tolerance`) — eine Fläche hinter einer
+    schmalen Fase ist nicht das Ende des Mantels, und ein Stopfen bis dorthin
+    legte Material über die Fase. Von mehreren gilt die größte, gerundet wie
+    im Nummernschlüssel (:func:`carrier_of`).
+    """
+    from app.core.perceive.features import AREA_DIGITS
+
+    found: list[tuple[float, EndPlane] | None] = [None, None]
+    for candidate in features.values():
+        if candidate.kind != "face" or not candidate.face_indices:
+            continue
+        normal = np.asarray(candidate.params.get("normal", (0.0, 0.0, 0.0)), dtype=float)
+        if abs(units.dot3(normal, frame.normal)) < 1.0 - SAME_MEASURE:
+            continue
+        centre = np.asarray(candidate.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+        level = units.dot3(centre - frame.origin, frame.normal)
+        plane = EndPlane(normal, units.dot3(normal, centre))
+        area = round(float(candidate.params.get("area", 0.0)), AREA_DIGITS)
+        for index, (edge, rim) in enumerate(zip(span, rims, strict=True)):
+            best = found[index]
+            if (
+                abs(level - edge) <= units.MAX_FACET_SAG
+                and abs(units.dot3(normal, rim) - plane.offset) <= tolerance
+                and (best is None or area > best[0])
+            ):
+                found[index] = (area, plane)
+    return (
+        None if found[0] is None else found[0][1],
+        None if found[1] is None else found[1][1],
+    )
 
 
 def _axial_span(points: np.ndarray, triangles: np.ndarray, axis: np.ndarray) -> tuple[float, float]:

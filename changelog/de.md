@@ -76,6 +76,7 @@ Nutzen da und sonst nichts.
 - Zwei Platten, die sich berühren, bleiben an einer Bohrung ein Körper und behalten ihr Material, ob Sie sie ziehen, ändern, versetzen oder schließen. Ein Stift darüber bleibt stehen.
 - Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
+- Muster auf Zylinderflächen eingelesener Modelle bleiben beim Ändern geschlossen.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Kippachse*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.

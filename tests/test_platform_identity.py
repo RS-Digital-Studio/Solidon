@@ -678,12 +678,12 @@ def _curved_mouth() -> str:
 
 def _aligned_pattern_facets(tilted: bool = False) -> str:
     """Die Facettenkorrektur vor einer Musteränderung, mit unabhängig gebautem Eingang."""
-    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from app.core.geom.prepare_ops import _aligned_facets
     from tests.helpers import rounded_pattern_carrier
 
     source = rounded_pattern_carrier(tilted=tilted)
-    changed = _pattern_source_on_measured_facets(source, source.features["pattern_1"])
-    assert changed is not source, "die Probe muss die Eckpunkte tatsächlich ausrichten"
+    changed, refused = _aligned_facets(source, source.features["pattern_1"])
+    assert not refused and changed is not source, "die Probe muss die Ecken tatsächlich ausrichten"
     return _mesh_print(changed.mesh)
 
 

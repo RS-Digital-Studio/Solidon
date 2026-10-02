@@ -5444,7 +5444,9 @@ class RemoveFeatureParams(BaseParams):
     # 13: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 14: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="15",
+    # 16: Mantel und Musterstopfen teilen achsparallele Facetten samt ihrer
+    # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
+    cache_version="16",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -6901,7 +6903,9 @@ class ResizeFeatureParams(BaseParams):
     # 13: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
     # 14: exakte Rundungen führen ihre Kennung nur mit eindeutigem Flächenbeleg fort (RM-284).
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="15",
+    # 16: Mantel und Musterstopfen teilen achsparallele Facetten samt ihrer
+    # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
+    cache_version="16",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -14547,33 +14551,6 @@ PATTERN_NOT_READABLE: Final = _(
 )
 
 
-def _pattern_source_on_measured_facets(
-    source: SceneObject, feature: Feature, *, cancelled: CancelToken | None = None
-) -> SceneObject:
-    """Der Körper mit ausgerichteten Mantelfacetten — oder unverändert (:func:`_aligned_facets`)."""
-    return _aligned_facets(source, feature, cancelled=cancelled)[0]
-
-
-#: Wie genau eine Mantelfacette aus einer STL eben ist, relativ zur größten
-#: Koordinate des Körpers: das Achtfache der Rundung eines ``float32``, in dem
-#: jede binäre STL ihre Ecken speichert (2⁻²³). Dieselbe Zahl wie
-#: ``brep.from_mesh.PLANAR_SPAN``. Die feste Grenze ``EPS_GEOM`` (1 nm) riss
-#: schon ab 16 mm Koordinate, wo das Raster 1,9 nm misst (RM-404).
-_FACET_RASTER_SHARE: Final = 8.0 * 2.0**-23
-
-
-def _facet_tolerance(points: np.ndarray) -> float:
-    """Die Auflösung, in der die Ecken dieses Körpers gespeichert sein können.
-
-    Aus den heutigen Koordinaten und nicht aus der Datei: Ein späteres
-    Aufsetzen verschiebt die Ecken in doppelter Genauigkeit, ihre Rundung von
-    damals bleibt. Der Faktor acht deckt dabei auch einen Körper, der vorher
-    deutlich weiter vom Ursprung lag.
-    """
-    reach = float(np.max(np.abs(points))) if len(points) else 0.0
-    return max(EPS_GEOM, _FACET_RASTER_SHARE * reach)
-
-
 def _aligned_facets(
     source: SceneObject, feature: Feature, *, cancelled: CancelToken | None = None
 ) -> tuple[SceneObject, bool]:
@@ -14584,10 +14561,19 @@ def _aligned_facets(
     rekonstruiert; bereits der Rundungsabstand ließ die Vereinigung danach
     Selbstschnitte in den Träger eintriangulieren (RM-225).
 
-    **Alles oder nichts.** Ausgerichtet wird nur, wenn jede Facettengruppe des
-    Trägers innerhalb der Rasterauflösung der Koordinaten eben ist
-    (:func:`_facet_tolerance`) und jede gemeinsame Ecke sich quer zur
-    Zylinderachse auf den kleinsten Ausgleich ihrer Ebenen legen lässt; die
+    **Dieselben Facetten wie der Stopfen.** Ziel sind die achsparallelen
+    Geraden aus :func:`patterns.cylinder_facet_lines`, die der Stopfen am
+    ausgerichteten Körper wieder liest; an einer Ecke zweier Facetten liegt der
+    Punkt danach in ihrem Schnitt, wo auch der Stopfen von einer Facette auf die
+    nächste wechselt. Eine Ebene durch alle Ecken einer Facette stand an einer
+    STL bis 10⁻⁷ rad gegen die Achse geneigt; der Mantel lag dann an den
+    Stirnenden bis 1,5·10⁻⁶ mm neben dem Stopfen, und am Deckel Ø 80 mit 48
+    Rillen blieben Selbstschnitte (RM-404).
+
+    **Alles oder nichts.** Ausgerichtet wird nur, wenn jede Facette des
+    Trägers innerhalb der Rasterauflösung der Koordinaten gerade ist
+    (:func:`patterns.facet_tolerance`) und jede gemeinsame Ecke sich quer zur
+    Zylinderachse auf den kleinsten Ausgleich ihrer Geraden legen lässt; die
     Axiallage bleibt. Dreiecke und Vertex-IDs bleiben gleich.
 
     Zurück kommt der Körper und ob die Ausrichtung **abgelehnt** wurde — dann
@@ -14595,10 +14581,9 @@ def _aligned_facets(
     *Reparieren* (RM-404). Kein Zylinderträger oder nichts zu korrigieren ist
     keine Ablehnung.
 
-    Gerechnet wird je Gruppe von Ecken, die dieselben Ebenen tragen: Matrix,
-    Grammatrix und Eigenbasis einmal, die Ecken dann in Feldern — bei 26 112
-    Trägerecken waren es 1,2 bis 1,6 s Python je Ecke ohne Fortschritt.
-    Elementweise, ohne BLAS und LAPACK (RM-187).
+    Gerechnet wird je Facette und je Gruppe von Ecken, die dieselben Geraden
+    tragen, in Feldern — bei 26 112 Trägerecken waren es 1,2 bis 1,6 s Python
+    je Ecke ohne Fortschritt. Elementweise, ohne BLAS und LAPACK (RM-187).
     """
     if feature.params.get("carrier") != "cylinder":
         return source, False
@@ -14622,48 +14607,36 @@ def _aligned_facets(
 
     frame = patterns.frame_for(feature)
     points = np.asarray(body.vertices, dtype=np.float64)
-    tolerance = _facet_tolerance(points)
-    normals = stable_normals(body)[0][face_ids]
-    _angles, groups = patterns.cylinder_facet_groups(
-        frame, normals, check_cancelled=check_cancelled
+    tolerance = patterns.facet_tolerance(points)
+    lines = patterns.cylinder_facet_lines(
+        frame,
+        points,
+        np.asarray(body.faces, dtype=np.int64)[face_ids],
+        stable_normals(body)[0][face_ids],
+        check_cancelled=check_cancelled,
     )
-    if len(groups) < 3:
+    if len(lines) < 3:
         return source, False
 
     planes_by_vertex: dict[int, list[int]] = {}
     plane_normals: list[np.ndarray] = []
     plane_offsets: list[float] = []
-    for group in groups:
+    for line in lines:
         check_cancelled()
-        group_faces = face_ids[group]
-        vertex_ids = np.unique(np.asarray(body.faces, dtype=np.int64)[group_faces].ravel())
-        facet_points = points[vertex_ids]
-        if len(facet_points) < 3:
+        # Ecken, die quer zur Achse in einen Punkt fallen, belegen keine
+        # Gerade; eine Facette, deren Ecken weiter neben ihr liegen, als die
+        # Datei runden kann, ist keine Rundung, sondern Form.
+        if (
+            line is None
+            or len(line.vertices) < 3
+            or line.extent <= tolerance
+            or line.residual > tolerance
+        ):
             return source, True
-        middle, direction, _spread = units.plane_fit(facet_points)
-        centre, normal = np.asarray(middle), np.asarray(direction)
-        relative = facet_points - centre
-        lengths = np.linalg.norm(relative, axis=1)
-        longest = int(np.argmax(lengths))
-        if lengths[longest] <= tolerance:
-            return source, True
-        # Drei Punkte auf einer Linie belegen keine Ebene. Die quer zur
-        # längsten Strecke gemessene Breite braucht dieselbe Auflösung.
-        across = np.cross(relative, relative[longest] / lengths[longest])
-        if float(np.max(np.linalg.norm(across, axis=1))) <= tolerance:
-            return source, True
-        residual = transform.along(relative, normal)
-        if float(np.max(np.abs(residual))) > tolerance:
-            return source, True
-        outward = centre - frame.origin
-        outward -= frame.normal * units.dot3(outward, frame.normal)
-        if units.dot3(normal, outward) < 0.0:
-            normal = -normal
-
         plane_index = len(plane_normals)
-        plane_normals.append(normal)
-        plane_offsets.append(units.dot3(normal, centre - frame.origin))
-        for vertex_id in vertex_ids:
+        plane_normals.append(frame.x_axis * line.normal[0] + frame.y_axis * line.normal[1])
+        plane_offsets.append(line.offset)
+        for vertex_id in line.vertices:
             planes_by_vertex.setdefault(int(vertex_id), []).append(plane_index)
 
     by_planes: dict[tuple[int, ...], list[int]] = {}
