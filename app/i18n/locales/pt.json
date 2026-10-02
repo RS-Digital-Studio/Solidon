@@ -1313,6 +1313,7 @@
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "O nome tem de poder escrever-se numa expressão como @name — letras, algarismos e sublinhados.",
   "Der Name wird inzwischen wieder von einem Baustein verwendet. Prüfen Sie den aktuellen Stand und entfernen Sie ihn bei Bedarf erneut.": "O nome voltou a ser utilizado por um bloco. Verifique o estado atual e volte a removê-lo, se necessário.",
   "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort.": "A origem da cena fica fixa — um corpo afastado dela muda também de sítio.",
+  "Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil.": "A origem da mesa é inválida. Verifique o perfil da impressora.",
   "Der Nutboden wurde nicht eindeutig gefunden. Ändern Sie den Dichtweg oder die Tiefe.": "Não foi possível identificar inequivocamente o fundo da ranhura. Altere o percurso da vedação ou a profundidade.",
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Não foi possível verificar a pasta. Escolha uma pasta acessível ou tente novamente.",
   "Der Ordner ließ sich nicht öffnen — sein Pfad liegt in der Zwischenablage.": "Não foi possível abrir a pasta — o caminho está na área de transferência.",

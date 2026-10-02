@@ -1313,6 +1313,7 @@
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "Le nom doit pouvoir s'écrire @name dans une expression — lettres, chiffres et tirets bas.",
   "Der Name wird inzwischen wieder von einem Baustein verwendet. Prüfen Sie den aktuellen Stand und entfernen Sie ihn bei Bedarf erneut.": "Ce nom est de nouveau utilisé par un bloc. Vérifiez l'état actuel et retirez-le à nouveau si nécessaire.",
   "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort.": "L'origine de la scène reste fixe — un corps qui en est éloigné change aussi de place.",
+  "Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil.": "L'origine du plateau est invalide. Vérifiez le profil de l'imprimante.",
   "Der Nutboden wurde nicht eindeutig gefunden. Ändern Sie den Dichtweg oder die Tiefe.": "Le fond de la rainure n'a pas pu être identifié sans ambiguïté. Modifiez le tracé du joint ou la profondeur.",
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Impossible de vérifier le dossier. Choisissez un dossier accessible ou réessayez.",
   "Der Ordner ließ sich nicht öffnen — sein Pfad liegt in der Zwischenablage.": "Impossible d'ouvrir le dossier — son chemin est dans le presse-papiers.",

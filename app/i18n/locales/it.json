@@ -1313,6 +1313,7 @@
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "Il nome deve potersi scrivere in un'espressione come @name — lettere, cifre e trattini bassi.",
   "Der Name wird inzwischen wieder von einem Baustein verwendet. Prüfen Sie den aktuellen Stand und entfernen Sie ihn bei Bedarf erneut.": "Il nome è ora usato di nuovo da un blocco. Verifica lo stato attuale e rimuovilo di nuovo se necessario.",
   "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort.": "L'origine della scena resta ferma — un corpo lontano da essa cambia anche posizione.",
+  "Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil.": "L'origine del piano non è valida. Controlla il profilo della stampante.",
   "Der Nutboden wurde nicht eindeutig gefunden. Ändern Sie den Dichtweg oder die Tiefe.": "Il fondo della scanalatura non è stato identificato in modo univoco. Modifica il percorso della guarnizione o la profondità.",
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Impossibile verificare la cartella. Scegli una cartella raggiungibile o riprova.",
   "Der Ordner ließ sich nicht öffnen — sein Pfad liegt in der Zwischenablage.": "Impossibile aprire la cartella: il percorso è negli appunti.",

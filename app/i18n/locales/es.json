@@ -1313,6 +1313,7 @@
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "El nombre debe poder escribirse como @name en una expresión — letras, dígitos y guiones bajos.",
   "Der Name wird inzwischen wieder von einem Baustein verwendet. Prüfen Sie den aktuellen Stand und entfernen Sie ihn bei Bedarf erneut.": "Ahora otro bloque vuelve a utilizar este nombre. Compruebe el estado actual y vuelva a quitarlo si es necesario.",
   "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort.": "El origen de la escena queda fijo — un cuerpo alejado de él cambia también de sitio.",
+  "Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil.": "El origen de la cama no es válido. Revise el perfil de la impresora.",
   "Der Nutboden wurde nicht eindeutig gefunden. Ändern Sie den Dichtweg oder die Tiefe.": "No se ha podido identificar el fondo de la ranura de forma inequívoca. Cambie el recorrido de sellado o la profundidad.",
   "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "No se pudo comprobar la carpeta. Elija una carpeta accesible o inténtelo de nuevo.",
   "Der Ordner ließ sich nicht öffnen — sein Pfad liegt in der Zwischenablage.": "No se ha podido abrir la carpeta: su ruta está en el portapapeles.",

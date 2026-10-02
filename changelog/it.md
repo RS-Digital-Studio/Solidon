@@ -34,6 +34,7 @@ scrive in `website/version.json`.
 - Ora puoi generare i file di stampa direttamente da Solidon con Creality Print 7.2 e 7.3.
 - Con Cura, Solidon riprende su richiesta la stampante che Cura sta usando, con il suo ugello. Una stampante rinominata in Cura viene riconosciuta.
 - Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
+- Le stampanti con l'origine fuori dall'angolo del piano, come delta, BIBO o Dremel, ricevono i pezzi dove Solidon li mette. Prima finivano sul bordo o lo slicer li ridisponeva.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
 - Se scegli brim, skirt o raft nelle impostazioni di stampa, compaiono solo le misure di quel tipo di piano, senza campi che non avrebbero effetto.
 - Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.

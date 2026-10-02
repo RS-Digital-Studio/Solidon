@@ -93,7 +93,7 @@ def _read_table(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path) -> PrinterProfile:
-    from app.core.build_area import printable_area, printable_height
+    from app.core.build_area import machine_shift, printable_area, printable_height
 
     volume = table.get("build_volume")
     if not isinstance(volume, list) or len(volume) != 3:
@@ -146,6 +146,7 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         printable_area=contour,
         bed_exclusions=exclusions,
         printable_height=height_limit,
+        bed_origin=_bed_origin(table.get("bed_origin"), f"{identifier}.bed_origin", source),
         # Weniger als eine Düse druckt nichts; eine fehlende Angabe heißt
         # eine — das ist der Bestand der Tabelle und der übliche Drucker.
         nozzles=max(1, int(table.get("nozzles", 1))),
@@ -169,6 +170,7 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
     )
     printable_area(result)
     printable_height(result)
+    machine_shift(result)
     return result
 
 
@@ -281,6 +283,24 @@ def _printer_contour(points: Any) -> tuple[tuple[float, float], ...]:
     if any(len(point) != 2 for point in points):
         raise ValueError("expected two coordinates")
     return tuple((float(point[0]), float(point[1])) for point in points)
+
+
+def _bed_origin(value: Any, field: str, source: Path) -> tuple[float, float] | None:
+    """Der Nullpunkt der Maschine (``PrinterProfile.bed_origin``); fehlt er,
+    misst die Maschine von der Ecke — so wie jedes ältere Profil."""
+    if value is None:
+        return None
+    try:
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise ValueError("expected two coordinates")
+        across, along = float(value[0]), float(value[1])
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(
+            field=field,
+            detail=_("Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil."),
+            values={"file": str(source)},
+        ) from exc
+    return across, along
 
 
 def _material_from_table(
