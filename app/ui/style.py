@@ -30,7 +30,7 @@ from __future__ import annotations
 from typing import Final, Literal, cast
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QResizeEvent, QScreen, QShowEvent, QWindow
+from PySide6.QtGui import QFocusEvent, QFont, QKeyEvent, QResizeEvent, QScreen, QShowEvent, QWindow
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -614,8 +614,44 @@ def make_primary(button: QPushButton) -> QPushButton:
     return button
 
 
+#: Die Fokusgründe, mit denen die Tastatur einen Knopf erreicht: Tab und
+#: Umschalt+Tab. Ein Kürzel (``ShortcutFocusReason``) fokussiert einen Knopf
+#: nicht, es löst ihn gleich aus.
+_KEYBOARD_REASONS: Final = frozenset(
+    {Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason}
+)
+
+
+def enter_belongs_to_focus(reason: Qt.FocusReason, *, forced: bool) -> bool:
+    """Ob Enter dem Knopf gehört, der mit diesem Grund den Fokus bekam.
+
+    Wer mit Tab auf *Abbrechen* geht und Enter drückt, meint *Abbrechen*
+    (Bauplan §19.2). Maus, Fensterwechsel und ``setFocus`` aus dem Code
+    zeigen dagegen auf keine Absicht für die Eingabetaste; dort bleibt sie
+    beim Hauptknopf.
+
+    ``forced`` heißt: Der Fokus ist nicht gegangen, er wurde vertrieben. Qt
+    reicht ihn von einem Widget, das gesperrt oder verborgen wird, mit
+    ``TabFocusReason`` an das nächste weiter — so landete er während der
+    Erzeugung auf *Abbrechen*, ohne dass jemand Tab gedrückt hätte, und
+    Enter hätte nach dem Lauf das Ergebnis verworfen.
+    """
+    return reason in _KEYBOARD_REASONS and not forced
+
+
+def _dialog_of(widget: QWidget) -> QDialog | None:
+    """Der Dialog, in dem ein Knopf sitzt — dieselbe Suche wie Qts ``dialogParent``."""
+    current: QWidget | None = widget
+    while current is not None and not current.isWindow():
+        current = current.parentWidget()
+        if isinstance(current, QDialog):
+            return current
+    return None
+
+
 class _FocusTakesNoAccent(QObject):
-    """Kein Knopf wird Hauptknopf, weil er den Fokus bekommt.
+    """Kein Knopf wird Hauptknopf, weil er den Fokus bekommt — Enter gehört
+    trotzdem dem Knopf, den die Tastatur gewählt hat.
 
     ``QPushButton`` mit ``autoDefault`` — in einem ``QDialog`` die Vorgabe —
     macht sich in ``focusInEvent`` selbst zum Default: Akzentfarbe ohne
@@ -624,23 +660,84 @@ class _FocusTakesNoAccent(QObject):
     „Erzeugen“; während der Erzeugung ging der Fokus vom gesperrten
     „Erzeugen“ auf „Abbrechen“, und nach dem Lauf stand „Übernehmen“ grau,
     „Abbrechen“ orange — Enter hätte das Ergebnis verworfen. Alle zwölf
-    Dialoge mit Hauptknopf taten es (``tests/test_style.py``).
+    Dialoge mit Hauptknopf taten es (``tests/test_style.py``). Der Zuhörer
+    sieht das Fokusereignis vor dem Knopf und nimmt ihm ``autoDefault``,
+    solange er nicht der Hauptknopf ist.
+
+    **Ohne ``autoDefault`` reicht ein Knopf Enter an den Dialog weiter, und
+    der klickt den Hauptknopf** (RM-334): Tab auf *Abbrechen* und Enter
+    verwarf in „Abgeschnittene Schritte verwerfen?“ die Schritte, in
+    „Ungesicherte Änderungen“ überschrieb es die Projektdatei. Deshalb merkt
+    sich der Zuhörer den Knopf, den die Tastatur erreicht hat
+    (:func:`enter_belongs_to_focus`), und klickt ihn selbst, wenn Enter
+    kommt. Der Akzent bleibt dabei beim Hauptknopf — er sagt, was empfohlen
+    ist; der Fokusrahmen sagt, was Enter und Leertaste auslösen.
 
     Hier und nicht je Dialog, weil es jeden Knopf betrifft, auch die, die
-    ein Dialog erst später baut. Der Zuhörer sieht das Fokusereignis vor dem
-    Knopf und nimmt ihm ``autoDefault``, solange er nicht der Hauptknopf ist;
-    Leertaste und Klick lösen ihn weiter aus, Enter bleibt beim Hauptknopf.
+    ein Dialog erst später baut, und die, denen ein Dialog ``autoDefault``
+    ausdrücklich nimmt (:func:`no_primary` und die Nebenknöpfe in Katalog,
+    Dichtweg, Unterstützen).
     """
 
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        #: Der Knopf, auf den die Tastatur zuletzt gegangen ist, solange er den
+        #: Fokus hält.
+        self._typed_to: QPushButton | None = None
+        #: Ob das Widget, das gerade den Fokus abgab, gesperrt oder verborgen
+        #: war — gilt für das nächste ``FocusIn`` und dann nicht mehr.
+        self._forced = False
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt gibt den Namen
+        kind = event.type()
+        if kind == QEvent.Type.FocusOut:
+            if isinstance(watched, QWidget):
+                self._forced = not (watched.isEnabled() and watched.isVisible())
+            if watched is self._typed_to:
+                self._typed_to = None
+            return False
+        if kind == QEvent.Type.FocusIn:
+            forced, self._forced = self._forced, False
+            if isinstance(watched, QPushButton) and not watched.isDefault():
+                if watched.autoDefault():
+                    watched.setAutoDefault(False)
+                typed = isinstance(event, QFocusEvent) and enter_belongs_to_focus(
+                    event.reason(), forced=forced
+                )
+                self._typed_to = watched if typed and _dialog_of(watched) is not None else None
+            return False
         if (
-            event.type() == QEvent.Type.FocusIn
+            kind == QEvent.Type.KeyPress
+            and watched is self._typed_to
+            and isinstance(event, QKeyEvent)
             and isinstance(watched, QPushButton)
-            and watched.autoDefault()
-            and not watched.isDefault()
         ):
-            watched.setAutoDefault(False)
+            return self._enter(watched, event)
         return False
+
+    @staticmethod
+    def _enter(button: QPushButton, event: QKeyEvent) -> bool:
+        """Enter auf dem per Tastatur gewählten Knopf: ihn klicken, nicht den Hauptknopf.
+
+        Dieselbe Bedingung wie ``QDialog.keyPressEvent``, damit nur die Taste
+        umgeleitet wird, die der Dialog sonst an seinen Default gäbe; ein
+        Knopf mit ``autoDefault`` oder als Default behandelt Enter selbst.
+        """
+        key = event.key()
+        modifiers = event.modifiers()
+        plain = modifiers == Qt.KeyboardModifier.NoModifier or (
+            key == Qt.Key.Key_Enter and modifiers == Qt.KeyboardModifier.KeypadModifier
+        )
+        if (
+            key not in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            or not plain
+            or button.autoDefault()
+            or button.isDefault()
+            or not (button.isEnabled() and button.hasFocus())
+        ):
+            return False
+        button.click()
+        return True
 
 
 def _keep_the_primary() -> None:
@@ -648,7 +745,10 @@ def _keep_the_primary() -> None:
     application = QCoreApplication.instance()
     if application is None or application.findChildren(_FocusTakesNoAccent):
         return
-    app_events.listen(_FocusTakesNoAccent(application), (QEvent.Type.FocusIn,))
+    app_events.listen(
+        _FocusTakesNoAccent(application),
+        (QEvent.Type.FocusIn, QEvent.Type.FocusOut, QEvent.Type.KeyPress),
+    )
 
 
 def make_danger(button: QPushButton) -> QPushButton:
@@ -704,6 +804,9 @@ def no_primary(dialog: QWidget) -> None:
     for button in dialog.findChildren(QPushButton):
         button.setAutoDefault(False)
         button.setDefault(False)
+    # Ohne ``autoDefault`` gäbe ein per Tab erreichter Knopf Enter an einen
+    # Dialog ohne Default weiter, und nichts geschähe; der Zuhörer gibt sie ihm.
+    _keep_the_primary()
 
 
 #: Der Objektname, an dem das Stylesheet eine Menü-Überschrift erkennt.
