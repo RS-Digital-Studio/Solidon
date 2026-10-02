@@ -669,6 +669,12 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   Namen dürfen übersetzbare Texte tragen. `Scene.profile=None` beschreibt
   eine noch nicht zugeordnete Szene; eine rechnende Op erhält ein aufgelöstes
   `OpContext.profile`.
+- `PrinterProfile` beschreibt Bauraum, Druckkontur und Sperrzonen in Solidons
+  Bettkoordinaten, XY um die nominelle Bettmitte. `bed_origin` nennt darin
+  den Nullpunkt der Maschine; ohne Angabe liegt er in der vorderen linken
+  Ecke, wie bei jedem Profil vor diesem Feld, ohne Migration. Was
+  Maschinenkoordinaten schreibt oder liest, rechnet über diese eine Angabe
+  (§29).
 
 **Vier Regeln, die aus diesen Verträgen folgen:**
 
@@ -2320,6 +2326,14 @@ gemacht, ohne unkenntlich zu werden.
 exportierte Datei öffnen. Ordner, Format und Übergabeart werden je Projekt
 gemerkt. Solidon benutzt den installierten Slicer als externes Programm und
 liefert ihn nicht mit.
+
+**Die Teile liegen auf der Maschine dort, wo das Dokument sie hat.** Die
+Übergabe verschiebt sie von Solidons Bettmitte in die Koordinaten der
+Maschine, um deren Nullpunkt (`PrinterProfile.bed_origin`, §9): meist die
+vordere linke Ecke, an einem Delta, am BIBO oder am Dremel 3D45 nicht. Die
+Erhebung der Drucker aus dem Slicer übernimmt ihn aus dessen Bettkontur;
+Bettform, Ursprung und die Gegenprobe an der Druckdatei folgen demselben
+Nullpunkt.
 
 **Die zweite Übergabeart braucht keine Übersetzung.** Ein Programm, dessen
 Einstellungen Solidon nicht kennt — der Hersteller-Slicer eines

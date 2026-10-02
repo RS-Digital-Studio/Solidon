@@ -1321,6 +1321,7 @@
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "The name must be writable as @name in an expression — letters, digits and underscores.",
   "Der Name wird inzwischen wieder von einem Baustein verwendet. Prüfen Sie den aktuellen Stand und entfernen Sie ihn bei Bedarf erneut.": "The name is now being used by a part again. Check the current state and remove it again if necessary.",
   "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort.": "The origin of the scene stays put — a body away from it changes its position too.",
+  "Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil.": "The origin of the bed is invalid. Check the printer profile.",
   "Der Nutboden wurde nicht eindeutig gefunden. Ändern Sie den Dichtweg oder die Tiefe.": "The groove floor could not be identified unambiguously. Change the seal path or the depth.",
   "Der Ordner ließ sich nicht öffnen — sein Pfad liegt in der Zwischenablage.": "The folder could not be opened — its path is on the clipboard.",
   "Der Parameter braucht einen Namen.": "The parameter needs a name.",

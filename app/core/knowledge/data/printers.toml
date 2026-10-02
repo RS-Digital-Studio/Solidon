@@ -61,6 +61,9 @@
 # keinen Eintrag, und die Übergabe sagt es.
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
+# bed_origin ist der Nullpunkt der Maschine in denselben Koordinaten, als
+# [x, y]: [0.0, 0.0] für ein Bett um den Ursprung (Deltas, BIBO). Ohne Angabe
+# misst die Maschine von der vorderen linken Ecke — jeder Drucker hier.
 
 [generic-220]
 title = "Allgemeiner FDM-Drucker 220 mm"

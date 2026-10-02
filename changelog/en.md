@@ -34,6 +34,7 @@ it into `website/version.json`.
 - With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
 - Cura now slices with the nozzle you chose, also for printers from Cura's own list, and printers with their origin in the middle of the bed keep it.
+- Printers whose origin is not in the bed corner, such as deltas, BIBO or Dremel, get the parts where Solidon puts them. Until now they sat at the edge, or the slicer rearranged them.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
 - If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
