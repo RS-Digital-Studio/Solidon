@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-439: Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke (02.10.2026)](#rm-439-die-formleiste-nennt-die-pinselstärke-in-fünf-sprachen-wanddicke-02102026) |
 | 2026-10-02 | [RM-438: Ein Formzug in die eben gegrabene Mulde galt als verfehlt (02.10.2026)](#rm-438-ein-formzug-in-die-eben-gegrabene-mulde-galt-als-verfehlt-02102026) |
 | 2026-10-02 | [RM-437: Im Rückmeldebogen ließ sich kein Leerzeichen tippen (02.10.2026)](#rm-437-im-rückmeldebogen-ließ-sich-kein-leerzeichen-tippen-02102026) |
 | 2026-10-02 | [RM-399: Vorlage „Halter/Bügel“ (02.10.2026)](#rm-399-vorlage-halterbügel-02102026) |
@@ -36207,3 +36208,28 @@ seiner Etappe; das Gedächtnis gegen frische Rechnung nach Rückgängig und mitt
 (beide Gegenproben per Mutation rot). Der Warnsatz nennt die wirklichen Ursachen in allen
 Katalogen; Changelog 0.5.2 in sechs Sprachen. Umgesetzt von Claude, in main mit `6f64f7ed1`;
 Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
+
+## RM-439: Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke (02.10.2026)
+
+<a id="rm-439-die-formleiste-nennt-die-pinselstärke-in-fünf-sprachen-wanddicke-02102026"></a>
+<a id="rm-439"></a>
+
+**RM-439 — Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke.**
+  `app/ui/sculpt_bar.py` beschriftet den Pinselwert und seinen Namen für den Bildschirmleser mit
+  dem allgemeinen Schlüssel `tr("Stärke")`. Der steht für Maße wie die Stärke eines Halters
+  (`tools/make_examples.py`) und ist mit „Thickness“, „Espesor“, „Épaisseur“, „Spessore“,
+  „Espessura“ übersetzt; gemeint ist, wie weit ein Zug die Fläche verschiebt. Sichtbar in v0.5.1.
+  **Fix:** eigener Übersetzungskontext „Pinsel“, in den Katalogen mit den Begriffen der übrigen
+  Formtexte („strength“, „intensidad“, „intensité“, „intensità“, „intensidade“).
+  **Abnahme:** Leiste und Bildschirmleser zeigen in jeder Sprache den Pinselbegriff, der allgemeine
+  Schlüssel bleibt für Maße; Changelog 0.5.2 in sechs Sprachen. Bauplan §4.1, §19.
+
+**Abschluss:** `tr("Stärke", context="Pinsel")` an Beschriftung und Bildschirmleser-Name der
+Formleiste; die fünf Kataloge tragen `Pinsel\u0004Stärke` mit „Strength“, „Intensidad“,
+„Intensité“, „Intensità“, „Intensidade“ — dieselben Begriffe wie die Prüfberichtssätze zum Formen.
+Der allgemeine Schlüssel bleibt für die Stärke der Beispielhalter. Im Handbuch kommt der
+Pinselwert nicht vor; Bildschirmfotos nicht neu erzeugt. Offscreen-Sonde: die Leiste zeigt in
+allen sechs Sprachen den Pinselbegriff, auch als Bildschirmleser-Name. Fenstertest
+`test_the_brush_strength_is_not_named_like_a_wall_thickness` für das Release-Tor. Changelog 0.5.2
+in sechs Sprachen. Umgesetzt von Claude, in main mit `910acb1ee` (Merge `551e8cf48`);
+Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
