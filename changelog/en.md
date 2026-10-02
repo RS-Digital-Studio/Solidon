@@ -22,7 +22,7 @@ it into `website/version.json`.
 - New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.
 - New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.
 - New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
-- Four holders are made in one step: U-shaped, round, fork and shelf, fixed with a keyhole, screw tabs, a pegboard hook or a clamp.
+- Four holders are made in one step: U-shaped, round, fork and shelf, fixed with a keyhole, screw holes, a pegboard hook or a clamp.
 - An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
 - New bodies appear on the bed or on the chosen flat face, no longer where a previously selected body was, and are selected afterwards.
 
@@ -53,7 +53,7 @@ it into `website/version.json`.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
-- Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt axis*, and *At face* runs the cut parallel to a flat face.
+- Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt about*, and *At face* runs the cut parallel to a flat face.
 - A STEP body stays a STEP body when you crop it, with its faces, edges and names.
 - A freshly created screw lid is no longer reported as too tight for its neck.
 
@@ -65,7 +65,7 @@ it into `website/version.json`.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
-- In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
+- In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
 - The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
@@ -85,8 +85,6 @@ it into `website/version.json`.
 ### Operation and system
 
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
-- An export during a running calculation waits for the new result. Until now the file could still carry the old size.
-- The parameter bar rejects a dimension beyond its limit and names the limit, instead of leaving the view empty.
 - In the parameter bar every arrow step counts, and the focus stays in the field.
 - If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
