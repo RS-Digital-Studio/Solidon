@@ -76,7 +76,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Deckel der Hilfsprozesse, gemeinsamer Speicher unter Linux/macOS, breite Fänge |
-| [RM-324 — Beständige Inventarkennung ohne Druckeinstellungen entscheiden](#rm-324) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: Kennung ohne gespeicherten Prozesssatz und ohne eigene Dialogwahl; None- und 3MF-Vertrag erhalten |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -2232,22 +2231,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ab (Kommandozeile, Tests, Export). (f) Der Rauchtest im Paketjob verlangt das eigene Ende
   in der Produktfrist von 0,5 s; auf einem langsamen Mac-Runner bleibt ein kleines
   Wackelrisiko. Abnahme: je Punkt behoben oder mit Grund begrenzt.
-
-<a id="rm-324"></a>
-
-- [ ] **RM-324 — Beständige Inventarkennung ohne Druckeinstellungen entscheiden.**
-  Getrennte Produktfrage aus [RM-300](ROADMAP-ARCHIV.md#rm-300), dessen Prozess-
-  und Abschlussfehler mit `136698d18` behoben ist. Hat ein Projekt noch keine
-  gespeicherten Druckeinstellungen und trifft der Kunde keine eigene Dialogwahl,
-  bleibt die beim Plattenauftrag erzeugte Kennung dialoglokal. Nach erneutem
-  Öffnen entstehen eine andere Kennung und ein anderer Lager-Fingerprint;
-  `print_settings` bleibt dabei absichtlich `None`. Robert entscheidet, ob und
-  wo die Kennung unabhängig von einer Prozesswahl beständig werden soll.
-  Keine neue Vorgabe, Formatänderung oder Inventarpersistenz ist damit freigegeben.
-  Abnahme: Entscheidung samt Begründung dokumentiert; falls umgesetzt, bleiben
-  Kennung und Fingerprint über die beschlossenen Wiederöffnungs-/Speicherwege
-  stabil, ohne eine eigene Prozesswahl vorzutäuschen oder Solidon-Einstellungen
-  in eine bisher unveränderte 3MF einzuführen.
 
 <a id="rm-301"></a>
 

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-324: Inventarkennung ohne Druckeinstellungen bleibt dialoglokal (02.10.2026)](#rm-324-inventarkennung-ohne-druckeinstellungen-bleibt-dialoglokal-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
 | 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
@@ -34227,10 +34228,10 @@ Prüfstandlauf scheiterte nur an seiner fehlenden `.venv`-Verknüpfung; nach der
 Umgebungskorrektur bestand dasselbe unveränderte Paket das vollständige v3-Tor.
 Fenster-, Renderer- und Leistungsabnahme bleiben ausschließlich Releasearbeit.
 
-Die getrennte offene Produktfrage bleibt unter
-[RM-324](ROADMAP.md#rm-324) sichtbar: Bei bisher `None` und ohne eigene Dialogwahl
-ist die Kennung weiterhin dialoglokal. Der abgeschlossene RM-300-Fix entscheidet
-weder eine neue Formatänderung noch Inventarpersistenz oder Prozessvorgaben.
+Die getrennte Produktfrage ist unter [RM-324](#rm-324) abgeschlossen:
+Robert hat „Dialoglokal lassen“ entschieden. Bei bisher `None` und ohne eigene
+Dialogwahl bleibt die Kennung dialoglokal; Format und Prozessvorgaben erhalten
+keine zusätzliche Persistenz.
 
 ## RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)
 
@@ -34290,3 +34291,30 @@ Format und mypy endeten jeweils mit Exit 0. Der aktuelle Hauptzweig enthält
 diesen Commit als Vorfahren. Der unabhängige Abschlussreview fand keine offenen
 Befunde. Fenster-, Render- und Leistungsprüfungen wurden nicht ausgeführt; sie
 bleiben Release-Abnahme.
+
+## RM-324: Inventarkennung ohne Druckeinstellungen bleibt dialoglokal (02.10.2026)
+
+<a id="rm-324"></a>
+
+**Entscheidung Robert:** „Dialoglokal lassen“.
+
+Hat ein Projekt noch keine Druckeinstellungen (`print_settings is None`) und
+trifft der Kunde keine eigene Wahl im Druckdialog, bleibt die beim Plattenauftrag
+erzeugte `inventory_project_id` auf diesen Dialog beschränkt. Nach erneutem Öffnen
+können Kennung und Lager-Fingerprint wechseln. Das Dokument erhält weder einen
+Prozesssatz noch eine unabhängige Inventarkennung; der bestehende None- und
+3MF-Vertrag bleibt erhalten. Eine echte gespeicherte Dialogwahl übernimmt die
+Kennung weiterhin zusammen mit den Druckeinstellungen, wie unter RM-300 belegt.
+
+**Nachweis:** Die bestehende Abschluss-/Wiederöffnungsprüfung von RM-300 prüft
+fünf Speicherzustände jeweils mit und ohne eigene Wahl. Der unabhängige
+Abschlussnachgang umfasst den tatsächlichen Kennungs-/Fingerprint-Fehlerfall
+sowie drei Kontrollen einschließlich keiner eigenen Wahl. Belege:
+`tmp/review-seit-0.5.1-2026-10-01/rm300-abschluss-zweitreview.md` und
+`rm300-abschluss-zweitreview-probe.py/.json/.log/.exit` im selben Ordner.
+Der dazugehörige Code liegt mit `136698d180a1e13faee41c729842821d8d5f4ad7`
+auf `main` und `origin/main`; sein vollständiges Entwicklungstor
+`commit-tor-rm300-v3-final/` bestand 18.787 Fälle, 62 übersprungen, Suite/Ruff/Format/
+mypy jeweils Exit 0. Das ist der bestehende RM-300-Nachweis; für RM-324 entsteht
+keine neue Codeänderung, Migration oder Inventarpersistenz. Der eigenständige
+Dokumentabschluss wird unabhängig geprüft und danach separat integriert.
