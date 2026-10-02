@@ -1774,7 +1774,7 @@ def test_print_settings_refuse_out_of_range_numbers_until_corrected_or_reset(
     monkeypatch.setattr(
         dialog.session,
         "last_result",
-        SimpleNamespace(scene=SimpleNamespace(objects={"Teil": _cube_object()})),
+        _shown_result(SimpleNamespace(objects={"Teil": _cube_object()})),
     )
 
     def unexpected_setup() -> None:
@@ -2888,7 +2888,7 @@ def test_a_part_that_fits_no_bed_is_named_before_slicing(
     assert called == [("split_model", "obj_1")]
 
     small = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=small))
+    monkeypatch.setattr(dialog.session, "last_result", _shown_result(small))
     dialog._show_slicer_state()
     assert dialog.oversize_note.isHidden()
 
@@ -5146,7 +5146,7 @@ def test_a_declared_lid_condition_also_controls_print_advice(
     from app.core.geom.mesh import MeshData
 
     body = SceneObject(id="obj_1", name="Teil", mesh=MeshData.of(trimesh.creation.box()))
-    session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={body.id: body}))
+    session.last_result = _shown_result(SimpleNamespace(objects={body.id: body}))
     dialog = PrintSettingsDialog(session, UiSettings())
     try:
         assert dialog._fits_in_play() == expected
@@ -7011,6 +7011,18 @@ def test_the_filament_dialog_uses_that_calculation() -> None:
 # --- Was die Datei mitnimmt ---------------------------------------------------------
 
 
+def _shown_result(scene: SimpleNamespace) -> SimpleNamespace:
+    """Ein Auswertungsergebnis als Attrappe, mit allem, was die Sitzung daran liest.
+
+    ``Session.picture_first`` (KUNDE-14) fragt ``object_names`` und
+    ``stopped_at``; eine Attrappe nur mit ``scene`` riss dort mit
+    ``AttributeError``. Die Körper der Szene gelten als gezeigt.
+    """
+    return SimpleNamespace(
+        scene=scene, object_names={name: name for name in scene.objects}, stopped_at=None
+    )
+
+
 def _cube_object() -> SceneObject:
     """Ein Körper, an dem sich die Größe einer 3MF ablesen lässt."""
     import trimesh
@@ -7146,7 +7158,9 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     dialog.settings = settings
     selected = replace(_cube_object(), id="selected", plate=1)
     scene = SimpleNamespace(objects={"excluded": _cube_object(), "selected": selected})
-    monkeypatch.setattr(dialog.session, "last_result", SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog.session, "last_result", _shown_result(scene))
+    # Der Slicer bekommt die feine Rechnung (RM-426); die Attrappe ist sie.
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="prusa")
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [1])
@@ -8126,7 +8140,7 @@ def test_print_advice_remembers_measured_layers_across_dialogs(qt_app, monkeypat
 
     # Ein anderes Netz unter derselben Kennung ist ein anderer Körper.
     other = _print_advice_cube()
-    session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={other.id: other}))
+    session.last_result = _shown_result(SimpleNamespace(objects={other.id: other}))
     third = PrintSettingsDialog(session, UiSettings())
     assert third.wait_for_slicers()
     third._start_advice()
@@ -8419,7 +8433,7 @@ def test_a_changed_scene_replaces_slot_rows_on_the_same_plate(qt_app):
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=slots)])
     assert len(dialog.slot_rows) == 2
     green = _print_advice_cube(slots=(MaterialSlot(0, "Grün", material_type="PLA"),))
-    dialog.session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={green.id: green}))
+    dialog.session.last_result = _shown_result(SimpleNamespace(objects={green.id: green}))
     dialog.session.sceneChanged.emit(dialog.session.last_result)
     assert not dialog.slot_rows
     assert not dialog._slot_names
@@ -8874,9 +8888,7 @@ def test_a_crashed_stock_check_reads_as_lines_not_as_title_colon_detail(
     monkeypatch.setattr(module, "prepare_usage", broken)
     # Die Prüfung läuft nur mit einem Ergebnis; welche Körper es trägt, ist
     # gleich, denn sie scheitert vor dem ersten.
-    monkeypatch.setattr(
-        dialog.session, "last_result", SimpleNamespace(scene=SimpleNamespace(objects={}))
-    )
+    monkeypatch.setattr(dialog.session, "last_result", _shown_result(SimpleNamespace(objects={})))
     dialog._stock_revision += 1
     dialog._refresh_stock()
     worker = dialog._stock_worker
