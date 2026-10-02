@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
+| 2026-10-02 | [RM-453: *Eingabe korrigieren* führt einen zusammengesetzten Ausdruck in den Schritt (02.10.2026)](#rm-453-eingabe-korrigieren-führt-einen-zusammengesetzten-ausdruck-in-den-schritt-02102026) |
 | 2026-10-02 | [RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)](#rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026) |
 | 2026-10-02 | [RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)](#rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026) |
 | 2026-10-02 | [RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)](#rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026) |
@@ -36525,6 +36527,44 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
 
 **Abschluss:** Die Leiste weitet das Feld bis zur gespeicherten Zahl (`ParameterPanel._set_limits`), nennt die wirksame Grenze darunter und nimmt die Korrektur an; nach einer Ablehnung der Sitzung zeigt sie wieder den gültigen Wert; die Fernsteuerung nennt bei `set_parameter` die Grenze und übernimmt bei `add_parameter` Titel und Grenzen. Drei Fenstertests, alle vor dem Fix rot. Umgesetzt von Claude, in main mit `76ca8d57b`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
+## RM-453: *Eingabe korrigieren* führt einen zusammengesetzten Ausdruck in den Schritt (02.10.2026)
+
+<a id="rm-453-eingabe-korrigieren-führt-einen-zusammengesetzten-ausdruck-in-den-schritt-02102026"></a>
+<a id="rm-453"></a>
+
+**RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld.**
+  Quellenreview `6c9420b1f`, R6C942-04; Folge zum archivierten RM-354.
+  `main_window.py:21709–21718` am geprüften Stand leitet bei genau einer
+  Parameterreferenz automatisch zum Projektmaß statt zum Ausdruck um.
+  Bei `create_box.width = "=max(@breite,2000)"` und Maximum 1000 kann keine
+  Änderung von `breite` den Fehler beheben.
+  **Fix und Abnahme:** Direkte Bindung `=@breite` führt weiterhin zum Maß;
+  zusammengesetzte Ausdrücke führen zum tatsächlich korrigierbaren
+  Operationsausdruck. Beide Wege prüfen. Bauplan §2.1, §2.7, §13, Regel 17.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+**Abschluss:** Am Fenster nachgestellt (Stand `bd7f11180`): Datei mit `create_box.width = "=max(@breite, 2000)"` hält an Schritt 1, *Eingabe korrigieren* setzte den Fokus in die Leiste, kein Schrittdialog. `expressions.bound_name` erkennt jetzt nur die nackte Bindung (`=@breite`, auch `@breite` und mit Leerzeichen); `_correct_after_error` führt nur dann in die Leiste, sonst in den Schritt mit dem Cursor im Feld. `parameter_usage.field_bounds` fragt dieselbe Funktion, damit Grenze und Korrekturweg dieselbe Bindung meinen. Kerntest `test_only_a_bare_reference_binds_a_field_to_a_parameter` (10 Fälle), Fenstertest `test_correcting_a_composed_expression_opens_the_step_and_not_the_parameter` (vor dem Fix rot, Gegenprobe mit der alten Regel rot), RM-354-Test der direkten Bindung grün. Fenstersonde über den Knopf im Prüfbericht: zusammengesetzt → Schrittdialog mit Ausdruck und Fokus im Feld *Breite*; direkte Bindung → Fokus in der Leiste. Umgesetzt von Claude, Thread „Bedienung und KI“, in main mit `ff1f00341` (Merge `0e9cdc567`); Entwicklungstor grün.
+
+## RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)
+
+<a id="rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026"></a>
+<a id="rm-452"></a>
+
+**RM-452 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung.**
+  Quellenreview `6c9420b1f`, R6C942-03; Folge zum archivierten RM-355.
+  `ParameterPanel.show_document` (`app/ui/panels.py:3639–3695` am geprüften
+  Stand) verwendet gleiche Parameterzeilen ohne Dokumentidentität weiter;
+  abgelehnter Eingabetext bleibt trotz neuem Projekt stehen.
+  **Fix:** Wiederverwendung innerhalb eines Dokuments von Projektwechsel
+  trennen und beim Wechsel Text sowie Ablehnung an das neue Dokument binden.
+  **Abnahme:** A und B mit Wert 60, Obergrenze 100 und gleichen Metadaten:
+  abgelehnte 150 aus A erscheint nach Öffnen von B nicht mehr. In A behalten
+  wiederholte Pfeiltasteneingaben Widget und Fokus. Bauplan §2.1, §13.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+**Abschluss:** Am Fenster nachgestellt (Stand `bd7f11180`): Projekte A und B mit *Breite* 60, Obergrenze 100, Quader an `=@breite`; in A 150 + Enter abgelehnt, nach dem Öffnen von B stand „150“ samt „150,00 mm liegt über der Obergrenze 100,00 mm.“ in der Leiste, und drei ↑ in B ergaben 62 statt 63. `ParameterPanel.show_document` merkt sich das gezeigte Dokument; ein anderes Dokumentobjekt (die Sitzung tauscht es nur beim Projektwechsel) baut die Zeilen neu, ohne Fokus mitzunehmen, innerhalb eines Dokuments bleiben Feld und Fokus (RM-355). Fenstertest `test_another_project_does_not_inherit_a_refused_number` (vor dem Fix rot), RM-355-Test `test_three_arrow_steps_in_the_parameter_bar_turn_the_number_by_three` grün. Fenstersonde: B zeigt 60 ohne Ablehnung, 3× ↑ ergibt 63 mit demselben Feld und Fokus; die Grenzablehnung (5000 bei Obergrenze 100) steht weiter unter dem Feld, das Dokument bleibt, 80 danach wird übernommen. Umgesetzt von Claude, Thread „Bedienung und KI“, in main mit `1f8d96f2c` (Merge `0e9cdc567`); Entwicklungstor grün.
 ## RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)
 
 <a id="rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026"></a>
