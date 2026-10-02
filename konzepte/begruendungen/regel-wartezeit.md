@@ -396,6 +396,11 @@ bedienbare Oberfläche.
   Einfügemarke, Halt und Lizenz bleiben die von RM-361.
 * **Schließen hält an:** `wait_for_workers` bricht den Wurf ab, `release`
   schließt den Dialog, denn sein `take` hält das Fenster.
+* **Ein hängender Abbruch hält niemanden fest:** Während ein abgebrochener
+  weiterer Versuch ausläuft, ist *Abbrechen* gesperrt (RM-418, sonst gingen die
+  fertigen Versuche verloren); Esc und das Fensterkreuz lassen den Dialog dann
+  zur Seite treten, und das Ende holt ihn mit den Versuchen zurück.
+  `discard` schließt ihn trotzdem, für das Ende des Fensters.
 
 ## Die grobe Vorschaustufe
 

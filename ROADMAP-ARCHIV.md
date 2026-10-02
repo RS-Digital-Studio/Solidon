@@ -31,6 +31,14 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)](#rm-456-nach-einer-erzeugung-steht-die-verlaufsgruppe-offen-die-lizenzabsage-ohne-interne-kennung-der-mulden-formzug-mit-test-02102026) |
+| 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
+| 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
+| 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
+| 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
+| 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
+| 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
+| 2026-10-02 | [RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)](#rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026) |
 | 2026-10-02 | [RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)](#rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
@@ -42,6 +50,7 @@ entfernt hat.
 | 2026-10-02 | [RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)](#rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026) |
 | 2026-10-02 | [RM-447: Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren (02.10.2026)](#rm-447-regression-gegenüber-051-ein-hauptmaß-über-der-feldgrenze-aus-einer-datei-lässt-sich-in-der-leiste-nicht-mehr-korrigieren-02102026) |
 | 2026-10-02 | [RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)](#rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026) |
+| 2026-10-02 | [RM-360: Bauplan §2.2 nennt für Weg 1 das Auswahlfenster statt des Kontextmenüs (02.10.2026)](#rm-360-bauplan-22-nennt-für-weg-1-das-auswahlfenster-statt-des-kontextmenüs-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -36621,7 +36630,7 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   `test_shared_hosting_removed.py::test_local_part_file_runs_through_the_ui_buttons`.
   Bauplan §24.3, §2.6.
 
-**Abschluss:** Wählt der Kunde einen eigenen Baustein (Rezept oder eingelesen), klappt *Bausteine verwalten* auf (`PartCatalog` über `open_section`); ein eingebauter lässt den Abschnitt, wie er ist. Die beiden Hinweistests öffnen den Abschnitt jetzt selbst, weil Knopf und Grund dort stehen. `test_catalog_ui.py` und `test_shared_hosting_removed.py` mit Fensterfällen: 45 bestanden. Fenstersonde am echten Fenster (Katalog über *Bausteine*, Klicks mit `QTest` auf die Kacheln): eingebauter Baustein lässt die Verwaltung zu, eigener zeigt Bearbeiten, Weitergeben und Entfernen, 9 von 9 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).
+**Abschluss:** Wählt der Kunde einen eigenen Baustein (Rezept oder eingelesen), klappt *Bausteine verwalten* auf (`PartCatalog` über `open_section`); ein eingebauter lässt den Abschnitt, wie er ist. Die beiden Hinweistests öffnen den Abschnitt jetzt selbst, weil Knopf und Grund dort stehen. `test_catalog_ui.py` und `test_shared_hosting_removed.py` mit Fensterfällen: 45 bestanden. Fenstersonde am echten Fenster (Katalog über *Bausteine*, Klicks mit `QTest` auf die Kacheln): eingebauter Baustein lässt die Verwaltung zu, eigener zeigt Bearbeiten, Weitergeben und Entfernen, 9 von 9 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“), in main mit `421d8367d` (Merge `1a9c383aa`); Entwicklungstor grün bis auf einen Hilfsprozessausfall unter Volllast, der einzeln grün ist.
 ## RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)
 
 <a id="rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026"></a>
@@ -36644,6 +36653,186 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
 
 **Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“).
 
+## RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)
+
+<a id="rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026"></a>
+<a id="rm-427"></a>
+
+**RM-427 — Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-379 (archiviert). Unter dem Budget ist
+  *Weich verschmelzen* jetzt hashgleich, darüber gröber mit `blend.draft`.
+  - **Vorgabe „jede Op mit Entwurfsfaktor“ nicht erfüllt:** `primitive_ops._round_segments`
+    (`app/core/geom/primitive_ops.py:79–88`) halbiert im Entwurf weiter die Segmente von Kegel und
+    Torus, ohne Befund — Kegel mit 64 Segmenten 128 statt 256 Dreiecke, Torus 2 048 statt 8 192.
+    Docstring `blend.py:271–272` („heute hat ihn nur diese“) ist falsch.
+  - **§31 verfehlt:** Mit einem Eingangskörper von 327 680 Dreiecken knapp unter dem Budget dauert
+    der Entwurf 3,777 s (vorher 0,918 s); das Budget zählt nur Rasterpunkte, nicht die
+    Oberflächenwolke.
+  - **Regel:** Die Budgetregel steht nicht in `.claude/rules/operationen.md`.
+  **Abnahme:** Kegel und Torus unter dem Budget gleich fein, darüber mit Befund; schwerer Eingang
+  im Budget §31; Regel nachgezogen; Abnahme an mindestens drei unterschiedlichen Ops/Modellen.
+  Belege: `verif-70e9b3145-geometrie.md`, Sonde `v5g_rm379_schwer.txt`.
+
+**Abschluss:** Kegel und Ring haben keine Entwurfsstufe mehr (Entwurf = fein, `cache_version` 2); das Budget des weichen Verschmelzens wiegt Rasterpunkte über 100 000 Dreiecken mit der Oberfläche (`DRAFT_SURFACE`), darüber greift der Entwurfsfaktor mit `blend.draft`. Tests: Kegel und Ring gleich fein, schwere Oberfläche zählt im Budget (vor dem Fix drei Fälle rot); der überholte Test „im Entwurf leichter“ ersetzt. Regel in `operationen.md`, Begründung in `regel-operationen.md`. Umgesetzt von Claude, in main mit `ca2944c16`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)
+
+<a id="rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026"></a>
+<a id="rm-408"></a>
+
+**RM-408 — Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern.**
+  Review 02.10.2026, Modelltest, am HEAD `4449e3370`.
+  **Fehlerfall:** `pegboard-gs-100-v2.step`, Bohrung Ø 5 an der Stelle aus dem Lauf (|x| ≤ 1 mm,
+  neben einer vorhandenen Bohrungskette R 3/R 5 auf derselben Achsrichtung, 3,14 mm Achsabstand):
+  Ergebnis ungültig, zwei Schalen, Netzvolumen +670,8 mm³, nicht wasserdicht
+  (`bore.splits_the_body`). Bei x = 2 oder z = 20/30 trägt die Bohrung richtig ab.
+  **Stelle:** `app/core/brep/edit.py:1356–1393` prüft nach der exakten Booleschen nur `IsDone()` —
+  keine Gültigkeit (`BRepCheck_Analyzer`), keine Schalenzahl, keine Volumenabnahme.
+  **Fix:** Ergebnis prüfen (gültig, Schalenzahl wie erwartet, Volumen nimmt bei einer Bohrung ab);
+  sonst Rückfall auf den Netzkern bzw. Absage mit Grund und Handlung — nie ein ungültiger Körper
+  still weiter.
+  **Abnahme:** Test am kleinen Zwilling (Bohrung 3,14 mm neben einer Senkbohrungskette): gültig,
+  eine Schale, Volumen nimmt ab — oder Absage mit Satz. Bauplan §25, §17.2, Regel 17. Abgrenzung:
+  RM-385 nennt nur den fehlenden Rat. Belege: `modelle\diagnose.md` (Befund 4), Sonden `d4_*`.
+
+**Abschluss:** Jede exakte Boolesche prüft ihr Ergebnis, wo es mehr Schalen trägt als der Körper davor (`edit._holds`, `BRepCheck_Analyzer`), rechnet bei Ungültigkeit mit Unschärfe 1e-5 und 1e-4 mm nach (`_fuzzy_retry`) und sagt sonst ab; die Bohrung fällt dann auf das Dreiecksmodell zurück und die Auswertung meldet `evaluate.exact_became_mesh`. Am echten `pegboard-gs-100-v2.step` (x = 0 bis 1 mm, z = 24,393): gültig, dicht, eine Schale, Volumen −38 mm³ statt +670 mm³ und ungültig. Zwei Tests (Prüfweg mit Unschärfe, Rückweg der Bohrung), Changelog 0.5.2 in sechs Sprachen. Umgesetzt von Claude, in main mit `ca2944c16`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)
+
+<a id="rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026"></a>
+<a id="rm-416"></a>
+
+**RM-416 — *An Merkmal ausrichten*: der erste Bildklick wird am Hauptfenster weiter nicht angenommen.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-394, das im Arbeitsbaum archiviert ist.
+  Seit `eac0fd506` beginnt das Ziel leer und *Übernehmen* ist gesperrt — der stille Fehlgriff ist weg.
+  **Offen:** Am echten Hauptfenster nimmt der erste Bildklick ohne Fokus aufs Feld nichts an
+  („Dialog nahm face_2 nicht an“, `target: ''`): Beim Öffnen setzt der Erstfokus
+  `_feature_focus='feature'`, deshalb erreicht `take_feature` den neuen Zweig nie. Der Commit-Test
+  prüft den Dialog ungezeigt (ungezeigt grün, gezeigt rot). Regression:
+  `tests/test_operation_ui.py::test_an_alignment_target_is_never_left_empty` ist jetzt rot (an
+  `e3dff1907` grün), der alte Test wurde nicht nachgezogen. Am gesperrten Knopf steht „Dafür braucht
+  es ein Merkmal an einem zweiten Körper.“, obwohl der zweite Körper da ist.
+  **Fix:** Erstfokus auf das erste leere Pflichtfeld; Test am gezeigten Dialog; alten Test an die
+  neue Entscheidung anpassen; Sperrsatz „Klicken Sie im Bild auf die Fläche, an die … soll.“
+  **Abnahme:** am gezeigten Hauptfenster: Dialog öffnen, ein Bildklick auf die rechte Seite von A
+  füllt „Ziel“, B sitzt bündig rechts; beide Tests grün. Bauplan §2.6, Regel 21.
+  Belege: `verif-4cf460e87-oberflaeche.md`, Sonden `v4u_nachbau\v4u_a1_ausrichten.py`,
+  `v4u_test_rm394.py`.
+  Nachprüfung am Stand `4373b5f12` über die Oberfläche: nicht behoben — `46e6113ed` ändert nur Handbuch und Changelog; der erste Bildklick am Hauptfenster wird weiter nicht angenommen (`take_feature`), der alte Test bleibt rot.
+
+**Abschluss:** Der gezeigte Dialog gibt den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal (`OperationDialog._focus_first_empty_feature` im ersten `showEvent`); bis dahin nahm Qt das schon gefüllte Quellmerkmal, und `take_feature` erreichte das leere Ziel nie. Der Knopf folgt einem Pflichtziel jetzt sofort (`valuesChanged` → `_follow_source_pending`), nicht erst mit dem nächsten Vorschaubild. Der Sperrsatz unterscheidet: mit zweitem Körper „Klicken Sie im Bild auf die Fläche, an die ‹Körper› soll.“, ohne ihn weiter „Dafür braucht es ein Merkmal an einem zweiten Körper.“ (`_target_reason`, fünf Kataloge). Neuer Fenstertest `test_the_shown_alignment_dialog_takes_the_first_click_as_its_target` (Gegenprobe ohne den Erstfokus rot), `test_an_alignment_target_is_never_left_empty` auf die Entscheidung aus RM-394 gestellt; beide grün. Sonde am echten Hauptfenster mit echtem Mausklick in die Ansicht: am Stand `ba5a76365` 7 von 12 (Feldfokus `feature`, Ziel leer, B bleibt bei x = −50,4), danach 12 von 12 (Ziel `obj_1:face_4`, B bündig an A bei x = 6,5). Regel in `grenzen.md`. Umgesetzt von Claude, in main mit (Commit folgt).
+**Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“), in main mit `10f658811` (Merge `1a9c383aa`); Entwicklungstor grün bis auf einen Hilfsprozessausfall unter Volllast, der einzeln grün ist.
+
+## RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)
+
+<a id="rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026"></a>
+<a id="rm-286"></a>
+
+**RM-286 — Grenzablehnung in allen Zahlenfeldern.** Aus dem Release 0.5.1
+  (Oberflächenpaket, Code-Review U-5, U-6, U-8). Die Grenzablehnung ist in Parameterleiste,
+  Operationsdialog, Merkmalfenster und Druckeinstellungen umgesetzt; der `fx`-Rückweg erhält
+  auch einen Ausdruck jenseits der Grenze, und die Kurzhilfe nennt geänderte Parametergrenzen.
+  Die regulären Prüfungen sind grün. Offen bleibt die native Fensterabnahme an allen vier Orten,
+  die laut Projektregel erst beim Release läuft.
+  Registerabgleich 02.10.: umgesetzt (`BoundedSpin` in Merkmalfenster, Druckeinstellungen und Operationsdialog), offen nur die Fensterabnahme; Titel und Registerzeile („fehlt noch in Merkmalfenster und Druckeinstellungen“) sind veraltet.
+  Druckeinstellungen: Die zwölf Offscreen-Fenstertests der Grenzablehnung in `tests/test_print_settings_ui.py` sind grün, seit Aus- und Einblenden die abgelehnte Zahl nicht mehr verwerfen, ein Heben außerhalb der Suche seinen Umschaltersatz einlöst und ein nachgetragenes Haftungsmaß nur sein eigenes Feld lädt. Die native Fensterabnahme bleibt an allen vier Orten offen.
+  Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
+
+**Abschluss:** Fensterabnahme am echten Fenster (Fenstersonde auf dem zweiten Monitor, getippte Zahlen mit `QTest`), Stand nach RM-342 D-N2: Operationsdialog *Quader anlegen* lehnt 1100 mm ab, Übernehmen gesperrt, der Knopf nennt „Breite: …“; Parameterleiste lehnt 1100 ab, das Dokument bleibt, 70 + Enter kommt an; Merkmalfenster an Bohrung 1 von `plate_holes.stl`, *Merkmal drehen* 365° zeigt den Satz an der Zeile und „Merkmal drehen — Winkel: …“ am Fuß; Druckeinstellungen, Schichthöhe 1,5 mm abgelehnt, *Slicen* gesperrt mit „Schichthöhe: …“. 16 von 16 Prüfungen, Bilder im Scratchpad des Threads. Der im Review genannte rote Test `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am HEAD grün. Abgenommen von Claude (Thread „Bedienung und KI“).
+
+**Abschluss:** Der gezeigte Dialog gibt den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal (`OperationDialog._focus_first_empty_feature` im ersten `showEvent`); bis dahin nahm Qt das schon gefüllte Quellmerkmal, und `take_feature` erreichte das leere Ziel nie. Der Knopf folgt einem Pflichtziel jetzt sofort (`valuesChanged` → `_follow_source_pending`), nicht erst mit dem nächsten Vorschaubild. Der Sperrsatz unterscheidet: mit zweitem Körper „Klicken Sie im Bild auf die Fläche, an die ‹Körper› soll.“, ohne ihn weiter „Dafür braucht es ein Merkmal an einem zweiten Körper.“ (`_target_reason`, fünf Kataloge). Neuer Fenstertest `test_the_shown_alignment_dialog_takes_the_first_click_as_its_target` (Gegenprobe ohne den Erstfokus rot), `test_an_alignment_target_is_never_left_empty` auf die Entscheidung aus RM-394 gestellt; beide grün. Sonde am echten Hauptfenster mit echtem Mausklick in die Ansicht: am Stand `ba5a76365` 7 von 12 (Feldfokus `feature`, Ziel leer, B bleibt bei x = −50,4), danach 12 von 12 (Ziel `obj_1:face_4`, B bündig an A bei x = 6,5). Regel in `grenzen.md`. Umgesetzt von Claude, in main mit `ba7ff0ede` (Nachträge `d38792e7f`, `ab4e0e7cb`, Merge `c51f2d4e2`); Entwicklungstor grün bis auf `test_kernel_process*` unter Volllast (Auslagerungsdatei zu klein), einzeln zweimal nachgefahren, im zweiten Lauf 143 von 143 grün.
+
+## RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)
+
+<a id="rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026"></a>
+<a id="rm-448"></a>
+
+**RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**
+  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (echter Filterweg); Folgepunkt zu
+  RM-437 (archiviert; Leerzeichen in Rückmeldebogen und Chat sind behoben). Besteht schon in 0.5.1,
+  keine Regression.
+  **Fehlerfall:** Solange eine Vorschau mit Differenz läuft, nehmen Haken, Auswahlpunkte und Knöpfe in
+  jedem Fenster die Leertaste nicht an, auch die Skala des Rückmeldebogens
+  (`app/ui/viewport.py:3714–3727`, anwendungsweiter Tastenfilter).
+  **Fix:** Der Filter der Ansicht greift nur, wenn die Ansicht den Fokus hat.
+  **Abnahme:** Test über die Oberfläche: Vorschau offen, Leertaste auf einem Haken im Dialog und im
+  Rückmeldebogen schaltet. Bauplan §19.2 (Tastaturbedienung). Nebenbei: Die Zählkommentare der
+  Bausteine in `selection_operations.py`/`catalog.py` sind seit RM-398/399 wieder falsch (gemessen
+  26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
+  Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
+
+**Abschluss:** Der Vergleich an der Anwendung lässt die Leertaste jedem Bedienelement, das sie selbst braucht (`viewport.answers_space`: Textfelder wie bisher, dazu Knöpfe, Haken, Auswahlpunkte, Auswahllisten, Listen und ankreuzbare Rahmen); auf der Ansicht, einem Dialoghintergrund oder einer Beschriftung bleibt sie der Vergleich, und ein Loslassen auf einem Bedienelement beendet einen gehaltenen Vergleich. Entschieden statt „nur mit Fokus auf der Ansicht“: Der Vergleich soll auch während eines offenen Operationsdialogs gehen, dessen Hintergrund den Fokus hält; nur die Bedienelemente bekommen ihre Taste zurück. *Im Chat beschreiben* holt die rechte Spalte zurück, stellt den Chat nach vorn und setzt dann den Cursor. *Quader*/*Zylinder anlegen* aus der Einladung starten den Zwilling des Menüs (`menu_twins`, mit exaktem Kern `create_brep_box`/`create_brep_cylinder`): Gleich beschriftet heißt gleich gemacht, und der exakte Körper ist der, den der Kunde über das Menü kennt und mit echten Kanten weiterbearbeitet; ohne exakten Kern bleibt es das Netz, wie im Menü. Die Zählkommentare in `selection_operations.py` und `catalog.py` nennen keine Zahl mehr, sondern `standalone` (gemessen 15 von 41 frei). Fenstertests `test_controls_keep_the_space_key_while_a_preview_runs` und `test_every_entry_of_the_invitation_does_what_the_menu_does` (beide am Stand `ba5a76365` rot, danach grün; die bisherigen Leertasten- und Einladungstests grün). Sonde am echten Hauptfenster mit echten Tasten und Klicks: am Stand `ba5a76365` 7 von 13 (Chat nicht vorn, Einladung `create_box` gegen Menü `create_brep_box`, Haken und Skala ohne Leertaste), danach 13 von 13. Regel in `ansicht.md`. Umgesetzt von Claude, in main mit `40d3c8e36` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
+
+## RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)
+
+<a id="rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026"></a>
+<a id="rm-415"></a>
+
+**RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-334, das im Arbeitsbaum archiviert ist.
+  Tab + Enter folgt seit `2dc4ce0ce` dem Fokus in allen Rückfragen.
+  **Fehlerfall:** Rückfrage öffnen, Tab auf „Abbrechen“, zu einem anderen Fenster und zurück
+  wechseln, Enter → `confirm_discard` gibt `True`, `confirm_unsaved` `'save'`; die Leertaste löst
+  „Abbrechen“ aus, und ohne Solidons Zuhörer klickt Qt selbst „Abbrechen“.
+  **Ursache:** `app/ui/style.py` — `FocusOut` setzt `_typed_to` zurück, und
+  `ActiveWindowFocusReason` gilt nicht als Tastaturwahl.
+  **Fix:** `_typed_to` über den Fensterwechsel behalten (bzw. beim Zurückkehren den Fokusknopf als
+  Tastaturwahl werten).
+  **Abnahme:** Test je Rückfrage mit Fensterwechsel: Enter löst den fokussierten Knopf aus.
+  Bauplan §19.2, Regel 19. Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`,
+  Sonden `v4u_rm334_fensterwechsel.py`, `v4u_rm334_qt_nativ.py`.
+
+**Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit (Commit folgt).
+## RM-360: Bauplan §2.2 nennt für Weg 1 das Auswahlfenster statt des Kontextmenüs (02.10.2026)
+
+<a id="rm-360-bauplan-22-nennt-für-weg-1-das-auswahlfenster-statt-des-kontextmenüs-02102026"></a>
+<a id="rm-360"></a>
+
+**RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters.**
+  Review 02.10.2026, Gebietsprüfung Weg 1 (I-4); Entscheidung Robert 02.10.2026: „§2.2 anpassen“.
+  `3d-agent-bauplan.md:124` (§2.2, Weg 1) sagt „im Chat sagen, was werden soll, oder aus dem
+  Kontextmenü wählen“. §2.6 und §18.5 legen fest: Die passenden Ops stehen rechts im
+  Auswahlfenster am Merkmal, der Rechtsklick führt keine Operation aus und zeigt nur, was es dort
+  gibt (Ursprungsschritt, Zeichnen auf der Fläche, Ausblenden).
+  **Umfang (nur Wortlaut, die App bleibt unverändert):**
+  - `3d-agent-bauplan.md:124` — „oder aus dem Kontextmenü wählen“ durch die Wahl im
+    Auswahlfenster am Merkmal ersetzen (etwa „oder im Auswahlfenster am Merkmal die passende
+    Operation wählen“).
+  - Folgestellen mit demselben veralteten Satz „das Kontextmenü am Merkmal ist der Ort für
+    Weg 1 (§18.5)“: `.claude/rules/ansicht.md:35–36`, `konzepte/begruendungen/regel-ansicht.md:38–40`,
+    Docstrings und Kommentare `app/ui/viewport.py:17061–17063`, `app/ui/panels.py:2873–2875`,
+    `app/ui/main_window.py:17476–17478`, `tests/test_analysis_ui.py:2293`,
+    `tests/test_selection.py:1453–1457`, `tests/test_way_one.py:7–8` („hier kommt die Operation
+    aus dem Kontextmenü“). Die Aussage über den ungestuften Rechtsklick bleibt richtig, nur der
+    Ort der Operationen wird berichtigt.
+  - Handbuch (`app/core/manual.py`, `website/handbuch.html`) und README: geprüft, kein Satz nennt
+    das Kontextmenü als Ort der Operationen von Weg 1; die Treffer dort betreffen *Diesen Schritt
+    ändern*, *Löschen* im Verlauf und die STEP-Umstellung und bleiben.
+  **Abnahme:** `git grep -n "Kontextmenü"` findet keinen Satz mehr, der Operationen für Weg 1 im
+  Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
+  Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
+
+**Abschluss:** Bauplan §2.2 (Weg 1) nennt jetzt „rechts im Auswahlfenster am Merkmal die passende Operation wählen“, abgestimmt mit Robert (Ansage 02.10.2026). Nachgezogen in `.claude/rules/ansicht.md`, `konzepte/begruendungen/regel-ansicht.md`, den Docstrings und Kommentaren in `app/ui/viewport.py`, `panels.py`, `main_window.py`, `labels.py`, `selection_operations.py` und in `tests/test_analysis_ui.py`, `test_selection.py`, `test_way_one.py`, `test_operation_ui.py`. `git grep "Kontextmenü am Merkmal"` findet nur noch Sätze über *Diesen Schritt ändern* im Menü (richtig nach §18.5) und datierte Archivtexte. Die App bleibt unverändert. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+**Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit `c06c4d3b6` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
+
+## RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)
+
+<a id="rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026"></a>
+<a id="rm-418"></a>
+
+**RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen.**
+  Review 02.10.2026 am Stand `4cf460e87`; beide Ursprungspunkte sind im Arbeitsbaum archiviert.
+  - **Slicerpfad nur in Groß-/Kleinschreibung verschieden:** Die Wahl springt in Erststart und
+    Einstellungen auf „Später auswählen“ — die Liste fasst Schreibweisen über `Path` zusammen,
+    `select_data`/`findData` sucht den exakten Text. Dieselben Textvergleiche in
+    `app/ui/print_settings_dialog.py` (`_choose_slicer`) und `app/ui/filament_picker.py:538`.
+  - **Zweites „Abbrechen“ beim Erzeugen:** Solange der Abbruch von Versuch 2 noch ausläuft, schließt
+    ein zweiter Klick den Dialog und verwirft Versuch 1; der Knopf bleibt in dieser Zeit frei.
+  **Abnahme:** je Rest ein Test (Pfad `c:\…` gegen `C:\…` bleibt gewählt; zweiter Klick während des
+  Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
+
+**Abschluss:** Erststart, Einstellungen und Dateiwahl suchen den gewählten Slicer über `first_run.select_program` (Vergleich mit `discover.same_program`, also über `Path`) statt über den exakten Text; `PrintSettingsDialog._choose_slicer` und `filament_picker.slicer_filaments` vergleichen den gemerkten Pfad ebenso. *Abbrechen* im Erzeugen-Dialog ist gesperrt, solange der Abbruch eines weiteren Versuchs ausläuft, und trägt dabei den Satz „Wird abgebrochen — der laufende Schritt läuft aus.“; auch Esc und das Fensterkreuz verwerfen in dieser Zeit nichts (gefragt wird `_busy`, nicht `isRunning`, weil der Faden schon zurück sein kann, bevor seine Meldung ankommt). Tests: `test_a_slicer_in_another_case_stays_chosen_in_the_first_run`, `test_a_remembered_slicer_in_another_case_is_the_one_used` (Druckdialog und Filamentwähler), `test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings` (nur unter Windows, wo Pfade nicht nach Groß und Klein unterscheiden) und `test_a_second_cancel_while_the_first_runs_out_discards_nothing`; alle vier am Stand `ba5a76365` rot, danach grün. Sonde am echten Fenster: Erststart mit einer als `c:\…` gewählten Datei und anschließender Programmsuche, Erzeugen mit einem Abbruch, der zwei Sekunden ausläuft, echte Klicks und Esc: vorher 5 von 9, danach 9 von 9. In den Einstellungen trat der Fehler am echten Rechner nicht auf, weil die Programmsuche den gemerkten Pfad in seiner eigenen Schreibweise mitliefert; der Test stellt die Lage aus dem Review nach. Umgesetzt von Claude, in main mit `db87b3815` (Merge `db0f5ef13`); Entwicklungstor grün (20215 bestanden, ruff, format und mypy ohne Befund).
 ## RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)
 
 <a id="rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026"></a>
@@ -36678,12 +36867,15 @@ Ansage, mit fertigen Versuchen bleiben sie übernehmbar. *Übernehmen* gilt dem 
 Projekt; ein Wechsel steht vorher über dem Knopf (`_say_generation_destination`), vom
 Startbildschirm aus beginnt es ein neues Projekt (`_begin_from_the_start_screen`). Die
 RM-361-Absagen (Einfügemarke, Lizenz) bleiben unverändert. Schließen des Fensters bricht den
-Wurf ab. Text und Bild teilen den Weg; ein weiterer Generator nimmt ihn mit
+Wurf ab. Mit RM-418 verwirft ein zweites *Abbrechen* während des Auslaufens nichts; hängt der
+Generator dabei, lassen Esc und das Fensterkreuz den Dialog zur Seite treten, die Versuche
+bleiben, die Statusleiste nennt das Auslaufen. Text und Bild teilen den Weg; ein weiterer Generator nimmt ihn mit
 (`wartezeit.md`, „Eine Erzeugung läuft im Hintergrund“). Die Aufnahme des KI-Workshops
 (`tools/workshop_ai_capture.py`) bedient den Dialog nichtmodal und filmt die Wartezeit am Fenster.
 **Nachweis:** Fenstertests `tests/test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated[text|image]`,
 `::test_cancel_in_the_status_bar_stops_the_generation[False|True]`,
-`::test_a_project_opened_during_the_run_is_named_before_taking`, Wächter ohne Fenster
+`::test_a_project_opened_during_the_run_is_named_before_taking`,
+`::test_a_hanging_cancel_lets_the_dialog_step_aside_and_keeps_the_tries`, Wächter ohne Fenster
 `::test_generating_never_holds_the_window_in_a_modal_loop`; angepasst die RM-361-Tests,
 `test_ai_disclosure.py::test_main_window_keeps_the_generation_record_in_its_live_settings` und
 `test_widget_lifetime.py::test_a_window_that_opened_a_dialog_still_lets_go`. Fenstersonde am
@@ -36692,3 +36884,43 @@ echten Fenster (zweiter Monitor, gestellter langsamer Generator), Läufe Text, B
 „Modell wird erzeugt (2 s) · 14 % · Verstrichen: 2 s“ mit *Abbrechen*, Abbruch beendet den
 Arbeiter, Übernehmen und Strg+Z als ein Schritt. Ausgangsstand gegengeprüft: Dialog während des
 Laufs `ApplicationModal`. Commit: wird nachgetragen.
+
+## RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)
+
+<a id="rm-456-nach-einer-erzeugung-steht-die-verlaufsgruppe-offen-die-lizenzabsage-ohne-interne-kennung-der-mulden-formzug-mit-test-02102026"></a>
+<a id="rm-456"></a>
+
+**RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test.**
+  Review 02.10.2026 der Claude-Commits bis `73d83b55b` über die Oberfläche.
+  - **Regression gegenüber 0.5.1 (gering):** Seit RM-372 (`e27743131`) bündelt eine Erzeugung ihre
+    Schritte in einer Verlaufsgruppe, die zugeklappt erscheint — in v0.5.1 waren nach dem Erzeugen
+    2 von 4 Schritten sichtbar, jetzt 0 von 4; der Kunde sieht erst nach Aufklappen, was geschah.
+    Fix: die Gruppe der gerade entstandenen Transaktion offen zeigen.
+  - **Testlücke RM-438 (`6f64f7ed1`):** Wird `before=self._sculpt_shown()` in
+    `app/ui/main_window.py:11698` entfernt, bleiben alle 23 Fenstertests grün, die Züge setzen — der
+    Kundenfehler (Formzug in die eben gegrabene Mulde gilt als verfehlt) könnte unbemerkt
+    zurückkehren. Fix: Fenstertest mit zwei Zügen in dieselbe Mulde.
+  - **Interner Wert sichtbar (gering, keine Verschlechterung):** Die Lizenzabsage beim Erzeugen
+    zeigt die Zeile „Handlung: change“.
+  **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
+  macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
+  Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Stand 02.10.2026 (Claude, Thread „Bedienung und KI“): Teile 1 und 3 erledigt.** Teil 1:
+  `_take_generated` öffnet die Gruppe der neuen Transaktion (`HistoryPanel.open_group`);
+  Fenstertest `test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated`
+  (Mutation ohne den Aufruf: rot). Teil 3: `action` steht in `dialogs.ADDRESS_VALUES`, keine
+  Freischaltungsabsage nennt mehr ihre Kennung; Test ohne Fenster
+  `test_an_activation_refusal_names_no_internal_action` (vier Fehlerarten, Mutation rot), dazu
+  die RM-361-Fenstertests. Fenstersonde am echten Fenster: Gruppe nach Text- und Bildlauf offen
+  (`3 Modell einfügen` bis `6 Auf das Bett setzen`), Lizenzabsage ohne „Handlung: change“;
+  am Ausgangsstand beides nachgestellt (vier Kindzeilen verborgen, Zeile vorhanden). Commit wird
+  nachgetragen. **Offen: Teil 2** (Koordinator).
+  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
+
+**Abschluss:** **Abschluss 02.10.2026 (Claude, Thread „Bedienung und KI“):** Alle drei Teile erledigt. Teil 1 und
+3 mit RM-371 (`HistoryPanel.open_group` nach `_take_generated`; `action` in
+`dialogs.ADDRESS_VALUES`), Teil 2 vom Koordinator
+(`test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage`, Gegenprobe
+ohne `before=self._sculpt_shown()` rot). Am Ausgangsstand per Fenstersonde nachgestellt: vier
+Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nachher Gruppe offen
+(`3 Modell einfügen` bis `6 Auf das Bett setzen`), Absage ohne Kennung. Commit: wird nachgetragen.

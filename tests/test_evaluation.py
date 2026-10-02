@@ -4828,6 +4828,70 @@ def test_a_declined_recognition_keeps_the_later_steps_local(monkeypatch, profile
     assert "perceive.too_large" in {f.code for f in result.scene.report.findings}
 
 
+def test_a_declined_recognition_carries_over_to_the_pieces_of_a_split(monkeypatch, profile):
+    """Die Stücke eines abgelehnten Modells erben die Absage (RM-406, Entscheidung Robert).
+
+    Nach „Sofort laden“ teilte *Auto Split* ein Modell mit 1,95 Mio. Dreiecken
+    in zwölf Stücke, jedes unter der automatischen Grenze und darum voll
+    erkannt — 570 s und 9,9 GB. Jetzt bleiben die Stücke bei der begrenzten
+    Erkennung, der Bericht sagt es, und *Alle Merkmale erkennen* findet die
+    Wahl am Ladeschritt des Ursprungs.
+    """
+    from importlib import import_module
+
+    import trimesh
+
+    from app.core.perceive.match_records import recognition_answer_key
+    from app.core.scene.history import recognition_reopenable
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1000)
+    project = new_project("centauri-carbon-2", "petg")
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+    # Auf dem Bett, ob die Ladeoperation verschiebt oder nicht: z = 0 … 20.
+    ball.apply_translation((0.0, 0.0, 10.0))
+    assert len(ball.faces) > 1000, "Voraussetzung: das Modell liegt über der Grenze"
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/ball.stl", "")
+    project.sources["src_1"] = ball.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Teilen",
+        [
+            OperationDraft(
+                "split_pinned", inputs=("obj_1",), params={"axis": "z", "position": 10.0, "pins": 0}
+            )
+        ],
+    )
+    pieces = project.document.ops[-1].outputs
+    monkeypatch.setattr(
+        module, "detect", lambda *_a, **_k: pytest.fail("a piece was recognised in full")
+    )
+
+    result = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        ask=lambda _question, choices: choices[0],
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    for piece in pieces:
+        assert result.scene.objects[piece].mesh.triangle_count < 1000, "Stücke unter der Grenze"
+    told = [
+        str(finding.message)
+        for finding in result.scene.report.findings
+        if finding.code == "perceive.too_large" and finding.object_id in pieces
+    ]
+    assert len(told) == len(pieces) and all("Stück" in text for text in told), told
+    assert history.record_matches(result.matches)
+    assert all(recognition_reopenable(project.document, piece) for piece in pieces)
+    assert history.reopen_recognition((pieces[-1],))
+    assert recognition_answer_key("obj_1") not in project.document.ops[0].matches
+
+
 def test_the_way_back_to_the_full_recognition_survives_a_follow_up_step(monkeypatch, profile):
     """Nach einem Verschieben trägt der Befund weiter „Alle Merkmale erkennen“ (Review B1).
 

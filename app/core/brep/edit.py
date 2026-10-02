@@ -3463,6 +3463,8 @@ def _boolean_pair(
         # nicht. Bei bloßer Berührung behebt Bewegung die Ursache.
         raise _boolean_refused()
     result = operation.Shape()
+    if not _holds(result, shape):
+        operation, result = _fuzzy_retry(kind, shape, other.shape, cancelled)
     sources = [(shape, slots)]
     if kind != "difference":
         sources.append((other.shape, other.face_slots))
@@ -3470,6 +3472,62 @@ def _boolean_pair(
         sources.append((other.shape, (cut_slot,) * other.face_count))
     updated_slots = carried_face_slots(result, sources, history=operation, cancelled=cancelled)
     return result, updated_slots, operation
+
+
+#: Mit welcher Unschärfe eine Boolesche noch einmal rechnet, deren Ergebnis
+#: nicht gültig ist (RM-408). OpenCASCADE meldet ``IsDone`` auch für einen
+#: Körper mit einer zweiten Schale, wo zwei Flächen fast zusammenfallen — an
+#: einer Lochplatte aus STEP trug eine Bohrung Ø 5 neben einer Senkbohrung so
+#: einen ungültigen Körper mit 670 mm³ mehr Netzvolumen weiter. Die Stufen
+#: liegen über der Fertigungsgenauigkeit üblicher STEP-Dateien (bis 1e-5 mm)
+#: und weit unter allem, was ein Drucker zeigt.
+BOOLEAN_FUZZ: Final = (EPS_GEOM * 10.0, EPS_GEOM * 100.0)
+
+
+def _shells(shape: Any) -> int:
+    """Wie viele Schalen eine Form trägt."""
+    from OCP.TopAbs import TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+
+    count = 0
+    walk = TopExp_Explorer(shape, TopAbs_SHELL)
+    while walk.More():
+        count += 1
+        walk.Next()
+    return count
+
+
+def _holds(result: Any, source: Any) -> bool:
+    """Ob ein Boolesches Ergebnis gültig ist — geprüft, wo es verdächtig ist.
+
+    Die volle Prüfung (``BRepCheck_Analyzer``) kostet an großen Körpern
+    spürbar; sie läuft, wo das Ergebnis mehr Schalen trägt als der Körper
+    davor. Genau dort lag der kaputte Fall: eine zweite Schale, die kein
+    Hohlraum war (RM-408). Ein echter innerer Hohlraum besteht die Prüfung.
+    """
+    if _shells(result) <= _shells(source):
+        return True
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    return bool(BRepCheck_Analyzer(result).IsValid())
+
+
+def _fuzzy_retry(
+    kind: Literal["union", "difference", "intersection"],
+    shape: Any,
+    tool: Any,
+    cancelled: CancelToken | None,
+) -> tuple[Any, Any]:
+    """Dieselbe Boolesche mit Unschärfe — oder die Absage, nie ein ungültiger Körper."""
+    for fuzz in BOOLEAN_FUZZ:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        operation = boolean_builder(kind, shape, tool, tolerance=fuzz)
+        operation.Build()
+        if operation.IsDone() and _holds(operation.Shape(), shape):
+            _log.info("boolean %s held only with fuzzy value %g", kind, fuzz)
+            return operation, operation.Shape()
+    raise _boolean_refused()
 
 
 def _boolean_refused() -> GeometryError:

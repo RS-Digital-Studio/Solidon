@@ -347,6 +347,8 @@ class GenerateDialog(QDialog):
     """Fortschritt des laufenden Wurfs: Anteil und Satz des Generators."""
     runEnded = Signal(str)
     """Der Wurf ist zu Ende: ``"done"``, ``"failed"`` oder ``"cancelled"``."""
+    runStopping = Signal()
+    """Der Wurf wird abgebrochen und läuft noch aus — *Abbrechen* gilt schon."""
 
     def __init__(
         self,
@@ -964,7 +966,20 @@ class GenerateDialog(QDialog):
         self._busy = running
         self._lock_make(not running)
         self.again.setEnabled(not running)
-        self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
+        self._lock_cancel(None)
+
+    def _lock_cancel(self, why: str | None) -> None:
+        """*Abbrechen* sperren, solange ein abgebrochener Versuch ausläuft (RM-418).
+
+        In dieser Zeit schloss ein zweiter Klick den Dialog und verwarf die
+        fertigen Versuche — gemeint war, den laufenden zu beenden, und das
+        geschieht schon. ``None`` gibt frei.
+        """
+        cancel = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel.setEnabled(why is None)
+        cancel.setToolTip(why or "")
+        cancel.setStatusTip(why or "")
+        cancel.setAccessibleDescription(why or "")
 
     def _lock_make(self, free: bool) -> None:
         """*Erzeugen* freigeben oder sperren — und im zweiten Fall sagen, warum.
@@ -1068,11 +1083,6 @@ class GenerateDialog(QDialog):
         worker = self._worker
         return worker is not None and worker.cancelled()
 
-    @property
-    def running(self) -> bool:
-        """Ob gerade ein Wurf läuft."""
-        return self._busy
-
     def cancel_run(self) -> None:
         """Den laufenden Wurf abbrechen, ohne den Dialog zu schließen.
 
@@ -1081,10 +1091,17 @@ class GenerateDialog(QDialog):
         danach gilt, meldet :attr:`runEnded`.
         """
         worker = self._worker
-        if worker is None or not worker.isRunning() or worker.cancelled():
+        if worker is None or not self._busy or worker.cancelled():
             return
+        self._begin_stopping(worker)
+
+    def _begin_stopping(self, worker: _Worker) -> None:
+        """Den Wurf abbrechen und überall sagen, dass er ausläuft (RM-418)."""
         worker.cancel()
-        self.state.setText(tr("Wird abgebrochen — der laufende Schritt läuft aus."))
+        why = tr("Wird abgebrochen — der laufende Schritt läuft aus.")
+        self.state.setText(why)
+        self._lock_cancel(why)
+        self.runStopping.emit()
 
     def set_destination(self, text: str) -> None:
         """Über *Übernehmen* sagen, wohin das Modell kommt — leer blendet aus."""
@@ -1342,10 +1359,26 @@ class GenerateDialog(QDialog):
         zweites *Abbrechen* schließt.
         """
         worker = self._worker
-        if self.tries and worker is not None and worker.isRunning() and not worker.cancelled():
-            worker.cancel()
-            self.state.setText(tr("Wird abgebrochen — der laufende Schritt läuft aus."))
+        if self.tries and worker is not None and self._busy:
+            # Ein zweites Abbrechen, während der erste noch ausläuft — auch über
+            # Esc oder das Fensterkreuz —, verwirft nichts (RM-418). Gefragt
+            # wird ``_busy``: Der Faden kann schon zurück sein, während seine
+            # Meldung noch in der Warteschlange steht.
+            if not worker.cancelled():
+                self._begin_stopping(worker)
+            else:
+                # **Ein hängender Abbruch hält niemanden fest** (RM-371): Esc
+                # und das Fensterkreuz lassen den Dialog zur Seite treten, die
+                # Versuche bleiben, der Lauf steht in der Statusleiste, und
+                # sein Ende holt den Dialog mit ihnen zurück.
+                self.hide()
             return
+        self._stop_worker()
+        self.wait_for_workers()
+        super().reject()
+
+    def discard(self) -> None:
+        """Sofort schließen, auch während ein Abbruch ausläuft — für das Ende des Fensters."""
         self._stop_worker()
         self.wait_for_workers()
         super().reject()
