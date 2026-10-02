@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from typing import Any, Final, cast, get_args
@@ -46,7 +47,6 @@ from app.core.types import (
     SculptTool,
     Stroke,
     Vec3,
-    as_vec3,
 )
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -504,10 +504,10 @@ def strokes_from_text(text: str) -> list[Stroke]:
         entries = json.loads(text)
         strokes = [
             Stroke(
-                point=as_vec3(entry["p"]),
-                normal=as_vec3(entry["n"]),
-                radius=float(entry["r"]),
-                strength=float(entry["s"]),
+                point=_finite_point(entry["p"]),
+                normal=_finite_point(entry["n"]),
+                radius=_finite(entry["r"], positive=True),
+                strength=_finite(entry["s"]),
                 tool=_tool(entry.get("t", "draw")),
                 symmetry=int(entry.get("y", 0)),
                 cut=bool(entry.get("c", False)),
@@ -526,6 +526,27 @@ def strokes_from_text(text: str) -> list[Stroke]:
             constraint="unreadable",
         ) from problem
     return strokes
+
+
+def _finite(value: object, *, positive: bool = False) -> float:
+    """Eine endliche Zahl aus dem Text — ``NaN`` und Unendlich sind Lesefehler.
+
+    Sonst endete ``"s": NaN`` als unerwarteter Fehler, ein Radius von null
+    oder kleiner nahm Ecken mit, und ``"r": Infinity`` blieb still
+    wirkungslos (RM-367, W4-3).
+    """
+    number = float(value)  # type: ignore[arg-type]
+    if not math.isfinite(number) or (positive and number <= 0.0):
+        raise ValueError(f"not a usable number: {value!r}")
+    return number
+
+
+def _finite_point(value: object) -> Vec3:
+    """Genau drei endliche Koordinaten — eine vierte wurde still abgeschnitten."""
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        raise ValueError(f"not a point: {value!r}")
+    x, y, z = (_finite(entry) for entry in value)
+    return (x, y, z)
 
 
 def _tool(value: object) -> SculptTool:
