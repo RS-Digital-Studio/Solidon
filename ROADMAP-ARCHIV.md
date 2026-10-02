@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-437: Im Rückmeldebogen ließ sich kein Leerzeichen tippen (02.10.2026)](#rm-437-im-rückmeldebogen-ließ-sich-kein-leerzeichen-tippen-02102026) |
 | 2026-10-02 | [RM-399: Vorlage „Halter/Bügel“ (02.10.2026)](#rm-399-vorlage-halterbügel-02102026) |
 | 2026-10-02 | [RM-390: Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen (02.10.2026)](#rm-390-ein-neuer-grundkörper-entsteht-auf-dem-zuletzt-gewählten-körper-oder-merkmal-ohne-es-zu-sagen-02102026) |
 | 2026-10-02 | [RM-356: Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog (02.10.2026)](#rm-356-nach-quader-anlegen-ist-nichts-gewählt-und-bausteine-führt-in-einen-gesperrten-katalog-02102026) |
@@ -36152,3 +36153,30 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   `catalog.py:487`), gemessen 10 von 35.
 
 **Abschluss:** Ein Erzeugerschritt wählt seinen neuen Körper; bei genau einem Körper nimmt der Katalog diesen; in der leeren Szene trägt der Katalog *Quader anlegen* und *Modell einfügen …*. Die Zählkommentare sind berichtigt (25 von 35 Bausteinen brauchen eine Stelle). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-437: Im Rückmeldebogen ließ sich kein Leerzeichen tippen (02.10.2026)
+
+<a id="rm-437-im-rückmeldebogen-ließ-sich-kein-leerzeichen-tippen-02102026"></a>
+<a id="rm-437"></a>
+
+**RM-437 — Im Rückmeldebogen ließ sich kein Leerzeichen tippen.**
+  Kundenrückmeldung 02.10.2026 (0.5.1, Windows 11, Vorgang S-20261002-ddbaa9): Die Antwort auf
+  „Was hat gefehlt oder gestört?“ kam ohne ein einziges Leerzeichen an. Bildschirmfoto und
+  Protokoll zeigen den Bogen über dem Band „Keine Vorschau: Wählen Sie das Merkmal …“ eines offenen
+  Dialogs *An Merkmal ausrichten*.
+  **Ursache:** Der Vergleich „Leertaste halten: vorher“ (`HoldToCompare`) hängt als Filter an der
+  Anwendung, solange das Vorschauband steht, und lässt nur Textfelder aus (`types_text`).
+  `QPlainTextEdit` erbt nicht von `QTextEdit` und fehlte dort: Bogenfelder, Nachrichtenfeld der
+  Rückmeldung und Chat verloren jedes Leerzeichen. Dazu belegte auch das Band „Keine Vorschau“
+  (und „Vorschau abgebrochen“) die Taste und zeigte die Legende *Hinzugefügt / Entfernt*, obwohl
+  keine Differenz im Bild lag. Am Stand `bf0b62fc5` nachgestellt.
+
+**Abschluss:** `types_text` kennt `QPlainTextEdit`; die beiden Bänder ohne Differenz rufen
+`mark_preview(..., changes=False)` und hängen den Filter ab. Sonde über den echten Filterweg der
+Anwendung: vorher Bogenfeld und `QPlainTextEdit` „ab“, nachher alle Texteingaben (Bogen,
+`QPlainTextEdit`, `QTextEdit`, `QLineEdit`, editierbare Auswahl) „a b“, Vergleich nicht ausgelöst.
+Pos1/Ende in `QTextEdit` geprüft und ohne Befund. Fenstertest
+`test_the_survey_takes_spaces_while_a_preview_runs` und eine Zusicherung in
+`test_the_banner_names_the_reason_and_the_empty_difference` für das Release-Tor. Changelog 0.5.2 in allen
+sechs Sprachen. Umgesetzt von Claude, in main mit `ff6b1a359`; Entwicklungstor grün
+(19645 bestanden, mypy ohne Befund). Aus derselben Rückmeldung offen: [RM-438](ROADMAP.md#rm-438).
