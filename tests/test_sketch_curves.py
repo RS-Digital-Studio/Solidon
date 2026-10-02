@@ -1504,25 +1504,31 @@ def test_a_trimmed_line_keeps_its_smooth_joint() -> None:
     assert cosine == pytest.approx(0.0, abs=1e-9)
 
 
-def _dense_box(
+def _dense_anchor(
     a: float, b: float, degrees: float, centre: tuple[float, float], begin: float, end: float
 ) -> tuple[float, float]:
-    """Die Mitte des Hüllrechtecks eines Ellipsenstücks — dicht abgetastet."""
+    """Der Punkt des Hüllrechtecks eines Ellipsenstücks, der dem Nullpunkt am
+    nächsten liegt — dicht abgetastet."""
     t = np.linspace(begin, end, 400_001)
     turn = math.radians(degrees)
     x, y = a * np.cos(t), b * np.sin(t)
     xs = centre[0] + x * math.cos(turn) - y * math.sin(turn)
     ys = centre[1] + x * math.sin(turn) + y * math.cos(turn)
-    return ((float(xs.min()) + float(xs.max())) / 2.0, (float(ys.min()) + float(ys.max())) / 2.0)
+    return (
+        min(max(0.0, float(xs.min())), float(xs.max())),
+        min(max(0.0, float(ys.min())), float(ys.max())),
+    )
 
 
 @pytest.mark.parametrize(("begin", "end"), [(0.0, 2.0 * math.pi), (-0.4, 1.9), (2.2, 5.6)])
 def test_stretching_measures_an_ellipse_at_its_vertices(begin: float, end: float) -> None:
-    """Gestreckt wird um die Mitte der Hülle, und die reicht an einer gedrehten
-    Ellipse bis zu ihren Scheiteln — nicht bis zu ihren gespeicherten Punkten."""
+    """Gestreckt wird um den Bezugspunkt der Hülle (RM-391), und die reicht an
+    einer gedrehten Ellipse bis zu ihren Scheiteln — nicht bis zu ihren
+    gespeicherten Punkten. Die Ellipse liegt ganz neben dem Nullpunkt, damit
+    der Bezugspunkt eine Ecke der Hülle ist und die Scheitel entscheiden."""
     from app.core.sketch import edit
 
-    a, b, degrees, centre = 20.0, 6.0, 35.0, (5.0, -3.0)
+    a, b, degrees, centre = 20.0, 6.0, 35.0, (40.0, -30.0)
     if end - begin >= 2.0 * math.pi:
         element = _ellipse_element(a, b, degrees, centre)
     else:
@@ -1536,13 +1542,13 @@ def test_stretching_measures_an_ellipse_at_its_vertices(begin: float, end: float
                 _turned(a, b, degrees, centre, end),
             ),
         )
-    middle = _dense_box(a, b, degrees, centre, begin, end)
+    anchor = _dense_anchor(a, b, degrees, centre, begin, end)
 
     bigger, _kept = edit.scaled(Sketch("plane:xy", (element,)), 2.0)
 
     moved = bigger.elements[0].points[0]
     assert moved == pytest.approx(
-        (middle[0] + 2.0 * (centre[0] - middle[0]), middle[1] + 2.0 * (centre[1] - middle[1])),
+        (anchor[0] + 2.0 * (centre[0] - anchor[0]), anchor[1] + 2.0 * (centre[1] - anchor[1])),
         abs=1e-6,
     )
 

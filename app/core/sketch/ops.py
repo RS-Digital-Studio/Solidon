@@ -407,12 +407,25 @@ def _profile_for(
     return _sketch_profile(shape, length, width, corners)
 
 
-def _created(name: str, fallback: str, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
+def _created(
+    name: str,
+    fallback: str,
+    solid: Solid,
+    *,
+    cancelled: CancelToken,
+    findings: list[Finding],
+) -> SceneObject:
     """Das Ergebnis als Szenenobjekt — nachdem feststeht, dass eines da ist.
 
     Alle vier Erzeuger-Ops laufen hier durch. Ein Ergebnis ohne Körper wurde
     vorher trotzdem Objekt: unsichtbar, Volumen null, und jeder spätere
     Schritt darauf scheiterte weit weg von der Ursache (Gesamtreview D-8).
+
+    **Ein undichter Körper wird genannt** (RM-391). Ein gestreckter Linienzug
+    kam undicht heraus, und der Prüfbericht sprach nur von offenen Maßen; der
+    Kunde fand es erst im Slicer. Die Kennung ist dieselbe wie nach jeder
+    anderen Operation (``mesh.not_watertight``) — mit denselben zwei Wegen und
+    gestrichen, sobald ein späterer Schritt den Körper schließt.
     """
     if solid.solid_count < 1 or solid.volume <= EPS_GEOM:
         raise GeometryError(
@@ -425,6 +438,18 @@ def _created(name: str, fallback: str, solid: Solid, *, cancelled: CancelToken) 
                 Action("open_sketch", _("Skizze ansehen"), primary=True),
                 CORRECT_INPUT,
             ),
+        )
+    if not solid.is_watertight:
+        findings.append(
+            Finding(
+                code="mesh.not_watertight",
+                severity="warning",
+                message=_(
+                    "Der Körper aus der Zeichnung ist nicht geschlossen — "
+                    "„Reparieren“ schließt die offenen Stellen."
+                ),
+                values={"triangles": solid.triangle_count},
+            )
         )
     return SceneObject(
         id="",
@@ -583,7 +608,11 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
     bodies = [profiles.extrude(one, height, plane, frame) for one in chosen]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(
-        outputs=[_created(params.name, str(_("Grundform")), solid, cancelled=ctx.cancelled)],
+        outputs=[
+            _created(
+                params.name, str(_("Grundform")), solid, cancelled=ctx.cancelled, findings=findings
+            )
+        ],
         findings=findings,
     )
 
@@ -1302,7 +1331,15 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
             )
     solid = profiles.revolve(placed, params.angle)
     return OpResult(
-        outputs=[_created(params.name, str(_("Rotationskörper")), solid, cancelled=ctx.cancelled)],
+        outputs=[
+            _created(
+                params.name,
+                str(_("Rotationskörper")),
+                solid,
+                cancelled=ctx.cancelled,
+                findings=findings,
+            )
+        ],
         findings=findings,
     )
 
@@ -1447,7 +1484,9 @@ def sketch_sweep(ctx: OpContext) -> OpResult:
     solid, _upward = _swept(ctx, params, findings)
     fallback = _("Bahn") if params.along == "drawn" else _("Bogen")
     return OpResult(
-        outputs=[_created(params.name, str(fallback), solid, cancelled=ctx.cancelled)],
+        outputs=[
+            _created(params.name, str(fallback), solid, cancelled=ctx.cancelled, findings=findings)
+        ],
         findings=findings,
     )
 
@@ -1750,7 +1789,11 @@ def sketch_loft(ctx: OpContext) -> OpResult:
     bodies = [profiles.loft(below, above, params.height, plane, frame) for below, above in pairs]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(
-        outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)],
+        outputs=[
+            _created(
+                params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled, findings=findings
+            )
+        ],
         findings=findings,
     )
 

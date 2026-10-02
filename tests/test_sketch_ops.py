@@ -9,6 +9,7 @@ nicht. Genau daran erkennt man, dass der Weg stimmt.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import math
 from io import BytesIO
 
@@ -1758,7 +1759,7 @@ def test_a_bodiless_result_is_a_sentence_not_an_object() -> None:
     big = brep_box(40.0, 40.0, 40.0).mesh
     gone = edit.boolean("difference", [small, big])
     with pytest.raises(GeometryError) as caught:
-        _created("", "x", gone, cancelled=NeverCancelled())
+        _created("", "x", gone, cancelled=NeverCancelled(), findings=[])
     assert caught.value.suggestions
 
 
@@ -1949,3 +1950,199 @@ def test_a_measurement_on_a_project_parameter_is_left_alone() -> None:
     assert punkte[1][0] - punkte[0][0] == pytest.approx(80.0), (
         "die Punkte folgen trotzdem — der Löser entscheidet danach, wer gewinnt"
     )
+
+
+# --- Strecken nach einer Zeichnung (RM-391) -------------------------------------
+
+
+def _typed_polyline(plane: str) -> Sketch:
+    """Der Linienzug aus dem Nachbau F6, so wie ihn der Editor speichert.
+
+    44,2 × 47 mit einer Schräge, Start im Nullpunkt; jede Länge getippt
+    (``place_measured``): je Linie ein ``distance`` mit neun Nachkommastellen,
+    waagerecht oder senkrecht, wo die Linie so liegt, und eine Deckung nur
+    zwischen Ende und nächstem Anfang. **Das letzte Ende ist mit dem Anfang
+    nicht verbunden** — der Umriss schließt nur über die Toleranz von
+    ``profile._joins``, genau wie am Fenster.
+    """
+    corners = [(0.0, 0.0), (44.2, 0.0), (44.2, 47.0), (36.0, 47.0), (0.0, 17.0), (0.0, 0.0)]
+    elements: list[SketchElement] = []
+    constraints: list[SketchConstraint] = []
+    here = corners[0]
+    for index, (start, end) in enumerate(itertools.pairwise(corners)):
+        length = math.dist(start, end)
+        direction = ((end[0] - here[0]) / length, (end[1] - here[1]) / length)
+        there = (here[0] + direction[0] * length, here[1] + direction[1] * length)
+        begin = 2 * index
+        elements.append(SketchElement("line", (here, there)))
+        if index:
+            constraints.append(SketchConstraint("coincident", (begin - 1, begin)))
+        constraints.append(SketchConstraint("distance", (begin, begin + 1), f"{length:.9f}"))
+        if abs(there[1] - here[1]) <= 1e-9:
+            constraints.append(SketchConstraint("horizontal", (begin, begin + 1)))
+        elif abs(there[0] - here[0]) <= 1e-9:
+            constraints.append(SketchConstraint("vertical", (begin, begin + 1)))
+        here = there
+    return Sketch(plane=plane, elements=tuple(elements), constraints=tuple(constraints))
+
+
+def _extruded(drawing: Sketch, profile: Profile) -> tuple[Solid, list[str]]:
+    """Der Körper hinter der Auswertung — derselbe Weg wie *Übernehmen*."""
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(
+                id=1,
+                op="sketch_extrude",
+                outputs=("obj_1",),
+                params={"sketch": sketch_to_text(drawing), "height": 10.0},
+            )
+        ],
+    )
+    result = evaluate(document, profile, cache=ResultCache())
+    assert result.complete
+    body = result.scene.objects["obj_1"].mesh
+    assert isinstance(body, Solid)
+    return body, [finding.code for finding in result.scene.report.findings]
+
+
+@pytest.mark.parametrize(
+    ("plane", "axis", "untouched"),
+    [("plane:xy", 0, 47.0), ("plane:yz", 0, 47.0), ("plane:xy", 1, 44.2)],
+)
+def test_a_stretched_polyline_changes_one_direction_stays_on_the_bed_and_is_closed(
+    plane: str, axis: int, untouched: float, profile: Profile
+) -> None:
+    """RM-391: „Länge 40“ nach dem Linienzug 44,2 × 47.
+
+    Gestreckt wurde gleichmäßig um die Mitte: Die Breite ging mit auf 42,53,
+    die Unterseite hob um 2,23 mm ab, und der Körper war nicht wasserdicht,
+    weil der Linienzug nach dem Lösen nur noch auf 4,5·10⁻⁷ schloss. Erwartet
+    wird, was der Kunde getippt hat — und sonst nichts.
+    """
+    from app.core.brep.profiles import bounds
+    from app.core.sketch.edit import stretched
+
+    drawing = _typed_polyline(plane)
+    drawn = (44.2, 47.0)[axis]
+
+    result = stretched(drawing, 40.0 / drawn, axis)
+
+    assert not result.evenly, "ein Linienzug lässt sich in einer Richtung strecken"
+    body, codes = _extruded(result.sketch, profile)
+    xmin, ymin, zmin, xmax, ymax, zmax = bounds(body)
+    # Auf XY ist die Zeichnung x→X, y→Y; auf YZ ist sie x→Y, y→Z.
+    across, upward = (
+        ((xmin, xmax), (ymin, ymax)) if plane == "plane:xy" else ((ymin, ymax), (zmin, zmax))
+    )
+    spans = (across[1] - across[0], upward[1] - upward[0])
+    assert spans[axis] == pytest.approx(40.0, abs=1e-4), "das getippte Maß"
+    assert spans[1 - axis] == pytest.approx(untouched, abs=1e-4), (
+        "die andere Richtung ist mitgestreckt worden"
+    )
+    assert across[0] == pytest.approx(0.0, abs=1e-4)
+    assert upward[0] == pytest.approx(0.0, abs=1e-4), (
+        "die Zeichnung hat ihren Bezugspunkt verlassen"
+    )
+    assert zmin == pytest.approx(0.0, abs=1e-4), "der Körper hebt vom Bett ab"
+    assert body.is_watertight, "der gestreckte Linienzug ergibt keinen dichten Körper"
+    assert "mesh.not_watertight" not in codes
+
+
+def test_a_drawing_that_closes_only_within_the_tolerance_still_gives_a_closed_body(
+    profile: Profile,
+) -> None:
+    """Der Umriss schließt über ``_joins`` (10⁻⁴), der Kern verbindet Kanten
+    nur auf 10⁻⁷. Dazwischen entstand ein Draht mit zwei Ecken an einer Stelle
+    und ein undichter Körper — ohne Strecken, für jede Zeichnung mit einer
+    solchen Lücke. Die Kette rastet ihre Enden deshalb aufeinander ein."""
+    gap = 5e-6
+    drawing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (30.0, 0.0))),
+            SketchElement("line", ((30.0, 0.0), (30.0, 20.0))),
+            SketchElement("line", ((30.0, 20.0), (0.0, 20.0))),
+            SketchElement("line", ((0.0, 20.0), (gap, gap))),
+        ),
+    )
+
+    body, _codes = _extruded(drawing, profile)
+
+    assert body.is_watertight, "eine Lücke unter der Fangtoleranz öffnet den Körper"
+    assert body.volume == pytest.approx(30.0 * 20.0 * 10.0, rel=1e-6)
+
+
+def test_a_round_drawing_is_stretched_evenly_and_says_so() -> None:
+    """Ein Kreis wird in einer Richtung zur Ellipse, ein Winkel zu einem
+    anderen — beides ist keine Größenänderung. Dann streckt die Zeichnung
+    gleichmäßig, und das Ergebnis sagt es, damit der Dialog es sagen kann."""
+    from app.core.sketch.edit import stretched
+
+    circle = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("circle", ((0.0, 0.0), (15.0, 0.0))),),
+        constraints=(SketchConstraint("diameter", (0, 1), "30"),),
+    )
+
+    result = stretched(circle, 40.0 / 30.0, 0)
+
+    assert result.evenly
+    centre, rim = result.sketch.elements[0].points
+    assert centre == pytest.approx((0.0, 0.0), abs=1e-12)
+    assert math.dist(centre, rim) == pytest.approx(20.0)
+    assert result.sketch.constraints[0].value == "40"
+
+
+def test_a_drawing_whose_angle_would_change_is_stretched_evenly() -> None:
+    """Ein Winkelmaß bleibt nur unter gleichmäßigem Strecken wahr."""
+    from app.core.sketch.edit import stretched
+
+    wedge = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (40.0, 0.0))),
+            SketchElement("line", ((0.0, 0.0), (20.0, 20.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (0, 2)),
+            SketchConstraint("angle", (0, 1, 2, 3), "45"),
+        ),
+    )
+
+    assert stretched(wedge, 0.5, 0).evenly
+
+
+def test_a_stretch_in_one_direction_rescales_only_the_measures_along_it() -> None:
+    """Ein waagerechtes Maß folgt dem Faktor, ein senkrechtes bleibt, ein
+    schräges nimmt die neue Länge seiner Strecke an."""
+    from app.core.sketch.edit import stretched
+
+    drawing = _typed_polyline("plane:xy")
+    result = stretched(drawing, 0.5, 0)
+
+    measures = {
+        constraint.targets: float(constraint.value)
+        for constraint in result.sketch.constraints
+        if constraint.kind == "distance"
+    }
+    assert measures[(0, 1)] == pytest.approx(22.1, abs=1e-6), "waagerecht: halbiert"
+    assert measures[(2, 3)] == pytest.approx(47.0, abs=1e-6), "senkrecht: unverändert"
+    assert measures[(6, 7)] == pytest.approx(math.hypot(18.0, 30.0), abs=1e-6), "die Schräge"
+
+
+def test_a_leaky_body_from_a_drawing_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Undicht entstanden heißt: im Bericht, mit dem Weg „Reparieren“.
+
+    Der Prüfbericht nannte nach dem gestreckten Linienzug nur die offenen
+    Maße; dass der Körper offen war, sah erst der Slicer (RM-391). Seit die
+    Kette einrastet, gibt es den Fall an dieser Zeichnung nicht mehr — die
+    Meldung bleibt der Schutz für den nächsten Weg dorthin.
+    """
+    monkeypatch.setattr(Solid, "is_watertight", property(lambda _self: False))
+
+    result = run("sketch_extrude", shape="rectangle", length=40, width=20, height=10)
+
+    assert [finding.code for finding in result.findings] == ["mesh.not_watertight"]
+    assert result.findings[0].severity == "warning"

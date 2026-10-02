@@ -2553,6 +2553,12 @@ class OperationDialog(QDialog):
         follows = tr("Die Zeichnung folgt dieser Zahl: sie wird darauf gestreckt.")
         clamped = tr("Die Zeichnung ist hier kleiner, als dieses Feld zeigen kann.")
         axis_of = {"length": 0, "width": 1}
+        # **Nach einer Zeichnung heißen die Maße nach der Zeichnung** (RM-391).
+        # „Länge“ und „Breite“ meinen X und Y — auf einer Seitenebene aber
+        # liegt die Zeichnung in Y und Z, und „Breite 40“ machte das Teil 40
+        # hoch. Waagerecht und senkrecht gelten auf jeder Ebene so, wie die
+        # Zeichnung im Editor steht.
+        drawn_titles = {"length": tr("Zeichnung waagerecht"), "width": tr("Zeichnung senkrecht")}
         docs = {name: str(entry.doc or "") for name, entry in declared.items()}
         seen_text: dict[str, str] = {}
         seen_extent: dict[str, tuple[float, float] | None] = {}
@@ -2571,6 +2577,27 @@ class OperationDialog(QDialog):
         #: verkleinert. Der Test hat genau das gefangen.
         primed = {"done": False}
         held: dict[str, tuple[str, ...]] = {}
+        #: Ist die letzte Streckung in beide Richtungen gegangen?
+        evenly: dict[str, bool] = {}
+        #: Die Zeilen, die dieser Zweig ausgeblendet hat — nur sie kommen zurück.
+        hidden: set[str] = set()
+
+        def evenly_note() -> str:
+            """Warum das andere Maß mitgewachsen ist — oder nichts.
+
+            Eine Zeichnung mit Kreis, Bogen oder Winkel lässt sich nicht in
+            einer Richtung strecken, ohne ihre Form zu ändern
+            (``sketch.edit.stretched``). Dass dann beide Felder springen, muss
+            dort stehen, wo der Kunde getippt hat.
+            """
+            if not evenly.get("value"):
+                return ""
+            return str(
+                tr(
+                    "Die Zeichnung hat Rundungen oder Winkel und wächst deshalb "
+                    "in beiden Richtungen."
+                )
+            )
 
         def held_note() -> str:
             """Was beim Strecken **nicht** mitkam — oder nichts.
@@ -2590,16 +2617,17 @@ class OperationDialog(QDialog):
                 )
             ).format(count=len(kept))
 
-        def stretch(text: str, factor: float) -> None:
-            """Die Zeichnung auf das getippte Maß bringen.
+        def stretch(text: str, factor: float, axis: int) -> None:
+            """Die Zeichnung auf das getippte Maß bringen — in seiner Richtung.
 
             Die Punkte allein zu strecken genügt nicht — ein ``distance`` von
             50 zöge der Löser wieder auf 50 zusammen, und das Feld zeigte nach
-            dem Schließen die alte Zahl. ``sketch.edit.scaled`` nimmt die Maße
-            mit und lässt stehen, was an einem Parameter hängt.
+            dem Schließen die alte Zahl. ``sketch.edit.stretched`` nimmt die
+            Maße mit, lässt stehen, was an einem Parameter hängt, und streckt
+            nur die Richtung des Feldes, wo die Zeichnung es zulässt (RM-391).
             """
             from app.core.errors import AppError
-            from app.core.sketch.edit import scaled
+            from app.core.sketch.edit import stretched
             from app.core.sketch.serialize import sketch_from_text, sketch_to_text
             from app.ui.sketch_editor import SketchField
 
@@ -2607,17 +2635,18 @@ class OperationDialog(QDialog):
             if not isinstance(field, SketchField):
                 return
             try:
-                bigger, kept = scaled(sketch_from_text(text), factor)
+                result = stretched(sketch_from_text(text), factor, axis, self._parameter_values)
             except AppError:
                 # Eine halbfertige Zeichnung ist im Dialog kein Fehlerfall —
                 # dieselbe Haltung wie in ``sketch_extent``.
                 return
 
             with QSignalBlocker(field):
-                field.set_text(sketch_to_text(bigger))
+                field.set_text(sketch_to_text(result.sketch))
             seen_text.pop("value", None)
             seen_extent.pop("value", None)
-            held["value"] = kept
+            held["value"] = result.kept
+            evenly["value"] = result.evenly
             # **Ein Wächter, kein Vertrauen auf Genauigkeit.** Der Löser trifft
             # das Maß auf seine Toleranz genau, nicht exakt; bliebe ein Rest
             # über der Schwelle, streckte der nächste Durchlauf erneut, und der
@@ -2685,7 +2714,19 @@ class OperationDialog(QDialog):
                     # `follows` statt `reason`, und ohne diese Zeile bliebe
                     # nach dem Löschen ein Satz stehen, der sich auf eine
                     # Zeichnung beruft, die es nicht mehr gibt.
-                    if editor.toolTip() in (reason, follows, held_note()):
+                    # Name und Zeile kommen zurück, woran sie zu erkennen sind —
+                    # nicht am Tooltip: Den überschreibt ``depends_on`` am
+                    # Breitenfeld, bevor dieser Zweig läuft.
+                    if (
+                        isinstance(label, QLabel)
+                        and name in drawn_titles
+                        and label.text() == str(drawn_titles[name])
+                    ):
+                        label.setText(str(declared[name].title))
+                    if name in hidden:
+                        hidden.discard(name)
+                        self._rows[name].setRowVisible(editor, True)
+                    if editor.toolTip() in (reason, follows, held_note(), evenly_note()):
                         editor.setEnabled(True)
                         if label is not None:
                             label.setEnabled(True)
@@ -2723,7 +2764,7 @@ class OperationDialog(QDialog):
                         and not drawing_changed
                         and darstellbar
                     ):
-                        stretch(text, typed / drawn)
+                        stretch(text, typed / drawn, axis_of[name])
                         return
                     # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``
                     # aus, und diese Funktion riefe sich selbst.
@@ -2732,11 +2773,17 @@ class OperationDialog(QDialog):
                     editor.setEnabled(True)
                     if label is not None:
                         label.setEnabled(True)
+                    if isinstance(label, QLabel):
+                        label.setText(str(drawn_titles[name]))
                     # **Ein geklemmtes Feld sagt, dass es klemmt.** Sonst
                     # steht dort 0,1, während die Zeichnung 0,06 misst — eine
                     # stille Ungenauigkeit ist schlimmer als eine genannte,
                     # weil der Kunde die Zahl für sein Maß hält.
-                    _explain(editor, label, (not darstellbar and clamped) or held_note() or follows)
+                    _explain(
+                        editor,
+                        label,
+                        (not darstellbar and clamped) or held_note() or evenly_note() or follows,
+                    )
                     continue
                 # Grundform und Eckenzahl bleiben gesperrt, und das ist keine
                 # halbe Sache: Eine gezeichnete Kontur **ist** keine Grundform.
@@ -2746,6 +2793,13 @@ class OperationDialog(QDialog):
                 if label is not None:
                     label.setEnabled(False)
                 _explain(editor, label, reason)
+                # **Die Grundform verschwindet, solange gezeichnet ist** (RM-391).
+                # Gesperrt stand dort weiter „Rechteck“ neben einem Linienzug
+                # mit Schräge — eine Angabe, die nicht stimmt, ist schlimmer
+                # als keine. Wer die Zeichnung löscht, bekommt die Zeile zurück.
+                if name == "shape" and name not in hidden:
+                    hidden.add(name)
+                    self._rows[name].setRowVisible(editor, False)
 
         self.valuesChanged.connect(follow_sketch)
         self._couplings.append(follow_sketch)

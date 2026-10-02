@@ -376,6 +376,11 @@ selben Ort, gesucht über die gelösten Punkte —, dann Klick.
 
 * **Eine frische Zeichnung wird nicht auf die Vorgabe gestreckt**
   (`op_dialog.follow_sketch`, `drawing_changed`).
+* **Ein getipptes Maß streckt nur seine Richtung** (`edit.stretched`), sonst
+  wächst die Gegenrichtung mit und die Zeichnung verlässt ihren Bezugspunkt;
+  gleichmäßig nur, wo die Zeichnung es verlangt, und das Feld sagt es. Nach
+  einer Zeichnung heißen die Felder *Zeichnung waagerecht/senkrecht*, weil sie
+  auf jeder Ebene so liegen, und die Grundform-Zeile ist ausgeblendet.
 * **Flächenkontur ist ein eigener Knopf neben Projizieren**
   (`take_face_outline`): eine feste **Kopie** des Randes; am Netz nennt die
   Zeile die erkannten Kreise und ihre größte Abweichung (`outline_phrase`),

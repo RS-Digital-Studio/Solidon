@@ -36,7 +36,7 @@ schweigt, wenn sie sich nicht auflösen lässt, `frame_for_sketch` sagt warum;
 | `profile.py` | Vom gelösten Element zum Umriss: `arc_sweep` (wie weit ein Bogen läuft), `EllipseFrame`/`ellipse_turn`, `spline_controls`, `path_of`, `flat_curve` (Punktfolge der Ansicht) |
 | `shapes.py` | Grundformen und Lochbilder; `grid_centres`, die mittige Rasterlage für Skizze und Feldschnitt |
 | `planes.py` | Wo eine Skizze liegt (oben) |
-| `edit.py` | Trimmen (so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln; Ecken (`corner_at`, `fillet`, `chamfer`); Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at`); `project` (exakt über `brep.section`), `face_outline`, `ellipse_from_clicks`, Splinepunkte, `removed`; die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
+| `edit.py` | Trimmen (so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln; Ecken (`corner_at`, `fillet`, `chamfer`); Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at`); `project` (exakt über `brep.section`), `face_outline`, `ellipse_from_clicks`, Splinepunkte, `removed`; Strecken auf ein Maß (`scaled`, `stretched`); die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
 | `ops.py` | Die Operationen der Kategorie „Skizze"; `cut_regions`/`_cut_span` für Tasche und Übergangsschnitt; `_cut_with_tool` für die Schnitte mit Werkzeug; `sketch_join` teilt mit `sketch_extrude` `RaisedOutlineParams` |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
@@ -122,6 +122,14 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
 - **Eine Splinekurve für Vorschau und Körper**: `profile.spline_controls`
   (Catmull-Rom-Bézier) für 2D-Schnittprüfung und B-Rep, eine Kante je
   Teilkurve, Drehsinn aus dem exakten Integral.
+- **Kettenenden rasten aufeinander ein** (`profile._starting_at`): verkettet
+  wird über `_JOIN_TOL`, der exakte Kern verbindet Kanten nur auf 10⁻⁷ —
+  dazwischen entstand ein undichter Körper. Ein Erzeuger meldet einen
+  undichten Körper trotzdem als `mesh.not_watertight` (`ops._created`).
+- **Strecken bleibt am Bezugspunkt und in seiner Richtung** (`edit.stretched`):
+  um den Punkt der Hülle, der dem Nullpunkt am nächsten liegt
+  (`_anchor_of`), nur die getippte Achse. Runde Elemente oder eine Bedingung
+  ohne Maß, die das nicht übersteht, strecken gleichmäßig (`Stretch.evenly`).
 - **Ringe brauchen getrennte Grenzen**: Kreise analytisch, andere über ihre
   B-Rep-Grenzen; Kreuzung, Berührung, doppelte Ringe halten mit Vorschlag.
 - **Eine Profiländerung, die Ergebnisse ändert, hebt

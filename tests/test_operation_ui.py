@@ -4288,6 +4288,110 @@ def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     )
 
 
+def _side_polyline() -> str:
+    """Ein Linienzug 44,2 mal 47 mit Schräge auf der Seitenebene YZ, Start im
+    Nullpunkt, das letzte Ende nur über die Fangtoleranz am Anfang (RM-391)."""
+    import itertools
+
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+
+    corners = [(0.0, 0.0), (44.2, 0.0), (44.2, 47.0), (36.0, 47.0), (0.0, 17.0), (0.0, 0.0)]
+    elements = []
+    constraints = []
+    for index, (start, end) in enumerate(itertools.pairwise(corners)):
+        begin = 2 * index
+        elements.append(SketchElement("line", (start, end)))
+        if index:
+            constraints.append(SketchConstraint("coincident", (begin - 1, begin)))
+        length = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+        constraints.append(SketchConstraint("distance", (begin, begin + 1), f"{length:.9f}"))
+    return sketch_to_text(
+        Sketch(plane="plane:yz", elements=tuple(elements), constraints=tuple(constraints))
+    )
+
+
+def test_a_typed_length_stretches_a_drawing_only_along_itself(qt_app: QApplication) -> None:
+    """RM-391: „Länge 40“ nach einem Linienzug 44,2 mal 47 auf YZ.
+
+    Die Zeichnung wuchs gleichmäßig um ihre Mitte — die Breite ging mit auf
+    42,53, und daneben stand weiter „Grundform: Rechteck“ und „Länge“ für
+    eine Zeichnung, die in Y und Z liegt. Jetzt ändert sich nur das getippte
+    Maß, die Grundform ist fort, solange gezeichnet ist, und die Maße heißen
+    nach der Zeichnung; ohne Zeichnung ist alles wieder wie vorher.
+    """
+    bootstrap.load_operations()
+    dialog = OperationDialog(
+        REGISTRY.get("sketch_extrude"), [], None, values={"sketch": _side_polyline()}
+    )
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        length = dialog._editors["length"]
+        width = dialog._editors["width"]
+        assert isinstance(length, ValueField)
+        assert isinstance(width, ValueField)
+        assert length.value() == pytest.approx(44.2, abs=0.01)
+        assert width.value() == pytest.approx(47.0, abs=0.01)
+
+        length.set_value(40.0)
+        dialog.valuesChanged.emit()
+        qt_app.processEvents()
+
+        assert length.value() == pytest.approx(40.0, abs=0.01)
+        assert width.value() == pytest.approx(47.0, abs=0.01), "die Breite ist mitgewachsen"
+        shape = dialog._editors["shape"]
+        assert not shape.isVisibleTo(dialog), "neben der Zeichnung steht eine Grundform"
+        captions = {
+            name: dialog._rows[name].labelForField(dialog._editors[name])
+            for name in ("length", "width")
+        }
+        assert all(isinstance(caption, QLabel) for caption in captions.values())
+        assert captions["length"].text() == tr("Zeichnung waagerecht")
+        assert captions["width"].text() == tr("Zeichnung senkrecht")
+
+        dialog._editors["sketch"].set_text("")
+        qt_app.processEvents()
+
+        assert shape.isVisibleTo(dialog), "ohne Zeichnung kommt die Grundform zurück"
+        assert captions["length"].text() == tr("Länge")
+        assert captions["width"].text() == tr("Breite")
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
+
+
+def test_a_round_drawing_grows_in_both_directions_and_the_field_says_so(
+    qt_app: QApplication,
+) -> None:
+    """Ein Kreis wird in einer Richtung nicht zur Ellipse: Er wächst ganz, und
+    das Feld, in dem getippt wurde, sagt, warum das andere mitkam (RM-391)."""
+    bootstrap.load_operations()
+    dialog = OperationDialog(
+        REGISTRY.get("sketch_extrude"),
+        [],
+        None,
+        values={"sketch": sketch_to_text(shapes.circle(30.0))},
+    )
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        length = dialog._editors["length"]
+        assert isinstance(length, ValueField)
+        assert length.value() == pytest.approx(30.0, abs=0.01)
+
+        length.set_value(40.0)
+        dialog.valuesChanged.emit()
+        qt_app.processEvents()
+
+        assert dialog._editors["width"].value() == pytest.approx(40.0, abs=0.01)
+        assert "beiden Richtungen" in length.toolTip(), length.toolTip()
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
+
+
 def test_a_drawing_smaller_than_the_field_can_show_is_not_stretched_back(
     qt_app: QApplication,
 ) -> None:
@@ -4304,6 +4408,10 @@ def test_a_drawing_smaller_than_the_field_can_show_is_not_stretched_back(
     **Gefunden hat es kein Test, sondern ein Durchgang mit Zahlen, die ein
     Kunde tippt** — nicht 60, sondern 0,1, das kleinste erlaubte Maß. Der
     Normalfall war die ganze Zeit grün.
+
+    Seit RM-391 streckt ein Linienzug nur in der Richtung des Feldes; die
+    Breite klemmt nur noch, wo beide Richtungen wachsen müssen — am Langloch
+    mit seinen Bögen.
     """
     from app.core.sketch import shapes
     from app.core.sketch.serialize import sketch_to_text
@@ -4312,7 +4420,7 @@ def test_a_drawing_smaller_than_the_field_can_show_is_not_stretched_back(
     bootstrap.load_operations()
     spec = REGISTRY.get("sketch_extrude")
     dialog = OperationDialog(
-        spec, [], None, values={"sketch": sketch_to_text(shapes.rectangle(50.0, 30.0))}
+        spec, [], None, values={"sketch": sketch_to_text(shapes.slot(50.0, 30.0))}
     )
     try:
         länge = dialog._editors["length"]

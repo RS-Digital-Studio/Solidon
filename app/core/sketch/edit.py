@@ -23,11 +23,11 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
-from app.core.errors import CANCEL, Action, ValidationError, require_positive
+from app.core.errors import CANCEL, Action, AppError, ValidationError, require_positive
 from app.core.sketch.planes import feature_plane_parts, standing_on_feature, to_plane
 from app.core.sketch.profile import (
     _JOIN_TOL,
@@ -37,7 +37,7 @@ from app.core.sketch.profile import (
     ellipse_frame,
     parameter_sweep,
 )
-from app.core.sketch.solver import CURVE_SLOTS, closest_on_spline
+from app.core.sketch.solver import CURVE_SLOTS, closest_on_spline, solve_sketch
 from app.core.types import (
     PlaneFrame,
     Point2,
@@ -2355,35 +2355,26 @@ def _drawing_box(sketch: Sketch) -> tuple[Point2, Point2] | None:
     )
 
 
-def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
-    """Die Skizze um *factor* vergrößern — Punkte **und** Maße.
+def _anchor_of(box: tuple[Point2, Point2]) -> Point2:
+    """Der Bezugspunkt einer Zeichnung: der Punkt ihrer Hülle, der dem
+    Nullpunkt der Zeichenebene am nächsten liegt.
 
-    Der Grund, aus dem das hier steht und nicht in der Oberfläche: Die Punkte
-    allein zu strecken genügt nicht. Ein ``distance``-Maß von 50 zieht der
-    Löser beim nächsten Lauf wieder auf 50 zusammen, und die Zeichnung springt
-    in ihre alte Größe zurück — sichtbar erst nach dem Schließen des Dialogs.
-    Skaliert wird deshalb um die **Mitte der Zeichnung**, damit sie an Ort und
-    Stelle bleibt, und jedes Maß wandert mit.
-
-    **Die Mitte der Geometrie, nicht der Schwerpunkt ihrer Punkte**
-    (:func:`_drawing_box`). Hier stand der Schwerpunkt, und ein Kreis trägt
-    Mitte **und** einen Randpunkt: Sein Punktschwerpunkt liegt auf halbem
-    Radius neben der Mitte, und ein Kreis um den Ursprung wanderte beim
-    Strecken um ein Viertel des Zuwachses zur Seite — gemessen am 22.09.2026
-    im Dialog *Zwischen zwei Umrissen aufspannen*, Kreis Ø 30 um (0 | 0) auf
-    Ø 40 um (-2,5 | 0).
-
-    **Ein Maß an einem Projektparameter bleibt stehen.** Ein Wert wie
-    ``=@breite`` ist die ausgesprochene Absicht des Nutzers (Regel 8); ihn
-    still durch eine Zahl zu ersetzen, nähme ihm den Parameter, ohne es zu
-    sagen. Solche Maße kommen als zweiter Rückgabewert zurück — wer skaliert,
-    weiß damit, dass die Zeichnung nicht vollständig gefolgt ist, und kann es
-    sagen, statt eine Größe zu versprechen, die nicht eintritt.
-
-    ``factor`` muss endlich und größer als null sein: Null faltet die
-    Zeichnung auf einen Punkt, negativ spiegelt sie, und beides ist keine
-    Größenänderung.
+    **Die Mitte war der falsche Halt** (RM-391). Ein Linienzug von (0 | 0) bis
+    44,2 mal 47 auf einer Seitenebene steht mit seiner Unterkante auf dem Bett;
+    um die Mitte auf Länge 40 gebracht, hob er um 2,23 mm ab. Je Achse gilt
+    deshalb: Liegt der Nullpunkt innerhalb der Hülle, bleibt er stehen — ein
+    Kreis um den Ursprung bleibt dort, eine Kante auf der Grundlinie auf ihr.
+    Liegt die Zeichnung ganz daneben, bleibt ihre zugewandte Kante stehen, und
+    sie wächst vom Nullpunkt weg, statt über ihn zu wandern.
     """
+    (low_x, low_y), (high_x, high_y) = box
+    return (min(max(0.0, low_x), high_x), min(max(0.0, low_y), high_y))
+
+
+def _checked_factor(factor: float) -> None:
+    """``factor`` muss endlich und größer als null sein: Null faltet die
+    Zeichnung auf einen Punkt, negativ spiegelt sie, und beides ist keine
+    Größenänderung."""
     if not math.isfinite(factor) or factor <= 0.0:
         raise ValidationError(
             title=_("Die Zeichnung lässt sich nicht auf dieses Maß bringen."),
@@ -2393,24 +2384,39 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
             values={"factor": str(factor)},
         )
 
-    box = _drawing_box(sketch)
-    if box is None:
-        return sketch, ()
-    (low_x, low_y), (high_x, high_y) = box
-    centre_x = (low_x + high_x) / 2.0
-    centre_y = (low_y + high_y) / 2.0
+
+def _mapped(
+    sketch: Sketch, factors: tuple[float, float], anchor: Point2
+) -> tuple[Sketch, tuple[str, ...]]:
+    """Punkte **und** Maße um *anchor* strecken, je Achse mit ihrem Faktor.
+
+    Ein Maß wächst mit der Strecke, die es misst: gleichmäßig um den Faktor,
+    in einer Richtung um das Verhältnis der neuen zur alten Länge (eine
+    senkrechte Linie behält ihr Maß, eine Schräge nimmt ihre neue Länge an).
+    Ein Ausdruck bleibt und kommt im zweiten Rückgabewert zurück.
+    """
+    flat = [point for element in sketch.elements for point in element.points]
 
     def pulled(point: Point2) -> Point2:
         return (
-            centre_x + (point[0] - centre_x) * factor,
-            centre_y + (point[1] - centre_y) * factor,
+            anchor[0] + (point[0] - anchor[0]) * factors[0],
+            anchor[1] + (point[1] - anchor[1]) * factors[1],
         )
+
+    def grown(targets: tuple[int, ...]) -> float:
+        if factors[0] == factors[1]:
+            return factors[0]
+        first, second = flat[targets[0]], flat[targets[1]]
+        dx, dy = second[0] - first[0], second[1] - first[1]
+        before = math.hypot(dx, dy)
+        if before <= EPS_SKETCH:
+            return 1.0
+        return math.hypot(dx * factors[0], dy * factors[1]) / before
 
     elements = tuple(
         replace(element, points=tuple(pulled(point) for point in element.points))
         for element in sketch.elements
     )
-
     kept: list[str] = []
     constraints: list[SketchConstraint] = []
     for constraint in sketch.constraints:
@@ -2425,9 +2431,127 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
             kept.append(constraint.value)
             constraints.append(constraint)
             continue
-        constraints.append(replace(constraint, value=written_measure(measure * factor)))
-
+        constraints.append(
+            replace(constraint, value=written_measure(measure * grown(constraint.targets)))
+        )
     return replace(sketch, elements=elements, constraints=tuple(constraints)), tuple(kept)
+
+
+def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
+    """Die Skizze um *factor* vergrößern — Punkte **und** Maße, gleichmäßig.
+
+    Der Grund, aus dem das hier steht und nicht in der Oberfläche: Die Punkte
+    allein zu strecken genügt nicht. Ein ``distance``-Maß von 50 zieht der
+    Löser beim nächsten Lauf wieder auf 50 zusammen, und die Zeichnung springt
+    in ihre alte Größe zurück — sichtbar erst nach dem Schließen des Dialogs.
+    Jedes Maß wandert deshalb mit.
+
+    Gestreckt wird um den **Bezugspunkt** (:func:`_anchor_of`), gemessen an der
+    Geometrie und nicht an den Punkten (:func:`_drawing_box`): Ein Kreis trägt
+    Mitte **und** einen Randpunkt, ein Bogen drei Punkte, und ihr Schwerpunkt
+    liegt neben der Form.
+
+    **Ein Maß an einem Projektparameter bleibt stehen.** Ein Wert wie
+    ``=@breite`` ist die ausgesprochene Absicht des Nutzers (Regel 8); ihn
+    still durch eine Zahl zu ersetzen, nähme ihm den Parameter, ohne es zu
+    sagen. Solche Maße kommen als zweiter Rückgabewert zurück — wer skaliert,
+    weiß damit, dass die Zeichnung nicht vollständig gefolgt ist, und kann es
+    sagen, statt eine Größe zu versprechen, die nicht eintritt.
+    """
+    _checked_factor(factor)
+    box = _drawing_box(sketch)
+    if box is None:
+        return sketch, ()
+    return _mapped(sketch, (factor, factor), _anchor_of(box))
+
+
+#: Elementarten, die eine Streckung in nur einer Richtung nicht übersteht: Ein
+#: Kreis würde zur Ellipse, ein Bogen verlöre seinen Mittelpunkt, eine Ellipse
+#: ihre senkrechten Achsen.
+_ROUND_KINDS: Final = frozenset({"circle", "arc", *ELLIPSE_KINDS})
+
+
+@dataclass(frozen=True, slots=True)
+class Stretch:
+    """Was :func:`stretched` zurückgibt.
+
+    ``kept`` sind die Maße an einem Projektparameter, die stehen blieben;
+    ``evenly`` sagt, dass die Zeichnung in **beiden** Richtungen gewachsen
+    ist, weil eine allein ihre Form verändert hätte.
+    """
+
+    sketch: Sketch
+    kept: tuple[str, ...]
+    evenly: bool
+
+
+def stretched(
+    sketch: Sketch,
+    factor: float,
+    axis: int,
+    values: Mapping[str, float] | None = None,
+) -> Stretch:
+    """Die Zeichnung in **einer** Richtung auf ein Maß bringen (RM-391).
+
+    Wer im Dialog die Länge tippt, meint die Länge. Gestreckt wurde
+    gleichmäßig, und die Breite ging mit: 44,2 mal 47 auf Länge 40 ergab
+    40 mal 42,53. Hier wächst nur *axis* (0 waagerecht, 1 senkrecht in der
+    Zeichnung), um den Bezugspunkt (:func:`_anchor_of`).
+
+    **Nur, wenn die Zeichnung es übersteht.** Gestreckt wird die gelöste Lage;
+    danach müssen alle Bedingungen ohne Maß — Deckung, waagerecht,
+    senkrecht, rechtwinklig, gleich lang, Winkel — noch gelten, ohne dass der
+    Löser einen Punkt bewegt, und kein Element darf rund sein
+    (:data:`_ROUND_KINDS`). Sonst wächst die Zeichnung gleichmäßig, und
+    ``evenly`` sagt es: Ein Kreis Ø 30 auf Länge 40 ist ein Kreis Ø 40 und
+    keine Ellipse.
+    """
+    _checked_factor(factor)
+
+    def evenly() -> Stretch:
+        bigger, kept = scaled(sketch, factor)
+        return Stretch(bigger, kept, evenly=True)
+
+    if any(element.kind in _ROUND_KINDS for element in sketch.elements) or any(
+        constraint.kind in ("radius", "diameter") for constraint in sketch.constraints
+    ):
+        return evenly()
+    try:
+        solved = solve_sketch(sketch, values)
+    except AppError:
+        return evenly()
+    settled = replace(sketch, elements=solved.elements)
+    box = _drawing_box(settled)
+    if box is None:
+        return Stretch(sketch, (), evenly=False)
+    factors = (factor, 1.0) if axis == 0 else (1.0, factor)
+    candidate, kept = _mapped(settled, factors, _anchor_of(box))
+
+    # Gilt noch alles, was kein Maß ist? Gefragt wird der Löser ohne die Maße:
+    # Was er dann verschiebt, hat die Streckung verletzt.
+    shape_only = replace(
+        candidate,
+        constraints=tuple(
+            constraint
+            for constraint in candidate.constraints
+            if constraint.kind not in MEASURED_KINDS
+        ),
+    )
+    try:
+        held = solve_sketch(shape_only, values)
+    except AppError:
+        return evenly()
+    moved = max(
+        (
+            math.dist(before, after)
+            for old, new in zip(candidate.elements, held.elements, strict=True)
+            for before, after in zip(old.points, new.points, strict=True)
+        ),
+        default=0.0,
+    )
+    if moved > EPS_GEOM:
+        return evenly()
+    return Stretch(candidate, kept, evenly=False)
 
 
 def polygon_at(centre: Point2, corner: Point2, corners: int) -> Sketch:
