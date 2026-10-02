@@ -68,6 +68,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSlider,
     QSpinBox,
     QStyle,
     QStyleOptionComboBox,
@@ -169,6 +170,7 @@ from app.ui.labels import (
     limit_sentence,
     localised,
     spoiled_the_exact_body,
+    unit_of,
     value_line,
     value_text,
     volume,
@@ -1329,8 +1331,12 @@ def _value_lines(finding: Finding) -> list[str]:
             for key, value in finding.values.items()
             if key not in ("setting", "value") and key not in ADDRESS_VALUES
         ]
+    # Die Einheit gehört an die Grenze, nicht in eine eigene Zeile (RM-359 F7).
+    unit = unit_of(finding.values)
     return [
-        value_line(key, value) for key, value in finding.values.items() if key not in ADDRESS_VALUES
+        value_line(key, value, unit)
+        for key, value in finding.values.items()
+        if key not in ADDRESS_VALUES and not (unit and key == "unit")
     ]
 
 
@@ -3218,6 +3224,8 @@ class ParameterPanel(QWidget):
         """Die Anzeige je abgeleitetem Maß — sein Ausdruck besitzt den Wert."""
         self._titles: dict[str, QLabel] = {}
         """Die Beschriftung je Zeile, die auch „Nicht verwendet“ sagt."""
+        self._sliders: dict[str, QSlider] = {}
+        """Der Regler je Maß mit eigener Unter- und Obergrenze (§13, RM-359 F8)."""
         self._layout: tuple[object, ...] | None = None
         """Was die Zeilen ausmacht (:meth:`_layout_of`) — gleich, so werden nur
         die Werte gesetzt und kein Feld verliert den Fokus (RM-355)."""
@@ -3580,7 +3588,11 @@ class ParameterPanel(QWidget):
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         details.setToolTip(note)
         details.setStatusTip(note)
-        details.setAccessibleName(tr("Parameter ändern"))
+        # Mit dem Maß im Namen (RM-359 F9): Dreimal „Parameter ändern“ und
+        # dreimal „Einheit“ hießen für einen Vorleser drei gleiche Knöpfe.
+        details.setAccessibleName(tr("{name} ändern", name=title))
+        unit.setAccessibleName(tr("Einheit von {name}", name=title))
+        value.setAccessibleName(title)
         details.setProperty("parameterName", name)
         details.clicked.connect(self._details_clicked)
         layout.addWidget(details)
@@ -3588,6 +3600,7 @@ class ParameterPanel(QWidget):
         label = QLabel(title, self)
         label.setWordWrap(True)
         fit_wrapped(label)
+        label.setBuddy(value)
         self._titles[name] = label
         self._form.addRow(label, row)
         self._remember_row(name, row)
@@ -3788,6 +3801,7 @@ class ParameterPanel(QWidget):
                     with QSignalBlocker(editor):
                         editor.setValue(parameter.value)
                     editor.setMinimumWidth(least_number_width(editor))
+                    self._place_slider(name, parameter.value)
                     if self._refused_name == name and self._refusal is not None:
                         self._form.removeRow(self._refusal)
                         self._refusal = None
@@ -3807,6 +3821,7 @@ class ParameterPanel(QWidget):
         self._detail_buttons.clear()
         self._derived.clear()
         self._titles.clear()
+        self._sliders.clear()
         self._layout = self._layout_of(document)
         # Die Zeile der Ablehnung geht mit den Zeilen (``removeRow``); der neue
         # Stand kennt keine abgelehnte Zahl mehr.
@@ -3885,7 +3900,97 @@ class ParameterPanel(QWidget):
             editor.lineEdit().textEdited.connect(lambda _text, key=name: self._show_refusal(key))
             self._editors[name] = editor
             self._add_parameter_row(name, f"{parameter.title or name}", editor, unit)
+            slider = self._slider_for(name, f"{parameter.title or name}", parameter)
+            if slider is not None:
+                self._form.addRow(slider)
         self._fit()
+
+    def _slider_for(self, name: str, title: str, parameter: Parameter) -> QSlider | None:
+        """Ein Regler für ein Maß mit eigener Unter- und Obergrenze (§13, RM-359 F8).
+
+        Nur dann: Ohne beide Grenzen gibt es keine Strecke, über die er führt.
+        **Und nur für einen Arbeitsbereich**: Benannte Maße erben die Grenzen
+        ihres Feldes (0,1 bis 1000 mm), und ein Regler, der ein 40-mm-Maß mit
+        jedem Bildpunkt um mehr als einen Millimeter verschiebt, ist keiner. Ab
+        :data:`SLIDER_SPAN` mal dem Wert fehlt er; wer einen Bereich wie 30 bis
+        80 setzt, bekommt ihn.
+        **Ein Zug ist ein Schritt**: Während des Ziehens zeigt das Feld die Zahl,
+        übernommen wird beim Loslassen — eine Transaktion, ein Strg+Z. Pfeiltasten
+        und ein Klick neben den Griff ändern je einmal.
+        """
+        low, high = parameter.minimum, parameter.maximum
+        if low is None or high is None or not high > low:
+            return None
+        if high - low > SLIDER_SPAN * max(abs(parameter.value), 1.0):
+            return None
+        slider = QSlider(Qt.Orientation.Horizontal, self._sheet)
+        slider.setRange(0, SLIDER_STEPS)
+        slider.setPageStep(SLIDER_STEPS // 10)
+        slider.setAccessibleName(tr("{name} als Regler", name=title))
+        slider.setToolTip(
+            tr("Von {low} bis {high}", low=localised(f"{low:g}"), high=localised(f"{high:g}"))
+        )
+        wheel_needs_focus(slider)
+        self._sliders[name] = slider
+        self._place_slider(name, parameter.value)
+        slider.sliderMoved.connect(lambda position, key=name: self._slider_moved(key, position))
+        slider.sliderReleased.connect(lambda key=name: self._slider_released(key))
+        slider.valueChanged.connect(lambda position, key=name: self._slider_stepped(key, position))
+        return slider
+
+    def _slider_value(self, name: str, position: int) -> float:
+        """Die Zahl an einer Stelle des Reglers, gerundet wie das Feld sie zeigt."""
+        low, high = self._slider_range(name)
+        value = low + (high - low) * position / SLIDER_STEPS
+        editor = self._editors.get(name)
+        return round(value, editor.decimals() if editor is not None else 2)
+
+    def _slider_range(self, name: str) -> tuple[float, float]:
+        document = self._document
+        parameter = document.parameters.get(name) if document is not None else None
+        if parameter is None or parameter.minimum is None or parameter.maximum is None:
+            return 0.0, 1.0
+        return float(parameter.minimum), float(parameter.maximum)
+
+    def _place_slider(self, name: str, value: float) -> None:
+        """Setzt den Griff auf eine Zahl, ohne dass das eine Änderung wäre."""
+        slider = self._sliders.get(name)
+        if slider is None or slider.isSliderDown():
+            return
+        low, high = self._slider_range(name)
+        share = 0.0 if high <= low else (value - low) / (high - low)
+        with QSignalBlocker(slider):
+            slider.setValue(round(min(max(share, 0.0), 1.0) * SLIDER_STEPS))
+
+    def _slider_moved(self, name: str, position: int) -> None:
+        """Während des Ziehens zeigt das Feld die Zahl — übernommen wird beim Loslassen."""
+        editor = self._editors.get(name)
+        if editor is not None:
+            with QSignalBlocker(editor):
+                editor.setValue(self._slider_value(name, position))
+
+    def _slider_released(self, name: str) -> None:
+        slider = self._sliders.get(name)
+        if slider is not None:
+            self._queue_parameter_edit(name, self._slider_value(name, slider.value()))
+
+    def _slider_stepped(self, name: str, position: int) -> None:
+        """Pfeiltaste oder Klick neben den Griff: je Schritt eine Änderung."""
+        slider = self._sliders.get(name)
+        if slider is None or slider.isSliderDown():
+            return
+        value = self._slider_value(name, position)
+        editor = self._editors.get(name)
+        if editor is not None:
+            with QSignalBlocker(editor):
+                editor.setValue(value)
+        self._queue_parameter_edit(name, value)
+
+
+#: Wie fein der Regler einer Parameterzeile teilt (§13, RM-359 F8).
+SLIDER_STEPS: Final = 1000
+#: Bis zu welchem Vielfachen seines Werts ein Bereich noch ein Arbeitsbereich ist.
+SLIDER_SPAN: Final = 20.0
 
 
 #: Datenrolle der Einfügemarke im Verlauf (P7.1): Die Zeile trägt keinen

@@ -568,12 +568,30 @@ def with_accepted(settings: PrintSettings, path: str, value: Any) -> PrintSettin
     return _with_a_measure(changed, path, with_accepted)
 
 
-#: Das Maß, ohne das eine Haftungsart nichts tut.
-ADHESION_MEASURES: Final = {
-    "skirt": "adhesion.skirt_loops",
-    "brim": "adhesion.brim_width",
-    "raft": "adhesion.raft_layers",
+#: Die Haftungsmaße je Art — **die eine Tabelle** für Maß, Sichtbarkeit und
+#: Übergabe (RM-432). Das erste ist das Maß, ohne das die Art nichts tut; der
+#: Skirt-Abstand wirkt nur mit Skirt-Runden.
+ADHESION_PATHS: Final[dict[str, tuple[str, ...]]] = {
+    "skirt": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+    "brim": ("adhesion.brim_width",),
+    "raft": ("adhesion.raft_layers",),
 }
+
+#: Das Maß, ohne das eine Haftungsart nichts tut.
+ADHESION_MEASURES: Final = {kind: paths[0] for kind, paths in ADHESION_PATHS.items()}
+
+
+def adhesion_kinds(kind: str) -> frozenset[str]:
+    """Welche Haftungsarten bei dieser Wahl mit ihren Maßen wirken.
+
+    Der Auto-Brim der Orca-Familie misst mit der Brimbreite — die einzige
+    Ausnahme, und sie steht nur hier: Sichtbarkeit im Dialog
+    (:func:`inactive_paths`) und die Übergabe
+    (``handover._only_chosen_adhesion``) fragen beide diese Funktion.
+    """
+    if kind == "auto":
+        return frozenset({"brim"})
+    return frozenset({kind}) & frozenset(ADHESION_PATHS)
 
 
 #: Die Detailwerte der Stützen — sie wirken nur, wenn Stützen gedruckt werden.
@@ -587,26 +605,33 @@ SUPPORT_DETAILS: Final = (
     "support.block_channels",
 )
 
-#: Welche Haftungsart jedes Haftungsmaß braucht. Der Auto-Brim misst mit der
-#: Brimbreite — dieselbe Ausnahme wie in ``handover._only_chosen_adhesion``.
-ADHESION_DETAILS: Final[dict[str, tuple[str, ...]]] = {
-    "adhesion.skirt_loops": ("skirt",),
-    "adhesion.skirt_distance": ("skirt",),
-    "adhesion.brim_width": ("brim", "auto"),
-    "adhesion.raft_layers": ("raft",),
-}
+#: Alle Haftungsmaße, in der Reihenfolge des Dialogs — abgeleitet aus
+#: :data:`ADHESION_PATHS`, keine zweite Tabelle.
+ADHESION_DETAILS: Final[tuple[str, ...]] = tuple(
+    path for paths in ADHESION_PATHS.values() for path in paths
+)
 
 
-def inactive_paths(support_style: str, adhesion_kind: str) -> frozenset[str]:
+def inactive_paths(
+    support_style: str, adhesion_kind: str, *, also: frozenset[str] = frozenset()
+) -> frozenset[str]:
     """Welche Einstellungen bei dieser Wahl nichts tun (RM-341).
 
     Die eine Stelle für Sichtbarkeit, Sperre und Suche im Dialog — vorher drei
     Fassungen, und alle kannten nur „aus“: Bei *Brim* blieben Skirt- und
     Raft-Maße sichtbar, obwohl die Übergabe sie nullt, und ein Wert über der
     Grenze in einem wirkungslosen Feld sperrte *Slicen*.
+
+    ``adhesion_kind`` ist die Art, die **übergeben** wird — bei PrusaSlicer und
+    Cura heißt „Automatisch“ die Art des Materials
+    (``handover.effective_adhesion``, RM-432). ``also`` sind weitere Arten, die
+    die Übergabe stehen lässt (eine Prusa-Grundlage mit Skirt und Brim).
     """
     inactive = set(SUPPORT_DETAILS) if support_style == "none" else set()
-    inactive.update(path for path, kinds in ADHESION_DETAILS.items() if adhesion_kind not in kinds)
+    active = adhesion_kinds(adhesion_kind) | also
+    inactive.update(
+        path for kind, paths in ADHESION_PATHS.items() if kind not in active for path in paths
+    )
     return frozenset(inactive)
 
 

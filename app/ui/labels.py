@@ -1207,8 +1207,20 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "ellipse": _("Elliptischer Querschnitt aus Breite und Höhe."),
     "lower": _("Die untere Schale nimmt die Schraubenköpfe auf."),
     "upper": _("Die obere Schale nimmt die Muttern auf."),
-    "below": _("Die Seite mit den kleineren Werten auf der Achse bleibt — bei Z unten."),
-    "above": _("Die Seite mit den größeren Werten auf der Achse bleibt — bei Z oben."),
+    # Gilt für jede Ebene von *Abschneiden*, nicht nur für die Achse (N2 der
+    # Nachprüfung RM-400): An einer Unterseite stimmte „bei Z unten“ nicht.
+    "below": _(
+        "Die Seite unter der Ebene bleibt: an einer Achse die mit den kleineren Werten, "
+        "bei Z unten; an einer Fläche die Seite hinter ihr, im Körper."
+    ),
+    "above": _(
+        "Die Seite über der Ebene bleibt: an einer Achse die mit den größeren Werten, "
+        "bei Z oben; an einer Fläche die Seite, zu der sie zeigt."
+    ),
+    "along_axis": _("Senkrecht zu X, Y oder Z, auf Wunsch geneigt."),
+    "at_face": _("Parallel zu einer ebenen Fläche, um den Abstand versetzt."),
+    "through_edge": _("Die Ebene enthält eine gerade Kante und kippt um sie."),
+    "through_points": _("Die Ebene geht durch drei Stellen, im Bild angeklickt."),
     "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
     "dovetail": _(
         "Schwalbenschwanz: die Teile schieben sich ein und halten quer zur Fuge ohne Kleber."
@@ -1866,13 +1878,31 @@ def localised_value(value: object) -> str:
     return localised(text) if _NUMBER.match(text) else choice_label(text)
 
 
-def value_line(key: str, value: object) -> str:
+#: Werte eines Befunds, die in der Einheit seines Feldes stehen, wenn er sie
+#: mitbringt (``values["unit"]``, RM-359 F7).
+UNIT_VALUES: Final = frozenset({"minimum", "maximum", "value"})
+
+
+def value_line(key: str, value: object, unit: str = "") -> str:
     """Eine Zeile „Beschriftung: Wert" für Tooltip und Einzelheiten.
 
     Die Zahl bekommt ihr Komma (§13) und ihre Einheit, der Rest bleibt, wie er
-    ist — siehe :func:`value_text` und :func:`localised_value`.
+    ist — siehe :func:`value_text` und :func:`localised_value`. ``unit`` ist
+    die Einheit des Feldes, die der Befund daneben nennt: Eine Grenze in
+    Millimetern folgt dann der Anzeigeeinheit wie jede andere Länge.
     """
-    return tr("{name}: {value}", name=value_label(key), value=value_text(key, value))
+    shown = value_text(key, value)
+    if unit and key in UNIT_VALUES and isinstance(value, int | float):
+        shown = value_text(f"{key}_mm", value) if unit == "mm" else f"{shown} {unit}"
+    return tr("{name}: {value}", name=value_label(key), value=shown)
+
+
+def unit_of(values: Mapping[str, object]) -> str:
+    """Die Einheit, die ein Befund für seine Grenzen nennt — leer ohne."""
+    unit = values.get("unit")
+    if isinstance(unit, str) and unit and any(key in values for key in UNIT_VALUES):
+        return unit
+    return ""
 
 
 def spoiled_the_exact_body(result: Any) -> str:

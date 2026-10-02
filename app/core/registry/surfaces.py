@@ -176,6 +176,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "upper": _("Obere Hälfte"),
     "below": _("Kleinere Seite"),
     "above": _("Größere Seite"),
+    # Woran die Ebene von *Abschneiden* hängt (RM-400). Eigene Schlüssel: „face“
+    # heißt oben schon „Auf eine Fläche“.
+    "along_axis": _("An einer Achse"),
+    "at_face": _("An einer Fläche"),
+    "through_edge": _("Durch eine Kante"),
+    "through_points": _("Durch drei Punkte"),
     "hex": _("Sechskant"),
     "dovetail": _("Schwalbenschwanz"),
     "snap": _("Schnapper"),

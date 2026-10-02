@@ -240,10 +240,15 @@ Richtung, `opposite_side`)
   `ray_hit_distances`. Ein Langlochumriss (`prepare.slot_profile`)
   normalisiert seinen Winkel auf eine halbe Umdrehung; zerlegte Teile
   nummeriert `_loose_parts` nach gerundetem Volumenverhältnis, dann nach Lage.
-- **Muster am importierten Zylinder**: Vor dem Schließen richtet
-  `_aligned_facets` die Trägerpunkte auf die gemessenen Mantelfacetten aus
-  (Bedingungen im Docstring); Stopfen und Neuzeichnen nehmen denselben
-  Quellkörper und `patterns.cylinder_facet_groups`.
+- **Muster am importierten Zylinder**: Vor dem Schließen legt
+  `_aligned_facets` die Mantelecken auf die achsparallelen Facettengeraden aus
+  `patterns.cylinder_facet_lines`, die Stopfen und Neuzeichnen danach am
+  selben Körper lesen; Ecken liegen im Schnitt zweier Facetten, wo auch der
+  Stopfen wechselt, und er endet in der Stirnfläche (`Frame.ends`). Grenze ist
+  das float32-Raster (`patterns.facet_tolerance`), abgelehnt meldet
+  `pattern.facets_unaligned`. Plattformgleich, abbrechbar, nur quer zur
+  Achse; IDs und Slots bleiben, nur bitgleich unberührte Dreiecke behalten
+  ihre Verfeinerungsherkunft, ein alter Innenraumbeleg verfällt.
 
 **Schnitte** (`section.py`): Eine Ebene, die erst im Schnitt verzweigte Kanten
 erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche

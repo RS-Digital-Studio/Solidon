@@ -1444,7 +1444,12 @@ class History:
             )
         return self._registry.get(entry.op)
 
-    def change_params(self, op_id: OpId, params: Mapping[str, Any]) -> Operation:
+    def change_params(
+        self,
+        op_id: OpId,
+        params: Mapping[str, Any],
+        changes: DocumentChange | None = None,
+    ) -> Operation:
         """Gibt einer Operation des Stapels andere Parameter (§15.4, §11).
 
         Genau das macht den Stapel zum Stapel statt zu einer Liste von Dingen,
@@ -1464,6 +1469,10 @@ class History:
         auf Körper, die es nicht mehr gibt. Und ein Fehler am fernen Ende des
         Stapels, über eine Zahl, die jemand am nahen Ende geändert hat, ist die
         Sorte Fehler, die niemand mit dem verbindet, was er getan hat.
+
+        ``changes`` reist in derselben Transaktion mit (RM-359 F6): Wer beim
+        Ändern eines Grundkörpers *Maße als Parameter anlegen* setzt, bekommt
+        Schritt und Maße mit einem Strg+Z zurück, wie beim Anlegen.
         """
         # Die Lizenzgrenze wie bei ``apply``: Diese Methode schreibt ins
         # Dokument, gehört also zu den Stellen, die selbst holen und selbst
@@ -1525,7 +1534,10 @@ class History:
 
         changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
         _log.info("changed parameters of op %s (%s)", op_id, entry.op)
-        return self._swap_operation(spec.title, entry, changed)
+        _transaction, (swapped,) = self._swap_operations(
+            spec.title, ((entry, changed),), along=changes
+        )
+        return swapped
 
     def change_inputs(self, op_id: OpId, inputs: Sequence[ObjectId]) -> Operation:
         """Gibt einem Schritt andere Objekte, auf denen er arbeitet (§15.4).
@@ -1773,9 +1785,12 @@ class History:
         self,
         title: TranslatableText | str,
         pairs: Sequence[tuple[Operation, Operation]],
+        along: DocumentChange | None = None,
     ) -> tuple[Transaction, tuple[Operation, ...]]:
         """Wie :meth:`_swap_operation`, für mehrere Schritte in **einer**
-        Transaktion — ein Strg+Z legt alle zurück (Regel 16, §15.5)."""
+        Transaktion — ein Strg+Z legt alle zurück (Regel 16, §15.5).
+
+        ``along`` bringt Parameter mit, die dieselbe Transaktion anlegt."""
         swapped = tuple(
             _copy_operation_matches(
                 changed, previous_outputs=entry.outputs, previous_inputs=entry.inputs
@@ -1786,10 +1801,12 @@ class History:
         self._forget_undone()
         changes = DocumentChange(
             before=DocumentState(
-                edited_ops={entry.id: _copy_operation_matches(entry) for entry, _changed in pairs}
+                parameters=along.before.parameters if along is not None else None,
+                edited_ops={entry.id: _copy_operation_matches(entry) for entry, _changed in pairs},
             ),
             after=DocumentState(
-                edited_ops={changed.id: _copy_operation_matches(changed) for changed in swapped}
+                parameters=along.after.parameters if along is not None else None,
+                edited_ops={changed.id: _copy_operation_matches(changed) for changed in swapped},
             ),
         )
         transaction = Transaction(
