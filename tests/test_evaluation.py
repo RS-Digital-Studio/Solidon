@@ -6397,3 +6397,109 @@ def test_a_full_disk_is_reported_at_its_step_and_not_cached(profile: Profile) ->
 
     again = evaluate(project.document, profile, registry=own, cache=cache)
     assert not [entry for entry in again.scene.report.findings if entry.code == "kernel.disk_full"]
+
+
+def test_an_evaluation_knows_whether_a_step_asked_for_the_quality(profile: Profile) -> None:
+    """RM-494: Nur wer nach der Güte fragt, rechnet im Entwurf anders als fein.
+
+    Der Export rechnete seit RM-426 jedes Modell fein nach — am Lochbrett-STEP
+    5 s für dieselbe Datei. Weder Quader noch Bohrung fragen, denn die
+    Boolesche Kette hält schon auf einer verlustfreien Stufe; ein Cachetreffer
+    meldet dasselbe wie der frische Lauf. Das Gegenstück, ein Schritt, der
+    fragt: ``test_a_blend_asks_for_the_quality_and_keeps_its_fine_export``.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={})])
+    cache = ResultCache()
+
+    plain = evaluate(project.document, profile, quality="draft", cache=cache)
+    again = evaluate(project.document, profile, quality="draft", cache=cache)
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    drilled = evaluate(project.document, profile, quality="draft", cache=cache)
+    hit = evaluate(project.document, profile, quality="draft", cache=cache)
+
+    assert plain.complete and not plain.reads_quality
+    assert not again.reads_quality, "der Treffer fragt so wenig wie der Lauf"
+    assert drilled.complete and not drilled.reads_quality
+    assert not hit.reads_quality
+
+
+def test_a_blend_asks_for_the_quality_and_keeps_its_fine_export(profile: Profile) -> None:
+    """RM-494, Gegenstück zu RM-426: Weiches Verschmelzen rechnet im Entwurf gröber.
+
+    Es fragt nach der Güte, und der Export rechnet es deshalb weiter fein nach.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = {"width": 10.0, "depth": 10.0, "height": 10.0}
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 5.0}),
+        ],
+    )
+    cache = ResultCache()
+    apart = evaluate(project.document, profile, quality="draft", cache=cache)
+    history.apply(
+        "Verschmelzen",
+        [
+            OperationDraft(
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 2.0, "grid": 1.0}
+            )
+        ],
+    )
+
+    blended = evaluate(project.document, profile, quality="draft", cache=cache)
+    hit = evaluate(project.document, profile, quality="draft", cache=cache)
+
+    assert apart.complete and not apart.reads_quality, "Voraussetzung: erst das Verschmelzen fragt"
+    assert blended.complete and blended.reads_quality
+    assert hit.reads_quality, "der Treffer fragt so viel wie der Lauf"
+
+
+def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality() -> None:
+    """RM-494: Die Boolesche Kette fragt erst hinter den verlustfreien Stufen.
+
+    Beide Güten beginnen mit *direkt* und *verschweißt*. Hält die erste Stufe,
+    ist der Entwurf schon die feine Rechnung — am Rucksack-Halter rechnete der
+    Export sonst 1,2 s nach, um dieselbe Datei zu schreiben.
+    """
+    from app.core.scene.evaluate import evaluate
+
+    project, history, profile, cache, sources, first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Bohrung ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=(body,),
+                params={"at_feature": "hole_1", "diameter": 6.0},
+            )
+        ],
+    )
+
+    changed = evaluate(project.document, profile, sources=sources, cache=cache, quality="draft")
+
+    assert not first.reads_quality, "Voraussetzung: das Einlesen fragt nicht"
+    assert changed.complete and not changed.reads_quality

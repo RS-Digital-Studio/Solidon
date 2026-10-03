@@ -322,15 +322,15 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
   eine zweite Umrechnung verschiebt um die Kopfzeile.
 - **Wahldialoge (Filament, Slicerprofil, Körper) und Bausteinkatalog** nach der
   Antwort im `finally` zur Löschung vormerken. Der Katalog stoppt vorher seine
-  Zeitgeber (`release()`), sonst hält ein eingereihter gebundener Rückruf den
-  nativ gelöschten Dialog am Leben.
+  Zeitgeber (`release()`), sonst hält ein eingereihter gebundener Rückruf die
+  Python-Hülle des nativ schon gelöschten Dialogs am Leben.
 - **`weak_slot(..., forward=True)`, wo der Empfänger die Signalargumente
   braucht** — ohne `forward` verwirft er sie.
 - **Berichtshandlungen lesen den Zielkörper aus Befund/Dokument, nie aus der
   Auswahl.** Ab `REPORT_BUNDLE_FROM` bündelt der Bericht gleiche Meldungen
   (Robert); die Zeile wählt alle Körper (`bundleActivated`). `BodyChoiceDialog`
   fragt den Zielkörper. `_run_action_for` führt Operationen je Körper als
-  Transaktionsschritte aus (`actionOnBodies`), Einzelhandlungen über
+  Schritte **einer** Transaktion aus (`actionOnBodies`), Einzelhandlungen über
   `_PER_BODY_ACTIONS` mit eigenem Befund (`_MEMBERS_ROLE`), gesammelt in
   `Session.one_step` zu einer Transaktion.
 - **Objektbaum bündelt nach Name und Maß** (`BUNDLE_FROM`). Eine Bohrungskette

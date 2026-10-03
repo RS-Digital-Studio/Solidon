@@ -1260,6 +1260,72 @@ def test_the_real_stroke_evaluation_meets_the_same_budget() -> None:
     assert taken < 2.0
 
 
+def test_the_pierce_check_stays_with_the_strokes() -> None:
+    """§31 (RM-419): Die Durchstichprüfung lief über den gemeinsamen Hüllquader
+    aller bewegten Punkte. Sechs kleine Züge rund um eine Kugel nahmen so jedes
+    Dreieck des Körpers in die Suche, und der Formschritt kostete das
+    Hundertdreißigfache (0,22 → 29 s). Sie sucht je Zugbereich; mit ihr kostet
+    der Schritt höchstens das Doppelte von ohne.
+    """
+    import trimesh
+
+    from app.core.geom import sculpt
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject, Stroke
+
+    ball = trimesh.creation.icosphere(subdivisions=7, radius=30.0)
+    axes = ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    axes += ((0.0, -1.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0))
+    strokes = [
+        Stroke(
+            point=(30.0 * n[0], 30.0 * n[1], 30.0 * n[2]),
+            normal=n,
+            radius=5.0,
+            strength=0.5,
+            tool="carve",
+        )
+        for n in axes
+    ]
+    spec = REGISTRY.get("sculpt_strokes")
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+
+    def step() -> None:
+        entry = SceneObject(id="obj_1", name="Kugel", mesh=MeshData.of(ball.copy()))
+        spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(strokes=sculpt.strokes_to_text(strokes)),
+                profile=profile,
+                quality="fine",
+                seed=None,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    def fastest(rounds: int = 3) -> float:
+        taken = []
+        for _round in range(rounds):
+            started = time.perf_counter()
+            step()
+            taken.append(time.perf_counter() - started)
+        return min(taken)
+
+    original = sculpt._damage_findings
+    try:
+        sculpt._damage_findings = lambda *args, **kwargs: []  # type: ignore[assignment]
+        without = fastest()
+    finally:
+        sculpt._damage_findings = original
+    taken = measure("sculpt_pierce_check_six_strokes", step)
+    assert min(taken, fastest()) < 2.0 * without
+
+
 def test_gathering_strokes_beats_replaying_them_one_by_one() -> None:
     """Entscheidung C, als Test statt als Behauptung.
 

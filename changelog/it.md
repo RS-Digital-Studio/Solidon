@@ -63,6 +63,7 @@ scrive in `website/version.json`.
 - Nella cronologia di un corpo STEP puoi riordinare i passi o inserirne uno prima, anche se un passo successivo riguarda un foro. Il riferimento segue il foro.
 - Un foro spostato o duplicato con una nuova direzione resta esatto su un corpo STEP.
 - Una caratteristica riconosciuta a più di un metro dall'origine mantiene il suo posto quando la modifichi. Prima il campo tagliava il numero in silenzio e il foro si spostava.
+- Se un passaggio colpisce un pezzo la cui superficie interseca se stessa, si ferma e mostra il punto. Altrove continua a calcolare e avvisa che i pezzi non si sono potuti unire.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in alto scegli il «Piano»: su un asse con inclinazione, parallelo a una faccia, per uno spigolo o per tre punti cliccati nella vista.
@@ -84,10 +85,10 @@ scrive in `website/version.json`.
 - Le scritte vengono composte con più precisione: le lettere stanno al loro posto e le curve seguono il carattere, invece di perdere fino al 2 per cento di superficie nelle misure piccole.
 - La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.
 - Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
-- Un tratto sul piano di simmetria agisce una volta invece di due.
+- Un tratto sul piano di simmetria agisce una volta invece di due, e subito accanto il tratto e il suo riflesso si fondono con continuità.
 - L'editor dello scheletro mostra ossa e giunto nella vista, e un giunto sta al centro del corpo invece che sulla pelle, così la figura si piega in modo uniforme.
 - La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
-- Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
+- Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto e l'esportazione lo segnalano, con «Mostra il punto» e «Ritira il tratto».
 - Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
@@ -95,6 +96,8 @@ scrive in `website/version.json`.
 - La destinazione di «Allinea alla caratteristica» parte vuota, e il primo clic nella vista la riempie. «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 - Un altro tratto in una cavità appena scavata la rende più profonda, anche con un pennello piccolo. Finora restava senza effetto e contava come mancato.
+- In «Modella», la finestra mostra ogni tratto con la stessa rapidità anche dopo molti tratti. Finora rallentava a ogni tratto.
+- «Fissa lo stato» salva una sessione di modellazione fine come la calcolano esportazione e stampa, e la finestra resta utilizzabile. Finora salvava la vista più grossolana.
 
 ### Generare con l'IA
 

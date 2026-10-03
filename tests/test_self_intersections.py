@@ -645,3 +645,139 @@ def test_a_cancelled_search_raises_the_cancellation() -> None:
         intersections.intersects(sphere.vertices, sphere.faces, Cancelled())
     with pytest.raises(OperationCancelled):
         repair.self_intersecting_faces(MeshData.of(sphere), Cancelled())
+
+
+# --- nur um aktive Dreiecke (RM-419) -------------------------------------------
+
+
+def _pairs_with(found: intersections.Crossings, active: np.ndarray) -> set[tuple[int, int]]:
+    """Die Paare einer Suche, an denen ein aktives Dreieck beteiligt ist."""
+    return {
+        (min(int(a), int(b)), max(int(a), int(b)))
+        for a, b in zip(found.first, found.second, strict=True)
+        if active[a] or active[b]
+    }
+
+
+def _overlapping_balls() -> tuple[np.ndarray, np.ndarray]:
+    """Zwei Kugeln, die sich durchdringen, als ein Netz — Hunderte Schnittpaare."""
+    one = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+    other = trimesh.creation.icosphere(subdivisions=3, radius=9.0)
+    other.apply_translation((6.0, 1.0, 0.5))
+    both = trimesh.util.concatenate([one, other])
+    return np.asarray(both.vertices, dtype=float), np.asarray(both.faces, dtype=np.int64)
+
+
+def _folded_ball() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Eine Kugel, deren Kappe über ihre Mitte hinaus gekniffen ist — Falten
+    zwischen Nachbarn, dazu das Gedächtnis, welche Ecken sich bewegt haben."""
+    from app.core.geom.sculpt import apply_strokes
+    from app.core.types import Stroke
+
+    base = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0))
+    pinch = Stroke(
+        point=(0.0, 0.0, 20.0), normal=(0.0, 0.0, 1.0), radius=8.0, strength=3.5, tool="pinch"
+    )
+    shaped = apply_strokes(base, [pinch], front_only=False)
+    before = np.asarray(base.raw.vertices, dtype=float)
+    after = np.asarray(shaped.raw.vertices, dtype=float)
+    moved = np.linalg.norm(after - before, axis=1) > 1e-9
+    faces = np.asarray(shaped.raw.faces, dtype=np.int64)
+    return after, faces, moved[faces].any(axis=1)
+
+
+def test_the_search_around_active_triangles_finds_exactly_their_pairs() -> None:
+    """``crossings_at`` sucht nur um die aktiven Dreiecke und trennt Nachbarn
+    vorab (RM-419). Es findet genau die Paare der vollständigen Suche, an
+    denen ein aktives Dreieck beteiligt ist — an zwei Kugeln, die sich
+    durchdringen, mit zufällig gewählten aktiven Dreiecken, und an einer
+    Kappe, deren Kniff Nachbarn übereinanderfaltet."""
+    vertices, faces = _overlapping_balls()
+    everything = intersections.crossing_face_pairs(vertices, faces)
+    assert len(everything.first) > 100, "Voraussetzung: viele Schnittpaare"
+    source = np.random.default_rng(2101)
+    for share in (0.05, 0.4, 1.0):
+        active = source.random(len(faces)) < share
+        found = intersections.crossings_at(vertices, faces, active)
+        assert _pairs_with(found, active) == _pairs_with(everything, active), share
+        assert len(found.first) == len(_pairs_with(found, active)), "jedes Paar einmal"
+
+    folded, faces, active = _folded_ball()
+    everything = intersections.crossing_face_pairs(folded, faces)
+    found = intersections.crossings_at(folded, faces, active)
+    assert len(everything.first) > 0, "Voraussetzung: die Kappe ist gefaltet"
+    assert _pairs_with(found, active) == _pairs_with(everything, active)
+
+
+def _folds_at_the_tolerance() -> tuple[np.ndarray, np.ndarray]:
+    """Ein Paar, das nur die Sicherung „nicht fast parallel“ an die genaue
+    Prüfung hält (:func:`intersections._touching_apart`).
+
+    Eine gemeinsame Ecke, das zweite Dreieck über das erste gefaltet und um
+    einen Sinus von 8,5·10⁻⁷ gekippt: Für die genaue Prüfung liegt es in
+    derselben Ebene und überdeckt das erste — ein Schnitt. Seine freien Ecken
+    stehen aber 4,8·10⁻⁶ über der Ebene des ersten, mehr als ``margin``; ohne
+    die Sicherung hieße es „liegt nur an“.
+    """
+    tilt = 6e-7
+
+    def lifted(x: float, y: float) -> list[float]:
+        return [x, y, tilt * (x + y)]
+
+    ones = [[[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]]]
+    others = [[[0.0, 0.0, 0.0], lifted(6.0, 2.0), lifted(2.0, 6.0)]]
+    return np.asarray(ones), np.asarray(others)
+
+
+def test_the_neighbour_check_never_drops_a_pair_that_crosses() -> None:
+    """Was ``_touching_apart`` vor der genauen Prüfung verwirft, schneidet nicht
+    — an Zufall, Fächern, Falten und den Grenzfällen (RM-419).
+
+    Sie verwirft mehr als :func:`intersections._separated`: auch Nachbarn mit
+    gemeinsamer Ecke, die schräg stehen, und Sattelpaare, deren
+    Schnittstrecken von der Ecke auseinanderlaufen. Dafür darf sie keinen
+    Treffer kosten.
+    """
+    ones, others = _random_pairs(2000)
+    fans, folds, _lifts = _touching_pairs()
+    tolerant, tolerated = _pairs_at_the_tolerance()
+    flat_one, flat_other = _folds_at_the_tolerance()
+    apart_any = False
+    for name, first_corners, second_corners in (
+        ("zufällig", ones, others),
+        ("an der Toleranz", tolerant, tolerated),
+        ("Fächer", fans, folds),
+        ("fast parallel gefaltet", flat_one, flat_other),
+    ):
+        surface, first, second = _shared_surface(first_corners, second_corners)
+        apart = intersections._touching_apart(surface, first, second)
+        crossed = intersections.crossing_pairs(
+            surface.triangles[first],
+            surface.triangles[second],
+            surface.faces[first],
+            surface.faces[second],
+        )
+        assert isinstance(crossed, np.ndarray)
+        assert not np.any(apart & crossed), (name, np.flatnonzero(apart & crossed)[:10])
+        apart_any |= bool(apart.any())
+        if name == "fast parallel gefaltet":
+            assert crossed.all(), "Voraussetzung: die genaue Prüfung sieht die Falte"
+    assert apart_any, "sie verwirft überhaupt etwas"
+
+
+def test_the_search_around_active_triangles_can_be_stopped_and_reports_progress() -> None:
+    """Abbrechen wirkt in der Suche, und der Fortschritt endet bei eins."""
+
+    class Cancelled:
+        is_cancelled = True
+
+        def raise_if_cancelled(self) -> None:
+            raise OperationCancelled
+
+    vertices, faces = _overlapping_balls()
+    active = np.ones(len(faces), dtype=bool)
+    with pytest.raises(OperationCancelled):
+        intersections.crossings_at(vertices, faces, active, Cancelled())
+    shares: list[float] = []
+    intersections.crossings_at(vertices, faces, active, progress=shares.append)
+    assert shares and shares[-1] == 1.0 and all(0.0 <= share <= 1.0 for share in shares)

@@ -193,6 +193,14 @@ class DropArea(QPushButton):
         link.setWordWrap(True)
         set_level(link, "caption")
 
+        # Die Antwort auf eine Datei, die Solidon nicht liest (RM-358 W1-6):
+        # Die Quittung des Fensters liegt über der Ansicht und damit hinter
+        # dem Startbildschirm; hier steht der Satz dort, wo abgelegt wurde.
+        self.note = QLabel("", self)
+        self.note.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.note.setWordWrap(True)
+        self.note.setVisible(False)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.setSpacing(TIGHT)
@@ -202,9 +210,17 @@ class DropArea(QPushButton):
         layout.addWidget(click_hint)
         layout.addWidget(kinds)
         layout.addWidget(link)
+        layout.addWidget(self.note)
         layout.addStretch(1)
         self._painted: tuple[str, bool] | None = None
         self._paint("dark")
+
+    def say(self, text: str) -> None:
+        """Einen Satz zur zuletzt abgelegten Datei zeigen — leer räumt ihn weg."""
+        self.note.setText(text)
+        self.note.setVisible(bool(text))
+        self.setAccessibleDescription(text)
+        self.updateGeometry()
 
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
         """Die Beschriftungen bestimmen die Höhe des zusammengesetzten Knopfs."""
@@ -279,7 +295,8 @@ class DropArea(QPushButton):
         self._paint(current_theme())
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None or accepted_url(event) is not None:
+        if dropped_file(event) is not None or accepted_url(event) is not None:
+            self.say("")
             self._set_hover(True)
             event.acceptProposedAction()
 
@@ -299,6 +316,13 @@ class DropArea(QPushButton):
         url = accepted_url(event)
         if url is not None:
             self.urlDropped.emit(url)
+            event.acceptProposedAction()
+            return
+        # Eine Datei, die Solidon nicht liest, bekommt trotzdem eine Antwort:
+        # das Fenster sagt, wie das Modell hereinkommt (RM-358 W1-6).
+        other = dropped_file(event)
+        if other is not None:
+            self.fileDropped.emit(other)
             event.acceptProposedAction()
 
 
@@ -495,6 +519,24 @@ def accepted_url(event: QDragEnterEvent | QDropEvent) -> str | None:
         if url.isLocalFile() or url.scheme().lower() not in ("http", "https"):
             continue
         return str(url.toString())
+    return None
+
+
+def dropped_file(event: QDragEnterEvent | QDropEvent) -> Path | None:
+    """Die erste fallengelassene lokale Datei, gleich welcher Art (RM-358 W1-6).
+
+    Ein Fenster, das eine Datei nicht liest, nimmt sie trotzdem an und sagt,
+    wie das Modell hereinkommt. Vorher filterte das Ziehen nach Endung, und
+    ``.f3d``, ``.blend``, ``.scad`` oder ``.gcode`` bekamen nur das
+    Verbotszeichen — eine Absage ohne Satz. Was mit der Datei geschieht,
+    entscheidet ``MainWindow.open_path``.
+    """
+    data = event.mimeData()
+    if not data.hasUrls():
+        return None
+    for url in data.urls():
+        if url.isLocalFile():
+            return Path(url.toLocalFile())
     return None
 
 
@@ -877,6 +919,7 @@ class StartScreen(QWidget):
         self.open_button.clicked.connect(self.browseRequested)
 
         drop = DropArea(self)
+        self.drop_area = drop
         drop.fileDropped.connect(self.fileDropped)
         drop.urlDropped.connect(self.urlDropped)
         drop.leftOut.connect(self.leftOut)
@@ -1286,7 +1329,7 @@ class StartScreen(QWidget):
         menu.deleteLater()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None or accepted_url(event) is not None:
+        if dropped_file(event) is not None or accepted_url(event) is not None:
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
@@ -1300,6 +1343,13 @@ class StartScreen(QWidget):
         url = accepted_url(event)
         if url is not None:
             self.urlDropped.emit(url)
+            event.acceptProposedAction()
+            return
+        # Eine Datei, die Solidon nicht liest, bekommt trotzdem eine Antwort:
+        # das Fenster sagt, wie das Modell hereinkommt (RM-358 W1-6).
+        other = dropped_file(event)
+        if other is not None:
+            self.fileDropped.emit(other)
             event.acceptProposedAction()
 
 

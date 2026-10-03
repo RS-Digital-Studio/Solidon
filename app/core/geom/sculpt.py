@@ -25,19 +25,32 @@ from __future__ import annotations
 import dataclasses
 import json
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any, Final, cast, get_args
 
 import numpy as np
 
 from app.core.deferred import cKDTree, trimesh
-from app.core.errors import CANCEL, SHOW_LOCATION, ValidationError
-from app.core.geom.intersections import crossing_face_pairs
-from app.core.geom.mesh import MeshData, as_mesh_data, ray_hits_batch, read_mesh
+from app.core.errors import CANCEL, SHOW_LOCATION, TAKE_BACK_STROKE, ValidationError
+from app.core.geom.intersections import (
+    box_groups,
+    boxes_around,
+    crossings_at,
+    face_bounds,
+    faces_touching,
+)
+from app.core.geom.mesh import (
+    MeshData,
+    as_mesh_data,
+    ray_hits_batch,
+    read_mesh,
+    stable_vertex_normals_at,
+)
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     ORDERED_TOOLS,
+    Action,
     BaseParams,
     CancelToken,
     Finding,
@@ -126,6 +139,11 @@ def _mirrored(stroke: Stroke, centre: np.ndarray) -> list[tuple[np.ndarray, np.n
     return places
 
 
+def _falloff(away: np.ndarray) -> np.ndarray:
+    """Das Gewicht eines Pinsels im Abstand ``away`` (in Radien) von seiner Mitte."""
+    return np.asarray(np.exp(-4.0 * away * away))
+
+
 def _weights(tree: cKDTree, points: np.ndarray, centre: np.ndarray, radius: float) -> Any:
     """Wen dieser Strich trifft und wie stark — Indizes und Gewichte.
 
@@ -137,8 +155,54 @@ def _weights(tree: cKDTree, points: np.ndarray, centre: np.ndarray, radius: floa
     near = np.asarray(tree.query_ball_point(centre, radius * FALLOFF), dtype=np.int64)
     if not len(near):
         return near, np.zeros(0)
-    away = np.linalg.norm(points[near] - centre, axis=1) / max(radius, 1e-9)
-    return near, np.exp(-4.0 * away * away) * (away <= FALLOFF)
+    offset = points[near] - centre
+    # Dieselbe Rechnung wie ``np.linalg.norm(…, axis=1)``, bitgleich, ohne
+    # dessen Aufrufkosten: Tausend Züge mit Spiegelbild sind zweitausend
+    # Aufrufe, und je Aufruf kostete die Prüfung der Argumente mehr als die
+    # Rechnung an den tausend getroffenen Punkten (RM-428).
+    away = np.sqrt(np.add.reduce(offset * offset, axis=1)) / max(radius, 1e-9)
+    return near, _falloff(away) * (away <= FALLOFF)
+
+
+def _mirror_share(places: list[tuple[np.ndarray, np.ndarray]], radius: float) -> float:
+    """Welchen Anteil jede Kopie eines gespiegelten Zugs trägt (RM-378, RM-428).
+
+    Ein Zug auf der Symmetrieebene fiel mit seinem Spiegelbild zusammen und
+    wirkte doppelt. Die stärkere Kopie je Ecke (RM-378) wirkte dort einmal,
+    hinterließ aber knapp daneben eine Kerbe mit Knick, wo beide gleich stark
+    sind, und schob bei Gleichstand die Ecken auf der Ebene zur Seite der
+    ersten Kopie: 1 mm neben der Ebene 0,148 mm tief, Kneifen 0,426 mm aus der
+    Ebene.
+
+    Jetzt tragen alle Kopien denselben Anteil ``1 / Σ κ``: ``κ`` ist das
+    Gewicht, das eine Kopie an der Mitte der ersten hat, ohne die harte Grenze
+    des Pinsels. An der Mitte des Zugs wirkt so genau seine Stärke, ob sein
+    Spiegelbild darüber liegt (Anteil ½, er wirkt einmal) oder weit weg
+    (Anteil 1, beide wirken wie bisher); dazwischen gleitet der Anteil glatt.
+    Die Summe zweier Glockenkurven hat keinen Knick, und weil die Kopien
+    einander spiegeln, sehen alle dieselben Abstände — derselbe Anteil für
+    jede, und das Ergebnis bleibt spiegelgleich.
+
+    Überdecken sich die Pinsel nicht, ist der Anteil genau eins: dort rechnet
+    der Zug bitgleich wie vor RM-378. Bis dahin fehlen höchstens e⁻¹⁶ der
+    Stärke.
+    """
+    if len(places) < 2:
+        return 1.0
+    # Höchstens acht Kopien: in Gleitkommazahlen von Python, nicht als Feld —
+    # je Zug kostete das Feld mehr als die Kopien selbst.
+    first = places[0][0]
+    x, y, z = float(first[0]), float(first[1]), float(first[2])
+    size = max(radius, 1e-9)
+    reaching = []
+    for centre, _direction in places:
+        dx, dy, dz = float(centre[0]) - x, float(centre[1]) - y, float(centre[2]) - z
+        away = math.sqrt(dx * dx + dy * dy + dz * dz) / size
+        if away < 2.0 * FALLOFF:
+            reaching.append(away)
+    if len(reaching) < 2:
+        return 1.0
+    return float(1.0 / _falloff(np.asarray(reaching)).sum())
 
 
 def _neighbours(mesh: trimesh.Trimesh, count: int) -> tuple[np.ndarray, np.ndarray]:
@@ -157,59 +221,93 @@ def _neighbours(mesh: trimesh.Trimesh, count: int) -> tuple[np.ndarray, np.ndarr
     return total, np.maximum(seen, 1.0)
 
 
-def _offsets(
-    mesh: MeshData,
-    strokes: Iterable[Stroke],
-    missed: list[Stroke] | None = None,
-    cancelled: CancelToken | None = None,
-    centre: np.ndarray | None = None,
-    *,
-    front_only: bool = True,
-    mirror_once: bool = True,
-) -> np.ndarray:
-    """Das Offsetfeld einer Etappe: alle Striche summiert, ein Durchgang.
+class _Stage:
+    """Eine Etappe im Aufbau: die Fläche an ihrem Anfang, ihr Suchbaum, ihre
+    Normalen — und das Offsetfeld der Züge, die bisher zu ihr gehören.
 
-    ``missed`` sammelt die Striche, die keinen einzigen Eckpunkt greifen —
-    hier und nicht anderswo, weil die Kugelabfrage es ohnehin feststellt.
-    Was daraus wird, steht in ``_sculpting_findings``.
+    Die Striche einer Etappe summieren sich auf diese Fläche (Entscheidung C),
+    einer nach dem anderen und in ihrer Reihenfolge: :meth:`add` kostet nur
+    die Kugelabfrage des Zugs. Die Operation gibt alle Züge einer Etappe
+    hinein, die Vorschau der Formsitzung (:class:`SculptPreview`) nur den
+    neuen — beide rechnen dieselbe Folge und sind bitgleich.
 
-    ``cancelled`` wird vor jedem Zug gefragt (§15.6): Eine Sitzung mit
-    tausenden Zügen ist ein Suchlauf je Zug, und bis zum 22.09.2026 wirkte der
-    Abbrechen-Knopf erst, wenn alle gerechnet waren.
+    Nachbarschaft und Krümmung brauchen nur die Werkzeuge aus
+    :data:`ORDERED_TOOLS`, und jedes davon steht allein in seiner Etappe; sie
+    entstehen erst mit ihm.
     """
-    body = mesh.raw
-    points = np.asarray(body.vertices, dtype=float)
-    normals = np.asarray(body.vertex_normals, dtype=float)
-    tree = cKDTree(points)
-    plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
-    shift = np.zeros_like(points)
 
-    smoothing = [s for s in strokes if s.tool in ORDERED_TOOLS]
-    total, seen = _neighbours(body, len(points)) if smoothing else (points, np.ones(len(points)))
-    curvature = np.zeros(len(points))
-    if any(s.tool == "inflate" for s in smoothing):
-        # Krümmung als Abstand zum Nachbarschaftsmittel entlang der Normale:
-        # positiv, wo die Fläche nach innen gewölbt ist. Eine Näherung, und
-        # die richtige — sie kostet nichts über die Nachbarn hinaus, die für
-        # das Glätten ohnehin gebraucht werden.
-        middle = total / seen[:, None]
-        curvature = np.einsum("ij,ij->i", middle - points, normals)
+    def __init__(
+        self,
+        body: trimesh.Trimesh,
+        plane: np.ndarray,
+        *,
+        front_only: bool,
+        mirror_once: bool,
+        tree: Any = None,
+    ) -> None:
+        self.body = body
+        self.points = np.asarray(body.vertices, dtype=float)
+        self.normals = np.asarray(body.vertex_normals, dtype=float)
+        self.tree = cKDTree(self.points) if tree is None else tree
+        self.plane = plane
+        self.front_only = front_only
+        self.mirror_once = mirror_once
+        self.shift = np.zeros_like(self.points)
+        self.strokes: list[Stroke] = []
+        self._neighbours: tuple[np.ndarray, np.ndarray] | None = None
+        self._curvature: np.ndarray | None = None
 
-    for stroke in strokes:
+    def neighbours(self) -> tuple[np.ndarray, np.ndarray]:
+        """Summe und Zahl der Nachbarn je Eckpunkt (:func:`_neighbours`)."""
+        if self._neighbours is None:
+            self._neighbours = _neighbours(self.body, len(self.points))
+        return self._neighbours
+
+    def curvature(self) -> np.ndarray:
+        """Krümmung als Abstand zum Nachbarschaftsmittel entlang der Normale:
+        positiv, wo die Fläche nach innen gewölbt ist. Eine Näherung, und die
+        richtige — sie kostet nichts über die Nachbarn hinaus, die für das
+        Glätten ohnehin gebraucht werden."""
+        if self._curvature is None:
+            total, seen = self.neighbours()
+            middle = total / seen[:, None]
+            self._curvature = np.einsum("ij,ij->i", middle - self.points, self.normals)
+        return self._curvature
+
+    def add(
+        self,
+        stroke: Stroke,
+        missed: list[Stroke] | None = None,
+        cancelled: CancelToken | None = None,
+    ) -> None:
+        """Einen Zug aufsummieren.
+
+        ``missed`` sammelt die Striche, die keinen einzigen Eckpunkt greifen —
+        hier und nicht anderswo, weil die Kugelabfrage es ohnehin feststellt.
+        Was daraus wird, steht in ``_sculpting_findings``.
+
+        ``cancelled`` wird vor jedem Zug gefragt (§15.6): Eine Sitzung mit
+        tausenden Zügen ist ein Suchlauf je Zug, und bis zum 22.09.2026 wirkte
+        der Abbrechen-Knopf erst, wenn alle gerechnet waren.
+        """
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        self.strokes.append(stroke)
+        points, normals, shift = self.points, self.normals, self.shift
         touched = False
         places = []
-        for centre, direction in _mirrored(stroke, plane):
-            near, weight = _weights(tree, points, centre, stroke.radius)
+        copies = _mirrored(stroke, self.plane)
+        share = _mirror_share(copies, stroke.radius) if self.mirror_once else 1.0
+        for centre, direction in copies:
+            near, weight = _weights(self.tree, points, centre, stroke.radius)
             if not len(near):
                 continue
             touched = True
-            if front_only:
+            if self.front_only:
                 weight = weight * _facing(normals[near], direction)
+            if share != 1.0:
+                weight = weight * share
             places.append((centre, direction, near, weight))
-        if mirror_once and len(places) > 1:
-            places = _strongest_copy(places)
         for centre, direction, near, weight in places:
             if not np.any(weight > 0.0):
                 continue
@@ -222,9 +320,11 @@ def _offsets(
                 towards = centre - points[near]
                 shift[near] += towards * scale * 0.5
             elif stroke.tool == "smooth":
+                total, seen = self.neighbours()
                 middle = total[near] / seen[near, None]
                 shift[near] += (middle - points[near]) * scale
             elif stroke.tool == "inflate":
+                curvature = self.curvature()
                 shift[near] += normals[near] * (curvature[near][:, None] + 1.0) * scale
             elif stroke.tool == "flatten":
                 # Die Ebene bildet sich aus dem, was der Pinsel greift: ihr
@@ -238,7 +338,17 @@ def _offsets(
                 shift[near] -= direction * (height[:, None] * scale)
         if missed is not None and not touched:
             missed.append(stroke)
-    return shift
+
+    def moved(self) -> trimesh.Trimesh:
+        """Die Fläche nach den bisherigen Zügen dieser Etappe."""
+        return trimesh.Trimesh(
+            vertices=self.points + self.shift, faces=self.body.faces, process=False
+        )
+
+
+#: Nach wie vielen Zügen die Auswertung ihren Fortschritt meldet — je Zug
+#: kostete die Meldung mehr als der Zug.
+PROGRESS_STROKES: Final = 64
 
 
 #: Ab welchem Skalarprodukt zwischen Eckpunktnormale und Strichrichtung ein
@@ -263,34 +373,6 @@ def _facing(normals: np.ndarray, direction: np.ndarray) -> np.ndarray:
     return np.asarray(along > FACING_LIMIT, dtype=float)
 
 
-def _strongest_copy(places: list[Any]) -> list[Any]:
-    """Je Eckpunkt nur die stärkste Kopie eines gespiegelten Zugs (RM-378).
-
-    Ein Zug auf der Symmetrieebene wirkte mit seinem Spiegelbild zweimal am
-    selben Ort, je näher an der Ebene, desto mehr. Mit der stärksten Kopie je
-    Punkt wirkt er dort wie ein einzelner Zug; wo sich die Kopien nicht
-    überdecken, ändert sich nichts. Gleich starke Kopien entscheidet die
-    Reihenfolge — reproduzierbar aus den Parametern (Regel 2).
-    """
-    indices = np.concatenate([near for _centre, _direction, near, _weight in places])
-    weights = np.concatenate([weight for _centre, _direction, _near, weight in places])
-    owner = np.concatenate(
-        [np.full(len(near), number) for number, (_c, _d, near, _w) in enumerate(places)]
-    )
-    order = np.lexsort((owner, -weights, indices))
-    first = np.ones(len(order), dtype=bool)
-    first[1:] = indices[order][1:] != indices[order][:-1]
-    keep = np.zeros(len(order), dtype=bool)
-    keep[order[first]] = True
-    kept: list[Any] = []
-    start = 0
-    for centre, direction, near, weight in places:
-        mask = keep[start : start + len(near)]
-        start += len(near)
-        kept.append((centre, direction, near[mask], weight[mask]))
-    return kept
-
-
 def median_edge(mesh: MeshData) -> float:
     """Die mittlere Kantenlänge — das Maß, an dem ein Pinsel sich messen lässt.
 
@@ -311,6 +393,8 @@ def stroke_at(
     symmetry: int = 0,
     cut: bool = False,
     before: Sequence[Stroke] = (),
+    mirrored: int = 0,
+    preview: SculptPreview | None = None,
 ) -> Stroke:
     """Aus einem angeklickten Punkt einen Strich machen.
 
@@ -327,15 +411,34 @@ def stroke_at(
     (``cut``). Sonst wirkte er nicht und hieße verfehlt (RM-438). Die
     Entscheidung reist im Zug mit; die Operation rechnet sie nicht nach.
 
+    ``mirrored`` sind die Spiegelebenen, die die ganze Sitzung über jeden Zug
+    legt (der Parameter *Symmetrie* der Operation). Sie gehören nicht in den
+    Zug — sie bleiben nachträglich änderbar —, aber in die Frage, wo er wirkt:
+    Auch ein Spiegelbild kann als einziges die Fläche greifen (RM-454).
+
+    ``preview`` ist die Vorschau der Sitzung (:class:`SculptPreview`), wenn
+    sie zu ``mesh`` und ``before`` passt: Ihre Etappe kennt Fläche, Suchbaum
+    und Normalen schon, und der Zug kostet keinen Suchbaum über das ganze Netz
+    (RM-366). Ohne sie entsteht derselbe Zug.
+
     Im Kern und nicht in der Oberfläche, weil es Geometrie ist. Was das Fenster
     beisteuert, sind zwei Zahlen und ein Klick.
     """
-    surface, cut = _surface_for(mesh, before, point, radius, tool=tool, cut=cut)
-    points = np.asarray(surface.raw.vertices, dtype=float)
-    if not len(points):
+    if preview is not None and preview.mesh is mesh and preview.strokes == tuple(before):
+        surface, cut, tree, normals = preview.surface_for(
+            point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
+        )
+    else:
+        surface, cut = _surface_for(
+            mesh, before, point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
+        )
+        points = np.asarray(surface.raw.vertices, dtype=float)
+        tree = cKDTree(points) if len(points) else None
+        normals = np.asarray(surface.raw.vertex_normals, dtype=float)
+    if tree is None:
         return Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=strength)
-    _away, index = cKDTree(points).query(np.asarray(point, dtype=float))
-    normal = np.asarray(surface.raw.vertex_normals, dtype=float)[int(index)]
+    _away, index = tree.query(np.asarray(point, dtype=float))
+    normal = normals[int(index)]
     return Stroke(
         point=point,
         normal=(float(normal[0]), float(normal[1]), float(normal[2])),
@@ -355,6 +458,7 @@ def _surface_for(
     *,
     tool: str,
     cut: bool,
+    symmetry: int = 0,
 ) -> tuple[MeshData, bool]:
     """Die Fläche, auf die ein neuer Zug wirkt, und ob er dafür eine Etappe
     beginnen muss.
@@ -364,7 +468,10 @@ def _surface_for(
     aus :data:`ORDERED_TOOLS` oder nach einem solchen —, wirkt er auf die
     Fläche nach allen Zügen. Sonst entscheidet, ob seine Kugel einen
     Eckpunkt der Etappenfläche greift: dieselbe Frage, an der
-    :func:`_offsets` einen Zug verfehlt nennt.
+    :meth:`_Stage.add` einen Zug verfehlt nennt — **an jedem seiner
+    Spiegelorte**, um dieselbe Mitte, um die die Auswertung spiegelt.
+    Gefragt war nur der Klickpunkt; griff allein ein Spiegelbild die Fläche
+    nach der Etappe, blieb der Zug in ihr und wirkte nirgends (RM-454).
 
     Eine eigene Etappe bekommt er nur, wenn er die Fläche nach der Etappe
     greift. Greift er auch die nicht, ist er verfehlt, und eine Etappe
@@ -378,21 +485,23 @@ def _surface_for(
     fresh = cut or tool in ORDERED_TOOLS or current[-1].tool in ORDERED_TOOLS
     start = len(before) if fresh else len(before) - len(current)
     surface = _completed(mesh, tuple(before[:start]), plane)
-    if fresh or _reaches(surface, point, radius):
+    probe = Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=0.0)
+    places = [place for place, _way in _mirrored(replace(probe, symmetry=symmetry), centre)]
+    if fresh or _reaches(surface, places, radius):
         return surface, cut
     after = apply_strokes(surface, before[start:], centre=plane)
-    if _reaches(after, point, radius):
+    if _reaches(after, places, radius):
         return after, True
     return surface, False
 
 
-def _reaches(mesh: MeshData, point: Vec3, radius: float) -> bool:
-    """Ob die Kugel eines Zugs um ``point`` einen Eckpunkt von ``mesh`` greift."""
+def _reaches(mesh: MeshData, places: Sequence[np.ndarray], radius: float) -> bool:
+    """Ob die Kugel eines Zugs um einen seiner Orte einen Eckpunkt von ``mesh`` greift."""
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     if not len(vertices):
         return False
-    away, _index = cKDTree(vertices).query(np.asarray(point, dtype=float))
-    return float(away) <= radius * FALLOFF
+    away, _index = cKDTree(vertices).query(np.asarray(places, dtype=float))
+    return bool(np.min(away) <= radius * FALLOFF)
 
 
 #: Die zuletzt gerechnete Etappenfläche: Netz, Züge bis zu ihr, Ergebnis.
@@ -431,6 +540,7 @@ def apply_strokes(
     centre: Vec3 | None = None,
     front_only: bool = True,
     mirror_once: bool = True,
+    progress: Callable[[float], None] | None = None,
 ) -> MeshData:
     """Die ganze Strichliste auswerten — Etappe für Etappe, jede in einem Zug.
 
@@ -444,25 +554,188 @@ def apply_strokes(
     — einmal genommen, nicht je Etappe, damit die Ebene beim Formen steht.
 
     ``front_only`` lässt nur dem Pinsel zugewandte Punkte wirken (RM-376),
-    ``mirror_once`` einen Zug auf der Symmetrieebene nur einmal (RM-378).
-    Beide sind die Vorgabe; alte Formschritte tragen ``False`` (Format 41).
+    ``mirror_once`` einen Zug auf der Symmetrieebene nur einmal (RM-378,
+    :func:`_mirror_share`). Beide sind die Vorgabe; alte Formschritte tragen
+    ``False`` (Format 41). ``progress`` bekommt den Anteil der übertragenen
+    Züge.
     """
     if not strokes:
         return mesh
     plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
     body = mesh.raw
+    done = 0
     for part in stages(strokes):
-        moved = np.asarray(body.vertices, dtype=float) + _offsets(
-            mesh.replacing(body),
-            part,
-            missed,
-            cancelled,
-            plane,
-            front_only=front_only,
-            mirror_once=mirror_once,
-        )
-        body = trimesh.Trimesh(vertices=moved, faces=body.faces, process=False)
+        stage = _Stage(body, plane, front_only=front_only, mirror_once=mirror_once)
+        for stroke in part:
+            stage.add(stroke, missed, cancelled)
+            done += 1
+            if progress is not None and done % PROGRESS_STROKES == 0:
+                progress(done / len(strokes))
+        body = stage.moved()
+    if progress is not None:
+        progress(1.0)
     return mesh.replacing(body)
+
+
+#: Wie viele Etappenanfänge die Vorschau einer Formsitzung behält
+#: (:class:`SculptPreview`). Jeder ist ein Feld der Ecken; zurückgenommen wird
+#: meist der letzte Zug, und weiter zurück rechnet sie vom nächsten behaltenen
+#: Anfang aus.
+KEPT_STAGES: Final = 12
+
+
+class SculptPreview:
+    """Die Vorschau einer Formsitzung, Zug für Zug (RM-366).
+
+    Das Fenster rechnete nach jedem Klick und jedem Ziehschritt die ganze
+    Sitzung neu, im Oberflächen-Thread: an einer Figur mit 145 742 Ecken
+    0,03 s nach dem ersten Zug, 5,8 s nach dem vierzigsten im Wechsel mit
+    Glätten. Hier steht die laufende Etappe (:class:`_Stage`) mit ihrer
+    Fläche, ihrem Suchbaum und ihren Normalen: Ein Zug in ihr kostet seine
+    Kugelabfrage, eine neue Etappe einen Durchgang — nach dem vierzigsten
+    Zug so viel wie nach dem ersten. Zurückgenommen oder umgestellt wird ab
+    dem letzten Etappenanfang, den die Änderung nicht berührt.
+
+    Gerechnet wird dieselbe Folge wie in :func:`apply_strokes`, Etappe für
+    Etappe und Zug für Zug; die Vorschau ist bitgleich mit der Operation, die
+    beim Verlassen entsteht. Ein Dokumentzustand ist sie nicht (Regel 2).
+    """
+
+    def __init__(
+        self,
+        mesh: MeshData,
+        *,
+        centre: Vec3 | None = None,
+        front_only: bool = True,
+        mirror_once: bool = True,
+    ) -> None:
+        self.mesh = mesh
+        self.plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
+        self.front_only = front_only
+        self.mirror_once = mirror_once
+        self.strokes: tuple[Stroke, ...] = ()
+        self._starts: dict[int, np.ndarray] = {}
+        """Die Ecken am Anfang der Etappen, nach der Nummer ihres ersten Zugs."""
+        self._stage: _Stage | None = None
+        self._begin = 0
+        self._shown: MeshData = mesh
+        self._shown_tree: Any = None
+        self._input_tree: Any = None
+
+    @property
+    def shown(self) -> MeshData:
+        """Die Fläche nach allen Zügen — was die Vorschau zeigt."""
+        return self._shown
+
+    def show(self, strokes: Sequence[Stroke]) -> MeshData:
+        """Die Fläche nach ``strokes``, gerechnet ab der letzten Etappe, die
+        sich nicht geändert hat."""
+        strokes = tuple(strokes)
+        if strokes == self.strokes:
+            return self._shown
+        common = 0
+        limit = min(len(strokes), len(self.strokes))
+        while common < limit and strokes[common] == self.strokes[common]:
+            common += 1
+        begins = list(np.cumsum([0, *(len(part) for part in stages(strokes))])[:-1].tolist())
+        for index in [index for index in self._starts if index > common]:
+            del self._starts[index]
+        stage = self._stage
+        if not (
+            stage is not None
+            and self._begin in begins
+            and self._begin + len(stage.strokes) <= common
+        ):
+            stage = None
+        start = (
+            self._begin
+            if stage is not None
+            else max(
+                [index for index in self._starts if index in begins and index <= common],
+                default=0,
+            )
+        )
+        for number, begin in enumerate(begins):
+            end = begins[number + 1] if number + 1 < len(begins) else len(strokes)
+            if end <= start and begin < start:
+                continue
+            if stage is None or begin != self._begin:
+                body, tree = self._start_of(begin, common)
+                stage = _Stage(
+                    body,
+                    self.plane,
+                    front_only=self.front_only,
+                    mirror_once=self.mirror_once,
+                    tree=tree,
+                )
+                self._begin = begin
+            for stroke in strokes[begin + len(stage.strokes) : end]:
+                stage.add(stroke)
+            if end < len(strokes):
+                self._starts[end] = stage.points + stage.shift
+                stage = None
+        self._keep_few()
+        self._stage = stage
+        self.strokes = strokes
+        self._shown = self.mesh if stage is None else self.mesh.replacing(stage.moved())
+        self._shown_tree = None
+        return self._shown
+
+    def _start_of(self, begin: int, common: int) -> tuple[trimesh.Trimesh, Any]:
+        """Fläche und Suchbaum am Anfang der Etappe, deren erster Zug die
+        Nummer ``begin`` hat.
+
+        Beginnt sie, wo die gezeigte Fläche steht, sind es deren Körper und
+        Suchbaum: Der Zug, der die Etappe beginnt, hat Normalen und Baum dort
+        schon gebraucht (:meth:`surface_for`), und jede neue Etappe rechnete
+        beide ein zweites Mal — die Hälfte eines Klicks an einem großen Netz.
+        """
+        if begin == 0:
+            return self.mesh.raw, self._input_tree
+        if begin == len(self.strokes) == common:
+            return self._shown.raw, self._shown_tree
+        body = trimesh.Trimesh(
+            vertices=self._starts[begin], faces=self.mesh.raw.faces, process=False
+        )
+        return body, None
+
+    def _keep_few(self) -> None:
+        """Nur die jüngsten :data:`KEPT_STAGES` Anfänge — ältere rechnet sie nach."""
+        for index in sorted(self._starts)[:-KEPT_STAGES]:
+            del self._starts[index]
+
+    def surface_for(
+        self, point: Vec3, radius: float, *, tool: str, cut: bool, symmetry: int
+    ) -> tuple[MeshData, bool, Any, np.ndarray]:
+        """:func:`_surface_for` für den nächsten Zug — mit Suchbaum und Normalen
+        der Fläche, auf die er wirkt, aus der laufenden Etappe."""
+        stage = self._stage
+        if not self.strokes or stage is None:
+            if self._input_tree is None:
+                self._input_tree = cKDTree(np.asarray(self.mesh.raw.vertices, dtype=float))
+            normals = np.asarray(self.mesh.raw.vertex_normals, dtype=float)
+            return self.mesh, cut, self._input_tree, normals
+        fresh = cut or tool in ORDERED_TOOLS or self.strokes[-1].tool in ORDERED_TOOLS
+        if not fresh:
+            probe = Stroke(
+                point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=0.0, symmetry=symmetry
+            )
+            places = np.asarray([place for place, _way in _mirrored(probe, self.plane)])
+            away, _index = stage.tree.query(places)
+            if float(np.min(away)) <= radius * FALLOFF:
+                return self.mesh.replacing(stage.body), cut, stage.tree, stage.normals
+            away, _index = self._shown_query().query(places)
+            if float(np.min(away)) > radius * FALLOFF:
+                return self.mesh.replacing(stage.body), False, stage.tree, stage.normals
+            cut = True
+        normals = np.asarray(self._shown.raw.vertex_normals, dtype=float)
+        return self._shown, cut, self._shown_query(), normals
+
+    def _shown_query(self) -> Any:
+        """Der Suchbaum über die gezeigte Fläche — gebaut, wenn ihn ein Zug braucht."""
+        if self._shown_tree is None:
+            self._shown_tree = cKDTree(np.asarray(self._shown.raw.vertices, dtype=float))
+        return self._shown_tree
 
 
 # --- Serialisierung -------------------------------------------------------------
@@ -653,6 +926,9 @@ class SculptParams(BaseParams):
     params=SculptParams,
     consumes=1,
     produces=1,
+    # 1: Spiegelkopien teilen sich glatt (RM-428), der Durchstich nennt
+    # seinen Zug (RM-419).
+    cache_version="1",
     doc=_(
         "Trägt Material mit dem Pinsel auf und ab. Der ganze Vorgang ist ein Schritt "
         "im Verlauf und bleibt änderbar, so viele Züge er auch enthält."
@@ -687,6 +963,7 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
     if params.mirror_at_body:
         middle = mirror_centre(before)
         centre = (float(middle[0]), float(middle[1]), float(middle[2]))
+    ctx.progress(0.0, str(_("Züge übertragen")))
     after = apply_strokes(
         before,
         strokes,
@@ -695,9 +972,18 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
         centre=centre,
         front_only=params.front_only,
         mirror_once=params.mirror_once,
+        progress=lambda share: ctx.progress(0.6 * share, str(_("Züge übertragen"))),
     )
     findings = _sculpting_findings(
-        before, after, strokes, source.id, missed, ctx.profile, ctx.cancelled
+        before,
+        after,
+        strokes,
+        source.id,
+        missed,
+        ctx.profile,
+        ctx.cancelled,
+        centre,
+        lambda share: ctx.progress(0.6 + 0.4 * share, str(_("Wand prüfen"))),
     )
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
@@ -762,6 +1048,8 @@ def _sculpting_findings(
     missed: Sequence[Stroke],
     profile: Profile,
     cancelled: CancelToken | None = None,
+    centre: Vec3 | None = None,
+    progress: Callable[[float], None] | None = None,
 ) -> list[Finding]:
     """Was die Sitzung gekostet hat — und was ihr im Weg stand.
 
@@ -898,7 +1186,12 @@ def _sculpting_findings(
                 values={"strokes": len(strokes), "stages": len(parts)},
             )
         )
-    if not after.is_watertight and before.is_watertight:
+    # ``warp`` lässt die Dreiecke, wie sie sind, und Dichtheit hängt nur an
+    # ihnen: Mit derselben Dreiecksliste ist das Ergebnis genau so dicht wie
+    # der Eingang. Die Prüfung am neuen Netz kostete an 327 680 Dreiecken eine
+    # Zehntelsekunde je Auswertung (RM-419).
+    same_faces = np.array_equal(np.asarray(after.raw.faces), np.asarray(before.raw.faces))
+    if not same_faces and not after.is_watertight and before.is_watertight:
         findings.append(
             Finding(
                 code="sculpt.torn",
@@ -923,7 +1216,11 @@ def _sculpting_findings(
             )
         )
     if changed:
-        findings.extend(_damage_findings(before, after, shifted, object_id, profile, cancelled))
+        findings.extend(
+            _damage_findings(
+                before, after, shifted, object_id, profile, cancelled, strokes, centre, progress
+            )
+        )
     return findings
 
 
@@ -931,10 +1228,6 @@ def _sculpting_findings(
 #: dünnste Stelle liegt dort, wo am meisten abgetragen wurde; jeden bewegten
 #: Punkt zu messen kostete an einer feinen Figur Sekunden je Auswertung.
 WALL_PROBES: Final = 256
-
-#: Blockgröße für die Hüllquader der Dreiecke — begrenzt den Speicher an
-#: Netzen mit Millionen Dreiecken.
-_BOX_BLOCK: Final = 262_144
 
 
 def _damage_findings(
@@ -944,6 +1237,9 @@ def _damage_findings(
     object_id: str,
     profile: Profile,
     cancelled: CancelToken | None,
+    strokes: Sequence[Stroke] = (),
+    centre: Vec3 | None = None,
+    progress: Callable[[float], None] | None = None,
 ) -> list[Finding]:
     """Hat ein Zug die Wand durchstoßen oder unter die Mindestwand gedünnt?
 
@@ -953,10 +1249,16 @@ def _damage_findings(
     „übertragen“, und der Export lief ohne Warnung. „Aufgerissen“ kann es
     nicht sehen, denn ``warp`` ändert die Topologie nicht.
 
-    Geprüft wird nur um die bewegten Punkte, mit dem Rand, in dem ein
-    Gegenüber dünner als die Mindestwand liegen kann. Gemeldet wird nur, was
-    der Zug verursacht hat: mehr schneidende Paare mit einem bewegten
-    Dreieck als vorher, eine Wand, die dünner wurde.
+    Geprüft wird nur um die bewegten Punkte: Paare mit einem bewegten
+    Dreieck, die Wand unter den am tiefsten abgetragenen Punkten. Gemeldet
+    wird nur, was der Zug verursacht hat: mehr schneidende Paare mit einem
+    bewegten Dreieck als vorher, eine Wand, die dünner wurde.
+
+    Die Schnittsuche lief bis RM-419 über den gemeinsamen Hüllquader aller
+    bewegten Punkte; sechs kleine Züge rund um eine Kugel nahmen so jedes
+    Dreieck des Körpers mit, und der Formschritt kostete bis zum
+    Hundertdreißigfachen. Jetzt sucht :func:`crossings_at` je Zugbereich und
+    meldet seinen Fortschritt.
     """
     moved_points = shifted > MOVED_EPSILON_MM
     if not moved_points.any():
@@ -965,18 +1267,35 @@ def _damage_findings(
     vertices = np.asarray(after.raw.vertices, dtype=float)
     earlier = np.asarray(before.raw.vertices, dtype=float)
     faces = np.asarray(after.raw.faces, dtype=np.int64)
-    margin = 2.0 * minimum
-    low = np.minimum(vertices[moved_points].min(axis=0), earlier[moved_points].min(axis=0))
-    high = np.maximum(vertices[moved_points].max(axis=0), earlier[moved_points].max(axis=0))
-    near = _faces_in_box(vertices, faces, low - margin, high + margin)
-    if not len(near):
-        return []
-    local = faces[near]
-    touched = moved_points[local].any(axis=1)
+    touched = moved_points[faces].any(axis=1)
+    # Die längste Kante vorher steht im Netzcache (``too_coarse`` fragt sie
+    # auch); jetzt ist keine länger als sie plus zweimal der weiteste Weg.
+    lengths = np.asarray(before.raw.edges_unique_length, dtype=float)
+    longest_then = float(lengths.max()) if len(lengths) else 0.0
+    reach = float(shifted.max())
+    longest = (longest_then + 2.0 * reach, longest_then)
+    # Eine Suche für alles, was hier fragt: Partner der Schnittsuche um die
+    # Zugbereiche, Gegenwände der Wandprobe bis zur Mindestwand, jetzt und —
+    # um den weitesten Weg weiter — vorher.
+    chosen = np.flatnonzero(touched)
+    low, high = face_bounds(vertices, faces[chosen])
+    pad = minimum + reach
+    padded = [(box_low - pad, box_high + pad) for box_low, box_high in boxes_around(low, high)]
+    nearby = np.union1d(faces_touching(vertices, faces, padded, longest[0]), chosen)
 
-    pierced = _new_crossings(earlier, vertices, local, touched, cancelled)
+    pierced = _new_crossings(
+        earlier, vertices, faces, touched, longest, nearby, cancelled, progress
+    )
     if pierced is not None:
-        count, where = pierced
+        count, where, crossing = pierced
+        values: dict[str, float | str] = {"triangles": count}
+        suggestions: tuple[Action, ...] = (SHOW_LOCATION,)
+        culprit = _culprit(strokes, earlier, vertices, faces[crossing], centre)
+        if culprit is not None:
+            # Gezählt wie im Verlauf, ab eins: Die Handlung nimmt genau diesen
+            # Zug aus der Sitzung, als eine rücknehmbare Änderung (RM-419).
+            values["stroke"] = culprit + 1
+            suggestions = (TAKE_BACK_STROKE, SHOW_LOCATION)
         return [
             Finding(
                 code="sculpt.pierced",
@@ -987,13 +1306,13 @@ def _damage_findings(
                     "doppelt. Den Zug schwächer setzen oder zurücknehmen."
                 ),
                 object_id=object_id,
-                values={"triangles": count},
+                values=values,
                 location=where,
-                suggestions=(SHOW_LOCATION,),
+                suggestions=suggestions,
             )
         ]
 
-    thinnest = _thinned_wall(before, after, local, minimum, cancelled)
+    thinnest = _thinned_wall(before, after, faces, nearby, minimum, cancelled)
     if thinnest is None:
         return []
     thickness, where = thinnest
@@ -1013,51 +1332,135 @@ def _damage_findings(
     ]
 
 
-def _faces_in_box(
-    vertices: np.ndarray, faces: np.ndarray, low: np.ndarray, high: np.ndarray
-) -> np.ndarray:
-    """Die Dreiecke, deren Hüllquader den Quader ``low`` … ``high`` berührt."""
-    kept: list[np.ndarray] = [np.zeros(0, dtype=np.int64)]
-    for start in range(0, len(faces), _BOX_BLOCK):
-        corners = vertices[faces[start : start + _BOX_BLOCK]]
-        inside = np.all(corners.max(axis=1) >= low, axis=1) & np.all(
-            corners.min(axis=1) <= high, axis=1
-        )
-        kept.append(np.flatnonzero(inside) + start)
-    return np.concatenate(kept)
-
-
 def _new_crossings(
     earlier: np.ndarray,
     vertices: np.ndarray,
-    local: np.ndarray,
+    faces: np.ndarray,
     touched: np.ndarray,
+    longest: tuple[float, float],
+    nearby: np.ndarray,
     cancelled: CancelToken | None,
-) -> tuple[int, Vec3] | None:
+    progress: Callable[[float], None] | None = None,
+) -> tuple[int, Vec3, np.ndarray] | None:
     """Wie viele Dreiecke sich jetzt an einem bewegten schneiden, wenn es mehr
-    schneidende Paare sind als vorher — und wo das erste liegt."""
-    now = crossing_face_pairs(vertices, local, cancelled)
-    hits = touched[now.first] | touched[now.second]
-    if not hits.any():
+    schneidende Paare sind als vorher — wo das erste liegt, und welche es sind.
+
+    ``longest`` sind Schranken der längsten Kante jetzt und vorher
+    (:func:`faces_touching`), ``nearby`` die Dreiecke, unter denen jetzt die
+    Partner liegen. Vorher wird nur gesucht,
+    wenn jetzt etwas schneidet: Das ist der seltene Fall, und die Suche dort
+    kostet noch einmal dasselbe."""
+    now = crossings_at(
+        vertices, faces, touched, cancelled, progress=progress, longest=longest[0], nearby=nearby
+    )
+    if not len(now.first):
         return None
-    then = crossing_face_pairs(earlier, local, cancelled)
-    if int(hits.sum()) <= int((touched[then.first] | touched[then.second]).sum()):
+    then = crossings_at(earlier, faces, touched, cancelled, longest=longest[1])
+    if len(now.first) <= len(then.first):
         return None
-    crossing = np.unique(np.concatenate([now.first[hits], now.second[hits]]))
-    face = int(now.first[np.flatnonzero(hits)[0]])
-    centre = vertices[local[face]].mean(axis=0)
-    return len(crossing), (float(centre[0]), float(centre[1]), float(centre[2]))
+    crossing = np.unique(np.concatenate([now.first, now.second]))
+    centre = vertices[faces[int(now.first[0])]].mean(axis=0)
+    return len(crossing), (float(centre[0]), float(centre[1]), float(centre[2])), crossing
+
+
+def _culprit(
+    strokes: Sequence[Stroke],
+    earlier: np.ndarray,
+    vertices: np.ndarray,
+    crossing: np.ndarray,
+    centre: Vec3 | None,
+) -> int | None:
+    """Der letzte Zug, dessen Pinsel die durchstoßenen Dreiecke greift.
+
+    Gesucht an den Ecken vor und nach der Sitzung: Ein Zug greift die Fläche
+    seiner Etappe, und die liegt zwischen beiden. ``None``, wenn keiner sie
+    erreicht — dann bleibt nur *Stelle zeigen*.
+    """
+    if not strokes:
+        return None
+    corners = np.unique(np.asarray(crossing, dtype=np.int64).ravel())
+    tree = cKDTree(np.concatenate([earlier[corners], vertices[corners]]))
+    plane = np.zeros(3) if centre is None else np.asarray(centre, dtype=float)
+    for index in range(len(strokes) - 1, -1, -1):
+        stroke = strokes[index]
+        for place, _way in _mirrored(stroke, plane):
+            if tree.query_ball_point(place, stroke.radius * FALLOFF, return_length=True):
+                return index
+    return None
+
+
+def _rays_near(
+    points: np.ndarray,
+    faces: np.ndarray,
+    nearby: np.ndarray,
+    origins: np.ndarray,
+    directions: np.ndarray,
+    reach: float,
+    cancelled: CancelToken | None,
+) -> np.ndarray:
+    """Je Strahl der nächste Treffer bis ``reach`` — gegen die Dreiecke, die er
+    bis dorthin erreichen kann, je Kasten um nahe Strahlen (:func:`box_groups`).
+
+    Weiter weg kann ``inf`` oder ein Treffer stehen; beides ist mehr als
+    ``reach``. Die Proben eines Formschritts sitzen an wenigen Stellen, und
+    jede Stelle fragt nur ihre Umgebung statt aller Dreiecke um alle Stellen.
+    """
+    found = np.full(len(origins), np.inf)
+    groups = box_groups(origins - reach, origins + reach)
+    corners = points[faces[nearby]]
+    low, high = corners.min(axis=1), corners.max(axis=1)
+    for group_low, group_high, group in groups:
+        mine = np.flatnonzero(np.all(low <= group_high, axis=1) & np.all(high >= group_low, axis=1))
+        for members in _clumps(origins, group):
+            box_low = origins[members].min(axis=0) - reach
+            box_high = origins[members].max(axis=0) + reach
+            near = mine[
+                np.all(low[mine] <= box_high, axis=1) & np.all(high[mine] >= box_low, axis=1)
+            ]
+            travel, _hit = ray_hits_batch(
+                corners[near],
+                origins[members],
+                directions[members],
+                edge_margin=EPS_GEOM,
+                minimum_travel=EPS_GEOM * 100.0,
+                cancelled=cancelled,
+            )
+            found[members] = travel
+    return found
+
+
+#: Wie viele Wandproben sich einen Kasten teilen (:func:`_rays_near`). Die
+#: tiefsten Punkte eines Zugs liegen dicht beieinander; in einem Kasten um
+#: alle prüfte jeder Strahl jedes Dreieck um alle.
+RAY_CLUMP: Final = 16
+
+
+def _clumps(points: np.ndarray, members: np.ndarray) -> list[np.ndarray]:
+    """``members`` in Gruppen zu höchstens :data:`RAY_CLUMP` nahen Punkten,
+    geteilt am Median der längsten Ausdehnung."""
+    if len(members) <= RAY_CLUMP:
+        return [members]
+    spread = np.ptp(points[members], axis=0)
+    axis = int(np.argmax(spread))
+    order = members[np.argsort(points[members, axis], kind="stable")]
+    half = len(order) // 2
+    return [*_clumps(points, order[:half]), *_clumps(points, order[half:])]
 
 
 def _thinned_wall(
     before: MeshData,
     after: MeshData,
-    local: np.ndarray,
+    faces: np.ndarray,
+    nearby: np.ndarray,
     minimum: float,
     cancelled: CancelToken | None,
 ) -> tuple[float, Vec3] | None:
     """Die dünnste Wand unter den am tiefsten abgetragenen Punkten, wenn sie
-    unter ``minimum`` liegt und der Zug sie dünner gemacht hat."""
+    unter ``minimum`` liegt und der Zug sie dünner gemacht hat.
+
+    Gefragt werden nur Dreiecke, die ein Strahl bis ``minimum`` erreichen
+    kann: Was weiter weg liegt, macht keine Wand dünn, und vorher galt es als
+    dicker als jetzt — dieselbe Antwort, ohne den Rest des Körpers."""
     earlier = np.asarray(before.raw.vertices, dtype=float)
     vertices = np.asarray(after.raw.vertices, dtype=float)
     normals_then = np.asarray(before.raw.vertex_normals, dtype=float)
@@ -1067,26 +1470,27 @@ def _thinned_wall(
     if not len(candidates):
         return None
     probes = candidates[np.argsort(-inward[candidates], kind="stable")[:WALL_PROBES]]
-    normals_now = np.asarray(after.raw.vertex_normals, dtype=float)[probes]
+    # Plattformgleich und nur an den Proben: Die Normalen des ganzen neuen
+    # Netzes kosteten mehr als die ganze Probe.
+    normals_now = stable_vertex_normals_at(after.raw, probes)
     # Dieselben Schwellen wie die Wandstärke (``measure.ray_distances``): Das
     # Dreieck unter dem Startpunkt ist kein Gegenüber.
-    now, _hit = ray_hits_batch(
-        vertices[local],
-        vertices[probes],
-        -normals_now,
-        edge_margin=EPS_GEOM,
-        minimum_travel=EPS_GEOM * 100.0,
-        cancelled=cancelled,
+    now = _rays_near(vertices, faces, nearby, vertices[probes], -normals_now, minimum, cancelled)
+    thin = np.isfinite(now) & (now < minimum)
+    if not thin.any():
+        # Keine Wand unter dem Minimum — wie dick sie vorher war, ändert daran nichts.
+        return None
+    then = np.full(len(probes), np.inf)
+    then[thin] = _rays_near(
+        earlier,
+        faces,
+        nearby,
+        earlier[probes[thin]],
+        -normals_then[probes[thin]],
+        minimum,
+        cancelled,
     )
-    then, _hit = ray_hits_batch(
-        earlier[local],
-        earlier[probes],
-        -normals_then[probes],
-        edge_margin=EPS_GEOM,
-        minimum_travel=EPS_GEOM * 100.0,
-        cancelled=cancelled,
-    )
-    thinner = np.isfinite(now) & (now < minimum) & (now < then)
+    thinner = thin & (now < then)
     if not thinner.any():
         return None
     index = int(np.flatnonzero(thinner)[np.argmin(now[thinner])])

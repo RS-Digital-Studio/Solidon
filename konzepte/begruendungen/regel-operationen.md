@@ -420,6 +420,28 @@ nicht an ihm vorbei.
 Nach `voxel` ist die Materialslot-Zuweisung neu zu übertragen — die Vernetzung
 wurde ersetzt (§20).
 
+**Was sich nicht vereinigen lässt, hält nur dort an, wo es das Ergebnis
+verdirbt** (RM-382, Entscheidung Robert 02.10.2026: „Das Beste für Kunden,
+damit sie bearbeiten können."). Seit `eab5f4f47` hielt jede Boolesche an einem
+Mehrschaler mit einer selbstkreuzenden Schale an: Der Laptop-Ständer (21 Teile,
+eines kreuzt sich 1 121-mal selbst) ließ sich an keiner Stelle mehr bohren,
+auch wo die Bohrung nichts traf, und der Satz nannte weder Grund noch Weg.
+Verlässlich ist das Ergebnis aber überall, wo das Werkzeug die kaputte Schale
+nicht berührt; dort rechnet die Kette wie in 0.5.1 mit den Teilen, wie sie
+sind, und warnt. *Reparieren* fehlt am Halt mit Absicht: Die Reparatur meldet
+eine Eigenkreuzung (`repair.self_crossing`), löst sie aber nicht auf — der
+Knopf endete am selben Halt.
+
+**Die Vorfrage zählt Paare, die sich überdecken, nicht Achsenläufe** (RM-381).
+Am Besenhalter (59 740 Dreiecke, drei Schalen, lange Splitterdreiecke) zählte
+die Achsensuche 55,7 Millionen Grobkandidaten für 14 058 Paare, deren
+Hüllquader sich überdecken; ohne Paarbudget kostete das 3,9 s vor jeder
+Booleschen, mit Budget gab sie sofort auf. Auch eine Draufsicht trennt dort nur
+auf 1,85 Millionen Paare. Zwei Hüllquaderbäume, die gemeinsam absteigen, kommen
+mit 0,05–0,08 s aus; an 64 mehrschaligen Korpuskörpern sind die Antworten
+dieselben. Damit entfällt auch die Teilegrenze für die vollständige Frage
+(RM-383): 300 getrennte Würfel hielten jede Boolesche an.
+
 **Was der Kern nicht geschnitten hat, gibt er in der Darstellung des Eingangs
 zurück** (RM-261, `attributes.in_source_layout`): dieselbe Eckenfolge je
 Dreieck, dieselbe Reihenfolge der Ecken. `manifold3d` übernimmt ein
@@ -632,6 +654,9 @@ und der Fall entsteht gar nicht. Er blieb ohne den Fix grün. Was ihn trägt,
 ist die Normale aus dem echten Treffer (`original_surface_hit`), denn erst die
 tesselierte Facette erzeugt den Überstand.
 
+**`_flank_opens_within`** fragt nur dort, wo die Bohrung schneidet, zählt nur
+Luft mit freiem Strahl quer zur Achse, und eine Nachbarbohrung ist kein Rand.
+
 ### Wo die Vorprüfung selbst urteilt, beweist sie es gegen die Toleranzen der genauen
 
 Die Trennprüfung der Schnittsuche (`intersections._separated`, RM-244)
@@ -654,6 +679,8 @@ eine Vorprüfung dieser Art baut, nimmt jede ihrer Bedingungen einmal heraus
 und sucht den Fall, der dann rot wird — findet er keinen, konstruiert er ihn an
 der Toleranz, die die Bedingung deckt, oder die Bedingung ist überflüssig.
 
+Gemessen werden an ihr Vollständigkeit und Abdeckung, nicht die Zeit allein.
+
 **Und sie bezahlt ihre Rechnung selbst.** Ein Budget, das die genauen
 Prüfungen zählt, zählt die Vorprüfung mit (`SEPARATION_COST`) — sonst liefe
 sie an einem Netz, dessen Paare sie alle trennt, ohne Grenze. Und sie steigt
@@ -665,6 +692,22 @@ Ein eigener Anteil für den frühen Ausstieg ließ die Netzfehlerkarte an
 organischen Netzen acht Prozent weniger Dreiecke prüfen — obwohl die Zeit je
 Paar gesunken war, weil die genaue Prüfung gleiche Ecken seither nicht mehr
 zusammenlegt.
+
+**`_touching_apart` vor der Suche um aktive Dreiecke** (`crossings_at`, RM-419):
+Der Formschritt fragte die ganze Suche über den gemeinsamen Hüllquader aller
+bewegten Punkte; an einer Kugel aus 327 680 Dreiecken kosteten sechs kleine
+Züge 29 bis 32 Sekunden statt 0,22. Neun von zehn Kandidaten einer glatten
+Fläche teilen eine Ecke und stehen schräg — `_separated` gab sie alle an die
+genaue Prüfung (an der Kugel mit R 10: 91 351 von 93 211). Getrennt werden sie
+über die Seite ihrer freien Ecken jenseits `margin` und, wenn beide über die
+Ebene des anderen reiten (am Rand einer Mulde), über auseinanderlaufende
+Schnittstrecken. Die eine Sicherung, nie fast parallel, hat ihren roten Fall
+(`_folds_at_the_tolerance`: Sinus 8,5·10⁻⁷, freie Ecken 4,8·10⁻⁶ über der
+Ebene); eine zweite gegen zusammengelegte nahe Ecken hatte keinen — eine Ecke
+näher als `EPS_GEOM` liegt selbst innerhalb `margin`, gesucht an 200 000
+schmalen Dreiecken — und fiel. Was die Auswertung so findet, sagt der Export
+weiter (`writer.CARRIED_TO_EXPORT`); nachmessen hieße, jeden Körper ganz zu
+prüfen.
 
 ## Eine Zahl beschreibt die Regel, nicht die Lage
 

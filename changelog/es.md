@@ -64,6 +64,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el historial de un cuerpo STEP se pueden reordenar pasos o insertar uno antes, aunque un paso posterior se refiera a un taladro. La referencia sigue al taladro.
 - Un taladro desplazado o duplicado con una dirección nueva sigue exacto en un cuerpo STEP.
 - Una característica reconocida a más de un metro del origen conserva su lugar al cambiarla. Antes el campo recortaba la cifra sin aviso y el taladro se movía.
+- Si un paso alcanza una pieza cuya superficie se cruza consigo misma, se detiene y muestra el lugar. Fuera de ella sigue calculando y avisa de que las piezas no se pudieron unir.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
 - Recortar corta ahora también en ángulo: arriba elige el «Plano»: en un eje con inclinación, paralelo a una cara, por una arista o por tres puntos que marca en la vista.
@@ -85,10 +86,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los rótulos se componen con más precisión: las letras quedan en su sitio y las curvas siguen la fuente, en vez de perder hasta un 2 por ciento de superficie en tamaños pequeños.
 - La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la cama. Los proyectos antiguos conservan su forma.
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
-- Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
+- Un trazo sobre el plano de simetría actúa una vez en lugar de dos, y justo al lado el trazo y su reflejo se funden con suavidad.
 - El editor de esqueleto muestra huesos y articulación en la vista, y una articulación queda en el centro del cuerpo en vez de en su piel, así la figura se dobla de forma pareja.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
-- Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
+- Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe y antes de exportar, con «Mostrar el punto» y «Deshacer el trazo».
 - En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
@@ -96,6 +97,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El destino de «Alinear a la característica» empieza vacío, y el primer clic en la vista lo rellena. «Aplicar» espera hasta entonces en vez de poner el cuerpo en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 - Otro trazo en una cavidad recién excavada la hace más profunda, también con un pincel pequeño. Hasta ahora no surtía efecto y contaba como fallido.
+- Al «Modelar», la ventana muestra cada trazo igual de rápido, también tras muchos trazos. Hasta ahora se volvía más lenta con cada uno.
+- «Fijar el estado» guarda la sesión de modelado tan fina como la calculan la exportación y la impresión, y la ventana sigue utilizable. Antes guardaba la vista más basta.
 
 ### Generar con IA
 

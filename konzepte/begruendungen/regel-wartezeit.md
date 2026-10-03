@@ -232,6 +232,17 @@ reißt die Rechnung kooperativ ab und meldet `revisionCancelled` — am Verlauf
 hat sich dann nichts geändert. `busy` umfasst ihn, `wait_for_idle` wartet auf
 ihn, und ein zweiter Umbau während des ersten wird abgesagt statt eingereiht.
 
+***Stand festschreiben* folgt demselben Muster** (`_BakeWorker`,
+`Session.bake_strokes_async`) und rechnet fein, wie Export und Druck. Bis
+RM-365 schrieb es das Entwurfsnetz des Fensters fest, und der Export war danach
+gröber als ohne: An der Figur aus Weg 4 mit Raster 0,5 mm für *Weich
+verschmelzen* 10 298 statt 22 098 Dreiecke, 14 346,6 statt 14 386,9 mm³, die
+Form bis 0,35 mm verschoben. Fein gerechnet kostet das Sekunden, deshalb im
+Arbeiter mit Fortschritt und *Abbrechen*. Übernommen wird nur, wenn der Schritt
+noch dieselben Parameter und Eingänge hat wie beim Start
+(`Session._bake_from`) — sonst stünde ein Stand fest, der zu keinem Zug mehr
+passt.
+
 **Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
 Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb
 geschriebener Export ist eine halbe Datei, und der Schreiber im Kern hat keinen
@@ -1200,6 +1211,12 @@ Besenhalter — `shapely` und `numpy` geben den GIL überwiegend her. Eine
 Prüfung, die nach jeder Geste neu anläuft, bekommt einen Abbruchschalter:
 Die Wandkarte nimmt seither `cancelled` (`maps.wall_thickness_map`).
 
+**Messfalle beim Takt:** Ein `QTimer` bis 20 ms (oder jeder präzise) hebt
+selbst die Zeitgeberauflösung des Prozesses; eine Sonde mit 5-ms-Takt misst
+die 15,6-ms-Wartezeit je GIL-Griff nie. Gemessen wird mit einem groben Takt ab
+25 ms. (Aus der Regel hierher verschoben, weil sie die Sonde betrifft, nicht
+den Code.)
+
 ### Ein Blick auf eine Datei ist eine Netzfrage
 
 „Zuletzt geöffnet" fragte beim Fensteraufbau jede gemerkte Datei nach ihrer
@@ -1305,3 +1322,11 @@ Zusammenhangskomponente (`scipy.sparse.csgraph`). An der Lochplatte mit
 815 104 Dreiecken kamen Griff und Maße nach dem Klick auf eine Bohrung vorher
 nach 9 bis 21 s, danach nach 1 bis 2,4 s; am Korpus sind alle 339 ebenen
 Stücke und 999 Flächenwahlen dieselben wie vorher.
+
+## Ein Filter auf einem sterblichen Widget bestellt beim `Destroy` ab
+
+Die Richtung entscheidet, nicht die Zählung der `installEventFilter`: Stirbt
+der Filter, räumt Qt selbst auf; stirbt das *überwachte* Objekt, liefe der
+Filter in dessen Abbau, und `Destroy` ist der letzte Takt davor. Auf der
+`QCoreApplication` braucht es den Griff deshalb nicht, an jeder sterblichen
+Filterstelle steht er als Vorsorge.

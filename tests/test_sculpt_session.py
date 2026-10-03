@@ -297,6 +297,81 @@ def test_a_second_carve_into_the_shown_pit_starts_its_own_stage(
     assert second.cut, "der Zug in die gezeigte Mulde beginnt eine eigene Etappe"
 
 
+def test_the_preview_does_not_redo_the_whole_session_after_each_stroke(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-366: Nach jedem Klick rechnete die Vorschau alle Etappen der Sitzung
+    neu, im Oberflächen-Thread — an einer Figur mit 145 742 Ecken 5,8 s nach
+    dem vierzigsten Zug im Wechsel von Auftragen und Glätten, ohne Abbrechen.
+    Jetzt baut ein Klick höchstens eine Etappe, und das Bild ist bitgleich mit
+    dem, was die Operation aus denselben Zügen rechnet."""
+    import numpy as np
+
+    from app.core.geom import sculpt
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    mesh = window._sculpt_mesh(object_id)
+    assert mesh is not None
+    crown = mesh.bounds.maximum
+    built = 0
+    real = sculpt._Stage.__init__
+
+    def counted(self: object, *args: object, **kwargs: object) -> None:
+        nonlocal built
+        built += 1
+        real(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(sculpt._Stage, "__init__", counted)
+    bar = window.sculpt_bar
+    clicks = 16
+    for click in range(clicks):
+        bar.tool.setCurrentIndex(bar.tool.findData("smooth" if click % 2 else "draw"))
+        window._on_sculpt((0.0, 0.0, float(crown[2])))
+
+    assert len(sculpt.stages(window._sculpt_shown())) == clicks, "jeder Zug eine Etappe"
+    assert built <= clicks + 2, f"{built} Etappen gebaut für {clicks} Klicks"
+    preview = window._sculpt_preview
+    assert preview is not None
+    expected = sculpt.apply_strokes(mesh, window._sculpt_shown())
+    assert np.array_equal(np.asarray(preview.shown.raw.vertices), np.asarray(expected.raw.vertices))
+
+
+def test_the_session_mirror_reaches_the_stage_decision_in_the_window(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """RM-454 im Fenster: Die Leiste *Symmetrie* liegt über allen Zügen; ob ein
+    Zug eine eigene Etappe braucht, fragt jetzt auch sein Spiegelbild. Am
+    schiefen Prisma greift ein Klick auf die rechte Wand selbst nichts, sein
+    Spiegelbild aber genau die Mulde, die der Zug davor links gegraben hat."""
+    import numpy as np
+    import trimesh
+
+    from tests.test_sculpt import lopsided_prism
+
+    path = tmp_path / "prisma.stl"
+    path.write_bytes(trimesh.exchange.stl.export_stl(lopsided_prism().raw))
+    window.open_path(path)
+    assert window.session.wait_for_idle(30_000)
+    object_id = str(next(iter(window.session.last_result.scene.objects)))
+    mesh = window._sculpt_mesh(object_id)
+    assert mesh is not None
+    shift = np.asarray(mesh.raw.bounds[0], dtype=float) - np.array([-10.0, -10.0, -10.0])
+    window.start_sculpt(object_id)
+    bar = window.sculpt_bar
+    bar.symmetry.setCurrentIndex(bar.symmetry.findData("x"))
+    bar.tool.setCurrentIndex(bar.tool.findData("carve"))
+    bar.radius.set_value_mm(0.4)
+    bar.strength.set_value_mm(1.0)
+
+    window._on_sculpt(tuple(float(value) for value in np.array([-10.0, 0.0, 0.0]) + shift))
+    window._on_sculpt(tuple(float(value) for value in np.array([9.0, 0.0, 0.0]) + shift))
+
+    first, second = window._sculpt_strokes
+    assert not first.cut
+    assert second.cut, "nur das Spiegelbild greift — auf der Fläche nach der ersten Etappe"
+
+
 def test_undo_takes_back_a_stroke_not_the_operation(window: MainWindow) -> None:
     """Das Rückgängig des Editors läuft auf der Strichliste.
 
@@ -624,6 +699,140 @@ def test_the_wall_check_does_not_hold_the_window(
     assert window.sculpt_bar.warning.text() == text, "an old answer must not overwrite it"
 
 
+def with_a_plate(window: MainWindow, tmp_path: Path) -> str:
+    """Eine 4-mm-Platte, fein genug vernetzt für einen 6-mm-Pinsel, geöffnet
+    wie eine Datei des Kunden."""
+    import trimesh
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 4.0))
+    vertices, faces = trimesh.remesh.subdivide_to_size(box.vertices, box.faces, max_edge=0.8)
+    path = tmp_path / "platte.stl"
+    path.write_bytes(trimesh.exchange.stl.export_stl(trimesh.Trimesh(vertices, faces)))
+    window.open_path(path)
+    assert window.session.wait_for_idle(30_000)
+    object_id = next(iter(window.session.last_result.scene.objects))
+    return str(object_id)
+
+
+def test_taking_back_the_piercing_stroke_is_one_undoable_step(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """*Zug zurücknehmen* am Durchstich im Prüfbericht nimmt genau den Zug aus
+    der Sitzung, der die Wand durchstochen hat — eine Transaktion, die
+    Strg+Z zurückholt (RM-419). Vorher stand „zurücknehmen“ nur im Satz."""
+    from app.core.geom.sculpt import strokes_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Stroke
+
+    object_id = with_a_plate(window, tmp_path)
+    low, high = window.session.last_result.scene.objects[object_id].mesh.raw.bounds
+    middle = (low + high) / 2.0
+    top = float(high[2])
+    harmless = Stroke(
+        point=(float(low[0]) + 3.0, float(low[1]) + 3.0, top),
+        normal=(0.0, 0.0, 1.0),
+        radius=2.0,
+        strength=0.3,
+    )
+    piercing = Stroke(
+        point=(float(middle[0]), float(middle[1]), top),
+        normal=(0.0, 0.0, 1.0),
+        radius=6.0,
+        strength=6.0,
+        tool="carve",
+    )
+    assert window.session.apply(
+        "Formen",
+        [
+            OperationDraft(
+                op="sculpt_strokes",
+                inputs=(object_id,),
+                params={"strokes": strokes_to_text([harmless, piercing])},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    report = window.report
+    item = next(
+        report.list.item(row)
+        for row in range(report.list.count())
+        if getattr(report.list.item(row).data(256), "code", "") == "sculpt.pierced"
+    )
+
+    report._run_action_for(item, "take_back_stroke")
+    assert window.session.wait_for_idle(30_000)
+
+    sculpt = window.session.project.document.ops[-1]
+    assert strokes_from_text(sculpt.params["strokes"]) == [harmless]
+    assert "sculpt.pierced" not in {
+        f.code for f in window.session.last_result.scene.report.findings
+    }
+    assert "Strg+Z" in window.status_message.text()
+
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    restored = window.session.project.document.ops[-1]
+    assert len(strokes_from_text(restored.params["strokes"])) == 2
+
+
+def test_the_export_says_a_stroke_pierced_the_wall(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Durchstich stand im Prüfbericht, der Export schrieb ohne Hinweis
+    (RM-419). Jetzt fragt der Export davor und nennt ihn."""
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    from app.core.geom.sculpt import strokes_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Stroke
+    from app.i18n import tr
+    from tests.ui_helpers import wait_for_export
+
+    object_id = with_a_plate(window, tmp_path)
+    low, high = window.session.last_result.scene.objects[object_id].mesh.raw.bounds
+    middle = (low + high) / 2.0
+    piercing = Stroke(
+        point=(float(middle[0]), float(middle[1]), float(high[2])),
+        normal=(0.0, 0.0, 1.0),
+        radius=6.0,
+        strength=6.0,
+        tool="carve",
+    )
+    assert window.session.apply(
+        "Formen",
+        [
+            OperationDraft(
+                op="sculpt_strokes",
+                inputs=(object_id,),
+                params={"strokes": strokes_to_text([piercing])},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    target = tmp_path / "platte_geformt.stl"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+    seen: list[str] = []
+
+    def cancel(box: QMessageBox) -> int:
+        seen.append(box.informativeText())
+        next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen")).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", cancel)
+    window.action_export()
+    # Der Export wartet erst auf die feine Rechnung (RM-426) und prüft dann.
+    assert window.session.wait_for_idle(60_000)
+    wait_for_export(window)
+
+    assert seen, "der Export schrieb, ohne die durchstochene Wand zu zeigen"
+    assert "Wand dahinter" in seen[0], f"der Dialog nennt den Durchstich nicht: {seen[0]!r}"
+    assert not target.exists()
+
+
 # --- Einbacken (Entscheidung D) -------------------------------------------------
 
 
@@ -678,6 +887,106 @@ def test_baking_and_reopening_keeps_the_face_materials(
     restored = session.evaluate_now().scene.objects["obj_1"]
     assert restored.mesh.slot_indices == before.mesh.slot_indices
     assert restored.material_slots == before.material_slots
+
+
+def with_a_cone_session(window: MainWindow) -> tuple[str, int]:
+    """Ein Kegelstumpf und eine Formsitzung auf seiner Deckfläche."""
+    from app.core.geom.sculpt import strokes_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Stroke
+
+    assert window.session.apply(
+        "Kegel",
+        [
+            OperationDraft(
+                op="create_cone",
+                params={"bottom_diameter": 30.0, "top_diameter": 10.0, "height": 30.0},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    object_id = str(next(iter(window.session.last_result.scene.objects)))
+    top = float(window.session.last_result.scene.objects[object_id].mesh.raw.bounds[1][2])
+    stroke = Stroke(point=(0.0, 0.0, top), normal=(0.0, 0.0, 1.0), radius=6.0, strength=1.0)
+    assert window.session.apply(
+        "Formen",
+        [
+            OperationDraft(
+                op="sculpt_strokes",
+                inputs=(object_id,),
+                params={"strokes": strokes_to_text([stroke])},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    return object_id, window.session.project.document.ops[-1].id
+
+
+def test_baking_keeps_the_fine_result(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-365: *Festschreiben* fror das Entwurfsnetz des Fensters ein. An der
+    Figur aus Weg 4 standen danach 6 964 statt 9 974 Dreiecke im Export, das
+    Volumen 2,6 % weniger, die Form bis 0,94 mm verschoben. Festgeschrieben wird die
+    feine Rechnung — sie ist es, die gerechnet wird, und danach stehen dieselben
+    Dreiecke und dasselbe Volumen wie in der feinen Auswertung."""
+    import app.ui.session as session_module
+
+    object_id, op_id = with_a_cone_session(window)
+    fine = window.session.evaluate_now().scene.objects[object_id].mesh
+    asked: list[str] = []
+    real = session_module.evaluate
+
+    def spied(document: Any, *args: Any, **kwargs: Any) -> Any:
+        asked.append(str(kwargs.get("quality")))
+        return real(document, *args, **kwargs)
+
+    monkeypatch.setattr(session_module, "evaluate", spied)
+    assert window.session.bake_strokes(op_id)
+    assert asked == ["fine"], "das Festschreiben rechnet fein"
+    monkeypatch.setattr(session_module, "evaluate", real)
+    assert window.session.wait_for_idle(30_000)
+
+    baked = window.session.evaluate_now().scene.objects[object_id].mesh
+    assert baked.triangle_count == fine.triangle_count
+    assert baked.volume == pytest.approx(fine.volume, rel=1e-12)
+
+
+def test_baking_in_the_window_runs_beside_it_and_keeps_the_fine_result(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Weg des Fensters: *Festschreiben* im Verlauf rechnet fein im
+    Arbeiter, das Fenster wartet nicht darauf (§2.8), und festgehalten wird
+    der feine Stand."""
+    import threading
+    import time
+
+    import app.ui.session as session_module
+
+    object_id, op_id = with_a_cone_session(window)
+    fine = window.session.evaluate_now().scene.objects[object_id].mesh
+    release = threading.Event()
+    asked: list[str] = []
+    real = session_module.evaluate
+
+    def held(document: Any, *args: Any, **kwargs: Any) -> Any:
+        asked.append(str(kwargs.get("quality")))
+        release.wait(10)
+        return real(document, *args, **kwargs)
+
+    monkeypatch.setattr(session_module, "evaluate", held)
+    started = time.perf_counter()
+    window.bake_sculpt(op_id)
+    assert time.perf_counter() - started < 1.0, "das Fenster wartete auf das Festschreiben"
+    assert window.session.busy
+    release.set()
+    assert window.session.wait_for_idle(30_000)
+    monkeypatch.setattr(session_module, "evaluate", real)
+
+    assert asked and asked[0] == "fine", "das Festschreiben rechnet fein"
+    sculpt = next(entry for entry in window.session.project.document.ops if entry.id == op_id)
+    assert sculpt.params["baked"]
+    assert "Strg+Z" in window.status_message.text()
+    baked = window.session.evaluate_now().scene.objects[object_id].mesh
+    assert baked.triangle_count == fine.triangle_count
 
 
 def test_the_history_offers_baking_only_for_a_live_session(window: MainWindow) -> None:
@@ -831,7 +1140,8 @@ def test_the_button_makes_the_mesh_fine_enough_for_the_brush(window: MainWindow)
     window.start_sculpt()
 
     window.sculpt_bar.refine.click()
-    window.session.wait_for_idle()
+    # Das Vernetzen der Figur dauert unter Last länger als die Vorgabe von 10 s.
+    assert window.session.wait_for_idle(120_000)
 
     assert [entry.op for entry in window.session.project.document.ops][-1] == "remesh_uniform"
     mesh = window._sculpt_mesh(str(window.object_tree.selected()))
@@ -846,7 +1156,8 @@ def test_the_button_goes_when_the_warning_goes(window: MainWindow) -> None:
     window.sculpt_bar.radius.setValue(1.0)
     window.start_sculpt()
     window.sculpt_bar.refine.click()
-    window.session.wait_for_idle()
+    # Das Vernetzen der Figur dauert unter Last länger als die Vorgabe von 10 s.
+    assert window.session.wait_for_idle(120_000)
 
     mesh = window._sculpt_mesh(str(window.object_tree.selected()))
     assert mesh is not None

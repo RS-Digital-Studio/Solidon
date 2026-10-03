@@ -2978,3 +2978,25 @@ def test_split_cache_recalculates_old_single_cut_translation(
         ] == [expected]
     finally:
         set_language(previous)
+
+
+def test_whether_a_step_asked_for_the_quality_survives_the_disk(tmp_path: Path) -> None:
+    """RM-494: Ein Treffer von der Platte meldet, ob der Schritt nach der Güte fragte.
+
+    Ohne Angabe gilt sie als gefragt — ein alter Eintrag rechnet den Export
+    lieber einmal fein nach, als eine Entwurfsdatei zu schreiben.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshCodec, MeshData
+
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    body = SceneObject(id="obj_1", name="Quader", mesh=MeshData.of(trimesh.creation.box()))
+    cache.put("ohne", CachedResult(objects=(body,), reads_quality=False), to_disk=True)
+    cache.put("mit", CachedResult(objects=(body,)), to_disk=True)
+
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    without, asked = cold.get("ohne"), cold.get("mit")
+
+    assert without is not None and without.reads_quality is False
+    assert asked is not None and asked.reads_quality is True

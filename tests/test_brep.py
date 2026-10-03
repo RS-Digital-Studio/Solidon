@@ -2186,9 +2186,15 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
     with pytest.raises(GeometryError) as caught:
         edit.boolean("difference", [part, part])
 
-    from app.core.errors import BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+    # Grund und Weg stehen im Satz (RM-385): Meist berühren sich die Körper nur,
+    # und eine Bewegung behebt es — gefragt am Wortlaut, nicht an der Konstante.
+    from app.core.errors import CANCEL, CORRECT_INPUT
 
-    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+    detail = str(caught.value.detail)
+    assert "berühren sie sich nur an einer Fläche oder Kante" in detail
+    assert "Verschieben Sie einen der beiden" in detail
+    assert "verbind" not in detail.lower()
+    assert caught.value.suggestions == (CORRECT_INPUT, CANCEL)
 
 
 def test_a_radius_that_does_not_fit_is_an_error_not_a_guess() -> None:

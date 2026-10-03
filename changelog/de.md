@@ -88,6 +88,7 @@ Nutzen da und sonst nichts.
 - Im Verlauf eines STEP-Körpers lassen sich Schritte umstellen oder davor einfügen, auch wenn ein späterer Schritt eine Bohrung meint. Der Verweis folgt der Bohrung.
 - Eine Bohrung, mit neuer Richtung versetzt oder verdoppelt, bleibt an einem STEP-Körper exakt.
 - Ein erkanntes Merkmal mehr als einen Meter vom Nullpunkt entfernt behält beim Ändern seinen Ort. Bisher kürzte das Feld die Zahl still, und die Bohrung wanderte.
+- Trifft ein Schritt ein Teil, dessen Oberfläche sich selbst kreuzt, hält er an und zeigt die Stelle. Daneben rechnet er weiter und warnt, dass sich die Teile nicht vereinigen ließen.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Vorn wählen Sie die *Ebene* — an einer Achse mit Neigung, parallel zu einer Fläche, durch eine Kante oder durch drei Punkte, die Sie im Bild anklicken.
@@ -109,10 +110,10 @@ Nutzen da und sonst nichts.
 - Schriftzüge werden genauer gesetzt: Die Buchstaben stehen an ihrer Stelle, und runde Bögen folgen der Schrift, statt bei kleinen Größen bis zu 2 Prozent Fläche zu verlieren.
 - Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
-- Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
+- Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt, und knapp daneben gehen Zug und Spiegelbild glatt ineinander über.
 - Der Skeletteditor zeigt Knochen und Gelenk im Bild, und ein Gelenk sitzt in der Mitte des Körpers statt auf seiner Haut, sodass die Figur gleichmäßig beugt.
 - In den übersetzten Fassungen heißt die Stärke des Formpinsels nicht mehr wie eine Wanddicke.
-- Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
+- Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht und vor dem Export, mit *Stelle zeigen* und *Zug zurücknehmen*.
 - Im Fenster rechnet *Weich verschmelzen* jetzt fein, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
@@ -120,6 +121,8 @@ Nutzen da und sonst nichts.
 - Das Ziel von *An Merkmal ausrichten* ist anfangs leer, und der erste Klick ins Bild füllt es. *Übernehmen* wartet bis dahin, statt den Körper still an die falsche Seite zu setzen.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 - Ein weiterer Zug in eine eben gegrabene Mulde gräbt tiefer, auch mit einem kleinen Pinsel. Bisher blieb er wirkungslos und galt als verfehlt.
+- Beim *Formen* zeigt das Fenster jeden Zug gleich schnell, auch nach vielen Zügen. Bisher wurde es mit jedem Zug langsamer.
+- *Stand festschreiben* legt eine Formsitzung so fein ab, wie Export und Druck sie rechnen, und das Fenster bleibt dabei bedienbar. Bisher wurde die gröbere Ansicht abgelegt.
 
 ### Erzeugen mit KI
 

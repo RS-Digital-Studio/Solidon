@@ -141,6 +141,7 @@ from app.ui.palette import (
     ROLES,
     VIRIDIS,
     DiffPalette,
+    Encoding,
     category_colours,
     readable_on,
     text_colour,
@@ -1051,7 +1052,7 @@ def sketch_cursor(
 
 
 def hatch_lines(
-    corners: Any, normal: Vec3, spacing: float, limit: int = 40
+    corners: Any, normal: Vec3, spacing: float, limit: int = 40, turn: float = 0.0
 ) -> list[tuple[Vec3, Vec3]]:
     """Parallele Striche über einer Dreiecksfläche — zweite Kodierung nach Regel 18.
 
@@ -1070,21 +1071,39 @@ def hatch_lines(
     Eine Fläche, die in der xy-Ebene liegt, hat mit z-Schnitten keinen
     Schnittpunkt — sie läge in der Ebene. Gewählt wird deshalb die Achse, zu
     der die Normale am wenigsten zeigt; das Kreuzprodukt daraus liegt sicher
-    in der Fläche.
+    in der Fläche. ``turn`` dreht die Striche in der Fläche (Bogenmaß): Die
+    Differenzansicht schraffiert Hinzugekommenes unter +45 und Entferntes
+    unter -45 Grad (:func:`body_hatch`).
 
     ``limit`` deckelt die Zahl der Striche. Eine große Fläche mit engem Abstand
     ergäbe sonst tausende Segmente, und die kosten beim Drehen mehr, als sie
     dem Auge sagen.
     """
+    return [
+        (
+            (float(start[0]), float(start[1]), float(start[2])),
+            (float(end[0]), float(end[1]), float(end[2])),
+        )
+        for start, end in _hatch_segments(corners, normal, spacing, limit, turn)
+    ]
+
+
+def _hatch_segments(corners: Any, normal: Any, spacing: float, limit: int, turn: float) -> Any:
+    """Die Rechnung von :func:`hatch_lines` als Feld ``(n, 2, 3)``, je Ebene vektorisiert.
+
+    Ein Differenzkörper hat leicht Hunderttausende Dreiecke; Dreieck für
+    Dreieck in Python wäre bei jeder neuen Vorschau eine spürbare Pause.
+    """
     import numpy as np
 
-    points = np.asarray(corners, dtype=float)
+    empty = np.zeros((0, 2, 3))
+    points = np.asarray(corners, dtype=float).reshape(-1, 3)
     if len(points) < 3 or spacing <= 0.0:
-        return []
+        return empty
     up = np.asarray(normal, dtype=float)
     length = float(np.linalg.norm(up))
     if length <= EPS_GEOM:
-        return []
+        return empty
     up = up / length
     # Die Achse, zu der die Normale am wenigsten zeigt: ihr Kreuzprodukt mit
     # der Normalen ist am längsten und damit am stabilsten.
@@ -1092,40 +1111,88 @@ def hatch_lines(
     axis[int(np.argmin(np.abs(up)))] = 1.0
     across = np.cross(up, axis)
     across /= np.linalg.norm(across)
+    if turn:
+        across = math.cos(turn) * across + math.sin(turn) * np.cross(up, across)
 
     reach = points @ across
     low, high = float(reach.min()), float(reach.max())
     if high - low <= spacing:
-        return []
+        return empty
     steps = np.arange(low + spacing, high, spacing)
     if len(steps) > limit:
         steps = np.linspace(low + spacing, high - spacing / 2.0, limit)
 
     triangles = points.reshape(-1, 3, 3)
     away = reach.reshape(-1, 3)
-    segments: list[tuple[Vec3, Vec3]] = []
-    for level in steps:
-        side = away - level
-        # Ein Dreieck trägt ein Segment, wenn seine Ecken nicht alle auf
-        # derselben Seite liegen.
-        touched = (side.min(axis=1) < 0.0) & (side.max(axis=1) > 0.0)
-        for triangle, offsets in zip(triangles[touched], side[touched], strict=True):
-            crossing = []
-            for first, second in ((0, 1), (1, 2), (2, 0)):
-                one, other = offsets[first], offsets[second]
-                if (one < 0.0) == (other < 0.0):
-                    continue
-                share = one / (one - other)
-                crossing.append(triangle[first] + share * (triangle[second] - triangle[first]))
-            if len(crossing) == 2:
-                start, end = crossing
-                segments.append(
-                    (
-                        (float(start[0]), float(start[1]), float(start[2])),
-                        (float(end[0]), float(end[1]), float(end[2])),
-                    )
-                )
-    return segments
+    # Die Ebenen liegen in gleichem Abstand. Statt jede Ebene gegen jedes
+    # Dreieck zu halten, sagt die Spanne eines Dreiecks, welche Ebenen es
+    # schneiden — streng innen, wie zuvor: Eine Ecke genau auf der Ebene
+    # zählt nicht als Kreuzung.
+    first = float(steps[0])
+    step = float(steps[1] - steps[0]) if len(steps) > 1 else spacing
+    last = len(steps) - 1
+    below = np.floor((away.min(axis=1) - first) / step).astype(np.int64) + 1
+    above = np.ceil((away.max(axis=1) - first) / step).astype(np.int64) - 1
+    below, above = np.clip(below, 0, last), np.clip(above, -1, last)
+    counts = np.maximum(above - below + 1, 0)
+    if not counts.any():
+        return empty
+    hit = np.repeat(np.arange(len(triangles)), counts)
+    within = np.arange(len(hit)) - np.repeat(np.cumsum(counts) - counts, counts)
+    levels = steps[below[hit] + within]
+    corner = triangles[hit]
+    offsets = away[hit] - levels[:, None]
+    keep = (offsets.min(axis=1) < 0.0) & (offsets.max(axis=1) > 0.0)
+    corner, offsets = corner[keep], offsets[keep]
+    following = [1, 2, 0]
+    one, other = offsets, offsets[:, following]
+    crosses = (one < 0.0) != (other < 0.0)
+    share = np.where(crosses, one / np.where(crosses, one - other, 1.0), 0.0)
+    ends = corner + share[:, :, None] * (corner[:, following] - corner)
+    # Die zwei kreuzenden Kanten in Kantenreihenfolge.
+    order = np.argsort(~crosses, axis=1, kind="stable")[:, :2]
+    return np.take_along_axis(ends, order[:, :, None], axis=1)
+
+
+def body_hatch(
+    vertices: Any, faces: Any, spacing: float, turn: float, lift: float, limit: int = 40
+) -> Any:
+    """Eine Schraffur über einen ganzen Körper — die Endpunkte als Feld ``(2n, 3)``.
+
+    Die Flächen werden nach ihrer Hauptrichtung (±x, ±y, ±z) gesammelt, und
+    jede Gruppe bekommt Striche in derselben Drehung (:func:`hatch_lines`).
+    So stehen Hinzugekommenes und Entferntes der Differenzansicht in
+    erkennbar verschiedenen Richtungen, auch für jemanden, der die zwei Farben
+    nicht trennt (Regel 18, §19.1, RM-358 W1-3). ``lift`` hebt die Striche
+    entlang der Flächennormalen über die Fläche, damit sie nicht mit ihr um
+    dieselbe Tiefe streiten.
+    """
+    import numpy as np
+
+    points = np.asarray(vertices, dtype=float)
+    index = np.asarray(faces, dtype=np.int64)
+    if not len(index) or spacing <= 0.0:
+        return np.zeros((0, 3))
+    corners = points[index]
+    normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    lengths = np.linalg.norm(normals, axis=1)
+    usable = lengths > EPS_GEOM
+    normals[usable] /= lengths[usable, None]
+    main = np.argmax(np.abs(normals), axis=1)
+    sign = np.sign(normals[np.arange(len(normals)), main])
+    raised = corners + normals[:, None, :] * lift
+    found = []
+    for axis in range(3):
+        for direction in (-1.0, 1.0):
+            chosen = usable & (main == axis) & (sign == direction)
+            if not chosen.any():
+                continue
+            facing = np.zeros(3)
+            facing[axis] = direction
+            found.append(_hatch_segments(raised[chosen], facing, spacing, limit, turn))
+    if not found:
+        return np.zeros((0, 3))
+    return np.concatenate(found).reshape(-1, 3)
 
 
 def pull_handle(
@@ -1628,6 +1695,12 @@ PROTECTED_HATCH_SPACING = 0.025
 #: Die Striche sind heller als die Tönung, sonst verschwinden sie darin.
 PROTECTED_HATCH_COLOUR = "#d6f0ea"
 PROTECTED_HATCH_WIDTH = 2
+
+#: Die Schraffur der Differenzkörper (RM-358 W1-3): Richtung je Muster aus
+#: ``Encoding.pattern`` — Hinzugekommenes vorwärts, Entferntes rückwärts —,
+#: dieselbe Strichstärke wie an gesperrten Flächen.
+DIFFERENCE_HATCH_TURN: Final[dict[str, float]] = {"forward": math.pi / 4, "backward": -math.pi / 4}
+DIFFERENCE_HATCH_WIDTH = 2
 BED_COLOUR = "#5a6472"
 
 #: Der gefüllte Grund der Platte — dunkler als das Raster darauf und heller
@@ -5687,6 +5760,10 @@ class Viewport(QWidget):
         self._preview_changes = True
         self._preview_hint = ""
         self._difference_actors: list[Any] = []
+        self._difference_hatches: dict[str, tuple[Any, float, float, Any]] = {}
+        """Die Schraffur je Differenzkörper, gemerkt mit Netz, Abstand und
+        Drehung: Ein Neuzeichnen ohne neue Vorschau (Palette, Leertaste)
+        rechnet sie nicht noch einmal."""
         self._covered: set[ObjectId] = set()
         """Körper, deren eigener Aktor gerade unter einer Vorschau verborgen
         ist — neue Dreiecke oder neue Farben liegen deckungsgleich darüber, und
@@ -13448,11 +13525,9 @@ class Viewport(QWidget):
                 if scene_entry is not None and self._result is not None
                 else np.zeros(3)
             )
+            self._add_body(entry.added, colours.added, f"added:{entry.object_id}", 0.95, shift)
             self._add_body(
-                entry.added, colours.added.colour, f"added:{entry.object_id}", 0.95, shift
-            )
-            self._add_body(
-                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.18, shift
+                entry.removed, colours.removed, f"removed:{entry.object_id}", 0.18, shift
             )
             # **Ein Deckel liegt nur auf einem Körper, der im Bild ist** —
             # nicht auf einem ausgeblendeten (§18.8) oder einem auf einer
@@ -13583,7 +13658,16 @@ class Viewport(QWidget):
             opacity = min(opacity, SKETCH_CONTEXT_OPACITY)
         return opacity
 
-    def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
+    def _add_body(
+        self, mesh: Any, encoding: Encoding, name: str, opacity: float, shift: Any
+    ) -> None:
+        """Ein Differenzkörper in seiner Farbe **und** mit seinem Muster (Regel 18).
+
+        Die Farbe allein trennte Hinzugekommenes und Entferntes, das Muster aus
+        ``Encoding.pattern`` las keine Ansicht (RM-358 W1-3). Die Striche haben
+        auf dem deckenden Körper die lesbare Gegenfarbe, auf dem
+        durchscheinenden seine eigene — dort ist der Grund das Bild dahinter.
+        """
         if self._difference_meshes is not None:
             mesh = self._difference_meshes.get(name)
         if self.renderer is None or mesh is None or not len(mesh.raw.faces):
@@ -13596,7 +13680,28 @@ class Viewport(QWidget):
                 np.asarray(raw.vertices, dtype=float) + shift,
                 np.asarray(raw.faces, dtype=np.int64),
                 name=name,
-                style=SurfaceStyle(colour=colour, opacity=opacity, coplanar_overlay=True),
+                style=SurfaceStyle(colour=encoding.colour, opacity=opacity, coplanar_overlay=True),
+            )
+        )
+        turn = DIFFERENCE_HATCH_TURN.get(encoding.pattern)
+        if turn is None:
+            return
+        spacing = max(self._scene_size() * PROTECTED_HATCH_SPACING, EPS_GEOM)
+        kept = self._difference_hatches.get(name)
+        if kept is not None and kept[0] is raw and kept[1] == spacing and kept[2] == turn:
+            ends = kept[3]
+        else:
+            lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
+            ends = body_hatch(raw.vertices, raw.faces, spacing, turn, lift)
+            self._difference_hatches[name] = (raw, spacing, turn, ends)
+        if not len(ends):
+            return
+        self._difference_actors.append(
+            self.renderer.add_lines(
+                np.asarray(ends, dtype=float) + shift,
+                name=f"hatch:{name}",
+                colour=encoding.colour if opacity < 0.5 else readable_on(encoding.colour),
+                width=float(DIFFERENCE_HATCH_WIDTH),
             )
         )
 

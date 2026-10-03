@@ -9820,6 +9820,124 @@ def test_a_bundle_row_acting_on_each_body_is_one_undo_step(
     assert longest() == pytest.approx([300.0, 300.0]), "ein Strg+Z stellt beide wieder her"
 
 
+def test_a_bundle_row_splits_every_chosen_body_in_turn(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-440: *Modell teilen* an einer Sammelzeile teilte nur den ersten Körper.
+
+    Die Handlung lief je Körper an; die zweite Suche traf die laufende erste
+    und endete mit „Die Teilung läuft schon“. Jetzt teilt das Fenster die
+    gewählten Körper nacheinander, jede Teilung ein eigener Rückgängig-Schritt
+    wie beim einzelnen *Modell teilen*.
+    """
+    import time
+
+    import trimesh
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+    from app.ui import panels
+
+    monkeypatch.setattr(
+        panels.BodyChoiceDialog, "ask", lambda parent, title, ids, names: tuple(ids)
+    )
+    parts = []
+    for index in range(2):
+        mesh = trimesh.creation.box((300.0, 20.0, 20.0))
+        mesh.apply_translation((0.0, 40.0 * index, 10.0))
+        parts.append(threemf.AssemblyPart(mesh=MeshData.of(mesh), name=f"Leiste {index + 1}"))
+    assert window.session.import_payload("leisten.3mf", threemf.write_assembly(parts))
+    assert window.session.wait_for_idle()
+    document = window.session.project.document
+    bodies = document.ops[-1].outputs
+    assert len(bodies) == 2
+    window.report.show_result(window.session.last_result, document)
+
+    listing = window.report.list
+    item = next(
+        listing.item(row)
+        for row in range(listing.count())
+        if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.out_of_build_volume"
+    )
+    assert set(item.data(panels._BODIES_ROLE) or ()) == set(bodies), "eine Zeile für beide"
+    listing.setCurrentItem(item)
+    QApplication.processEvents()
+    button = next(
+        child
+        for child in window.report._offers.findChildren(QPushButton)
+        if child.text() == str(errors.SPLIT_MODEL.label)
+    )
+    said: list[str] = []
+    monkeypatch.setattr(window, "announce", lambda text, *args, **kwargs: said.append(str(text)))
+    transactions = len(document.transactions)
+    button.click()
+
+    deadline = time.monotonic() + 120.0
+    while time.monotonic() < deadline and (
+        getattr(window, "_split_turn", None) is not None
+        or window.session.split_running
+        or window.session.busy
+    ):
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    living = window.session.last_result.scene.objects
+    assert not set(bodies) & set(living), "jeder gewählte Körper ist geteilt"
+    assert len(document.transactions) == transactions + 2, "eine Teilung, ein Rückgängig-Schritt"
+    assert not any("läuft schon" in text for text in said), said
+    assert said[-1] == tr(
+        "{done} von {count} Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.",
+        done=2,
+        count=2,
+    )
+
+    window.action_undo()
+    assert window.session.wait_for_idle()
+    living = window.session.last_result.scene.objects
+    assert len(set(bodies) & set(living)) == 1, "ein Strg+Z nimmt eine Teilung zurück"
+
+
+def test_cancelling_a_turn_of_splits_leaves_the_rest_whole(window: MainWindow) -> None:
+    """*Abbrechen* hält in einer Reihe von Teilungen auch die wartenden Körper an (RM-440)."""
+    import time
+
+    for _index in range(2):
+        window.session.apply(
+            "Anlegen",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 300.0, "depth": 20.0, "height": 20.0}
+                )
+            ],
+        )
+        assert window.session.wait_for_idle()
+    document = window.session.project.document
+    bodies = list(window.session.last_result.scene.objects)
+    assert len(bodies) == 2
+    transactions = len(document.transactions)
+
+    window.split_in_turn(bodies)
+    assert window.session.split_running
+    assert window._split_progress_text.startswith(
+        tr("Körper {index} von {count} · {phase}", index=1, count=2, phase="")
+    ), window._split_progress_text
+    window.session.cancel_split()
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline and (
+        window._split_turn is not None or window.session.split_running
+    ):
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert window.session.wait_for_idle()
+
+    assert window._split_turn is None and not window._split_queue
+    assert len(document.transactions) == transactions, "nichts geteilt, nichts angefangen"
+    assert set(bodies) <= set(window.session.last_result.scene.objects)
+
+
 @pytest.mark.parametrize("count", [2, 8])
 @pytest.mark.parametrize("changed", [False, True])
 def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
@@ -11472,6 +11590,92 @@ def _finish_split_progress(window: MainWindow) -> None:
     window.session.splitBusyChanged.emit(False)
 
 
+@pytest.mark.parametrize("owner", ["generate", "agent"])
+def test_beside_a_run_the_customer_works_alongside_sayings_reach_the_status_line(
+    window: MainWindow, owner: str
+) -> None:
+    """RM-500: Neben einer Erzeugung oder einem Zug des Agenten verschwanden Ansagen.
+
+    Der Fortschritt belegte die Statuszeile für Minuten; eine Ansage kam nur
+    als Blase, ein Hinweis gar nicht. Jetzt steht die Ansage so lange in der
+    Zeile wie ihre Blase, ein Hinweis, solange er gilt — danach kehrt der
+    Fortschritt zurück. Ein Lauf, auf den der Kunde wartet, behält die Zeile.
+    """
+    running = "Modell wird erzeugt …" if owner == "generate" else "Der Agent denkt nach."
+    window._set_progress_state(
+        owner,
+        active=True,
+        text=running,
+        minimum=0,
+        maximum=0,
+        value=0,
+        accessible_description=running,
+        cancel_enabled=True,
+        immediate=True,
+    )
+    assert window.status_message.text() == running
+
+    window.announce("Exportiert: halter.stl")
+    assert window.status_message.text() == "Exportiert: halter.stl", "die Ansage kommt an"
+    window._spoken.stop()
+    window._spoken.timeout.emit()
+    assert window.status_message.text() == running, "danach steht der Fortschritt wieder da"
+
+    window.announce("Der Griff versetzt die gewählte Fläche.", receipt=False)
+    assert window.status_message.text() == "Der Griff versetzt die gewählte Fläche."
+    window.announce("", receipt=False)
+    assert window.status_message.text() == running, "ein geräumter Hinweis gibt die Zeile frei"
+    window._set_progress_state(owner, active=False)
+
+
+def test_a_run_the_customer_waits_for_keeps_the_status_line(window: MainWindow) -> None:
+    """RM-500, Gegenstück: Wer auf einen Export wartet, liest dessen Fortschritt."""
+    window._set_progress_state(
+        "export",
+        active=True,
+        text="Wird exportiert …",
+        minimum=0,
+        maximum=0,
+        value=0,
+        accessible_description="Wird exportiert …",
+        cancel_enabled=True,
+        immediate=True,
+    )
+    window.announce("Etwas anderes")
+    assert window.status_message.text() == "Wird exportiert …"
+    window._set_progress_state("export", active=False)
+
+
+def test_the_step_counter_of_a_local_model_counts_to_its_own_cap(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-501: Die Statuszeile zählte jeden Zug gegen „/8“.
+
+    Ein lokales Modell hat seit RM-251a zwölf Schritte je Zug; die Zeile
+    zählte dann „Schritt 9/8“. Der Deckel kommt jetzt vom Modell, das den Zug
+    rechnet.
+    """
+    from app.core.agent.session import MAX_STEPS_LOCAL
+    from app.core.backends.llm import OllamaBackend
+    from app.ui.ai_disclosure import DisclosureResult
+
+    sent: list[object] = []
+    window.session.set_agent_backend(OllamaBackend())
+    monkeypatch.setattr(
+        main_window_module, "ensure_ai_disclosure", lambda *_args: DisclosureResult.CURRENT
+    )
+    monkeypatch.setattr(
+        window.session, "propose_async", lambda *args, **kwargs: sent.append(kwargs["backend"])
+    )
+    window._on_request_sent("eine Bohrung")
+    assert sent, "der Zug ging los"
+    window._on_agent_busy(True)
+    window._on_agent_progress(9, "Netz prüfen")
+    text = window._progress_states["agent"].text
+    assert f"9/{MAX_STEPS_LOCAL}" in text, text
+    window._on_agent_busy(False)
+
+
 def test_split_restores_the_complete_agent_progress(window: MainWindow) -> None:
     """Split überdeckt den Agenten, ohne dessen Anzeige oder Abbruch zu verlieren."""
 
@@ -12760,7 +12964,9 @@ def test_the_export_offers_its_folder(
     monkeypatch.setattr(
         dialogs.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True
     )
-    worker = object()
+    from types import SimpleNamespace
+
+    worker = SimpleNamespace(_objects=("obj_1",), _all_objects=("obj_1",))
     window._export_worker = worker
     try:
         window._export_done(worker, [tmp_path / "dose.3mf"], [])
@@ -12773,6 +12979,60 @@ def test_the_export_offers_its_folder(
 
     window.announce("etwas anderes")
     assert window.reveal_export.isHidden(), "eine neue Ankündigung nimmt ihn mit"
+
+
+def test_the_export_scope_is_empty_only_for_the_whole_scene() -> None:
+    """Der Umfang steht da, sobald nicht alles hinausgeht (RM-358 W1-4)."""
+    from app.ui.main_window import export_scope
+
+    assert export_scope(2, 2) == ""
+    assert export_scope(1, 2) == tr("{count} von {total} Körpern", count=1, total=2)
+    assert "1" in export_scope(1, 2) and "2" in export_scope(1, 2)
+
+
+def test_exporting_a_selection_names_its_scope_in_title_and_receipt(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Strg+E nach einem Klick exportierte still nur den gewählten Körper (RM-358 W1-4).
+
+    Zwei Körper im Bild, einer gewählt: Der Dateidialog heißt „Exportieren:
+    1 von 2 Körpern“, und die Quittung nennt denselben Umfang. Ohne Auswahl
+    bleibt beides wie bisher.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from tests.ui_helpers import export_anyway
+
+    export_anyway(monkeypatch)
+    for _index in range(2):
+        window.session.apply("Anlegen", [OperationDraft(op="create_box")])
+        assert window.session.wait_for_idle()
+    titles: list[str] = []
+
+    def save_as(_parent: object, title: str, *_args: object, **_kwargs: object) -> tuple[str, str]:
+        titles.append(title)
+        return str(tmp_path / f"teil-{len(titles)}.3mf"), "3MF (*.3mf)"
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(save_as))
+    scope = tr("{count} von {total} Körpern", count=1, total=2)
+
+    window.object_tree.select_object("obj_1")
+    window.action_export()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+    assert titles[-1] == tr("Exportieren: {scope}", scope=scope)
+    assert window._announcement == tr(
+        "Exportiert: {file} · {scope}", file="teil-1.3mf", scope=scope
+    )
+
+    window.object_tree.select_object(None)
+    window.action_export()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+    assert titles[-1] == tr("Exportieren")
+    assert window._announcement == tr("Exportiert: {file}", file="teil-2.3mf")
 
 
 # --- die Tour durch ein Beispiel (§37.2) ------------------------------------------
@@ -15177,9 +15437,90 @@ def test_a_part_file_drop_reaches_open_path_but_json_does_not(
     generic_drop = _drag([generic.as_uri()])
     window.dropEvent(generic_drop)  # type: ignore[arg-type]
 
-    assert opened == [part]
+    assert opened == [part, generic], "jede lokale Datei bekommt eine Antwort (RM-358 W1-6)"
     assert part_drop.accepted
-    assert not generic_drop.accepted
+    assert generic_drop.accepted
+
+
+@pytest.mark.parametrize("name", ["gehaeuse.f3d", "figur.blend", "halter.scad", "haus.skp"])
+def test_a_dropped_file_solidon_cannot_read_gets_a_sentence_with_the_way(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Statt des Verbotszeichens ein Satz samt Weg (RM-358 W1-6).
+
+    ``.f3d``, ``.blend``, ``.scad`` und ``.skp`` bekamen beim Ziehen nur das
+    Verbotszeichen. Jetzt nimmt das Fenster jede lokale Datei an und sagt, wie
+    das Modell hereinkommt; das offene Projekt bleibt, wie es war.
+    """
+    said: list[str] = []
+    monkeypatch.setattr(window, "announce", lambda text, *args, **kwargs: said.append(str(text)))
+    path = tmp_path / name
+    path.write_bytes(b"fremd")
+    entering = _drag([path.as_uri()])
+    window.dragEnterEvent(entering)  # type: ignore[arg-type]
+    drop = _drag([path.as_uri()])
+    window.dropEvent(drop)  # type: ignore[arg-type]
+
+    assert entering.accepted and drop.accepted
+    assert said and said[-1] == tr(
+        "„{name}“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem Programm "
+        "als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.",
+        name=name,
+    )
+    assert not window.session.project.document.ops, "nichts wurde eingelesen"
+
+
+def test_a_dropped_gcode_file_is_checked(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine G-Code-Datei auf dem Fenster geht den Weg von *G-Code prüfen* (RM-358 W1-6)."""
+    checked: list[Path] = []
+    monkeypatch.setattr(window, "check_gcode", checked.append)
+    path = tmp_path / "platte.gcode"
+    path.write_text("; gcode\n", encoding="utf-8")
+    drop = _drag([path.as_uri()])
+
+    window.dropEvent(drop)  # type: ignore[arg-type]
+
+    assert drop.accepted
+    assert checked == [path]
+
+
+def test_the_start_screen_takes_every_local_file(tmp_path: Path, qt_app: QApplication) -> None:
+    """Auch das Ablagefeld des Startbildschirms nimmt jede lokale Datei an (RM-358 W1-6)."""
+    from app.ui.start_screen import DropArea
+
+    area = DropArea()
+    dropped: list[Path] = []
+    area.fileDropped.connect(dropped.append)
+    path = tmp_path / "figur.blend"
+    entering = _drag([path.as_uri()])
+    area.dragEnterEvent(entering)  # type: ignore[arg-type]
+    drop = _drag([path.as_uri()])
+    area.dropEvent(drop)  # type: ignore[arg-type]
+    area.deleteLater()
+
+    assert entering.accepted and drop.accepted
+    assert dropped == [path]
+
+
+def test_the_start_screen_says_the_way_where_the_file_was_dropped(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Auf dem Startbildschirm steht der Satz im Ablagefeld (RM-358 W1-6).
+
+    Die Quittung des Fensters liegt über der Ansicht, also hinter dem
+    Startbildschirm; dort war nur die Statuszeile zu lesen.
+    """
+    window._show_start_screen(True)
+    path = tmp_path / "figur.blend"
+    window.open_path(path)
+
+    note = window.start_screen.drop_area.note
+    assert not note.isHidden() and "figur.blend" in note.text()
+    entering = _drag([path.as_uri()])
+    window.start_screen.drop_area.dragEnterEvent(entering)  # type: ignore[arg-type]
+    assert note.isHidden(), "der nächste Zug beginnt ohne den alten Satz"
 
 
 def test_a_bad_address_says_so_before_a_worker_starts(
@@ -20783,6 +21124,91 @@ def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> 
     assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
 
 
+def _two_plates_bound(window: MainWindow) -> tuple[Any, float]:
+    """Zwei Bretter auf zwei Platten, das erste liest *breite* — zurück Ergebnis und Feldgrenze."""
+    from app.core.registry import REGISTRY
+    from app.i18n import _
+
+    session = window.session
+    assert session.add_parameter(
+        Parameter(name="breite", value=200.0, unit="mm", title=_("Breite"))
+    )
+    for width in ("=@breite", 200.0):
+        session.apply(
+            "Anlegen",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": width, "depth": 200.0, "height": 20.0}
+                )
+            ],
+        )
+        assert session.wait_for_idle(30_000)
+    result = session.last_result
+    assert result is not None
+    session.apply(
+        "Anordnen",
+        [
+            OperationDraft(
+                op="arrange_bed", inputs=tuple(result.scene.objects), params={"plates": 2}
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    result = session.last_result
+    assert result is not None
+    assert {entry.plate for entry in result.scene.objects.values()} == {0, 1}, "zwei Platten"
+    entry = {item.name: item for item in REGISTRY.get("create_box").params.spec()}["width"]
+    assert entry.maximum is not None
+    return result, float(entry.maximum)
+
+
+def test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid(window: MainWindow) -> None:
+    """Das erhaltene Bild behält Ausblendung und Plattenwahl (RM-451).
+
+    ``_show_scene`` schnitt die Ausblendungen mit dem leeren Haltergebnis und
+    zählte die Platten daran — das alte Bild kam mit allen Körpern und auf
+    „Alle Platten“ zurück. Gegenfall: eine echte Löschung räumt die Filter
+    weiterhin auf.
+    """
+    import dataclasses
+
+    window.show()
+    result, high = _two_plates_bound(window)
+    QApplication.processEvents()
+    hidden = next(key for key, entry in result.scene.objects.items() if entry.plate == 0)
+    window._on_visibility([hidden], False)
+    window.header.plates.setCurrentIndex(2)
+    QApplication.processEvents()
+    assert window.header.plate == 1 and window.viewport._plate == 1, "Platte 2 gewählt"
+
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    halted = window.session.evaluate_now()
+    assert halted.stopped_at == 1 and not halted.scene.objects
+    window._on_scene(halted)
+    QApplication.processEvents()
+
+    shown = window.viewport._requested_result
+    assert shown is not None and hidden in shown.scene.objects, "das alte Bild bleibt"
+    assert hidden in window._hidden, "die Ausblendung des alten Bilds bleibt"
+    assert hidden in window.viewport._hidden
+    assert window.header.plate == 1, "die gewählte Platte bleibt"
+    assert window.viewport._plate == 1
+    assert not window.viewport.invitation.isVisible(), "kein „Womit fangen Sie an?“ über Körpern"
+
+    document.parameters["breite"] = dataclasses.replace(document.parameters["breite"], value=200.0)
+    window._on_scene(window.session.evaluate_now())
+    window.session.apply(
+        "Löschen", [OperationDraft(op="delete_object", inputs=(hidden,), params={})]
+    )
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert hidden not in window._hidden, "eine echte Löschung räumt die Ausblendung weg"
+    assert hidden not in window.viewport._hidden
+
+
 def test_a_project_halting_at_its_first_step_says_so_instead_of_inviting(
     qt_app: QApplication, tmp_path: Path
 ) -> None:
@@ -21019,7 +21445,7 @@ def _a_blend_in_draft(window: MainWindow) -> None:
     Bis RM-427 tat es ein Kegel; seitdem rechnen Kegel und Ring in beiden
     Stufen mit derselben Teilung. Gröber im Entwurf ist nur noch das
     Verschmelzen über :data:`blend.DRAFT_SAMPLES` Rasterpunkten — hier rund
-    650 000 bei 0,6 mm.
+    330 000 bei 0,8 mm.
     """
     box = {"width": 40.0, "depth": 40.0, "height": 40.0}
     assert window.session.apply(
@@ -21029,7 +21455,7 @@ def _a_blend_in_draft(window: MainWindow) -> None:
             OperationDraft(op="create_box", params=box),
             OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 20.0}),
             OperationDraft(
-                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.6}
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.8}
             ),
         ],
     )
@@ -21082,6 +21508,26 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
     written = sum(len(trimesh.load(path, force="mesh").faces) for path in tmp_path.glob("*.stl"))
     assert written == fine, (written, fine, draft)
     assert window.session.last_quality == "fine"
+
+
+def test_an_export_without_quality_steps_writes_at_once(window: MainWindow, tmp_path: Path) -> None:
+    """Ohne Schritt, der nach der Güte fragt, ist der Entwurf schon fein (RM-494).
+
+    Seit RM-426 rechnete jeder Export fein nach — am Lochbrett-STEP 4,5 bis
+    5 s für eine Datei, die Byte für Byte gleich blieb. Ein eingelesenes Netz
+    fragt nicht nach der Güte; der Export beginnt sofort.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
+
+    window._start_export(tmp_path / "wuerfel.stl", "stl")
+
+    assert window._export_worker is not None, "der Export wartet auf keine feine Rechnung"
+    wait_for_export(window)
+    assert (tmp_path / "wuerfel.stl").is_file()
+    assert window.session.last_quality == "draft", "nachgerechnet wurde nichts"
 
 
 def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:

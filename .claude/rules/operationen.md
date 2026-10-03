@@ -114,15 +114,19 @@ sagen beide Kerne mit demselben Satz ab — keine still niedrigere Wand, kein vo
 
 ## Boolesches geht durch die Rückfallkette
 
-Stufen (§17.2), die erreichte in `solver`: 1 direkt (`direct`); 2 verschweißen
-und entnadeln, ohne ein dichtes Netz aufzureißen (`welded`); 3 minimale Störung
-aus den Rohbits des Generators (`jittered`, mit Startwert); 4 voxelbasiert,
-zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
+Die Stufen (§17.2) stehen im Docstring von `boolean.py`; die erreichte gehört
+in `solver`, `jittered` mit Startwert.
 
 - Stufe 4 steht im Prüfbericht, nie still; danach werden die Materialslots neu
   übertragen (§20). Im Entwurf endet die Kette nach Stufe 2.
-- **Überlappende Teile je Eingang vorab vereinen, mit Befund** (`boolean.parts_united`);
-  Zusatzwerkzeuge ohne Objekt-ID ausnehmen; Mehrschaler durch `boolean()`.
+- **Überlappende Teile je Szenenkörper vorab vereinen, mit Befund**
+  (`boolean.parts_united`), auch am Werkzeug einer Differenz; interne Werkzeuge
+  (`None`) ausnehmen; Mehrschaler durch `boolean()` mit `object_ids` und
+  `ctx.cancelled`, auch über `prepare.drill` u. a.
+- **Nicht Vereinbares rechnet und warnt** (`boolean.parts_not_united`), halt nur
+  am Treffer einer selbstkreuzenden Schale (`CROSSING_SHELL_IN_THE_WAY`,
+  Entscheidung Robert); keine Teilegrenze für die vollständige Vorfrage; wer
+  Proben beurteilt, fängt `GeometryError`.
 - **Was der Kern nicht geschnitten hat, kommt in der Darstellung des Eingangs
   und an seinem Ort zurück** (`attributes.in_source_layout`,
   `prepare_ops._without_scars`): Werkzeuge wandern in die Welt, nie Körper in
@@ -142,7 +146,7 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
 - **Wer Boolesches rechnet, fragt danach — ohne Ausnahme**, an beiden Kernen;
   eine Op mit `boolean(...)` ist erst damit fertig.
 - **Gemessen wird die Wirkung, nicht der Treffer**, auch ohne Boolesches
-  (`sculpt.no_effect` gegen `Profile.printer.layer_height`,
+  (`sculpt.no_effect` gegen die Schichthöhe,
   `sculpt.strokes_missed`), mit dem Profil (`Profile.smallest_printable_volume`
   statt `EPS_GEOM`; ohne `profile` das Epsilon). Ein abtragender Baustein fragt
   die Tiefe (`parts.cuts_no_layer`); die Richtung wird nie aus der nächsten
@@ -151,7 +155,7 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
   nicht herabgestuft** (`SETTLED_BY`). **Was der Endstand widerlegt, fällt auch
   so** (`evaluate._without_outdated`); neue Befunde über Dichtheit, Teilezahl
   oder Wicklung gehören in `CLOSED_STATE_CODES`, `ONE_PIECE_CODES` oder
-  `WOUND_STATE_CODES`.
+  `WOUND_STATE_CODES`, was der Export nennt, in `CARRIED_TO_EXPORT`.
 - **Die Reparatur löst Überschneidungen von sich aus auf** (Entscheidung Robert,
   `RepairParams.self_intersections`, alte Schritte nicht; `repair.self_crossing`).
 - **Was aus einem Verhältnis entsteht, fragt die Auswertung am Endstand**, nicht
@@ -166,20 +170,19 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
 Schlägt sie an, wird an der Sache nachgemessen; ohne Netz bleibt die Näherung,
 zu streng, nie zu milde. **Wie oft schlägt sie im Normalfall an?** Schweigt sie,
 ist das kein Freispruch: Mit `reach` fragt `over_the_edge_along` am Netz nach
-(`_flank_opens_within`: nur wo die Bohrung schneidet, nur Luft mit freiem Strahl
-quer zur Achse, eine Nachbarbohrung ist kein Rand), nie über die ganze Hülle;
+(`_flank_opens_within`, Bedingungen im Docstring), nie über die ganze Hülle;
 jeder Weg, der eine Bohrung setzt, gibt `reach` mit, an beiden Kernen.
 
 ### Wo die Vorprüfung selbst urteilt, beweist sie es gegen die Toleranzen der genauen
 
-`intersections._separated` verwirft nur, was die genaue Prüfung mit all ihren
-Toleranzen auch verwürfe: Abstand über allen, gemeinsame Ecke nur zwischen
-parallelen Ebenen, dort Spiel unter der Treffschwelle. **Jede Sicherung hat
+`intersections._separated` und `_touching_apart` verwerfen nur, was die genaue
+Prüfung mit all ihren Toleranzen auch verwürfe: Abstand über allen, gemeinsame
+Ecke nur zwischen parallelen Ebenen, dort Spiel unter der Treffschwelle, oder
+freie Ecken über `margin`, nie fast parallel. **Jede Sicherung hat
 einen konstruierten Fall, an dem ihr Fehlen einen Treffer kostet**
 (`_pairs_at_the_tolerance`): Jede Bedingung einmal herausnehmen; ohne roten Fall
 ihn an der Toleranz konstruieren, sonst ist sie überflüssig. Sie zählt im Budget
-mit (`SEPARATION_COST`), steigt früh aus, und gemessen werden Vollständigkeit
-und Abdeckung.
+mit (`SEPARATION_COST`) und steigt früh aus.
 
 ## Eine Zahl beschreibt die Regel, nicht die Lage
 
@@ -426,9 +429,8 @@ mit Befund, oder lassen). Nie still der Netzweg.
 
 `surfaces.folded_groups` faltet die hinterste Gruppe aus `MENU_GROUPS`, die
 allein genügt, erst sonst die größte; `keep` hält die häufige Geste oben
-(Entscheidung Robert). Ohne Qt — ein Test mit `MainWindow` hebt die Abrissquote
-seiner Datei. Wer die Tiefe ändert, misst neu und sucht die Menüwege in den
-Texten (`menu_path`).
+(Entscheidung Robert), ohne Qt. Wer die Tiefe ändert, misst neu und sucht die
+Menüwege in den Texten (`menu_path`).
 
 ## Auto Split: die Folge, die Spiegelebene, der Rand
 

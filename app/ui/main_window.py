@@ -94,6 +94,7 @@ from app.core.agent.session import (
     parse_number,
     report_text,
     standard_text,
+    steps_for,
 )
 from app.core.agent.tools import (
     ADD_FIT,
@@ -145,10 +146,11 @@ from app.core.geom.pose import armature_to_text
 from app.core.geom.sculpt import (
     BRUSH_TO_EDGE,
     SYMMETRY_BITS,
-    apply_strokes,
+    SculptPreview,
     median_edge,
     stages,
     stroke_at,
+    strokes_from_text,
     strokes_to_text,
 )
 from app.core.geom.section import SectionPlane, plane_through
@@ -371,7 +373,7 @@ from app.ui.sketch_editor import (
 )
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
-from app.ui.start_screen import StartScreen, accepted_path, accepted_paths, accepted_url
+from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
 from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
@@ -937,15 +939,18 @@ class _SculptWallWorker(Worker):
     ``done`` trägt die Nummer der Prüfung und die Zahl der zu dünnen Stellen
     — ``None``, wenn das Netz für die Karte zu groß ist. Das Fenster nimmt
     nur die Antwort der jüngsten Prüfung an.
+
+    Geprüft wird die Fläche, die die Vorschau schon zeigt: Der Arbeiter rechnete
+    alle Züge der Sitzung noch einmal, ohne Abbrechen, und das kostete bei
+    vierzig Etappen Sekunden neben dem Fenster (RM-366).
     """
 
     done = Signal(int, object)
 
-    def __init__(self, number: int, mesh: MeshData, strokes: list[Stroke], minimum: float) -> None:
+    def __init__(self, number: int, mesh: MeshData, minimum: float) -> None:
         super().__init__()
         self._number = number
         self._mesh: MeshData | None = mesh
-        self._strokes = strokes
         self._minimum = minimum
         self.cancelled = CancelSignal()
         """Der nächste Zug macht diese Prüfung wertlos — und das Schließen
@@ -955,10 +960,9 @@ class _SculptWallWorker(Worker):
         self.cancelled.cancel()
 
     def work(self) -> None:
-        mesh = self._mesh
-        if mesh is None:
+        sculpted = self._mesh
+        if sculpted is None:
             return
-        sculpted = apply_strokes(mesh, self._strokes)
         try:
             card = wall_thickness_map(
                 sculpted,
@@ -976,9 +980,8 @@ class _SculptWallWorker(Worker):
         self.done.emit(self._number, len(card.highlighted))
 
     def release_finished_references(self) -> None:
-        """Netz und Züge loslassen, sobald die Antwort zugestellt ist."""
+        """Das Netz loslassen, sobald die Antwort zugestellt ist."""
         self._mesh = None
-        self._strokes = []
         super().release_finished_references()
 
 
@@ -1166,6 +1169,16 @@ _PROGRESS_PRIORITY: Final = (
 #: der Kunde gerade wartet (§2.8).
 _BACKGROUND_PROGRESS: Final = frozenset({"generate"})
 
+#: Läufe, neben denen der Kunde weiterarbeitet: Ihr Fortschritt gibt die
+#: Statuszeile für Ansagen und Hinweise frei (RM-500). Eine Erzeugung dauert
+#: Minuten, ein Zug des Agenten bis zu einer; was der Kunde währenddessen
+#: selbst tut, sagte bisher nur eine Blase, ein Hinweis gar nichts.
+_WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
+
+#: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
+#: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
+SPOKEN_HOLD_MS: Final = 8000
+
 
 class _ExportWorker(Worker):
     """Der Export, abseits des Oberflächen-Threads (§2.8, §29).
@@ -1221,6 +1234,7 @@ class _ExportWorker(Worker):
         scene: Any = None,
         document: Any = None,
         checked: list[Finding] | None = None,
+        evaluated: Sequence[Finding] = (),
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -1236,6 +1250,8 @@ class _ExportWorker(Worker):
         self._all_objects = tuple(all_objects) if all_objects is not None else tuple(objects)
         self._scene = scene
         self._document = document
+        self._evaluated = tuple(evaluated)
+        """Die Befunde der Auswertung, aus der die Körper stammen (RM-419)."""
         #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
@@ -1269,6 +1285,7 @@ class _ExportWorker(Worker):
             scene=self._scene,
             document=self._document,
             checked=list(findings),
+            evaluated=self._evaluated,
         )
 
     def work(self) -> None:
@@ -1283,6 +1300,7 @@ class _ExportWorker(Worker):
                     scene=self._scene,
                     document=self._document,
                     cancelled=self.cancelled,
+                    evaluated=self._evaluated,
                 )
                 self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
@@ -1765,6 +1783,18 @@ def _format_from_filter(chosen_filter: str) -> ExportFormat | None:
         if f"*{ending}" in chosen_filter:
             return name
     return None
+
+
+def export_scope(chosen: int, total: int) -> str:
+    """Wie viel der Szene ein Export schreibt — leer, wenn es alles ist (RM-358 W1-4).
+
+    Exportiert wird die Auswahl, ohne Auswahl alles. Nach einem Klick auf ein
+    Merkmal ist ein Körper gewählt, und Strg+E schrieb still nur ihn; Titel
+    und Quittung nennen den Umfang deshalb, sobald es nicht alles ist.
+    """
+    if chosen >= total:
+        return ""
+    return tr("{count} von {total} Körpern", count=chosen, total=total)
 
 
 def _export_target(
@@ -2389,6 +2419,17 @@ class MainWindow(QMainWindow):
         self._announcement = ""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._hint = ""
+        """Der Hinweis, der gerade gilt (``announce(receipt=False)``) — neben
+        einem Lauf aus :data:`_WORKED_ALONGSIDE` steht er in der Zeile (RM-500)."""
+        self._spoken = QTimer(self)
+        """Solange er läuft, steht die letzte Ansage neben einem solchen Lauf in
+        der Zeile; danach kehrt der Fortschritt zurück (RM-500)."""
+        self._spoken.setSingleShot(True)
+        self._spoken.setInterval(SPOKEN_HOLD_MS)
+        self._spoken.timeout.connect(self._render_progress_state)
+        self._agent_steps = MAX_STEPS
+        """Der Schrittdeckel des laufenden Zugs — er hängt am Modell (RM-501)."""
         self._on_start_screen = True
         """Ob der Startbildschirm steht — dort lädt die leere Szene nicht ein (RM-370)."""
         self._last_complete: tuple[Any, EvaluationResult] | None = None
@@ -2616,6 +2657,8 @@ class MainWindow(QMainWindow):
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
+        self.session.bakeFinished.connect(self._bake_finished)
+        self.session.bakeCancelled.connect(self._on_revision_cancelled)
         self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
         self.history_panel.drawingReuseRequested.connect(self.reuse_drawing)
         self.filaments = FilamentPanel(self)
@@ -2685,6 +2728,17 @@ class MainWindow(QMainWindow):
         self._split_findings: tuple[int, list[Finding]] = (-1, [])
         """Was *Automatisch teilen* über seinen Plan zu sagen hatte, und bei
         welcher Zahl von Verlaufsschritten das galt — siehe :meth:`_split_done`."""
+        self._split_queue: list[ObjectId] = []
+        """Die Körper, die eine Reihe von Teilungen noch vor sich hat (RM-440)."""
+        self._split_turn: tuple[int, int] | None = None
+        """Der wievielte Körper einer Reihe gerade geteilt wird, und von wie
+        vielen — ``None`` außerhalb einer Reihe (:meth:`split_in_turn`)."""
+        self._split_turn_done = 0
+        """Wie viele Körper der laufenden Reihe schon geteilt sind."""
+        self._split_turn_stopped = False
+        """Die Reihe wurde abgebrochen — der Rest bleibt ungeteilt."""
+        self._split_next_due = False
+        """Der nächste Körper der Reihe ist schon bestellt (ein Zeitgeber steht aus)."""
         self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
         """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
@@ -3171,6 +3225,8 @@ class MainWindow(QMainWindow):
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
+        self._sculpt_preview: SculptPreview | None = None
+        """Die Vorschau der laufenden Formsitzung, Zug für Zug (RM-366)."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
         self._sketch_body: ObjectId | None = None
@@ -3836,6 +3892,11 @@ class MainWindow(QMainWindow):
             self.status_message.setText(self._announcement)
             return
         status = self._progress_states[status_owner]
+        if status_owner in _WORKED_ALONGSIDE:
+            spoken = self._hint or (self._announcement if self._spoken.isActive() else "")
+            if spoken:
+                self.status_message.setText(spoken)
+                return
         if status.immediate or status_owner == "split" or self._waiting:
             self.status_message.setText(status.text or self._announcement)
         else:
@@ -5641,6 +5702,31 @@ class MainWindow(QMainWindow):
         if error.op_id is not None:
             self._suppress_history_steps([int(error.op_id)])
 
+    def _take_back_stroke(self, error: AppError) -> None:
+        """*Zug zurücknehmen*: den Zug, der die Wand durchstochen hat, aus seiner
+        Formsitzung nehmen (RM-419).
+
+        Der Befund nennt ihn ab eins (``values["stroke"]``). Eine
+        Parameteränderung am Schritt, also eine Transaktion: Strg+Z holt den
+        Zug zurück, und keine Nachfrage davor (Regel 19).
+        """
+        number = error.values.get("stroke")
+        if error.op_id is None or number is None:
+            return
+        operation = next(
+            (entry for entry in self.session.project.document.ops if entry.id == error.op_id),
+            None,
+        )
+        if operation is None or operation.op != "sculpt_strokes":
+            return
+        strokes = strokes_from_text(str(operation.params.get("strokes", "")))
+        index = int(float(number)) - 1
+        if not 0 <= index < len(strokes):
+            return
+        del strokes[index]
+        self.session.change_params(operation.id, {"strokes": strokes_to_text(strokes)})
+        self.announce(tr("Zug zurückgenommen — Strg+Z holt ihn wieder."))
+
     def _suppress_along_after_error(self, error: AppError) -> None:
         """„Diesen Schritt mit ausschalten": dieselben Schritte und der, an dem es hielt."""
         steps = [int(step) for step in str(error.values.get("steps", "")).split(",") if step]
@@ -6223,11 +6309,35 @@ class MainWindow(QMainWindow):
         Statuszeile wird ausdrücklich neu gezeichnet, bevor das Lesen den
         Hauptthread belegt (§2.8). Ein Modell liest die Sitzung dagegen im
         Arbeiter (RM-224, ``Session.import_model_async``).
+
+        Abgelegt wird jede lokale Datei (RM-358 W1-6). Was kein Modell ist,
+        geht seinen eigenen Weg: G-Code zu *G-Code prüfen*, ein Bild zum
+        Relief, alles andere bekommt den Satz, wie das Modell hereinkommt.
         """
-        if path.suffix.lower() == PART_FILE_SUFFIX:
+        suffix = path.suffix.lower()
+        if suffix in GCODE_SUFFIXES:
+            if self._begin_from_the_start_screen():
+                self.check_gcode(path)
+            return
+        if suffix in IMAGE_SUFFIXES:
+            self._drop_image(path)
+            return
+        if suffix not in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
+            said = tr(
+                "„{name}“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem "
+                "Programm als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.",
+                name=path.name,
+            )
+            self.announce(said)
+            if self.stack.currentWidget() is self.start_screen:
+                # Die Quittung liegt über der Ansicht, also hinter dem
+                # Startbildschirm; der Satz steht dort, wo abgelegt wurde.
+                self.start_screen.drop_area.say(said)
+            return
+        if suffix == PART_FILE_SUFFIX:
             self._open_part_file(path)
             return
-        project_file = path.suffix.lower() == PROJECT_SUFFIX
+        project_file = suffix == PROJECT_SUFFIX
         if project_file and not self._may_discard():
             return
         # Vom Startbildschirm aus ersetzt ein Modell das offene Projekt — und
@@ -6810,6 +6920,14 @@ class MainWindow(QMainWindow):
             return
         self._generator_project = self.session._project_generation
         self._generation_timing.end()
+        # **Die Ansage vor dem Lauf** (RM-500): Sie sagt, wo der Fortschritt
+        # steht, und soll ihn nicht acht Sekunden lang verdecken.
+        self.announce(
+            tr(
+                "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen "
+                "stehen unten in der Statusleiste."
+            )
+        )
         self._set_progress_state(
             "generate",
             active=True,
@@ -6822,12 +6940,6 @@ class MainWindow(QMainWindow):
         )
         self._generation_timing.begin()
         dialog.hide()
-        self.announce(
-            tr(
-                "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen "
-                "stehen unten in der Statusleiste."
-            )
-        )
 
     def _generation_stepped(self, fraction: float, text: str) -> None:
         if self._generator is None or self.sender() is not self._generator:
@@ -7030,6 +7142,100 @@ class MainWindow(QMainWindow):
         self._split_protected = len(self.session.protected_features(object_id))
         self.session.split_async(object_id, self._split_done)
 
+    def split_in_turn(self, object_ids: Sequence[ObjectId]) -> None:
+        """Mehrere Körper teilen, einen nach dem anderen (RM-440).
+
+        Der Weg der Sammelzeile im Prüfbericht: *Modell teilen* für sechs zu
+        große Teile. Die Suche läuft im Arbeiter und immer nur einmal zugleich
+        (``Session.split_async``); je Körper gestartet traf die zweite die
+        erste und endete mit „Die Teilung läuft schon“. Die Reihe startet den
+        nächsten Körper, sobald der vorige Arbeiter ausgelaufen ist
+        (:meth:`_on_split_busy`). Fortschritt und *Abbrechen* sind dieselben
+        wie bei einer Teilung; der Balken nennt dazu den Körper der Reihe, und
+        *Abbrechen* hält auch den Rest an. Jede Teilung bleibt ein eigener
+        Rückgängig-Schritt, wie beim einzelnen *Modell teilen*.
+        """
+        if self.session.split_running:
+            self.announce(tr("Die Teilung läuft schon — der Abbrechen-Knopf hält sie an."))
+            return
+        wanted = list(dict.fromkeys(object_ids))
+        if not wanted:
+            return
+        self._split_queue = wanted
+        self._split_turn = (0, len(wanted))
+        self._split_turn_done = 0
+        self._split_turn_stopped = False
+        self._split_next_due = False
+        self._split_next()
+
+    def _split_next(self) -> None:
+        """Den nächsten Körper der Reihe teilen — oder die Reihe abschließen.
+
+        ``_split_next_due`` bleibt gesetzt, bis der nächste Arbeiter läuft:
+        ``split_async`` wartet auf die Auswertung der vorigen Teilung und
+        stellt dabei Ereignisse zu, darunter das Auslaufen des vorigen
+        Arbeiters — ohne die Sperre bestellte es einen zweiten Start.
+        """
+        self._split_next_due = True
+        try:
+            turn = self._split_turn
+            if turn is None:
+                return
+            while self._split_queue and not self._split_turn_stopped:
+                object_id = self._split_queue.pop(0)
+                turn = (turn[0] + 1, turn[1])
+                self._split_turn = turn
+                living = self.session.last_result
+                if living is None or object_id not in living.scene.objects:
+                    # Ein Körper, den es inzwischen nicht mehr gibt (Undo,
+                    # Löschen), hat nichts mehr zu teilen.
+                    continue
+                self.action_auto_split(object_id)
+                if self.session.split_running:
+                    return
+                # Die Sitzung hat abgesagt (Halt, laufende Rechnung) und es
+                # gesagt; mit dem Rest käme dieselbe Absage noch einmal.
+                self._split_turn_stopped = True
+            self._finish_split_turn()
+        finally:
+            self._split_next_due = False
+
+    def _finish_split_turn(self) -> None:
+        """Die Reihe ist zu Ende: sagen, wie viele Körper geteilt sind."""
+        turn = self._split_turn
+        done = self._split_turn_done
+        stopped = self._split_turn_stopped
+        self._split_turn = None
+        self._split_queue = []
+        self._split_turn_done = 0
+        self._split_turn_stopped = False
+        if turn is None or turn[1] < 2:
+            return
+        if stopped and done:
+            self.announce(
+                tr(
+                    "Teilung abgebrochen. {done} von {count} Körpern sind geteilt. "
+                    "Strg+Z nimmt jede Teilung einzeln zurück.",
+                    done=done,
+                    count=turn[1],
+                )
+            )
+        elif not stopped:
+            self.announce(
+                tr(
+                    "{done} von {count} Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.",
+                    done=done,
+                    count=turn[1],
+                )
+            )
+
+    def _split_phase(self, text: str) -> str:
+        """Der Fortschrittstext einer Teilung — in einer Reihe mit dem Körper davor."""
+        turn = self._split_turn
+        if turn is None or turn[1] < 2 or not text:
+            return text
+        return tr("Körper {index} von {count} · {phase}", index=turn[0], count=turn[1], phase=text)
+
     def _split_done(self, applied: Any) -> None:
         """Die Teilung ist angewandt: Befunde in den Bericht, Ergebnis in die Statuszeile.
 
@@ -7041,10 +7247,15 @@ class MainWindow(QMainWindow):
         """
         self.report.add_findings(applied.findings)
         if applied.transaction is not None:
+            # In einer Reihe gelten die Sätze der früheren Teilungen weiter;
+            # die nächste Auswertung hängt sie alle wieder an (RM-440).
+            earlier = self._split_findings[1] if self._split_turn_done else []
             self._split_findings = (
                 len(self.session.project.document.ops),
-                list(applied.findings),
+                [*earlier, *applied.findings],
             )
+            if self._split_turn is not None:
+                self._split_turn_done += 1
         if applied.transaction is None:
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
@@ -7129,8 +7340,17 @@ class MainWindow(QMainWindow):
         Was der Dialog erklärte, steht jetzt in der Ansage danach — was sich
         geändert hat und wie es zurückgeht — und vorher im Tooltip des
         Eintrags im Verlauf.
+
+        Festgeschrieben wird die feine Rechnung, im Arbeiter mit Fortschritt
+        und *Abbrechen* (RM-365); die Ansage kommt mit ihrem Ende
+        (:meth:`_bake_finished`).
         """
-        if not self.session.bake_strokes(op_id):
+        if not self.session.bake_strokes_async(op_id):
+            self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
+
+    def _bake_finished(self, baked: bool) -> None:
+        """Was das Festschreiben bewirkt hat, und wie es zurückgeht."""
+        if not baked:
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
             return
         self.announce(
@@ -7893,8 +8113,18 @@ class MainWindow(QMainWindow):
         )
         if not name:
             return
+        self.check_gcode(Path(name))
 
-        path = Path(name)
+    def check_gcode(self, path: Path) -> None:
+        """Eine G-Code-Datei gegenprüfen, deren Ort schon feststeht.
+
+        Der Weg des Menüs nach dem Dateidialog, und der Weg einer abgelegten
+        Datei: Wer G-Code auf das Fenster zieht, meint dieselbe Handlung
+        (RM-358 W1-6).
+        """
+        if self._gcode_worker is not None:
+            self.announce(tr("Eine G-Code-Datei wird bereits gegenprüft."))
+            return
         target = self.object_tree.selected()
         worker = _GcodeWorker(path)
         self._gcode_worker = worker
@@ -8186,7 +8416,9 @@ class MainWindow(QMainWindow):
         suggested_name = f"{base}{FORMAT_SUFFIX[wanted]}"
         folder = self.settings.export_dir(self.session.path)
         start = str(folder / suggested_name) if folder is not None else suggested_name
-        name, chosen_filter = QFileDialog.getSaveFileName(self, tr("Exportieren"), start, filters)
+        scope = export_scope(len(objects), len(result.scene.objects))
+        title = tr("Exportieren: {scope}", scope=scope) if scope else tr("Exportieren")
+        name, chosen_filter = QFileDialog.getSaveFileName(self, title, start, filters)
         if not name:
             return
         target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
@@ -8306,6 +8538,9 @@ class MainWindow(QMainWindow):
             # sie herum. Ohne beides bliebe die Prüfung, was sie war.
             scene=result.scene,
             document=document,
+            # Und was die Auswertung schon fand: Ein durchstochener Formzug
+            # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
+            evaluated=result.scene.report.findings,
         )
         self._run_export(worker)
 
@@ -8486,23 +8721,37 @@ class MainWindow(QMainWindow):
             self._focus_report()
         if not written:
             return
-        self._announce_written(written)
+        self._announce_written(
+            written, scope=export_scope(len(worker._objects), len(worker._all_objects))
+        )
 
-    def _announce_written(self, written: Sequence[Path]) -> None:
+    def _announce_written(self, written: Sequence[Path], *, scope: str = "") -> None:
         """Was geschrieben wurde und wohin — mit *Ordner zeigen* daneben.
 
         Eine Stelle für den Export und den Variantengenerator: Beide legen
-        Dateien ab, und nach beiden fragt der Kunde dasselbe.
+        Dateien ab, und nach beiden fragt der Kunde dasselbe. ``scope`` nennt
+        den Umfang, wenn nur ein Teil der Szene hinausging (:func:`export_scope`).
         """
-        self.announce(
-            tr("Exportiert: {file}", file=written[0].name)
-            if len(written) == 1
-            else tr(
+        if len(written) == 1:
+            said = (
+                tr("Exportiert: {file} · {scope}", file=written[0].name, scope=scope)
+                if scope
+                else tr("Exportiert: {file}", file=written[0].name)
+            )
+        elif scope:
+            said = tr(
+                "Exportiert: {count} Dateien → {folder} · {scope}",
+                count=len(written),
+                folder=written[0].parent,
+                scope=scope,
+            )
+        else:
+            said = tr(
                 "Exportiert: {count} Dateien → {folder}",
                 count=len(written),
                 folder=written[0].parent,
             )
-        )
+        self.announce(said)
         self._export_folder = written[0].parent
         self.reveal_export.setToolTip(str(self._export_folder))
         self.reveal_export.setStatusTip(str(self._export_folder))
@@ -11894,6 +12143,7 @@ class MainWindow(QMainWindow):
         # bekam eine eigene Etappe, ohne sie verlangt zu haben.
         self.sculpt_bar.cut.setChecked(False)
         self._sculpt_strokes = []
+        self._sculpt_preview = None
         self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
         self.tools.setVisible(False)
@@ -12025,8 +12275,11 @@ class MainWindow(QMainWindow):
                 **bar.values(),
                 # Geklickt wird auf die Vorschau, also nach diesen Zügen. Ob
                 # der neue Zug dort noch wirkt oder eine Etappe braucht, weiß
-                # nur, wer sie kennt (RM-438).
+                # nur, wer sie kennt (RM-438) — samt der Spiegelung, die die
+                # Leiste über alle Züge legt (RM-454).
                 before=self._sculpt_shown(),
+                mirrored=SYMMETRY_BITS.get(bar.plane(), 0),
+                preview=self._sculpt_preview_for(mesh),
             )
         )
         # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
@@ -12064,10 +12317,12 @@ class MainWindow(QMainWindow):
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
 
         Die Vorschau rechnet dieselbe Auswertung wie die Operation, nur auf dem
-        Anzeigenetz und ohne den Stapel darum: Tausend Züge auf dem
-        §31-Prüfnetz kosten 96 ms, ein einzelner also nichts, was jemand
-        bemerkt. Der Dokumentzustand ändert sich dabei nicht — er ändert sich
-        bei „Fertig", in einer Transaktion.
+        Anzeigenetz und ohne den Stapel darum — und nur, was sich geändert hat
+        (:class:`SculptPreview`): Sie rechnete nach jedem Klick die ganze
+        Sitzung neu, an einer Figur mit 145 742 Ecken 5,8 s nach dem
+        vierzigsten Zug im Wechsel mit Glätten (RM-366). Der Dokumentzustand
+        ändert sich dabei nicht — er ändert sich bei „Fertig", in einer
+        Transaktion.
         """
         strokes = self._sculpt_strokes
         self.sculpt_bar.show_count(len(strokes), len(stages(strokes)))
@@ -12085,9 +12340,17 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.refine,
         ):
             self._clear_preview()
-        self.viewport.show_preview_mesh(
-            self._sculpt_target, apply_strokes(mesh, self._sculpt_shown())
-        )
+        preview = self._sculpt_preview_for(mesh)
+        self.viewport.show_preview_mesh(self._sculpt_target, preview.show(self._sculpt_shown()))
+
+    def _sculpt_preview_for(self, mesh: MeshData) -> SculptPreview:
+        """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
+        anderes ist (*Jetzt vernetzen* mitten in der Sitzung)."""
+        preview = self._sculpt_preview
+        if preview is None or preview.mesh is not mesh:
+            preview = SculptPreview(mesh)
+            self._sculpt_preview = preview
+        return preview
 
     def _sculpt_shown(self) -> list[Stroke]:
         """Die Züge der Sitzung mit der gewählten Symmetrie — wie die Vorschau
@@ -12119,10 +12382,10 @@ class MainWindow(QMainWindow):
         if mesh is None:
             return
         self._sculpt_wall_number += 1
+        shown = self._sculpt_preview_for(mesh).show(self._sculpt_shown())
         worker = _SculptWallWorker(
             self._sculpt_wall_number,
-            mesh,
-            self._sculpt_shown(),
+            shown,
             self.session.profile.minimum_wall_thickness,
         )
         worker.done.connect(self._sculpt_walls_checked)
@@ -12300,6 +12563,7 @@ class MainWindow(QMainWindow):
         self._clear_preview()
         self._sculpt_target = None
         self._sculpt_strokes = []
+        self._sculpt_preview = None
         self._sculpt_check.stop()
         # Eine Antwort, die nach dem Verlassen ankommt, gehört niemandem mehr.
         self._sculpt_wall_number += 1
@@ -14840,6 +15104,9 @@ class MainWindow(QMainWindow):
         selected = self.object_tree.selected()
         feature = self.object_tree.selected_feature()
         selection = (selected, feature or "") if selected else None
+        # Ein lokales Modell hat mehr Schritte je Zug (RM-251a); die Zeile
+        # nannte bis dahin immer „/8“ und zählte dann über ihren Deckel (RM-501).
+        self._agent_steps = steps_for(backend)
         self.session.propose_async(request, selection, backend=backend)
 
     def _disclosure_stopped(self, request: str, *, rendering_problem: bool) -> None:
@@ -14892,7 +15159,7 @@ class MainWindow(QMainWindow):
         """
         if not self.chat.busy:
             return
-        text = f"{tr('Schritt')} {step}/{MAX_STEPS} — {label}"
+        text = f"{tr('Schritt')} {step}/{self._agent_steps} — {label}"
         self._set_progress_state("agent", text=text, accessible_description=text)
         # **Und im Chat**, wo der Nutzer während eines Zuges hinsieht. Die
         # Statuszeile bleibt: Sie trägt den Deckel (``/MAX_STEPS``) und steht
@@ -14908,7 +15175,7 @@ class MainWindow(QMainWindow):
             self._split_patience.start()
             self._split_bar_delay.start()
             self._split_fraction = 0.0
-            self._split_progress_text = tr("Die Trennebenen werden gesucht …")
+            self._split_progress_text = self._split_phase(tr("Die Trennebenen werden gesucht …"))
             self._split_determinate = False
             self._split_started = time.monotonic()
             self._set_progress_state(
@@ -14928,6 +15195,16 @@ class MainWindow(QMainWindow):
             self._split_bar_released = False
             self._split_started = None
             self._set_progress_state("split", active=False, cancel_enabled=True)
+            if (
+                self._split_turn is not None
+                and not self._split_next_due
+                and not self.session.split_running
+            ):
+                # Der nächste Körper einer Reihe (RM-440) — erst wenn der
+                # Arbeiter ausgelaufen ist, und über den Zeitgeber, damit die
+                # angewandte Teilung vorher ihre Ansage und Befunde setzt.
+                self._split_next_due = True
+                QTimer.singleShot(0, self, self._split_next)
         self._update_waiting_state()
 
     def _release_split_status(self) -> None:
@@ -14979,8 +15256,8 @@ class MainWindow(QMainWindow):
             self._split_determinate = False
             self._split_fraction = max(self._split_fraction, fraction)
             minimum, maximum = 0, 0
-        self._split_progress_text = text
-        parts = [text]
+        self._split_progress_text = self._split_phase(text)
+        parts = [self._split_progress_text]
         if self._split_determinate:
             parts.append(f"{round(self._split_fraction * 100)} %")
             if left_over := remaining_time(self._split_started, self._split_fraction):
@@ -15004,7 +15281,13 @@ class MainWindow(QMainWindow):
         return "  ·  ".join(part for part in parts if part)
 
     def _on_split_cancel_requested(self) -> None:
-        """Der Knopf wirkt sofort; der Arbeiter bestätigt das Ende später."""
+        """Der Knopf wirkt sofort; der Arbeiter bestätigt das Ende später.
+
+        In einer Reihe (RM-440) hält er auch die Körper an, die noch warten.
+        """
+        if self._split_turn is not None:
+            self._split_turn_stopped = True
+            self._split_queue = []
         self._set_progress_state(
             "split",
             text=tr("Teilung wird abgebrochen …"),
@@ -20774,9 +21057,15 @@ class MainWindow(QMainWindow):
 
         Während eine Datei lädt, ist die Szene auch leer; dann gehört das
         Bild der Ladeanzeige und nicht der Frage, womit man anfängt (RM-370).
+        Gefragt wird das gezeigte Bild: Ein Halt am ersten Schritt ist leer,
+        zu sehen bleibt aber das letzte vollständige Bild (RM-451).
         """
         result = self.session.last_result
-        empty = result is not None and not result.scene.objects and not self.session.busy
+        empty = (
+            result is not None
+            and not self._picture_for(result).scene.objects
+            and not self.session.busy
+        )
         invitation = self.viewport.invitation
         # **Nur eine bekannte Antwort** (RM-492): ``agent_backend`` liest sonst
         # Schlüsselbund und Netz im Hauptfaden, am Arbeiter der Modellfrage
@@ -20907,10 +21196,15 @@ class MainWindow(QMainWindow):
         self.viewport.set_analysis_map(None, None)
         self.viewport.set_layer(None)
         self.analysis_bar.show_legend(None)
+        # Die Ansichtsfilter gehören dem Bild, das gezeigt wird. Hält die Kette
+        # am ersten Schritt an, ist das das letzte vollständige Bild, nicht das
+        # leere Haltergebnis — an diesem gemessen fielen Ausblendung und
+        # Plattenwahl des erhaltenen Bilds weg (RM-451).
+        picture = self._picture_for(result)
         # Ausgeblendetes, das die Szene nicht mehr enthält, wird vergessen —
         # sonst blendet eine wiederhergestellte Nummer später etwas aus, das
         # niemand versteckt hat.
-        self._hidden &= set(result.scene.objects)
+        self._hidden &= set(picture.scene.objects)
         self.viewport.set_hidden(self._hidden)
         self.object_tree.set_hidden(self._hidden)
         # **Und dasselbe für das Merkmalsfenster** — es war der Zwilling, den
@@ -20945,7 +21239,7 @@ class MainWindow(QMainWindow):
         self.object_tree.show_scene(result, self.session.project.document)
         effective_settings = self.effective_print_settings()
         self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
-        plates = {entry.plate for entry in result.scene.objects.values()}
+        plates = {entry.plate for entry in picture.scene.objects.values()}
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
         # unter einem Werkzeug, das Teile auseinanderzieht.
@@ -20975,7 +21269,7 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self._frame_after_resizing()
-        self.viewport.show_scene(self._picture_for(result))
+        self.viewport.show_scene(picture)
         self._show_invitation()
         self._reveal_split_result(result)
         self.history_panel.show_document(
@@ -21452,10 +21746,21 @@ class MainWindow(QMainWindow):
         sich nur darüber und gibt sie danach wieder frei.
         """
         if not receipt:
-            if self._active_progress_owner() is None:
+            self._hint = text
+            owner = self._active_progress_owner()
+            if owner is None:
                 self.status_message.setText(text or self._announcement)
+            elif owner in _WORKED_ALONGSIDE:
+                self._render_progress_state()
             return
         self._announcement = text
+        # Nur was neben einem solchen Lauf gesagt wird, nimmt ihm die Zeile:
+        # Eine Ansage unter einer Teilung oder einem Export gehört zu diesem
+        # und soll danach nicht über dem Agenten stehen bleiben.
+        if text and self._active_progress_owner() in _WORKED_ALONGSIDE:
+            self._spoken.start()
+        else:
+            self._spoken.stop()
         # Eine neue Ankündigung räumt den Ordner-Knopf des Exports ab; der
         # Export stellt ihn nach seiner eigenen wieder hin.
         if hasattr(self, "reveal_export"):
@@ -22238,6 +22543,7 @@ class MainWindow(QMainWindow):
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).
             "reactivate_step": self._reactivate_after_error,
             "suppress_step": self._suppress_after_error,
+            "take_back_stroke": self._take_back_stroke,
             "suppress_along": self._suppress_along_after_error,
             "stop_inserting": lambda _error: self.session.stop_inserting(),
             "enter_licence_key": lambda _error: self.action_activate(),
@@ -22579,7 +22885,15 @@ class MainWindow(QMainWindow):
         )
 
     def _split_after_error(self, error: AppError) -> None:
-        """Zu groß für das Bett: teilen, bis jedes Stück passt (§25)."""
+        """Zu groß für das Bett: teilen, bis jedes Stück passt (§25).
+
+        Aus einer Sammelzeile kommen alle gewählten Körper mit
+        (``split_objects``) und werden der Reihe nach geteilt (RM-440).
+        """
+        several = error.values.get("split_objects")
+        if isinstance(several, (tuple, list)) and len(several) > 1:
+            self.split_in_turn([str(entry) for entry in several])
+            return
         object_id = self._object_of(error)
         if object_id is not None:
             self.action_auto_split(object_id)
@@ -23901,11 +24215,10 @@ class MainWindow(QMainWindow):
             self.session.recover(candidate, path)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if (
-            accepted_path(event) is not None
-            or accepted_url(event) is not None
-            or _image_path(event) is not None
-        ):
+        # Jede lokale Datei wird angenommen, auch eine, die Solidon nicht
+        # liest: Sie bekommt beim Ablegen einen Satz statt des
+        # Verbotszeichens (RM-358 W1-6).
+        if dropped_file(event) is not None or accepted_url(event) is not None:
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
@@ -23925,6 +24238,11 @@ class MainWindow(QMainWindow):
         url = accepted_url(event)
         if url is not None:
             self.download_model(url)
+            event.acceptProposedAction()
+            return
+        other = dropped_file(event)
+        if other is not None:
+            self.open_path(other)
             event.acceptProposedAction()
 
     def _say_files_left_out(self, count: int) -> None:

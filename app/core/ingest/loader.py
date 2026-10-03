@@ -1444,7 +1444,9 @@ def _count_components(
     if len(pieces) <= 1:
         return len(pieces)
     small = small_components(body)
-    crossing = parts_that_cross(body, pieces, cancelled) if closed else None
+    # Ohne Teileliste (es sind dieselben): Eine vollständige Antwort bleibt am
+    # Netz, und die erste Boolesche Operation daran fragt nicht noch einmal.
+    crossing = parts_that_cross(body, cancelled=cancelled) if closed else None
     if crossing is not None:
         findings.append(
             Finding(

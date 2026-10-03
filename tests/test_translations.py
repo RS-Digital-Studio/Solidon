@@ -689,7 +689,7 @@ def test_dynamic_value_labels_keep_catalogue_punctuation_and_raw_paths(
     from app.ui import labels
 
     display_language(language)
-    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    monkeypatch.setattr(app.i18n, "_DISPLAY_UNIT", "mm")
     separator = " : " if language == "fr" else ": "
     assert labels.value_line("diameter_mm", 12.5) == (
         labels.value_label("diameter_mm") + separator + labels.length(12.5)
@@ -708,11 +708,10 @@ def test_french_history_labels_translate_colons_without_changing_names_or_values
 ) -> None:
     """Anlegen, Löschen, Werte und Grenzen nutzen denselben übersetzten Rahmen."""
     from app.core.types import DocumentChange, DocumentState, Parameter, Transaction
-    from app.ui import labels
     from app.ui.panels import _changed_parameters
 
     display_language("fr")
-    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    monkeypatch.setattr(app.i18n, "_DISPLAY_UNIT", "mm")
     old = Parameter("width", 12.5, title=TranslatableText("Breite"), minimum=3.0, maximum=20.0)
     new = Parameter("width", 14.5, title=old.title, maximum=22.5)
     added = Parameter("added", 5.0, title="Cale:12.5")
@@ -795,13 +794,12 @@ def test_french_measurement_warnings_and_advice_keep_complete_text_frames(
 
     from app.core.types import Finding, SettingAdvice
     from app.i18n import tr
-    from app.ui import labels
     from app.ui.chat import _named, _warnings
     from app.ui.print_settings_dialog import PrintSettingsDialog, _TargetedAdvice
     from app.ui.section_bar import MeasureBar
 
     display_language("fr")
-    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    monkeypatch.setattr(app.i18n, "_DISPLAY_UNIT", "mm")
     readouts: list[str] = []
     bar = SimpleNamespace(readout=SimpleNamespace(setText=readouts.append))
     MeasureBar.show_measurement(bar, "distance", 12.5, 3)

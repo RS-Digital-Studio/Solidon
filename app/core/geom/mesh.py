@@ -625,6 +625,36 @@ def stable_vertex_normals(mesh: trimesh.Trimesh) -> np.ndarray:
     if not len(faces):
         return summed
     normals, _areas = stable_normals(mesh)
+    return _angle_weighted(vertices, faces, normals, summed)
+
+
+def stable_vertex_normals_at(mesh: trimesh.Trimesh, wanted: np.ndarray) -> np.ndarray:
+    """:func:`stable_vertex_normals` für einige Ecken — dieselben Bits, ohne den
+    Rest des Netzes.
+
+    Gerechnet wird nur an den Dreiecken, die eine gewünschte Ecke tragen, in
+    ihrer Reihenfolge im Netz: Die Summe je Ecke läuft dann genau so wie über
+    alle. Die Wandprobe eines Formschritts fragt 256 Ecken eines Netzes mit
+    Hunderttausenden (RM-419).
+    """
+    vertices = np.asarray(mesh.vertices, dtype=np.float64)
+    faces = np.asarray(mesh.faces, dtype=np.int64)
+    wanted = np.asarray(wanted, dtype=np.int64)
+    summed = np.zeros((len(vertices), 3), dtype=np.float64)
+    if not len(faces) or not len(wanted):
+        return np.asarray(summed[wanted])
+    marked = np.zeros(len(vertices), dtype=bool)
+    marked[wanted] = True
+    carrying = np.flatnonzero(marked[faces].any(axis=1))
+    normals, _areas = _normals_and_areas(vertices[faces[carrying]])
+    return np.asarray(_angle_weighted(vertices, faces[carrying], normals, summed)[wanted])
+
+
+def _angle_weighted(
+    vertices: np.ndarray, faces: np.ndarray, normals: np.ndarray, summed: np.ndarray
+) -> np.ndarray:
+    """Die Normalen ``normals`` der Dreiecke ``faces``, mit ihren Winkeln je Ecke
+    in ``summed`` aufsummiert und normiert (:func:`stable_vertex_normals`)."""
     corners = vertices[faces]
     angles = np.zeros((len(faces), 3), dtype=np.float64)
     with np.errstate(divide="ignore", invalid="ignore"):

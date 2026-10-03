@@ -31,10 +31,14 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
 | 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
 | 2026-10-03 | [RM-306: Ein weiteres Modell kommt an die freie Stelle nächst der Plattenmitte (03.10.2026)](#rm-306-ein-weiteres-modell-kommt-an-die-freie-stelle-nächst-der-plattenmitte-03102026) |
+| 2026-10-03 | [RM-501: Die Statuszeile zählte Agentenschritte gegen den falschen Deckel (03.10.2026)](#rm-501-die-statuszeile-zählte-agentenschritte-gegen-den-falschen-deckel-03102026) |
+| 2026-10-03 | [RM-492: Öffnen bis Ruhe: Import verlagert, Hauptfaden frei, gegenüber v0.5.1 kein Rückschritt (03.10.2026)](#rm-492-öffnen-bis-ruhe-import-verlagert-hauptfaden-frei-gegenüber-v051-kein-rückschritt-03102026) |
+| 2026-10-03 | [RM-500: Neben einer Erzeugung oder einem Agentenzug erreichen Ansagen die Statuszeile (03.10.2026)](#rm-500-neben-einer-erzeugung-oder-einem-agentenzug-erreichen-ansagen-die-statuszeile-03102026) |
 | 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
@@ -73,12 +77,15 @@ entfernt hat.
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
 | 2026-10-02 | [RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)](#rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026) |
 | 2026-10-02 | [RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)](#rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026) |
+| 2026-10-02 | [RM-358: Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz (02.10.2026)](#rm-358-weg-1-export-nennt-den-umfang-nicht-die-differenz-trägt-kein-muster-zahlen-und-ablegen-ohne-satz-02102026) |
+| 2026-10-02 | [RM-440: Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten (02.10.2026)](#rm-440-sammelzeile-modell-teilen-über-mehrere-körper-teilt-nur-den-ersten-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
 | 2026-10-02 | [RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)](#rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026) |
 | 2026-10-02 | [RM-458: Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen (02.10.2026)](#rm-458-eine-datei-die-an-schritt-1-hält-sagt-das-statt-zum-anfangen-einzuladen-02102026) |
 | 2026-10-02 | [RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)](#rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026) |
+| 2026-10-02 | [RM-451: Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl (02.10.2026)](#rm-451-bei-einem-halt-verliert-das-erhaltene-bild-ausblendungen-und-plattenwahl-02102026) |
 | 2026-10-02 | [RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)](#rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
@@ -37947,3 +37954,138 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-1), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Ursache war nicht das Warten selbst, sondern dass die Vorschau nicht die Rechnung des Übernehmens war: *Bohrung ändern* und jede andere Operation mit `deterministic=False` bekam ihren Startwert je Anwendung zufällig, einen in der Dokumentkopie der Vorschau und einen anderen beim Übernehmen. Der Startwert steht im Cache-Schlüssel, also rechnete die Auswertung dieselbe Änderung noch einmal. `History` bestimmt einen fehlenden Startwert jetzt aus Operation, Eingängen und Werten (`history._seed_of`), gespeichert wird er wie bisher in der Operation; die Auswertung nach dem Übernehmen findet die Rechnung der Vorschau im Cache. Die Prüfung der Werte durch die Vorschau bleibt, wo ein Bild Pflicht ist (exakte Körper, Maßgruppe im Bild): Ein unmöglicher Wert wird weiter nicht übernommen. Ohne Bildpflicht (Netz im Auswahlfenster oder Dialog) brach ein früher Klick die laufende Vorschau samt Hilfsprozess ab und rechnete daneben neu; er wartet jetzt auf eine Vorschau, die dasselbe rechnet wie die Auswertung (`Session.preview_is_the_evaluation`; nicht bei grober Stufe, feiner Güte oder Vorabzählung), und läuft, sobald gerechnet ist, ohne den Vergleich fürs Bild (`Session.drop_preview_picture`). Tests ohne Fenster `test_evaluation.py::test_a_preview_is_the_computation_its_apply_finds_in_the_cache` (am Ausgangsstand rot: anderer Startwert, zweite Rechnung), `::test_a_preview_nobody_will_see_computes_without_comparing`, `::test_the_preview_is_not_the_evaluation_where_it_computes_otherwise`; Fenstertests (Release) `test_operation_ui.py::test_a_mesh_apply_waits_for_the_preview_that_computes_it` (am Ausgangsstand rot) und die Gegenprobe `::test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise`. Gemessen Klick auf *Übernehmen* 0,2 s nach Vorschaustart bis Ergebnis in der Szene, Ausgangsstand gegen Fix im Wechsel, Auswahlfenster: pegboard-STEP 3,41/1,93 s → 1,26/1,12 s, Rucksack-Halter 0,81/0,56 s → 0,71/0,38 s, `garden-hose-holder.3mf` (392 612 Dreiecke) 12,15/11,28 s → 12,23/11,34 s, also nie länger als eine Auswertung allein; am echten Fenster über die Maßgruppe im Bild *Bohrung ändern* je einmal statt zweimal gerechnet, STEP 3,12 → 2,04 s, Rucksack 0,98/0,93 → 0,64/0,64 s, Gartenschlauchhalter 35,4 → 28,2 s (Rechner unter Last). Dreieckszahl und Volumen gleich dem Ausgangsstand (2 762 / 10 647,01 mm³, 15 978 / 27 051,234 mm³, 392 612 / 517 062,054 mm³). Offen und nicht Teil dieses Punkts: *Bohrung ändern* selbst kostet am STEP rund 2,3 s (Gewindelesen in `features_of` des Ergebnisses), am 392k-Netz rund 11 s. Umgesetzt von Claude (Thread „Bedienung und KI“). In main mit `b4eab0244` und `a640ac8dc` (Merge `feb0482c6`).
+
+## RM-500: Neben einer Erzeugung oder einem Agentenzug erreichen Ansagen die Statuszeile (03.10.2026)
+
+<a id="rm-500-neben-einer-erzeugung-oder-einem-agentenzug-erreichen-ansagen-die-statuszeile-03102026"></a>
+<a id="rm-500"></a>
+
+**RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile.**
+  Fund aus RM-371 (03.10.2026). Solange eine Erzeugung läuft, belegt ihr Fortschritt („Modell wird
+  erzeugt … · 14 % · Verstrichen: 2 s“) die Statuszeile. Ansagen anderer Handlungen erscheinen dann
+  nur als Blase, Hinweise gar nicht; beim Agenten ist es genauso.
+  **Fix:** Fortschritt und Ansage teilen sich die Zeile so, dass eine Ansage sichtbar wird und der
+  Fortschritt danach zurückkehrt (oder der Fortschritt steht in seinem eigenen Bereich).
+  **Abnahme:** Test: während eines Laufs erreicht eine Ansage die Statuszeile, danach steht der
+  Fortschritt wieder da; dasselbe beim Agenten.
+
+**Abschluss:** Neben einem Lauf, an dem der Kunde weiterarbeitet (`_WORKED_ALONGSIDE`: Erzeugung und Agent), steht eine dort gesagte Ansage so lange in der Statuszeile wie ihre Blase (`SPOKEN_HOLD_MS`, 8 s), ein Hinweis, solange er gilt; danach kehrt der Fortschritt zurück (`MainWindow._render_progress_state`, `announce`). Ein Lauf, auf den der Kunde wartet (Export, Teilung, Auswertung), behält die Zeile wie bisher, und eine Ansage, die unter einer solchen Teilung gesagt wurde, bleibt danach nicht über dem Agenten stehen. Die Startansage der Erzeugung kommt vor dem Fortschritt und verdeckt ihn nicht. Regel in `.claude/rules/wartezeit.md`; Platz dafür aus der Begründung zum Ereignisfilter, die nach `konzepte/begruendungen/regel-wartezeit.md` zog. Tests in `test_ui.py`: `test_beside_a_run_the_customer_works_alongside_sayings_reach_the_status_line` (Erzeugung, Agent), `test_a_run_the_customer_waits_for_keeps_the_status_line`; ohne die Änderung rot (Gegenprobe). 56 Fenstertests zu Statuszeile, Fortschritt und Agent sowie `test_generate_ui.py` grün. Fenstersonde am echten Fenster mit gestelltem langsamem Generator: 5 von 5 — *Druckplatte ausgeblendet* steht während des Laufs 7 s in der Zeile, der Balken bleibt, danach steht „Modell wird erzeugt (9 s) · 26 % · Verstrichen: 9 s“ wieder da. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-492: Öffnen bis Ruhe: Import verlagert, Hauptfaden frei, gegenüber v0.5.1 kein Rückschritt (03.10.2026)
+
+<a id="rm-492-öffnen-bis-ruhe-import-verlagert-hauptfaden-frei-gegenüber-v051-kein-rückschritt-03102026"></a>
+<a id="rm-492"></a>
+
+**RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.1.2**, gegenüber v0.5.1
+  besser. `open_path(plate_holes.stl)` bis die Sitzung ruht (Median aus vier Läufen, F0FF, darin
+  1 s feste Wartezeit der Sonde): v0.1.2 1,31 s, v0.3.5 6,50, v0.4.4 8,68, v0.5.0 3,69, v0.5.1
+  2,92, heute 2,76 s. v0.1.2 erkannte weniger (keine Angaben „eingepasst/gemessen“, kein
+  Filamentabschnitt).
+  **Fix (allgemein):** Zeitanteile je Schritt messen; trägt die Erkennung den Hauptteil, Bild und
+  Bedienung vor ihrem Ende freigeben und den Rest nachreichen (§2.8).
+  **Abnahme:** an drei Modellen (klein, mittel, groß) Zeit bis bedienbar unter v0.5.1 und im
+  Budget §31, Erkennung kommt nach. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U7), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** Gemessen (03.10.2026, offscreen, je Lauf ein frischer Prozess, `scratchpad/r492/messen.py`, v0.5.1 und Stand dieses Zweigs im Wechsel, Rechner unter Last): Die Zeit bis zur ruhenden Sitzung ist beim **ersten** Öffnen nach dem Start fast ganz der Import von trimesh samt networkx und scipy (2,2–2,7 s an `plate_holes.stl`, mit vorgeladenen Bibliotheken 0,46–0,70 s). Die Merkmalserkennung trägt den Hauptteil nicht; der Vorschlag „Bild vor Ende der Erkennung freigeben“ greift deshalb hier nicht (ab 50 000 Dreiecken gibt es ihn schon, KUNDE-14). Der Import ist seit der Entscheidung zu §31 verlagert: Das Fenster steht früher, die Bibliotheken lädt `_ImportWarmup` dahinter, und nur wer sofort nach dem Start öffnet, wartet auf den Rest (v0.1.2 lud alles vor dem Fenster). Gegenüber v0.5.1 kein Rückschritt: `plate_holes.stl` kalt 2,17/2,62 s gegen 2,78/2,43 s, warm 0,43/0,46 s gegen 0,47/0,49 s bis ins Bild; Kugel mit 81 920 Dreiecken 3,5–9,0 s gegen 4,5–7,7 s (streut unter Last); die längste Blockade des Hauptfadens 0,09–0,12 s gegen 0,13–0,23 s. Behoben ist der eine Rückschritt beim Öffnen, den die Messung fand: Die Einladung fragte beim Wechsel vom Startbildschirm das Sprachmodell im Hauptfaden (Schlüsselbund, Netzprobe, WMI), am Arbeiter dafür vorbei, bis zu 0,45 s Stillstand; sie nimmt jetzt nur eine bekannte Antwort, der Chatknopf kommt mit ihr (`17639f4bc`, Test `test_chat_ui.py::test_the_invitation_waits_for_the_model_question_instead_of_asking_itself`, Gegenprobe rot). Verworfen nach Versuch: networkx über `importlib.util.LazyLoader` nachzuladen — Pythons Importmaschine fasst das Modul schon bei `import networkx` an. Das 1,3-Mio.-Modell ließ sich unter der Last dieser Nacht nicht sinnvoll messen; sein Weg ist das Bild vor der Erkennung. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-501: Die Statuszeile zählte Agentenschritte gegen den falschen Deckel (03.10.2026)
+
+<a id="rm-501-die-statuszeile-zählte-agentenschritte-gegen-den-falschen-deckel-03102026"></a>
+<a id="rm-501"></a>
+
+**RM-501 — Die Statuszeile zählte Agentenschritte gegen den falschen Deckel.**
+Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachmodell zwölf Schritte je Zug hat (`agent.session.steps_for`), zählte die Statuszeile während eines Zugs weiter gegen den festen Deckel acht (`MAX_STEPS`) und zeigte „Schritt 9/8“.
+
+**Abschluss:** Der Deckel kommt vom Modell, das den Zug rechnet: `_on_request_sent` merkt sich `steps_for(backend)`, `_on_agent_progress` zählt dagegen. Test `test_ui.py::test_the_step_counter_of_a_local_model_counts_to_its_own_cap` (Ollama, Schritt 9 von 12), ohne die Änderung rot (Gegenprobe). Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-451: Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl (02.10.2026)
+
+<a id="rm-451-bei-einem-halt-verliert-das-erhaltene-bild-ausblendungen-und-plattenwahl-02102026"></a>
+<a id="rm-451"></a>
+
+**RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
+  Quellenreview `6c9420b1f`, R6C942-02; Folge zum archivierten RM-354.
+  `_show_scene` bereinigt `_hidden` und Plattenzahl aus dem leeren aktuellen
+  Haltergebnis, bevor `_picture_for` das letzte vollständige Bild wählt
+  (`app/ui/main_window.py:19852–19916` am geprüften Stand).
+  **Fix:** Zuerst das gezeigte Bild bestimmen, dessen Ansichtsfilter erhalten.
+  **Abnahme:** Halt am ersten Schritt lässt ausgeblendete Körper und gewählte
+  Platte des erhaltenen Bilds unverändert; echte spätere Körperlöschung
+  bereinigt Filter weiterhin. Bauplan §15.3, §18.8, §25.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+**Abschluss:** `_show_scene` bestimmt zuerst das gezeigte Bild (`_picture_for`) und misst daran Ausblendungen und Plattenzahl; ein Halt am ersten Schritt behält so die ausgeblendeten Körper und die gewählte Platte des erhaltenen Bilds, eine echte Löschung räumt weiter auf. Mitgefunden am Fenster: Über dem erhaltenen Bild stand die Einladung „Womit fangen Sie an?“, weil `_show_invitation` das leere Haltergebnis fragte; sie fragt jetzt ebenfalls das gezeigte Bild. Test: `test_ui.py::test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid` (zwei Platten, eine Ausblendung, Platte 2, Halt am ersten Schritt; Gegenfall Löschung), am Ausgangsstand rot, einzeln grün; die Nachbarn zu Halt und Einladung (9 Fälle) grün. Fenstersonde am echten Fenster (Plattenwahl per Tastatur, Ausblenden über das Signal des Kontextmenüs, Halt über eine gespeicherte Breite jenseits der Feldgrenze): am Stand `origin/main` 3 von 6 (Ausblendung leer, „Alle Platten“, Wähler verborgen), danach 7 von 7. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `7cd40930a`; Entwicklungstor grün (20209 bestanden, ruff, format und mypy ohne Befund).
+
+## RM-440: Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten (02.10.2026)
+
+<a id="rm-440-sammelzeile-modell-teilen-über-mehrere-körper-teilt-nur-den-ersten-02102026"></a>
+<a id="rm-440"></a>
+
+**RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
+  Fund 02.10.2026 bei RM-372 (Claude, Unteragent), am Code gelesen, nicht im Fenster
+  nachgestellt: Wählt der Kunde in der Sammelzeile des Prüfberichts *Modell teilen* für
+  mehrere Körper, startet die Handlung je Körper eine Teilungssuche; die zweite trifft die
+  laufende erste und endet mit „Die Teilung läuft schon“. Geteilt wird nur der erste Körper.
+  **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
+  zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
+  geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
+
+**Abschluss:** Am Fenster nachgestellt (drei 300-mm-Leisten aus einer 3MF, Sammelzeile „(3) Ein Objekt steht über den Bauraum hinaus.“, *Modell teilen*, Körperwahl mit allen): am Stand `origin/main` geteilt nur die erste, eine Transaktion. Jetzt reicht die Sammelzeile alle gewählten Körper an das Fenster (`split_objects`), und `MainWindow.split_in_turn` teilt sie nacheinander: Der nächste startet, wenn der Arbeiter des vorigen ausgelaufen ist (`_on_split_busy`, Sperre `_split_next_due` gegen einen Doppelstart während `wait_for_idle`). Der Fortschritt nennt „Körper 2 von 3 · …“, *Abbrechen* hält auch die wartenden Körper an, jede Teilung bleibt ein eigener Rückgängig-Schritt wie beim einzelnen *Modell teilen*, die Befunde der Suchen sammeln sich über die Reihe, am Ende steht „3 von 3 Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.“ (Abbruch nach geteilten Körpern: eigener Satz). Tests: `test_ui.py::test_a_bundle_row_splits_every_chosen_body_in_turn` (Knopf der Sammelzeile, beide geteilt, zwei Transaktionen, kein „läuft schon“, ein Strg+Z nimmt eine Teilung zurück; am Ausgangsstand rot), `test_cancelling_a_turn_of_splits_leaves_the_rest_whole`, Nachbar `test_a_bundle_row_acting_on_each_body_is_one_undo_step` grün. Fenstersonde am echten Fenster (Klick auf *Modell teilen*, Körperwahl mit Klick auf den Hauptknopf): am Stand `origin/main` 3 von 5, danach 7 von 7. Drei neue Texte in allen Katalogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `fdd3b4bc8`; Entwicklungstor: 20212 bestanden, zwei Abbaufehler in `test_kernel_process.py` unter Last, die Datei allein grün; ruff, format und mypy ohne Befund.
+
+## RM-358: Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz (02.10.2026)
+
+<a id="rm-358-weg-1-export-nennt-den-umfang-nicht-die-differenz-trägt-kein-muster-zahlen-und-ablegen-ohne-satz-02102026"></a>
+<a id="rm-358"></a>
+
+**RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
+  Review 02.10.2026, Gebietsprüfung Weg 1, am HEAD `6ce767031`.
+  - **W1-4 — Strg+E nach einem Merkmalklick exportiert still nur diesen Körper.** Zwei Körper im
+    Bild, die 3MF enthält einen, Quittung „Exportiert: projekt.3mf“. `main_window.py:7693–7698`,
+    `:7811–7816` exportieren die Auswahl; Menütipp (`:3830`), Dialogtitel (`:7764`) und Quittung
+    (`:8011–8019`) nennen den Umfang nicht. Fix ohne Rückfrage: Titel und Quittung nennen „1 von
+    2 Körpern“. §29, §2.8. Sonde `w1_export_auswahl.py`.
+  - **W1-3 — Die Differenzansicht zeichnet ihr Muster nicht.** `Encoding.pattern`
+    (`app/ui/palette.py:182–184`, `:213–229`) wird in `app/ui` nirgends gelesen;
+    `viewport.py:13021–13026` und `_add_body` (`:13156–13171`) unterscheiden Hinzugekommenes und
+    Entferntes nur über Farbe und Deckkraft. `tests/test_palette.py:24–30` prüft eine Zusage, die
+    keine Ansicht einlöst. Fix: `hatch_lines` (`viewport.py:1047`) an die Differenzkörper hängen.
+    Regel 18, §18.7, §19.1 (nur aus der Quelle belegt, Renderer nicht gefahren).
+  - **W1-1 — Die Einheitenfrage schreibt Zahlen mit Punkt und immer in mm**: deutsch „Zoll (in):
+    177.80 × 177.80 × 38.10 mm“, auch bei gewählter Anzeigeeinheit Zoll.
+    `app/core/ingest/ops.py:750–751` (`format_length`), `app/ui/dialogs.py:161` übernimmt;
+    `app.i18n.format_decimal` (`app/i18n/__init__.py:242`) bleibt ungenutzt. §17.1, §19.3,
+    `oberflaeche.md` „Zahlen“. Sonde `w1_einheit.py` Teil A.
+  - **W1-6 — `.f3d`, `.blend`, `.scad`, `.skp`, `.gcode` bekommen beim Ziehen nur das
+    Verbotszeichen.** `start_screen.py:509–528` filtert nach Endung, `main_window.py:22628–22634`
+    nimmt dann nicht an; für Web-Adressen ist dasselbe schon behoben (`start_screen.py:477–490`).
+    Fix: jede lokale Datei annehmen und mit einem Satz samt Weg antworten (G-Code → *G-Code
+    prüfen*). §2.7, §2.3. Sonde `w1_ablegen.py`.
+  **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
+  `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
+  Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
+
+**Abschluss:** Alle vier Funde behoben. **W1-4:** `main_window.export_scope` nennt den Umfang, sobald nicht die ganze Szene hinausgeht; der Dateidialog heißt „Exportieren: 1 von 2 Körpern“, die Quittung „Exportiert: auswahl.3mf · 1 von 2 Körpern“ (auch für mehrere Dateien). **W1-3:** Die Differenzkörper tragen ihr Muster aus `Encoding.pattern`: `viewport.body_hatch` schraffiert je Hauptrichtung der Flächen, Hinzugekommenes unter +45, Entferntes unter −45 Grad (`hatch_lines(turn=…)`, jetzt je Ebene vektorisiert; 327 680 Dreiecke in 0,25 s), Strichfarbe auf dem deckenden Körper die lesbare Gegenfarbe, auf dem durchscheinenden die eigene; gemerkt je Netz. **W1-1:** Die Anzeigeeinheit liegt als Zustand in `app.i18n` (die Oberfläche greift weiter über `labels.set_display_unit`/`display_unit`), und `unit_question` schreibt Zahlen mit dem Dezimalzeichen der Sprache in der Anzeigeeinheit; die Kommandozeile stellt dieselbe Frage samt Größen statt einer ohne. **W1-6:** Startbildschirm, Ablagefeld und Fenster nehmen jede lokale Datei an (`start_screen.dropped_file`); `open_path` schickt G-Code zu *G-Code prüfen* (`check_gcode`), ein Bild zum Relief und sagt sonst „„figur.blend“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem Programm als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.“ — auf dem Startbildschirm zusätzlich im Ablagefeld, weil die Quittung dort hinter ihm liegt. Tests: `test_ui.py::test_the_export_scope_is_empty_only_for_the_whole_scene`, `test_exporting_a_selection_names_its_scope_in_title_and_receipt`, `test_a_dropped_file_solidon_cannot_read_gets_a_sentence_with_the_way` (f3d, blend, scad, skp), `test_a_dropped_gcode_file_is_checked`, `test_the_start_screen_takes_every_local_file`, `test_the_start_screen_says_the_way_where_the_file_was_dropped`, angepasst `test_a_part_file_drop_reaches_open_path_but_json_does_not`; `test_ingest.py::test_the_question_writes_its_sizes_in_the_display_unit`, angepasst `test_the_question_says_how_big_each_answer_would_be` (hielt „101.60“ fest); `test_viewport_decisions.py::test_a_turned_hatch_runs_diagonally_and_mirrors_with_the_other_turn`, `test_the_difference_bodies_carry_their_pattern`; Renderertest einzeln `test_render_contract.py::test_the_hatch_of_an_added_body_shows_on_its_surface` (grün am echten pygfx). Fenstersonde am echten Fenster (Ablegen über echte `QDropEvent`, Strg+E mit Tastendruck, Einheitenfrage im auf Zoll gestellten Fenster, Vorschau von *Verschieben* mit 12 mm): am Stand `origin/main` 2 von 12, danach 14 von 14; im Bildschirmfoto der Vorschau steht der verschobene Körper blau mit Schrägschraffur. Regeln `kern.md` (Zahlen in fertigem Kerntext) und `oberflaeche.md` nachgezogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `7e7072b88`; Entwicklungstor: 20209 bestanden, Ausfälle nur in `test_kernel_process.py` unter Last (die Datei allein 141 bestanden); ruff, format und mypy ohne Befund.
+
+## RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)
+
+<a id="rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026"></a>
+<a id="rm-494"></a>
+
+**RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1. **Regression gegenüber v0.5.1**, eingeführt mit
+  `70aa4c52b` (Fix von RM-426, richtig für Kegel und weich verschmolzene Teile). Exportzeit:
+  pegboard-STEP 0,04 s → 4,5–5,0 s, Rucksack-Halter 0,07 s → 1,1–1,4 s — die geschriebene Datei
+  ist bei beiden byte- bzw. kennzahlgleich wie vorher, weil kein Schritt von der Güte abhängt.
+  **Stellen:** `app/ui/main_window.py:7946`, `app/core/scene/session.py:4628`.
+  **Fix (allgemein):** Fein nachrechnen nur, wenn ein Schritt des Stapels von `ctx.quality`
+  abhängt (Kennzeichen am Register oder Ergebnis der Entwurfsauswertung); sonst das gezeigte
+  Ergebnis schreiben. Die feine Fassung kann im Leerlauf vorab entstehen.
+  **Abnahme:** Kegel und weich verschmolzenes Teil weiter fein (RM-426), pegboard-STEP,
+  Rucksack-Halter und ein drittes Modell ohne gütewirksame Schritte in unter 0,5 s exportiert,
+  Datei unverändert. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
+
+**Abschluss:** Die Auswertung reicht jeder Operation eine beobachtete Güte (`evaluate._WatchedQuality`: Vergleich, Hashwert und `pickle` merken die Frage) und meldet in `EvaluationResult.reads_quality`, ob ein Schritt sie gelesen hat; ein Cachetreffer trägt die Angabe mit, auch von der Platte, ein alter Eintrag ohne sie gilt als gefragt. `Session.fine_current` behandelt einen Entwurf ohne solche Frage als fein. Dazu fragt die Boolesche Kette erst hinter den verlustfreien Stufen nach der Güte (`boolean.boolean`): Beide Ketten beginnen mit `DRAFT_CHAIN`, und hielt *direkt*, war der Entwurf schon die feine Rechnung; vorher wählte die Kette ihre Stufen vorab und meldete so jede Bohrung als gütewirksam. Kegel und Ring rechnen seit RM-427 in beiden Stufen gleich, eine Bohrung an Quader und Platte ist im Entwurf bitgleich zur feinen Rechnung; weich verschmolzene Teile fragen weiter und werden fein nachgerechnet (RM-426). Tests in `test_evaluation.py` (Quader und Bohrung fragen nicht, *Bohrung ändern* an der Platte fragt nicht, Verschmelzen fragt, Treffer melden dasselbe) und `test_cache.py` (Angabe übersteht die Platte); ohne die Kettenänderung 2 von 4 rot (Gegenprobe). Weg-1-Detailsonde am echten Fenster (offscreen, F0FF), Klick bis Datei: Lochbrett-STEP 5,017 → 0,016 s, Rucksack-Halter 1,072 → 0,032 s, Platte 0,285 → 0,017 s (v0.5.1: 0,039 / 0,069 / 0,027 s); Dreiecke und Volumen der Dateien unverändert (2762 / 10 633,23 mm³, 15 978 / 27 026,24 mm³, 796 / 31 250,93 mm³). Rohwerte `F:\solidon-review-reports\regression-0.5.2\weg1\ergebnisse\detail-aufl494b-*`. Begonnen in `claude/rm-494`, abgeschlossen von Claude (Thread „Zweige auflösen“).

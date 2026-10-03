@@ -9,7 +9,7 @@ Die Regeln stehen in `.claude/rules/uebersetzung.md`.
 
 | Datei | Rolle |
 |---|---|
-| `__init__.py` | `tr()`, `TranslatableText`, Sprachumschaltung, `format_decimal()`, `sort_key()` |
+| `__init__.py` | `tr()`, `TranslatableText`, Sprachumschaltung, `format_decimal()`, Anzeigeeinheit (`display_unit()`), `sort_key()` |
 | `catalog.py` | Kataloge laden: `available_languages()`, `read_catalog()`, `install_language()` |
 | `extract.py` | Übersetzbare Texte aus den Quellen einsammeln (§37.2) |
 | `locales/` | Ein JSON je Sprache: `en` `es` `fr` `it` `pt` |

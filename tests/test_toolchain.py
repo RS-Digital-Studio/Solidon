@@ -855,6 +855,41 @@ def test_test_files_do_not_import_private_names_from_each_other() -> None:
     )
 
 
+def _top_level_names_defined_twice(source: str) -> list[tuple[str, int]]:
+    """Namen, die eine Datei auf oberster Ebene ein zweites Mal als Funktion definiert."""
+    seen: set[str] = set()
+    twice: list[tuple[str, int]] = []
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            if node.name in seen:
+                twice.append((node.name, node.lineno))
+            seen.add(node.name)
+    return twice
+
+
+def test_no_test_file_defines_a_function_twice() -> None:
+    """Eine zweite Definition überschattet die erste still, und pytest sammelt nur eine.
+
+    Gefunden am 02.10.2026: Drei Testdateien trugen am Ende eine wortgleiche
+    Kopie eines ganzen Blocks — sieben Tests in ``test_repair.py``, fünf in
+    ``test_prepare.py``, einer in ``test_slot_features.py``. Wer die erste
+    Fassung änderte, prüfte nichts: Gesammelt wurde die unveränderte zweite.
+    """
+    sources = sorted((_ROOT / "tests").glob("test_*.py"))
+    assert sources, "keine Testdateien gefunden — der Wächter prüft nichts"
+    assert _top_level_names_defined_twice("def a():\n    pass\n\n\ndef a():\n    pass\n") == [
+        ("a", 5)
+    ], "die Gegenprobe muss eine doppelte Definition finden"
+
+    found = [
+        f"{path.relative_to(_ROOT).as_posix()}:{line}: {name}"
+        for path in sources
+        for name, line in _top_level_names_defined_twice(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not found, "doppelt definiert, die erste Fassung läuft nie:\n" + "\n".join(found)
+
+
 def test_the_shared_exact_kernel_guard_does_not_skip_its_own_import(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
