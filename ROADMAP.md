@@ -69,7 +69,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
-| [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Stücknummern alter Läufe per Migration gebaut (Format 43→44), gelöschte oder ausgeschaltete Schnitte zählen nicht mit; offen: Roberts Entscheidung zu (a), ob alte Läufe so nachnummeriert werden |
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | B7, B8, B9, B11, B12, B13, N3, N6, N8 und N9 erledigt; offen bleiben getrennte Platten-/Teilwerte, Anzeige, Anschluss und Laufzeitreste |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | (b) Eigenkreuzung endet beim ersten Gegenbeleg (Besenhalter 18,4 → 14,6–15,1 s, Laptop 26–28,6 → 20,1–20,9 s unter Last, Paare bitgleich), (c) ohne zweite Vereinigung gebaut; offen: (a) beim Öffnen am Fenster zuordnen, (b) lastfrei messen und mit Ziel führen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Bekannte Durchgangswand misst örtlich nach, die letzte Vorschau erkennt nur noch den Folgebedarf; Senkplatte im Sitzungsweg 7,6/4,6/3,5 s (Ø 6/6,5/7, unter Last); offen: unter 3 s auf ruhiger Maschine |
@@ -2369,31 +2368,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Vollerkennung nach dem Schritt wurden nicht verändert.
   Nachprüfung (Review 02.10., Arbeitsbaum ungesichert): auf Kernebene bestätigt — Übernehmen am Gartenschlauchhalter 0,06 s, keine Fehl-Treffer. Nachweis am echten Fenster steht aus.
   Registerabgleich 02.10.: steht als `[x]` noch im Abschnitt statt im Archiv.
-
-<a id="rm-287"></a>
-
-- [~] **RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte.** Aus dem Release 0.5.1 (Paket texte, Code-Review T-2;
-  Abschluss von [RM-229](ROADMAP-ARCHIV.md#rm-229)). Seit 0.5.1 zählt *Automatisch teilen*
-  ab drei Stücken durch. Zwei Ränder: (a) Läufe aus älteren Projekten tragen `piece_count`,
-  `number_a` und `number_b` nicht und behalten den Buchstabenpfad mit richtigem Zusatz; aus
-  einem einzelnen Schritt lässt sich der Lauf nicht ablesen, eine Nummerierung bräuchte
-  eine Migration (`format_version`) — Rückfrage. (b) Wird ein Schnitt des Laufs gelöscht
-  oder ausgeschaltet, bleibt die gespeicherte Zählung stehen: Leiste 600 mm, drei Stücke,
-  letzter Schnitt gelöscht → „Leiste 1 von 3 · Stifte“ neben „Leiste · Löcher“
-  (`prepare_ops.stem_of`, Beleg `konzepte/nachweise-release-0.5.1/laeufe/rev-code-t11.txt`). Weg für
-  (b): die Zählung beim Löschen und Ausschalten nachführen oder bei Nummer 0 ohne weiteren
-  Schnitt auf A/B zurückfallen. Abnahme: nach dem Löschen eines Schnitts stimmen Nummern
-  und Zahl der Stücke; zu (a) eine Entscheidung.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die Migration 43→44 belegt
-  zusammenhängende ursprüngliche Transaktionen aus `split_pinned` und `split_line` mit Stücknummern,
-  auch in gespeicherten Revisionsseiten; übersetzte Titel werden nicht geraten, unabhängige Schnitte
-  bleiben unabhängig. Die Auswertung zählt bei Löschen, Ausschalten und Klonen nur aktive Stücke.
-  Altdatei `tests/data/projects/auto_split_unnumbered_v42.p3d` (Leiste 600 mm, zwei Schnitte,
-  letzter gelöscht): Laden A/B, Undo 1/2/3 von 3, Redo A/B; beide Güten, Cache kalt und warm,
-  Volumensumme 360 000 mm³, Speichern und Laden. Formatkette im Hauptbaum 306 Fälle grün. Claude hat
-  den Schritt von 42→43 auf 43→44 verschoben, weil main 42→43 für `centre_slender` belegt. Beleg:
-  `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM-287).
 
 <a id="rm-289"></a>
 

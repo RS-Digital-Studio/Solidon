@@ -120,6 +120,7 @@ it into `website/version.json`.
 - A direction you enter on the right for a slot also reaches the dimension card in the view, and *Apply* stays available. Until now it fell back to 0° there.
 - Solidon recognises cones, fillets and narrow faces the same way on more models, whether the model is moved, rotated or scaled.
 - Solidon recognises each rib, honeycomb or dimple field in an imported file as one pattern, and *Detect features here* combines the cells of a field.
+- Pieces of an automatic split are numbered in projects from older versions too, and a deleted or disabled cut no longer counts.
 
 ### Fillets and chamfers
 

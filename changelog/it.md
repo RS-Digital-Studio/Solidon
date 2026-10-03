@@ -120,6 +120,7 @@ scrive in `website/version.json`.
 - Una direzione che inserisci a destra per un'asola passa anche alla scheda delle quote nella vista, e «Applica» resta disponibile. Finora lì tornava a 0°.
 - Solidon riconosce coni, raccordi e facce strette allo stesso modo su più modelli, che il modello sia spostato, ruotato o scalato.
 - Solidon riconosce ogni campo di nervature, nido d'ape o bugne di un file importato come un solo motivo, e «Riconosci elementi qui» raggruppa le celle di un campo.
+- Anche nei progetti di versioni precedenti i pezzi di una divisione automatica vengono numerati, e un taglio eliminato o disattivato non conta più.
 
 ### Raccordi e smussi
 

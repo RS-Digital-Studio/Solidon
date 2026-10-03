@@ -145,6 +145,7 @@ Nutzen da und sonst nichts.
 - Eine Richtung, die Sie rechts für ein Langloch eintragen, übernimmt auch die Maßkarte im Bild, und *Übernehmen* bleibt frei. Bisher fiel sie dort auf 0° zurück.
 - Kegel, Rundungen und schmale Flächen erkennt Solidon an mehr Modellen gleich, ob das Modell verschoben, gedreht oder skaliert ist.
 - Rippen-, Waben- und Noppenfelder einer eingelesenen Datei erkennt Solidon je als ein Muster, und *Merkmale an dieser Stelle erkennen* fasst die Zellen eines Felds zusammen.
+- Auch in Projekten aus älteren Versionen zählen die Stücke einer automatischen Teilung durch, und ein gelöschter oder ausgeschalteter Schnitt zählt nicht mehr mit.
 
 ### Verrunden und Fasen
 
