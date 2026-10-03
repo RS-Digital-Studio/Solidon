@@ -36,11 +36,14 @@ def test_chat_setup_follows_late_status_text_without_growing_paragraph_gaps(
         compact = dialog.height()
         dialog.explanation.setText(original + "\n" + "Status\n" * 5)
         _settle(qt_app)
-        assert dialog.height() > compact
+        # Der Rahmen wächst, soweit Inhalt verdeckt läge, und gibt danach nichts
+        # zurück, damit er bei wechselndem Status nicht springt (RM-487).
+        assert dialog.height() >= compact
         assert dialog._scroll.verticalScrollBar().maximum() == 0
+        grown = dialog.height()
         dialog.explanation.setText(original)
         _settle(qt_app)
-        assert dialog.height() == compact
+        assert dialog.height() == grown
     finally:
         dialog.close()
         dialog.release()

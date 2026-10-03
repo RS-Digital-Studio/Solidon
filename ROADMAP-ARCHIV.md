@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
 | 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
 | 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
@@ -37272,3 +37273,47 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   (Repository und Druckprojekte) gaben 171 dieselben Ringe wie trimesh mit lxml, die 150 übrigen
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
+
+## RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)
+
+<a id="rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026"></a>
+<a id="rm-487"></a>
+
+**RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe.**
+  Versionsvergleich 0.5.2 (02.10.2026), Oberfläche offscreen, `grab()`. **Regression gegenüber
+  v0.5.1.** Erststart: Nach der Programmerkennung (3–10 s) wächst der Inhalt um 56 px, der Rahmen
+  nicht (v0.5.1: 680×651 → 723); „Zusatzprogramme verwalten …“ und „Chat einrichten …“ liegen zu
+  0 % im Ausschnitt, ein Rollbalken erscheint. „Modell erzeugen“ ohne ComfyUI: 480×243 statt
+  480×293, der Knopf „Zusätzliche Programme …“ liegt 32 px unter dem Rand, der Kunde liest „ohne das
+  bleibt dieser Weg zu“ und sieht keinen Ausweg (Regel 17). Gemeinsame Ursache: Inhalt aus einer
+  Hintergrundprüfung zählt als passive Anpassung, die den Rahmen seit `b837a73f8`/`2a0bbf121` nie
+  vergrößert. Trifft jeden Dialog, der nach dem Öffnen Inhalt nachreicht.
+  **Stellen:** `app/ui/style.py:515` (`ContentSizeFit.fit`), `app/ui/first_run.py:612`, `:730`,
+  `app/ui/generate_dialog.py:509–528`, `:632`, `:1231`.
+  **Fix (allgemein):** Solange der Kunde die Größe nicht selbst gezogen hat, darf eine passive
+  Anpassung den Rahmen bis zur verfügbaren Schirmhöhe vergrößern; nur Schrumpfen und das
+  Überschreiben einer Nutzergröße bleiben gesperrt.
+  **Abnahme:** Wächter an Erststart, „Modell erzeugen“ und einem dritten Dialog mit
+  nachgereichtem Inhalt: nach Eingang der Prüfung liegt jeder Knopf vollständig im Ausschnitt;
+  eine gezogene Nutzergröße bleibt erhalten. Bauplan §2.8.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U3, U6), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** **Abschluss:** `style.ContentHeight.fit` lässt eine passive Anpassung nach der Anfangsmessung
+  wieder wachsen, solange der Kunde die Größe nicht gezogen hat: um den Teil, der im Rollbereich
+  verdeckt läge (`style._hidden_height`, gemessen an der wirklichen Inhaltsbreite), höchstens bis
+  zur Bildschirmhöhe, nie breiter und nie zurück. Reicht der Platz unter dem Dialog nicht, rückt
+  `fit_dialog_to_screen` ihn hinauf; nach einem ausdrücklichen Klappen hält auch Passives den Anker
+  (`_keeps_anchor`), damit die Überschrift unter dem Zeiger bleibt. Die beiden Gründe der Sperre aus
+  `b837a73f8` bleiben: Eine gezogene Größe überschreibt nichts, und ein wechselnder Status kann den
+  Rahmen höchstens einmal vergrößern statt bei jedem Wechsel zu springen. Warum, steht in
+  `konzepte/begruendungen/regel-fenster.md` („Passive Größenänderungen wachsen, schrumpfen nie“),
+  die Regel in `fenster.md`. Wächter in `tests/test_dialog_layout_regressions.py` an Erststart,
+  *Modell erzeugen* und *ComfyUI einrichten* (Ordnersuche ohne Fund), je automatisch und mit
+  gezogener Größe; am Stand davor nennen sie genau die verdeckten Knöpfe aus dem Befund
+  („Zusatzprogramme verwalten …“, „Chat einrichten …“, „Zusätzliche Programme …“) und den
+  abgeschnittenen Ordnerhinweis. Dazu `test_style.py` ohne Fenster. Sieben Fenstertests, die das
+  Stehenbleiben des Rahmens festschrieben, prüfen jetzt Wachsen ohne Zurückgeben; der
+  Wachstumstest des Druckdialogs (`test_the_dialog_grows_when_the_profile_section_opens_itself`),
+  seit `b837a73f8` rot, ist wieder grün. Sonde am echten Fenster (2560×1392): Erststart 680×621 →
+  680×662 nach der Erkennung, Rollweite 41 → 0; *Modell erzeugen* ohne ComfyUI 480×243 → 480×275,
+  Rollweite 32 → 0, beide an derselben Stelle.

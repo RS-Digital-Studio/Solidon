@@ -688,8 +688,9 @@ def test_the_main_button_stays_the_default_through_the_run(qt_app: QApplication)
     qt_app.processEvents()
 
 
-def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplication) -> None:
-    """Passive Statuswechsel halten den Außenrahmen und rollen den Mehrinhalt."""
+def test_status_text_grows_the_dialog_once_and_stays_reachable(qt_app: QApplication) -> None:
+    """Ein langer Status vergrößert den Rahmen bis zum Bildschirm, der Rest rollt;
+    ein kurzer danach gibt nichts zurück, damit der Rahmen nicht springt (RM-487)."""
     dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
     long_text = "Ein langer Satz, der mehrere Zeilen braucht. " * 140
     short_text = "Bereit."
@@ -701,7 +702,11 @@ def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplic
 
         dialog.state.setText(long_text)
         _settle(qt_app)
-        assert dialog.size() == before, "eine Statusmeldung bewegt den Außenrahmen nicht"
+        grown = dialog.size()
+        assert grown.width() == before.width(), "die Breite bleibt"
+        assert grown.height() > before.height(), "der lange Satz bekommt Platz"
+        room = dialog.screen().availableGeometry()
+        assert room.contains(dialog.frameGeometry()), "gewachsen wird nur bis zum Bildschirm"
         scroll = dialog._scroll
         bar = scroll.verticalScrollBar()
         assert bar.maximum() > 0, "der lange Text liegt im erreichbaren Rollbereich"
@@ -716,16 +721,16 @@ def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplic
 
         dialog.state.setText(short_text)
         _settle(qt_app)
-        assert dialog.size() == before, "auch der kurze Status lässt den Außenrahmen stehen"
+        assert dialog.size() == grown, "der kurze Status gibt die Höhe nicht zurück"
 
         dialog.state.setText(long_text)
         _settle(qt_app)
         dialog.state.setText(short_text)
         _settle(qt_app)
-        assert dialog.size() == before, "wiederholte Statuswechsel bleiben stabil"
+        assert dialog.size() == grown, "wiederholte Statuswechsel bleiben stabil"
 
         # Von Hand gezogen: Das bleibt, auch nach einem langen Satz.
-        dialog.resize(before.width(), before.height() + 200)
+        dialog.resize(before.width(), before.height() + 40)
         _settle(qt_app)
         drawn = dialog.size()
         dialog.state.setText(long_text)
@@ -2446,7 +2451,9 @@ def test_a_long_setup_failure_stays_in_the_scroll_area(
         dialog._refused("Ein Paket ließ sich nicht installieren.\n" + "pip: Zeile\n" * 200)
         _settle(qt_app)
 
-        assert dialog.size() == before, "die Meldung bewegt den Außenrahmen nicht"
+        assert dialog.width() == before.width(), "die Meldung verbreitert nichts"
+        room = dialog.screen().availableGeometry()
+        assert room.contains(dialog.frameGeometry()), "gewachsen wird nur bis zum Bildschirm"
         assert dialog.content_scroll.isAncestorOf(dialog.state), "der Status rollt mit"
         assert dialog.content_scroll.verticalScrollBar().maximum() > 0
         close = dialog.findChild(QDialogButtonBox)

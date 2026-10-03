@@ -797,13 +797,16 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         QTest.qWait(100)
         assert dialog._scroll.horizontalScrollBar().maximum() == 0
         assert dialog.width() == initial_width
-        assert dialog.height() == initial_height
+        # Die Maßzeilen dürfen den Rahmen wachsen lassen, zurückgegeben wird
+        # nichts — sonst spränge er bei jedem Wechsel (RM-487).
+        assert dialog.height() >= initial_height
+        expanded_height = dialog.height()
         dialog.printer.setCurrentIndex(dialog.printer.findData(default))
         QTest.qWait(100)
-        assert dialog.height() == initial_height
+        assert dialog.height() == expanded_height
         assert dialog.width() == initial_width
 
-        manual_height = dialog.height() + 70
+        manual_height = dialog.height() - 70
         dialog.resize(dialog.width(), manual_height)
         QTest.qWait(100)
         dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))

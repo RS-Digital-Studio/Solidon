@@ -2529,7 +2529,10 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindo
         ]
         # Die Breite geht: Ein Lochraster hat keine — dafür kommen seine drei.
         assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"], front
-        assert dialog.size() == fitted_size, "bedingte Zeilen verschieben den Außenrahmen nicht"
+        # Eine Zeile mehr darf den Rahmen wachsen lassen (RM-487), nie breiter.
+        assert dialog.width() == fitted_size.width(), "bedingte Zeilen verbreitern nichts"
+        assert dialog.height() >= fitted_size.height()
+        fitted_size = dialog.size()
 
         from PySide6.QtCore import QRect
 
