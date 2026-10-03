@@ -45,6 +45,7 @@ entfernt hat.
 | 2026-10-02 | [RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)](#rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026) |
 | 2026-10-02 | [RM-359: Weg 2: Leiste, Haken beim Ändern, Grenzen mit Einheit, Regler, Namen und Parameterdialog (02.10.2026)](#rm-359-weg-2-leiste-haken-beim-ändern-grenzen-mit-einheit-regler-namen-und-parameterdialog-02102026) |
 | 2026-10-02 | [RM-342: Oberfläche: Reste aus dem Review seit 0.5.1 (02.10.2026)](#rm-342-oberfläche-reste-aus-dem-review-seit-051-02102026) |
+| 2026-10-02 | [RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)](#rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -37273,6 +37274,41 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   (Repository und Druckprojekte) gaben 171 dieselben Ringe wie trimesh mit lxml, die 150 übrigen
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
+
+## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
+
+<a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
+<a id="rm-367"></a>
+
+**RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett.**
+  Review 02.10.2026, Gebietsprüfung Weg 4, am HEAD `6ce767031`.
+  - **W4-3 — Ein von Hand verdorbener Strichtext endet als „unerwarteter Fehler“.** Feld *Striche*
+    im Dialog (auch über *Eingabe korrigieren*): `JSONDecodeError`, `KeyError: 'n'`, `IndexError`
+    → jedes Mal `op.sculpt_strokes.InternalError` mit *Fehler melden*
+    (`app/core/geom/sculpt.py:306–323`). Beim Skelett wird derselbe Fall als Eingabefehler
+    abgefangen. Fix: Strichtext prüfen und als `ValidationError` mit Handlungsvorschlag melden.
+    §2.7, Regel 17. Sonde `w4_strichtext.py`.
+  - **W4-6 — Der Skeletteditor zeigt im Bild keinen Knochen und keinen Gelenkpunkt**, nur die
+    Leiste zählt mit (`main_window.py:11755–11943`, `viewport.py`). §2.8. Sonde
+    `w4_knochen_sichtbar.py` (Quelltextprobe).
+  - **W4-7 — Ein Knochen landet auf dem angeklickten Hautpunkt statt im Gelenk**, obwohl die
+    Leiste „Erst das Gelenk anklicken“ sagt (`main_window.py:11848`, `pose_bar.py:77`); die
+    Beugung wird einseitig: +60° Volumen 0,841 statt 0,927 mit `pose.pinched`, −60° 1,013.
+    Fix: den Klickpunkt auf die Körperachse unter der Haut legen. §2.2, §2.7. Sonde
+    `w4_knochen_oberflaeche.py`.
+  - **W4-8 — Ende-zu-Ende-Test und Beispiel von Weg 4 lassen „Skelett setzen und stellen“ aus**
+    („stellen“ als „auf die Platte stellen“ gelesen): `tests/test_way_four.py:40–131`,
+    `tools/make_examples.py:166–232`. §40 P16, §2.2.
+  **Abnahme:** je Fund ein Test — verdorbener Strichtext → Eingabefehler mit Vorschlag; Knochen
+  und Gelenke im Bild sichtbar; Knochen liegt im Körperinneren, ±60° symmetrisch; `test_way_four`
+  setzt und stellt ein Skelett. Beleg: `F:\solidon-review-reports\gebiet-weg4.md`.
+  Nachprüfung am Stand `4cf460e87` (nach `88b5f425f`): W4-8 behoben (`test_way_four` setzt und stellt ein Skelett, Gegenprobe rot). W4-3 unvollständig: die drei Originalfälle sind jetzt ein Eingabefehler mit Vorschlag, aber `"s":NaN` und `"p":[NaN,…]` enden weiter als „unerwarteter Fehler“; r ≤ 0 wird angenommen und bewegt trotzdem Ecken; r = Infinity bleibt wirkungslos ohne Befund; vier Koordinaten werden still abgeschnitten (`types.as_vec3`). W4-6 und W4-7 offen. Belege `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonde `v4g_rm367_strichtext_zwillinge.py`.
+  **W4-3 vollständig (02.10.2026 abends, Claude, Thread „Bedienung und KI“):** `strokes_from_text`
+  liest Punkte und Normalen als genau drei endliche Koordinaten, Radius endlich und größer null,
+  Stärke endlich (`_finite`, `_finite_point`); sonst Eingabefehler mit Ausweg. Sechs neue Fälle in
+  `test_sculpt.py::test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out`.
+
+**Abschluss:** Alle vier Funde erledigt. W4-8 mit `88b5f425f` (`test_way_four` setzt und stellt ein Skelett). W4-3 vollständig: Strichtext mit NaN, Unendlich, Radius ≤ 0 oder vier Koordinaten ist ein Eingabefehler mit Ausweg (`_finite`, `_finite_point`; sechs neue Fälle in `test_sculpt.py`). W4-7: Ein Klick auf die Haut setzt das Gelenk unter den Klick in die Mitte des Körpers, entlang des Blicks bis zur Gegenwand (`pose.inside_the_body`, `Viewport.ray_toward`); neben der Haut, streifend oder ins Leere bleibt der Punkt (`test_pose.py::test_a_click_on_the_skin_becomes_a_joint_on_the_axis`). W4-6: Der Skeletteditor zeichnet Knochen und das gesetzte Gelenk vor dem Körper (`Viewport.show_bones`, `clear_bones`, `bones_shown`/`joint_shown`; `test_pose_session.py::test_bones_are_drawn_and_sit_inside_the_body`). Alle 62 Skeletttests einschließlich Fensterfällen grün. Fenstersonde am echten Fenster an `clean_figure.stl`: Gelenk 4,27 mm unter der Haut, Knochen im Bild sichtbar, nach *Fertig* weg; 4 von 4. Umgesetzt von Claude (Thread „Bedienung und KI“).
 
 ## RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)
 
