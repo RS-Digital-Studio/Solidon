@@ -972,7 +972,9 @@ def test_an_evaluation_question_keeps_the_project_generation_from_its_creation(
     stopped: list[bool] = []
     session.askRequested.connect(requests.append)
     worker.cancelled.connect(lambda: stopped.append(True))
-    monkeypatch.setattr(session, "run_evaluation", lambda: session.ask_from_worker("Alt", ["Ja"]))
+    monkeypatch.setattr(
+        session, "run_evaluation", lambda *_args: session.ask_from_worker("Alt", ["Ja"])
+    )
     session._project_generation += 1
     try:
         worker.work()
@@ -1324,7 +1326,7 @@ def test_active_matching_questions_end_when_their_evaluation_is_invalidated(
         assert dialog.result() == QDialog.DialogCode.Rejected
         return dialog.result()
 
-    def evaluate():
+    def evaluate(*_args):
         session.announce_question(preview, (("part", "face_new_a"),))
         session.ask_from_worker("Welcher Bezug bleibt?", ["face_new_a"])
         pytest.fail("an invalidated evaluation cannot receive a matching answer")
@@ -9558,10 +9560,22 @@ def test_a_boolean_that_failed_in_draft_can_go_the_full_chain(window: MainWindow
     entwurf = errors.BooleanFailedError(attempted=("direct", "welded"))
     assert "use_voxel_stage" in {a.id for a in offered_actions(entwurf, handlers)}
 
+    session = window.session
     handlers["use_voxel_stage"](entwurf)
-    assert window.session._quality_once == "fine", "der Lauf bleibt im Entwurf"
-    window.session.wait_for_idle()
-    assert window.session._quality_once is None, "und der nächste ist wieder Entwurf"
+    # Die Güte legt der Start des Arbeiters fest (RM-426), nicht mehr dessen Lauf.
+    assert session._worker is not None and session._worker.quality == "fine", (
+        "der Lauf bleibt im Entwurf"
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_quality == "fine"
+    session.evaluate_async()
+    assert session._worker is not None and session._worker.quality == "draft", (
+        "und der nächste ist wieder Entwurf"
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_quality == "draft"
 
 
 def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) -> None:
