@@ -7379,7 +7379,9 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
         lambda *_args, **_kwargs: handover.SliceOutcome(
             gcode_path=tmp_path / "plate.gcode",
             metrics=gcode.GcodeMetrics(
-                filament_grams=expected.grams, print_seconds=expected.seconds
+                filament_grams=expected.grams,
+                resolved_model_grams=expected.grams,
+                print_seconds=expected.seconds,
             ),
         ),
     )
@@ -7413,7 +7415,9 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     MainWindow._compare_totals(
         window,
         gcode.GcodeMetrics(
-            filament_grams=expected.grams * 0.5, print_seconds=expected.seconds * 0.5
+            filament_grams=expected.grams * 0.5,
+            resolved_model_grams=expected.grams * 0.5,
+            print_seconds=expected.seconds * 0.5,
         ),
         dialog.slice_comparison,
     )

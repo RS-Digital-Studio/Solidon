@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- A comparação de material considera apenas o modelo impresso. A purga aparece separadamente, com indicação quando a quantidade não pode ser lida por completo.
 - A análise do espaço necessário para suportes é muito mais rápida nos modelos ocos e preserva os contornos finos.
 - Nas peças sobrepostas, a análise de impressão deixa de contar o ar fechado como material. Também melhora a deteção de saliências e dos suportes necessários.
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.

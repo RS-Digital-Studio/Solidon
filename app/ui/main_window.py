@@ -8299,11 +8299,23 @@ class MainWindow(QMainWindow):
             ]
             estimate = estimate_total(bodies, settings)
             comparison = SliceComparison(grams=estimate.grams, seconds=estimate.seconds)
-            grams = metrics.grams(settings.filament.density, settings.filament.diameter)
+            grams = metrics.model_grams(settings.filament.density)
         else:
-            grams = metrics.grams(None, None)
+            grams = metrics.model_grams()
 
         findings: list[Finding] = []
+        if grams is None and comparison.grams is not None:
+            findings.append(
+                Finding(
+                    code="gcode.model_material_unknown",
+                    severity="info",
+                    message=_(
+                        "Die Druckdatei weist das Modellmaterial nicht mit vollständig "
+                        "bekannten Materialwerten getrennt aus."
+                    ),
+                    source="gcode",
+                )
+            )
         if grams is not None and comparison.grams is not None and comparison.grams > 0.0:
             findings += gcode.compare(comparison.grams, grams, "material").findings
         if (

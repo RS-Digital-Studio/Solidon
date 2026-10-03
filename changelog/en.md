@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- The material cross-check compares only the printed model. Purge material is shown separately, with a note when the amount cannot be read in full.
 - Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.

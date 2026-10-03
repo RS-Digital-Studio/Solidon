@@ -137,6 +137,13 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 
 ## G-Code und Verbrauch
 
+- **Modell und Spülung sind getrennte Rollen.** `model_grams` verlangt
+  vollständige Modellrollen und Werkzeugdaten; unbekannte oder bedingte
+  Modellförderung verhindert eine vollständige Menge. `combine` summiert
+  belegte Modellmassen ohne Werkzeugnummern verschiedener Platten zu mischen.
+  Spülabschnittssummen bleiben bei ungeklärter Bilanz ausdrücklich unvollständig
+  belegt; Gesamtverbrauch und Buchung übernehmen sie nicht. Explizite Modellzeit
+  ersetzt keine Gesamtzeit; deren Differenz ist nur ein Zusatzanteil.
 - Warnungen vergleichen **ungekürzte** Materialvorgaben mit den Grenzen des
   Druckers — ein gedeckelter Sollwert beweist keine zu niedrige Temperatur.
 - **`filament_mm_by_tool`, `filament_grams_by_tool`**: Index ist die

@@ -7494,5 +7494,9 @@
   "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Para Cura, la aceleración se limita al máximo de la impresora. Revise el valor en el diálogo de impresión.",
   "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. Die Kammertemperatur bleibt ohne Wirkung.": "El perfil de impresora elegido no tiene calefacción regulable en la cámara. El ajuste de temperatura de la cámara no tiene efecto.",
   "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. Wählen Sie im Druckdialog ein passendes Maschinenprofil.": "Este perfil de impresora no confirma que la cámara tenga calefacción regulable. Elija un perfil de máquina adecuado en el diálogo de impresión.",
-  "Kammertemperatur": "Temperatura de la cámara"
+  "Kammertemperatur": "Temperatura de la cámara",
+  "Spülmaterial aus lesbaren G-Code-Abschnitten: {volume} cm³. Die vollständige Menge ist unbekannt.": "Material de purga de las secciones legibles del G-Code: {volume} cm³. Se desconoce la cantidad total.",
+  "Modellzeit aus dem G-Code.": "Tiempo del modelo según el G-Code.",
+  "Aus ausgewiesenen G-Code-Abschnitten gelesenes Spülmaterial: {volume} cm³.": "Material de purga leído de las secciones identificadas del G-Code: {volume} cm³.",
+  "Die Druckdatei weist das Modellmaterial nicht mit vollständig bekannten Materialwerten getrennt aus.": "El archivo de impresión no distingue el material del modelo con propiedades del material totalmente conocidas."
 }

@@ -7494,5 +7494,9 @@
   "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "For Cura, acceleration is limited to the printer's limit. Check the value in the print dialog.",
   "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. Die Kammertemperatur bleibt ohne Wirkung.": "The selected printer profile has no controlled chamber heater. The chamber temperature setting has no effect.",
   "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. Wählen Sie im Druckdialog ein passendes Maschinenprofil.": "A controlled chamber heater is not documented for this printer profile. Choose a matching machine profile in the print dialog.",
-  "Kammertemperatur": "Chamber temperature"
+  "Kammertemperatur": "Chamber temperature",
+  "Spülmaterial aus lesbaren G-Code-Abschnitten: {volume} cm³. Die vollständige Menge ist unbekannt.": "Purge material from readable G-code sections: {volume} cm³. The full amount is unknown.",
+  "Modellzeit aus dem G-Code.": "Model time from the G-code.",
+  "Aus ausgewiesenen G-Code-Abschnitten gelesenes Spülmaterial: {volume} cm³.": "Purge material read from identified G-code sections: {volume} cm³.",
+  "Die Druckdatei weist das Modellmaterial nicht mit vollständig bekannten Materialwerten getrennt aus.": "The print file does not identify model material separately with fully known material properties."
 }

@@ -14452,6 +14452,7 @@ def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
     estimate = estimate_total(bodies, settings)
     measured = gcode.GcodeMetrics(
         filament_grams=estimate.grams * 0.8,
+        resolved_model_grams=estimate.grams * 0.8,
         print_seconds=estimate.seconds * 0.8,
     )
 
@@ -14489,7 +14490,11 @@ def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
     estimate = estimate_total(bodies, settings)
 
     window._compare_totals(
-        gcode.GcodeMetrics(filament_grams=estimate.grams * 0.95, print_seconds=estimate.seconds)
+        gcode.GcodeMetrics(
+            filament_grams=estimate.grams * 0.95,
+            resolved_model_grams=estimate.grams * 0.95,
+            print_seconds=estimate.seconds,
+        )
     )
 
     assert "gcode.deviation" not in _report_codes(window)
@@ -21669,3 +21674,73 @@ def test_every_entry_of_the_invitation_does_what_the_menu_does(window: MainWindo
     assert window.right.currentWidget() is window.chat, "der Chat steht vorn"
     assert window.chat.input.isVisible()
     assert window.focusWidget() is window.chat.input, "der Cursor steht im sichtbaren Feld"
+
+
+@pytest.mark.parametrize("known", [False, True])
+def test_model_material_comparison_never_uses_total_consumption(known: bool) -> None:
+    """Spülen kann den Gesamtverbrauch erhöhen, ohne die Modellgegenprobe zu verändern."""
+    from types import SimpleNamespace
+
+    from app.core.slice import gcode
+    from app.ui.print_settings_dialog import SliceComparison
+
+    findings = []
+    host = SimpleNamespace(
+        report=SimpleNamespace(add_findings=lambda values: findings.extend(values))
+    )
+    metrics = gcode.GcodeMetrics(
+        filament_grams=30.0,
+        model_material_cm3=2.0 if known else None,
+        material_cm3_by_role={"model": (2.0,)} if known else {},
+        filament_densities=(1.5,),
+        used_tools=(0,),
+    )
+    MainWindow._compare_totals(host, metrics, SliceComparison(grams=3.0, seconds=None))
+    assert not [finding for finding in findings if finding.code == "gcode.deviation"]
+    assert (
+        bool([finding for finding in findings if finding.code == "gcode.model_material_unknown"])
+        is not known
+    )
+    assert metrics.grams() == pytest.approx(30.0), "Die Verbrauchsbuchung behält die Gesamtmenge"
+
+
+def test_known_model_material_replaces_previous_unknown_report() -> None:
+    """Eine neue Druckdatei räumt den alten Hinweis zur unbekannten Modellmenge ab."""
+    from types import SimpleNamespace
+
+    from app.core.export.handover import SliceOutcome
+    from app.core.slice import gcode
+    from app.ui.panels import ReportPanel
+    from app.ui.print_settings_dialog import SliceComparison
+
+    def quiet(*_args, **_kwargs):
+        pass
+
+    report = SimpleNamespace(
+        _findings=[],
+        list=SimpleNamespace(selectedItems=list),
+        _rebuild=quiet,
+        _count_up=quiet,
+        _refilter=quiet,
+        _preselect=quiet,
+        _show_controls=quiet,
+        _grew=quiet,
+        _show_first_of=quiet,
+    )
+    report.add_findings = lambda values, **kwargs: ReportPanel.add_findings(
+        report, values, **kwargs
+    )
+    host = SimpleNamespace(report=report, _focus_report=quiet, announce=quiet)
+    host._compare_totals = lambda *args: MainWindow._compare_totals(host, *args)
+    comparison = SliceComparison(grams=3.0, seconds=None)
+    for known in (False, True):
+        metrics = gcode.GcodeMetrics(
+            filament_grams=30.0,
+            resolved_model_grams=3.0 if known else None,
+        )
+        outcome = SliceOutcome(gcode_path=Path("plate.gcode"), metrics=metrics, findings=[])
+        MainWindow._gcode_returned(host, [outcome], comparison)
+        unknown = [
+            entry for entry in report._findings if entry.code == "gcode.model_material_unknown"
+        ]
+        assert bool(unknown) is not known
