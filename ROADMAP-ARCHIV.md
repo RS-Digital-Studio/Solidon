@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-490: Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“ (03.10.2026)](#rm-490-objektbaum-spalte-maße-endet-auch-bei-voller-breite-in--03102026) |
+| 2026-10-03 | [RM-488: Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken (03.10.2026)](#rm-488-auswahlfenster-am-merkmal-felder-rechts-abgeschnitten-kopfzeile-gekappt-waagrechter-rollbalken-03102026) |
 | 2026-10-03 | [RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)](#rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026) |
 | 2026-10-03 | [RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)](#rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
@@ -37444,3 +37446,44 @@ Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nac
   seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
 
 **Abschluss:** Ein weiteres Modell meldet seinen Körper auf allen drei Wegen mit demselben Signal (`Session.modelPlaced`): Datei und Download beim Annehmen des Imports, das erzeugte Modell in `add_generated`, ein Import an der Einfügemarke erst, wenn sein Umbau übernommen ist. Das Fenster zeigt daraufhin die Platte des neuen Körpers, sobald ein Ergebnis ihn trägt (`MainWindow._on_model_placed`); bisher wechselte nur eine Datei vom Pfad, und das über den letzten Schritt des Stapels, der an der Einfügemarke ein fremder ist. Ein Import an der Einfügemarke, dessen Umbau abgebrochen wird oder scheitert, nimmt seine Quelle wieder aus Dokument und Projekt (`Session._settle_revision_import`), statt sie mit dem nächsten Speichern mitreisen zu lassen. Tests: `test_ui.py::test_a_further_model_brings_its_plate_into_view` (Datei, Download, erzeugt; Platte 1 gewählt, das neue Modell kommt auf Platte 2 und die Kopfzeile zeigt sie) und `test_history_revision_ui.py::test_an_import_at_the_marker_takes_its_source_along_when_it_does_not_land` (abgebrochen, gescheitert, übernommen). Gegenprobe: ohne den Anschluss im Fenster und ohne die Rücknahme an der Marke 5 von 6 Fällen rot, nur „übernommen“ grün. Fenstersonde am echten Fenster: Brett 200 × 200 mm, Platte 1 gewählt, dann Datei, Download und erzeugtes Modell — jedes auf einer neuen Platte, die Kopfzeile zeigt jeweils dessen Platte; 10 von 10 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-488: Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken (03.10.2026)
+
+<a id="rm-488-auswahlfenster-am-merkmal-felder-rechts-abgeschnitten-kopfzeile-gekappt-waagrechter-rollbalken-03102026"></a>
+<a id="rm-488"></a>
+
+**RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.0** (seit v0.5.1). Nach Klick
+  auf ein Merkmal (z. B. „Bohrung 1“) ist der Inhalt breiter als die Spalte: Die Kopfzeile wird
+  rechts gekappt statt umzubrechen, alle Zahlen- und Auswahlfelder enden ohne Pfeile am Rand, unten
+  liegt ein waagrechter Rollbalken; die „i“-Knöpfe sind nicht mehr zu sehen. Gilt bei 1920×1080
+  und 1280×720, beide Schemata. v0.4.4 und v0.5.0 passten in die Spalte.
+  **Stellen:** `app/ui/panels.py:6848` (`FeaturePanel`, Rollbereich), `:6958`; eingeführt
+  zwischen v0.5.0 und v0.5.1 (Kandidaten `e8013c5cc`, `a255b14f8`, `5a90d4361`).
+  **Fix (allgemein):** Mindestbreite des Inhalts auf die Spaltenbreite begrenzen (Kopf mit
+  Umbruch, Felder mit wachsender statt fester Mindestbreite), waagrechten Balken abschalten.
+  **Abnahme:** an Bohrung, Fläche und Kante bei 1280 und 1920, beide Schemata: `contentsRect`
+  jedes Felds liegt im Ausschnitt, kein waagrechter Balken. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U5), Bilder in `regression-0.5.2\ui\`.
+  Ursache gemessen (Weg 1, 02.10.2026): Das Auswahlfeld „Änderungsumfang“ verlangt 196 px, weil Qt die Breite am längsten Eintrag „Senkung, Stufen und Verengung mitnehmen“ misst; die Leiste hat 160 px. Mit dem Text aus v0.5.0 sind es 150 px, mit `AdjustToMinimumContentsLengthWithIcon` 90 px. Stellen `app/ui/panels.py:6307`, `app/core/registry/surfaces.py:66`. Beleg `regression-0.5.2\weg1\befunde.md` (W1-3).
+
+**Abschluss:** Erledigt (03.10.2026, Commit `7123c1e22`). Ursache wie gemessen: Die Auswahl „Änderungsumfang“ verlangte ihren längsten Eintrag als Mindestbreite. Auswahlfelder im Merkmalfenster baut jetzt `panels.column_choice` (`AdjustToMinimumContentsLengthWithIcon`, zwölf Zeichen; die offene Liste zeigt den ganzen Text), und der Rollbereich der Spalte ist `panels.ColumnScroller`: nur senkrecht, seine Mindestbreite ist die des Inhalts, sodass ein nicht kürzbarer Haken oder Knopftext die Spalte verbreitert statt abgeschnitten zu werden. Wächter in `tests/test_analysis_ui.py`: `test_the_selection_column_fits_every_field_it_shows` (Bohrung, Fläche, Kante bei 1280×720 und 1920×1080; am Ausgangsstand rot mit Rollweg 100 und 40 Feldern außerhalb) und `test_the_selection_column_fits_in_every_language` (en, es, fr, it, pt); Gegenprobe ohne beide Maßnahmen: 7 von 7 rot. Fenstersonde am echten Fenster (2560×1369 maximiert und 1280×720, dunkel und hell, Bohrung 1, Oberseite, Kante): vorher an der Bohrung mit sichtbarer Maßgruppe Inhalt 290 px in 232 px Ausschnitt, Felder ohne Pfeile, „i“ außerhalb; nachher 29 von 29 Prüfungen, kein waagrechter Balken. Gemessen, kein Befund: In Italienisch verlangt der Haken „Applica a tutti i {count} dello stesso tipo“ in der Knopfzeile unter dem Rollbereich rund 20 px mehr als die Standardbreite; die Spalte wird dort etwas breiter, abgeschnitten wird nichts, und das galt schon vor dieser Änderung. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-490: Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“ (03.10.2026)
+
+<a id="rm-490-objektbaum-spalte-maße-endet-auch-bei-voller-breite-in--03102026"></a>
+<a id="rm-490"></a>
+
+**RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.4.4** (seit v0.5.0). Die neue
+  Zusatzangabe „eingepasst/gemessen“ macht die Spalte zu breit: „Ø5,20 mm · ein…“, „3915 mm² · ge…“
+  auch bei 1920×1080; bis v0.4.4 stand „Ø5,19 mm“ vollständig. Eine Angabe, die nie ganz zu lesen
+  ist, sagt nichts.
+  **Stellen:** Objektbaum in `app/ui/panels.py` (Spalte „Maße“).
+  **Fix (allgemein):** Zusatzangabe als kurzes Zeichen mit Tooltip oder Spalte auf den Inhalt
+  bemessen, Maß zuerst nie kürzen.
+  **Abnahme:** Bohrung, Fläche und gemessene Kante bei 1280 und 1920: Maß vollständig lesbar,
+  Zusatzangabe über Tooltip oder Zeichen erreichbar (zweite Kodierung, Regel 18). Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U2), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** Erledigt (03.10.2026, Commit `7fd439654`). Die Maßspalte trägt `labels.feature_measure(marked=True)`: die Zahl ganz, eine warnende Herkunft (eingepasst, aus dem Schritt, nicht belegt) als `labels.MEASURE_MARK` „≈“ dahinter, eine direkte (gemessen, aus der Konstruktion) ohne Zusatz wie an den Marken der Ansicht. Das Wort mit seinem Satz steht im Tooltip der Spalte, der Bildschirmleser liest es über `AccessibleTextRole` („Ø5,20 mm · eingepasst“); das Dach gleichartiger Merkmale trägt beides ebenso. Wächter in `tests/test_analysis_ui.py`: `test_the_tree_column_keeps_the_measure_whole_and_marks_its_source` (ohne Fenster) und `test_the_measure_column_is_never_cut` (1280×720, 1920×1080; am Ausgangsstand rot: 258 px Bedarf in 99 px Spalte). Fenstersonde am echten Fenster, beide Schemata, maximiert und 1280×720: vorher braucht die Spalte 134 px bei 100 px („Ø5,20 mm · ein…“), nachher passt sie, Vorlesetext und Tooltip nennen die Herkunft. Umgesetzt von Claude (Thread „Bedienung und KI“).
