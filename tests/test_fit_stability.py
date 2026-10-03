@@ -719,35 +719,44 @@ def test_a_round_form_over_the_minimum_arc_stays_a_fillet() -> None:
 def test_the_exact_kernel_holds_the_same_minimum_arc() -> None:
     """Dieselbe Schranke am exakten Körper, sonst hinge der Steckbrief am Format.
 
-    Ein Quader, dessen Oberseite ein flacher Bogen über 40 mm ist. Bei drei
-    Grad (R 764) meldete der exakte Kern eine Verrundung, sein eigener
-    Netzzwilling eine gekrümmte Fläche; bei zwölf Grad (R 191) ist es an ihm
-    eine Verrundung.
+    Eine Platte 200 x 10, auf deren Oberseite ein flacher Buckel R 40 sitzt.
+    Bei drei Grad meldete der exakte Kern eine Verrundung, sein eigener
+    Netzzwilling keine; bei zwölf Grad ist es an beiden eine Verrundung.
+
+    Der Buckel und nicht ein Bogen über die ganze Breite: Der passt mit R 764
+    oder R 191 quer zur Achse nicht in einen 40 mm breiten Quader und ist
+    darum an beiden Kernen gar keine Rundform, sondern eine gekrümmte Fläche
+    (RM-226, ``test_exact_body_parity``). Hier soll allein der Mindestbogen
+    entscheiden, also passt der Buckel in die Platte.
     """
     exact_kernel()
     from app.core.brep import profiles
     from app.core.brep.features import features_of
     from app.core.sketch.profile import Profile, ProfileSegment
 
-    def arched(arc: float) -> tuple[Any, float]:
-        chord = 40.0
-        radius = (chord / 2.0) / units.exact_sin_degrees(arc / 2.0)
+    def bumped(arc: float) -> tuple[Any, float]:
+        radius = 40.0
+        half = radius * units.exact_sin_degrees(arc / 2.0)
         rise = radius * (1.0 - units.exact_cos_degrees(arc / 2.0))
         outline = Profile(
             segments=(
-                ProfileSegment("line", (0.0, 0.0), (chord, 0.0)),
-                ProfileSegment("line", (chord, 0.0), (chord, 10.0)),
-                ProfileSegment("arc", (chord, 10.0), (0.0, 10.0), via=(chord / 2.0, 10.0 + rise)),
+                ProfileSegment("line", (0.0, 0.0), (200.0, 0.0)),
+                ProfileSegment("line", (200.0, 0.0), (200.0, 10.0)),
+                ProfileSegment("line", (200.0, 10.0), (100.0 + half, 10.0)),
+                ProfileSegment(
+                    "arc", (100.0 + half, 10.0), (100.0 - half, 10.0), via=(100.0, 10.0 + rise)
+                ),
+                ProfileSegment("line", (100.0 - half, 10.0), (0.0, 10.0)),
                 ProfileSegment("line", (0.0, 10.0), (0.0, 0.0)),
             )
         )
         return profiles.extrude(outline, 8.0), radius
 
-    shallow, _radius = arched(3.0)
+    shallow, _radius = bumped(3.0)
     fillets = [f.id for f in features_of(shallow).values() if f.kind == "fillet"]
     assert fillets == [], f"three degrees of arc are an edge at the exact kernel: {fillets}"
 
-    kept, radius = arched(12.0)
+    kept, radius = bumped(12.0)
     radii = [f.params["radius"] for f in features_of(kept).values() if f.kind == "fillet"]
     assert radii == [pytest.approx(radius, rel=1e-9)], f"twelve degrees stay a fillet: {radii}"
 

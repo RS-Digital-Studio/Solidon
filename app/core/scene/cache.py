@@ -160,7 +160,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Nachbauten, Folgeschritte oder Merkmalsbindungen mehr steuern.
 #: - 42 (RM-226): Kugelige Eckrundungen tragen ebenfalls den Trägermittelpunkt
 #:   statt des Flächenschwerpunkts; Nachbau und Folgeoperationen lesen ihn.
-CACHE_FORMAT_VERSION: Final = 42
+#: - 43 (RM-226): Ein Zylinder, der quer zu seiner Achse nicht in seinen
+#:   Körper passt, ist auch am exakten Kern keine Verrundung, sondern eine
+#:   gekrümmte Fläche wie am Netz; gespeicherte exakte Merkmale nennen ihn noch
+#:   ``fillet``.
+CACHE_FORMAT_VERSION: Final = 43
 
 
 @dataclass(frozen=True, slots=True)

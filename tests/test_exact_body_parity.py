@@ -527,7 +527,15 @@ CASES = [
         "posed",
         None,
     ),
-    Case("push_face", "box", {"face": "top", "distance": 2.0}, KEEP, "volume", 3840.0),
+    # Quader 20 x 16 x 10, Deckfläche um 2 mm hinaus: 20 x 16 x 12, sechs Flächen.
+    Case(
+        "push_face",
+        "box",
+        {"face": "top", "distance": 2.0},
+        KEEP,
+        "pushed",
+        (3840.0, (192.0, 192.0, 240.0, 240.0, 320.0, 320.0)),
+    ),
     Case("remesh_mesh", "box", {"edge": 4.0}, MESH, "refined", 3200.0),
     Case("remesh_uniform", "box", {"edge": 4.0, "deviation": 0.0}, MESH, "refined", 3200.0),
     Case(
@@ -1281,6 +1289,17 @@ def _assert_invariant(
                 # Der unveränderte Quader darf keine Verrundung bestehen.
                 tolerance = min(tolerance, difference / 4)
         assert volume == pytest.approx(expected, rel=0.0, abs=tolerance)
+    elif rule == "pushed":
+        # RM-226: *Fläche versetzen* ließ am exakten Körper die angesetzte
+        # Scheibe als eigene koplanare Fläche neben jeder Seitenwand stehen
+        # (160 + 32 statt 192 mm²), das Netz nannte je Wand eine. Beide Kerne
+        # nennen dieselben sechs ebenen Flächen mit denselben Inhalten.
+        expected_volume, expected_areas = expected
+        assert volume == pytest.approx(expected_volume, abs=1e-6)
+        kinds = sorted(feature.kind for feature in first.features.values())
+        assert kinds == ["face"] * len(expected_areas), kinds
+        areas = sorted(feature.params["area"] for feature in first.features.values())
+        assert areas == pytest.approx(expected_areas, abs=1e-6)
     elif rule == "greater":
         assert volume > expected + 0.1
         if case.name == "lattice_fill":
@@ -1694,3 +1713,125 @@ def test_every_operation_completes_with_its_declared_result(
         assert math.isfinite(entry.mesh.volume) and entry.mesh.volume > 0.0
         assert as_mesh_data(entry.mesh).is_watertight
     _assert_invariant(case, outputs, inputs, result)
+
+
+# --- RM-226: dieselbe Fläche heißt an beiden Kernen gleich -------------------
+
+
+def _arched_block(arc: float) -> Any:
+    """Quader 40 x 8, dessen Oberseite ein Kreisbogen über die ganze Breite ist.
+
+    Sehne 40, Öffnungswinkel ``arc``: Der Bogen trifft die senkrechten
+    Seitenwände unter 90° − arc/2 und damit nie tangential. Gebaut aus Quader
+    und Zylinder, unabhängig von Skizze und Extrusion; der Radius folgt aus
+    der Sehne, 20 / sin(arc/2) — R 382,15 / 191,34 / 77,27 bei 6 / 12 / 30 Grad.
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+
+    radius = 20.0 / math.sin(math.radians(arc / 2.0))
+    rise = radius * (1.0 - math.cos(math.radians(arc / 2.0)))
+    block = BRepPrimAPI_MakeBox(gp_Pnt(-20.0, -4.0, 0.0), 40.0, 8.0, 10.0 + rise + 1.0).Shape()
+    drum = BRepPrimAPI_MakeCylinder(
+        gp_Ax2(gp_Pnt(0.0, -5.0, 10.0 + rise - radius), gp_Dir(0.0, 1.0, 0.0)), radius, 10.0
+    ).Shape()
+    return Solid(BRepAlgoAPI_Common(block, drum).Shape())
+
+
+def _arched_section(arc: float) -> float:
+    """Querschnitt des gewölbten Quaders: Rechteck 40 x 10 plus Kreisabschnitt."""
+    radius = 20.0 / math.sin(math.radians(arc / 2.0))
+    angle = math.radians(arc)
+    return 40.0 * 10.0 + radius * radius / 2.0 * (angle - math.sin(angle))
+
+
+def _evaluated(
+    op: str, params: dict[str, Any], inputs: list[SceneObject], profile: Profile
+) -> list[SceneObject]:
+    """Vorbereitete Eingaben durch Verlauf und Auswertung, wie im Falltest oben."""
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+
+    def seed(ctx: OpContext) -> OpResult:
+        """Die Referenzkörper betreten den echten Auswertungsweg."""
+        return OpResult(outputs=[dataclasses.replace(entry, id="") for entry in inputs])
+
+    registry.register(
+        OperationSpec(
+            name="matrix_input",
+            title="Referenzkörper",
+            category="primitive",
+            params=BaseParams,
+            fn=seed,
+            consumes=0,
+            produces=len(inputs),
+        )
+    )
+    history = History(project.document, registry=registry)
+    history.apply("Referenzkörper", [OperationDraft(op="matrix_input")])
+    history.apply(
+        "Geprüfter Auftrag",
+        [
+            OperationDraft(
+                op=op, inputs=tuple(entry.id for entry in inputs), params=params, seed=1234
+            )
+        ],
+    )
+    operation = project.document.ops[-1]
+    result = evaluate(
+        project.document,
+        profile,
+        registry=registry,
+        sources=ProjectSources(project),
+        ask=_unexpected_question,
+    )
+    assert result.complete, [
+        (finding.code, str(finding.message), finding.values)
+        for finding in result.scene.report.findings
+    ]
+    return [result.scene.objects[identifier] for identifier in operation.outputs]
+
+
+@pytest.mark.parametrize("arc", [6.0, 12.0, 30.0])
+def test_an_arched_top_is_one_curved_face_on_both_kernels(arc: float, profile: Profile) -> None:
+    """Eine gewölbte Oberseite ist an beiden Kernen eine gekrümmte Fläche (RM-226).
+
+    Der exakte Kern nannte jeden Zylinderausschnitt unter 300 Grad eine
+    Verrundung — an diesem Quader „Verrundung R 382 / 191 / 77“ bei 6, 12
+    und 30 Grad —, das Netz denselben Bogen eine gekrümmte Fläche. Am Netz
+    entscheidet nicht ``replaces_an_edge`` (ein flacher Buckel mitten auf
+    der Oberseite ersetzt auch keine Kante und heißt an beiden Kernen
+    Verrundung), sondern die Frage, ob der Zylinder in seinen Körper passt:
+    Ø 764 auf einem 40 mm breiten Quader ist keine Rundung. Jetzt fragt der
+    exakte Kern dieselbe. Geprüft am Eingang auf denselben Dreiecken und nach
+    *Fläche versetzen* an der Vorderseite, ohne Wechsel der Bauart (KEEP).
+    """
+    exact_kernel()
+    from collections import Counter
+
+    solid = _arched_block(arc)
+    expected = {"face": 5, "curved_face": 1}
+    tops: dict[str, set[int]] = {}
+    for kind in ("mesh", "brep"):
+        entry = _object(solid, kind)
+        assert Counter(feature.kind for feature in entry.features.values()) == expected, kind
+        (top,) = [feature for feature in entry.features.values() if feature.kind == "curved_face"]
+        tops[kind] = set(top.face_indices)
+        front = next(
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == "face" and feature.params["normal"][1] < -0.99
+        )
+        (pushed,) = _evaluated("push_face", {"face": front, "distance": 1.0}, [entry], profile)
+        assert pushed.kind == kind
+        assert Counter(feature.kind for feature in pushed.features.values()) == expected, kind
+        # 9 mm tief statt 8; das Netz liegt mit seinen Sehnen innen.
+        assert pushed.mesh.volume == pytest.approx(_arched_section(arc) * 9.0, rel=2e-3)
+    # Die Vernetzung des exakten Körpers ist der Netzzwilling: dieselben Dreiecke.
+    assert tops["brep"] == tops["mesh"]

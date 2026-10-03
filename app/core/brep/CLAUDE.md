@@ -132,7 +132,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
 - **Zylindrische Rundung**: `centre` ist dieselbe begrenzte Achsmitte wie im
   Netzfit, auch bei zusammengeführten Teilflächen. Der Flächenschwerpunkt
   dient nur der Materialseitenprobe. Kugelige Eckrundungen tragen die
-  Trägerkugelmitte ohne erfundene Achse.
+  Trägerkugelmitte ohne erfundene Achse. Ein Zylinder, der quer zu seiner
+  Achse nicht in den Körper passt, ist wie am Netz keine Rundform
+  (`_oversized_rounds_dropped` fragt `perceive.features.cylinder_fits_in_the_body`).
   Werkzeuge: Material über trägen `profiles.for_object`, Profil aus
   `geom.prepare.drill_outline`, analytisch rotiert;
   `revolved_bore_tool`/`clipped_bore_tool` schneiden an den echten Randebenen

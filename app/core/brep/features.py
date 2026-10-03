@@ -237,6 +237,7 @@ def features_of(
         solid, found, named, surfaces, inside, reach, tolerance, cancelled=cancelled
     )
     found = _short_arcs_dropped(found, named, surfaces)
+    found = _oversized_rounds_dropped(solid, found, named, surfaces)
     found = _slots_instead_of_half_bores(
         solid,
         found,
@@ -1121,6 +1122,54 @@ def _short_arcs_dropped(
         if isinstance(surface, CylinderSurface) and surface.turn < least_turn:
             del kept[identifier]
             del named[indices[0]]
+    return kept
+
+
+def _oversized_rounds_dropped(
+    solid: Solid,
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    surfaces: dict[int, Surface | None],
+) -> dict[FeatureId, Feature]:
+    """Ein Zylinder, der nicht in seinen Körper passt, ist keine Rundform (RM-226).
+
+    **Dieselbe Frage wie am Netz**
+    (:func:`app.core.perceive.features.cylinder_fits_in_the_body`): Dort muss
+    jeder eingepasste Zylinder quer zu seiner Achse in den Körper passen, sonst
+    ist er Oberfläche. Ein Bogen R 382 über 6 Grad auf einem 40 mm breiten
+    Quader ist örtlich ein Zylinder, als Merkmal aber eine gewölbte Fläche — am
+    Netz hieß er so, am exakten Körper „Verrundung R 382“, denn jeder
+    Ausschnitt unter :func:`_full_turn` ist dort eine. Gefragt wird mit dem
+    Topologiemaß an der eigenen Vernetzung, nach der Nahtzusammenführung; was
+    fällt, bleibt Oberfläche und kommt am Ende von :func:`features_of` über
+    dieselbe Restflächenerkennung wie am Netz.
+
+    **Nicht ``replaces_an_edge``**: Ein flacher Buckel mitten auf einer
+    Deckfläche ersetzt auch keine Kante und heißt an beiden Kernen Verrundung;
+    die Frage nach der Kante stellen Panel und Bearbeitung, nicht der Name.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import cylinder_fits_in_the_body
+
+    faces_of: dict[FeatureId, list[int]] = {}
+    for index, identifier in named.items():
+        faces_of.setdefault(identifier, []).append(index)
+    kept = dict(found)
+    mesh = None
+    for identifier, indices in faces_of.items():
+        feature = kept.get(identifier)
+        if feature is None or feature.kind not in ("fillet", "hole", "pin"):
+            continue
+        if not all(isinstance(surfaces.get(index), CylinderSurface) for index in indices):
+            continue
+        if mesh is None:
+            mesh = as_mesh_data(solid)
+        radius = float(feature.params["diameter"]) / 2.0
+        if cylinder_fits_in_the_body(mesh, feature.params["axis"], radius):
+            continue
+        del kept[identifier]
+        for index in indices:
+            del named[index]
     return kept
 
 

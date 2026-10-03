@@ -3038,11 +3038,23 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     Zapfen zählen dort), aber ein Merkmal, das nicht in seinen Körper passt,
     gehört in keine Liste und in kein Kontextmenü.
     """
-    axis = np.asarray(fit.axis, dtype=float)
-    if float(np.max(np.abs(axis))) <= EPS_GEOM:
-        return True
     radius = fit.radius if fit.radial_min is None else fit.radial_min
-    first, second = _plane_basis(axis)
+    return cylinder_fits_in_the_body(mesh, fit.axis, radius)
+
+
+def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: float) -> bool:
+    """Ob ein Zylinder mit diesem Radius quer zu seiner Achse in den Körper passt.
+
+    Die Frage hinter :func:`_fits_in_the_body`, ohne Einpassung gestellt —
+    **der exakte Kern fragt sie mit seinem Topologiemaß an seiner eigenen
+    Vernetzung** (``brep.features._oversized_rounds_dropped``, RM-226). Ohne
+    sie hieß ein Bogen R 382 über 6 Grad auf einem 40 mm breiten Quader exakt
+    „Verrundung R 382“ und am Netzzwilling „gekrümmte Fläche“.
+    """
+    direction = np.asarray(axis, dtype=float)
+    if float(np.max(np.abs(direction))) <= EPS_GEOM:
+        return True
+    first, second = _plane_basis(direction)
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     extreme: np.ndarray = remembered(
         "body_extreme_points",
