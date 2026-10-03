@@ -1,4 +1,19 @@
 {
+  "Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.": "Le impostazioni di stampa effettive di questa uscita sono sconosciute.",
+  "Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen.": "Lo slicer determina la disposizione comune dei pezzi durante lo slicing.",
+  "Überlappende Teile haben unterschiedliche Stützeinstellungen.": "I pezzi sovrapposti hanno impostazioni dei supporti diverse.",
+  "Die gemeinsame Stützmenge mit diesen Stützbegrenzungen ist unbekannt.": "La quantità complessiva di supporto con queste restrizioni è sconosciuta.",
+  "Der Slicer hat die Anordnung der Teile geändert.": "Lo slicer ha modificato la disposizione dei pezzi.",
+  "Stützmaterial": "Materiale di supporto",
+  "Modellschichten": "Strati del modello",
+  "Platte {plate}, {quantity}: Die Gegenprobe ist unvollständig. {reason}": "Piatto {plate}, {quantity}: la verifica incrociata è incompleta. {reason}",
+  "Platte {plate}, {quantity}: intern geschätzt {estimated} {unit}, im G-Code {measured} {unit}. {result}": "Piatto {plate}, {quantity}: stima interna {estimated} {unit}, nel G-Code {measured} {unit}. {result}",
+  "Die Werte weichen deutlich voneinander ab.": "I valori differiscono notevolmente.",
+  "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "I valori corrispondono entro il limite di confronto.",
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "I file di stampa non possono essere associati in modo univoco ai piatti confrontati.",
+  "Quelle der Schätzung": "Fonte della stima",
+  "Quelle des G-Code-Werts": "Fonte del valore del G-Code",
+  "Interne Schichtanalyse": "Analisi interna degli strati",
   " %": "%",
   " und ": " e ",
   " °": " °",
@@ -7498,5 +7513,6 @@
   "Spülmaterial aus lesbaren G-Code-Abschnitten: {volume} cm³. Die vollständige Menge ist unbekannt.": "Materiale di spurgo dalle sezioni leggibili del G-Code: {volume} cm³. La quantità totale è sconosciuta.",
   "Modellzeit aus dem G-Code.": "Tempo del modello dal G-Code.",
   "Aus ausgewiesenen G-Code-Abschnitten gelesenes Spülmaterial: {volume} cm³.": "Materiale di spurgo letto dalle sezioni identificate del G-Code: {volume} cm³.",
-  "Die Druckdatei weist das Modellmaterial nicht mit vollständig bekannten Materialwerten getrennt aus.": "Il file di stampa non indica separatamente il materiale del modello con proprietà completamente note."
+  "Die Druckdatei weist das Modellmaterial nicht mit vollständig bekannten Materialwerten getrennt aus.": "Il file di stampa non indica separatamente il materiale del modello con proprietà completamente note.",
+  "Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.": "Il file di stampa non indica in modo univoco la quantità completa di materiale di supporto."
 }

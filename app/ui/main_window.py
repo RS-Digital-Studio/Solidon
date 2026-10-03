@@ -216,7 +216,7 @@ from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
-from app.core.slice.estimate import support_material
+from app.core.slice.estimate import plates_findings, support_material
 from app.core.slice.estimate import total as estimate_total
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
@@ -8076,6 +8076,16 @@ class MainWindow(QMainWindow):
             )
         if comparison is not None:
             self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]), comparison)
+            self.report.add_findings(
+                plates_findings(
+                    comparison.plates,
+                    [entry.metrics for entry in outcomes],
+                    [
+                        any(finding.code == "slicer.arranged_itself" for finding in entry.findings)
+                        for entry in outcomes
+                    ],
+                )
+            )
         self._focus_report()
         self.announce(
             tr("Geslicet: {file}", file=outcomes[0].gcode_path.name)

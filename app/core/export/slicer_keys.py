@@ -566,7 +566,8 @@ CURA: Final[tuple[Row, ...]] = (
     # sie bleibt es bei 60 mm/s aus der Definition.
     ("speed.inner_wall", "speed_print", _number),
     ("speed.infill", "speed_infill", _number),
-    ("speed.top_surface", "speed_topbottom", _number),
+    ("speed.infill", "speed_topbottom", _number),
+    ("speed.top_surface", "speed_roofing", _number),
     ("speed.first_layer", "speed_layer_0", _number),
     ("speed.travel", "speed_travel", _number),
     ("support.style", "support_enable", _support_on_boolean),
@@ -727,7 +728,7 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "retraction_hop": ("retraction_hop_after_extruder_switch_height",),
     "retraction_speed": ("retraction_prime_speed", "retraction_retract_speed"),
     "speed_layer_0": ("skirt_brim_speed", "speed_print_layer_0"),
-    "speed_topbottom": ("speed_flooring", "speed_roofing"),
+    "speed_topbottom": ("speed_flooring",),
     "speed_wall_0": ("speed_wall_0_flooring", "speed_wall_0_roofing"),
     "speed_wall_x": ("speed_wall_x_flooring", "speed_wall_x_roofing"),
     "support_angle": ("seam_overhang_angle",),

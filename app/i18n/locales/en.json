@@ -1,4 +1,19 @@
 {
+  "Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.": "The effective print settings for this output are unknown.",
+  "Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen.": "The slicer determines the shared part layout when slicing.",
+  "Überlappende Teile haben unterschiedliche Stützeinstellungen.": "Overlapping parts have different support settings.",
+  "Die gemeinsame Stützmenge mit diesen Stützbegrenzungen ist unbekannt.": "The combined support amount with these support restrictions is unknown.",
+  "Der Slicer hat die Anordnung der Teile geändert.": "The slicer changed the part layout.",
+  "Stützmaterial": "Support material",
+  "Modellschichten": "Model layers",
+  "Platte {plate}, {quantity}: Die Gegenprobe ist unvollständig. {reason}": "Plate {plate}, {quantity}: The cross-check is incomplete. {reason}",
+  "Platte {plate}, {quantity}: intern geschätzt {estimated} {unit}, im G-Code {measured} {unit}. {result}": "Plate {plate}, {quantity}: internal estimate {estimated} {unit}, in the G-code {measured} {unit}. {result}",
+  "Die Werte weichen deutlich voneinander ab.": "The values differ significantly.",
+  "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "The values agree within the comparison limit.",
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "The print files cannot be matched unambiguously to the compared plates.",
+  "Quelle der Schätzung": "Estimate source",
+  "Quelle des G-Code-Werts": "Source of the G-code value",
+  "Interne Schichtanalyse": "Internal layer analysis",
   " %": "%",
   " und ": " and ",
   " °": " °",
@@ -7498,5 +7513,6 @@
   "Spülmaterial aus lesbaren G-Code-Abschnitten: {volume} cm³. Die vollständige Menge ist unbekannt.": "Purge material from readable G-code sections: {volume} cm³. The full amount is unknown.",
   "Modellzeit aus dem G-Code.": "Model time from the G-code.",
   "Aus ausgewiesenen G-Code-Abschnitten gelesenes Spülmaterial: {volume} cm³.": "Purge material read from identified G-code sections: {volume} cm³.",
-  "Die Druckdatei weist das Modellmaterial nicht mit vollständig bekannten Materialwerten getrennt aus.": "The print file does not identify model material separately with fully known material properties."
+  "Die Druckdatei weist das Modellmaterial nicht mit vollständig bekannten Materialwerten getrennt aus.": "The print file does not identify model material separately with fully known material properties.",
+  "Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.": "The print file does not clearly specify the complete amount of support material."
 }

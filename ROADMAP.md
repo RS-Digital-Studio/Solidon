@@ -106,13 +106,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Materialteil umgesetzt und geprüft; Zeitabnahme nach drei gemessenen Ansätzen offen. Nächster Schritt: Mindesttempo, Erstschichttempi und unabhängig belegte Startzeit |
-| [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
 | [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
 | [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 2 von 16. G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
-| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Offen nach zwei Messansätzen: Beschleunigungsgrenzen, Zahlenliterale und Berichte korrigiert; SV06/Pilz noch 37,86 % Zeitabweichung, bei gleichen Prozesswerten 21,62 %. Nächster Schritt: Herstellergrenzen und Zeitanteile klären |
+| [RM-503 — Cura übernimmt die native Jerk-Steuerung nicht](#rm-503) | Geometrie, Erkennung und Druckvorbereitung | Schalter und vollständige abhängige Jerk-Werte aus dem gewählten Profil auflösen; M205 im G-Code gegen die Zeitberechnung prüfen |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
@@ -3110,22 +3109,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Stand 03.10.2026 — Materialteil umgesetzt, Zeitabnahme offen:** Der Vergleich benutzt nur das aus bekannten Druckrollen gelesene Modellmaterial und belegte Werkzeugdichten. Spülung und Reinigungsturm erscheinen getrennt; unvollständig belegte Mengen bleiben ausdrücklich unbekannt. Bedingte Firmwarezweige, Cutter-Wiederförderung, unbekannte Rollen und fehlende Materialdaten werden nicht als vollständiges Modellmaterial ausgegeben. Gesamtverbrauch und Verbrauchsbuchung behalten ihren bisherigen Weg. Die Materialgegenprobe bleibt an acht frischen einfarbigen Würfel-/Pilz-Ausgaben der vier verlangten Slicer innerhalb 15 %; bei sechs lesbaren realen Farbdateien liegen die Abweichungen zwischen 0,49 und 9,90 %. Cura ohne übergebene Filamentdaten bleibt unbekannt. Der Parser trennt ausdrücklich ausgewiesene Modellzeit von Gesamtzeit; deren Differenz ist ein Zusatzanteil, keine belegte reine Startzeit. 173 Parser-Kopietests und drei Anschlussfälle grün; vier Reviewfunde durch rote Gegenproben beziehungsweise korrigierte Texte erledigt, unabhängige Nachprüfung ohne offenen Fund. Ursprung des Summenvergleichs d2ed623c1f, enthalten in v0.5.0/v0.5.1; sechs Changelog-Punkte beschreiben ausschließlich die Materialkorrektur.
   **Drei gemessene Zeitansätze:** Eine feste Mindestschichtzeit ignoriert das Mindestdrucktempo (SuperSlicer-Pilz: 7,03 s trotz 15 s Vorgabe). Schichtweise Wand-/Füll-/Deckflächen mit Tempogrenze erreichen fünf von acht Vorgaben; CC2 bleibt bei −33,51 % am Würfel und −28,43 % am Pilz, MK4S-Würfel bei −15,52 %. Ein Beschleunigungsband plus unabhängig angenäherter CC2-Startanteil von 110 s ergibt −14,55 %/−16,28 % und erfüllt die gemeinsame Abnahme ebenfalls nicht. Keine passende Startzeit aus der Differenz zur eigenen Schätzung abgeleitet; Warnschwelle unverändert. Der bestehende Zeitvergleich warnt weiterhin in sieben von acht Standardfällen. Nächster Schritt: belegtes Mindestdrucktempo und getrennte Erstschichttempi aus dem Herstellerprofil, unabhängig belegte Start-/Zusatzzeiten mit Drucker- und Profilidentität. Tragende Messwerte, Formeln, Modellidentitäten und Grenzen der Wiederholung stehen im Repository: [Material- und Zeitgegenprobe](konzepte/konzept-slicer-uebergabe.md#9-rm-465--material--und-zeitgegenprobe-vom-03102026).
 
-<a id="rm-466"></a>
-
-- [ ] **RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1).**
-  G-Code-Gegenprüfung 02.10.2026. §28.1 verlangt Stützmaterialvolumen und Schichtzahl aus dem G-Code
-  als Gegenprobe. Nach *Slicen* vergleicht `_gcode_returned` → `_compare_totals` nur Zeit und
-  Material (`app/ui/main_window.py:7466–7490`, `:7672–7718`); `_compare_support` läuft nur nach
-  *G-Code prüfen* mit einer von Hand gewählten Datei (`:7583–7592`). `support_mm3` und `layer_count`
-  werden gelesen, aber weder verglichen noch gezeigt. Gemessen (Pilz A, G-Code gegen
-  Schichtanalyse): CC2 9 969 gegen 14 764 mm³, P1S 6 219 gegen 7 171, MK4S 6 629 gegen 8 889, Kobra 2
-  (Orca) 4 207 gegen 32 112 mm³.
-  **Fix:** `_gcode_returned` ruft dieselbe Stützgegenprobe wie der manuelle Weg und vergleicht die
-  Schichtzahl mit dem Raster der Analyse (erste Schichthöhe); Befunde mit Herkunft.
-  **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
-  Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
-  Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
-
 <a id="rm-475"></a>
 
 - [ ] **RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
@@ -3222,64 +3205,38 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Lauf, kein Slicerstart. Bauplan §29, Regel 17.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
 
-<a id="rm-482"></a>
+<a id="rm-503"></a>
 
-- [ ] **RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
-  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0, `sovol-sv06` und `generic-220`.
-  `printers.toml` führt dort keine Beschleunigung, also gilt die Stufe (8000/5000 mm/s²); der
-  G-Code trägt 99 × `M204 S8000` hinter Curas eigenem `M201 X500 Y500`. Die Firmware deckelt auf
-  500, Curas Zeit und Solidons `gcode.print_time` rechnen mit 8000. Die Grenzen der Definition
-  (`machine_max_acceleration_*` als `value`) erreichen CuraEngine nicht. Trifft jeden Drucker
-  ohne Beschleunigung in `printers.toml`.
-  **Stellen:** `app/core/knowledge/data/printers.toml:492–511`,
-  `app/core/knowledge/data/print_settings.toml:65–66`, `app/core/export/slicer_keys.py`
-  (`CURA`, `CURA_MIRRORED`), `app/core/export/handover.py` (`_cura_machine`).
-  **Fix (allgemein):** Maschinenwerte aus dem Herstellerprofil in `printers.toml` (SV06: 1000
-  Druck, 500 Leerfahrt); ohne Maschinenwert keine Stufenbeschleunigung an Cura; Grenzen der
-  Definitionskette als Zahl an CuraEngine.
-  **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
-  Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
-
-  **Stand 03.10.2026:** Der allgemeine Beschleunigungsfehler ist behoben:
-  Ohne belegten Maschinenwert oder bewusste Auswahl aktiviert Solidon keine
-  Stufenbeschleunigung. Numerische Werte der vollständigen Cura-Definitionskette,
-  einschließlich endlicher Zahlenliterale als Text, erreichen Konsole und Fenster.
-  Platten-, Objekt- und Endcodebeschleunigungen werden an den Achsgrenzen begrenzt.
-  Eigene oder übernommene Werte oberhalb dieser Grenze erzeugen einen Befund mit
-  angefordertem und tatsächlichem Wert samt Rückweg in den Druckdialog; die
-  Gegenprobe behält den tatsächlich geschriebenen Wert. Ein unvollständiger
-  Benutzerstapel fällt nicht auf Werkswerte zurück.
-  SV06 erhält Druck/Außenwand 1000 mm/s² aus dem belegten Herstellerprozess;
-  Curas Achsgrenze 500 bleibt wirksam. `printers.toml` gehört nicht zu den
-  gemeinsamen Geometrieeingängen des Bereichsnachweises; kein Bauteilmaß geändert.
-  **Messung:** 48 erfolgreiche echte Schnitte, drei Drucker × Würfel/Pilz ×
-  Cura 5.13.0/Prusa 2.9.6 × vier Stände. Vorher bei allen Cura-Fällen M204 S8000;
-  nachher SV06 S/P/T höchstens 500, generic-220 und erkannter Ender-3 ohne
-  von Solidon aktivierte M204-Steuerung. Zusätzliche echte eigene 2000/1500-Wahl:
-  zwei passende Begrenzungsbefunde auf 500, G-Code ebenfalls höchstens 500.
-  Standardweg Cura/Prusa, Würfel/Pilz in Sekunden: SV06 1547,11/1744 und
-  2828,85/2052 (11,29/37,86 %); generic-220 1073,52/1080 und 2230,90/2253
-  (0,60/0,98 %); Ender-3 1341,62/2336 und 2487,74/2763 (42,57/9,96 %).
-  Zweiter Ansatz mit denselben ausdrücklich gewählten Prozesswerten:
-  SV06 11,38/21,62 %, generic-220 0,60/0,98 %, Ender-3 5,19/1,50 %.
-  **Abnahme bleibt offen:** Beide Ansätze verfehlen am SV06-Pilz die verbindlichen
-  15 %. Die Herstellerdaten widersprechen sich (Cura X/Y 500, Prusa 1000).
-  Nächster Schritt: gültige Herstellergrenzen klären und den verbleibenden
-  Zeitanteil aus Geschwindigkeit, Kühlung, Beschleunigung und Bahnführung messen.
-  Keine Kalibrierzahl verdeckt die Abweichung.
-  **Prüfungen:** zuerst vier rote Kernfälle, danach 62 grün; Anschlussreview
-  zusätzlich sechs rote Berichts- und vier rote Zahlen-/Fensterdateifälle.
-  Abschließend 435 Kernfälle und 682 Wächter grün, Ruff/Format/mypy grün.
-  Betroffener Lauf mit `tools/affected_tests.py --run`: 1401 bestanden,
-  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Gemeinsames Entwicklungstor
-  auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0; Ruff, Format
-  und mypy ebenfalls grün. Fenster, Renderer und Leistung ausgeschlossen.
-  Belege: `F:\solidon-review-reports\B-rm482\bericht.md`, `after-final`,
-  `after-matched`, `review-choice-2`, `native-numeric-text.json`.
-  Kundensichtbar und seit `f934a42219` in v0.5.1: Changelog in sechs Sprachen
-  beschreibt ausschließlich die korrigierte Begrenzung. Commit: `c0e7eab7d`
-  (Cura berücksichtigt die belegten Beschleunigungsgrenzen des Druckers).
+- [ ] **RM-503 — Cura übernimmt die native Jerk-Steuerung nicht.**
+  Bei der Zeitabnahme von RM-482 am 03.10.2026 nachgestellt, Stand `cafd47ccc`,
+  CuraEngine 5.13.0, SV06/Pilz: beide Engine-Ebenen bekommen
+  `machine_max_jerk_xy=5`, aber weder `jerk_enabled` noch `jerk_print`.
+  Im gesamten G-Code steht nur das `M205 X8 Y8` des Startcodes. Cura berechnet
+  daher mit 5 mm/s, während der Drucker mit 8 fährt. Die native Profilkette
+  aktiviert die Steuerung und verlangt Druck 5, Leerfahrt 10 mm/s.
+  **Stellen:** `handover._cura_motion_values`,
+  `slicer_profiles._cura_definition_values`, `slicer_keys.CURA_MIRRORED`.
+  **Fix (allgemein):** Native Schalter und vollständige abhängige Rollenwerte
+  aus der gewählten Definitions- oder Instanzkette übernehmen. Eigene
+  Rollenwerte behalten Vorrang; unbekannte Formeln bleiben unbekannt. Kein
+  Ausführen fremder Ausdrücke und keine SV06-Sonderverzweigung. Daneben den
+  belegten Unterschied `machine_max_feedrate_e=40` gegen Startcode `M203 E50`
+  einordnen, ohne Hardwaregrenzen zu raten.
+  **Abnahme:** SV06 sowie je ein Profil mit ausgeschalteter Steuerung und
+  eigenen Rollenwerten: berechnete Jerk-Werte entsprechen den ausgegebenen
+  M205-Werten, einschließlich erster Schicht und Leerfahrt; Konsolen- und
+  Fensterprofil übernehmen dieselbe native Wahl. Unvollständige Stapel und
+  unbekannte Formeln werden ausdrücklich behandelt. Bauplan §29.
+  **Fortsetzbare Belege:** Cura 5.13
+  [Sovol-Grundprofil](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_base.def.json),
+  [Planetenextruder](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_base_planetary.def.json),
+  [SV06-Startcode](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_sv06.def.json)
+  und [Zeitrechnung](https://github.com/Ultimaker/CuraEngine/blob/5.13/src/timeEstimate.cpp).
+  Reproduktion: `write_config`/`slice_model` mit `sovol-sv06`, PLA, Standard und
+  `tests/data/meshes/cube_clean.stl`; alle `machine_max_jerk_xy`-/`jerk_*`-Argumente
+  mit jedem M205 vor und nach der ersten Schicht vergleichen. Die Zeitwirkung
+  dieses getrennten Befunds ist noch nicht gemessen; RM-482 belegt nur seine
+  Beschleunigungsgrenzen und den Vergleich mit gleichen Prozesswerten.
 
 <a id="rm-483"></a>
 

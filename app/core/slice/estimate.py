@@ -55,9 +55,26 @@ eine Näherung mit ausgewiesener Herkunft, keine Rechnung.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from app.core.types import PrintSettings
+from app.core.errors import OPEN_PRINT_SETTINGS
+from app.core.geom.mesh import MeshData, concatenated
+from app.core.types import (
+    CancelToken,
+    Finding,
+    LayerInfo,
+    PrintSettings,
+    Profile,
+    SceneObject,
+    SliceResult,
+)
+from app.core.units import EPS_GEOM, is_close
+from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.slice.gcode import GcodeMetrics
 
 #: Anteil der Zeit, der nicht auf Materialauftrag entfällt — Fahrwege,
 #: Rückzüge, Beschleunigung, Schichtwechsel.
@@ -240,3 +257,300 @@ def total(bodies: list[tuple[float, float]], settings: PrintSettings) -> Estimat
         grams=sum(part.grams for part in parts),
         seconds=sum(part.seconds for part in parts),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class PlateComparison:
+    """Kennzahlen genau einer ausgegebenen Platte; unbekannt ist nie null."""
+
+    plate: int
+    support_material_mm3: float | None
+    model_layer_count: int | None
+    support_reason: TranslatableText | str = ""
+    layers_reason: TranslatableText | str = ""
+    arrangement_dependent: bool = False
+
+
+def plate_comparison(
+    plate: int,
+    parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+    profile: Profile,
+    *,
+    keep_arrangement: bool,
+    separate_objects: bool,
+    cancelled: CancelToken | None = None,
+) -> PlateComparison:
+    """Vollständige Analyse der exportierten Netze mit deren wirksamen Teilwerten.
+
+    Der Schreiber ruft diesen Weg erst nach der Auflösung aller Teilwerte auf.
+    Eine gemeinsame Platte wird gemeinsam geschnitten: Material eines zweiten
+    Körpers trägt die Stütze des ersten, und dieselbe Säule zählt nur einmal.
+    Unbekannte Slicer-Anordnung oder überlappende unterschiedliche Stützregeln
+    erlauben dagegen keine gemeinsame Stützmenge. Modelllagen bleiben prüfbar.
+    """
+    from app.core.knowledge import profiles
+    from app.core.slice.analysis import model_support
+    from app.core.slice.findings import analysed
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    missing = _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.")
+    if not parts or any(settings is None for _entry, _mesh, settings in parts):
+        return PlateComparison(plate, None, None, missing, missing)
+    known = [(entry, mesh, settings) for entry, mesh, settings in parts if settings is not None]
+    first = known[0][2]
+    same_grid = all(
+        is_close(settings.layers.layer_height, first.layers.layer_height)
+        and is_close(settings.layers.first_layer_height, first.layers.first_layer_height)
+        for _entry, _mesh, settings in known
+    )
+    meshes: list[MeshData] = []
+    for _entry, mesh, _settings in known:
+        # Bei getrennten Objekten ohne übernommene Anordnung setzt der Slicer
+        # jedes Objekt aufs Bett. Ein gemeinsames STL wird als Ganzes versetzt.
+        if separate_objects and not keep_arrangement:
+            raw = mesh.raw.copy()
+            raw.apply_translation((0.0, 0.0, -mesh.bounds.minimum[2]))
+            mesh = MeshData.of(raw)
+        meshes.append(mesh)
+
+    def limits(indices: Sequence[int], settings: PrintSettings) -> tuple[float, float]:
+        values = [
+            profiles.analysis_limits(
+                profiles.for_process(profile, settings, effective=True), known[index][0]
+            )
+            for index in indices
+        ]
+        # Die Gegenprobe folgt dem exportierten Stützwinkel. Materialproben
+        # liefern weiterhin die Wandgrenze, dürfen aber den finalen Teilwert
+        # hier nicht durch ihren Vorschlagswinkel ersetzen.
+        return max(wall for wall, _angle in values), settings.support.threshold_angle
+
+    def measure(indices: Sequence[int], settings: PrintSettings) -> SliceResult:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        mesh = (
+            meshes[indices[0]]
+            if len(indices) == 1
+            else MeshData.of(concatenated([meshes[index].raw for index in indices]))
+        )
+        wall, angle = limits(indices, settings)
+        return analysed(mesh, settings, angle, wall, cancelled=cancelled)
+
+    all_indices = tuple(range(len(known)))
+    arranged_apart = separate_objects and not keep_arrangement and len(known) > 1
+    if same_grid and not arranged_apart:
+        shared = measure(all_indices, first)
+        model_layers = sum(layer.area > EPS_GEOM * EPS_GEOM for layer in shared.layers)
+    else:
+        shared = None
+
+        # Bei unterschiedlichen Rastern ist jede tatsächlich belegte Z-Lage
+        # der Platte einmal zu zählen. LayerInfo.z ist die Schnittmitte,
+        # G-Code nennt dagegen die Oberkante der gedruckten Lage. Leerlagen
+        # fehlen im Ergebnis; deshalb nicht über die Listenposition umrechnen.
+        def printed_height(layer: LayerInfo, mesh: MeshData, settings: PrintSettings) -> float:
+            first_top = mesh.bounds.minimum[2] + settings.layers.first_layer_height
+            if layer.z < first_top + EPS_GEOM:
+                return float(first_top)
+            return layer.z + settings.layers.layer_height / 2.0
+
+        heights = sorted(
+            printed_height(layer, meshes[index], settings)
+            for index, (_entry, _mesh, settings) in enumerate(known)
+            for layer in measure((index,), settings).layers
+            if layer.area > EPS_GEOM * EPS_GEOM
+        )
+        model_layers = 0
+        previous: float | None = None
+        for height in heights:
+            if previous is None or not is_close(height, previous):
+                model_layers += 1
+                previous = height
+
+    if all(settings.support.style == "none" for _entry, _mesh, settings in known):
+        return PlateComparison(plate, 0.0, model_layers)
+    if arranged_apart:
+        return PlateComparison(
+            plate,
+            None,
+            model_layers,
+            _("Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen."),
+        )
+
+    # Gleicher Vertrag heißt gleiches Raster und gleiche Stützparameter, nicht
+    # bloß dieselbe Dichte. Filamentdichte beeinflusst mm³ dagegen nicht.
+    def same_support(settings: PrintSettings) -> bool:
+        a, b = first.support, settings.support
+        return (
+            a.style == b.style
+            and a.placement == b.placement
+            and a.block_channels == b.block_channels
+            and a.interface_layers == b.interface_layers
+            and all(
+                is_close(getattr(a, key), getattr(b, key))
+                for key in ("density", "threshold_angle", "z_gap", "xy_gap")
+            )
+        )
+
+    if same_grid and all(same_support(settings) for _entry, _mesh, settings in known):
+        assert shared is not None
+        groups = [(shared, first)]
+    else:
+        for index, mesh in enumerate(meshes):
+            for other in meshes[index + 1 :]:
+                if all(
+                    mesh.bounds.minimum[axis] < other.bounds.maximum[axis] - EPS_GEOM
+                    and other.bounds.minimum[axis] < mesh.bounds.maximum[axis] - EPS_GEOM
+                    for axis in (0, 1)
+                ):
+                    return PlateComparison(
+                        plate,
+                        None,
+                        model_layers,
+                        _("Überlappende Teile haben unterschiedliche Stützeinstellungen."),
+                    )
+        groups = [
+            (measure((index,), settings), settings)
+            for index, (_entry, _mesh, settings) in enumerate(known)
+        ]
+    support = 0.0
+    for result, settings in groups:
+        if settings.support.style == "none":
+            continue
+        if settings.support.placement == "build_plate" or settings.support.block_channels:
+            supported = model_support(result)
+            if (
+                settings.support.placement == "build_plate"
+                and (
+                    supported.open_area > EPS_GEOM
+                    or supported.channels
+                    or supported.island_on_model
+                )
+            ) or (settings.support.block_channels and supported.channels):
+                return PlateComparison(
+                    plate,
+                    None,
+                    model_layers,
+                    _("Die gemeinsame Stützmenge mit diesen Stützbegrenzungen ist unbekannt."),
+                )
+        support += support_material(result.support_volume, settings)
+    return PlateComparison(plate, support, model_layers, arrangement_dependent=len(known) > 1)
+
+
+def plate_findings(
+    expected: PlateComparison,
+    measured: GcodeMetrics,
+    *,
+    rearranged: bool = False,
+) -> list[Finding]:
+    """Beide Herkünfte je Platte sichtbar halten, auch bei Übereinstimmung."""
+    from app.core.slice.gcode import DEVIATION_LIMIT
+
+    support = expected.support_material_mm3
+    reason = expected.support_reason
+    if rearranged and expected.arrangement_dependent:
+        support = None
+        reason = _("Der Slicer hat die Anordnung der Teile geändert.")
+    measured_support = measured.support_mm3
+    if "support" in measured.uncertain_material_roles:
+        measured_support = None
+        reason = _("Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.")
+    found: list[Finding] = []
+    for quantity, estimate_value, measured_value, unit, missing_reason in (
+        (_("Stützmaterial"), support, measured_support, "mm³", reason),
+        (
+            _("Modellschichten"),
+            expected.model_layer_count,
+            measured.model_layer_count,
+            _("Schichten"),
+            expected.layers_reason,
+        ),
+    ):
+        values: dict[str, float | str | TranslatableText] = {
+            "plate": expected.plate + 1,
+            "what": quantity,
+            "unit": unit,
+            "estimated_source": "internal",
+            "measured_source": "gcode",
+        }
+        if estimate_value is not None:
+            values["estimated"] = estimate_value
+        if measured_value is not None:
+            values["measured"] = measured_value
+        if estimate_value is None or measured_value is None:
+            values["reason"] = missing_reason or _(
+                "Die Druckdatei nennt für diese Größe keinen Messwert."
+            )
+            found.append(
+                Finding(
+                    code="gcode.plate_comparison_unknown",
+                    severity="info",
+                    message=_(
+                        "Platte {plate}, {quantity}: Die Gegenprobe ist unvollständig. {reason}",
+                        plate=expected.plate + 1,
+                        quantity=quantity,
+                        reason=values["reason"],
+                    ),
+                    values=values,
+                    source="gcode",
+                )
+            )
+            continue
+        deviation = (
+            abs(measured_value - estimate_value) / measured_value
+            if measured_value > EPS_GEOM
+            else (0.0 if estimate_value <= EPS_GEOM else 1.0)
+        )
+        differs = deviation > DEVIATION_LIMIT
+        found.append(
+            Finding(
+                code="gcode.plate_deviation" if differs else "gcode.plate_comparison",
+                severity="warning" if differs else "info",
+                suggestions=(OPEN_PRINT_SETTINGS,) if differs else (),
+                message=_(
+                    "Platte {plate}, {quantity}: intern geschätzt {estimated} {unit}, "
+                    "im G-Code {measured} {unit}. {result}",
+                    plate=expected.plate + 1,
+                    quantity=quantity,
+                    estimated=round(estimate_value, 2),
+                    measured=round(measured_value, 2),
+                    unit=unit,
+                    result=_("Die Werte weichen deutlich voneinander ab.")
+                    if differs
+                    else _("Die Werte stimmen innerhalb der Vergleichsgrenze überein."),
+                ),
+                values=values,
+                source="gcode",
+            )
+        )
+    return found
+
+
+def plates_findings(
+    expected: Sequence[PlateComparison],
+    measured: Sequence[GcodeMetrics],
+    rearranged: Sequence[bool],
+) -> list[Finding]:
+    """Nur vollständige, eindeutig zugeordnete Plattenvergleiche veröffentlichen."""
+    if (
+        len(expected) != len(measured)
+        or len(expected) != len(rearranged)
+        or len({entry.plate for entry in expected}) != len(expected)
+    ):
+        return [
+            Finding(
+                code="gcode.plate_comparison_unknown",
+                severity="info",
+                message=_(
+                    "Die Druckdateien lassen sich nicht eindeutig den verglichenen "
+                    "Platten zuordnen."
+                ),
+                source="gcode",
+            )
+        ]
+    return [
+        finding
+        for snapshot, metrics, moved in zip(expected, measured, rearranged, strict=True)
+        for finding in plate_findings(snapshot, metrics, rearranged=moved)
+    ]

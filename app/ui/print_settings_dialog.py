@@ -76,14 +76,14 @@ from app.core.export.writer import arrangement_holds, part_advice, write_assembl
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.fits import fit_kinds_for
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
-from app.core.slice.estimate import estimate
+from app.core.slice.estimate import PlateComparison, estimate, plate_comparison
 from app.core.slice.findings import remembered_analysis
 from app.core.types import (
     AdhesionType,
@@ -1820,6 +1820,9 @@ class PlateRun:
     deklarierte Spulenliste taugt dafür nicht — sie kann einen Eintrag
     tragen, den keine Fläche benutzt."""
 
+    comparison: PlateComparison | None = None
+    """Vollständige Gegenprobe der tatsächlich geschriebenen Teilwerte."""
+
 
 @dataclass(frozen=True, slots=True)
 class _PlateJob:
@@ -1855,6 +1858,7 @@ class _PlateJob:
     #: der Konsole (``writer.write_assembly``, RM-257). Auch das setzt der
     #: Arbeiter selbst.
     for_window: bool = False
+    with_comparison: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1867,6 +1871,7 @@ class SliceComparison:
 
     grams: float | None
     seconds: float | None
+    plates: tuple[PlateComparison, ...] = ()
 
 
 def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceComparison:
@@ -1907,7 +1912,8 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
                 # Prusa und Cura bekommen genau einen Satz für die ganze Platte.
                 choices = [shared]
             if not choices or any(choice is None for choice in choices):
-                return SliceComparison(grams=None, seconds=None)
+                grams = seconds = None
+                continue
             values = [
                 estimate(entry.mesh.volume, entry.mesh.area, choice)
                 for choice in choices
@@ -1925,7 +1931,21 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
                 and all(is_close(value.seconds, first.seconds) for value in values)
                 else None
             )
-    return SliceComparison(grams=grams, seconds=seconds)
+    return SliceComparison(
+        grams=grams,
+        seconds=seconds,
+        plates=tuple(
+            run.comparison
+            or PlateComparison(
+                run.plate,
+                None,
+                None,
+                _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt."),
+                _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt."),
+            )
+            for run in runs
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -2006,6 +2026,21 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     # wird vor dem Schreiben über ihre vollständige Materialidentität aufgelöst.
     local_settings = replace(job.settings, slot_profiles=chosen)
     keep = arrangement_holds([as_mesh_data(entry.mesh) for entry in on_plate], job.profile)
+    comparison: PlateComparison | None = None
+
+    def remember_comparison(
+        parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+    ) -> None:
+        nonlocal comparison
+        comparison = plate_comparison(
+            plate,
+            parts,
+            job.profile,
+            keep_arrangement=keep,
+            separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
+            cancelled=job.cancelled,
+        )
+
     written, findings = write_assembly(
         on_plate,
         job.folder,
@@ -2023,9 +2058,11 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         # Ob ein übernommener Vorschlag je Teil verlangt ist, entscheidet der
         # ganze Auftrag, nicht diese eine Platte (Durchsicht 0.5.1, N1).
         job=[entry for entry in objects if entry.plate in job.plates],
+        comparison=remember_comparison if job.with_comparison else None,
     )
     return PlateRun(
         plate=plate,
+        comparison=comparison,
         model=written,
         slots=handover.with_slot_profiles(slots, chosen),
         keep_arrangement=keep,
@@ -2507,7 +2544,7 @@ class _PrepareAndSliceWorker(_SliceWorker):
 
     def __init__(self, job: _PlateJob) -> None:
         super().__init__((), job.settings, job.profile, job.setup)
-        self._job = replace(job, cancelled=self.cancelled)
+        self._job = replace(job, cancelled=self.cancelled, with_comparison=True)
         self.comparison: SliceComparison | None = None
 
     def work(self) -> None:

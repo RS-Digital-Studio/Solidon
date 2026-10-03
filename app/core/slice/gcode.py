@@ -801,6 +801,9 @@ def analyze_lines(
 
     position: list[float | None] = [None, None, None]
     axes_absolute = True
+    axes_mode_uncertain = False
+    physical_height: float | None = None
+    height_offset: float | None = 0.0
     arc_centres_absolute = False
     independent = _ExtrusionState()
     marlin = _ExtrusionState()
@@ -995,10 +998,26 @@ def analyze_lines(
             continue
         if code in (90, 91):
             axes_absolute = code == 90
+            axes_mode_uncertain = conditional_depth > 0
             marlin.absolute = axes_absolute
             marlin.role_mode_uncertain = conditional_depth > 0
             continue
         if code == 92:
+            if "Z" in words:
+                # G92 bewegt nicht. Bei bekannter physischer Höhe setzt es
+                # nur den Ursprung; ein unklarer Ursprung kann durch spätere
+                # absolute Z-Fahrten nicht als bekannt angenommen werden.
+                if conditional_depth:
+                    height_offset = None
+                elif physical_height is not None:
+                    height_offset = physical_height - words["Z"]
+                elif position[2] is None and height_offset is not None:
+                    # Vor der ersten belegten Höhe genügt eine gemeinsame
+                    # Bezugsbasis; gezählt werden verschiedene Druckhöhen.
+                    physical_height = words["Z"]
+                    height_offset = 0.0
+                else:
+                    height_offset = None
             for axis, name in enumerate("XYZ"):
                 if name in words:
                     position[axis] = words[name]
@@ -1022,6 +1041,16 @@ def analyze_lines(
             else:
                 endpoint[axis] = None
         position = endpoint
+        if "Z" in words:
+            # Physische Höhen zählen, nicht die nach G92 verschobenen Werte.
+            # Relative Bewegung braucht keinen bekannten Ursprung, absolute
+            # Bewegung dagegen schon. Ein Zweig belegt keine gemeinsame Höhe.
+            if conditional_depth or axes_mode_uncertain:
+                physical_height = None
+            elif axes_absolute:
+                physical_height = words["Z"] + height_offset if height_offset is not None else None
+            elif physical_height is not None:
+                physical_height += words["Z"]
 
         steps = [state.step(words["E"]) for state in extrusion_states] if "E" in words else []
         if not steps:
@@ -1074,43 +1103,49 @@ def analyze_lines(
         for state, amount in zip(extrusion_states, consumed, strict=True):
             # Der gelesene Zweig kann rechnerisch null liefern, während der
             # andere Zweig fördert. Unsicherheit gilt deshalb vor der Menge.
-            if (
+            uncertain = bool(
                 conditional_depth
                 or (state.absolute and state.role_position_uncertain)
                 or state.role_debt_uncertain
                 or state.role_mode_uncertain
                 or role_tool_uncertain
                 or role_volume_mode_uncertain
-            ):
+            )
+            if uncertain:
                 state.uncertain_roles.add(role)
                 if role == "model":
                     state.model_complete = False
                 elif role == "support":
                     state.support_heights_known = False
-            if amount <= 0.0:
-                continue
-            state.classify(role, active_tool, amount, volumetric=volumetric)
-            if role == "model" and travelled:
-                if state.model_layer_pending:
-                    if endpoint[2] is not None:
-                        state.model_heights.add(endpoint[2])
-                    else:
-                        state.model_heights_known = False
-                    state.model_layer_pending = False
-            elif role == "support" and travelled:
-                if state.support_layer_pending:
-                    if endpoint[2] is not None:
-                        state.support_heights.add(endpoint[2])
-                    else:
-                        state.support_heights_known = False
-                    state.support_layer_pending = False
-            elif role == "unknown" and travelled and not custom_role:
+            if role == "unknown" and travelled and not custom_role and (amount > 0.0 or uncertain):
                 if after_first_layer:
                     state.model_complete = False
+                    state.uncertain_roles.add("support")
                 else:
                     # Erst am Dateiende steht fest, ob eine spätere erste
                     # Schicht diese unbekannte Bahn als Startcode abtrennt.
                     state.unmarked_unknown_motion = True
+            if amount <= 0.0:
+                continue
+            state.classify(role, active_tool, amount, volumetric=volumetric)
+            if role == "model" and travelled:
+                if physical_height is None:
+                    state.model_heights_known = False
+                if state.model_layer_pending:
+                    if physical_height is not None:
+                        state.model_heights.add(physical_height)
+                    else:
+                        state.model_heights_known = False
+                    state.model_layer_pending = False
+            elif role == "support" and travelled:
+                if physical_height is None:
+                    state.support_heights_known = False
+                if state.support_layer_pending:
+                    if physical_height is not None:
+                        state.support_heights.add(physical_height)
+                    else:
+                        state.support_heights_known = False
+                    state.support_layer_pending = False
         if code == 0 or not travelled:
             continue
         end = (endpoint[0], endpoint[1], endpoint[2])
@@ -1181,6 +1216,7 @@ def analyze_lines(
     state = marlin if dialect in ("marlin", "marlin2", "marlin(legacy)") else independent
     if state.unmarked_unknown_motion and not has_first_layer:
         state.model_complete = False
+        state.uncertain_roles.add("support")
     used_tools = state.used_tools
     if bambu_tools:
         _bambu_amounts(metrics, pattern_values, bambu_tools)
@@ -1220,7 +1256,13 @@ def analyze_lines(
             support_cm3 += sum(state.support_volumes.values()) / 1000.0
         if state.unknown_amounts.intersection(state.support.keys() | state.support_volumes.keys()):
             support_cm3 = None
-        metrics.support_mm3 = support_cm3 * 1000.0 if support_cm3 is not None else None
+        # Die gelesene Teilmenge ist keine vollständige Stützmenge, wenn ein
+        # bedingter Zweig oder eine unbekannte Druckrolle weitere Stütze trägt.
+        metrics.support_mm3 = (
+            support_cm3 * 1000.0
+            if support_cm3 is not None and "support" not in state.uncertain_roles
+            else None
+        )
     motion_lengths: dict[int, float | None] = dict(state.lengths)
     for tool, volume in state.unknown_volume_lengths.items():
         area = _filament_area(_at(metrics.filament_diameters, tool))

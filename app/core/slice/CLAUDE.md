@@ -21,7 +21,7 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 | `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt und Konturverkettung (`tools/build_slice_core.py`, Budget §31); ohne ihn gerichtete Verkettung über NumPy |
 | `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29): Stützort über `analysis.model_support` (außen, Kanal, Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße, ruhige Wände und Beschleunigung für schlanke Körper auf kleinem Fuß (`_calm_walls`), langsame erste Schicht über schmalen Stegen (`analysis.narrow_share`), Schrägnaht an runden Außenwänden (`analysis.smooth_outline_height`), Volumenstrom über `knowledge.print_settings.flow_speed_limit` (sein Deckel ist an `limits_flow` zu erkennen); `combine` vereint den Ausgabeumfang, ohne benötigte Stützen zu verlieren; Bremsen auf Tempo und Beschleunigung lockern keine frühere Regel (`_merged`, `_BRAKING_PATHS`); `for_part` gibt mit Profil den Rat je Körper für `PART_PATHS`, `SLICED_PATHS` sagt, welche davon den Schnitt des Körpers brauchen (danach schneidet der Export), `plate_paths` die plattenweiten Gründe, `connector_diameters` die Verbinder eines Körpers |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2) in einem Durchlauf, auch die erste Schicht mit Bauteillüfter (`fan_start`) |
-| `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
+| `estimate.py` | Kostenschätzung sowie eingefrorene Plattengegenprobe aus tatsächlich exportierten Netzen und Teilwerten (`plate_comparison`); vollständige gemeinsame Stützanalyse, belegte Modelllagen, beide Herkünfte je Platte (`plates_findings`) |
 | `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort, größter frei hängender Überhang außerhalb der Kanäle (`model_support(..., only=)` nur über der Meldeschwelle), lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage; gemerkt im Netzcache, gerufen von `ui/print_findings_flow.py`. `remembered_analysis` gibt die Messung heraus, ohne zu rechnen — Druckdialog (`_AdviceWorker`) und Stützsperre (`export.writer._support_blocker`) fragen dort zuerst |
 | `orientation.py` | Die Suche nach einer Druckorientierung (§28.2); dazu eine kleine Grundflächen-Vorauswahl für Auto Split mit demselben Stützvolumen und derselben Fünf-Prozent-Grenze (§22.3) |
 
@@ -144,6 +144,16 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
   Spülabschnittssummen bleiben bei ungeklärter Bilanz ausdrücklich unvollständig
   belegt; Gesamtverbrauch und Buchung übernehmen sie nicht. Explizite Modellzeit
   ersetzt keine Gesamtzeit; deren Differenz ist nur ein Zusatzanteil.
+- **Stützmenge braucht vollständige Rollen.** Bedingte Stützextrusion oder eine
+  unbekannte bewegte Druckrolle macht `support_mm3` unbekannt; gelesene
+  Rollenanteile und Gesamtverbrauch bleiben erhalten. Auch die Gegenprobe
+  verwirft unvollständige Stützmengen.
+- **Modelllagen zählen physische Höhen.** `G92` verschiebt den Ursprung, nicht
+  den Druckkopf. Höhe, Ursprung und Achsmodus werden getrennt verfolgt;
+  bedingte Befehle können die Lagenzahl unbekannt machen, ohne eine belegte
+  Modellmenge zu verwerfen. Relative Fahrten brauchen keinen bekannten Ursprung,
+  absolute Fahrten schon. Später belegte Höhen ersetzen keine früheren
+  unbekannten Druckhöhen.
 - Warnungen vergleichen **ungekürzte** Materialvorgaben mit den Grenzen des
   Druckers — ein gedeckelter Sollwert beweist keine zu niedrige Temperatur.
 - **`filament_mm_by_tool`, `filament_grams_by_tool`**: Index ist die

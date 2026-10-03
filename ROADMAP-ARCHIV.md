@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-466: Nach dem Slicen erscheinen Stützmaterial und Modelllagen mit beiden Herkünften (03.10.2026)](#rm-466-nach-dem-slicen-erscheinen-stützmaterial-und-modelllagen-mit-beiden-herkünften-03102026) |
+| 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
 | 2026-10-03 | [RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)](#rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026) |
 | 2026-10-03 | [RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)](#rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026) |
 | 2026-10-03 | [RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)](#rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026) |
@@ -38286,6 +38288,156 @@ Fünf von fünf neue Schnitte mit SuperSlicer 2.5.59.13/generic-220 und Bambu St
 
 Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffentlichungen; kundensichtbar, deshalb ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `d6b13016f` (Verworfene Druckwerte werden nach dem Schneiden gemeldet). Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
 
+## RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)
+
+<a id="rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026"></a>
+<a id="rm-482"></a>
+
+**RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0, `sovol-sv06` und `generic-220`.
+  `printers.toml` führt dort keine Beschleunigung, also gilt die Stufe (8000/5000 mm/s²); der
+  G-Code trägt 99 × `M204 S8000` hinter Curas eigenem `M201 X500 Y500`. Die Firmware deckelt auf
+  500, Curas Zeit und Solidons `gcode.print_time` rechnen mit 8000. Die Grenzen der Definition
+  (`machine_max_acceleration_*` als `value`) erreichen CuraEngine nicht. Trifft jeden Drucker
+  ohne Beschleunigung in `printers.toml`.
+  **Stellen:** `app/core/knowledge/data/printers.toml:492–511`,
+  `app/core/knowledge/data/print_settings.toml:65–66`, `app/core/export/slicer_keys.py`
+  (`CURA`, `CURA_MIRRORED`), `app/core/export/handover.py` (`_cura_machine`).
+  **Fix (allgemein):** Maschinenwerte aus dem Herstellerprofil in `printers.toml` (SV06: 1000
+  Druck, 500 Leerfahrt); ohne Maschinenwert keine Stufenbeschleunigung an Cura; Grenzen der
+  Definitionskette als Zahl an CuraEngine.
+  **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
+  Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
+
+  **Stand 03.10.2026:** Der allgemeine Beschleunigungsfehler ist behoben:
+  Ohne belegten Maschinenwert oder bewusste Auswahl aktiviert Solidon keine
+  Stufenbeschleunigung. Numerische Werte der vollständigen Cura-Definitionskette,
+  einschließlich endlicher Zahlenliterale als Text, erreichen Konsole und Fenster.
+  Platten-, Objekt- und Endcodebeschleunigungen werden an den Achsgrenzen begrenzt.
+  Eigene oder übernommene Werte oberhalb dieser Grenze erzeugen einen Befund mit
+  angefordertem und tatsächlichem Wert samt Rückweg in den Druckdialog; die
+  Gegenprobe behält den tatsächlich geschriebenen Wert. Ein unvollständiger
+  Benutzerstapel fällt nicht auf Werkswerte zurück.
+  SV06 erhält Druck/Außenwand 1000 mm/s² aus dem belegten Herstellerprozess;
+  Curas Achsgrenze 500 bleibt wirksam. `printers.toml` gehört nicht zu den
+  gemeinsamen Geometrieeingängen des Bereichsnachweises; kein Bauteilmaß geändert.
+  **Messung:** 48 erfolgreiche echte Schnitte, drei Drucker × Würfel/Pilz ×
+  Cura 5.13.0/Prusa 2.9.6 × vier Stände. Vorher bei allen Cura-Fällen M204 S8000;
+  nachher SV06 S/P/T höchstens 500, generic-220 und erkannter Ender-3 ohne
+  von Solidon aktivierte M204-Steuerung. Zusätzliche echte eigene 2000/1500-Wahl:
+  zwei passende Begrenzungsbefunde auf 500, G-Code ebenfalls höchstens 500.
+  Standardweg Cura/Prusa, Würfel/Pilz in Sekunden: SV06 1547,11/1744 und
+  2828,85/2052 (11,29/37,86 %); generic-220 1073,52/1080 und 2230,90/2253
+  (0,60/0,98 %); Ender-3 1341,62/2336 und 2487,74/2763 (42,57/9,96 %).
+  Zweiter Ansatz mit denselben ausdrücklich gewählten Prozesswerten:
+  SV06 11,38/21,62 %, generic-220 0,60/0,98 %, Ender-3 5,19/1,50 %.
+  **Abnahme bleibt offen:** Beide Ansätze verfehlen am SV06-Pilz die verbindlichen
+  15 %. Die Herstellerdaten widersprechen sich (Cura X/Y 500, Prusa 1000).
+  Nächster Schritt: gültige Herstellergrenzen klären und den verbleibenden
+  Zeitanteil aus Geschwindigkeit, Kühlung, Beschleunigung und Bahnführung messen.
+  Keine Kalibrierzahl verdeckt die Abweichung.
+  **Prüfungen:** zuerst vier rote Kernfälle, danach 62 grün; Anschlussreview
+  zusätzlich sechs rote Berichts- und vier rote Zahlen-/Fensterdateifälle.
+  Abschließend 435 Kernfälle und 682 Wächter grün, Ruff/Format/mypy grün.
+  Betroffener Lauf mit `tools/affected_tests.py --run`: 1401 bestanden,
+  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Gemeinsames Entwicklungstor
+  auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0; Ruff, Format
+  und mypy ebenfalls grün. Fenster, Renderer und Leistung ausgeschlossen.
+  Belege: `F:\solidon-review-reports\B-rm482\bericht.md`, `after-final`,
+  `after-matched`, `review-choice-2`, `native-numeric-text.json`.
+  Kundensichtbar und seit `f934a42219` in v0.5.1: Changelog in sechs Sprachen
+  beschreibt ausschließlich die korrigierte Begrenzung. Commit: `c0e7eab7d`
+  (Cura berücksichtigt die belegten Beschleunigungsgrenzen des Druckers).
+
+**Abschluss:** Der Beschleunigungsfehler war mit `c0e7eab7d` behoben;
+der anschließende Zeitvergleich zeigte einen zweiten Übergabefehler:
+`speed.top_surface` wurde in Cura auf sämtliche geschlossenen Füllschichten
+angewendet. Am SV06-Pilz fuhren dadurch 19,98 m innere Haut mit 30 statt
+60 mm/s. Die allgemeine Zuordnung schreibt nun das Fülltempo nach
+`speed_topbottom` und das Oberflächentempo nach `speed_roofing`. Bei vorhandenen
+oberen Schichten aktiviert sie genau eine äußere Dachschicht, sonst keine.
+Die Spiegelung überschreibt das Oberflächentempo nicht mehr. Bügeln bleibt
+an dessen Tempo gebunden, in Konsole und importierbarem `.curaprofile`.
+Keine Modellverzweigung, Kalibrierzahl oder erhöhte Hardwaregrenze.
+
+**Nachgestellter Fehler und Gegenprobe:** Frischer Lauf auf `cafd47ccc`,
+CuraEngine 5.13.0 gegen PrusaSlicer 2.9.6, SV06/Pilz mit gleichen gewählten
+Prozesswerten: 2828,846424 gegen 2326 s, 21,62 % Unterschied. Elf neue
+Kernfälle waren vor dem Rollenfix rot. Das Anschlussreview fand zusätzlich
+die im Fenster vom Fülltempo abgeleitete Bügelgeschwindigkeit; zwei zuerst
+rote Profilfälle verlangen dort bei Füllung 73 und Oberfläche 30 genau
+20 statt 48,67 mm/s. Abschließend alle 13 grün. Sie lesen beide Engine-Ebenen
+und die echte Profil-ZIP-Struktur, einschließlich 0/1/4 Deckschichten und
+einzeln gewählter Felder.
+
+**Verbindliche Abnahme:** Zwölf erfolgreiche echte Schnitte über
+`write_assembly` und `slice_model`, drei Drucker × Würfel/Pilz × beide Slicer.
+Gleiche ausdrücklich gewählte Solidon-Prozesswerte, native Maschinen- und
+Beschleunigungswerte unverändert; Prozent = abs(Cura − Prusa) / Prusa.
+Der dritte Drucker ist die tatsächlich erkannte Cura-Definition
+`creality_ender3`, an Prusas `Creality Ender-3 (0.4 mm nozzle)` gebunden;
+sein Solidon-Profil enthält keine Beschleunigung. Modelle:
+`tests/data/meshes/cube_clean.stl` und `F:\3D Dateien\mushroom.stl`.
+
+| Drucker | Würfel Cura / Prusa | Abweichung | Pilz Cura / Prusa | Abweichung |
+|---|---|---|---|---|
+| Sovol SV06 | 1483,76 / 1389 s | 6,82 % | 2584,78 / 2326 s | 11,13 % |
+| generic-220 | 1011,91 / 1080 s | 6,30 % | 2024,88 / 2253 s | 10,13 % |
+| Erkannter Ender-3 | 1300,69 / 1415 s | 8,08 % | 2321,21 / 2451 s | 5,30 % |
+
+Alle sechs Paarungen liegen unter 15 %. Die unabhängige G-Code-Prüfung
+erfüllt 162 von 162 Bedingungen (Exit 0), einschließlich Modellhash,
+Wandabmessungen, Endhöhe und Materialbilanz. Alle fördernden Hautbahnen der
+vorletzten und letzten Schicht fahren beim SV06 60/30, sonst 80/40 mm/s.
+Cura-Zeit aus dem letzten
+`TIME_ELAPSED`, Prusa-Zeit aus dessen G-Code-Angabe, jeweils vollständig
+125 Pilz- und 100 Würfelschichten. SV06-M204 S/P/T höchstens 500 mm/s²,
+passend zu M201 X500/Y500; R ist der getrennte Rückzugswert. generic-220
+und erkannter Ender-3 erhalten weiterhin keine von Solidon aktivierte
+M204-Steuerung. Die frühere eigene 2000/1500-Wahl bleibt auf 500 begrenzt,
+mit zwei Befunden. Der Anschlusslauf nach der Verlagerung des Bügeltempos
+bestätigt am SV06-Pilz 2584,775568 s und unverändert höchstens 500 mm/s².
+
+Die frühere Standardpaarung war kein Vergleich desselben Prozesses:
+Ender-3 etwa 40/60/80 gegen 25/40/50 mm/s sowie 8 gegen 20 s
+Mindestschichtzeit. Diese Herstellerunterschiede werden nicht überschrieben.
+Auch Prusas SV06-Achsgrenze 1000 ist nur `time_estimate_only`; der Prusa-Code
+setzt kein M201. Die [offizielle SV06-Firmware](https://github.com/Sovol3d/Sv06-Source-Code/blob/366699b1f9c5742f8029081c47e6d9089ed8d531/Marlin/Configuration.h)
+belegt X/Y 500. Die fehlende native Jerk-Steuerung ist gesondert offen unter
+RM-503; diese Abnahme verspricht keine vollständige Synchronisierung aller
+Bewegungswerte oder eine gemessene Laufzeit auf physischer Hardware.
+
+**Entwicklungstor:** 20560 bestanden, 61 übersprungen, Exit 0
+(`suite-getrennt.sh`, 356,82 s); Ruff und Format (1080 Dateien) sowie mypy
+(337 Quelldateien) jeweils Exit 0. Betroffene 13 Fälle auch über
+`tools/affected_tests.py --run` grün. Der erste Torlauf fand einen verbotenen
+privaten Querimport zwischen Testdateien; die Profilfälle stehen nun bei
+den vorhandenen Exporthelfern, danach vollständiger Neulauf grün.
+Der anfangs serielle betroffene Lauf über fast die ganze Suite wurde durch
+dieses Tor ersetzt und zählt nicht als bestanden. Fenster, Renderer,
+Erzeugnisvergleiche und Leistung bleiben beim Release.
+
+**Gemeinsamer Stand:** Mit `2602e8c90` (RM-485/RM-486) zusammengeführt,
+native Schichtberechnung neu gebaut: 20671 bestanden, 35 übersprungen,
+375,39 s, Exit 0. Ruff, Format (1080 Dateien) und mypy (337 Quelldateien)
+jeweils Exit 0. Auf diesem Stand erneut zwölf echte Schnitte und unabhängig
+162/162 G-Code-Bedingungen erfüllt; alle sechs Zeitabweichungen unverändert
+unter 15 %. Belege: `continuation-integrated-suite.log`,
+`continuation-integrated-matched`, `fortsetzung-integration-abnahme.md/.json`.
+
+**Changelog:** Ja, der Zuordnungsfehler stammt aus `f934a42219`, enthalten
+auch in `v0.5.1` (`git tag --contains`). Der bestehende RM-482-Punkt unter
+0.5.2 ist in allen sechs Sprachen um die getrennten Tempi ergänzt, jeweils
+unter 200 Zeichen. **Commits:** `c0e7eab7d` (Beschleunigungsgrenzen),
+`d534706eb` (Vollschichten, sichtbare Oberseite und Profilimport).
+Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
+`continuation-before-matched`, `continuation-final-matched`,
+`continuation-reviewed-matched`, `fortsetzung-bahnen-bericht.md`,
+`fortsetzung-prozess-bericht.md`, `fortsetzung-hersteller.md` und
+`fortsetzung-abnahme.md`; Abschlussbericht außerdem im beauftragten
+`scratchpad/bericht-B.md`.
+
 ## RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)
 
 <a id="rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026"></a>
@@ -38312,3 +38464,38 @@ Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffent
   Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
 
 **Abschluss:** Die GEOS-Säulenrechnung stammt aus 5c90fac6a und ist unter anderem in v0.5.0 und v0.5.1 enthalten. Sie führt jetzt die schwebende Kontur als CrossSection mit positiver Umlaufzahl: Überhang vereinigen, Material darunter abziehen, Fläche über area(). Bereits gerichtete Materialringe werden ohne Vereinfachung einmal je Schicht übernommen. model_support hält eine Säule je Herkunftsstück; Befunde teilen die umgewandelten Materialkonturen. Die GEOS-Öffnung bleibt unverändert. Cache-Version 38 verhindert alte Stützkennzahlen in gespeicherten Ausrichtungen. Vier analytische Sollfälle bestanden vor und nach der Umstellung: volle Säule 350 mm³, andere erste Höhe 290 mm³, Teilauflage 250 mm³, Loch 262,5 mm³. Abbruch und geteilte Konturen sind zusätzlich abgesichert. Der neue Weg steht in test_platform_identity: Stützvolumen, einzelne Säule und Standorturteil unter gezieltem Zahlenrauschen sowie mit einem anderen OpenBLAS-Kern (Nehalem). Vollständiger betroffener Lauf einschließlich dieser Datei, Slice-Fällen und Unterlagenwächtern: 886 bestanden, 3 übersprungen, 13 Releasefälle abgewählt in 115,64 s, Exit 0; Ruff, Format und gezielte Typprüfung grün. Reale Stützvolumina vor/nach RM-486: Aushöhlbeispiel maximal 1,665e-10, CC2-Box 6,02e-10, Screen-Cover 7,37e-11 relative Abweichung; alle unter 1e-9. Standort- und Kanalurteile bleiben erhalten. Gemessen auf i9-13900K, Affinität F0FF, OPENBLAS_NUM_THREADS=1, Alt/Neu abwechselnd und fremde Python-Prozesse protokolliert: vollständiges slice_body(detail="support") am Aushöhlbeispiel mit frischem Netz 0,328–0,354 s statt 0,438–0,466 s, wiederholt 0,316–0,360 s statt 0,429–0,477 s. In sechs zusätzlichen frischen Python-Prozessen, jeweils erste Analyse nach regulärem Projektladen, neu 0,29645/0,29768/0,29989 s, alt 0,39386/0,38721/0,39503 s. Das Projektladen kann native Kerne bereits benutzen; dies ist kein Nachweis eines völlig kalten nativen Kerns. CC2-Box neu 0,186–0,243 s statt 0,126–0,138 s, Screen-Cover neu 0,039–0,057 s statt 0,033–0,050 s; beide bleiben unter 0,2 s Mehrzeit. Die frühere 40-s-Messung gehört zum Stand vor RM-485; sie wird nicht als unmittelbare Vorhermessung dieser Umstellung ausgegeben. Gemeinsames Entwicklungstor: 20659 passed, 34 skipped in 611.69s (0:10:11); Ruff, Format, mypy und Suite jeweils Exit 0. Der aktuelle gemeinsame Slicerstand cafd47ccc ist per Merge enthalten. Sechs Kundenpunkte für 0.5.2. Messungen, Lastprotokolle, analytische Vorher-/Nachherläufe und Plattformnachweis: F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003\rm486-patch; Entwicklungstor unter rm486-gate-1.
+
+## RM-466: Nach dem Slicen erscheinen Stützmaterial und Modelllagen mit beiden Herkünften (03.10.2026)
+
+<a id="rm-466-nach-dem-slicen-erscheinen-stützmaterial-und-modelllagen-mit-beiden-herkünften-03102026"></a>
+<a id="rm-466"></a>
+
+**RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1).**
+  G-Code-Gegenprüfung 02.10.2026. §28.1 verlangt Stützmaterialvolumen und Schichtzahl aus dem G-Code
+  als Gegenprobe. Nach *Slicen* vergleicht `_gcode_returned` → `_compare_totals` nur Zeit und
+  Material (`app/ui/main_window.py:7466–7490`, `:7672–7718`); `_compare_support` läuft nur nach
+  *G-Code prüfen* mit einer von Hand gewählten Datei (`:7583–7592`). `support_mm3` und `layer_count`
+  werden gelesen, aber weder verglichen noch gezeigt. Gemessen (Pilz A, G-Code gegen
+  Schichtanalyse): CC2 9 969 gegen 14 764 mm³, P1S 6 219 gegen 7 171, MK4S 6 629 gegen 8 889, Kobra 2
+  (Orca) 4 207 gegen 32 112 mm³.
+  **Fix:** `_gcode_returned` ruft dieselbe Stützgegenprobe wie der manuelle Weg und vergleicht die
+  Schichtzahl mit dem Raster der Analyse (erste Schichthöhe); Befunde mit Herkunft.
+  **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
+  Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
+  Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
+
+**Abschluss:** Nach dem Slicen erscheinen pro Platte Stützmaterial und Modelllagen mit interner Schätzung und G-Code-Wert, auch bei Übereinstimmung. Ursache war der auf Zeit und Gesamtmaterial beschränkte Rückweg nach dem Slicer; der manuelle G-Code-Weg besaß bereits eine Stützgegenprobe. Der alte Rückweg ist bis f934a42219/d2ed623c1f belegt und in v0.5.1 enthalten. Sechs Changelog-Einträge beschreiben die sichtbare Korrektur.
+
+`writer.write_assembly` gibt die tatsächlich exportierten Netze und endgültigen Teilwerte an die Gegenprobe. Ein unveränderliches `PlateComparison` reist mit dem Slicerauftrag; die Rückmeldung liest weder eine inzwischen andere Auswahl noch geänderte Dialogwerte. Die vollständige gemeinsame Schichtanalyse benutzt die gewählte erste Schichthöhe und den exportierten Stützwinkel. Modelllagen zählen vereinigte physische Druckhöhen. Neue Slicer-Anordnung, verschiedene überlappende Stützverträge, Kanalsperren oder eingeschränkter Stützort lassen eine nicht belegbare Stützmenge unbekannt. Export ohne Gegenprobe löst keine zusätzliche Analyse aus.
+
+Der G-Code-Parser trennt vollständige Mengen von gelesenen Teilmengen. Bedingte Förderung und unbekannte bewegte Druckrollen können Modell- und Stützmenge unbekannt machen; Gesamtverbrauch und Verbrauchsbuchung bleiben erhalten. Bedingte Z-Befehle, G90/G91 und G92 werden mit physischer Höhe und getrenntem Ursprung behandelt. Reine Höhenunsicherheit verwirft keine belegte Materialmenge. Später belegte Höhen machen frühere unbekannte Druckhöhen nicht rückwirkend bekannt. Auch der manuelle Rückweg vergleicht keine unvollständige Stützmenge.
+
+Gegenproben: Fensteranschluss ohne Korrektur rot (keine statt vier Plattenzeilen); drei Rückmeldungen vor der Herkunftskorrektur rot, danach sieben grün. Kalibrierter Winkel gegen explizite 70°: drei rote Fälle, danach 19 grün. G92-Ursprung: 16 rote und zwei bereits grüne Fälle, danach beide vollständigen Parser-/Vergleichsdateien mit 240 Fällen grün. Unabhängige Nachprüfung von 23 Fallgruppen ohne offenen Fund, darunter Nullmengen, Rückzüge, unbekannte Rollen, bedingte Extrusion, physische Höhen, verschiedene Raster, mehrere Platten, Auswahlwechsel und erneute Rückmeldung. Integrierte betroffene Kerntests: 544 bestanden, 914 Fenster-/Rendererfälle zurückgestellt. Ein ausdrücklich verlangter Windows-Fensteranschluss bestand separat; sein Lauf protokollierte eine native RPC-Ausnahme, endete aber mit Exit 0. Die zusätzlichen echten Oberflächenläufe bestanden ohne diesen Befund.
+
+Echte Pilz-Gegenprobe, Folgehöhe 0,20 mm, erste Höhe 0,28 mm, Gitterstütze überall mit 15 %: Elegoo CC2 4497,417338 mm³ intern gegen 5908,736634 mm³ G-Code mit korrekt sichtbarer Abweichung; Prusa MK4S 4505,141380 gegen 4921,934267 mm³ innerhalb der Vergleichsgrenze. Beide zählen 125/125 Modelllagen. Der endgültige native Windows-Lauf vom 03.10.2026, 09:12 UTC, betätigt den sichtbaren Berichtknopf „An den Slicer übergeben …“ und „Slicen“, ohne Befehlspalette. Echte Einstellungswidgets schalten anschließend Stütze aus und ändern Folge-/Ersthöhe auf 0,25/0,12 mm: 0/0 mm³ und 101/101 Lagen ersetzen die alten Zeilen. Der dritte Lauf wird nach dem Start des eigenen Prusa-Prozesses über „Abbrechen“ beendet: 0,1125 s, kein sliced-Signal, kein neues Ergebnis, letzte gültige Befunde erhalten, Knopf wieder frei und Status „Abgebrochen.“. Import und anfängliche Profilwahl sind Prüfvorbedingungen; ein nativer Dateidialog- oder Mehrplattenlauf wird nicht behauptet. Nach dem endgültigen Parserfix wurden acht Standard- und neun reale Farb-/Stützdateien erneut gelesen: Materialwerte, Gesamtsummen und Buchungsgrundlage unverändert.
+
+Der erste vollständige Torlauf fand noch die fehlende Handlung an der neuen Abweichungswarnung (20.766 bestanden, ein Regelwächter rot). Sie bietet jetzt über den bestehenden Handlungspfad „Druckeinstellungen öffnen“ an; der allgemeine Druckdialog öffnet sichtbar mit seiner regulären Plattenwahl und ändert keine Einstellung automatisch. Übereinstimmung und unbekannte Werte erhalten keinen zusätzlichen Knopf. Die gezielte Gegenprobe war vorher rot und prüft danach auch die beiden Informationsfälle. Der erste Torlauf wird nicht als bestanden gezählt.
+
+Die zusätzliche native Elegoo-Folge vom 03.10.2026, 09:38 UTC, bestätigt den Handlungsweg an der wirklichen Stützabweichung 4497,417338/5908,736634 mm³: Informationszeile ohne neuen Knopf, Warnzeile mit sichtbarem „Druckeinstellungen öffnen“, Klick öffnet den echten Druckdialog, sichtbares „Schließen“ führt zurück. Kein weiterer Slicerprozess und keine veränderten Vergleichszeilen. Die betroffenen Handlungs- und Befundprüfungen bestehen mit 267 Fällen. Damit umfasst die unabhängige Fallmatrix 24 Gruppen.
+
+Gemeinsames Entwicklungstor: 20767 passed, 34 skipped in 796.04s (0:13:16); Ruff, Format, mypy und Suite jeweils Exit 0. Der Abschlusscommit trägt diesen Archivabschnitt und übernimmt den zwischenzeitlichen Slicerstand 5a7ab992f. Messdateien und vollständige Fallmatrix liegen zusätzlich unter `tmp/schichtanalyse-gegenproben-20261003/`; die tragenden Ergebnisse stehen vollständig in diesem Abschnitt. Keine Release-Abnahme behauptet.
