@@ -11472,6 +11472,92 @@ def _finish_split_progress(window: MainWindow) -> None:
     window.session.splitBusyChanged.emit(False)
 
 
+@pytest.mark.parametrize("owner", ["generate", "agent"])
+def test_beside_a_run_the_customer_works_alongside_sayings_reach_the_status_line(
+    window: MainWindow, owner: str
+) -> None:
+    """RM-500: Neben einer Erzeugung oder einem Zug des Agenten verschwanden Ansagen.
+
+    Der Fortschritt belegte die Statuszeile für Minuten; eine Ansage kam nur
+    als Blase, ein Hinweis gar nicht. Jetzt steht die Ansage so lange in der
+    Zeile wie ihre Blase, ein Hinweis, solange er gilt — danach kehrt der
+    Fortschritt zurück. Ein Lauf, auf den der Kunde wartet, behält die Zeile.
+    """
+    running = "Modell wird erzeugt …" if owner == "generate" else "Der Agent denkt nach."
+    window._set_progress_state(
+        owner,
+        active=True,
+        text=running,
+        minimum=0,
+        maximum=0,
+        value=0,
+        accessible_description=running,
+        cancel_enabled=True,
+        immediate=True,
+    )
+    assert window.status_message.text() == running
+
+    window.announce("Exportiert: halter.stl")
+    assert window.status_message.text() == "Exportiert: halter.stl", "die Ansage kommt an"
+    window._spoken.stop()
+    window._spoken.timeout.emit()
+    assert window.status_message.text() == running, "danach steht der Fortschritt wieder da"
+
+    window.announce("Der Griff versetzt die gewählte Fläche.", receipt=False)
+    assert window.status_message.text() == "Der Griff versetzt die gewählte Fläche."
+    window.announce("", receipt=False)
+    assert window.status_message.text() == running, "ein geräumter Hinweis gibt die Zeile frei"
+    window._set_progress_state(owner, active=False)
+
+
+def test_a_run_the_customer_waits_for_keeps_the_status_line(window: MainWindow) -> None:
+    """RM-500, Gegenstück: Wer auf einen Export wartet, liest dessen Fortschritt."""
+    window._set_progress_state(
+        "export",
+        active=True,
+        text="Wird exportiert …",
+        minimum=0,
+        maximum=0,
+        value=0,
+        accessible_description="Wird exportiert …",
+        cancel_enabled=True,
+        immediate=True,
+    )
+    window.announce("Etwas anderes")
+    assert window.status_message.text() == "Wird exportiert …"
+    window._set_progress_state("export", active=False)
+
+
+def test_the_step_counter_of_a_local_model_counts_to_its_own_cap(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-501: Die Statuszeile zählte jeden Zug gegen „/8“.
+
+    Ein lokales Modell hat seit RM-251a zwölf Schritte je Zug; die Zeile
+    zählte dann „Schritt 9/8“. Der Deckel kommt jetzt vom Modell, das den Zug
+    rechnet.
+    """
+    from app.core.agent.session import MAX_STEPS_LOCAL
+    from app.core.backends.llm import OllamaBackend
+    from app.ui.ai_disclosure import DisclosureResult
+
+    sent: list[object] = []
+    window.session.set_agent_backend(OllamaBackend())
+    monkeypatch.setattr(
+        main_window_module, "ensure_ai_disclosure", lambda *_args: DisclosureResult.CURRENT
+    )
+    monkeypatch.setattr(
+        window.session, "propose_async", lambda *args, **kwargs: sent.append(kwargs["backend"])
+    )
+    window._on_request_sent("eine Bohrung")
+    assert sent, "der Zug ging los"
+    window._on_agent_busy(True)
+    window._on_agent_progress(9, "Netz prüfen")
+    text = window._progress_states["agent"].text
+    assert f"9/{MAX_STEPS_LOCAL}" in text, text
+    window._on_agent_busy(False)
+
+
 def test_split_restores_the_complete_agent_progress(window: MainWindow) -> None:
     """Split überdeckt den Agenten, ohne dessen Anzeige oder Abbruch zu verlieren."""
 

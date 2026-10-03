@@ -42,6 +42,10 @@ ein blockierendes Fenster; lange Rechnungen laufen nicht im Qt-Hauptthread.
   Restschätzung, und ihre Antwortzeit zählt weder als Rechenzeit noch als
   Stillstand; steht der Anteil über der Schwelle still, rechnet die Uhr nichts
   hoch (`ProgressTiming.remaining`).
+* **Neben einem Lauf, an dem weitergearbeitet wird** (`_WORKED_ALONGSIDE`:
+  Erzeugung, Agent), steht eine dort gesagte Ansage so lange wie ihre Blase in
+  der Statuszeile, ein Hinweis, solange er gilt; danach kehrt der Fortschritt
+  zurück. Ein Lauf, auf den gewartet wird, behält die Zeile.
 * Animationen melden Bildschirmlesern keine Zeitänderung. Eine leere
   Fortschrittsmeldung beendet nur eine Teilrechnung; Uhr und Statusanzeige
   bleiben, solange `Session.busy` gilt.
@@ -431,11 +435,8 @@ def eventFilter(self, watched, event):
     ...
 ```
 
-Die Richtung entscheidet, nicht die Zählung der `installEventFilter`: Stirbt
-der Filter, räumt Qt selbst auf; stirbt das *überwachte* Objekt, liefe der
-Filter in dessen Abbau, und `Destroy` ist der letzte Takt davor. Auf der
-`QCoreApplication` braucht es den Griff nicht;
-sonst steht er an jeder sterblichen Filterstelle, als Vorsorge.
+Nötig an jeder sterblichen Filterstelle, nicht auf der `QCoreApplication`
+(Begründung in `konzepte/begruendungen/regel-wartezeit.md`).
 `tests/test_widget_lifetime.py` findet neue Stellen am **Filterargument**,
 nicht an der Datei.
 
