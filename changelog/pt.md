@@ -45,6 +45,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.
 - Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
 - Quando chega outro modelo, de um ficheiro, de uma transferência ou gerado, a vista mostra a placa em que está.
+- Outro modelo vai para o espaço livre mais próximo do centro da placa, em vez do canto traseiro esquerdo.
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
 - O SuperSlicer já não falha com peças redondas: já não recebe a costura chanfrada que não conhece.
@@ -73,6 +74,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 - Se um furo não puder ser cortado de forma limpa num corpo STEP, o Solidon fura-o no modelo de triângulos em vez de passar adiante um corpo danificado.
 - Se escolheu «Carregar agora», também as peças de *Dividir o modelo* deixam de iniciar minutos de reconhecimento; «Reconhecer todas as características» recupera-o.
+- Ao escolher «Dividir o modelo» numa linha de resumo do relatório para vários corpos, o Solidon divide-os um a seguir ao outro. Antes só dividia o primeiro.
 
 ### Arredondar e chanfrar
 
@@ -99,7 +101,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 - Outro traço numa cavidade acabada de escavar torna-a mais funda, também com um pincel pequeno. Até agora não tinha efeito e contava como falhado.
 - Em «Modelar», a janela mostra cada traço com a mesma rapidez, também depois de muitos traços. Até agora ficava mais lenta a cada traço.
-- «Fixar o estado» guarda uma sessão de modelação tão fina como a exportação e a impressão a calculam, e a janela continua utilizável. Até agora guardava a vista mais grosseira.
+- Com «Fixar o estado», o Solidon guarda uma sessão de modelação tão fina como a exportação e a impressão a calculam, e a janela continua utilizável. Antes guardava a vista mais grosseira.
 
 ### Gerar com IA
 
@@ -118,6 +120,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
 - A exportação, «Fatiar» e «Abrir no slicer …» recebem sempre o cálculo fino, não a vista mais grosseira da janela. Arredondamentos e cones chegam ao ficheiro com resolução completa.
 - Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
+- Se exportar só uma parte da cena, o diálogo de ficheiro e a confirmação indicam o âmbito, por exemplo «1 de 2 corpos».
 - A barra de parâmetros recusa uma medida fora do seu limite em vez de deixar a vista vazia.
 - Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
 - Na barra de parâmetros as medidas de dois paralelepípedos levam o seu número, e uma medida com intervalo de trabalho próprio tem um cursor.
@@ -139,6 +142,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo de linguagem local pode dar doze passos em vez de oito por pedido no chat e resolve assim mais pedidos com várias partes.
 - O painel de seleção volta a caber na sua coluna, e a coluna de medidas da árvore mostra a medida inteira, como «Ø5,19 mm» em vez de «…».
 - Num furo, «Alterar elemento» abre diretamente «Alterar furo» com pré-visualização, em vez de só remeter para ele.
+- Ao clicar em «Aplicar» durante uma pré-visualização em curso, o Solidon calcula a alteração uma só vez. Antes calculava-a depois uma segunda vez.
+- A vista de diferenças traceja o que foi acrescentado e o que foi removido em duas direções, para os distinguir também sem cor.
+- Quando o Solidon pergunta a unidade de um ficheiro ao abrir, as medidas aparecem na sua unidade de exibição e com o separador decimal da sua língua.
+- Se arrastar um ficheiro que o Solidon não abre, por exemplo do Blender, ele indica como o trazer como 3MF, STEP ou STL. O G-Code vai para «Verificar o G-Code».
 
 ## 0.5.1
 

@@ -45,6 +45,7 @@ it into `website/version.json`.
 - Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
 - When another model joins, whether from a file, a download or generated, the view shows the plate it lies on.
+- Another model goes to the free spot closest to the middle of the plate instead of the back left corner.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
 - SuperSlicer no longer crashes on round parts: it no longer receives the scarf seam it does not know.
@@ -73,6 +74,7 @@ it into `website/version.json`.
 - A freshly created screw lid is no longer reported as too tight for its neck.
 - If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
 - If you chose “Load now”, the pieces from *Split the model* no longer start minutes of recognition either; “Recognise all features” catches up on it.
+- Choosing *Split the model* on a summary row of the report for several bodies splits them one after another. Until now only the first was split.
 
 ### Fillets and chamfers
 
@@ -99,7 +101,7 @@ it into `website/version.json`.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
 - In *Sculpt*, the window shows every stroke just as quickly after many strokes as after the first. Until now it got slower with each stroke.
-- *Fix the state* stores a sculpting session as finely as export and printing compute it, and the window stays usable meanwhile. Until now it stored the coarser view.
+- With *Fix the state*, Solidon stores a sculpting session as finely as export and printing compute it, and the window stays usable. Until now it stored the coarser view.
 
 ### Generating with AI
 
@@ -118,6 +120,7 @@ it into `website/version.json`.
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
 - Export, *Slice* and *Open in slicer …* always get the fine calculation, not the coarser view of the window. Fillets and cones reach the file at full resolution.
 - An export during a running calculation waits for the new result. Until now the file could still carry the old size.
+- When you export only part of the scene, the file dialog and the confirmation name the scope, such as “1 of 2 bodies”.
 - The parameter bar rejects a dimension beyond its limit instead of leaving the view empty.
 - In the parameter bar every arrow step counts, and the focus stays in the field.
 - In the parameter bar the dimensions of two boxes carry their number, and a dimension with its own working range has a slider.
@@ -139,6 +142,10 @@ it into `website/version.json`.
 - A local language model may take twelve instead of eight steps per request in the chat and so solves more requests made of several parts.
 - The selection panel fits its column again, and the size column in the object tree shows the whole size, such as “Ø5.19 mm” instead of “…”.
 - On a hole, *Change feature* opens *Change bore* directly with a preview instead of only pointing to it.
+- Clicking *Apply* during a running preview calculates the change only once. Until now Solidon calculated it a second time afterwards.
+- The difference view hatches what was added and what was removed in two directions, so the two can be told apart without colour.
+- When Solidon asks for the unit of a file on opening, the sizes are shown in your display unit and with your language's decimal separator.
+- Drop a file Solidon cannot open, say from Blender, and it tells you how to bring it in as 3MF, STEP or STL. G-code goes to *Cross-check G-code*.
 
 ## 0.5.1
 
