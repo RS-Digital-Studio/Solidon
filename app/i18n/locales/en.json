@@ -2030,6 +2030,7 @@
   "Die Teile konnten vor dieser Bearbeitung nicht vollständig auf Überschneidungen und Berührflächen geprüft werden. Vereinigen Sie sie in Ihrem CAD- oder Netzprogramm und importieren Sie das Modell erneut.": "The parts could not be fully checked for intersections and face contacts before this operation. Join them into one body in your CAD or mesh repair program, then import the model again.",
   "Die Teile liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen.": "The parts still lie against each other in the model. Place them side by side for printing.",
   "Die Teile liegen schon so — es war nichts zu verschieben.": "The parts already lie like this — there was nothing to move.",
+  "Die Teile wurden für diesen Slicer auf der Druckplatte angeordnet.": "The parts were arranged on the print bed for this slicer.",
   "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie einem der beiden Spiel, dann prüft Solidon den Weg dorthin.": "The parts already overlap in their final position. Give one of them clearance, then Solidon checks the way there.",
   "Die Teilmengen müssen zusammen die angegebene Gesamtmenge ergeben.": "The partial quantities must add up to the specified total quantity.",
   "Die Teilung erzeugt keine geschlossene einzelne Hälfte. Ändern Sie die Trennebene.": "The split does not produce a single closed half. Change the split plane.",

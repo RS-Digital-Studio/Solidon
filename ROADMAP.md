@@ -107,7 +107,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
-| [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-503 — Cura übernimmt die native Jerk-Steuerung nicht](#rm-503) | Geometrie, Erkennung und Druckvorbereitung | Schalter und vollständige abhängige Jerk-Werte aus dem gewählten Profil auflösen; M205 im G-Code gegen die Zeitberechnung prüfen |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
@@ -3118,24 +3117,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
   Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
   Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
-
-<a id="rm-478"></a>
-
-- [ ] **RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält.**
-  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` und jedes Prusa-Bündelprofil.
-  `arrangement_holds` verwirft die Anordnung schon bei überlappenden Hüllquadern in der Aufsicht
-  (Siebhalter umgreift ein Sieb); dann liegen die Teile um (0,0). Die Orca-Familie ordnet selbst
-  an, PrusaSlicers Konsole nicht: „All objects are outside of the print volume“, keine Druckdatei,
-  obwohl die sieben Teile (198 × 178 mm) auf 250 × 210 mm passen. Ein Teil der 56
-  Bauraum-Absagen der Codex-Matrix gehört dazu. Keine Regression.
-  **Stellen:** `app/core/export/writer.py:580–626` (`arrangement_holds`), `:1807`,
-  `app/core/export/handover.py:3727–3736`, `:5038–5080`.
-  **Fix (allgemein):** „Der Slicer ordnet selbst an“ als Prädikat je Programm neben
-  `wants_bed_coordinates`; wo nicht, ordnet Solidon vorher an (wie *Auf dem Bett anordnen*) und
-  meldet einen eigenen Bauraumbefund, wenn es nicht passt.
-  **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
-  weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
 
 <a id="rm-503"></a>
 

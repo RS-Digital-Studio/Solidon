@@ -2030,6 +2030,7 @@
   "Die Teile konnten vor dieser Bearbeitung nicht vollständig auf Überschneidungen und Berührflächen geprüft werden. Vereinigen Sie sie in Ihrem CAD- oder Netzprogramm und importieren Sie das Modell erneut.": "Non è stato possibile verificare completamente intersezioni e contatti tra facce prima di questa operazione. Unisci le parti in un solo corpo nel tuo programma CAD o di riparazione della mesh, poi importa di nuovo il modello.",
   "Die Teile liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen.": "Nel modello i pezzi sono ancora a contatto. Mettili uno accanto all'altro per stampare.",
   "Die Teile liegen schon so — es war nichts zu verschieben.": "I pezzi stanno già così — non c'era nulla da spostare.",
+  "Die Teile wurden für diesen Slicer auf der Druckplatte angeordnet.": "Le parti sono state disposte sul piatto per questo slicer.",
   "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie einem der beiden Spiel, dann prüft Solidon den Weg dorthin.": "I pezzi si sovrappongono già nella posizione finale. Dai gioco a uno dei due, poi Solidon verifica il percorso fin lì.",
   "Die Teilmengen müssen zusammen die angegebene Gesamtmenge ergeben.": "La somma delle quantità parziali deve corrispondere alla quantità totale indicata.",
   "Die Teilung erzeugt keine geschlossene einzelne Hälfte. Ändern Sie die Trennebene.": "La divisione non genera una singola metà chiusa. Modifica il piano di separazione.",

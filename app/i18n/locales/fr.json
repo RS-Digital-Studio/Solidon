@@ -2030,6 +2030,7 @@
   "Die Teile konnten vor dieser Bearbeitung nicht vollständig auf Überschneidungen und Berührflächen geprüft werden. Vereinigen Sie sie in Ihrem CAD- oder Netzprogramm und importieren Sie das Modell erneut.": "Les pièces n'ont pas pu être entièrement vérifiées pour détecter les intersections et les contacts entre faces avant cette opération. Réunissez-les en un seul corps dans votre logiciel de CAO ou de réparation de maillage, puis réimportez le modèle.",
   "Die Teile liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen.": "Dans le modèle, les pièces sont encore accolées. Placez-les côte à côte pour l'impression.",
   "Die Teile liegen schon so — es war nichts zu verschieben.": "Les pièces sont déjà ainsi — il n'y avait rien à déplacer.",
+  "Die Teile wurden für diesen Slicer auf der Druckplatte angeordnet.": "Les pièces ont été disposées sur le plateau pour ce trancheur.",
   "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie einem der beiden Spiel, dann prüft Solidon den Weg dorthin.": "Les pièces se recouvrent déjà dans leur position finale. Donnez du jeu à l'une des deux, puis Solidon vérifie le chemin jusque-là.",
   "Die Teilmengen müssen zusammen die angegebene Gesamtmenge ergeben.": "La somme des quantités partielles doit correspondre à la quantité totale indiquée.",
   "Die Teilung erzeugt keine geschlossene einzelne Hälfte. Ändern Sie die Trennebene.": "La séparation ne produit pas une moitié unique et fermée. Modifiez le plan de séparation.",

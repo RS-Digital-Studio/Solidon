@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-478: PrusaSlicer erhält die Teile in einer passenden Anordnung auf dem Druckbett (03.10.2026)](#rm-478-prusaslicer-erhält-die-teile-in-einer-passenden-anordnung-auf-dem-druckbett-03102026) |
 | 2026-10-03 | [RM-477: Modellnamen mit Sonderzeichen erreichen die Slicer (03.10.2026)](#rm-477-modellnamen-mit-sonderzeichen-erreichen-die-slicer-03102026) |
 | 2026-10-03 | [RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)](#rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026) |
 | 2026-10-03 | [RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)](#rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026) |
@@ -38685,3 +38686,58 @@ Die betroffene Gesamtsammlung nach der Integration endete mit 19.796 bestanden, 
 Die vollständigen drei betroffenen Dateien bestanden anschließend über `affected_tests.py --run`: **799 bestanden, 4 übersprungen, 7 Releasefälle abgewählt, 44,88 s, Exit 0** (`solidon-A-477-repaired-affected.txt`). Ruff und Format der korrigierten Attrappen ebenfalls Exit 0. Der Produktcode blieb seit der echten Abnahme und der vollständigen statischen Prüfung unverändert. Das gemeinsame Entwicklungstor folgt nach dem nächsten Punkt gemäß dem vereinbarten Zweierpaket.
 
 Archiv, Unterlagenlast, Changelog, Übersetzungskataloge und Meldungsregeln nach dem Abschluss: **275 bestanden, 4 übersprungen, 1 Releasefall abgewählt, 28,48 s, Exit 0** (`solidon-A-477-docs.txt`).
+
+Commitnachweis zu RM-477: `4c257df0372b74555050886d71cb4feadb45270b`.
+
+Die abschließende Wiederlesung aller zwölf Nachweise bestätigt vier bestehende Cura-Lüfterwarnungen (`gcode.fan_in_first_layers`): bei den türkischen und deutschen Modellen jeweils im normalen und im 8.3-Ersatzweg. Die Pfadkorrektur unterdrückt diese Hinweise nicht. Beleg: `rm477-rm478-nachweisblock.md` im Scratchpad.
+
+## RM-478: PrusaSlicer erhält die Teile in einer passenden Anordnung auf dem Druckbett (03.10.2026)
+
+<a id="rm-478-prusaslicer-erhält-die-teile-in-einer-passenden-anordnung-auf-dem-druckbett-03102026"></a>
+<a id="rm-478"></a>
+
+**RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` und jedes Prusa-Bündelprofil.
+  `arrangement_holds` verwirft die Anordnung schon bei überlappenden Hüllquadern in der Aufsicht
+  (Siebhalter umgreift ein Sieb); dann liegen die Teile um (0,0). Die Orca-Familie ordnet selbst
+  an, PrusaSlicers Konsole nicht: „All objects are outside of the print volume“, keine Druckdatei,
+  obwohl die sieben Teile (198 × 178 mm) auf 250 × 210 mm passen. Ein Teil der 56
+  Bauraum-Absagen der Codex-Matrix gehört dazu. Keine Regression.
+  **Stellen:** `app/core/export/writer.py:580–626` (`arrangement_holds`), `:1807`,
+  `app/core/export/handover.py:3727–3736`, `:5038–5080`.
+  **Fix (allgemein):** „Der Slicer ordnet selbst an“ als Prädikat je Programm neben
+  `wants_bed_coordinates`; wo nicht, ordnet Solidon vorher an (wie *Auf dem Bett anordnen*) und
+  meldet einen eigenen Bauraumbefund, wenn es nicht passt.
+  **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
+  weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
+
+**Abschluss:** Der Writer verwarf eine überlappende Anordnung und verließ sich anschließend auf die Platzierung durch den Slicer. PrusaSlicer ordnet auf der Konsole nicht selbst an. Die Ursache `0524911eb1e36e74343684d4494e9e2858bddca0` ist in veröffentlichten Versionen bis einschließlich v0.5.1 enthalten. Die drei Ausgangsfälle erzeugten am bisherigen Stand trotz erfolgreichem Prozessende keine Druckdatei und meldeten Teile außerhalb des Bauraums (`codex_A_478_baseline`).
+
+`arranges_on_cli` hält diese Fähigkeit je Programm fest. PrusaSlicer, SuperSlicer und CuraEngine bekommen jetzt bei Bedarf exportlokal angeordnete Netze. Jede Platte bleibt getrennt; bereits gültige Lagen werden erhalten. Writer und spätere Vorprüfung verwenden denselben Netzsatz. Der bestehende Packer und deterministische aufrechte Drehungen berücksichtigen Druckkontur, Sperrzonen und nutzbare Höhe. Der normale Datei- und Fensterweg wird nicht automatisch gepackt; die gemeinsame Entscheidung zur Lageübernahme prüft aber auch dort diese tatsächlichen Grenzen. Ein nicht gefundener Packplan wird als solcher benannt, ohne daraus eine mathematische Unmöglichkeit abzuleiten. Die sichtbaren Handlungen führen zur vorhandenen projektweiten Anordnung oder Druckerwahl. Abbruch wird unmittelbar vor und nach dem Packer geprüft.
+
+**Test zuerst und Gegenprobe:** Die portable Writerprüfung am ursprünglichen Root war mit 14 Fehlern und 13 bestandenen Kontrollen rot; 13 Fehler belegten falsche Geometrie oder Platzierung, einer den fehlenden gemeinsamen Netzplan. Die unabhängigen Folgefälle zeigten zusätzlich einen fehlenden Abbruchcheck und acht falsche Lageentscheidungen in tatsächlichen 3MF-Dateien. Nach der Integration bestehen über `affected_tests.py --run` alle **69 neuen Prüfungen**, 4,54 s, Exit 0. Die Teilmatrizen enthalten außerdem drei reale Modellauswahlen, neun Plattformstörungen mit bitgleichen ausgegebenen Vertices, unveränderte Farben/Slots/Merkmale und Cura-Stützsperren mit genau einem Maschinenversatz. Ein 200 × 20-mm-Stab passt nach Drehung mit 178,626894 × 125,701218 mm aufs MINI-Bett; eine bereits gültige 45°-Lage bleibt erhalten. Ein um 0,5° gedrehter 179 × 169-mm-Körper wird passend ausgerichtet. Tatsächlich freigegebene Kontur und Höhe erlauben 188 beziehungsweise 190 mm trotz kleinerer Nennmaße.
+
+Die angebotene Anordnung wirkt ausdrücklich auf das ganze Projekt. Eine Prüfung mit echter History zeigt drei Teile vorher/nachher auf zwei Platten; ein Undo stellt sämtliche Netzarrays und Plattennummern exakt wieder her. Die Exportanordnung selbst verändert keine Szene. Belege: `rm478-v2-matrix-output/proof.json`, `rm478-v2-whole-project-undo.json`, `codex_A_478_portable_writer_root_before.xml`, `codex_A_478_followup_after.xml` im Scratchpad.
+
+**Gemessene Abnahme:** PrusaSlicer 2.9.6, MK4S mit 250 × 210 × 220 mm, drei reale überlappende Platten, jeweils genau ein Prozess und Exit 0:
+
+| Auswahl | Teile | Schichten | Bahngrenzen X / Y / Z in mm | Positive E-Wege in mm |
+|---|---:|---:|---|---:|
+| Siebhalter | 7 | 239 | 23,177–226,852 / 12,956–197,045 / 0,2–47,8 | 19436,726 |
+| Regal-Kleinteile | 3 | 40 | 76,680–173,320 / 89,975–120,028 / 0,2–8 | 2915,360 |
+| Wizard-Turm mit Sockel | 2 | 316 | 89,721–160,273 / 88,234–121,772 / 0,2–63,2 | 3678,212 |
+
+Die unabhängige Rücklesung der drei Export-3MF bestätigt 7/3/2 Körper, erhaltene Namen und Gesamt-Dreieckszahlen sowie jeweils mindestens 5 mm Abstand der XY-Hüllquader. Alle Bahnen liegen im Druckbett. Die Regal-Kleinteile `obj_14/18/19` stammen aus den ursprünglichen Platten 5/6/7 und wurden für diese Abnahme ausdrücklich zu einem einzelnen Auftrag zusammengestellt; die Ursprungsdatei bleibt unverändert. Alle CLI-Pfade sind ASCII und alle privaten Arbeitsordner nachher geräumt. Drei Modellquellen, 21.977 Herstellerprofile, 17 Nutzerprofile und 361 Produktdateien sind vorher/nachher hashgleich. Belege: `F:\solidon-review-reports\gcode\rest\codex_A_478_integrated_v2` mit `manifest.json`, `acceptance-proof.json`, `export-layout-proof.json`, Konsolen und vollständigen G-Codes. Der erste erhaltene Anlauf erzeugte den Siebhalter korrekt, scheiterte aber am alten Messzugriff `analysis.layer_count`; die korrigierte Sonde liest `analysis.metrics.layer_count`. Dieser Anlauf zählt nicht als bestandene Gesamtabnahme.
+
+Ruff check, Format (1083 Dateien) und mypy (337 Quelldateien) bestanden am integrierten Produktstand. Fenster-, Renderer- und Leistungsprüfungen bleiben dem Release vorbehalten. Changelog in allen sechs Sprachen, weil die veröffentlichte Übergabe Kunden betrifft. Commit: „PrusaSlicer erhält die Teile in einer passenden Anordnung auf dem Druckbett“.
+
+**Zusätzliche Familienabnahme:** Dieselben drei Regal-Kleinteile wurden durch CuraEngine/Kobra 2 und SuperSlicer/MINI mit dessen tatsächlich installiertem Profil geschnitten, je ein Start und Exit 0. Cura: 40 Schichten, Bahnen X 57,257–162,743 / Y 90,552–129,448 / Z 0,25–8,05 mm. SuperSlicer: 53 Schichten, X 55,731–124,269 / Y 60,139–119,834 / Z 0,2–8 mm. Die unabhängig zurückgelesenen STL-/3MF-Ausgaben enthalten jeweils drei Körper und 852 Dreiecke, mit 5 mm kleinstem XY-Abstand. Cura meldet weiterhin zwei Haftungsabstands-Warnungen; diese werden nicht unterdrückt oder als behoben ausgegeben. Sämtliche geschützten Quellen und Profile sind hashgleich. Beleg: `codex_A_478_family_controls`, Bericht `rm478-familienkontrollen.md` im Scratchpad. Der erste Nachleser scheiterte an seinem lxml-Import; der vorhandene ZIP/XML-Leser bestätigte dieselben Exporte ohne weitere Slicerstarts.
+
+Die zusätzliche betroffene Sammlung für Kataloge und Gebietskarte endete mit **10.967 bestanden, 52 übersprungen, 3.261 Releasefällen abgewählt und zwei Fehlern**, 1110,35 s, Exit 1 (`solidon-A-478-docs-pre.txt`). Ein Fehler zeigte den eigenen neuen Wertschlüssel `object_ids` ohne Beschriftung. Eine zusätzliche echte Packabsage als Gegenprobe belegte außerdem dessen sichtbare interne Kennungen (1 rot, `solidon-A-478-address-red.txt`). Der Schlüssel trägt nun die vorhandene übersetzte Beschriftung „Objekte“ und bleibt als technische Zuordnung aus Kundentexten ausgeblendet. Der zweite Fehler betrifft erneut den bekannten Zähler `helper:display_simplify`. Die unabhängig entstandene Cache-Isolation `7e699af9f` betrifft zwei andere Vorschauprüfungen in `test_evaluation.py`; dieser Hilfsprozessfall wird deshalb gesondert nachgestellt.
+
+Nach dem Anzeigefix bestehen die sechs vollständigen betroffenen Dateien einschließlich Hilfsprozess, Dialogen und Beschriftungen über `affected_tests.py --run`: **414 bestanden, 76 Releasefälle abgewählt, 39,20 s, Exit 0** (`solidon-A-478-repaired.txt`). Ruff und Format der drei nachgezogenen Dateien ebenfalls Exit 0. Die echte Slicer-Abnahme bleibt gültig; der anschließende Fix betrifft ausschließlich Beschriftung und ausgeblendete technische Werte.
+
+Die Hilfsprozessursache ist anschließend deterministisch belegt: Ein gezielt vorgefüllter DiskCache führt mit vier echten Plattentreffern zum fehlenden Zähler `helper:display_simplify` (1 rot, 1,86 s). Ein eigener `ResultCache` für diesen einen Fall lässt dieselbe Ausgangslage bestehen (1 grün, 1,83 s); `display_simplify` wird einmal gezählt, `boolean` vier- statt dreimal. Alle fünf ursprünglichen Assertions bleiben AST-identisch. Diese reine Prüfstandsisolation wird in einem eigenen Folgecommit geführt und erhält keinen Changelogpunkt.
+
+Die breite Produktauswahl endete mit **19.866 bestanden, 107 übersprungen, 3.712 Releasefälle abgewählt und den beiden oben behandelten Fehlern**, 2614,66 s, Exit 1 (`solidon-A-478-affected.txt`). Sie hatte beide alten Prüfmodule vor deren Korrektur importiert. Es gab keine weiteren Fehler. Die vollständigen betroffenen Dateien wurden mit der Korrektur erneut grün ausgeführt; die dauerhafte Cache-Isolation wird gesondert geprüft und committed. Gebietskarten, Changelog und Kataloge bestehen mit **275 bestanden, vier übersprungen, einem Releasefall abgewählt**, 30,27 s, Exit 0 (`solidon-A-478-docs-final.txt`). Das unabhängige Review des vollständigen RM-478-Diffs fand keine weiteren Befunde. Das gemeinsame Entwicklungstor nach der Zusammenführung bleibt Voraussetzung für den Push.

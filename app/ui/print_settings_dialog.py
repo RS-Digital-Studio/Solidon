@@ -72,7 +72,12 @@ from app.core.errors import (
 )
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
-from app.core.export.writer import arrangement_holds, mesh_for_export, part_advice, write_assembly
+from app.core.export.writer import (
+    arrangement_holds,
+    part_advice,
+    prepare_slicer_meshes,
+    write_assembly,
+)
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
@@ -2011,7 +2016,10 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     # müssen dieselbe lokale Nummerierung tragen. Die projektweite Profilwahl
     # wird vor dem Schreiben über ihre vollständige Materialidentität aufgelöst.
     local_settings = replace(job.settings, slot_profiles=chosen)
-    meshes = tuple(mesh_for_export(entry.mesh, job.profile) for entry in on_plate)
+    mesh_plan = prepare_slicer_meshes(
+        on_plate, job.profile, job.setup, for_window=job.for_window, cancelled=job.cancelled
+    )
+    meshes = tuple(mesh_plan[0][entry.id] for entry in on_plate)
     keep = arrangement_holds(meshes, job.profile)
     written, findings = write_assembly(
         on_plate,
@@ -2027,6 +2035,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
+        mesh_plan=mesh_plan,
         # Ob ein übernommener Vorschlag je Teil verlangt ist, entscheidet der
         # ganze Auftrag, nicht diese eine Platte (Durchsicht 0.5.1, N1).
         job=[entry for entry in objects if entry.plate in job.plates],

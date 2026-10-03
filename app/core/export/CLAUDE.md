@@ -115,6 +115,11 @@ Importleser die Dateien. Stützsperren zählen nicht als Druckteile. Ein
 bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
 die normale Datei- und Fensterübergabe behält ihren Berichtweg.
 
+`prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
+Ohne eigene Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf
+exportlokal gepackt. `arrangement_holds` prüft auch tatsächliche Druckkontur,
+Sperrzonen und nutzbare Höhe; dies gilt ebenso für die Lageübernahme im Fenster.
+
 | Prüfung | Frage |
 |---|---|
 | `off_the_bed` | Liegt der Druck im Bauraum? |

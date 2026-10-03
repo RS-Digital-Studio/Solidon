@@ -2030,6 +2030,7 @@
   "Die Teile konnten vor dieser Bearbeitung nicht vollständig auf Überschneidungen und Berührflächen geprüft werden. Vereinigen Sie sie in Ihrem CAD- oder Netzprogramm und importieren Sie das Modell erneut.": "No se pudieron comprobar por completo las intersecciones y los contactos entre caras antes de esta operación. Una las piezas en un solo cuerpo con su programa CAD o de reparación de mallas y vuelva a importar el modelo.",
   "Die Teile liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen.": "En el modelo, las piezas siguen juntas. Colóquelas una al lado de la otra para imprimir.",
   "Die Teile liegen schon so — es war nichts zu verschieben.": "Las piezas ya están así — no había nada que mover.",
+  "Die Teile wurden für diesen Slicer auf der Druckplatte angeordnet.": "Las piezas se han colocado en la base de impresión para este laminador.",
   "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie einem der beiden Spiel, dann prüft Solidon den Weg dorthin.": "Las piezas ya se solapan en su posición final. Dé holgura a una de las dos y Solidon comprobará el camino hasta allí.",
   "Die Teilmengen müssen zusammen die angegebene Gesamtmenge ergeben.": "Las cantidades parciales deben sumar la cantidad total indicada.",
   "Die Teilung erzeugt keine geschlossene einzelne Hälfte. Ändern Sie die Trennebene.": "La separación no produce una única mitad cerrada. Cambie el plano de separación.",
