@@ -84,6 +84,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la cama. Los proyectos antiguos conservan su forma.
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
+- El editor de esqueleto muestra huesos y articulación en la vista, y una articulación queda en el centro del cuerpo en vez de en su piel, así la figura se dobla de forma pareja.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
 - En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
@@ -128,6 +129,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
 - La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
 - Si otros programas tienen el ordenador ocupado, *Cancelar* detiene un cálculo largo en menos de un segundo en lugar de pedir un reinicio tras varios segundos.
+- Un modelo de lenguaje local puede dar doce pasos en lugar de ocho por encargo en el chat y resuelve así más encargos de varias partes.
 
 ## 0.5.1
 

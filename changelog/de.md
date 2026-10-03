@@ -108,6 +108,7 @@ Nutzen da und sonst nichts.
 - Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
 - Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
+- Der Skeletteditor zeigt Knochen und Gelenk im Bild, und ein Gelenk sitzt in der Mitte des Körpers statt auf seiner Haut, sodass die Figur gleichmäßig beugt.
 - In den übersetzten Fassungen heißt die Stärke des Formpinsels nicht mehr wie eine Wanddicke.
 - Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
 - Im Fenster rechnet *Weich verschmelzen* jetzt fein, solange der Körper nicht sehr groß ist.
@@ -152,6 +153,7 @@ Nutzen da und sonst nichts.
 - Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 - Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.
 - Lasten andere Programme den Rechner aus, bricht *Abbrechen* eine lange Rechnung in unter einer Sekunde ab, statt nach Sekunden einen Neustart zu verlangen.
+- Ein lokales Sprachmodell darf im Chat zwölf statt acht Schritte je Auftrag gehen und löst so mehr Aufträge, die aus mehreren Teilen bestehen.
 
 ## 0.5.1
 

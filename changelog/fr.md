@@ -84,6 +84,7 @@ dans `website/version.json`.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
+- L'éditeur de squelette montre os et articulation dans la vue, et une articulation se place au milieu du corps au lieu de sa peau, la figure plie donc régulièrement.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
@@ -128,6 +129,7 @@ dans `website/version.json`.
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
 - Quand d'autres programmes occupent l'ordinateur, *Annuler* arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
+- Un modèle de langage local peut faire douze étapes au lieu de huit par demande dans le chat et résout ainsi plus de demandes en plusieurs parties.
 
 ## 0.5.1
 
