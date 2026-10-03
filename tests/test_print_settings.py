@@ -1341,6 +1341,113 @@ def test_curas_zigzag_keeps_the_density_and_a_tree_carries_none() -> None:
     assert branches["support_wall_count"] == "1"
 
 
+#: Wie PrusaSlicer und die Orca-Familie den Platz einer Bahn rechnen
+#: (``Flow::rounded_rectangle_extrusion_spacing``): Breite - Höhe * (1 - pi/4).
+def _flow_spacing(width: float, height: float) -> float:
+    return width - height * (1.0 - 3.141592653589793 / 4.0)
+
+
+@pytest.mark.parametrize(
+    ("flavour", "key"),
+    [("prusa", "support_material_spacing"), ("orca", "support_base_pattern_spacing")],
+)
+@pytest.mark.parametrize("density", [0.15, 0.5, 1.0])
+def test_the_support_density_goes_to_prusa_and_orca_as_the_gap_between_lines(
+    flavour: str, key: str, density: float
+) -> None:
+    """RM-475: PrusaSlicer und die Orca-Familie führen den Stützabstand als
+    **Lücke** zwischen zwei Linien (``SupportParameters``: Teilung = Abstand +
+    ``support_material_flow.spacing()``). Solidon schrieb die Teilung
+    Bahnbreite / Dichte hinein; gedruckt wurde 15 % als 12 % und 50 % als 31 %
+    (G-Code-Gegenprüfung 02.10.2026). Geprüft wird die Formel des Slicers,
+    einschließlich seiner tatsächlich geschriebenen Stützbahnbreite."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.density",
+        density,
+    )
+    width, height = settings.layers.line_width, settings.layers.layer_height
+
+    gap = float(handover.as_mapping(settings, flavour)[key])
+
+    spacing = _flow_spacing(width, height)
+    assert spacing / (gap + spacing) == pytest.approx(density, abs=1e-5)
+    width_key = "support_material_extrusion_width" if flavour == "prusa" else "support_line_width"
+    assert float(handover.as_mapping(settings, flavour)[width_key]) == pytest.approx(width)
+
+
+def test_the_support_gap_reads_back_as_the_density_it_was_written_from() -> None:
+    """Rücklesung und Übergabe rechnen dieselbe Formel in beide Richtungen
+    (RM-475): Orcas Kobra-2-Profil mit 0,2 mm Lücke war als 100 % gelesen
+    worden, Prusas Bündelwert 2,5 mm als 17 %."""
+    from app.core.export import manufacturer
+
+    width, height = 0.42, 0.2
+    read = {"layers.line_width": width, "layers.layer_height": height}
+    context = manufacturer._Context(nozzle=0.4)
+    for density in (0.05, 0.15, 0.5, 0.9):
+        gap = manufacturer.support_gap(density, width, height)
+        back = manufacturer._support_density(
+            {"support_base_pattern_spacing": f"{gap:g}"}, read, context
+        )
+        assert back == pytest.approx(density, rel=1e-4)
+    kobra = manufacturer._support_density({"support_base_pattern_spacing": "0.2"}, read, context)
+    assert kobra == pytest.approx(
+        _flow_spacing(width, height) / (0.2 + _flow_spacing(width, height))
+    )
+    assert manufacturer._support_density(
+        {"support_base_pattern_spacing": "0"}, read, context
+    ) == pytest.approx(1.0), "Lücke null ist die dichteste Stütze, nicht keine"
+
+
+def test_no_support_density_becomes_the_densest_support() -> None:
+    """0 % ergab in PrusaSlicer und der Orca-Familie die dichteste Stütze
+    (Lücke 0: am Pilz 28,9 cm³ statt 5,8 cm³). Das Prozentfeld beginnt bei 1.
+    Gespeicherte Nullwerte bleiben erhalten und bekommen eine Absage mit
+    Handlung, bevor daraus eine Druckdatei wird (RM-475)."""
+    from app.core.errors import ValidationError
+    from app.core.scene import serialise
+    from app.ui.print_settings_dialog import FIELDS
+
+    least = print_settings.LEAST_SUPPORT_DENSITY
+    profile = profiles.make_profile()
+    grid = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    nothing = print_settings.with_path(grid, "support.density", 0.0)
+    for flavour in ("prusa", "orca"):
+        with pytest.raises(ValidationError) as caught:
+            handover.as_mapping(nothing, flavour)
+        assert caught.value.suggestions
+
+    field = next(one for one in FIELDS if one.path == "support.density")
+    assert field.minimum == pytest.approx(least * field.factor)
+
+    stored = serialise.print_settings_to_data(nothing)
+    assert serialise.print_settings_from_data(stored, "pla").support.density == pytest.approx(0.0)
+    assert least == pytest.approx(0.01), "kleinster positiver Wert im ganzzahligen Prozentfeld"
+
+
+@pytest.mark.parametrize("prusa", [False, True])
+@pytest.mark.parametrize("native_width", ["0.4", "100%", "0"])
+def test_support_density_reads_the_native_support_width(prusa: bool, native_width: str) -> None:
+    """Supportbreite und allgemeine Breite unterscheiden sich absichtlich;
+    Prozent gilt bei Prusa der Schichthöhe, bei Orca der Düse."""
+    from app.core.export import manufacturer
+
+    values = (
+        {"support_material_spacing": "0.2", "support_material_extrusion_width": native_width}
+        if prusa
+        else {"support_base_pattern_spacing": "0.2", "support_line_width": native_width}
+    )
+    read = {"layers.line_width": 0.45, "layers.layer_height": 0.2}
+    width = 0.45 if native_width == "0" else 0.2 if native_width == "100%" and prusa else 0.4
+    strand = _flow_spacing(width, 0.2)
+    actual = manufacturer._support_density(
+        values, read, manufacturer._Context(nozzle=0.4), prusa=prusa
+    )
+    assert actual == pytest.approx(strand / (0.2 + strand))
+
+
 #: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
 #: Profilbestand von OrcaSlicer und seinen Ablegern. Ein Name daneben fällt
 #: still auf die Vorgabe zurück — geprüft wird deshalb hier und nicht im Druck.

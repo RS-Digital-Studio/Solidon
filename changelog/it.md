@@ -52,6 +52,7 @@ scrive in `website/version.json`.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 - Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano *Orienta per la stampa*, *Ruota* e *Sposta*. Il corpo resta esatto.
 - Una parete esterna più lenta vale ora anche per i perimetri piccoli come fori e steli in PrusaSlicer e nella famiglia Orca.
+- PrusaSlicer e la famiglia Orca rispettano la densità dei supporti scelta. Il campo parte dall'1 %. Per stampare senza supporti, scegli «Nessuno».
 
 ### Fori, asole e divisione
 

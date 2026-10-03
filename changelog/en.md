@@ -52,6 +52,7 @@ it into `website/version.json`.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 - On STEP surface models too, for turns of almost 180° and on partly recognised faces, *Orient for printing*, *Rotate* and *Move* now work. The body stays exact.
 - A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
+- PrusaSlicer and the Orca family now use the support density you set. The field starts at 1 %. To print without supports, choose “None”.
 
 ### Holes, slots and splitting
 

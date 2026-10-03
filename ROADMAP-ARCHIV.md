@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)](#rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
@@ -38089,3 +38090,38 @@ Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachm
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Die Auswertung reicht jeder Operation eine beobachtete Güte (`evaluate._WatchedQuality`: Vergleich, Hashwert und `pickle` merken die Frage) und meldet in `EvaluationResult.reads_quality`, ob ein Schritt sie gelesen hat; ein Cachetreffer trägt die Angabe mit, auch von der Platte, ein alter Eintrag ohne sie gilt als gefragt. `Session.fine_current` behandelt einen Entwurf ohne solche Frage als fein. Dazu fragt die Boolesche Kette erst hinter den verlustfreien Stufen nach der Güte (`boolean.boolean`): Beide Ketten beginnen mit `DRAFT_CHAIN`, und hielt *direkt*, war der Entwurf schon die feine Rechnung; vorher wählte die Kette ihre Stufen vorab und meldete so jede Bohrung als gütewirksam. Kegel und Ring rechnen seit RM-427 in beiden Stufen gleich, eine Bohrung an Quader und Platte ist im Entwurf bitgleich zur feinen Rechnung; weich verschmolzene Teile fragen weiter und werden fein nachgerechnet (RM-426). Tests in `test_evaluation.py` (Quader und Bohrung fragen nicht, *Bohrung ändern* an der Platte fragt nicht, Verschmelzen fragt, Treffer melden dasselbe) und `test_cache.py` (Angabe übersteht die Platte); ohne die Kettenänderung 2 von 4 rot (Gegenprobe). Weg-1-Detailsonde am echten Fenster (offscreen, F0FF), Klick bis Datei: Lochbrett-STEP 5,017 → 0,016 s, Rucksack-Halter 1,072 → 0,032 s, Platte 0,285 → 0,017 s (v0.5.1: 0,039 / 0,069 / 0,027 s); Dreiecke und Volumen der Dateien unverändert (2762 / 10 633,23 mm³, 15 978 / 27 026,24 mm³, 796 / 31 250,93 mm³). Rohwerte `F:\solidon-review-reports\regression-0.5.2\weg1\ergebnisse\detail-aufl494b-*`. Begonnen in `claude/rm-494`, abgeschlossen von Claude (Thread „Zweige auflösen“).
+
+## RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)
+
+<a id="rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026"></a>
+<a id="rm-475"></a>
+
+**RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2,
+  PrusaSlicer 2.9.6, Weg Bibliothek (Vorwahl wie der Druckdialog). Orca und PrusaSlicer führen den
+  Stützabstand als **Lücke** zwischen zwei Linien, Solidon schreibt `Bahnbreite / Dichte` als
+  Teilung. Gemessen am Pilz (CC2, Schicht z = 10 mm): 15 % → 12 %, 50 % → 31 %, und 0 % ergibt
+  die dichteste Stütze (28 922 mm³, 42,4 g statt 13,5 g, 62,7 statt 23,2 min), während Solidons
+  Schätzung 0 mm³ nennt. Die Rücklesung des Herstellerwerts irrt ebenso (Orca Kobra 2:
+  `support_base_pattern_spacing = 0.2` als 100 % statt 66 %). Trifft jeden Drucker der Familien
+  `orca` und `prusa` mit Stützen; am Kobra 2 gleich gemessen. Keine Regression gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:1175–1197` (`_support_spacing`),
+  `app/core/export/manufacturer.py:783–797` und `:1285–1290` (Rücklesung),
+  `app/core/slice/estimate.py:100–134`, Feld `app/ui/print_settings_dialog.py:807–817`.
+  **Fix (allgemein):** `spacing = s / d − s` und zurück `d = s / (spacing + s)` mit `s` =
+  Linienabstand der Stützbahn; 0 % ist als Abstand nicht darstellbar — keine Stützfüllung
+  schreiben oder das Feld auf den kleinsten darstellbaren Wert begrenzen und es im Dialog sagen.
+  **Abnahme:** je Familie ein Lauf mit 15 % und 50 %, gemessene Teilung gegen Bahnbreite / Dichte
+  (drei Drucker: CC2, Kobra 2, MK4S); Test `_support_spacing` gegen `_support_density` und die
+  Formel. Bauplan §28, §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G1), `gcode\rest\`.
+
+**Abschluss:** Nachgestellt am Stand `6b87ba235` (PrusaSlicer 2.9.6, MK4S, Pilz, Weg Bibliothek): 15 % schrieb `support_material_spacing = 3`, gemessene Teilung 3,36 mm; 0 % schrieb `0` und ergab 28 675 mm³ Stütze (62,5 min, 41,6 g). Ursache `5537ae25a4bf280530ad2b552c4506a9ca8d98ed`, enthalten in v0.1.1 bis v0.5.1: Beide Familien rechnen `d = s / (Lücke + s)`, Solidon schrieb die Teilung als Lücke.
+
+Der Fix schreibt `Lücke = s/d − s`, mit `s = Breite − Schichthöhe · (1 − π/4)` nach der Fließquerschnittsrechnung der Slicer. Eine ausdrücklich gewählte Dichte schreibt die verwendete Stützbahnbreite mit; Schichthöhe und Bahnbreite ziehen den Abstand nach. Die Rücklesung berücksichtigt native Stützbreiten samt Auto- und Prozentwerten. Das ganzzahlige Prozentfeld beginnt bei 1 %; gespeicherte Nullwerte bleiben erhalten, eine aktive Übergabe mit 0 % fordert eine neue Wahl oder das Abschalten der Stützen. Sechs signifikante Stellen vermeiden einen falschen Abweichungsbefund durch die G-Code-Rundung.
+
+Claudes uncommittierter Anfang wurde übernommen und korrigiert: Er hatte Bahnbreite statt `s` im Zähler und änderte gespeicherte 0 % still auf 5 %. Die unabhängige Gegenprobe ergab acht rote Fälle gegen diesen Zwischenstand; am ursprünglichen Stand waren zehn Regressionen rot. Die Formel-, Rücklese-, Nullwert- und Profiltests sind jetzt grün; der vollständige Lauf von `test_print_settings.py` und `test_manufacturer.py` meldete 613 bestanden, 4 übersprungen, 6 abgewählt, Exit 0.
+
+Der betroffene Lauf meldete 20 213 bestanden, 88 übersprungen, 3710 abgewählt und zwei Fehler außerhalb der Änderung, Exit 1: Hilfsprozess-Zählung in `test_kernel_process.py` und ein `TypeError` aus Pythons `ast.iter_child_nodes` in `test_toolchain.py`. Die unmittelbare isolierte Wiederholung beider Fälle bestand (2 bestanden in 9,45 s, Exit 0). Der erste Lauf bleibt als rot dokumentiert; das vollständige Entwicklungstor vor der Zusammenführung ist gesondert zu fahren. Ruff und Formatprüfung bestanden, mypy prüfte 337 Quelldateien ohne Befund. Protokolle: `%TEMP%/solidon-A-475-affected.txt`, `solidon-A-475-recheck.txt` und `solidon-A-475-mypy.txt`.
+
+Abnahme mit echtem Pilz, Gitterstütze, jeweils 15 und 50 %: ElegooSlicer 1.5.3.5 / CC2 und OrcaSlicer 2.4.2 / Kobra 2 schreiben Breite 0,42 mm, Lücke 2,13678 bzw. 0,37708 mm; PrusaSlicer 2.9.6 / MK4S schreibt Breite 0,45 mm, Lücke 2,30678 bzw. 0,40708 mm. Die daraus unabhängig berechneten Dichten sind 15,00003 bzw. 49,99998 %. Gemessene Teilungen in einer mittleren Stützschicht: CC2 und Kobra 2 jeweils 2,51 / 0,75 mm (Soll 2,51386 / 0,75416), MK4S 2,71 / 0,81 mm (Soll 2,71386 / 0,81416). Alle sechs Läufe erzeugen G-Code. Rohdaten, Kommandos, Protokolle und Datei-Prüfsummen: `F:\solidon-review-reports\gcode\rest\codex_A_475_final\`; Messung `support_measurements.json` mit Auswertung der Extrusionswege, relativen/absoluten E-Werten und G92. Changelog in sechs Sprachen, weil Kunden veröffentlichter Versionen betroffen sind. Commit: „Die eingestellte Stützdichte erreicht PrusaSlicer und die Orca-Familie“.

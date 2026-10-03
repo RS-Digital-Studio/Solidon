@@ -837,6 +837,8 @@ def as_mapping(
 COUPLED_PATHS: Final[Mapping[str, tuple[str, ...]]] = {
     "adhesion.kind": tuple(print_settings.ADHESION_MEASURES.values()),
     "cooling.fan_speed": ("cooling.minimum_fan_speed",),
+    "layers.layer_height": ("support.density",),
+    "layers.line_width": ("support.density",),
 }
 
 
@@ -1261,22 +1263,38 @@ def _support_spacing(
     """Die Stützdichte, wo der Slicer sie als Abstand führt (§29).
 
     Solidon sagt „15 Prozent", Cura auch. PrusaSlicer und die Orca-Familie
-    kennen dort keinen Anteil, sondern den Abstand zweier Stützlinien in
-    Millimetern — ``support_material_spacing`` beim einen,
-    ``support_base_pattern_spacing`` beim anderen. Ohne die Umrechnung war die
-    Einstellung für zwei von drei Slicern folgenlos, und der Dialog bot sie
-    trotzdem an.
+    kennen dort keinen Anteil, sondern die **Lücke** zwischen zwei
+    Stützlinien in Millimetern — ``support_material_spacing`` beim einen,
+    ``support_base_pattern_spacing`` beim anderen; die Teilung ist Lücke plus
+    Linienabstand (:func:`manufacturer.support_gap`). Als Teilung geschrieben
+    druckten 15 % als 12 %, und 0 % als die dichteste Stütze (RM-475).
 
-    Gerechnet wie Cura es rechnet: Bahnbreite mal hundert durch Prozent —
-    ohne dessen Kreuzungsfaktor, denn beide legen ihre Stützfüllung als *eine*
-    Linienschar. Eine Dichte von null heißt „keine Füllung"; der Abstand dazu
-    ist keine Zahl, und der Slicer meint mit 0 dasselbe.
+    Die Teilung ist Linienabstand durch Dichte. Die dafür verwendete
+    Stützbahnbreite geht mit, damit das Herstellerprofil die Rechnung nicht
+    verändert. Eine aktive Null-Dichte verlangt eine neue Wahl; eine Lücke
+    null wäre das Gegenteil des Gemeinten. Ohne Stützen wirkt der Wert nicht.
     """
     key = {"prusa": "support_material_spacing", "orca": "support_base_pattern_spacing"}.get(flavour)
     if key is None:
         return written
     density = settings.support.density
-    written[key] = "0" if density <= 0.0 else f"{settings.layers.line_width / density:g}"
+    if density < print_settings.LEAST_SUPPORT_DENSITY and settings.support.style != "none":
+        raise ValidationError(
+            field="support.density",
+            detail=_(
+                "Wählen Sie mindestens 1 % Stützdichte oder schalten Sie die Stützen aus. "
+                "Dieser Slicer kann 0 % Stützfüllung nicht darstellen."
+            ),
+            suggestions=(OPEN_PRINT_SETTINGS,),
+        )
+    density = max(density, print_settings.LEAST_SUPPORT_DENSITY)
+    gap = manufacturer.support_gap(
+        density, settings.layers.line_width, settings.layers.layer_height
+    )
+    # Beide Familien schreiben sechs signifikante Stellen in den G-Code.
+    written[key] = f"{gap:.6g}"
+    width_key = "support_material_extrusion_width" if flavour == "prusa" else "support_line_width"
+    written[width_key] = f"{settings.layers.line_width:.9g}"
     return written
 
 

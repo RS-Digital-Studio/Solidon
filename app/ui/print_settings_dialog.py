@@ -810,12 +810,16 @@ FIELDS: tuple[Field, ...] = (
         _("Stützdichte"),
         "support",
         unit="%",
-        minimum=0.0,
+        # Kleinster positiver ganzzahliger Prozentwert (RM-475).
+        minimum=print_settings.LEAST_SUPPORT_DENSITY * 100.0,
         maximum=100.0,
         step=5.0,
         decimals=0,
         factor=100.0,
-        note=_("Wie dicht die Stütze steht. Dichter trägt mehr und ist schwerer abzunehmen."),
+        note=_(
+            "Wie dicht die Stütze steht, von 1 bis 100 %. Dichter trägt mehr und ist schwerer "
+            "abzunehmen. Für einen Druck ohne Stützen wählen Sie bei „Stützen“ die Option „Keine“."
+        ),
     ),
     Field(
         "support.interface_layers",

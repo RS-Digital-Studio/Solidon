@@ -110,7 +110,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
-| [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
 | [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 2 von 16. G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
@@ -3181,28 +3180,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
   Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
   Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
-
-<a id="rm-475"></a>
-
-- [ ] **RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2,
-  PrusaSlicer 2.9.6, Weg Bibliothek (Vorwahl wie der Druckdialog). Orca und PrusaSlicer führen den
-  Stützabstand als **Lücke** zwischen zwei Linien, Solidon schreibt `Bahnbreite / Dichte` als
-  Teilung. Gemessen am Pilz (CC2, Schicht z = 10 mm): 15 % → 12 %, 50 % → 31 %, und 0 % ergibt
-  die dichteste Stütze (28 922 mm³, 42,4 g statt 13,5 g, 62,7 statt 23,2 min), während Solidons
-  Schätzung 0 mm³ nennt. Die Rücklesung des Herstellerwerts irrt ebenso (Orca Kobra 2:
-  `support_base_pattern_spacing = 0.2` als 100 % statt 66 %). Trifft jeden Drucker der Familien
-  `orca` und `prusa` mit Stützen; am Kobra 2 gleich gemessen. Keine Regression gegenüber v0.5.1.
-  **Stellen:** `app/core/export/handover.py:1175–1197` (`_support_spacing`),
-  `app/core/export/manufacturer.py:783–797` und `:1285–1290` (Rücklesung),
-  `app/core/slice/estimate.py:100–134`, Feld `app/ui/print_settings_dialog.py:807–817`.
-  **Fix (allgemein):** `spacing = s / d − s` und zurück `d = s / (spacing + s)` mit `s` =
-  Linienabstand der Stützbahn; 0 % ist als Abstand nicht darstellbar — keine Stützfüllung
-  schreiben oder das Feld auf den kleinsten darstellbaren Wert begrenzen und es im Dialog sagen.
-  **Abnahme:** je Familie ein Lauf mit 15 % und 50 %, gemessene Teilung gegen Bahnbreite / Dichte
-  (drei Drucker: CC2, Kobra 2, MK4S); Test `_support_spacing` gegen `_support_density` und die
-  Formel. Bauplan §28, §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G1), `gcode\rest\`.
 
 <a id="rm-476"></a>
 
