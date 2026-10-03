@@ -55,7 +55,7 @@ from app.core.geom import kernel_process
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
-from app.ui import app_events, cursors, window_chrome
+from app.ui import app_events, cursors, start_check, window_chrome
 from app.ui.icons import application_icon
 from app.ui.leash import Worker, WorkerLeash, configure_gil_switching
 from app.ui.qt_platform import prefer_x11_for_the_viewport
@@ -577,6 +577,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         window.showMaximized()
     splash.finish(window)
+    # Der Starttest des fertigen Pakets (``start_check``, nur mit gesetzter
+    # Variable): ab hier steht das Fenster, und ``window`` kann der Erstlauf
+    # noch ersetzen — die Funktion liest es erst beim Bericht.
+    if (start_report := start_check.requested()) is not None:
+        start_check.arm(start_report, lambda: window)
     # **Jetzt, hinter dem sichtbaren Fenster, die schweren Bibliotheken.**
     # Sie gehören der ersten Rechnung, und die kommt mit dem ersten Klick;
     # bis dahin lädt sie ein Arbeiter (:class:`_ImportWarmup`).

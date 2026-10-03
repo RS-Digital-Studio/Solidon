@@ -2658,3 +2658,7 @@ Dialog und kein stiller zweiter Buchungsversuch.
 `on_the_copy`. Mehrere Netzkopien werden nach ihrer Identität sortiert und
 jeweils genau einmal gesperrt, damit zwei Arbeiter dieselben Kopien nie in
 verschiedener Reihenfolge anfordern.
+
+Der Mündungsumriss der Flächenplatzierung (`placement_flow.py`) trifft die
+Ebene längs der Werkzeugachse, nicht senkrecht zur Fläche; bei fast
+paralleler Achse bleibt statt des Umrisses der Werkzeugkörper sichtbar.

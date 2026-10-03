@@ -42,7 +42,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`), die Wandmessung verwendet den eigenen Strahltest. Matplotlib ist seit `9bb1542b` wieder Laufzeitabhängigkeit; die Windows-Lizenzbeilage enthält 50 Komponenten. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster; die Bereichsprüfungsreste sind mit RM-214 geschlossen (Durchsicht 0.5.1) |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Installerlauf 36467614477 von 0.5.1 belegt Inno Setup 7.1.0 und den Signierprüfschritt bei abweichendem Commit (188 Tests). Offen bleiben der Flatpak-Lauf auf echter Linux-Grafik und Installieren/Aktualisieren/Deinstallieren auf fremdem Windows |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger auf dem Runner zugeordnet (Symboldienst stürzt in Metal ab, Befund am Punkt); offen Intel-Fenster am echten Gerät und die übrigen Unix-Fenster-/Export-/Chatfälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
@@ -468,6 +468,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Anwendung, sagt nur ein Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
   grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
   0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
+
+  **Befund 03.10.2026, Intel-Runner (`macos-26-intel`, Lauf 37150755506):** Das
+  veröffentlichte Intel-Paket 0.5.1 hängt dort beim ersten Zeigen des Fensters im
+  Hauptthread in `-[NSWorkspace iconForContentType:]` → `ISIconManager` (synchrones XPC),
+  weil der Symboldienst des Systems (`iconservicesagent`) auf der paravirtualisierten Grafik
+  in Metal abstürzt (`MTLReportFailure` in `RenderBox`); Spotlight und Dock stürzen daneben
+  ab. Das ist sehr wahrscheinlich derselbe „Hänger beim ersten Ereignisdurchlauf“ und eine
+  Eigenheit des Runners, keines Kunden-Macs. Der Starttest des Release-Laufs fährt den
+  Intel-Mac deshalb ohne Bildschirm (`auslieferung.md`); Fenster und Metal-Ansicht auf Intel
+  belegt nur ein echtes Gerät — offen bleibt die Rückmeldung des Kunden nach 0.5.2 (RM-505).
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 

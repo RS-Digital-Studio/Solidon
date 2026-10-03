@@ -165,6 +165,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- On a Mac, Solidon no longer quits shortly after it starts. In version 0.5.1 this happened on every Mac, even without a 3D mouse connected.
 - The *Create the dimensions as parameters* tick is set the first time and then remembers your last choice, even across a restart.
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
 - Export, *Slice* and *Open in slicer …* always get the fine calculation, not the coarser view of the window. Fillets and cones reach the file at full resolution.

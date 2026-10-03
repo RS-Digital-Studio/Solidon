@@ -66,6 +66,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
+from app.core.paths import PROFILE_VARIABLES
 from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
 from app.i18n.catalog import read_catalog
 from tools import make_figures as figures
@@ -195,18 +196,8 @@ def save_share(image: QImage, language: str) -> Path:
     return target
 
 
-#: Die Nutzerverzeichnisse, die der Kindprozess der Aufnahmen umbiegt —
-#: dieselben sechs wie ``tests/conftest.py`` (§38). ``HOME`` ist für macOS
-#: dabei, wo jede Auflösung über ``Path.home()`` läuft; unter Windows ist der
-#: Eintrag folgenlos.
-ISOLATED_VARIABLES = (
-    "APPDATA",
-    "LOCALAPPDATA",
-    "HOME",
-    "XDG_DATA_HOME",
-    "XDG_CONFIG_HOME",
-    "XDG_CACHE_HOME",
-)
+#: Die Nutzerverzeichnisse, die der Kindprozess der Aufnahmen umbiegt (§38).
+ISOLATED_VARIABLES = PROFILE_VARIABLES
 
 #: Woran das Kind erkennt, dass es isoliert läuft. Der Elternprozess setzt die
 #: Variable auf den Temp-Ordner; das Kind weigert sich ohne sie — von Hand

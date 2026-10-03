@@ -112,6 +112,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Der Windows-Installerbau ist nicht freigegeben." }
           'Der Installer enthält die geprüfte signierte Anwendung. Die Setup-Datei selbst muss lokal signiert und anschließend erneut geprüft werden; dieses Artefakt wird nicht veröffentlicht.' >> $env:GITHUB_STEP_SUMMARY
 
+      - name: Installer still installieren und starten
+        # Der Installer, den der Kunde bekommt, bis auf die Setupsignatur:
+        # installieren, dann der erste Start (tools/check_frozen_start.py).
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/windows-installer-output" -Filter 'Solidon3D-Setup-*.exe' -File)
+          if ($setup.Count -ne 1) { throw "Nicht genau eine Setup-Datei in der Ausgabe." }
+          $target = Join-Path $env:RUNNER_TEMP 'Solidon3D-installed'
+          $log = Join-Path $env:RUNNER_TEMP 'setup-install.log'
+          $process = Start-Process -FilePath $setup[0].FullName -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/NOICONS', ('/DIR="' + $target + '"'), ('/LOG="' + $log + '"')) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { Get-Content -LiteralPath $log -Tail 40; throw "Das Setup endete mit $($process.ExitCode)." }
+          python tools/check_frozen_start.py --executable (Join-Path $target 'Solidon3D.exe')
+          if ($LASTEXITCODE -ne 0) { throw "Der Starttest der installierten Anwendung ist rot; kein Installer zur Signatur." }
+
       - name: Installer ausschließlich zur lokalen Setupsignatur übergeben
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

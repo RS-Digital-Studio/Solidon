@@ -165,6 +165,7 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Su Mac, Solidon non si chiude più poco dopo l'avvio. Nella versione 0.5.1 succedeva su ogni Mac, anche senza un mouse 3D collegato.
 - La spunta «Creare le misure come parametri» è attiva la prima volta e poi ricorda la tua ultima scelta, anche dopo un riavvio.
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
 - Esportazione, «Affetta» e «Apri nello slicer …» ricevono sempre il calcolo fine, non la vista più grossolana della finestra. Raccordi e coni arrivano nel file a piena risoluzione.

@@ -922,6 +922,10 @@ def _ascii_workspace(directory: Path, prefix: str, platform: str) -> Iterator[Pa
 
 def _windows_short_path(path: Path) -> Path | None:
     """Ein 8.3-Alias zählt nur, wenn er ASCII ist und dieselbe Datei bezeichnet."""
+    # Die Weiche über ``sys.platform``: Nur sie lässt mypy auf Linux und macOS
+    # den Rest überspringen, wo es ``ctypes.WinDLL`` nicht gibt.
+    if sys.platform != "win32":
+        return None
     import ctypes
     from ctypes import wintypes
 
@@ -944,6 +948,8 @@ def _windows_short_path(path: Path) -> Path | None:
 
 def _windows_temp_dir() -> Path:
     """Systemweites Temp als zweiter Ort, ohne Annahme über Laufwerk oder Nutzer."""
+    if sys.platform != "win32":
+        raise OSError("Das systemweite Windows-Temp gibt es nur unter Windows.")
     import ctypes
     from ctypes import wintypes
 

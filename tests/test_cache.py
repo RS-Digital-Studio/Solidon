@@ -2175,9 +2175,10 @@ def test_every_caller_says_whether_the_result_may_go_to_disk() -> None:
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if ".put(" not in line or "to_disk=" in line:
                 continue
-            if "sink.put(" in line or "feed.put(" in line:
+            if "sink.put(" in line or "feed.put(" in line or "_searches.put(" in line:
                 # ``queue.Queue`` eines Pump-Fadens (comfy_setup._pump und
-                # install._stream) — kein Cache, kennt kein ``to_disk``.
+                # install._stream) und die Aufträge des Suchfadens der 3D-Maus
+                # (spacemouse._SearchThread) — kein Cache, kennt kein ``to_disk``.
                 # Kuratierte Ausnahme wie GERMAN_STEMS: Wer eine weitere
                 # Warteschlange baut, trägt ihren Namen hier ein, und das
                 # breite Netz bleibt gespannt.
