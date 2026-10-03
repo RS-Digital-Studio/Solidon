@@ -153,6 +153,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
+| [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Restliste gegen 187b5bbd3 abgeglichen (03.10.): die meisten Korrekturen stehen im Code; offen sind die Fensterabnahme des späteren Stands und Hinweise bei Spulenprüfung und Werte-Mitgabe |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -4555,6 +4556,62 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: Schlüsselloch per Klick 10 mm unter der Oberkante → Lage stimmt, liegt ganz
   in der Fläche, nach einer Maßänderung der Fläche bleibt der Kantenabstand. Bauplan §2.6, §24.3.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Freie Lage für alle Bausteine an einer Fläche (Schlüsselloch, Einpressbuchse, Mutternfalle, Schraubloch, Wandhalter …) auf ebenen und einfach gekrümmten Flächen, Kantenabstände in Flächenkoordinaten. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 25 Teile mit Befestigungen (Wandhalterungen, Lochwand, Filamenthalter M6, Screen-Cover). Abnahme an mindestens drei unterschiedlichen Bausteinen und Modellen.
+
+<a id="rm-502"></a>
+
+- [ ] **RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären.**
+  Die Restliste der Durchsicht vom 29.09.2026 (Commits `4d955a9e7`, `d80e1ce8e`, `e969f88ce`,
+  `42253ae03`, `72281a33e`) wurde am 03.10. gegen Code und Historie von `187b5bbd3` geprüft.
+  Ihre damaligen Fehler sind keine Aussage über den heutigen Stand. Die folgenden Stellen,
+  Commits und Prüfwege ersetzen die Abhängigkeit von der örtlichen Sicherung.
+  **Im Code bereits umgesetzt:**
+  - **Einstellungen und Ersteinrichtung:** `88bb41ed8`, `c59ed62ca`, `97369c2f1`, `93018dd56`
+    und `3fcd402a9` berücksichtigen verborgene Formulare und nachgereichten Inhalt über
+    `style.expanded_width` und `ContentHeight`. Der alte Breitensprung 547 → 573 sowie die
+    Querrollwerte 382/418 sind historische Befunde. RM-342 D-N5 ist im Archiv, ebenso die
+    Inhaltsangabe eingeklappter Einstellungen unter RM-491.
+  - **Druckeinstellungen:** `print_settings.GROUPS` führt Filament vor Temperaturen und
+    Geschwindigkeit; `_update_inactive_setting_rows` blendet ausgeschaltete Stütz- und
+    Haftungsdetails aus. `_build_head` hält Düsenstatus und Ablehnungen am Düsenfeld. Die Mitgabe
+    steht bei den Übergabeknöpfen (`_build_state`); ihr verbliebener Fehlerhinweis steht unten.
+  - **Neues Filament und Slicerfilamente:** `ba8c08b14` gleicht die Formulare über `align_forms`
+    an und ersetzt den doppelten Datumstext durch eine benannte Löschtaste. Der Leertext in
+    `filament_picker.SlicerFilamentDialog._refill` unterscheidet fehlenden Bestand vom Filter.
+    `tests/test_filament_picker.py::test_spool_form_columns_align_and_unknown_dates_have_one_label`
+    sichert die Spalten und Datumsfelder; die Lage der Prüfzeile bleibt gesondert zu klären.
+  - **Chat, ComfyUI, Lager und Erststart:** Seit `ba8c08b14` enthält
+    `dialogs.KeyDialog._cloud_model_section` Schlüsselzustand und Löschen; ComfyUIs Ordnerwahl
+    und Eingabe stoßen `_refresh_folder_state` bzw. `_folder_edited` an. Die Warnschwelle steht
+    außerhalb der Lagerklappe, `reverse_hint` direkt unter der Rücknahme. Der Namenshinweis
+    steht unter `FirstRunDialog.printer_name`. Befehlspalette und Ausdrucksdialog wurden in
+    derselben Dialogreihe nachgezogen (`tests/test_dialog_layout_regressions.py`).
+  - **Raster:** `ba8c08b14`, `a5e698c78` und `9b84722ad` setzen Abstände aus `style.py` an den
+    bearbeiteten Formularen und Knopfleisten. Die alten Zahlen 6/11 belegen keinen verbliebenen
+    Fehler an diesen Stellen; Abweichungen erst am aktuellen Fenster benennen.
+  **Offen:**
+  - **Fensterabnahme des späteren Stands:** Der nachgelesene
+    [CI-Lauf 37086153737](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37086153737)
+    am Stand `4c172d8ee` meldet im Windows-Fensterjob für
+    `tests/test_first_run_setup.py::test_custom_printer_natural_width_and_manual_height_survive_toggling`
+    `[fdm-fr]` und `[resin-fr]` jeweils `assert 42 == 0`; beide italienischen Fälle bestehen.
+    Dieser Lauf enthält `93018dd56` noch nicht. Die spätere Rechnung in sechs Sprachen und
+    FDM/Resin beim Release auf allen Plattformen abnehmen; auf ausreichend breitem Bildschirm
+    kein Querrollen, auf schmalem höchstens der abgeschnittene Teil der natürlichen Breite.
+    Die übrigen bearbeiteten Dialoge mit ihren vorhandenen Fensterfällen und Bildern abnehmen.
+    Paketfreigabe und Laufzeitwechsel bleiben unter RM-468.
+  - **Prüfzeile der Spule:** `filament_picker.NewFilamentDialog` setzt `validation` weiter im
+    äußeren Layout über die Knöpfe; der oben genannte Test verlangt genau diesen festen Ort.
+    Den alten Wunsch nach Feldnähe am gezeigten Dialog mit ungültigem Datum nachstellen und
+    gegen die Erreichbarkeit bei kleiner Höhe entscheiden. Einen feststehenden Fehlerhinweis
+    nicht allein wegen des alten Listenwortlauts in den Rollbereich verschieben.
+  - **Hinweis zur Mitgabe:** `PrintSettingsDialog._share_toggled` schreibt einen Speicherfehler
+    noch in `self.state`. Bei fehlenden Schreibrechten die Zuordnung zu „Werte mitgeben“ im
+    gezeigten Dialog prüfen und den Hinweis, falls nötig, direkt am Schalter platzieren.
+  **Abnahme:** je verbliebenem Fall ein nachvollziehbarer Prüfweg und beim Release ein Bild am
+  echten Fenster; die bestehenden Fälle in `test_first_run_setup.py`,
+  `test_dialog_layout_regressions.py`, `test_print_settings_ui.py`, `test_filament_picker.py`,
+  `test_filament_inventory_ui.py`, `test_chat_ui.py` und `test_generate_ui.py` grün. Diese
+  Registerpflege führt keine Fensterprüfung aus und behauptet keine neue Abnahme. Bauplan §2, §2.7.
 
 ## KI und Generatoren
 
