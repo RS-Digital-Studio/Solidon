@@ -48,6 +48,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
+- Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
 
 ### Taladros, ranuras y división
 

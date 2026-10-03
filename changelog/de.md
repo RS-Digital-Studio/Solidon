@@ -72,6 +72,7 @@ Nutzen da und sonst nichts.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
+- Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
 
 ### Bohrungen, Langlöcher und Teilen
 

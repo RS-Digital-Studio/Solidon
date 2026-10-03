@@ -47,6 +47,7 @@ it into `website/version.json`.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
+- A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
 
 ### Holes, slots and splitting
 

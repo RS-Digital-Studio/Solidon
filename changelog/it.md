@@ -47,6 +47,7 @@ scrive in `website/version.json`.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
+- Una parete esterna più lenta vale ora anche per i perimetri piccoli come fori e steli in PrusaSlicer e nella famiglia Orca.
 
 ### Fori, asole e divisione
 

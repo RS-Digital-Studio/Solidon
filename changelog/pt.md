@@ -47,6 +47,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
+- Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
 
 ### Furos, furos oblongos e divisão
 
