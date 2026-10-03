@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
 | 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
 | 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
@@ -37907,3 +37908,25 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Beispielprojekte im echten Fenster gegen origin/main ohne den Umbau: dieselben Befunde, 18 von
   22 Exporten textgleich, anders nur die beiden mit Schrift (Lettern des Schilds +1,6 % Volumen).
   Entwicklungstor 20 351 grün. Der volle CI-Lauf auf allen Plattformen steht unter RM-468.
+
+## RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)
+
+<a id="rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026"></a>
+<a id="rm-493"></a>
+
+**RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 über die Oberfläche (Hauptfenster offscreen).
+  **Regression gegenüber v0.4.1** (seit v0.4.4). Zeit vom Klick auf *Übernehmen* bis das
+  Ergebnis in der Szene steht: Rucksack-Halter 0,37 s → 1,0–4,5 s (v0.5.1: 7,1 s),
+  pegboard-STEP 0,75 s → 4,2–5,3 s. Nach dem Klick rechnet die Vorschau rund 2,4 s fertig, danach
+  die Auswertung dieselbe Änderung noch einmal (2,3 s). Trifft jede Änderung über das
+  Auswahlfenster an größeren Modellen; verletzt das 2-s-Ziel aus §31.
+  **Stellen:** `app/ui/panels.py:8889` (`_run_armed`), `app/ui/main_window.py:16156`.
+  **Fix (allgemein):** Beim Übernehmen die laufende Vorschau abbrechen oder, wenn sie mit
+  denselben Parametern läuft, ihr Ergebnis als Auswertung übernehmen statt neu zu rechnen.
+  **Abnahme:** Rucksack-Halter, pegboard-STEP und ein drittes Modell über 100 000 Dreiecke:
+  Übernehmen bis Szene unter 2 s bzw. nicht länger als eine Auswertung allein; Ergebnis gleich
+  dem heutigen. Bauplan §31, §2.8.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-1), Rohwerte in `weg1\ergebnisse\`.
+
+**Abschluss:** Ursache war nicht das Warten selbst, sondern dass die Vorschau nicht die Rechnung des Übernehmens war: *Bohrung ändern* und jede andere Operation mit `deterministic=False` bekam ihren Startwert je Anwendung zufällig, einen in der Dokumentkopie der Vorschau und einen anderen beim Übernehmen. Der Startwert steht im Cache-Schlüssel, also rechnete die Auswertung dieselbe Änderung noch einmal. `History` bestimmt einen fehlenden Startwert jetzt aus Operation, Eingängen und Werten (`history._seed_of`), gespeichert wird er wie bisher in der Operation; die Auswertung nach dem Übernehmen findet die Rechnung der Vorschau im Cache. Die Prüfung der Werte durch die Vorschau bleibt, wo ein Bild Pflicht ist (exakte Körper, Maßgruppe im Bild): Ein unmöglicher Wert wird weiter nicht übernommen. Ohne Bildpflicht (Netz im Auswahlfenster oder Dialog) brach ein früher Klick die laufende Vorschau samt Hilfsprozess ab und rechnete daneben neu; er wartet jetzt auf eine Vorschau, die dasselbe rechnet wie die Auswertung (`Session.preview_is_the_evaluation`; nicht bei grober Stufe, feiner Güte oder Vorabzählung), und läuft, sobald gerechnet ist, ohne den Vergleich fürs Bild (`Session.drop_preview_picture`). Tests ohne Fenster `test_evaluation.py::test_a_preview_is_the_computation_its_apply_finds_in_the_cache` (am Ausgangsstand rot: anderer Startwert, zweite Rechnung), `::test_a_preview_nobody_will_see_computes_without_comparing`, `::test_the_preview_is_not_the_evaluation_where_it_computes_otherwise`; Fenstertests (Release) `test_operation_ui.py::test_a_mesh_apply_waits_for_the_preview_that_computes_it` (am Ausgangsstand rot) und die Gegenprobe `::test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise`. Gemessen Klick auf *Übernehmen* 0,2 s nach Vorschaustart bis Ergebnis in der Szene, Ausgangsstand gegen Fix im Wechsel, Auswahlfenster: pegboard-STEP 3,41/1,93 s → 1,26/1,12 s, Rucksack-Halter 0,81/0,56 s → 0,71/0,38 s, `garden-hose-holder.3mf` (392 612 Dreiecke) 12,15/11,28 s → 12,23/11,34 s, also nie länger als eine Auswertung allein; am echten Fenster über die Maßgruppe im Bild *Bohrung ändern* je einmal statt zweimal gerechnet, STEP 3,12 → 2,04 s, Rucksack 0,98/0,93 → 0,64/0,64 s, Gartenschlauchhalter 35,4 → 28,2 s (Rechner unter Last). Dreieckszahl und Volumen gleich dem Ausgangsstand (2 762 / 10 647,01 mm³, 15 978 / 27 051,234 mm³, 392 612 / 517 062,054 mm³). Offen und nicht Teil dieses Punkts: *Bohrung ändern* selbst kostet am STEP rund 2,3 s (Gewindelesen in `features_of` des Ergebnisses), am 392k-Netz rund 11 s. Umgesetzt von Claude (Thread „Bedienung und KI“).

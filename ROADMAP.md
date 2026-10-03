@@ -160,7 +160,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
-| [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile](#rm-500) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund aus RM-371; Ansagen und Hinweise neben dem Fortschritt sichtbar halten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -4681,23 +4680,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** an drei Modellen (klein, mittel, groß) Zeit bis bedienbar unter v0.5.1 und im
   Budget §31, Erkennung kommt nach. Bauplan §31.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U7), Bilder in `regression-0.5.2\ui\`.
-
-<a id="rm-493"></a>
-
-- [ ] **RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal.**
-  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 über die Oberfläche (Hauptfenster offscreen).
-  **Regression gegenüber v0.4.1** (seit v0.4.4). Zeit vom Klick auf *Übernehmen* bis das
-  Ergebnis in der Szene steht: Rucksack-Halter 0,37 s → 1,0–4,5 s (v0.5.1: 7,1 s),
-  pegboard-STEP 0,75 s → 4,2–5,3 s. Nach dem Klick rechnet die Vorschau rund 2,4 s fertig, danach
-  die Auswertung dieselbe Änderung noch einmal (2,3 s). Trifft jede Änderung über das
-  Auswahlfenster an größeren Modellen; verletzt das 2-s-Ziel aus §31.
-  **Stellen:** `app/ui/panels.py:8889` (`_run_armed`), `app/ui/main_window.py:16156`.
-  **Fix (allgemein):** Beim Übernehmen die laufende Vorschau abbrechen oder, wenn sie mit
-  denselben Parametern läuft, ihr Ergebnis als Auswertung übernehmen statt neu zu rechnen.
-  **Abnahme:** Rucksack-Halter, pegboard-STEP und ein drittes Modell über 100 000 Dreiecke:
-  Übernehmen bis Szene unter 2 s bzw. nicht länger als eine Auswertung allein; Ergebnis gleich
-  dem heutigen. Bauplan §31, §2.8.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-1), Rohwerte in `weg1\ergebnisse\`.
 
 <a id="rm-494"></a>
 
