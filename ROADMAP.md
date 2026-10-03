@@ -169,7 +169,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“](#rm-495) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1; Hinweis nicht zeigen, wenn der Kunde genau diese Handlung benutzt |
-| [RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren](#rm-499) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Seit RM-371 nichtmodal; vor dem Schließen nennen, was verloren geht |
 | [RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile](#rm-500) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund aus RM-371; Ansagen und Hinweise neben dem Fortschritt sichtbar halten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -4843,19 +4842,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Bohrung, Senkung und Fase an drei STEP-Modellen: kein Selbstverweis, Hinweis nennt
   den Grund. Bauplan §2.7.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
-
-<a id="rm-499"></a>
-
-- [ ] **RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren.**
-  Fund aus RM-371 (03.10.2026). Seit „Modell erzeugen“ nichtmodal ist (RM-371), lässt sich das
-  Hauptfenster während eines Laufs schließen. Der Lauf bricht ab, und fertige, nicht übernommene
-  Versuche gehen ohne Rückfrage verloren — Minuten Rechenzeit, die kein Strg+Z zurückholt. Vorher
-  verhinderte der modale Dialog das Schließen.
-  **Fix:** Beim Schließen fragen, wenn ein Lauf läuft oder fertige Versuche nicht übernommen sind
-  (kein rücknehmbarer Schritt, Regel 19 erlaubt die Frage), mit *Übernehmen und schließen*,
-  *Verwerfen und schließen* und *Abbrechen*.
-  **Abnahme:** Test mit laufendem Lauf und mit fertigem Versuch; ohne Erzeugung bleibt das
-  Schließen unverändert.
 
 <a id="rm-500"></a>
 

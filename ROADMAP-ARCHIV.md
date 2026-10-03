@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
 | 2026-10-02 | [RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)](#rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026) |
 | 2026-10-02 | [RM-407: Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist (03.10.2026)](#rm-407-ausrichten-scheitert-an-exakten-körpern-obwohl-es-nur-eine-drehung-ist-03102026) |
@@ -37693,3 +37694,21 @@ Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nac
 Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der Maßgruppe stand ein abgelehnter Ausdruck sichtbar im Feld, und nach einem Griffzug war *Übernehmen* wieder frei: Der Vorschauauftrag des Zugs überschrieb den Sperrgrund der Felder. Die beiden Tests dazu (`test_a_refused_measure_stays_blocked_after_focus_moves`, `test_a_refused_measure_expression_blocks_accept_and_survives_refresh`) waren seit ihrer Entstehung rot und deckten den Fehler deshalb nie auf: Der eine zeigte das Fenster nie (offscreen kein Fokuswechsel), der andere bot einen Schritt an, den der Verlauf nicht kennt.
 
 **Abschluss:** Die Ablehnung der Felder ist eine eigene Sperre (`QuietHost.refuse_fields` in `app/ui/placement_flow.py`, gelesen in `read_fields` in `app/ui/main_window.py`), die ein Vorschauauftrag nicht mehr überschreibt. Der Fokustest zeigt das Fenster und sichert den Fokuswechsel als Voraussetzung ab; der Ausdruckstest bohrt echt mit `=@bore` und wählt die Bohrung wie der Kunde. Regel in `.claude/rules/oberflaeche.md`, Begründung in `konzepte/begruendungen/regel-oberflaeche.md`. Fenstersonde am echten Fenster: vorher 6 von 7 (nach dem Zug *Übernehmen* frei, Sperrgrund leer), nachher 7 von 7. In main mit `bbbee3a57`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)
+
+<a id="rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026"></a>
+<a id="rm-499"></a>
+
+**RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren.**
+  Fund aus RM-371 (03.10.2026). Seit „Modell erzeugen“ nichtmodal ist (RM-371), lässt sich das
+  Hauptfenster während eines Laufs schließen. Der Lauf bricht ab, und fertige, nicht übernommene
+  Versuche gehen ohne Rückfrage verloren — Minuten Rechenzeit, die kein Strg+Z zurückholt. Vorher
+  verhinderte der modale Dialog das Schließen.
+  **Fix:** Beim Schließen fragen, wenn ein Lauf läuft oder fertige Versuche nicht übernommen sind
+  (kein rücknehmbarer Schritt, Regel 19 erlaubt die Frage), mit *Übernehmen und schließen*,
+  *Verwerfen und schließen* und *Abbrechen*.
+  **Abnahme:** Test mit laufendem Lauf und mit fertigem Versuch; ohne Erzeugung bleibt das
+  Schließen unverändert.
+
+**Abschluss:** Schließen fragt jetzt, wenn eine Erzeugung läuft oder fertige Versuche nicht übernommen sind (`MainWindow._may_lose_the_generation`, `dialogs.confirm_generation_loss`, `GenerateDialog.running`): „Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab.“ bzw. „Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.“, mit *Zur Erzeugung* als Vorgabe (holt den Dialog nach vorn, das Fenster bleibt offen) und *Trotzdem schließen*. Ohne Erzeugung bleibt das Schließen, wie es war; die Frage nach ungesicherten Änderungen folgt danach unverändert. Regel 19 erlaubt die Frage, weil kein Strg+Z einen abgebrochenen Lauf zurückholt. Texte in allen fünf Katalogen. Tests in `test_generate_ui.py`: `test_closing_the_window_names_what_a_generation_would_lose` (laufend und fertig, je beide Antworten) und `test_closing_without_a_generation_asks_nothing_about_it`; ohne die Frage 4 von 4 rot (Gegenprobe). Fenstersonde am echten Fenster mit gestelltem langsamem Generator: 7 von 7 — gefragt während des Laufs und mit fertigem Versuch, *Zur Erzeugung* lässt das Fenster offen und holt den Dialog nach vorn, danach *Übernehmen* wie gewohnt. Umgesetzt von Claude (Thread „Bedienung und KI“).

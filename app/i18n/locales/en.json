@@ -7454,5 +7454,12 @@
   "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in dieses Projekt.": "A different project is open now. “Apply” adds the model to this project.",
   "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in „{name}“.": "A different project is open now. “Apply” adds the model to “{name}”.",
   "Modell wird erzeugt …": "Generating the model …",
-  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "“Apply” starts a new project with the model."
+  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "“Apply” starts a new project with the model.",
+  "Erzeugung läuft": "Generation running",
+  "Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab.": "A model is being generated. Closing cancels the generation.",
+  "Nicht übernommene Versuche": "Tries not added",
+  "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.": "One generated try is not in the project yet and will be lost on closing.",
+  "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim Schließen verloren.": "{count} generated tries are not in the project yet and will be lost on closing.",
+  "Zur Erzeugung": "Back to generation",
+  "Trotzdem schließen": "Close anyway"
 }

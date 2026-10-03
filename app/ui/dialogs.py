@@ -4069,6 +4069,45 @@ def _go_on_despite(
     return box.clickedButton() is write
 
 
+def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = None) -> str:
+    """Vor dem Schließen, wenn eine Erzeugung etwas verlöre (RM-499, Regel 19).
+
+    Seit *Modell erzeugen* nichtmodal ist (RM-371), lässt sich das Fenster
+    während eines Laufs schließen. Den Lauf und seine fertigen Versuche holt
+    kein Strg+Z zurück — Minuten Rechenzeit gingen sonst wortlos verloren.
+    Die Vorgabe ist der Weg zurück zur Erzeugung. Gibt ``back`` oder
+    ``close`` zurück.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    lost = ""
+    if tries == 1:
+        lost = tr(
+            "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren."
+        )
+    elif tries > 1:
+        lost = tr(
+            "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim "
+            "Schließen verloren.",
+            count=tries,
+        )
+    if running:
+        box.setWindowTitle(tr("Erzeugung läuft"))
+        box.setText(tr("Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab."))
+        if lost:
+            box.setInformativeText(lost)
+    else:
+        box.setWindowTitle(tr("Nicht übernommene Versuche"))
+        box.setText(lost)
+    back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
+    close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
+    make_primary(back)
+    box.setDefaultButton(back)
+    box.setEscapeButton(back)
+    box.exec()
+    return "close" if box.clickedButton() is close else "back"
+
+
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:
     """Die eine Frage, die sich zu stellen lohnt: mehr als einen Schritt
     wegzuwerfen (§15.4).
