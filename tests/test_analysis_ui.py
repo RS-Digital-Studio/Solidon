@@ -1441,6 +1441,78 @@ def test_the_object_tree_lists_the_features(window: MainWindow) -> None:
     assert not any(text in ("hole", "face") for text in measures), "der Typ ist kein Maß"
 
 
+def test_the_tree_column_keeps_the_measure_whole_and_marks_its_source() -> None:
+    """RM-490: Die Maßspalte trägt die Zahl ganz, die Herkunft als Zeichen.
+
+    Seit v0.5.0 stand dort „Ø5,20 mm · eingepasst“ und endete in jeder
+    Fensterbreite in „Ø5,20 mm · ein…“ — eine Angabe, die nie ganz zu lesen
+    ist, sagt nichts. Die Zahl steht vorn und allein; eine Herkunft, die
+    warnt, wird ein ``≈`` dahinter, das Wort behalten Tooltip und
+    Bildschirmleser.
+    """
+    from app.core.types import Feature
+    from app.ui.labels import MEASURE_MARK, area, feature_measure
+
+    def hole(source: str) -> Feature:
+        return Feature(
+            id="hole_1",
+            kind="hole",
+            params={"diameter": 5.2},
+            provenance="test",
+            measure_sources={"diameter": source},
+        )
+
+    face = Feature(
+        id="face_1",
+        kind="face",
+        params={"area": 3915.0, "normal": (0.0, 0.0, 1.0)},
+        provenance="test",
+        measure_sources={"area": "facets"},
+    )
+    assert feature_measure(hole("fit"), marked=True) == f"Ø{length(5.2)} {MEASURE_MARK}"
+    assert feature_measure(hole("parameter"), marked=True) == f"Ø{length(5.2)} {MEASURE_MARK}"
+    assert feature_measure(hole("native"), marked=True) == f"Ø{length(5.2)}"
+    assert feature_measure(face, marked=True) == area(3915.0)
+    # Das Wort bleibt die Auskunft für Tooltip und Bildschirmleser.
+    assert feature_measure(hole("fit")) == f"Ø{length(5.2)} · {tr('eingepasst')}"
+
+
+@pytest.mark.parametrize("size", [(1280, 720), (1920, 1080)], ids=["1280", "1920"])
+def test_the_measure_column_is_never_cut(window: MainWindow, size: tuple[int, int]) -> None:
+    """RM-490: Bohrung und Fläche zeigen ihr Maß ganz, das Wort steht dahinter bereit."""
+    window.resize(*size)
+    window.show()
+    QApplication.processEvents()
+    tree = window.object_tree.tree
+    item = tree.topLevelItem(0)
+    assert item is not None
+    item.setExpanded(True)
+    QApplication.processEvents()
+    rows = [item.child(index) for index in range(item.childCount())]
+    assert any(row.text(1).startswith("Ø") for row in rows), "ohne Bohrung prüft der Test nichts"
+    # Offscreen misst eine Ersatzschrift mit 12 Punkten je Zeichen, die kein
+    # Kunde sieht; dort gilt der Vergleich mit dem Körpermaß darüber, das die
+    # Spalte schon bis v0.4.4 trug. Auf einer echten Plattform zählt die Breite.
+    metrics = tree.fontMetrics()
+    body = metrics.horizontalAdvance(item.text(1))
+    for row in rows:
+        assert metrics.horizontalAdvance(row.text(1)) <= body, (
+            f"„{row.text(1)}“ ist breiter als das Körpermaß „{item.text(1)}“"
+        )
+    if QApplication.platformName() != "offscreen":
+        assert tree.sizeHintForColumn(1) <= tree.columnWidth(1), (
+            f"{[row.text(1) for row in rows]} passt nicht in {tree.columnWidth(1)} Punkte"
+        )
+    for row in rows:
+        shown = row.text(1)
+        assert tr("eingepasst") not in shown and tr("gemessen") not in shown, shown
+        spoken = str(row.data(1, Qt.ItemDataRole.AccessibleTextRole))
+        assert spoken.startswith(shown.split(" ≈")[0]) and " · " in spoken, (
+            f"der Bildschirmleser hört Maß und Herkunft: {spoken!r}"
+        )
+        assert spoken.split(" · ", 1)[1] in row.toolTip(1), "der Tooltip nennt die Herkunft"
+
+
 def _choose_and_wait(window: MainWindow, feature_id: str) -> None:
     """Ein Merkmal im Baum wählen und warten, bis das Auswahlfenster steht."""
     import time

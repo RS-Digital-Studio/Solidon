@@ -2235,7 +2235,7 @@ class ObjectTree(QWidget):
                 if other_id not in under and _part_group(other.created_by, document) is None:
                     group_key = (
                         cavity_names.get(other_id, feature_name(other_id, other)),
-                        feature_measure(other),
+                        feature_measure(other, marked=True),
                     )
                     alike[group_key] = alike.get(group_key, 0) + 1
             made: dict[str, QTreeWidgetItem] = {}
@@ -2244,12 +2244,18 @@ class ObjectTree(QWidget):
                 # Name links, Maß rechts. Vorher stand die ganze Beschriftung
                 # links und rechts der Typ („hole", „face") — links war damit
                 # abgeschnitten, was rechts gefehlt hat.
+                #
+                # **Die Zahl ganz, die Herkunft als Zeichen** (RM-490): Mit dem
+                # Wort dahinter endete die Spalte in jeder Breite in
+                # „Ø5,20 mm · ein…“. Das Wort hört der Bildschirmleser, und der
+                # Tooltip nennt es samt Satz (Regel 18).
                 child = QTreeWidgetItem(
                     [
                         cavity_names.get(feature_id, feature_name(feature_id, feature)),
-                        feature_measure(feature),
+                        feature_measure(feature, marked=True),
                     ]
                 )
+                child.setData(1, Qt.ItemDataRole.AccessibleTextRole, feature_measure(feature))
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 tip = _feature_tip(feature_id, feature, document)
@@ -2313,6 +2319,13 @@ class ObjectTree(QWidget):
                         roof.setToolTip(0, note)
                         roof.setStatusTip(0, note)
                         roof.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, note)
+                        # Das gemeinsame Maß sagt seine Herkunft wie jedes Kind.
+                        roof.setData(
+                            1,
+                            Qt.ItemDataRole.AccessibleTextRole,
+                            child.data(1, Qt.ItemDataRole.AccessibleTextRole),
+                        )
+                        roof.setToolTip(1, feature_measure_tip(feature))
                         by_kind[label] = roof
                         item.addChild(roof)
                     # Zugeklappt, sonst wäre nichts gewonnen. ``_restore``

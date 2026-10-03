@@ -2416,6 +2416,15 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     return feature_id  # type: ignore[unreachable]
 
 
+#: Das Zeichen hinter einer Zahl, deren Herkunft warnt — eingepasst, aus dem
+#: Schritt oder nicht belegt (RM-490). Die Maßspalte des Objektbaums ist zu
+#: schmal für „Ø5,20 mm · eingepasst“ und zeigte „Ø5,20 mm · ein…“; die Zahl
+#: steht deshalb ganz da, das Wort in Tooltip und Bildschirmleser. „≈“ heißt
+#: dort, was alle drei Wörter gemeinsam sagen: Die Oberfläche kann von dieser
+#: Zahl abweichen.
+MEASURE_MARK: Final = "≈"
+
+
 def measure_text(
     feature: Feature,
     name: str,
@@ -2424,18 +2433,23 @@ def measure_text(
     format_value: Callable[[float], str] = length,
     with_source: bool = True,
     compact: bool = False,
+    marked: bool = False,
 ) -> str:
     """Eine vorhandene Zahl und ihre belegte Herkunft, ohne erneute Maßrechnung.
 
     ``compact`` nennt nur das Wort, das warnt (``measure_qualifier``) — für die
     Marken in der Ansicht, wo viele einzeilige Beschriftungen um Platz ringen.
+    ``marked`` setzt statt des warnenden Worts :data:`MEASURE_MARK` hinter die
+    Zahl — für die Maßspalte des Objektbaums (RM-490).
     """
     status = measure_status(feature, name)
-    qualifier = measure_qualifier(status, compact=compact)
+    qualifier = measure_qualifier(status, compact=compact or marked)
     if not status.available:
         return str(qualifier)
     value = prefix + format_value(float(feature.params[name]))
-    return f"{value} · {qualifier}" if with_source and qualifier is not None else value
+    if not with_source or qualifier is None:
+        return value
+    return f"{value} {MEASURE_MARK}" if marked else f"{value} · {qualifier}"
 
 
 def _measure_group(
@@ -2444,6 +2458,7 @@ def _measure_group(
     separator: str,
     *,
     compact: bool = False,
+    marked: bool = False,
 ) -> str:
     """Gleiche Quellen teilen ihren Zusatz; gemischte bleiben je Zahl kenntlich."""
     statuses = [measure_status(feature, name) for name, _prefix, _formatter in fields]
@@ -2456,11 +2471,14 @@ def _measure_group(
             format_value=formatter,
             with_source=not common,
             compact=compact,
+            marked=marked,
         )
         for name, prefix, formatter in fields
     )
-    qualifier = measure_qualifier(statuses[0], compact=compact) if common else None
-    return f"{value} · {qualifier}" if qualifier is not None else value
+    qualifier = measure_qualifier(statuses[0], compact=compact or marked) if common else None
+    if qualifier is None:
+        return value
+    return f"{value} {MEASURE_MARK}" if marked else f"{value} · {qualifier}"
 
 
 def feature_measure_tip(feature: Feature, *names: str) -> str:
@@ -2486,18 +2504,19 @@ def feature_measure_tip(feature: Feature, *names: str) -> str:
     return "\n".join(descriptions)
 
 
-def feature_measure(feature: Feature, *, compact: bool = False) -> str:
+def feature_measure(feature: Feature, *, compact: bool = False, marked: bool = False) -> str:
     """Die eine Zahl, die dieses Merkmal ausmacht — ohne seinen Namen.
 
     Getrennt vom Namen, weil der Objektbaum zwei Spalten hat: dort stand die
     ganze Beschriftung links und rechts der Typ („hole", „face"). Links war
     damit abgeschnitten, was rechts gefehlt hat.
 
-    ``compact`` gilt für die Marken in der Ansicht (siehe :func:`measure_text`).
+    ``compact`` gilt für die Marken in der Ansicht, ``marked`` für die
+    Maßspalte des Objektbaums (siehe :func:`measure_text`).
     """
     params = feature.params
     if feature.kind == "hole":
-        return measure_text(feature, "diameter", prefix="Ø", compact=compact)
+        return measure_text(feature, "diameter", prefix="Ø", compact=compact, marked=marked)
     # **Beide Maße, und die Breite zuerst.** Ein Langloch bestellt man wie ein
     # Blech: „8 auf 20". Die Breite entscheidet über die Schraube, die Länge
     # über ihr Spiel — eine Zahl allein sagt keines von beidem. Das ``Ø`` steht
@@ -2508,17 +2527,18 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
             (("diameter", "Ø", length), ("length", "", length)),
             " × ",
             compact=compact,
+            marked=marked,
         )
     # **R und nicht Ø**, weil eine Verrundung über ihren Radius benannt wird:
     # Der Kunde sagt „R3", der Slicer sagt „R3", Fusion sagt „R3". Ohne diese
     # Zeile blieb die Maßspalte des Objektbaums bei jeder Verrundung leer,
     # während sie bei jedem anderen Merkmal etwas zeigt.
     if feature.kind == "fillet":
-        return measure_text(feature, "radius", prefix="R", compact=compact)
+        return measure_text(feature, "radius", prefix="R", compact=compact, marked=marked)
     # Zwei Vergleiche statt ``in``: So sieht mypy die Verzweigung vollständig
     # und hält die Zeile am Ende weiter für unerreichbar.
     if feature.kind == "face" or feature.kind == "curved_face":
-        return measure_text(feature, "area", format_value=area, compact=compact)
+        return measure_text(feature, "area", format_value=area, compact=compact, marked=marked)
     if feature.kind == "cone":
         # Eine Verengung nennt die Weite, die sie lässt: Ihr weites Ende ist die
         # Bohrung selbst, und „Verengung Ø8,25" neben „Sackbohrung Ø8,25" sagte
@@ -2529,9 +2549,10 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
             (("angle", "", lambda value: f"{value:.0f}°"), (size, "Ø", length)),
             " ",
             compact=compact,
+            marked=marked,
         )
     if feature.kind == "sphere":
-        return measure_text(feature, "diameter", prefix="Ø", compact=compact)
+        return measure_text(feature, "diameter", prefix="Ø", compact=compact, marked=marked)
     # Zwei Zahlen ohne Wort, wie beim Kegel: Ringdurchmesser, dann Rohrstärke.
     # Ein Wort dazwischen wäre eine zweite Stelle, an der eine Sprache fehlt.
     #
@@ -2546,6 +2567,7 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
             (("diameter", "Ø", length), ("tube_diameter", "Ø", length)),
             " / ",
             compact=compact,
+            marked=marked,
         )
     if feature.kind == "edge_loop":
         # Dieselbe Unterscheidung wie im Steckbrief: Die Sammelzeile trägt
@@ -2562,13 +2584,14 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
     # Durchmesser und Steigung, denn die macht es aus (Ø6 mit 1,0 ist
     # M6, Ø6 mit 0,75 ist M6 fein).
     if feature.kind == "pin":
-        return measure_text(feature, "diameter", prefix="Ø", compact=compact)
+        return measure_text(feature, "diameter", prefix="Ø", compact=compact, marked=marked)
     if feature.kind == "thread":
         text = _measure_group(
             feature,
             (("diameter", "Ø", length), ("pitch", "", length)),
             " × ",
             compact=compact,
+            marked=marked,
         )
         # **Was vom Üblichen abweicht, steht dabei** (P2.5): Ein Linksgewinde und
         # ein mehrgängiges nennen es — ein rechtsgängiges, eingängiges nicht,
@@ -2587,12 +2610,12 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
     # und das kann ein Zylinder sein oder sonst etwas. Was der Kunde wissen
     # will, ist, wie viel Luft im Teil steckt.
     if feature.kind == "void":
-        return measure_text(feature, "volume", format_value=volume, compact=compact)
+        return measure_text(feature, "volume", format_value=volume, compact=compact, marked=marked)
     # Zahl und Teilung, wie man ein Muster bestellt: „196 · 10,4 mm". Die
     # Zellbreite und die Tiefe stehen im Panel und im Steckbrief.
     if feature.kind == "pattern":
         count = int(params.get("count", 0))
-        pitch = measure_text(feature, "pitch", compact=compact)
+        pitch = measure_text(feature, "pitch", compact=compact, marked=marked)
         return f"{count} {tr('Zellen')} · {pitch}" if pitch else f"{count} {tr('Zellen')}"
     # Wie bei ``feature_name`` oben: Seit alle elf Arten ein Maß haben,
     # hält mypy diese Zeile für unerreichbar — und **das ist die
