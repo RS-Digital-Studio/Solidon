@@ -180,6 +180,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“](#rm-495) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.4.1; Hinweis nicht zeigen, wenn der Kunde genau diese Handlung benutzt |
+| [RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü](#rm-497) | Bedienung und Darstellung | Versionsvergleich 03.10.: seit der Entscheidung vom 11.09. stehen Operationen im Auswahlfenster; Abnahmetext anpassen (Bauplan nur mit Ansage) |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -3343,9 +3344,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
   Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
-  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode
-est
-m463_regression.md`.
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode\rest\rm463_regression.md`.
 
 <a id="rm-464"></a>
 
@@ -5075,6 +5074,20 @@ m463_regression.md`.
   **Abnahme:** Bohrung, Senkung und Fase an drei STEP-Modellen: kein Selbstverweis, Hinweis nennt
   den Grund. Bauplan §2.7.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
+
+<a id="rm-497"></a>
+
+- [ ] **RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü.**
+  Versionsvergleich Weg 1 (03.10.2026). Seit der Entscheidung vom 11.09. stehen Operationen nicht
+  mehr im Kontextmenü, sondern rechts im Auswahlfenster (§18.5; §2.2 ist schon angepasst). Zwei
+  Abnahmesätze in §40 sprechen noch vom alten Weg: P0 „zwei Ops im Register, sichtbar in Menü,
+  Palette, Kontextmenü, CLI und Tool-Schema“ und P1 „Klick liefert die korrekte Feature-ID und das
+  passende Kontextmenü“ (`3d-agent-bauplan.md:3164`, `:3200` am Stand `809141fdd`). Der Docstring
+  `_on_viewport_context_menu` in `app/ui/main_window.py` ist als Kleinigkeit berichtigt.
+  **Fix:** Beide Sätze auf das Auswahlfenster umstellen (Bauplan nur mit Ansage; Thread, der RM-360
+  umgesetzt hat).
+  **Abnahme:** `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nur noch Menüs, die es gibt.
+  Beleg: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md`.
 
 ## KI und Generatoren
 
