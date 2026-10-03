@@ -827,7 +827,7 @@ def search(
 def shape_key(mesh: MeshData) -> bytes:
     """Woran zwei Netze dieselbe Form in derselben Lage sind — gleich, wo sie stehen.
 
-    Die Ecken relativ zur kleinsten Ecke, auf einen Mikrometer gerundet, und
+    Die Ecken relativ zur kleinsten Ecke, auf einen Nanometer gerundet, und
     die Dreiecke. Eine verschobene Kopie trifft denselben Schlüssel, eine
     gekippte nicht: Für sie gilt eine andere Lage. Trifft die Rundung eine
     Kante zwischen zwei Werten, fehlt nur der Treffer, und es wird gesucht.

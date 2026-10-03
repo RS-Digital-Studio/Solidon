@@ -7681,6 +7681,7 @@ class PrintSettingsDialog(QDialog):
                     self.settings,
                     profiles.for_process(self.session.profile, self.settings, effective=True),
                     self.slice_result,
+                    flavour=self._current_flavour(),
                 )
             except AppError as problem:
                 self._set_advice_problem(problem)

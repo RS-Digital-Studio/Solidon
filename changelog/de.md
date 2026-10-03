@@ -53,6 +53,8 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- Bei Orca und Prusa bremst ein übernommener Vorschlag für eine Passung nur noch die betroffenen Teile.
+- Auch kleine übernommene Änderungen der Druckeinstellungen bleiben beim Export erhalten.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.
 - Ist in Cura ein anderer Drucker aktiv, nennt die Übergabe beide Drucker und zeigt, wo Sie Curas Auswahl übernehmen können.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.

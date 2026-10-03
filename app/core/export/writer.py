@@ -1406,7 +1406,7 @@ def _unserved(
             reason="",
         )
         for path in sorted(split.per_part - served)
-        if not _same_value(read_path(accepted, path), read_path(split.base, path))
+        if not same_value(read_path(accepted, path), read_path(split.base, path))
     ]
 
 
@@ -1455,17 +1455,6 @@ def _served_elsewhere(
 def _finding_value(value: object) -> float | str:
     """Ein Einstellungswert, wie ihn ein Befund trägt: Zahl, Wahrheitswert oder Wort."""
     return value if isinstance(value, int | float | str) else str(value)
-
-
-def _same_value(first: object, second: object) -> bool:
-    """Gleich bis auf die Anzeigegenauigkeit bei Zahlen, sonst genau gleich."""
-    if isinstance(first, float) or isinstance(second, float):
-        return (
-            isinstance(first, int | float)
-            and isinstance(second, int | float)
-            and abs(float(first) - float(second)) <= EPS_DISPLAY
-        )
-    return first == second
 
 
 def _body_analysis(

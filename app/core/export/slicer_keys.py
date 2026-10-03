@@ -28,6 +28,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
+from app.core.knowledge.print_settings import SCARF_LENGTH
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -214,11 +215,6 @@ def _angle_from_horizontal(value: object) -> str:
 
 
 # --- PrusaSlicer und SuperSlicer ------------------------------------------------
-
-#: Wie lang die Rampe der Schrägnaht ist, in Millimetern (``shell.scarf_seam``):
-#: die Vorgabe von OrcaSlicer und PrusaSlicer. Cura hat keine eigene, bei ihm
-#: schaltet eine Länge über null die Schrägnaht erst ein.
-SCARF_LENGTH: Final = 20.0
 
 _PRUSA_INFILL: Final = {
     "grid": "grid",
@@ -1238,7 +1234,9 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
     nicht (:data:`NOT_TAKEN_BY`) und deckelt nicht; dort ist der Vorschlag der
     einzige Deckel.
     """
-    return flavour in ("orca", "prusa")
+    from app.core.knowledge.print_settings import caps_volumetric_speed as caps_flow
+
+    return caps_flow(flavour)
 
 
 def limitation(

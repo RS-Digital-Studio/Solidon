@@ -70,7 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Zählung beim Löschen nachführen; Entscheidung zu alten Läufen (Migration) |
-| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
+| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | B7, B8, B12, B13, N3, N6 und N9 erledigt; offen bleiben getrennte Platten-/Teilwerte, Anzeige, Anschluss und Laufzeitreste |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
@@ -2242,7 +2242,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-289"></a>
 
-- [ ] **RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
+- [~] **RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
   `3018613e6`, `konzepte/nachweise-release-0.5.1/reports/review-gesamt-dd95985e5.md`; B1–B4 gehören
   zum Paket und werden vor dem Tag behoben). (B6) Nach dem Übernehmen zeigt der Druckdialog
   einen Wert je Teil als Wert der Platte (`print_settings_dialog.py`). (B7) `plate_paths`
@@ -2270,6 +2270,47 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   einmal (`writer._served_elsewhere`). (N9) Der Docstring von `orientation.shape_key`
   nennt einen Mikrometer, gerundet wird auf einen Nanometer. N6 (Dateiexport einer
   Auswahl ohne den ganzen Auftrag) ist behoben (`effaef006`).
+
+
+  **Teilstand 03.10.2026 — B7, B12, N3 und N9:** Reine Volumenstromgründe
+  werden für Slicer mit eigenem Deckel vor dem Zusammenführen der Vorschläge
+  ausgelassen. Passungs- und TPU-Gründe bleiben erhalten; der Rat stimmt in
+  Druckdialog, Plattenaufteilung und Teilübergabe überein. Echte Außenbahnen
+  zweier 40-mm-Teile: Orca nachher Passung 30/Klotz 162,364883 mm/s statt
+  30/30; 11,999970 mm³/s bleiben unter 12. Prusa 29,999967/169,999783 statt
+  zweimal 29,999967; 13,840695 mm³/s bleiben unter 15. Cura bleibt im
+  absichtlich begrenzten Kontrollfall bei 17/17. Alle sechs Vorher-/Nachherläufe
+  liefern Druckdateien. 18 rote Beratungsgegenproben vor dem Fix; danach 30
+  neue Fälle und insgesamt 974 gezielte Kernfälle grün, vier übersprungen,
+  288 Releasefälle abgewählt. Unabhängige Folgenprüfung bestätigt sieben
+  Programmmarken mit Passungs-/TPU-Gründen sowie positive, fehlende, null und
+  unlesbare native Grenzwerte, eigene Wahl und Bool/Zahl-Vergleich.
+  B12 leitet den Mindestumfang aus der gemeinsamen Schrägnahtlänge ab;
+  die Werte bleiben 20/40 mm. N3 verwendet die gemeinsame Einstellungspräzision:
+  Eine übernommene Bahnbreitenänderung um 0,005 mm bleibt erhalten. N9 korrigiert
+  nur die Einheitenangabe auf Nanometer. B8 ist bereits durch `094b2637b`
+  abgesichert, N6 durch `effaef006`. Kundenpunkte für B7 und N3: Ursachen
+  `9b58af5ef`/`2cf02ad2d` und `176d961c9` liegen in v0.5.1. Kein Kundeneintrag
+  für die unveränderten Zahlen von B12 oder den Docstring N9. Der Widerspruch
+  zum anfänglichen Prusa-Fähigkeitsbefund wird unter RM-317 durch große und
+  kleine Konturen aufgelöst; ohne diesen Rollenanschluss keine gemeinsame
+  Freigabe. Belege: `F:\solidon-review-reports\B-slicer-rest\rm289\bericht.md`
+  und `review.md`. B2/B6, B9–B11, N4 und N8 bleiben offen; RM-289 wird
+  nicht archiviert. Genaue Commits und gemeinsames Tor stehen im Bericht B.
+
+
+  **B13 ebenfalls geklärt:** Der Druckdialog ohne gewähltes Programm startet
+  seinen tatsächlichen Beratungsarbeiter mit der Orca-Familie, genau wie die
+  anschließend geschriebene 3MF. Automatische Haftung bleibt dabei automatisch;
+  ein Skirt am schlanken Körper führt weiter zum Brimvorschlag. Zwei neue
+  Anschlussfälle rufen den Dialogstart ohne Fenster auf, rechnen den Arbeiter
+  und lesen Projekt- und Objektwerte der geschriebenen 3MF. Beide bestehen;
+  mit entfernter Familienbindung sind beide rot. Die vorsichtige Kernabfrage
+  ohne Familie bleibt als eigener Grenzfall bestehen, ihre bisher irreführende
+  Beschreibung ist berichtigt. Drei gezielte Fälle grün, 625 abgewählt,
+  Exit 0; Gegenprobe zwei rot. Keine Produktverhaltensänderung und deshalb
+  kein Changelog-Punkt. Beleg: `rm289/b13-connection.log` und
+  `b13-counter.log` im B-Berichtsordner.
 
 <a id="rm-292"></a>
 

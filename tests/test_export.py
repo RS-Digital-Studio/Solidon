@@ -2284,6 +2284,29 @@ def test_an_accepted_suggestion_no_part_asks_for_goes_to_every_part(
     assert not [entry for entry in findings if entry.code == "export.part_setting"]
 
 
+def test_an_accepted_width_below_display_precision_is_still_exported(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """N3: Kein Teil verlangt die übernommene Breite von sich aus. Der
+    Rückfall muss auch 0,005 mm Änderung erhalten; Anzeigepräzision ist kein
+    Gleichheitsmaß für gespeicherte Druckeinstellungen."""
+    settings = print_settings.resolve(profile)
+    width = settings.layers.line_width + 0.005
+    settings = print_settings.with_accepted(settings, "layers.line_width", width)
+
+    written, findings = write_assembly(
+        _two_blocks(), tmp_path, project_name="Bahnbreite", profile=profile, settings=settings
+    )
+
+    values = _object_values(written, "Metadata/model_settings.config")
+    assert all(float(item["line_width"]) == pytest.approx(width) for item in values.values())
+    assert any(
+        finding.code == "export.part_setting_all"
+        and finding.values["setting"] == "layers.line_width"
+        for finding in findings
+    )
+
+
 def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile: Profile) -> None:
     """Die ruhigen Wände der schlanken Stange gehören nur an die Stange (RM-328).
 
@@ -2895,6 +2918,63 @@ def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
     assert geometry.per_part == frozenset({"adhesion.kind"})
     assert geometry.plate.adhesion.kind == "skirt"
     assert geometry.base.adhesion.kind == "skirt"
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_a_native_flow_limit_does_not_spread_fitting_speed_to_the_plain_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flavour: SlicerFlavour
+) -> None:
+    """B7: P1S/Generic PLA 12 mm³/s und MK4S/Prusament PLA 15 mm³/s
+    machten aus der Passungsbremse einen plattenweiten Wert. Das Filament
+    deckelt dort der Slicer selbst; nur Cura braucht Solidons Tempodeckel."""
+    from app.core.export import manufacturer
+    from app.core.scene.project import new_project
+    from app.core.types import FeatureRef, Fit
+
+    profile = profiles.make_profile("bambu-p1s", "pla")
+    foundation = print_settings.with_path(
+        print_settings.resolve(profile), "speed.outer_wall", 200.0
+    )
+    foundation = print_settings.with_path(foundation, "filament.max_flow", 12.0)
+    monkeypatch.setattr(
+        manufacturer,
+        "base_settings",
+        lambda *_args, **_kwargs: manufacturer.Foundation(foundation, profile=profile),
+    )
+    settings = print_settings.with_accepted(foundation, "speed.outer_wall", 30.0)
+    document = new_project(profile.printer.id, "pla").document
+    document.fits.append(
+        Fit("Passung", FeatureRef("fit", "top"), FeatureRef("mate-other-plate", "bottom"))
+    )
+    objects = [scene_object("fit", "Passungsteil"), scene_object("block", "Klotz")]
+    split = handover.split_for_parts(settings, profile, None, flavour)
+
+    written, _ = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Passung",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+        document=document,
+        checked=[],
+    )
+
+    if flavour == "cura":
+        assert split.per_part == frozenset()
+        assert split.plate.speed.outer_wall == pytest.approx(30.0)
+    else:
+        assert split.per_part == frozenset({"speed.outer_wall"})
+        assert split.plate.speed.outer_wall == pytest.approx(200.0)
+        member = (
+            "Metadata/model_settings.config"
+            if flavour == "orca"
+            else "Metadata/Slic3r_PE_model.config"
+        )
+        key = "outer_wall_speed" if flavour == "orca" else "external_perimeter_speed"
+        values = _object_values(written, member)
+        assert float(values["Passungsteil"][key]) == pytest.approx(30.0)
+        assert key not in values["Klotz"]
 
 
 def _tapered_cup() -> MeshData:

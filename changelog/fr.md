@@ -29,6 +29,8 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- Avec Orca et Prusa, une suggestion de vitesse acceptée pour un ajustement ne ralentit que les pièces concernées.
+- Même les petites modifications acceptées dans les réglages d’impression sont conservées à l’export.
 - Cura reprend les limites de jerk du profil, avec des valeurs distinctes pour les parois, le remplissage et la première couche.
 - Si une autre imprimante est active dans Cura, le transfert nomme les deux et indique où reprendre le choix de Cura.
 - Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.

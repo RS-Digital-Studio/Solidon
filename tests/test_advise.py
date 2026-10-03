@@ -183,6 +183,59 @@ def test_the_flow_advice_can_be_told_apart() -> None:
     assert not advise.limits_flow(other), "am Grund erkannt, nicht am Feld"
 
 
+@pytest.mark.parametrize("flavour", [None, "other", "cura", "orca", "prusa"])
+@pytest.mark.parametrize("material, fitting", [("pla", False), ("pla", True), ("tpu-95a", False)])
+def test_native_flow_limits_preserve_the_actual_reason_for_slow_walls(flavour, material, fitting):
+    """B7: Ein später weggefilterter Volumenstromgrund verschluckte den
+    Passungs- oder Materialgrund, der dieselbe Außenwand tatsächlich braucht.
+    Platte und Einzelteil müssen dieselbe wirksame Empfehlung zurückgeben."""
+    from app.core.types import BoundingBox
+
+    profile = profiles.make_profile("bambu-p1s", material)
+    settings = print_settings.with_path(print_settings.resolve(profile), "speed.outer_wall", 200.0)
+    settings = print_settings.with_path(settings, "filament.max_flow", 0.6)
+    fit_kinds = ("clearance",) if fitting else ()
+    for entries in (
+        advise.advise(settings, profile, fit_kinds=fit_kinds, flavour=flavour),
+        advise.for_part(
+            settings,
+            BoundingBox((0.0, 0.0, 0.0), (30.0, 30.0, 10.0)),
+            900.0,
+            profile=profile,
+            fit_kinds=fit_kinds,
+            flavour=flavour,
+        ),
+    ):
+        outer = [entry for entry in entries if entry.path == "speed.outer_wall"]
+        if flavour in ("orca", "prusa"):
+            assert not any(advise.limits_flow(entry) for entry in entries)
+            if fitting or material == "tpu-95a":
+                assert len(outer) == 1
+                assert number(outer[0]) == pytest.approx(30.0)
+            else:
+                assert outer == []
+        else:
+            assert len(outer) == 1
+            assert advise.limits_flow(outer[0])
+            assert number(outer[0]) == pytest.approx(print_settings.flow_speed_limit(settings))
+
+
+@pytest.mark.parametrize("flavour", [None, "cura", "orca", "prusa"])
+@pytest.mark.parametrize("material", ["pla", "tpu-95a"])
+def test_plate_wide_reasons_respect_the_slicers_own_flow_limit(flavour, material):
+    """B7: Der Deckel des Slicers macht einen Flow-Vorschlag entbehrlich,
+    aber nicht den langsameren Materialtransport von TPU."""
+    profile = profiles.make_profile("bambu-p1s", material)
+    settings = print_settings.with_path(print_settings.resolve(profile), "speed.outer_wall", 200.0)
+    settings = print_settings.with_path(settings, "filament.max_flow", 12.0)
+
+    wanted = advise.plate_paths(settings, profile, flavour=flavour)
+
+    assert ("speed.outer_wall" in wanted) is (
+        material == "tpu-95a" or flavour not in ("orca", "prusa")
+    )
+
+
 # --- die Deckelung der Strukturbreite ist keine Messung --------------------------
 
 
@@ -1026,6 +1079,34 @@ def test_a_round_outer_wall_asks_for_a_scarf_seam() -> None:
         "unter der Mindesthöhe wird aus der Naht keine Linie"
     )
     assert "shell.scarf_seam" in advise.PART_PATHS
+
+
+def test_scarf_advice_follows_a_changed_shared_ramp_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    """B12: Bei einer längeren ausgegebenen Rampe darf ein kleiner Umfang
+    nicht weiter die Empfehlung für die abgeschriebene 20-mm-Rampe bekommen."""
+    import importlib
+
+    from app.core.export import handover, slicer_keys
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    round_one = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=128))
+    try:
+        with monkeypatch.context() as changed:
+            changed.setattr(print_settings, "SCARF_LENGTH", 50.0, raising=False)
+            importlib.reload(slicer_keys)
+            importlib.reload(advise)
+            assert "shell.scarf_seam" not in paths(advise.advise(settings, profile, round_one))
+            selected = print_settings.with_choice(settings, "shell.scarf_seam", True)
+            for flavour, key in (
+                ("orca", "seam_slope_min_length"),
+                ("prusa", "scarf_seam_length"),
+                ("cura", "scarf_joint_seam_length"),
+            ):
+                assert float(handover.as_mapping(selected, flavour)[key]) == pytest.approx(50.0)
+    finally:
+        importlib.reload(slicer_keys)
+        importlib.reload(advise)
 
 
 def test_a_polygon_with_corners_hides_its_seam_itself() -> None:

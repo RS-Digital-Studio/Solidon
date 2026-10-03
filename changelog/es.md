@@ -29,6 +29,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
+- Con Orca y Prusa, aceptar una sugerencia de velocidad para un encaje solo ralentiza las piezas afectadas.
+- También se conservan al exportar los pequeños cambios aceptados en los ajustes de impresión.
 - Cura usa los límites de cambio brusco de velocidad del perfil, con valores separados para paredes, relleno y primera capa.
 - Si Cura tiene otra impresora seleccionada, el envío indica ambas y muestra dónde adoptar la selección de Cura.
 - Corregido un cierre inesperado de ElegooSlicer y OrcaSlicer al laminar modelos multicolor con soportes de rejilla.

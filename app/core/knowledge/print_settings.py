@@ -63,6 +63,10 @@ REFERENCE_NOZZLE: Final = 0.4
 #: auf der darunterliegenden auf.
 MAX_LAYER_RATIO: Final = 0.75
 
+#: Länge der Schrägnaht-Rampe in Millimetern, wie Orca und Prusa sie vorgeben.
+#: Der Rat braucht zwei Rampen im Umfang; Cura schaltet sie mit einer Länge über null ein.
+SCARF_LENGTH: Final = 20.0
+
 #: Die Tempi, bei denen die Düse fördert, und ob sie mit den Maßen der ersten
 #: Schicht rechnen. Fahrt und Brücke stehen nicht darin: Die eine fördert
 #: nicht, die andere mit eigenem Fluss.
@@ -87,6 +91,16 @@ HOTEND_FLOW_MATERIAL: Final = "pla"
 _DATA_DIR: Final = Path(__file__).parent / "data"
 
 _tables: dict[str, dict[str, dict[str, Any]]] | None = None
+
+
+def caps_volumetric_speed(flavour: str | None) -> bool:
+    """Ob die Slicerfamilie den Filamentdurchsatz an jeder Druckbahn begrenzt.
+
+    Prusa und Orca verwenden ``filament_max_volumetric_speed``. Cura kennt
+    diesen Filamentdeckel nicht; dort bleibt der entsprechende Tempovorschlag
+    nötig, ebenso solange noch kein unterstützter Slicer gewählt ist.
+    """
+    return flavour in ("orca", "prusa")
 
 
 def _read_table(path: Path) -> dict[str, Any]:

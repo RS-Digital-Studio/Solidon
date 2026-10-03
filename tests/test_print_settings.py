@@ -693,9 +693,9 @@ def test_a_slender_part_on_a_broad_foot_keeps_its_pace() -> None:
     assert [_paths(entries) & set(CALM_WALLS) for entries in cases] == [set(), set()]
 
 
-def test_without_a_known_slicer_automatic_adhesion_stays_unanchored() -> None:
-    """Ohne Slicer ist offen, ob „automatisch“ etwas rechnet — dann bleibt es
-    bei der Vorsicht, und ein Skirt hält auch unter Orca nichts fest."""
+def test_the_core_without_a_family_keeps_automatic_adhesion_conservative() -> None:
+    """Die ungebundene Kernabfrage bleibt vorsichtig; sie beschreibt nicht
+    den Druckdialog ohne Programmauswahl. Ein Skirt hält auch unter Orca nichts."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     table = print_settings.resolve(profile)
     automatic = print_settings.with_path(table, "adhesion.kind", "auto")
@@ -7171,6 +7171,79 @@ def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: An
     worker.work()
     assert got, "der Arbeiter kam ohne Rat zurück"
     return got[0]
+
+
+@pytest.mark.parametrize("kind", ["auto", "skirt"])
+def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
+    tmp_path: Path, kind: str
+) -> None:
+    """B13: Der echte Arbeiterstart bindet den Rat an dieselbe Familie wie
+    die anschließend geschriebene Datei. Eine ungebundene Kernprobe genügt nicht."""
+    from types import SimpleNamespace
+
+    from app.core.export.writer import write_assembly
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", kind)
+    bodies = (_standing_box("Turm", (4.0, 4.0, 80.0)),)
+    received: list[Any] = []
+    started: list[Any] = []
+
+    def quiet(*_args: Any) -> None:
+        pass
+
+    state = SimpleNamespace(
+        _settling=False,
+        _advice_pending=True,
+        _plate_bodies=lambda: bodies,
+        session=SimpleNamespace(profile=profile, busy=False),
+        settings=settings,
+        _advice_worker=None,
+        _advice_request=(),
+        _advice_context=lambda: (),
+        _current_flavour=lambda: None,
+        _slicer_path=None,
+        _plate_slots=list,
+        _profiles_for=lambda _slots: [],
+        _analysis_context=lambda: (),
+        _analysed_context=(),
+        _body_analyses={},
+        _fits_in_play=lambda: (),
+        _connector_diameters=lambda: (),
+        _part_fits=dict,
+        _advice_ready=lambda _worker, _context, _analysis, entries, _results: received.extend(
+            entries
+        ),
+        _advice_failed=quiet,
+        _advice_progressed=quiet,
+        _advice_finished=quiet,
+        _leash=SimpleNamespace(start=started.append),
+    )
+
+    PrintSettingsDialog._start_advice(state)
+    assert len(started) == 1
+    worker = started[0]
+    assert worker.setup is None and worker.flavour == "orca"
+    worker.work()
+    brim = [entry for entry in received if entry.path == "adhesion.kind"]
+    assert [entry.value for entry in brim] == ([] if kind == "auto" else ["brim"])
+
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Satz",
+        profile=profile,
+        settings=advise.apply(settings, brim),
+    )
+    with zipfile.ZipFile(written) as archive:
+        process = json.loads(archive.read("Metadata/project_settings.config"))
+        parts = ET.fromstring(archive.read("Metadata/model_settings.config"))
+    assert process["brim_type"] == ("auto_brim" if kind == "auto" else "no_brim")
+    actual = [
+        entry.get("value") for entry in parts.iter("metadata") if entry.get("key") == "brim_type"
+    ]
+    assert actual == ([] if kind == "auto" else ["outer_only"])
 
 
 def test_the_advice_names_the_part_the_export_gives_it_to(tmp_path: Path) -> None:

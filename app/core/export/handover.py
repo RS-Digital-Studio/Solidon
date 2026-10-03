@@ -1283,7 +1283,9 @@ def split_for_parts(
     base = settings
     for path in sorted(wanted):
         base = print_settings.without_choice(base, path, foundation)
-    wanted -= advise.plate_paths(base, profiles.for_process(profile, base, effective=True))
+    wanted -= advise.plate_paths(
+        base, profiles.for_process(profile, base, effective=True), flavour=flavour
+    )
     per_part = wanted & _part_paths(flavour)
     unavailable = wanted - per_part
     trimmed = settings
