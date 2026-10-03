@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
@@ -50,6 +51,12 @@ it into `website/version.json`.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
 - SuperSlicer no longer crashes on round parts: it no longer receives the scarf seam it does not know.
+- SuperSlicer receives grid supports with an explanation when tree supports were chosen. The Nearest seam choice arrives without a false warning.
+- TPU now selects the matching filament profile and start settings in PrusaSlicer and SuperSlicer. If no profile is available, Solidon identifies its own material table as the source.
+- Cura now respects the printer's acceleration limits. If your setting exceeds them, Solidon shows the reduced value in the report.
+- Chamber temperatures reach the correct slicer field. Printer profiles without controlled chamber heating now explain why the setting has no effect.
+- The Lines infill pattern reaches Bambu Studio and Creality Print as lines, without being replaced by Grid or Cubic.
+- After slicing, Solidon also reports settings discarded by PrusaSlicer or Orca-based slicers. Changes to brim, wall order and support type are detected too.
 - The filament preselection takes Generic or your printer's brand instead of a third-party special filament, for example Generic PETG instead of BETA PETG on the Bambu A1.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 - On STEP surface models too, for turns of almost 180° and on partly recognised faces, *Orient for printing*, *Rotate* and *Move* now work. The body stays exact.

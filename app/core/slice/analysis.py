@@ -20,7 +20,7 @@ import math
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Final, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import manifold3d
 import numpy as np
@@ -36,9 +36,6 @@ from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGRE
 from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
-
-if TYPE_CHECKING:
-    from concurrent.futures import Executor
 
 #: Die übersetzte Konturverkettung (§22.1), oder ``None``.
 #:
@@ -202,25 +199,14 @@ DIRECT_SECTIONS_ABOVE = 10
 MAX_WORKERS = 16
 FULL_WORKERS = 6
 
-#: Wie viele Arbeiter die Stützsäulen unter sich aufteilen (:func:`_support_volume`).
+#: Wie viele Arbeiter die örtlichen Säulen- und Kanalfragen unter sich aufteilen.
 SUPPORT_WORKERS = 6
-
-#: Ab so vielen offenen Säulenstücken einer Schicht teilen sich die Arbeiter
-#: die Fragen und Differenzen (:func:`_above_material_shared`); darunter
-#: kostet das Herumreichen mehr, als es spart.
-SUPPORT_SHARE_FROM = 16
 
 #: So viele Schichten misst ein Arbeiter in einem Block (:func:`_measure_batch`).
 #: Groß genug, dass jeder GEOS-Aufruf ein Feld statt einer Schicht fragt;
 #: klein genug, dass sechs Arbeiter an 400 Schichten gleichmäßig zu tun haben
 #: und ein Abbruch nach höchstens einem Block je Arbeiter greift.
 BATCH_LAYERS = 16
-
-#: Ab dieser Zahl Stützflächen ist der Aufbau eines räumlichen Index billiger
-#: als ein vektorisierter GEOS-Test gegen jede einzelne. An 59 Kugelschichten
-#: mit bis zu 151 Teilen: 50 auf 35 ms; darunter bleibt der direkte Aufruf
-#: schneller und spart den Baumaufbau.
-SUPPORT_TREE_FROM = 64
 
 Detail = Literal["full", "support"]
 """Wie viel einer Schicht vermessen wird. ``support`` lässt alles aus, was die
@@ -491,6 +477,18 @@ def _footing_area(
     return 0.0 if shape is None or shape.is_empty else float(shape.area)
 
 
+def _material_cross(shape: ShapelyPolygon | None) -> manifold3d.CrossSection:
+    """Eine vorhandene Materialfläche als gerichtete Clipper-Konturen, ohne Vereinfachung."""
+    if shape is None or shape.is_empty:
+        return manifold3d.CrossSection()
+    oriented = shapely.orient_polygons(shape, exterior_cw=False)
+    rings = []
+    for part in _areas_of(oriented):
+        rings.append(np.asarray(part.exterior.coords, dtype=np.float64)[:-1])
+        rings.extend(np.asarray(ring.coords, dtype=np.float64)[:-1] for ring in part.interiors)
+    return manifold3d.CrossSection(rings, manifold3d.FillRule.Positive)
+
+
 def _support_volume(
     sections: list[ShapelyPolygon | None],
     measured: list[LayerMetrics | None],
@@ -499,96 +497,27 @@ def _support_volume(
     first_layer_height: float | None = None,
     cancelled: CancelToken | None = None,
 ) -> float:
-    """Das Volumen der **Stützsäulen** unter allen Überhängen, in mm³ (§22.2).
+    """Stützsäulen bis zum nächsten Material oder Bett, ohne Konturvereinfachung.
 
-    Gerechnet wurde hier ``Überhangfläche mal Schichthöhe``, aufsummiert. Das ist
-    das Volumen der auskragenden **Schale** — des Materials, das der Drucker
-    dort oben ablegt — und nicht das, was eine Stütze kostet. Zwei Dinge waren
-    daran falsch, und das zweite ist das schlimmere: Die Zahl war an einem Pilz
-    (Hut 40 auf 40 über einem Stiel 10 auf 10, 20 mm hoch) um den Faktor 380 zu
-    klein, **und** sie hing an der Schichthöhe: 79 mm³ bei 0,2 mm, 385 bei 1,0.
-    Eine Eigenschaft des Körpers, die sich mit der Auflösung ändert, mit der man
-    sie misst, ist keine.
-
-    Gestützt wird der Raum **unter** dem Überhang, bis zum nächsten Material
-    oder bis zur Platte. Gerechnet wird das in einem Durchgang von oben nach
-    unten: ``pending`` ist die Fläche, die auf dieser Höhe noch von unten
-    getragen werden muss. Sie wächst um den Überhang jeder Schicht und schrumpft
-    um alles, was die Schicht darunter an Material bietet — je Schichtabstand
-    kommt ihre Fläche mal der Fallhöhe dazu. Damit ist das Ergebnis von der
-    Schichthöhe unabhängig: halb so hohe Schichten sind doppelt so viele.
-
-    **Unter der untersten Schicht bleibt eine halbe Schichthöhe.** Der erste
-    Schnitt liegt eine halbe Schicht über der Unterkante des Körpers, und ob
-    dort die Platte steht, weiß der Schneider nicht — er kennt nur den Körper.
-    Der Term geht mit der Schichthöhe gegen null und ist damit kein Beitrag,
-    der eine Aussage trägt.
-
-    **Die Säulen werden nie vereinigt, und das ist der Unterschied zwischen
-    37 Millisekunden und 6,7 Sekunden.** Sie können sich nicht überschneiden:
-    Ein Überhang gehört zum Material seiner eigenen Schicht, und was von oben
-    kommt, ist eine Schicht vorher an genau diesem Material zerteilt worden.
-    Der erste Anlauf rief trotzdem ``unary_union`` — an einer Kugel mit
-    327 000 Dreiecken kostete das 33 ms je Schicht, weil das Verschneiden
-    hunderter schmaler Ringe genau die Arbeit ist, die eine Vereinigung teuer
-    macht. Gehalten wird deshalb eine **Liste** überschneidungsfreier Teile;
-    ihre Flächen addieren sich, und der räumliche Index sagt in einem Aufruf,
-    welche davon die Schicht darunter überhaupt berührt. Beide Wege ergeben
-    dieselbe Zahl (4016,6 mm³ an derselben Kugel), einer davon in einem
-    Hundertachtzigstel der Zeit.
-
-    **Und die Stücke einer Schicht verteilen sich auf Arbeiter** (RM-266).
-    Weil keine Säule eine andere beschneidet, ist jede Differenz einer Schicht
-    unabhängig von den übrigen; :func:`_above_material_shared` verteilt sie
-    auf die Arbeiter und setzt die Stücke in der Folge wieder zusammen, in der
-    sie einfädig entstünden. Bis dahin rechnete je Arbeiter eine Gruppe von
-    Startschichten ihren eigenen Durchgang (RM-201), und das trug nur, solange
-    die Überhänge sich über viele Startschichten verteilten: An der großen
-    Hälfte des Laptop-Ständers zerfallen die Säulen einer einzigen Startschicht
-    in über 500 Stücke, eine Gruppe rechnete 2,1 s, die übrigen fünf zusammen
-    0,2 s. Und die Gruppensumme hing in der letzten Stelle an der Zahl der
-    Kerne — dieselbe Naht kostete auf vier Kernen eine andere Zahl als auf
-    acht. Jetzt entsteht die Summe in einer einzigen, festen Folge, gleich wie
-    viele Arbeiter es sind.
+    Die gerichtete Säulenkontur wächst am Überhang und verliert an der
+    Schicht darunter. Jede Fläche wird einmal nach Clipper übertragen;
+    Zwischenkonturen bleiben dort. Summe und Schrittreihenfolge sind fest.
     """
-    if not any(
-        metrics is not None and metrics.overhang is not None and not metrics.overhang.is_empty
-        for metrics in measured
-    ):
-        return 0.0
-    workers = _workers(SUPPORT_WORKERS) if len(sections) >= PARALLEL_FROM else 1
-    from concurrent.futures import ThreadPoolExecutor
-
-    pool = ThreadPoolExecutor(max_workers=workers) if workers > 1 else None
-    try:
-        pending: list[ShapelyPolygon] = []
-        volume = 0.0
-        for index in range(len(sections) - 1, -1, -1):
-            if cancelled is not None:
-                cancelled.raise_if_cancelled()
-            metrics = measured[index]
-            if (
-                metrics is not None
-                and metrics.overhang is not None
-                and not metrics.overhang.is_empty
-            ):
-                pending += _areas_of(metrics.overhang)
-            if not pending:
-                continue
-            below = sections[index - 1] if index else None
-            if below is not None and not below.is_empty:
-                pending = _above_material(
-                    pending, below, cancelled=cancelled, pool=pool, workers=workers
-                )
-                if not pending:
-                    continue
-            volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * _layer_step(
-                index, layer_height, first_layer_height
-            )
-        return volume
-    finally:
-        if pool is not None:
-            pool.shutdown(wait=True, cancel_futures=True)
+    pending = manifold3d.CrossSection()
+    volume = 0.0
+    for index in range(len(sections) - 1, -1, -1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        metrics = measured[index]
+        if metrics is not None and metrics.overhang is not None:
+            pending += _material_cross(metrics.overhang)
+        if pending.is_empty():
+            continue
+        below = sections[index - 1] if index else None
+        if below is not None and not below.is_empty:
+            pending -= _material_cross(below)
+        volume += float(pending.area()) * _layer_step(index, layer_height, first_layer_height)
+    return volume
 
 
 def _layer_step(index: int, layer_height: float, first_layer_height: float | None) -> float:
@@ -609,98 +538,6 @@ def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
     """
     parts = getattr(shape, "geoms", [shape])
     return [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
-
-
-def _above_material(
-    pending: list[ShapelyPolygon],
-    below: ShapelyPolygon,
-    *,
-    cancelled: CancelToken | None = None,
-    pool: Executor | None = None,
-    workers: int = 1,
-) -> list[ShapelyPolygon]:
-    """Was von den Säulen übrig bleibt, wenn die Schicht darunter trägt.
-
-    Geschnitten wird nur, was sich überhaupt berührt, und gefragt wird in
-    **einem** Aufruf über alle Teile, nicht einmal je Teil. Bei kleinen Listen
-    ist das vektorisierte Prädikat am billigsten. Ab ``SUPPORT_TREE_FROM``
-    spart ein räumlicher Index genug Paarfragen, um seinen Aufbau zu bezahlen;
-    unterhalb dieser gemessenen Grenze bleibt er bewusst weg.
-
-    **Die Stücke bleiben in ihrer Folge**: erst die unberührten, dann die
-    Reste der berührten, beide nach ihrer Stelle in ``pending``. Der Baum
-    liefert seine Treffer in seiner eigenen Folge, und die wird sortiert —
-    sonst hinge die Summe der Flächen in der letzten Stelle daran, wie der
-    Baum gebaut ist, und an nichts am Körper.
-
-    Mit ``pool`` teilen sich die Arbeiter die Stücke (:func:`_above_material_shared`).
-    """
-    if pool is not None and workers > 1 and len(pending) >= SUPPORT_SHARE_FROM:
-        return _above_material_shared(pending, below, cancelled, pool, workers)
-    if len(pending) >= SUPPORT_TREE_FROM:
-        candidates = np.sort(shapely.STRtree(pending).query(below))
-        # ``below`` teilen die Arbeiter. Ein Baum-Prädikat würde dessen
-        # vorbereiteten GEOS-Index nebenläufig erst vervollständigen. Deshalb
-        # nur die Hüllboxen im Baum, dann exakt mit den eigenen Säulen zuerst.
-        parts = np.asarray(pending, dtype=object)[candidates]
-        touching = candidates[shapely.intersects(parts, below)].tolist()
-    else:
-        parts = np.asarray(pending, dtype=object)
-        touching = np.nonzero(shapely.intersects(parts, below))[0].tolist()
-    if not touching:
-        return pending
-    hit = set(touching)
-    kept = [part for number, part in enumerate(pending) if number not in hit]
-    for number in touching:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        kept += _areas_of(pending[number].difference(below))
-    return kept
-
-
-def _above_material_shared(
-    pending: list[ShapelyPolygon],
-    below: ShapelyPolygon,
-    cancelled: CancelToken | None,
-    pool: Executor,
-    workers: int,
-) -> list[ShapelyPolygon]:
-    """:func:`_above_material` auf mehreren Arbeitern — dieselben Stücke in
-    derselben Folge (RM-266).
-
-    Jeder Arbeiter nimmt jedes so vielte Stück (``pending[first::shares]``),
-    fragt, ob es die Schicht darunter berührt, und schneidet die berührten.
-    Gestreut statt in Blöcken, weil die Differenzen sehr verschieden viel
-    kosten und schwere Stücke nebeneinander liegen. Beide Fragen bleiben
-    dieselben GEOS-Aufrufe wie einfädig, nur ohne Baum: Der fragt ebenfalls
-    nur Hüllboxen, und die prüft GEOS vor jedem Prädikat selbst. Zurück kommt
-    dieselbe Liste wie einfädig, Stück für Stück bitgleich.
-
-    Abgebrochen wird zwischen den Anteilen; einer ist höchstens ein Bruchteil
-    einer Schicht.
-    """
-    parts = np.asarray(pending, dtype=object)
-    shares = min(len(parts), workers)
-
-    def share(first: int) -> tuple[Any, Any]:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        own = parts[first::shares]
-        touching = shapely.intersects(own, below)
-        return touching, shapely.difference(own[touching], below)
-
-    touched = np.zeros(len(parts), dtype=bool)
-    rests = np.empty(len(parts), dtype=object)
-    for first, (touching, cut) in enumerate(pool.map(share, range(shares))):
-        numbers = np.arange(first, len(parts), shares)
-        touched[numbers] = touching
-        rests[numbers[touching]] = cut
-    if not touched.any():
-        return pending
-    kept = [part for part, hit in zip(pending, touched.tolist(), strict=True) if not hit]
-    for rest in rests[touched]:
-        kept += _areas_of(rest)
-    return kept
 
 
 def _same_layer(shape: ShapelyPolygon, previous: ShapelyPolygon) -> bool:
@@ -3221,77 +3058,38 @@ def _model_support(
     starting = sorted(starts, reverse=True)
     groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(layers) >= PARALLEL_FROM else 1
     member = {index: number % groups for number, index in enumerate(starting)}
-    # Je Schicht einmal gebaut, für alle Gruppen und die Kanalfrage danach.
-    # **Vorbereitet wird je Gruppe eine eigene Kopie**: GEOS vervollständigt
-    # den Index einer vorbereiteten Fläche erst bei der Abfrage, und geteilt
-    # zwischen Fäden ist das ein Wettlauf. Die Kopie kommt aus WKB; das kostet
-    # je Schicht Mikrosekunden, die Vorbereitung spart an der Waschschüssel
-    # 1,5 s — GEOS nutzt sie nur am ersten Argument, deshalb steht die Schicht
-    # vorn.
-    materials: dict[int, ShapelyPolygon] = {}
-    frozen: dict[int, bytes] = {}
+    # Material einmal je Schicht für alle Säulen und die unveränderte Kanalfrage.
+    materials: dict[int, tuple[ShapelyPolygon, manifold3d.CrossSection]] = {}
     building = threading.Lock()
 
-    def material_at(index: int) -> tuple[ShapelyPolygon, bytes]:
+    def material_at(index: int) -> tuple[ShapelyPolygon, manifold3d.CrossSection]:
         with building:
             if index not in materials:
-                materials[index] = _material(layers[index])
-                frozen[index] = shapely.to_wkb(materials[index])
-            return materials[index], frozen[index]
+                shape = _material(layers[index])
+                materials[index] = shape, _material_cross(shape)
+            return materials[index]
 
     def descend(group: int) -> dict[int, tuple[int, float]]:
-        pending: list[ShapelyPolygon] = []
-        owners: list[int] = []
+        pending: list[tuple[int, manifold3d.CrossSection]] = []
         landed: dict[int, tuple[int, float]] = {}
         for index in range(top, 0, -1):
             if member.get(index) == group:
-                for owner in starts[index]:
-                    pending.append(pieces[owner])
-                    owners.append(owner)
+                pending.extend((owner, _material_cross(pieces[owner])) for owner in starts[index])
             if not pending:
                 continue
-            shared, blob = material_at(index - 1)
-            if shared.is_empty:
+            _shared, below = material_at(index - 1)
+            if below.is_empty():
                 continue
-            below = shapely.from_wkb(blob)
-            shapely.prepare(below)
-            parts = np.asarray(pending, dtype=object)
-            if len(pending) >= SUPPORT_TREE_FROM:
-                # Sortiert: Der Baum liefert seine Treffer in seiner eigenen
-                # Folge, und die hängt an den übrigen Stücken der Gruppe. Die
-                # Flächen eines Stücks summieren sich so in derselben Folge,
-                # auf wie vielen Arbeitern auch immer (RM-187).
-                candidates = np.sort(shapely.STRtree(pending).query(below))
-                touching = candidates[shapely.intersects(below, parts[candidates])]
-            else:
-                touching = np.nonzero(shapely.intersects(below, parts))[0]
-            if not len(touching):
-                continue
-            hit = set(touching.tolist())
-            kept = [part for number, part in enumerate(pending) if number not in hit]
-            kept_owners = [owner for number, owner in enumerate(owners) if number not in hit]
-            # **In einem Aufruf je Schicht**, nicht je Stück: Ein vektorisierter
-            # GEOS-Aufruf gibt den Interpreter frei, und erst damit rechnen die
-            # Gruppen wirklich nebeneinander — Stück für Stück gerufen standen
-            # sie am Eiffelturm hintereinander an (7,8 s seriell, 6,0 s auf
-            # sechs Arbeitern).
-            chosen = parts[touching]
-            split, source = shapely.get_parts(shapely.difference(chosen, below), return_index=True)
-            flat = (shapely.get_type_id(split) == shapely.GeometryType.POLYGON) & ~shapely.is_empty(
-                split
-            )
-            split, source = split[flat], source[flat]
-            left = np.zeros(len(chosen))
-            np.add.at(left, source, shapely.area(split))
-            lost = shapely.area(chosen) - left
-            for position, number in enumerate(touching.tolist()):
-                if lost[position] > EPS_GEOM:
-                    owner = owners[number]
+            kept = []
+            for owner, column in pending:
+                remaining = column - below
+                lost = float(column.area() - remaining.area())
+                if lost > EPS_GEOM:
                     low, before = landed.get(owner, (index - 1, 0.0))
-                    landed[owner] = (low, before + float(lost[position]))
-            kept += split.tolist()
-            kept_owners += [owners[int(touching[position])] for position in source.tolist()]
-            pending, owners = kept, kept_owners
+                    landed[owner] = (low, before + lost)
+                if not remaining.is_empty():
+                    kept.append((owner, remaining))
+            pending = kept
         return landed
 
     if groups == 1:

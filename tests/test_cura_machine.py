@@ -434,7 +434,7 @@ def _cura_values(printer: str, material: str = "pla", **paths: object) -> dict[s
     profile = profiles.make_profile(printer, material)
     settings = print_settings.resolve(profile)
     for path, value in paths.items():
-        settings = print_settings.with_path(settings, path.replace("__", "."), value)
+        settings = print_settings.with_choice(settings, path.replace("__", "."), value)
     return handover.values_for(settings, profile, "cura")
 
 
@@ -446,8 +446,7 @@ def _cura_values(printer: str, material: str = "pla", **paths: object) -> dict[s
         ("creality-ender3-v3", 500.0),
         ("creality-k1-max", 1000.0),
         ("anycubic-kobra-2", 2000.0),
-        # Ohne Angabe des Herstellers die Vorgabe der Werksprofile.
-        ("generic-220", 500.0),
+        # Der SV06 nennt die Druckbeschleunigung, für die erste Schicht gilt die Vorgabe.
         ("sovol-sv06", 500.0),
     ],
 )
@@ -819,3 +818,310 @@ def test_the_se_and_ke_start_with_the_code_of_their_definition(
         "material_bed_temp_prepend": bed_prepend,
         "material_print_temp_prepend": "false",
     }
+
+
+def test_cura_does_not_receive_stage_acceleration_without_a_machine_value() -> None:
+    """Ein unbekannter Drucker bekommt keine 8000 mm/s² aus der Qualitätsstufe."""
+    profile = profiles.make_profile("generic-220", "pla")
+    values = handover.values_for(print_settings.resolve(profile), profile, "cura")
+
+    assert values.get("acceleration_enabled", "false") == "false"
+    assert "acceleration_print" not in values
+    assert "acceleration_wall_0" not in values
+    assert "acceleration_travel" not in values
+
+
+@pytest.mark.parametrize("choose", [print_settings.with_choice, print_settings.with_accepted])
+def test_cura_keeps_an_explicit_acceleration_without_a_table_value(choose) -> None:
+    """Eine bewusste Wahl oder ein übernommener Rat ist keine ungeprüfte Stufenvorgabe."""
+    profile = profiles.make_profile("generic-220", "pla")
+    settings = choose(print_settings.resolve(profile), "speed.acceleration", 300.0)
+    values = handover.values_for(settings, profile, "cura")
+
+    assert values["acceleration_enabled"] == "true"
+    assert float(values["acceleration_print"]) == pytest.approx(300.0)
+    assert float(values["acceleration_print_layer_0"]) <= 300.0
+
+
+def _with_motion_limits(engine: Path) -> None:
+    """Curas belegte Bauart: allgemeiner Vorgabewert, numerisches Hersteller-``value``."""
+    folder = engine.parent / "share" / "cura" / "resources" / "definitions"
+    base = folder / "fdmprinter.def.json"
+    document = json.loads(base.read_text(encoding="utf-8"))
+    document["settings"]["machine_settings"]["children"].update(
+        {
+            "machine_acceleration": {"default_value": 4000},
+            "machine_max_acceleration_x": {"default_value": 9000},
+            "machine_max_acceleration_y": {"default_value": 9000},
+            "machine_max_feedrate_x": {"default_value": 299792458000},
+        }
+    )
+    base.write_text(json.dumps(document), encoding="utf-8")
+    factory = folder / "creality_k1max.def.json"
+    document = json.loads(factory.read_text(encoding="utf-8"))
+    document["overrides"].update(
+        {
+            "machine_acceleration": {"value": 1000},
+            "machine_max_acceleration_x": {"value": 500},
+            "machine_max_acceleration_y": {"value": 600},
+            "machine_max_feedrate_x": {"value": 200},
+            "acceleration_travel": {"value": 400},
+        }
+    )
+    factory.write_text(json.dumps(document), encoding="utf-8")
+
+
+def test_cura_factory_motion_limits_reach_both_engine_levels(tmp_path: Path) -> None:
+    """Numerisches ``value`` ersetzt den allgemeinen Default auch ohne Nutzerinstanz."""
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    config = _written(engine, "creality-k1-max", tmp_path)
+    command = handover._command(
+        handover.SlicerSetup(engine, "cura"), [tmp_path / "part.stl"], config, tmp_path
+    )
+    extruder = command.index("-e0")
+
+    for key, expected in {
+        # Cura setzt diesen Wert vor dem Endcode erneut mit M204.
+        "machine_acceleration": "500",
+        "machine_max_acceleration_x": "500",
+        "machine_max_acceleration_y": "600",
+        "machine_max_feedrate_x": "200",
+    }.items():
+        assert config.written.get(key) == expected, key
+        assert f"{key}={expected}" in command[:extruder], key
+        assert f"{key}={expected}" in command[extruder:], key
+
+
+def test_cura_process_accelerations_stay_inside_the_factory_limits(tmp_path: Path) -> None:
+    """Auch die Blätter, die ``M204`` steuern, bleiben innerhalb der X-/Y-Grenzen."""
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    config = _written(engine, "creality-k1-max", tmp_path)
+
+    for key in (
+        "acceleration_print",
+        "acceleration_wall_0",
+        "acceleration_infill",
+        "acceleration_support",
+        "acceleration_print_layer_0",
+        "acceleration_travel_layer_0",
+        "raft_base_acceleration",
+    ):
+        assert 0 < float(config.written[key]) <= 500.0, key
+    assert float(config.written["acceleration_travel"]) == pytest.approx(400.0)
+
+
+def test_cura_part_acceleration_cannot_bypass_the_machine_limits(tmp_path: Path) -> None:
+    """Ein Außenwandwert je Netz überschreibt den Plattenwert erst hinter ``-l``."""
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    config = _written(engine, "creality-k1-max", tmp_path)
+    model = tmp_path / "part.stl"
+    model.write_bytes(b"solid part\nendsolid part\n")
+    handover.write_cura_meshes(model, [handover.CuraMesh(model, {"acceleration_wall_0": "1500"})])
+
+    command = handover._command(handover.SlicerSetup(engine, "cura"), [model], config, tmp_path)
+    object_arguments = command[command.index("-l") + 2 :]
+
+    assert "acceleration_wall_0=500" in object_arguments
+    assert "acceleration_wall_0=1500" not in object_arguments
+
+
+@pytest.mark.parametrize("choose", [print_settings.with_choice, print_settings.with_accepted])
+@pytest.mark.parametrize(
+    ("path", "key"),
+    [
+        ("speed.acceleration", "acceleration_print"),
+        ("speed.outer_wall_acceleration", "acceleration_wall_0"),
+    ],
+)
+def test_cura_reports_a_limited_explicit_acceleration(
+    tmp_path: Path, choose, path: str, key: str
+) -> None:
+    """Die bewusste Wahl bleibt sichtbar, auch wenn die Maschine weniger zulässt."""
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = choose(print_settings.resolve(profile), path, 2000.0)
+
+    config = handover.write_config(
+        settings, profile, handover.SlicerSetup(engine, "cura"), tmp_path
+    )
+
+    assert print_settings.read_path(settings, path) == pytest.approx(2000.0)
+    assert float(config.written[key]) == pytest.approx(500.0)
+    [finding] = [item for item in config.findings if item.values.get("setting") == path]
+    assert finding.code == "slicer.acceleration_limited"
+    assert finding.values["requested"] == pytest.approx(2000.0)
+    assert finding.values["actual"] == pytest.approx(500.0)
+    assert [action.id for action in finding.suggestions] == ["open_print_settings"]
+
+
+def test_cura_slice_report_retains_plate_and_part_acceleration_limits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die fertige Druckdatei meldet beide Kürzungen, obwohl Cura keine Sollwerte rückliest."""
+    from subprocess import CompletedProcess
+
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "speed.acceleration", 2000.0
+    )
+    model = tmp_path / "part.stl"
+    model.write_bytes(b"solid part\nendsolid part\n")
+    handover.write_cura_meshes(model, [handover.CuraMesh(model, {"acceleration_wall_0": "1500"})])
+
+    def sliced(command: list[str], *_args: object, **_kwargs: object):
+        assert "acceleration_print=500" in command
+        assert "acceleration_wall_0=500" in command[command.index("-l") + 2 :]
+        Path(command[command.index("-o") + 1]).write_text(
+            ";Generated with Cura_SteamEngine 5.13.0\nG90\nM82\nG1 Z0.2 F300\n"
+            "G1 X110 Y110 E0.1\nG1 X115 Y110 E0.2\n;TIME_ELAPSED:5\n",
+            encoding="utf-8",
+        )
+        return CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", sliced)
+    outcome = handover.slice_model(
+        model, settings, profile, handover.SlicerSetup(engine, "cura"), output_dir=tmp_path
+    )
+
+    limited = [item for item in outcome.findings if item.code == "slicer.acceleration_limited"]
+    assert {(item.values["setting"], item.values["requested"]) for item in limited} == {
+        ("speed.acceleration", 2000.0),
+        ("speed.outer_wall_acceleration", 1500.0),
+    }
+    [part] = [item for item in limited if item.values["setting"] == "speed.outer_wall_acceleration"]
+    assert part.values["file"] == "part.stl"
+    assert all(item.values["actual"] == pytest.approx(500.0) for item in limited)
+    assert all(item.suggestions[0].id == "open_print_settings" for item in limited)
+
+
+@pytest.mark.parametrize("for_window", [False, True])
+def test_cura_export_reports_limits_on_the_part_that_needs_the_accepted_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, for_window: bool
+) -> None:
+    """Auch der Exportbericht nennt den gekürzten Rat mit seiner Objektkennung."""
+    import trimesh
+
+    from app.core.export import slicer_profiles, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject, SettingAdvice
+
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    active = slicer_profiles.CuraActiveMachine("Werkstatt", definition)
+    monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _exe: active)
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    profile = replace(profile, printer=replace(profile.printer, outer_wall_acceleration=400.0))
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile), "speed.outer_wall_acceleration", 2000.0
+    )
+    mesh = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    objects = [SceneObject(id=identifier, name=identifier, mesh=mesh) for identifier in ("a", "b")]
+
+    def advice(entry, *_args, **_kwargs):
+        return (
+            [SettingAdvice("speed.outer_wall_acceleration", 2000.0, 400.0, "Teil braucht den Rat")]
+            if entry.id == "a"
+            else []
+        )
+
+    monkeypatch.setattr(writer, "part_advice", advice)
+    target, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="Teile",
+        profile=profile,
+        settings=settings,
+        flavour="cura",
+        setup=handover.SlicerSetup(engine, "cura"),
+        checked=[],
+        for_window=for_window,
+    )
+
+    limited = [item for item in findings if item.code == "slicer.acceleration_limited"]
+    [part] = [item for item in limited if item.object_id == "a"]
+    assert not any(item.object_id == "b" for item in limited)
+    assert part.values["requested"] == pytest.approx(2000.0)
+    assert part.values["actual"] == pytest.approx(500.0)
+    assert part.suggestions[0].id == "open_print_settings"
+    if for_window:
+        import zipfile
+        from xml.etree import ElementTree as ET
+
+        with zipfile.ZipFile(target) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        written = [
+            node.text for node in root.iter() if node.get("name") == "cura:acceleration_wall_0"
+        ]
+        assert "500" in written and "2000" not in written
+
+
+@pytest.mark.parametrize("native", ["1000", "1e3", " 1000.0 "])
+def test_cura_numeric_text_is_a_limit_but_an_expression_is_not(tmp_path: Path, native: str) -> None:
+    """Strateo3D IDEX420 speichert seine 1000 mm/s² als Text im Feld ``value``."""
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    document = json.loads(definition.read_text(encoding="utf-8"))
+    for key in ("machine_acceleration", "machine_max_acceleration_x", "machine_max_acceleration_y"):
+        document["overrides"][key] = {"value": native}
+    document["overrides"]["machine_max_feedrate_x"] = {"value": "100 + 100"}
+    definition.write_text(json.dumps(document), encoding="utf-8")
+
+    config = _written(engine, "creality-k1-max", tmp_path)
+
+    for key in ("machine_acceleration", "machine_max_acceleration_x", "machine_max_acceleration_y"):
+        assert float(config.written[key]) == pytest.approx(1000.0)
+    assert "machine_max_feedrate_x" not in config.written
+
+
+def test_cura_window_profile_and_parts_keep_limits_and_report_the_original_choice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die importierbaren Container und Objektwerte halten dieselbe Grenze wie die Konsole."""
+    import configparser
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_motion_limits(engine)
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    active = slicer_profiles.CuraActiveMachine("Werkstatt", definition)
+    monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _exe: active)
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "speed.acceleration", 2000.0
+    )
+    model = tmp_path / "part.3mf"
+    findings = []
+
+    said = handover.cura_profile_beside(
+        model, settings, profile, handover.SlicerSetup(engine, "cura"), findings=findings
+    )
+
+    assert said is not None
+    with zipfile.ZipFile(model.with_suffix(".curaprofile")) as archive:
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read_string(archive.read("solidon").decode("utf-8"))
+    assert float(parser["values"]["acceleration_print"]) == pytest.approx(500.0)
+    assert parser["values"]["acceleration_enabled"] == "True"
+    [limited] = [item for item in findings if item.values.get("setting") == "speed.acceleration"]
+    assert limited.values["requested"] == pytest.approx(2000.0)
+    assert limited.values["actual"] == pytest.approx(500.0)
+    part = handover.for_the_cura_window(
+        {"acceleration_wall_0": "1500"},
+        machine=handover.cura_window_motion(handover.SlicerSetup(engine, "cura"), profile),
+    )
+    assert part["acceleration_wall_0"] == "500"

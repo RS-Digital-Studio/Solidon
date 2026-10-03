@@ -3150,6 +3150,33 @@ def test_prusa_filaments_fit_by_condition_and_the_models_suggestion_wins(
     assert petg is not None and petg.name == "Prusament PETG @MK4S HF0.4"
 
 
+@pytest.mark.parametrize("native,requested", [("FLEX", "TPU"), ("TPU", "FLEX")])
+def test_flexible_filament_names_select_the_same_material(
+    tmp_path: Path, native: str, requested: str
+) -> None:
+    """Prusa nennt TPU FLEX; die Vorwahl darf deshalb nicht leer bleiben."""
+    root = tmp_path / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[vendor]\nname = Prusa Research\n\n"
+        "[printer:Original Prusa MINI]\nprinter_model = MINI\nnozzle_diameter = 0.4\n\n"
+        "[filament:Generic FLEX]\n"
+        f"filament_type = {native}\nfilament_vendor = Generic\n"
+        'compatible_printers_condition = printer_model=="MINI"\n\n'
+        "[filament:Generic PETG]\nfilament_type = PETG\nfilament_vendor = Generic\n",
+        encoding="utf-8",
+    )
+    executable = tmp_path / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    found = sp.find_profiles(executable, "prusa", ("machine", "filament"))
+    machine = next(entry for entry in found if entry.kind == "machine")
+
+    chosen = sp.match_filament(found, machine, requested)
+
+    assert chosen is not None and chosen.name == "Generic FLEX"
+    assert sp.match_filament(found, machine, "PET") is None, "PET bleibt von PETG getrennt"
+
+
 def test_prusa_takes_generic_before_a_foreign_brand_with_a_shorter_name(
     prusa_mk4s: Path,
 ) -> None:

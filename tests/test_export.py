@@ -2749,6 +2749,35 @@ def test_superslicer_gets_no_scarf_seam_it_cannot_read(tmp_path: Path, profile: 
     assert _plate_value(prusa, "prusa", "scarf_seam_placement") == "contours"
 
 
+@pytest.mark.parametrize("accepted", [False, True])
+def test_superslicer_gets_grid_instead_of_an_unsupported_tree(
+    tmp_path: Path, profile: Profile, accepted: bool
+) -> None:
+    """RM-480: Auch ein übernommener Baumvorschlag erreicht Platte und Teil als
+    Kreuzgitter; der Export sagt dem Kunden, dass er die Stützart ersetzt."""
+    choose = print_settings.with_accepted if accepted else print_settings.with_choice
+    settings = choose(print_settings.resolve(profile), "support.style", "tree")
+    settings = print_settings.with_choice(settings, "shell.seam_position", "nearest")
+    setup = handover.SlicerSetup(Path("superslicer_console.exe"), "prusa")
+    written, findings = write_assembly(
+        [scene_object()],
+        tmp_path,
+        project_name="Stützen",
+        profile=profile,
+        settings=settings,
+        flavour="prusa",
+        setup=setup,
+    )
+    with zipfile.ZipFile(written) as archive:
+        plate = archive.read("Metadata/Slic3r_PE.config").decode("utf-8")
+        parts = archive.read("Metadata/Slic3r_PE_model.config").decode("utf-8")
+    assert "organic" not in plate + parts
+    assert "rectilinear-grid" in plate + parts
+    assert "seam_position = cost" in plate
+    assert any(item.code == "slicer.choice_substituted" for item in findings)
+    assert settings.support.style == "tree", "Die gespeicherte Wahl bleibt erhalten."
+
+
 def test_superslicer_reads_the_fill_pattern_of_its_own_bundle_under_todays_name() -> None:
     """RM-459: ``external_fill_pattern`` steht in SuperSlicers eigenem Bündel,
     sein 3MF-Leser kennt nur ``top_fill_pattern`` und ``bottom_fill_pattern``.
@@ -3405,7 +3434,18 @@ def _cura_install(tmp_path: Path) -> Path:
     resources = install / "share" / "cura" / "resources"
     (resources / "definitions").mkdir(parents=True)
     (resources / "definitions" / "fdmprinter.def.json").write_text(
-        json.dumps({"version": 2, "name": "FDM Printer", "metadata": {"setting_version": 27}}),
+        json.dumps(
+            {
+                "version": 2,
+                "name": "FDM Printer",
+                "metadata": {"setting_version": 27},
+                "settings": {"machine_nozzle_size": {"default_value": 0.4}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (resources / "definitions" / "fdmextruder.def.json").write_text(
+        json.dumps({"version": 2, "name": "Extruder", "inherits": "fdmprinter"}),
         encoding="utf-8",
     )
     (resources / "quality").mkdir()
@@ -3455,8 +3495,8 @@ def _cura_active(
     (root / "machine_instances" / f"{name.replace(' ', '+')}.global.cfg").write_text(
         f"[general]\nversion = 5\nname = {name}\nid = {name}\n\n"
         "[metadata]\nsetting_version = 27\ntype = machine\n\n"
-        f"[containers]\n0 = {name}_user\n1 = empty_quality_changes\n2 = empty_intent\n"
-        f"3 = empty_quality\n4 = empty_material\n5 = empty_variant\n6 = {name}_settings\n"
+        "[containers]\n0 = empty_user_changes\n1 = empty_quality_changes\n2 = empty_intent\n"
+        "3 = empty_quality\n4 = empty_material\n5 = empty_variant\n6 = empty_definition_changes\n"
         f"7 = {definition}\n",
         encoding="utf-8",
     )
@@ -4505,6 +4545,13 @@ def test_cura_names_the_active_printer_only_when_it_is_a_different_one(
         changes.mkdir()
         (changes / "Creality+K1+Max_settings.inst.cfg").write_text(
             f"[general]\nversion = 4\n\n[values]\nmachine_width = {cura_bed_width}\n",
+            encoding="utf-8",
+        )
+        stack = changes.parent / "machine_instances/Creality+K1+Max.global.cfg"
+        stack.write_text(
+            stack.read_text(encoding="utf-8").replace(
+                "6 = empty_definition_changes", "6 = Creality K1 Max_settings"
+            ),
             encoding="utf-8",
         )
     profile = profiles.make_profile(solidon_printer, "pla")

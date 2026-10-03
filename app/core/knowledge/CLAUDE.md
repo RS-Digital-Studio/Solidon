@@ -32,6 +32,11 @@ und ist kein Testlauf.
 
 ## Druckproben gelten für ihren Prozess
 
+`profiles.material_id_for_type` ordnet native Materialarten über die gemeinsame
+Übersetzung aus `export.slicer_keys` zu. Prusas `FLEX` und `TPU` meinen
+dieselbe Art; `PET` bleibt von `PETG` getrennt. Eine unbekannte oder mehrdeutige
+Art bleibt ohne Zuordnung.
+
 - `calibration.apply(..., process=...)` speichert Mindestwand und
   Überhanggrenze mit Druckerkennung, Düse, Schichthöhe und Linienbreite;
   `profiles.for_process` nimmt das Druckraster aus den Projekteinstellungen.

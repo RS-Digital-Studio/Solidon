@@ -147,7 +147,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 37 (RM-485): Gerichtete Schichtschnitte halten eingeschlossene Luft frei.
 #:   Ausrichtungen und Auto-Split-Ergebnisse aus der alten Materialfläche
 #:   müssen neu berechnet werden.
-CACHE_FORMAT_VERSION: Final = 37
+#: - 38 (RM-486): Clipper-Säulen ersetzen GEOS-Differenzen. Gespeicherte
+#:   Ausrichtungen rechnen mit den neuen Stützkennzahlen erneut.
+CACHE_FORMAT_VERSION: Final = 38
 
 
 @dataclass(frozen=True, slots=True)

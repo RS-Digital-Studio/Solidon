@@ -105,9 +105,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
-| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 9 von 16. G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
-| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 10 von 16. G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
-| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
 | [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
@@ -115,12 +112,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
-| [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 4 von 16. G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
-| [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 7 von 16. G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
-| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
+| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Offen nach zwei Messansätzen: Beschleunigungsgrenzen, Zahlenliterale und Berichte korrigiert; SV06/Pilz noch 37,86 % Zeitabweichung, bei gleichen Prozesswerten 21,62 %. Nächster Schritt: Herstellergrenzen und Zeitanteile klären |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
-| [RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung](#rm-486) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: schwebende Säulenkontur als `CrossSection` führen; ersetzt den Fix von RM-405 b |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
@@ -154,6 +148,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
+| [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Restliste gegen 187b5bbd3 abgeglichen (03.10.): die meisten Korrekturen stehen im Code; offen sind die Fensterabnahme des späteren Stands und Hinweise bei Spulenprüfung und Werte-Mitgabe |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -3093,59 +3088,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
   Review 02.10.: bestätigt über die Oberfläche — mit X-Symmetrie wirkt ein Zug nicht, wenn nur seine Spiegelkopie die eben verformte Fläche greift, der Bericht nennt ihn verfehlt (gleich wie in v0.5.1). Beleg Fall C in `F:\solidon-review-reports\sonden\v8k_rm442_ui.py`.
 
-<a id="rm-460"></a>
-
-- [ ] **RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek.
-  - Bambu Studio 02.08.02.61 (alle 12 Profile): `chamber_temperature` fehlt im Konfigurationsblock;
-    Bambu führt `chamber_temperatures` (bleibt 0).
-  - ElegooSlicer 1.5.3.5 (alle mit Elegoo-/Bambu-Filamentprofil): `0` — die Filamentbasis bringt den
-    Altschlüssel `chamber_temperatures: ["0"]` mit und überschreibt Solidons Wert.
-  - OrcaSlicer 2.4.2, Creality Print 7.3: Wert steht im Block, aber `activate_chamber_temp_control
-    = 0` → kein `M141`/`M191` im G-Code. In keinem Lauf ein Kammerbefehl.
-  **Stellen:** `app/core/export/slicer_keys.py:411`, Rücklesung `slicer_profiles.py:3593`, `:3780`,
-  `manufacturer.py:924`.
-  **Fix (allgemein):** Wert an den Schlüssel, den dieses Programm liest, mit dem Schalter, ohne den er
-  nicht wirkt (wie `_positive_switch`); Altschlüssel der Basis mitsetzen oder entfernen; ohne
-  Kammerregelung (`support_chamber_temp_control = 0`) das Feld im Druckdialog als nicht wirksam
-  ausweisen.
-  **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
-  Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
-  Regression 02.10.2026: nein — v0.5.1 und v0.5.0 gleich (CC2 35 → `0`, P1S Schlüssel fehlt, kein `M141`/`M191`).
-
-<a id="rm-461"></a>
-
-- [ ] **RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek. `sparse_infill_pattern`
-  `rectilinear` landet in Bambu Studio 02.08.02.61 als `cubic` (6 von 6 Läufen) und in Creality
-  Print 7.3 als `grid` (7 von 7); beide führen „Rectilinear“ unter `zig-zag`. Elegoo und Orca
-  richtig. Solidons Gegenprobe meldet `slicer.setting_ignored`, gedruckt wird trotzdem das falsche
-  Muster.
-  **Stellen:** `app/core/export/slicer_keys.py:335` (`"lines": "rectilinear"`), `:403` (eine Tabelle für
-  die ganze Orca-Familie).
-  **Fix (allgemein):** Aufzählungswerte je Programm übersetzen; jede Aufzählung einmal je Programm
-  gegen dessen Profilbestand prüfen.
-  **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
-  Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
-  Regression 02.10.2026: nein — Wert und Tabelle in v0.5.0, v0.5.1 und `09d8e9485` gleich (`slicer_keys.py:335`).
-
-<a id="rm-462"></a>
-
-- [ ] **RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`. `handover.verify_settings` überspringt jeden
-  geschriebenen Schlüssel, der im Konfigurationsblock fehlt (`app/core/export/handover.py:5581`).
-  Orca-Familie und PrusaSlicer schreiben ihre Konfiguration aber vollständig (631 bzw. 358
-  Schlüssel) — was fehlt, hat das Programm verworfen: `chamber_temperature` in Bambu Studio
-  (RM-460) ohne Meldung; in SuperSlicer `fan_always_on`/`min_fan_speed`. `_RECOMPUTED`
-  (`:5533–5547`) nimmt `brim_type`, `wall_sequence`, `support_type` ganz aus der Gegenprobe — genau
-  die Aufzählungen, bei denen ein unbekannter Wert still auf die Vorgabe fällt (RM-461).
-  **Fix:** Für `orca` und `prusa` einen fehlenden geschriebenen Schlüssel als „vom Slicer nicht
-  übernommen“ melden (Ausnahmeliste je Programm für belegte Umbenennungen); die drei Aufzählungen
-  wieder vergleichen.
-  **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
-  Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
-  Regression 02.10.2026: nein — Code in v0.5.0, v0.5.1 und `09d8e9485` gleich.
-
 <a id="rm-465"></a>
 
 - [ ] **RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an.**
@@ -3277,43 +3219,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Lauf, kein Slicerstart. Bauplan §29, Regel 17.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
 
-<a id="rm-480"></a>
-
-- [ ] **RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“.**
-  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` und `generic-220`.
-  `support_material_style = organic` (Baumstütze) lässt SuperSlicer mit `0xC0000005` abstürzen —
-  isoliert gemessen, `snug` und `grid` rechnen; 3 der 108 Abstürze der Codex-Matrix (übernommener
-  Baumstützen-Vorschlag). `seam_position = nearest` wird dort zu `cost`, Solidon meldet
-  `slicer.setting_ignored`. Ursache wie RM-459: SuperSlicer läuft als Familie `prusa` mit
-  PrusaSlicers Wertebestand.
-  **Stellen:** `app/core/export/slicer_keys.py:233` (`_PRUSA_SUPPORT_STYLE`), `:244`
-  (`seam_position`), `:294`, `:915`, `:965–987` (`NOT_TAKEN_BY` nur je Familie).
-  **Fix (allgemein):** Aufzählungswerte je Programm aus dem gemessenen Bestand der installierten
-  Version (`discover.program_mark`); Baumstütze für SuperSlicer nicht anbieten, ein übernommener
-  Vorschlag wird „Gitter“ mit Hinweis; `nearest` → `cost` ohne Warnung.
-  **Abnahme:** Wächter jede Aufzählungszeile der Prusa-Tabelle gegen den Bestand jedes
-  erkannten Programms; Pilz, Würfel und ein Korpusmodell mit Baumstütze an SuperSlicer →
-  Druckdatei. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-4, CP-9), `gcode\rest\`.
-
-<a id="rm-481"></a>
-
-- [ ] **RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund.**
-  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, SuperSlicer 2.5.59.13, alle
-  Bündeldrucker (`prusa-mk4s`, `prusa-mini`, `prusa-xl`, `sovol-sv06`). Solidon schreibt
-  `filament_type = TPU`, die Bündel führen Flex als `FLEX`: `filament_settings_id` bleibt leer,
-  kein Befund. Folge im G-Code des MK4S: Vermessen bei 170 statt 210 °C, Einzug `E-2` statt
-  `E-4`, kein Startcode des Herstellerfilaments. Keine Regression.
-  **Stellen:** `app/core/export/slicer_keys.py:841–846` (`FILAMENT_TYPES`),
-  `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
-  `app/ui/print_settings_dialog.py:5605–5625`, `app/core/export/handover.py:2357–2382`.
-  **Fix (allgemein):** Materialart je Familie an einer Stelle in Lese- und Schreibrichtung
-  übersetzen; fehlt ein Herstellerfilament, Befund mit Herkunft „Solidon-Tabelle statt
-  Slicerprofil“ (Regel 14).
-  **Abnahme:** je erkanntem Drucker und Material (PLA, PETG, ABS, ASA, TPU) eine nicht leere
-  Vorwahl, an mindestens drei Bündeldruckern gemessen. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-6), `gcode\rest\`.
-
 <a id="rm-482"></a>
 
 - [ ] **RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
@@ -3332,6 +3237,46 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
   Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
+
+  **Stand 03.10.2026:** Der allgemeine Beschleunigungsfehler ist behoben:
+  Ohne belegten Maschinenwert oder bewusste Auswahl aktiviert Solidon keine
+  Stufenbeschleunigung. Numerische Werte der vollständigen Cura-Definitionskette,
+  einschließlich endlicher Zahlenliterale als Text, erreichen Konsole und Fenster.
+  Platten-, Objekt- und Endcodebeschleunigungen werden an den Achsgrenzen begrenzt.
+  Eigene oder übernommene Werte oberhalb dieser Grenze erzeugen einen Befund mit
+  angefordertem und tatsächlichem Wert samt Rückweg in den Druckdialog; die
+  Gegenprobe behält den tatsächlich geschriebenen Wert. Ein unvollständiger
+  Benutzerstapel fällt nicht auf Werkswerte zurück.
+  SV06 erhält Druck/Außenwand 1000 mm/s² aus dem belegten Herstellerprozess;
+  Curas Achsgrenze 500 bleibt wirksam. `printers.toml` gehört nicht zu den
+  gemeinsamen Geometrieeingängen des Bereichsnachweises; kein Bauteilmaß geändert.
+  **Messung:** 48 erfolgreiche echte Schnitte, drei Drucker × Würfel/Pilz ×
+  Cura 5.13.0/Prusa 2.9.6 × vier Stände. Vorher bei allen Cura-Fällen M204 S8000;
+  nachher SV06 S/P/T höchstens 500, generic-220 und erkannter Ender-3 ohne
+  von Solidon aktivierte M204-Steuerung. Zusätzliche echte eigene 2000/1500-Wahl:
+  zwei passende Begrenzungsbefunde auf 500, G-Code ebenfalls höchstens 500.
+  Standardweg Cura/Prusa, Würfel/Pilz in Sekunden: SV06 1547,11/1744 und
+  2828,85/2052 (11,29/37,86 %); generic-220 1073,52/1080 und 2230,90/2253
+  (0,60/0,98 %); Ender-3 1341,62/2336 und 2487,74/2763 (42,57/9,96 %).
+  Zweiter Ansatz mit denselben ausdrücklich gewählten Prozesswerten:
+  SV06 11,38/21,62 %, generic-220 0,60/0,98 %, Ender-3 5,19/1,50 %.
+  **Abnahme bleibt offen:** Beide Ansätze verfehlen am SV06-Pilz die verbindlichen
+  15 %. Die Herstellerdaten widersprechen sich (Cura X/Y 500, Prusa 1000).
+  Nächster Schritt: gültige Herstellergrenzen klären und den verbleibenden
+  Zeitanteil aus Geschwindigkeit, Kühlung, Beschleunigung und Bahnführung messen.
+  Keine Kalibrierzahl verdeckt die Abweichung.
+  **Prüfungen:** zuerst vier rote Kernfälle, danach 62 grün; Anschlussreview
+  zusätzlich sechs rote Berichts- und vier rote Zahlen-/Fensterdateifälle.
+  Abschließend 435 Kernfälle und 682 Wächter grün, Ruff/Format/mypy grün.
+  Betroffener Lauf mit `tools/affected_tests.py --run`: 1401 bestanden,
+  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Gemeinsames Entwicklungstor
+  auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0; Ruff, Format
+  und mypy ebenfalls grün. Fenster, Renderer und Leistung ausgeschlossen.
+  Belege: `F:\solidon-review-reports\B-rm482\bericht.md`, `after-final`,
+  `after-matched`, `review-choice-2`, `native-numeric-text.json`.
+  Kundensichtbar und seit `f934a42219` in v0.5.1: Changelog in sechs Sprachen
+  beschreibt ausschließlich die korrigierte Begrenzung. Commit: `c0e7eab7d`
+  (Cura berücksichtigt die belegten Beschleunigungsgrenzen des Druckers).
 
 <a id="rm-483"></a>
 
@@ -3365,28 +3310,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
   ohne leere Schicht. Bauplan §29, Regel 14.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
-
-<a id="rm-486"></a>
-
-- [ ] **RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung.**
-  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_support_volume`/`_above_material`
-  vereinigen und ziehen die schwebende Säulenkontur Schicht für Schicht mit GEOS ab; über
-  Hohlräumen wächst sie auf Hunderttausende Punkte. Gemessen (F0FF, je zweimal):
-  `aushoehlen-und-teilen.p3d` 37,4–43,3 s mit GEOS, 0,062–0,068 s mit Clipper2, Stützraum
-  gleich auf 1,5e-12; CC2-Box und Screen-Cover gleich bis 2,4e-10, dort 0,01–0,17 s langsamer.
-  RM-405 b maß mit Vereinfachung 0,46 s und braucht dafür eine Toleranz; Clipper2 braucht
-  keine. Für RM-201: Clipper2 reist schon in manifold3d mit (BSL-1.0 in `licences.toml`), für
-  die Öffnung mit Gehrung ist es aber 2–7-mal langsamer als GEOS — dort bleibt die eigene
-  native Öffnung der Weg.
-  **Stellen:** `app/core/slice/analysis.py:481–645`, gleiche Bauart `:2991`,
-  `app/core/slice/findings.py:257`.
-  **Fix (allgemein):** Säulenkontur als `CrossSection` (Überhang `+`, Schicht darunter `-`,
-  Fläche über `area()`), Umwandlung einmal je Schicht, gerichtete Ringe aus RM-485
-  wiederverwenden; GEOS bleibt für die Öffnung.
-  **Abnahme:** `aushoehlen-und-teilen.p3d`, CC2-Box, Screen-Cover: Stützraum gleich auf 1e-9
-  relativ, Aushöhlbeispiel unter 0,5 s für `slice_body(detail="support")`, die einfachen
-  Modelle höchstens 0,2 s schlechter; neuer Weg in `test_platform_identity`. Bauplan §31.
-  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
 
 <a id="rm-496"></a>
 
@@ -4568,6 +4491,62 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: Schlüsselloch per Klick 10 mm unter der Oberkante → Lage stimmt, liegt ganz
   in der Fläche, nach einer Maßänderung der Fläche bleibt der Kantenabstand. Bauplan §2.6, §24.3.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Freie Lage für alle Bausteine an einer Fläche (Schlüsselloch, Einpressbuchse, Mutternfalle, Schraubloch, Wandhalter …) auf ebenen und einfach gekrümmten Flächen, Kantenabstände in Flächenkoordinaten. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 25 Teile mit Befestigungen (Wandhalterungen, Lochwand, Filamenthalter M6, Screen-Cover). Abnahme an mindestens drei unterschiedlichen Bausteinen und Modellen.
+
+<a id="rm-502"></a>
+
+- [ ] **RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären.**
+  Die Restliste der Durchsicht vom 29.09.2026 (Commits `4d955a9e7`, `d80e1ce8e`, `e969f88ce`,
+  `42253ae03`, `72281a33e`) wurde am 03.10. gegen Code und Historie von `187b5bbd3` geprüft.
+  Ihre damaligen Fehler sind keine Aussage über den heutigen Stand. Die folgenden Stellen,
+  Commits und Prüfwege ersetzen die Abhängigkeit von der örtlichen Sicherung.
+  **Im Code bereits umgesetzt:**
+  - **Einstellungen und Ersteinrichtung:** `88bb41ed8`, `c59ed62ca`, `97369c2f1`, `93018dd56`
+    und `3fcd402a9` berücksichtigen verborgene Formulare und nachgereichten Inhalt über
+    `style.expanded_width` und `ContentHeight`. Der alte Breitensprung 547 → 573 sowie die
+    Querrollwerte 382/418 sind historische Befunde. RM-342 D-N5 ist im Archiv, ebenso die
+    Inhaltsangabe eingeklappter Einstellungen unter RM-491.
+  - **Druckeinstellungen:** `print_settings.GROUPS` führt Filament vor Temperaturen und
+    Geschwindigkeit; `_update_inactive_setting_rows` blendet ausgeschaltete Stütz- und
+    Haftungsdetails aus. `_build_head` hält Düsenstatus und Ablehnungen am Düsenfeld. Die Mitgabe
+    steht bei den Übergabeknöpfen (`_build_state`); ihr verbliebener Fehlerhinweis steht unten.
+  - **Neues Filament und Slicerfilamente:** `ba8c08b14` gleicht die Formulare über `align_forms`
+    an und ersetzt den doppelten Datumstext durch eine benannte Löschtaste. Der Leertext in
+    `filament_picker.SlicerFilamentDialog._refill` unterscheidet fehlenden Bestand vom Filter.
+    `tests/test_filament_picker.py::test_spool_form_columns_align_and_unknown_dates_have_one_label`
+    sichert die Spalten und Datumsfelder; die Lage der Prüfzeile bleibt gesondert zu klären.
+  - **Chat, ComfyUI, Lager und Erststart:** Seit `ba8c08b14` enthält
+    `dialogs.KeyDialog._cloud_model_section` Schlüsselzustand und Löschen; ComfyUIs Ordnerwahl
+    und Eingabe stoßen `_refresh_folder_state` bzw. `_folder_edited` an. Die Warnschwelle steht
+    außerhalb der Lagerklappe, `reverse_hint` direkt unter der Rücknahme. Der Namenshinweis
+    steht unter `FirstRunDialog.printer_name`. Befehlspalette und Ausdrucksdialog wurden in
+    derselben Dialogreihe nachgezogen (`tests/test_dialog_layout_regressions.py`).
+  - **Raster:** `ba8c08b14`, `a5e698c78` und `9b84722ad` setzen Abstände aus `style.py` an den
+    bearbeiteten Formularen und Knopfleisten. Die alten Zahlen 6/11 belegen keinen verbliebenen
+    Fehler an diesen Stellen; Abweichungen erst am aktuellen Fenster benennen.
+  **Offen:**
+  - **Fensterabnahme des späteren Stands:** Der nachgelesene
+    [CI-Lauf 37086153737](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37086153737)
+    am Stand `4c172d8ee` meldet im Windows-Fensterjob für
+    `tests/test_first_run_setup.py::test_custom_printer_natural_width_and_manual_height_survive_toggling`
+    `[fdm-fr]` und `[resin-fr]` jeweils `assert 42 == 0`; beide italienischen Fälle bestehen.
+    Dieser Lauf enthält `93018dd56` noch nicht. Die spätere Rechnung in sechs Sprachen und
+    FDM/Resin beim Release auf allen Plattformen abnehmen; auf ausreichend breitem Bildschirm
+    kein Querrollen, auf schmalem höchstens der abgeschnittene Teil der natürlichen Breite.
+    Die übrigen bearbeiteten Dialoge mit ihren vorhandenen Fensterfällen und Bildern abnehmen.
+    Paketfreigabe und Laufzeitwechsel bleiben unter RM-468.
+  - **Prüfzeile der Spule:** `filament_picker.NewFilamentDialog` setzt `validation` weiter im
+    äußeren Layout über die Knöpfe; der oben genannte Test verlangt genau diesen festen Ort.
+    Den alten Wunsch nach Feldnähe am gezeigten Dialog mit ungültigem Datum nachstellen und
+    gegen die Erreichbarkeit bei kleiner Höhe entscheiden. Einen feststehenden Fehlerhinweis
+    nicht allein wegen des alten Listenwortlauts in den Rollbereich verschieben.
+  - **Hinweis zur Mitgabe:** `PrintSettingsDialog._share_toggled` schreibt einen Speicherfehler
+    noch in `self.state`. Bei fehlenden Schreibrechten die Zuordnung zu „Werte mitgeben“ im
+    gezeigten Dialog prüfen und den Hinweis, falls nötig, direkt am Schalter platzieren.
+  **Abnahme:** je verbliebenem Fall ein nachvollziehbarer Prüfweg und beim Release ein Bild am
+  echten Fenster; die bestehenden Fälle in `test_first_run_setup.py`,
+  `test_dialog_layout_regressions.py`, `test_print_settings_ui.py`, `test_filament_picker.py`,
+  `test_filament_inventory_ui.py`, `test_chat_ui.py` und `test_generate_ui.py` grün. Diese
+  Registerpflege führt keine Fensterprüfung aus und behauptet keine neue Abnahme. Bauplan §2, §2.7.
 
 ## KI und Generatoren
 

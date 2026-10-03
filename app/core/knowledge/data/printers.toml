@@ -508,6 +508,11 @@ speed_inner_wall = 40.0
 speed_infill = 60.0
 speed_top_surface = 30.0
 speed_bridge = 25.0
+# Cura 5.13: sovol_base_planetary.machine_acceleration; PrusaSlicer 2.9.6:
+# Sovol.ini, Standardprozess default_acceleration. Curas Achsgrenzen gelten zusätzlich.
+acceleration = 1000.0
+# Cura: acceleration_wall_0 → acceleration_wall → acceleration_print → machine_acceleration.
+outer_wall_acceleration = 1000.0
 overhang_limit = 50.0
 first_layer_line_factor = 1.05
 overhang_speed_factors = [80, 60, 40]

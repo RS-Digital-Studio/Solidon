@@ -7454,11 +7454,6 @@
   "„{text}“ · Startwert {seed}": "«{text}» · graine {seed}",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "« Ouvrir sur la face » ne vaut que sans ouvertures choisies. Inscrivez la face sous « Ouvertures » et videz ce champ.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abrégé. Le rapport complet se trouve dans le dossier enregistré sous « bericht.txt » — merci de le joindre.",
-  "Einfügen beenden und Modell erzeugen": "Terminer l'insertion et générer un modèle",
-  "Einfügen beenden und übernehmen": "Terminer l'insertion et appliquer",
-  "Größe ändern": "Modifier la taille",
-  "Reliefhöhe ändern": "Modifier la hauteur du relief",
-  "Zellgröße ändern": "Modifier la taille de cellule",
   "{title} {number}": "{title} {number}",
   "{name} ändern": "Modifier {name}",
   "Einheit von {name}": "Unité de {name}",
@@ -7493,5 +7488,11 @@
   "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Parois, remplissage, températures, supports, vitesse et plus",
   "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Imprimante, profil de base, filament et plateau d'impression dans le slicer",
   "Weitere Beispielprojekte": "Autres projets d'exemple",
-  "Text und Anhänge vor dem Senden ansehen": "Voir le texte et les pièces jointes avant l'envoi"
+  "Text und Anhänge vor dem Senden ansehen": "Voir le texte et les pièces jointes avant l'envoi",
+  "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer ne gère pas les supports arborescents et utilise des supports en grille.",
+  "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "Aucun profil du slicer n'est choisi pour ce matériau. Les valeurs proviennent du tableau de Solidon ; choisissez au besoin un profil de filament dans la fenêtre d'impression.",
+  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Pour Cura, l'accélération est limitée au maximum de l'imprimante. Vérifiez la valeur dans la fenêtre d'impression.",
+  "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. Die Kammertemperatur bleibt ohne Wirkung.": "Le profil d'imprimante choisi ne prévoit pas de chauffage régulé de la chambre. Le réglage de température de la chambre n'a aucun effet.",
+  "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. Wählen Sie im Druckdialog ein passendes Maschinenprofil.": "Ce profil d'imprimante ne confirme pas la présence d'un chauffage régulé de la chambre. Choisissez un profil de machine adapté dans la fenêtre d'impression.",
+  "Kammertemperatur": "Température de la chambre"
 }

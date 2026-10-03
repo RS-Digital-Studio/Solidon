@@ -492,6 +492,22 @@ def foundation_findings(
         return []
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     findings = manufacturer.findings(foundation)
+    if setup.flavour == "orca":
+        chamber = 0 if slots else settings.temperature.chamber
+        for slot in slots:
+            resolved = _resolve_slot(settings, profile, slot, setup, foundation=foundation)
+            chamber = max(chamber, resolved.settings.temperature.chamber)
+        reason = manufacturer.chamber_limitation(foundation)
+        if chamber > 0 and reason is not None:
+            findings.append(
+                Finding(
+                    code="slicer.chamber_unavailable",
+                    severity="warning",
+                    message=reason,
+                    values={"setting": _("Kammertemperatur"), "value": f"{chamber} °C"},
+                    suggestions=(OPEN_PRINT_SETTINGS,),
+                )
+            )
     if setup.flavour != "orca" or not foundation.has_profile:
         return findings
     for slot in slots:
@@ -785,6 +801,7 @@ def as_mapping(
     paths: frozenset[str] | None = None,
     *,
     native_adhesion_kinds: frozenset[str] = frozenset(),
+    program: str = "",
 ) -> dict[str, str]:
     """Die Einstellungen in der Sprache dieses Slicers (§29).
 
@@ -803,8 +820,13 @@ def as_mapping(
     heißt alle — dort, wo kein Herstellerprofil darunter liegt. Was ohne
     seinen Partner nicht wirkt, kommt mit (:data:`COUPLED_PATHS`). Bei Prusa
     Auto bleiben zusätzlich die im nativen Prozess aktiven Haftungsarten stehen.
+
+    ``program`` ist die Marke des Programms (``slicer_keys.program_of``): Eine
+    Wahl, die es nicht kennt, geht als ihr Ersatz hinaus, ein Aufzählungswert
+    in seiner Schreibweise (RM-480, RM-461). Nur Solidons eigene Werte gehen
+    hier durch — die des Herstellerprofils sind schon in ihr.
     """
-    settings = _fan_curve_in_order(settings)
+    settings = _fan_curve_in_order(offered_settings(settings, program))
     if paths is not None:
         paths = _with_partners(paths, settings)
     written: dict[str, str] = {}
@@ -817,7 +839,9 @@ def as_mapping(
         # Gegenprobe: geschrieben überschriebe er den Wert des Herstellers,
         # verglichen meldete er eine Abweichung von nichts.
         if value != "":
-            written[entry.key] = value
+            written[slicer_keys.native_key(entry.key, program)] = slicer_keys.program_value(
+                entry.key, value, program
+            )
     chosen = _only_chosen_adhesion(
         written, settings, flavour, native_adhesion_kinds=native_adhesion_kinds
     )
@@ -826,6 +850,21 @@ def as_mapping(
     if paths is not None and "support.density" not in paths:
         return chosen
     return _support_spacing(chosen, settings, flavour)
+
+
+def offered_settings(settings: PrintSettings, program: str) -> PrintSettings:
+    """Die Einstellungen mit dem Ersatz für jede Wahl, die dieses Programm nicht kennt.
+
+    SuperSlicer kennt keine Baumstütze (RM-480): Wer sie gewählt oder einen
+    Vorschlag dazu übernommen hat, bekommt dort Gitterstützen — mit allem, was
+    Solidon zu Gitter schreibt, auch dem Kreuzmuster. Die Herkunft bleibt
+    (``with_path``), den Satz dazu nennt ``slicer_keys.limitation``.
+    """
+    for path, table in slicer_keys.NOT_OFFERED_BY_PROGRAM.get(program, {}).items():
+        replaced = table.get(read_path(settings, path))
+        if replaced is not None:
+            settings = with_path(settings, path, replaced.value)
+    return settings
 
 
 #: Werte, die ohne ihren Partner nicht tun, was die Wahl verlangt (Review
@@ -873,7 +912,9 @@ def _fan_curve_in_order(settings: PrintSettings) -> PrintSettings:
     return replace(settings, cooling=replace(cooling, minimum_fan_speed=cooling.fan_speed))
 
 
-def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
+def values_for(
+    settings: PrintSettings, profile: Profile, flavour: SlicerFlavour, *, program: str = ""
+) -> dict[str, str]:
     """Alles, was dieser Slicer bekommt — Einstellungen, Maschine, Abgeleitetes.
 
     Die eine Stelle, an der die drei Stufen zusammenkommen. Sie hat einen
@@ -882,12 +923,37 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
     Zusammenführen laufen ließe, bekäme die Hälfte.
     """
-    values = as_mapping(effective_adhesion(settings, profile, flavour), flavour)
-    values |= _machine_keys(profile, flavour)
+    written = as_mapping(effective_adhesion(settings, profile, flavour), flavour, program=program)
+    written |= _machine_keys(profile, flavour)
     if flavour == "cura":
-        values = _cura_dependants(values, settings, profile)
-    _without_line_break(values, flavour)
-    return values
+        written = _cura_dependants(
+            _cura_accelerations(written, settings, profile), settings, profile
+        )
+    _without_line_break(written, flavour)
+    return written
+
+
+def _cura_accelerations(
+    written: Mapping[str, str], settings: PrintSettings, profile: Profile
+) -> dict[str, str]:
+    """Nur belegte oder bewusst gewählte Beschleunigungen, auch im Fensterprofil."""
+    configured = dict(written)
+    # Eine Qualitätsstufe kennt die Mechanik eines unbekannten Druckers nicht.
+    for path, key, native in (
+        ("speed.acceleration", "acceleration_print", profile.printer.acceleration),
+        (
+            "speed.outer_wall_acceleration",
+            "acceleration_wall_0",
+            profile.printer.outer_wall_acceleration,
+        ),
+    ):
+        if native is None and path not in settings.explicit:
+            configured.pop(key, None)
+    active = "acceleration_print" in configured or "acceleration_wall_0" in configured
+    configured["acceleration_enabled"] = "true" if active else "false"
+    if "acceleration_print" in configured:
+        configured.setdefault("acceleration_wall_0", configured["acceleration_print"])
+    return configured
 
 
 def effective_adhesion(
@@ -993,6 +1059,8 @@ def by_section(
     settings: PrintSettings,
     flavour: SlicerFlavour,
     paths: frozenset[str] | None = None,
+    *,
+    program: str = "",
 ) -> dict[slicer_keys.ProfileSection, dict[str, str]]:
     """Dieselben Werte, getrennt nach dem Profil, in das sie gehören (§29).
 
@@ -1016,13 +1084,14 @@ def by_section(
     :func:`_cura_dependants` sieht diese Funktion gar nicht, denn sie liest
     :func:`as_mapping` und nicht :func:`values_for`.
     """
-    complete = as_mapping(settings, flavour, paths)
+    complete = as_mapping(settings, flavour, paths, program=program)
     split: dict[slicer_keys.ProfileSection, dict[str, str]] = {"process": {}}
     placed: set[str] = set()
     for entry in slicer_keys.TABLES[flavour]:
-        if entry.key in complete:
-            split.setdefault(entry.section, {})[entry.key] = complete[entry.key]
-            placed.add(entry.key)
+        key = slicer_keys.native_key(entry.key, program)
+        if key in complete:
+            split.setdefault(entry.section, {})[key] = complete[key]
+            placed.add(key)
     for key, value in complete.items():
         if key not in placed:
             split["process"][key] = value
@@ -1030,7 +1099,11 @@ def by_section(
 
 
 def object_keys(
-    settings: PrintSettings, advice: Sequence[SettingAdvice], flavour: SlicerFlavour
+    settings: PrintSettings,
+    advice: Sequence[SettingAdvice],
+    flavour: SlicerFlavour,
+    *,
+    program: str = "",
 ) -> dict[str, str]:
     """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
 
@@ -1055,8 +1128,8 @@ def object_keys(
     applied = _applied(settings, advice)
     paths = _with_partners(frozenset(entry.path for entry in advice), applied)
     keys = {entry.key for entry in slicer_keys.TABLES[flavour] if entry.path in paths}
-    before = as_mapping(settings, flavour)
-    changed = as_mapping(applied, flavour)
+    before = as_mapping(settings, flavour, program=program)
+    changed = as_mapping(applied, flavour, program=program)
     written = {
         key: value for key, value in changed.items() if key in keys or before.get(key) != value
     }
@@ -1851,7 +1924,7 @@ class CuraMachine:
     codes: Mapping[str, str] = field(default_factory=dict)
     switches: Mapping[str, str] = field(default_factory=dict)
     settings: Mapping[str, str] = field(default_factory=dict)
-    """Belegte Hardwarewerte der konfigurierten Maschine, ohne Prozesswerte."""
+    """Belegte Hardwarewerte samt daran begrenzten Prozessbeschleunigungen."""
     name: str = ""
     """``machine_name`` der Definition — CuraEngine schreibt ihn als
     ``;TARGET_MACHINE.NAME`` in den Kopf (:func:`cura_machine_differences`)."""
@@ -1889,6 +1962,8 @@ class SlicerConfig:
     """Die tatsächlich geschriebenen Sollwerte, einschließlich aller Filamentplätze."""
     cura_machine: CuraMachine | None = None
     """Nur bei Cura: Druckerdefinition, Start- und Endcode (:func:`_cura_machine`)."""
+    findings: tuple[Finding, ...] = ()
+    """Belegte Abweichungen von der eigenen Wahl; ``written`` bleibt der ausgegebene Wert."""
 
     @property
     def filament(self) -> Path | None:
@@ -1974,6 +2049,7 @@ def _resolve_slot(
                 _profile_roots(setup),
                 variant_name=foundation.variant_name if foundation is not None else "",
                 extruder_id=foundation.variant_id if foundation is not None else "",
+                program=manufacturer.program(setup),
             )
             for path, value in readback.values.items():
                 settings = with_path(settings, path, value)
@@ -2452,7 +2528,9 @@ def prusa_values(
     aus PrusaSlicer 2.9 ab (RM-459).
     """
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    written, expected = _prusa_values(settings, profile, setup, slots, console=console)
+    written, expected = _prusa_values(
+        settings, profile, setup, slots, console=console, program=program
+    )
     return (
         slicer_keys.for_program(written, "prusa", program),
         slicer_keys.for_program(expected, "prusa", program),
@@ -2466,8 +2544,9 @@ def _prusa_values(
     slots: Sequence[MaterialSlot],
     *,
     console: bool,
+    program: str,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """:func:`prusa_values` ohne den Blick auf das Programm."""
+    """:func:`prusa_values` vor dem Filter auf die Schlüssel des Programms."""
     effective = settings_for_handover(settings, profile, "prusa", slots, setup)
     chain: manufacturer.PrusaChain | None = None
     if setup is not None:
@@ -2477,8 +2556,8 @@ def _prusa_values(
             # Den Grund nennt der Befund der Grundlage (``slicer.process_unreadable``).
             _log.warning("Prusa profile unreadable, writing Solidon's table: %s", problem)
     if setup is None or chain is None:
-        flat = values_for(effective, profile, "prusa")
-        flat["filament_type"] = slicer_keys.filament_type(profile.material.id)
+        flat = values_for(effective, profile, "prusa", program=program)
+        flat["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
@@ -2502,7 +2581,7 @@ def _prusa_values(
         paths = paths - {"adhesion.kind"}
     own = _followers_not_faster(
         {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values},
-        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_kinds),
+        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_kinds, program=program),
         _suggested_speed_keys(effective, "prusa"),
         followers=_PRUSA_FOLLOWERS,
     )
@@ -2519,7 +2598,7 @@ def _prusa_values(
     if chain.filament:
         document["filament_settings_id"] = chain.filament
     else:
-        document["filament_type"] = slicer_keys.filament_type(profile.material.id)
+        document["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
     document["printer_settings_id"] = chain.printer
     document["print_settings_id"] = chain.process
     if console:
@@ -2548,6 +2627,7 @@ def write_config(
     """
     _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
+    program = slicer_keys.program_of(setup.executable)
 
     # Gerechnet wird in dem Zweig, der es braucht: Die Orca-Familie schreibt
     # ihre Werte aus ``by_section`` und ``_orca_*``, nicht aus dieser Abbildung
@@ -2585,8 +2665,8 @@ def write_config(
         # bisher alles; das entscheidet jedes Dokument für sich.
         foundation = manufacturer.base_settings(profile, settings.quality, setup)
         paths = _deviating(settings, foundation)
-        split = by_section(settings, setup.flavour)
-        deviating = by_section(settings, setup.flavour, paths)
+        split = by_section(settings, setup.flavour, program=program)
+        deviating = by_section(settings, setup.flavour, paths, program=program)
         plate = foundation.plate if foundation.has_profile else ""
         # Das Maschinenprofil zuerst: Der Prozess daneben nennt es in
         # ``compatible_printers``, und beide Namen kommen aus
@@ -2638,7 +2718,7 @@ def write_config(
                 if slot.material
                 else setup
             )
-            part = split if mine is settings else by_section(mine, setup.flavour)
+            part = split if mine is settings else by_section(mine, setup.flavour, program=program)
             own_paths = _for_the_slot(
                 paths,
                 settings,
@@ -2655,8 +2735,11 @@ def write_config(
                     profile,
                     own,
                     slot,
-                    deviating=by_section(mine, setup.flavour, own_paths).get("filament", {}),
+                    deviating=by_section(mine, setup.flavour, own_paths, program=program).get(
+                        "filament", {}
+                    ),
                     plate=plate or None,
+                    chamber_control=foundation.chamber_control,
                 )
             )
         # **Erst angleichen, dann schreiben.** Die Orca-Familie indiziert jeden
@@ -2699,17 +2782,21 @@ def write_config(
         firmware = machine_document.get("gcode_flavor")
         if isinstance(firmware, str):
             expected["gcode_flavor"] = firmware
-        for entry in slicer_keys.TABLES[setup.flavour]:
-            if entry.section != "filament" or not all(
-                entry.key in document for document in filament_documents
-            ):
+        filament_keys = {
+            slicer_keys.native_key(entry.key, program)
+            for entry in slicer_keys.TABLES[setup.flavour]
+            if entry.section == "filament"
+        }
+        filament_keys.add("activate_chamber_temp_control")
+        for key in sorted(filament_keys):
+            if not all(key in document for document in filament_documents):
                 continue
             # Ein Wert je Spule, wie der G-Code sie führt. Die Filamentwerte
             # des Herstellers bleiben ganz in der Gegenprobe: an ElegooSlicer,
             # Bambu Studio, Creality Print und OrcaSlicer kam jeder an.
             printed_values = [
                 _printed_variant(
-                    document[entry.key],
+                    document[key],
                     document,
                     "filament_extruder_variant",
                     "filament_extruder_id",
@@ -2718,9 +2805,7 @@ def write_config(
                 for document in filament_documents
             ]
             if all(value is not None for value in printed_values):
-                expected[entry.key] = ",".join(
-                    value for value in printed_values if value is not None
-                )
+                expected[key] = ",".join(value for value in printed_values if value is not None)
         # Eine eigene Betttemperatur steht unter dem Schlüssel der aufliegenden
         # Platte (``_on_the_plate``), nicht unter ``hot_plate_temp`` — geprüft
         # wird sie dort (Review Stufe A+B, H3).
@@ -2754,6 +2839,7 @@ def write_config(
     # nicht hier, sondern in ``cura_machine`` (:func:`_command`).
     flat = flat_values()
     machine = _cura_machine(setup, profile, flat)
+    limited = _cura_limit_findings(flat, machine.settings, paths=settings.explicit)
     flat |= machine.settings
     if machine.from_printer:
         # Die Druckerdefinition ist die Maschine (RM-330): Ihr Ursprung gilt,
@@ -2769,7 +2855,7 @@ def write_config(
         "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",
     )
-    return SlicerConfig(process=target, written=flat, cura_machine=machine)
+    return SlicerConfig(process=target, written=flat, cura_machine=machine, findings=tuple(limited))
 
 
 #: Schlüssel, die eine Spule aus sich selbst ergänzt und nie vom Nachbarn
@@ -2870,12 +2956,13 @@ def project_settings(
     # Slicer — und übernimmt nur, was derselbe Drucker ist.
     setup = replace(setup, machine_profile=machine_for(setup, profile))
 
-    split = by_section(settings, setup.flavour)
+    program = slicer_keys.program_of(setup.executable)
+    split = by_section(settings, setup.flavour, program=program)
     # Dieselbe Grundlage wie im Konsolenlauf (:func:`write_config`): auf dem
     # Herstellerprofil nur die Abweichung, dazu die Druckplatte.
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     paths = _deviating(settings, foundation)
-    deviating = by_section(settings, setup.flavour, paths)
+    deviating = by_section(settings, setup.flavour, paths, program=program)
     plate = foundation.plate if foundation.has_profile else ""
 
     # Eine Projektdatei trägt kein ``inherits`` — sie muss die Werte
@@ -2941,7 +3028,7 @@ def project_settings(
             if slot is not None and slot.material
             else setup
         )
-        slot_values = by_section(mine, setup.flavour).get("filament", {})
+        slot_values = by_section(mine, setup.flavour, program=program).get("filament", {})
         slot_paths = (
             paths
             if slot is None
@@ -2962,8 +3049,11 @@ def project_settings(
                 profile,
                 own,
                 slot,
-                deviating=by_section(mine, setup.flavour, slot_paths).get("filament", {}),
+                deviating=by_section(mine, setup.flavour, slot_paths, program=program).get(
+                    "filament", {}
+                ),
                 plate=plate or None,
+                chamber_control=foundation.chamber_control,
             )
         )
 
@@ -3420,6 +3510,7 @@ def _orca_filament(
     *,
     deviating: Mapping[str, str] | None = None,
     plate: str | None = None,
+    chamber_control: bool | None = None,
 ) -> dict[str, object]:
     """Das Filamentprofil für die Orca-Familie.
 
@@ -3445,8 +3536,8 @@ def _orca_filament(
         slot is not None
         and slot.material_type
         and not slot.material
-        and slot.material_type.strip().casefold()
-        != slicer_keys.filament_type(profile.material.id).casefold()
+        and slicer_keys.normalise_filament_type(slot.material_type)
+        != slicer_keys.filament_type(profile.material.id)
     ):
         # Eine lokale Spule anderen Typs erbt keine fremden Materialwerte
         # oder Startsequenzen aus der allgemeinen Herstellerunterlage.
@@ -3458,7 +3549,7 @@ def _orca_filament(
         "from": "User",
         "instantiation": "true",
         "filament_type": [
-            slot.material_type
+            slicer_keys.filament_type(slot.material_type, "orca")
             if slot is not None and slot.material_type
             else slicer_keys.filament_type(profile.material.id)
         ],
@@ -3480,9 +3571,12 @@ def _orca_filament(
     # selbst setzt. Der Slicer wählte „Cool Plate", fand dort die 35 Grad
     # seiner eigenen Vorgabe, und ein PETG-Druck ging mit kaltem Bett hinaus.
     base = profile_file(chosen, setup, "filament")
+    program = manufacturer.program(setup)
     inherited: dict[str, object] = {}
     if base is not None:
-        inherited = slicer_profiles.resolve_values(base, roots=_profile_roots(setup))
+        inherited = slicer_keys.normalise_chamber(
+            slicer_profiles.resolve_values(base, roots=_profile_roots(setup)), program
+        )
         document.update({key: _as_slots(value) for key, value in inherited.items()})
 
     # Solidons Werte kommen darüber — außer sie gehören einem anderen Material.
@@ -3503,20 +3597,33 @@ def _orca_filament(
     if slot is not None and slot.material and inherited:
         override = override_for(settings, slot)
         from_the_material = {
-            orca
+            slicer_keys.native_key(orca, program)
             for solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK
-            if orca in inherited
+            if slicer_keys.native_key(orca, program) in inherited
             and (override is None or getattr(override, solidon.partition(".")[0]) is None)
         }
         own_values = {
             key: value for key, value in own_values.items() if key not in from_the_material
         }
     document.update(own_values)
+    if program == "bambustudio":
+        document.pop("activate_chamber_temp_control", None)
+    else:
+        temperatures = document.get("chamber_temperature")
+        if isinstance(temperatures, list) and (
+            "chamber_temperature" in own_values
+            or "activate_chamber_temp_control" not in document
+            or chamber_control is not True
+        ):
+            document["activate_chamber_temp_control"] = [
+                "1" if chamber_control is True and (_as_float(str(value)) or 0.0) > 0.0 else "0"
+                for value in temperatures
+            ]
     # Die ausdrücklich gewählte Spule gewinnt zuletzt. Eine lokale PLA-Spule
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.
     if slot is not None and slot.material_type:
-        document["filament_type"] = [slot.material_type]
+        document["filament_type"] = [slicer_keys.filament_type(slot.material_type, "orca")]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
     # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine
@@ -3751,6 +3858,26 @@ def setting_limitations(
     ]
 
 
+def substituted_choices(settings: PrintSettings, program: str) -> list[Finding]:
+    """Wahlen, die dieses Programm nicht kennt und als Ersatz bekommt (RM-480).
+
+    :func:`offered_settings` schreibt den Ersatz; hier steht, dass es einer
+    ist — vor dem Öffnen wie nach dem Slicen, denn die Druckdatei bestätigt
+    den Ersatz, nicht die Wahl.
+    """
+    return [
+        Finding(
+            code="slicer.choice_substituted",
+            severity="warning",
+            message=replaced.reason,
+            values={"path": path},
+            suggestions=(OPEN_PRINT_SETTINGS, CHOOSE_SLICER),
+        )
+        for path, table in slicer_keys.NOT_OFFERED_BY_PROGRAM.get(program, {}).items()
+        if (replaced := table.get(read_path(settings, path))) is not None
+    ]
+
+
 def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Finding]:
     """Wo Solidons Werte von denen des Filamentprofils abweichen (§29, §22.5).
 
@@ -3895,6 +4022,8 @@ def _command(
     config: SlicerConfig,
     output: Path,
     keep_arrangement: bool = False,
+    *,
+    findings: list[Finding] | None = None,
 ) -> list[str]:
     """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
     ein Dateiname mit Leerzeichen ist sonst zwei Argumente.
@@ -4019,7 +4148,10 @@ def _command(
     for model in models:
         for mesh in cura_meshes(Path(model)):
             arguments += ["-l", str(mesh.path)]
-            for key, value in mesh.settings.items():
+            limited = _cura_limited_accelerations(mesh.settings, engine.settings)
+            if findings is not None:
+                findings.extend(_cura_limit_findings(mesh.settings, limited, file=mesh.path.name))
+            for key, value in limited.items():
                 arguments += ["-s", f"{key}={value}"]
     arguments += ["-o", str(output / OUTPUT_NAME)]
     return arguments
@@ -4195,6 +4327,7 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         if (isinstance(source, slicer_profiles.SlicerProfile) and source.cura_instance is not None)
         else {}
     )
+    hardware |= _cura_motion_values(chain, values, profile.printer)
     # **Der Ursprung gehört der Maschine** (RM-330). Eine Druckerdefinition
     # oder Instanz mit ``machine_center_is_zero`` misst von der Bettmitte —
     # Curas Deltas etwa —, und CuraEngine verschiebt das Modell dann nicht.
@@ -4278,6 +4411,156 @@ def _cura_hardware_values(
         and isinstance(value, (str, int, float, bool))
     }
     return hardware
+
+
+def _cura_limited_accelerations(
+    values: Mapping[str, str], machine: Mapping[str, str]
+) -> dict[str, str]:
+    """Prozesswerte auf die belegte X-/Y-Grenze deckeln, auch je Netz."""
+    limits = [
+        number
+        for axis in ("x", "y")
+        if (number := _as_float(machine.get(f"machine_max_acceleration_{axis}"))) is not None
+        and math.isfinite(number)
+        and number > 0.0
+    ]
+    result = dict(values)
+    if not limits:
+        return result
+    limit = min(limits)
+    for key, value in values.items():
+        if not (key.startswith("acceleration_") or key.endswith("_acceleration")):
+            continue
+        number = _as_float(value)
+        if number is not None and math.isfinite(number) and number > limit:
+            result[key] = f"{limit:g}"
+    return result
+
+
+def _cura_limit_findings(
+    requested: Mapping[str, str],
+    written: Mapping[str, str],
+    *,
+    paths: frozenset[str] | None = None,
+    object_id: str | None = None,
+    file: str = "",
+) -> list[Finding]:
+    """Eine gekürzte Wahl bleibt als strukturierter Befund erhalten, auch je Teil.
+
+    Nur die im Dialog angebotenen Wurzeln zählen, nicht deren Cura-Spiegel.
+    Für die Platte gelten die eigenen und übernommenen Wahlen; ein Netz
+    trägt bereits nur seine Abweichungen und nennt deshalb jede Kürzung.
+    """
+    findings: list[Finding] = []
+    for entry in slicer_keys.TABLES["cura"]:
+        if entry.key not in ("acceleration_print", "acceleration_wall_0"):
+            continue
+        if paths is not None and entry.path not in paths:
+            continue
+        before = _as_float(requested.get(entry.key))
+        after = _as_float(written.get(entry.key))
+        if before is None or after is None or not before > after:
+            continue
+        findings.append(
+            Finding(
+                code="slicer.acceleration_limited",
+                severity="warning",
+                message=_(
+                    "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. "
+                    "Prüfen Sie den Wert im Druckdialog."
+                ),
+                object_id=object_id,
+                values={
+                    "setting": entry.path,
+                    "requested": before,
+                    "actual": after,
+                    **({"file": file} if file else {}),
+                },
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        )
+    return findings
+
+
+def cura_acceleration_findings(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    parts: Mapping[str, Mapping[str, str]],
+    *,
+    for_window: bool = False,
+) -> list[Finding]:
+    """Der Exportbericht nennt dieselben Kürzungen wie der CuraEngine-Lauf."""
+    if setup.flavour != "cura":
+        return []
+    requested = values_for(settings, profile, setup.flavour)
+    motion = (
+        cura_window_motion(setup, profile)
+        if for_window
+        else _cura_machine(setup, profile, requested).settings
+    )
+    limited = _cura_limited_accelerations(requested, motion)
+    # Beim Fenster meldet der Profilschreiber die Platte erst beim Schreiben,
+    # einschließlich der einzelnen Spulen. Hier reisen dann nur Objektwerte.
+    findings = (
+        [] if for_window else _cura_limit_findings(requested, limited, paths=settings.explicit)
+    )
+    for object_id, original in parts.items():
+        limited = _cura_limited_accelerations(original, motion)
+        findings.extend(_cura_limit_findings(original, limited, object_id=object_id))
+    return findings
+
+
+def _cura_motion_values(
+    chain: Mapping[str, object], written: Mapping[str, str], printer: PrinterProfile
+) -> dict[str, str]:
+    """Numerische Maschinenwerte der Definitionskette für CuraEngine auflösen.
+
+    CuraEngine liest nur ``default_value``. Der Profilauflöser liefert auch
+    numerisches ``value``, lässt Formeln aber aus. Grenzen bleiben deshalb
+    Herstellerdaten; die Stufenvorgabe ersetzt nie eine unbekannte Grenze.
+    """
+    motion: dict[str, str] = {}
+    for key, value in chain.items():
+        if key != "machine_acceleration" and not key.startswith(
+            ("machine_max_acceleration_", "machine_max_feedrate_", "machine_max_jerk_")
+        ):
+            continue
+        number = _as_float(str(value))
+        if number is not None and math.isfinite(number) and number >= 0.0:
+            motion[key] = f"{number:g}"
+    # Vor dem Endcode setzt CuraEngine diese Beschleunigung erneut mit M204.
+    # Auch die Rückstellung muss innerhalb der unveränderten Achsgrenzen liegen.
+    motion = _cura_limited_accelerations(motion, motion)
+    if written.get("acceleration_enabled") != "true":
+        return motion
+
+    process_values = {
+        key: value
+        for key, value in written.items()
+        if key.startswith("acceleration_") or key.endswith("_acceleration")
+    }
+    printing = process_values.get("acceleration_print", motion.get("machine_acceleration"))
+    if printing is not None:
+        process_values.setdefault("acceleration_print", printing)
+        process_values.setdefault("acceleration_wall_0", printing)
+        for source, targets in slicer_keys.CURA_MIRRORED.items():
+            if source in process_values:
+                for target in targets:
+                    process_values.setdefault(target, process_values[source])
+    travel = _as_float(str(chain.get("acceleration_travel", "")))
+    if travel is not None and math.isfinite(travel) and travel > 0.0:
+        process_values["acceleration_travel"] = f"{travel:g}"
+    process_values = _cura_limited_accelerations(process_values, motion)
+    acceleration = _as_float(process_values.get("acceleration_print"))
+    if acceleration:
+        first = min(printer.first_layer_acceleration or _FIRST_LAYER_ACCELERATION, acceleration)
+        process_values["acceleration_layer_0"] = f"{first:g}"
+        for key in slicer_keys.CURA_MIRRORED["acceleration_layer_0"]:
+            process_values[key] = f"{first:g}"
+        travel = _as_float(process_values.get("acceleration_travel")) or acceleration
+        process_values["acceleration_travel_layer_0"] = f"{first * travel / acceleration:g}"
+    return motion | process_values
 
 
 def cura_machine_differences(
@@ -5191,6 +5474,9 @@ def slice_model(
         )
 
     started_perf_counter = time.perf_counter()
+    # Gefragt an der Wahl vor der Trennung: Ein Ersatz gilt der Platte wie dem
+    # Teil, das den Wert als Objektwert trägt (RM-480).
+    substituted = substituted_choices(settings, slicer_keys.program_of(setup.executable))
     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
@@ -5206,6 +5492,7 @@ def slice_model(
             else models
         )
         config = write_config(settings, profile, setup, workspace, slots)
+        limited_settings = list(config.findings)
         requested_values = config.written
         config = _creality_cli_tower_position(config, setup, cli_models)
         densities, diameters = _readback_materials(config, settings, profile, setup, slots)
@@ -5235,7 +5522,9 @@ def slice_model(
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
         # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
         completed = _run_slicer(
-            _command(setup, cli_models, config, target, wanted_arrangement),
+            _command(
+                setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
+            ),
             workspace,
             timeout,
             setup,
@@ -5454,7 +5743,11 @@ def slice_model(
         # benutzte Werkzeuge voraus; ausdrückliche Sollwerte bleiben vollständig.
         written = config.written if len(metrics.used_tools) > 1 else requested_values
         ignored = verify_settings(
-            analysis.settings, written, cura_machine_differences(analysis, config.cura_machine)
+            analysis.settings,
+            written,
+            cura_machine_differences(analysis, config.cura_machine),
+            flavour=setup.flavour,
+            program=slicer_keys.program_of(setup.executable),
         )
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
@@ -5467,6 +5760,7 @@ def slice_model(
     # nach dem Slicen die Druckdatei selbst (``fan_in_off_layers``).
     findings = [
         *setting_limitations(setup.flavour),
+        *substituted,
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
         *unreachable_overrides(settings, setup, slots, profile=profile),
@@ -5477,6 +5771,7 @@ def slice_model(
         # Orca-Familie sagt dazu nur „process not compatible with printer".
         *machine_missing(setup, profile),
         *foundation_findings(settings, profile, setup, slots=slots),
+        *limited_settings,
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),
@@ -5628,12 +5923,39 @@ _CURA_CONTAINER_VERSION: Final = 4
 _CURA_PROFILE_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
 
 
-def for_the_cura_window(values: Mapping[str, str]) -> dict[str, str]:
+def cura_window_motion(setup: SlicerSetup, profile: Profile) -> Mapping[str, str]:
+    """Belegte Grenzen der aktiven Cura-Instanz, auf die das Fenster importiert."""
+    if not _cura_base(setup.executable):
+        return {}
+    active = slicer_profiles.cura_active_machine(setup.executable)
+    if active is None:
+        return {}
+    roots = _profile_roots(setup)
+    chosen = slicer_profiles.chosen_machine("cura", setup.executable)
+    source = (
+        slicer_profiles.profile_by_name(setup.executable, "cura", chosen, "machine")
+        if chosen
+        else None
+    )
+    if chosen and source is None:
+        raise _cura_instance_error(setup, active.name, missing=False)
+    chain = (
+        slicer_profiles.resolve_profile(source, roots)
+        if source is not None
+        else slicer_profiles.resolve_values(active.definition, roots)
+    )
+    return _cura_motion_values(chain, {}, profile.printer)
+
+
+def for_the_cura_window(
+    values: Mapping[str, str], *, machine: Mapping[str, str] | None = None
+) -> dict[str, str]:
     """Werte in der Schreibweise von Curas Fenster: Wahrheitswerte als
     ``True``/``False``, wie sein eigener Schreiber sie ablegt; die Konsole
     liest ``true``/``false`` (:func:`values_for`)."""
+    limited = _cura_limited_accelerations(values, machine or {})
     return {
-        key: {"true": "True", "false": "False"}.get(value, value) for key, value in values.items()
+        key: {"true": "True", "false": "False"}.get(value, value) for key, value in limited.items()
     }
 
 
@@ -5643,6 +5965,8 @@ def cura_profile_beside(
     profile: Profile,
     setup: SlicerSetup,
     slots: Sequence[MaterialSlot] = (),
+    *,
+    findings: list[Finding] | None = None,
 ) -> Finding | None:
     """Die Einstellungen als importierbares Cura-Profil neben dem Modell (§29).
 
@@ -5711,6 +6035,7 @@ def cura_profile_beside(
     quality = min(sorted(qualities), key=lambda kind: abs(qualities[kind] - wanted))
     definition = slicer_profiles.cura_quality_definition(setup.executable, active.definition)
     name = _one_line(model.stem) or "solidon"
+    motion = cura_window_motion(setup, profile)
 
     def container(values: Mapping[str, str], position: int | None) -> str:
         lines = [
@@ -5727,16 +6052,21 @@ def cura_profile_beside(
         if position is not None:
             lines.append(f"position = {position}")
         lines += ["", "[values]"]
-        for key, value in sorted(for_the_cura_window(values).items()):
+        limited = for_the_cura_window(values, machine=motion)
+        if findings is not None:
+            findings.extend(_cura_limit_findings(values, limited, paths=settings.explicit))
+        for key, value in sorted(limited.items()):
             lines.append(f"{key} = {value}")
         return "\n".join(lines) + "\n"
 
-    shared = as_mapping(settings_for_handover(settings, profile, "cura", slots, setup), "cura")
+    resolved = settings_for_handover(settings, profile, "cura", slots, setup)
+    shared = _cura_accelerations(as_mapping(resolved, "cura"), resolved, profile)
     _without_line_break(shared, setup.name)
     entries = [("solidon", container(shared, None))]
     if len(slots) > 1:
         for position, slot in enumerate(slots):
-            own = as_mapping(settings_for_slot(settings, profile, slot, setup), "cura")
+            resolved = settings_for_slot(settings, profile, slot, setup)
+            own = _cura_accelerations(as_mapping(resolved, "cura"), resolved, profile)
             _without_line_break(own, setup.name)
             entries.append((f"solidon_extruder_{position}", container(own, position)))
     target = model.with_suffix(CURA_PROFILE_SUFFIX)
@@ -5787,14 +6117,17 @@ _RECOMPUTED: Final = frozenset(
         "nozzle_diameter",
         "bed_shape",
         "first_layer_speed",
-        "brim_type",
-        "wall_sequence",
-        "support_type",
     }
 )
 
 
-def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
+def verify(
+    text: str,
+    written: Mapping[str, str],
+    *,
+    flavour: SlicerFlavour | None = None,
+    program: str = "",
+) -> list[Finding]:
     """Kam an, was Solidon geschrieben hat? (§28.2)
 
     Die Slicer schreiben ihre wirksame Konfiguration als Kommentare in die
@@ -5802,16 +6135,50 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
     stimmt — und sie kommt von dem Programm selbst, nicht aus einer
     Dokumentation, die für die installierte Version womöglich nicht gilt.
 
-    Damit prüft sich jeder Slicer selbst, auch einer, den beim Bauen der
-    Tabelle niemand vorliegen hatte. Gemeldet wird nur, was **nachweislich**
-    abweicht: ein Schlüssel, den die Datei gar nicht nennt, sagt nichts —
-    kein Slicer schreibt alles.
+    Prusa und Orca schreiben vollständige Konfigurationsblöcke: Ein fehlender
+    Druckwert wurde nicht übernommen. Ohne bekannte Familie wird nur mit den
+    vorhandenen Werten verglichen, etwa bei einem einzelnen Kommentarblock.
     """
-    return verify_settings(gcode.analyze(text).settings, written)
+    return verify_settings(gcode.analyze(text).settings, written, flavour=flavour, program=program)
+
+
+def _verification_values(written: Mapping[str, str], program: str) -> Mapping[str, str]:
+    """SuperSlicers belegte Lüfterumbenennung, einschließlich ausgeschalteter Plätze.
+
+    In 2.5.59.13 heißt ``min_fan_speed`` intern ``default_fan_speed``;
+    ``fan_always_on=0`` setzt diesen Wert auf null (PrintConfig.cpp,
+    ``handle_legacy``). Die beiden Prusa-Schlüssel stehen nicht im G-Code.
+    """
+    if program != "superslicer" or "min_fan_speed" not in written:
+        return written
+    minimum = re.split(r"[,;]", written["min_fan_speed"].strip().strip("[]"))
+    switches = re.split(r"[,;]", written.get("fan_always_on", "1").strip().strip("[]"))
+    switches = [value.strip().strip('"') for value in switches]
+    if len(switches) != len(minimum) or any(value not in {"0", "1"} for value in switches):
+        return written
+    native = dict(written)
+    native.pop("min_fan_speed")
+    native.pop("fan_always_on", None)
+    native["default_fan_speed"] = ",".join(
+        value.strip().strip('"') if switch == "1" else "0"
+        for value, switch in zip(minimum, switches, strict=True)
+    )
+    return native
+
+
+#: Nur diese Orca-Materialfelder heben als ``nil`` keine Maschinenvorgabe auf.
+_INHERITED_MATERIAL_OVERRIDES: Final = frozenset(
+    {"filament_retraction_length", "filament_retraction_speed", "filament_z_hop", "filament_wipe"}
+)
 
 
 def verify_settings(
-    found: Mapping[str, str], written: Mapping[str, str], differences: Sequence[str] = ()
+    found: Mapping[str, str],
+    written: Mapping[str, str],
+    differences: Sequence[str] = (),
+    *,
+    flavour: SlicerFlavour | None = None,
+    program: str = "",
 ) -> list[Finding]:
     """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen.
 
@@ -5821,11 +6188,33 @@ def verify_settings(
     """
 
     ignored: list[str] = list(differences)
-    for key, wanted in written.items():
+    for key, wanted in _verification_values(written, program).items():
         if key in _RECOMPUTED:
             continue
+        if (
+            flavour == "orca"
+            and key in _INHERITED_MATERIAL_OVERRIDES
+            and all(
+                value.strip().strip('"') == "nil"
+                for value in re.split(r"[,;]", wanted.strip().strip("[]"))
+            )
+        ):
+            continue
         actual = found.get(key.casefold())
-        if actual is None or _same(
+        if actual is None:
+            if flavour not in {"prusa", "orca"}:
+                continue
+            # Nur Bambu kennt diesen Schalter; die drei gemessenen Verwandten
+            # schreiben ihre Nahtwerte unmittelbar und führen ihn nicht.
+            if key == "override_filament_scarf_seam_setting" and program in {
+                "orcaslicer",
+                "elegooslicer",
+                "crealityprint",
+            }:
+                continue
+            ignored.append(f"{key}: {wanted} → —")
+            continue
+        if _same(
             actual,
             wanted,
             unescape_gcode_quotes=key.casefold().endswith("_gcode"),

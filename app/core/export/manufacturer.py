@@ -41,7 +41,7 @@ from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
 from app.core.units import exact_atan_degrees, is_zero
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from app.core.export.handover import SlicerSetup
@@ -87,6 +87,10 @@ class Foundation:
     machine: str = ""
     process: str = ""
     filament: str = ""
+    material_from_table: bool = False
+    """Ohne auflösbares Filamentprofil stammen die Materialwerte aus Solidons Tabelle."""
+    chamber_control: bool | None = None
+    """Die Kammerheizung ist im Maschinenprofil belegt; fehlend heißt unbekannt."""
     plate: str = ""
     """Die Druckplatte, für die die Betttemperatur gelesen wurde — der Name,
     wie die Orca-Familie ihn schreibt (``Textured PEI Plate``)."""
@@ -765,11 +769,14 @@ def _read_filament(
     machine: Mapping[str, Any],
     plate: str,
     source: Path,
+    program: str = "",
 ) -> tuple[dict[str, object], bool]:
     """Die Filamentwerte in Solidons Pfaden — samt Rückzug der Maschine, wo das
     Filament ``nil`` sagt, und der Betttemperatur der gewählten Platte."""
+    filament = slicer_keys.normalise_chamber(filament, program)
     read: dict[str, object] = {}
     for solidon, native, kind in slicer_profiles.FILAMENT_READBACK:
+        native = slicer_keys.native_key(native, program)
         text = _text(filament.get(native))
         if text is None:
             continue
@@ -1572,7 +1579,13 @@ def base_settings(
     """
     fallback = settings_table.resolve(profile, quality)
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
-        return _table_foundation(profile, fallback)
+        return _table_foundation(
+            profile,
+            fallback,
+            material_from_table=(
+                setup is not None and setup.flavour in ("orca", "prusa") and not setup.base_filament
+            ),
+        )
     if setup.flavour == "prusa":
         return _prusa_foundation(profile, quality, setup, fallback)
     from app.core.export import handover
@@ -1660,7 +1673,7 @@ def base_settings(
     refuses = False
     if filament_file is not None:
         filament_read, refuses = _read_filament(
-            filament_values, machine_values, plate, filament_file
+            filament_values, machine_values, plate, filament_file, program(setup)
         )
         read.update(filament_read)
     staged = (
@@ -1689,6 +1702,10 @@ def base_settings(
         machine=machine_name,
         process=setup.base_process,
         filament=setup.base_filament,
+        material_from_table=filament_file is None,
+        chamber_control={"0": False, "1": True}.get(
+            _text(machine_values.get("support_chamber_temp_control")) or ""
+        ),
         plate=plate,
         plate_refuses_filament=refuses,
         plates=plate_temperatures(filament_values),
@@ -1717,7 +1734,7 @@ def _prusa_foundation(
         _log.warning("Prusa profile unreadable, using Solidon's table: %s", problem)
         return _table_foundation(profile, fallback, unreadable=setup.base_process, has_plates=False)
     if chain is None:
-        return _table_foundation(profile, fallback, has_plates=False)
+        return _table_foundation(profile, fallback, has_plates=False, material_from_table=True)
     context = _Context(nozzle=profile.printer.nozzle_diameter)
     read, foreign = _read_prusa({**PRUSA_PROGRAM_DEFAULTS, **chain.values}, context)
     if not chain.filament:
@@ -1746,6 +1763,7 @@ def _prusa_foundation(
         machine=chain.printer,
         process=chain.process,
         filament=chain.filament,
+        material_from_table=not bool(chain.filament),
         has_plates=False,
     )
 
@@ -1758,6 +1776,21 @@ MATERIAL_GROUPS: Final = ("temperature", "cooling", "filament")
 def _material_path(path: str) -> bool:
     """Gehört dieser Pfad dem Filament und nicht Drucker oder Prozess?"""
     return path.partition(".")[0] in MATERIAL_GROUPS
+
+
+def chamber_limitation(foundation: Foundation | None) -> TranslatableText | None:
+    """Derselbe belegte Heizungsstatus für Druckfeld und Übergabebefund."""
+    if foundation is not None and foundation.chamber_control is True:
+        return None
+    if foundation is not None and foundation.chamber_control is False:
+        return _(
+            "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. "
+            "Die Kammertemperatur bleibt ohne Wirkung."
+        )
+    return _(
+        "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. "
+        "Wählen Sie im Druckdialog ein passendes Maschinenprofil."
+    )
 
 
 def findings(foundation: Foundation) -> list[Finding]:
@@ -1819,28 +1852,45 @@ def findings(foundation: Foundation) -> list[Finding]:
                 suggestions=(OPEN_PRINT_SETTINGS,),
             )
         ]
+    found: list[Finding] = []
+    if foundation.material_from_table:
+        found.append(
+            Finding(
+                code="slicer.filament_from_table",
+                severity="warning",
+                message=_(
+                    "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte "
+                    "kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil "
+                    "im Druckdialog."
+                ),
+                values={"source": "solidon_table"},
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        )
     if not foundation.has_profile:
-        return []
+        return found
     if foundation.has_plates and not foundation.plate:
         return [
+            *found,
             Finding(
                 code="slicer.plate_unknown",
                 severity="warning",
                 message=_("Welche Druckplatte aufliegt, sagt das Profil nicht."),
                 suggestions=(OPEN_PRINT_SETTINGS,),
-            )
+            ),
         ]
     if foundation.plate_refuses_filament:
         return [
+            *found,
             Finding(
                 code="slicer.plate_refuses_filament",
                 severity="warning",
                 message=_("Der Hersteller gibt diese Platte für dieses Filament nicht frei."),
                 values={"plate": foundation.plate},
                 suggestions=(OPEN_PRINT_SETTINGS,),
-            )
+            ),
         ]
-    return []
+    return found
 
 
 def effective(stored: PrintSettings | None, foundation: Foundation) -> PrintSettings:

@@ -7454,11 +7454,6 @@
   "„{text}“ · Startwert {seed}": "«{text}» · semilla {seed}",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "«Abrir en la superficie» solo vale sin aberturas elegidas. Introduzca la cara en «Aberturas» y vacíe este campo.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. El informe completo está en la carpeta guardada como «bericht.txt»; adjúntelo, por favor.",
-  "Einfügen beenden und Modell erzeugen": "Terminar la inserción y generar modelo",
-  "Einfügen beenden und übernehmen": "Terminar la inserción y aplicar",
-  "Größe ändern": "Cambiar tamaño",
-  "Reliefhöhe ändern": "Cambiar altura del relieve",
-  "Zellgröße ändern": "Cambiar tamaño de celda",
   "{title} {number}": "{title} {number}",
   "{name} ändern": "Cambiar {name}",
   "Einheit von {name}": "Unidad de {name}",
@@ -7493,5 +7488,11 @@
   "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Paredes, relleno, temperaturas, soportes, velocidad y más",
   "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Impresora, perfil base, filamento y placa de impresión en el slicer",
   "Weitere Beispielprojekte": "Más proyectos de ejemplo",
-  "Text und Anhänge vor dem Senden ansehen": "Ver el texto y los adjuntos antes de enviar"
+  "Text und Anhänge vor dem Senden ansehen": "Ver el texto y los adjuntos antes de enviar",
+  "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer no admite soportes de árbol y utiliza soportes de rejilla.",
+  "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "No se ha elegido un perfil del slicer para este material. Los valores proceden de la tabla de Solidon; si lo necesita, elija un perfil de filamento en el diálogo de impresión.",
+  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Para Cura, la aceleración se limita al máximo de la impresora. Revise el valor en el diálogo de impresión.",
+  "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. Die Kammertemperatur bleibt ohne Wirkung.": "El perfil de impresora elegido no tiene calefacción regulable en la cámara. El ajuste de temperatura de la cámara no tiene efecto.",
+  "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. Wählen Sie im Druckdialog ein passendes Maschinenprofil.": "Este perfil de impresora no confirma que la cámara tenga calefacción regulable. Elija un perfil de máquina adecuado en el diálogo de impresión.",
+  "Kammertemperatur": "Temperatura de la cámara"
 }

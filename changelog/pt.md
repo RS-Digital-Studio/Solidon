@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- A análise do espaço necessário para suportes é muito mais rápida nos modelos ocos e preserva os contornos finos.
 - Nas peças sobrepostas, a análise de impressão deixa de contar o ar fechado como material. Também melhora a deteção de saliências e dos suportes necessários.
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
 - O bico escolhe-se nas definições de impressão entre os tamanhos que a sua impressora conhece, e o slicer recebe o perfil correspondente.
@@ -50,6 +51,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
 - O SuperSlicer já não falha com peças redondas: já não recebe a costura chanfrada que não conhece.
+- O SuperSlicer recebe suportes em grelha com um aviso se foram escolhidos suportes em árvore. A costura mais próxima é aplicada sem avisos falsos.
+- O TPU encontra o perfil de filamento e os valores de arranque no PrusaSlicer e no SuperSlicer. Se faltar um perfil, o Solidon indica que usa a sua própria tabela de materiais.
+- O Cura respeita os limites de aceleração da impressora. Se um valor escolhido os ultrapassar, o Solidon mostra o valor reduzido no relatório.
+- A temperatura da câmara chega ao campo correto do slicer. Os perfis sem aquecimento regulável da câmara explicam por que o valor não tem efeito.
+- O preenchimento Linhas chega ao Bambu Studio e ao Creality Print como linhas, sem ser substituído por Grelha ou Cúbico.
+- Após o corte, o Solidon assinala definições descartadas pelo PrusaSlicer ou pelos slicers Orca, além de alterações à borda, ordem das paredes e tipo de suporte.
 - A pré-seleção de filamento escolhe Generic ou a marca da sua impressora em vez de um filamento especial de terceiros, por exemplo Generic PETG em vez de BETA PETG na Bambu A1.
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
 - Também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte funcionam *Orientar para impressão*, *Rodar* e *Deslocar*. O corpo continua exato.

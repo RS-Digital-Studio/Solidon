@@ -25,6 +25,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Final, cast
 
+import manifold3d
 import numpy as np
 from shapely.geometry import Polygon as ShapelyPolygon
 
@@ -33,9 +34,8 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles
 from app.core.slice import advise
 from app.core.slice.analysis import (
-    _above_material,
-    _layer_shape,
-    _total_area,
+    _material,
+    _material_cross,
     largest_overhang_patch,
     model_support,
     slice_body,
@@ -220,12 +220,15 @@ def island_findings(object_id: ObjectId, result: SliceResult, bottom: float) -> 
     Durchgang wie beim Stützvolumen, nur für dieses eine Stück.
     """
     islands: list[tuple[float, int, ShapelyPolygon]] = []
+    materials: dict[int, manifold3d.CrossSection] = {}
     for index, layer in enumerate(result.layers):
         for contour in layer.islands:
             piece = ShapelyPolygon(contour.outline, contour.holes)
             if piece.is_empty or piece.area <= EPS_GEOM * EPS_GEOM:
                 continue
-            islands.append((_column_under(piece, result, index, bottom), index, piece))
+            islands.append(
+                (_column_under(piece, result, index, bottom, materials=materials), index, piece)
+            )
     if not islands:
         return []
     islands.sort(key=lambda item: (-item[0], item[1]))
@@ -254,19 +257,28 @@ def island_findings(object_id: ObjectId, result: SliceResult, bottom: float) -> 
     return findings
 
 
-def _column_under(piece: ShapelyPolygon, result: SliceResult, index: int, bottom: float) -> float:
-    """Der Raum unter ``piece`` bis zum nächsten Material oder zur Platte, in mm³."""
-    pending = [piece]
+def _column_under(
+    piece: ShapelyPolygon,
+    result: SliceResult,
+    index: int,
+    bottom: float,
+    *,
+    materials: dict[int, manifold3d.CrossSection] | None = None,
+) -> float:
+    """Der Raum unter dem Stück; Materialkonturen werden unter Inseln geteilt."""
+    if materials is None:
+        materials = {}
+    pending = _material_cross(piece)
     volume = 0.0
     for below_index in range(index - 1, -1, -1):
         step = result.layers[below_index + 1].z - result.layers[below_index].z
-        below = _layer_shape(result.layers[below_index])
-        if not below.is_empty:
-            pending = _above_material(pending, below)
-        if not pending:
+        if below_index not in materials:
+            materials[below_index] = _material_cross(_material(result.layers[below_index]))
+        pending -= materials[below_index]
+        if pending.is_empty():
             return volume
-        volume += _total_area(pending) * step
-    return volume + _total_area(pending) * max(result.layers[0].z - bottom, 0.0)
+        volume += float(pending.area()) * step
+    return volume + float(pending.area()) * max(result.layers[0].z - bottom, 0.0)
 
 
 def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]:

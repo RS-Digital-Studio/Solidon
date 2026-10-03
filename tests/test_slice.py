@@ -365,32 +365,23 @@ def test_the_support_volume_comes_out_the_same_on_any_number_of_workers(
     mm³ mit einem Arbeiter, …759 mit zweien, …76 mit dreien. Die Auto-Split-
     Suche vergleicht Nähte an diesem Wert; auf einem Rechner mit vier Kernen
     rechnete sie mit einer anderen Zahl als auf einem mit acht. Jetzt teilen
-    sich die Arbeiter die Stücke **einer** Schicht, und die Summe entsteht in
-    einer einzigen, festen Folge.
+    sich die Arbeiter die Schichtmessung; die Clipper-Säule und ihre Summe
+    entstehen danach in einer einzigen, festen Folge.
     """
     body = ceilings_over_drafted_walls(3)
-    shared = analysis._above_material_shared
-    asked: list[int] = []
-
-    def counting(pending: list[Any], *args: Any) -> list[Any]:
-        asked.append(len(pending))
-        return shared(pending, *args)
-
-    monkeypatch.setattr(analysis, "_above_material_shared", counting)
     answers = []
     for workers in (1, 2, 3, 6):
-        monkeypatch.setattr(analysis, "SUPPORT_WORKERS", workers)
+        monkeypatch.setattr(analysis, "_workers", lambda _wanted, count=workers: count)
         answers.append(slice_body(body, 0.25, detail="support").support_volume)
 
-    assert asked, "die Arbeiter teilten sich keine Schicht — der Test prüfte nur einen Faden"
     assert answers[0] > 50_000.0, "drei Decken stehen auf einem zerfallenden Gitter"
     assert answers[1:] == [answers[0]] * 3, [repr(value) for value in answers]
 
 
 def test_the_pieces_of_one_layer_are_cut_the_same_on_a_pool() -> None:
     """Die Arbeiter teilen sich die Stücke einer Schicht (RM-266). Was dabei
-    zurückkommt, sind dieselben Stücke in derselben Folge wie ohne sie —
-    Stück für Stück bitgleich, denn jede Differenz bleibt derselbe GEOS-Aufruf."""
+    zurückkommt, ist dieselbe Kontur wie ohne sie, Bit für Bit. Gemeinsame
+    Clipper-Eingaben dürfen auch mehrere Aufrufer unverändert teilen."""
     from concurrent.futures import ThreadPoolExecutor
 
     import shapely
@@ -400,15 +391,14 @@ def test_the_pieces_of_one_layer_are_cut_the_same_on_a_pool() -> None:
         shapely.box(-1.0 + 0.37 * index, 5.0 + 0.9 * index, 3.0 + 0.37 * index, 5.5 + 0.9 * index)
         for index in range(90)
     ]
-    alone = analysis._above_material(pending, below)
+    column = analysis._material_cross(shapely.union_all(pending))
+    material = analysis._material_cross(below)
+    alone = analysis._cross_shape(column - material)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        shared = analysis._above_material(pending, below, pool=pool, workers=4)
+        shared = list(pool.map(lambda _number: analysis._cross_shape(column - material), range(4)))
 
-    assert len(shared) == len(alone)
-    assert all(
-        shapely.equals_exact(mine, theirs, tolerance=0.0)
-        for mine, theirs in zip(shared, alone, strict=True)
-    )
+    assert alone is not None
+    assert all(shape is not None and shape.wkb == alone.wkb for shape in shared)
 
 
 @pytest.mark.parametrize("groups", [15, 16, 17])
@@ -419,8 +409,8 @@ def test_parallel_support_columns_keep_holes_and_boundary_contacts(
     """Gemeinsames Material darf parallel gelesen werden, auch mit GEOS-Index.
 
     Je Vierergruppe liegt eine Säule im Material, eine in einem Loch,
-    eine kreuzt den Rand und eine berührt ihn nur. Unter, auf und über
-    der Baumgrenze bleiben jeweils genau zehn Quadratmillimeter übrig.
+    eine kreuzt den Rand und eine berührt ihn nur. Auch die früheren
+    Baumgrenzen behalten jeweils zehn Quadratmillimeter je Gruppe übrig.
     """
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
@@ -447,16 +437,18 @@ def test_parallel_support_columns_keep_holes_and_boundary_contacts(
         expected.extend([hole, shapely.box(-1.0, y + 4.0, 0.0, y + 6.0), contact])
     expected_shape = shapely.union_all(expected)
     ready = Barrier(3)
+    column = analysis._material_cross(shapely.union_all(pending))
+    material = analysis._material_cross(below)
 
     def cut(_worker: int):
         ready.wait(timeout=10.0)
-        return analysis._above_material(pending, below)
+        return analysis._cross_shape(column - material)
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         results = list(pool.map(cut, range(3)))
 
-    for parts in results:
-        actual = shapely.union_all(parts)
+    for actual in results:
+        assert actual is not None
         assert actual.area == pytest.approx(groups * 10.0)
         assert actual.equals(expected_shape)
     assert bool(shapely.is_prepared(below)) is prepared
@@ -2234,3 +2226,77 @@ def test_inverted_separate_cavity_walls_keep_the_nesting_fallback(cut_path: None
     assert section is not None
     assert len(section.interiors) == 1
     assert section.area == pytest.approx(expected, rel=1e-6)
+
+
+def test_clipper_columns_check_cancellation_between_layers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine laufende Säule lässt sich nach einer Konvertierung abbrechen."""
+    from shapely.geometry import box
+
+    roof = box(0, 0, 10, 10)
+    measured = [
+        analysis.LayerMetrics(
+            z=index + 0.5,
+            area=0.0,
+            overhang_area=0.0,
+            island_area=0.0,
+            min_width=0.0,
+            bridge_width=0.0,
+            contour_count=0,
+            overhang=roof if index == 3 else None,
+        )
+        for index in range(4)
+    ]
+    token = CancelSignal()
+    original = analysis._material_cross
+    calls = []
+
+    def cancel_after_conversion(shape):
+        calls.append(shape)
+        result = original(shape)
+        token.cancel()
+        return result
+
+    monkeypatch.setattr(analysis, "_material_cross", cancel_after_conversion)
+    with pytest.raises(OperationCancelled):
+        analysis._support_volume([None, None, None, roof], measured, 1.0, cancelled=token)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "first_height, carried_width, hole, expected",
+    [
+        (None, 0.0, False, 350.0),
+        (0.4, 0.0, False, 290.0),
+        (None, 4.0, False, 250.0),
+        (None, 0.0, True, 262.5),
+    ],
+)
+def test_clipper_columns_match_analytic_volume(
+    first_height: float | None, carried_width: float, hole: bool, expected: float
+) -> None:
+    """100 mm² Dach: volle Säule, andere erste Höhe, Teilauflage und 25 mm² Loch."""
+    from shapely.geometry import box
+
+    roof = box(0, 0, 10, 10)
+    if hole:
+        roof = roof.difference(box(2, 2, 7, 7))
+    below = box(0, 0, carried_width, 10) if carried_width else None
+    measured = [
+        analysis.LayerMetrics(
+            z=index + 0.5,
+            area=0.0,
+            overhang_area=0.0,
+            island_area=0.0,
+            min_width=0.0,
+            bridge_width=0.0,
+            contour_count=0,
+            overhang=roof if index == 3 else None,
+        )
+        for index in range(4)
+    ]
+    # Ohne Auflage 100 * 3,5; erste Höhe 0,4: 100 * 2,9.
+    # Teilauflage: 100 * 1 + 60 * 2,5; Loch: 75 * 3,5.
+    actual = analysis._support_volume(
+        [None, below, None, roof], measured, 1.0, first_layer_height=first_height
+    )
+    assert actual == pytest.approx(expected, abs=1e-9)

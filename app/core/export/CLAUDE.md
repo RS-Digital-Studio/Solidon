@@ -55,6 +55,20 @@ internen Instanzkennung.
 
 ## Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung
 
+Materialarten werden in `slicer_keys` gelesen und geschrieben:
+`normalise_filament_type` vereinheitlicht native Namen für Vorwahl und
+Rücklesung, `filament_type(..., flavour)` schreibt die Form des Zielprogramms.
+Ohne auflösbares Filamentprofil nennt `Foundation.material_from_table` die
+Materialherkunft; `slicer.filament_from_table` trägt sie in den Exportbericht.
+
+Kammerwerte verwenden `slicer_keys.native_key` beim Schreiben, Rücklesen,
+Aufteilen und Prüfen. `normalise_chamber` löst den alten Plural vor eigenen
+Werten auf. `Foundation.chamber_control` kommt ausschließlich aus der
+Maschine; unbekannt bleibt `None`. `manufacturer.chamber_limitation` begründet
+das gesperrte Druckfeld, das Vorschlagangebot und den Übergabebefund. Nur bei
+belegter Heizung und positivem Sollwert setzt die Orca-Übergabe den nötigen
+Filamentschalter.
+
 `write_config` und `project_settings` fragen `base_settings`; liegt ein
 lesbarer Herstellerprozess darunter, gehen nur die Pfade aus `chosen` und
 `accepted` hinaus (`as_mapping(paths=)`, `by_section(paths=)`), dazu das
@@ -101,6 +115,11 @@ oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
 | `verify_settings` | Hat der Slicer die geschriebenen Werte übernommen? |
 | `spools_left_out` | Sind **alle übergebenen Spulen** gedruckt worden? |
 
+`verify_settings` erhält Familie und Programmmarke: Prusa und Orca schreiben
+vollständige Blöcke, fehlende Druckwerte sind deshalb Befunde. Belegte
+Umbenennungen werden vor dem Vergleich übersetzt; reine `nil`-Overrides
+bleiben Vererbung. Randart, Wandfolge und Stützart werden ebenfalls verglichen.
+
 `verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
 Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
 ein wörtlicher Backslash erhalten.
@@ -124,6 +143,10 @@ Stand: Was ein Programm nicht kennt, steht je Programmmarke in
 `for_program`; SuperSlicer stürzt an fremden 3MF-Schlüsseln ab). Rat
 (`writer.part_advice`, `split_for_parts`), Beilage (`prusa_values`) und Dialog
 fragen es; gemessener Bestand in `tests/data/superslicer_3mf_keys.json`.
+Aufzählungen übersetzt `PROGRAM_VALUES` je Programm; nicht verfügbare Wahlen
+stehen mit Ersatz und Grund in `NOT_OFFERED_BY_PROGRAM`. Dialog, Rat, Platte
+und Objektwerte fragen denselben Bestand. `tests/data/slicer_values.json`
+hält die unabhängig gemessenen Aufzählungswerte für den Wächter fest.
 
 ## Stolperfallen
 
@@ -150,7 +173,11 @@ fragen es; gemessener Bestand in `tests/data/superslicer_3mf_keys.json`.
   (`_cura_machine`): mit `PrinterProfile.cura_definition` und installierter
   Datei `-j`, sonst `fdmprinter`; Start- und Endcode aus der Kette, gefüllt von
   `_filled`, je ein `-s` (`solidon_cura.txt` trägt keine Umbrüche);
-  `_temperature_switches`; ohne Definition `slicer.cura_printer_unknown`.
+  `_temperature_switches`; `_cura_motion_values` übernimmt numerische
+  Bewegungswerte, `_cura_limited_accelerations` begrenzt Platte und Netze;
+  eigene Kürzungen reisen als `SlicerConfig.findings` in den Bericht.
+  Fensterprofile und Objektwerte verwenden dieselbe Grenze der aktiven
+  Instanz (`cura_window_motion`); ohne Definition `slicer.cura_printer_unknown`.
 - **Cura übernimmt Einstellungen nur als Profil** (`cura_profile_beside`,
   Befund `handover.cura_profile`). Die Qualitätsstufe kommt vom Drucker, der in
   Cura aktiv ist, für Düse und Spule seines ersten Fachs

@@ -120,21 +120,20 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 - **Die Öffnung** (`_opening_loss`, `_protrusion`, `_minimum_widths`,
   `_halved`, `_width_outline`, `_canonical`) folgt der Regel „Die Öffnung
   zählt, was der Form fehlt“ in `schichtanalyse.md`.
-- **Die Säulen**: `_support_volume` läuft einmal von oben nach unten; ab
-  `SUPPORT_SHARE_FROM` offenen Stücken teilen sich `SUPPORT_WORKERS` die
-  Stücke einer Schicht (`_above_material_shared`), zurück in einfädiger Folge;
-  die untere Schicht lesen alle gemeinsam.
-  Einfädig nimmt `_above_material` den Baum nur für Hüllboxtreffer, sortiert
-  sie und prüft exakt mit den eigenen Säulenteilen als erstem Operand. **Ein
-  vorbereiteter GEOS-Index wird nie parallel als Prädikatindex benutzt** —
-  GEOS baut darin Suchstrukturen erst bei der Abfrage.
+- **Die Säulen**: `_support_volume` vereinigt Überhänge und zieht Material
+  darunter als gerichtete `CrossSection` ab; jede Fläche wird einmal
+  konvertiert, Zwischenkonturen bleiben in Clipper. Schichten und Summe
+  laufen in fester Folge, mit Abbruchprüfung je Schicht. `_material_cross`
+  orientiert vorhandene Außenringe und Löcher ohne Vereinfachung.
   `slice_body(support_volume=False)` lässt die Säulen aus (Druckvorschläge);
   der Druckdialog behält die Messung in der Sitzung
   (`Session.remember_analyses`).
 - **Der Stützort auf Arbeitern** (`model_support`): Gruppen je Startschicht,
-  jede mit eigener Kopie der Schicht (aus WKB), Differenzen einer Schicht in
-  einem Aufruf, Baumtreffer sortiert; die Kanalfrage je Schicht
-  (`_in_channels`), der Kanalraum auf Arbeitern (`channel_space`).
+  eine Clipper-Säule je ursprünglichem Stück. Materialkonturen entstehen
+  unter einem lokalen Schloss einmal je Schicht und werden unverändert
+  geteilt; `findings._column_under` teilt sie innerhalb eines Befundlaufs.
+  Standort, Inseln und Kanäle bleiben örtliche Fragen; deren GEOS-Öffnung
+  (`_in_channels`) und der Kanalraum (`channel_space`) bleiben bestehen.
 
 ## G-Code und Verbrauch
 
