@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-477: Modellnamen mit Sonderzeichen erreichen die Slicer (03.10.2026)](#rm-477-modellnamen-mit-sonderzeichen-erreichen-die-slicer-03102026) |
 | 2026-10-03 | [RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)](#rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026) |
 | 2026-10-03 | [RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)](#rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026) |
 | 2026-10-03 | [RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)](#rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026) |
@@ -38639,3 +38640,48 @@ Releaseprüfung abgewählt, Exit 0**, 30,98 s. Der Abschlussnachweis aus
 Roadmap-, Karten- und Changelogprüfungen besteht mit 77 Prüfungen und vier
 übersprungenen Plattformfällen. Protokolle: `solidon-A-batch1-kernel-repeat.txt`
 und `solidon-A-batch1-final-docs.txt` unter `%TEMP%`.
+
+## RM-477: Modellnamen mit Sonderzeichen erreichen die Slicer (03.10.2026)
+
+<a id="rm-477-modellnamen-mit-sonderzeichen-erreichen-die-slicer-03102026"></a>
+<a id="rm-477"></a>
+
+**RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0 (Windows, Codepage 1252), jeder
+  Drucker. Teilnetze heißen `<Projektname>-part-<n>.stl`; bei Namen wie „obj_4_Bayrak Direği uzun“
+  oder „埃菲尔铁塔18cm“ meldet CuraEngine `Failed to load model … (error number 2/22)`, Solidon sagt
+  nur „Der Slicer hat keine Druckdatei geschrieben“ mit „Maschinenprofil prüfen“. In der
+  Codex-Matrix trifft es alle 12 Korpusmodelle mit solchen Namen in allen 29 Varianten; Namen mit
+  Zeichen aus cp1252 laufen. Abgeleitet: ebenso jeder Lauf, wenn schon der Benutzerordner solche
+  Zeichen trägt. Keine Regression.
+  **Stellen:** `app/core/export/writer.py:2048–2056` (`_cura_meshes`),
+  `app/core/export/handover.py:3838` (`-l`), `:5193–5199` (Rückfallsatz ohne Ursache).
+  **Fix (allgemein):** Dateien, die ein Fremdprogramm über die Kommandozeile öffnet, ASCII und
+  technisch benennen (`platte-1-teil-1.stl`), den Projektnamen nur für Anzeige und Druckdatei;
+  liegt der Arbeitsordner außerhalb der Codepage, einen kurzen ASCII-Ordner verwenden; „Failed to
+  load model“ als eigene Ursache übersetzen.
+  **Abnahme:** je Familie ein Lauf mit türkischem, chinesischem und deutschem Namen, alle mit
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-1), `gcode\rest\`.
+
+**Abschluss:** CuraEngine 5.13.0 unter Windows öffnete die von Solidon verwendeten projektabhängigen Dateipfade über schmale Zeichenketten. Am bisherigen Stand scheiterten der türkische Fahnenmast „obj_4_Bayrak Direği uzun“ und „埃菲尔铁塔18cm“; der deutsche Würfel sowie die drei Orca-/Prusa-Kontrollen funktionierten. Der Pfad stammt aus `400dde0e2ad093f82b62fd911961cd9c7cd453dc`, enthalten in v0.5.1.
+
+Alle Familien bekommen jetzt private technische Modellkopien und unter Windows einen ASCII-Arbeitsordner. Bei einem Unicode-Tempordner wird zunächst ein geprüfter 8.3-Alias benutzt; fehlt er, entsteht ein eigener privater Ordner im Windows-Tempverzeichnis, dessen Ort über die Windows-API ermittelt wird. Cura erhält zudem vollständige Kopien seiner Definitionsketten und Extruderzüge mit technischen Dateiverweisen. Formeln, Modellreihenfolge, individuelle Einstellungen, Blocker, Metadaten und Originale bleiben erhalten. Crealitys vorhandene 3MF-Aufbereitung bleibt angeschlossen. Die Druckdatei wird atomar und abbrechbar ins gewünschte Ziel kopiert; ohne ausdrückliches Ziel behält sie den Projektnamen. „Failed to load model“ nennt nun das Dateilesen als Ursache und bietet Wiederholen oder Slicerwechsel.
+
+Test zuerst: acht Fälle für Namen, Ausgabeziel, fehlenden 8.3-Pfad und Dateilesefehler waren vor dem Fix rot; die Verallgemeinerung auf Orca und Prusa hatte zwei weitere rote Gegenproben. Nach der Korrektur bestanden die drei betroffenen Module mit 684 Tests, 4 übersprungen und 6 Releasefällen abgewählt, Exit 0. Unterlagenprüfung zusätzlich 11 bestanden, 3 vorhandene Plattformfälle übersprungen. Ruff, Format und mypy der beiden geänderten Kernmodule bestanden.
+
+**Gemessene Abnahme:** Neun echte Läufe mit türkischen, chinesischen und deutschen Namen, jeweils zusätzlich Unicode-TEMP und Unicode-Ausgabe, erzeugen Druckdateien. Schichtzahlen: Cura/Kobra 2 und Orca/Kobra 2 jeweils 610 / 863 / 100; Prusa/MK4S 610 / 864 / 100. Letzte Extrusionshöhen in mm: Cura 122,05 / 172,65 / 20,05; Orca 122,08 / 172,68 / 20,08; Prusa 122 / 172,8 / 20. Die unabhängige Bahnlesung bestätigt positive Förderung in allen Dateien. Alle 36 übergebenen Datei- und Ordnerargumente sind ASCII. Die Originalexportnamen bleiben erhalten, ebenso die bisherigen nativen Ergebnisnamen `plate_1.gcode` bei Orca und `solidon.gcode` bei Prusa/Cura mit ausdrücklichem Ausgabeordner.
+
+Drei zusätzliche echte Cura-Läufe mit abgeschaltetem 8.3-Helfer, Unicode-Temp, Unicode-Ausgabe und Unicode-Vorlagenverzeichnis bestanden ebenfalls: jeweils 100 Schichten und 208 598 Bytes. Drei unterschiedliche private Ordner unter Windows-Temp wurden aufgeräumt; acht SHA-256-Werte der nativen Vorlagen und ihrer Kopien blieben unverändert. Die installierten Profile wurden nicht verändert.
+
+Belege: `F:\solidon-review-reports\gcode\rest\codex_A_477_baseline`, `codex_A_477_final` mit `rm477-summary.json` und `ascii-cli-proof.json`, sowie `codex_A_477_fallback_final\fallback-proof.json`. Jeder Einzelbeleg enthält Kommando, Ausgabe, Kennzahlen und Prüfsummen. Changelog in sechs Sprachen, weil Kunden veröffentlichter Versionen betroffen sind. Commit: „Modellnamen mit Sonderzeichen erreichen die Slicer“.
+
+**Nachprüfung am integrierten Stand:** Auf `27e0debd928fe95e9172e4a9f5a215b4928e0c04` mit dem vollständigen RM-477-Diff nochmals zwölf echte Slicerstarts: neun Namen-/Familienfälle und dieselben drei Originalmodelle zusätzlich in Cura ohne 8.3-Helfer. Beide Kindprozesse und der Gesamtwrapper Exit 0. 48 CLI-Datei-/Verzeichnispfade sind ASCII; alle zwölf privaten Arbeitsordner sind geräumt. Schichten und Endhöhen entsprechen der obigen Abnahme. Positive E-Wege in mm für türkisch/chinesisch/deutsch: Cura 1545,956 / 11642,042 / 1421,556; Orca 1523,251 / 11761,193 / 1343,289; Prusa 1342,323 / 11266,209 / 1266,927. Im Cura-Rückfall 1545,956 / 11642,050 / 1421,556. Quellen, 21.977 native Profildateien, 17 Original-Nutzerprofildateien und 361 Produktdateien sind vor/nachher per SHA-256 unverändert. Die Privatkopien der Modelle sind bytegleich; die Ausgaben bleiben unter ihren Unicode-Zielen erhalten. Belege unter `codex_A_477_integrated` und `codex_A_477_integrated_fallback`, vollständige Kommandos, Prozessausgänge und Hashes in `manifest.json`, Messung in `ascii-cli-proof.json`.
+
+Zusätzliche Rückwegmatrix über Erfolg, späten Abbruch und verweigerten atomaren Ersatz bei Cura/Prusa/Orca mit und ohne ausdrückliches Unicode-Ausgabeziel: ohne Fix 9 rot und 9 Kontrollen grün, mit Fix 18 grün. Alte Zieldateien bleiben bei Abbruch/Schreibfehler erhalten. Die Gegenprobe setzt an der bestehenden Dateigrenze an, nicht an einem erst neu eingeführten Helfer. Das Zusammenführen erhält die RM-479-Vorprüfung vor jeder Kopie, den gemeinsamen RM-476-Turmweg und die laufenden Profilbefunde; 171 gemeinsame Fälle und sieben zusätzliche Anschlüsse bestehen. Ruff, Format (1080 Dateien) und mypy (337 Quelldateien) am integrierten Stand jeweils Exit 0. Fenster-, Renderer- und Leistungsprüfungen bleiben dem Release vorbehalten.
+
+Die betroffene Gesamtsammlung nach der Integration endete mit 19.796 bestanden, 107 übersprungen, 3.712 Releasefällen abgewählt und drei Fehlern in 2692,95 s, Exit 1 (`solidon-A-477-integrated-affected.txt`). Zwei verbliebene Slicer-Attrappen schrieben ausdrücklich in den alten Kundenausgabeordner statt an das wirkliche `--output`-Ziel. Sie folgen jetzt wie der echte Slicer dem Aufruf; der fachliche Vergleich des ersten Filaments und der genaue Programmalias bleiben bestehen. Der dritte Fehler ist der bereits zuvor beobachtete fehlende Zähler `helper:display_simplify`; daran wurde keine Produkt- oder Prüflogik geändert. Der anfängliche rote Lauf bleibt als solcher dokumentiert.
+
+Die vollständigen drei betroffenen Dateien bestanden anschließend über `affected_tests.py --run`: **799 bestanden, 4 übersprungen, 7 Releasefälle abgewählt, 44,88 s, Exit 0** (`solidon-A-477-repaired-affected.txt`). Ruff und Format der korrigierten Attrappen ebenfalls Exit 0. Der Produktcode blieb seit der echten Abnahme und der vollständigen statischen Prüfung unverändert. Das gemeinsame Entwicklungstor folgt nach dem nächsten Punkt gemäß dem vereinbarten Zweierpaket.
+
+Archiv, Unterlagenlast, Changelog, Übersetzungskataloge und Meldungsregeln nach dem Abschluss: **275 bestanden, 4 übersprungen, 1 Releasefall abgewählt, 28,48 s, Exit 0** (`solidon-A-477-docs.txt`).

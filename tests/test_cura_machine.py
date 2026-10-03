@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -105,6 +106,277 @@ def _argument(command: list[str], key: str) -> str:
     found = [entry for entry in command if entry.startswith(f"{key}=")]
     assert len(found) == 1, f"{key}: {len(found)}-mal in der Kommandozeile"
     return found[0].split("=", 1)[1]
+
+
+@pytest.mark.parametrize("name", ("Bayrak Direği uzun", "埃菲尔铁塔18cm", "Würfel Größe"))
+@pytest.mark.parametrize("explicit_output", (False, True))
+def test_cura_reads_ascii_copies_and_keeps_the_original_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, explicit_output: bool
+) -> None:
+    """Alle CLI-Dateien sind lesbar; Teile, Blocker und eigene Namen bleiben erhalten."""
+    engine = _cura(tmp_path / "安装目录")
+    model = tmp_path / f"{name}.stl"
+    model_bytes = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
+    model.write_bytes(model_bytes)
+    blocker = tmp_path / f"{name}-blocker.stl"
+    blocker.write_bytes(model_bytes)
+    handover.write_cura_meshes(
+        model,
+        (
+            handover.CuraMesh(model, {"wall_line_count": "4"}),
+            handover.CuraMesh(blocker, {"anti_overhang_mesh": "true"}),
+        ),
+    )
+    sources = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    output_dir = tmp_path / "输出 Größe" if explicit_output else None
+    captured: list[Path] = []
+
+    def run(command: list[str], workspace: Path, *_args: object, **_kwargs: object):
+        captured.append(workspace)
+        assert str(workspace).isascii()
+        paths = [
+            Path(command[index + 1])
+            for index, flag in enumerate(command[:-1])
+            if flag in {"-l", "-j", "-o"}
+        ]
+        assert all(str(path).isascii() for path in paths)
+        roots = command[command.index("-d") + 1].split(os.pathsep)
+        assert all(str(root).isascii() for root in roots)
+        meshes = [Path(command[index + 1]) for index, flag in enumerate(command) if flag == "-l"]
+        assert [path.read_bytes() for path in meshes] == [model_bytes, model_bytes]
+        assert command[command.index(str(meshes[0])) + 2] == "wall_line_count=4"
+        assert command[command.index(str(meshes[1])) + 2] == "anti_overhang_mesh=true"
+        seen: set[Path] = set()
+
+        def check_definition(path: Path) -> None:
+            if path in seen:
+                return
+            seen.add(path)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            references = list(data.get("metadata", {}).get("machine_extruder_trains", {}).values())
+            if "inherits" in data:
+                references.append(data["inherits"])
+            for reference in references:
+                assert reference.isascii()
+                matches = [Path(root) / f"{reference}.def.json" for root in roots]
+                check_definition(next(entry for entry in matches if entry.is_file()))
+
+        for index, flag in enumerate(command):
+            if flag == "-j":
+                check_definition(Path(command[index + 1]))
+        assert len(seen) == 4
+        assert any("gantry_height" in path.read_text(encoding="utf-8") for path in seen)
+        Path(command[command.index("-o") + 1]).write_text(_printed("G28"), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    outcome = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(engine, "cura"),
+        output_dir=output_dir,
+    )
+    expected = output_dir / handover.OUTPUT_NAME if output_dir else model.with_suffix(".gcode")
+    assert outcome.gcode_path == expected
+    assert expected.is_file()
+    assert all(path.read_bytes() == content for path, content in sources.items())
+    assert captured and not captured[0].exists()
+
+
+def test_cura_model_read_error_has_a_matching_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine nicht geladene Modelldatei verweist auf erneute Übergabe und Slicerwechsel."""
+    from app.core.errors import CHECK_SLICER_PROFILE, RETRY, SHOW_SLICER_OUTPUT
+
+    engine = _cura(tmp_path)
+    model = tmp_path / "model.stl"
+    model_bytes = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
+    model.write_bytes(model_bytes)
+    monkeypatch.setattr(
+        handover,
+        "_run_slicer",
+        lambda command, *_args, **_kwargs: subprocess.CompletedProcess(
+            command, 1, b"", b"Failed to load model model-0.stl (error number 2)"
+        ),
+    )
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    with pytest.raises(ExternalToolError) as caught:
+        handover.slice_model(
+            model, print_settings.resolve(profile), profile, handover.SlicerSetup(engine, "cura")
+        )
+    assert RETRY in caught.value.suggestions
+    assert SHOW_SLICER_OUTPUT in caught.value.suggestions
+    assert CHECK_SLICER_PROFILE not in caught.value.suggestions
+
+
+@pytest.mark.parametrize("flavour", ("prusa", "orca"))
+def test_other_families_also_read_private_ascii_model_copies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flavour: str
+) -> None:
+    """Der allgemeine Dateivertrag umfasst beide Slicerfamilien neben Cura."""
+    model = tmp_path / "Bayrak Direği 打印.stl"
+    model_bytes = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
+    model.write_bytes(model_bytes)
+    executable = tmp_path / "slicer.exe"
+    executable.touch()
+    output_dir = tmp_path / "打印"
+
+    def run(command: list[str], workspace: Path, *_args: object, **_kwargs: object):
+        assert str(workspace).isascii()
+        inputs = [Path(argument) for argument in command if argument.endswith(".stl")]
+        assert len(inputs) == 1 and inputs[0] != model
+        assert str(inputs[0]).isascii()
+        assert inputs[0].read_bytes() == model.read_bytes()
+        if flavour == "prusa":
+            target = Path(command[command.index("--output") + 1])
+        else:
+            target = Path(command[command.index("--outputdir") + 1]) / "plate_1.gcode"
+        assert str(target).isascii()
+        target.write_text(_printed("G28"), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    profile = profiles.make_profile()
+    result = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(executable, flavour),
+        output_dir=output_dir,
+    )
+    assert result.gcode_path.parent == output_dir
+    assert result.gcode_path.is_file()
+    assert model.read_bytes() == model_bytes
+
+
+def test_cura_copies_unicode_definition_ids_in_native_search_order(tmp_path: Path) -> None:
+    """Vorlagen samt Formeln bleiben erhalten; die erste gleichnamige Vorlage gewinnt."""
+    first = tmp_path / "第一"
+    second = tmp_path / "第二"
+    workspace = tmp_path / "workspace"
+    for directory in (first, second, workspace):
+        directory.mkdir()
+    for directory, marker in ((first, "first"), (second, "second")):
+        (directory / "基础.def.json").write_text(
+            json.dumps({"name": marker, "settings": {"formula": {"value": "x + 1"}}}),
+            encoding="utf-8",
+        )
+    child = second / "Düse.def.json"
+    child.write_text(json.dumps({"inherits": "基础", "name": "Düse"}), encoding="utf-8")
+    engine = first / "printer.def.json"
+    engine.write_text(
+        json.dumps({"inherits": "基础", "metadata": {"machine_extruder_trains": {"0": "Düse"}}}),
+        encoding="utf-8",
+    )
+    command = [
+        "CuraEngine",
+        "slice",
+        "-d",
+        os.pathsep.join((str(first), str(second))),
+        "-j",
+        str(engine),
+        "-e0",
+        "-j",
+        str(child),
+        "-o",
+        str(second / "打印.gcode"),
+    ]
+    original = {path: path.read_bytes() for path in tmp_path.rglob("*.json")}
+    staged = handover._prepare_cura_cli(command, workspace, None)
+    copied = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (workspace / "definitions").glob("*.json")
+    ]
+    assert len(copied) == 3
+    assert {data.get("name", "") for data in copied} == {"", "first", "Düse"}
+    assert (
+        next(data for data in copied if data.get("name") == "first")["settings"]["formula"]["value"]
+        == "x + 1"
+    )
+    assert all(
+        str(value).isascii()
+        for index, value in enumerate(staged)
+        if index and staged[index - 1] in {"-j", "-d", "-o"}
+    )
+    assert all(path.read_bytes() == content for path, content in original.items())
+
+
+@pytest.mark.parametrize(
+    "bad_data",
+    (
+        {"inherits": "missing"},
+        {"inherits": "printer"},
+        {"metadata": {"machine_extruder_trains": {"0": "missing"}}},
+        {"inherits": "../elsewhere"},
+        [],
+    ),
+)
+def test_incomplete_cura_definition_copies_stop_before_starting(
+    tmp_path: Path, bad_data: object
+) -> None:
+    """Eine abgerissene Vorlagenkette erreicht den Fremdprozess nicht."""
+    source = tmp_path / "printer.def.json"
+    source.write_text(json.dumps(bad_data), encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    with pytest.raises(ExternalToolError) as caught:
+        handover._prepare_cura_cli(["CuraEngine", "slice", "-j", str(source)], workspace, None)
+    assert caught.value.suggestions
+    assert source.read_text(encoding="utf-8") == json.dumps(bad_data)
+
+
+def test_cura_copies_the_fallback_extruder_definition(tmp_path: Path) -> None:
+    """Auch der zweite -j-Pfad der allgemeinen Maschine bleibt im Arbeitsordner."""
+    engine = _cura(tmp_path / "安装")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = _written(engine, "anycubic-kobra-2", workspace)
+    model = tmp_path / "打印.stl"
+    model_bytes = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
+    model.write_bytes(model_bytes)
+    command = handover._command(handover.SlicerSetup(engine, "cura"), [model], config, tmp_path)
+    assert command.count("-j") == 2
+    staged = handover._prepare_cura_cli(command, workspace, None)
+    assert staged.count("-j") == 2
+    assert all(
+        Path(staged[index + 1]).parent == workspace / "definitions"
+        for index, flag in enumerate(staged)
+        if flag == "-j"
+    )
+
+
+def test_cura_output_copy_cancellation_keeps_the_existing_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beim Abbruch bleiben die frühere Druckdatei und das Modell unverändert."""
+    from app.core.errors import OperationCancelled
+
+    class CancelDuringCopy:
+        calls = 0
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.calls >= 3
+
+        def raise_if_cancelled(self) -> None:
+            self.calls += 1
+            if self.is_cancelled:
+                raise OperationCancelled
+
+    source = tmp_path / "print.gcode"
+    source.write_bytes(b"new")
+    target = tmp_path / "打印.gcode"
+    target.write_bytes(b"old")
+    token = CancelDuringCopy()
+    monkeypatch.setattr(handover, "COPY_BLOCK_BYTES", 1)
+    with pytest.raises(OperationCancelled):
+        handover._copy_print_file(source, target, cancelled=token)
+    assert target.read_bytes() == b"old"
+    assert source.read_bytes() == b"new"
+    assert set(tmp_path.iterdir()) == {source, target}
 
 
 def test_cura_gets_the_start_code_of_its_printer(tmp_path: Path) -> None:

@@ -121,8 +121,10 @@ def test_slice_model_passes_the_family_and_exact_program(
     )
     monkeypatch.setattr(handover, "write_config", lambda *_args, **_kwargs: config)
 
-    def write_gcode(*_args: object, **_kwargs: object) -> CompletedProcess[bytes]:
-        (tmp_path / "solidon.gcode").write_text(
+    def write_gcode(
+        command: list[str], *_args: object, **_kwargs: object
+    ) -> CompletedProcess[bytes]:
+        Path(command[command.index("--output") + 1]).write_text(
             "G90\nM82\nG1 Z0.2 F300\nG1 X1 Y0 E0.1\nG1 X5 Y0 E0.2\n; default_fan_speed = 50\n",
             encoding="utf-8",
         )

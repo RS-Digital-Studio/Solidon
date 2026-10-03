@@ -62,7 +62,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 |---|---|
 | `paths.py` | Wo Nutzerdaten liegen (§38); `opened_path` (kanonischer Pfad hinter einem offenen Handle, für `scene/project` und `updates`); `lock_file()` als Lebensdauersperre für Wiederherstellung und Absturzprotokoll |
 | `log.py` | Lokales Protokoll (§33.2); `install_crash_logging()` beim Prozessstart, nie beim Import; `redact_user_paths` setzt `~` für den Nutzerordner |
-| `discover.py` · `tools.py` · `install.py` | Installierte Programme außerhalb des PATH finden · externe Programme · Fehlendes aus der Anwendung nachinstallieren (§36) |
+| `discover.py` · `tools.py` · `install.py` | Installierte Programme außerhalb des PATH finden · externe Programme · Fehlendes aus der Anwendung nachinstallieren (§36); `workspace_for(ascii_only=True)` liefert unter Windows bei Bedarf einen geprüften 8.3-Alias oder einen privaten Ordner im Windows-Temp |
 | `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
 | `network.py` | CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher (Flatpak) |
 

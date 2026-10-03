@@ -107,7 +107,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
-| [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-503 — Cura übernimmt die native Jerk-Steuerung nicht](#rm-503) | Geometrie, Erkennung und Druckvorbereitung | Schalter und vollständige abhängige Jerk-Werte aus dem gewählten Profil auflösen; M205 im G-Code gegen die Zeitberechnung prüfen |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
@@ -3119,26 +3118,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
   Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
   Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
-
-<a id="rm-477"></a>
-
-- [ ] **RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt.**
-  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0 (Windows, Codepage 1252), jeder
-  Drucker. Teilnetze heißen `<Projektname>-part-<n>.stl`; bei Namen wie „obj_4_Bayrak Direği uzun“
-  oder „埃菲尔铁塔18cm“ meldet CuraEngine `Failed to load model … (error number 2/22)`, Solidon sagt
-  nur „Der Slicer hat keine Druckdatei geschrieben“ mit „Maschinenprofil prüfen“. In der
-  Codex-Matrix trifft es alle 12 Korpusmodelle mit solchen Namen in allen 29 Varianten; Namen mit
-  Zeichen aus cp1252 laufen. Abgeleitet: ebenso jeder Lauf, wenn schon der Benutzerordner solche
-  Zeichen trägt. Keine Regression.
-  **Stellen:** `app/core/export/writer.py:2048–2056` (`_cura_meshes`),
-  `app/core/export/handover.py:3838` (`-l`), `:5193–5199` (Rückfallsatz ohne Ursache).
-  **Fix (allgemein):** Dateien, die ein Fremdprogramm über die Kommandozeile öffnet, ASCII und
-  technisch benennen (`platte-1-teil-1.stl`), den Projektnamen nur für Anzeige und Druckdatei;
-  liegt der Arbeitsordner außerhalb der Codepage, einen kurzen ASCII-Ordner verwenden; „Failed to
-  load model“ als eigene Ursache übersetzen.
-  **Abnahme:** je Familie ein Lauf mit türkischem, chinesischem und deutschem Namen, alle mit
-  Druckdatei. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-1), `gcode\rest\`.
 
 <a id="rm-478"></a>
 

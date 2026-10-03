@@ -165,6 +165,13 @@ hält die unabhängig gemessenen Aufzählungswerte für den Wächter fest.
 
 ### Stützsperre und Cura
 
+Alle Slicer lesen technische Modellkopien und schreiben im privaten Arbeitsordner.
+Unter Windows sind diese Pfade ASCII; ein 8.3-Alias darf nicht wieder aufgelöst
+werden. Die Druckdatei gelangt danach atomar ins ursprüngliche Unicode-Ziel.
+Cura erhält zusätzlich Blocker und vollständige Definitionsketten mit technischen
+Namen (`handover._prepare_cura_cli`); nur Vererbung und Extruderzug-Verweise ändern
+sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
+
 - **Die Stützsperre** (`support.block_channels`, Regel in `dateiformat.md`):
   `writer._support_blocker` fragt zuerst die Schichten des Prüfberichts
   (`slice.findings.remembered_analysis`), sonst schneidet es einmal mit
