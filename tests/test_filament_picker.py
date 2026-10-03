@@ -35,6 +35,18 @@ def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
     assert hex_of((1.0, 0.0, 0.0)) == "#ff0000"
 
 
+def _next_tab(widget):
+    """Das nächste Widget der Fokuskette, das die Tabulatortaste annimmt."""
+    from PySide6.QtCore import Qt
+
+    following = widget.nextInFocusChain()
+    while following is not widget and not (
+        following.focusPolicy() & Qt.FocusPolicy.TabFocus and following.isEnabled()
+    ):
+        following = following.nextInFocusChain()
+    return following
+
+
 def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app, monkeypatch) -> None:
     """Eine weitere Farbe entfernt weder den bisherigen Fokusanker noch den Weg durchs Formular."""
     from PySide6.QtGui import QColor
@@ -47,10 +59,13 @@ def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app, monk
         dialog.add_colour.click()
         assert tuple(dialog.colour_buttons[:2]) == original
         assert len(dialog.colour_buttons) == 3
-        assert dialog.colour_buttons[0].nextInFocusChain() is dialog.colour_buttons[1]
-        assert dialog.colour_buttons[1].nextInFocusChain() is dialog.colour_buttons[2]
-        assert dialog.colour_buttons[2].nextInFocusChain() is dialog.add_colour
-        assert dialog.remove_colour.nextInFocusChain() is dialog.location
+        # Geprüft wird der Weg der Tabulatortaste. In der Fokuskette stehen
+        # auch die Namensschilder der Farben (Regel 18: die Farbe steht nie
+        # allein); die nimmt Tab nicht an, also überspringt sie auch der Test.
+        assert _next_tab(dialog.colour_buttons[0]) is dialog.colour_buttons[1]
+        assert _next_tab(dialog.colour_buttons[1]) is dialog.colour_buttons[2]
+        assert _next_tab(dialog.colour_buttons[2]) is dialog.add_colour
+        assert _next_tab(dialog.remove_colour) is dialog.location
         dialog.remove_colour.click()
         assert tuple(dialog.colour_buttons) == original
     finally:
@@ -323,8 +338,10 @@ def test_a_spool_with_several_colours_goes_whole_into_the_field(
     assert seen == ["#ff0000 #0000ff"], "beide Farben gehen in das Feld der Operation"
 
     image = field.itemIcon(position).pixmap(SWATCH_PIXELS, SWATCH_PIXELS).toImage()
-    left = image.pixelColor(1, SWATCH_PIXELS // 2).name()
-    right = image.pixelColor(SWATCH_PIXELS - 2, SWATCH_PIXELS // 2).name()
+    # Der Punkt ist rund (e969f88ce); am Rand mischt die Kantenglättung. Gelesen
+    # wird je in der Mitte der linken und der rechten Hälfte.
+    left = image.pixelColor(SWATCH_PIXELS // 4, SWATCH_PIXELS // 2).name()
+    right = image.pixelColor(3 * SWATCH_PIXELS // 4, SWATCH_PIXELS // 2).name()
     assert (left, right) == ("#ff0000", "#0000ff"), f"Streifen in Spulenreihenfolge: {left} {right}"
 
 
@@ -1327,6 +1344,106 @@ def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
     )
 
 
+def test_a_colour_dot_is_no_bigger_than_the_field_it_replaced(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Der runde Punkt ist so groß wie das Feld vor ihm, nur schärfer (RM-489).
+
+    Gezeichnet wird er in doppelter Auflösung; ein Symbol aus nur diesem Bild
+    meldete Qt aber 28 statt 14 Punkte. Eine Spulenzeile wurde 34 statt 24
+    Punkte hoch, die linke Spalte reichte nicht mehr, und der Objektbaum oder
+    „Im Regal" fiel heraus — gemessen am echten Fenster bei 1920×1080.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import QListWidget, QListWidgetItem
+
+    from app.ui.filament_picker import SWATCH_PIXELS, FilamentPanel, swatch
+
+    dot = swatch("#c0392b")
+    assert dot.actualSize(QSize(64, 64)).toTuple() == (SWATCH_PIXELS, SWATCH_PIXELS)
+    sharp = dot.pixmap(QSize(SWATCH_PIXELS, SWATCH_PIXELS), 2.0)
+    assert sharp.size().toTuple() == (2 * SWATCH_PIXELS, 2 * SWATCH_PIXELS), (
+        "auf einem Schirm mit 200 % bleibt der Punkt rund und scharf"
+    )
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    panel = FilamentPanel()
+    panel.show_scene(
+        [_assigned_body([MaterialSlot(index=1, name="PLA Rot", colour=(0.8, 0.2, 0.2))], (1,))]
+    )
+    # Der Vergleich: dieselbe Zeile mit einem Feld von vierzehn Punkten, wie
+    # bis v0.5.1 gezeichnet.
+    reference = QListWidget()
+    plain = QPixmap(SWATCH_PIXELS, SWATCH_PIXELS)
+    plain.fill(Qt.GlobalColor.red)
+    reference.addItem(QListWidgetItem(plain, panel.list.item(1).text()))
+    try:
+        assert panel.list.sizeHintForRow(1) <= reference.sizeHintForRow(0), (
+            f"Spulenzeile {panel.list.sizeHintForRow(1)} Punkte, mit dem alten Feld "
+            f"{reference.sizeHintForRow(0)}"
+        )
+    finally:
+        reference.deleteLater()
+
+
+def test_a_long_filament_name_is_shortened_instead_of_rolled_sideways(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Kein waagrechter Balken in der Filamentliste; der volle Name steht im Tooltip.
+
+    Ein waagrechter Balken nahm der schmalen Liste eine Zeile, die Rechnung
+    darüber wusste davon nichts, und dazu kam ein senkrechter Balken, hinter
+    dem „Im Regal" verschwand (RM-489).
+    """
+    from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.save(
+        filaments.CatalogueFilament("Polymaker PolyTerra Cotton White Sonderedition", "#f5f5f0")
+    )
+    long_name = "Prusament PLA Galaxy Black mit einem sehr langen Namen"
+    host = QWidget()
+    host.setFixedWidth(260)
+    layout = QVBoxLayout(host)
+    layout.setContentsMargins(0, 0, 0, 0)
+    panel = FilamentPanel()
+    layout.addWidget(panel)
+    panel.show_scene(
+        [_assigned_body([MaterialSlot(index=1, name=long_name, colour=(0.1, 0.1, 0.1))], (1,))]
+    )
+    host.resize(260, 600)
+    host.show()
+    try:
+        for _ in range(8):
+            qt_app.processEvents()
+        panel.set_room(panel.wanted_height())
+        for _ in range(8):
+            qt_app.processEvents()
+        listing = panel.list
+        width = listing.viewport().width()
+        assert listing.horizontalScrollBar().maximum() == 0, "waagrecht gerollt statt gekürzt"
+        assert not listing.horizontalScrollBar().isVisible()
+        too_wide = [
+            listing.item(row).text()
+            for row in range(listing.count())
+            if listing.visualRect(listing.model().index(row, 0)).width() > width
+        ]
+        assert not too_wide, f"breiter als die Liste ({width} Punkte): {too_wide}"
+        assert listing.verticalScrollBar().maximum() == 0, "bei voller Wunschhöhe rollt nichts"
+        for row in range(listing.count()):
+            item = listing.item(row)
+            if item.flags() & Qt.ItemFlag.ItemIsSelectable:
+                assert item.text() in item.toolTip(), (
+                    f"gekürzt sichtbar, also gehört der volle Name in den Tooltip: {item.text()}"
+                )
+    finally:
+        host.close()
+        host.deleteLater()
+
+
 @pytest.mark.parametrize("font_points", [10, 16])
 @pytest.mark.parametrize("width", [260, 420])
 @pytest.mark.parametrize("row_count", [0, 25])
@@ -1914,4 +2031,19 @@ def test_the_profile_choice_button_says_what_it_does(qt_app: QApplication) -> No
     try:
         assert dialog._ok_button.text() == "Profil übernehmen"
     finally:
+        dialog.deleteLater()
+
+
+def test_the_closed_spool_details_name_what_they_hold(qt_app: QApplication) -> None:
+    """Auch „Weitere Angaben" der Spule nennt zugeklappt seinen Inhalt (RM-491)."""
+    from PySide6.QtWidgets import QLabel
+
+    dialog = NewFilamentDialog()
+    try:
+        summary = dialog.more_section.findChild(QLabel, "sectionSummary")
+        assert summary is not None and summary.isVisibleTo(dialog)
+        for word in ("Durchmesser", "Preis", "Slicer-Profil"):
+            assert word in summary.text(), (word, summary.text())
+    finally:
+        dialog.release()
         dialog.deleteLater()

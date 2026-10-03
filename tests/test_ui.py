@@ -972,7 +972,9 @@ def test_an_evaluation_question_keeps_the_project_generation_from_its_creation(
     stopped: list[bool] = []
     session.askRequested.connect(requests.append)
     worker.cancelled.connect(lambda: stopped.append(True))
-    monkeypatch.setattr(session, "run_evaluation", lambda: session.ask_from_worker("Alt", ["Ja"]))
+    monkeypatch.setattr(
+        session, "run_evaluation", lambda *_args: session.ask_from_worker("Alt", ["Ja"])
+    )
     session._project_generation += 1
     try:
         worker.work()
@@ -1324,7 +1326,7 @@ def test_active_matching_questions_end_when_their_evaluation_is_invalidated(
         assert dialog.result() == QDialog.DialogCode.Rejected
         return dialog.result()
 
-    def evaluate():
+    def evaluate(*_args):
         session.announce_question(preview, (("part", "face_new_a"),))
         session.ask_from_worker("Welcher Bezug bleibt?", ["face_new_a"])
         pytest.fail("an invalidated evaluation cannot receive a matching answer")
@@ -4359,6 +4361,11 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
     from PySide6.QtTest import QTest
 
     _object_id, _hole, flow, fields = _hole_fields_in_placement(window)
+    # Fokus und damit ``focusOutEvent`` gibt es offscreen nur im aktiven Fenster;
+    # ohne das prüfte der Test den Fokuswechsel, den es nie gab.
+    window.show()
+    window.activateWindow()
+    QApplication.processEvents()
     diameter = fields["Durchmesser"]
     _minimum, _maximum = diameter._bounds_mm
     limit = diameter.value_mm() + 1.0
@@ -4375,6 +4382,7 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
     other.lineEdit().setFocus()
     QTest.keyClick(other.lineEdit(), Qt.Key.Key_End)
     QApplication.processEvents()
+    assert other.lineEdit().hasFocus() and not line.hasFocus(), "Voraussetzung: der Fokus wechselt"
     assert not line.isModified(), (
         "Fokuswechsel stellt die ungültige Zahl ohne Änderungsmarke wieder her"
     )
@@ -4400,27 +4408,37 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
 def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
     window: MainWindow,
 ) -> None:
-    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt."""
-    from types import SimpleNamespace
+    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt.
 
+    Die Bohrung stammt aus einem echten Schritt mit ``=@bore``: Wählt der Kunde
+    sie, bietet das Fenster ihren Schritt an und holt dessen Maße ins Bild. Ein
+    erfundener Schritt, den der Verlauf nicht kennt, kam nie bis zur Maßgruppe.
+    """
     from app.ui.labels import LengthSpin
     from app.ui.op_dialog import ValueField
     from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
-    result = window.session.evaluate_now()
+    session = window.session
+    assert session.add_parameter(Parameter(name="bore", value=6.0))
+    assert session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert session.wait_for_idle(30_000)
+    body = session.project.document.ops[-1].outputs[0]
+    assert session.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(body,),
+                params={"diameter": "=@bore", "x": 0.0, "y": 0.0, "z": 10.0},
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    result = session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
     window.object_tree.select_feature(object_id, hole)
-    for _ in range(40):
-        QApplication.processEvents()
-
-    spec = REGISTRY.get("drill_hole")
-    step = SimpleNamespace(id=17, op="drill_hole", params={"diameter": "=@bore"})
-    window.feature_panel.offer_bore_step(step, spec, {"bore": 6.0})
-    window._place_measures("drill_hole", {"diameter": "=@bore"}, editing=False)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -5766,6 +5784,134 @@ def test_the_remesh_and_retry_button_refines_before_the_smoothing_and_runs_throu
     window.session.undo()
     window.session.wait_for_idle()
     assert list(window.session.project.document.ops) == ops_before
+
+
+def test_the_mesh_and_retry_button_rounds_the_places_without_an_exact_edge(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Knick ohne eigene Kante im exakten Körper hat einen Weg: am Dreiecksmodell (RM-436).
+
+    ``edges.unmapped`` bot nur „Prüfen Sie die markierten Stellen“ an; am Knick
+    innerhalb einer Fläche gibt es nichts zu prüfen. Der Knopf setzt
+    *Flächenbearbeitung beenden* vor den Schritt, und derselbe Schritt rundet
+    am Netz — ein Zug, Strg+Z nimmt ihn zurück. Der Befund wird hier an die
+    echte Gruppenbindung angehängt; Angebot, Handler, Verlauf und Auswertung
+    sind echt.
+    """
+    from app.core.errors import CORRECT_INPUT, MESH_AND_RETRY, SHOW_LOCATION
+    from app.core.geom import edge_ops
+    from app.core.types import Finding
+    from app.ui.panels import actions_for_document, as_error
+
+    real = edge_ops._group_that_fits
+
+    def with_a_place_without_an_edge(*args: Any, **kwargs: Any) -> Any:
+        kept, findings = real(*args, **kwargs)
+        place = (((0.0, 0.0, 1.0), (0.0, 1.0, 1.0)),)
+        unmapped = Finding(
+            code="edges.unmapped",
+            severity="warning",
+            message="An 1 Stellen hat der exakte Körper keine eigene Kante.",
+            values={"skipped": 1, "worked": len(kept)},
+            location=place[0][0],
+            outline=place,
+            suggestions=(SHOW_LOCATION, MESH_AND_RETRY, CORRECT_INPUT),
+        )
+        return kept, [*findings, unmapped]
+
+    monkeypatch.setattr(edge_ops, "_group_that_fits", with_a_place_without_an_edge)
+    window.session.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    window.session.wait_for_idle()
+    body = window.session.project.document.ops[-1].outputs[0]
+    window.session.apply(
+        "Verrunden",
+        [
+            OperationDraft(
+                op="fillet_edges", inputs=(body,), params={"radius": 1.0, "edges": "vertical"}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    finding = next(f for f in result.scene.report.findings if f.code == "edges.unmapped")
+    handlers = window.error_handlers()
+    offered = [
+        action.id
+        for action in actions_for_document(
+            finding,
+            window.session.project.document,
+            stopped_at=result.stopped_at,
+            live_objects=result.scene.objects,
+        )
+        if action.id in handlers
+    ]
+    assert MESH_AND_RETRY.id in offered, offered
+    ops_before = list(window.session.project.document.ops)
+
+    handlers[MESH_AND_RETRY.id](as_error(finding, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "create_brep_box",
+        "brep_to_mesh",
+        "fillet_edges",
+    ]
+    assert after.scene.objects[body].kind == "mesh"
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert list(window.session.project.document.ops) == ops_before
+
+
+def test_a_bundle_of_places_on_one_body_keeps_show_the_place_for_all(
+    qt_app: QApplication,
+) -> None:
+    """Gleiche Sätze an verschiedenen Stellen eines Körpers: Die Sammelzeile zeigt alle (RM-412).
+
+    Zwei ausgelassene Rundungskanten standen als „(2) …“ ohne Ort und ohne
+    *Stelle zeigen* da; der Kunde musste raten, welche Kanten scharf blieben.
+    Trägt jedes Mitglied seinen Umriss, fliegt die Zeile zur ersten Stelle und
+    umrandet alle. Ohne Umriss bleibt sie ohne Ort — ein zufälliger erster
+    wäre eine Behauptung.
+    """
+    from app.core.errors import SHOW_LOCATION
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel, as_error
+
+    first = (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)
+    second = (((5.0, 0.0, 0.0), (6.0, 0.0, 0.0)),)
+    common: dict[str, Any] = {
+        "code": "edges.too_narrow",
+        "severity": "warning",
+        "message": "Einige Kanten dieser Auswahl sind nicht verrundet.",
+        "object_id": "obj_1",
+        "suggestions": (SHOW_LOCATION,),
+    }
+    panel = ReportPanel()
+    panel.add_findings(
+        [
+            Finding(location=first[0][0], outline=first, values={"edge": 1}, **common),
+            Finding(location=second[0][0], outline=second, values={"edge": 2}, **common),
+        ]
+    )
+
+    assert panel.list.count() == 1
+    row = panel.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert row.location == first[0][0]
+    assert row.outline == first + second
+    assert as_error(row).values["outline"] == first + second
+
+    points = ReportPanel()
+    points.add_findings(
+        [
+            Finding(location=first[0][0], values={"edge": 1}, **common),
+            Finding(location=second[0][0], values={"edge": 2}, **common),
+        ]
+    )
+    bare = points.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert bare.location is None and bare.outline == ()
 
 
 def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count() -> None:
@@ -9558,10 +9704,22 @@ def test_a_boolean_that_failed_in_draft_can_go_the_full_chain(window: MainWindow
     entwurf = errors.BooleanFailedError(attempted=("direct", "welded"))
     assert "use_voxel_stage" in {a.id for a in offered_actions(entwurf, handlers)}
 
+    session = window.session
     handlers["use_voxel_stage"](entwurf)
-    assert window.session._quality_once == "fine", "der Lauf bleibt im Entwurf"
-    window.session.wait_for_idle()
-    assert window.session._quality_once is None, "und der nächste ist wieder Entwurf"
+    # Die Güte legt der Start des Arbeiters fest (RM-426), nicht mehr dessen Lauf.
+    assert session._worker is not None and session._worker.quality == "fine", (
+        "der Lauf bleibt im Entwurf"
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_quality == "fine"
+    session.evaluate_async()
+    assert session._worker is not None and session._worker.quality == "draft", (
+        "und der nächste ist wieder Entwurf"
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_quality == "draft"
 
 
 def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) -> None:
@@ -11397,6 +11555,8 @@ def test_split_restores_the_complete_export_progress(
     """Prüfung und Schreiben erhalten nach Split genau ihren eigenen Abbruchzustand zurück."""
 
     monkeypatch.setattr(window._leash, "start", lambda _worker: None)
+    # Am feinen Ergebnis beginnt der Export sofort (RM-426); um das Warten geht es hier nicht.
+    window.session.quality = "fine"
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._start_export(tmp_path / "halter.stl", "stl")
@@ -13640,6 +13800,48 @@ def test_the_object_tree_grows_with_its_content(qt_app: QApplication) -> None:
     assert tree.tree.height() >= 6 * row, (
         f"sechs Zeilen brauchen {6 * row} px, die Ansicht ist {tree.tree.height()} px hoch"
     )
+
+
+def test_the_object_tree_asks_only_for_the_rows_it_has(qt_app: QApplication) -> None:
+    """Die Körperzeile mit Vorschaubild ist doppelt so hoch wie ihre Merkmale.
+
+    Gerechnet wurde mit der Höhe der ersten Zeile mal der Zahl der Zeilen: Ein
+    Körper mit zehn Merkmalen wollte 583 statt rund 300 Punkte. Die Karte nahm
+    sie der Filamentliste darunter weg und zeigte selbst eine leere Fläche
+    unter „Rechte Seite" (RM-489, gemessen bei 1920×1080).
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import ObjectTree, view_chrome
+
+    tree = ObjectTree()
+    body = QTreeWidgetItem(tree.tree, ["Halter", "60 × 40 × 11 mm"])
+    body.setSizeHint(0, QSize(0, 48))
+    for number in range(10):
+        QTreeWidgetItem(body, [f"Fläche {number}", "400 mm²"])
+    body.setExpanded(True)
+    tree.resize(300, 800)
+    tree.show()
+    try:
+        for _ in range(6):
+            qt_app.processEvents()
+        rows = tree.tree.rowHeight(tree.tree.indexFromItem(body))
+        rows += sum(
+            tree.tree.rowHeight(tree.tree.indexFromItem(body.child(index)))
+            for index in range(body.childCount())
+        )
+        needed = view_chrome(tree.tree) + rows
+        assert tree.wanted_height() <= needed, (
+            f"Wunsch {tree.wanted_height()} Punkte für Zeilen, die {needed} brauchen"
+        )
+        tree.set_room(tree.wanted_height())
+        for _ in range(6):
+            qt_app.processEvents()
+        assert tree.tree.verticalScrollBar().maximum() == 0, "mit vollem Wunsch rollt nichts"
+    finally:
+        tree.close()
+        tree.deleteLater()
 
 
 def test_the_history_grows_with_its_content(qt_app: QApplication) -> None:
@@ -17311,6 +17513,49 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert all(chr(10) in row for row in both), both
 
 
+def test_the_palette_finds_every_setting_behind_the_closed_section(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Tastenbelegung" und „Fernsteuerung" in der Palette führen zur Zeile (RM-491).
+
+    Seit sieben Optionen hinter „Weitere Einstellungen" liegen, fand die
+    Palette sie nicht: Sie kannte nur *Einstellungen …*. Jetzt steht jede
+    Zeile darin, unter ihrem Namen, und der Klick öffnet den Dialog mit
+    aufgeklapptem Bereich und dem Feld im Fokus.
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    from app.ui.command_palette import CommandPalette
+    from app.ui.settings_dialog import SettingsDialog
+
+    entries = window.palette_rows()
+    palette = CommandPalette(entries, parent=window)
+    for query, wanted in (
+        ("Tastenbelegung", "settings.shortcuts"),
+        ("Fernsteuerung", "settings.remote"),
+    ):
+        palette._refilter(query)
+        found = [
+            palette.list.item(row).data(Qt.ItemDataRole.UserRole)
+            for row in range(palette.list.count())
+        ]
+        assert found and found[0] == wanted, (query, found[:5])
+    palette.deleteLater()
+
+    seen: dict[str, object] = {}
+
+    def look(dialog: SettingsDialog) -> int:
+        heading = dialog.advanced.findChild(QToolButton)
+        seen["open"] = heading.isChecked()
+        seen["focus"] = dialog._shown_option is dialog.shortcuts
+        dialog.release()
+        return int(SettingsDialog.DialogCode.Rejected)
+
+    monkeypatch.setattr(SettingsDialog, "exec", look)
+    window.window_commands()["settings.shortcuts"][2]()
+    assert seen == {"open": True, "focus": True}, seen
+
+
 def test_command_palette_shows_explanations_without_repeating_window_titles(
     window: MainWindow,
 ) -> None:
@@ -18394,6 +18639,59 @@ def test_looking_at_one_plate_puts_the_outline_back(window: MainWindow) -> None:
     assert high == pytest.approx(box.maximum[0], abs=1.0)
 
 
+@pytest.mark.parametrize("way", ["file", "download", "generated"])
+def test_a_further_model_brings_its_plate_into_view(
+    window: MainWindow, tmp_path: Path, way: str
+) -> None:
+    """RM-303: Bei gewählter Platte 1 kommt ein weiteres Modell auf Platte 2 — und ins Bild.
+
+    Bis 0.5.1 wechselte nur eine Datei vom Pfad die Platte. Ein Download und
+    ein erzeugtes Modell landeten auf Platte 2, während das Bild weiter
+    Platte 1 zeigte; nur ein Befund nannte, wo das neue Modell steht. Neben
+    einem Brett von 200 auf 200 mm hat kein zweites Modell Platz.
+    """
+    import trimesh
+
+    from app.core.ingest.fetch import FetchedModel
+    from tests.scripted_backend import ScriptedMeshBackend
+
+    board = tmp_path / "brett.stl"
+    trimesh.creation.box(extents=(200.0, 200.0, 20.0)).export(board)
+    window.open_path(board)
+    assert window.session.wait_for_idle()
+    plates = window.header.plates
+    plates.setCurrentIndex(plates.findData(0))
+    assert window.header.plate == 0
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    if way == "file":
+        second = tmp_path / "wuerfel.stl"
+        second.write_bytes(cube)
+        window.open_path(second)
+    elif way == "download":
+        window._downloaded(
+            FetchedModel(
+                name="wuerfel.stl",
+                payload=cube,
+                url="https://example.invalid/wuerfel.stl",
+                retrieved="2026-10-03T00:00:00+00:00",
+            )
+        )
+    else:
+        # Derselbe Aufruf wie *Übernehmen* im Erzeugen-Dialog (``_take_generated``).
+        generated = ScriptedMeshBackend(fallback=cube).text_to_mesh("ein Würfel", seed=1)
+        window.session.add_generated(generated)
+    assert window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    result = window.session.last_result
+    assert result is not None
+    assert sorted(entry.plate for entry in result.scene.objects.values()) == [0, 1], (
+        "ohne zweite Platte prüft der Test nichts"
+    )
+    assert window.header.plate == 1, "das neue Modell steht auf Platte 2 und gehört ins Bild"
+
+
 def test_the_section_plane_cuts_every_plate_at_its_own_place(window: MainWindow) -> None:
     """Und die Entscheidung daneben: Der Schnitt ist eine Szenenebene (RM-119).
 
@@ -19033,6 +19331,141 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
     document = window.session.project.document
     assert document.ops == []
     assert document.parameters == {}, "der Quader nimmt seine Maße mit"
+
+
+def test_editing_a_box_offers_to_name_its_dimensions_in_one_step(window: MainWindow) -> None:
+    """RM-359 F6: *Diesen Schritt ändern* an einem Grundkörper bietet den Haken an.
+
+    Wer seine Maße erst später benennen will, fand ihn nur beim Anlegen
+    (``grenzen.md``: in jedem Dialog der Kategorie ``primitive``). Schritt und
+    Maße kommen in **einer** Transaktion; ein Strg+Z nimmt beides zurück.
+    """
+    from app.core.scene.history import OperationDraft
+
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft("create_box", params={"width": 30.0, "depth": 20.0, "height": 10.0})],
+    )
+    window.session.wait_for_idle()
+    step = window.session.project.document.ops[-1]
+    transactions = len(window.session.history.transactions)
+
+    window.edit_operation(step.id)
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.offers_naming(), "der Haken steht auch beim Ändern"
+    dialog._naming.setChecked(True)
+    _accept_after_preview(window, dialog)
+    QApplication.processEvents()
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert set(document.parameters) == {"breite", "tiefe", "hoehe"}
+    changed = next(entry for entry in document.ops if entry.id == step.id)
+    assert changed.params["width"] == "=@breite"
+    assert len(window.session.history.transactions) == transactions + 1, "eine Transaktion"
+
+    assert window.session.undo() is not None
+    window.session.wait_for_idle()
+    document = window.session.project.document
+    assert document.parameters == {}, "Strg+Z nimmt Maße und Schritt zusammen zurück"
+    restored = next(entry for entry in document.ops if entry.id == step.id)
+    assert restored.params["width"] == 30.0
+
+
+def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
+    qt_app: QApplication,
+) -> None:
+    """RM-359 F8: Ein Maß mit eigener Unter- und Obergrenze hat einen Regler (§13).
+
+    Während des Ziehens zeigt das Feld die Zahl; übernommen wird beim
+    Loslassen — eine Änderung, ein Strg+Z. Eine Pfeiltaste ändert einmal.
+    Ohne beide Grenzen gibt es keinen Regler, denn es gibt keine Strecke.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.core.types import Document, Parameter
+    from app.ui.panels import SLIDER_STEPS, ParameterPanel
+
+    panel = ParameterPanel()
+    document = Document(format_version=1, app_version="0.0.1")
+    document.parameters["breite"] = Parameter(
+        name="breite", value=40.0, minimum=10.0, maximum=110.0, title="Breite"
+    )
+    document.parameters["hoehe"] = Parameter(name="hoehe", value=20.0, maximum=50.0)
+    # Die Grenzen eines Feldes, geerbt beim Benennen: kein Arbeitsbereich.
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=40.0, minimum=0.1, maximum=1000.0)
+    panel.show_document(document)
+    panel.show()
+    QApplication.processEvents()
+    edited: list[tuple[str, float]] = []
+    panel.parameterEdited.connect(lambda name, value: edited.append((name, value)))
+
+    assert set(panel._sliders) == {"breite"}, "nur das Maß mit einem Arbeitsbereich"
+    slider = panel._sliders["breite"]
+    assert slider.value() == round(0.3 * SLIDER_STEPS), "der Griff steht bei 40 von 10…110"
+    assert slider.accessibleName()
+
+    slider.setSliderDown(True)
+    for share in (0.4, 0.5, 0.6):
+        slider.setSliderPosition(round(share * SLIDER_STEPS))
+        QApplication.processEvents()
+    assert panel._editors["breite"].value() == pytest.approx(70.0), "das Feld zeigt mit"
+    assert edited == [], "während des Zugs keine Änderung"
+    slider.setSliderDown(False)
+    QApplication.processEvents()
+    QTest.qWait(10)
+    assert edited == [("breite", pytest.approx(70.0))], "Loslassen ist genau eine Änderung"
+
+    slider.setFocus()
+    QTest.keyClick(slider, Qt.Key.Key_Right)
+    QTest.qWait(10)
+    assert len(edited) == 2 and edited[-1][1] == pytest.approx(70.1), edited
+
+
+def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> None:
+    """RM-359 F5 und F9: Zwei Quader mit benannten Maßen — sechs verschiedene Zeilen.
+
+    Vorher stand „Breite, Tiefe, Höhe“ zweimal ohne Bezug in der Leiste, und
+    die Felder hatten keinen Namen: dreimal „Einheit“, dreimal „Parameter
+    ändern“. Jetzt trägt der zweite Satz die Nummer seines Namens, und jedes
+    Feld, jede Einheit und jeder Knopf heißt nach seinem Maß.
+    """
+    from app.ui.labels import BoundedSpin
+
+    spec = REGISTRY.get("create_box")
+    for _round in range(2):
+        window.run_operation(spec)
+        dialog = window._op_dialog
+        assert dialog is not None
+        assert dialog._naming is not None
+        dialog._naming.setChecked(True)
+        _accept_after_preview(window, dialog)
+        QApplication.processEvents()
+        window.session.wait_for_idle()
+
+    document = window.session.project.document
+    titles = [str(parameter.title) for parameter in document.parameters.values()]
+    assert len(titles) == 6 and len(set(titles)) == 6, titles
+    assert str(tr("{title} {number}", title=tr("Breite"), number=2)) in titles
+
+    panel = window.parameters
+    QApplication.processEvents()
+    named = [
+        widget.accessibleName()
+        for widget in (
+            *panel._editors.values(),
+            *panel._unit_editors.values(),
+            *panel._detail_buttons.values(),
+        )
+    ]
+    assert all(named), "kein Feld ohne Namen"
+    assert len(named) == len(set(named)), f"doppelte Namen: {named}"
+    assert all(isinstance(editor, BoundedSpin) for editor in panel._editors.values())
+    assert all(panel._titles[name].buddy() is editor for name, editor in panel._editors.items()), (
+        "die Beschriftung zeigt auf ihr Feld"
+    )
 
 
 @pytest.mark.parametrize("name", ["create_box", "create_cylinder", "create_holder_u"])
@@ -20350,6 +20783,62 @@ def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> 
     assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
 
 
+def test_a_project_halting_at_its_first_step_says_so_instead_of_inviting(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """RM-458: Eine Datei, deren Kette am ersten Schritt hält, ist kein leeres Projekt.
+
+    Geöffnet stand „Noch keine Objekte“ im Baum und „Womit fangen Sie an?“
+    über der Ansicht, obwohl ein Quader-Schritt da war. Jetzt sagen Ansicht und
+    Baum, dass das Projekt an Schritt 1 hält, und *Schritt korrigieren* öffnet
+    ihn (§2.7, §15.3). Der Weg ist der des Kunden: Datei öffnen.
+    """
+    import dataclasses
+
+    builder = Session()
+    high = _bound_width_project(builder)
+    document = builder.project.document
+    box = document.ops[0]
+    document.ops[0] = dataclasses.replace(
+        box, params={**box.params, "width": f"=max(@breite, {high + 1000.0:g})"}
+    )
+    stored = builder.save_project(tmp_path / "haelt.p3d")
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window.open_path(stored)
+        assert window.session.wait_for_idle(30_000)
+        for _ in range(8):
+            QApplication.processEvents()
+        result = window.session.last_result
+        assert result is not None and result.stopped_at == 1 and not result.scene.objects
+
+        card = window.viewport.invitation
+        assert card.isVisible()
+        assert "Womit" not in card.title.text()
+        assert "1" in card.title.text(), card.title.text()
+        assert not any(button.isVisibleTo(card) for button in card.buttons.values())
+        assert not card.drop_hint.isVisibleTo(card)
+        correct = card.halt_buttons["correct_step"]
+        assert correct.isVisibleTo(card) and card.halt_buttons["report"].isVisibleTo(card)
+
+        note = window.object_tree._empty.text()
+        assert "1" in note and "Erzeugen" not in note, note
+
+        correct.click()
+        QApplication.processEvents()
+        dialog = window._op_dialog
+        assert dialog is not None, "der Schritt ist zum Korrigieren offen"
+        dialog.reject()
+        QApplication.processEvents()
+    finally:
+        window.session.wait_for_idle()
+        window.close()
+        window.deleteLater()
+        builder.deleteLater()
+
+
 def _a_stored_width_beyond_its_field(window: MainWindow) -> float:
     """*Breite* jenseits der Feldgrenze, wie eine Datei sie mitbringt — zurück die Grenze."""
     import dataclasses
@@ -20524,23 +21013,27 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
 
 
-def _a_cone_in_draft(window: MainWindow) -> None:
-    """Ein Kegel, der im Entwurf mit halb so vielen Dreiecken steht wie fein."""
+def _a_blend_in_draft(window: MainWindow) -> None:
+    """Ein verschmolzenes Teil, das im Entwurf auf doppelt so grobem Raster steht wie fein.
+
+    Bis RM-427 tat es ein Kegel; seitdem rechnen Kegel und Ring in beiden
+    Stufen mit derselben Teilung. Gröber im Entwurf ist nur noch das
+    Verschmelzen über :data:`blend.DRAFT_SAMPLES` Rasterpunkten — hier rund
+    650 000 bei 0,6 mm.
+    """
+    box = {"width": 40.0, "depth": 40.0, "height": 40.0}
     assert window.session.apply(
-        "Kegel",
+        "Zwei verschmolzene Quader",
         [
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 20.0}),
             OperationDraft(
-                op="create_cone",
-                params={
-                    "bottom_diameter": 30.0,
-                    "top_diameter": 10.0,
-                    "height": 20.0,
-                    "segments": 64,
-                },
-            )
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.6}
+            ),
         ],
     )
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
 
@@ -20573,13 +21066,13 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
 
     from app.core.geom.mesh import as_mesh_data
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     result = window.session.last_result
     assert result is not None
     draft = sum(as_mesh_data(entry.mesh).triangle_count for entry in result.scene.objects.values())
     fine = _fine_triangles(window)
     assert fine > draft, "Voraussetzung: fein und Entwurf unterscheiden sich"
-    target = tmp_path / "kegel.stl"
+    target = tmp_path / "teil.stl"
 
     window._start_export(target, "stl")
     assert window.session.wait_for_idle(30_000)
@@ -20600,7 +21093,7 @@ def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:
     """
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     ran: list[str] = []
 

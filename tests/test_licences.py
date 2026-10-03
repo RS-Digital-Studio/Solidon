@@ -22,9 +22,10 @@ def test_no_dependency_violates_the_policy() -> None:
 
 def test_the_runtime_tree_is_actually_walked() -> None:
     packages = {name.lower() for name in licences.runtime_packages()}
-    for expected in ("trimesh", "manifold3d", "numpy", "scipy", "matplotlib", "pyside6", "pygfx"):
+    for expected in ("trimesh", "manifold3d", "numpy", "scipy", "uharfbuzz", "pyside6", "pygfx"):
         assert expected in packages, f"{expected} is missing from the checked tree"
-    assert not packages.intersection({"pyvista", "pyvistaqt", "qtpy"})
+    # matplotlib entfiel mit RM-471: Die Schriftzüge setzt HarfBuzz.
+    assert not packages.intersection({"pyvista", "pyvistaqt", "qtpy", "matplotlib"})
 
 
 def test_gpl_is_refused_and_lgpl_is_not() -> None:
@@ -402,21 +403,19 @@ def test_every_bundled_font_carries_its_licence() -> None:
     # Entscheidung.
     allowed = (licences_dir / "licences.toml").read_text(encoding="utf-8")
     assert '"OFL-1.1"' in allowed, "die SIL Open Font License steht nicht in der Freigabeliste"
+    assert '"Bitstream-Vera"' in allowed, "die DejaVu-Lizenz fehlt in der Freigabeliste"
 
     # **Was zur Wahl steht, muss auch da sein.** Eine Familie in ``FONTS``,
-    # deren Dateien fehlen, fiele beim Kunden nicht auf, sondern auf DejaVu
-    # zurück — matplotlib meldet das nur auf der Fehlerausgabe.
+    # deren Dateien fehlen, stünde im Dialog zur Wahl und ließe sich beim
+    # Kunden nicht setzen.
     #
     # Verglichen wird der volle Familienname ohne Leerzeichen gegen den
     # Dateinamen vor dem Bindestrich: „Liberation Sans" gegen
-    # „LiberationSans-Regular.ttf". DejaVu bringt matplotlib selbst mit und
-    # liegt deshalb nicht in unserem Ordner.
+    # „LiberationSans-Regular.ttf", „DejaVu Sans Mono" gegen „DejaVuSansMono.ttf".
     bundled = {entry.stem.split("-")[0].lower() for entry in fonts}
     for family in FONTS:
         flat = family.replace(" ", "").lower()
-        assert flat in bundled or flat.startswith("dejavu"), (
-            f"{family} steht zur Wahl, liegt aber nicht bei — {sorted(bundled)}"
-        )
+        assert flat in bundled, f"{family} steht zur Wahl, liegt aber nicht bei — {sorted(bundled)}"
 
 
 def test_the_bundled_fonts_are_listed_here() -> None:
@@ -443,7 +442,7 @@ def test_the_bundled_fonts_are_listed_here() -> None:
             f"{clan} {version} liegt bei, steht aber in keiner Zeile von licences.toml"
         )
     count = len(sorted(BUNDLED_FONTS.glob("*.ttf")))
-    written = {"12": "zwölf", "13": "dreizehn", "14": "vierzehn", "15": "fünfzehn"}.get(str(count))
+    written = {"14": "vierzehn", "26": "sechsundzwanzig", "27": "siebenundzwanzig"}.get(str(count))
     assert written is not None, f"{count} Schriftdateien — die Zahlwörter hier reichen nicht mehr"
     assert written in head, (
         f"es liegen {written} ({count}) Schriftdateien bei; licences.toml nennt eine andere Zahl"

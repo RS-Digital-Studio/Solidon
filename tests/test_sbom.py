@@ -372,7 +372,7 @@ def test_windows_libffi_is_bound_to_the_pinned_cpython_build() -> None:
     """ABI 8 allein darf nicht als Quellversion in der Lizenzakte landen."""
     # Aktueller Bau und die weiterhin zuordenbaren alten Artefakte:
     # PCbuild/python.props nennt jeweils libffi-3.4.4.
-    for python_version in ("3.13.14", "3.13.15", "3.14.7"):
+    for python_version in ("3.13.14", "3.13.15", "3.14.7", "3.14.8"):
         assert make_sbom._libffi_version(
             target_platform="win32", python_version=python_version
         ) == (

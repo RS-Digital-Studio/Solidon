@@ -250,6 +250,9 @@ class UiSettings:
     Beim ersten Start an, danach die letzte Wahl beim Übernehmen: Wer Weg 2
     geht, will seine Maße jedes Mal benannt haben und musste den Haken bisher
     bei jedem Grundkörper neu finden (Entscheidung Robert, 02.10.2026)."""
+    open_sections: dict[str, bool] = field(default_factory=dict)
+    """Welche einklappbaren Abschnitte der Kunde offen oder zu verließ, unter
+    ihrem Merker (``panels.collapsible(remember=…)``, RM-491)."""
 
     def remember(self, path: Path) -> None:
         text = str(path)

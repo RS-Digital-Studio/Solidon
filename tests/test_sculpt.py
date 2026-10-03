@@ -703,6 +703,14 @@ def run(entry: SceneObject, profile: Profile, **params: object) -> OpResult:
         '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": "groß", "s": 1}]',
         '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": 1, "s": 1, "t": "hammer"}]',
         '{"p": 1}',
+        # Die Zwillinge aus der Nachprüfung (RM-367): keine endliche Zahl, ein
+        # Radius ohne Fläche oder ohne Grenze, ein Punkt mit vier Koordinaten.
+        '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": 1, "s": NaN}]',
+        '[{"p": [NaN, 0, 0], "n": [0, 0, 1], "r": 1, "s": 1}]',
+        '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": 0, "s": 1}]',
+        '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": -2, "s": 1}]',
+        '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": Infinity, "s": 1}]',
+        '[{"p": [0, 0, 0, 7], "n": [0, 0, 1], "r": 1, "s": 1}]',
     ],
 )
 def test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out(

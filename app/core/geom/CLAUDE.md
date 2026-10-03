@@ -125,7 +125,7 @@ Aufrufe (`manifold3d`, `csgraph`) als reine Rechnung mit Feldern hinein/heraus;
 `JOBS` ist der einzige Auftragseinstieg, `serve` die Helferseite,
 `pack`/`copied` der gemeinsame Speicher. `_opened` ordnet nur ENOMEM und
 die Windows-Speichercodes 8/14/1450/1455 als `MemoryError` ein; ENOSPC bleibt
-ein Transfer-`OSError` für den bestehenden Absage-/lokalen Rückfallweg.
+ein Transfer-`OSError` und pausiert den Hilfsprozess (`kern.md`).
 `kernel_process.py`: bitgleiches `run` hier/im Helfer, Vorrat, Abbruch, Tod,
 Rückfall, `warm_up`, `shutdown`; `NOT_A_KERNEL_FAILURE` schützt breite Fänge.
 Ein Start reserviert unter dem Poolschloss einen Platz; der gesamte Bestand
@@ -138,8 +138,8 @@ gibt auch bei Fehler seine Wartenden frei, nimmt offene Starts mit und trennt
 alte Reservierungen/Rückgaben/Absagen vom neuen Bestand; Regel: `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
-Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen
-Fläche entfällt, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
+Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
+belegt, sonst entfällt er, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
 Spiegelung am Netz, `perceive.features.note_movement`) · `ops.py` („Transformation“,
 `place_on_bed`, `place_group_on_bed` ohne vorberechneten Versatz;
 `repair_object` gibt einen heilen Eingang unverändert zurück) · `align.py` ·
@@ -189,7 +189,7 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
-`label_ops.py` (Schriften in `data/fonts/`; Matplotlib gehört zum Extra `geom`;
+`label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten Austritt entgegen der
 Richtung, `opposite_side`)
 
@@ -356,10 +356,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 - Fehlt eine genannte Kante oder trifft ein Schlüssel mehrere, hält der ganze
   Schritt an; eine Gruppe überspringt, was nicht `workable` ist. Ob eine
   Rundung passt, fragen beide Kerne vorher gleich (`contact_band_limit`).
-- Exakte Gruppen: `brep.edit.native_edges_of_chains` (BRep-Karte).
-  Nach Breitenfilter neu belegen; ohne Kante absagen. „Zu schmal“ nur gemessen.
-  Alle Auslassungen auch bei Fehlern als `Finding.outline` mit Konturpunkt
-  `location` erhalten.
+- Exakte Gruppen: `_group_that_fits` bindet über
+  `brep.edit.native_edges_of_segments`, `_on_a_solid` rundet über
+  `brep.edit.fillet_group`; Regeln `kanten.md`.
 - `_arc_steps` folgt `MAX_FACET_SAG` und `MAX_FACET_ANGLE` wie OpenCASCADE.
   Eckknoten aus `MeshEdge.node_indices`, ein Knoten ohne Körper bekommt keine
   Haube (`_corner_hull`). Den Überstand bekommt, was abgezogen wird, nicht was
@@ -386,8 +385,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   (`mesh.remember_refined_units`, weitergereicht bis `to_bytes`).
 - Schriften: nur, was mitreist (`BUNDLED_FONT_LICENCES`);
   `FONT_STYLES_AVAILABLE` je Familie; `stroke_width` gegen `narrowest_bead`
-  als Befund, ohne Tabelle je Familie; `font_properties` prüft die Familie
-  der gefundenen Datei, denn matplotlib fällt still zurück.
+  als Befund, ohne Tabelle je Familie; `glyphs.font_file` lehnt fehlende
+  Datei oder Schnitt ab.
 - `MeshData.cavity` folgt `transform.apply` und verfällt bei jeder anderen
   Geometrieänderung; ohne sie tragen Innenschalen oder die Entlüftung
   (`_cavity_mesh`), nie ein Hüllquader. Kein Reparaturweg begründet einen

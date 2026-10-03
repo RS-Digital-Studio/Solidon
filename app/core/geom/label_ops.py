@@ -29,7 +29,7 @@ from app.core.errors import (
     CORRECT_INPUT,
     ValidationError,
 )
-from app.core.geom import transform
+from app.core.geom import glyphs, transform
 from app.core.geom.attributes import with_slot
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
@@ -38,6 +38,7 @@ from app.core.geom.boolean import (
     fell_apart,
     without_effect,
 )
+from app.core.geom.glyphs import FONT_FOLDER
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
@@ -66,10 +67,10 @@ Placement = Literal["raised", "engraved"]
 #: eintaucht, kann eine gewollte Prägung auf schräger Fläche sein.
 LABEL_BURIED_SHARE: Final = 0.5
 
-#: Die Schriften, die immer da sind. matplotlib bringt DejaVu selbst mit, eine
-#: Beschriftung sieht also auf jedem Rechner gleich aus — eine Systemschrift,
-#: die es auf einem Rechner gibt und auf dem nächsten nicht, ist ein Projekt,
-#: das sich unterschiedlich öffnet.
+#: Die Schriften, die immer da sind. Alle liegen als Dateien bei
+#: (:data:`app.core.geom.glyphs.FONT_FILES`), eine Beschriftung sieht also auf
+#: jedem Rechner gleich aus — eine Systemschrift, die es auf einem Rechner gibt
+#: und auf dem nächsten nicht, ist ein Projekt, das sich unterschiedlich öffnet.
 FONTS: tuple[str, ...] = (
     "DejaVu Sans",
     "DejaVu Serif",
@@ -85,17 +86,17 @@ FONTS: tuple[str, ...] = (
 #: passiert wäre.
 #:
 #: Comfortaa und Dancing Script kommen als **variable** Schriften: eine Datei
-#: mit einer Gewichtsachse, aus der sich jeder Schnitt rechnen ließe. Nur kann
-#: matplotlib das nicht; es nimmt die Standardinstanz und meldet „Failed to
-#: find font weight bold, now using 400" auf die Fehlerausgabe. Gemessen am
+#: mit einer Gewichtsachse, aus der sich jeder Schnitt rechnen ließe. Gesetzt
+#: wird die Standardinstanz; matplotlib meldete dazu nur „Failed to find font
+#: weight bold, now using 400" auf die Fehlerausgabe. Gemessen am
 #: 10.09.2026 an „ABCabc 123" auf 10 mm: Bei den sechs statischen Familien
 #: wächst die mittlere Strichbreite von 0,61 bis 0,84 mm auf 0,92 bis 1,44 mm, bei
 #: diesen beiden bleibt sie auf 0,70 beziehungsweise 0,48 — vier Einträge im
 #: Dialog, ein Ergebnis.
 #:
-#: **Der Riegel in** :func:`font_properties` **hätte das nicht gefangen**: Er
-#: prüfte die Familie, und die ist ja da. Ein Schnitt, den es nicht gibt, ist
-#: dieselbe stille Lüge eine Ebene tiefer.
+#: **Eine Prüfung der Familie allein hätte das nicht gefangen**: Die ist ja da.
+#: Ein Schnitt, den es nicht gibt, ist dieselbe stille Lüge eine Ebene tiefer —
+#: :func:`app.core.geom.glyphs.font_file` lehnt ihn ab.
 FONT_STYLES_AVAILABLE: Final[dict[str, tuple[str, ...]]] = {
     "Comfortaa": ("regular",),
     "Dancing Script": ("regular",),
@@ -105,14 +106,18 @@ FONT_STYLES_AVAILABLE: Final[dict[str, tuple[str, ...]]] = {
 #:
 #: Aus :data:`FONTS` abzüglich derer, die nur einen Schnitt mitbringen — der
 #: Dialog graut das Feld damit aus, statt eine Wahl anzubieten, die
-#: :func:`font_properties` gleich danach ablehnt. Eine neue variable Schrift
+#: :func:`app.core.geom.glyphs.font_file` gleich danach ablehnt. Eine neue variable Schrift
 #: braucht nur ihren Eintrag in :data:`FONT_STYLES_AVAILABLE`; hier fällt sie
 #: von selbst heraus.
 FONTS_WITH_ALL_STYLES: Final[tuple[str, ...]] = tuple(
     font for font in FONTS if font not in FONT_STYLES_AVAILABLE
 )
 
-#: Wo die mitgelieferten Schriften liegen, die matplotlib nicht selbst kennt.
+#: Wo die mitgelieferten Schriften liegen.
+#:
+#: **DejaVu** ist die Vorgabe und deckt die meisten Zeichen ab; bis RM-471 kam
+#: es mit matplotlib ins Paket, jetzt liegt es selbst bei (Fassung 2.35,
+#: bitgleich zur Veröffentlichung der DejaVu-Fonts).
 #:
 #: **Liberation, und zwar aus einem Grund, der nichts mit Geschmack zu tun
 #: hat:** Die drei Familien sind metrisch kompatibel zu Arial, Times New Roman
@@ -125,16 +130,15 @@ FONTS_WITH_ALL_STYLES: Final[tuple[str, ...]] = tuple(
 #: Fließtext auf einem Bildschirm gezeichnet sind. Eine runde und eine
 #: geschriebene daneben decken ab, wofür sonst jemand das Programm verlässt.
 #:
-#: Vierzehn Dateien und gut viereinhalb Megabyte: zwölf für Liberation, weil
-#: jede der drei Familien ihre vier Schnitte mitbringt, und je eine für die
-#: beiden variablen. Drei Regular allein wären billiger und wären eine Falle:
-#: Der Schnitt stünde dann bei DejaVu zur Wahl und bei Liberation nicht, ohne
-#: dass es jemand sähe — matplotlib fällt still zurück
-#: (:func:`font_properties`).
+#: Sechsundzwanzig Dateien und knapp zehn Megabyte: je zwölf für DejaVu und
+#: Liberation, weil jede ihrer drei Familien vier Schnitte mitbringt, und je
+#: eine für die beiden variablen. Drei Regular allein wären billiger und wären
+#: eine Falle: Der Schnitt stünde zur Wahl, ohne dass es ihn gäbe.
 #:
-#: Alle drei stehen unter der SIL Open Font License 1.1; welcher Text zu
-#: welcher Sippe gehört, sagt :data:`BUNDLED_FONT_LICENCES`.
-BUNDLED_FONTS: Final[Path] = Path(__file__).parent / "data" / "fonts"
+#: Liberation, Comfortaa und Dancing Script stehen unter der SIL Open Font
+#: License 1.1, DejaVu unter der Bitstream-Vera-Lizenz; welcher Text zu welcher
+#: Sippe gehört, sagt :data:`BUNDLED_FONT_LICENCES`.
+BUNDLED_FONTS: Final[Path] = FONT_FOLDER
 
 #: Welche mitgelieferte Schriftsippe unter welchem Lizenztext steht.
 #:
@@ -151,42 +155,18 @@ BUNDLED_FONTS: Final[Path] = Path(__file__).parent / "data" / "fonts"
 #: wird von nichts gelesen. ``tests/test_licences.py`` hält ihn seit dem
 #: 10.09.2026 gegen den Versionseintrag in der Schriftdatei selbst.
 BUNDLED_FONT_LICENCES: Final[dict[str, str]] = {
+    "DejaVu": "DejaVu-2.35-Bitstream-Vera.txt",
     "Liberation": "Liberation-2.1.5-OFL-1.1.txt",
     "Comfortaa": "Comfortaa-3.105-OFL-1.1.txt",
     "DancingScript": "DancingScript-2.001-OFL-1.1.txt",
 }
 
-_registered = False
-
-
-def _register_bundled_fonts() -> None:
-    """Die mitgelieferten Schriften einmal je Prozess bei matplotlib anmelden.
-
-    Ohne das findet ``findfont`` sie nicht: Es sucht in den Systemordnern und
-    im eigenen Datenverzeichnis, und ein Ordner in der Anwendung ist beides
-    nicht. ``addfont`` trägt eine Datei in den laufenden Fontmanager ein, ohne
-    seinen Zwischenspeicher auf der Platte anzufassen.
-
-    **Einmal je Prozess**, denn ``addfont`` liest jede Datei und legt sie in
-    die Liste — vierzehn Dateien bei jedem Aufruf von :func:`outlines` wären
-    vierzehn Dateizugriffe je Buchstabengruppe.
-    """
-    global _registered
-    if _registered:
-        return
-    from matplotlib import font_manager
-
-    for entry in sorted(BUNDLED_FONTS.glob("*.ttf")):
-        font_manager.fontManager.addfont(str(entry))
-    _registered = True
-
-
 #: Die Schnitte, die jede dieser Familien mitbringt — und die bis zum
 #: 10.09.2026 niemand anbieten konnte.
 #:
-#: Sie liegen längst im Paket: matplotlib führt zu jeder statischen Familie
-#: vier Dateien (regular, bold, oblique, bold-oblique), und ``FONTS`` nannte
-#: nur die erste. Aus sechs Familien werden damit vierundzwanzig Kombinationen,
+#: Sie lagen längst im Paket: Zu jeder statischen Familie gibt es vier Dateien
+#: (regular, bold, kursiv oder geneigt, beides), und ``FONTS`` nannte nur die
+#: erste. Aus sechs Familien werden damit vierundzwanzig Kombinationen,
 #: ohne ein Byte mehr; die beiden variablen bleiben bei je einer
 #: (:data:`FONT_STYLES_AVAILABLE`).
 #:
@@ -201,18 +181,6 @@ def _register_bundled_fonts() -> None:
 #: kurze Listen statt einer langen, und mit jeder weiteren Familie wächst nur
 #: die erste. Der Schlüssel ist englisch, weil er in der Projektdatei steht.
 FONT_STYLES: Final[tuple[str, ...]] = ("regular", "bold", "italic", "bold_italic")
-
-#: Was ein Schnitt für ``FontProperties`` bedeutet: Gewicht und Neigung.
-_STYLE_PROPERTIES: Final[dict[str, tuple[str, str]]] = {
-    "regular": ("normal", "normal"),
-    "bold": ("bold", "normal"),
-    # ``oblique`` und nicht ``italic``: DejaVu führt geneigte Schnitte, keine
-    # echten kursiven. Wer hier ``italic`` verlangt, bekommt von matplotlib
-    # den geneigten — aber über einen Rückfall, und ein Rückfall, der zufällig
-    # das Richtige trifft, ist keine Zusage.
-    "italic": ("normal", "oblique"),
-    "bold_italic": ("bold", "oblique"),
-}
 
 #: Erklärungen, die beide Beschriftungs-Operationen teilen.
 _WHERE = _("Wo die Schrift sitzt. Eine angeklickte Fläche trägt Ort und Richtung selbst ein.")
@@ -323,79 +291,16 @@ def too_thin_to_print(shapes: Sequence[Any], size: float, line_width: float) -> 
     return size * line_width / stroke
 
 
-def font_properties(font: str, style: str = FONT_STYLES[0]) -> Any:
-    """Familie und Schnitt als ``FontProperties`` — und die Zusage, dass es sie gibt.
-
-    **matplotlib fällt still zurück.** Wer eine Schrift verlangt, die auf dem
-    Rechner fehlt, bekommt keine Ausnahme, sondern DejaVu Sans und eine Zeile
-    auf der Fehlerausgabe. Gemessen am 10.09.2026: ``family="Liberation Sans"``
-    löst auf einem Rechner ohne Liberation nach ``DejaVuSans.ttf`` auf, und
-    ``family="Arial"`` findet auf Windows Arial und sonst nirgends — genau das
-    Projekt, „das sich unterschiedlich öffnet", vor dem der Kommentar an
-    :data:`FONTS` warnt.
-
-    Solange nur mitgelieferte Familien zur Wahl stehen, kann das nicht
-    eintreten. Es bleibt trotzdem eine Zusage, die niemand einlöste — und eine
-    mitgelieferte Schrift, die es aus einem Paketfehler nicht ins Paket
-    schafft, fiele lautlos auf DejaVu zurück (Regel 21).
-    """
-    from matplotlib.font_manager import FontProperties, findfont, get_font
-
-    _register_bundled_fonts()
-    # **Und der Schnitt gehört zur selben Frage.** Eine variable Schrift bringt
-    # nur ihre Standardinstanz mit; „fett" liefert dieselben Umrisse, und
-    # matplotlib sagt es auf einer Fehlerausgabe, die niemand liest.
-    offered = FONT_STYLES_AVAILABLE.get(font)
-    if offered is not None and style not in offered:
-        raise ValidationError(
-            field="style",
-            detail=_(
-                "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder "
-                "nehmen Sie eine Schrift, die fett und kursiv mitbringt.",
-                font=font,
-            ),
-            value=style,
-            constraint="missing_style",
-        )
-    weight, slant = _STYLE_PROPERTIES.get(style, _STYLE_PROPERTIES[FONT_STYLES[0]])
-    # ``slant`` stammt aus :data:`_STYLE_PROPERTIES` und ist dort immer einer
-    # der drei Werte, die matplotlib kennt; der Parameter selbst kommt als
-    # ``str`` aus dem Schema, und diese Kenntnis hat mypy nicht.
-    prop = FontProperties(
-        family=font, weight=weight, style=cast(Literal["normal", "italic", "oblique"], slant)
-    )
-    # **Die Datei wird nach ihrer Familie gefragt, nicht nach ihrem Namen.**
-    # Der erste Anlauf verglich das erste Wort mit dem Dateinamen — „DejaVu
-    # Serif" fand „dejavu" in ``DejaVuSans.ttf`` und war zufrieden, also fing
-    # der Riegel genau den Fall nicht, für den er gebaut ist: den Rückfall
-    # innerhalb derselben Sippe. ``get_font`` liest den Familiennamen aus dem
-    # ``name``-Table der gefundenen Datei und beantwortet damit die gestellte
-    # Frage; nebenbei fällt jede Vermutung über Dateinamen weg, die auf einer
-    # fremden Distribution ohnehin anders lauten dürfen.
-    found = get_font(findfont(prop)).family_name
-    if found.casefold() != font.casefold():
-        raise ValidationError(
-            field="font",
-            detail=_(
-                "Die Schrift „{font}“ ist auf diesem Rechner nicht zu finden. "
-                "Wählen Sie eine der mitgelieferten — dann sieht das Projekt "
-                "überall gleich aus.",
-                font=font,
-            ),
-            value=font,
-            constraint="missing_font",
-        )
-    return prop
-
-
 def outlines(
     text: str, size: float, font: str = FONTS[0], style: str = FONT_STYLES[0]
 ) -> list[Any]:
-    """Die Buchstaben als Polygone, in Millimetern, auf dem Ursprung sitzend."""
-    from matplotlib.textpath import TextPath
+    """Die Buchstaben als Polygone, in Millimetern, auf dem Ursprung sitzend.
 
-    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
-    rings = [np.asarray(entry, dtype=float) for entry in path.to_polygons()]
+    Gesetzt und gezeichnet über :mod:`app.core.geom.glyphs`; Sehnenfehler und
+    Sehnenlänge folgen der Schriftgröße (``sag_for``, ``chord_for``).
+    """
+    found = glyphs.contours(text, size, font, style)
+    rings = glyphs.rings(found, glyphs.sag_for(size), glyphs.chord_for(size))
     return nonzero_fill([entry for entry in rings if len(entry) >= 4])
 
 
@@ -766,7 +671,7 @@ def _too_fine(
     # **Der Rat muss es an dieser Schrift geben.** „Nehmen Sie den fetten
     # Schnitt" ist bei Comfortaa und Dancing Script kein Ausweg, sondern der
     # nächste Fehler — sie bringen nur einen Schnitt mit, und die Operation
-    # lehnt jeden anderen ab (:func:`font_properties`).
+    # lehnt jeden anderen ab (:func:`app.core.geom.glyphs.font_file`).
     bolder = style not in ("bold", "bold_italic") and font in FONTS_WITH_ALL_STYLES
     message = (
         _(
@@ -925,12 +830,10 @@ def _exact_letters(
     cancelled: Any = None,
 ) -> Any:
     """Die Buchstaben als exakter Körper, stehend auf Z = 0 (``brep.lettering``)."""
-    from matplotlib.textpath import TextPath
-
     from app.core.brep import lettering
 
-    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
-    return lettering.letters(path, height, cancelled=cancelled)
+    found = glyphs.contours(text, size, font, style)
+    return lettering.letters(found, height, cancelled=cancelled)
 
 
 def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> OpResult:

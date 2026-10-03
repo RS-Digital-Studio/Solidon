@@ -151,8 +151,9 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
 ## Hinter einen Halt kommt kein Schritt
 
 Hält die Kette an (§15.3), zeigt das Bild den letzten vollständig gerechneten
-Stand, und dahinter wird nichts gerechnet. Zwei Stellen halten das, beide sind
-nötig:
+Stand, und dahinter wird nichts gerechnet. Gibt es keinen, sagen Leerkarte und
+Baum den Schritt, mit *Schritt korrigieren*, nie die Einladung (RM-458). Zwei
+Stellen halten das, beide sind nötig:
 
 - **Die Sitzung nimmt keinen Schritt an** (`Session.halt_in_the_way` in `apply`
   mit Entwürfen, `split_async`, `auto_split`, `split_along`, `create_lid`,
@@ -185,9 +186,9 @@ nötig:
   anordnen*, nicht *Modell teilen*.
 - **Gleiche Meldungen sind eine Zeile, die Zahl davor in Klammern**
   (Entscheidung Robert): gebündelt ab zwei nach Satz, Kennung, Schwere, Schritt
-  und Handlungen. Die Sammelzeile trägt alle Körper und wählt beim Klick alle,
-  ihre Handlung fragt, für welche sie gilt, Ort und Merkmale trägt sie nur, wenn
-  alle Mitglieder dieselben haben.
+  und Handlungen. Die Sammelzeile trägt alle Körper, wählt beim Klick alle,
+  ihre Handlung fragt, für welche sie gilt; Merkmale trägt sie nur gleiche,
+  Orte eines Körpers mit Umrissen alle.
 - **Die Handlungen stehen sichtbar da, nicht im Rechtsklick:** eine Knopfzeile
   unter der Liste über `actions_for(finding)`, dieselbe Quelle wie das
   Kontextmenü (§2.7).
@@ -246,10 +247,10 @@ nötig:
   `_folded` macht aus gleich begründeten Absagen eine Zeile („Verschieben,
   Ändern, Drehen, Verdoppeln und Entfernen — <Satz>“); der Satz verneint die
   **Voraussetzung**, nicht eine Handlung („trägt kein Maß, an dem sich Lage
-  oder Größe ändern ließen“), und nennt den Weg, der bleibt. Maschinell
-  prüfbar ist das nicht („ändern“ ist beides) —
-  `test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing` hält nur,
-  dass keine Art auf `_UNKNOWN_KIND` zurückfällt.
+  oder Größe ändern ließen“), und nennt den Weg, der bleibt.
+- **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
+  die Mindestbreite des Inhalts; Auswahlfelder baut `column_choice`, sonst
+  verlangt ihr längster Eintrag die Spalte.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):
   `perceive.actions._kind_of` nennt `int` `count`, das Fenster baut ein
   Ganzzahlfeld und gibt `int` zurück; eine neue Feldart in `ActionField.kind`
@@ -314,9 +315,7 @@ Ansichtsseite steht in `griffe.md`.
 ## Der Hauptknopf
 
 **Ein Hauptknopf entsteht über `style.make_primary()`, nie über
-`setDefault(True)`:** Qt rechnet die Breite aus der normalen Schrift, gezeichnet
-wird halbfett, und in einer engen Leiste wird die Beschriftung abgeschnitten.
-`make_primary` setzt die Schrift am Widget; das Fett bleibt als zweite
+`setDefault(True)`:** `make_primary` setzt die Schrift am Widget; das Fett bleibt als zweite
 Kodierung neben der Akzentfarbe (Regel 18). **Ein Knopf, der verwirft, entsteht
 über `style.make_danger()`** — Fehlerrot (`ROLES["error"]`) als Fläche, Schrift
 aus `readable_on`, das Wort als zweite Kodierung (*Abbrechen* unter
@@ -364,13 +363,10 @@ der Knopf die Handlung („Trennen“, „Jetzt trennen“;
 
 Von Hand gezogen oder beim Öffnen an den Inhalt angepasst — überschüssiger
 Raum braucht **eine** Stelle, sonst verteilt Qt ihn als Lücken zwischen
-Widgets fester Höhe (im KI-Hinweis stand die Überschrift allein über einer
-leeren Fläche). Die Stelle ist ein `addStretch` dort, wo Leere nicht stört,
-oder ein Widget, das den Platz nutzt (die Versuchsliste des Erzeugen-Dialogs
-nach dem Lauf). Lange Statusmeldungen bleiben im Rollbereich erreichbar und
-ändern den Außenrahmen nicht; `style.WrappedNote` misst dafür ohne die
-gepinnte Höhe, denn `QLabel.heightForWidth` meldet nie weniger als die
-Mindesthöhe.
+Widgets fester Höhe. Die Stelle ist ein `addStretch` dort, wo Leere nicht
+stört, oder ein Widget, das den Platz nutzt. `style.WrappedNote` misst
+Statusmeldungen ohne die gepinnte Höhe, denn `QLabel.heightForWidth` meldet
+nie weniger als die Mindesthöhe.
 
 **Dialoggröße nach Auslöser:** `ContentHeight` misst die natürliche Geometrie
 des aktuellen Inhalts einmal nach dem Anzeigen. Eine manuell gezogene Breite
@@ -378,12 +374,14 @@ oder Höhe bleibt für die Dialoglebensdauer maßgeblich; Mehrinhalt rollt im
 äußeren Scrollbereich, Aktionsknöpfe bleiben außerhalb. Nur ausdrücklich
 betätigtes Auf- und Zuklappen darf bei automatischer Größe die Höhe anpassen;
 dabei bleibt der Fensteranker, Platz bis zum Bildschirmrand wird genutzt, der
-Rest rollt. Reiter, Suche, Statusmeldungen und bedingte Zeilen lassen den
-Außenrahmen stehen. `contentSizeChanged` meldet verzögerte Innenlayoutänderungen.
+Rest rollt. Passives (nachgereichte Prüfung, Status, Suche, Reiter, bedingte
+Zeilen) wächst nach der Anfangsmessung um den verdeckten Inhalt bis zur
+Bildschirmhöhe, nach einem Klappen ab dem Anker, und schrumpft nie (RM-487).
+`contentSizeChanged` meldet verzögerte Innenlayoutänderungen.
 Beim Öffnen sowie nach Monitorwechseln, geänderter nutzbarer Fläche oder
 logischer DPI stellt `DialogScrollArea` mit `fit_dialog_to_screen` die
-Erreichbarkeit wieder her. `form_natural_width` berücksichtigt zugeklappte
-Formularzeilen bei der einmaligen Anfangsbreite.
+Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
+Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
@@ -393,11 +391,12 @@ zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt.
 
 **Klappen:** überall die flache Überschrift (`panels.collapsible`,
-`sectionHeading`). Werte, die sich ein- und ausschalten lassen, sind eine
+`sectionHeading`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
+`test_interface_limits`), `remember=` hält den Zustand des Kunden. Werte, die sich ein- und ausschalten lassen, sind eine
 Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei
 `ContentHeight`-Dialogen werden Anfangsgröße und ausdrücklich bedientes
-Klappen getrennt gemessen; passive Änderungen bleiben im Rollbereich und
-werden nicht als gezogene Nutzergröße gemerkt. Andere Dialoge behalten ihren
+Klappen getrennt gemessen; eigenes Wachsen gilt nicht als gezogene
+Nutzergröße. Andere Dialoge behalten ihren
 eigenen Größenweg. Ein Ausgang ist `RejectRole` — als `AcceptRole` macht ihn
 die Knopfleiste beim Anzeigen zum Hauptknopf.
 
@@ -424,9 +423,7 @@ nur die Liste.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster — bis zum Löschen
-steht es als eigenes Fenster auf dem Bildschirm, im selben Atemzug gelöscht
-bringt es den Absturz, und Tastenkürzel lösen falsch auf. Weggeräumt wird mit
+Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster. Weggeräumt wird mit
 `hide()` und `deleteLater()`, nie über den Elternteil: `takeAt` nimmt es aus
 dem Layout, `hide` aus dem Bild, der Elternteil trägt es bis zum Löschen.
 
@@ -464,7 +461,7 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 
 `tests/test_overlay.py` hält alle drei („settles on one answer“, „moves a card
 once“, „no card is pushed outside its section“). `fit_to_rows` rechnet mit
-**einer** Zeilenhöhe — ungleiche Zeilen misst `overlay.rows_height`, und
+**einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
 `wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
 steht, gehört in beide Rechnungen**, sonst schiebt die Liste den einzigen Weg
 der Karte hinaus.

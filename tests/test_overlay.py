@@ -640,7 +640,7 @@ def test_the_row_count_sees_every_open_level(qt_app: QApplication) -> None:
     """
     from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 
-    from app.ui.panels import _visible_rows
+    from app.ui.overlay import rows_height
 
     tree = QTreeWidget()
     body = QTreeWidgetItem(["Körper"])
@@ -650,15 +650,19 @@ def test_the_row_count_sees_every_open_level(qt_app: QApplication) -> None:
         group.addChild(QTreeWidgetItem([f"Verrundung {number}"]))
     tree.addTopLevelItem(body)
 
+    body.setExpanded(False)
+    closed = rows_height(tree)
+    row = tree.rowHeight(tree.indexFromItem(body))
+    assert row > 0
+
     body.setExpanded(True)
     group.setExpanded(True)
-    assert _visible_rows(body) == 8, "der Körper, sein Bausteinknoten und sechs Merkmale"
+    assert rows_height(tree) - closed == 7 * row, (
+        "der Körper, sein Bausteinknoten und sechs Merkmale"
+    )
 
     group.setExpanded(False)
-    assert _visible_rows(body) == 2, "ein zugeklappter Baustein ist eine Zeile"
-
-    body.setExpanded(False)
-    assert _visible_rows(body) == 1, "und ein zugeklappter Körper ebenso"
+    assert rows_height(tree) - closed == row, "ein zugeklappter Baustein ist eine Zeile"
 
 
 def test_one_action_moves_a_card_once(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:

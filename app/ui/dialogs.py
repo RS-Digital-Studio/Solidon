@@ -16,7 +16,17 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QLocale,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+    QUrlQuery,
+    Signal,
+)
 from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -91,6 +101,7 @@ from app.ui.labels import (
     fill_parameter_units,
     localised_value,
     trial_days,
+    unit_of,
     value_line,
     wheel_needs_focus,
 )
@@ -111,6 +122,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     fit_dialog_to_screen,
     fit_height_after_show,
     make_danger,
@@ -658,9 +670,28 @@ class ParameterDialog(QDialog):
         form.addRow(tr("Wert"), value_row)
         form.addRow(tr("Ausdruck"), self.expression_row)
         form.addRow(tr("Einheit"), self.unit_field)
-        form.addRow(tr("Untergrenze"), self.minimum_field)
-        form.addRow(tr("Obergrenze"), self.maximum_field)
         self._form = form
+        # **Vorn nur Name, Wert, Einheit** (§2.4, RM-359 F11). Die Grenzen
+        # stehen hinter *Weitere Einstellungen*; offen, wenn das Maß schon
+        # welche hat — sonst sähe ein Änderungsdialog aus, als gäbe es keine.
+        from app.ui.panels import collapsible
+
+        self._limits = QWidget(content)
+        limits_form = QFormLayout(self._limits)
+        limits_form.setContentsMargins(0, 0, 0, 0)
+        limits_form.setHorizontalSpacing(NORMAL)
+        limits_form.setVerticalSpacing(NORMAL)
+        limits_form.addRow(tr("Untergrenze"), self.minimum_field)
+        limits_form.addRow(tr("Obergrenze"), self.maximum_field)
+        bounded = existing is not None and (
+            existing.minimum is not None or existing.maximum is not None
+        )
+        self._limits_section = collapsible(
+            tr("Weitere Einstellungen"),
+            self._limits,
+            open_now=bounded,
+            contents=tr("Untergrenze und Obergrenze"),
+        )
         chain = (
             self.name_field,
             self.value_field,
@@ -713,6 +744,7 @@ class ParameterDialog(QDialog):
         content_layout.setSpacing(NORMAL)
         content_layout.addWidget(explanation)
         content_layout.addLayout(form)
+        content_layout.addWidget(self._limits_section)
         content_layout.addWidget(self.problem)
         content_layout.addStretch(1)
 
@@ -795,6 +827,15 @@ class ParameterDialog(QDialog):
             return tr("Der Wert liegt außerhalb der eigenen Grenzen.")
         return None
 
+    @staticmethod
+    def _limit_problems() -> tuple[str, ...]:
+        """Die Sätze, die eine Grenze meinen — sie klappen die Grenzen auf."""
+        return (
+            tr("Eine Grenze muss eine Zahl sein — oder das Feld bleibt leer."),
+            tr("Die Untergrenze liegt über der Obergrenze."),
+            tr("Der Wert liegt außerhalb der eigenen Grenzen."),
+        )
+
     def _bounds(self) -> tuple[float | None, float | None] | None:
         """Die eingetragenen Grenzen — oder ``None``, wenn eine keine Zahl ist.
 
@@ -874,6 +915,11 @@ class ParameterDialog(QDialog):
     def _accept(self) -> None:
         problem = self.validation_problem()
         if problem is not None:
+            if problem in self._limit_problems():
+                # Der Satz nennt eine Grenze; die Felder dazu gehören ins Bild.
+                from app.ui.panels import open_section
+
+                open_section(self._limits)
             self.problem.setText(problem)
             self.problem.setVisible(True)
             self._fit_soon()
@@ -1156,8 +1202,21 @@ class KeyDialog(QDialog):
         QTimer.singleShot(0, self, weak_slot(self, KeyDialog._fit_key_content, intent))
 
     def _fit_key_content(self, intent: ContentFitIntent) -> None:
-        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
-        self._height.fit(self, self._scroll, intent=intent)
+        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken.
+
+        Beim Öffnen so breit wie der Inhalt (``style.expanded_width``), soweit der
+        Bildschirm reicht: Die Zeile aus Modellwahl, *Modell holen* und
+        *Werkzeuge prüfen* war breiter als die Vorgabebreite, und das
+        Prüfergebnis darunter rollte quer.
+        """
+        initial = intent == "initial"
+        self._height.fit(
+            self,
+            self._scroll,
+            intent=intent,
+            grow_width=initial,
+            natural_width=expanded_width(self._scroll) if initial else 0,
+        )
 
     def _set_tab_order(self) -> None:
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
@@ -1810,6 +1869,11 @@ class KeyDialog(QDialog):
         self.probe_result.setMinimumHeight(max(0, result_height))
         self._scroll.updateGeometry()
         fit_dialog_to_screen(self)
+        # Erst die neue Höhe in den Rollbereich bringen: Die Layout-Anfrage
+        # dafür wartet in der Schlange, und ohne sie war die Rollweite noch
+        # die alte — ``ensureWidgetVisible`` rollte nicht, und die Warnung
+        # stand halb unter dem Rand.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         self._scroll.ensureWidgetVisible(self.probe_result)
 
     @staticmethod
@@ -2983,6 +3047,8 @@ NEEDS_OP: Final = frozenset(
         "decimate_and_retry",
         # Und vor ein umgeschlagenes *Glätten* das Verfeinern (Durchsicht 0.5.1).
         "remesh_and_retry",
+        # Und vor eine Rundung ohne Kante im exakten Körper die Umwandlung (RM-436).
+        "mesh_and_retry",
         # Öffnet den Schritt, den ein Befund meint (RM-374, *Größe ändern*).
         "change_step",
     }
@@ -3180,10 +3246,12 @@ def spoken_values(error: AppError) -> list[str]:
     das Datum nicht stimmt (Lagerdurchsicht 19.09.2026). Der Dialog setzt den
     Cursor ins Feld; das ist die Übersetzung der Adresse.
     """
+    unit = unit_of(error.values)
     return [
-        value_line(key, value)
+        value_line(key, value, unit)
         for key, value in error.values.items()
         if key not in ADDRESS_VALUES
+        and not (unit and key == "unit")
         and value is not None
         and value != ""
         and value != []
@@ -3193,8 +3261,11 @@ def spoken_values(error: AppError) -> list[str]:
 
 #: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden —
 #: auch im Hinweis einer Befundzeile (``panels._value_lines``), wo ein
-#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374).
-ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids"})
+#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374). Dazu
+#: ``action`` der Freischaltungsfehler (``change``, ``export``, ``slicer``,
+#: ``chat``): eine Kennung fürs Protokoll, die als „Handlung: change“ unter der
+#: Lizenzabsage stand — der Titel sagt schon, was fehlt (RM-456).
+ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids", "action"})
 
 
 def problem_text(
@@ -3550,12 +3621,12 @@ class DonationDialog(QDialog):
         layout.addWidget(without_heading)
         layout.addWidget(without)
         layout.addLayout(helping)
-        scroll = DialogScrollArea(self)
-        scroll.setWidget(content)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
-        outer.addWidget(scroll, 1)
+        outer.addWidget(self._scroll, 1)
         outer.addWidget(buttons)
         no_primary(self)
         # Qt berechnet den ersten Höhenvorschlag vor der Mindestbreite und
@@ -3565,10 +3636,30 @@ class DonationDialog(QDialog):
         self.resize(self.minimumWidth(), self.sizeHint().height())
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._fit_providers()
         super().showEvent(event)
         # Der Vorschlag oben ist vor dem Stylesheet gerechnet; nachgemessen
         # verschwinden rund achtzig Punkte Leere über „Schließen“.
         fit_height_after_show(self)
+
+    def _fit_providers(self) -> None:
+        """Beide Anbieterknöpfe so breit wie der längere, der Dialog breit genug für beide.
+
+        Gemessen erst nach dem Polieren, wenn das Stylesheet den Innenabstand
+        gesetzt hat. Mit größerer Systemschrift oder längerer Übersetzung passen
+        die zwei Knöpfe nicht mehr in :data:`DONATION_WIDTH`; der Rollbereich
+        rollte dann quer, und der längere Knopf stand breiter da als der andere
+        — das Auge liest Größe als Rang. Der Dialog wächst stattdessen mit.
+        """
+        buttons = (self.support_button, self.gofundme_button)
+        equal = max(button.sizeHint().width() for button in buttons)
+        for button in buttons:
+            button.setMinimumWidth(equal)
+        content = self._scroll.widget()
+        content_layout = content.layout() if content is not None else None
+        if content_layout is not None:
+            content_layout.activate()
+        self.setMinimumWidth(max(DONATION_WIDTH, expanded_width(self._scroll)))
 
     @staticmethod
     def _purpose_row(parent: QWidget, symbol: str, point: str, detail: str) -> QHBoxLayout:
@@ -4007,6 +4098,45 @@ def _go_on_despite(
     box.setDefaultButton(write)
     box.exec()
     return box.clickedButton() is write
+
+
+def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = None) -> str:
+    """Vor dem Schließen, wenn eine Erzeugung etwas verlöre (RM-499, Regel 19).
+
+    Seit *Modell erzeugen* nichtmodal ist (RM-371), lässt sich das Fenster
+    während eines Laufs schließen. Den Lauf und seine fertigen Versuche holt
+    kein Strg+Z zurück — Minuten Rechenzeit gingen sonst wortlos verloren.
+    Die Vorgabe ist der Weg zurück zur Erzeugung. Gibt ``back`` oder
+    ``close`` zurück.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    lost = ""
+    if tries == 1:
+        lost = tr(
+            "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren."
+        )
+    elif tries > 1:
+        lost = tr(
+            "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim "
+            "Schließen verloren.",
+            count=tries,
+        )
+    if running:
+        box.setWindowTitle(tr("Erzeugung läuft"))
+        box.setText(tr("Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab."))
+        if lost:
+            box.setInformativeText(lost)
+    else:
+        box.setWindowTitle(tr("Nicht übernommene Versuche"))
+        box.setText(lost)
+    back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
+    close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
+    make_primary(back)
+    box.setDefaultButton(back)
+    box.setEscapeButton(back)
+    box.exec()
+    return "close" if box.clickedButton() is close else "back"
 
 
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:

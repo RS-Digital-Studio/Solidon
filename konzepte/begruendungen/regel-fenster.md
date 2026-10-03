@@ -339,6 +339,24 @@ nennt `int` deshalb `count`, das Fenster baut dafür ein Ganzzahlfeld, und was
 zurückgeht, ist `int`. Wer eine neue Feldart in `ActionField.kind` einführt,
 baut sie an beiden Enden — im Kern benannt, im Fenster gebaut und eingesammelt.
 
+**Ein zusammengelegter Grund verneint die Voraussetzung** — maschinell prüfbar
+ist das nicht („ändern“ ist beides):
+`test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing` hält nur,
+dass keine Art auf `_UNKNOWN_KIND` zurückfällt.
+
+**Die Spalte rollt nur senkrecht** (RM-488). Seit v0.5.1 verlangte die
+Auswahl *Änderungsumfang* ihren längsten Eintrag („Senkung, Stufen und
+Verengung mitnehmen“) als Mindestbreite; das Auswahlfenster wurde breiter als
+seine Spalte, die Kopfzeile wurde gekappt statt umgebrochen, Zahlenfelder
+endeten ohne Pfeile, die Info-Zeichen lagen rechts außerhalb, unten stand ein
+waagrechter Balken. `column_choice` lässt eine Auswahl mit der Spalte schmal
+werden (die offene Liste zeigt unter Fusion den ganzen Text), und
+`ColumnScroller` bindet die Mindestbreite des Inhalts an die Spalte: Was sich
+nicht kürzen lässt — ein Haken, ein Knopftext in einer längeren Sprache —,
+verbreitert die Spalte, statt unter den Rand zu laufen. Wächter:
+`test_the_selection_column_fits_every_field_it_shows` und
+`test_the_selection_column_fits_in_every_language` in `tests/test_analysis_ui.py`.
+
 ## Ein Merkmal aus einem Baustein meint den Baustein
 
 **Und der Organizer gehört dazu, obwohl er kein Baustein ist** (Befund
@@ -610,6 +628,29 @@ Nutzers zu überstimmen. Drei Regeln, alle drei einmal gebrochen gewesen:
   Start die jüngste **fremde** Sicherung; abgelehnt wird genau sie geräumt
   (`discard_recovery`), angenommen wandert sie unter die eigene Kennung.
 
+## Passive Größenänderungen wachsen, schrumpfen nie
+
+Eine Zeit lang ließen passive Änderungen den Außenrahmen ganz stehen, damit
+eine Suche oder eine Statusmeldung keine gezogene Größe überschreibt und der
+Rahmen nicht bei jedem Statuswechsel springt. Das traf auch Inhalt, den eine
+Hintergrundprüfung nach dem Öffnen nachreicht: Im Erststart lagen
+„Zusatzprogramme verwalten …“ und „Chat einrichten …“ unter dem Rand, in
+*Modell erzeugen* ohne ComfyUI der Knopf „Zusätzliche Programme …“ — neben dem
+Satz, dass ohne ihn dieser Weg zu bleibt (RM-487, Rückschritt gegenüber
+0.5.1).
+
+Beide Gründe bleiben gewahrt: Nach einem Zug des Kunden ändert nichts Passives
+den Rahmen, und gewachsen wird nur, nie zurückgegeben — ein Status, der
+wechselt, kann den Rahmen höchstens einmal vergrößern. Gemessen wird der
+verdeckte Teil des Rollbereichs (`style._hidden_height`), nicht der
+Größenwunsch des Dialogs: Der fällt höher aus, wenn ein Umbruch an einer
+anderen Breite gemessen wird, und ließe einen Dialog ohne verdeckten Inhalt
+wachsen. Reicht der Platz unter dem Dialog nicht, rückt `fit_dialog_to_screen`
+ihn so weit hinauf wie nötig — außer nach einem ausdrücklichen Klappen: Dort
+hält schon das Klappen den Anker, damit die Überschrift unter dem Zeiger
+bleibt, und ohne den Anker zog die passive Nachmessung einen Umlauf später den
+Dialog nach oben (`ContentHeight._keeps_anchor`).
+
 ## Wie die Karten ihre Höhe teilen
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`.
@@ -668,6 +709,47 @@ für eine gewachsene Berichtkarte) — eine Zusicherung nach einer Runde misst
 einen Zwischenstand. `is_room_taker` beantwortet die Frage je Widget-Typ
 einmal; sie ist strukturell, und der Typ ändert sich nicht.
 
+**Ungleiche Zeilen, ungleiche Rechnung (RM-489).** Der Objektbaum rechnete
+mit der Höhe seiner ersten Zeile mal der Zeilenzahl, und die erste ist die
+Körperzeile mit Vorschaubild, doppelt so hoch wie ein Merkmal: Ein Körper mit
+zehn Merkmalen wollte 583 statt rund 300 Punkte. Die Spalte gab sie ihm, unter
+„Rechte Seite" stand eine leere Fläche, und der Filamentliste fehlte genau
+diese Höhe für „Im Regal". Seit `ObjectTree.wanted_height` über `rows_height`
+misst, zeigt die Spalte bei 1920×1080 mit 1, 2 und 4 Filamenten alle
+Baumzeilen und beide Überschriften. Bei 1280×720 reicht die Spalte für alle
+vier offenen Abschnitte nicht, wie schon in v0.5.1.
+
+**Der Farbpunkt ist so groß wie das Feld vor ihm.** `swatch` zeichnet in
+doppelter Auflösung, damit der Kreis auf 200 % rund bleibt. Ein `QIcon` aus nur
+diesem Bild meldete Qt 28 statt 14 Punkte, und jede Spulenzeile wurde zehn
+Punkte höher; mit einem Bild einfacher Auflösung daneben misst Qt wieder 14.
+Die Filamentliste rollt nicht mehr waagrecht: Ein waagrechter Balken nahm ihr
+eine Zeile, die keine Höhenrechnung kannte. Lange Namen enden auf „…", der
+volle steht im Tooltip. `rows_height` zählt einen sichtbaren waagrechten
+Balken auch dann, wenn die Liste noch nicht angezeigt ist — vorher las es eine
+Differenz aus dem Bau (eine Liste von null Punkten über einem Sichtfeld von 28).
+
+## Klappen nennen ihren Inhalt
+
+Hinter „Weitere Einstellungen" lagen seit v0.5.2 Navigation, Tastenbelegung,
+Differenzansicht, Chat, KI-Hinweis und Fernsteuerung, hinter „Bausteine
+verwalten" Speichern, Weitergeben und Entfernen — und von außen verriet nichts,
+dass es sie gibt (RM-491, Versionsvergleich 0.5.2). Die gestufte Tiefe (§2.4)
+versteckt, was man selten ändert; sie darf nicht verstecken, dass es da ist.
+Deshalb steht unter einer zugeklappten Überschrift ihr Inhalt, klickbar, mit
+demselben Satz in Kurzhilfe und Bildschirmleser. Der Wächter liest den
+Quelltext; ausgenommen sind Abschnitte, deren Titel schon der Inhalt ist (die
+Filamente der linken Spalte, wo jede Zusatzzeile der Spalte Höhe nähme).
+
+Wer einen Bereich aufklappt, will ihn beim nächsten Mal wieder offen sehen:
+`remember=` schreibt den Zustand in `UiSettings.open_sections`, gebunden über
+`panels.keep_sections_in` an die Einstellungen des Fensters, damit jedes
+Speichern ihn mitnimmt — auch aus Dialogen, die eine Kopie bearbeiten. Die
+Befehlspalette findet jede Zeile der Einstellungen unter ihrem Namen
+(`settings_dialog.option_titles`, eine Quelle für Formular und Palette) und
+öffnet den Dialog dort; ein gesperrtes Feld gibt den Fokus an den Haken, der
+es freigibt.
+
 ## Rückmeldung und Fehlerbericht
 
 *Bis zur Verdichtung in `oberflaeche.md`:*
@@ -706,3 +788,8 @@ Versand. Abwahl und Schließen bleiben möglich; geschlossene Dialoge verwerfen
 späte Antworten. Auch die Protokollbytes werden einmal behalten und für
 Vorschau, Versand und Ablage identisch verwendet. `report.log_tail()` liest
 rückwärts höchstens 1 MiB für die letzten 400 Zeilen, nie das gesamte Protokoll.
+
+**Überschüssige Höhe braucht eine Stelle.** Ohne sie verteilte Qt den Raum als
+Lücken: Im KI-Hinweis stand die Überschrift allein über einer leeren Fläche.
+Ein Beispiel für ein Widget, das den Platz nutzt, ist die Versuchsliste des
+Erzeugen-Dialogs nach dem Lauf.

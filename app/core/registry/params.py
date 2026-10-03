@@ -450,7 +450,9 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 detail=_("Der Wert liegt unter dem zulässigen Mindestwert."),
                 value=value,
                 constraint="minimum",
-                values={"minimum": spec.minimum},
+                # Mit der Einheit des Feldes (RM-359 F7): „Mindestwert: 0,1“
+                # ohne mm ließ offen, ob Millimeter oder Zoll gemeint sind.
+                values={"minimum": spec.minimum, **({"unit": spec.unit} if spec.unit else {})},
             )
         if spec.maximum is not None and is_greater(float(number), spec.maximum, EPS_GEOM):
             raise ValidationError(
@@ -458,7 +460,7 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 detail=_("Der Wert liegt über dem zulässigen Höchstwert."),
                 value=value,
                 constraint="maximum",
-                values={"maximum": spec.maximum},
+                values={"maximum": spec.maximum, **({"unit": spec.unit} if spec.unit else {})},
             )
         return number
 

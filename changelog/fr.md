@@ -45,9 +45,14 @@ dans `website/version.json`.
 - Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
+- Quand un autre modèle arrive, depuis un fichier, un téléchargement ou généré, la vue montre le plateau où il se trouve.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
+- SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
+- La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
+- Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent. Le corps reste exact.
+- Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
 
 ### Perçages, trous oblongs et découpe
 
@@ -58,6 +63,7 @@ dans `website/version.json`.
 - Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
 - Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
+- Une caractéristique reconnue à plus d'un mètre de l'origine garde sa place quand vous la modifiez. Avant, le champ tronquait le nombre sans rien dire, et le perçage bougeait.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
 - Découper coupe maintenant aussi en biais : en haut, vous choisissez le « Plan » — sur un axe avec inclinaison, parallèle à une face, par une arête ou par trois points cliqués dans la vue.
@@ -66,17 +72,26 @@ dans `website/version.json`.
 - Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.
 - Si vous avez choisi « Charger maintenant », les pièces de *Scinder le modèle* ne lancent plus non plus des minutes de reconnaissance ; « Reconnaître toutes les caractéristiques » la rattrape.
 
+### Congés et chanfreins
+
+- Arrondir un groupe d'arêtes d'un corps STEP arrondit désormais les arêtes possibles au lieu de tout refuser. *Montrer l'endroit* retrouve chaque arête omise.
+- Les arêtes contre une paroi pas plus épaisse que le rayon restent vives, et le rapport indique le rayon qui y tient. Jusqu'ici, tout l'arrondi était refusé.
+- Si un corps STEP n'a pas d'arête propre à un endroit choisi, le rapport propose *Terminer la modification des faces et réessayer*. Sur le modèle en triangles, il est aussi arrondi.
+- S'il ne reste plus de place pour l'échange avec le processus de calcul, Solidon calcule quand même l'étape et le signale dans le rapport. Avant, il s'arrêtait en conseillant un calcul plus grossier.
+
 ### Sculpter, texte et esquisse
 
 - Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux, et juste à côté le trait et son reflet se fondent en douceur.
+- L'éditeur de squelette montre os et articulation dans la vue, et une articulation se place au milieu du corps au lieu de sa peau, la figure plie donc régulièrement.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport et l'export le signalent, avec « Montrer l'endroit » et « Retirer le trait ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
+- Les dessins SVG arrivent correctement : rotations, cisaillements, coins arrondis, ellipses et arcs elliptiques sont justes, et les calques masqués restent dehors.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide, et le premier clic dans la vue la remplit. « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
@@ -89,6 +104,7 @@ dans `website/version.json`.
 - Chaque essai de la liste indique sa phrase ou son image et sa graine. Si votre saisie ne correspond plus à l'essai choisi, la boîte de dialogue dit lequel sera appliqué.
 - Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.
 - Si une erreur de génération indique la configuration comme issue, elle apparaît comme bouton dans la boîte de dialogue.
+- Pendant la génération d'un modèle, la fenêtre reste utilisable. La boîte de dialogue se met de côté, et la barre d'état montre progression, temps et « Annuler ».
 - La boîte de dialogue de génération indique le volume à la taille où la pièce arrive.
 - Un modèle généré s'annule d'un seul Ctrl+Z. Il en fallait trois ou quatre.
 - Si « Appliquer » est refusé pendant la génération, la boîte de dialogue reste ouverte avec tous les essais et indique l'issue au lieu de jeter le maillage.
@@ -101,6 +117,7 @@ dans `website/version.json`.
 - Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
 - La barre des paramètres refuse une cote hors de sa limite au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
+- Dans la barre des paramètres, les cotes de deux pavés portent leur numéro, et une cote avec sa propre plage de travail a un curseur.
 - Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
 - Les coches des listes sont lisibles sur chaque ligne, et les couleurs apparaissent en pastille ronde à côté.
@@ -115,6 +132,10 @@ dans `website/version.json`.
 - Certains constats qui visent une étape l'ouvrent pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
+- Quand d'autres programmes occupent l'ordinateur, *Annuler* arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
+- Un modèle de langage local peut faire douze étapes au lieu de huit par demande dans le chat et résout ainsi plus de demandes en plusieurs parties.
+- Le panneau de sélection tient de nouveau dans sa colonne, et la colonne des cotes de l'arbre montre la cote entière, par exemple « Ø5,19 mm » au lieu de « … ».
+- Sur un perçage, « Modifier l'élément » ouvre directement « Modifier le trou » avec aperçu, au lieu d'y renvoyer seulement.
 
 ## 0.5.1
 

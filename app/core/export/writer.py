@@ -34,7 +34,7 @@ from app.core.errors import (
     NeedsSolidError,
     ValidationError,
 )
-from app.core.export import threemf
+from app.core.export import slicer_keys, threemf
 from app.core.export.slicer_keys import (
     CURA_SUPPORT_BLOCKER,
     SlicerFlavour,
@@ -1207,7 +1207,16 @@ def part_advice(
         ]
         return advise.combine(current, groups)
 
-    advice = asked(settings)
+    # Was das Programm seiner Familie nicht kennt, schlägt der Rat nicht vor:
+    # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459).
+    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(
+        slicer_keys.program_of(setup.executable) if setup is not None else "", frozenset()
+    )
+
+    def asked_here(current: PrintSettings) -> list[SettingAdvice]:
+        return [item for item in asked(current) if item.path not in unknown]
+
+    advice = asked_here(settings)
     chain = dict(accepted or {})
     served: dict[str, SettingAdvice] = {}
     current = settings
@@ -1223,7 +1232,7 @@ def part_advice(
             break
         served.update((item.path, item) for item in follows)
         current = advise.apply(current, follows)
-        advice = asked(current)
+        advice = asked_here(current)
     if not served:
         return advice
     # Was eine spätere Runde zu einem schon angewandten Pfad sagt, hat den

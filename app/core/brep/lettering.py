@@ -1,8 +1,8 @@
 """Schrift als exakte Flächen — die Kurven der Glyphen statt ihrer Vielecke (P2.8).
 
 Die Netzfassung (``geom.label_ops.outlines``) flacht jeden Glyphenpfad zu
-Vielecken ab. Hier werden dieselben Pfade, wie ``matplotlib.textpath``
-sie aus der Schriftdatei liest, als Strecken und Bézier-Kurven gebaut — eine
+Vielecken ab. Hier werden dieselben Konturen, wie ``geom.glyphs`` sie über
+HarfBuzz aus der Schriftdatei liest, als Strecken und Bézier-Kurven gebaut — eine
 Beschriftung am exakten Körper bleibt damit exakt, und ein „o" ist in STEP
 ein Kreis aus Kurven und kein 24-Eck.
 
@@ -68,72 +68,25 @@ class Contour:
         return points
 
 
-def glyph_contours(path: Any) -> list[Contour]:
-    """Die Konturen eines ``matplotlib.path.Path`` (``TextPath``) als Kurvenstücke.
+def glyph_contours(found: Sequence[Sequence[Sequence[Point2]]]) -> list[Contour]:
+    """Die Konturen aus ``geom.glyphs.contours`` als :class:`Contour`.
 
-    Codes nach matplotlib: MOVETO beginnt eine Kontur, LINETO, CURVE3 und
-    CURVE4 hängen ein Stück an, CLOSEPOLY schließt zum Anfang. Stücke ohne
-    Länge und Konturen ohne Fläche fallen weg — sie tragen nichts und
-    brächen den Draht.
+    Jede Kontur kommt als Folge von Stücken (Polpunkte), geschlossen: Das
+    letzte endet am Anfang des ersten. Stücke ohne Länge und Konturen ohne
+    Fläche fallen weg — sie tragen nichts und brächen den Draht.
     """
-    from matplotlib.path import Path as MplPath
-
-    found: list[Contour] = []
-    pieces: list[tuple[Point2, ...]] = []
-    start: Point2 | None = None
-    last: Point2 | None = None
-
-    def point(index: int) -> Point2:
-        x, y = path.vertices[index]
-        return (float(x), float(y))
-
-    def close() -> None:
-        nonlocal pieces
-        if start is not None and last is not None and math.dist(last, start) > EPS_GEOM:
-            pieces.append((last, start))
-        kept = tuple(poles for poles in pieces if _length(poles) > EPS_GEOM)
+    result: list[Contour] = []
+    for pieces in found:
+        kept = tuple(
+            tuple((float(x), float(y)) for x, y in poles)
+            for poles in pieces
+            if _length(poles) > EPS_GEOM
+        )
         if len(kept) >= 2 or (kept and len(kept[0]) > 2):
             contour = Contour(kept)
             if abs(_signed_area(contour.sampled())) > EPS_GEOM**2:
-                found.append(contour)
-        pieces = []
-
-    codes = path.codes
-    index = 0
-    while index < len(codes):
-        code = codes[index]
-        if code == MplPath.MOVETO:
-            if pieces:
-                close()
-            start = last = point(index)
-            index += 1
-        elif code == MplPath.LINETO:
-            end = point(index)
-            if last is not None:
-                pieces.append((last, end))
-            last = end
-            index += 1
-        elif code == MplPath.CURVE3:
-            control, end = point(index), point(index + 1)
-            if last is not None:
-                pieces.append((last, control, end))
-            last = end
-            index += 2
-        elif code == MplPath.CURVE4:
-            first, second, end = point(index), point(index + 1), point(index + 2)
-            if last is not None:
-                pieces.append((last, first, second, end))
-            last = end
-            index += 3
-        elif code == MplPath.CLOSEPOLY:
-            close()
-            last = start
-            index += 1
-        else:
-            index += 1
-    if pieces:
-        close()
-    return found
+                result.append(contour)
+    return result
 
 
 def _length(poles: Sequence[Point2]) -> float:
@@ -298,8 +251,13 @@ def _folded_faces(
     return faces
 
 
-def letters(path: Any, height: float, *, cancelled: CancelToken | None = None) -> Solid:
-    """Die Buchstaben eines Glyphenpfads als Prismen von z = 0 bis ``height``.
+def letters(
+    found: Sequence[Sequence[Sequence[Point2]]],
+    height: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid:
+    """Die Buchstaben (``geom.glyphs.contours``) als Prismen von z = 0 bis ``height``.
 
     Ein Verbund aus einem Körper je gefülltem Bereich — dieselbe Gestalt wie
     die aneinandergehängten Prismen des Netzwegs (``label_ops.label_solid``),
@@ -313,7 +271,7 @@ def letters(path: Any, height: float, *, cancelled: CancelToken | None = None) -
 
     from app.core.brep.profiles import prism
 
-    contours = glyph_contours(path)
+    contours = glyph_contours(found)
     if not contours:
         raise _no_letters()
     faces = letter_faces(contours, cancelled=cancelled)

@@ -485,7 +485,12 @@ class SupportDialog(QDialog):
 
         self.preview = QTextBrowser(self)
         self.preview.setMinimumHeight(160)
-        self.previews = collapsible(tr("Was gesendet wird"), self.preview, open_now=False)
+        self.previews = collapsible(
+            tr("Was gesendet wird"),
+            self.preview,
+            open_now=False,
+            contents=tr("Text und Anhänge vor dem Senden ansehen"),
+        )
 
         self.state = QLabel(self)
         self.state.setWordWrap(True)

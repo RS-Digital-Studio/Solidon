@@ -15,7 +15,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from functools import partial
 from itertools import pairwise
-from typing import Any, Final, NamedTuple, cast
+from typing import Any, Final, NamedTuple, cast, override
 
 from PySide6.QtCore import (
     QEvent,
@@ -68,6 +68,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSlider,
     QSpinBox,
     QStyle,
     QStyleOptionComboBox,
@@ -93,6 +94,7 @@ from app.core.errors import (
     DECIMATE_MESH,
     EXPORT_AS_MESH,
     GIVE_THICKNESS,
+    MESH_AND_RETRY,
     ORIENT_FOR_PRINT,
     PLACE_ON_BED,
     RECOGNIZE_FULLY,
@@ -169,13 +171,14 @@ from app.ui.labels import (
     limit_sentence,
     localised,
     spoiled_the_exact_body,
+    unit_of,
     value_line,
     value_text,
     volume,
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
-from app.ui.overlay import LEFT_WIDTH
+from app.ui.overlay import LEFT_WIDTH, rows_height
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import (
     NORMAL,
@@ -892,6 +895,16 @@ def actions_for_document(
         # einem, der durchlief und nur zu viel Volumen kostete
         # (``mesh.smooth_shrank``), wie die Reparatur vor einem gerundeten.
         offered = [action for action in offered if action.id != REMESH_AND_RETRY.id]
+    if finding.op_id is None or not repair_is_available(
+        document,
+        stopped_at=finding.op_id,
+        op_id=finding.op_id,
+        object_id=None,
+    ):
+        # *Flächenbearbeitung beenden und erneut versuchen* setzt die Umwandlung
+        # vor den Schritt des Befunds — nur, solange er im Verlauf steht und
+        # vorhandene Körper liest, dieselbe Schranke wie die Reparatur davor.
+        offered = [action for action in offered if action.id != MESH_AND_RETRY.id]
     target = _object_for_finding(finding, document)
     if target is not None and live_objects is not None and target not in live_objects:
         # Der Körper des Befunds ist verbraucht (RM-268): Jede Handlung, die
@@ -1329,8 +1342,12 @@ def _value_lines(finding: Finding) -> list[str]:
             for key, value in finding.values.items()
             if key not in ("setting", "value") and key not in ADDRESS_VALUES
         ]
+    # Die Einheit gehört an die Grenze, nicht in eine eigene Zeile (RM-359 F7).
+    unit = unit_of(finding.values)
     return [
-        value_line(key, value) for key, value in finding.values.items() if key not in ADDRESS_VALUES
+        value_line(key, value, unit)
+        for key, value in finding.values.items()
+        if key not in ADDRESS_VALUES and not (unit and key == "unit")
     ]
 
 
@@ -1561,21 +1578,6 @@ def _feature_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
             continue
         found.extend(_feature_refs_under(child))
     return found
-
-
-def _visible_rows(item: QTreeWidgetItem | None) -> int:
-    """Wie viele Zeilen dieser Ast zeigt: er selbst plus, was offen darunter steht.
-
-    Der Nachbar von ``_feature_item`` und aus demselben Grund rekursiv — der
-    Baum ist unter einem Körper zwei Ebenen tief, seit die Merkmale eines
-    Bausteins unter seinem Knoten stehen.
-    """
-    if item is None:
-        return 0
-    rows = 1
-    if item.isExpanded():
-        rows += sum(_visible_rows(item.child(index)) for index in range(item.childCount()))
-    return rows
 
 
 def _empty_objects_text() -> str:
@@ -1908,6 +1910,18 @@ class ObjectTree(QWidget):
         layout.addWidget(self._empty)
         layout.addWidget(self.tree)
 
+    def say_why_empty(self, note: str) -> None:
+        """Was der leere Baum sagt: die Einladung, oder warum noch kein Körper da ist.
+
+        Ein Projekt, dessen Kette am ersten Schritt hält, ist nicht leer; dort
+        „Über „Erzeugen“ entsteht ein Körper“ zu lesen, schickte den Kunden an
+        den Anfang statt an den Schritt (RM-458). Leer heißt: die Vorgabe.
+        """
+        text = note or _empty_objects_text()
+        if self._empty.text() != text:
+            self._empty.setText(text)
+            fit_wrapped(self._empty)
+
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
         """Welche Körper gerade nicht gezeichnet werden — nur zum Anzeigen."""
         if hidden == self._hidden:
@@ -2217,7 +2231,7 @@ class ObjectTree(QWidget):
                 if other_id not in under and _part_group(other.created_by, document) is None:
                     group_key = (
                         cavity_names.get(other_id, feature_name(other_id, other)),
-                        feature_measure(other),
+                        feature_measure(other, marked=True),
                     )
                     alike[group_key] = alike.get(group_key, 0) + 1
             made: dict[str, QTreeWidgetItem] = {}
@@ -2226,12 +2240,18 @@ class ObjectTree(QWidget):
                 # Name links, Maß rechts. Vorher stand die ganze Beschriftung
                 # links und rechts der Typ („hole", „face") — links war damit
                 # abgeschnitten, was rechts gefehlt hat.
+                #
+                # **Die Zahl ganz, die Herkunft als Zeichen** (RM-490): Mit dem
+                # Wort dahinter endete die Spalte in jeder Breite in
+                # „Ø5,20 mm · ein…“. Das Wort hört der Bildschirmleser, und der
+                # Tooltip nennt es samt Satz (Regel 18).
                 child = QTreeWidgetItem(
                     [
                         cavity_names.get(feature_id, feature_name(feature_id, feature)),
-                        feature_measure(feature),
+                        feature_measure(feature, marked=True),
                     ]
                 )
+                child.setData(1, Qt.ItemDataRole.AccessibleTextRole, feature_measure(feature))
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 tip = _feature_tip(feature_id, feature, document)
@@ -2295,6 +2315,13 @@ class ObjectTree(QWidget):
                         roof.setToolTip(0, note)
                         roof.setStatusTip(0, note)
                         roof.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, note)
+                        # Das gemeinsame Maß sagt seine Herkunft wie jedes Kind.
+                        roof.setData(
+                            1,
+                            Qt.ItemDataRole.AccessibleTextRole,
+                            child.data(1, Qt.ItemDataRole.AccessibleTextRole),
+                        )
+                        roof.setToolTip(1, feature_measure_tip(feature))
                         by_kind[label] = roof
                         item.addChild(roof)
                     # Zugeklappt, sonst wäre nichts gewonnen. ``_restore``
@@ -2374,29 +2401,15 @@ class ObjectTree(QWidget):
         if self._pending:
             QTimer.singleShot(0, self, self._render_pending)
 
-    def _rows(self) -> int:
-        """Die sichtbaren Zeilen — ein zugeklappter Ast zählt als eine.
-
-        **Über alle Ebenen, nicht nur die erste.** Gezählt wurden lange die
-        direkten Kinder, und das stimmte, solange der Baum zwei Ebenen hatte.
-        Seit die Merkmale eines eingesetzten Bausteins unter seinem Knoten
-        stehen, sind es drei — und dieser Knoten steht **immer** offen: Ein
-        Körper mit sechs Verrundungen unter einem Einhänger meldete zwei
-        Zeilen und zeigte acht. Die Karte bekam damit Höhe für zwei und einen
-        Rollbalken, den es an dieser Stelle nicht geben soll.
-
-        Dieselbe Ebenenblindheit hatte ``_restore`` schon einmal: Ein Klick im
-        Viewport fand das Merkmal nicht, weil es eine Ebene tiefer lag. Wer
-        eine Ebene einzieht, sucht die Stellen, die über Ebenen laufen.
-        """
-        return sum(
-            _visible_rows(self.tree.topLevelItem(index))
-            for index in range(self.tree.topLevelItemCount())
-        )
-
     def wanted_height(self) -> int:
-        """Die Höhe, bei der jede Zeile zu sehen wäre."""
-        return view_chrome(self.tree) + self._rows() * row_height_of(self.tree)
+        """Die Höhe, bei der jede Zeile zu sehen wäre.
+
+        Gemessen je Zeile (``rows_height``), nicht erste Zeile mal Zeilenzahl:
+        Die Körperzeile trägt ein Vorschaubild und ist doppelt so hoch wie
+        ihre Merkmale. Ein Körper mit zehn Merkmalen wollte so 583 statt rund
+        300 Punkte und nahm sie der Filamentliste darunter (RM-489).
+        """
+        return max(view_chrome(self.tree), rows_height(self.tree))
 
     def least_height(self) -> int:
         """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``)."""
@@ -2498,7 +2511,13 @@ class ObjectTree(QWidget):
         empty = self.tree.topLevelItemCount() == 0
         self._empty.setVisible(empty)
         self.tree.setVisible(not empty)
-        fit_to_rows(self.tree, self._rows(), room=self._room)
+        wanted = self.wanted_height()
+        ceiling = (
+            self._room
+            if self._room is not None
+            else view_chrome(self.tree) + MAX_ROWS * row_height_of(self.tree)
+        )
+        self.tree.setFixedHeight(max(least_height_of(self.tree), min(wanted, ceiling)))
         self._size_columns()
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
@@ -3218,6 +3237,8 @@ class ParameterPanel(QWidget):
         """Die Anzeige je abgeleitetem Maß — sein Ausdruck besitzt den Wert."""
         self._titles: dict[str, QLabel] = {}
         """Die Beschriftung je Zeile, die auch „Nicht verwendet“ sagt."""
+        self._sliders: dict[str, QSlider] = {}
+        """Der Regler je Maß mit eigener Unter- und Obergrenze (§13, RM-359 F8)."""
         self._layout: tuple[object, ...] | None = None
         """Was die Zeilen ausmacht (:meth:`_layout_of`) — gleich, so werden nur
         die Werte gesetzt und kein Feld verliert den Fokus (RM-355)."""
@@ -3580,7 +3601,11 @@ class ParameterPanel(QWidget):
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         details.setToolTip(note)
         details.setStatusTip(note)
-        details.setAccessibleName(tr("Parameter ändern"))
+        # Mit dem Maß im Namen (RM-359 F9): Dreimal „Parameter ändern“ und
+        # dreimal „Einheit“ hießen für einen Vorleser drei gleiche Knöpfe.
+        details.setAccessibleName(tr("{name} ändern", name=title))
+        unit.setAccessibleName(tr("Einheit von {name}", name=title))
+        value.setAccessibleName(title)
         details.setProperty("parameterName", name)
         details.clicked.connect(self._details_clicked)
         layout.addWidget(details)
@@ -3588,6 +3613,7 @@ class ParameterPanel(QWidget):
         label = QLabel(title, self)
         label.setWordWrap(True)
         fit_wrapped(label)
+        label.setBuddy(value)
         self._titles[name] = label
         self._form.addRow(label, row)
         self._remember_row(name, row)
@@ -3788,6 +3814,7 @@ class ParameterPanel(QWidget):
                     with QSignalBlocker(editor):
                         editor.setValue(parameter.value)
                     editor.setMinimumWidth(least_number_width(editor))
+                    self._place_slider(name, parameter.value)
                     if self._refused_name == name and self._refusal is not None:
                         self._form.removeRow(self._refusal)
                         self._refusal = None
@@ -3807,6 +3834,7 @@ class ParameterPanel(QWidget):
         self._detail_buttons.clear()
         self._derived.clear()
         self._titles.clear()
+        self._sliders.clear()
         self._layout = self._layout_of(document)
         # Die Zeile der Ablehnung geht mit den Zeilen (``removeRow``); der neue
         # Stand kennt keine abgelehnte Zahl mehr.
@@ -3885,7 +3913,97 @@ class ParameterPanel(QWidget):
             editor.lineEdit().textEdited.connect(lambda _text, key=name: self._show_refusal(key))
             self._editors[name] = editor
             self._add_parameter_row(name, f"{parameter.title or name}", editor, unit)
+            slider = self._slider_for(name, f"{parameter.title or name}", parameter)
+            if slider is not None:
+                self._form.addRow(slider)
         self._fit()
+
+    def _slider_for(self, name: str, title: str, parameter: Parameter) -> QSlider | None:
+        """Ein Regler für ein Maß mit eigener Unter- und Obergrenze (§13, RM-359 F8).
+
+        Nur dann: Ohne beide Grenzen gibt es keine Strecke, über die er führt.
+        **Und nur für einen Arbeitsbereich**: Benannte Maße erben die Grenzen
+        ihres Feldes (0,1 bis 1000 mm), und ein Regler, der ein 40-mm-Maß mit
+        jedem Bildpunkt um mehr als einen Millimeter verschiebt, ist keiner. Ab
+        :data:`SLIDER_SPAN` mal dem Wert fehlt er; wer einen Bereich wie 30 bis
+        80 setzt, bekommt ihn.
+        **Ein Zug ist ein Schritt**: Während des Ziehens zeigt das Feld die Zahl,
+        übernommen wird beim Loslassen — eine Transaktion, ein Strg+Z. Pfeiltasten
+        und ein Klick neben den Griff ändern je einmal.
+        """
+        low, high = parameter.minimum, parameter.maximum
+        if low is None or high is None or not high > low:
+            return None
+        if high - low > SLIDER_SPAN * max(abs(parameter.value), 1.0):
+            return None
+        slider = QSlider(Qt.Orientation.Horizontal, self._sheet)
+        slider.setRange(0, SLIDER_STEPS)
+        slider.setPageStep(SLIDER_STEPS // 10)
+        slider.setAccessibleName(tr("{name} als Regler", name=title))
+        slider.setToolTip(
+            tr("Von {low} bis {high}", low=localised(f"{low:g}"), high=localised(f"{high:g}"))
+        )
+        wheel_needs_focus(slider)
+        self._sliders[name] = slider
+        self._place_slider(name, parameter.value)
+        slider.sliderMoved.connect(lambda position, key=name: self._slider_moved(key, position))
+        slider.sliderReleased.connect(lambda key=name: self._slider_released(key))
+        slider.valueChanged.connect(lambda position, key=name: self._slider_stepped(key, position))
+        return slider
+
+    def _slider_value(self, name: str, position: int) -> float:
+        """Die Zahl an einer Stelle des Reglers, gerundet wie das Feld sie zeigt."""
+        low, high = self._slider_range(name)
+        value = low + (high - low) * position / SLIDER_STEPS
+        editor = self._editors.get(name)
+        return round(value, editor.decimals() if editor is not None else 2)
+
+    def _slider_range(self, name: str) -> tuple[float, float]:
+        document = self._document
+        parameter = document.parameters.get(name) if document is not None else None
+        if parameter is None or parameter.minimum is None or parameter.maximum is None:
+            return 0.0, 1.0
+        return float(parameter.minimum), float(parameter.maximum)
+
+    def _place_slider(self, name: str, value: float) -> None:
+        """Setzt den Griff auf eine Zahl, ohne dass das eine Änderung wäre."""
+        slider = self._sliders.get(name)
+        if slider is None or slider.isSliderDown():
+            return
+        low, high = self._slider_range(name)
+        share = 0.0 if high <= low else (value - low) / (high - low)
+        with QSignalBlocker(slider):
+            slider.setValue(round(min(max(share, 0.0), 1.0) * SLIDER_STEPS))
+
+    def _slider_moved(self, name: str, position: int) -> None:
+        """Während des Ziehens zeigt das Feld die Zahl — übernommen wird beim Loslassen."""
+        editor = self._editors.get(name)
+        if editor is not None:
+            with QSignalBlocker(editor):
+                editor.setValue(self._slider_value(name, position))
+
+    def _slider_released(self, name: str) -> None:
+        slider = self._sliders.get(name)
+        if slider is not None:
+            self._queue_parameter_edit(name, self._slider_value(name, slider.value()))
+
+    def _slider_stepped(self, name: str, position: int) -> None:
+        """Pfeiltaste oder Klick neben den Griff: je Schritt eine Änderung."""
+        slider = self._sliders.get(name)
+        if slider is None or slider.isSliderDown():
+            return
+        value = self._slider_value(name, position)
+        editor = self._editors.get(name)
+        if editor is not None:
+            with QSignalBlocker(editor):
+                editor.setValue(value)
+        self._queue_parameter_edit(name, value)
+
+
+#: Wie fein der Regler einer Parameterzeile teilt (§13, RM-359 F8).
+SLIDER_STEPS: Final = 1000
+#: Bis zu welchem Vielfachen seines Werts ein Bereich noch ein Arbeitsbereich ist.
+SLIDER_SPAN: Final = 20.0
 
 
 #: Datenrolle der Einfügemarke im Verlauf (P7.1): Die Zeile trägt keinen
@@ -4675,6 +4793,19 @@ class HistoryPanel(QWidget):
             self._open_groups.discard(group)
         else:
             self._open_groups.add(group)
+        self._reflow_groups()
+
+    def open_group(self, transaction_id: str) -> None:
+        """Die Teilschritte dieser Transaktion offen zeigen — auch nach dem Neuaufbau.
+
+        Für eine Handlung, deren Schritte der Kunde gleich sehen soll: Nach
+        einer Erzeugung stand nur die zugeklappte Zeile „Modell erzeugen“ da,
+        und was aus dem Netz wurde (Größe, Reparatur, aufs Bett), sah erst, wer
+        aufklappte — in 0.5.1 standen die ersten Schritte offen (RM-456).
+        """
+        if transaction_id in self._open_groups:
+            return
+        self._open_groups.add(transaction_id)
         self._reflow_groups()
 
     def _reflow_groups(self) -> None:
@@ -5717,8 +5848,19 @@ class ReportPanel(QWidget):
             # der erste davon wäre keine Zusammenfassung, sondern eine
             # zufällige Behauptung.
             location = members[0].location
+            outline = members[0].outline
             if any(one.location != location for one in members[1:]):
-                location = None
+                # **Verschiedene Stellen eines Körpers bleiben auffindbar**, wenn
+                # jedes Mitglied seinen Umriss trägt: *Stelle zeigen* fliegt zur
+                # ersten und umrandet alle. Ohne Umriss wäre der erste Ort eine
+                # zufällige Behauptung; die Zeile trägt dann keinen (RM-412).
+                if len(bodies) <= 1 and all(
+                    one.location is not None and one.outline for one in members
+                ):
+                    outline = tuple(segment for one in members for segment in one.outline)
+                else:
+                    location = None
+                    outline = ()
             feature_ids = members[0].feature_ids
             if any(one.feature_ids != feature_ids for one in members[1:]):
                 feature_ids = ()
@@ -5744,6 +5886,7 @@ class ReportPanel(QWidget):
                 feature_ids=feature_ids,
                 values=values,
                 location=location,
+                outline=outline,
                 # Verschiedene Vorschläge trennen schon den Gruppenschlüssel:
                 # Eine verdichtete Fehlerzeile darf nie ihren Ausweg verlieren.
                 suggestions=members[0].suggestions,
@@ -6304,7 +6447,7 @@ def feature_field(
     if kind == "bool":
         editor = RowCheckBox(parent)
     elif kind == "choice":
-        combo = QComboBox(parent)
+        combo = column_choice(QComboBox(parent))
         for value, text in field.choices or ():
             combo.addItem(choice_label(str(text)), value)
         explain_choices(combo)
@@ -6843,6 +6986,62 @@ def _feature_group_note(group: FeatureActionGroup) -> str:
             )
         )
     return " ".join(parts)
+
+
+#: Wie viele Zeichen eine Auswahl in einer Spalte mindestens zeigt (RM-488).
+COLUMN_CHOICE_LETTERS: Final = 12
+
+
+def column_choice(combo: QComboBox) -> QComboBox:
+    """Eine Auswahl, die mit ihrer Spalte schmal wird, statt sie zu sprengen (RM-488).
+
+    Qts Vorgabe nimmt den längsten Eintrag als Mindestbreite: „Senkung, Stufen
+    und Verengung mitnehmen“ machte das Auswahlfenster breiter als seine
+    Spalte, und jedes Feld daneben endete ohne Pfeile am Rand. Die offene
+    Liste bleibt so breit wie ihr längster Eintrag (Fusion), gekürzt wird nur
+    die geschlossene Anzeige.
+    """
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    combo.setMinimumContentsLength(COLUMN_CHOICE_LETTERS)
+    combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    return combo
+
+
+class ColumnScroller(QScrollArea):
+    """Ein Rollbereich, der nur senkrecht rollt und so breit bleibt wie sein Inhalt (RM-488).
+
+    Die Breite des Inhalts ist an die Spalte gebunden, in beide Richtungen:
+    ``setWidgetResizable`` zieht ihn auf die Spalte, und die Mindestbreite des
+    Inhalts wird die der Spalte. Ein waagrechter Balken unter Zahlenfeldern
+    versteckt ihre Pfeile und Info-Zeichen; ein zu breites Feld macht
+    stattdessen die Spalte breiter, statt rechts abgeschnitten zu werden.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+    @override
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        content = self.widget()
+        if content is None:
+            return hint
+        # Der senkrechte Balken zählt immer mit: Kommt er erst beim Rollen,
+        # darf er nichts verdecken, und die Spalte springt nicht.
+        bar = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent, None, self)
+        least = content.minimumSizeHint().width() + bar + 2 * self.frameWidth()
+        return QSize(max(hint.width(), least), hint.height())
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # ``setWidget`` trägt den Rollbereich als Filter am Inhalt ein; ein neu
+        # gelegter Inhalt kann eine neue Mindestbreite haben.
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            self.updateGeometry()
+        return super().eventFilter(watched, event)
 
 
 class FeaturePanel(QWidget):
@@ -7670,7 +7869,7 @@ class FeaturePanel(QWidget):
         if selected is None and certain and len(operations) == 1:
             selected = int(operations[0].id)
         if len(operations) > 1 or not certain:
-            choice = QComboBox(self)
+            choice = column_choice(QComboBox(self))
             choice.setObjectName("texture-step-choice")
             choice.setAccessibleName(tr("Textur bearbeiten"))
             choice.addItem(tr("Textur am Körper wählen …"), userData=None)
@@ -7863,7 +8062,7 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        choice = QComboBox(box)
+        choice = column_choice(QComboBox(box))
         choice.setAccessibleName(tr("Passungsart"))
         if len(choices) > 1:
             choice.addItem(tr("Passungsart wählen …"), "")
@@ -9429,7 +9628,47 @@ class FeaturePanel(QWidget):
         self.operationRequested.emit(op, params)
 
 
-def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:
+#: Welche merkenden Abschnitte offen stehen, unter ihrem Schlüssel.
+#:
+#: Gebunden an ``UiSettings.open_sections`` des Fensters
+#: (:func:`keep_sections_in`), damit das Speichern der Einstellungen den
+#: Zustand mitnimmt — auch aus Dialogen, die eine Kopie bearbeiten.
+_OPEN_SECTIONS: dict[str, bool] = {}
+
+
+def keep_sections_in(store: dict[str, bool]) -> None:
+    """Merkende Abschnitte schreiben ihren Zustand ab jetzt in ``store``."""
+    global _OPEN_SECTIONS
+    _OPEN_SECTIONS = store
+
+
+class _SectionSummary(QLabel):
+    """Was in einem zugeklappten Abschnitt steht — ein Klick klappt ihn auf."""
+
+    def __init__(self, text: str, heading: QToolButton, parent: QWidget) -> None:
+        super().__init__(text, parent)
+        self._heading = heading
+        self.setWordWrap(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        set_level(self, "caption")
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self._heading.setChecked(True)
+            return
+        super().mouseReleaseEvent(event)
+
+
+def collapsible(
+    title: str,
+    content: QWidget,
+    *,
+    open_now: bool = True,
+    contents: str = "",
+    remember: str = "",
+) -> QWidget:
     """Ein Abschnitt, der sich zuklappen lässt — §2.5 verlangt genau das.
 
     Er hieß so und war keiner: eine fette Überschrift über dem Inhalt, ohne
@@ -9440,7 +9679,19 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     Der Umschalter ist ein Knopf mit dem Titel darauf, kein Zeichen daneben:
     die ganze Zeile ist damit die Fläche, die man trifft, und der gedrückte
     Zustand sagt ohne Farbe, ob offen oder zu ist (Regel 18).
+
+    **Zugeklappt nennt er, was darin steht** (``contents``, RM-491): Hinter
+    „Weitere Einstellungen" lagen Tastenbelegung und Fernsteuerung, und von
+    außen verriet nichts, dass es sie gibt. Die Zeile steht unter der
+    Überschrift, nur solange sie zu ist, und klappt auf, wenn man sie
+    anklickt; Kurzhilfe und Bildschirmleser bekommen denselben Satz.
+
+    **Mit ``remember`` merkt er sich, wie der Kunde ihn verließ** — über
+    Dialoge und Neustarts hinweg (:func:`keep_sections_in`). Ohne Merker
+    gilt ``open_now``.
     """
+    if remember:
+        open_now = _OPEN_SECTIONS.get(remember, open_now)
     wrapper = QWidget()
     heading = QToolButton(wrapper)
     # Eine Kopfzeile ist kein Umschalter im Sinne der Werkzeugzeile: sie steht
@@ -9459,10 +9710,23 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     content.setVisible(open_now)
     set_level(heading, "section")
     heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    summary: _SectionSummary | None = None
+    if contents:
+        heading.setToolTip(contents)
+        heading.setAccessibleDescription(contents)
+        summary = _SectionSummary(contents, heading, wrapper)
+        summary.setObjectName("sectionSummary")
+        # Eingerückt bis unter den Titel, nicht unter den Pfeil.
+        summary.setIndent(heading.iconSize().width() + TIGHT)
+        summary.setVisible(not open_now)
 
     def toggled(open_now: bool) -> None:
         content.setVisible(open_now)
         heading.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+        if summary is not None:
+            summary.setVisible(not open_now)
+        if remember:
+            _OPEN_SECTIONS[remember] = open_now
 
     heading.toggled.connect(toggled)
 
@@ -9470,6 +9734,8 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     layout.addWidget(heading)
+    if summary is not None:
+        layout.addWidget(summary)
     layout.addWidget(content)
     return wrapper
 

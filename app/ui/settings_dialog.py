@@ -65,7 +65,7 @@ from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
 from app.ui.leash import WAIT_TIMEOUT_MS, WorkerLeash
 from app.ui.palette import DIFF_PALETTES
-from app.ui.panels import align_forms, collapsible
+from app.ui.panels import align_forms, collapsible, open_section
 from app.ui.print_settings_dialog import _SlicerWorker
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
@@ -76,6 +76,7 @@ from app.ui.style import (
     WIDE,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     make_primary,
     select_data,
 )
@@ -115,6 +116,64 @@ DIFF_LABELS = {
 }
 
 
+def option_titles() -> dict[str, str]:
+    """Jede Einzeloption des Dialogs mit ihrem Namen, in der Folge des Formulars.
+
+    **Eine Quelle für Formular und Befehlspalette** (RM-491): Seit die Hälfte
+    hinter „Weitere Einstellungen" liegt, findet man Tastenbelegung und
+    Fernsteuerung über die Palette — unter genau dem Namen, den die Zeile
+    trägt. Die Schlüssel sind die Attributnamen der Felder
+    (:meth:`SettingsDialog.show_option`).
+    """
+    return {
+        "language": tr("Sprache"),
+        "unit": tr("Anzeigeeinheit"),
+        "theme": tr("Thema"),
+        "updates": tr("Beim Start nach einer neuen Version sehen"),
+        "slicer": tr("Slicer"),
+        "navigation": tr("Navigation"),
+        "spacemouse": tr("3D-Maus (SpaceMouse) benutzen"),
+        "spacemouse_speed": tr("Geschwindigkeit der 3D-Maus"),
+        "spacemouse_invert": tr("Richtung umkehren"),
+        "shortcuts": tr("Tastenbelegung"),
+        "diff_palette": tr("Differenzansicht"),
+        "auto_accept": tr("Umkehrbare Chat-Vorschläge ohne Nachfrage übernehmen"),
+        "ai_disclosure_reset": tr("KI-Hinweis erneut anzeigen"),
+        "remote": tr("Fernsteuerung durch andere Programme zulassen (MCP)"),
+        "remote_port": tr("Port der Fernsteuerung"),
+        "printer": tr("Drucker"),
+        "material": tr("Material"),
+    }
+
+
+#: Die Zeilen der 3D-Maus — sichtbar erst ab dem ersten gesehenen Gerät.
+SPACEMOUSE_OPTIONS = ("spacemouse", "spacemouse_speed", "spacemouse_invert")
+
+#: Welcher Haken eine Zeile freigibt, solange sie gesperrt ist.
+_GATES = {
+    "remote_port": "remote",
+    "spacemouse_speed": "spacemouse",
+    "spacemouse_invert": "spacemouse",
+}
+
+
+def searchable_options(settings: UiSettings) -> dict[str, str]:
+    """Was die Befehlspalette aus diesem Dialog anbietet — nur sichtbare Zeilen.
+
+    „Richtung umkehren" allein sagt in der Palette nicht, wessen Richtung;
+    dort steht die 3D-Maus davor.
+    """
+    titles = option_titles()
+    if not settings.spacemouse_seen:
+        for key in SPACEMOUSE_OPTIONS:
+            titles.pop(key)
+    else:
+        titles["spacemouse_invert"] = tr(
+            "{name}: {value}", name=tr("3D-Maus"), value=titles["spacemouse_invert"]
+        )
+    return titles
+
+
 class SettingsDialog(QDialog):
     """Was die Anwendung sich merkt, an einer Stelle."""
 
@@ -138,6 +197,8 @@ class SettingsDialog(QDialog):
         self._discovered_printers = dict(discovered_printers or {})
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(460)
+        titles = option_titles()
+        self._shown_option: QWidget | None = None
 
         self.language = _choices(self, {key: language_name(key) for key in available_languages()})
         select_data(self.language, settings.language)
@@ -172,7 +233,7 @@ class SettingsDialog(QDialog):
             tr("Welche Tasten die Operationen führen. Wirkt beim nächsten Start.")
         )
 
-        self.updates = QCheckBox(tr("Beim Start nach einer neuen Version sehen"), self)
+        self.updates = QCheckBox(titles["updates"], self)
         self.updates.setChecked(settings.check_for_updates)
         # **Die Zusage stimmt seit ``download()`` und ``start_installer()``
         # nicht mehr.** Hier stand, es werde nichts geladen und nichts ersetzt;
@@ -191,9 +252,7 @@ class SettingsDialog(QDialog):
         # §26.5: die automatische Übernahme ist die Vorgabe — Regel 19 kennt
         # keine Bestätigung vor rücknehmbaren Handlungen. Abschaltbar, weil
         # sie das gefühlte Verhalten des Chats ändert.
-        self.auto_accept = QCheckBox(
-            tr("Umkehrbare Chat-Vorschläge ohne Nachfrage übernehmen"), self
-        )
+        self.auto_accept = QCheckBox(titles["auto_accept"], self)
         self.auto_accept.setChecked(settings.auto_accept_reversible)
         self.auto_accept.setToolTip(
             tr(
@@ -204,7 +263,7 @@ class SettingsDialog(QDialog):
         )
 
         self._reset_ai_disclosure = False
-        self.ai_disclosure_reset = QPushButton(tr("KI-Hinweis erneut anzeigen"), self)
+        self.ai_disclosure_reset = QPushButton(titles["ai_disclosure_reset"], self)
         self.ai_disclosure_reset.setAccessibleName(self.ai_disclosure_reset.text())
         has_disclosure = bool(
             settings.ai_disclosure_version
@@ -256,7 +315,7 @@ class SettingsDialog(QDialog):
         # Version („Solidon von anderen Programmen auf diesem Rechner
         # fernsteuern lassen") sagte nicht mehr und zog den Dialog auf
         # Französisch von 566 auf 768 Bildpunkte — gemessen, dann verworfen.
-        self.remote = QCheckBox(tr("Fernsteuerung durch andere Programme zulassen (MCP)"), self)
+        self.remote = QCheckBox(titles["remote"], self)
         self.remote.setChecked(settings.remote_enabled)
         self.remote_port = QSpinBox(self)
         self.remote_port.setRange(1024, 65535)
@@ -280,7 +339,7 @@ class SettingsDialog(QDialog):
         # Regler, Richtung. Sichtbar erst ab dem ersten gesehenen Gerät, und
         # ab dann dauerhaft: Wer das Gerät abzieht, findet die Einstellung
         # sonst nicht wieder, und die Handbuchbilder sähen sie nie.
-        self.spacemouse = QCheckBox(tr("3D-Maus (SpaceMouse) benutzen"), self)
+        self.spacemouse = QCheckBox(titles["spacemouse"], self)
         self.spacemouse.setChecked(settings.spacemouse_enabled)
         self.spacemouse.setToolTip(
             tr(
@@ -293,11 +352,11 @@ class SettingsDialog(QDialog):
         self.spacemouse_speed.setValue(settings.spacemouse_speed)
         self.spacemouse_speed.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.spacemouse_speed.setTickInterval(1)
-        self.spacemouse_speed.setAccessibleName(tr("Geschwindigkeit der 3D-Maus"))
+        self.spacemouse_speed.setAccessibleName(titles["spacemouse_speed"])
         self.spacemouse_speed.setToolTip(
             tr("Wie weit ein Schub die Ansicht bewegt. Links fein, rechts flott.")
         )
-        self.spacemouse_invert = QCheckBox(tr("Richtung umkehren"), self)
+        self.spacemouse_invert = QCheckBox(titles["spacemouse_invert"], self)
         self.spacemouse_invert.setChecked(settings.spacemouse_invert)
         self.spacemouse_invert.setToolTip(
             tr(
@@ -322,7 +381,7 @@ class SettingsDialog(QDialog):
             self.slicer.addItem(slicer_title(Path(selected_slicer)), selected_slicer)
             self.slicer.setItemData(1, selected_slicer, Qt.ItemDataRole.ToolTipRole)
             self.slicer.setCurrentIndex(1)
-        self.slicer.setAccessibleName(tr("Slicer"))
+        self.slicer.setAccessibleName(titles["slicer"])
         self.slicer.currentIndexChanged.connect(self._slicer_changed)
         self.slicer_file = QPushButton(tr("Benutzerdefiniert …"), self)
         self.slicer_file.setIcon(icon("open", self.slicer_file))
@@ -389,8 +448,8 @@ class SettingsDialog(QDialog):
         form_layout = QVBoxLayout(content)
         form_layout.setContentsMargins(0, 0, 0, 0)
         form_layout.setSpacing(WIDE)
-        form_layout.addWidget(self._application_group())
-        form_layout.addWidget(self._project_group())
+        form_layout.addWidget(self._application_group(titles))
+        form_layout.addWidget(self._project_group(titles))
         form_layout.addStretch(1)
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
@@ -451,6 +510,35 @@ class SettingsDialog(QDialog):
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
         self._fit_initial_soon()
+        if self._shown_option is not None:
+            QTimer.singleShot(0, self, self._reach_the_shown_option)
+
+    def show_option(self, key: str) -> None:
+        """Öffnet den Dialog bei einer Zeile — der Weg aus der Befehlspalette.
+
+        Liegt sie hinter „Weitere Einstellungen", klappt der Bereich auf; das
+        Feld bekommt den Fokus und wird nach dem Anzeigen ins Bild gerollt.
+        Ist es gesperrt, weil ein Haken darüber aus ist (der Port ohne
+        Fernsteuerung), bekommt dieser Haken den Fokus — er ist der Weg.
+        """
+        widget = getattr(self, key, None) if key in option_titles() else None
+        if not isinstance(widget, QWidget):
+            return
+        more = self._advanced_form.parentWidget()
+        if more is not None and more.isAncestorOf(widget):
+            open_section(more)
+        gate = _GATES.get(key)
+        if not widget.isEnabled() and gate is not None:
+            widget = getattr(self, gate)
+        self._shown_option = widget
+        widget.setFocus(Qt.FocusReason.OtherFocusReason)
+        if self.isVisible():
+            QTimer.singleShot(0, self, self._reach_the_shown_option)
+
+    def _reach_the_shown_option(self) -> None:
+        if self._shown_option is not None:
+            self._scroll.ensureWidgetVisible(self._shown_option)
+            self._shown_option.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _fit_soon(self) -> None:
         QTimer.singleShot(0, self, self._fit_content)
@@ -462,7 +550,7 @@ class SettingsDialog(QDialog):
         QTimer.singleShot(0, self, self._fit_explicit_content)
 
     def _fit_content(self) -> None:
-        """Nachgereichte Inhalte ändern nur den Rollbereich, nicht den Rahmen."""
+        """Nachgereichte Inhalte vergrößern den Rahmen höchstens, nie zurück (RM-487)."""
         self._height.fit(self, self._scroll, intent="passive")
 
     def _fit_initial_content(self) -> None:
@@ -481,63 +569,14 @@ class SettingsDialog(QDialog):
         self._height.fit(self, self._scroll, intent="explicit")
 
     def _reserve_advanced_width(self) -> int:
-        """Ermittelt die natürliche Fensterbreite samt verborgener Zusatzzeilen."""
-        base_width = max(self.sizeHint().width(), self.minimumWidth())
-        was_hidden = self._advanced_content.isHidden()
-        group = self.advanced.parentWidget()
-        assert group is not None
-        contents = self._scroll.widget()
-        assert contents is not None
-        dialog_layout = self.layout()
-        assert dialog_layout is not None
-        layouts = (
-            self._advanced_form,
-            self.advanced.layout(),
-            group.layout(),
-            contents.layout(),
-            dialog_layout,
+        """Die natürliche Fensterbreite samt der zugeklappten Zusatzzeilen."""
+        return max(
+            self.sizeHint().width(),
+            self.minimumWidth(),
+            expanded_width(self._scroll, self._advanced_form),
         )
 
-        def activate_layouts() -> None:
-            for layout in layouts:
-                if layout is not None:
-                    layout.invalidate()
-                    layout.activate()
-            self.advanced.updateGeometry()
-            group.updateGeometry()
-            self._scroll.updateGeometry()
-            self.updateGeometry()
-
-        try:
-            self._advanced_content.setVisible(True)
-            activate_layouts()
-            margins = dialog_layout.contentsMargins()
-            content_width = max(contents.sizeHint().width(), contents.minimumSizeHint().width())
-            scroll_width = (
-                content_width
-                + 2 * self._scroll.frameWidth()
-                + self._scroll.verticalScrollBar().sizeHint().width()
-            )
-            other_width = 0
-            for index in range(dialog_layout.count()):
-                item = dialog_layout.itemAt(index)
-                if item is None or item.widget() is self._scroll:
-                    continue
-                other_width = max(
-                    other_width,
-                    item.sizeHint().width(),
-                    item.minimumSize().width(),
-                )
-            expanded_width = max(
-                self.minimumWidth(),
-                max(scroll_width, other_width) + margins.left() + margins.right(),
-            )
-        finally:
-            self._advanced_content.setVisible(not was_hidden)
-            activate_layouts()
-        return max(base_width, expanded_width)
-
-    def _application_group(self) -> QWidget:
+    def _application_group(self, titles: Mapping[str, str]) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)
         form = QFormLayout(box)
         form.setVerticalSpacing(NORMAL)
@@ -547,9 +586,9 @@ class SettingsDialog(QDialog):
         # übrigen daneben — zwei Formen in einem Dialog. Der Dialog wird dafür
         # so breit, wie seine breiteste Zeile es verlangt.
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
-        form.addRow(tr("Sprache"), self.language)
-        form.addRow(tr("Anzeigeeinheit"), self.unit)
-        form.addRow(tr("Thema"), self.theme)
+        form.addRow(titles["language"], self.language)
+        form.addRow(titles["unit"], self.unit)
+        form.addRow(titles["theme"], self.theme)
         form.addRow("", self.updates)
         # **Der Slicer gilt der Anwendung, nicht dem nächsten Projekt**: Er
         # rechnet jede Druckdatei, auch die des offenen Projekts. Er steht
@@ -561,7 +600,7 @@ class SettingsDialog(QDialog):
         slicer_layout.setSpacing(NORMAL)
         slicer_layout.addWidget(self.slicer, 1)
         slicer_layout.addWidget(self.slicer_file)
-        form.addRow(tr("Slicer"), slicer_row)
+        form.addRow(titles["slicer"], slicer_row)
         form.addRow(self.slicer_state)
         form.addRow(self.slicer_progress)
         more = QWidget(box)
@@ -572,25 +611,40 @@ class SettingsDialog(QDialog):
         details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         # Was zusammengehört, steht beisammen: erst die Kamera (Navigation,
         # 3D-Maus), dann die Tasten, das Bild, der Chat, die Fernsteuerung.
-        details.addRow(tr("Navigation"), self.navigation)
+        details.addRow(titles["navigation"], self.navigation)
         details.addRow("", self.spacemouse)
-        details.addRow(tr("Geschwindigkeit der 3D-Maus"), self.spacemouse_speed)
+        details.addRow(titles["spacemouse_speed"], self.spacemouse_speed)
         details.addRow("", self.spacemouse_invert)
-        details.addRow(tr("Tastenbelegung"), self.shortcuts)
-        details.addRow(tr("Differenzansicht"), self.diff_palette)
+        details.addRow(titles["shortcuts"], self.shortcuts)
+        details.addRow(titles["diff_palette"], self.diff_palette)
         details.addRow("", self.auto_accept)
         details.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
         details.addRow("", self.remote)
-        details.addRow(tr("Port der Fernsteuerung"), self.remote_port)
+        details.addRow(titles["remote_port"], self.remote_port)
         for row in (self.spacemouse, self.spacemouse_speed, self.spacemouse_invert):
             details.setRowVisible(row, self.settings.spacemouse_seen)
-        self.advanced = collapsible(tr("Weitere Einstellungen"), more, open_now=False)
+        # Zugeklappt nennt der Bereich, was in ihm steht, und er merkt sich,
+        # wie der Kunde ihn verließ (RM-491).
+        contents = (
+            tr(
+                "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, "
+                "KI-Hinweis, Fernsteuerung"
+            )
+            if self.settings.spacemouse_seen
+            else tr("Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung")
+        )
+        self.advanced = collapsible(
+            tr("Weitere Einstellungen"),
+            more,
+            open_now=False,
+            contents=contents,
+            remember="settings.more",
+        )
         self._advanced_form = details
-        self._advanced_content = more
         form.addRow(self.advanced)
         return box
 
-    def _project_group(self) -> QWidget:
+    def _project_group(self, titles: Mapping[str, str]) -> QWidget:
         box = QGroupBox(tr("Vorgaben für neue Projekte"), self)
         form = QFormLayout(box)
         form.setVerticalSpacing(NORMAL)
@@ -605,12 +659,12 @@ class SettingsDialog(QDialog):
         )
         note.setWordWrap(True)
         form.addRow(note)
-        form.addRow(tr("Drucker"), self.printer)
+        form.addRow(titles["printer"], self.printer)
         form.addRow(self.printer_choice_state)
         form.addRow(self.printer_state)
         form.addRow(self.search_progress)
         form.addRow(self.search_again)
-        form.addRow(tr("Material"), self.material)
+        form.addRow(titles["material"], self.material)
         return box
 
     @property

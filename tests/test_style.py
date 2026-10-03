@@ -67,7 +67,14 @@ def test_dialog_size_decision_follows_the_change_intent() -> None:
     assert _content_size_for_intent(current, natural, "explicit", available_height=250) == QSize(
         700, 250
     )
-    assert _content_size_for_intent(current, natural, "passive") is None
+    # Passiv wächst nur die Höhe, bis zum Bildschirmrand, und nichts schrumpft:
+    # nachgereichter Inhalt bekommt Platz, ein kürzerer Status lässt den Rahmen stehen.
+    assert _content_size_for_intent(current, natural, "passive") == QSize(700, 680)
+    assert _content_size_for_intent(current, natural, "passive", available_height=500) == QSize(
+        700, 500
+    )
+    assert _content_size_for_intent(current, natural, "passive", available_height=400) is None
+    assert _content_size_for_intent(current, QSize(920, 300), "passive") is None
 
 
 def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
@@ -86,6 +93,9 @@ def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
         def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
             pass
 
+        def widget(self) -> None:
+            return None
+
     class Geometry:
         def __init__(self) -> None:
             self._size = QSize(680, 420)
@@ -95,6 +105,12 @@ def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
 
         def size(self) -> QSize:
             return QSize(self._size)
+
+        def width(self) -> int:
+            return self._size.width()
+
+        def height(self) -> int:
+            return self._size.height()
 
         def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
             return QSize(720, 500)
@@ -134,6 +150,132 @@ def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
     assert dialog.size() == QSize(980, 500)
 
 
+def test_late_content_grows_an_automatic_dialog_but_never_a_drawn_one() -> None:
+    """Nachgereichter Inhalt vergrößert den Rahmen, solange der Kunde nicht zog (RM-487).
+
+    Das Ergebnis einer Hintergrundprüfung kommt als passive Anpassung an. Sie
+    blieb ganz im Rollbereich, und der Knopf, den die Prüfung einblendet, lag
+    unter dem Rand. Jetzt wächst die Höhe — Breite und Lage bleiben —, ein
+    kürzerer Inhalt danach gibt nichts zurück, und eine gezogene Größe bleibt.
+    """
+    from PySide6.QtCore import QPoint, QRect, QSize
+
+    from app.ui.style import ContentHeight
+
+    class Layout:
+        def invalidate(self) -> None:
+            pass
+
+        def activate(self) -> None:
+            pass
+
+    #: Was um den Rollbereich herum steht: Ränder und Knopfleiste.
+    chrome = 100
+
+    class Viewport:
+        def __init__(self, dialog: Dialog) -> None:
+            self.dialog = dialog
+
+        def width(self) -> int:
+            return self.dialog.size().width()
+
+        def height(self) -> int:
+            return self.dialog.size().height() - chrome
+
+    class Content:
+        def __init__(self, dialog: Dialog) -> None:
+            self.dialog = dialog
+
+        def layout(self) -> None:
+            return None
+
+        def width(self) -> int:
+            return self.dialog.size().width()
+
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return self.dialog.natural - QSize(0, chrome)
+
+        def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(0, 0)
+
+    class Scroll:
+        def __init__(self, dialog: Dialog) -> None:
+            self._viewport = Viewport(dialog)
+            self._content = Content(dialog)
+
+        def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
+            pass
+
+        def widget(self) -> Content:
+            return self._content
+
+        def viewport(self) -> Viewport:
+            return self._viewport
+
+    class Dialog:
+        def __init__(self) -> None:
+            self._size = QSize(680, 420)
+            self.natural = QSize(680, 420)
+            self.moves: list[QPoint] = []
+
+        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
+            return True
+
+        def size(self) -> QSize:
+            return QSize(self._size)
+
+        def width(self) -> int:
+            return self._size.width()
+
+        def height(self) -> int:
+            return self._size.height()
+
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(self.natural)
+
+        def frameGeometry(self) -> QRect:  # noqa: N802 — Qt-Name
+            return QRect(QPoint(40, 30), self._size)
+
+        def move(self, point: QPoint) -> None:
+            self.moves.append(point)
+
+        def screen(self) -> None:
+            return None
+
+        def layout(self) -> Layout:
+            return Layout()
+
+        def resize(self, width: int, height: int) -> None:
+            self._size = QSize(width, height)
+
+    dialog = Dialog()
+    scroll = Scroll(dialog)
+    height = ContentHeight()
+
+    dialog.natural = QSize(720, 480)
+    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
+    assert dialog.size() == QSize(680, 420), "vor der Anfangsmessung misst nur ``initial``"
+
+    height.fit(dialog, scroll, grow_width=True, intent="initial")  # type: ignore[arg-type]
+    assert dialog.size() == QSize(720, 480)
+
+    dialog.natural = QSize(900, 536)
+    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
+    assert dialog.size() == QSize(720, 536), "die Höhe wächst mit, die Breite bleibt"
+    assert height.user is None, "das eigene Wachsen ist kein Zug des Kunden"
+
+    dialog.natural = QSize(720, 300)
+    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
+    assert dialog.size() == QSize(720, 536), "ein kürzerer Inhalt lässt den Rahmen stehen"
+
+    dialog.resize(720, 400)  # der Kunde zieht
+    dialog.natural = QSize(720, 700)
+    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
+    assert dialog.size() == QSize(720, 400), "die gezogene Größe gehört dem Kunden"
+    assert height.user == QSize(720, 400)
+    assert dialog.moves == []
+
+
 def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() -> None:
     from PySide6.QtCore import QSize
 
@@ -157,6 +299,9 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
     class Scroll:
         def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
             pass
+
+        def widget(self) -> None:
+            return None
 
     class PrinterForm:
         def layout(self) -> None:
@@ -185,6 +330,9 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
 
         def minimumWidth(self) -> int:  # noqa: N802 — Qt-Name
             return 0
+
+        def _natural_width(self) -> int:
+            return FirstRunDialog._natural_width(self)  # type: ignore[arg-type]
 
         def width(self) -> int:
             return self._size.width()

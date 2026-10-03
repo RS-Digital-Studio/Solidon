@@ -8,8 +8,8 @@ was nur Claude Code betrifft: Unterlagen, Befehle, Werkzeuge, Arbeitsweise.
 ## Was dieses Projekt ist
 
 Solidon — eine Desktop-Anwendung in **Python (3.14 oder neuer) mit PySide6**.
-Die Untergrenze steht in `pyproject.toml`; Arbeitsumgebung und CI verwenden
-CPython 3.14.7.
+Die Untergrenze steht in `pyproject.toml`; die CI und damit jedes Paket
+verwenden CPython 3.14.8, die Arbeitsplätze noch 3.14.7 (RM-468).
 
 | Datei | Beantwortet |
 |---|---|

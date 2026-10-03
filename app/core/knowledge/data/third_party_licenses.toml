@@ -10,6 +10,11 @@ source = "https://raw.githubusercontent.com/google/fonts/d76415e6d10823546b8d002
 sha256 = "c89ab37b152eaa07dc5e8d100d6ffb968226a0c4988bdff16a97e73174e9c77c"
 
 [[text]]
+path = "third_party_licenses/DejaVu-2.35-Bitstream-Vera.txt"
+source = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/e055422f2643c8dc4718fb2269daeb3f707ccc4b/dejavu-fonts/LICENSE"
+sha256 = "b7666e9925d7a933b0ef3ea8ee4d152249263663a6e3739bd60f04d89ccea4a0"
+
+[[text]]
 path = "third_party_licenses/DancingScript-2.001-OFL-1.1.txt"
 source = "https://raw.githubusercontent.com/google/fonts/f8dc91f6f13564fd038c60c02e82f305be8c551d/ofl/dancingscript/OFL.txt"
 sha256 = "c02c0002d3bbd41a16933c162888c400469c7029f1362ca9d60d5ed20ea7d157"
@@ -124,7 +129,7 @@ id = "cpython"
 name = "CPython runtime"
 notice_source = "python-runtime"
 source = "https://github.com/python/cpython"
-versions = ["3.13.14", "3.13.15", "3.14.7"]
+versions = ["3.13.14", "3.13.15", "3.14.7", "3.14.8"]
 
 [[runtime]]
 id = "appimage-type2-runtime"
@@ -148,15 +153,17 @@ versions = ["6.22.2", "6.22.3"]
 [[runtime]]
 id = "openssl"
 name = "OpenSSL"
-# **Zwei Fassungen, weil zwei Plattformen liefern.** Windows und macOS
-# bekommen OpenSSL mit dem CPython-Bau (3.0.21), auf Linux reist die
-# Systembibliothek des Bauservers mit — Ubuntu 24.04 trägt 3.0.13. Der
-# erste Linux-Paketlauf, der überhaupt bis zur Releaseakte kam (Tag-Lauf 8,
-# 03.09.2026), ist darüber gestolpert. Beide Fassungen stehen unter
-# Apache-2.0; die Quelle nennt deshalb das Repository und nicht einen
-# einzelnen Baum, denn eine Zeile kann nicht auf zwei Tags zeigen.
+# **Mehrere Fassungen, weil zwei Plattformwege liefern.** Windows und macOS
+# bekommen OpenSSL mit dem CPython-Bau (3.5.9 mit 3.14.8, laut
+# `PCbuild/python.props` und `Mac/BuildScript/build-installer.py` zum Tag;
+# 3.5.7 mit 3.14.7, 3.0.21 mit 3.13), auf Linux reist die Systembibliothek
+# des Bauservers mit — Ubuntu 24.04 trägt 3.0.13. Der erste Linux-Paketlauf,
+# der überhaupt bis zur Releaseakte kam (Tag-Lauf 8, 03.09.2026), ist darüber
+# gestolpert. Alle Fassungen stehen unter Apache-2.0; die Quelle nennt deshalb
+# das Repository und nicht einen einzelnen Baum, denn eine Zeile kann nicht
+# auf mehrere Tags zeigen.
 source = "https://github.com/openssl/openssl"
-versions = ["3.0.13", "3.0.21", "3.5.7"]
+versions = ["3.0.13", "3.0.21", "3.5.7", "3.5.9"]
 
 [[runtime]]
 id = "libffi"

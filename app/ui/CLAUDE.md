@@ -142,7 +142,7 @@ Karte, dort das Gesetz.
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |
 | `seal_dialog.py` | Dichtweg als Zeichnung oder Öffnung wählen (§19.2); schreibt keine Operation |
 | `seal_flow.py` | bindet die Dichtwegwahl an den normalen Operationsdialog |
-| `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27) |
+| `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27); nichtmodal, der Lauf steht in der Statusleiste |
 | `variants_dialog.py` | Variantengenerator (§28.3, §25) |
 | `comfy_dialog.py` | ComfyUI einrichten (§27, §36); Dateiprüfung siehe `wartezeit.md` |
 | `install_dialog.py` | was fehlt, und ein Knopf, der es holt (§36, §38); eine begonnene Installation läuft beim Schließen geordnet aus |
@@ -210,7 +210,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `style.py` | Formsprache/Typografie/Raster; `make_primary`, `rule`; `ContentHeight` nach Auslöser/Nutzermaß; `DialogScrollArea`, `form_natural_width`, Bildschirmfit, Aufmachmaß, Pfeil/Haken |
+| `style.py` | Formsprache/Typografie/Raster; `make_primary`, `rule`; `ContentHeight` nach Auslöser/Nutzermaß; `DialogScrollArea`, `expanded_width`, Bildschirmfit, Aufmachmaß, Pfeil/Haken |
 | `theme.py` | hell und dunkel (§19.3) |
 | `window_chrome.py` | die Titelleiste in den Farben der Anwendung (Windows malt sie und bekommt nur die Farbe gesagt); ein idempotent angemeldeter Wächter am Ereignisstrom |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
@@ -234,7 +234,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 | Datei | Zweck |
 |---|---|
 | `settings.py` | Oberflächen-Einstellungen (`UiSettings`) in einer schlichten Datei (§38) |
-| `settings_dialog.py` | Einstellungen als Entwurf (§19.3, §38); Slicer vor Drucker, gemeinsame Erhebung aus `first_run` |
+| `settings_dialog.py` | Einstellungen als Entwurf (§19.3, §38); Slicer vor Drucker, gemeinsame Erhebung aus `first_run`; jede Zeile in der Palette (`option_titles`) |
 | `support_dialog.py` | Rückmeldung senden (§37.2): Anhänge als ein Schnappschuss (`report.diagnostic_attachments()`), vor dem Senden sichtbar; ein Absturz sendet nichts |
 | `survey.py` | Bogen, Nutzungsuhr und die zwei Einladungen über der Ansicht (`SurveyNotice`, `SupportNotice` auf `ViewNotice`) |
 

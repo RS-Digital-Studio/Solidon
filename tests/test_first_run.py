@@ -665,7 +665,14 @@ def test_the_chat_line_names_the_ready_backend(
 def test_the_answers_land_in_the_settings(qt_app: QApplication) -> None:
     settings = UiSettings()
     dialog = FirstRunDialog(settings)
-    dialog.printer.setCurrentIndex(0)
+    # Die Liste beginnt mit der Überschrift des Verfahrens („FDM — Filament“,
+    # seit 48ffcf145); gewählt wird der erste Drucker darunter.
+    first = next(
+        row
+        for row in range(dialog.printer.count())
+        if not str(dialog.printer.itemData(row) or "").startswith("__")
+    )
+    dialog.printer.setCurrentIndex(first)
 
     dialog.apply_to(settings)
 

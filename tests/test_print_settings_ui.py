@@ -35,7 +35,14 @@ from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
 from app.core.slice.analysis import total_overhang
-from app.core.types import Feature, MaterialSlot, Profile, SceneObject, SlotOverride
+from app.core.types import (
+    Feature,
+    MaterialSlot,
+    Profile,
+    SceneObject,
+    SettingAdvice,
+    SlotOverride,
+)
 from app.i18n import tr
 from app.ui.labels import BoundedLengthSpin, BoundedSpin
 from app.ui.print_settings_dialog import (
@@ -334,7 +341,10 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
     monkeypatch.setattr(dialog, "_queue_refit", record_intent)
     dialog.show()
     try:
-        dialog.wait_for_workers()
+        # Warten, nicht schließen: ``wait_for_workers`` setzt den Dialog auf
+        # „wird geschlossen“, und die späte Antwort unten fiele weg.
+        assert dialog.wait_for_slicers()
+        dialog._leash.wait_all(2000)
         for _ in range(3):
             qt_app.processEvents()
         toggle = dialog.slicer_toggle
@@ -369,7 +379,10 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
         passively_opened = outcome != "empty-inventory"
         assert toggle.isChecked() is passively_opened
         assert dialog.slicer_inner.isVisibleTo(dialog.slicer_box) is passively_opened
-        assert dialog.frameGeometry() == folded_frame
+        # Passiv wächst höchstens die Höhe, nie die Breite (RM-487).
+        assert dialog.frameGeometry().width() == folded_frame.width()
+        if not passively_opened:
+            assert dialog.frameGeometry() == folded_frame
         if passively_opened:
             assert queued and set(queued) == {"passive"}
         else:
@@ -1774,7 +1787,7 @@ def test_print_settings_refuse_out_of_range_numbers_until_corrected_or_reset(
     monkeypatch.setattr(
         dialog.session,
         "last_result",
-        SimpleNamespace(scene=SimpleNamespace(objects={"Teil": _cube_object()})),
+        _shown_result(SimpleNamespace(objects={"Teil": _cube_object()})),
     )
 
     def unexpected_setup() -> None:
@@ -2562,6 +2575,21 @@ def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) ->
 # --- Aussehen und gestufte Tiefe ----------------------------------------------------
 
 
+def _path_of(dialog: PrintSettingsDialog, editor: QWidget) -> str:
+    """Der Einstellungspfad zu einem Feld des Dialogs."""
+    return next(path for path, known in dialog._editors.items() if known is editor)
+
+
+def _in_form(form: QFormLayout, editor: QWidget) -> bool:
+    """Ob ``editor`` in einer Feldzelle dieses Formulars steht, auch in einem Halter."""
+    for row in range(form.rowCount()):
+        item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+        holder = item.widget() if item is not None else None
+        if holder is not None and (holder is editor or holder.isAncestorOf(editor)):
+            return True
+    return False
+
+
 def test_no_field_stretches_across_the_whole_dialog(dialog: PrintSettingsDialog) -> None:
     """Ein Wert wie 0,200 stand in einem 726 Bildpunkte breiten Kasten.
 
@@ -2573,17 +2601,38 @@ def test_no_field_stretches_across_the_whole_dialog(dialog: PrintSettingsDialog)
     Gemessen wird am gezeigten Fenster und nicht an `maximumWidth`: Dass eine
     Grenze gesetzt ist, heißt nicht, dass das Layout sie einhält.
     """
-    dialog.resize(960, 760)
+    # Erst zeigen, dann aufziehen — wie der Kunde: Die Anfangsgröße beim
+    # Zeigen folgt dem Bildschirm (offscreen 800 Punkte) und nicht einem
+    # ``resize`` davor; eine danach gezogene Breite bleibt (``fenster.md``).
     dialog.show()
-    QApplication.processEvents()
+    for _ in range(16):
+        QApplication.processEvents()
+    dialog.resize(960, 760)
+    for _ in range(16):
+        QApplication.processEvents()
 
     assert dialog.width() >= 900, "der Test taugt nur an einem breiten Fenster"
+    # ``panels.even_fields`` (4d955a9e7) gibt den gedeckelten Feldern eines
+    # Formulars eine Kante: die Wunschbreite des breitesten Nachbarn. Breiter
+    # als der breiteste Wert seines Formulars wird damit keines — und genau das
+    # ist die Zusage, nicht die eigene Wunschbreite jedes Felds.
+    neighbours: dict[int, int] = {}
+    for form in dialog.findChildren(QFormLayout):
+        members = [
+            editor
+            for editor in dialog._editors.values()
+            if FIELD_WIDTH.get(dialog._fields[_path_of(dialog, editor)].kind) is not None
+            and _in_form(form, editor)
+        ]
+        widest = max((editor.sizeHint().width() for editor in members), default=0)
+        for editor in members:
+            neighbours[id(editor)] = max(neighbours.get(id(editor), 0), widest)
     too_wide = []
     for path, editor in dialog._editors.items():
         limit = FIELD_WIDTH.get(dialog._fields[path].kind)
         if limit is None:
             continue
-        allowed = max(limit, editor.sizeHint().width())
+        allowed = max(limit, editor.sizeHint().width(), neighbours.get(id(editor), 0))
         if editor.width() > allowed:
             too_wide.append(f"{path}: {editor.width()} statt höchstens {allowed}")
     assert not too_wide, "\n".join(too_wide)
@@ -2835,6 +2884,25 @@ def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
         assert editor.accessibleDescription() == own_description
 
 
+@pytest.mark.parametrize(
+    ("slicer", "ignored"), [("superslicer.exe", True), ("PrusaSlicer.exe", False)]
+)
+def test_superslicer_greys_out_the_scarf_seam_and_drops_its_suggestion(
+    dialog: PrintSettingsDialog, slicer: str, ignored: bool
+) -> None:
+    """RM-459: SuperSlicer gehört zur Prusa-Familie, kennt die Schrägnaht aber
+    nicht. Das Feld sagt es, und ein Vorschlag darauf steht nicht in der Liste."""
+    dialog._slicer_path = Path(slicer)
+    dialog._mark_fields_this_slicer_ignores()
+    editor = dialog._editors["shell.scarf_seam"]
+    assert editor.isEnabled() is not ignored
+    assert ("kennt diese Einstellung nicht" in editor.toolTip()) is ignored
+
+    suggestion = SettingAdvice(path="shell.scarf_seam", value=True, was=False, reason="rund")
+    dialog._advice_entries = [suggestion]
+    assert (suggestion in dialog._current_advice()) is not ignored
+
+
 def test_a_part_that_fits_no_bed_is_named_before_slicing(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2888,7 +2956,7 @@ def test_a_part_that_fits_no_bed_is_named_before_slicing(
     assert called == [("split_model", "obj_1")]
 
     small = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=small))
+    monkeypatch.setattr(dialog.session, "last_result", _shown_result(small))
     dialog._show_slicer_state()
     assert dialog.oversize_note.isHidden()
 
@@ -4399,7 +4467,10 @@ def test_the_active_slicer_variant_and_nozzle_choice_stay_in_step(
     session.start_new("centauri-carbon-2", "pla")
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
-    dialog.wait_for_workers()
+    # Nur warten, nicht schließen: ``wait_for_workers`` ist der Abbau der Suite
+    # und setzt den Dialog auf „wird geschlossen“ — danach verwarf
+    # ``_profiles_found`` jede Antwort, und die Düse blieb auf 0,4.
+    dialog._leash.wait_all(2000)
 
     def close_dialog() -> None:
         dialog.reject()
@@ -4467,7 +4538,8 @@ def test_profile_search_preserves_a_pending_custom_nozzle_draft(
     session.start_new("centauri-carbon-2", "pla")
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers()
-    dialog.wait_for_workers()
+    # Warten, nicht schließen (siehe ``test_the_active_slicer_variant_…``).
+    dialog._leash.wait_all(2000)
 
     def close_dialog() -> None:
         dialog.reject()
@@ -4557,7 +4629,9 @@ def test_imported_printer_identity_limits_nozzle_choices_to_its_model_and_vendor
         nozzle=0.6,
     )
     found = [source, foreign, active]
-    dialog.session.profile = replace(
+    # ``Session.profile`` ist abgeleitet (aus Dokument und Druckeinstellungen)
+    # und hat keinen Setter; die Attrappe steht deshalb an der Klasse.
+    imported = replace(
         dialog.session.profile,
         printer=slicer_profiles._discovered_printer(
             source,
@@ -4572,6 +4646,7 @@ def test_imported_printer_identity_limits_nozzle_choices_to_its_model_and_vendor
             "OrcaSlicer",
         ),
     )
+    monkeypatch.setattr(type(dialog.session), "profile", property(lambda _self: imported))
     dialog._slicer_path = Path("OrcaSlicer.exe")
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args, **_kwargs: active.name)
 
@@ -5146,7 +5221,7 @@ def test_a_declared_lid_condition_also_controls_print_advice(
     from app.core.geom.mesh import MeshData
 
     body = SceneObject(id="obj_1", name="Teil", mesh=MeshData.of(trimesh.creation.box()))
-    session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={body.id: body}))
+    session.last_result = _shown_result(SimpleNamespace(objects={body.id: body}))
     dialog = PrintSettingsDialog(session, UiSettings())
     try:
         assert dialog._fits_in_play() == expected
@@ -6246,7 +6321,12 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     # „0 >= 23" ist kein Befund über Stauchung, sondern über ein Layout, das
     # es noch nicht gibt (dieselbe Falle wie `isVisible` vor dem Anzeigen).
     dialog.show()
-    qt_app.processEvents()
+    # Gemessen wird gesammelt im nächsten Umlauf (``_queue_refit``): Ein
+    # einzelnes ``processEvents`` sah die Anfangsgröße noch nicht, und das
+    # Aufklappen ging in der noch wartenden Anfangsmessung auf.
+    for _ in range(8):
+        qt_app.processEvents()
+    assert dialog._content_height.initial_fit_done
     before = dialog.height()
     field = dialog._editors["layers.layer_height"]
     tall_enough = field.sizeHint().height()
@@ -6259,7 +6339,8 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     room = dialog.screen().availableGeometry().height() - SCREEN_MARGIN
 
     dialog._open_slicer_section()
-    qt_app.processEvents()
+    for _ in range(8):
+        qt_app.processEvents()
 
     wanted = min(dialog.sizeHint().height(), room)
     assert dialog.height() >= max(before, wanted), (
@@ -7011,6 +7092,18 @@ def test_the_filament_dialog_uses_that_calculation() -> None:
 # --- Was die Datei mitnimmt ---------------------------------------------------------
 
 
+def _shown_result(scene: SimpleNamespace) -> SimpleNamespace:
+    """Ein Auswertungsergebnis als Attrappe, mit allem, was die Sitzung daran liest.
+
+    ``Session.picture_first`` (KUNDE-14) fragt ``object_names`` und
+    ``stopped_at``; eine Attrappe nur mit ``scene`` riss dort mit
+    ``AttributeError``. Die Körper der Szene gelten als gezeigt.
+    """
+    return SimpleNamespace(
+        scene=scene, object_names={name: name for name in scene.objects}, stopped_at=None
+    )
+
+
 def _cube_object() -> SceneObject:
     """Ein Körper, an dem sich die Größe einer 3MF ablesen lässt."""
     import trimesh
@@ -7146,7 +7239,9 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     dialog.settings = settings
     selected = replace(_cube_object(), id="selected", plate=1)
     scene = SimpleNamespace(objects={"excluded": _cube_object(), "selected": selected})
-    monkeypatch.setattr(dialog.session, "last_result", SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog.session, "last_result", _shown_result(scene))
+    # Der Slicer bekommt die feine Rechnung (RM-426); die Attrappe ist sie.
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="prusa")
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [1])
@@ -8126,7 +8221,7 @@ def test_print_advice_remembers_measured_layers_across_dialogs(qt_app, monkeypat
 
     # Ein anderes Netz unter derselben Kennung ist ein anderer Körper.
     other = _print_advice_cube()
-    session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={other.id: other}))
+    session.last_result = _shown_result(SimpleNamespace(objects={other.id: other}))
     third = PrintSettingsDialog(session, UiSettings())
     assert third.wait_for_slicers()
     third._start_advice()
@@ -8419,7 +8514,7 @@ def test_a_changed_scene_replaces_slot_rows_on_the_same_plate(qt_app):
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=slots)])
     assert len(dialog.slot_rows) == 2
     green = _print_advice_cube(slots=(MaterialSlot(0, "Grün", material_type="PLA"),))
-    dialog.session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={green.id: green}))
+    dialog.session.last_result = _shown_result(SimpleNamespace(objects={green.id: green}))
     dialog.session.sceneChanged.emit(dialog.session.last_result)
     assert not dialog.slot_rows
     assert not dialog._slot_names
@@ -8789,7 +8884,7 @@ def test_switching_print_tabs_keeps_the_outer_size_and_scrolls_the_current_page(
 def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
     dialog: PrintSettingsDialog, qt_app: QApplication
 ) -> None:
-    """„Andere …“ zeigt ein Feld, ohne den Außenrahmen springen zu lassen."""
+    """„Andere …“ zeigt ein Feld; der Rahmen wächst höchstens und springt nicht zurück."""
     from app.ui.style import SPACE, WIDE
 
     dialog.show()
@@ -8816,7 +8911,10 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
 
     assert not dialog.nozzle.isHidden()
     assert page.sizeHint().height() > closed_content_height
-    assert dialog.size() == closed_size, "der Rollbereich nimmt die zusätzliche Zeile auf"
+    # Die Zeile darf den Rahmen wachsen lassen, nie breiter (RM-487).
+    assert dialog.width() == closed_size.width()
+    assert dialog.height() >= closed_size.height()
+    expanded_size = dialog.size()
     expanded_content_height = page.sizeHint().height()
 
     standard = dialog.nozzle_choice.findData(0.4)
@@ -8828,7 +8926,7 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
 
     assert dialog.nozzle.isHidden()
     assert page.sizeHint().height() < expanded_content_height
-    assert dialog.size() == closed_size, "Zuklappen lässt den Außenrahmen ruhig stehen"
+    assert dialog.size() == expanded_size, "Zuklappen lässt den Außenrahmen ruhig stehen"
 
 
 def test_every_setting_field_carries_its_name_and_its_unit_once(
@@ -8874,9 +8972,7 @@ def test_a_crashed_stock_check_reads_as_lines_not_as_title_colon_detail(
     monkeypatch.setattr(module, "prepare_usage", broken)
     # Die Prüfung läuft nur mit einem Ergebnis; welche Körper es trägt, ist
     # gleich, denn sie scheitert vor dem ersten.
-    monkeypatch.setattr(
-        dialog.session, "last_result", SimpleNamespace(scene=SimpleNamespace(objects={}))
-    )
+    monkeypatch.setattr(dialog.session, "last_result", _shown_result(SimpleNamespace(objects={})))
     dialog._stock_revision += 1
     dialog._refresh_stock()
     worker = dialog._stock_worker

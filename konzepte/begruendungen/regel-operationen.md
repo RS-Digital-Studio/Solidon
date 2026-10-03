@@ -362,6 +362,29 @@ und auch einzeln), bleibt die Absage mit der größten Zahl. Ein Suchen nach dem
 baubaren Rest durch wiederholtes Bauen wurde gemessen und verworfen: 15 bis 37 s
 je Vorschau an den Pegboards, und der Rest war teils offen.
 
+**Seit RM-435 sucht die exakte Gruppe gezielt, je Kontur** (02.10.2026). Mit
+der Bindung an native Kanten (RM-322, `0041000a0`) lief jede exakte
+Gruppenrundung durch die Auslass-Suche von RM-284, die jede Kante einzeln und
+jede Gruppe ohne eine Kante baute: an `pegboard-gs-100-v2.step` („alle“ R 0,5)
+134 Bauten und 263,6 s statt 3,0 s, an goot 288 Bauten und 148 s für eine
+Absage. Jetzt fragt sie zuerst, was der Builder selbst meldet
+(`NbFaultyContours`/`FaultyVertex`; `FaultyContour` zählt Streifen, nur die
+ersten `NbContours` sind Konturen — am Prüfkasten Streifen 25 bei 17 Konturen),
+ortet ungültige Flächen und offene Dreiecke über `Generated` und die
+Kopierabbildung, und erst ohne Hinweis folgen Proben je Kontur und das
+Weglassen je einer Kontur. gs-100: 3 Bauten, 61 statt 58 Kanten gerundet;
+goot senkrecht R 1: 4 statt 10 Bauten, dasselbe Ergebnis (26 798,415 mm³);
+goot „alle“ R 0,5: 101 von 143 gerundet nach 8 Bauten statt Absage nach 288;
+pb3041 „alle“ R 0,5: 73 von 104 wie vorher, aus 28 statt 210 Bauten.
+Ausgelassen wird je Kontur, weil `Add(radius, edge)` die Rundung über
+tangentiale Nachbarkanten fortsetzt; am Crimper läuft so die Kontur der
+eindeutigen 20-mm-Kante über eine Kante, an der der Knick tangential ausläuft,
+und baut bei keinem Radius gültig — dort bietet der Befund das
+Dreiecksmodell an. Die Wand wird je Kontur geprüft, weil drei durch die
+Bindung je Kante neu belegte Crimper-Kanten an einer 0,37-mm-Wand die ganze
+Gruppe absagen ließen. Gezählt wird in nativen Kanten: pb3041 meldete für
+dieselbe Geometrie erst 14, dann 2 zu schmale Kanten.
+
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
 Die Formschräge rechnet am Netz Werkzeuge zwischen alter und neuer Fläche;

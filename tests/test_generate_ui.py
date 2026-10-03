@@ -688,8 +688,9 @@ def test_the_main_button_stays_the_default_through_the_run(qt_app: QApplication)
     qt_app.processEvents()
 
 
-def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplication) -> None:
-    """Passive Statuswechsel halten den Außenrahmen und rollen den Mehrinhalt."""
+def test_status_text_grows_the_dialog_once_and_stays_reachable(qt_app: QApplication) -> None:
+    """Ein langer Status vergrößert den Rahmen bis zum Bildschirm, der Rest rollt;
+    ein kurzer danach gibt nichts zurück, damit der Rahmen nicht springt (RM-487)."""
     dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
     long_text = "Ein langer Satz, der mehrere Zeilen braucht. " * 140
     short_text = "Bereit."
@@ -701,7 +702,11 @@ def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplic
 
         dialog.state.setText(long_text)
         _settle(qt_app)
-        assert dialog.size() == before, "eine Statusmeldung bewegt den Außenrahmen nicht"
+        grown = dialog.size()
+        assert grown.width() == before.width(), "die Breite bleibt"
+        assert grown.height() > before.height(), "der lange Satz bekommt Platz"
+        room = dialog.screen().availableGeometry()
+        assert room.contains(dialog.frameGeometry()), "gewachsen wird nur bis zum Bildschirm"
         scroll = dialog._scroll
         bar = scroll.verticalScrollBar()
         assert bar.maximum() > 0, "der lange Text liegt im erreichbaren Rollbereich"
@@ -716,16 +721,16 @@ def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplic
 
         dialog.state.setText(short_text)
         _settle(qt_app)
-        assert dialog.size() == before, "auch der kurze Status lässt den Außenrahmen stehen"
+        assert dialog.size() == grown, "der kurze Status gibt die Höhe nicht zurück"
 
         dialog.state.setText(long_text)
         _settle(qt_app)
         dialog.state.setText(short_text)
         _settle(qt_app)
-        assert dialog.size() == before, "wiederholte Statuswechsel bleiben stabil"
+        assert dialog.size() == grown, "wiederholte Statuswechsel bleiben stabil"
 
         # Von Hand gezogen: Das bleibt, auch nach einem langen Satz.
-        dialog.resize(before.width(), before.height() + 200)
+        dialog.resize(before.width(), before.height() + 40)
         _settle(qt_app)
         drawn = dialog.size()
         dialog.state.setText(long_text)
@@ -2446,7 +2451,9 @@ def test_a_long_setup_failure_stays_in_the_scroll_area(
         dialog._refused("Ein Paket ließ sich nicht installieren.\n" + "pip: Zeile\n" * 200)
         _settle(qt_app)
 
-        assert dialog.size() == before, "die Meldung bewegt den Außenrahmen nicht"
+        assert dialog.width() == before.width(), "die Meldung verbreitert nichts"
+        room = dialog.screen().availableGeometry()
+        assert room.contains(dialog.frameGeometry()), "gewachsen wird nur bis zum Bildschirm"
         assert dialog.content_scroll.isAncestorOf(dialog.state), "der Status rollt mit"
         assert dialog.content_scroll.verticalScrollBar().maximum() > 0
         close = dialog.findChild(QDialogButtonBox)
@@ -2652,15 +2659,22 @@ def test_taking_a_generation_that_is_refused_keeps_the_mesh_and_names_the_way(
     from app.ui import main_window as main_window_module
     from tests.ui_helpers import expire_trial
 
+    # Im Arbeitsbereich, wie beim Kunden: Vom Startbildschirm aus beginnt
+    # *Übernehmen* ein neues Projekt (RM-371).
+    window._show_start_screen(False)
     if cause == "insertion":
         _two_steps(window)
     unlocked = activation._cached
     hooked: list[object] = []
     monkeypatch.setattr(sys, "excepthook", lambda *args: hooked.append(args))
     shown: list[tuple[str, dict[str, str], object]] = []
+    spoken: list[str] = []
 
     def fake_show_error(error: Any, parent: Any = None, handlers: Any = None) -> None:
+        from app.ui.dialogs import spoken_values
+
         shown.append((str(error.title), {a.id: str(a.label) for a in error.suggestions}, parent))
+        spoken.extend(spoken_values(error))
         if answer == "way" and STOP_INSERTING.id in {a.id for a in error.suggestions}:
             handlers[STOP_INSERTING.id](error)
 
@@ -2671,31 +2685,34 @@ def test_taking_a_generation_that_is_refused_keeps_the_mesh_and_names_the_way(
         def __init__(self, parent: Any = None, settings: Any = None) -> None:
             super().__init__(backend=generator, parent=parent, settings=settings)
 
-        def exec(self) -> int:
-            finish(self, qt_app)
-            if cause == "licence":
-                expire_trial(monkeypatch)
-            else:
-                _insert_before_the_last(window)
-            ok(self).click()
-            seen["parent"] = self
-            seen["accepted"] = self.result() == GenerateDialog.DialogCode.Accepted
-            seen["tries"] = len(self.tries)
-            seen["sources"] = _generated_sources(window)
-            if not seen["accepted"]:
-                # Der Weg danach: Marke ans Ende oder Schlüssel eingetragen,
-                # und derselbe Versuch geht ohne neuen Lauf hinein.
-                monkeypatch.setattr(activation, "_cached", unlocked)
-                window.session.stop_inserting()
-                assert window.session.wait_for_idle()
-                ok(self).click()
-                seen["later"] = self.result() == GenerateDialog.DialogCode.Accepted
-            self.release()
-            return int(self.result())
-
     monkeypatch.setattr(main_window_module, "GenerateDialog", Scripted)
+    # Der Dialog ist nichtmodal (RM-371): Der Menüweg kehrt zurück, und der
+    # Test bedient den offenen Dialog wie der Kunde.
     window.action_generate()
+    dialog = window._generator
+    assert isinstance(dialog, Scripted)
+    dialog.prompt.setText("eine Figur")
+    finish(dialog, qt_app)
+    if cause == "licence":
+        expire_trial(monkeypatch)
+    else:
+        _insert_before_the_last(window)
+    ok(dialog).click()
+    seen["parent"] = dialog
+    seen["accepted"] = dialog.result() == GenerateDialog.DialogCode.Accepted
+    seen["tries"] = len(dialog.tries)
+    seen["sources"] = _generated_sources(window)
+    if not seen["accepted"]:
+        # Der Weg danach: Marke ans Ende oder Schlüssel eingetragen,
+        # und derselbe Versuch geht ohne neuen Lauf hinein.
+        monkeypatch.setattr(activation, "_cached", unlocked)
+        window.session.stop_inserting()
+        assert window.session.wait_for_idle()
+        ok(dialog).click()
+        seen["later"] = dialog.result() == GenerateDialog.DialogCode.Accepted
+    dialog.release()
     assert window.session.wait_for_idle()
+    assert window._generator is None, "übernommen schließt den Dialog"
 
     assert not hooked, "eine Absage gehört in einen Satz, nicht an sys.excepthook"
     assert len(shown) == 1, shown
@@ -2706,6 +2723,10 @@ def test_taking_a_generation_that_is_refused_keeps_the_mesh_and_names_the_way(
         assert labels[STOP_INSERTING.id] == "Einfügen beenden und übernehmen"
     else:
         assert labels, "die Lizenzsperre nennt ihren Weg"
+        assert not any("change" in line for line in spoken), (
+            "RM-456: keine interne Handlungskennung in der Meldung",
+            spoken,
+        )
     if cause == "insertion" and answer == "way":
         assert seen["accepted"], "ein Klick: Marke ans Ende, Modell übernommen"
     else:
@@ -2757,17 +2778,22 @@ def test_generating_is_checked_before_the_dialog_opens(
         def __init__(self, parent: Any = None, settings: Any = None) -> None:
             super().__init__(backend=ScriptedMeshBackend(), parent=parent, settings=settings)
 
-        def exec(self) -> int:
+        def show(self) -> None:
+            # Nichtmodal (RM-371): Das Fenster zeigt den Dialog mit ``show``.
             opened.append(self._image is not None)
             self.release()
-            return int(GenerateDialog.DialogCode.Rejected)
+            self.reject()
 
     shown: list[tuple[str, dict[str, str], int]] = []
+    spoken: list[str] = []
 
     def fake_show_error(error: Any, parent: Any = None, handlers: Any = None) -> None:
+        from app.ui.dialogs import spoken_values
+
         shown.append(
             (str(error.title), {a.id: str(a.label) for a in error.suggestions}, len(opened))
         )
+        spoken.extend(spoken_values(error))
         if STOP_INSERTING.id in {a.id for a in error.suggestions}:
             handlers[STOP_INSERTING.id](error)
 
@@ -2798,6 +2824,10 @@ def test_generating_is_checked_before_the_dialog_opens(
     else:
         assert labels, "die Lizenzsperre nennt ihren Weg"
         assert opened == [], "gesperrt öffnet kein Dialog, der erst nach Minuten absagt"
+        assert not any("change" in line for line in spoken), (
+            "RM-456: keine interne Handlungskennung in der Meldung",
+            spoken,
+        )
 
 
 # --- Der Befund „Auf Maß gebracht“ trägt *Größe ändern* (RM-374) ---------------
@@ -2869,3 +2899,433 @@ def test_the_fitted_finding_of_a_generation_changes_its_size(
     assert max(body.mesh.bounds.size) == pytest.approx(150.0, abs=1e-3)
     sizing = next(entry for entry in session.history.operations if entry.op == "fit_to_size")
     assert sizing.params["largest"] == pytest.approx(150.0)
+
+
+# --- Interne Werte bleiben aus der Meldung (RM-456) ----------------------------
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        "LicenceRequired",
+        "DeviceActivationRequired",
+        "DeviceDeactivationPending",
+        "InstallationDamaged",
+    ],
+)
+def test_an_activation_refusal_names_no_internal_action(error_type: str) -> None:
+    """RM-456: Die Lizenzabsage beim Erzeugen zeigte „Handlung: change“.
+
+    ``action`` ist eine Kennung fürs Protokoll (``change``, ``export``,
+    ``slicer``, ``chat``); der Titel sagt schon, was fehlt. Ohne Fenster: Die
+    Zeilen unter einer Meldung kommen aus ``spoken_values``.
+    """
+    from app.core import errors
+    from app.ui.dialogs import spoken_values
+
+    error = getattr(errors, error_type)(action="change")
+    lines = spoken_values(error)
+    assert not any("change" in line or "Handlung" in line for line in lines), lines
+
+
+# --- Die Oberfläche bleibt während der Erzeugung bedienbar (RM-371) -----------
+
+
+def test_generating_never_holds_the_window_in_a_modal_loop() -> None:
+    """RM-371, ohne Fenster: Der Erzeugen-Weg öffnet seinen Dialog nichtmodal.
+
+    ``dialog.exec()`` hielt die Anwendung an, solange der Generator rechnete —
+    vierzig Sekunden bis Minuten. Gelesen wird der Quelltext von
+    ``MainWindow._generate`` und dem Dialog: kein ``exec``, kein ``setModal``.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from app.ui import generate_dialog
+    from app.ui.main_window import MainWindow
+
+    def calls(tree: ast.AST) -> set[str]:
+        return {
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        }
+
+    def source_of(function: Any) -> ast.AST:
+        return ast.parse(textwrap.dedent(inspect.getsource(function)))
+
+    assert "exec" not in calls(source_of(MainWindow._generate)), "nichtmodal geöffnet"
+    assert "show" in calls(source_of(MainWindow._show_generator))
+    dialog_calls = calls(ast.parse(inspect.getsource(generate_dialog)))
+    assert not {"exec", "setModal", "setWindowModality"} & dialog_calls
+
+
+class _GatedBackend(ScriptedMeshBackend):
+    """Ein langsamer Generator: meldet Fortschritt und liefert erst, wenn der Test es sagt.
+
+    Er fragt den Abbruch regelmäßig wie ComfyUI. Die Frist ist eine Reißleine,
+    keine Wartezeit: Gibt niemand frei, endet der Wurf mit einem Fehler statt
+    mit einem hängenden Lauf.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(fallback=(MESHES / "cube_clean.stl").read_bytes())
+        self.gate = threading.Event()
+        self.started = threading.Event()
+        self.ignore_cancel = False
+        """Wie ein ComfyUI, das nach dem Abbruch weiterrechnet."""
+
+    def _hold(self, kwargs: dict[str, Any]) -> None:
+        progress = kwargs.get("progress")
+        cancelled = kwargs.get("cancelled")
+        self.started.set()
+        if callable(progress):
+            progress(0.25, "Modell wird erzeugt (1 s)")
+        deadline = time.monotonic() + 30.0
+        while not self.gate.wait(0.01):
+            if callable(cancelled) and cancelled() and not self.ignore_cancel:
+                raise OperationCancelled
+            if time.monotonic() > deadline:
+                raise AssertionError("niemand hat den Generator freigegeben")
+
+    def text_to_mesh(self, prompt: str, **kwargs: Any) -> GeneratedMesh:  # type: ignore[override]
+        self._hold(kwargs)
+        return super().text_to_mesh(prompt, **kwargs)
+
+    def image_to_mesh(self, image: bytes, **kwargs: Any) -> GeneratedMesh:  # type: ignore[override]
+        self._hold(kwargs)
+        return super().image_to_mesh(image, **kwargs)
+
+
+def _run_in_window(
+    window: Any,
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    backend: _GatedBackend,
+    image: Path | None = None,
+) -> GenerateDialog:
+    """Über das Menü (oder ein abgelegtes Bild) öffnen und *Erzeugen* klicken."""
+    from app.ui import main_window as main_window_module
+
+    class Gated(GenerateDialog):
+        def __init__(self, parent: Any = None, settings: Any = None) -> None:
+            super().__init__(backend=backend, parent=parent, settings=settings)
+
+    monkeypatch.setattr(main_window_module, "GenerateDialog", Gated)
+    window._show_start_screen(False)
+    if image is None:
+        window.generate_action.trigger()
+    else:
+        window.chat.imageDropped.emit(str(image))
+    dialog = window._generator
+    assert isinstance(dialog, Gated), "der Menüweg kehrt mit offenem Dialog zurück"
+    # Ein abgelegtes Bild fragt den Bildweg neu; gewartet wird auf die Antwort
+    # für den Weg, der gilt, nicht auf die erste.
+    deadline = time.monotonic() + 10.0
+    while dialog.readiness is None and time.monotonic() < deadline:
+        wait_for_readiness(dialog, qt_app)
+        time.sleep(0.01)
+    assert dialog.readiness is not None
+    if image is None:
+        dialog.prompt.setText("eine kleine Figur")
+    ok(dialog).click()
+    assert backend.started.wait(10.0), "der Wurf läuft"
+    for _ in range(3):
+        qt_app.processEvents()
+    return dialog
+
+
+def _wait_for_run(dialog: GenerateDialog, qt_app: QApplication) -> None:
+    worker = dialog._worker
+    if worker is not None:
+        assert worker.wait(30_000), "der Wurf endet"
+    for _ in range(3):
+        qt_app.processEvents()
+
+
+def _picture(tmp_path: Path) -> Path:
+    from PySide6.QtGui import QImage
+
+    picture = tmp_path / "skizze.png"
+    image = QImage(16, 16, QImage.Format.Format_RGB32)
+    image.fill(0x808080)
+    assert image.save(str(picture))
+    return picture
+
+
+@pytest.mark.parametrize("way", ["text", "image"])
+def test_the_window_stays_usable_while_a_model_is_generated(
+    qt_app: QApplication,
+    window: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    way: str,
+) -> None:
+    """RM-371, Abnahme Text und Bild: Während der Generator rechnet, ist kein
+    Fenster modal, ein Menüeintrag wirkt, die Statusleiste zeigt Fortschritt,
+    verstrichene Zeit und *Abbrechen*. Danach kommt der Dialog mit dem
+    Versuch wieder, *Übernehmen* legt ihn als einen Schritt ab, dessen Gruppe
+    offen steht (RM-456), und Strg+Z nimmt ihn als Ganzes zurück."""
+    backend = _GatedBackend()
+    picture = _picture(tmp_path) if way == "image" else None
+    dialog = _run_in_window(window, qt_app, monkeypatch, backend, picture)
+    try:
+        assert QApplication.activeModalWidget() is None, "kein Fenster hält die Anwendung an"
+        assert dialog.isHidden(), "der Dialog tritt zur Seite"
+        assert not window.progress.isHidden(), "der Balken steht in der Statusleiste"
+        assert not window.cancel_button.isHidden()
+        assert window.cancel_button.isEnabled()
+        deadline = time.monotonic() + 5.0
+        while "Verstrichen" not in window.status_message.text() and time.monotonic() < deadline:
+            qt_app.processEvents()
+            time.sleep(0.02)
+        status = window.status_message.text()
+        assert "Verstrichen" in status, status
+        assert "Modell wird erzeugt" in status, status
+
+        bed = window.settings.bed_visible
+        window._bed_action.trigger()
+        assert window.settings.bed_visible is not bed, "ein Menüeintrag wirkt während des Laufs"
+        window._bed_action.trigger()
+
+        window.generate_action.trigger()
+        assert window._generator is dialog, "ein zweiter Aufruf holt denselben Dialog"
+        assert not dialog.isHidden()
+        running = dialog._worker
+        assert running is not None and running.isRunning(), "und startet keinen zweiten Wurf"
+        dialog.hide()
+
+        backend.gate.set()
+        _wait_for_run(dialog, qt_app)
+        assert not dialog.isHidden(), "mit dem Ergebnis kommt der Dialog wieder"
+        assert window.progress.isHidden()
+        assert window.cancel_button.isHidden()
+        assert len(dialog.tries) == 1
+        assert ok(dialog).text() == "Übernehmen"
+        assert dialog.destination.isHidden(), "dasselbe Projekt braucht keinen Hinweis"
+
+        before = len(window.session.project.document.transactions)
+        ok(dialog).click()
+        assert window.session.wait_for_idle()
+        qt_app.processEvents()
+        assert window._generator is None, "übernommen schließt den Dialog"
+        assert window.status_message.text() == (
+            "Das erzeugte Modell liegt im Projekt. Strg+Z nimmt es zurück."
+        ), "die Ansage „fertig — Übernehmen“ bleibt nicht über dem übernommenen Modell stehen"
+        document = window.session.project.document
+        assert len(document.transactions) == before + 1, "eine Erzeugung ist ein Schritt"
+        assert len(document.transactions[-1].ops) > 1
+        listing = window.history_panel.list
+        children = [
+            listing.item(row)
+            for row in range(listing.count())
+            if listing.item(row).text().startswith("    ")
+        ]
+        assert children, "die Erzeugung steht als Gruppe im Verlauf"
+        assert not any(row.isHidden() for row in children), (
+            "RM-456: die Schritte der neuen Erzeugung stehen offen da"
+        )
+
+        window.undo_action.trigger()
+        assert window.session.wait_for_idle()
+        assert len(window.session.project.document.transactions) == before
+    finally:
+        backend.gate.set()
+        if window._generator is not None:
+            window._generator.release()
+
+
+@pytest.mark.parametrize("finished_before", [False, True])
+def test_cancel_in_the_status_bar_stops_the_generation(
+    qt_app: QApplication,
+    window: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    finished_before: bool,
+) -> None:
+    """RM-371, Abnahme Abbruch: *Abbrechen* in der Statusleiste hält den Wurf an.
+
+    Ohne fertigen Versuch geht der Dialog zu und die Statuszeile sagt es; mit
+    einem kommt er mit diesem wieder, und der lässt sich übernehmen."""
+    backend = _GatedBackend()
+    dialog = _run_in_window(window, qt_app, monkeypatch, backend)
+    closed: list[int] = []
+    dialog.finished.connect(closed.append)
+    try:
+        if finished_before:
+            backend.gate.set()
+            _wait_for_run(dialog, qt_app)
+            backend.gate.clear()
+            backend.started.clear()
+            dialog.again.click()
+            assert backend.started.wait(10.0)
+            qt_app.processEvents()
+            assert dialog.isHidden()
+        worker = dialog._worker
+        assert worker is not None
+        window.cancel_button.click()
+        assert worker.cancelled(), "der Knopf erreicht den Arbeiter"
+        assert not window.cancel_button.isEnabled(), "kein zweites Abbrechen im Auslaufen"
+        _wait_for_run(dialog, qt_app)
+        assert window.progress.isHidden()
+        assert window.cancel_button.isHidden()
+        if finished_before:
+            assert not closed, "die fertigen Versuche bleiben"
+            assert not dialog.isHidden()
+            assert len(dialog.tries) == 1
+            assert ok(dialog).isEnabled()
+            ok(dialog).click()
+            assert window.session.wait_for_idle()
+            assert len(_generated_sources(window)) == 1
+        else:
+            assert closed, "ohne Versuch gibt es nichts zu zeigen"
+            assert window._generator is None
+            assert window.status_message.text() == "Die Erzeugung wurde abgebrochen."
+            assert _generated_sources(window) == []
+    finally:
+        backend.gate.set()
+        if window._generator is not None:
+            window._generator.release()
+
+
+@pytest.mark.parametrize("answer", ["back", "close"])
+@pytest.mark.parametrize("state", ["running", "finished"])
+def test_closing_the_window_names_what_a_generation_would_lose(
+    qt_app: QApplication,
+    window: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    answer: str,
+) -> None:
+    """RM-499: Das Fenster schloss während einer Erzeugung ohne Frage.
+
+    Seit der Dialog nichtmodal ist (RM-371), brach Schließen den Lauf ab, und
+    fertige, nicht übernommene Versuche gingen wortlos verloren — kein Strg+Z
+    holt sie zurück. Jetzt fragt das Fenster; *Zur Erzeugung* holt den Dialog
+    nach vorn und lässt das Fenster offen, *Trotzdem schließen* schließt.
+    """
+    from app.ui import main_window as main_window_module
+
+    backend = _GatedBackend()
+    dialog = _run_in_window(window, qt_app, monkeypatch, backend)
+    asked: list[tuple[bool, int]] = []
+
+    def confirm(running: bool, tries: int, _parent: Any = None) -> str:
+        asked.append((running, tries))
+        return answer
+
+    monkeypatch.setattr(main_window_module, "confirm_generation_loss", confirm)
+    try:
+        if state == "finished":
+            backend.gate.set()
+            _wait_for_run(dialog, qt_app)
+        window.close()
+        qt_app.processEvents()
+        expected = (True, 0) if state == "running" else (False, 1)
+        assert asked == [expected], asked
+        if answer == "back":
+            assert not getattr(window, "_close_requested", False), "das Fenster bleibt offen"
+            assert window._generator is dialog
+            assert not dialog.isHidden(), "Zur Erzeugung holt den Dialog nach vorn"
+        else:
+            assert getattr(window, "_close_requested", False), "Trotzdem schließen schließt"
+    finally:
+        backend.gate.set()
+        if window._generator is not None:
+            window._generator.release()
+
+
+def test_closing_without_a_generation_asks_nothing_about_it(
+    window: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-499: Ohne Erzeugung bleibt das Schließen, wie es war."""
+    from app.ui import main_window as main_window_module
+
+    asked: list[object] = []
+    monkeypatch.setattr(
+        main_window_module, "confirm_generation_loss", lambda *args: asked.append(args) or "back"
+    )
+    assert window._may_lose_the_generation()
+    assert not asked
+
+
+def test_a_project_opened_during_the_run_is_named_before_taking(
+    qt_app: QApplication, window: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-371: Während des Laufs bleibt das Fenster bedienbar, auch für ein
+    anderes Projekt. *Übernehmen* legt das Modell dorthin, wo der Kunde jetzt
+    ist — und der Dialog sagt das vorher."""
+    backend = _GatedBackend()
+    dialog = _run_in_window(window, qt_app, monkeypatch, backend)
+    try:
+        window.open_path(Path(__file__).parent / "data" / "projects" / "drilled_v6.p3d")
+        assert window.session.wait_for_idle()
+        bodies = len(window.session.last_result.scene.objects)
+        backend.gate.set()
+        _wait_for_run(dialog, qt_app)
+        assert not dialog.destination.isHidden(), "der Wechsel steht über Übernehmen"
+        assert "anderes Projekt" in dialog.destination.text()
+        assert "drilled_v6" in dialog.destination.text()
+        ok(dialog).click()
+        assert window.session.wait_for_idle()
+        assert window._generator is None
+        assert len(_generated_sources(window)) == 1, "im jetzt offenen Projekt"
+        assert len(window.session.last_result.scene.objects) == bodies + 1
+    finally:
+        backend.gate.set()
+        if window._generator is not None:
+            window._generator.release()
+
+
+def test_a_hanging_cancel_lets_the_dialog_step_aside_and_keeps_the_tries(
+    qt_app: QApplication, window: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-371 mit RM-418: Hängt der Generator nach *Abbrechen* eines weiteren
+    Versuchs, ist *Abbrechen* gesperrt und verwirft nichts — aber Esc und das
+    Fensterkreuz halten den Kunden nicht im Dialog fest. Er tritt zur Seite,
+    die Statusleiste nennt das Auslaufen, und das Ende holt ihn mit allen
+    Versuchen zurück."""
+    backend = _GatedBackend()
+    dialog = _run_in_window(window, qt_app, monkeypatch, backend)
+    closed: list[int] = []
+    dialog.finished.connect(closed.append)
+    cancel = dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+    try:
+        backend.gate.set()
+        _wait_for_run(dialog, qt_app)
+        backend.gate.clear()
+        backend.started.clear()
+        backend.ignore_cancel = True
+        dialog.again.click()
+        assert backend.started.wait(10.0)
+        qt_app.processEvents()
+        window.generate_action.trigger()
+        assert not dialog.isHidden(), "der Menüweg holt den laufenden Dialog nach vorn"
+
+        cancel.click()
+        worker = dialog._worker
+        assert worker is not None and worker.cancelled()
+        assert not cancel.isEnabled(), "RM-418: das zweite Abbrechen verwirft nichts"
+        assert cancel.toolTip(), "und sagt, warum"
+        assert not window.cancel_button.isEnabled(), "die Statusleiste weiß es auch"
+        assert "Wird abgebrochen" in window.status_message.text()
+
+        dialog.reject()  # Esc oder das Fensterkreuz
+        qt_app.processEvents()
+        assert dialog.isHidden(), "der Dialog tritt zur Seite"
+        assert not closed, "und verwirft nichts"
+        assert len(dialog.tries) == 1
+        assert not window.progress.isHidden(), "der Lauf steht weiter in der Statusleiste"
+        assert QApplication.activeModalWidget() is None
+
+        backend.gate.set()
+        _wait_for_run(dialog, qt_app)
+        assert not dialog.isHidden(), "das Ende holt ihn zurück"
+        assert len(dialog.tries) == 1, "der fertige Versuch bleibt übernehmbar"
+        assert ok(dialog).isEnabled()
+        assert cancel.isEnabled()
+        assert window.progress.isHidden()
+    finally:
+        backend.gate.set()
+        if window._generator is not None:
+            window._generator.release()

@@ -474,6 +474,38 @@ def window(qt_app: QApplication) -> MainWindow:
     return window
 
 
+def test_changing_a_hole_through_the_wrong_sister_opens_the_right_one(
+    window: MainWindow,
+) -> None:
+    """RM-495: *Merkmal ändern* an einer Bohrung öffnete einen Dialog, der nichts kann.
+
+    *Merkmal ändern* und *Bohrung ändern* sind eine Handlung mit zwei
+    Operationen. Über Befehlspalette, Menü oder Karte an einer Bohrung
+    gewählt, stand ein Dialog ohne Vorschau da, und das Band sagte „Dafür ist
+    „Bohrung ändern“ da“. Jetzt öffnet derselbe Weg *Bohrung ändern* an der
+    gewählten Bohrung; an einem Merkmal, das *Merkmal ändern* annimmt, bleibt
+    es dabei.
+    """
+    from app.core.registry import REGISTRY
+
+    result = window.session.last_result
+    assert result is not None
+    entry = next(iter(result.scene.objects.values()))
+    hole = next(fid for fid, feature in entry.features.items() if feature.kind == "hole")
+    select(window, str(hole))
+    window.run_operation(REGISTRY.get("resize_feature"))
+    dialog = window._op_dialog
+    assert dialog is not None, "ein Dialog gehört dazu"
+    try:
+        assert dialog.spec.name == "resize_hole", dialog.spec.name
+        assert dialog.values().get("at_feature") == str(hole)
+    finally:
+        dialog.reject()
+
+    sister = window._sister_for_the_chosen_feature(REGISTRY.get("resize_hole"))
+    assert sister is None, "die passende Operation bleibt, was sie ist"
+
+
 def test_wait_for_idle_distinguishes_completion_from_timeout(qt_app: QApplication) -> None:
     class NeverFinishes:
         def wait(self, _timeout_ms: int) -> bool:
@@ -2179,13 +2211,17 @@ def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
     try:
         dialog.resize(520, 460)
         dialog.show()
-        description = dialog.layout().itemAt(0)
-
-        assert description.widget() is dialog._description
+        QApplication.processEvents()
+        # Seit der Inhalt im Rollbereich steht, ist der Satz dort der erste
+        # Eintrag und nicht mehr der des Dialogs; gemessen wird seine Höhe.
+        holder = dialog._description.parentWidget()
+        assert holder is not None and holder.layout() is not None
+        first = holder.layout().itemAt(0)
+        assert first is not None and first.widget() is dialog._description
         # Zwei Zeilen Text in einem Dialog dieser Höhe — großzügig gedeckelt,
         # damit der Test eine andere Schrift überlebt und trotzdem anschlägt,
         # wenn das Label wieder wächst.
-        assert description.geometry().height() < 120
+        assert dialog._description.height() < 120
     finally:
         dialog.deleteLater()
 
@@ -2529,7 +2565,10 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindo
         ]
         # Die Breite geht: Ein Lochraster hat keine — dafür kommen seine drei.
         assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"], front
-        assert dialog.size() == fitted_size, "bedingte Zeilen verschieben den Außenrahmen nicht"
+        # Eine Zeile mehr darf den Rahmen wachsen lassen (RM-487), nie breiter.
+        assert dialog.width() == fitted_size.width(), "bedingte Zeilen verbreitern nichts"
+        assert dialog.height() >= fitted_size.height()
+        fitted_size = dialog.size()
 
         from PySide6.QtCore import QRect
 
@@ -3477,8 +3516,11 @@ def test_a_number_field_stays_as_wide_as_a_number(empty_window: MainWindow) -> N
             "die Auswahl ist so schmal wie ein Zahlenfeld — dann wurde zu viel gedeckelt"
         )
         fields = dialog.findChildren(ValueField)
+        # ``even_value_fields`` (d80e1ce8e) gibt den Zahlenfeldern untereinander
+        # eine Kante: die Wunschbreite des breitesten. Breiter wird keines.
+        widest = max(field.spin.sizeHint().width() for field in fields)
         for field in fields:
-            assert field.spin.width() <= field.spin.sizeHint().width() + NUMBER_AIR, (
+            assert field.spin.width() <= widest + NUMBER_AIR, (
                 f"das Drehfeld wuchs auf {field.spin.width()} px"
             )
     finally:
@@ -4779,6 +4821,51 @@ def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QAppl
         QApplication.processEvents()
 
 
+def test_an_expression_field_shows_its_start_and_room_for_it(qt_app: QApplication) -> None:
+    """RM-457: Ein gebundenes Maß zeigt seinen Ausdruck lesbar.
+
+    Im Schrittdialog stand „=max(@breite, 2000)“ als „@breite, 2000)“: Das Feld
+    war schmal, und der Cursor stand am Ende, also schob Qt den Anfang mit dem
+    Funktionsnamen aus dem Bild. Jetzt steht der Anfang da, das Feld ist so
+    breit wie der Ausdruck (bis zu einer Obergrenze), der Rest der Zeile gehört
+    ihm, und der Tooltip nennt den ganzen Ausdruck.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+
+    expression = "=max(@breite, 2000)"
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(
+        spec, {}, values={"width": expression}, parameter_values={"breite": 60.0}
+    )
+    try:
+        dialog.show()
+        for _ in range(8):
+            qt_app.processEvents()
+        field = dialog._editors["width"]
+        assert isinstance(field, ValueField)
+        line = field.text
+        assert line.isVisible() and line.text() == expression
+        metrics = line.fontMetrics()
+        assert line.width() >= metrics.horizontalAdvance(expression), "der Ausdruck passt ins Feld"
+        assert line.cursorPosition() == 0, "der Anfang mit dem Funktionsnamen steht im Bild"
+        assert expression in line.toolTip()
+        assert "@name" in line.toolTip(), "die Grammatikhilfe bleibt im Tooltip"
+
+        # Nach dem Tippen am Ende und dem Verlassen des Felds steht wieder der
+        # Anfang da, und der Tooltip zieht mit.
+        line.end(False)
+        line.insert(" + 1")
+        assert line.cursorPosition() == len(line.text())
+        leaving = QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason)
+        QApplication.sendEvent(line, leaving)
+        assert line.cursorPosition() == 0
+        assert line.text() in line.toolTip()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
     qt_app: QApplication,
 ) -> None:
@@ -5509,7 +5596,12 @@ def test_refining_a_dense_body_says_the_count_instead_of_computing(
     assert "geschätzt" in note and "Dreiecke" in note, note
     assert dialog.can_accept()
     dialog.accept()
-    assert window.session.wait_for_idle()
+    # Übernommen wird die echte Verfeinerung (0,5 mm an der ganzen Platte) im
+    # Hilfsprozess des Netzkerns. Das dauert, was es dauert; zugesagt ist nur,
+    # dass der Klick nicht auf die Vorschau wartet. Mit der Vorgabe von zehn
+    # Sekunden riss die Frist bei voller Rechnerlast ab (Release-Tor 0.5.2);
+    # im Wechsel mit 0.5.1 gemessen, braucht das Übernehmen dort gleich lang.
+    assert window.session.wait_for_idle(120_000)
     assert [entry.op for entry in window.session.project.document.ops] == ["load", "remesh_mesh"]
 
 
@@ -5590,9 +5682,11 @@ def test_a_long_preview_offers_cancel_and_cancelling_leaves_the_model(
     shown: list[str] = []
     real = type(window.viewport).mark_preview
 
-    def noted(self: object, note: str, hint: str = "") -> object:
+    def noted(self: object, note: str, hint: str = "", **options: Any) -> object:
+        # ``mark_preview`` kennt seit dem Abbrechen-Weg ``changes=``; ohne
+        # Durchreichen brach der Ersatz dort ab, und das Band blieb stehen.
         shown.append(note)
-        return real(self, note, hint)
+        return real(self, note, hint, **options)
 
     monkeypatch.setattr(type(window.viewport), "mark_preview", noted)
     window.run_operation(REGISTRY.get("decimate_mesh"))
