@@ -17066,16 +17066,12 @@ class MainWindow(QMainWindow):
             refused = refused_feature_field(editors)
             if refused is not None:
                 refusal, focus_target = refused
-                refusal_state["reason"] = refusal
-                host.block_apply(refusal)
+                host.refuse_fields(refusal)
                 if interpret:
                     focus_target.setFocus()
                     window.announce(refusal)
                 return False
-            previous_refusal = refusal_state["reason"]
-            if previous_refusal is not None and host.blocked_reason == previous_refusal:
-                host.block_apply(None)
-            refusal_state["reason"] = None
+            host.refuse_fields(None)
             if interpret:
                 for editor in editors.values():
                     spins = (
@@ -17221,7 +17217,6 @@ class MainWindow(QMainWindow):
         # Felder bindet, löst er deshalb bei der Rückgabe selbst — sonst
         # läse ein alter ``read_fields`` in den Träger eines alten Flusses.
         bound: list[QMetaObject.Connection] = []
-        refusal_state: dict[str, str | None] = {"reason": None}
         for editor in editors.values():
             if isinstance(editor, QCheckBox):
                 bound.append(editor.toggled.connect(read_fields))

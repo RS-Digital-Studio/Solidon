@@ -4361,6 +4361,11 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
     from PySide6.QtTest import QTest
 
     _object_id, _hole, flow, fields = _hole_fields_in_placement(window)
+    # Fokus und damit ``focusOutEvent`` gibt es offscreen nur im aktiven Fenster;
+    # ohne das prüfte der Test den Fokuswechsel, den es nie gab.
+    window.show()
+    window.activateWindow()
+    QApplication.processEvents()
     diameter = fields["Durchmesser"]
     _minimum, _maximum = diameter._bounds_mm
     limit = diameter.value_mm() + 1.0
@@ -4377,6 +4382,7 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
     other.lineEdit().setFocus()
     QTest.keyClick(other.lineEdit(), Qt.Key.Key_End)
     QApplication.processEvents()
+    assert other.lineEdit().hasFocus() and not line.hasFocus(), "Voraussetzung: der Fokus wechselt"
     assert not line.isModified(), (
         "Fokuswechsel stellt die ungültige Zahl ohne Änderungsmarke wieder her"
     )
@@ -4402,27 +4408,37 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
 def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
     window: MainWindow,
 ) -> None:
-    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt."""
-    from types import SimpleNamespace
+    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt.
 
+    Die Bohrung stammt aus einem echten Schritt mit ``=@bore``: Wählt der Kunde
+    sie, bietet das Fenster ihren Schritt an und holt dessen Maße ins Bild. Ein
+    erfundener Schritt, den der Verlauf nicht kennt, kam nie bis zur Maßgruppe.
+    """
     from app.ui.labels import LengthSpin
     from app.ui.op_dialog import ValueField
     from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
-    result = window.session.evaluate_now()
+    session = window.session
+    assert session.add_parameter(Parameter(name="bore", value=6.0))
+    assert session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert session.wait_for_idle(30_000)
+    body = session.project.document.ops[-1].outputs[0]
+    assert session.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(body,),
+                params={"diameter": "=@bore", "x": 0.0, "y": 0.0, "z": 10.0},
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    result = session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
     window.object_tree.select_feature(object_id, hole)
-    for _ in range(40):
-        QApplication.processEvents()
-
-    spec = REGISTRY.get("drill_hole")
-    step = SimpleNamespace(id=17, op="drill_hole", params={"diameter": "=@bore"})
-    window.feature_panel.offer_bore_step(step, spec, {"bore": 6.0})
-    window._place_measures("drill_hole", {"diameter": "=@bore"}, editing=False)
     for _ in range(40):
         QApplication.processEvents()
 
