@@ -81,6 +81,7 @@ scrive in `website/version.json`.
 ### Modellare, testo e schizzo
 
 - Con «Su entrambe le facce», «Applica testo» mette le lettere anche sul retro, leggibili da fuori. Va bene per bandierine, cartelli e targhette.
+- Le scritte vengono composte con più precisione: le lettere stanno al loro posto e le curve seguono il carattere, invece di perdere fino al 2 per cento di superficie nelle misure piccole.
 - La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.
 - Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
 - Un tratto sul piano di simmetria agisce una volta invece di due.

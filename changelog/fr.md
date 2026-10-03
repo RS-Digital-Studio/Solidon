@@ -82,6 +82,7 @@ dans `website/version.json`.
 ### Sculpter, texte et esquisse
 
 - Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.
+- Les inscriptions sont composées plus précisément : les lettres restent à leur place, et les courbes suivent la police au lieu de perdre jusqu'à 2 % de surface en petite taille.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
