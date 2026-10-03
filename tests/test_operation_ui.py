@@ -5099,6 +5099,8 @@ def test_a_mesh_apply_waits_for_the_preview_that_computes_it(deferred_mesh_previ
     sie fertig ist.
     """
     window, requests, applied = deferred_mesh_preview
+    dropped: list[bool] = []
+    window.session.drop_preview_picture = lambda: dropped.append(True)  # type: ignore[method-assign]
     window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
     dialog = window._op_dialog
     assert dialog is not None and requests, "die Vorschau rechnet"
@@ -5108,6 +5110,7 @@ def test_a_mesh_apply_waits_for_the_preview_that_computes_it(deferred_mesh_previ
     dialog._accept_button.click()
     assert not applied and window._op_dialog is dialog, "der Klick wartet auf die Rechnung"
     assert approval.pending_click is not None
+    assert dropped, "das Bild braucht niemand mehr — die Vorschau vergleicht nicht"
 
     requests[-1][0](_exact_difference(window))
     assert len(applied) == 1 and tuple(applied[0]) == requests[-1][1], "einmal, mit dem Auftrag"

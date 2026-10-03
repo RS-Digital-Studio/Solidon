@@ -2036,6 +2036,52 @@ def test_a_preview_is_the_computation_its_apply_finds_in_the_cache() -> None:
     assert len(seeds) == 1, "die Auswertung findet die Rechnung der Vorschau im Cache"
 
 
+def test_a_preview_nobody_will_see_computes_without_comparing(monkeypatch) -> None:
+    """Wartet ein Übernehmen auf die Rechnung, entfällt der Vergleich fürs Bild (RM-493).
+
+    Die Rechnung liegt nach ``evaluate`` im Cache, und die Auswertung findet
+    sie dort; der Vergleich danach kostet an großen Netzen Sekunden für ein
+    Bild, das das Übernehmen gleich wieder abräumt.
+    """
+    from app.ui import session as session_module
+
+    session, body, _mesh = _ellipsoid_session()
+    session.cache = ResultCache()
+    compared: list[object] = []
+    real = session_module.compare_scenes
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        compared.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(session_module, "compare_scenes", counted)
+    draft = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+    unseen = CancelSignal()
+    unseen.cancel()
+    _scene, difference, reason = session._preview_outcome(
+        [draft], coarsened=[].append, detect_features=False, unseen=unseen
+    )
+    assert reason == "" and difference is not None and not difference.changed
+    assert compared == [], "kein Vergleich für ein Bild, das niemand sieht"
+    session.history.apply("Bohrung setzen", [draft])
+    hits = session.cache.statistics.hits
+    applied = session.run_evaluation()
+    assert applied.stopped_at is None
+    assert session.cache.statistics.hits > hits, "die Auswertung findet die Rechnung"
+
+    # Gegenprobe: Mit Bild wird verglichen.
+    _scene, shown, _reason = session._preview_outcome(
+        [dataclasses.replace(draft, params={**draft.params, "diameter": 3.0})],
+        coarsened=[].append,
+        detect_features=False,
+    )
+    assert compared and shown is not None and shown.changed
+
+
 def test_the_preview_is_not_the_evaluation_where_it_computes_otherwise(monkeypatch) -> None:
     """Grob, fein oder geschätzt: Dann wartet kein Klick auf die Vorschau (RM-493).
 

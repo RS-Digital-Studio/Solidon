@@ -810,6 +810,8 @@ class _PreviewWorker(Worker):
         self._generation = generation
         self._compute = compute
         self.cancel = cancel
+        self.unseen = CancelSignal()
+        """Gesetzt, wenn nur noch die Rechnung zählt (:meth:`Session.drop_preview_picture`)."""
 
     def work(self) -> None:
         try:
@@ -3953,6 +3955,7 @@ class Session(QObject):
                 # Eine Erkennung je getippter Zahl wäre eine Sekunde für nichts.
                 detect_features=False,
                 snapshot=snapshot,
+                unseen=worker.unseen,
             )
 
         # Was jetzt noch rechnet, rechnet für eine Frage von gestern: die
@@ -4120,6 +4123,17 @@ class Session(QObject):
         """Jedem laufenden Vorschau-Arbeiter sagen, dass er aufhören darf."""
         for worker in list(self._previews):
             worker.cancel.cancel()
+
+    def drop_preview_picture(self) -> None:
+        """Die laufende Vorschau rechnet zu Ende, aber ihr Bild braucht niemand mehr.
+
+        Ein Übernehmen wartet auf ihre Rechnung, weil die Auswertung danach
+        sie im Cache findet (RM-493). Abbrechen hieße, dieselbe Rechnung von
+        vorn zu beginnen; der Vergleich für das Bild dagegen kostet an großen
+        Netzen Sekunden für nichts und entfällt (``_preview_outcome``).
+        """
+        for worker in list(self._previews):
+            worker.unseen.cancel()
 
     def _preview_done(self, stamp: int, difference: Any, then: Any) -> None:
         if stamp != self._preview_generation:
@@ -5031,12 +5045,18 @@ class Session(QObject):
         progress: Any = None,
         refused: Any = None,
         counted: Any = None,
+        unseen: CancelSignal | None = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
 
         ``change_op`` mit ``change_values`` zeigt statt neuer Schritte eine
         geänderte Operation des Stapels (§15.4). ``change_name`` verwendet
         dabei dieselbe Zwillingsumschaltung wie die spätere Übernahme.
+
+        ``unseen`` (ein Signal, :meth:`drop_preview_picture`) sagt, dass nur
+        noch die Rechnung zählt: Ein Übernehmen wartet auf sie, und ihr
+        Ergebnis liegt nach ``evaluate`` im Cache. Der Vergleich danach
+        entfällt, zurück kommt eine leere Differenz (RM-493).
 
         ``snapshot`` ist der im Hauptfaden gezogene Stand (:class:`_Snapshot`);
         im Arbeiter wird nur er gelesen und kopiert, nie das lebende Dokument.
@@ -5202,6 +5222,7 @@ class Session(QObject):
                     progress=progress,
                     refused=refused,
                     counted=counted,
+                    unseen=unseen,
                 )
         preview_profile = snapshot.profile
         if changes is not None:
@@ -5250,6 +5271,7 @@ class Session(QObject):
                 progress=progress,
                 refused=refused,
                 counted=counted,
+                unseen=unseen,
             )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
@@ -5280,6 +5302,11 @@ class Session(QObject):
         # Sekunden; wer vorher abgebrochen hat, bekommt ihn nicht mehr.
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        if unseen is not None and unseen.is_cancelled:
+            # **Ein Bild, das niemand mehr ansieht, wird nicht verglichen**
+            # (RM-493): Ein Übernehmen wartet nur auf die Rechnung, die jetzt im
+            # Cache liegt, und der Vergleich kostet an großen Netzen Sekunden.
+            return result.scene, SceneDifference(), ""
         reshaped = _reshaped_only(working, previewed)
         difference = (
             compare_scenes(before, result.scene, retriangulated=reshaped)

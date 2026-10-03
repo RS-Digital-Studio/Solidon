@@ -19110,6 +19110,9 @@ class MainWindow(QMainWindow):
             ):
                 if then is not None:
                     self._apply_when_previewed(approval, then)
+                    # Das Bild räumte das Übernehmen gleich wieder ab: Die
+                    # Vorschau rechnet zu Ende, vergleicht aber nicht mehr.
+                    self.session.drop_preview_picture()
                 return False
             return not self._preview_block_reason and not approval.problem
         if approval.displayed and not approval.problem:
