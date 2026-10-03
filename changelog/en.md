@@ -68,6 +68,13 @@ it into `website/version.json`.
 - If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
 - If you chose “Load now”, the pieces from *Split the model* no longer start minutes of recognition either; “Recognise all features” catches up on it.
 
+### Fillets and chamfers
+
+- Rounding a group of edges on a STEP body now rounds the edges that work instead of refusing the whole group. *Show the place* finds every edge that was left out.
+- Edges on a wall no thicker than the radius stay sharp, and the report names the radius that fits there. Previously the whole fillet was refused.
+- If a STEP body has no edge of its own at a selected location, the report offers *End face editing and try again*. On the triangle model that spot is rounded too.
+- If there is no space left for the exchange with the computing process, Solidon still computes the step and says so in the report. Previously it stopped with advice to compute more coarsely.
+
 ### Sculpting, text and sketching
 
 - With *On both sides*, *Put text on* also places the lettering on the back, readable from outside. That suits flags, signs and tags.

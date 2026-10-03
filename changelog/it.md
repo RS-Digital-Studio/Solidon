@@ -68,6 +68,13 @@ scrive in `website/version.json`.
 - Se un foro non si riesce a tagliare in modo pulito in un corpo STEP, Solidon lo esegue sul modello a triangoli invece di passare avanti un corpo difettoso.
 - Se hai scelto «Carica subito», anche i pezzi di *Dividi il modello* non avviano più minuti di riconoscimento; «Riconosci tutte le caratteristiche» lo recupera.
 
+### Raccordi e smussi
+
+- Arrotondare un gruppo di spigoli su un corpo STEP arrotonda ora gli spigoli possibili invece di rifiutare tutto. *Mostra il punto* trova ogni spigolo escluso.
+- Gli spigoli accanto a una parete non più spessa del raggio restano vivi, e il report indica il raggio che lì entra. Finora veniva rifiutato l'intero raccordo.
+- Se un corpo STEP non ha uno spigolo proprio in un punto scelto, il report offre *Termina la modifica delle facce e riprova*. Sul modello a triangoli viene arrotondato anche lì.
+- Se manca spazio per lo scambio con il processo di calcolo, Solidon calcola comunque il passaggio e lo segnala nel report. Prima si fermava consigliando un calcolo più grossolano.
+
 ### Modellare, testo e schizzo
 
 - Con «Su entrambe le facce», «Applica testo» mette le lettere anche sul retro, leggibili da fuori. Va bene per bandierine, cartelli e targhette.

@@ -68,6 +68,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo não puder ser cortado de forma limpa num corpo STEP, o Solidon fura-o no modelo de triângulos em vez de passar adiante um corpo danificado.
 - Se escolheu «Carregar agora», também as peças de *Dividir o modelo* deixam de iniciar minutos de reconhecimento; «Reconhecer todas as características» recupera-o.
 
+### Arredondar e chanfrar
+
+- Arredondar um grupo de arestas num corpo STEP arredonda agora as arestas possíveis em vez de recusar tudo. *Mostrar o ponto* encontra cada aresta omitida.
+- As arestas junto a uma parede não mais espessa do que o raio ficam vivas, e o relatório indica o raio que cabe ali. Antes, todo o arredondamento era recusado.
+- Se um corpo STEP não tiver aresta própria num local escolhido, o relatório oferece *Terminar a edição de faces e tentar de novo*. No modelo de triângulos também é arredondado.
+- Se faltar espaço para a troca com o processo de cálculo, o Solidon calcula o passo mesmo assim e indica-o no relatório. Antes parava com o conselho de calcular de forma mais grosseira.
+
 ### Modelar, texto e esboço
 
 - Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.

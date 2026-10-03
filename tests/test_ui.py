@@ -5768,6 +5768,134 @@ def test_the_remesh_and_retry_button_refines_before_the_smoothing_and_runs_throu
     assert list(window.session.project.document.ops) == ops_before
 
 
+def test_the_mesh_and_retry_button_rounds_the_places_without_an_exact_edge(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Knick ohne eigene Kante im exakten Körper hat einen Weg: am Dreiecksmodell (RM-436).
+
+    ``edges.unmapped`` bot nur „Prüfen Sie die markierten Stellen“ an; am Knick
+    innerhalb einer Fläche gibt es nichts zu prüfen. Der Knopf setzt
+    *Flächenbearbeitung beenden* vor den Schritt, und derselbe Schritt rundet
+    am Netz — ein Zug, Strg+Z nimmt ihn zurück. Der Befund wird hier an die
+    echte Gruppenbindung angehängt; Angebot, Handler, Verlauf und Auswertung
+    sind echt.
+    """
+    from app.core.errors import CORRECT_INPUT, MESH_AND_RETRY, SHOW_LOCATION
+    from app.core.geom import edge_ops
+    from app.core.types import Finding
+    from app.ui.panels import actions_for_document, as_error
+
+    real = edge_ops._group_that_fits
+
+    def with_a_place_without_an_edge(*args: Any, **kwargs: Any) -> Any:
+        kept, findings = real(*args, **kwargs)
+        place = (((0.0, 0.0, 1.0), (0.0, 1.0, 1.0)),)
+        unmapped = Finding(
+            code="edges.unmapped",
+            severity="warning",
+            message="An 1 Stellen hat der exakte Körper keine eigene Kante.",
+            values={"skipped": 1, "worked": len(kept)},
+            location=place[0][0],
+            outline=place,
+            suggestions=(SHOW_LOCATION, MESH_AND_RETRY, CORRECT_INPUT),
+        )
+        return kept, [*findings, unmapped]
+
+    monkeypatch.setattr(edge_ops, "_group_that_fits", with_a_place_without_an_edge)
+    window.session.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    window.session.wait_for_idle()
+    body = window.session.project.document.ops[-1].outputs[0]
+    window.session.apply(
+        "Verrunden",
+        [
+            OperationDraft(
+                op="fillet_edges", inputs=(body,), params={"radius": 1.0, "edges": "vertical"}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    finding = next(f for f in result.scene.report.findings if f.code == "edges.unmapped")
+    handlers = window.error_handlers()
+    offered = [
+        action.id
+        for action in actions_for_document(
+            finding,
+            window.session.project.document,
+            stopped_at=result.stopped_at,
+            live_objects=result.scene.objects,
+        )
+        if action.id in handlers
+    ]
+    assert MESH_AND_RETRY.id in offered, offered
+    ops_before = list(window.session.project.document.ops)
+
+    handlers[MESH_AND_RETRY.id](as_error(finding, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "create_brep_box",
+        "brep_to_mesh",
+        "fillet_edges",
+    ]
+    assert after.scene.objects[body].kind == "mesh"
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert list(window.session.project.document.ops) == ops_before
+
+
+def test_a_bundle_of_places_on_one_body_keeps_show_the_place_for_all(
+    qt_app: QApplication,
+) -> None:
+    """Gleiche Sätze an verschiedenen Stellen eines Körpers: Die Sammelzeile zeigt alle (RM-412).
+
+    Zwei ausgelassene Rundungskanten standen als „(2) …“ ohne Ort und ohne
+    *Stelle zeigen* da; der Kunde musste raten, welche Kanten scharf blieben.
+    Trägt jedes Mitglied seinen Umriss, fliegt die Zeile zur ersten Stelle und
+    umrandet alle. Ohne Umriss bleibt sie ohne Ort — ein zufälliger erster
+    wäre eine Behauptung.
+    """
+    from app.core.errors import SHOW_LOCATION
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel, as_error
+
+    first = (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)
+    second = (((5.0, 0.0, 0.0), (6.0, 0.0, 0.0)),)
+    common: dict[str, Any] = {
+        "code": "edges.too_narrow",
+        "severity": "warning",
+        "message": "Einige Kanten dieser Auswahl sind nicht verrundet.",
+        "object_id": "obj_1",
+        "suggestions": (SHOW_LOCATION,),
+    }
+    panel = ReportPanel()
+    panel.add_findings(
+        [
+            Finding(location=first[0][0], outline=first, values={"edge": 1}, **common),
+            Finding(location=second[0][0], outline=second, values={"edge": 2}, **common),
+        ]
+    )
+
+    assert panel.list.count() == 1
+    row = panel.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert row.location == first[0][0]
+    assert row.outline == first + second
+    assert as_error(row).values["outline"] == first + second
+
+    points = ReportPanel()
+    points.add_findings(
+        [
+            Finding(location=first[0][0], values={"edge": 1}, **common),
+            Finding(location=second[0][0], values={"edge": 2}, **common),
+        ]
+    )
+    bare = points.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert bare.location is None and bare.outline == ()
+
+
 def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count() -> None:
     """*Dreiecke verringern und erneut versuchen* nimmt Schritt und Zahl aus dem Befund.
 

@@ -3029,3 +3029,65 @@ def test_public_run_distinguishes_enospc_from_memory_in_both_transfers(
             )
     finally:
         pool.shutdown()
+
+
+def test_a_full_disk_pauses_the_helper_and_tells_the_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein voller Datenträger pausiert den Hilfsprozess, statt ihn bis zum Neustart abzuschalten.
+
+    RM-436: Ein einzelnes ENOSPC beim Anlegen des gemeinsamen Speichers
+    schaltete die Sitzung still auf Rechnen im Programm um. Jetzt rechnet sie
+    für ``FULL_DISK_PAUSE_SECONDS`` im Programm, jede solche Rechnung
+    hinterlässt ihrem Schritt einen Hinweis, und danach nimmt die nächste
+    große Rechnung den Hilfsprozess wieder. Andere Transferfehler bleiben
+    bleibende Gründe.
+    """
+    pool = kernel_process._Pool()
+    made: list[_PoolHelper] = []
+    calls = {"local": 0}
+
+    class Helper(_PoolHelper):
+        call = kernel_process._Helper.call
+
+        def __init__(self) -> None:
+            super().__init__()
+            made.append(self)
+
+    def job(_arrays: Any, _values: Any, check: Callable[[], None]) -> Any:
+        check()
+        calls["local"] += 1
+        return {"marker": np.array([1], dtype=np.int64)}, {}
+
+    def full(_arrays: Any) -> Any:
+        raise OSError(errno.ENOSPC, "Platzattrappe")
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", Helper)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "full_disk_probe", job)
+    monkeypatch.setattr(kernel_jobs, "pack", full)
+    source = {"marker": np.array([7], dtype=np.int64)}
+
+    def run() -> tuple[Any, str | None]:
+        return in_a_worker(
+            lambda: (
+                kernel_process.run("full_disk_probe", source, {}, weight=1),
+                kernel_process.take_notice(),
+            ),
+            timeout=10.0,
+        )
+
+    try:
+        _result, notice = run()
+        assert notice == kernel_process.DISK_FULL
+        assert calls["local"] == 1
+        assert pool.paused and pool.disabled and not pool._disabled
+        _result, notice = run()
+        assert notice == kernel_process.DISK_FULL, "auch in der Pause erfährt es der Schritt"
+        assert len(made) == 1, "in der Pause startet kein Hilfsprozess"
+
+        pool._paused_until = 0.0
+        assert not pool.paused and not pool.disabled
+        assert pool.take(None) is not None, "nach der Frist nimmt die Sitzung ihn wieder"
+        assert len(made) == 2
+    finally:
+        pool.shutdown()

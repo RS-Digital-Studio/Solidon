@@ -2507,6 +2507,21 @@ class Session(QObject):
         self._changed()
         return True
 
+    def mesh_and_retry(self, stopped_at: int) -> bool:
+        """Setzt *Flächenbearbeitung beenden* und den erneuten Versuch als einen Zug davor.
+
+        Für Stellen, an denen der exakte Körper keine eigene Kante hat
+        (``edges.unmapped``); Reihenfolge und Undo gehören dem Verlauf
+        (``History.mesh_and_retry``).
+        """
+        try:
+            self.history.mesh_and_retry(stopped_at)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._changed()
+        return True
+
     def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
         """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
 

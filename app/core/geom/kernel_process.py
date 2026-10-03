@@ -34,6 +34,7 @@ das Jobobjekt jeden Hilfsprozess mit dem Elternprozess (``process.bind_helper``)
 
 from __future__ import annotations
 
+import errno
 import multiprocessing
 import multiprocessing.connection
 import os
@@ -116,6 +117,23 @@ _ENVIRONMENT_LOCK: Final = threading.Lock()
 
 _CONTEXT: Final = multiprocessing.get_context("spawn")
 
+#: Wie lange ein voller Datenträger den Hilfsprozess pausiert, in Sekunden
+#: (RM-436). Danach versucht ihn die nächste große Rechnung wieder. Bis dahin
+#: schaltete ein einzelnes ENOSPC ihn bis zum Neustart ab, still — und jede
+#: große Rechnung danach hielt das Fenster an.
+FULL_DISK_PAUSE_SECONDS: Final = 60.0
+
+#: Was ein Schritt erfährt, dessen große Rechnung wegen eines vollen
+#: Datenträgers im Programm lief (:func:`take_notice`).
+DISK_FULL: Final = "disk_full"
+
+#: Windows-Codes für einen vollen Datenträger (``ERROR_HANDLE_DISK_FULL``,
+#: ``ERROR_DISK_FULL``) — das Gegenstück zu ENOSPC.
+_WINDOWS_DISK_FULL: Final = frozenset({39, 112})
+
+#: Je Faden der Hinweis, den die Auswertung beim Schritt abholt.
+_NOTICE: Final = threading.local()
+
 #: Was ein Hilfsprozess nach dem Start ausführt. Ein Name, damit die Suite einen
 #: Hilfsprozess nachstellen kann, der nicht antwortet oder stirbt.
 _SERVE: Callable[[Any], None] = kernel_jobs.serve
@@ -173,9 +191,17 @@ class _HelperRefusedError(Exception):
     Hilfsprozess, der vor der Annahme starb, ist kein bleibender Grund.
     """
 
-    def __init__(self, why: str, *, lasting: bool) -> None:
+    def __init__(self, why: str, *, lasting: bool, full: bool = False) -> None:
         super().__init__(why)
         self.lasting = lasting
+        self.full = full
+
+
+def _disk_full(problem: BaseException) -> bool:
+    """Ob ein Transfer an einem vollen Datenträger scheiterte — ENOSPC oder sein Windows-Code."""
+    return isinstance(problem, OSError) and (
+        problem.errno == errno.ENOSPC or getattr(problem, "winerror", None) in _WINDOWS_DISK_FULL
+    )
 
 
 #: Was ein breiter Fang um einen Kernaufruf durchlässt (``except Exception``):
@@ -286,7 +312,11 @@ class _Helper:
         try:
             segment, layout = kernel_jobs.pack(arrays)
         except OSError as unmade:
-            raise _HelperRefusedError(f"shared memory: {unmade}", lasting=True) from unmade
+            # Ein voller Datenträger ist kein bleibender Grund (RM-436): Er pausiert.
+            full = _disk_full(unmade)
+            raise _HelperRefusedError(
+                f"shared memory: {unmade}", lasting=not full, full=full
+            ) from unmade
         try:
             try:
                 self.connection.send(
@@ -309,7 +339,8 @@ class _Helper:
             if isinstance(problem, MemoryError):
                 problem.add_note(f"im Hilfsprozess des Kerns ({self.pid}):\n{reply[2]}")
                 raise problem
-            raise _HelperRefusedError(f"refused: {problem!r}", lasting=True)
+            full = _disk_full(problem)
+            raise _HelperRefusedError(f"refused: {problem!r}", lasting=not full, full=full)
         if reply[0] == "error":
             problem = pickle.loads(reply[1])
             problem.add_note(f"im Hilfsprozess des Kerns ({self.pid}):\n{reply[2]}")
@@ -409,13 +440,32 @@ class _Pool:
         self._generation = 0
         self._failed_starts = 0
         self._disabled = False
+        self._paused_until: float | None = None
         self.counts: dict[str, int] = {}
 
     @property
     def disabled(self) -> bool:
-        """Eine bleibende Absage oder ein noch nicht bestätigtes Helferende."""
+        """Eine bleibende Absage, eine laufende Pause oder ein noch nicht bestätigtes Helferende."""
         with self._lock:
-            return self._disabled or bool(self._failed_stops)
+            return self._disabled or bool(self._failed_stops) or self._paused()
+
+    @property
+    def paused(self) -> bool:
+        """Ob ein voller Datenträger den Hilfsprozess gerade pausiert (:meth:`pause`)."""
+        with self._lock:
+            return self._paused()
+
+    def _paused(self) -> bool:
+        """Unter dem Schloss, das der Rufer schon hält."""
+        return self._paused_until is not None and time.monotonic() < self._paused_until
+
+    def pause(self, why: str, helper: _Helper) -> None:
+        """Rechnet für :data:`FULL_DISK_PAUSE_SECONDS` ohne Hilfsprozess — dann wieder mit."""
+        with self._lock:
+            if self._closing or helper.generation != self._generation:
+                return
+            self._paused_until = time.monotonic() + FULL_DISK_PAUSE_SECONDS
+        _log.warning("kernel helper paused for %.0f s (%s)", FULL_DISK_PAUSE_SECONDS, why)
 
     def count(self, what: str, by: int = 1) -> None:
         with self._lock:
@@ -625,6 +675,7 @@ class _Pool:
             with self._lock:
                 self._failed_starts = 0
                 self._disabled = False
+                self._paused_until = None
                 self._closing = False
                 self._lock.notify_all()
 
@@ -689,6 +740,12 @@ def run(
     _POOL.raise_if_stop_failed()
     if not offloaded(weight):
         _POOL.raise_if_stop_failed()
+        if (
+            weight > OFFLOAD_ABOVE
+            and threading.current_thread() is not threading.main_thread()
+            and _POOL.paused
+        ):
+            _NOTICE.pending = DISK_FULL
         _POOL.count("in_process")
         return function(arrays, plain, check)
     try:
@@ -717,6 +774,9 @@ def run(
     except _HelperRefusedError as refused:
         if refused.lasting:
             _POOL.disable(str(refused), helper)
+        elif refused.full:
+            _POOL.pause(str(refused), helper)
+            _NOTICE.pending = DISK_FULL
         _POOL.discard(helper)
         _POOL.raise_if_stop_failed()
         _POOL.count("fallback")
@@ -743,6 +803,18 @@ def run(
     _POOL.count("helper")
     _POOL.count(f"helper:{job}")
     return outcome
+
+
+def take_notice() -> str | None:
+    """Was die großen Rechnungen dieses Fadens dem Kunden sagen müssen — einmal abgeholt.
+
+    :data:`DISK_FULL`, wenn eine Rechnung wegen eines vollen Datenträgers im
+    Programm lief (dann kann das Fenster dabei stehen); sonst ``None``. Die
+    Auswertung holt ihn je Schritt ab und meldet ihn dort (``kernel.disk_full``).
+    """
+    notice: str | None = getattr(_NOTICE, "pending", None)
+    _NOTICE.pending = None
+    return notice
 
 
 def warm_up() -> bool:
