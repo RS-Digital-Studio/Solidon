@@ -768,12 +768,34 @@ def test_failed_slicer_path_save_keeps_first_run_open_and_can_be_retried(
         set_language(spoken)
 
 
-@pytest.mark.parametrize("language", ["fr", "it"])
+def _room(dialog: FirstRunDialog) -> int:
+    """Die Breite, die ``fit_dialog_to_screen`` einem Dialog höchstens lässt."""
+    from app.ui.style import NORMAL
+
+    screen = dialog.screen()
+    assert screen is not None
+    border = dialog.frameGeometry().width() - dialog.width()
+    return screen.availableGeometry().width() - 2 * NORMAL - border
+
+
+def _sideways_at_most(dialog: FirstRunDialog, natural: int) -> None:
+    """Quer rollt höchstens, was der Bildschirm von der natürlichen Breite abschneidet."""
+    assert dialog._scroll.horizontalScrollBar().maximum() <= max(0, natural - dialog.width())
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
 @pytest.mark.parametrize("technology", ["fdm", "resin"])
 def test_custom_printer_natural_width_and_manual_height_survive_toggling(
     setup_dialog: FirstRunDialog, qt_app: QApplication, language: str, technology: str
 ) -> None:
-    """Die langen Maßzeilen bekommen Platz; eine bewusst gewählte Höhe bleibt erhalten."""
+    """Die langen Maßzeilen bekommen Platz; eine bewusst gewählte Höhe bleibt erhalten.
+
+    Platz heißt: die natürliche Breite samt zugeklappter Maßzeilen
+    (``_natural_width``), soweit der Bildschirm sie lässt. Offscreen ist er
+    800 Punkte breit, und französisch braucht der Dialog dort 973 — was der
+    Bildschirm abschneidet, rollt (``fenster.md``), mehr nicht. Auf einem
+    Bildschirm mit Platz rollt nichts.
+    """
     from PySide6.QtTest import QTest
 
     from app.i18n import get_language, set_language
@@ -790,12 +812,14 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         QTest.qWait(100)
         initial_height = dialog.height()
         initial_width = dialog.width()
-        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+        natural = dialog._natural_width()
+        assert initial_width == min(natural, _room(dialog)), "beim Öffnen so breit wie nötig"
+        _sideways_at_most(dialog, natural)
         default = dialog.printer.currentData()
         dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
         dialog.printer_technology.setCurrentIndex(dialog.printer_technology.findData(technology))
         QTest.qWait(100)
-        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+        _sideways_at_most(dialog, natural)
         assert dialog.width() == initial_width
         assert dialog.height() == initial_height
         dialog.printer.setCurrentIndex(dialog.printer.findData(default))
@@ -809,7 +833,7 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
         QTest.qWait(100)
         assert dialog.height() == manual_height
-        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+        _sideways_at_most(dialog, natural)
         dialog.printer.setCurrentIndex(dialog.printer.findData(default))
         QTest.qWait(100)
         assert dialog.height() == manual_height

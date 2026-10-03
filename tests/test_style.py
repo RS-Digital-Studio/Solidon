@@ -189,6 +189,9 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
         def minimumWidth(self) -> int:  # noqa: N802 — Qt-Name
             return 0
 
+        def _natural_width(self) -> int:
+            return FirstRunDialog._natural_width(self)  # type: ignore[arg-type]
+
         def width(self) -> int:
             return self._size.width()
 
