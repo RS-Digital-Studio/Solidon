@@ -487,6 +487,44 @@ def test_the_model_question_runs_in_a_worker_only_once_the_loop_runs(
         window.deleteLater()
 
 
+def test_the_invitation_waits_for_the_model_question_instead_of_asking_itself(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-492: Die Einladung fragte das Modell am Arbeiter vorbei im Hauptfaden.
+
+    Wer kurz nach dem Start ein Modell öffnete, bekam beim Wechsel vom
+    Startbildschirm ``first_available`` im Hauptfaden — Schlüsselbund und
+    Sockets, bis zu 0,45 s Stillstand. Jetzt zeigt die Einladung den
+    Chatknopf erst, wenn die Antwort da ist, und gefragt wird nur im Arbeiter.
+    """
+    import threading
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    main = threading.get_ident()
+    asked_on_main: list[str] = []
+
+    def first_available() -> None:
+        if threading.get_ident() == main:
+            asked_on_main.append("first_available")
+
+    monkeypatch.setattr("app.ui.session.first_available", first_available)
+    monkeypatch.setattr(llm, "first_available", first_available)
+    session = Session()
+    window = MainWindow(session, UiSettings())
+    try:
+        window._show_invitation()
+        assert not asked_on_main, "die Einladung fragte selbst, im Hauptfaden"
+        assert not window.viewport.invitation._chat_available, "vor der Antwort kein Chatknopf"
+        session.set_agent_backend(cast(Any, SimpleNamespace(id="ollama", model="m")))
+        window._refresh_chat_availability()
+        assert window.viewport.invitation._chat_available, "mit der Antwort kommt der Knopf"
+        assert not asked_on_main
+    finally:
+        window.release()
+        window.deleteLater()
+
+
 def test_proposal_findings_reach_the_report(window: MainWindow) -> None:
     """Fund 3: Die Befunde eines Zugs hatten keinen Anzeigeweg.
 
