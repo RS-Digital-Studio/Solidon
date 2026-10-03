@@ -356,6 +356,18 @@ Solidons Abweichung als „geändert“; Prusas Vorgabe stützt nur an gemalten
 Verstärkern, daher `support_material_auto = 1`; ohne `filament_retract_*`
 überstimmt das Filament den Rückzug.
 
+**Die Lüfterkurve bleibt beim Hersteller (RM-228, Konsolidierung 03.10.2026).**
+Orca und PrusaSlicer lesen sie aus dem Filamentprofil des Herstellers und
+schreiben sie nur auf eigene Wahl; Hilfs-, Kammer-, Überhang- und Bügellüfter
+kennt Solidon nicht und schreibt sie nie (am CC2 und MK4S gegen das
+Herstellerprofil allein gemessen: alle Lüfterschlüssel gleich). Cura bekam
+dagegen Solidons ganze Materialkurve; die PLA-Schwelle 80 s hob jede erste
+Schicht unter 80 s an (Okarina 49 % in Schicht 1 trotz Pause). Unteres Ende
+und Schwelle kommen deshalb aus der Druckerdefinition (`fdmprinter`: Formel
+`cool_fan_speed`, 10 s); das obere Ende bleibt der Materialwert, weil die
+Konsole kein Cura-Materialprofil bekommt und `fdmprinter` jedem Material
+100 % gibt.
+
 ## CuraEngine rechnet keine Formeln
 
 Was ein geschriebener Wert nicht erreicht, und die Messung:
@@ -375,6 +387,9 @@ nicht das Profil des Herstellers, sondern das allgemeine."
 
 Warum `-d` den Ordner `extruders` nennt: Über `CURA_ENGINE_SEARCH_PATH` fand
 CuraEngine die Extruderzüge unter Windows nicht.
+
+Die Maschine steht nicht in `values_for`, weil sie Installation und fertige
+Werte braucht.
 
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 

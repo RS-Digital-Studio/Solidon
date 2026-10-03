@@ -2329,6 +2329,10 @@ def _resolve_slot(
             )
             for path, value in readback.values.items():
                 settings = with_path(settings, path, value)
+    if (material_id and material_id != profile.material.id) or readback is not None:
+        # Die Kurve der Spule folgt bei Cura derselben Regel wie die des
+        # Projekts (RM-228); ohne neues Material bleibt sie aus der Grundlage.
+        settings = manufacturer.cura_fan_curve(settings, profile, setup)
     override = override_for(settings, slot)
     if override is not None and not override.empty:
         settings = replace(
@@ -6672,6 +6676,24 @@ def for_the_cura_window(
     }
 
 
+def _without_curas_own_fan_curve(
+    values: Mapping[str, str], settings: PrintSettings
+) -> dict[str, str]:
+    """Das Fenster rechnet unteres Ende und Schwelle der Lüfterkurve selbst (RM-228).
+
+    Die Konsole liest nur Vorgabewerte und bekommt deshalb, was die
+    Druckerdefinition sagt (:func:`manufacturer.cura_fan_curve`). Das Fenster
+    rechnet Formel und Qualitätsstufe der aktiven Maschine; ein importiertes
+    Profil überschriebe sie. Es nennt die beiden deshalb nur als eigene Wahl.
+    """
+    dropped = {
+        slicer_keys.native_key(entry.key, "")
+        for entry in slicer_keys.TABLES["cura"]
+        if entry.path in manufacturer.CURA_FAN_PATHS and entry.path not in settings.explicit
+    }
+    return {key: value for key, value in values.items() if key not in dropped}
+
+
 def cura_profile_beside(
     model: Path,
     settings: PrintSettings,
@@ -6765,7 +6787,9 @@ def cura_profile_beside(
         if position is not None:
             lines.append(f"position = {position}")
         lines += ["", "[values]"]
-        limited = for_the_cura_window(values, machine=motion)
+        limited = for_the_cura_window(
+            _without_curas_own_fan_curve(values, settings), machine=motion
+        )
         if findings is not None:
             findings.extend(_cura_limit_findings(values, limited, paths=settings.explicit))
         for key, value in sorted(limited.items()):

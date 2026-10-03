@@ -120,7 +120,9 @@ Mindestzeit, unten ab einer Schwelle): `CoolingSettings` mit `fan_speed`,
 `minimum_fan_speed`, `fan_below_layer_time`, `minimum_layer_time`, übersetzt in
 `slicer_keys`. `handover._fan_curve_in_order` deckelt den unteren Wert auf den
 oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
-`slicer_profiles` liest beide Enden und die Schwelle zurück.
+`slicer_profiles` liest beide Enden und die Schwelle zurück. Bei Cura kommen
+unteres Ende und Schwelle aus der Druckerdefinition
+(`manufacturer.cura_fan_curve`).
 
 ## Die vier Gegenproben nach dem Lauf
 

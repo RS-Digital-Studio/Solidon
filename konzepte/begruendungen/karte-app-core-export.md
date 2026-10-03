@@ -345,6 +345,12 @@ die zwei Schlüssel still übergeht. Gemessen am 23.09.2026 mit ElegooSlicer,
 OrcaSlicer, PrusaSlicer und CuraEngine; die Regel dazu steht in
 `.claude/rules/dateiformat.md`.
 
+Bei Cura legt `manufacturer.cura_fan_curve` unteres Ende und Schwelle aus der
+Druckerdefinition in die Grundlage (`CURA_FAN_PATHS`), auch je Spule
+(`handover._resolve_slot`); das Fensterprofil nennt beide nur als eigene Wahl
+(`handover._without_curas_own_fan_curve`), damit Curas Formel und
+Qualitätsstufe gelten (RM-228).
+
 ## Die vier Gegenproben nach dem Lauf
 
 `slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.

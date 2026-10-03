@@ -1505,6 +1505,108 @@ def _unmeasured(profile: Profile, read: Mapping[str, object]) -> dict[str, objec
     }
 
 
+#: Curas Schwelle der Lüfterkurve, wenn keine Definition lesbar ist:
+#: ``cool_min_layer_time_fan_speed_max.default_value`` in ``fdmprinter.def.json``
+#: (Cura 5.13). Das untere Ende ist dort die Formel ``cool_fan_speed``.
+CURA_FAN_THRESHOLD: Final = 10.0
+
+#: Was bei Cura der Druckerdefinition gehört, nicht Solidons Materialtabelle
+#: (RM-228): unteres Ende und Schwelle der Lüfterkurve. Das obere Ende bleibt
+#: der Materialwert — die Konsole bekommt kein Cura-Materialprofil, und
+#: ``fdmprinter`` nennt für jedes Material 100 %.
+CURA_FAN_PATHS: Final = ("cooling.minimum_fan_speed", "cooling.fan_below_layer_time")
+
+_CURA_FAN_CACHE: dict[tuple[str, int, int], tuple[float | None, float | None]] = {}
+
+
+def _cura_number(raw: object) -> float | None:
+    """Ein Zahlwert der Definition; eine Formel ist keine Zahl (Regel 10)."""
+    if isinstance(raw, bool) or not isinstance(raw, int | float | str):
+        return None
+    try:
+        number = float(raw)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _cura_fan_definition(setup: SlicerSetup, profile: Profile) -> tuple[float | None, float | None]:
+    """Schwelle und unteres Ende (Prozent) aus der Erbkette des Druckers.
+
+    Eine eingerichtete Cura-Instanz geht vor, dann die Druckerdefinition, dann
+    ``fdmprinter``. ``None`` heißt: die Kette nennt keine Zahl — beim unteren
+    Ende Curas Formel ``cool_fan_speed``, bei der Schwelle Curas Grundwert.
+    """
+    from app.core.export import handover
+
+    roots = handover._profile_roots(setup)
+    try:
+        source = handover.profile_source(setup.machine_profile, setup, "machine")
+        if isinstance(source, slicer_profiles.SlicerProfile):
+            chain = slicer_profiles.resolve_profile(source, roots)
+        else:
+            definition = handover._cura_printer_definition(
+                setup.executable, profile.printer
+            ) or handover._cura_base(setup.executable)
+            if not definition:
+                return None, None
+            path = Path(definition)
+            stat = path.stat()
+            key = (str(path), stat.st_mtime_ns, stat.st_size)
+            cached = _CURA_FAN_CACHE.get(key)
+            if cached is not None:
+                return cached
+            chain = slicer_profiles.resolve_values(path, roots)
+            found = (
+                _cura_number(chain.get("cool_min_layer_time_fan_speed_max")),
+                _cura_number(chain.get("cool_fan_speed_min")),
+            )
+            _CURA_FAN_CACHE[key] = found
+            return found
+    except (ExternalToolError, OSError) as problem:
+        _log.warning("Cura definition unreadable, using Cura's base fan curve: %s", problem)
+        return None, None
+    return (
+        _cura_number(chain.get("cool_min_layer_time_fan_speed_max")),
+        _cura_number(chain.get("cool_fan_speed_min")),
+    )
+
+
+def cura_fan_curve(
+    settings: PrintSettings, profile: Profile, setup: SlicerSetup | None
+) -> PrintSettings:
+    """Unteres Ende und Schwelle der Lüfterkurve, wie Cura sie fährt (RM-228).
+
+    **Die Lüfterkurve bleibt beim Herstellerprofil** (Entscheidung zu RM-228):
+    Bei der Orca-Familie und PrusaSlicer liest die Grundlage sie aus dem
+    Filamentprofil des Herstellers und schreibt sie nur auf eigene Wahl. Cura
+    bekam dagegen Solidons ganzen Satz, und mit ihm Elegoos PLA-Kurve: 50 bis
+    100 % bei 80 s. Cura hebt jede Schicht unter der Schwelle an, auch die
+    erste, deren Pause :func:`handover._cura_fan_start` schreibt — gemessen
+    an der Okarina 49 % in Schicht 1. Curas eigene Definition nennt 10 s und
+    kein unteres Ende unter dem oberen.
+
+    Hier, in der Grundlage, damit Dialog, Konsole und Gegenprobe dieselben
+    Werte sehen; eine eigene Wahl (``settings.explicit``) bleibt. Für alle
+    anderen Familien ändert sich nichts.
+    """
+    if setup is None or setup.flavour != "cura":
+        return settings
+    threshold, minimum = _cura_fan_definition(setup, profile)
+    values: dict[str, float] = {
+        "cooling.fan_below_layer_time": CURA_FAN_THRESHOLD if threshold is None else threshold,
+        "cooling.minimum_fan_speed": (
+            settings.cooling.fan_speed
+            if minimum is None
+            else min(minimum / 100.0, settings.cooling.fan_speed)
+        ),
+    }
+    for path, value in values.items():
+        if path not in settings.explicit:
+            settings = settings_table.with_path(settings, path, value)
+    return settings
+
+
 def _table_foundation(profile: Profile, fallback: PrintSettings, **known: Any) -> Foundation:
     """Solidons Tabelle als Grundlage — mit der Messung, wo sie auf ihr gilt."""
     return Foundation(
@@ -1729,7 +1831,7 @@ def base_settings(
     Solidons Tabelle (:func:`app.core.knowledge.print_settings.resolve`) —
     und die Übergabe schreibt sie dann vollständig.
     """
-    fallback = settings_table.resolve(profile, quality)
+    fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
         return _table_foundation(
             profile,

@@ -275,6 +275,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   gehört zum Projekt. Nur wo der Hersteller keinen nennt (Creality Print heißt
   jeden Prozess „Standard"), liegen `STAGE_PATHS` über dem Standardprozess;
   ein selbst gewählter Prozess ist die Stufe.
+- **Die Lüfterkurve bleibt beim Hersteller** (RM-228): bei Cura unteres Ende
+  und Schwelle aus der Druckerdefinition (`manufacturer.cura_fan_curve`).
 - **Was ohne Partner nicht wirkt, geht mit ihm** (`handover.COUPLED_PATHS`):
   Haftungsart mit den Maßen aller Arten, Lüfter-Obergrenze mit dem unteren
   Ende; eine gewählte Haftungsart bringt ihr Maß mit, wenn es null ist
@@ -309,9 +311,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Auftrags: Jeder Aufrufer gibt `write_assembly` den Auftrag als `job` mit,
   der Druckdialog die gewählten Platten, der Dateiexport alle Körper, auch
   wenn nur einer gewählt ist.
-- **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
-  nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
-  (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
+- **Die Druckplatte ist eine Angabe, keine Vermutung**: die im Druckdialog
+  gewählte (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
   Modells (Elegoos `default_bed_type = 4` = texturierte PEI). Nur ohne
   Plattenwahl (`support_multi_bed_types` fehlt) gilt die eine Temperatur
   `hot_plate_temp` (`manufacturer.SINGLE_PLATE`); mit Wahl und ohne
@@ -388,8 +389,7 @@ einem Drucker seines Bündels bekommt `prusa_values` statt `values_for` — die
 Maschine kommt aus der Kette, `_machine_keys` entfällt. Für Cura folgt die
 Maschine (`_cura_machine` in `write_config`: Druckerdefinition hinter `-j`,
 Start- und Endcode als eigene `-s`, die zwei Schalter für Curas
-Temperaturbefehle); sie braucht Installation und fertige Werte und steht
-deshalb nicht in `values_for`.
+Temperaturbefehle), nicht in `values_for`.
 
 ## CuraEngine rechnet keine Formeln
 
