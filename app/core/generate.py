@@ -295,7 +295,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
         outputs=(object_id,),
         # **Und erst am fertigen Maß wird gelegt** (Robert, 28.09.2026): Ein
         # erzeugtes Modell ist aus Kundensicht ein weiteres Modell — aufgesetzt
-        # an die erste freie Stelle, nach derselben Regel wie beim Einfügen
+        # an die freie Stelle nächst der Plattenmitte, wie beim Einfügen
         # (§17.1, Schritt 6). In einem leeren Projekt heißt das: mittig auf
         # Platte 1.
         params={"largest": WORKING_SIZE_MM, "free_spot": True},

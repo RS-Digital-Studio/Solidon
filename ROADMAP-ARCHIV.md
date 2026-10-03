@@ -34,6 +34,7 @@ entfernt hat.
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
 | 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
+| 2026-10-03 | [RM-306: Ein weiteres Modell kommt an die freie Stelle nächst der Plattenmitte (03.10.2026)](#rm-306-ein-weiteres-modell-kommt-an-die-freie-stelle-nächst-der-plattenmitte-03102026) |
 | 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
@@ -37908,6 +37909,22 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Beispielprojekte im echten Fenster gegen origin/main ohne den Umbau: dieselben Befunde, 18 von
   22 Exporten textgleich, anders nur die beiden mit Schrift (Lettern des Schilds +1,6 % Volumen).
   Entwicklungstor 20 351 grün. Der volle CI-Lauf auf allen Plattformen steht unter RM-468.
+
+## RM-306: Ein weiteres Modell kommt an die freie Stelle nächst der Plattenmitte (03.10.2026)
+
+<a id="rm-306-ein-weiteres-modell-kommt-an-die-freie-stelle-nächst-der-plattenmitte-03102026"></a>
+<a id="rm-306"></a>
+
+**RM-306 — Zweites Modell in der Ecke oder zur Mitte.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F15;
+  Text der Gesamtprüfung). Das zweite Modell steht hinten links, nach der
+  Regel von *Auf dem Bett anordnen* (§29: hinterste, dann linkeste Stelle); zentriert wird
+  nur eine ganz neu angeordnete Platte. Robert wollte beim Anordnen „startpunkt mitte“
+  (§29, 09.09.2026). Frage: die Kandidaten der freien Stelle nach Abstand zur Plattenmitte
+  ordnen? Empfehlung der Release-Sitzung: ja, weil ein einzelnes weiteres Modell nahe der
+  Mitte besser zu sehen und zu erreichen ist. Abnahme: Entscheidung Robert, danach Test.
+
+**Abschluss:** **Abschluss:** Entscheidung (Auftrag Robert über den Thread „Bedienung und KI“, 03.10.2026): Ein weiteres Modell kommt an die freie Stelle, die der Plattenmitte am nächsten liegt, mit demselben Abstand zu Nachbarn und Rand wie *Auf dem Bett anordnen*, auf der ersten Platte mit Platz, sonst auf der nächsten; eine leere Platte nimmt es mittig. Begründung: Nahe der Mitte steht es im Bild und ist zu erreichen, und es entspricht Roberts „startpunkt mitte“ (§29, 09.09.2026). Am Ausgangsstand lag ein Würfel neben einem mittigen Behälter auf dem 220er Bett bei −97/97 und stand außerhalb des Kamerabilds. Umsetzung: `geom.prepare._nearest_the_middle`, gerufen von `first_free_spot`. Die Kandidaten sind exakt: Plattenmitte, die Seiten jedes Nachbarn um Abstand und halbe Größe hinausgerückt, die Flächenränder und die Konturecken (Sperrzonen), dazu ein Raster im Schritt des Abstands für schräge Konturen. Vektorisiert und blockweise der Nähe nach geprüft. Bei gleicher Entfernung gewinnt die Stelle neben dem Vorhandenen statt dahinter oder davor, dann rechts, dann hinten. *Auf dem Bett anordnen* bleibt unverändert. Festgehaltene Stellen (`spot_x`, `spot_y`, `spot_plate`) bleiben, wo sie sind. Bauplan §17.1 Schritt 6 nennt die neue Regel, Befundsatz und Schalterdoku in allen sechs Sprachen nachgezogen. Nachweis: `test_a_further_model_lands_as_near_the_middle_as_there_is_room` (Sollwert 20 mm, Rasterprobe 0,25 mm mit Sperrecke des CC2; am Ausgangsstand rot mit 166,9 mm), `test_a_spot_kept_before_the_middle_rule_stays_in_its_corner` (−113/113 bleibt). Angepasst wurden zwei Tests, die die alte Ecke behaupteten: `test_a_further_model_lands_in_a_free_place_on_the_first_plate` (jetzt 25/0) und `test_v37_a_further_model_keeps_the_place_of_its_file` (neben dem ersten in jeder Richtung). Eine Gegenprobe mit 120 zufälligen Belegungen auf CC2 und K1 fand nirgends eine erlaubte Rasterstelle, die näher läge. Gemessen mit `first_free_spot` (i9, sieben Läufe, Median, vorher und nachher im Wechsel): 1 Körper 1,3–1,6 → 0,9–1,9 ms, 30 Körper 4,7–6,9 → 3,8 ms, 120 Körper 10–24 → 3,0–3,7 ms. Fenstersonde (Allgemeiner FDM-Drucker 220, `1x1-bin.stl`, dazu `dice_w6_16mm_v00.stl` über *Modell einfügen* und `Wedge-Lock (Top).stl` über den Downloadweg): vorher −97/97 und −61,6/87,5, nachher 33/0 und 0/44,6. Beide Stellen hatten den kleinsten möglichen Abstand zur Mitte, 6 von 6 Prüfungen erfüllt. In main mit `2ed15c34d` (Merge `d21c615e3`).
 
 ## RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)
 

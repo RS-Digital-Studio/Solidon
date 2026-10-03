@@ -3746,8 +3746,12 @@ def test_v37_a_further_model_keeps_the_place_of_its_file(profile) -> None:
     assert today.complete
     moved = today.scene.objects["obj_2"].mesh.bounds
     assert moved.minimum[2] == pytest.approx(0.0)
-    assert moved.maximum[0] <= first.mesh.bounds.minimum[0] - 5.0 or moved.minimum[1] >= (
-        first.mesh.bounds.maximum[1] + 5.0
+    low, high = first.mesh.bounds.minimum, first.mesh.bounds.maximum
+    assert (
+        moved.maximum[0] <= low[0] - 5.0
+        or moved.minimum[0] >= high[0] + 5.0
+        or moved.maximum[1] <= low[1] - 5.0
+        or moved.minimum[1] >= high[1] + 5.0
     ), "neben dem ersten, nicht in ihm"
 
 

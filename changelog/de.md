@@ -106,6 +106,7 @@ Nutzen da und sonst nichts.
 ### Formen, Schrift und Zeichnen
 
 - Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.
+- Schriftzüge werden genauer gesetzt: Die Buchstaben stehen an ihrer Stelle, und runde Bögen folgen der Schrift, statt bei kleinen Größen bis zu 2 Prozent Fläche zu verlieren.
 - Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
 - Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.

@@ -583,8 +583,8 @@ class FitToSizeParams(BaseParams):
     free_spot: bool = free_spot_param(
         _(
             "Setzt das Modell nach dem Skalieren auf und legt es neben die Teile, die schon "
-            "im Projekt liegen: an die erste freie Stelle, Platte für Platte, wie "
-            "„Auf dem Bett anordnen“."
+            "im Projekt liegen: so nah an der Plattenmitte wie möglich, auf der ersten "
+            "Platte mit Platz."
         ),
         placement="advanced",
     )

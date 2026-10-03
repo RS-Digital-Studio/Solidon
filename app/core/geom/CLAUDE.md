@@ -341,12 +341,11 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `plate` ab eins wie im Plattenwähler, null bleibt); gehalten wird dann um
   die Körper der Zielplatte.
 - `placed_at_free_spot` (`free_spot` an `load`, `load_step` und
-  `fit_to_size`, §17.1 Schritt 6): einmal über `first_free_spot` gerechnet —
-  ein Quader aus den Grenzen, Platte für Platte über `arrange_on_bed` mit
-  `occupied` (`standing_in`) —, dann als Antwort festgehalten (`spot_*`,
-  Felder aus `spot_param`); `arrange.no_free_spot`, wo keine Platte Platz
-  hat, ohne Verschiebung kein Befund. Abstand `ARRANGE_SPACING` wie *Auf dem
-  Bett anordnen*; Weg 3 legt am fertigen Maß und setzt nach der Reparatur auf.
+  `fit_to_size`, §17.1): einmal über `first_free_spot` — Grenzquader, je
+  Platte die Stelle nächst der Mitte (`_nearest_the_middle`), leer oder voll
+  über `arrange_on_bed` —, dann festgehalten (`spot_*` aus `spot_param`);
+  `arrange.no_free_spot` ohne Platz, ohne Verschiebung kein Befund. Abstand
+  `ARRANGE_SPACING`; Weg 3 legt am fertigen Maß, nach der Reparatur.
 
 **Kanten und Flächen**:
 

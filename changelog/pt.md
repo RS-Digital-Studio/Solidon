@@ -81,6 +81,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Modelar, texto e esboço
 
 - Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.
+- As inscrições são compostas com mais precisão: as letras ficam no seu lugar e as curvas seguem a fonte, em vez de perder até 2 por cento de área em tamanhos pequenos.
 - A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.
 - O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.
 - Um traço sobre o plano de simetria atua uma vez em vez de duas.

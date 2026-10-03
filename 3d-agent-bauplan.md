@@ -1156,13 +1156,17 @@ baut daraus das normalisierte Szenenobjekt über dieselbe Eingangskette:
    aufgesetzt und mittig herein (Entscheidung Robert, 03.09.2026): Ein leeres
    Bett hat keine Lage, die zu erhalten wäre, und ein Modell, das halb unter
    der Platte oder weit daneben steht, ist der erste Eindruck eines frischen
-   Projekts. **Jedes weitere** kommt aufgesetzt an die erste freie Stelle
+   Projekts. **Jedes weitere** kommt aufgesetzt an eine freie Stelle
    (Robert, 28.09.2026: „wenn wir ein weiteres modell hinzufügen zu einem
    schon vorhandenen landet es immer außerhalb, obwohl auf den anderen platten
-   noch platz ist"): dieselbe Regel und derselbe Abstand wie *Auf dem Bett
-   anordnen* (§29), Platten in ihrer Reihenfolge; was schon liegt, bleibt
-   liegen und belegt seinen Platz auf seiner Platte, und passt es auf keine
-   vorhandene Platte, kommt es auf die nächste. Mittig läge es im ersten, an
+   noch platz ist"): derselbe Abstand wie *Auf dem Bett anordnen* (§29),
+   Platten in ihrer Reihenfolge, und auf der ersten Platte mit Platz die
+   Stelle, die der Plattenmitte am nächsten liegt (Entscheidung zu RM-306,
+   nach Roberts „startpunkt mitte" in §29: nahe der Mitte steht es im Bild
+   und ist zu erreichen; bis dahin war es die hinterste, dann linkeste
+   Stelle); was schon liegt, bleibt liegen und belegt seinen Platz auf seiner
+   Platte, und passt es auf keine vorhandene Platte, kommt es auf die nächste
+   und dort mittig. Mittig läge es im ersten, an
    seinen Dateikoordinaten meist neben dem Bett. Eine Datei mit mehreren
    Körpern wird als Ganzes gelegt, die Teile behalten ihre Lage zueinander;
    eine 3MF mit mehreren Platten behält ihre Aufteilung und kommt hinter die

@@ -20861,7 +20861,7 @@ class MainWindow(QMainWindow):
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
         eingefügten Modells (Review F14).
 
-        Ein weiteres Modell kommt an die erste freie Stelle, oft auf eine
+        Ein weiteres Modell kommt an eine freie Stelle, oft auf eine
         andere Platte (§17.1, Schritt 6); ohne den Wechsel stünde es nicht im
         Bild, und nur ein Befund nennte die Platte. Gewechselt wird einmal,
         sobald ein Ergebnis den Körper trägt — dieselbe Wahl wie im Plattenfeld.

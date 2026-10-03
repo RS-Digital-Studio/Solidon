@@ -472,7 +472,7 @@ def command_import(args: argparse.Namespace) -> int:
     # trägt seine Einheit selbst, eine flache Zeichnung hat keine dritte
     # Dimension — dort wäre die Frage eine Zumutung ohne Zweck.
     # Das erste Modell eines Projekts kommt mittig auf die Platte, jedes weitere
-    # an die erste freie Stelle (§17.1, Schritt 6). Gefragt wird der Stapel und
+    # an die freie Stelle nächst der Plattenmitte (§17.1, Schritt 6). Gefragt wird der Stapel und
     # nicht die Szene: Er steht fest, bevor irgendetwas ausgewertet ist, und die
     # Operation trägt die Entscheidung danach selbst.
     first_model = not project.document.ops
