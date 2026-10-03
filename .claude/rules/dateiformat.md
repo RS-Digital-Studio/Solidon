@@ -326,8 +326,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   (`handover._followers_not_faster`): Innenwand schreibt auch die
   Lückenfüllung, Füllung auch die innere Vollfüllung (Solidons eigener Satz
   braucht dafür Werte); über dem Herstellerprozess dürfen sie langsamer
-  werden, nicht schneller. Wer einem Feld einen Schlüssel hinzufügt, prüft,
-  ob er dazugehört.
+  werden, nicht schneller. Eine Rolle mit eigenem Herstellertempo
+  (`_PRUSA_ROLES`, `_ORCA_ROLES`) folgt einem gebremsten Leittempo.
 - **Ein übernommener Vorschlag bremst, er beschleunigt nicht**: Tempi, die nur
   ein Vorschlag setzt (`handover._suggested_speed_keys`), bleiben über dem
   Herstellerprozess nie schneller als dort; eine eigene Wahl darf beides.

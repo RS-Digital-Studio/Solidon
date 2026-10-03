@@ -17,7 +17,7 @@ zugeordnet werden).
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, cast
 
@@ -64,7 +64,15 @@ from app.core.geom.edges import wanted as edges_wanted
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
-from app.core.types import BoundingBox, CancelToken, PlaneFrame, Point2, Transform, Vec3
+from app.core.types import (
+    BoundingBox,
+    CancelToken,
+    PlaneFrame,
+    Point2,
+    ProgressFn,
+    Transform,
+    Vec3,
+)
 from app.core.units import EPS_DISPLAY, EPS_GEOM, dot3, exact_centre, is_close, weld_tolerance
 from app.i18n import _
 
@@ -410,14 +418,39 @@ def native_edges_of_chains(
     *,
     cancelled: CancelToken | None = None,
 ) -> tuple[tuple[int, ...], ...]:
-    """Bindet vollständige Netzzüge über Flächenherkunft und tatsächlichen Verlauf.
+    """Die nativen Kanten, die ein Netzzug belegt — je Zug, ohne Wiederholung.
 
-    Eine leere Bindung heißt unbekannt, niemals alle Kanten oder glatt. Auch
-    innerhalb einer einzigen nativen Fläche kann ein geometrischer Knick
-    liegen. Teilen zwei Flächen mehrere native Kanten, muss jedes Segment
-    räumlich zu genau einer passen. Und jede gebundene native Kante muss
+    Die Zusammenfassung von :func:`native_edges_of_segments`. Eine leere
+    Bindung heißt unbekannt, niemals alle Kanten oder glatt.
+    """
+    return tuple(
+        tuple(dict.fromkeys(index for index in claimed if index is not None))
+        for claimed in native_edges_of_segments(solid, mesh, chains, cancelled=cancelled)
+    )
+
+
+def native_edges_of_segments(
+    solid: Solid,
+    mesh: MeshData,
+    chains: Sequence[MeshEdge],
+    *,
+    cancelled: CancelToken | None = None,
+) -> tuple[tuple[int | None, ...], ...]:
+    """Je Zug und Strecke die native Kante, die sie belegt — ``None``, wo keine eindeutig ist.
+
+    Über Flächenherkunft und tatsächlichen Verlauf. Auch innerhalb einer
+    einzigen nativen Fläche kann ein geometrischer Knick liegen; dort gibt es
+    keine Kante. Teilen zwei Flächen mehrere native Kanten, muss jede Strecke
+    räumlich zu genau einer passen. Und jede belegte native Kante muss
     vollständig von den gewählten Zügen abgedeckt sein: Ein Ausschnitt darf
     nicht zur Bearbeitung der ganzen Kurve werden.
+
+    **Entschieden wird je native Kante, nicht je Zug** (RM-435 M2): Eine
+    unvollständig belegte Kante verliert ihre Strecken, die übrigen Kanten
+    desselben Zugs bleiben belegt. Am Crimper fiel sonst ein 43-mm-Zug samt
+    einer eindeutigen 20-mm-Kante, weil sein Knick an einer 0,85-mm-Kante
+    tangential auslief. Die Abdeckung einer Kante hängt nur an den Strecken,
+    die sie belegen — ein Durchgang genügt.
     """
     from itertools import pairwise
 
@@ -433,7 +466,7 @@ def native_edges_of_chains(
     _check(cancelled)
     sources = face_sources(mesh)
     if len(sources) != mesh.triangle_count or np.any((sources < 0) | (sources >= solid.face_count)):
-        return tuple(() for _chain in chains)
+        return tuple((None,) * max(len(chain.points) - 1, 0) for chain in chains)
     neighbours = NeighbourMap()
     TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
     _check(cancelled)
@@ -465,14 +498,14 @@ def native_edges_of_chains(
     join_tolerance = weld_tolerance(mesh.bounds.diagonal)
     reach = 2.0 * max(solid.deflection, EPS_GEOM) + join_tolerance
     sampled: dict[int, tuple[Vec3, ...]] = {}
-    claims: list[tuple[int, ...]] = []
+    claims: list[tuple[int | None, ...]] = []
     for chain in chains:
         _check(cancelled)
         chain_segments = tuple(pairwise(chain.points))
         if len(chain.node_indices) != len(chain.points) or not chain_segments:
-            claims.append(())
+            claims.append((None,) * len(chain_segments))
             continue
-        found: list[int] = []
+        found: list[int | None] = []
         for nodes, segment in zip(pairwise(chain.node_indices), chain_segments, strict=True):
             _check(cancelled)
             faces = face_pairs.get((min(nodes), max(nodes)), ())
@@ -487,30 +520,22 @@ def native_edges_of_chains(
                     segment, tuple(pairwise(points)), reach, join_tolerance, cancelled
                 ):
                     candidates.append(index)
-            if len(candidates) != 1:
-                found = []
-                break
-            found.append(candidates[0])
+            found.append(candidates[0] if len(candidates) == 1 else None)
         claims.append(tuple(found))
-    while True:
-        covered: dict[int, list[tuple[Vec3, Vec3]]] = {}
-        for chain, claimed in zip(chains, claims, strict=True):
-            _check(cancelled)
-            if claimed:
-                for index, segment in zip(claimed, pairwise(chain.points), strict=True):
-                    covered.setdefault(index, []).append(segment)
-        complete: set[int] = set()
-        for index, segments in covered.items():
-            _check(cancelled)
-            points = sampled[index]
-            if _curve_is_covered(points, segments, reach, join_tolerance, cancelled):
-                complete.add(index)
-        retained = [claim if all(index in complete for index in claim) else () for claim in claims]
-        if retained == claims:
-            return tuple(tuple(dict.fromkeys(claim)) for claim in retained)
-        # Ein verworfener Zug darf die Abdeckung einer anderen nativen Kante
-        # nicht weiterhin belegen. Jede Runde entfernt mindestens einen Zug.
-        claims = retained
+    covered: dict[int, list[tuple[Vec3, Vec3]]] = {}
+    for chain, claimed in zip(chains, claims, strict=True):
+        _check(cancelled)
+        for claim, segment in zip(claimed, pairwise(chain.points), strict=True):
+            if claim is not None:
+                covered.setdefault(claim, []).append(segment)
+    complete: set[int] = set()
+    for index, segments in covered.items():
+        _check(cancelled)
+        if _curve_is_covered(sampled[index], segments, reach, join_tolerance, cancelled):
+            complete.add(index)
+    return tuple(
+        tuple(claim if claim in complete else None for claim in claimed) for claimed in claims
+    )
 
 
 def _curve_is_covered(
@@ -1004,111 +1029,542 @@ def fillet(
     return _build_constant_fillet(working, chosen, radius, cancelled=cancelled)
 
 
+#: Bis zu wie vielen Konturen die letzte Stufe der Gruppensuche jede einmal
+#: weglässt — je Kontur ein Bau der ganzen übrigen Gruppe. Darüber sagt die
+#: Gruppe ab, statt minutenlang zu bauen (RM-435): Die Vorgängerin ließ jede
+#: Kante einzeln weg und brauchte an ``pegboard-goot-ceramic-screwdrivers-v3``
+#: 288 Bauten und 148 s für eine Absage. Eine Zahl und keine Zeit, damit
+#: dieselbe Datei auf jeder Maschine dasselbe Teil ergibt.
+LEAVE_ONE_OUT_LIMIT: Final = 32
+
+#: Was die Leiste während der Gruppensuche sagt (§2.8) — je Stufe von
+#: :class:`_GroupSearch`. Der erste Bau meldet nichts: Gelingt er, ist die
+#: Rundung so schnell wie ohne Suche.
+_SEARCH_STAGES: Final = {
+    "named": _("Die Rundung wird ohne die gemeldeten Stellen gebaut …"),
+    "probe": _("Die Kanten werden einzeln geprüft …"),
+    "leave_out": _("Die Gruppe wird ohne je eine Kante gebaut …"),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _GroupCandidate:
+    """Ein Bau eines Teils der Gruppe — und wen er beschuldigt, wenn er scheitert.
+
+    ``solid`` steht nur nach einem vollständig geprüften Bau, der trägt;
+    ``passed`` gilt auch für eine Probe ohne Tessellierung. ``blamed`` sind
+    gewählte Kanten (Indizes in ``edges()`` des Eingangs), deren Kontur der
+    Bau als Fehlstelle nennt — leer, wenn er keine benennt.
+    """
+
+    passed: bool
+    solid: Solid | None = None
+    blamed: frozenset[int] = frozenset()
+    certain: bool = True
+    """Ob der Builder selbst benennt (Fehlkontur, Fehlecke) — sonst ist es eine
+    Ortung über Flächen des Ergebnisses, und die trifft auch Nachbarn."""
+
+
+#: Bis zu wie vielen über Flächen beschuldigten Konturen die Suche zuerst jede
+#: einzeln weglässt, bevor alle fallen (:class:`_GroupSearch`).
+SUSPECTS_TRIED_ALONE: Final = 8
+
+
+@dataclass(frozen=True, slots=True)
+class GroupFillet:
+    """Was :func:`fillet_group` gerundet und ausgelassen hat — Kanten als Indizes des Eingangs."""
+
+    solid: Solid
+    omitted: tuple[int, ...] = ()
+    """Kanten, die mit den übrigen nicht zusammen gebaut werden konnten."""
+    thin: tuple[int, ...] = ()
+    """Kanten, an deren Kontur eine Wand nicht dicker ist als der Radius — vor
+    jedem Bau ausgelassen, denn dort kann der Bau die Anwendung beenden."""
+    thinnest: float = math.inf
+    """Die dünnste Wand an diesen Kanten in mm: Darunter passt der Radius dort."""
+
+
 def fillet_group(
     solid: Solid,
     radius: float,
     selected_edges: Sequence[int],
     *,
     cancelled: CancelToken | None = None,
-) -> tuple[Solid, tuple[Vec3, ...]]:
-    """Rundet eine vorgeprüfte Kantengruppe und lässt nötigenfalls Kanten aus.
+    progress: ProgressFn | None = None,
+) -> GroupFillet:
+    """Rundet eine belegte Kantengruppe und lässt aus, was OpenCASCADE nicht baut.
 
-    Eine Gruppe, die am Netz verkleinert wurde, darf am exakten Kern nicht
-    komplett verloren gehen, nur weil OpenCASCADE alle tragenden Kanten
-    gemeinsam ablehnt. Die Auswahl wird deterministisch aufgebaut. Ist die
-    vollständige Gruppe nicht gültig und geschlossen, werden zuerst einzeln
-    offene Kanten ermittelt und gemeinsam ausgelassen. Bleibt das Ergebnis
-    offen, wird jede Einzelauslassung am unveränderten Körper geprüft;
-    bereits gebaute Kantenkombinationen samt Ergebnis werden wiederverwendet.
-    Zurück kommen die Orte ausgelassener Kanten für den Befund.
+    Gerufen für jede Gruppe konstanter Radien, die ``geom.edge_ops`` an native
+    Kanten gebunden hat. Gelingt der erste Bau, bleibt es bei ihm — so schnell
+    wie :func:`fillet`. Sonst sucht sie, was die Gruppe zu Fall bringt, und
+    zwar **je Kontur**: OpenCASCADE setzt eine Rundung über tangential
+    anschließende Kanten fort, und eine Kante einer Kontur wegzulassen ließe
+    sie trotzdem gerundet. In dieser Reihenfolge, jeder Bau auf frischer Form:
+
+    1. **Was der Bau selbst sagt.** Ein gescheiterter Builder nennt
+       Fehlkonturen und Fehlecken, ein gebauter, aber ungültiger Körper seine
+       ungültigen Flächen, eine offene Schale ihre freien Kanten, eine undichte
+       Tessellierung ihre offenen Dreiecke. Über die Historie des Builders
+       führen sie zu den Konturen, deren Rundung dort liegt; die fallen weg,
+       und der Rest wird neu gebaut — solange der Bau etwas benennt.
+    2. **Jede Kontur allein**, wenn er nichts benennt, als Probe ohne
+       Tessellierung. Was allein nicht trägt, fällt weg.
+    3. **Je eine Kontur weg**, bis :data:`LEAVE_ONE_OUT_LIMIT` Konturen — für
+       das, was nur im Verbund scheitert.
+
+    **Die Wand prüft sie je Kontur, vor jedem Bau** (der Schutz aus
+    :func:`_fits_the_wall`): Ist eine Wand an einer Kante der Kontur nicht
+    dicker als der Radius — auch an einer tangential fortgesetzten, die
+    niemand gewählt hat —, fällt die Kontur aus der Gruppe (``thin``), statt
+    die ganze Gruppe abzusagen. Eine Kontur ist eine gewählte Kante mit allen
+    tangential anschließenden; das hängt an der Form, nicht am Radius oder an
+    den übrigen Kanten, und gilt deshalb für jede Teilmenge.
+
+    Jede Kombination wird höchstens einmal gebaut. ``progress`` erfährt ab dem
+    ersten gescheiterten Bau, wie weit die Suche ist (§2.8). Trägt kein Teil
+    der Gruppe, kommt die Absage „zu groß“. Gemessen an
+    ``pegboard-gs-100-v2.step``, „alle Kanten“ R 0,5: drei Bauten statt 134,
+    61 statt 58 Kanten gerundet.
     """
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+    from OCP.TopoDS import TopoDS
+
     require()
     _check(cancelled)
     checked = solid.checked_edge_indices(selected_edges, cancelled=cancelled)
     working = replace(solid)
     _check(cancelled)
     chosen = _edges_for(working, "all", (), checked)
-    _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
-    source_indices = {id(entry): index for entry, index in zip(chosen, checked, strict=True)}
-
-    first_error: GeometryError | None = None
-    individually_open: list[EdgeInfo] | None = None
-    candidate_results: dict[frozenset[int], Solid | GeometryError] = {}
-
-    def build_candidate(entries: Sequence[EdgeInfo]) -> Solid:
-        """Baut jede Kantenkombination höchstens einmal und hält ihr Ergebnis vor."""
-        _check(cancelled)
-        indices = tuple(source_indices[id(entry)] for entry in entries)
-        key = frozenset(indices)
-        cached = candidate_results.get(key)
-        if isinstance(cached, GeometryError):
-            raise cached
-        if cached is not None:
-            return cached
-        candidate = replace(solid)
-        _check(cancelled)
-        candidate_edges = _edges_for(candidate, "all", (), indices)
-        try:
-            result = _build_constant_fillet(candidate, candidate_edges, radius, cancelled=cancelled)
-        except GeometryError as refused:
-            candidate_results[key] = refused
-            raise
-        candidate_results[key] = result
-        return result
-
-    def try_candidate(entries: Sequence[EdgeInfo]) -> Solid | None:
-        """Baut oder holt eine Kantenkombination, die nur geschlossen gelten darf."""
-        try:
-            result = build_candidate(entries)
-        except GeometryError:
-            return None
-        return result if result.is_watertight else None
-
-    try:
-        complete = build_candidate(chosen)
-    except GeometryError as refused:
-        first_error = refused
-    else:
-        if complete.is_watertight:
-            return complete, ()
-        first_error = GeometryError(
+    builder = BRepFilletAPI_MakeFillet(working.shape)
+    for entry in chosen:
+        builder.Add(radius, entry.edge)
+    rounds = _RoundsOf(working, builder, chosen, checked)
+    members = [sorted(contour) for contour in rounds.members]
+    walls = iter(
+        _edge_walls(
+            working,
+            [
+                TopoDS.Edge(rounds.known.FindKey(member))
+                for contour in members
+                for member in contour
+            ],
+            cancelled=cancelled,
+        )
+    )
+    contour_walls = [min(next(walls) for _member in contour) for contour in members]
+    carried = [number for number, wall in enumerate(contour_walls) if radius < wall]
+    if not carried:
+        raise GeometryError(
+            detail=_too_large("fillet"),
+            suggestions=(CORRECT_INPUT, CANCEL),
+            values={
+                "size_mm": round(radius, 3),
+                "edges": len(chosen),
+                "wall_mm": round(min(contour_walls), 2),
+            },
+        )
+    contours = tuple(tuple(sorted(rounds.chosen_in[number])) for number in carried)
+    thin = [number for number in range(len(members)) if number not in carried]
+    found = _GroupSearch(solid, radius, contours, cancelled=cancelled, progress=progress).run()
+    if found is None:
+        raise GeometryError(
             detail=_too_large("fillet"),
             suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(radius, 3), "edges": len(chosen)},
         )
-        individually_open = _individually_open_fillet_edges(
-            chosen, cancelled=cancelled, build_candidate=build_candidate
-        )
-        if individually_open and len(individually_open) < len(chosen):
-            omitted_ids = {id(entry) for entry in individually_open}
-            remaining = [entry for entry in chosen if id(entry) not in omitted_ids]
-            result = try_candidate(remaining)
-            if result is not None:
-                return result, tuple(entry.middle for entry in individually_open)
+    result, omitted = found
+    return GroupFillet(
+        result,
+        omitted=tuple(index for number in sorted(omitted) for index in contours[number]),
+        thin=tuple(index for number in thin for index in sorted(rounds.chosen_in[number])),
+        thinnest=min((contour_walls[number] for number in thin), default=math.inf),
+    )
 
-    for omitted in chosen:
+
+class _GroupSearch:
+    """Eine Suche: welche Konturen der Gruppe zusammen tragen (:func:`fillet_group`)."""
+
+    def __init__(
+        self,
+        solid: Solid,
+        radius: float,
+        contours: tuple[tuple[int, ...], ...],
+        *,
+        cancelled: CancelToken | None,
+        progress: ProgressFn | None,
+    ) -> None:
+        self.solid = solid
+        self.radius = radius
+        self.contours = contours
+        self.cancelled = cancelled
+        self.progress = progress
+        self.reached = 0.0
+        self.tried: dict[tuple[frozenset[int], bool], _GroupCandidate] = {}
+        self.contour_of = {
+            index: number for number, members in enumerate(contours) for index in members
+        }
+
+    def build(self, numbers: Sequence[int], *, whole: bool = True) -> _GroupCandidate:
+        """Baut diese Konturen einmal; eine zweite Frage bekommt die erste Antwort."""
+        key = (frozenset(numbers), whole)
+        known = self.tried.get(key)
+        if known is not None:
+            return known
+        indices = tuple(index for number in sorted(numbers) for index in self.contours[number])
+        outcome = _group_candidate(
+            self.solid, self.radius, indices, whole=whole, cancelled=self.cancelled
+        )
+        self.tried[key] = outcome
+        return outcome
+
+    def named(self, outcome: _GroupCandidate, remaining: Sequence[int]) -> list[int]:
+        """Die übrigen Konturen, die ein gescheiterter Bau benennt."""
+        numbers = {self.contour_of[index] for index in outcome.blamed if index in self.contour_of}
+        return [number for number in remaining if number in numbers]
+
+    def report(self, share: float, stage: str) -> None:
+        """Meldet einen Anteil, der nie zurückgeht (§2.8)."""
+        _check(self.cancelled)
+        if self.progress is None:
+            return
+        self.reached = max(self.reached, min(share, 1.0))
+        self.progress(self.reached, str(_SEARCH_STAGES[stage]))
+
+    def run(self) -> tuple[Solid, list[int]] | None:
+        """Der Körper und die ausgelassenen Konturen — ``None``, wenn kein Teil trägt."""
+        remaining = list(range(len(self.contours)))
+        outcome = self.build(remaining)
+        if outcome.solid is not None:
+            return outcome.solid, []
+        omitted: list[int] = []
+        probed = False
+        rounds = 0
+        while len(remaining) > 1:
+            named = self.named(outcome, remaining)
+            if named and len(named) < len(remaining):
+                rounds += 1
+                self.report(min(0.3, 0.1 * rounds), "named")
+                if not outcome.certain and len(named) <= SUSPECTS_TRIED_ALONE:
+                    # Über Flächen geortet ist eine Vermutung: Oft genügt eine
+                    # der beschuldigten Konturen (am Stift auf der Plattenkante
+                    # R 0,3 eine statt vier).
+                    for number in named:
+                        trial = self.build([other for other in remaining if other != number])
+                        if trial.solid is not None:
+                            return trial.solid, [*omitted, number]
+            elif probed:
+                break
+            else:
+                probed = True
+                named = []
+                for position, number in enumerate(remaining):
+                    self.report(0.3 + 0.4 * position / len(remaining), "probe")
+                    if not self.build([number], whole=False).passed:
+                        named.append(number)
+                if len(named) == len(remaining):
+                    return None
+                if not named:
+                    break
+            omitted.extend(named)
+            remaining = [number for number in remaining if number not in named]
+            outcome = self.build(remaining)
+            if outcome.solid is not None:
+                return outcome.solid, omitted
+        if 1 < len(remaining) <= LEAVE_ONE_OUT_LIMIT:
+            for position, number in enumerate(remaining):
+                self.report(0.7 + 0.3 * position / len(remaining), "leave_out")
+                outcome = self.build([other for other in remaining if other != number])
+                if outcome.solid is not None:
+                    return outcome.solid, [*omitted, number]
+        return None
+
+
+def _group_candidate(
+    solid: Solid,
+    radius: float,
+    indices: Sequence[int],
+    *,
+    whole: bool,
+    cancelled: CancelToken | None,
+) -> _GroupCandidate:
+    """Baut ``indices`` auf frischer Form und prüft wie :func:`_built` — mit Ortung.
+
+    Dieselben Fragen wie dort, von billig nach teuer: gebaut, gültig,
+    geschlossen, so viele Körper wie vorher, dann (``whole``) die Kopie mit
+    Filamenten, die Dichtheit der Tessellierung und zuletzt das Volumen — am
+    gerundeten Körper eine Randintegration und die teuerste Frage, die ein
+    Zwischenstand der Suche deshalb nie stellt. Ohne ``whole`` ist es eine
+    Probe ohne Kopie und ohne Tessellierung.
+    """
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+
+    _check(cancelled)
+    candidate = replace(solid)
+    _check(cancelled)
+    entries = _edges_for(candidate, "all", (), tuple(indices))
+    builder = BRepFilletAPI_MakeFillet(candidate.shape)
+    for entry in entries:
         _check(cancelled)
-        remaining = [entry for entry in chosen if entry is not omitted]
-        if not remaining:
+        builder.Add(radius, entry.edge)
+    rounds = _RoundsOf(candidate, builder, entries, indices)
+    _check(cancelled)
+    try:
+        builder.Build()
+        done = bool(builder.IsDone())
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception:  # OpenCASCADE wirft eigene Ausnahmearten
+        done = False
+    _check(cancelled)
+    if not done:
+        return _GroupCandidate(False, blamed=rounds.at_faults())
+    shape = builder.Shape()
+    if not BRepCheck_Analyzer(shape).IsValid():
+        return _GroupCandidate(
+            False, blamed=rounds.at_faces(shape, _invalid_faces(shape)), certain=False
+        )
+    _check(cancelled)
+    if not whole:
+        loose = _faces_at_free_edges(shape)
+        if loose:
+            return _GroupCandidate(False, blamed=rounds.at_faces(shape, loose), certain=False)
+        return _GroupCandidate(_solid_count(shape) == candidate.solid_count)
+    outcome = candidate.replacing(shape, history=builder, cancelled=cancelled)
+    _check(cancelled)
+    if not outcome.is_closed:
+        # Dieselbe Frage wie ``is_closed``, nur mit den Flächen an den freien
+        # Kanten — gestellt erst, wenn die Antwort nein ist.
+        loose = _faces_at_free_edges(shape)
+        return _GroupCandidate(False, blamed=rounds.at_faces(shape, loose), certain=False)
+    if outcome.solid_count != candidate.solid_count:
+        return _GroupCandidate(False)
+    if not outcome.is_watertight:
+        return _GroupCandidate(
+            False, blamed=rounds.at_faces(shape, _open_faces(outcome)), certain=False
+        )
+    _check(cancelled)
+    if outcome.volume <= EPS_GEOM:
+        return _GroupCandidate(False)
+    _log.info("fillet of %.2f mm on %d edge(s) of a group", radius, len(entries))
+    return _GroupCandidate(True, outcome)
+
+
+class _RoundsOf:
+    """Die Konturen eines Builders und die gewählten Kanten darin — für die Ortung.
+
+    ``chosen_in`` steht je Kontur in der Zählung des Builders (Kontur 1 an
+    Stelle 0) und nennt die Indizes des Eingangs. Eine Kontur trägt auch die
+    tangential fortgesetzten Kanten, die niemand gewählt hat
+    (``members``, Nummern der Kantenkarte der Arbeitskopie).
+    """
+
+    def __init__(
+        self, candidate: Solid, builder: Any, entries: Sequence[EdgeInfo], indices: Sequence[int]
+    ) -> None:
+        from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+        from OCP.TopAbs import TopAbs_EDGE
+        from OCP.TopExp import TopExp
+
+        self.candidate = candidate
+        self.builder = builder
+        self.known = ShapeMap()
+        TopExp.MapShapes_s(candidate.shape, TopAbs_EDGE, self.known)
+        picked = {
+            int(self.known.FindIndex(entry.edge)): index
+            for entry, index in zip(entries, indices, strict=True)
+        }
+        self.members: list[frozenset[int]] = []
+        self.chosen_in: list[frozenset[int]] = []
+        for number in range(1, int(builder.NbContours()) + 1):
+            members = frozenset(
+                int(self.known.FindIndex(builder.Edge(number, position)))
+                for position in range(1, int(builder.NbEdges(number)) + 1)
+            )
+            self.members.append(members)
+            self.chosen_in.append(frozenset(picked[k] for k in members if k in picked))
+
+    def _of(self, numbers: set[int]) -> frozenset[int]:
+        return frozenset(index for number in numbers for index in self.chosen_in[number - 1])
+
+    def at_faults(self) -> frozenset[int]:
+        """Die Konturen, die ein gescheiterter Bau als Fehlkontur oder an einer Fehlecke nennt.
+
+        ``FaultyContour`` zählt die Streifen des Builders; nur die ersten
+        ``NbContours`` sind Konturen — am Prüfkasten aus RM-284 nannte er
+        Streifen 25 bei 17 Konturen. Ein solcher Streifen benennt nichts.
+        """
+        from OCP.collections import (
+            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+        )
+        from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
+        from OCP.TopExp import TopExp
+
+        builder = self.builder
+        numbers: set[int] = set()
+        count = len(self.members)
+        for position in range(1, int(builder.NbFaultyContours()) + 1):
+            number = int(builder.FaultyContour(position))
+            if 1 <= number <= count:
+                numbers.add(number)
+        if builder.NbFaultyVertices():
+            around = NeighbourMap()
+            TopExp.MapShapesAndAncestors_s(self.candidate.shape, TopAbs_VERTEX, TopAbs_EDGE, around)
+            for position in range(1, int(builder.NbFaultyVertices()) + 1):
+                vertex = builder.FaultyVertex(position)
+                if not around.Contains(vertex):
+                    continue
+                touching = {
+                    int(self.known.FindIndex(edge)) for edge in listed(around.FindFromKey(vertex))
+                }
+                numbers.update(
+                    number for number, members in enumerate(self.members, 1) if members & touching
+                )
+        return self._of(numbers)
+
+    def at_faces(self, shape: Any, faces: set[int]) -> frozenset[int]:
+        """Die Konturen, deren Rundung an diesen Flächen des Ergebnisses liegt.
+
+        ``faces`` zählt die Flächenkarte von ``shape`` (ab 1). Eine Fläche,
+        die eine Kontur erzeugt hat — an einer ihrer Kanten oder an einer
+        ihrer Ecken (``Generated``) —, gehört ihr. **Liegt eine der Flächen
+        auf einer Rundung, zählen nur diese Konturen**; erst ohne eine solche
+        gehört eine geänderte alte Fläche den Konturen, deren Rundungen an sie
+        grenzen. Am goot-Lochbrett (senkrecht R 1) waren sechs Flächen offen,
+        zwei davon Rundungen: Deren Konturen fallen weg, nicht dazu zwei
+        Nachbarn der beschnittenen Wände.
+        """
+        from OCP.collections import (
+            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+        )
+        from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+        from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+        from OCP.TopExp import TopExp, TopExp_Explorer
+        from OCP.TopoDS import TopoDS
+
+        if not faces:
+            return frozenset()
+        out = ShapeMap()
+        TopExp.MapShapes_s(shape, TopAbs_FACE, out)
+        made: dict[int, set[int]] = {}
+        for number, members in enumerate(self.members, 1):
+            for member in members:
+                edge = TopoDS.Edge(self.known.FindKey(member))
+                for source in (edge, TopExp.FirstVertex_s(edge), TopExp.LastVertex_s(edge)):
+                    for face in listed(self.builder.Generated(source)):
+                        index = int(out.FindIndex(face))
+                        if index:
+                            made.setdefault(index, set()).add(number)
+        numbers: set[int] = set()
+        for face in faces:
+            numbers |= made.get(face, set())
+        if numbers:
+            return self._of(numbers)
+        neighbours = NeighbourMap()
+        TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+        for face in sorted(faces):
+            explorer = TopExp_Explorer(out.FindKey(face), TopAbs_EDGE)
+            while explorer.More():
+                edge = explorer.Current()
+                if neighbours.Contains(edge):
+                    for other in listed(neighbours.FindFromKey(edge)):
+                        numbers |= made.get(int(out.FindIndex(other)), set())
+                explorer.Next()
+        return self._of(numbers)
+
+
+def _invalid_faces(shape: Any) -> set[int]:
+    """Die Flächen der Form, die ``BRepCheck`` für sich allein ablehnt (Kartenzählung ab 1)."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
+
+    faces = ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+    return {
+        number
+        for number in range(1, faces.Extent() + 1)
+        if not BRepCheck_Analyzer(faces.FindKey(number)).IsValid()
+    }
+
+
+def _faces_at_free_edges(shape: Any) -> set[int]:
+    """Die Flächen an freien oder falsch orientierten Kanten — leer bei geschlossener Schale.
+
+    Dieselbe Frage wie :attr:`Solid.is_closed` (``CheckOrientedShells`` mit
+    freien Kanten); eine Form ohne Schale ist nie geschlossen und hat hier
+    keine Fläche, an der die Schuld läge — sie bekommt alle.
+    """
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.ShapeAnalysis import ShapeAnalysis_Shell
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp, TopExp_Explorer
+
+    faces = ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+    checker = ShapeAnalysis_Shell()
+    checker.LoadShells(shape)
+    if not checker.NbLoaded():
+        return set(range(1, faces.Extent() + 1))
+    checker.CheckOrientedShells(shape, True)
+    if not checker.HasFreeEdges() and not checker.HasBadEdges():
+        return set()
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    found: set[int] = set()
+    for compound in (checker.FreeEdges(), checker.BadEdges()):
+        if compound.IsNull():
             continue
-        result = try_candidate(remaining)
-        if result is not None:
-            return result, (omitted.middle,)
+        explorer = TopExp_Explorer(compound, TopAbs_EDGE)
+        while explorer.More():
+            edge = explorer.Current()
+            if neighbours.Contains(edge):
+                found.update(
+                    int(faces.FindIndex(face)) for face in listed(neighbours.FindFromKey(edge))
+                )
+            explorer.Next()
+    found.discard(0)
+    return found or set(range(1, faces.Extent() + 1))
 
-    if individually_open is None:
-        individually_open = _individually_open_fillet_edges(
-            chosen, cancelled=cancelled, build_candidate=build_candidate
-        )
 
-    if individually_open and len(individually_open) < len(chosen):
-        _check(cancelled)
-        omitted_ids = {id(entry) for entry in individually_open}
-        remaining = [entry for entry in chosen if id(entry) not in omitted_ids]
-        result = try_candidate(remaining)
-        if result is not None:
-            return result, tuple(entry.middle for entry in individually_open)
+def _solid_count(shape: Any) -> int:
+    """Wie viele Körper eine Form trägt — dieselbe Zählung wie :attr:`Solid.solid_count`."""
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp
 
-    raise first_error
+    found = ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_SOLID, found)
+    return int(found.Extent())
+
+
+def _open_faces(outcome: Solid) -> set[int]:
+    """Die Flächen, an denen die Tessellierung nicht dicht ist — gezählt wie die Form davor.
+
+    Eine Netzkante, die nicht genau zwei Dreiecke trennt, ist offen oder
+    verzweigt. Ihre Dreiecke führen über die Flächenherkunft zur Fläche des
+    Körpers und über dessen Kopierabbildung zur Fläche der Form, die der
+    Builder gebaut hat (Kartenzählung ab 1). Ganze Zahlen, keine Geometrie —
+    auf jeder Maschine dieselbe Antwort.
+    """
+    import numpy as np
+
+    from app.core.brep.kernel import face_sources
+    from app.core.geom.mesh import unique_edges
+
+    raw = outcome.mesh.raw
+    sources = face_sources(outcome.mesh)
+    _unique, inverse, counts = unique_edges(
+        np.asarray(raw.edges, dtype=np.int64), return_inverse=True, return_counts=True
+    )
+    owners = np.asarray(raw.edges_face, dtype=np.int64)[counts[inverse] != 2]
+    copied = {int(face) for face in np.unique(sources[owners])} if len(sources) else set()
+    back = {target: source for source, target in enumerate(outcome._copied_faces)}
+    return {back[face] + 1 for face in copied if face in back}
 
 
 def _build_constant_fillet(
@@ -1126,26 +1582,6 @@ def _build_constant_fillet(
         _check(cancelled)
         builder.Add(radius, entry.edge)
     return _built(solid, builder, "fillet", radius, len(chosen), cancelled=cancelled)
-
-
-def _individually_open_fillet_edges(
-    chosen: Sequence[EdgeInfo],
-    *,
-    cancelled: CancelToken | None,
-    build_candidate: Callable[[Sequence[EdgeInfo]], Solid],
-) -> list[EdgeInfo]:
-    """Findet Kanten, deren eigene exakte Rundung nicht geschlossen tesselliert."""
-    individually_open: list[EdgeInfo] = []
-    for entry in chosen:
-        _check(cancelled)
-        try:
-            single = build_candidate((entry,))
-        except GeometryError:
-            individually_open.append(entry)
-        else:
-            if not single.is_watertight:
-                individually_open.append(entry)
-    return individually_open
 
 
 def _laid_along(builder: Any, chosen: Sequence[EdgeInfo], law: RadiusLaw) -> None:
@@ -1500,30 +1936,17 @@ def _wall_not_proven() -> GeometryError:
     )
 
 
-def _edge_wall_faces(solid: Solid, edges: Sequence[EdgeInfo]) -> list[int]:
-    """Die echten Trägerflächen der gewählten Kanten, in stabiler Flächenordnung."""
-    from OCP.collections import (
-        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
-    )
-    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-    from OCP.TopExp import TopExp
-
-    neighbours = NeighbourMap()
-    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
-    wanted = ShapeMap()
-    for entry in edges:
-        if not neighbours.Contains(entry.edge):
-            raise _wall_not_proven()
-        for face in listed(neighbours.FindFromKey(entry.edge)):
-            wanted.Add(face)
-    return [index for index, face in enumerate(solid.faces()) if wanted.Contains(face)]
-
-
 def _thinnest_wall(
     solid: Solid, edges: Sequence[EdgeInfo], *, cancelled: CancelToken | None = None
 ) -> float:
-    """Die dünnste belegte Wand an den Trägerflächen dieser Kanten.
+    """Die dünnste belegte Wand an den Trägerflächen dieser Kanten (:func:`_edge_walls`)."""
+    return min(_edge_walls(solid, [entry.edge for entry in edges], cancelled=cancelled))
+
+
+def _edge_walls(
+    solid: Solid, edges: Sequence[Any], *, cancelled: CancelToken | None = None
+) -> list[float]:
+    """Je Kante die dünnste belegte Wand ihrer Trägerflächen — eine Wandkarte für alle.
 
     Eine 3-mm-Grundplatte begrenzt keine senkrechte Rundung am massiven
     Aufbau. Auch ihre Stirnflächen berühren senkrechte Kanten nur am Ende;
@@ -1537,7 +1960,17 @@ def _thinnest_wall(
     Wandprobe. Wo das Raster an einer schmalen Fläche keine liefert, misst
     derselbe Wandstrahl wie das Messwerkzeug ihre Dreiecksschwerpunkte.
     Ohne belegte Zuordnung und Wandprobe gibt es keine Freigabe.
+
+    **Je Kante**, damit eine Gruppe eine Kante an einer dünnen Wand auslassen
+    kann, statt ganz abzusagen (:func:`fillet_group`); die Karte und jede
+    Fläche werden dabei einmal gemessen.
     """
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+
     from app.core.geom.measure import wall_thickness
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.maps import wall_thickness_map
@@ -1549,8 +1982,15 @@ def _thinnest_wall(
         _check(cancelled)
         if len(measured) != solid.triangle_count:
             raise _wall_not_proven()
-        values: list[float] = []
-        for face in _edge_wall_faces(solid, edges):
+        neighbours = NeighbourMap()
+        TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+        per_face: dict[int, float] = {}
+
+        def face_wall(face: int) -> float:
+            """Die dünnste belegte Wand einer Fläche — einmal gemessen."""
+            known_wall = per_face.get(face)
+            if known_wall is not None:
+                return known_wall
             _check(cancelled)
             indices = solid.triangles_of_face(face)
             known = [
@@ -1571,16 +2011,28 @@ def _thinnest_wall(
                         known.append(value)
             if not known:
                 raise _wall_not_proven()
-            values.append(min(known))
+            per_face[face] = min(known)
+            return per_face[face]
+
+        walls: list[float] = []
+        for edge in edges:
+            if not neighbours.Contains(edge):
+                raise _wall_not_proven()
+            faces = sorted(
+                {solid.face_index(face) for face in listed(neighbours.FindFromKey(edge))}
+            )
+            if not faces or faces[0] < 0:
+                raise _wall_not_proven()
+            walls.append(min(face_wall(face) for face in faces))
     except GeometryError, OperationCancelled:
         raise
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # ohne Messung ist der native Aufruf nicht sicher
         raise _wall_not_proven() from problem
-    if not values:
+    if not walls:
         raise _wall_not_proven()
-    return min(values)
+    return walls
 
 
 def _fits_the_wall(
@@ -2882,6 +3334,46 @@ def transformed(solid: Solid, matrix: Transform, *, cancelled: CancelToken | Non
     return transformed_with_faces(solid, matrix, cancelled=cancelled)[0]
 
 
+#: Bis wohin eine Matrix als Rundungsrauschen einer Ähnlichkeit gilt, relativ
+#: zum Quadrat ihres Maßstabs. Eine Drehung aus mehreren Schritten trägt mehr
+#: als die 64 eps einer einzelnen; eine gewollte Scherung dieser Größe
+#: verschöbe an einem Meter einen Mikrometer.
+_SIMILARITY_NOISE: Final = 1e-9
+
+
+def _nearest_similarity(linear: Any, scale: float, *, mirrored: bool) -> Any:
+    """Die Ähnlichkeit, deren Rauschen ``linear`` ist — Gram-Schmidt in Grundrechenarten.
+
+    Ohne Zerlegung über LAPACK, damit die Lage auf jeder Plattform dieselbe
+    bleibt (RM-187). Ein Maßstab, der nur im Rauschen von eins abweicht, ist
+    eins: sonst baute OCCT die Flächen neu, statt die Form nur zu legen.
+    """
+    import numpy as np
+
+    def unit(vector: tuple[float, float, float]) -> tuple[float, float, float]:
+        length = math.hypot(*vector)
+        return (vector[0] / length, vector[1] / length, vector[2] / length)
+
+    first = unit((float(linear[0, 0]), float(linear[1, 0]), float(linear[2, 0])))
+    column = (float(linear[0, 1]), float(linear[1, 1]), float(linear[2, 1]))
+    along = first[0] * column[0] + first[1] * column[1] + first[2] * column[2]
+    second = unit(
+        (column[0] - along * first[0], column[1] - along * first[1], column[2] - along * first[2])
+    )
+    sign = -1.0 if mirrored else 1.0
+    third = (
+        sign * (first[1] * second[2] - first[2] * second[1]),
+        sign * (first[2] * second[0] - first[0] * second[2]),
+        sign * (first[0] * second[1] - first[1] * second[0]),
+    )
+    if abs(scale - 1.0) <= _SIMILARITY_NOISE:
+        scale = 1.0
+    return np.array(
+        [[scale * first[row], scale * second[row], scale * third[row]] for row in range(3)],
+        dtype=np.float64,
+    )
+
+
 def _invalid_transform(*, result: bool = False) -> GeometryError:
     """Nennt ungültige Eingaben und nicht belegbare native Ergebnisse getrennt."""
     return GeometryError(
@@ -2945,17 +3437,27 @@ def transformed_with_faces(
     if np.allclose(values, np.eye(4), atol=roundoff, rtol=0.0):
         return solid, tuple(range(len(solid._copied_faces)))
     try:
-        if (
-            solid.solid_count < 1
-            or not solid.is_closed
-            or not BRepCheck_Analyzer(solid.shape).IsValid()
-        ):
-            raise _invalid_transform(result=True)
         gram = linear.T @ linear
         squared_scale = float(np.trace(gram) / 3.0)
-        similarity = bool(
-            np.allclose(gram, np.eye(3) * squared_scale, atol=roundoff * squared_scale, rtol=0.0)
-        )
+        deviation = float(np.abs(gram - np.eye(3) * squared_scale).max())
+        similarity = bool(deviation <= roundoff * squared_scale)
+        if not similarity and deviation <= _SIMILARITY_NOISE * squared_scale:
+            # Rauschen einer Drehung, keine Scherung: auf die Ähnlichkeit
+            # legen, sonst nähme sie den Weg über GTransform und wäre keine
+            # starre Bewegung mehr (RM-407, 175,7° an carpet-corner-clip.step).
+            values = values.copy()
+            values[:3, :3] = linear = _nearest_similarity(
+                linear, math.sqrt(squared_scale), mirrored=determinant < 0.0
+            )
+            determinant = float(np.linalg.det(linear))
+            similarity = True
+        rigid = similarity and math.isclose(determinant, 1.0, rel_tol=roundoff, abs_tol=0.0)
+        # Ein Flächenmodell ohne geschlossenes Volumen ist kein Grund, es nicht
+        # zu bewegen (RM-407, ``surfaces.step``): Die starre Bewegung belegt
+        # sich über die Partnerschaft und erbt die Gültigkeit ihrer Eingabe.
+        closed = solid.solid_count >= 1 and solid.is_closed
+        if not rigid and not BRepCheck_Analyzer(solid.shape).IsValid():
+            raise _invalid_transform(result=True)
         builder: Any
         # Wessen Form der Builder bekommt, und welche Fläche dieser Form zu
         # welcher Fläche des Eingangs gehört: ohne Kopie dieselbe Nummer, mit
@@ -2994,24 +3496,26 @@ def transformed_with_faces(
         # allgemeine affine Abbildung bauen die Flächen neu — eine Lage trägt
         # keinen Maßstab —, und dort belegt das Integral gegen die Determinante
         # weiterhin, dass nichts verloren ging.
-        rigid = similarity and math.isclose(determinant, 1.0, rel_tol=roundoff, abs_tol=0.0)
         if rigid and not shape.IsPartner(solid.shape):
             raise _invalid_transform(result=True)
-        if not BRepCheck_Analyzer(shape).IsValid():
+        if not rigid and not BRepCheck_Analyzer(shape).IsValid():
             raise _invalid_transform(result=True)
         result = owner.replacing(shape, history=builder, cancelled=cancelled)
-        if result.solid_count != solid.solid_count or not result.is_closed:
+        if result.solid_count != solid.solid_count or result.is_closed != solid.is_closed:
             raise _invalid_transform(result=True)
-        if not rigid:
-            expected_volume = solid._properties("volume", cancelled=cancelled).mass * abs(
-                determinant
-            )
+        # Ohne Volumen belegt die Fläche den Maßstab; eine allgemeine affine
+        # Abbildung eines Flächenmodells hat keinen festen Flächenfaktor, dort
+        # tragen Gültigkeit und die vollständige Flächenzuordnung unten.
+        measure = "volume" if closed else "surface" if similarity else None
+        if not rigid and measure is not None:
+            factor = abs(determinant) if closed else squared_scale
+            expected = solid._properties(measure, cancelled=cancelled).mass * factor
             if (
-                expected_volume <= 0.0
-                or not math.isfinite(expected_volume)
+                expected <= 0.0
+                or not math.isfinite(expected)
                 or not math.isclose(
-                    result._properties("volume", cancelled=cancelled).mass,
-                    expected_volume,
+                    result._properties(measure, cancelled=cancelled).mass,
+                    expected,
                     rel_tol=2.0 * INTEGRAL_RELATIVE_ERROR,
                     abs_tol=0.0,
                 )

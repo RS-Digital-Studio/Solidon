@@ -82,8 +82,15 @@ def wait_for_export(window: MainWindow) -> None:
     RM-140): Der erste Lauf endet an der Prüfung, wenn sie etwas findet; die
     Antwort darauf startet den zweiten. Wo nichts gefragt wird, ist die zweite
     Runde ein ``processEvents`` ohne Arbeiter und kostet nichts.
+
+    **Vor jeder Runde die feine Rechnung** (RM-426): Das Fenster rechnet im
+    Entwurf, und der Export bestellt erst die feine Rechnung und schreibt,
+    wenn sie da ist (``_export_when_current``). Ohne dieses Warten gab es noch
+    keinen Arbeiter, und die Datei fehlte.
     """
     for _ in range(2):
+        window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
         worker = window._export_worker
         if worker is not None:
             worker.wait(20_000)

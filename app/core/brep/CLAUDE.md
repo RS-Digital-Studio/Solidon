@@ -14,7 +14,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 | `kernel.py` | `Solid` und sein Weg ins Netz, `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface` |
 | `profiles.py` | Vom Skizzenumriss zum Körper (§30.1): Gewinde, Formschräge, Bahn, Übergang, Querschnitte für Profilklemmen und Dichtnuten (`face_of`, `offset_face`, `face_boolean`, `prism`), `round_cord`, `shell_open_at`, `top_faces_of` |
 | `ops.py` | Die Operationen (§25, §10): `mesh_to_exact`, `brep_to_mesh`, `thread_exact`, `create_brep_box` …; `drill_brep_hole`, `shell_exact` versteckt, `prepare_ops.drill_hole` und `hollow_object` rufen sie |
-| `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet_group` erkennt nach einem offenen Gruppenergebnis einzeln offene Kanten und lässt sie gemeinsam aus, bevor einzelne Auslassungen versucht werden; jeder Kandidat entsteht auf frischer Form und nur ein geschlossenes Ergebnis wird übernommen; `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
+| `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet_group` rundet eine belegte Gruppe und lässt je Kontur aus, was OpenCASCADE nicht baut (`GroupFillet`, Suche `_GroupSearch`, Kandidat `_group_candidate`, Ortung `_RoundsOf`); `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
 | `features.py` | Merkmale aus der Topologie (§21), `features_of`; „durchgehend?" erst nach dem Gewinde (`_ThroughQuestion`) |
 | `canonical.py` | Geprüfte Träger mit wirklichen Grenzen (`surface_sample`, `horizontal_area`); Kegel bis in die Spitze (`_apart_from_the_apex`), gespiegelte Ebene über die Pole (`_pole_plane`) |
 | `thread.py` | Gewinde an importierter Geometrie (§21.1) |
@@ -64,9 +64,11 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Flächen- und Filamenthistorie.
 - **`transformed_with_faces`** bleibt bei Maßstab, Spiegelung, Scherung exakt
   (`gp_GTrsf`; `gp_Trsf.SetValues` orthogonalisiert); Matrix endlich, affin,
-  umkehrbar; Körperzahl, Geschlossenheit, Gültigkeit halten. Starr belegt
-  `IsPartner`, kein Integral, sonst das skalierte Volumen; eine Identität baut
-  nichts.
+  umkehrbar; Körperzahl, Geschlossenheit, Gültigkeit halten. Rauschen bis
+  `_SIMILARITY_NOISE` legt `_nearest_similarity` auf die Ähnlichkeit. Starr
+  belegt `IsPartner`, kein Integral und keine Gültigkeitsprüfung, auch an
+  offenen Hüllen; sonst das skalierte Volumen, ohne Volumen die Fläche; eine
+  Identität baut nichts.
 - **Was ein Körper über seine Flächen weiß, weiß er einmal** (`Solid.surface`,
   `face_properties`, `face_index`); Kopie und neue Qualität beginnen kalt.
   Grenzen aus `AddOptimal`, kein nativer Aufruf je Frame — ein Cache ersetzt
@@ -171,22 +173,20 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   (`checked_edge_indices`, `_edges_for`) geht vor `keys`, ohne Rückfall; die
   Auswertung bindet über `native_edge_indices`, nie über `edges_of`.
   `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge.
-- **`native_edges_of_chains` belegt ganze Kurven**: Netzknoten und
-  Dreiecksnachbarn führen über `face_sources` zu genau zwei nativen Flächen.
-  Mehrere gemeinsame Kanten entscheidet ihr tatsächlicher Sehnenverlauf;
-  projizierte Intervalle belegen dessen vollständige Abdeckung in beiden
-  Richtungen. Die Schweißgrenze verbindet Intervalle, ersetzt aber keines.
-  Entfällt ein Zug, wird die Abdeckung bis zum Fixpunkt neu geprüft.
-  Eine leere Bindung heißt unbekannt, auch bei einem Knick innerhalb einer
-  C0-Fläche; sie bedeutet weder alle Kanten noch glatt. Abbruch reist mit.
-- **`fillet_group`** wird nur für eine von `geom.edge_ops` automatisch
-  belegte Gruppe konstanter Radien aufgerufen. Es misst die Wand einmal,
-  baut zuerst alle verbleibenden Kanten. Bei einem offenen Gruppenergebnis
-  prüft es zuerst jede Kante einzeln und versucht, alle einzeln offenen Kanten
-  gemeinsam auszulassen; danach versucht es jede Einzelauslassung. Nur ein gültiger,
-  geschlossener Körper mit gleicher Körperzahl wird ausgegeben; zusätzliche
-  Auslassungen gehen mit ihrer Stelle an den Op-Befund. Eine ausdrücklich
-  gewählte Kante und ein veränderlicher Radius bleiben beim strikten `fillet`.
+- **`native_edges_of_segments` belegt je Strecke** (`native_edges_of_chains`
+  fasst je Zug zusammen): Netzknoten und Dreiecksnachbarn führen über
+  `face_sources` zu genau zwei nativen Flächen; mehrere gemeinsame Kanten
+  entscheidet der Sehnenverlauf, projizierte Intervalle belegen die
+  vollständige Abdeckung je native Kante. `None` heißt unbekannt, auch bei
+  einem Knick innerhalb einer C0-Fläche. Abbruch reist mit.
+- **`fillet_group`** nimmt eine von `geom.edge_ops` belegte Gruppe konstanter
+  Radien und gibt `GroupFillet` zurück (Körper, ausgelassene und zu dünn
+  getragene Kanten, dünnste Wand). Konturen liest `_RoundsOf` aus dem Builder;
+  `_edge_walls` misst die Wand je Kontur einmal; `_GroupSearch` baut jede
+  Kombination höchstens einmal auf frischer Form (`_group_candidate`, Prüfungen
+  wie `_built`, Volumen zuletzt) und meldet Fortschritt. Reihenfolge und
+  Grenzen: `operationen.md`. Eine ausdrücklich gewählte Kante und ein
+  veränderlicher Radius bleiben beim strikten `fillet`.
 - **Verrunden mit Verlauf** (`fillet(law=)`): `SetLaw` setzt den Builder
   zurück, `Add(R1, R2, E)` ist nicht linear — eine Tabelle je Kante.
 - **Eine Rundung wegnehmen heißt, ihre Fläche zu streichen** (`unround`,

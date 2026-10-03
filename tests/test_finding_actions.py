@@ -356,6 +356,9 @@ def test_every_handler_that_reads_the_body_of_a_finding_is_listed() -> None:
         # das gilt ohne den Körper; ohne Schritt nimmt es ``actions_for_document``
         # schon heraus (``repair_is_available`` mit dem Schritt des Befunds).
         "remesh_and_retry",
+        # Setzt die Umwandlung vor den Schritt des Befunds, solange er im
+        # Verlauf steht — wie das Verfeinern, ohne den Körper zu lesen.
+        "mesh_and_retry",
     }
     tree = ast.parse(Path(main_window.__file__).read_text(encoding="utf-8"))
     window = next(

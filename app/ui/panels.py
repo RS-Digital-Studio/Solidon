@@ -94,6 +94,7 @@ from app.core.errors import (
     DECIMATE_MESH,
     EXPORT_AS_MESH,
     GIVE_THICKNESS,
+    MESH_AND_RETRY,
     ORIENT_FOR_PRINT,
     PLACE_ON_BED,
     RECOGNIZE_FULLY,
@@ -894,6 +895,16 @@ def actions_for_document(
         # einem, der durchlief und nur zu viel Volumen kostete
         # (``mesh.smooth_shrank``), wie die Reparatur vor einem gerundeten.
         offered = [action for action in offered if action.id != REMESH_AND_RETRY.id]
+    if finding.op_id is None or not repair_is_available(
+        document,
+        stopped_at=finding.op_id,
+        op_id=finding.op_id,
+        object_id=None,
+    ):
+        # *Flächenbearbeitung beenden und erneut versuchen* setzt die Umwandlung
+        # vor den Schritt des Befunds — nur, solange er im Verlauf steht und
+        # vorhandene Körper liest, dieselbe Schranke wie die Reparatur davor.
+        offered = [action for action in offered if action.id != MESH_AND_RETRY.id]
     target = _object_for_finding(finding, document)
     if target is not None and live_objects is not None and target not in live_objects:
         # Der Körper des Befunds ist verbraucht (RM-268): Jede Handlung, die
@@ -4794,6 +4805,19 @@ class HistoryPanel(QWidget):
             self._open_groups.add(group)
         self._reflow_groups()
 
+    def open_group(self, transaction_id: str) -> None:
+        """Die Teilschritte dieser Transaktion offen zeigen — auch nach dem Neuaufbau.
+
+        Für eine Handlung, deren Schritte der Kunde gleich sehen soll: Nach
+        einer Erzeugung stand nur die zugeklappte Zeile „Modell erzeugen“ da,
+        und was aus dem Netz wurde (Größe, Reparatur, aufs Bett), sah erst, wer
+        aufklappte — in 0.5.1 standen die ersten Schritte offen (RM-456).
+        """
+        if transaction_id in self._open_groups:
+            return
+        self._open_groups.add(transaction_id)
+        self._reflow_groups()
+
     def _reflow_groups(self) -> None:
         """Zeichen und Sichtbarkeit an den gemerkten Zustand angleichen.
 
@@ -5834,8 +5858,19 @@ class ReportPanel(QWidget):
             # der erste davon wäre keine Zusammenfassung, sondern eine
             # zufällige Behauptung.
             location = members[0].location
+            outline = members[0].outline
             if any(one.location != location for one in members[1:]):
-                location = None
+                # **Verschiedene Stellen eines Körpers bleiben auffindbar**, wenn
+                # jedes Mitglied seinen Umriss trägt: *Stelle zeigen* fliegt zur
+                # ersten und umrandet alle. Ohne Umriss wäre der erste Ort eine
+                # zufällige Behauptung; die Zeile trägt dann keinen (RM-412).
+                if len(bodies) <= 1 and all(
+                    one.location is not None and one.outline for one in members
+                ):
+                    outline = tuple(segment for one in members for segment in one.outline)
+                else:
+                    location = None
+                    outline = ()
             feature_ids = members[0].feature_ids
             if any(one.feature_ids != feature_ids for one in members[1:]):
                 feature_ids = ()
@@ -5861,6 +5896,7 @@ class ReportPanel(QWidget):
                 feature_ids=feature_ids,
                 values=values,
                 location=location,
+                outline=outline,
                 # Verschiedene Vorschläge trennen schon den Gruppenschlüssel:
                 # Eine verdichtete Fehlerzeile darf nie ihren Ausweg verlieren.
                 suggestions=members[0].suggestions,

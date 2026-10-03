@@ -23,7 +23,8 @@ Ruhe (§29).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from app.i18n import TranslatableText, _
@@ -1012,7 +1013,32 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 }
 
 
-def takes(flavour: SlicerFlavour, path: str) -> bool:
+#: Was ein **Programm** seiner Familie nicht kennt — Schlüssel der
+#: Programmmarke (``discover.program_mark``). Gleiche Familie heißt nicht
+#: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
+#: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
+#: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
+NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"shell.scarf_seam"}),
+}
+
+#: Schlüssel, die ein Programm nur als alten Namen kennt, mit den heutigen —
+#: die Konsole übersetzt sie, der 3MF-Leser von SuperSlicer nicht (RM-459).
+#: ``external_fill_pattern`` steht in SuperSlicers eigenem Prusa-Bündel.
+PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
+    "superslicer": {"external_fill_pattern": ("top_fill_pattern", "bottom_fill_pattern")},
+}
+
+
+def program_of(executable: str | Path) -> str:
+    """Die Programmmarke eines Slicers — ``""``, wenn keiner bekannt ist."""
+    from app.core import discover
+
+    name = Path(executable).name
+    return discover.program_mark(name) if name else ""
+
+
+def takes(flavour: SlicerFlavour, path: str, program: str = "") -> bool:
     """Nimmt dieser Slicer diese Einstellung überhaupt entgegen (§29)?
 
     Ein Feld, an dem man dreht, ohne dass etwas geschieht, ist eine Attrappe —
@@ -1021,12 +1047,34 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
     einem Regler ziehen zu lassen, der bei seinem Slicer nichts tut.
 
     Die Antwort steht in :data:`NOT_TAKEN_BY` und ist gemessen; warum sie
-    nicht aus den Tabellen kommen kann, steht dort. Ein Programm ohne Familie
-    nimmt nichts entgegen — es bekommt die Datei und keinen Wert.
+    nicht aus den Tabellen kommen kann, steht dort. ``program`` ist die Marke
+    des Programms (:func:`program_of`); was es seiner Familie nicht kennt,
+    steht in :data:`NOT_TAKEN_BY_PROGRAM`. Ein Programm ohne Familie nimmt
+    nichts entgegen — es bekommt die Datei und keinen Wert.
     """
     if flavour == "other":
         return False
-    return path not in NOT_TAKEN_BY[flavour]
+    return path not in NOT_TAKEN_BY[flavour] | NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+
+
+def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str) -> dict[str, str]:
+    """Die Schlüssel, die dieses Programm lesen kann (RM-459).
+
+    Was es nicht kennt (:data:`NOT_TAKEN_BY_PROGRAM`), fällt heraus; ein alter
+    Name (:data:`PROGRAM_ALIASES`) wird zu den heutigen, wo diese nicht schon
+    stehen. Ein Abkömmling stürzt an einem fremden Schlüssel ab, statt ihn zu
+    übergehen — die Beilage einer Schrägnaht genügte bei SuperSlicer.
+    """
+    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+    unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
+    kept = {key: value for key, value in values.items() if key not in unknown}
+    for old, new in PROGRAM_ALIASES.get(program, {}).items():
+        if old not in kept:
+            continue
+        value = kept.pop(old)
+        for key in new:
+            kept.setdefault(key, value)
+    return kept
 
 
 def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:

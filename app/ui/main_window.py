@@ -1154,7 +1154,15 @@ _PROGRESS_PRIORITY: Final = (
     "agent",
     "preview",
     "evaluation",
+    # Zuletzt: Die Erzeugung läuft Minuten im Hintergrund, und was der Kunde
+    # währenddessen selbst anstößt, zeigt seinen eigenen Balken davor (RM-371).
+    "generate",
 )
+
+#: Wer nur im Hintergrund läuft, stellt keinen Wartezeiger auf — die
+#: Oberfläche bleibt minutenlang bedienbar, und der Zeiger gilt dem, worauf
+#: der Kunde gerade wartet (§2.8).
+_BACKGROUND_PROGRESS: Final = frozenset({"generate"})
 
 
 class _ExportWorker(Worker):
@@ -2289,6 +2297,12 @@ class MainWindow(QMainWindow):
         das Worker-Feld: ``done``/``failed`` kommen vor ``finished``, und das
         Feld hält den Arbeiter absichtlich länger (GC-Falle). Der Balken
         richtet sich nach dem Zustand, nicht nach der Lebensdauer."""
+        self._generator: GenerateDialog | None = None
+        """Der offene Erzeugen-Dialog (Weg 3) — nichtmodal, einer zur Zeit (RM-371)."""
+        self._generator_project: int | None = None
+        """Der Projektstempel, unter dem der Dialog aufging oder sein Wurf begann."""
+        self._generation_timing = ProgressTiming(self)
+        self._generation_timing.changed.connect(self._refresh_generation_progress)
         self._gcode_worker: Any = None
         self._gcode_path: Path | None = None
         """Die laufende G-Code-Gegenprobe und ihre ausgewählte Datei (§2.8)."""
@@ -3612,6 +3626,22 @@ class MainWindow(QMainWindow):
                 True,
                 False,
             ),
+            # Weg 3 (RM-371): Der Generator rechnet Minuten, und das Fenster
+            # bleibt dabei bedienbar — Balken und *Abbrechen* sofort, denn
+            # kürzer als zwei Sekunden ist keine Erzeugung.
+            "generate": _ProgressState(
+                False,
+                tr("Modell wird erzeugt …"),
+                0,
+                0,
+                0,
+                tr("Modell erzeugen"),
+                tr("Modell wird erzeugt …"),
+                tr("Bricht die Erzeugung ab. Fertige Versuche bleiben zur Wahl."),
+                True,
+                True,
+                True,
+            ),
         }
         self._progress_owner: str | None = None
 
@@ -3733,6 +3763,18 @@ class MainWindow(QMainWindow):
             None,
         )
 
+    def _foreground_owner(self) -> str | None:
+        """Der erste aktive Besitzer, auf den der Kunde wartet — ohne Hintergrund."""
+
+        return next(
+            (
+                owner
+                for owner in _PROGRESS_PRIORITY
+                if owner not in _BACKGROUND_PROGRESS and self._progress_states[owner].active
+            ),
+            None,
+        )
+
     def _visible_progress_owner(self, *, split_released: bool) -> str | None:
         """Wählt einen Besitzer, dessen eigene Sichtbarkeitsschwelle erreicht ist."""
 
@@ -3807,6 +3849,7 @@ class MainWindow(QMainWindow):
             "split": self.session.cancel_split,
             "export": self._cancel_export,
             "map": self._cancel_analysis,
+            "generate": self._cancel_generation,
         }
         handler = handlers.get(owner)
         if handler is not None:
@@ -5945,6 +5988,8 @@ class MainWindow(QMainWindow):
         self.session.sceneChanged.connect(self._on_scene)
         self.session.pictureChanged.connect(self._on_picture)
         self.session.projectChanged.connect(self._on_project)
+        # Ein Projektwechsel während einer Erzeugung steht über *Übernehmen* (RM-371).
+        self.session.projectChanged.connect(self._say_generation_destination)
         self.session.progressChanged.connect(self._on_progress)
         self.session.busyChanged.connect(self._on_busy)
         self.session.askRequested.connect(self._on_ask)
@@ -5976,6 +6021,7 @@ class MainWindow(QMainWindow):
         self.session.importFinished.connect(self._on_import_finished)
         self.session.importRejected.connect(self._on_import_rejected)
         self.session.importConfirmed.connect(self._on_import_confirmed)
+        self.session.modelPlaced.connect(self._on_model_placed)
         #: Die eingelesene Datei, bis ihre Auswertung zeigt, dass sie ein
         #: Modell enthält — erst dann kommt sie nach „Zuletzt geöffnet“ (KUNDE-12).
         self._recent_candidate: Path | None = None
@@ -6611,7 +6657,7 @@ class MainWindow(QMainWindow):
         loswerden, und keiner darf dabei den laufenden Auswertungsbalken
         ausknipsen.
         """
-        if self._active_progress_owner() is None and not self._anything_running():
+        if self._foreground_owner() is None and not self._anything_running():
             # Mit dem Balken gehen die Zeitgeber und der Zeiger: Ein Arbeiter,
             # der den Balken selbst anschaltet, hat die Stufung übersprungen,
             # und ein Wartezeiger ohne laufende Rechnung sieht aus wie ein
@@ -6648,6 +6694,18 @@ class MainWindow(QMainWindow):
                 partial(self._generate, image),
             )
             return
+        # **Nichtmodal, und einer zur Zeit** (RM-371, §2.8). Der Dialog lief
+        # mit ``exec()``, und solange der Generator rechnete — vierzig Sekunden
+        # bis viele Minuten —, ging im Fenster nichts. Jetzt rechnet der Wurf
+        # im Arbeiter, die Statusleiste zeigt ihn, und das Fenster bleibt
+        # bedienbar. Ein zweiter Aufruf holt denselben Dialog nach vorn: Zwei
+        # Läufe auf derselben Grafikkarte wären doppelte Wartezeit.
+        dialog = self._generator
+        if dialog is not None:
+            if image is not None:
+                dialog.set_image(image)
+            self._show_generator(dialog, activate=True)
+            return
         # Der Aufbau fragt einmal, ob ein Generator läuft, und das ist ein
         # Socket mit Zeitlimit — gemessen eine halbe Sekunde. Damit gehört er
         # in die mittlere Zeile der Wartezeit-Tabelle (§2.8).
@@ -6665,16 +6723,179 @@ class MainWindow(QMainWindow):
         # die Einrichtung: über die Liste der Programme wären es drei Klicks für
         # etwas, das der Dialog schon weiß.
         dialog.nodesRequested.connect(lambda: self._offer_generator_nodes(dialog))
+        dialog.runStarted.connect(self._generation_started)
+        dialog.runStepped.connect(self._generation_stepped)
+        dialog.runEnded.connect(self._generation_ended)
+        dialog.runStopping.connect(self._generation_stopping)
+        dialog.finished.connect(self._generator_closed)
+        self._generator = dialog
+        self._generator_project = self.session._project_generation
         if image is not None:
             dialog.set_image(image)
-        try:
-            dialog.exec()
-        finally:
-            # Die zwei Lambdas darüber fangen das Fenster, und der Dialog ist
-            # sein Kind — ohne Freigeben überlebt beides den Aufruf
-            # (dieselbe Stelle wie in :meth:`_exec_catalog`).
-            dialog.take = None
-            dialog.deleteLater()
+        self._show_generator(dialog, activate=True)
+
+    def _show_generator(self, dialog: GenerateDialog, *, activate: bool) -> None:
+        """Den Erzeugen-Dialog zeigen — gerufen aktiviert, von selbst ohne Fokus.
+
+        Kommt er nach dem Lauf von selbst wieder, nimmt er dem Kunden keine
+        Tastatur weg: Wer gerade einen Wert tippt, tippt ihn zu Ende, und der
+        Dialog steht obenauf daneben.
+        """
+        self._say_generation_destination()
+        dialog.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, not activate)
+        dialog.show()
+        dialog.raise_()
+        if activate:
+            dialog.activateWindow()
+
+    def _say_generation_destination(self) -> None:
+        """Über *Übernehmen* nennen, wohin das Modell kommt, wenn sich das geändert hat.
+
+        Während der Wurf rechnet, bleibt das Fenster bedienbar — auch für ein
+        anderes Projekt oder den Startbildschirm. Übernommen wird in das, was
+        dann offen ist, als ein Schritt mit Strg+Z; vorher steht es da.
+        """
+        dialog = self._generator
+        if dialog is None:
+            return
+        if self.stack.currentWidget() is self.start_screen:
+            text = tr("„Übernehmen“ beginnt mit dem Modell ein neues Projekt.")
+        elif self._generator_project not in (None, self.session._project_generation):
+            name = self.session.document_name
+            text = (
+                tr(
+                    "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell "
+                    "in „{name}“.",
+                    name=name,
+                )
+                if name
+                else tr(
+                    "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell "
+                    "in dieses Projekt."
+                )
+            )
+        else:
+            text = ""
+        dialog.set_destination(text)
+
+    def _generation_started(self) -> None:
+        """Der Wurf läuft: Der Dialog tritt zur Seite, die Statusleiste übernimmt."""
+        dialog = self._generator
+        if dialog is None or self.sender() is not dialog:
+            return
+        self._generator_project = self.session._project_generation
+        self._generation_timing.end()
+        self._set_progress_state(
+            "generate",
+            active=True,
+            text=tr("Modell wird erzeugt …"),
+            minimum=0,
+            maximum=0,
+            value=0,
+            accessible_description=tr("Modell wird erzeugt …"),
+            cancel_enabled=True,
+        )
+        self._generation_timing.begin()
+        dialog.hide()
+        self.announce(
+            tr(
+                "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen "
+                "stehen unten in der Statusleiste."
+            )
+        )
+
+    def _generation_stepped(self, fraction: float, text: str) -> None:
+        if self._generator is None or self.sender() is not self._generator:
+            return
+        self._generation_timing.step(fraction, text)
+
+    def _refresh_generation_progress(self) -> None:
+        """Fortschritt, Satz und verstrichene Zeit der Erzeugung, sekündlich (§2.8)."""
+        timing = self._generation_timing
+        if timing.started is None or not self._progress_states["generate"].active:
+            return
+        known = timing.fraction > 0.0
+        parts = [timing.detail or tr("Modell wird erzeugt …")]
+        if known:
+            parts.append(f"{round(timing.fraction * 100)} %")
+        parts.append(timing.time_text)
+        display = "  ·  ".join(part for part in parts if part)
+        self._set_progress_state(
+            "generate",
+            text=display,
+            minimum=0,
+            maximum=100 if known else 0,
+            value=int(timing.fraction * 100) if known else 0,
+            accessible_description=display,
+        )
+
+    def _cancel_generation(self) -> None:
+        """*Abbrechen* in der Statusleiste gilt dem laufenden Wurf (§2.8, §15.6)."""
+        dialog = self._generator
+        if dialog is not None:
+            dialog.cancel_run()
+
+    def _generation_stopping(self) -> None:
+        """Der Wurf läuft aus — aus der Statusleiste oder aus dem Dialog abgebrochen."""
+        if self._generator is None or self.sender() is not self._generator:
+            return
+        stopping = tr("Wird abgebrochen — der laufende Schritt läuft aus.")
+        self._generation_timing.end()
+        self._set_progress_state(
+            "generate",
+            text=stopping,
+            accessible_description=stopping,
+            cancel_enabled=False,
+        )
+
+    def _end_generation_progress(self) -> None:
+        self._generation_timing.end()
+        if self._progress_states["generate"].active:
+            self._set_progress_state("generate", active=False)
+            self._progress_idle()
+
+    def _generation_ended(self, outcome: str) -> None:
+        """Der Wurf ist zu Ende: Der Dialog kommt mit Ergebnis oder Auskunft wieder.
+
+        Abgebrochen ohne fertigen Versuch gibt es nichts zu zeigen — dann geht
+        er zu, und die Statuszeile sagt es.
+        """
+        dialog = self._generator
+        if dialog is None or self.sender() is not dialog:
+            return
+        self._end_generation_progress()
+        if getattr(self, "_close_requested", False):
+            # Das Fenster geht zu und hat den Wurf dafür angehalten.
+            dialog.reject()
+            return
+        if outcome == "cancelled" and not dialog.tries:
+            self.announce(tr("Die Erzeugung wurde abgebrochen."))
+            dialog.reject()
+            return
+        if outcome == "done":
+            self.announce(tr("Das Modell ist fertig — „Übernehmen“ legt es ins Projekt."))
+        elif outcome == "failed":
+            self.announce(
+                tr("Die Erzeugung ist nicht gelungen. Warum und was hilft, steht im Dialog.")
+            )
+        else:
+            self.announce(tr("Die Erzeugung wurde abgebrochen. Die fertigen Versuche bleiben."))
+        self._show_generator(dialog, activate=False)
+
+    def _generator_closed(self, _result: int) -> None:
+        """Der Dialog ist zu — übernommen, abgebrochen oder geschlossen."""
+        dialog = self.sender()
+        if not isinstance(dialog, GenerateDialog):
+            return
+        if dialog is self._generator:
+            self._generator = None
+            self._generator_project = None
+            self._end_generation_progress()
+        # Die zwei Lambdas aus :meth:`_generate` fangen das Fenster, und der
+        # Dialog ist sein Kind — ohne Freigeben überlebt beides seinen Abschluss
+        # (dieselbe Stelle wie in :meth:`_exec_catalog`).
+        dialog.take = None
+        dialog.deleteLater()
 
     def _generation_refusal(self) -> AppError | None:
         """Warum gerade kein erzeugtes Modell ins Projekt käme — oder ``None``.
@@ -6698,7 +6919,16 @@ class MainWindow(QMainWindow):
         Vorschlag über dem Dialog (Regel 17), und der Dialog bleibt mit allen
         Versuchen offen, bis der Weg gegangen ist. An der Einfügemarke führt
         *Einfügen beenden und übernehmen* in einem Klick hinein.
+
+        **Übernommen wird in das Projekt, das jetzt offen ist** (RM-371): Der
+        Dialog ist nichtmodal, und während des Laufs kann der Kunde ein anderes
+        Projekt öffnen oder zum Startbildschirm gehen. Der Dialog nennt das
+        vorher (:meth:`_say_generation_destination`); vom Startbildschirm aus
+        beginnt das Modell ein neues Projekt wie jeder andere Anfang dort —
+        wer sein geändertes Projekt behält, behält auch die Versuche.
         """
+        if not self._begin_from_the_start_screen():
+            return False
         try:
             self.session.add_generated(mesh)
         except AppError as error:
@@ -6711,6 +6941,12 @@ class MainWindow(QMainWindow):
                 error, dialog, tr("Einfügen beenden und übernehmen"), take_again
             )
             return any(taken)
+        # Was aus dem Netz wurde — Größe, Reparatur, aufs Bett — steht offen
+        # da, nicht hinter einer zugeklappten Zeile (RM-456).
+        self.history_panel.open_group(self.session.project.document.transactions[-1].id)
+        # Die Ansage „fertig — Übernehmen …“ von :meth:`_generation_ended` gilt
+        # nicht mehr; stehen bliebe sie über dem schon übernommenen Modell.
+        self.announce(tr("Das erzeugte Modell liegt im Projekt. Strg+Z nimmt es zurück."))
         return True
 
     def _say_generation_refusal(
@@ -15311,8 +15547,8 @@ class MainWindow(QMainWindow):
     def _on_viewport_context_menu(self, x: int, y: int) -> None:
         """Zeigt am Zeiger dasselbe Menü, das der Objektbaum anbietet (§18.5).
 
-        Gebaut wird es dort, weil es dort schon steht: dieselbe Sichtbarkeit,
-        dieselben Operationen aus ``applies_to``. Zwei Menüs mit derselben
+        Gebaut wird es dort, weil es dort schon steht; Operationen stehen
+        im Auswahlfenster, nicht im Menü. Zwei Menüs mit derselben
         Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
 
         Die Ansicht meldet Gerätepixel, das Menü braucht Logikpunkte — die
@@ -17113,16 +17349,12 @@ class MainWindow(QMainWindow):
             refused = refused_feature_field(editors)
             if refused is not None:
                 refusal, focus_target = refused
-                refusal_state["reason"] = refusal
-                host.block_apply(refusal)
+                host.refuse_fields(refusal)
                 if interpret:
                     focus_target.setFocus()
                     window.announce(refusal)
                 return False
-            previous_refusal = refusal_state["reason"]
-            if previous_refusal is not None and host.blocked_reason == previous_refusal:
-                host.block_apply(None)
-            refusal_state["reason"] = None
+            host.refuse_fields(None)
             if interpret:
                 for editor in editors.values():
                     spins = (
@@ -17268,7 +17500,6 @@ class MainWindow(QMainWindow):
         # Felder bindet, löst er deshalb bei der Rückgabe selbst — sonst
         # läse ein alter ``read_fields`` in den Träger eines alten Flusses.
         bound: list[QMetaObject.Connection] = []
-        refusal_state: dict[str, str | None] = {"reason": None}
         for editor in editors.values():
             if isinstance(editor, QCheckBox):
                 bound.append(editor.toggled.connect(read_fields))
@@ -20738,15 +20969,22 @@ class MainWindow(QMainWindow):
         else:
             self.status_message.setText(self._announcement)
 
+    def _on_model_placed(self, body: str) -> None:
+        """Ein weiteres Modell steht im Stapel — seine Platte kommt ins Bild,
+        sobald ein Ergebnis es trägt (RM-303).
+
+        Derselbe Weg für Datei, Download und erzeugtes Modell. Bis 0.5.1
+        wechselte nur eine Datei vom Pfad die Platte, und das über den
+        letzten Schritt des Stapels — an der Einfügemarke ist das ein fremder.
+        """
+        self._plate_of_import = body
+        self._show_the_plate_of_the_import()
+
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
         imported, self._recent_candidate = self._recent_candidate, None
         if imported is None:
             return
-        operations = self.session.project.document.ops
-        if operations and operations[-1].outputs:
-            self._plate_of_import = operations[-1].outputs[0]
-            self._show_the_plate_of_the_import()
         self.settings.remember(imported)
         self._store_settings()
         self._show_recent()
@@ -20761,6 +20999,7 @@ class MainWindow(QMainWindow):
         Kette hält an“ abgewiesen.
         """
         self._recent_candidate = None
+        self._plate_of_import = None
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
         self.status_message.setText(self._announcement)
@@ -21318,7 +21557,7 @@ class MainWindow(QMainWindow):
     def _update_waiting_state(self) -> None:
         """Führt die gestufte Warteanzeige für den gewählten Besitzer nach."""
 
-        running = self._active_progress_owner() is not None or self._anything_running()
+        running = self._foreground_owner() is not None or self._anything_running()
         # **Gestuft und nicht sofort** (§2.8). Die Zeitgeber und ihre Zahlen
         # sind bei ihrer Anlage begründet; hier steht nur, wann sie laufen.
         # Ein Lauf, der noch aussteht, startet sie nicht neu — sonst schöbe
@@ -21333,7 +21572,7 @@ class MainWindow(QMainWindow):
         else:
             self._stop_waiting()
         self._render_progress_state()
-        if not running:
+        if not running and self._active_progress_owner() is None:
             self.status_message.setText(self._announcement)
 
     def _on_evaluation_cancelled(self) -> None:
@@ -21741,6 +21980,7 @@ class MainWindow(QMainWindow):
             # Und in der Gegenrichtung: *Kanten verfeinern* vor ein *Glätten*, das
             # umschlug — mit der Länge, an der der Kern beides durchgespielt hat.
             "remesh_and_retry": self._remesh_after_error,
+            "mesh_and_retry": self._mesh_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
@@ -22372,6 +22612,19 @@ class MainWindow(QMainWindow):
         if object_id is None:
             return
         self.run_operation(REGISTRY.get("remesh_mesh"), {"edge": edge}, on_bodies=(object_id,))
+
+    def _mesh_after_error(self, error: AppError) -> None:
+        """*Flächenbearbeitung beenden* vor den Schritt des Befunds, dann derselbe Schritt am Netz.
+
+        Für Stellen, an denen der exakte Körper keine eigene Kante hat — ein
+        Knick innerhalb einer Fläche (``edges.unmapped``, RM-436): Am
+        Dreiecksmodell rundet derselbe Schritt jeden Knick. Ein Zug im
+        Verlauf (``History.mesh_and_retry``), Strg+Z nimmt ihn zurück. Steht
+        der Schritt nicht mehr im Verlauf, gibt es nichts davorzusetzen.
+        """
+        steps = self.session.project.document.ops
+        if error.op_id is not None and any(entry.id == error.op_id for entry in steps):
+            self.session.mesh_and_retry(error.op_id)
 
     def _change_selection_after_error(self, error: AppError) -> None:
         """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.
@@ -23281,6 +23534,7 @@ class MainWindow(QMainWindow):
             self._drop_feature_preview()
         switch(self.stack, self.start_screen if show else self.overlay)
         self._on_start_screen = show
+        self._say_generation_destination()
         if self.__dict__.get("viewport") is not None:
             # Die Einladung gehört der Arbeitsfläche; der Startbildschirm hat
             # seine eigenen Einstiege (RM-370).
@@ -23665,6 +23919,11 @@ class MainWindow(QMainWindow):
         self._cancel_gcode()
         self._cancel_export()
         self._cancel_sculpt_check()
+        # Der Erzeugen-Dialog ist nichtmodal und kann neben dem Fenster einen
+        # Wurf laufen haben; dessen Arbeiter hält die Leine des Dialogs, und
+        # ``wait_for_all`` unten wartet auf ihn — angehalten wird er hier.
+        if self._generator is not None:
+            self._generator.cancel_run()
         # Die Kernauskünfte eines Merkmalklicks will niemand mehr sehen. Ohne
         # Kennung verfällt ihre Antwort wie die eines abgelösten Klicks
         # (``_answers_arrived``, ``_answers_failed``); sonst baute das
@@ -23773,6 +24032,11 @@ class MainWindow(QMainWindow):
         self._clear_proposal()
         if self._op_dialog is not None:
             self._op_dialog.reject()
+        # Der nichtmodale Erzeugen-Dialog hält das Fenster über ``take``; sein
+        # Schließen hält den Wurf an und gibt beides frei (``_generator_closed``).
+        generator = self._generator
+        if generator is not None:
+            generator.discard()
         # Der Baum zeichnet seine Bilder nebenan und stellt den Start zurück;
         # freigegeben heißt: nichts mehr anfangen (``ObjectTree.release``).
         self.object_tree.release()
@@ -23789,6 +24053,7 @@ class MainWindow(QMainWindow):
         # gerechnet wird, behält die Sanduhr über dem Schreibtisch.
         self._stop_waiting()
         self._run_timing.end()
+        self._generation_timing.end()
         # Die Sitzung überlebt dieses Fenster — in der Suite gehört sie einem
         # eigenen Fixture, im Betrieb kann ein zweites Fenster folgen. Solange
         # ihre Signale hierher zeigen, ruft das nächste Ergebnis in ein
