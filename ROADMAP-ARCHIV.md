@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
+| 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
 | 2026-10-03 | [RM-306: Ein weiteres Modell kommt an die freie Stelle nächst der Plattenmitte (03.10.2026)](#rm-306-ein-weiteres-modell-kommt-an-die-freie-stelle-nächst-der-plattenmitte-03102026) |
 | 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
@@ -37295,6 +37297,50 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
 
+## RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)
+
+<a id="rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026"></a>
+<a id="rm-487"></a>
+
+**RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe.**
+  Versionsvergleich 0.5.2 (02.10.2026), Oberfläche offscreen, `grab()`. **Regression gegenüber
+  v0.5.1.** Erststart: Nach der Programmerkennung (3–10 s) wächst der Inhalt um 56 px, der Rahmen
+  nicht (v0.5.1: 680×651 → 723); „Zusatzprogramme verwalten …“ und „Chat einrichten …“ liegen zu
+  0 % im Ausschnitt, ein Rollbalken erscheint. „Modell erzeugen“ ohne ComfyUI: 480×243 statt
+  480×293, der Knopf „Zusätzliche Programme …“ liegt 32 px unter dem Rand, der Kunde liest „ohne das
+  bleibt dieser Weg zu“ und sieht keinen Ausweg (Regel 17). Gemeinsame Ursache: Inhalt aus einer
+  Hintergrundprüfung zählt als passive Anpassung, die den Rahmen seit `b837a73f8`/`2a0bbf121` nie
+  vergrößert. Trifft jeden Dialog, der nach dem Öffnen Inhalt nachreicht.
+  **Stellen:** `app/ui/style.py:515` (`ContentSizeFit.fit`), `app/ui/first_run.py:612`, `:730`,
+  `app/ui/generate_dialog.py:509–528`, `:632`, `:1231`.
+  **Fix (allgemein):** Solange der Kunde die Größe nicht selbst gezogen hat, darf eine passive
+  Anpassung den Rahmen bis zur verfügbaren Schirmhöhe vergrößern; nur Schrumpfen und das
+  Überschreiben einer Nutzergröße bleiben gesperrt.
+  **Abnahme:** Wächter an Erststart, „Modell erzeugen“ und einem dritten Dialog mit
+  nachgereichtem Inhalt: nach Eingang der Prüfung liegt jeder Knopf vollständig im Ausschnitt;
+  eine gezogene Nutzergröße bleibt erhalten. Bauplan §2.8.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U3, U6), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** **Abschluss:** `style.ContentHeight.fit` lässt eine passive Anpassung nach der Anfangsmessung
+  wieder wachsen, solange der Kunde die Größe nicht gezogen hat: um den Teil, der im Rollbereich
+  verdeckt läge (`style._hidden_height`, gemessen an der wirklichen Inhaltsbreite), höchstens bis
+  zur Bildschirmhöhe, nie breiter und nie zurück. Reicht der Platz unter dem Dialog nicht, rückt
+  `fit_dialog_to_screen` ihn hinauf; nach einem ausdrücklichen Klappen hält auch Passives den Anker
+  (`_keeps_anchor`), damit die Überschrift unter dem Zeiger bleibt. Die beiden Gründe der Sperre aus
+  `b837a73f8` bleiben: Eine gezogene Größe überschreibt nichts, und ein wechselnder Status kann den
+  Rahmen höchstens einmal vergrößern statt bei jedem Wechsel zu springen. Warum, steht in
+  `konzepte/begruendungen/regel-fenster.md` („Passive Größenänderungen wachsen, schrumpfen nie“),
+  die Regel in `fenster.md`. Wächter in `tests/test_dialog_layout_regressions.py` an Erststart,
+  *Modell erzeugen* und *ComfyUI einrichten* (Ordnersuche ohne Fund), je automatisch und mit
+  gezogener Größe; am Stand davor nennen sie genau die verdeckten Knöpfe aus dem Befund
+  („Zusatzprogramme verwalten …“, „Chat einrichten …“, „Zusätzliche Programme …“) und den
+  abgeschnittenen Ordnerhinweis. Dazu `test_style.py` ohne Fenster. Sieben Fenstertests, die das
+  Stehenbleiben des Rahmens festschrieben, prüfen jetzt Wachsen ohne Zurückgeben; der
+  Wachstumstest des Druckdialogs (`test_the_dialog_grows_when_the_profile_section_opens_itself`),
+  seit `b837a73f8` rot, ist wieder grün. Sonde am echten Fenster (2560×1392): Erststart 680×621 →
+  680×662 nach der Erkennung, Rollweite 41 → 0; *Modell erzeugen* ohne ComfyUI 480×243 → 480×275,
+  Rollweite 32 → 0, beide an derselben Stelle; nach dem Zusammenführen mit RM-371 (Erzeugen ohne
+  Modalfenster) 480×267 → 480×299, ebenfalls ohne Rollweite. Commit `3fcd402a9`.
 ## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
 
 <a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
@@ -37821,6 +37867,47 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
 
 **Abschluss:** Allgemein im gemeinsamen Baustein gelöst: `panels.collapsible(contents=…, remember=…)`. Zugeklappt steht der Inhalt als klickbare Zeile unter der Überschrift (gleicher Satz in Kurzhilfe und zugänglicher Beschreibung), `remember=` merkt den Zustand in `UiSettings.open_sections` über Dialoge und Neustarts (`panels.keep_sections_in`, gebunden im Hauptfenster). Alle zugeklappten Abschnitte nennen ihren Inhalt: Einstellungen („Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung“, mit gesehener 3D-Maus auch sie), „Bausteine verwalten“, Spulen-„Weitere Angaben“, Lager-Einstellungen, Erzeugen, Druckeinstellungen (beide Klappen), Parametergrenzen, Startbildschirm, Rückmeldung; ausgenommen die Filamente der linken Spalte (Titel ist der Inhalt, Spaltenhöhe RM-489). Die Befehlspalette findet jede sichtbare Zeile der Einstellungen als „Einstellungen: <Zeile>“ (`settings_dialog.option_titles`, eine Quelle für Formular und Palette) und öffnet den Dialog aufgeklappt mit dem Feld im Fokus (`MainWindow.show_setting`, `SettingsDialog.show_option`; ein gesperrtes Feld gibt den Fokus an seinen Haken). Neue Texte in allen fünf Katalogen. Tests (rot am Ausgangsstand, grün danach): `test_interface_limits.py::test_every_closed_section_names_what_it_holds` (Quelltextwächter, ohne Fenster), `test_ui_settings.py::test_the_closed_settings_name_what_lies_behind_them`, `::test_a_setting_from_the_palette_opens_its_row` (4 Fälle), `::test_the_palette_offers_every_visible_setting_under_its_row_name`, `::test_the_remembered_sections_travel_in_the_settings_file`, `test_catalog_ui.py::test_the_closed_management_names_what_it_holds`, `test_filament_picker.py::test_the_closed_spool_details_name_what_they_hold`, `test_ui.py::test_the_palette_finds_every_setting_behind_the_closed_section`. Fenstersonde am echten Fenster: 6 von 6 (vorher 2 von 6, und die beiden nur scheinbar: die Palette meldete „Kein Befehl passt zu ‚Tastenbelegung‘“). Regel `fenster.md` (Klappen) und Begründung nachgezogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `dd7e1e923`.
 
+## RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)
+
+<a id="rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026"></a>
+<a id="rm-471"></a>
+
+**RM-471 — Schriftzüge ohne matplotlib.** Aus RM-467. matplotlib dient allein den
+  Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
+  (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
+  reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
+  kiwisolver, cycler, pyparsing, python-dateutil und six mit. Den Satz macht matplotlib 3.11 schon
+  über libraqm und damit HarfBuzz (`_text_helpers.layout`); uharfbuzz kommt mit pygfx ohnehin ins
+  Paket und setzt gleich. Gemessen am 02.10.2026: `TextPath.to_polygons` hält `MAX_FACET_SAG` ab
+  etwa 10 mm Schrifthöhe nicht mehr — an DejaVu Sans „Og“ 0,074 mm Sehnenfehler bei 10 mm,
+  0,23 mm bei 50 mm.
+  **Umbau:** Konturen über fontTools aus den mitgelieferten Dateien, Satz über uharfbuzz, Kurven
+  mit eigenem Sehnenfehler in `MAX_FACET_SAG`, die exakten Kurven für `brep.lettering` aus
+  denselben Kontrollpunkten. Eine Schriftsuche je Plattform entfällt, denn angeboten werden nur
+  mitgelieferte Familien; die drei DejaVu-Familien (zwölf Dateien) stammen heute aus matplotlib
+  und kommen dann selbst ins Paket, mit Lizenztext und Rechteeintrag. uharfbuzz und fontTools
+  wandern in die Gruppe `geom`.
+  **Plattformfolgen:** keine — Dateien statt Systemschriften, alle drei Pakete gleich; netto
+  rund 19 MB und sieben Pakete weniger.
+  **Abnahme:** Glyphenlagen gegen matplotlib innerhalb 0,002 mm für alle acht Familien und
+  Schnitte, Flächen der Schriftzüge an Netz und exaktem Kern gegen den heutigen Stand, Sehnenfehler
+  in `MAX_FACET_SAG`; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
+
+**Abschluss:** Umgesetzt in `25d5536ee`. `app/core/geom/glyphs.py` setzt über uharfbuzz und lässt
+  HarfBuzz die Umrisse zeichnen; `label_ops.outlines` und `brep.lettering` nehmen dieselben
+  Konturen. matplotlib, contourpy, cycler, kiwisolver, pyparsing, python-dateutil und six fehlen in
+  `pyproject.toml`, `constraints.txt`, der Lizenzliste und der Lizenzbeilage (41 statt 49
+  Laufzeitkomponenten). Die DejaVu-Familien liegen selbst bei, Fassung 2.35 bitgleich zur
+  Veröffentlichung, Lizenztext von der Primärquelle, Bitstream-Vera freigegeben. Der Sehnenfehler
+  folgt der Schriftgröße (ein Tausendstel, nie über `MAX_FACET_SAG`), die Sehnen bleiben unter drei
+  Prozent davon, damit die Erkennung fast gerade Kurvenstrecken nicht als Ebene liest (der untere
+  Bogen einer „3“ zerfiel sonst). Gemessen: Fläche bei jeder Größe höchstens 0,07 % neben der
+  exakten Glyphenfläche, matplotlib bei 3 mm bis 2,41 % darunter; Glyphenlage am Ende einer
+  50-mm-Zeile 0,04 mm genauer; exakte Schriftkörper höchstens 0,044 % anders; rund doppelt so
+  viele Punkte. Je Zeile in `konzepte/nachweise-bibliotheken-2026-10/`. UI-Audit der zwölf
+  Beispielprojekte im echten Fenster gegen origin/main ohne den Umbau: dieselben Befunde, 18 von
+  22 Exporten textgleich, anders nur die beiden mit Schrift (Lettern des Schilds +1,6 % Volumen).
+  Entwicklungstor 20 351 grün. Der volle CI-Lauf auf allen Plattformen steht unter RM-468.
 ## RM-306: Ein weiteres Modell kommt an die freie Stelle nächst der Plattenmitte (03.10.2026)
 
 <a id="rm-306-ein-weiteres-modell-kommt-an-die-freie-stelle-nächst-der-plattenmitte-03102026"></a>

@@ -35,20 +35,21 @@ def test_chat_setup_follows_late_status_text_without_growing_paragraph_gaps(
         original = dialog.explanation.text()
         compact = dialog.height()
         compact_scroll = dialog._scroll.verticalScrollBar().maximum()
-        # Eine späte Statuszeile ist eine passive Änderung: Der Rahmen bleibt,
-        # der Inhalt rollt (cbeb239e9, ``fenster.md`` Dialoggröße nach Auslöser).
-        # Bis dahin verlangte der Test, dass der Dialog dafür wächst.
+        # Eine späte Statuszeile ist eine passive Änderung: Der Rahmen wächst nur
+        # um Inhalt, der sonst verdeckt läge, und gibt danach nichts zurück,
+        # damit er bei wechselndem Status nicht springt (RM-487, ``fenster.md``
+        # Dialoggröße nach Auslöser). Was der Bildschirm nicht fasst, rollt.
         dialog.explanation.setText(original + "\n" + "Status\n" * 5)
         _settle(qt_app)
-        assert dialog.height() == compact, "eine Statusmeldung zieht den Rahmen nicht"
+        assert dialog.height() >= compact
         explanation = dialog.explanation
         assert dialog._scroll.verticalScrollBar().maximum() > compact_scroll or (
             explanation.height() >= explanation.heightForWidth(explanation.width())
         ), "sie steht ganz da oder rollt"
+        grown = dialog.height()
         dialog.explanation.setText(original)
         _settle(qt_app)
-        assert dialog.height() == compact
-        assert dialog._scroll.verticalScrollBar().maximum() == compact_scroll
+        assert dialog.height() == grown, "zurückgegeben wird nichts"
     finally:
         dialog.close()
         dialog.release()

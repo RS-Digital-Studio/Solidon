@@ -13,8 +13,8 @@ eine Boolesche Operation dort und hier und verlangt:
 * der Hilfsprozess ist die gebaute Anwendung und antwortet;
 * dieselben Bytes wie die Rechnung im Prozess;
 * nach ``shutdown`` lebt kein Hilfsprozess mehr;
-* sein Temp-Verzeichnis ist danach leer (der Laufzeithaken für matplotlib legt
-  dort je Prozess einen Ordner an, Durchsicht RM-212, B4);
+* sein Temp-Verzeichnis ist danach leer (Durchsicht RM-212, B4: der frühere
+  Laufzeithaken für matplotlib legte dort je Prozess einen Ordner an);
 * unter Linux bleibt kein gemeinsamer Speicher in ``/dev/shm``.
 
 Belegt ist die Seite des Hilfsprozesses im Paket; den eingefrorenen

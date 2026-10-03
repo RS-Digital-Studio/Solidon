@@ -663,7 +663,7 @@ class GenerateDialog(QDialog):
         self._grow_to_content("explicit")
 
     def _grow_to_content(self, intent: ContentFitIntent = "passive") -> None:
-        """Misst das Layout, ohne Statusmeldungen den Außenrahmen bewegen zu lassen."""
+        """Misst das Layout; passiv wächst der Rahmen nur um verdeckten Inhalt (RM-487)."""
         layout = self.layout()
         if layout is None or not self.isVisible():
             return

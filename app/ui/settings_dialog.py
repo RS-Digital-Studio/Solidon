@@ -550,7 +550,7 @@ class SettingsDialog(QDialog):
         QTimer.singleShot(0, self, self._fit_explicit_content)
 
     def _fit_content(self) -> None:
-        """Nachgereichte Inhalte ändern nur den Rollbereich, nicht den Rahmen."""
+        """Nachgereichte Inhalte vergrößern den Rahmen höchstens, nie zurück (RM-487)."""
         self._height.fit(self, self._scroll, intent="passive")
 
     def _fit_initial_content(self) -> None:

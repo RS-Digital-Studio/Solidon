@@ -379,7 +379,10 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
         passively_opened = outcome != "empty-inventory"
         assert toggle.isChecked() is passively_opened
         assert dialog.slicer_inner.isVisibleTo(dialog.slicer_box) is passively_opened
-        assert dialog.frameGeometry() == folded_frame
+        # Passiv wächst höchstens die Höhe, nie die Breite (RM-487).
+        assert dialog.frameGeometry().width() == folded_frame.width()
+        if not passively_opened:
+            assert dialog.frameGeometry() == folded_frame
         if passively_opened:
             assert queued and set(queued) == {"passive"}
         else:
@@ -8881,7 +8884,7 @@ def test_switching_print_tabs_keeps_the_outer_size_and_scrolls_the_current_page(
 def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
     dialog: PrintSettingsDialog, qt_app: QApplication
 ) -> None:
-    """„Andere …“ zeigt ein Feld, ohne den Außenrahmen springen zu lassen."""
+    """„Andere …“ zeigt ein Feld; der Rahmen wächst höchstens und springt nicht zurück."""
     from app.ui.style import SPACE, WIDE
 
     dialog.show()
@@ -8908,7 +8911,10 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
 
     assert not dialog.nozzle.isHidden()
     assert page.sizeHint().height() > closed_content_height
-    assert dialog.size() == closed_size, "der Rollbereich nimmt die zusätzliche Zeile auf"
+    # Die Zeile darf den Rahmen wachsen lassen, nie breiter (RM-487).
+    assert dialog.width() == closed_size.width()
+    assert dialog.height() >= closed_size.height()
+    expanded_size = dialog.size()
     expanded_content_height = page.sizeHint().height()
 
     standard = dialog.nozzle_choice.findData(0.4)
@@ -8920,7 +8926,7 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
 
     assert dialog.nozzle.isHidden()
     assert page.sizeHint().height() < expanded_content_height
-    assert dialog.size() == closed_size, "Zuklappen lässt den Außenrahmen ruhig stehen"
+    assert dialog.size() == expanded_size, "Zuklappen lässt den Außenrahmen ruhig stehen"
 
 
 def test_every_setting_field_carries_its_name_and_its_unit_once(

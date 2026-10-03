@@ -48,7 +48,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
 | [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
-| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Konturen über fontTools aus mitgelieferten Dateien, Satz über uharfbuzz, Kurven in `MAX_FACET_SAG`; DejaVu selbst mitliefern |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -159,10 +158,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe](#rm-487) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1; passive Anpassung darf vergrößern, solange der Kunde die Größe nicht gezogen hat |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
-| [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
+| [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile](#rm-500) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund aus RM-371; Ansagen und Hinweise neben dem Fortschritt sichtbar halten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -691,29 +689,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Offen:** beide Mac-Paketjobs (Apple Silicon und `macos-26-intel`, das nur paketiert wird) und
   ein Blick auf die Ansicht im gebauten Paket; sie laufen, sobald die Fensterjobs grün sind.
   **Abnahme:** beide Mac-Pakete gebaut, die Ansicht des Mac-Pakets zeichnet.
-
-<a id="rm-471"></a>
-
-- [ ] **RM-471 — Schriftzüge ohne matplotlib.** Aus RM-467. matplotlib dient allein den
-  Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
-  (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
-  reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
-  kiwisolver, cycler, pyparsing, python-dateutil und six mit. Den Satz macht matplotlib 3.11 schon
-  über libraqm und damit HarfBuzz (`_text_helpers.layout`); uharfbuzz kommt mit pygfx ohnehin ins
-  Paket und setzt gleich. Gemessen am 02.10.2026: `TextPath.to_polygons` hält `MAX_FACET_SAG` ab
-  etwa 10 mm Schrifthöhe nicht mehr — an DejaVu Sans „Og“ 0,074 mm Sehnenfehler bei 10 mm,
-  0,23 mm bei 50 mm.
-  **Umbau:** Konturen über fontTools aus den mitgelieferten Dateien, Satz über uharfbuzz, Kurven
-  mit eigenem Sehnenfehler in `MAX_FACET_SAG`, die exakten Kurven für `brep.lettering` aus
-  denselben Kontrollpunkten. Eine Schriftsuche je Plattform entfällt, denn angeboten werden nur
-  mitgelieferte Familien; die drei DejaVu-Familien (zwölf Dateien) stammen heute aus matplotlib
-  und kommen dann selbst ins Paket, mit Lizenztext und Rechteeintrag. uharfbuzz und fontTools
-  wandern in die Gruppe `geom`.
-  **Plattformfolgen:** keine — Dateien statt Systemschriften, alle drei Pakete gleich; netto
-  rund 19 MB und sieben Pakete weniger.
-  **Abnahme:** Glyphenlagen gegen matplotlib innerhalb 0,002 mm für alle acht Familien und
-  Schnitte, Flächen der Schriftzüge an Netz und exaktem Kern gegen den heutigen Stand, Sehnenfehler
-  in `MAX_FACET_SAG`; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -1608,7 +1583,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ist an keinem der fünf Modelle erreicht; den nächsten Hebel je Modell nennt
   `konzepte/nachweise-release-0.5.1/reports/stapel-schluss.md` (Abschnitt „Nicht behoben“).
   Am Drachen sind 12 von 98 Läufen vergeblich, in Gruppen zu klein für den Stapel.
-
 
 <a id="rm-201"></a>
 
@@ -4681,26 +4655,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
-<a id="rm-487"></a>
-
-- [ ] **RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe.**
-  Versionsvergleich 0.5.2 (02.10.2026), Oberfläche offscreen, `grab()`. **Regression gegenüber
-  v0.5.1.** Erststart: Nach der Programmerkennung (3–10 s) wächst der Inhalt um 56 px, der Rahmen
-  nicht (v0.5.1: 680×651 → 723); „Zusatzprogramme verwalten …“ und „Chat einrichten …“ liegen zu
-  0 % im Ausschnitt, ein Rollbalken erscheint. „Modell erzeugen“ ohne ComfyUI: 480×243 statt
-  480×293, der Knopf „Zusätzliche Programme …“ liegt 32 px unter dem Rand, der Kunde liest „ohne das
-  bleibt dieser Weg zu“ und sieht keinen Ausweg (Regel 17). Gemeinsame Ursache: Inhalt aus einer
-  Hintergrundprüfung zählt als passive Anpassung, die den Rahmen seit `b837a73f8`/`2a0bbf121` nie
-  vergrößert. Trifft jeden Dialog, der nach dem Öffnen Inhalt nachreicht.
-  **Stellen:** `app/ui/style.py:515` (`ContentSizeFit.fit`), `app/ui/first_run.py:612`, `:730`,
-  `app/ui/generate_dialog.py:509–528`, `:632`, `:1231`.
-  **Fix (allgemein):** Solange der Kunde die Größe nicht selbst gezogen hat, darf eine passive
-  Anpassung den Rahmen bis zur verfügbaren Schirmhöhe vergrößern; nur Schrumpfen und das
-  Überschreiben einer Nutzergröße bleiben gesperrt.
-  **Abnahme:** Wächter an Erststart, „Modell erzeugen“ und einem dritten Dialog mit
-  nachgereichtem Inhalt: nach Eingang der Prüfung liegt jeder Knopf vollständig im Ausschnitt;
-  eine gezogene Nutzergröße bleibt erhalten. Bauplan §2.8.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U3, U6), Bilder in `regression-0.5.2\ui\`.
 
 <a id="rm-492"></a>
 
@@ -4939,7 +4893,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
   anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
   belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
-
 
 <a id="rm-020"></a>
 

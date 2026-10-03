@@ -628,6 +628,29 @@ Nutzers zu überstimmen. Drei Regeln, alle drei einmal gebrochen gewesen:
   Start die jüngste **fremde** Sicherung; abgelehnt wird genau sie geräumt
   (`discard_recovery`), angenommen wandert sie unter die eigene Kennung.
 
+## Passive Größenänderungen wachsen, schrumpfen nie
+
+Eine Zeit lang ließen passive Änderungen den Außenrahmen ganz stehen, damit
+eine Suche oder eine Statusmeldung keine gezogene Größe überschreibt und der
+Rahmen nicht bei jedem Statuswechsel springt. Das traf auch Inhalt, den eine
+Hintergrundprüfung nach dem Öffnen nachreicht: Im Erststart lagen
+„Zusatzprogramme verwalten …“ und „Chat einrichten …“ unter dem Rand, in
+*Modell erzeugen* ohne ComfyUI der Knopf „Zusätzliche Programme …“ — neben dem
+Satz, dass ohne ihn dieser Weg zu bleibt (RM-487, Rückschritt gegenüber
+0.5.1).
+
+Beide Gründe bleiben gewahrt: Nach einem Zug des Kunden ändert nichts Passives
+den Rahmen, und gewachsen wird nur, nie zurückgegeben — ein Status, der
+wechselt, kann den Rahmen höchstens einmal vergrößern. Gemessen wird der
+verdeckte Teil des Rollbereichs (`style._hidden_height`), nicht der
+Größenwunsch des Dialogs: Der fällt höher aus, wenn ein Umbruch an einer
+anderen Breite gemessen wird, und ließe einen Dialog ohne verdeckten Inhalt
+wachsen. Reicht der Platz unter dem Dialog nicht, rückt `fit_dialog_to_screen`
+ihn so weit hinauf wie nötig — außer nach einem ausdrücklichen Klappen: Dort
+hält schon das Klappen den Anker, damit die Überschrift unter dem Zeiger
+bleibt, und ohne den Anker zog die passive Nachmessung einen Umlauf später den
+Dialog nach oben (`ContentHeight._keeps_anchor`).
+
 ## Wie die Karten ihre Höhe teilen
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`.

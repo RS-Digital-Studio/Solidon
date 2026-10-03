@@ -23,10 +23,8 @@ from __future__ import annotations
 import ast
 import errno
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 import textwrap
 import threading
 import time
@@ -939,8 +937,8 @@ def test_shutdown_lets_an_idle_helper_end_by_itself(
 ) -> None:
     """Ein untätiger Hilfsprozess endet beim ``shutdown`` selbst, auf dem gewöhnlichen Weg.
 
-    Hart beendet liefe sein ``atexit`` nicht — im Paket blieb dann der Ordner
-    des Laufzeithakens für matplotlib liegen (Durchsicht RM-212, B4). Die Frist
+    Hart beendet liefe sein ``atexit`` nicht, und was er aufräumt, bliebe
+    liegen (Durchsicht RM-212, B4). Die Frist
     ist hier weit gesetzt: Geprüft wird, dass er selbst endet, nicht wie
     schnell unter der Last der Suite.
     """
@@ -951,41 +949,6 @@ def test_shutdown_lets_an_idle_helper_end_by_itself(
     kernel_process.shutdown()
 
     assert helper.exitcode == 0, f"beendet statt selbst geendet: {helper.exitcode}"
-
-
-def _frozen_with_a_temp_folder(connection: Any) -> None:
-    """Ein Hilfsprozess wie im Paket: ``sys.frozen`` und der Ordner des Laufzeithakens.
-
-    ``pyi_rth_mplconfig`` legt jedem Prozess des Pakets einen leeren Ordner im
-    Temp-Verzeichnis an und setzt ``MPLCONFIGDIR`` darauf.
-    """
-    sys.frozen = True  # type: ignore[attr-defined]
-    folder = tempfile.mkdtemp()
-    os.environ["MPLCONFIGDIR"] = folder
-    Path(os.environ["KERNEL_TEST_MARK"]).write_text(folder, encoding="utf-8")
-    kernel_jobs.serve(connection)
-
-
-def test_a_frozen_helper_leaves_no_temp_folder(
-    offloaded: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Im Paket räumt der Hilfsprozess den Ordner des Laufzeithakens gleich beim Start weg.
-
-    Am gebauten ``Solidon3D.exe``: drei Starts, drei Ordner, alle liegen
-    geblieben — Abbrechen und ``shutdown`` beenden einen Hilfsprozess hart,
-    und ``atexit`` räumt dann nichts mehr (Durchsicht RM-212, B4).
-    """
-    mark = tmp_path / "ordner"
-    monkeypatch.setenv("KERNEL_TEST_MARK", str(mark))
-    monkeypatch.setattr(kernel_process, "_SERVE", _frozen_with_a_temp_folder)
-
-    assert kernel_process.warm_up()
-
-    folder = Path(mark.read_text(encoding="utf-8"))
-    try:
-        assert not folder.exists(), "der Ordner des Laufzeithakens liegt noch"
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
 
 
 def _alive(pid: int) -> bool:
@@ -2966,7 +2929,6 @@ def test_public_run_distinguishes_enospc_from_memory_in_both_transfers(
     monkeypatch.setitem(kernel_jobs.JOBS, "enospc_transfer_probe", job)
     monkeypatch.setattr(kernel_jobs.shared_memory, "SharedMemory", memory)
     monkeypatch.setattr(kernel_jobs, "_yield_to_the_window", lambda: None)
-    monkeypatch.setattr(kernel_jobs, "_without_a_temp_folder", lambda: None)
     monkeypatch.setattr(kernel_jobs.multiprocessing, "parent_process", lambda: None)
 
     def run() -> Any:
