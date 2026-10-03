@@ -51,7 +51,7 @@ it into `website/version.json`.
 - SuperSlicer no longer crashes on round parts: it no longer receives the scarf seam it does not know.
 - SuperSlicer receives grid supports with an explanation when tree supports were chosen. The Nearest seam choice arrives without a false warning.
 - TPU now selects the matching filament profile and start settings in PrusaSlicer and SuperSlicer. If no profile is available, Solidon identifies its own material table as the source.
-- Cura now respects the printer's acceleration limits. If your setting exceeds them, Solidon shows the reduced value in the report.
+- Cura respects acceleration limits and reports reduced custom values. Solid infill uses the infill speed; only the top surface uses the surface speed.
 - Chamber temperatures reach the correct slicer field. Printer profiles without controlled chamber heating now explain why the setting has no effect.
 - The Lines infill pattern reaches Bambu Studio and Creality Print as lines, without being replaced by Grid or Cubic.
 - After slicing, Solidon also reports settings discarded by PrusaSlicer or Orca-based slicers. Changes to brim, wall order and support type are detected too.

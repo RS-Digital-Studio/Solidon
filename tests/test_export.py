@@ -3566,6 +3566,35 @@ def test_cura_opens_with_its_settings_as_an_importable_profile(
     assert not [value for value in values.values() if value in {"true", "false"}]
 
 
+@pytest.mark.parametrize("top_layers", [0, 4])
+def test_the_importable_profile_keeps_surface_and_ironing_at_the_surface_speed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, top_layers: int
+) -> None:
+    """RM-482: Auch das Fenster bügelt mit dem Tempo der sichtbaren Oberseite."""
+    engine = _cura_install(tmp_path)
+    _cura_active(tmp_path, monkeypatch)
+    profile = profiles.make_profile("sovol-sv06", "pla")
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        shell=replace(settings.shell, top_layers=top_layers, ironing=True),
+        speed=replace(settings.speed, infill=73.0, top_surface=30.0),
+    )
+    model = tmp_path / "pilz.stl"
+
+    finding = handover.cura_profile_beside(
+        model, settings, profile, handover.SlicerSetup(engine, "cura")
+    )
+
+    assert finding is not None and finding.code == "handover.cura_profile"
+    written = _cura_containers(model.with_suffix(".curaprofile"))["solidon"]["values"]
+    assert written["roofing_layer_count"] == ("1" if top_layers else "0")
+    assert written["ironing_enabled"] == "True"
+    assert float(written["speed_topbottom"]) == pytest.approx(73.0)
+    assert float(written["speed_roofing"]) == pytest.approx(30.0)
+    assert float(written["speed_ironing"]) == pytest.approx(20.0)
+
+
 def test_cura_gets_one_extruder_profile_per_spool(
     tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:

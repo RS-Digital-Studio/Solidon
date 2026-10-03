@@ -846,6 +846,17 @@ def as_mapping(
         written, settings, flavour, native_adhesion_kinds=native_adhesion_kinds
     )
     if flavour == "cura":
+        # Nur die äußerste obere Haut bekommt das Oberflächentempo, wie bei
+        # Prusas ``top_solid_infill_speed``. Die inneren Vollschichten fahren
+        # mit der Füllung; ohne Dachschicht bliebe ``speed_roofing`` wirkungslos.
+        # Auch der Profilimport im Cura-Fenster läuft durch diese Zuordnung.
+        if "top_layers" in chosen or "speed_roofing" in chosen:
+            chosen["roofing_layer_count"] = str(min(settings.shell.top_layers, 1))
+        surface = _as_float(chosen.get("speed_roofing"))
+        if surface:
+            # Curas Formel bezieht sich sonst auf die nun schnelleren inneren
+            # Vollschichten. Das Bügeln gehört auch im Fenster zur Oberfläche.
+            chosen["speed_ironing"] = f"{surface * 20.0 / 30.0:g}"
         return _cura_fan_start(_first_layer_width(chosen), settings)
     if paths is not None and "support.density" not in paths:
         return chosen
@@ -1612,10 +1623,6 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profi
             floor = min(travel, _FIRST_LAYER_TRAVEL)
             written["speed_travel_layer_0"] = f"{max(formula, floor):g}"
 
-    surface = _as_float(written.get("speed_topbottom"))
-    if surface:
-        written["speed_ironing"] = f"{surface * 20.0 / 30.0:g}"
-
     nozzle = _as_float(written.get("material_print_temperature"))
     if nozzle:
         # Curas Vorgabe fährt die Düse vor dem ersten und nach dem letzten
@@ -1754,7 +1761,6 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             # Stützen endete `grid` in einer Speicherzugriffsverletzung und
             # `tree` ohne jede Datei. Solidon meldete beides als „der Slicer
             # hat das Modell nicht verarbeitet" — richtig, aber ratlos.
-            "roofing_layer_count": "0",
             "flooring_layer_count": "0",
             "support_z_seam_away_from_model": "false",
             "min_wall_line_width": f"{profile.printer.nozzle_diameter * 0.85:g}",

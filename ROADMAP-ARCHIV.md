@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
 | 2026-10-03 | [RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)](#rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026) |
 | 2026-10-03 | [RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)](#rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026) |
 | 2026-10-03 | [RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)](#rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026) |
@@ -38253,3 +38254,145 @@ Echte Abnahme: Der unveränderte ursprüngliche Bambu-P1S-Würfel-A-Lauf hatte 7
 Fünf von fünf neue Schnitte mit SuperSlicer 2.5.59.13/generic-220 und Bambu Studio 02.08.02.61/A1 erfolgreich und ohne falsche Übergabewarnung. SuperSlicer bestätigt bei drei Würfeln nativ 50, 60 und 0 Prozent (je 64 geschriebene/489 gelesene Werte); Bambu bestätigt Vorgabe und 60 Prozent (je 28/562, vier berechtigt fehlende nil-Overrides). Ein Bambu-Prozess wurde nach fertiger Druckdatei durch den vorhandenen Ergebniswächter beendet. Neue echte Läufe einspulig; Mehrspulen durch Regressionen und Codepfad geprüft. Belege: `F:\solidon-review-reports\B-rm462\final-evidence.json`, `probe-before.json`, `probe-after.json`, `bericht.md`; Druckdateien unter `F:\solidon-review-reports\gcode\codexB\rm462-nachher`.
 
 Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffentlichungen; kundensichtbar, deshalb ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `d6b13016f` (Verworfene Druckwerte werden nach dem Schneiden gemeldet). Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
+
+## RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)
+
+<a id="rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026"></a>
+<a id="rm-482"></a>
+
+**RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0, `sovol-sv06` und `generic-220`.
+  `printers.toml` führt dort keine Beschleunigung, also gilt die Stufe (8000/5000 mm/s²); der
+  G-Code trägt 99 × `M204 S8000` hinter Curas eigenem `M201 X500 Y500`. Die Firmware deckelt auf
+  500, Curas Zeit und Solidons `gcode.print_time` rechnen mit 8000. Die Grenzen der Definition
+  (`machine_max_acceleration_*` als `value`) erreichen CuraEngine nicht. Trifft jeden Drucker
+  ohne Beschleunigung in `printers.toml`.
+  **Stellen:** `app/core/knowledge/data/printers.toml:492–511`,
+  `app/core/knowledge/data/print_settings.toml:65–66`, `app/core/export/slicer_keys.py`
+  (`CURA`, `CURA_MIRRORED`), `app/core/export/handover.py` (`_cura_machine`).
+  **Fix (allgemein):** Maschinenwerte aus dem Herstellerprofil in `printers.toml` (SV06: 1000
+  Druck, 500 Leerfahrt); ohne Maschinenwert keine Stufenbeschleunigung an Cura; Grenzen der
+  Definitionskette als Zahl an CuraEngine.
+  **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
+  Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
+
+  **Stand 03.10.2026:** Der allgemeine Beschleunigungsfehler ist behoben:
+  Ohne belegten Maschinenwert oder bewusste Auswahl aktiviert Solidon keine
+  Stufenbeschleunigung. Numerische Werte der vollständigen Cura-Definitionskette,
+  einschließlich endlicher Zahlenliterale als Text, erreichen Konsole und Fenster.
+  Platten-, Objekt- und Endcodebeschleunigungen werden an den Achsgrenzen begrenzt.
+  Eigene oder übernommene Werte oberhalb dieser Grenze erzeugen einen Befund mit
+  angefordertem und tatsächlichem Wert samt Rückweg in den Druckdialog; die
+  Gegenprobe behält den tatsächlich geschriebenen Wert. Ein unvollständiger
+  Benutzerstapel fällt nicht auf Werkswerte zurück.
+  SV06 erhält Druck/Außenwand 1000 mm/s² aus dem belegten Herstellerprozess;
+  Curas Achsgrenze 500 bleibt wirksam. `printers.toml` gehört nicht zu den
+  gemeinsamen Geometrieeingängen des Bereichsnachweises; kein Bauteilmaß geändert.
+  **Messung:** 48 erfolgreiche echte Schnitte, drei Drucker × Würfel/Pilz ×
+  Cura 5.13.0/Prusa 2.9.6 × vier Stände. Vorher bei allen Cura-Fällen M204 S8000;
+  nachher SV06 S/P/T höchstens 500, generic-220 und erkannter Ender-3 ohne
+  von Solidon aktivierte M204-Steuerung. Zusätzliche echte eigene 2000/1500-Wahl:
+  zwei passende Begrenzungsbefunde auf 500, G-Code ebenfalls höchstens 500.
+  Standardweg Cura/Prusa, Würfel/Pilz in Sekunden: SV06 1547,11/1744 und
+  2828,85/2052 (11,29/37,86 %); generic-220 1073,52/1080 und 2230,90/2253
+  (0,60/0,98 %); Ender-3 1341,62/2336 und 2487,74/2763 (42,57/9,96 %).
+  Zweiter Ansatz mit denselben ausdrücklich gewählten Prozesswerten:
+  SV06 11,38/21,62 %, generic-220 0,60/0,98 %, Ender-3 5,19/1,50 %.
+  **Abnahme bleibt offen:** Beide Ansätze verfehlen am SV06-Pilz die verbindlichen
+  15 %. Die Herstellerdaten widersprechen sich (Cura X/Y 500, Prusa 1000).
+  Nächster Schritt: gültige Herstellergrenzen klären und den verbleibenden
+  Zeitanteil aus Geschwindigkeit, Kühlung, Beschleunigung und Bahnführung messen.
+  Keine Kalibrierzahl verdeckt die Abweichung.
+  **Prüfungen:** zuerst vier rote Kernfälle, danach 62 grün; Anschlussreview
+  zusätzlich sechs rote Berichts- und vier rote Zahlen-/Fensterdateifälle.
+  Abschließend 435 Kernfälle und 682 Wächter grün, Ruff/Format/mypy grün.
+  Betroffener Lauf mit `tools/affected_tests.py --run`: 1401 bestanden,
+  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Gemeinsames Entwicklungstor
+  auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0; Ruff, Format
+  und mypy ebenfalls grün. Fenster, Renderer und Leistung ausgeschlossen.
+  Belege: `F:\solidon-review-reports\B-rm482\bericht.md`, `after-final`,
+  `after-matched`, `review-choice-2`, `native-numeric-text.json`.
+  Kundensichtbar und seit `f934a42219` in v0.5.1: Changelog in sechs Sprachen
+  beschreibt ausschließlich die korrigierte Begrenzung. Commit: `c0e7eab7d`
+  (Cura berücksichtigt die belegten Beschleunigungsgrenzen des Druckers).
+
+**Abschluss:** Der Beschleunigungsfehler war mit `c0e7eab7d` behoben;
+der anschließende Zeitvergleich zeigte einen zweiten Übergabefehler:
+`speed.top_surface` wurde in Cura auf sämtliche geschlossenen Füllschichten
+angewendet. Am SV06-Pilz fuhren dadurch 19,98 m innere Haut mit 30 statt
+60 mm/s. Die allgemeine Zuordnung schreibt nun das Fülltempo nach
+`speed_topbottom` und das Oberflächentempo nach `speed_roofing`. Bei vorhandenen
+oberen Schichten aktiviert sie genau eine äußere Dachschicht, sonst keine.
+Die Spiegelung überschreibt das Oberflächentempo nicht mehr. Bügeln bleibt
+an dessen Tempo gebunden, in Konsole und importierbarem `.curaprofile`.
+Keine Modellverzweigung, Kalibrierzahl oder erhöhte Hardwaregrenze.
+
+**Nachgestellter Fehler und Gegenprobe:** Frischer Lauf auf `cafd47ccc`,
+CuraEngine 5.13.0 gegen PrusaSlicer 2.9.6, SV06/Pilz mit gleichen gewählten
+Prozesswerten: 2828,846424 gegen 2326 s, 21,62 % Unterschied. Elf neue
+Kernfälle waren vor dem Rollenfix rot. Das Anschlussreview fand zusätzlich
+die im Fenster vom Fülltempo abgeleitete Bügelgeschwindigkeit; zwei zuerst
+rote Profilfälle verlangen dort bei Füllung 73 und Oberfläche 30 genau
+20 statt 48,67 mm/s. Abschließend alle 13 grün. Sie lesen beide Engine-Ebenen
+und die echte Profil-ZIP-Struktur, einschließlich 0/1/4 Deckschichten und
+einzeln gewählter Felder.
+
+**Verbindliche Abnahme:** Zwölf erfolgreiche echte Schnitte über
+`write_assembly` und `slice_model`, drei Drucker × Würfel/Pilz × beide Slicer.
+Gleiche ausdrücklich gewählte Solidon-Prozesswerte, native Maschinen- und
+Beschleunigungswerte unverändert; Prozent = abs(Cura − Prusa) / Prusa.
+Der dritte Drucker ist die tatsächlich erkannte Cura-Definition
+`creality_ender3`, an Prusas `Creality Ender-3 (0.4 mm nozzle)` gebunden;
+sein Solidon-Profil enthält keine Beschleunigung. Modelle:
+`tests/data/meshes/cube_clean.stl` und `F:\3D Dateien\mushroom.stl`.
+
+| Drucker | Würfel Cura / Prusa | Abweichung | Pilz Cura / Prusa | Abweichung |
+|---|---|---|---|---|
+| Sovol SV06 | 1483,76 / 1389 s | 6,82 % | 2584,78 / 2326 s | 11,13 % |
+| generic-220 | 1011,91 / 1080 s | 6,30 % | 2024,88 / 2253 s | 10,13 % |
+| Erkannter Ender-3 | 1300,69 / 1415 s | 8,08 % | 2321,21 / 2451 s | 5,30 % |
+
+Alle sechs Paarungen liegen unter 15 %. Die unabhängige G-Code-Prüfung
+erfüllt 162 von 162 Bedingungen (Exit 0), einschließlich Modellhash,
+Wandabmessungen, Endhöhe und Materialbilanz. Alle fördernden Hautbahnen der
+vorletzten und letzten Schicht fahren beim SV06 60/30, sonst 80/40 mm/s.
+Cura-Zeit aus dem letzten
+`TIME_ELAPSED`, Prusa-Zeit aus dessen G-Code-Angabe, jeweils vollständig
+125 Pilz- und 100 Würfelschichten. SV06-M204 S/P/T höchstens 500 mm/s²,
+passend zu M201 X500/Y500; R ist der getrennte Rückzugswert. generic-220
+und erkannter Ender-3 erhalten weiterhin keine von Solidon aktivierte
+M204-Steuerung. Die frühere eigene 2000/1500-Wahl bleibt auf 500 begrenzt,
+mit zwei Befunden. Der Anschlusslauf nach der Verlagerung des Bügeltempos
+bestätigt am SV06-Pilz 2584,775568 s und unverändert höchstens 500 mm/s².
+
+Die frühere Standardpaarung war kein Vergleich desselben Prozesses:
+Ender-3 etwa 40/60/80 gegen 25/40/50 mm/s sowie 8 gegen 20 s
+Mindestschichtzeit. Diese Herstellerunterschiede werden nicht überschrieben.
+Auch Prusas SV06-Achsgrenze 1000 ist nur `time_estimate_only`; der Prusa-Code
+setzt kein M201. Die [offizielle SV06-Firmware](https://github.com/Sovol3d/Sv06-Source-Code/blob/366699b1f9c5742f8029081c47e6d9089ed8d531/Marlin/Configuration.h)
+belegt X/Y 500. Die fehlende native Jerk-Steuerung ist gesondert offen unter
+RM-503; diese Abnahme verspricht keine vollständige Synchronisierung aller
+Bewegungswerte oder eine gemessene Laufzeit auf physischer Hardware.
+
+**Entwicklungstor:** 20560 bestanden, 61 übersprungen, Exit 0
+(`suite-getrennt.sh`, 356,82 s); Ruff und Format (1080 Dateien) sowie mypy
+(337 Quelldateien) jeweils Exit 0. Betroffene 13 Fälle auch über
+`tools/affected_tests.py --run` grün. Der erste Torlauf fand einen verbotenen
+privaten Querimport zwischen Testdateien; die Profilfälle stehen nun bei
+den vorhandenen Exporthelfern, danach vollständiger Neulauf grün.
+Der anfangs serielle betroffene Lauf über fast die ganze Suite wurde durch
+dieses Tor ersetzt und zählt nicht als bestanden. Fenster, Renderer,
+Erzeugnisvergleiche und Leistung bleiben beim Release.
+
+**Changelog:** Ja, der Zuordnungsfehler stammt aus `f934a42219`, enthalten
+auch in `v0.5.1` (`git tag --contains`). Der bestehende RM-482-Punkt unter
+0.5.2 ist in allen sechs Sprachen um die getrennten Tempi ergänzt, jeweils
+unter 200 Zeichen. **Commits:** `c0e7eab7d` (Beschleunigungsgrenzen),
+dieser Abschluss-Commit „Cura trennt volle Füllschichten von der Oberseite“.
+Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
+`continuation-before-matched`, `continuation-final-matched`,
+`continuation-reviewed-matched`, `fortsetzung-bahnen-bericht.md`,
+`fortsetzung-prozess-bericht.md`, `fortsetzung-hersteller.md` und
+`fortsetzung-abnahme.md`; Abschlussbericht außerdem im beauftragten
+`scratchpad/bericht-B.md`.

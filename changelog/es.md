@@ -52,7 +52,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - SuperSlicer ya no se bloquea con piezas redondas: ya no recibe la costura en bisel que no conoce.
 - SuperSlicer recibe soportes de rejilla con un aviso si se eligieron soportes de árbol. La costura más cercana se aplica sin avisos falsos.
 - TPU selecciona el perfil de filamento y sus valores de inicio en PrusaSlicer y SuperSlicer. Si falta un perfil, Solidon indica que usa su propia tabla de materiales.
-- Cura respeta los límites de aceleración de la impresora. Si un valor elegido los supera, Solidon muestra el valor reducido en el informe.
+- Cura respeta los límites de aceleración e informa de los valores propios reducidos. El relleno sólido usa la velocidad de relleno; solo la cara superior usa la velocidad de superficie.
 - La temperatura de cámara llega al campo correcto del slicer. Los perfiles sin calefacción de cámara regulable explican por qué el valor no tiene efecto.
 - El relleno Líneas llega a Bambu Studio y Creality Print como líneas, sin sustituirse por Rejilla o Cúbico.
 - Tras cortar, Solidon avisa de ajustes descartados por PrusaSlicer o los slicers de Orca. También detecta cambios en el borde, el orden de paredes y el tipo de soporte.

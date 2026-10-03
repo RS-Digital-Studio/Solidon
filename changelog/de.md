@@ -76,7 +76,7 @@ Nutzen da und sonst nichts.
 - SuperSlicer stürzt bei runden Teilen nicht mehr ab: Die Schrägnaht, die er nicht kennt, bekommt er nicht mehr.
 - SuperSlicer erhält Gitterstützen mit Hinweis, wenn Baumstützen gewählt waren. Die Nahtwahl „Nächstgelegen“ kommt ohne falsche Warnung an.
 - TPU findet in PrusaSlicer und SuperSlicer das passende Filamentprofil samt Startwerten. Fehlt ein Profil, nennt Solidon die eigene Materialtabelle als Grundlage.
-- Cura berücksichtigt die Beschleunigungsgrenzen des Druckers. Wenn eine eigene Einstellung darüber liegt, nennt Solidon den begrenzten Wert im Bericht.
+- Cura beachtet die Beschleunigungsgrenzen und meldet begrenzte eigene Werte. Volle Füllschichten drucken mit dem Fülltempo; nur die Oberseite erhält das Oberflächentempo.
 - Kammertemperaturen kommen im richtigen Slicerfeld an. Druckerprofile ohne regelbare Kammerheizung erklären jetzt, warum der Wert nicht wirkt.
 - Das Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als Linien an und wird nicht mehr durch Gitter oder Würfel ersetzt.
 - Solidon meldet nach dem Schneiden auch Einstellungen, die PrusaSlicer oder die Orca-Slicer verworfen haben. Abweichende Rand-, Wand- und Stützarten werden ebenfalls erkannt.

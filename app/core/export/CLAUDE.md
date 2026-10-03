@@ -129,6 +129,12 @@ der Vergleich, ohne Filamentprofile je Spule sagt es `unreachable_overrides`
 vorher. `crashed` (Regel in `dateiformat.md`) lässt eigene Fehlercodes wie
 Bambus `-100` Absagen bleiben.
 
+Curas innere Vollschichten fahren mit `speed.infill` (`speed_topbottom`),
+die sichtbare Oberseite mit `speed.top_surface` (`speed_roofing`).
+`as_mapping` aktiviert dafür genau eine Dachschicht, sofern obere Schichten
+vorhanden sind, und bindet auch das Bügeltempo an die Oberfläche. So gelten
+dieselben Rollen in der Konsole und im importierbaren Fensterprofil.
+
 ## Warum `slicer_keys.py` existiert
 
 Drei Familien übersetzen (Warum im Moduldocstring): `prusa` (PrusaSlicer,

@@ -51,7 +51,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O SuperSlicer já não falha com peças redondas: já não recebe a costura chanfrada que não conhece.
 - O SuperSlicer recebe suportes em grelha com um aviso se foram escolhidos suportes em árvore. A costura mais próxima é aplicada sem avisos falsos.
 - O TPU encontra o perfil de filamento e os valores de arranque no PrusaSlicer e no SuperSlicer. Se faltar um perfil, o Solidon indica que usa a sua própria tabela de materiais.
-- O Cura respeita os limites de aceleração da impressora. Se um valor escolhido os ultrapassar, o Solidon mostra o valor reduzido no relatório.
+- O Cura respeita os limites de aceleração e indica os valores escolhidos reduzidos. O preenchimento sólido usa a sua velocidade; só a face superior usa a velocidade de superfície.
 - A temperatura da câmara chega ao campo correto do slicer. Os perfis sem aquecimento regulável da câmara explicam por que o valor não tem efeito.
 - O preenchimento Linhas chega ao Bambu Studio e ao Creality Print como linhas, sem ser substituído por Grelha ou Cúbico.
 - Após o corte, o Solidon assinala definições descartadas pelo PrusaSlicer ou pelos slicers Orca, além de alterações à borda, ordem das paredes e tipo de suporte.

@@ -52,7 +52,7 @@ dans `website/version.json`.
 - SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
 - SuperSlicer reçoit des supports en grille avec une explication si des supports arborescents étaient choisis. La couture la plus proche est appliquée sans fausse alerte.
 - TPU trouve le profil de filament et ses valeurs de démarrage dans PrusaSlicer et SuperSlicer. Si aucun profil n'est disponible, Solidon indique qu'il utilise son propre tableau de matériaux.
-- Cura respecte les limites d'accélération de l'imprimante. Si une valeur choisie les dépasse, Solidon indique la valeur réduite dans le rapport.
+- Cura respecte les limites d'accélération et signale les valeurs choisies réduites. Le remplissage plein garde sa vitesse ; seule la face supérieure utilise la vitesse de surface.
 - La température de chambre arrive dans le bon champ du slicer. Les profils sans chauffage de chambre réglable expliquent pourquoi la valeur reste sans effet.
 - Le remplissage Lignes arrive dans Bambu Studio et Creality Print sous forme de lignes, sans être remplacé par Grille ou Cubique.
 - Après le découpage, Solidon signale les réglages rejetés par PrusaSlicer ou les slicers Orca, ainsi que les changements de bordure, d'ordre des parois et de support.
