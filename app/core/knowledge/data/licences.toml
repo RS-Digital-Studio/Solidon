@@ -11,11 +11,14 @@
 # ausschließlich als extern installierte Programme aufgerufen, nie
 # mitgeliefert.
 #
-# **Und was mitreist, ohne ein Paket zu sein, ebenfalls.** Drei Schriftsippen
-# liegen als vierzehn TTF-Dateien in `app/core/geom/data/fonts/` und werden mit
-# ausgeliefert; `pip` weiß nichts von ihnen. Alle drei stehen unter der SIL
-# Open Font License 1.1:
+# **Und was mitreist, ohne ein Paket zu sein, ebenfalls.** Vier Schriftsippen
+# liegen als sechsundzwanzig TTF-Dateien in `app/core/geom/data/fonts/` und
+# werden mit ausgeliefert; `pip` weiß nichts von ihnen. DejaVu steht unter der
+# Bitstream-Vera-Lizenz (seine eigenen Änderungen gemeinfrei, die Arev-Glyphen
+# unter gleichlautenden Bedingungen), die übrigen drei unter der SIL Open Font
+# License 1.1:
 #
+#   DejaVu          2.35    zwölf Dateien, drei Familien zu vier Schnitten
 #   Liberation      2.1.5   zwölf Dateien, drei Familien zu vier Schnitten
 #   Comfortaa       3.105   eine Datei, variabel
 #   Dancing Script  2.001   eine Datei, variabel
@@ -27,7 +30,7 @@
 # `test_every_licence_text_names_the_version_that_lies_beside_it` hält die
 # Fassung im Dateinamen gegen die Schriftdatei selbst, und
 # `test_the_bundled_fonts_are_listed_here` hält diese Aufzählung gegen die
-# Zuordnung — eine vierte Sippe stünde sonst nirgends in der Aktenlage.
+# Zuordnung — eine fünfte Sippe stünde sonst nirgends in der Aktenlage.
 # Zusätzlich führt `third_party_licenses.toml` ihre festen Primärquellen und
 # SHA-256-Werte. `test_font_licence_corruption_is_rejected` belegt, dass der
 # Beilagengenerator auch einen beschädigten Schriftlizenztext zurückweist.
@@ -142,6 +145,9 @@ allowed = [
   # dieselbe Überlegung wie bei den ComfyUI-Abläufen, deren Lizenzfrage auch
   # nicht in `pyproject.toml` steht (`.claude/rules/kern.md`).
   "OFL-1.1",
+  # Bitstream Vera — die mitgelieferten DejaVu-Schriften (zwölf Dateien), bis
+  # RM-471 über matplotlib im Paket, jetzt als eigene Dateien.
+  "Bitstream-Vera",
   "MIT-CMU",
   "0BSD",
   "BSD-2-Clause",
@@ -226,7 +232,7 @@ rubicon-objc = { licence = "BSD-3-Clause", note = "Objective-C-Anbindung von wgp
 rendercanvas = { licence = "BSD-2-Clause", note = "die Leinwand für pygfx — Qt-Widget und Puffer ohne Fenster, direkt in ui/render gebaut" }
 pylinalg = { licence = "BSD-2-Clause", note = "lineare Algebra für pygfx" }
 freetype-py = { licence = "BSD-3-Clause", note = "Schrift für pygfx-Beschriftungen; bringt FreeType (FTL) mit — die Metadaten sagen nur „BSD License“" }
-uharfbuzz = { licence = "Apache-2.0", note = "Textsatz für pygfx; bringt HarfBuzz (MIT-artig) mit — die Metadaten sagen nur „Apache License 2.0“" }
+uharfbuzz = { licence = "Apache-2.0", note = "Textsatz für pygfx und die Schriftzüge (geom/glyphs.py); bringt HarfBuzz (MIT-artig) mit — die Metadaten sagen nur „Apache License 2.0“" }
 Jinja2 = { licence = "BSD-3-Clause", note = "Shader-Vorlagen in pygfx; die Metadaten sagen nur „BSD License“" }
 hsluv = { licence = "MIT", note = "Farbraum für pygfx; die Metadaten sagen nur „MIT License“" }
 # Der zweite Konstruktionskern (§30). Die Python-Anbindung steht unter
@@ -241,7 +247,6 @@ PySide6 = { licence = "LGPL-3.0-only", note = "dynamisch gebunden, §36" }
 PySide6-Essentials = { licence = "LGPL-3.0-only" }
 PySide6-Addons = { licence = "LGPL-3.0-only" }
 shiboken6 = { licence = "LGPL-3.0-only" }
-matplotlib = { licence = "LicenseRef-Matplotlib", note = "eigene PSF-basierte matplotlib-Lizenz; Volltext aus dem Ziel-Wheel" }
 pillow = { licence = "MIT-CMU", note = "HPND, freizügig" }
 # Der Agent legt den eigenen Schlüssel im Schlüsselbund des Systems ab (§27).
 # Alles darunter kommt mit `keyring`; durchweg MIT außer pywin32-ctypes, das
@@ -253,15 +258,9 @@ keyring = { licence = "MIT", note = "Schlüsselbund des Systems für Geräteiden
 more-itertools = { licence = "MIT", note = "kommt mit keyring" }
 pywin32-ctypes = { licence = "BSD-3-Clause", note = "Windows-Anmeldespeicher hinter keyring" }
 certifi = { licence = "MPL-2.0" }
-contourpy = { licence = "BSD-3-Clause" }
-cycler = { licence = "BSD-3-Clause" }
 fonttools = { licence = "MIT" }
-kiwisolver = { licence = "BSD-3-Clause" }
 packaging = { licence = "Apache-2.0 OR BSD-2-Clause" }
 Pygments = { licence = "BSD-2-Clause" }
-pyparsing = { licence = "MIT" }
-python-dateutil = { licence = "BSD-3-Clause OR Apache-2.0" }
-six = { licence = "MIT" }
 typing_extensions = { licence = "PSF-2.0" }
 SecretStorage = { licence = "BSD-3-Clause" }
 jeepney = { licence = "MIT" }

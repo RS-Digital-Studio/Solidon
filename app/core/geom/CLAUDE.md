@@ -190,7 +190,7 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
-`label_ops.py` (Schriften in `data/fonts/`; Matplotlib gehört zum Extra `geom`;
+`label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten Austritt entgegen der
 Richtung, `opposite_side`)
 
@@ -386,8 +386,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   (`mesh.remember_refined_units`, weitergereicht bis `to_bytes`).
 - Schriften: nur, was mitreist (`BUNDLED_FONT_LICENCES`);
   `FONT_STYLES_AVAILABLE` je Familie; `stroke_width` gegen `narrowest_bead`
-  als Befund, ohne Tabelle je Familie; `font_properties` prüft die Familie
-  der gefundenen Datei, denn matplotlib fällt still zurück.
+  als Befund, ohne Tabelle je Familie; `glyphs.font_file` lehnt fehlende
+  Datei oder Schnitt ab.
 - `MeshData.cavity` folgt `transform.apply` und verfällt bei jeder anderen
   Geometrieänderung; ohne sie tragen Innenschalen oder die Entlüftung
   (`_cavity_mesh`), nie ein Hüllquader. Kein Reparaturweg begründet einen

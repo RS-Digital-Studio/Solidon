@@ -188,6 +188,9 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         viewport = _ExitViewport()
         spacemouse = _SpaceMouse()
 
+        def _may_lose_the_generation(self) -> bool:
+            return True
+
         def _may_discard(self) -> bool:
             return True
 
@@ -241,11 +244,38 @@ def test_rejected_application_exit_touches_nothing() -> None:
     from app.ui.main_window import MainWindow
 
     class _RejectedWindow:
+        def _may_lose_the_generation(self) -> bool:
+            return True
+
         def _may_discard(self) -> bool:
             return False
 
     event = QCloseEvent()
 
     MainWindow.closeEvent(_RejectedWindow(), event)
+
+    assert not event.isAccepted()
+
+
+def test_staying_with_a_generation_asks_nothing_else() -> None:
+    """RM-499: *Zur Erzeugung* hält das Fenster offen — ohne die Frage nach dem Speichern.
+
+    Erst die Erzeugung, dann das Projekt: Wer zur Erzeugung zurückwill, soll
+    nicht noch gefragt werden, ob er speichern möchte.
+    """
+    from PySide6.QtGui import QCloseEvent
+
+    from app.ui.main_window import MainWindow
+
+    class _StayingWindow:
+        def _may_lose_the_generation(self) -> bool:
+            return False
+
+        def _may_discard(self) -> bool:
+            raise AssertionError("nach „Zur Erzeugung“ kommt keine zweite Frage")
+
+    event = QCloseEvent()
+
+    MainWindow.closeEvent(_StayingWindow(), event)
 
     assert not event.isAccepted()

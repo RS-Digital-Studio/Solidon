@@ -1797,16 +1797,17 @@ def test_overlapping_strokes_fill_by_winding_not_by_parity(font: str, text: str)
     Script 0,3 mm², und erhaben gedruckt hatten die Buchstaben Schlitze.
 
     Der Sollwert kommt nicht aus ``outlines``: Die Umlaufzahl wird hier an
-    einem Punktraster direkt aus den Konturen der Schrift gerechnet.
+    einem Punktraster direkt aus den Konturen der Schrift gerechnet, fein
+    abgeflacht und ohne die Füllung des Prüflings.
     """
-    from matplotlib.textpath import TextPath
     from shapely import contains_xy
 
-    from app.core.geom.label_ops import font_properties, outlines
+    from app.core.geom import glyphs
+    from app.core.geom.label_ops import outlines
 
     size = 10.0
-    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font))
-    rings = [np.asarray(ring, dtype=float) for ring in path.to_polygons() if len(ring) >= 4]
+    found = glyphs.contours(text, size, font, "regular")
+    rings = [ring for ring in glyphs.rings(found, sag=0.002) if len(ring) >= 4]
     low = np.min([ring.min(axis=0) for ring in rings], axis=0)
     high = np.max([ring.max(axis=0) for ring in rings], axis=0)
     xs, ys = np.meshgrid(
@@ -2126,68 +2127,28 @@ def test_a_label_on_the_body_stays_quiet(profile: Profile) -> None:
 
 
 def _glyph_area(text: str, size: float, font: str = "DejaVu Sans") -> float:
-    """Die Fläche eines Schriftzugs aus den Kurven seiner Glyphen — Green über jedes Stück.
+    """Die Fläche eines Schriftzugs aus den Kurven seiner Glyphen, exakt über Green.
 
-    Unabhängig vom Prüfling: Die Codes des Glyphenpfads werden hier selbst
-    gelesen (Strecke, quadratische und kubische Bézier-Kurve), und das
-    Linienintegral ½∮(x dy − y dx) ist für ein Polynom mit acht
-    Gauß-Legendre-Knoten exakt. Ohne überlappende Konturen (DejaVu) ist die
-    nonzero-Füllung der Betrag der Summe.
+    Unabhängig vom Prüfling: Die Umrisse liest fontTools aus der Datei, nicht
+    HarfBuzz, und ``AreaPen`` integriert Strecken und Bézier-Kurven exakt. Die
+    Lage der Glyphen spielt für die Fläche keine Rolle, und ohne überlappende
+    Konturen (DejaVu) ist die nonzero-Füllung der Betrag der Summe.
     """
-    import math
+    from fontTools.pens.areaPen import AreaPen
+    from fontTools.ttLib import TTFont
 
-    from matplotlib.path import Path as MplPath
-    from matplotlib.textpath import TextPath
+    from app.core.geom.glyphs import font_file
 
-    from app.core.geom.label_ops import font_properties
-
-    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, "regular"))
-    nodes, weights = np.polynomial.legendre.leggauss(8)
-
-    def integral(poles: np.ndarray) -> float:
-        degree = len(poles) - 1
-        derivative = degree * np.diff(poles, axis=0)
-        total = 0.0
-        for node, weight in zip(nodes, weights, strict=True):
-            t = (node + 1.0) / 2.0
-            basis = [
-                math.comb(degree, k) * (1 - t) ** (degree - k) * t**k for k in range(degree + 1)
-            ]
-            slope = [
-                math.comb(degree - 1, k) * (1 - t) ** (degree - 1 - k) * t**k for k in range(degree)
-            ]
-            x, y = np.asarray(basis) @ poles
-            dx, dy = np.asarray(slope) @ derivative
-            total += 0.25 * (x * dy - y * dx) * weight
-        return total
-
-    area = 0.0
-    start = last = None
-    index = 0
-    codes, vertices = path.codes, path.vertices
-    while index < len(codes):
-        code = codes[index]
-        if code == MplPath.MOVETO:
-            start = last = vertices[index]
-            index += 1
-        elif code == MplPath.LINETO:
-            area += integral(np.asarray([last, vertices[index]]))
-            last = vertices[index]
-            index += 1
-        elif code == MplPath.CURVE3:
-            area += integral(np.asarray([last, *vertices[index : index + 2]]))
-            last = vertices[index + 1]
-            index += 2
-        elif code == MplPath.CURVE4:
-            area += integral(np.asarray([last, *vertices[index : index + 3]]))
-            last = vertices[index + 2]
-            index += 3
-        else:
-            if last is not None and start is not None:
-                area += integral(np.asarray([last, start]))
-            last = start
-            index += 1
-    return abs(area)
+    with TTFont(font_file(font, "regular")) as source:
+        glyph_set = source.getGlyphSet()
+        cmap = source.getBestCmap()
+        scale = size / source["head"].unitsPerEm
+        area = 0.0
+        for character in text:
+            pen = AreaPen(glyph_set)
+            glyph_set[cmap[ord(character)]].draw(pen)
+            area += pen.value
+    return abs(area) * scale * scale
 
 
 @pytest.mark.parametrize("mode", ["raised", "engraved"])
@@ -2331,45 +2292,28 @@ def test_exact_letters_fill_overlapping_strokes_like_the_font(font: str, text: s
     exact_kernel()
 
     import shapely
-    from matplotlib.path import Path as MplPath
-    from matplotlib.textpath import TextPath
     from shapely.geometry import LinearRing, Polygon
 
     from app.core.brep import lettering
-    from app.core.geom.label_ops import font_properties
+    from app.core.geom import glyphs
 
-    path = TextPath((0.0, 0.0), text, size=10.0, prop=font_properties(font, "regular"))
+    found = glyphs.contours(text, 10.0, font, "regular")
     rings: list[list[tuple[float, float]]] = []
-    current: list[tuple[float, float]] = []
-    last = (0.0, 0.0)
-    index = 0
-    while index < len(path.codes):
-        code = path.codes[index]
-        if code == MplPath.MOVETO:
-            if len(current) >= 3:
-                rings.append(current)
-            current = [tuple(path.vertices[index])]
-            last = current[0]
-            index += 1
-        elif code == MplPath.LINETO:
-            last = tuple(path.vertices[index])
-            current.append(last)
-            index += 1
-        elif code in (MplPath.CURVE3, MplPath.CURVE4):
-            count = 2 if code == MplPath.CURVE3 else 3
-            poles = np.asarray([last, *path.vertices[index : index + count]])
+    for pieces in found:
+        current: list[tuple[float, float]] = [pieces[0][0]]
+        for poles in pieces:
+            if len(poles) == 2:
+                current.append(poles[1])
+                continue
+            array = np.asarray(poles)
             degree = len(poles) - 1
             for t in np.linspace(0.0, 1.0, 65)[1:]:
                 weights = [
                     math.comb(degree, k) * (1 - t) ** (degree - k) * t**k for k in range(degree + 1)
                 ]
-                current.append(tuple(np.asarray(weights) @ poles))
-            last = current[-1]
-            index += count
-        else:
-            index += 1
-    if len(current) >= 3:
-        rings.append(current)
+                current.append(tuple(np.asarray(weights) @ array))
+        if len(current) >= 3:
+            rings.append(current)
     points = np.asarray([point for ring in rings for point in ring])
     step = 0.02
     xs = np.arange(points[:, 0].min(), points[:, 0].max(), step) + step / 2.0
@@ -2382,7 +2326,7 @@ def test_exact_letters_fill_overlapping_strokes_like_the_font(font: str, text: s
         winding += np.where(inside, 1 if linear.is_ccw else -1, 0)
     expected = np.count_nonzero(winding) * step * step
 
-    body = lettering.letters(path, 1.0)
+    body = lettering.letters(found, 1.0)
 
     assert body.is_closed
     assert body.volume == pytest.approx(expected, rel=1e-3)
@@ -2849,8 +2793,8 @@ def test_a_bold_style_carries_thicker_strokes_at_the_same_height() -> None:
     """Was der Schnitt für den Druck bedeutet, in Zahlen.
 
     Bis zum 10.09.2026 bot die Beschriftung drei Schriften an — die drei
-    Familien, die matplotlib mitbringt. Die **Schnitte** dazu lagen längst im
-    selben Paket, vier Dateien je Familie, und niemand kam an sie heran.
+    DejaVu-Familien, damals aus matplotlib. Die **Schnitte** dazu lagen längst
+    im selben Paket, vier Dateien je Familie, und niemand kam an sie heran.
 
     Für den Druck ist das keine Geschmacksfrage: ``MIN_SIZE`` steht bei drei
     Millimetern, weil dünne Striche unter einer Düsenbreite verschmieren. Ein
@@ -2886,12 +2830,12 @@ def test_a_bold_style_carries_thicker_strokes_at_the_same_height() -> None:
 
 
 def test_a_font_that_is_not_there_says_so_instead_of_quietly_becoming_another() -> None:
-    """matplotlib fällt still auf DejaVu Sans zurück — Solidon nicht mehr.
+    """Eine fehlende Schrift fällt nicht still auf eine andere zurück.
 
-    Gemessen am 10.09.2026: ``FontProperties(family="Arial")`` findet auf
-    Windows Arial und auf Mac und Linux nichts; ``findfont`` liefert trotzdem
-    ein Ergebnis, nämlich ``DejaVuSans.ttf``, und schreibt eine Zeile auf die
-    Fehlerausgabe, die kein Kunde sieht. Ein Projekt sähe damit auf zwei
+    So tat es matplotlib bis RM-471, gemessen am 10.09.2026:
+    ``FontProperties(family="Arial")`` fand auf Windows Arial und auf Mac und
+    Linux nichts; ``findfont`` lieferte trotzdem ``DejaVuSans.ttf`` und schrieb
+    eine Zeile auf die Fehlerausgabe, die kein Kunde sieht. Ein Projekt sähe damit auf zwei
     Rechnern verschieden aus, ohne dass irgendwo etwas stünde — genau das, wovor
     der Kommentar an ``FONTS`` seit je warnt.
 
@@ -2913,15 +2857,15 @@ def test_a_font_with_only_one_cut_says_so_instead_of_silently_giving_the_same() 
     """Eine variable Schrift bringt nur ihre Standardinstanz mit.
 
     Comfortaa und Dancing Script kommen als eine Datei mit einer
-    Gewichtsachse; matplotlib kann sie nicht instanziieren und nimmt die
-    Vorgabe — „fett" liefert dieselben Umrisse, gemeldet nur auf einer
-    Fehlerausgabe, die kein Kunde sieht. Gemessen am 10.09.2026 an
+    Gewichtsachse; gesetzt wird deren Vorgabe — „fett" lieferte unter
+    matplotlib dieselben Umrisse, gemeldet nur auf einer Fehlerausgabe, die
+    kein Kunde sieht. Gemessen am 10.09.2026 an
     „ABCabc 123" auf 10 mm: bei den sechs statischen Familien wächst die
     mittlere Strichbreite von 0,61–0,84 auf 0,89–1,44 mm, bei diesen beiden
     bleibt sie bei 0,70 beziehungsweise 0,48.
 
-    Der Riegel in ``font_properties`` hätte das nicht gefangen — er prüft die
-    **Familie**, und die ist ja da.
+    Eine Prüfung nur der **Familie** hätte das nicht gefangen, denn die ist ja
+    da; ``glyphs.font_file`` fragt Familie und Schnitt.
     """
     from app.core.errors import ValidationError
     from app.core.geom.label_ops import FONT_STYLES_AVAILABLE

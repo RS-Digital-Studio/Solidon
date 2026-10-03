@@ -922,8 +922,19 @@ def test_the_settings_row_appears_only_after_a_device_was_seen(qt_app: QApplicat
     from app.ui.settings import UiSettings
     from app.ui.settings_dialog import SettingsDialog
 
+    def open_details(dialog: SettingsDialog) -> None:
+        # Die Zeilen stehen unter *Weitere Einstellungen* (48ffcf145); zugeklappt
+        # wäre jede Zeile unsichtbar, und die Prüfung sagte nichts über das Gerät.
+        from PySide6.QtWidgets import QToolButton
+
+        heading = dialog.advanced.findChild(QToolButton)
+        assert heading is not None
+        heading.setChecked(True)
+
     unseen = SettingsDialog(UiSettings(), None)
     try:
+        open_details(unseen)
+        assert unseen.navigation.isVisibleTo(unseen), "die Klappe ist offen"
         assert not unseen.spacemouse.isVisibleTo(unseen)
         assert not unseen.spacemouse_speed.isVisibleTo(unseen)
     finally:
@@ -932,6 +943,7 @@ def test_the_settings_row_appears_only_after_a_device_was_seen(qt_app: QApplicat
     settings = UiSettings(spacemouse_seen=True, spacemouse_speed=7)
     dialog = SettingsDialog(settings, None)
     try:
+        open_details(dialog)
         assert dialog.spacemouse.isVisibleTo(dialog)
         assert dialog.spacemouse.isChecked()
         assert dialog.spacemouse_speed.value() == 7

@@ -269,6 +269,7 @@ from app.ui.dialogs import (
     StepValuesDialog,
     confirm_discard,
     confirm_export,
+    confirm_generation_loss,
     confirm_unsaved,
     damaged_line,
     licence_lock_line,
@@ -335,6 +336,7 @@ from app.ui.panels import (
     as_error,
     collapsible,
     describe_selection,
+    keep_sections_in,
     open_section,
     part_step_of,
     refused_feature_field,
@@ -358,7 +360,7 @@ from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
 from app.ui.session import AskRequest, Session, TriangleCounts
 from app.ui.settings import UiSettings, save_settings
-from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog
+from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
 from app.ui.sketch_editor import (
     SketchField,
@@ -2240,6 +2242,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session = session
         self.settings = settings
+        # Die Abschnitte merken sich ihren Zustand in diesen Einstellungen;
+        # jedes Speichern nimmt ihn mit (RM-491).
+        keep_sections_in(settings.open_sections)
         session.follow_print_settings(self.effective_print_settings)
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
@@ -6754,6 +6759,20 @@ class MainWindow(QMainWindow):
         if activate:
             dialog.activateWindow()
 
+    def _may_lose_the_generation(self) -> bool:
+        """Ob das Fenster schließen darf, obwohl eine Erzeugung etwas verlöre (RM-499).
+
+        Gefragt wird nur, wenn ein Lauf läuft oder fertige Versuche nicht
+        übernommen sind; *Zur Erzeugung* holt den Dialog nach vorn.
+        """
+        dialog = self._generator
+        if dialog is None or not (dialog.running or dialog.tries):
+            return True
+        if confirm_generation_loss(dialog.running, len(dialog.tries), self) == "close":
+            return True
+        self._show_generator(dialog, activate=True)
+        return False
+
     def _say_generation_destination(self) -> None:
         """Über *Übernehmen* nennen, wohin das Modell kommt, wenn sich das geändert hat.
 
@@ -9698,6 +9717,7 @@ class MainWindow(QMainWindow):
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
         )
+        self.viewport.invitation.set_chat_available(backend is not None)
         self.chat.set_notice("")
         # Nach set_available, denn die Sperre überschreibt dessen Hinweis:
         # §2 C zählt den Chat zur schreibenden Seite, mit oder ohne Modell.
@@ -9778,7 +9798,16 @@ class MainWindow(QMainWindow):
         self.chat.set_notice(str(warning if warning is not None else llm.local_model_expectation()))
 
     def action_settings(self) -> None:
-        """§19.3, §38: alles, was die Anwendung sich merkt, an einer Stelle.
+        """§19.3, §38: alles, was die Anwendung sich merkt, an einer Stelle."""
+        self.show_setting("")
+
+    def show_setting(self, option: str) -> None:
+        """Die Einstellungen öffnen, bei ``option`` mit dieser Zeile im Fokus.
+
+        Der Weg der Befehlspalette zu jeder Einzeloption (RM-491); leer heißt
+        der Dialog wie über das Menü. Eine eigene Methode neben
+        ``action_settings``, weil ``triggered`` sein ``checked`` in den ersten
+        Parameter reichte.
 
         Alles wirkt sofort — Thema, Einheit, Navigation, Farben, und seit dem
         Erststart-Weg auch die Sprache: ``languageChanged`` meldet den
@@ -9815,6 +9844,8 @@ class MainWindow(QMainWindow):
                     discovered_printers=slicer_printers,
                     printer_query=printer_query,
                 )
+                if option:
+                    dialog.show_option(option)
                 try:
                     if reset_disclosure:
                         dialog._reset_disclosure()
@@ -9980,6 +10011,16 @@ class MainWindow(QMainWindow):
                 self.action_add_parameter,
             ),
             "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
+            # Jede Einzeloption der Einstellungen, auch die hinter „Weitere
+            # Einstellungen" — unter dem Namen ihrer Zeile (RM-491).
+            **{
+                f"settings.{key}": (
+                    tr("{name}: {value}", name=tr("Einstellungen"), value=title),
+                    "",
+                    lambda option=key: self.show_setting(option),
+                )
+                for key, title in searchable_options(self.settings).items()
+            },
             "view.fit": (tr("Einpassen"), "Home", self.viewport.reset_camera),
             "view.toggle_right": (tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right),
             "view.bed": (tr("Druckplatte zeigen"), "Ctrl+Shift+D", self.action_toggle_bed),
@@ -12549,6 +12590,8 @@ class MainWindow(QMainWindow):
                         "dem Katalog hinzu."
                     )
                 )
+            elif key.startswith("settings."):
+                doc = str(tr("Öffnet die Einstellungen bei dieser Zeile."))
             elif key == "file.part_share":
                 doc = str(
                     tr(
@@ -13405,6 +13448,24 @@ class MainWindow(QMainWindow):
             return None
         spec = REGISTRY.get(twin)
         return spec if feature.kind in (spec.applies_to or ()) else None
+
+    def _sister_for_the_chosen_feature(self, spec: OperationSpec) -> OperationSpec | None:
+        """Die Operation derselben Zeile, die für das gewählte Merkmal gilt (RM-495).
+
+        *Merkmal ändern* und *Bohrung ändern* sind eine Handlung mit zwei
+        Operationen (``actions.instead_of``). Wer an einer Bohrung die falsche
+        wählte — über Befehlspalette, Menü oder Karte —, bekam einen Dialog
+        ohne Vorschau und ohne *Übernehmen*, dessen einziger Satz „Dafür ist
+        „Bohrung ändern“ da“ war. ``None``, wenn die Operation das Merkmal
+        annimmt, keines gewählt ist oder die Zeile keine Schwester hat.
+        """
+        from app.core.perceive.actions import instead_of
+
+        feature = self._selected_feature_object()
+        if feature is None or not spec.applies_to or feature.kind in spec.applies_to:
+            return None
+        sister: OperationSpec | None = instead_of(spec.name, feature.kind)
+        return sister
 
     def _delete_the_chosen_feature(self) -> bool:
         """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
@@ -17814,6 +17875,7 @@ class MainWindow(QMainWindow):
             self._local_features.invalidate()
         if spec.name == "delete_object" and self._delete_the_chosen_feature():
             return
+        spec = self._sister_for_the_chosen_feature(spec) or spec
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
             feature_id = self.object_tree.selected_feature()
@@ -20716,7 +20778,14 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         empty = result is not None and not result.scene.objects and not self.session.busy
         invitation = self.viewport.invitation
-        invitation.set_chat_available(self.session.agent_backend is not None)
+        # **Nur eine bekannte Antwort** (RM-492): ``agent_backend`` liest sonst
+        # Schlüsselbund und Netz im Hauptfaden, am Arbeiter der Modellfrage
+        # vorbei — beim ersten Öffnen kurz nach dem Start bis zu 0,45 s
+        # Stillstand. Der Chatknopf kommt mit der Antwort
+        # (``_refresh_chat_availability``).
+        invitation.set_chat_available(
+            self.session.backend_known and self.session.agent_backend is not None
+        )
         halted = self._halted_before_a_body(result) if empty else None
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
@@ -24160,7 +24229,9 @@ class MainWindow(QMainWindow):
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
         # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
         # Sicherung und ging zu. Wer die nicht kennt, hat seine Arbeit verloren.
-        if not getattr(self, "_close_requested", False) and not self._may_discard():
+        if not getattr(self, "_close_requested", False) and not (
+            self._may_lose_the_generation() and self._may_discard()
+        ):
             event.ignore()
             return
         self._close_requested = True

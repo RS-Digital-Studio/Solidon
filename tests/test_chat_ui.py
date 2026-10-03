@@ -487,6 +487,44 @@ def test_the_model_question_runs_in_a_worker_only_once_the_loop_runs(
         window.deleteLater()
 
 
+def test_the_invitation_waits_for_the_model_question_instead_of_asking_itself(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-492: Die Einladung fragte das Modell am Arbeiter vorbei im Hauptfaden.
+
+    Wer kurz nach dem Start ein Modell öffnete, bekam beim Wechsel vom
+    Startbildschirm ``first_available`` im Hauptfaden — Schlüsselbund und
+    Sockets, bis zu 0,45 s Stillstand. Jetzt zeigt die Einladung den
+    Chatknopf erst, wenn die Antwort da ist, und gefragt wird nur im Arbeiter.
+    """
+    import threading
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    main = threading.get_ident()
+    asked_on_main: list[str] = []
+
+    def first_available() -> None:
+        if threading.get_ident() == main:
+            asked_on_main.append("first_available")
+
+    monkeypatch.setattr("app.ui.session.first_available", first_available)
+    monkeypatch.setattr(llm, "first_available", first_available)
+    session = Session()
+    window = MainWindow(session, UiSettings())
+    try:
+        window._show_invitation()
+        assert not asked_on_main, "die Einladung fragte selbst, im Hauptfaden"
+        assert not window.viewport.invitation._chat_available, "vor der Antwort kein Chatknopf"
+        session.set_agent_backend(cast(Any, SimpleNamespace(id="ollama", model="m")))
+        window._refresh_chat_availability()
+        assert window.viewport.invitation._chat_available, "mit der Antwort kommt der Knopf"
+        assert not asked_on_main
+    finally:
+        window.release()
+        window.deleteLater()
+
+
 def test_proposal_findings_reach_the_report(window: MainWindow) -> None:
     """Fund 3: Die Befunde eines Zugs hatten keinen Anzeigeweg.
 
@@ -2475,11 +2513,25 @@ def test_the_cpu_probe_result_fits_its_real_wrapped_text_on_a_640_by_720_screen(
     dialog.show()
     qt_app.processEvents()
     dialog._probe_done(True, llm.Speed(tokens_per_second=7.8))
-    qt_app.processEvents()
+    for _ in range(8):
+        qt_app.processEvents()
 
     required = dialog.probe_result.heightForWidth(dialog.probe_result.width())
     buttons = dialog.findChild(QDialogButtonBox)
     assert dialog.width() <= 640 and dialog.height() <= 720
     assert dialog.probe_result.height() >= required
-    assert dialog.contentsRect().contains(dialog.probe_result.geometry().bottomRight())
+    # Seit 48ffcf145 steht der Inhalt in einem Rollbereich; die Lage des
+    # Ergebnisses zählt im sichtbaren Ausschnitt, nicht im Dialog. Senkrecht
+    # holt ``ensureWidgetVisible`` es ganz ins Bild; quer rollt höchstens, was
+    # der Bildschirm von der Inhaltsbreite abschneidet (offscreen ist die
+    # Schrift breiter, mit Windows-Schrift passt die Zeile in 640 Punkte).
+    from PySide6.QtCore import QPoint
+
+    from app.ui.style import expanded_width
+
+    viewport = dialog._scroll.viewport()
+    top = dialog.probe_result.mapTo(viewport, QPoint(0, 0)).y()
+    assert top >= 0 and top + dialog.probe_result.height() <= viewport.height()
+    natural = expanded_width(dialog._scroll)
+    assert dialog._scroll.horizontalScrollBar().maximum() <= max(0, natural - dialog.width())
     assert buttons is not None and dialog.contentsRect().contains(buttons.geometry().bottomRight())

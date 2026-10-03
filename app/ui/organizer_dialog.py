@@ -484,7 +484,13 @@ class OrganizerDialog(QDialog):
         )
         field = ValueField(entry, value, self._parameters, self.editor)
         field.changed.connect(lambda: setter(field.value()))
-        self.editor_form.addRow(title, field)
+        # Die Beschriftung bricht um: Das Formular steht in der schmalen
+        # linken Spalte, und „Grosor de la pared divisoria" brauchte dort
+        # mehr als den ganzen Rollbereich — er rollte quer.
+        caption = QLabel(title, self.editor)
+        caption.setWordWrap(True)
+        caption.setBuddy(field)
+        self.editor_form.addRow(caption, field)
         self._edit_fields[name] = field
         from app.ui.op_dialog import even_value_fields
 

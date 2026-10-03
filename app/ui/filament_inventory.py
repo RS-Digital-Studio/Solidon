@@ -538,7 +538,13 @@ class InventoryView(QWidget):
         threshold_layout.addWidget(self.low_stock_threshold)
         threshold_layout.addStretch(1)
         self.settings_area = settings_area
-        self.settings_panel = collapsible(tr("Lager-Einstellungen"), settings_area, open_now=False)
+        self.settings_panel = collapsible(
+            tr("Lager-Einstellungen"),
+            settings_area,
+            open_now=False,
+            contents=tr("Nach einer Ausgabe an den Slicer buchen"),
+            remember="inventory.settings",
+        )
         layout.addWidget(self.threshold_row)
         layout.addWidget(self.settings_panel)
         self.import_button = QPushButton(tr("Aus dem Slicer übernehmen"), shelf)
