@@ -31,6 +31,21 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
+| 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
+| 2026-10-02 | [RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)](#rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026) |
+| 2026-10-02 | [RM-407: Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist (03.10.2026)](#rm-407-ausrichten-scheitert-an-exakten-körpern-obwohl-es-nur-eine-drehung-ist-03102026) |
+| 2026-10-02 | [RM-459: SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt (03.10.2026)](#rm-459-superslicer-stürzt-ab-sobald-solidon-die-schrägnaht-übergibt-03102026) |
+| 2026-10-02 | [RM-464: Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen (03.10.2026)](#rm-464-die-filament-vorwahl-greift-über-fremdmarken-zum-kürzesten-namen-03102026) |
+| 2026-10-02 | [RM-474: Unter Volllast verhungert der Hilfsprozess: Stopp und Abbruch kommen nicht an (03.10.2026)](#rm-474-unter-volllast-verhungert-der-hilfsprozess-stopp-und-abbruch-kommen-nicht-an-03102026) |
+| 2026-10-02 | [RM-463: Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht (03.10.2026)](#rm-463-eine-langsamere-außenwand-erreicht-in-prusaslicer-die-kleinen-umfänge-nicht-03102026) |
+| 2026-10-02 | [RM-435: Exakte Gruppenrundungen sind seit `0041000a0` 27- bis 125-mal langsamer, und Absagen verlieren den Maßhinweis (03.10.2026)](#rm-435-exakte-gruppenrundungen-sind-seit-0041000a0-27--bis-125-mal-langsamer-und-absagen-verlieren-den-maßhinweis-03102026) |
+| 2026-10-02 | [RM-412: Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s (03.10.2026)](#rm-412-ausgelassene-rundungskanten-erscheinen-als-eine-zeile-ohne-ort-die-rückfallsuche-dauert-über-4-s-03102026) |
+| 2026-10-02 | [RM-436: Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch (03.10.2026)](#rm-436-reste-aus-dem-review-bis-0041000a0-stilles-abschalten-bei-vollem-datenträger-satz-ohne-weg-kantenzahl-italienisch-03102026) |
+| 2026-10-03 | [RM-490: Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“ (03.10.2026)](#rm-490-objektbaum-spalte-maße-endet-auch-bei-voller-breite-in--03102026) |
+| 2026-10-03 | [RM-488: Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken (03.10.2026)](#rm-488-auswahlfenster-am-merkmal-felder-rechts-abgeschnitten-kopfzeile-gekappt-waagrechter-rollbalken-03102026) |
+| 2026-10-03 | [RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)](#rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026) |
+| 2026-10-03 | [RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)](#rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026) |
 | 2026-10-03 | [RM-491: Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“ (03.10.2026)](#rm-491-einstellungen-sieben-optionen-liegen-ohne-hinweis-hinter-weitere-einstellungen-03102026) |
 | 2026-10-03 | [RM-489: Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken (03.10.2026)](#rm-489-linke-spalte-bei-19201080-objektbaum-gekürzt-oder-filamentliste-mit-zwei-rollbalken-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
@@ -46,6 +61,8 @@ entfernt hat.
 | 2026-10-02 | [RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)](#rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026) |
 | 2026-10-02 | [RM-359: Weg 2: Leiste, Haken beim Ändern, Grenzen mit Einheit, Regler, Namen und Parameterdialog (02.10.2026)](#rm-359-weg-2-leiste-haken-beim-ändern-grenzen-mit-einheit-regler-namen-und-parameterdialog-02102026) |
 | 2026-10-02 | [RM-342: Oberfläche: Reste aus dem Review seit 0.5.1 (02.10.2026)](#rm-342-oberfläche-reste-aus-dem-review-seit-051-02102026) |
+| 2026-10-02 | [RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)](#rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026) |
+| 2026-10-02 | [RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)](#rm-456-nach-einer-erzeugung-steht-die-verlaufsgruppe-offen-die-lizenzabsage-ohne-interne-kennung-der-mulden-formzug-mit-test-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -57,6 +74,7 @@ entfernt hat.
 | 2026-10-02 | [RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)](#rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026) |
 | 2026-10-02 | [RM-458: Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen (02.10.2026)](#rm-458-eine-datei-die-an-schritt-1-hält-sagt-das-statt-zum-anfangen-einzuladen-02102026) |
 | 2026-10-02 | [RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)](#rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026) |
+| 2026-10-02 | [RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)](#rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
@@ -37275,6 +37293,473 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
 
+## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
+
+<a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
+<a id="rm-367"></a>
+
+**RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett.**
+  Review 02.10.2026, Gebietsprüfung Weg 4, am HEAD `6ce767031`.
+  - **W4-3 — Ein von Hand verdorbener Strichtext endet als „unerwarteter Fehler“.** Feld *Striche*
+    im Dialog (auch über *Eingabe korrigieren*): `JSONDecodeError`, `KeyError: 'n'`, `IndexError`
+    → jedes Mal `op.sculpt_strokes.InternalError` mit *Fehler melden*
+    (`app/core/geom/sculpt.py:306–323`). Beim Skelett wird derselbe Fall als Eingabefehler
+    abgefangen. Fix: Strichtext prüfen und als `ValidationError` mit Handlungsvorschlag melden.
+    §2.7, Regel 17. Sonde `w4_strichtext.py`.
+  - **W4-6 — Der Skeletteditor zeigt im Bild keinen Knochen und keinen Gelenkpunkt**, nur die
+    Leiste zählt mit (`main_window.py:11755–11943`, `viewport.py`). §2.8. Sonde
+    `w4_knochen_sichtbar.py` (Quelltextprobe).
+  - **W4-7 — Ein Knochen landet auf dem angeklickten Hautpunkt statt im Gelenk**, obwohl die
+    Leiste „Erst das Gelenk anklicken“ sagt (`main_window.py:11848`, `pose_bar.py:77`); die
+    Beugung wird einseitig: +60° Volumen 0,841 statt 0,927 mit `pose.pinched`, −60° 1,013.
+    Fix: den Klickpunkt auf die Körperachse unter der Haut legen. §2.2, §2.7. Sonde
+    `w4_knochen_oberflaeche.py`.
+  - **W4-8 — Ende-zu-Ende-Test und Beispiel von Weg 4 lassen „Skelett setzen und stellen“ aus**
+    („stellen“ als „auf die Platte stellen“ gelesen): `tests/test_way_four.py:40–131`,
+    `tools/make_examples.py:166–232`. §40 P16, §2.2.
+  **Abnahme:** je Fund ein Test — verdorbener Strichtext → Eingabefehler mit Vorschlag; Knochen
+  und Gelenke im Bild sichtbar; Knochen liegt im Körperinneren, ±60° symmetrisch; `test_way_four`
+  setzt und stellt ein Skelett. Beleg: `F:\solidon-review-reports\gebiet-weg4.md`.
+  Nachprüfung am Stand `4cf460e87` (nach `88b5f425f`): W4-8 behoben (`test_way_four` setzt und stellt ein Skelett, Gegenprobe rot). W4-3 unvollständig: die drei Originalfälle sind jetzt ein Eingabefehler mit Vorschlag, aber `"s":NaN` und `"p":[NaN,…]` enden weiter als „unerwarteter Fehler“; r ≤ 0 wird angenommen und bewegt trotzdem Ecken; r = Infinity bleibt wirkungslos ohne Befund; vier Koordinaten werden still abgeschnitten (`types.as_vec3`). W4-6 und W4-7 offen. Belege `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonde `v4g_rm367_strichtext_zwillinge.py`.
+  **W4-3 vollständig (02.10.2026 abends, Claude, Thread „Bedienung und KI“):** `strokes_from_text`
+  liest Punkte und Normalen als genau drei endliche Koordinaten, Radius endlich und größer null,
+  Stärke endlich (`_finite`, `_finite_point`); sonst Eingabefehler mit Ausweg. Sechs neue Fälle in
+  `test_sculpt.py::test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out`.
+
+**Abschluss:** Alle vier Funde erledigt. W4-8 mit `88b5f425f` (`test_way_four` setzt und stellt ein Skelett). W4-3 vollständig: Strichtext mit NaN, Unendlich, Radius ≤ 0 oder vier Koordinaten ist ein Eingabefehler mit Ausweg (`_finite`, `_finite_point`; sechs neue Fälle in `test_sculpt.py`). W4-7: Ein Klick auf die Haut setzt das Gelenk unter den Klick in die Mitte des Körpers, entlang des Blicks bis zur Gegenwand (`pose.inside_the_body`, `Viewport.ray_toward`); neben der Haut, streifend oder ins Leere bleibt der Punkt (`test_pose.py::test_a_click_on_the_skin_becomes_a_joint_on_the_axis`). W4-6: Der Skeletteditor zeichnet Knochen und das gesetzte Gelenk vor dem Körper (`Viewport.show_bones`, `clear_bones`, `bones_shown`/`joint_shown`; `test_pose_session.py::test_bones_are_drawn_and_sit_inside_the_body`). Alle 62 Skeletttests einschließlich Fensterfällen grün. Fenstersonde am echten Fenster an `clean_figure.stl`: Gelenk 4,27 mm unter der Haut, Knochen im Bild sichtbar, nach *Fertig* weg; 4 von 4. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)
+
+<a id="rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026"></a>
+<a id="rm-497"></a>
+
+**RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü.**
+  Versionsvergleich Weg 1 (03.10.2026). Seit der Entscheidung vom 11.09. stehen Operationen nicht
+  mehr im Kontextmenü, sondern rechts im Auswahlfenster (§18.5; §2.2 ist schon angepasst). Zwei
+  Abnahmesätze in §40 sprechen noch vom alten Weg: P0 „zwei Ops im Register, sichtbar in Menü,
+  Palette, Kontextmenü, CLI und Tool-Schema“ und P1 „Klick liefert die korrekte Feature-ID und das
+  passende Kontextmenü“ (`3d-agent-bauplan.md:3164`, `:3200` am Stand `809141fdd`). Der Docstring
+  `_on_viewport_context_menu` in `app/ui/main_window.py` ist als Kleinigkeit berichtigt.
+  **Fix:** Beide Sätze auf das Auswahlfenster umstellen (Bauplan nur mit Ansage; Thread, der RM-360
+  umgesetzt hat).
+  **Abnahme:** `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nur noch Menüs, die es gibt.
+  Beleg: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md`.
+
+**Abschluss:** Beide Abnahmesätze in §40 nennen das Auswahlfenster: P0 „sichtbar in Menü, Palette, Auswahlfenster, CLI und Tool-Schema“, P1 „Klick liefert die korrekte Feature-ID und im Auswahlfenster die passenden Operationen“. `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nichts mehr; der verbleibende Treffer in §21 erzählt in der Vergangenheit, wie der Ausweg über die Provenienz gefunden wurde. Umgesetzt von Claude (Thread „Bedienung und KI“), Bauplanänderung angesagt mit RM-360.
+## RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)
+
+<a id="rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026"></a>
+<a id="rm-371"></a>
+
+**RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3, W3-4).
+  Der Erzeugen-Dialog läuft mit `dialog.exec()` (`app/ui/main_window.py:6577`) und ist
+  anwendungsmodal, solange der Generator rechnet (40 s bis viele Minuten); der Fortschritt steht
+  nur im Dialog. §2.8: „Oberfläche bedienbar“, „nie ein blockierendes Fenster“. Beleg
+  `F:\solidon-review-reports\sonden\w3_modal.txt` (`ApplicationModal`).
+  **Ablauf:** Nach *Erzeugen* schließt bzw. verkleinert sich der Dialog nicht modal; der Lauf geht
+  im Arbeiter weiter, die Statusleiste zeigt Fortschritt, verstrichene Zeit und *Abbrechen*
+  (§2.8), die Anwendung bleibt bedienbar. Ist der Lauf fertig, erscheint die Versuchsliste wieder
+  (nichtmodal) mit *Übernehmen*; ein Wechsel des Projekts oder eine gesetzte Einfügemarke
+  wird beim Übernehmen behandelt (RM-361).
+  **Stellen:** `main_window.py:6575–6579` (`_generate`), `app/ui/generate_dialog.py` (Lauf,
+  `_on_failed` `:1060–1068`, Abbrechen `:1091–1099`), Statusleisten-Fortschritt wie beim Laden.
+  **Abnahme:** Test mit gestelltem langsamen Backend: während des Laufs ist kein modales Fenster
+  aktiv, ein Menüeintrag lässt sich auslösen, die Statusleiste zeigt Fortschritt und *Abbrechen*
+  bricht den Lauf; danach ist das Ergebnis übernehmbar. Bauplan §2.8, §15.3.
+  **Vorgabe Robert 02.10.2026 — allgemein:** gleiches nichtmodales Verhalten für jede lange Erzeugung (Text, Bild, später weitere Generatoren); Abnahme mit mindestens drei unterschiedlichen Läufen (Text, Bild, Abbruch).
+
+**Abschluss:** **Abschluss 02.10.2026 (Claude, Thread „Bedienung und KI“):** Der Erzeugen-Dialog ist nichtmodal
+und einer zur Zeit (`MainWindow._generator`, ein zweiter Aufruf holt ihn nach vorn). Nach
+*Erzeugen* tritt er zur Seite; der neue Besitzer `"generate"` zeigt in der Statusleiste Satz,
+Anteil und verstrichene Zeit (eigene `ProgressTiming`, ab 10 s mit Schätzung) samt *Abbrechen*
+(`GenerateDialog.cancel_run`), ohne Wartezeiger (`_BACKGROUND_PROGRESS`), und steht zuletzt in
+`_PROGRESS_PRIORITY`. Ergebnis oder Fehler holen den Dialog ohne Fokusraub zurück
+(`runEnded`, `WA_ShowWithoutActivating`); ein Abbruch ohne fertigen Versuch schließt ihn mit
+Ansage, mit fertigen Versuchen bleiben sie übernehmbar. *Übernehmen* gilt dem jetzt offenen
+Projekt; ein Wechsel steht vorher über dem Knopf (`_say_generation_destination`), vom
+Startbildschirm aus beginnt es ein neues Projekt (`_begin_from_the_start_screen`). Die
+RM-361-Absagen (Einfügemarke, Lizenz) bleiben unverändert. Schließen des Fensters bricht den
+Wurf ab. Mit RM-418 verwirft ein zweites *Abbrechen* während des Auslaufens nichts; hängt der
+Generator dabei, lassen Esc und das Fensterkreuz den Dialog zur Seite treten, die Versuche
+bleiben, die Statusleiste nennt das Auslaufen. Text und Bild teilen den Weg; ein weiterer Generator nimmt ihn mit
+(`wartezeit.md`, „Eine Erzeugung läuft im Hintergrund“). Die Aufnahme des KI-Workshops
+(`tools/workshop_ai_capture.py`) bedient den Dialog nichtmodal und filmt die Wartezeit am Fenster.
+**Nachweis:** Fenstertests `tests/test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated[text|image]`,
+`::test_cancel_in_the_status_bar_stops_the_generation[False|True]`,
+`::test_a_project_opened_during_the_run_is_named_before_taking`,
+`::test_a_hanging_cancel_lets_the_dialog_step_aside_and_keeps_the_tries`, Wächter ohne Fenster
+`::test_generating_never_holds_the_window_in_a_modal_loop`; angepasst die RM-361-Tests,
+`test_ai_disclosure.py::test_main_window_keeps_the_generation_record_in_its_live_settings` und
+`test_widget_lifetime.py::test_a_window_that_opened_a_dialog_still_lets_go`. Fenstersonde am
+echten Fenster (zweiter Monitor, gestellter langsamer Generator), Läufe Text, Bild, Abbruch:
+43 von 43 Prüfungen — kein modales Fenster während des Laufs, Menüeintrag wirkt, Statusleiste
+„Modell wird erzeugt (2 s) · 14 % · Verstrichen: 2 s“ mit *Abbrechen*, Abbruch beendet den
+Arbeiter, Übernehmen und Strg+Z als ein Schritt. Ausgangsstand gegengeprüft: Dialog während des
+Laufs `ApplicationModal`. Commits: `4f8d55e28`, `4b9428337` (hängender Abbruch nach RM-418).
+
+## RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)
+
+<a id="rm-456-nach-einer-erzeugung-steht-die-verlaufsgruppe-offen-die-lizenzabsage-ohne-interne-kennung-der-mulden-formzug-mit-test-02102026"></a>
+<a id="rm-456"></a>
+
+**RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test.**
+  Review 02.10.2026 der Claude-Commits bis `73d83b55b` über die Oberfläche.
+  - **Regression gegenüber 0.5.1 (gering):** Seit RM-372 (`e27743131`) bündelt eine Erzeugung ihre
+    Schritte in einer Verlaufsgruppe, die zugeklappt erscheint — in v0.5.1 waren nach dem Erzeugen
+    2 von 4 Schritten sichtbar, jetzt 0 von 4; der Kunde sieht erst nach Aufklappen, was geschah.
+    Fix: die Gruppe der gerade entstandenen Transaktion offen zeigen.
+  - **Testlücke RM-438 (`6f64f7ed1`):** Wird `before=self._sculpt_shown()` in
+    `app/ui/main_window.py:11698` entfernt, bleiben alle 23 Fenstertests grün, die Züge setzen — der
+    Kundenfehler (Formzug in die eben gegrabene Mulde gilt als verfehlt) könnte unbemerkt
+    zurückkehren. Fix: Fenstertest mit zwei Zügen in dieselbe Mulde.
+  - **Interner Wert sichtbar (gering, keine Verschlechterung):** Die Lizenzabsage beim Erzeugen
+    zeigt die Zeile „Handlung: change“.
+  **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
+  macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
+  Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Stand 02.10.2026 (Claude, Thread „Bedienung und KI“): Teile 1 und 3 erledigt.** Teil 1:
+  `_take_generated` öffnet die Gruppe der neuen Transaktion (`HistoryPanel.open_group`);
+  Fenstertest `test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated`
+  (Mutation ohne den Aufruf: rot). Teil 3: `action` steht in `dialogs.ADDRESS_VALUES`, keine
+  Freischaltungsabsage nennt mehr ihre Kennung; Test ohne Fenster
+  `test_an_activation_refusal_names_no_internal_action` (vier Fehlerarten, Mutation rot), dazu
+  die RM-361-Fenstertests. Fenstersonde am echten Fenster: Gruppe nach Text- und Bildlauf offen
+  (`3 Modell einfügen` bis `6 Auf das Bett setzen`), Lizenzabsage ohne „Handlung: change“;
+  am Ausgangsstand beides nachgestellt (vier Kindzeilen verborgen, Zeile vorhanden). Commit wird
+  nachgetragen. **Offen: Teil 2** (Koordinator).
+  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
+
+**Abschluss:** **Abschluss 02.10.2026 (Claude, Thread „Bedienung und KI“):** Alle drei Teile erledigt. Teil 1 und
+3 mit RM-371 (`HistoryPanel.open_group` nach `_take_generated`; `action` in
+`dialogs.ADDRESS_VALUES`), Teil 2 vom Koordinator
+(`test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage`, Gegenprobe
+ohne `before=self._sculpt_shown()` rot). Am Ausgangsstand per Fenstersonde nachgestellt: vier
+Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nachher Gruppe offen
+(`3 Modell einfügen` bis `6 Auf das Bett setzen`), Absage ohne Kennung. Commit: `4f8d55e28`.
+
+## RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)
+
+<a id="rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026"></a>
+<a id="rm-303"></a>
+
+**RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F14, N8;
+  Text der Gesamtprüfung). Der Zweig hat die Fenstertests
+  `test_ui.py` (sechs Tests mit `keep_the_files_place`),
+  `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
+  `test_generate_ui.py` (Schrittliste mit `place_on_bed`) angepasst; sie gelten mit dem
+  Release-Tor. Der Plattenwechsel nach dem Import (`_show_the_plate_of_the_import`) hat
+  keinen Fenstertest und gilt nur für Dateien vom Pfad: gesetzt in `_on_import_confirmed`,
+  das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
+  erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
+  mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
+  auf Platte 2 kommt. Dazu aus der dritten Nachprüfung (Nachtrag
+  `e85c77ed0`, schon ab `bc901772c`): Ein abgebrochener Import an der Einfügemarke lässt
+  seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
+
+**Abschluss:** Ein weiteres Modell meldet seinen Körper auf allen drei Wegen mit demselben Signal (`Session.modelPlaced`): Datei und Download beim Annehmen des Imports, das erzeugte Modell in `add_generated`, ein Import an der Einfügemarke erst, wenn sein Umbau übernommen ist. Das Fenster zeigt daraufhin die Platte des neuen Körpers, sobald ein Ergebnis ihn trägt (`MainWindow._on_model_placed`); bisher wechselte nur eine Datei vom Pfad, und das über den letzten Schritt des Stapels, der an der Einfügemarke ein fremder ist. Ein Import an der Einfügemarke, dessen Umbau abgebrochen wird oder scheitert, nimmt seine Quelle wieder aus Dokument und Projekt (`Session._settle_revision_import`), statt sie mit dem nächsten Speichern mitreisen zu lassen. Tests: `test_ui.py::test_a_further_model_brings_its_plate_into_view` (Datei, Download, erzeugt; Platte 1 gewählt, das neue Modell kommt auf Platte 2 und die Kopfzeile zeigt sie) und `test_history_revision_ui.py::test_an_import_at_the_marker_takes_its_source_along_when_it_does_not_land` (abgebrochen, gescheitert, übernommen). Gegenprobe: ohne den Anschluss im Fenster und ohne die Rücknahme an der Marke 5 von 6 Fällen rot, nur „übernommen“ grün. Fenstersonde am echten Fenster: Brett 200 × 200 mm, Platte 1 gewählt, dann Datei, Download und erzeugtes Modell — jedes auf einer neuen Platte, die Kopfzeile zeigt jeweils dessen Platte; 10 von 10 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)
+
+<a id="rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026"></a>
+<a id="rm-406"></a>
+
+**RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat.**
+  Review 02.10.2026, Modelltest (einziger Hänger), am HEAD `4449e3370`.
+  **Fehlerfall:** `meshy_ai_wooden-marble-game-board…stl` (1,95 Mio. Dreiecke, 781 mm): Beim Laden
+  „Sofort laden“ (begrenzte Erkennung). *Auto Split* → 12 Stücke, jedes unter der 1,5-Mio.-Grenze
+  und deshalb voll erkannt (`app/core/scene/evaluate.py:3736`, `:4023`); die Absage gilt nur dem
+  geladenen Körper (`:3750–3809`). Gefragt war „1–4 min, 5 GB“; nach „Sofort laden“ kostete es rund
+  570 s und 9,9 GB, 6 der 12 Stücke passen trotzdem nicht (`split.too_many_parts`). Eine Kachel
+  230 × 230 mm (111 772 Dreiecke): `detect` 14,5–22,4 s für 228 ebene Flächen (Ziel 1 s, Zeit in der
+  Kegelverfeinerung — Laufzeit ist RM-193).
+  **Fix (Empfehlung nach der Leitlinie „Kunden arbeiten weiter“):** Die Absage vererbt sich an alle
+  Körper, die aus dem abgelehnten entstehen (Teilen, Auto Split, Zerlegen), symmetrisch zur
+  Zustimmung; der Prüfbericht sagt es und bietet *Vollständig erkennen* an. §21.1 nennt das heute
+  nicht — die Bauplanänderung braucht Roberts Ansage.
+  **Abnahme:** Test mit erzwungener Absage: Teilen eines großen Körpers → Stücke mit begrenzter
+  Erkennung, Hinweis mit Handlung sichtbar; mit Zustimmung voll. Bauplan §21.1, §2.1, §2.8.
+  Belege: `modelle\diagnose.md` (Befund 2), `modelle\haenger\m367_teilen.stack.txt`.
+  **Entschieden (Robert, 02.10.2026, Entscheidungskarte „Vererben“):** Die Absage der vollen Erkennung vererbt sich an die Teilungsstücke von Auto Split (und gleichartige Wege: Teilen, Zerlegen). Ein Knopf „Vollständig erkennen“ holt die volle Erkennung bei Bedarf nach. Die Anpassung von Bauplan §21.1 gehört zum Punkt.
+
+**Abschluss:** Ein teilender Schritt vererbt die abgelehnte volle Erkennung an alle Stücke (`a50cfc7d4`, Entscheidung Robert „Vererben“, Bauplan §21.1); „Alle Merkmale erkennen“ holt sie am Ladeschritt des Ursprungs nach. Test: Stücke eines abgelehnten Modells erben die Absage; Tor über 08c681543 grün. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-407: Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist (03.10.2026)
+
+<a id="rm-407-ausrichten-scheitert-an-exakten-körpern-obwohl-es-nur-eine-drehung-ist-03102026"></a>
+<a id="rm-407"></a>
+
+**RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist.**
+  Review 02.10.2026, Modelltest, am HEAD `4449e3370`. Drei Ursachen:
+  - **a) Offene Flächenhülle** (`surfaces.step`, `obj_2`): `app/core/brep/edit.py:2616–2621` lehnt
+    jede Bewegung ab, auch eine Verschiebung um 1 mm; der Satz „Verkleinern Sie die Änderung“ ist
+    falsch. Eine starre Bewegung braucht keine Gültigkeit eines geschlossenen Körpers.
+  - **b) Drehmatrix nahe 180°** (`carpet-corner-clip.step`, `obj_2`, 175,7°): `rotation_between`
+    verstärkt das Rundungsrauschen, die Matrix weicht um 2,7·10⁻¹⁴ von einer Drehung ab, die
+    Schwelle ist 1,4·10⁻¹⁴ (`edit.py:2598`, `:2625`) — der Weg geht über GTransform und scheitert.
+    Dieselbe Matrix orthonormiert geht.
+  - **c) Unvollständige Merkmalsflächen** (`gegen_naht.step`): `curve_1` deckt 3 647 von 3 649
+    Dreiecken seiner Flächen; `app/core/geom/transform.py:426` verlangt vollständige Flächen und
+    sperrt jede Bewegung mit „Wählen Sie vollständige Flächen aus“ — ein Satz, der nicht zum
+    Ausrichten passt.
+  **Fix:** a) starre Bewegungen auch an offenen Hüllen; b) Drehmatrix vor dem Prüfen orthonormieren
+  (bzw. `rotation_between` stabil nahe 180°); c) Vollständigkeitsprüfung nur dort, wo Flächen
+  einzeln bewegt werden, nicht beim Bewegen des ganzen Körpers.
+  **Abnahme:** Test je Ursache an den drei Dateien (bzw. kleinen Zwillingen): Ausrichten gelingt,
+  Körper gültig, Lage stimmt. Bauplan §25, §2.7, Regel 17.
+  Belege: `modelle\diagnose.md` (Befund 3), Sonden `d3_*`.
+
+**Abschluss:** Ausrichten, Drehen und Verschieben gelingen an Flächenmodellen, nahe 180° und an Teilflächen (`783f62d2a`): starre Bewegung über die Partnerschaft auch an offenen Hüllen, `rotation_between` über 1 − cos jenseits von 90°, Rauschen bis 1e-9 auf die Ähnlichkeit, Teilflächen folgen Dreieck für Dreieck. Je Ursache ein Test, vorher rot; am echten Fenster surfaces.step, carpet-corner-clip.step und gegen_naht.step ausgerichtet, 16 von 16 Prüfungen. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-459: SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt (03.10.2026)
+
+<a id="rm-459-superslicer-stürzt-ab-sobald-solidon-die-schrägnaht-übergibt-03102026"></a>
+<a id="rm-459"></a>
+
+**RM-459 — SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, SuperSlicer 2.5.59.13, Weg Bibliothek (wie
+  die Matrix aus RM-312). SuperSlicers 3MF-Leser stürzt mit `0xC0000005` ab, sobald
+  `Metadata/Slic3r_PE.config` mindestens zwei ihm unbekannte Schlüssel trägt (gemessen:
+  `gcode\probe_ss_keys.py`). Unbekannt sind `external_fill_pattern` (aus SuperSlicers eigenem
+  Bündel, in jeder Beilage) und die vier `scarf_seam_*` aus PrusaSlicer 2.9 — eine Schrägnaht genügt
+  zum Absturz. An `prusa-mini` stürzen `wuerfel A/B`, `pilz A`, `farben A` ab; 41 der 108
+  SuperSlicer-Abstürze aus der Codex-Matrix gehen darauf zurück (Variante „vorschlaege“ an runden
+  Teilen). Solidon meldet nur „Der Slicer ist beim Verarbeiten der Übergabe abgestürzt“.
+  **Stellen:** `app/core/export/slicer_keys.py:245–248` (Schrägnaht-Zeilen), `:915` (`superslicer` →
+  Familie `prusa`), `:965–981` (`NOT_TAKEN_BY` nur je Familie), `app/core/slice/advise.py:1189–1196`
+  (Vorschlag ohne Blick auf das Programm), Beilage `app/core/export/writer.py:1989–2018`,
+  `threemf.py:372`.
+  **Fix (allgemein):** Was ein Programm einer Familie nicht kennt, weder vorschlagen noch schreiben —
+  `NOT_TAKEN_BY` je Programm (`discover.program_mark`), für SuperSlicer mindestens
+  `shell.scarf_seam`; vor dem Schreiben die Schlüssel gegen den gemessenen Optionsbestand der
+  installierten Version filtern (gilt ebenso für Creality Print und Bambu Studio gegenüber
+  OrcaSlicer).
+  **Abnahme:** Wächter je Programm × Tabellenzeile gegen den Optionsbestand; `prusa-mini` mit
+  Schrägnaht in SuperSlicer liefert eine Druckdatei. Bauplan §28, §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde_teil1.md` (B1), `gcode\lauf1\`.
+  Nachtrag 02.10.2026 (Stand `09d8e9485`): **Regression gegenüber v0.5.0** — die Schrägnaht kam mit v0.5.1; dort derselbe Absturz (`prusa-mini` Würfel A/B, Pilz, Siebhalter). Schon die eigene Wahl „Schrägnaht aus“ reicht am Bündeldrucker (`scarf_seam_placement = nowhere` plus `external_fill_pattern`), am allgemeinen Drucker die Schrägnaht allein. Mit RM-479 und RM-480 sind alle 108 SuperSlicer-Abstürze der Codex-Matrix zugeordnet (41 Schrägnaht, 64 Bauraum, 3 Baumstütze). Beleg `gcode\befunde.md` (CP-5).
+
+**Abschluss:** SuperSlicer bekommt nur Schlüssel, die sein 3MF-Leser kennt (`34ee2b092`, `NOT_TAKEN_BY_PROGRAM`, gemessener Schlüsselbestand als Wächter). Am echten SuperSlicer 2.5.59.13: Teil mit Schrägnaht ergibt 200 Schichten, vorher Absturz. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-464: Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen (03.10.2026)
+
+<a id="rm-464-die-filament-vorwahl-greift-über-fremdmarken-zum-kürzesten-namen-03102026"></a>
+<a id="rm-464"></a>
+
+**RM-464 — Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen.**
+  G-Code-Gegenprüfung 02.10.2026, Weg Bibliothek (Vorwahl wie der Druckdialog). ElegooSlicer, Bambu
+  A1 mini, PETG → `addnorth PETG ESD` (leitfähiges Sonderfilament) statt Generic/Bambu PETG; Bambu
+  A1, PETG → `BETA PETG @BBL A1` statt `Generic PETG @BBL A1` (steht in `default_materials`);
+  PrusaSlicer MK4S HF0.4, ABS → `Esun ABS @MK4S HF0.4` statt `Generic ABS @MK4S HF0.4`. Mit dem
+  Filament kommen Temperatur, Lüfter und Volumenstrom des ganzen Drucks.
+  **Stellen:** `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
+  `:2647–2675` (`default_materials` nur bei PrusaSlicer), `:1713–1724` (Orca-Modellprofil liest die
+  Liste nicht), `:3307–3318` (`_vendor_of` nimmt bei `BBL/filament/<Marke>/` den Herstellerordner).
+  **Fix:** `default_materials` auch aus Orca-Modellprofilen; Marke = Unterordner; ohne Vorschlag der
+  Maschine „Generic <Typ>“ bzw. die Marke des Druckerherstellers vor jeder Fremdmarke, erst dann die
+  Namenslänge.
+  **Abnahme:** Wächter je erkanntem Drucker × Material gegen eine Positivliste. Bauplan §29.
+  Beleg: `gcode\befunde_teil1.md` (B7).
+  Regression 02.10.2026: nein — v0.5.0, v0.5.1 und `09d8e9485` wählen dieselben Fremdmarken.
+
+**Abschluss:** Die Filament-Vorwahl nimmt den Vorschlag des Druckermodells, sonst Generic oder die Marke des Druckers vor jeder Fremdmarke (`203df87ae`). Am echten Bestand: Bambu A1 und A1 mini Generic PETG statt BETA/addnorth, MK4S Prusa ABS statt Esun. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-474: Unter Volllast verhungert der Hilfsprozess: Stopp und Abbruch kommen nicht an (03.10.2026)
+
+<a id="rm-474-unter-volllast-verhungert-der-hilfsprozess-stopp-und-abbruch-kommen-nicht-an-03102026"></a>
+<a id="rm-474"></a>
+
+**RM-474 — Unter Volllast verhungert der Hilfsprozess: Stopp und Abbruch kommen nicht an.**
+  Fund 02.10.2026 (Thread „Umsetzung Bedienung, Darstellung, KI“): `tests/test_kernel_process.py`
+  fällt bei voller Prozessorlast auch einzeln (3 failed, 1 error, „Das Ende des Hilfsprozesses ist
+  noch nicht bestätigt“; der Abbruch der Bisektion kommt nicht an), bei 25 GB freiem Speicher.
+  **Vermutung:** Der Hilfsprozess rechnet seit RM-212 eine Stufe unter der Anwendung
+  (`kernel_jobs._yield_to_the_window`, `BELOW_NORMAL_PRIORITY_CLASS`). Auf einem ausgelasteten
+  Rechner bekommen dann auch seine Steuerwege keine Zeit: `TerminateProcess` braucht einen
+  geplanten Faden je Prozessfaden, die Frist in `_Helper.stop` ist 5 s, und das Lesen der
+  Abbruchnachricht läuft in derselben gesenkten Klasse. Beim Kunden heißt das „Starten Sie
+  Solidon neu“, wo nur ein anderes Programm rechnet.
+  **Fix:** Nur die Rechenarbeit zurückstellen, nicht die Steuerwege — vor Stopp und Abbruch die
+  Klasse des Kindes wieder anheben bzw. den Steuerfaden im Kind höher stellen; Fristen, die
+  unter Last tragen. Nachstellen unter erzeugter Volllast vorher und nachher, alle drei Plattformen
+  bedenken (`nice` lässt sich unter POSIX nicht zurücknehmen).
+  **Abnahme:** `test_kernel_process.py` unter erzeugter Volllast grün; ein Test, der den Stopp
+  eines gesenkten Kindes unter Last belegt; das Fenster bleibt bedienbar wie nach RM-212.
+  Bauplan §31, Regel 17.
+
+**Abschluss:** Abbrechen erreicht den Hilfsprozess auch unter fremder Volllast (`0e63ea20a`): der Elternprozess hebt das Kind vor dem Beenden auf normale Klasse, unter Windows rechnet es nur während einer Rechnung zurückgestellt. Unter 32 Lastprozessen sechs von sechs Abbrüchen in 0,13 bis 0,81 s, vorher 4,4 bis 5,1 s und zwei von vier mit „Neustart“. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-463: Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht (03.10.2026)
+
+<a id="rm-463-eine-langsamere-außenwand-erreicht-in-prusaslicer-die-kleinen-umfänge-nicht-03102026"></a>
+<a id="rm-463"></a>
+
+**RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` (und jedes Bündelprofil mit
+  absolutem `small_perimeter_speed`: 20 Prozesse 170, 7 mit 160, 9 mit 120 mm/s). Pilz A:
+  geschrieben `external_perimeter_speed = 160`, Stiel gedruckt mit 170 mm/s. Solidon schreibt
+  `small_perimeter_speed` nie; wer die Außenwand bremst (auch über `advise._calm_walls` für schlanke
+  Teile), bremst genau die kleinen Stäbe nicht. In der Orca-Familie führen 23–55 Prozesse den
+  Wert ebenfalls absolut.
+  **Stellen:** `app/core/export/slicer_keys.py:275`, `handover.py:3019–3021`
+  (`_ORCA_FOLLOWERS`/`_PRUSA_FOLLOWERS`), `:3024–3064` (`_followers_not_faster`).
+  **Fix (allgemein):** Jeder Slicerschlüssel, der eine Rolle eines Solidon-Tempos mit eigenem Wert
+  überschreibt, wird Folger dieses Tempos und auf die langsamere Außenwand gedeckelt; Rollenliste
+  je Familie (kleine Umfänge, Überhänge mit festem Tempo, erste Schicht über Raft).
+  **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
+  `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
+  Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode\rest\rm463_regression.md`.
+
+**Abschluss:** Eine Rolle mit eigenem Herstellertempo folgt der gebremsten Außenwand (`handover._roles_not_faster`, kleine Umfänge in PrusaSlicer und Orca). Am echten PrusaSlicer 2.9.6, Pilz an der MK4S mit Außenwand 120 mm/s: vorher 392 Bahnen mit 170 mm/s, jetzt alle mit 120. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-435: Exakte Gruppenrundungen sind seit `0041000a0` 27- bis 125-mal langsamer, und Absagen verlieren den Maßhinweis (03.10.2026)
+
+<a id="rm-435-exakte-gruppenrundungen-sind-seit-0041000a0-27--bis-125-mal-langsamer-und-absagen-verlieren-den-maßhinweis-03102026"></a>
+<a id="rm-435"></a>
+
+**RM-435 — Exakte Gruppenrundungen sind seit `0041000a0` 27- bis 125-mal langsamer, und Absagen verlieren den Maßhinweis.**
+  Review 02.10.2026 von `0041000a0` („Rundungen nur an vollständig belegte native Kanten binden“);
+  berührt RM-322, RM-412, RM-413.
+  - **H1 (hoch):** Jede Gruppenrundung am exakten Körper geht jetzt durch die Auslass-Suche von
+    `fillet_group` (`app/core/geom/edge_ops.py:776–789`, `app/core/brep/edit.py:1067–1111`), vorher
+    nur bei zu schmalen Kanten. „Alle Kanten“ R 0,5: `pegboard-gs-100-v2.step` 2,99 → 263,60 s,
+    Crimper 1,82 → 49,42 s, goot 93 → 142 s und trotzdem Absage; R 0,1/0,2: gs-100 1,39 → 173 s,
+    goot 1,27 → 95 s. 134 bzw. 152 OpenCASCADE-Bauten statt einem, ohne Fortschritt — §31 um
+    Faktor 27–125 verfehlt.
+  - **M1:** Absagen nennen das größte passende Maß nicht mehr (`edge_ops.py:1100–1101`, weil
+    `selected_edges` jetzt immer gesetzt ist) — 10 von 24 Fällen: vorher „Wählen Sie einen Radius
+    unter 0.26 mm“, jetzt „einen kleineren Radius“ (Regel 17).
+  - **M2:** Deckt ein Netzzug eine seiner nativen Kanten nur teilweise ab, wird der ganze Zug
+    verworfen (`edit.py:494`, `:508`) — am Crimper fällt ein 43-mm-Zug über sechs native Kanten,
+    darunter eine eindeutige 20-mm-Kante, „nicht bestimmbar“ (keine Regression, vorher ganze Absage).
+  **Fix:** Auslass-Suche nur, wenn der Einzelbau scheitert bzw. Kanten zu schmal sind, mit
+  `ctx.progress`; Maßhinweis aus der schmalsten Kante wieder setzen; eindeutige native Kanten eines
+  teilweise belegten Zugs behalten.
+  **Abnahme:** Messung an gs-100, Crimper, goot (F0FF, zweimal): höchstens 25 % über dem Stand vor
+  `0041000a0`; Absagen mit Maß; Crimper-Kante 20 mm gerundet. Bauplan §31, §2.7, §25.
+  Belege: `F:\solidon-review-reports\review-0041000a0.md`, Sonden `v6_rm322_*`.
+
+**Abschluss:** Gruppenrundungen suchen gezielt nach Konturen statt Einzelkanten und liefern Teilerfolge statt Absage (`ebb4f32c2`, `c4a694f93`): gs-100 „alle“ 61 Kanten gerundet in 8 s statt Absage, goot „alle“ 101 in 15 s statt Absage nach 110 s; Bauten bis zum Ergebnis z. B. gs-100 134 → 3. Die 20-mm-Kante am Crimper bleibt mit OpenCASCADE unrundbar und wird mit Ort gemeldet. Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-412: Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s (03.10.2026)
+
+<a id="rm-412-ausgelassene-rundungskanten-erscheinen-als-eine-zeile-ohne-ort-die-rückfallsuche-dauert-über-4-s-03102026"></a>
+<a id="rm-412"></a>
+
+**RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s.**
+  Review 02.10.2026 von `57848fa72`/`e3dff1907`, Funde F5 und F6; Folgepunkt zu RM-284 (Archiv).
+  - **F5:** Am `pegboard-goot-ceramic-screwdrivers-v3.step` entstehen zwei
+    `edges.exact_group_skipped`; das Fenster bündelt sie zu „(2) OpenCASCADE konnte diese Kante …“
+    ohne Ort und ohne *Stelle zeigen* (`app/ui/panels.py:354–396`, `:5453–5461`, `:896–899`). Der
+    Kunde muss raten, welche Kanten scharf blieben.
+  - **F6:** Die Rückfallsuche (`app/core/brep/edit.py:799–903`) braucht dort 10 OpenCASCADE-Bauten,
+    4,1 s (Entwurf) bzw. 4,4 s (fein), ohne Fortschritt; das Netz 0,06–0,19 s. §31: 2 s.
+  **Fix:** Befunde mit Ort nicht bündeln oder alle Orte anbieten; Satz ohne Bibliotheksnamen und
+  mit Weg (*Kleiner versuchen*, *Stelle zeigen*); Rückfallsuche mit `ctx.progress` und weniger
+  Bauten.
+  **Abnahme:** Test: zwei ausgelassene Kanten → zwei auffindbare Orte; Satz ohne „OpenCASCADE“;
+  Laufzeit am pegboard-goot im Budget. Bauplan §2.7, §2.8, §31.
+  Belege: `review-e3dff1907.md`, Sonde `r3_rundungsgruppe.py`.
+  Ergänzung Bibliotheksprüfung 02.10.2026: Bisektion über Konturen (`NbContours`) statt über Kanten braucht an `pegboard-10inch-crimper-v5.step` 5,6–6,2 s statt 100–151 s und rundet 54 statt 43 Kanten, an `pegboard-gs-100-v2.step` 1,8–2,2 s statt 226–286 s; `NbFaultyContours` allein taugt nicht. Beleg `bibliotheken\befunde.md`.
+
+**Abschluss:** Alle ausgelassenen Kanten stehen in einem Befund mit ihren Umrissen und Wegen, ohne den Namen des Kerns; eine Sammelzeile behält *Stelle zeigen* (`ebb4f32c2`). Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-436: Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch (03.10.2026)
+
+<a id="rm-436-reste-aus-dem-review-bis-0041000a0-stilles-abschalten-bei-vollem-datenträger-satz-ohne-weg-kantenzahl-italienisch-03102026"></a>
+<a id="rm-436"></a>
+
+**RM-436 — Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch.**
+  Review 02.10.2026 der Commits `70e9b3145..0041000a0`.
+  - **ENOSPC:** Ein einzelner voller Datenträger schaltet den Hilfsprozess bis zum Neustart ab, ohne
+    dass der Kunde es erfährt (`5230384ff`; RM-298 (b) selbst ist behoben).
+  - **`edges.unmapped`:** Der Satz bietet keinen gangbaren Weg an (etwa *Ins Netz umwandeln und
+    runden*).
+  - **Kantenzahl im Befund** wechselt bei gleichem Ergebnis von 14 auf 2.
+  - **Docstring `fillet_group`** veraltet; Entscheidungen stehen in den Karten statt in
+    `.claude/rules/operationen.md`.
+  - **Italienisch:** „Ridisegna“ statt „Ridipingi“ (`app/i18n/locales/it.json:3220`).
+  - **Prozess:** `3006acb62` und `8401b2c64` wurden mit rotem `tests/test_errors.py` committet
+    (Exit 1 am Stand `8401b2c64`); Register und Bericht zu `5230384ff` sagen „Tor ausstehend“,
+    obwohl der Commit in main ist.
+  **Abnahme:** je Rest Test bzw. berichtigte Unterlage. Beleg: `review-0041000a0.md`.
+  Teil Italienisch erledigt mit `8cb019980` (02.10.2026): „Ridisegna il passaggio“ → „Ridipingi il passaggio“ (`app/i18n/locales/it.json:3258`), neuer Wächter `test_italian_painted_strokes_are_painted_again_not_redrawn` (ohne Fix rot); das zweite „Ridisegna“ (Kontur neu zeichnen) ist richtig und bleibt.
+
+**Abschluss:** `edges.unmapped` nennt den Grund und bietet *Flächenbearbeitung beenden und erneut versuchen*; ein voller Datenträger pausiert den Hilfsprozess 60 s statt ihn bis zum Neustart abzuschalten (`kernel.disk_full`, `ebb4f32c2`). Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)
+
+<a id="rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026"></a>
+<a id="rm-498"></a>
+
+**RM-498 — Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei.**
+Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der Maßgruppe stand ein abgelehnter Ausdruck sichtbar im Feld, und nach einem Griffzug war *Übernehmen* wieder frei: Der Vorschauauftrag des Zugs überschrieb den Sperrgrund der Felder. Die beiden Tests dazu (`test_a_refused_measure_stays_blocked_after_focus_moves`, `test_a_refused_measure_expression_blocks_accept_and_survives_refresh`) waren seit ihrer Entstehung rot und deckten den Fehler deshalb nie auf: Der eine zeigte das Fenster nie (offscreen kein Fokuswechsel), der andere bot einen Schritt an, den der Verlauf nicht kennt.
+
+**Abschluss:** Die Ablehnung der Felder ist eine eigene Sperre (`QuietHost.refuse_fields` in `app/ui/placement_flow.py`, gelesen in `read_fields` in `app/ui/main_window.py`), die ein Vorschauauftrag nicht mehr überschreibt. Der Fokustest zeigt das Fenster und sichert den Fokuswechsel als Voraussetzung ab; der Ausdruckstest bohrt echt mit `=@bore` und wählt die Bohrung wie der Kunde. Regel in `.claude/rules/oberflaeche.md`, Begründung in `konzepte/begruendungen/regel-oberflaeche.md`. Fenstersonde am echten Fenster: vorher 6 von 7 (nach dem Zug *Übernehmen* frei, Sperrgrund leer), nachher 7 von 7. In main mit `bbbee3a57`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-488: Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken (03.10.2026)
+
+<a id="rm-488-auswahlfenster-am-merkmal-felder-rechts-abgeschnitten-kopfzeile-gekappt-waagrechter-rollbalken-03102026"></a>
+<a id="rm-488"></a>
+
+**RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.0** (seit v0.5.1). Nach Klick
+  auf ein Merkmal (z. B. „Bohrung 1“) ist der Inhalt breiter als die Spalte: Die Kopfzeile wird
+  rechts gekappt statt umzubrechen, alle Zahlen- und Auswahlfelder enden ohne Pfeile am Rand, unten
+  liegt ein waagrechter Rollbalken; die „i“-Knöpfe sind nicht mehr zu sehen. Gilt bei 1920×1080
+  und 1280×720, beide Schemata. v0.4.4 und v0.5.0 passten in die Spalte.
+  **Stellen:** `app/ui/panels.py:6848` (`FeaturePanel`, Rollbereich), `:6958`; eingeführt
+  zwischen v0.5.0 und v0.5.1 (Kandidaten `e8013c5cc`, `a255b14f8`, `5a90d4361`).
+  **Fix (allgemein):** Mindestbreite des Inhalts auf die Spaltenbreite begrenzen (Kopf mit
+  Umbruch, Felder mit wachsender statt fester Mindestbreite), waagrechten Balken abschalten.
+  **Abnahme:** an Bohrung, Fläche und Kante bei 1280 und 1920, beide Schemata: `contentsRect`
+  jedes Felds liegt im Ausschnitt, kein waagrechter Balken. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U5), Bilder in `regression-0.5.2\ui\`.
+  Ursache gemessen (Weg 1, 02.10.2026): Das Auswahlfeld „Änderungsumfang“ verlangt 196 px, weil Qt die Breite am längsten Eintrag „Senkung, Stufen und Verengung mitnehmen“ misst; die Leiste hat 160 px. Mit dem Text aus v0.5.0 sind es 150 px, mit `AdjustToMinimumContentsLengthWithIcon` 90 px. Stellen `app/ui/panels.py:6307`, `app/core/registry/surfaces.py:66`. Beleg `regression-0.5.2\weg1\befunde.md` (W1-3).
+
+**Abschluss:** Erledigt (03.10.2026, Commit `7123c1e22`). Ursache wie gemessen: Die Auswahl „Änderungsumfang“ verlangte ihren längsten Eintrag als Mindestbreite. Auswahlfelder im Merkmalfenster baut jetzt `panels.column_choice` (`AdjustToMinimumContentsLengthWithIcon`, zwölf Zeichen; die offene Liste zeigt den ganzen Text), und der Rollbereich der Spalte ist `panels.ColumnScroller`: nur senkrecht, seine Mindestbreite ist die des Inhalts, sodass ein nicht kürzbarer Haken oder Knopftext die Spalte verbreitert statt abgeschnitten zu werden. Wächter in `tests/test_analysis_ui.py`: `test_the_selection_column_fits_every_field_it_shows` (Bohrung, Fläche, Kante bei 1280×720 und 1920×1080; am Ausgangsstand rot mit Rollweg 100 und 40 Feldern außerhalb) und `test_the_selection_column_fits_in_every_language` (en, es, fr, it, pt); Gegenprobe ohne beide Maßnahmen: 7 von 7 rot. Fenstersonde am echten Fenster (2560×1369 maximiert und 1280×720, dunkel und hell, Bohrung 1, Oberseite, Kante): vorher an der Bohrung mit sichtbarer Maßgruppe Inhalt 290 px in 232 px Ausschnitt, Felder ohne Pfeile, „i“ außerhalb; nachher 29 von 29 Prüfungen, kein waagrechter Balken. Gemessen, kein Befund: In Italienisch verlangt der Haken „Applica a tutti i {count} dello stesso tipo“ in der Knopfzeile unter dem Rollbereich rund 20 px mehr als die Standardbreite; die Spalte wird dort etwas breiter, abgeschnitten wird nichts, und das galt schon vor dieser Änderung. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-490: Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“ (03.10.2026)
+
+<a id="rm-490-objektbaum-spalte-maße-endet-auch-bei-voller-breite-in--03102026"></a>
+<a id="rm-490"></a>
+
+**RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.4.4** (seit v0.5.0). Die neue
+  Zusatzangabe „eingepasst/gemessen“ macht die Spalte zu breit: „Ø5,20 mm · ein…“, „3915 mm² · ge…“
+  auch bei 1920×1080; bis v0.4.4 stand „Ø5,19 mm“ vollständig. Eine Angabe, die nie ganz zu lesen
+  ist, sagt nichts.
+  **Stellen:** Objektbaum in `app/ui/panels.py` (Spalte „Maße“).
+  **Fix (allgemein):** Zusatzangabe als kurzes Zeichen mit Tooltip oder Spalte auf den Inhalt
+  bemessen, Maß zuerst nie kürzen.
+  **Abnahme:** Bohrung, Fläche und gemessene Kante bei 1280 und 1920: Maß vollständig lesbar,
+  Zusatzangabe über Tooltip oder Zeichen erreichbar (zweite Kodierung, Regel 18). Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U2), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** Erledigt (03.10.2026, Commit `7fd439654`). Die Maßspalte trägt `labels.feature_measure(marked=True)`: die Zahl ganz, eine warnende Herkunft (eingepasst, aus dem Schritt, nicht belegt) als `labels.MEASURE_MARK` „≈“ dahinter, eine direkte (gemessen, aus der Konstruktion) ohne Zusatz wie an den Marken der Ansicht. Das Wort mit seinem Satz steht im Tooltip der Spalte, der Bildschirmleser liest es über `AccessibleTextRole` („Ø5,20 mm · eingepasst“); das Dach gleichartiger Merkmale trägt beides ebenso. Wächter in `tests/test_analysis_ui.py`: `test_the_tree_column_keeps_the_measure_whole_and_marks_its_source` (ohne Fenster) und `test_the_measure_column_is_never_cut` (1280×720, 1920×1080; am Ausgangsstand rot: 258 px Bedarf in 99 px Spalte). Fenstersonde am echten Fenster, beide Schemata, maximiert und 1280×720: vorher braucht die Spalte 134 px bei 100 px („Ø5,20 mm · ein…“), nachher passt sie, Vorlesetext und Tooltip nennen die Herkunft. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+
+## RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)
+
+<a id="rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026"></a>
+<a id="rm-495"></a>
+
+**RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 am pegboard-STEP. **Regression gegenüber v0.4.1**
+  (auch in v0.5.1). Nach dem Übernehmen steht „Keine Vorschau: Dafür ist „Bohrung ändern“ da.“,
+  obwohl der Kunde gerade „Bohrung ändern“ benutzt hat; der Satz schickt ihn dorthin, wo er schon
+  ist.
+  **Stellen:** `app/core/perceive/actions.py:1270` (Text), Band im Auswahlfenster.
+  **Fix (allgemein):** Ein Verweis auf eine Handlung entfällt, wenn diese Handlung die gerade
+  laufende ist; ohne Vorschau sagt das Band, warum (exakter Kern) und dass das Ergebnis nach
+  *Übernehmen* kommt.
+  **Abnahme:** Bohrung, Senkung und Fase an drei STEP-Modellen: kein Selbstverweis, Hinweis nennt
+  den Grund. Bauplan §2.7.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
+
+**Abschluss:** Nachgestellt am pegboard-STEP und an `plate_holes.stl`: Im Bedienweg des Kunden erscheint der Satz nach *Bohrung ändern* im Auswahlfenster nicht (Feld ändern, Vorschau, *Übernehmen*; danach drei Sekunden kein Band). Im Versionsvergleich stammte das Band aus dem Schritt davor: Der Prüfstand löste in der Karte rechts den seit RM-360 verborgenen Knopf *Merkmal ändern* per `click()` aus, ließ den Dialog ohne Vorschau offen, und dessen Band stand noch beim Übernehmen im Auswahlfenster. Die Befehlspalette sperrt *Merkmal ändern* an einer Bohrung, im Menü steht es nicht. Behoben ist die Sackgasse dahinter für jeden Aufrufer: Eine Merkmalsoperation, die die Art des gewählten Merkmals nicht annimmt, öffnet die Schwester derselben Zeile (`MainWindow._sister_for_the_chosen_feature` über `actions.instead_of`) — *Merkmal ändern* an einer Bohrung öffnet *Bohrung ändern* an dieser Bohrung, statt eines Dialogs, dessen einziger Satz „Dafür ist „Bohrung ändern“ da“ war; an einem Merkmal, das sie annimmt, bleibt die Operation, was sie ist. Test `test_operation_ui.py::test_changing_a_hole_through_the_wrong_sister_opens_the_right_one`, ohne die Umleitung rot (Gegenprobe). Fenstersonde am echten Fenster am pegboard-STEP: 4 von 4, der Dialog ist *Bohrung ändern*, das Band nennt den Grund („Die Bohrung hat bereits diesen Durchmesser.“). Umgesetzt von Claude (Thread „Bedienung und KI“).
 ## RM-489: Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken (03.10.2026)
 
 <a id="rm-489-linke-spalte-bei-19201080-objektbaum-gekürzt-oder-filamentliste-mit-zwei-rollbalken-03102026"></a>

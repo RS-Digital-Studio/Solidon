@@ -2688,6 +2688,86 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     assert meshes["Rohre-part-2.stl"]["scarf_joint_seam_length"] == "0"
 
 
+def test_superslicer_gets_no_scarf_seam_it_cannot_read(tmp_path: Path, profile: Profile) -> None:
+    """RM-459: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer 2.9
+    nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln ab — die
+    vier ``scarf_seam_*`` genügten. Weder Platte noch Teil bekommen sie, auch
+    wenn das Projekt die Schrägnaht selbst gewählt hat; PrusaSlicer behält sie."""
+    tube = trimesh.creation.cylinder(radius=12.5, height=40.0, sections=128)
+    tube.apply_translation((0.0, 0.0, 20.0))
+    objects = [replace(scene_object("obj_1", "Rohr"), mesh=MeshData.of(tube))]
+    accepted = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "shell.scarf_seam", True
+    )
+    chosen = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "shell.scarf_seam", True
+    )
+    scarf = {entry.key for entry in slicer_keys.TABLES["prusa"] if entry.path == "shell.scarf_seam"}
+    assert len(scarf) == 4, "die Vorbedingung"
+
+    for name, settings in (("vorschlag", accepted), ("wahl", chosen)):
+        written, _findings = write_assembly(
+            objects,
+            tmp_path / name,
+            project_name="Rohr",
+            profile=profile,
+            settings=settings,
+            flavour="prusa",
+            setup=handover.SlicerSetup(Path("superslicer_console.exe"), "prusa"),
+        )
+        archive = zipfile.ZipFile(written)
+        plate = archive.read("Metadata/Slic3r_PE.config").decode("utf-8")
+        parts = archive.read("Metadata/Slic3r_PE_model.config").decode("utf-8")
+        assert not [key for key in scarf if key in plate or key in parts], name
+
+    prusa, _findings = write_assembly(
+        objects,
+        tmp_path / "prusa",
+        project_name="Rohr",
+        profile=profile,
+        settings=chosen,
+        flavour="prusa",
+        setup=handover.SlicerSetup(Path("prusa-slicer-console.exe"), "prusa"),
+    )
+    assert _plate_value(prusa, "prusa", "scarf_seam_placement") == "contours"
+
+
+def test_superslicer_reads_the_fill_pattern_of_its_own_bundle_under_todays_name() -> None:
+    """RM-459: ``external_fill_pattern`` steht in SuperSlicers eigenem Bündel,
+    sein 3MF-Leser kennt nur ``top_fill_pattern`` und ``bottom_fill_pattern``.
+    Ein eigener Wert für einen der beiden bleibt."""
+    values = {"external_fill_pattern": "rectilinear", "top_fill_pattern": "monotonic"}
+
+    read = slicer_keys.for_program(values, "prusa", "superslicer")
+
+    assert read == {"top_fill_pattern": "monotonic", "bottom_fill_pattern": "rectilinear"}
+    assert slicer_keys.for_program(values, "prusa", "prusaslicer") == values
+    assert not slicer_keys.takes("prusa", "shell.scarf_seam", "superslicer")
+    assert slicer_keys.takes("prusa", "shell.scarf_seam", "prusaslicer")
+
+
+def test_every_key_solidon_writes_for_superslicer_is_one_its_reader_knows() -> None:
+    """Wächter zu RM-459: jede Zeile der Prusa-Tabelle, die SuperSlicer nach
+    :func:`slicer_keys.for_program` bekommt, gegen den gemessenen Bestand seines
+    3MF-Lesers (``tests/data/superslicer_3mf_keys.json``). Eine neue Zeile, die
+    er nicht kennt, macht den Test rot, bevor ein Kunde den Absturz sieht."""
+    measured = json.loads(
+        (Path(__file__).parent / "data" / "superslicer_3mf_keys.json").read_text(encoding="utf-8")
+    )
+    written = dict.fromkeys(
+        {entry.key for entry in slicer_keys.TABLES["prusa"]}
+        | {key for keys in slicer_keys.ADHESION_KEYS["prusa"].values() for key in keys}
+        | {"external_fill_pattern"},
+        "1",
+    )
+
+    read = slicer_keys.for_program(written, "prusa", "superslicer")
+
+    unknown = sorted(key for key in read if key not in measured["known"])
+    assert not unknown, f"SuperSlicer {measured['version']} kennt nicht: {unknown}"
+    assert not set(read) & set(measured["unknown"])
+
+
 def test_a_part_gets_what_its_second_spool_asks_for(tmp_path: Path, profile: Profile) -> None:
     """Der Rat je Teil fragt jede Spule des Teils, nicht nur Slot 0.
 

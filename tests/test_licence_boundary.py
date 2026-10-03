@@ -176,6 +176,7 @@ def test_an_expired_trial_blocks_removing_a_step(monkeypatch: pytest.MonkeyPatch
         "recount_and_retry",
         "decimate_and_retry",
         "remesh_and_retry",
+        "mesh_and_retry",
     ],
 )
 @pytest.mark.parametrize("licensed", [False, True])
@@ -196,6 +197,7 @@ def test_retry_boundaries_keep_reading_free_and_guard_changes(
         "recount_and_retry": (step.id, 3),
         "decimate_and_retry": (step.id, 20_000),
         "remesh_and_retry": (step.id, 1.0),
+        "mesh_and_retry": (step.id,),
     }
     before = deepcopy(project.document)
     if licensed:

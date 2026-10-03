@@ -238,6 +238,7 @@ class QuietHost(QObject):
         self.committing = False
         self._finished = False
         self._blocked_reason: str | None = None
+        self._field_refusal: str | None = None
         self.preview_check: Callable[[], bool] | None = None
         self.preview_defer: Callable[[], None] | None = None
         self._known = frozenset(known) if known is not None else None
@@ -288,17 +289,35 @@ class QuietHost(QObject):
         self._blocked_reason = reason
         self.applyStateChanged.emit()
 
+    def refuse_fields(self, reason: str | None) -> None:
+        """Eine abgelehnte Zahl oder ein abgelehnter Ausdruck in den Maßfeldern.
+
+        Ein eigener Grund neben dem der Vorschau: Jeder neue Vorschauauftrag —
+        schon ein Griffzug, der ein anderes Feld zurückschreibt — setzt
+        :meth:`block_apply` neu und gab damit *Übernehmen* frei, während der
+        abgelehnte Text sichtbar stehen blieb. Der Klick übernahm dann still
+        den alten Wert. Diese Sperre hebt nur ein gültiges Feld auf.
+        """
+        if reason == self._field_refusal:
+            return
+        self._field_refusal = reason
+        self.applyStateChanged.emit()
+
     @property
     def blocked_reason(self) -> str | None:
-        """Der gesetzte Sperrgrund, ohne eine neue Vorschauprüfung auszulösen."""
-        return self._blocked_reason
+        """Der gesetzte Sperrgrund, ohne eine neue Vorschauprüfung auszulösen.
+
+        Eine Ablehnung in den Feldern geht vor: Sie nennt, was der Kunde
+        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann.
+        """
+        return self._field_refusal or self._blocked_reason
 
     def can_accept(self) -> bool:
         """Ob der Träger die aktuellen Werte übernehmen darf."""
         if self._finished or self.committing:
             return False
         current = self.preview_check is None or self.preview_check()
-        return current and self._blocked_reason is None
+        return current and self.blocked_reason is None
 
     def accept(self) -> None:
         """Die Platzierung ist übernommen — was daraus wird, weiß der Rückruf.

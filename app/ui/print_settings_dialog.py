@@ -6353,8 +6353,9 @@ class PrintSettingsDialog(QDialog):
         man zeigt auf das Wort davor.
         """
         flavour = self._current_flavour()
+        program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
         for path, editor in self._editors.items():
-            ignored = flavour is not None and not slicer_keys.takes(flavour, path)
+            ignored = flavour is not None and not slicer_keys.takes(flavour, path, program)
             name = _slicer_title(self._slicer_path) if self._slicer_path else ""
             reason = (
                 str(
@@ -7378,11 +7379,12 @@ class PrintSettingsDialog(QDialog):
         if flavour is None:
             return entries
         caps = slicer_keys.caps_volumetric_speed(flavour)
+        program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
         shown: list[SettingAdvice] = []
         for entry in entries:
             if caps and advise.limits_flow(entry):
                 continue
-            if slicer_keys.takes(flavour, entry.path):
+            if slicer_keys.takes(flavour, entry.path, program):
                 shown.append(entry)
         return shown
 
