@@ -28,6 +28,11 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- Cura usa i limiti di jerk del profilo, con valori distinti per pareti, riempimento e primo strato.
+- Se in Cura è attiva un’altra stampante, il trasferimento indica entrambe e mostra dove adottare la scelta di Cura.
+- Risolto un arresto anomalo di ElegooSlicer e OrcaSlicer durante lo slicing di modelli multicolore con supporti a griglia.
+- Dopo lo slicing, Solidon confronta anche il materiale dei supporti e gli strati del modello per piatto. Il rapporto mostra la stima interna e i valori del file di stampa.
+- Il confronto del materiale considera solo il modello stampato. Lo spurgo è mostrato separatamente, segnalando se la quantità non può essere letta completamente.
 - L'analisi dello spazio necessario per i supporti è molto più rapida sui modelli cavi e mantiene i contorni fini.
 - Nelle parti sovrapposte, l'analisi di stampa non conta più l'aria racchiusa come materiale. Migliora anche il rilevamento degli sbalzi e dei supporti necessari.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.

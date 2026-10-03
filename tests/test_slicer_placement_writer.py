@@ -208,7 +208,10 @@ def test_the_real_cura_support_blocker_follows_its_arranged_body(tmp_path):
         np.testing.assert_array_equal(old, entry.mesh.raw.vertices)
 
 
-def test_prepared_plate_and_writer_share_one_arranged_export_snapshot(tmp_path, monkeypatch):
+@pytest.mark.parametrize("with_comparison", [False, True])
+def test_prepared_plate_and_writer_share_one_arranged_export_snapshot(
+    tmp_path, monkeypatch, with_comparison
+):
     profile = profiles.make_profile("prusa-mk4s", "pla")
     exact = replace(edit.cylinder(40.0, 10.0), deflection=0.5)
     objects = (
@@ -217,18 +220,38 @@ def test_prepared_plate_and_writer_share_one_arranged_export_snapshot(tmp_path, 
         body(3, (400.0, 400.0, 10.0), plate=1),
     )
     before = [entry.mesh.raw.vertices.copy() for entry in objects]
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile), "support.style", "auto"
+    )
     job = dialog._PlateJob(
         objects=objects,
         plates=(0, 1),
         folder=tmp_path,
         name="RM478",
         setup=handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa"),
-        settings=print_settings.resolve(profile),
+        settings=settings,
         profile=profile,
         slot_profiles={},
-        with_settings=False,
+        with_settings=with_comparison,
+        with_comparison=with_comparison,
     )
     captured = []
+    comparisons = []
+    resolved_parts = []
+    original_values = writer._part_values
+    expected_comparison = dialog.PlateComparison(0, None, None)
+
+    def compare(plate, parts, actual_profile, **kwargs):
+        comparisons.append((plate, tuple(parts), actual_profile, kwargs))
+        return expected_comparison
+
+    def values(*args, **kwargs):
+        result = original_values(*args, **kwargs)
+        resolved_parts.append(result.effective)
+        return result
+
+    monkeypatch.setattr(dialog, "plate_comparison", compare)
+    monkeypatch.setattr(writer, "_part_values", values)
     original_write = dialog.write_assembly
 
     def observed(*args, **kwargs):
@@ -255,3 +278,35 @@ def test_prepared_plate_and_writer_share_one_arranged_export_snapshot(tmp_path, 
         assert mesh.bounds.maximum == pytest.approx(prepared.bounds.maximum, abs=1e-5)
     for old, entry in zip(before, objects, strict=True):
         np.testing.assert_array_equal(old, entry.mesh.raw.vertices)
+
+    if with_comparison:
+        assert len(comparisons) == 1
+        plate, parts, actual_profile, options = comparisons[0]
+        assert plate == run.plate == 0 and actual_profile is profile
+        assert options == {
+            "keep_arrangement": True,
+            "separate_objects": True,
+            "cancelled": job.cancelled,
+        }
+        assert tuple(entry.id for entry, _mesh, _settings in parts) == run.object_ids
+        for (entry, mesh, effective), prepared, original in zip(
+            parts, run.meshes, objects[:2], strict=True
+        ):
+            assert entry.id == original.id
+            assert entry.mesh is original.mesh
+            assert mesh is prepared
+            assert mesh is not original.mesh
+            assert effective.support.style == "auto"
+        # Keines der Teile verlangt Stützen: Erst der endgültige Writerweg
+        # verteilt den übernommenen Vorschlag auf beide. Der Vergleich muss
+        # diesen letzten Stand bekommen, nicht die vorherige Grundlage.
+        assert resolved_parts
+        assert all(value.support.style == "none" for value in resolved_parts)
+        assert any(
+            finding.code == "export.part_setting_all"
+            and finding.values["setting"] == "support.style"
+            for finding in run.findings
+        )
+        assert run.comparison is expected_comparison
+    else:
+        assert comparisons == [] and run.comparison is None

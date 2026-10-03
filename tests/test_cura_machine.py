@@ -1397,3 +1397,636 @@ def test_cura_window_profile_and_parts_keep_limits_and_report_the_original_choic
         machine=handover.cura_window_motion(handover.SlicerSetup(engine, "cura"), profile),
     )
     assert part["acceleration_wall_0"] == "500"
+
+
+def _with_jerk(engine: Path, overrides: dict[str, object] | None = None) -> Path:
+    """Der Jerk-Ausschnitt aus Cura 5.13 mit den Beziehungen der Sovol-Basis."""
+    base = engine.parent / "share/cura/resources/definitions/fdmprinter.def.json"
+    data = json.loads(base.read_text(encoding="utf-8"))
+    entries = {
+        "machine_extruder_count": {"default_value": 1},
+        "jerk_enabled": {
+            "default_value": False,
+            "value": True,
+            "settable_per_extruder": False,
+        },
+        "jerk_travel_enabled": {"default_value": True, "settable_per_extruder": False},
+        "jerk_print": {"default_value": 20, "value": 5},
+        "jerk_travel": {"default_value": 30, "value": "jerk_print * 2"},
+        "jerk_wall": {"default_value": 20, "value": "jerk_print"},
+        "jerk_wall_0": {"default_value": 20, "value": "jerk_wall"},
+        "jerk_infill": {"default_value": 20, "value": "jerk_print"},
+        "jerk_layer_0": {"default_value": 20, "value": "jerk_print"},
+        "jerk_print_layer_0": {"default_value": 20, "value": "jerk_layer_0"},
+        "jerk_travel_layer_0": {"default_value": 20, "value": "jerk_travel"},
+        "jerk_support": {"default_value": 20, "value": "jerk_print"},
+        "jerk_support_interface": {"default_value": 20, "value": "jerk_support"},
+        "jerk_support_roof": {
+            "default_value": 20,
+            "value": "extruderValue(support_roof_extruder_nr, 'jerk_support_interface')",
+        },
+    }
+    for key, value in (overrides or {}).items():
+        entries.setdefault(key, {})["value"] = value
+    data["settings"]["jerk"] = {"children": entries}
+    base.write_text(json.dumps(data), encoding="utf-8")
+    return base
+
+
+def test_native_jerk_reaches_both_engine_levels_and_preserves_role_choices(tmp_path: Path) -> None:
+    """M205 und Zeitschätzung bekommen dieselben Rollen, auch ohne Beschleunigungswahl."""
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_wall_0": 3, "jerk_layer_0": 2})
+    config = _written(engine, "creality-k1-max", tmp_path)
+    command = handover._command(
+        handover.SlicerSetup(engine, "cura"), [tmp_path / "teil.stl"], config, tmp_path
+    )
+    for key, value in {
+        "jerk_enabled": "true",
+        "jerk_travel_enabled": "true",
+        "jerk_print": "5",
+        "jerk_wall": "5",
+        "jerk_wall_0": "3",
+        "jerk_infill": "5",
+        "jerk_travel": "10",
+        "jerk_print_layer_0": "2",
+        "jerk_travel_layer_0": "10",
+        "jerk_support_roof": "5",
+    }.items():
+        assert command.count(f"{key}={value}") == 2, key
+
+
+def test_disabled_native_jerk_stays_disabled(tmp_path: Path) -> None:
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_enabled": False, "jerk_print": "unknown()"})
+    config = _written(engine, "creality-k1-max", tmp_path)
+    assert config.written["jerk_enabled"] == "false"
+    assert "jerk_print" not in config.written
+
+
+@pytest.mark.parametrize("formula", ["unknown()", "jerk_print + 0", "__import__('os').getcwd()"])
+def test_unknown_native_jerk_never_falls_back_to_engine_defaults(
+    tmp_path: Path, formula: str
+) -> None:
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_wall_0": formula})
+    with pytest.raises(ExternalToolError) as caught:
+        _written(engine, "creality-k1-max", tmp_path)
+    assert caught.value.suggestions
+
+
+def test_jerk_instance_choice_recalculates_dependants_before_export(tmp_path: Path) -> None:
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    base = _with_jerk(engine)
+    chain = slicer_profiles._cura_definition_values(
+        base,
+        (),
+        overrides={"jerk_print": "6", "jerk_wall_0": "3", "jerk_travel_layer_0": "4"},
+        resolve_jerk=True,
+    )
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    motion = handover._cura_motion_values(chain, {}, profile.printer)
+    assert float(motion["jerk_infill"]) == pytest.approx(6)
+    assert float(motion["jerk_travel"]) == pytest.approx(12)
+    assert float(motion["jerk_wall_0"]) == pytest.approx(3)
+    assert float(motion["jerk_travel_layer_0"]) == pytest.approx(4)
+
+
+def test_cura_window_and_cli_use_the_same_native_jerk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import configparser
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_infill": 7, "jerk_travel_layer_0": 4})
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _exe: slicer_profiles.CuraActiveMachine("Werkstatt", definition),
+    )
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    setup = handover.SlicerSetup(engine, "cura")
+    config = _written(engine, "creality-k1-max", tmp_path)
+    model = tmp_path / "part.3mf"
+    handover.cura_profile_beside(model, print_settings.resolve(profile), profile, setup)
+    with zipfile.ZipFile(model.with_suffix(".curaprofile")) as archive:
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read_string(archive.read("solidon").decode("utf-8"))
+    assert parser["values"]["jerk_enabled"] == "True"
+    for key, value in config.written.items():
+        if key.startswith("jerk_") and not key.endswith("enabled"):
+            assert float(parser["values"][key]) == pytest.approx(float(value))
+    assert (
+        handover.for_the_cura_window({"jerk_wall_0": "2"}, machine={"jerk_wall_0": "5"})[
+            "jerk_wall_0"
+        ]
+        == "2"
+    )
+
+
+@pytest.mark.parametrize("value", [-1, float("nan"), float("inf"), True, None, "broken"])
+def test_invalid_native_jerk_is_not_sent_to_cura(tmp_path: Path, value: object) -> None:
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_wall_0": value})
+    with pytest.raises(ExternalToolError):
+        _written(engine, "creality-k1-max", tmp_path)
+
+
+@pytest.mark.parametrize("native, chosen", [(False, "True"), (True, "False")])
+def test_explicit_instance_jerk_switch_wins(tmp_path: Path, native: bool, chosen: str) -> None:
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    base = _with_jerk(engine, {"jerk_enabled": native})
+    chain = slicer_profiles._cura_definition_values(
+        base, (), overrides={"jerk_enabled": chosen}, resolve_jerk=True
+    )
+    motion = handover._cura_motion_values(chain, {}, profiles.make_profile().printer)
+    assert motion["jerk_enabled"] == chosen.lower()
+    assert ("jerk_print" in motion) is (chosen == "True")
+
+
+def _jerk_instance(engine: Path, tmp_path: Path) -> Path:
+    """Der native Containerstapel mit Qualität, Änderungsprofil und Extruderwerten."""
+    user = tmp_path / "user_root"
+    for folder in ("machine_instances", "quality", "quality_changes", "user", "extruders"):
+        (user / folder).mkdir(parents=True, exist_ok=True)
+    (user / "machine_instances" / "local.global.cfg").write_text(
+        "[general]\nversion = 5\nname = Local\nid = local\n[containers]\n"
+        "0 = local_user\n1 = changes\n2 = empty_intent\n3 = native_quality\n"
+        "4 = empty_material\n5 = empty_variant\n6 = empty_definition_changes\n7 = creality_k1max\n",
+        encoding="utf-8",
+    )
+    for folder, name, content in (
+        ("quality", "native_quality", "jerk_print = 6\njerk_infill = 7\n"),
+        ("quality_changes", "changes", "jerk_print = 8\njerk_wall_0 = 3\n"),
+        (
+            "user",
+            "local_user",
+            "machine_nozzle_size = 0.4\nmachine_extruder_count = 1\njerk_print = 9\n",
+        ),
+        ("user", "extruder_user", "jerk_layer_0 = 2\n"),
+    ):
+        (user / folder / f"{name}.inst.cfg").write_text(
+            f"[general]\nname = {name}\n[values]\n{content}", encoding="utf-8"
+        )
+    (user / "extruders" / "local.extruder.cfg").write_text(
+        "[general]\nversion = 4\n[metadata]\nmachine = local\nposition = 0\n"
+        "[containers]\n0 = extruder_user\n1 = empty_quality_changes\n2 = empty_intent\n"
+        "3 = empty_quality\n4 = empty_material\n5 = empty_variant\n"
+        "6 = empty_definition_changes\n7 = fdmextruder\n",
+        encoding="utf-8",
+    )
+    return user
+
+
+def test_native_jerk_uses_all_selected_containers_in_priority_order(tmp_path: Path) -> None:
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine)
+    user = _jerk_instance(engine, tmp_path)
+    roots = (engine.parent / "share/cura", user)
+    [(entry, native)] = list(
+        slicer_profiles._cura_machine_instances(roots, {}, {}, resolve_jerk=True)
+    )
+    assert entry.cura_instance is not None
+    assert float(native["jerk_print"]) == pytest.approx(9)
+    assert float(native["jerk_wall_0"]) == pytest.approx(3)
+    assert float(native["jerk_infill"]) == pytest.approx(7)
+    assert float(native["jerk_print_layer_0"]) == pytest.approx(2)
+
+
+def test_missing_selected_jerk_container_does_not_restore_factory_values(tmp_path: Path) -> None:
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine)
+    user = _jerk_instance(engine, tmp_path)
+    path = user / "quality_changes" / "changes.inst.cfg"
+    path.unlink()
+    roots = (engine.parent / "share/cura", user)
+    assert not list(slicer_profiles._cura_machine_instances(roots, {}, {}, resolve_jerk=True))
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_only_active_jerk_rejects_different_extruder_roles(tmp_path: Path, enabled: bool) -> None:
+    """Ausgeschaltete Rollen unterscheiden keine wirksame Maschinensteuerung."""
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_enabled": enabled, "jerk_support_roof": 5})
+    user = _jerk_instance(engine, tmp_path)
+    global_user = user / "user/local_user.inst.cfg"
+    global_user.write_text(
+        global_user.read_text(encoding="utf-8").replace(
+            "machine_extruder_count = 1", "machine_extruder_count = 2"
+        ),
+        encoding="utf-8",
+    )
+    (user / "extruders/second.extruder.cfg").write_text(
+        (user / "extruders/local.extruder.cfg")
+        .read_text(encoding="utf-8")
+        .replace("position = 0", "position = 1")
+        .replace("extruder_user", "second_user"),
+        encoding="utf-8",
+    )
+    (user / "user/second_user.inst.cfg").write_text(
+        "[general]\nname = Second\n[values]\njerk_layer_0 = 3\n", encoding="utf-8"
+    )
+    roots = (engine.parent / "share/cura", user)
+    found = list(slicer_profiles._cura_machine_instances(roots, {}, {}, resolve_jerk=True))
+    if enabled:
+        assert not found
+        return
+    [(_entry, native)] = found
+    written = handover._cura_motion_values(native, {}, profiles.make_profile().printer)
+    assert written["jerk_enabled"] == "false"
+    assert "jerk_layer_0" not in written
+    assert native["machine_extruder_count"] == 2
+
+
+@pytest.mark.parametrize("key", ["jerk_enabled", "jerk_travel_enabled"])
+@pytest.mark.parametrize("global_value", [False, True])
+def test_global_jerk_switch_ignores_stale_extruder_values(
+    tmp_path: Path, key: str, global_value: bool
+) -> None:
+    """Curas globale Schalter umgehen Extrudercontainer auch bei alten Restwerten."""
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine)
+    user = _jerk_instance(engine, tmp_path)
+    for name, value in (("local_user", global_value), ("extruder_user", not global_value)):
+        container = user / f"user/{name}.inst.cfg"
+        container.write_text(
+            container.read_text(encoding="utf-8") + f"{key} = {value}\n", encoding="utf-8"
+        )
+    roots = (engine.parent / "share/cura", user)
+    [(_entry, native)] = list(
+        slicer_profiles._cura_machine_instances(roots, {}, {}, resolve_jerk=True)
+    )
+    assert native[key] is global_value
+
+
+@pytest.mark.parametrize("printing", [False, True])
+@pytest.mark.parametrize("travel", [False, True])
+@pytest.mark.parametrize("count", [1, 2])
+@pytest.mark.parametrize("role", ["jerk_layer_0", "jerk_travel", "jerk_travel_layer_0"])
+@pytest.mark.parametrize("variant", ["same", "different", "invalid"])
+@pytest.mark.parametrize("stale", [False, True])
+def test_jerk_switches_limit_effective_extruder_roles(
+    tmp_path: Path,
+    printing: bool,
+    travel: bool,
+    count: int,
+    role: str,
+    variant: str,
+    stale: bool,
+) -> None:
+    """Nur wirksame Rollen und globale Schalter bestimmen die gemeinsame Steuerung."""
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_support_roof": 5})
+    user = _jerk_instance(engine, tmp_path)
+    container = user / "user/local_user.inst.cfg"
+    container.write_text(
+        container.read_text(encoding="utf-8").replace(
+            "machine_extruder_count = 1", f"machine_extruder_count = {count}"
+        )
+        + f"jerk_enabled = {printing}\njerk_travel_enabled = {travel}\n",
+        encoding="utf-8",
+    )
+    template = (user / "extruders/local.extruder.cfg").read_text(encoding="utf-8")
+    for index in range(count):
+        name = "extruder_user" if index == 0 else "second_user"
+        value = (
+            "unknown()"
+            if variant == "invalid"
+            else str(3 if index and variant == "different" else 2)
+        )
+        (user / f"user/{name}.inst.cfg").write_text(
+            f"[general]\nname = {name}\n[values]\n{role} = {value}\n"
+            + (
+                f"jerk_enabled = {not printing}\njerk_travel_enabled = {not travel}\n"
+                if stale
+                else ""
+            ),
+            encoding="utf-8",
+        )
+        if index:
+            (user / "extruders/second.extruder.cfg").write_text(
+                template.replace("position = 0", "position = 1").replace("extruder_user", name),
+                encoding="utf-8",
+            )
+    found = list(
+        slicer_profiles._cura_machine_instances(
+            (engine.parent / "share/cura", user), {}, {}, resolve_jerk=True
+        )
+    )
+    active = printing and (travel or role == "jerk_layer_0")
+    rejected = active and (variant == "invalid" or (variant == "different" and count == 2))
+    if rejected:
+        assert not found
+        return
+    [(_entry, native)] = found
+    written = handover._cura_motion_values(native, {}, profiles.make_profile().printer)
+    assert written["jerk_enabled"] == str(printing).lower()
+    if printing:
+        assert written["jerk_travel_enabled"] == str(travel).lower()
+    if active:
+        assert float(written[role]) == pytest.approx(2)
+    else:
+        assert role not in written
+
+
+@pytest.mark.parametrize("role", ["jerk_travel", "jerk_travel_layer_0"])
+def test_disabled_unknown_travel_jerk_reaches_cli_and_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, role: str
+) -> None:
+    """Inaktive Formeln gelangen weder in Engine-Argumente noch in das Importprofil."""
+    import configparser
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_travel_enabled": False, role: "unknown()"})
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _exe: slicer_profiles.CuraActiveMachine("Werkstatt", definition),
+    )
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    config = _written(engine, "creality-k1-max", tmp_path)
+    setup = handover.SlicerSetup(engine, "cura")
+    command = handover._command(setup, [tmp_path / "part.stl"], config, tmp_path)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    model = tmp_path / "part.stl"
+    handover.cura_profile_beside(model, print_settings.resolve(profile), profile, setup)
+    with zipfile.ZipFile(model.with_suffix(".curaprofile")) as archive:
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read_string(archive.read("solidon").decode("utf-8"))
+    assert command.count("jerk_travel_enabled=false") == 2
+    assert not any(value.startswith(("jerk_travel=", "jerk_travel_layer_0=")) for value in command)
+    assert parser["values"]["jerk_travel_enabled"] == "False"
+    assert "jerk_travel" not in parser["values"]
+    assert "jerk_travel_layer_0" not in parser["values"]
+
+
+@pytest.mark.parametrize("source", ["definition", "instance"])
+@pytest.mark.parametrize("way", ["cli", "window"])
+@pytest.mark.parametrize("printing", [False, True])
+@pytest.mark.parametrize("travel", [False, True])
+@pytest.mark.parametrize("role", ["jerk_layer_0", "jerk_travel", "jerk_travel_layer_0"])
+@pytest.mark.parametrize("value", ["4", "unknown()"])
+def test_jerk_handover_uses_only_active_definition_or_instance_roles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    way: str,
+    printing: bool,
+    travel: bool,
+    role: str,
+    value: str,
+) -> None:
+    """Beide echten Schreiber erhalten dieselbe wirksame Definition oder Nutzerinstanz."""
+    import configparser
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    choices = {"jerk_enabled": printing, "jerk_travel_enabled": travel, role: value}
+    _with_jerk(engine, choices if source == "definition" else {})
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    chosen = ""
+    if source == "instance":
+        user = _jerk_instance(engine, tmp_path)
+        container = user / "user/local_user.inst.cfg"
+        container.write_text(
+            container.read_text(encoding="utf-8")
+            + "".join(f"{key} = {setting}\n" for key, setting in choices.items()),
+            encoding="utf-8",
+        )
+        (user / "user/extruder_user.inst.cfg").write_text(
+            "[general]\nname = Extruder\n[values]\n", encoding="utf-8"
+        )
+        (user / "cura.cfg").write_text(
+            "[general]\nversion = 7\n[cura]\nactive_machine = local\n", encoding="utf-8"
+        )
+        monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [user])
+        monkeypatch.setattr(slicer_profiles, "_cura_user_roots", lambda *_args: [user])
+        chosen = "cura-instance:local"
+    else:
+        monkeypatch.setattr(
+            slicer_profiles,
+            "cura_active_machine",
+            lambda _exe: slicer_profiles.CuraActiveMachine("Werkstatt", definition),
+        )
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: chosen)
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    setup = handover.SlicerSetup(engine, "cura", machine_profile=chosen)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = print_settings.resolve(profile)
+
+    def write() -> dict[str, str]:
+        if way == "cli":
+            config = handover.write_config(settings, profile, setup, tmp_path)
+            command = handover._command(setup, [tmp_path / "part.stl"], config, tmp_path)
+            assert command.count(f"jerk_enabled={str(printing).lower()}") == 2
+            return dict(config.written)
+        model = tmp_path / "part.stl"
+        handover.cura_profile_beside(model, settings, profile, setup)
+        with zipfile.ZipFile(model.with_suffix(".curaprofile")) as archive:
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.read_string(archive.read("solidon").decode("utf-8"))
+        return dict(parser["values"])
+
+    active = printing and (travel or role == "jerk_layer_0")
+    if active and value == "unknown()":
+        with pytest.raises(ExternalToolError) as caught:
+            write()
+        assert caught.value.suggestions
+        return
+    written = write()
+    assert written["jerk_enabled"].casefold() == str(printing).lower()
+    if active:
+        assert float(written[role]) == pytest.approx(4)
+    else:
+        assert role not in written
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("container_name", ["quality/native_quality", "quality_changes/changes"])
+@pytest.mark.parametrize("way", ["cli", "window"])
+def test_concrete_process_switch_overrides_unknown_definition_switch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    enabled: bool,
+    container_name: str,
+    way: str,
+) -> None:
+    """Eine gültige Prozesswahl wird vor der Prüfung des Definitionsschalters gelesen."""
+    import configparser
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_enabled": "unknown()"})
+    user = _jerk_instance(engine, tmp_path)
+    container = user / f"{container_name}.inst.cfg"
+    container.write_text(
+        container.read_text(encoding="utf-8") + f"jerk_enabled = {enabled}\n",
+        encoding="utf-8",
+    )
+    [(_entry, native)] = list(
+        slicer_profiles._cura_machine_instances(
+            (engine.parent / "share/cura", user), {}, {}, resolve_jerk=True
+        )
+    )
+    assert native["jerk_enabled"] is enabled
+    (user / "cura.cfg").write_text(
+        "[general]\nversion = 7\n[cura]\nactive_machine = local\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [user])
+    monkeypatch.setattr(slicer_profiles, "_cura_user_roots", lambda *_args: [user])
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "cura-instance:local")
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    setup = handover.SlicerSetup(engine, "cura", machine_profile="cura-instance:local")
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = print_settings.resolve(profile)
+    if way == "cli":
+        config = handover.write_config(settings, profile, setup, tmp_path)
+        written = config.written
+    else:
+        handover.cura_profile_beside(tmp_path / "part.stl", settings, profile, setup)
+        with zipfile.ZipFile(tmp_path / "part.curaprofile") as archive:
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.read_string(archive.read("solidon").decode("utf-8"))
+        written = dict(parser["values"])
+    assert written["jerk_enabled"].casefold() == str(enabled).lower()
+
+
+@pytest.mark.parametrize("spiral, travel, first", [(False, 30, 12), (True, 5, 2)])
+def test_native_travel_and_first_layer_relationships_are_resolved(
+    tmp_path: Path, spiral: bool, travel: float, first: float
+) -> None:
+    engine = _cura(tmp_path)
+    _with_jerk(
+        engine,
+        {
+            "magic_spiralize": spiral,
+            "jerk_travel": "jerk_print if magic_spiralize else 30",
+            "jerk_layer_0": 2,
+            "jerk_travel_layer_0": "jerk_layer_0 * jerk_travel / jerk_print",
+        },
+    )
+    config = _written(engine, "creality-k1-max", tmp_path)
+    assert float(config.written["jerk_travel"]) == pytest.approx(travel)
+    assert float(config.written["jerk_travel_layer_0"]) == pytest.approx(first)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ("jerk_enabled", "broken"),
+        ("jerk_travel_enabled", "broken"),
+        ("machine_extruder_count", 2),
+        ("jerk_wall", "jerk_wall_0"),
+    ],
+)
+def test_ambiguous_jerk_never_enables_engine_defaults(
+    tmp_path: Path, key: str, value: object
+) -> None:
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {key: value})
+    with pytest.raises(ExternalToolError):
+        _written(engine, "creality-k1-max", tmp_path)
+
+
+def test_missing_jerk_dependency_remains_unknown(tmp_path: Path) -> None:
+    engine = _cura(tmp_path)
+    base = _with_jerk(engine)
+    data = json.loads(base.read_text(encoding="utf-8"))
+    del data["settings"]["jerk"]["children"]["jerk_wall"]
+    base.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ExternalToolError):
+        _written(engine, "creality-k1-max", tmp_path)
+
+
+def test_enabled_creality_jerk_keeps_its_native_travel_alias(tmp_path: Path) -> None:
+    """Creality setzt Leerfahrt gleich Druck; die Sovol-Basis verdoppelt sie."""
+    engine = _cura(tmp_path)
+    _with_jerk(engine, {"jerk_travel": "jerk_print"})
+    config = _written(engine, "creality-k1-max", tmp_path)
+    assert float(config.written["jerk_travel"]) == pytest.approx(5)
+    assert float(config.written["jerk_travel_layer_0"]) == pytest.approx(5)
+
+
+@pytest.mark.parametrize("read", ["selection", "bed"])
+def test_unknown_jerk_keeps_printer_selection_and_active_bed_readable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, read: str
+) -> None:
+    """Unbekannte Bewegung sperrt die Übergabe, nicht die bekannten Maschinenmaße."""
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    _with_jerk(
+        engine,
+        {
+            "machine_width": 300,
+            "machine_depth": 300,
+            "machine_height": 300,
+            "machine_nozzle_size": 0.4,
+            "jerk_support": "unknown()",
+        },
+    )
+    user = _jerk_instance(engine, tmp_path)
+    (user / "cura.cfg").write_text(
+        "[general]\nversion = 7\n[cura]\nactive_machine = local\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [user])
+    monkeypatch.setattr(slicer_profiles, "_cura_user_roots", lambda *_args: [user])
+
+    if read == "selection":
+        found = slicer_profiles.discover_printers(engine, "cura")
+        assert {"Local", "Creality K1 Max"} <= {printer.title for printer in found}
+    else:
+        active = slicer_profiles.cura_active_machine(engine)
+        assert active is not None
+        assert active.bed == pytest.approx((300, 300))
+
+    setup = handover.SlicerSetup(engine, "cura", machine_profile="cura-instance:local")
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = print_settings.resolve(profile)
+    with pytest.raises(ExternalToolError) as cli_error:
+        handover.write_config(settings, profile, setup, tmp_path)
+    assert cli_error.value.suggestions
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    with pytest.raises(ExternalToolError) as window_error:
+        handover.cura_profile_beside(tmp_path / "part.stl", settings, profile, setup)
+    assert window_error.value.suggestions
+    assert not (tmp_path / "part.curaprofile").exists()

@@ -1879,6 +1879,9 @@ def test_the_coarse_reduction_of_the_unchanged_input_outlives_a_superseded_previ
     from app.ui.session import Session
 
     session = Session()
+    # Der Fall muss die erste Verkleinerung rechnen. Ein Plattencache aus
+    # einem früheren Fall würde die gestellte Abbruchstelle überspringen.
+    session.cache = ResultCache()
     meshes = Path(__file__).parent / "data" / "meshes"
     assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
     session.evaluate_now()
@@ -1939,6 +1942,9 @@ def test_a_coarse_preview_the_kernel_refuses_is_computed_exactly(monkeypatch) ->
     from app.ui.session import Session
 
     session = Session()
+    # Die gestellte Kernabsage braucht eine frische Rechnung, keinen Treffer
+    # aus einem früheren Fall mit derselben Quelle und denselben Parametern.
+    session.cache = ResultCache()
     meshes = Path(__file__).parent / "data" / "meshes"
     assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
     result = session.evaluate_now()

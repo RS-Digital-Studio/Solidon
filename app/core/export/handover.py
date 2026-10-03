@@ -4344,13 +4344,13 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         definition = source.path
         own = str(definition)
         try:
-            chain = slicer_profiles.resolve_profile(source, roots)
+            chain = slicer_profiles.resolve_profile(source, roots, cura_motion=True)
         except ExternalToolError as problem:
             if source.cura_instance is None:
                 raise
             raise _cura_instance_error(setup, profile.printer.title, missing=False) from problem
     else:
-        chain = slicer_profiles.resolve_values(definition, roots)
+        chain = slicer_profiles.resolve_values(definition, roots, cura_motion=True)
     hardware = (
         _cura_hardware_values(chain, values)
         if (isinstance(source, slicer_profiles.SlicerProfile) and source.cura_instance is not None)
@@ -4561,6 +4561,20 @@ def _cura_motion_values(
     # Vor dem Endcode setzt CuraEngine diese Beschleunigung erneut mit M204.
     # Auch die Rückstellung muss innerhalb der unveränderten Achsgrenzen liegen.
     motion = _cura_limited_accelerations(motion, motion)
+    enabled = str(chain.get("jerk_enabled", "")).casefold()
+    if enabled in {"true", "false"}:
+        motion["jerk_enabled"] = enabled
+        if enabled == "true":
+            for key, value in chain.items():
+                if key.startswith("jerk_") or key.endswith("_jerk"):
+                    motion[key] = (
+                        str(value).lower() if isinstance(value, bool) else f"{float(str(value)):g}"
+                    )
+        motion.update(
+            (key, value)
+            for key, value in written.items()
+            if key.startswith("jerk_") or key.endswith("_jerk")
+        )
     if written.get("acceleration_enabled") != "true":
         return motion
 
@@ -6227,9 +6241,9 @@ def cura_window_motion(setup: SlicerSetup, profile: Profile) -> Mapping[str, str
     if chosen and source is None:
         raise _cura_instance_error(setup, active.name, missing=False)
     chain = (
-        slicer_profiles.resolve_profile(source, roots)
+        slicer_profiles.resolve_profile(source, roots, cura_motion=True)
         if source is not None
-        else slicer_profiles.resolve_values(active.definition, roots)
+        else slicer_profiles.resolve_values(active.definition, roots, cura_motion=True)
     )
     return _cura_motion_values(chain, {}, profile.printer)
 
@@ -6240,7 +6254,12 @@ def for_the_cura_window(
     """Werte in der Schreibweise von Curas Fenster: Wahrheitswerte als
     ``True``/``False``, wie sein eigener Schreiber sie ablegt; die Konsole
     liest ``true``/``false`` (:func:`values_for`)."""
-    limited = _cura_limited_accelerations(values, machine or {})
+    native = {
+        key: value
+        for key, value in (machine or {}).items()
+        if key.startswith("jerk_") or key.endswith("_jerk")
+    }
+    limited = _cura_limited_accelerations(native | dict(values), machine or {})
     return {
         key: {"true": "True", "false": "False"}.get(value, value) for key, value in limited.items()
     }

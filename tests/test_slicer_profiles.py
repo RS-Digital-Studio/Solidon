@@ -1793,7 +1793,7 @@ def _cura_konfiguration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
             f"[metadata]\ntype = extruder_train\nmachine = {maschine}\n"
             f"position = {position}\nsetting_version = 27\n\n"
             "[containers]\n0 = empty_user_changes\n1 = empty_quality_changes\n"
-            f"2 = empty_intent\n3 = normal\n4 = {material}\n5 = empty_variant\n"
+            f"2 = empty_intent\n3 = apri3_pla_fast\n4 = {material}\n5 = empty_variant\n"
             "6 = empty_definition_changes\n7 = fdmextruder\n",
             encoding="utf-8",
         )
@@ -1849,7 +1849,7 @@ def _cura_maschine(root: Path, name: str, definition: str) -> None:
         f"[general]\nversion = 5\nname = {name}\nid = {name}\n\n"
         "[metadata]\nsetting_version = 27\ntype = machine\n\n"
         f"[containers]\n0 = {name}_user\n1 = empty_quality_changes\n2 = empty_intent\n"
-        f"3 = normal\n4 = empty_material\n5 = empty_variant\n6 = {name}_settings\n"
+        f"3 = apri3_pla_fast\n4 = empty_material\n5 = empty_variant\n6 = {name}_settings\n"
         f"7 = {definition}\n",
         encoding="utf-8",
     )

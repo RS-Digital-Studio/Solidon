@@ -28,6 +28,11 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.
+- If Cura has a different printer selected, the handoff names both printers and shows where to adopt Cura’s selection.
+- Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
+- After slicing, Solidon also compares support material and model layers for each plate. The report shows the internal estimate alongside values from the print file.
+- The material cross-check compares only the printed model. Purge material is shown separately, with a note when the amount cannot be read in full.
 - Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.

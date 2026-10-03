@@ -7395,7 +7395,9 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
         lambda *_args, **_kwargs: handover.SliceOutcome(
             gcode_path=tmp_path / "plate.gcode",
             metrics=gcode.GcodeMetrics(
-                filament_grams=expected.grams, print_seconds=expected.seconds
+                filament_grams=expected.grams,
+                resolved_model_grams=expected.grams,
+                print_seconds=expected.seconds,
             ),
         ),
     )
@@ -7429,7 +7431,9 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     MainWindow._compare_totals(
         window,
         gcode.GcodeMetrics(
-            filament_grams=expected.grams * 0.5, print_seconds=expected.seconds * 0.5
+            filament_grams=expected.grams * 0.5,
+            resolved_model_grams=expected.grams * 0.5,
+            print_seconds=expected.seconds * 0.5,
         ),
         dialog.slice_comparison,
     )
@@ -9392,6 +9396,94 @@ def test_the_refusal_at_the_slice_button_names_its_field(
     assert dialog._first_numeric_refusal() == (
         f"{setting_title('support.density')}: 95 liegt über der Obergrenze 90."
     )
+
+
+@pytest.mark.parametrize("with_settings", [False, True])
+def test_plate_preparation_compares_the_final_writer_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_settings: bool
+) -> None:
+    """Die Gegenprobe folgt der endgültigen Teilauflösung, nicht den Dialogvorgaben."""
+    from app.core.slice.estimate import PlateComparison
+    from app.ui import print_settings_dialog as module
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    body = replace(_cube_object(), plate=3)
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", "prusa")
+    job = module._PlateJob(
+        (body,),
+        (3,),
+        tmp_path,
+        "Teil",
+        setup,
+        settings,
+        profile,
+        {},
+        with_settings=with_settings,
+        with_comparison=True,
+    )
+    effective = (
+        replace(
+            settings,
+            layers=replace(settings.layers, first_layer_height=0.37),
+            support=replace(settings.support, style="normal", density=0.23),
+        )
+        if with_settings
+        else None
+    )
+    passed = []
+
+    def write(objects, folder, *, comparison, **_kwargs):
+        comparison(((body, body.mesh, effective),))
+        return folder / "actual.3mf", []
+
+    def compare(plate, parts, actual_profile, **kwargs):
+        passed.append((plate, parts, actual_profile, kwargs))
+        return PlateComparison(plate, 17.0 if effective else None, 29 if effective else None)
+
+    monkeypatch.setattr(module, "write_assembly", write)
+    monkeypatch.setattr(module, "plate_comparison", compare)
+    run = module._prepare_plate(job, 3)
+    assert len(passed) == 1
+    assert passed[0][0] == 3
+    assert passed[0][1][0][2] is effective
+    assert passed[0][3]["separate_objects"] is True
+    assert run.comparison == PlateComparison(
+        3, 17.0 if effective else None, 29 if effective else None
+    )
+
+
+def test_unknown_material_does_not_discard_independent_plate_comparisons(tmp_path: Path):
+    """Fehlende Materialanteile lassen die bereits berechneten Modelllagen bestehen."""
+    from app.core.slice.estimate import PlateComparison
+    from app.ui import print_settings_dialog as module
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    body = _cube_object()
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", "orca")
+    job = module._PlateJob((body,), (0,), tmp_path, "Teil", setup, settings, profile, {})
+    run = module.PlateRun(0, tmp_path / "actual.3mf", comparison=PlateComparison(0, 0.0, 100))
+    actual = module._comparison_for_job(job, [run])
+    assert actual.grams is None
+    assert actual.plates == (run.comparison,)
+
+
+def test_changed_dialog_job_does_not_publish_its_previous_comparison():
+    """Die neue Gegenprobe umgeht nicht den Schutz gegen veraltete Dialogaufträge."""
+    from app.core.scene.cancel import CancelSignal
+    from app.ui import print_settings_dialog as module
+
+    published = []
+    worker = SimpleNamespace(cancelled=CancelSignal(), comparison=module.SliceComparison(1.0, 1.0))
+    host = SimpleNamespace(
+        _worker=worker,
+        _job_context=("plates", 3, 1),
+        _print_context=lambda: ("plates", 0),
+        _sliced=lambda *args, **kwargs: published.append((args, kwargs)),
+    )
+    module.PrintSettingsDialog._slice_done(host, worker, [])
+    assert not published
 
 
 @pytest.fixture

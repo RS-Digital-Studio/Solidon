@@ -599,11 +599,11 @@ def _write_geometry(
     ein einzelner Körper, nur mehrfach. Zwei Versionen davon wären zwei Orte,
     an denen sich eine Materialzuordnung verlieren kann.
 
-    **Sechs Nachkommastellen, nicht fünf.** Der Kern rechnet auf
-    :data:`app.core.units.EPS_GEOM` genau (§11.2, ein Nanometer), und fünf
-    Stellen rundeten gröber, als zwei Punkte auseinanderliegen dürfen, um
-    verschiedene zu sein. Was die Stelle kostet, ist gemessen: an einer Kugel
-    mit 5 120 Dreiecken sechs Prozent mehr XML, gepackt weniger.
+    **Koordinaten bleiben in doppelter Genauigkeit erhalten.** Auch eine
+    Rundung unter EPS_GEOM kann die Rechnung im Slicer verändern: Beim
+    zweifarbigen Besteckeinsatz stürzte Elegoo mit Gitterstützen nach Rundung
+    auf sechs Nachkommastellen ab. Siebzehn signifikante Stellen erhalten
+    jeden endlichen float64-Wert, auch bei Stützsperren (§11.2, RM-252).
 
     **Die Geometrie entsteht als Text und nicht als Baum**, und das ist der
     Grund für die Rückgabe: Zurück kommen die Marke, die im Baum steht, und
@@ -623,8 +623,8 @@ def _write_geometry(
     bleibt, ist dieselbe native Speicherfamilie, die dieses Projekt an
     mehreren Stellen hat.
 
-    **Was herauskommt, ist Zeichen für Zeichen dasselbe wie vorher.** Gemessen
-    am 10.09.2026 gegen drei vor dem Umbau geschriebene Dateien — ein Körper,
+    **Der damalige Umbau zum Text erhielt die Ausgabe bytegenau.** Gemessen
+    am 10.09.2026 gegen drei vor diesem Umbau geschriebene Dateien — ein Körper,
     ein bemalter Körper, eine Baugruppe, mit ``&`` und ``<`` in den Namen —,
     alle drei byte-identisch. Im Tor steht dafür
     ``test_every_part_keeps_its_own_geometry_in_a_long_assembly``: Es zählt je
@@ -637,12 +637,12 @@ def _write_geometry(
 
     lines: list[str] = ["<vertices>"]
     for point in mesh.raw.vertices:
-        lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
+        lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
     # Die Stützsperre als Bereich (PrusaSlicer): Ihre Dreiecke kommen nach
     # allen des Körpers, und die Prusa-Beilage nennt den Bereich.
     if blocker is not None:
         for point in blocker.raw.vertices:
-            lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
+            lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
     lines.append("</vertices><triangles>")
 
     assignment = mesh.slots or ((0,) * len(mesh.raw.faces))

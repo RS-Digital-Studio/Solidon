@@ -29,6 +29,11 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- Cura reprend les limites de jerk du profil, avec des valeurs distinctes pour les parois, le remplissage et la première couche.
+- Si une autre imprimante est active dans Cura, le transfert nomme les deux et indique où reprendre le choix de Cura.
+- Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.
+- Après le tranchage, Solidon compare aussi les supports et les couches du modèle par plateau. Le rapport présente l'estimation interne et les valeurs du fichier d'impression.
+- La comparaison de matière porte uniquement sur le modèle imprimé. La purge est affichée séparément, avec une indication si sa quantité ne peut pas être lue entièrement.
 - L'analyse de l'espace nécessaire aux supports est bien plus rapide sur les modèles creux et préserve les contours fins.
 - Pour les pièces qui se chevauchent, l'analyse d'impression ne compte plus l'air enfermé comme de la matière. La détection des surplombs et des supports nécessaires s'améliore aussi.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.

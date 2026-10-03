@@ -88,7 +88,7 @@ from app.core.scene.cancel import CancelSignal
 from app.core.scene.fits import fit_kinds_for
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
-from app.core.slice.estimate import estimate
+from app.core.slice.estimate import PlateComparison, estimate, plate_comparison
 from app.core.slice.findings import remembered_analysis
 from app.core.types import (
     AdhesionType,
@@ -1831,6 +1831,9 @@ class PlateRun:
     deklarierte Spulenliste taugt dafür nicht — sie kann einen Eintrag
     tragen, den keine Fläche benutzt."""
 
+    comparison: PlateComparison | None = None
+    """Vollständige Gegenprobe der tatsächlich geschriebenen Teilwerte."""
+
 
 @dataclass(frozen=True, slots=True)
 class _PlateJob:
@@ -1866,6 +1869,7 @@ class _PlateJob:
     #: der Konsole (``writer.write_assembly``, RM-257). Auch das setzt der
     #: Arbeiter selbst.
     for_window: bool = False
+    with_comparison: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1878,6 +1882,7 @@ class SliceComparison:
 
     grams: float | None
     seconds: float | None
+    plates: tuple[PlateComparison, ...] = ()
 
 
 def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceComparison:
@@ -1918,7 +1923,8 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
                 # Prusa und Cura bekommen genau einen Satz für die ganze Platte.
                 choices = [shared]
             if not choices or any(choice is None for choice in choices):
-                return SliceComparison(grams=None, seconds=None)
+                grams = seconds = None
+                continue
             values = [
                 estimate(entry.mesh.volume, entry.mesh.area, choice)
                 for choice in choices
@@ -1936,7 +1942,21 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
                 and all(is_close(value.seconds, first.seconds) for value in values)
                 else None
             )
-    return SliceComparison(grams=grams, seconds=seconds)
+    return SliceComparison(
+        grams=grams,
+        seconds=seconds,
+        plates=tuple(
+            run.comparison
+            or PlateComparison(
+                run.plate,
+                None,
+                None,
+                _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt."),
+                _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt."),
+            )
+            for run in runs
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -2021,6 +2041,21 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     )
     meshes = tuple(mesh_plan[0][entry.id] for entry in on_plate)
     keep = arrangement_holds(meshes, job.profile)
+    comparison: PlateComparison | None = None
+
+    def remember_comparison(
+        parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+    ) -> None:
+        nonlocal comparison
+        comparison = plate_comparison(
+            plate,
+            parts,
+            job.profile,
+            keep_arrangement=keep,
+            separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
+            cancelled=job.cancelled,
+        )
+
     written, findings = write_assembly(
         on_plate,
         job.folder,
@@ -2039,9 +2074,11 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         # Ob ein übernommener Vorschlag je Teil verlangt ist, entscheidet der
         # ganze Auftrag, nicht diese eine Platte (Durchsicht 0.5.1, N1).
         job=[entry for entry in objects if entry.plate in job.plates],
+        comparison=remember_comparison if job.with_comparison else None,
     )
     return PlateRun(
         plate=plate,
+        comparison=comparison,
         model=written,
         meshes=meshes,
         object_ids=tuple(entry.id for entry in on_plate),
@@ -2544,7 +2581,7 @@ class _PrepareAndSliceWorker(_SliceWorker):
 
     def __init__(self, job: _PlateJob) -> None:
         super().__init__((), job.settings, job.profile, job.setup)
-        self._job = replace(job, cancelled=self.cancelled)
+        self._job = replace(job, cancelled=self.cancelled, with_comparison=True)
         self.comparison: SliceComparison | None = None
 
     def work(self) -> None:
