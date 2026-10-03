@@ -113,8 +113,8 @@ denselben Körper mehrmals fragt — `prepare.surface_index_of`;
 Wert; `lifted_caps`, Zwilling von `brep.edit.collared`) · `boolean.py` ·
 `attributes.py` (Slots durch eine Operation, §20; `transfer`, `with_slots`,
 `carry_refined_units`) · `lathe.py` · `enclosure.py` (Verschachtelung ohne
-`rtree`) · `intersections.py` (Selbstdurchdringung als Feld, für Karte und
-Bereichstest) · `repair.py` (unten) · `deviation.py` (Grenzen ausgefüllter
+`rtree`) · `intersections.py` (Selbstdurchdringung als Feld, für Karte,
+Bereichstest und Formschritt) · `repair.py` (unten) · `deviation.py` (Grenzen ausgefüllter
 Originaldreiecke zu einem belegten `SurfacePatch`, Budget je Dreieck; keine
 neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
@@ -133,9 +133,7 @@ behält ihn bis zum bestätigten Prozessende. Stoppreste bleiben sichtbar und er
 aufräumbar; die nächste Anfrage sammelt einen inzwischen toten Rest regulär
 ein. Lebende Reste sperren Starts und lokale Rückfälle, auch beim nächsten
 `run` nach Vorabstart, mit dem vorhandenen Fehlerbericht-Ausweg. Bleibende
-Start-/Helferabsagen überstehen das Einsammeln. Die ursprüngliche
-Konstruktorursache bleibt auswertbar: erwartete Fehlstarts verbrauchen ihr
-Kontingent, unerwartete gelten nicht als gewöhnliche Startabsage. `shutdown`
+Start-/Helferabsagen überstehen das Einsammeln. `shutdown`
 gibt auch bei Fehler seine Wartenden frei, nimmt offene Starts mit und trennt
 alte Reservierungen/Rückgaben/Absagen vom neuen Bestand; Regel: `kern.md`.
 
@@ -154,7 +152,8 @@ exakten Grundkörper, `primitive_local_tool()` für Op und Vorschau) ·
 (`tool_in_outline()`; *Merkmal ändern* am Muster nimmt dasselbe
 `flat_tool()`; eben heißt
 `faces.FLAT_ENOUGH_FOR_A_TOOL`, nicht `EPS_GEOM`) · `texture.py` ·
-`sculpt.py`, `pose.py` (Sammelparameter-Ops) · `sketch_solid.py` (Umriss zu
+`sculpt.py`, `pose.py` (Sammelparameter-Ops; `SculptPreview` rechnet die
+Formsitzung Zug für Zug bitgleich zur Op) · `sketch_solid.py` (Umriss zu
 Netz ohne B-Rep) · `field_ops.py` (Schnittfeld: Raster
 `sketch.shapes.grid_centres`, Ursprung fest, Ränder am ganzen Werkzeugumriss,
 Kompensation nur Kreis und Langloch; am Netz gibt `_named_bores` nur benannte

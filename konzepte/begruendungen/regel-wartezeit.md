@@ -232,6 +232,17 @@ reißt die Rechnung kooperativ ab und meldet `revisionCancelled` — am Verlauf
 hat sich dann nichts geändert. `busy` umfasst ihn, `wait_for_idle` wartet auf
 ihn, und ein zweiter Umbau während des ersten wird abgesagt statt eingereiht.
 
+***Stand festschreiben* folgt demselben Muster** (`_BakeWorker`,
+`Session.bake_strokes_async`) und rechnet fein, wie Export und Druck. Bis
+RM-365 schrieb es das Entwurfsnetz des Fensters fest, und der Export war danach
+gröber als ohne: An der Figur aus Weg 4 mit Raster 0,5 mm für *Weich
+verschmelzen* 10 298 statt 22 098 Dreiecke, 14 346,6 statt 14 386,9 mm³, die
+Form bis 0,35 mm verschoben. Fein gerechnet kostet das Sekunden, deshalb im
+Arbeiter mit Fortschritt und *Abbrechen*. Übernommen wird nur, wenn der Schritt
+noch dieselben Parameter und Eingänge hat wie beim Start
+(`Session._bake_from`) — sonst stünde ein Stand fest, der zu keinem Zug mehr
+passt.
+
 **Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
 Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb
 geschriebener Export ist eine halbe Datei, und der Schreiber im Kern hat keinen

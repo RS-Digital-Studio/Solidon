@@ -84,10 +84,10 @@ it into `website/version.json`.
 - Lettering is set more precisely: the letters stand in their place, and curves follow the font instead of losing up to 2 percent of their area at small sizes.
 - Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
-- A sculpting stroke on the mirror plane now acts once instead of twice.
+- A sculpting stroke on the mirror plane now acts once instead of twice, and just beside it the stroke and its mirror image blend smoothly.
 - The skeleton editor shows bones and joint in the view, and a joint sits in the middle of the body instead of on its skin, so the figure bends evenly.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
-- If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
+- If a sculpting stroke pierces the wall or makes it too thin, the report and the export say so, with *Show the place* and *Take back the stroke*.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
@@ -95,6 +95,8 @@ it into `website/version.json`.
 - The target of *Align to feature* starts out empty, and the first click in the view fills it. *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
+- In *Sculpt*, the window shows every stroke just as quickly after many strokes as after the first. Until now it got slower with each stroke.
+- *Fix the state* stores a sculpting session as finely as export and printing compute it, and the window stays usable meanwhile. Until now it stored the coarser view.
 
 ### Generating with AI
 

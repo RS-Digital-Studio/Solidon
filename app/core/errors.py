@@ -94,6 +94,10 @@ SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 #: keine Karte färbt: Eine eben geschlossene Öffnung ist kein Netzfehler mehr,
 #: und *Stellen zeigen* öffnete darüber eine Netzfehlerkarte ohne Befund.
 SHOW_LOCATION = Action("show_location", _("Stelle zeigen"))
+#: Den Zug, der die Wand durchstochen hat, aus seiner Formsitzung nehmen — eine
+#: Parameteränderung am Schritt, also eine Transaktion, die Strg+Z zurückholt.
+#: Welcher Zug, steht im Befund (``values["stroke"]``, ab eins; RM-419).
+TAKE_BACK_STROKE = Action("take_back_stroke", _("Zug zurücknehmen"), primary=True)
 #: Den Körper in der Schichtansicht zeigen: Eingeschlossene Luft steht dort als
 #: Loch im Querschnitt, und genau das ist die Frage, die ein unlesbarer
 #: Einschluss offenlässt (``perceive.voids_unreadable``).

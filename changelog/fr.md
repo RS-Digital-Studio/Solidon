@@ -85,10 +85,10 @@ dans `website/version.json`.
 - Les inscriptions sont composées plus précisément : les lettres restent à leur place, et les courbes suivent la police au lieu de perdre jusqu'à 2 % de surface en petite taille.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
-- Un trait sur le plan de symétrie agit une fois au lieu de deux.
+- Un trait sur le plan de symétrie agit une fois au lieu de deux, et juste à côté le trait et son reflet se fondent en douceur.
 - L'éditeur de squelette montre os et articulation dans la vue, et une articulation se place au milieu du corps au lieu de sa peau, la figure plie donc régulièrement.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
-- Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
+- Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport et l'export le signalent, avec « Montrer l'endroit » et « Retirer le trait ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
@@ -96,6 +96,8 @@ dans `website/version.json`.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide, et le premier clic dans la vue la remplit. « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
+- Dans « Sculpter », la fenêtre affiche chaque trait aussi vite après de nombreux traits qu'au premier. Jusqu'ici, elle ralentissait à chaque trait.
+- « Figer l'état » enregistre une session de sculpture aussi finement que l'export et l'impression la calculent, et la fenêtre reste utilisable. Jusqu'ici, il figeait la vue plus grossière.
 
 ### Générer avec l'IA
 

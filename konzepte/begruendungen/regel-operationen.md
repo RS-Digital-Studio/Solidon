@@ -632,6 +632,9 @@ und der Fall entsteht gar nicht. Er blieb ohne den Fix grün. Was ihn trägt,
 ist die Normale aus dem echten Treffer (`original_surface_hit`), denn erst die
 tesselierte Facette erzeugt den Überstand.
 
+**`_flank_opens_within`** fragt nur dort, wo die Bohrung schneidet, zählt nur
+Luft mit freiem Strahl quer zur Achse, und eine Nachbarbohrung ist kein Rand.
+
 ### Wo die Vorprüfung selbst urteilt, beweist sie es gegen die Toleranzen der genauen
 
 Die Trennprüfung der Schnittsuche (`intersections._separated`, RM-244)
@@ -665,6 +668,22 @@ Ein eigener Anteil für den frühen Ausstieg ließ die Netzfehlerkarte an
 organischen Netzen acht Prozent weniger Dreiecke prüfen — obwohl die Zeit je
 Paar gesunken war, weil die genaue Prüfung gleiche Ecken seither nicht mehr
 zusammenlegt.
+
+**`_touching_apart` vor der Suche um aktive Dreiecke** (`crossings_at`, RM-419):
+Der Formschritt fragte die ganze Suche über den gemeinsamen Hüllquader aller
+bewegten Punkte; an einer Kugel aus 327 680 Dreiecken kosteten sechs kleine
+Züge 29 bis 32 Sekunden statt 0,22. Neun von zehn Kandidaten einer glatten
+Fläche teilen eine Ecke und stehen schräg — `_separated` gab sie alle an die
+genaue Prüfung (an der Kugel mit R 10: 91 351 von 93 211). Getrennt werden sie
+über die Seite ihrer freien Ecken jenseits `margin` und, wenn beide über die
+Ebene des anderen reiten (am Rand einer Mulde), über auseinanderlaufende
+Schnittstrecken. Die eine Sicherung, nie fast parallel, hat ihren roten Fall
+(`_folds_at_the_tolerance`: Sinus 8,5·10⁻⁷, freie Ecken 4,8·10⁻⁶ über der
+Ebene); eine zweite gegen zusammengelegte nahe Ecken hatte keinen — eine Ecke
+näher als `EPS_GEOM` liegt selbst innerhalb `margin`, gesucht an 200 000
+schmalen Dreiecken — und fiel. Was die Auswertung so findet, sagt der Export
+weiter (`writer.CARRIED_TO_EXPORT`); nachmessen hieße, jeden Körper ganz zu
+prüfen.
 
 ## Eine Zahl beschreibt die Regel, nicht die Lage
 

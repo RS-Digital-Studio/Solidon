@@ -1065,3 +1065,344 @@ def crossing_faces(
     """
     found = crossing_face_pairs(vertices, faces, cancelled, max_pairs=max_pairs)
     return found.faces, found.complete
+
+
+#: Wie viele Kästen die Suche um aktive Dreiecke höchstens aufspannt
+#: (:func:`crossings_at`). Mehr getrennte Stellen werden zu so vielen Kästen
+#: zusammengelegt — jeder kostet einen Durchgang über alle Hüllquader.
+ACTIVE_BOXES: Final = 24
+
+
+def face_bounds(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Der Hüllquader jedes Dreiecks, ``(low, high)`` je ``(n, 3)``."""
+    first, second, third = (vertices[faces[:, k]] for k in range(3))
+    low = np.minimum(np.minimum(first, second), third)
+    high = np.maximum(np.maximum(first, second), third)
+    return low, high
+
+
+def faces_touching(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    boxes: list[tuple[np.ndarray, np.ndarray]],
+    longest: float,
+) -> np.ndarray:
+    """Die Dreiecke, deren Hüllquader einen der Kästen bis auf ``EPS_GEOM`` berührt.
+
+    Gesucht über die Ecken: Berührt ein Dreieck einen Kasten, liegen alle
+    seine Ecken höchstens eine Kantenlänge daneben, also mindestens eine im
+    um ``longest`` (die längste Kante oder eine Schranke dafür) erweiterten
+    Kasten. Nur diese Dreiecke bekommen einen Hüllquader — an einem Netz mit
+    Hunderttausenden ein Bruchteil davon.
+    """
+    marked = np.zeros(len(vertices), dtype=bool)
+    reach = longest + EPS_GEOM
+    for box_low, box_high in boxes:
+        marked |= np.all(vertices >= box_low - reach, axis=1) & np.all(
+            vertices <= box_high + reach, axis=1
+        )
+    candidates = np.flatnonzero(marked[faces].any(axis=1))
+    low, high = face_bounds(vertices, faces[candidates])
+    hit = np.zeros(len(candidates), dtype=bool)
+    for box_low, box_high in boxes:
+        hit |= np.all(low <= box_high + EPS_GEOM, axis=1) & np.all(
+            high >= box_low - EPS_GEOM, axis=1
+        )
+    return np.asarray(candidates[hit], dtype=np.int64)
+
+
+def boxes_around(low: np.ndarray, high: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Die Kästen aus :func:`box_groups`, ohne ihre Mitglieder."""
+    return [(box_low, box_high) for box_low, box_high, _members in box_groups(low, high)]
+
+
+def box_groups(
+    low: np.ndarray, high: np.ndarray
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Die Hüllquader ``low``…``high`` als wenige Kästen, die sie alle umfassen —
+    je Kasten untere und obere Ecke und die Nummern der Quader darin.
+
+    Geteilt wird, wo auf einer Achse eine Lücke liegt: Sechs Züge an ±X, ±Y,
+    ±Z einer Kugel sind sechs Kästen, nicht einer um die ganze Kugel — der
+    gemeinsame Quader nahm dort jedes Dreieck des Körpers in die Suche
+    (RM-419). Zu viele Stellen legt :data:`ACTIVE_BOXES` zusammen; die Kästen
+    dürfen sich dann überdecken.
+    """
+    groups = [np.arange(len(low))]
+    found: list[np.ndarray] = []
+    while groups:
+        group = groups.pop()
+        parts: list[np.ndarray] | None = None
+        for axis in range(3):
+            order = group[np.argsort(low[group, axis], kind="stable")]
+            reach = np.maximum.accumulate(high[order, axis])
+            gaps = np.flatnonzero(low[order[1:], axis] > reach[:-1] + EPS_GEOM)
+            if len(gaps):
+                parts = np.split(order, gaps + 1)
+                break
+        if parts is None:
+            found.append(group)
+        else:
+            groups.extend(parts)
+    found.sort(key=lambda group: float(low[group, 0].min()))
+    if len(found) > ACTIVE_BOXES:
+        size = -(-len(found) // ACTIVE_BOXES)
+        found = [
+            np.concatenate(found[start : start + size]) for start in range(0, len(found), size)
+        ]
+    return [(low[group].min(axis=0), high[group].max(axis=0), group) for group in found]
+
+
+def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Welche Paare beweisbar höchstens an ihren gemeinsamen Ecken anliegen.
+
+    :func:`_separated` trennt eine gemeinsame Ecke nur in derselben Ebene;
+    schräg zueinander gehen Nachbarn an die genaue Prüfung — an einer glatten
+    Fläche sind das fast alle Kandidaten, und an einem Formschritt kostete das
+    Sekunden (RM-419). Getrennt heißt hier: Die Ecken des einen, die das
+    andere nicht trägt, liegen alle um ``surface.margin`` auf derselben Seite
+    der Ebene des anderen. Dann trifft das eine die Ebene des anderen nur in
+    den gemeinsamen Ecken, und eine gemeinsame Ecke oder Kante ist für
+    :func:`crossing_pairs` kein Schnitt. Ohne gemeinsame Ecke ist es die
+    Ebenentrennung von :func:`_separated`, hier für alle Paare in einem Feld.
+    Reiten bei einer gemeinsamen Ecke beide über die Ebene des anderen,
+    entscheidet die Richtung ihrer Schnittstrecken (:func:`_opposite_rays`).
+
+    **Eine Sicherung hält es an die genaue Prüfung: nicht fast parallel**
+    (Sinus über ``EPS_GEOM``). Sonst rechnet sie das Paar als eben, und eine
+    Falte über die gemeinsame Ecke ist ein Schnitt, auch wenn eine lange Kante
+    weiter als ``margin`` absteht (``_folds_at_the_tolerance`` in den Tests).
+
+    **Ecken, die die genaue Prüfung zusammenlegt, brauchen keine:** Liegt
+    eine freie Ecke näher als ``EPS_GEOM`` an einer des anderen Dreiecks,
+    liegt sie auch innerhalb ``margin`` von dessen Ebene — die Seite trennt
+    dann nicht, und die Schnittstrecken beider laufen auf dieselbe Stelle zu,
+    also nicht auseinander. Gesucht und nicht gefunden an 200 000 schmalen
+    Dreiecken mit einer Ecke knapp neben der anderen.
+
+    Abstände und Normalen sind dieselben Zahlen, die :func:`crossing_pairs`
+    rechnet — elementweise, ohne ``einsum`` (RM-187).
+    """
+    one, other = surface.triangles[first], surface.triangles[second]
+    same = surface.faces[first][:, :, None] == surface.faces[second][:, None, :]
+    one_normal, other_normal = surface.normal[first], surface.normal[second]
+    one_length = surface.normal_length[first]
+    other_length = surface.normal_length[second]
+    direction = np.cross(one_normal, other_normal)
+    steep = np.linalg.norm(direction, axis=1) > EPS_GEOM * one_length * other_length
+    margin = surface.margin
+    one_side = _dot_rows(one - other[:, 0, None, :], other_normal) / other_length[:, None]
+    other_side = _dot_rows(other - one[:, 0, None, :], one_normal) / one_length[:, None]
+    one_free, other_free = ~same.any(axis=2), ~same.any(axis=1)
+    beside = (
+        np.all(~one_free | (one_side > margin), axis=1)
+        | np.all(~one_free | (one_side < -margin), axis=1)
+        | np.all(~other_free | (other_side > margin), axis=1)
+        | np.all(~other_free | (other_side < -margin), axis=1)
+    )
+    # Eine gemeinsame Ecke, und beide reiten über die Ebene des anderen — am
+    # Rand einer Mulde die Regel: Ihre Schnittstrecken beginnen in der
+    # gemeinsamen Ecke, und zeigen sie auseinander, liegen die Dreiecke nur
+    # dort aneinander.
+    saddle = np.flatnonzero((one_free.sum(axis=1) == 2) & ~beside & steep)
+    if len(saddle):
+        beside[saddle] = _opposite_rays(
+            one[saddle],
+            other[saddle],
+            one_side[saddle],
+            other_side[saddle],
+            one_free[saddle],
+            other_free[saddle],
+            direction[saddle],
+            margin,
+        )
+    return np.asarray(beside & steep, dtype=bool)
+
+
+def _ray_from_the_corner(
+    triangle: np.ndarray, side: np.ndarray, free: np.ndarray, direction: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Wo die Schnittstrecke eines Dreiecks mit einer Ebene von seiner
+    gemeinsamen Ecke aus hinläuft, entlang ``direction`` — und ob es sie gibt.
+
+    Die zwei freien Ecken liegen auf verschiedenen Seiten der Ebene
+    (``side``); die Strecke reicht von der gemeinsamen Ecke bis zum
+    Durchstoßpunkt ihrer Kante, wie in :func:`_intervals_on_line`.
+    """
+    rows = np.arange(len(triangle))
+    order = np.argsort(~free, axis=1, kind="stable")
+    first, second, shared = order[:, 0], order[:, 1], order[:, 2]
+    start_distance, end_distance = side[rows, first], side[rows, second]
+    crossing = start_distance * end_distance < 0.0
+    fraction = np.divide(
+        start_distance,
+        start_distance - end_distance,
+        out=np.zeros_like(start_distance),
+        where=crossing,
+    )
+    start, end = triangle[rows, first], triangle[rows, second]
+    point = start + fraction[:, None] * (end - start)
+    away = point - triangle[rows, shared]
+    along = (
+        away[:, 0] * direction[:, 0] + away[:, 1] * direction[:, 1] + away[:, 2] * direction[:, 2]
+    )
+    return crossing, along
+
+
+def _opposite_rays(
+    one: np.ndarray,
+    other: np.ndarray,
+    one_side: np.ndarray,
+    other_side: np.ndarray,
+    one_free: np.ndarray,
+    other_free: np.ndarray,
+    direction: np.ndarray,
+    margin: float,
+) -> np.ndarray:
+    """Ob die Schnittstrecken zweier Dreiecke mit einer gemeinsamen Ecke von
+    ihr aus auseinanderlaufen — beide um mehr als ``margin``.
+
+    Dann überdecken sich ihre Abschnitte auf der Schnittgeraden nur in der
+    gemeinsamen Ecke, und das ist für :func:`crossing_pairs` eine Berührung.
+    """
+    one_crossing, one_along = _ray_from_the_corner(one, one_side, one_free, direction)
+    other_crossing, other_along = _ray_from_the_corner(other, other_side, other_free, direction)
+    length = np.linalg.norm(direction, axis=1)
+    one_along, other_along = one_along / length, other_along / length
+    return np.asarray(
+        one_crossing
+        & other_crossing
+        & (one_along * other_along < 0.0)
+        & (np.minimum(np.abs(one_along), np.abs(other_along)) > margin),
+        dtype=bool,
+    )
+
+
+def crossings_at(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    active: np.ndarray,
+    cancelled: CancelToken | None = None,
+    *,
+    progress: Callable[[float], None] | None = None,
+    longest: float | None = None,
+    nearby: np.ndarray | None = None,
+) -> Crossings:
+    """Die Paare, die sich schneiden und an denen ein Dreieck aus ``active`` beteiligt ist.
+
+    Vollständig wie :func:`crossing_face_pairs` für genau diese Paare, aber
+    nur dort gesucht: Ein Formschritt fragte die ganze Suche über den
+    gemeinsamen Hüllquader aller bewegten Punkte, und sechs kleine Züge an
+    einer Kugel aus 327 680 Dreiecken kosteten 29 bis 32 Sekunden statt 0,22
+    (RM-419). Die Partner kommen aus Kästen um die aktiven Dreiecke
+    (:func:`boxes_around`), die Kandidaten aus dem Würfelabstand der Mitten
+    (:func:`_active_pairs`); vor der genauen Prüfung trennen
+    :func:`_separated` und :func:`_touching_apart`.
+
+    ``longest`` ist eine Schranke für die längste Kante, wenn der Aufrufer
+    sie kennt (:func:`faces_touching`); ``nearby`` die Dreiecke, unter denen
+    die Partner liegen, wenn er sie schon gesucht hat — mehr schadet nicht,
+    weniger wäre falsch. ``progress`` bekommt den geprüften Anteil,
+    ``cancelled`` wird zwischen den Blöcken gefragt und wirft
+    ``OperationCancelled``.
+    """
+    faces = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    vertices = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    active = np.asarray(active, dtype=bool)
+    empty = np.zeros(0, dtype=np.int64)
+    nothing = Crossings(empty, empty, np.zeros(0, dtype=bool), True)
+    if not active.any():
+        return nothing
+    firsts: list[np.ndarray] = []
+    seconds: list[np.ndarray] = []
+    flats: list[np.ndarray] = []
+    try:
+        _check(cancelled)
+        chosen = np.flatnonzero(active)
+        if longest is None:
+            low, high = face_bounds(vertices, faces)
+            longest = float(np.max(high - low))
+        low, high = face_bounds(vertices, faces[chosen])
+        groups = box_groups(low, high)
+        boxes = [(box_low, box_high) for box_low, box_high, _members in groups]
+        if nearby is None:
+            nearby = faces_touching(vertices, faces, boxes, longest)
+        near_low, near_high = face_bounds(vertices, faces[nearby])
+        for done, (box_low, box_high, members) in enumerate(groups):
+            _check(cancelled)
+            if progress is not None:
+                progress(done / len(groups))
+            inside = np.all(near_low <= box_high + EPS_GEOM, axis=1) & np.all(
+                near_high >= box_low - EPS_GEOM, axis=1
+            )
+            sub = np.union1d(nearby[inside], chosen[members])
+            found = _crossings_in(vertices, faces, sub, active, box_high - box_low, cancelled)
+            if found is not None:
+                firsts.append(found[0])
+                seconds.append(found[1])
+                flats.append(found[2])
+    except _CancelledError:
+        raise OperationCancelled from None
+    if progress is not None:
+        progress(1.0)
+    if not firsts:
+        return nothing
+    first = np.concatenate(firsts).astype(np.int64)
+    second = np.concatenate(seconds).astype(np.int64)
+    # Zusammengelegte Kästen dürfen sich überdecken: jedes Paar einmal.
+    _keys, unique = np.unique(
+        np.minimum(first, second) * len(faces) + np.maximum(first, second), return_index=True
+    )
+    return Crossings(first[unique], second[unique], np.concatenate(flats)[unique], True)
+
+
+def _crossings_in(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    sub: np.ndarray,
+    active: np.ndarray,
+    extent: np.ndarray,
+    cancelled: CancelToken | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Die schneidenden Paare mit einem aktiven Dreieck unter den Dreiecken ``sub``
+    eines Flecks (:func:`crossings_at`), Nummern im ganzen Netz.
+
+    Der Kehrplan kommt aus der Lage des Flecks statt aus einer Stichprobe:
+    entlang seiner längsten Ausdehnung, in Scheiben quer dazu. Ein Fleck ist
+    ein Stück Haut, und so liegt jedes Dreieck nur bei seinen Nachbarn; ein
+    gemeinsamer Plan für sechs verschieden liegende Flecken zählte an der
+    Kugel das Siebenfache an Paaren.
+    """
+    surface = _surface(vertices, faces[sub])
+    if surface is None:
+        return None
+    live = active[sub][surface.kept]
+    if not live.any():
+        return None
+    axes = np.argsort(-np.asarray(extent), kind="stable")
+    width = 2.0 * float(np.median(surface.high[:, axes[1]] - surface.low[:, axes[1]]))
+    plan = _Plan(int(axes[0]), int(axes[1]), width) if width > EPS_GEOM else _Plan(int(axes[0]))
+    firsts: list[np.ndarray] = []
+    seconds: list[np.ndarray] = []
+    flats: list[np.ndarray] = []
+    for first, second in _candidates(surface, cancelled, _Search(), plan):
+        mine = live[first] | live[second]
+        one, other = first[mine], second[mine]
+        apart = _touching_apart(surface, one, other)
+        one, other = one[~apart], other[~apart]
+        separated, _searched = _separated(surface, one, other)
+        one, other = one[~separated], other[~separated]
+        crossed, coplanar = crossing_pairs(
+            surface.triangles[one],
+            surface.triangles[other],
+            surface.faces[one],
+            surface.faces[other],
+            with_coplanar=True,
+        )
+        if np.any(crossed):
+            firsts.append(sub[surface.kept[one[crossed]]])
+            seconds.append(sub[surface.kept[other[crossed]]])
+            flats.append(coplanar[crossed])
+    if not firsts:
+        return None
+    return np.concatenate(firsts), np.concatenate(seconds), np.concatenate(flats)

@@ -146,10 +146,11 @@ from app.core.geom.pose import armature_to_text
 from app.core.geom.sculpt import (
     BRUSH_TO_EDGE,
     SYMMETRY_BITS,
-    apply_strokes,
+    SculptPreview,
     median_edge,
     stages,
     stroke_at,
+    strokes_from_text,
     strokes_to_text,
 )
 from app.core.geom.section import SectionPlane, plane_through
@@ -938,15 +939,18 @@ class _SculptWallWorker(Worker):
     ``done`` trägt die Nummer der Prüfung und die Zahl der zu dünnen Stellen
     — ``None``, wenn das Netz für die Karte zu groß ist. Das Fenster nimmt
     nur die Antwort der jüngsten Prüfung an.
+
+    Geprüft wird die Fläche, die die Vorschau schon zeigt: Der Arbeiter rechnete
+    alle Züge der Sitzung noch einmal, ohne Abbrechen, und das kostete bei
+    vierzig Etappen Sekunden neben dem Fenster (RM-366).
     """
 
     done = Signal(int, object)
 
-    def __init__(self, number: int, mesh: MeshData, strokes: list[Stroke], minimum: float) -> None:
+    def __init__(self, number: int, mesh: MeshData, minimum: float) -> None:
         super().__init__()
         self._number = number
         self._mesh: MeshData | None = mesh
-        self._strokes = strokes
         self._minimum = minimum
         self.cancelled = CancelSignal()
         """Der nächste Zug macht diese Prüfung wertlos — und das Schließen
@@ -956,10 +960,9 @@ class _SculptWallWorker(Worker):
         self.cancelled.cancel()
 
     def work(self) -> None:
-        mesh = self._mesh
-        if mesh is None:
+        sculpted = self._mesh
+        if sculpted is None:
             return
-        sculpted = apply_strokes(mesh, self._strokes)
         try:
             card = wall_thickness_map(
                 sculpted,
@@ -977,9 +980,8 @@ class _SculptWallWorker(Worker):
         self.done.emit(self._number, len(card.highlighted))
 
     def release_finished_references(self) -> None:
-        """Netz und Züge loslassen, sobald die Antwort zugestellt ist."""
+        """Das Netz loslassen, sobald die Antwort zugestellt ist."""
         self._mesh = None
-        self._strokes = []
         super().release_finished_references()
 
 
@@ -1232,6 +1234,7 @@ class _ExportWorker(Worker):
         scene: Any = None,
         document: Any = None,
         checked: list[Finding] | None = None,
+        evaluated: Sequence[Finding] = (),
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -1247,6 +1250,8 @@ class _ExportWorker(Worker):
         self._all_objects = tuple(all_objects) if all_objects is not None else tuple(objects)
         self._scene = scene
         self._document = document
+        self._evaluated = tuple(evaluated)
+        """Die Befunde der Auswertung, aus der die Körper stammen (RM-419)."""
         #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
@@ -1280,6 +1285,7 @@ class _ExportWorker(Worker):
             scene=self._scene,
             document=self._document,
             checked=list(findings),
+            evaluated=self._evaluated,
         )
 
     def work(self) -> None:
@@ -1294,6 +1300,7 @@ class _ExportWorker(Worker):
                     scene=self._scene,
                     document=self._document,
                     cancelled=self.cancelled,
+                    evaluated=self._evaluated,
                 )
                 self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
@@ -2650,6 +2657,8 @@ class MainWindow(QMainWindow):
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
+        self.session.bakeFinished.connect(self._bake_finished)
+        self.session.bakeCancelled.connect(self._on_revision_cancelled)
         self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
         self.history_panel.drawingReuseRequested.connect(self.reuse_drawing)
         self.filaments = FilamentPanel(self)
@@ -3216,6 +3225,8 @@ class MainWindow(QMainWindow):
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
+        self._sculpt_preview: SculptPreview | None = None
+        """Die Vorschau der laufenden Formsitzung, Zug für Zug (RM-366)."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
         self._sketch_body: ObjectId | None = None
@@ -5691,6 +5702,31 @@ class MainWindow(QMainWindow):
         if error.op_id is not None:
             self._suppress_history_steps([int(error.op_id)])
 
+    def _take_back_stroke(self, error: AppError) -> None:
+        """*Zug zurücknehmen*: den Zug, der die Wand durchstochen hat, aus seiner
+        Formsitzung nehmen (RM-419).
+
+        Der Befund nennt ihn ab eins (``values["stroke"]``). Eine
+        Parameteränderung am Schritt, also eine Transaktion: Strg+Z holt den
+        Zug zurück, und keine Nachfrage davor (Regel 19).
+        """
+        number = error.values.get("stroke")
+        if error.op_id is None or number is None:
+            return
+        operation = next(
+            (entry for entry in self.session.project.document.ops if entry.id == error.op_id),
+            None,
+        )
+        if operation is None or operation.op != "sculpt_strokes":
+            return
+        strokes = strokes_from_text(str(operation.params.get("strokes", "")))
+        index = int(float(number)) - 1
+        if not 0 <= index < len(strokes):
+            return
+        del strokes[index]
+        self.session.change_params(operation.id, {"strokes": strokes_to_text(strokes)})
+        self.announce(tr("Zug zurückgenommen — Strg+Z holt ihn wieder."))
+
     def _suppress_along_after_error(self, error: AppError) -> None:
         """„Diesen Schritt mit ausschalten": dieselben Schritte und der, an dem es hielt."""
         steps = [int(step) for step in str(error.values.get("steps", "")).split(",") if step]
@@ -7304,8 +7340,17 @@ class MainWindow(QMainWindow):
         Was der Dialog erklärte, steht jetzt in der Ansage danach — was sich
         geändert hat und wie es zurückgeht — und vorher im Tooltip des
         Eintrags im Verlauf.
+
+        Festgeschrieben wird die feine Rechnung, im Arbeiter mit Fortschritt
+        und *Abbrechen* (RM-365); die Ansage kommt mit ihrem Ende
+        (:meth:`_bake_finished`).
         """
-        if not self.session.bake_strokes(op_id):
+        if not self.session.bake_strokes_async(op_id):
+            self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
+
+    def _bake_finished(self, baked: bool) -> None:
+        """Was das Festschreiben bewirkt hat, und wie es zurückgeht."""
+        if not baked:
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
             return
         self.announce(
@@ -8493,6 +8538,9 @@ class MainWindow(QMainWindow):
             # sie herum. Ohne beides bliebe die Prüfung, was sie war.
             scene=result.scene,
             document=document,
+            # Und was die Auswertung schon fand: Ein durchstochener Formzug
+            # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
+            evaluated=result.scene.report.findings,
         )
         self._run_export(worker)
 
@@ -12095,6 +12143,7 @@ class MainWindow(QMainWindow):
         # bekam eine eigene Etappe, ohne sie verlangt zu haben.
         self.sculpt_bar.cut.setChecked(False)
         self._sculpt_strokes = []
+        self._sculpt_preview = None
         self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
         self.tools.setVisible(False)
@@ -12226,8 +12275,11 @@ class MainWindow(QMainWindow):
                 **bar.values(),
                 # Geklickt wird auf die Vorschau, also nach diesen Zügen. Ob
                 # der neue Zug dort noch wirkt oder eine Etappe braucht, weiß
-                # nur, wer sie kennt (RM-438).
+                # nur, wer sie kennt (RM-438) — samt der Spiegelung, die die
+                # Leiste über alle Züge legt (RM-454).
                 before=self._sculpt_shown(),
+                mirrored=SYMMETRY_BITS.get(bar.plane(), 0),
+                preview=self._sculpt_preview_for(mesh),
             )
         )
         # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
@@ -12265,10 +12317,12 @@ class MainWindow(QMainWindow):
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
 
         Die Vorschau rechnet dieselbe Auswertung wie die Operation, nur auf dem
-        Anzeigenetz und ohne den Stapel darum: Tausend Züge auf dem
-        §31-Prüfnetz kosten 96 ms, ein einzelner also nichts, was jemand
-        bemerkt. Der Dokumentzustand ändert sich dabei nicht — er ändert sich
-        bei „Fertig", in einer Transaktion.
+        Anzeigenetz und ohne den Stapel darum — und nur, was sich geändert hat
+        (:class:`SculptPreview`): Sie rechnete nach jedem Klick die ganze
+        Sitzung neu, an einer Figur mit 145 742 Ecken 5,8 s nach dem
+        vierzigsten Zug im Wechsel mit Glätten (RM-366). Der Dokumentzustand
+        ändert sich dabei nicht — er ändert sich bei „Fertig", in einer
+        Transaktion.
         """
         strokes = self._sculpt_strokes
         self.sculpt_bar.show_count(len(strokes), len(stages(strokes)))
@@ -12286,9 +12340,17 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.refine,
         ):
             self._clear_preview()
-        self.viewport.show_preview_mesh(
-            self._sculpt_target, apply_strokes(mesh, self._sculpt_shown())
-        )
+        preview = self._sculpt_preview_for(mesh)
+        self.viewport.show_preview_mesh(self._sculpt_target, preview.show(self._sculpt_shown()))
+
+    def _sculpt_preview_for(self, mesh: MeshData) -> SculptPreview:
+        """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
+        anderes ist (*Jetzt vernetzen* mitten in der Sitzung)."""
+        preview = self._sculpt_preview
+        if preview is None or preview.mesh is not mesh:
+            preview = SculptPreview(mesh)
+            self._sculpt_preview = preview
+        return preview
 
     def _sculpt_shown(self) -> list[Stroke]:
         """Die Züge der Sitzung mit der gewählten Symmetrie — wie die Vorschau
@@ -12320,10 +12382,10 @@ class MainWindow(QMainWindow):
         if mesh is None:
             return
         self._sculpt_wall_number += 1
+        shown = self._sculpt_preview_for(mesh).show(self._sculpt_shown())
         worker = _SculptWallWorker(
             self._sculpt_wall_number,
-            mesh,
-            self._sculpt_shown(),
+            shown,
             self.session.profile.minimum_wall_thickness,
         )
         worker.done.connect(self._sculpt_walls_checked)
@@ -12501,6 +12563,7 @@ class MainWindow(QMainWindow):
         self._clear_preview()
         self._sculpt_target = None
         self._sculpt_strokes = []
+        self._sculpt_preview = None
         self._sculpt_check.stop()
         # Eine Antwort, die nach dem Verlassen ankommt, gehört niemandem mehr.
         self._sculpt_wall_number += 1
@@ -22480,6 +22543,7 @@ class MainWindow(QMainWindow):
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).
             "reactivate_step": self._reactivate_after_error,
             "suppress_step": self._suppress_after_error,
+            "take_back_stroke": self._take_back_stroke,
             "suppress_along": self._suppress_along_after_error,
             "stop_inserting": lambda _error: self.session.stop_inserting(),
             "enter_licence_key": lambda _error: self.action_activate(),

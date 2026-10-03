@@ -84,10 +84,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As inscrições são compostas com mais precisão: as letras ficam no seu lugar e as curvas seguem a fonte, em vez de perder até 2 por cento de área em tamanhos pequenos.
 - A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.
 - O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.
-- Um traço sobre o plano de simetria atua uma vez em vez de duas.
+- Um traço sobre o plano de simetria atua uma vez em vez de duas, e logo ao lado o traço e o seu reflexo fundem-se suavemente.
 - O editor de esqueleto mostra ossos e articulação na vista, e uma articulação fica no meio do corpo em vez de na pele, assim a figura dobra de forma uniforme.
 - A barra de modelação chama agora «Intensidade» ao valor do pincel, em vez de «Espessura», que fazia pensar numa parede.
-- Se um traço de modelação fura a parede ou a deixa fina demais, o relatório indica-o, com «Mostrar o ponto».
+- Se um traço de modelação fura a parede ou a deixa fina demais, o relatório e a exportação indicam-no, com «Mostrar o ponto» e «Retirar o traço».
 - Na janela, «Fundir suavemente» calcula agora fino, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
@@ -95,6 +95,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O destino de «Alinhar à característica» começa vazio, e o primeiro clique na vista preenche-o. «Aplicar» espera até lá em vez de pôr o corpo do lado errado.
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 - Outro traço numa cavidade acabada de escavar torna-a mais funda, também com um pincel pequeno. Até agora não tinha efeito e contava como falhado.
+- Em «Modelar», a janela mostra cada traço com a mesma rapidez, também depois de muitos traços. Até agora ficava mais lenta a cada traço.
+- «Fixar o estado» guarda uma sessão de modelação tão fina como a exportação e a impressão a calculam, e a janela continua utilizável. Até agora guardava a vista mais grosseira.
 
 ### Gerar com IA
 

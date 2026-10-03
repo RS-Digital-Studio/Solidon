@@ -777,6 +777,8 @@ def command_export(args: argparse.Namespace) -> int:
         # brauchen die Szene, aus der die Körper kommen (RM-140).
         scene=result.scene,
         document=project.document,
+        # Was die Auswertung schon fand und der Export weitersagt (RM-419).
+        evaluated=result.scene.report.findings,
     )
     # Die Prüfung spricht, bevor die Dateien existieren — eine Warnung ist
     # also eine Warnung über das, was geschrieben wird, nicht über das, was

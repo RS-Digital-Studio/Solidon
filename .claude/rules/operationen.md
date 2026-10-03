@@ -142,7 +142,7 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
 - **Wer Boolesches rechnet, fragt danach — ohne Ausnahme**, an beiden Kernen;
   eine Op mit `boolean(...)` ist erst damit fertig.
 - **Gemessen wird die Wirkung, nicht der Treffer**, auch ohne Boolesches
-  (`sculpt.no_effect` gegen `Profile.printer.layer_height`,
+  (`sculpt.no_effect` gegen die Schichthöhe,
   `sculpt.strokes_missed`), mit dem Profil (`Profile.smallest_printable_volume`
   statt `EPS_GEOM`; ohne `profile` das Epsilon). Ein abtragender Baustein fragt
   die Tiefe (`parts.cuts_no_layer`); die Richtung wird nie aus der nächsten
@@ -151,7 +151,7 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
   nicht herabgestuft** (`SETTLED_BY`). **Was der Endstand widerlegt, fällt auch
   so** (`evaluate._without_outdated`); neue Befunde über Dichtheit, Teilezahl
   oder Wicklung gehören in `CLOSED_STATE_CODES`, `ONE_PIECE_CODES` oder
-  `WOUND_STATE_CODES`.
+  `WOUND_STATE_CODES`, was der Export nennt, in `CARRIED_TO_EXPORT`.
 - **Die Reparatur löst Überschneidungen von sich aus auf** (Entscheidung Robert,
   `RepairParams.self_intersections`, alte Schritte nicht; `repair.self_crossing`).
 - **Was aus einem Verhältnis entsteht, fragt die Auswertung am Endstand**, nicht
@@ -166,15 +166,15 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
 Schlägt sie an, wird an der Sache nachgemessen; ohne Netz bleibt die Näherung,
 zu streng, nie zu milde. **Wie oft schlägt sie im Normalfall an?** Schweigt sie,
 ist das kein Freispruch: Mit `reach` fragt `over_the_edge_along` am Netz nach
-(`_flank_opens_within`: nur wo die Bohrung schneidet, nur Luft mit freiem Strahl
-quer zur Achse, eine Nachbarbohrung ist kein Rand), nie über die ganze Hülle;
+(`_flank_opens_within`), nie über die ganze Hülle;
 jeder Weg, der eine Bohrung setzt, gibt `reach` mit, an beiden Kernen.
 
 ### Wo die Vorprüfung selbst urteilt, beweist sie es gegen die Toleranzen der genauen
 
-`intersections._separated` verwirft nur, was die genaue Prüfung mit all ihren
-Toleranzen auch verwürfe: Abstand über allen, gemeinsame Ecke nur zwischen
-parallelen Ebenen, dort Spiel unter der Treffschwelle. **Jede Sicherung hat
+`intersections._separated` und `_touching_apart` verwerfen nur, was die genaue
+Prüfung mit all ihren Toleranzen auch verwürfe: Abstand über allen, gemeinsame
+Ecke nur zwischen parallelen Ebenen, dort Spiel unter der Treffschwelle, oder
+freie Ecken über `margin`, nie fast parallel. **Jede Sicherung hat
 einen konstruierten Fall, an dem ihr Fehlen einen Treffer kostet**
 (`_pairs_at_the_tolerance`): Jede Bedingung einmal herausnehmen; ohne roten Fall
 ihn an der Toleranz konstruieren, sonst ist sie überflüssig. Sie zählt im Budget
