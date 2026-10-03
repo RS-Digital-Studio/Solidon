@@ -125,7 +125,7 @@ Aufrufe (`manifold3d`, `csgraph`) als reine Rechnung mit Feldern hinein/heraus;
 `JOBS` ist der einzige Auftragseinstieg, `serve` die Helferseite,
 `pack`/`copied` der gemeinsame Speicher. `_opened` ordnet nur ENOMEM und
 die Windows-Speichercodes 8/14/1450/1455 als `MemoryError` ein; ENOSPC bleibt
-ein Transfer-`OSError` für den bestehenden Absage-/lokalen Rückfallweg.
+ein Transfer-`OSError` und pausiert den Hilfsprozess (`kern.md`).
 `kernel_process.py`: bitgleiches `run` hier/im Helfer, Vorrat, Abbruch, Tod,
 Rückfall, `warm_up`, `shutdown`; `NOT_A_KERNEL_FAILURE` schützt breite Fänge.
 Ein Start reserviert unter dem Poolschloss einen Platz; der gesamte Bestand
@@ -140,8 +140,8 @@ gibt auch bei Fehler seine Wartenden frei, nimmt offene Starts mit und trennt
 alte Reservierungen/Rückgaben/Absagen vom neuen Bestand; Regel: `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
-Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen
-Fläche entfällt, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
+Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
+belegt, sonst entfällt er, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
 Spiegelung am Netz, `perceive.features.note_movement`) · `ops.py` („Transformation“,
 `place_on_bed`, `place_group_on_bed` ohne vorberechneten Versatz;
 `repair_object` gibt einen heilen Eingang unverändert zurück) · `align.py` ·
@@ -357,10 +357,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 - Fehlt eine genannte Kante oder trifft ein Schlüssel mehrere, hält der ganze
   Schritt an; eine Gruppe überspringt, was nicht `workable` ist. Ob eine
   Rundung passt, fragen beide Kerne vorher gleich (`contact_band_limit`).
-- Exakte Gruppen: `brep.edit.native_edges_of_chains` (BRep-Karte).
-  Nach Breitenfilter neu belegen; ohne Kante absagen. „Zu schmal“ nur gemessen.
-  Alle Auslassungen auch bei Fehlern als `Finding.outline` mit Konturpunkt
-  `location` erhalten.
+- Exakte Gruppen: `_group_that_fits` bindet über
+  `brep.edit.native_edges_of_segments`, `_on_a_solid` rundet über
+  `brep.edit.fillet_group`; Regeln `kanten.md`.
 - `_arc_steps` folgt `MAX_FACET_SAG` und `MAX_FACET_ANGLE` wie OpenCASCADE.
   Eckknoten aus `MeshEdge.node_indices`, ein Knoten ohne Körper bekommt keine
   Haube (`_corner_hull`). Den Überstand bekommt, was abgezogen wird, nicht was

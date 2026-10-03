@@ -2971,3 +2971,23 @@ def test_parameter_only_proposals_are_checked_before_automatic_acceptance(
         assert any(
             finding.code == "agent.halted_by_document_change" for finding in proposal.findings
         )
+
+
+def test_a_local_model_gets_twelve_steps_and_a_hosted_one_eight(profile: Profile) -> None:
+    """RM-251 (a): Lokal kostet ein Schritt Zeit, kein Geld — die Grenze ist 12.
+
+    Gemessen in der Durchsicht 0.5.1 mit qwen3:14b: 23 statt 22 von 39 Fällen,
+    mehrteilige Aufträge 4 statt 2 von 10, weniger Läufe am Limit. Das gehostete
+    Modell behält die harte Grenze aus §26.5; eine ausdrücklich gesetzte Zahl gilt.
+    """
+    from app.core.agent.session import MAX_STEPS, MAX_STEPS_LOCAL, steps_for
+    from app.core.backends.llm import OllamaBackend
+    from app.core.scene.migrations import FORMAT_VERSION
+
+    local = OllamaBackend(model="qwen3:14b", url="http://127.0.0.1:11434")
+    assert steps_for(local) == MAX_STEPS_LOCAL == 12
+    assert steps_for(object()) == MAX_STEPS == 8
+    document = Document(format_version=FORMAT_VERSION, app_version="test")
+    assert AgentSession(backend=local, document=document, profile=profile).max_steps == 12
+    fixed = AgentSession(backend=local, document=document, profile=profile, max_steps=3)
+    assert fixed.max_steps == 3

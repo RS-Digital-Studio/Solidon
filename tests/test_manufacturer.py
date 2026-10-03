@@ -2213,6 +2213,65 @@ def test_prusa_gets_the_whole_chain_and_only_the_deviation(prusa_bundle: Path) -
     }, "geprüft wird die Grundlage, abweichen tut nichts"
 
 
+@pytest.mark.parametrize("vendor", ["170", "80%"])
+def test_a_slower_outer_wall_reaches_prusas_small_perimeters(
+    prusa_bundle: Path, vendor: str
+) -> None:
+    """RM-463, Rückschritt gegen 0.5.0: Kleine Umfänge fuhren schneller als die Außenwand.
+
+    PrusaSlicer 2.9.6 an der MK4S: Solidon schrieb die Außenwand mit 160 mm/s,
+    der Stiel lief mit 170, denn das Bündel führt ``small_perimeter_speed``
+    absolut (oder als Anteil der Innenwand, hier 80 % von 250). Wer die
+    Außenwand bremst, bremst die kleinen Umfänge mit; schneller wird keiner.
+    """
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle)
+    bundle = prusa_bundle.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    source = bundle.read_text(encoding="utf-8")
+    bundle.write_text(
+        source.replace(
+            "gap_fill_speed = 120\n", f"gap_fill_speed = 120\nsmall_perimeter_speed = {vendor}\n", 1
+        ),
+        encoding="utf-8",
+    )
+    base = manufacturer.effective(None, manufacturer.base_settings(profile, "standard", setup))
+
+    untouched, _expected = handover.prusa_values(base, profile, setup, console=True)
+    slower = print_settings.with_choice(base, "speed.outer_wall", 160.0)
+    braked, expected = handover.prusa_values(slower, profile, setup, console=True)
+    faster = print_settings.with_choice(base, "speed.outer_wall", 230.0)
+    unbraked, _expected = handover.prusa_values(faster, profile, setup, console=True)
+
+    assert untouched["small_perimeter_speed"] == vendor, "ohne Wahl gilt der Hersteller"
+    assert braked["external_perimeter_speed"] == "160"
+    assert braked["small_perimeter_speed"] == "160"
+    assert expected["small_perimeter_speed"] == "160", "die Gegenprobe kennt den Wert"
+    assert unbraked["small_perimeter_speed"] == vendor, "schneller wird keine Rolle"
+
+
+def test_the_orca_family_brakes_absolute_small_perimeters_with_the_outer_wall() -> None:
+    """Dieselbe Rolle in der Orca-Familie: 23 bis 55 Prozesse führen sie absolut (RM-463).
+
+    Ein Anteil bezieht sich dort auf die Außenwand und bleibt, wie er ist.
+    """
+    own = {"outer_wall_speed": "120"}
+
+    assert handover._roles_not_faster(
+        {"small_perimeter_speed": "150"}, own, handover._ORCA_ROLES
+    ) == {"small_perimeter_speed": "120"}
+    assert (
+        handover._roles_not_faster({"small_perimeter_speed": "50%"}, own, handover._ORCA_ROLES)
+        == {}
+    )
+    assert (
+        handover._roles_not_faster({"small_perimeter_speed": "100"}, own, handover._ORCA_ROLES)
+        == {}
+    )
+    assert (
+        handover._roles_not_faster({"small_perimeter_speed": "150"}, {}, handover._ORCA_ROLES) == {}
+    )
+
+
 def test_prusa_supports_switched_on_are_automatic_supports(prusa_bundle: Path) -> None:
     """Prusas Vorgabe stützt nur an gemalten Verstärkern. Wer Stützen
     einschaltet, bekommt beide Schalter; der Stil bleibt der des Bündels

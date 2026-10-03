@@ -7,6 +7,7 @@ an einem Ort.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -64,6 +65,30 @@ def test_the_opposite_direction_is_turned_all_the_way() -> None:
     assert np.array_equal(matrix[:3, :3], np.diag((-1.0, 1.0, -1.0)))
     near_x = rotation_between((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0))
     assert np.array_equal(near_x[:3, :3], np.diag((-1.0, -1.0, 1.0))), "nahe X hilft Y"
+
+
+@pytest.mark.parametrize("degrees", [120.0, 175.7, 179.9, 179.9999])
+def test_a_turn_near_half_a_circle_stays_a_rotation(degrees: float) -> None:
+    """RM-407: ``1 + cos`` löschte sich nahe 180° aus und verstärkte das Rauschen.
+
+    Bei 175,7° (``carpet-corner-clip.step``) lag die Matrix 2,7·10⁻¹⁴ neben
+    einer Drehung, und der exakte Kern nahm sie nicht mehr als starre
+    Bewegung; bei 179,9999° war es ein Zehntausendstel.
+    """
+    eps = np.finfo(np.float64).eps
+    radians = math.radians(degrees)
+    length = math.hypot(0.3, 1.0)
+    source = (0.0, 0.3 / length, 1.0 / length)
+    target = (
+        0.0,
+        source[1] * math.cos(radians) - source[2] * math.sin(radians),
+        source[1] * math.sin(radians) + source[2] * math.cos(radians),
+    )
+    matrix = rotation_between(source, target)[:3, :3]
+
+    assert np.abs(matrix.T @ matrix - np.eye(3)).max() <= 8.0 * eps
+    assert np.linalg.det(matrix) == pytest.approx(1.0, abs=8.0 * eps)
+    assert matrix @ source == pytest.approx(target, abs=1e-12)
 
 
 # --- die Bezugssysteme ----------------------------------------------------------

@@ -567,3 +567,34 @@ def test_an_unreadable_armature_does_not_block_the_editor(window: MainWindow) ->
         "ein unlesbarer Schritt darf nicht zum Ändern vorgemerkt werden — sonst "
         "überschriebe „Fertig“ ihn mit einem halben Skelett"
     )
+
+
+def test_bones_are_drawn_and_sit_inside_the_body(window: MainWindow) -> None:
+    """RM-367 W4-6 und W4-7: Der Skeletteditor zeigt Knochen und Gelenk im Bild,
+    und ein Klick auf die Haut setzt das Gelenk ins Innere.
+    """
+    import numpy as np
+
+    object_id = with_a_body(window)
+    window.start_armature(object_id)
+    entry = window.session.last_result.scene.objects[object_id]
+    vertices = np.asarray(entry.mesh.raw.vertices, dtype=float)
+    top = tuple(float(v) for v in vertices[int(np.argmax(vertices[:, 2]))])
+    # Offscreen schaut die Kamera entlang +Y: Die vordere Haut ist die mit
+    # kleinstem Y, ihr Blick führt in den Körper.
+    side = tuple(float(v) for v in vertices[int(np.argmin(vertices[:, 1]))])
+
+    window._on_bone_point(side)
+    joint = window.viewport.joint_shown
+    assert joint is not None, "das gesetzte Gelenk steht im Bild"
+    gap = float(np.linalg.norm(np.asarray(joint) - np.asarray(side)))
+    assert gap > 1.0, f"das Gelenk liegt nicht auf der Haut ({gap:.2f} mm)"
+    low, high = entry.mesh.bounds.minimum, entry.mesh.bounds.maximum
+    assert all(low[axis] < joint[axis] < high[axis] for axis in range(3)), joint
+
+    window._on_bone_point(top)
+    assert len(window.viewport.bones_shown) == 1, "der Knochen steht im Bild"
+    assert window.viewport.joint_shown is None
+
+    window.finish_armature()
+    assert window.viewport.bones_shown == ()

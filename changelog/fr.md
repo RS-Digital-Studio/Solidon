@@ -47,7 +47,11 @@ dans `website/version.json`.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
+- SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
+- La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
+- *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent aussi sur les surfaces STEP, pour des rotations de près de 180°, sur des faces reconnues en partie. Le corps reste exact.
+- Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
 
 ### Perçages, trous oblongs et découpe
 
@@ -67,12 +71,20 @@ dans `website/version.json`.
 - Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.
 - Si vous avez choisi « Charger maintenant », les pièces de *Scinder le modèle* ne lancent plus non plus des minutes de reconnaissance ; « Reconnaître toutes les caractéristiques » la rattrape.
 
+### Congés et chanfreins
+
+- Arrondir un groupe d'arêtes d'un corps STEP arrondit désormais les arêtes possibles au lieu de tout refuser. *Montrer l'endroit* retrouve chaque arête omise.
+- Les arêtes contre une paroi pas plus épaisse que le rayon restent vives, et le rapport indique le rayon qui y tient. Jusqu'ici, tout l'arrondi était refusé.
+- Si un corps STEP n'a pas d'arête propre à un endroit choisi, le rapport propose *Terminer la modification des faces et réessayer*. Sur le modèle en triangles, il est aussi arrondi.
+- S'il ne reste plus de place pour l'échange avec le processus de calcul, Solidon calcule quand même l'étape et le signale dans le rapport. Avant, il s'arrêtait en conseillant un calcul plus grossier.
+
 ### Sculpter, texte et esquisse
 
 - Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
+- L'éditeur de squelette montre os et articulation dans la vue, et une articulation se place au milieu du corps au lieu de sa peau, la figure plie donc régulièrement.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
@@ -116,6 +128,8 @@ dans `website/version.json`.
 - Certains constats qui visent une étape l'ouvrent pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
+- Quand d'autres programmes occupent l'ordinateur, *Annuler* arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
+- Un modèle de langage local peut faire douze étapes au lieu de huit par demande dans le chat et résout ainsi plus de demandes en plusieurs parties.
 
 ## 0.5.1
 

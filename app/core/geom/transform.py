@@ -385,7 +385,9 @@ def moved_object(
 
     Beim exakten Körper verbindet die Builder-Zuordnung die ursprünglichen
     Topologieflächen mit den neuen Dreiecken. Eine Teilmenge einer Fläche
-    wird dabei nicht heimlich zur gesamten Fläche erweitert.
+    wird dabei nicht heimlich zur gesamten Fläche erweitert: Sie folgt Dreieck
+    für Dreieck, wo die Bewegung die Vernetzung behält, und ein erkanntes
+    Merkmal, das das nicht kann, fällt der Erkennung des Ergebnisses zu.
     """
     from app.core.brep import edit
     from app.core.brep.kernel import Solid
@@ -415,6 +417,39 @@ def moved_object(
                 for index in table.get(int(face), _NO_TRIANGLES).tolist()
             }
 
+        images: dict[int, dict[int, int] | None] = {}
+
+        def image_of(face: int) -> dict[int, int] | None:
+            """Dreieck → Dreieck einer Fläche, wo die Bewegung ihre Vernetzung behielt.
+
+            Eine starre Bewegung legt dieselbe Vernetzung nur anders
+            (gemessen an ``gegen_naht.step``: alle 23 Flächen, Abweichung 0).
+            Belegt wird das Dreieck für Dreieck an den bewegten Ecken, nicht
+            angenommen; Maßstab und allgemeine Abbildung vernetzen neu.
+            """
+            if face not in images:
+                old = before.get(face, _NO_TRIANGLES)
+                new = after.get(face_map[face], _NO_TRIANGLES)
+                images[face] = None
+                if len(old) == len(new):
+                    old_mesh, new_mesh = as_mesh_data(source.mesh).raw, as_mesh_data(solid).raw
+                    rows = np.asarray(matrix, dtype=np.float64)
+                    moved = old_mesh.vertices[old_mesh.faces[old]] @ rows[:3, :3].T + rows[:3, 3]
+                    placed = new_mesh.vertices[new_mesh.faces[new]]
+                    if np.abs(moved - placed).max(initial=0.0) <= EPS_GEOM:
+                        images[face] = dict(zip(old.tolist(), new.tolist(), strict=True))
+            return images[face]
+
+        def image_of_part(triangles: set[int], faces: Sequence[int]) -> set[int] | None:
+            pairs: dict[int, int] = {}
+            for face in faces:
+                image = image_of(int(face))
+                if image is None:
+                    return None
+                pairs.update(image)
+            return {pairs[index] for index in triangles}
+
+        unfollowed: list[str] = []
         for name, feature in features.items():
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
@@ -423,7 +458,18 @@ def moved_object(
             selected = set(feature.face_indices)
             native_faces = source.mesh.faces_of_triangles(feature.face_indices)
             complete = triangles_of(before, native_faces)
-            if selected != complete:
+            followed = (
+                triangles_of(after, [face_map[face] for face in native_faces])
+                if selected == complete
+                else image_of_part(selected, native_faces)
+            )
+            if followed is None:
+                if feature.recognised:
+                    # Die Erkennung des Ergebnisses findet es wieder oder
+                    # meldet seinen Verlust (RM-407, ``curve_1`` deckt 3 647
+                    # von 3 649 Dreiecken seiner Flächen).
+                    unfollowed.append(name)
+                    continue
                 raise GeometryError(
                     _("Diese Teilauswahl lässt sich beim Verformen nicht eindeutig nachführen."),
                     detail=_(
@@ -438,26 +484,22 @@ def moved_object(
                 ):
                     continue
                 patch_faces = source.mesh.faces_of_triangles(patch.face_indices)
-                patch_complete = triangles_of(before, patch_faces)
-                if patch_complete != set(patch.face_indices):
+                patch_triangles = set(patch.face_indices)
+                patch_followed = (
+                    triangles_of(after, [face_map[face] for face in patch_faces])
+                    if triangles_of(before, patch_faces) == patch_triangles
+                    else image_of_part(patch_triangles, patch_faces)
+                )
+                if patch_followed is None:
                     # Die neue Tessellierung besitzt keine belegte Abbildung
                     # eines willkürlichen Ausschnitts einer nativen Fläche.
                     continue
-                patches.append(
-                    replace(
-                        patch,
-                        face_indices=tuple(
-                            sorted(triangles_of(after, [face_map[face] for face in patch_faces]))
-                        ),
-                    )
-                )
+                patches.append(replace(patch, face_indices=tuple(sorted(patch_followed))))
             features[name] = replace(
-                feature,
-                surface_patches=tuple(patches),
-                face_indices=tuple(
-                    sorted(triangles_of(after, [face_map[face] for face in native_faces]))
-                ),
+                feature, surface_patches=tuple(patches), face_indices=tuple(sorted(followed))
             )
+        for name in unfollowed:
+            del features[name]
     else:
         body = moved_body(source.mesh, matrix, cancelled=cancelled)
     mapped = transformed_features(
@@ -719,8 +761,23 @@ def rotation_between(
         )
         matrix[:3, :3] = 2.0 * np.outer(axis, axis) - np.eye(3, dtype=np.float64)
         return matrix
-    # Rodrigues, ausgeschrieben: I + K + K·K · 1/(1+cos).
     x, y, z = float(cross[0]), float(cross[1]), float(cross[2])
+    if cosine < 0.0:
+        # Jenseits von 90° löscht ``1 + cos`` sich aus: bei 175,7° verstärkt
+        # der Kehrwert das Rundungsrauschen 350-fach, und die Matrix ist keine
+        # Drehung mehr (RM-407). Über die Einheitsachse steht dort ``1 - cos``.
+        x, y, z = x / sine, y / sine, z / sine
+        rest = 1.0 - cosine
+        matrix[:3, :3] = np.array(
+            (
+                (cosine + x * x * rest, x * y * rest - z * sine, x * z * rest + y * sine),
+                (x * y * rest + z * sine, cosine + y * y * rest, y * z * rest - x * sine),
+                (x * z * rest - y * sine, y * z * rest + x * sine, cosine + z * z * rest),
+            ),
+            dtype=np.float64,
+        )
+        return matrix
+    # Rodrigues, ausgeschrieben: I + K + K·K · 1/(1+cos).
     share = 1.0 / (1.0 + cosine)
     matrix[:3, :3] = np.array(
         (

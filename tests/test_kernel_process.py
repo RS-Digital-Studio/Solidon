@@ -440,6 +440,68 @@ def test_a_helper_that_dies_mid_job_is_a_message_with_a_way_forward(
     assert kernel_process.statistics()["helper"] == 1, "der nächste Hilfsprozess rechnet"
 
 
+def _lowered_and_computing_forever(connection: Any) -> None:
+    """Wie :func:`_computes_forever`, aber zurückgestellt wie eine echte Rechnung."""
+    kernel_jobs._yield_to_the_window()
+    _computes_forever(connection)
+
+
+def _priority_class(process: Any) -> int:
+    import ctypes
+
+    windows: Any = ctypes
+    kernel32 = windows.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetPriorityClass.argtypes = (ctypes.c_void_p,)
+    kernel32.GetPriorityClass.restype = ctypes.c_uint32
+    return int(kernel32.GetPriorityClass(ctypes.c_void_p(process.sentinel)))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Nur Windows plant streng nach Prioritätsklasse.")
+def test_a_lowered_helper_is_hurried_before_it_is_ended(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """RM-474: Ein zurückgestellter Hilfsprozess bekommt für sein Ende normale Priorität.
+
+    ``TerminateProcess`` braucht für jeden Faden des Kindes eine Zeitscheibe.
+    Unter 32 Lastprozessen normaler Priorität kam die erst nach rund vier
+    Sekunden, und zwei von vier Abbrüchen endeten in „Starten Sie Solidon neu“.
+    """
+    mark = tmp_path / "rechnet"
+    monkeypatch.setenv("KERNEL_TEST_MARK", str(mark))
+    monkeypatch.setattr(kernel_process, "_SERVE", _lowered_and_computing_forever)
+    arrays, values = _small_job()
+    signal = CancelSignal()
+    outcome: dict[str, Any] = {}
+
+    def compute() -> None:
+        try:
+            kernel_process.run("simplify_closed", arrays, values, weight=1, cancelled=signal)
+        except OperationCancelled:
+            outcome["cancelled"] = True
+
+    worker = threading.Thread(target=compute)
+    worker.start()
+    deadline = time.monotonic() + 60.0
+    while not mark.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert mark.exists(), "die Rechnung hat nie begonnen"
+    helper = kernel_process.processes()[0]
+    assert _priority_class(helper) == 0x00004000, "die Rechnung läuft zurückgestellt"
+    seen: list[int] = []
+    kill = helper.kill
+
+    def watched_kill() -> None:
+        seen.append(_priority_class(helper))
+        kill()
+
+    monkeypatch.setattr(helper, "kill", watched_kill)
+    signal.cancel()
+    worker.join(30.0)
+
+    assert seen == [0x00000020], "beendet wird in normaler Klasse"
+    assert outcome == {"cancelled": True}
+
+
 def test_cancelling_ends_the_helper_even_inside_a_kernel_call(
     offloaded: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -2927,5 +2989,67 @@ def test_public_run_distinguishes_enospc_from_memory_in_both_transfers(
                 if stage == "helper-input"
                 else ["ready", "accepted", "refused"]
             )
+    finally:
+        pool.shutdown()
+
+
+def test_a_full_disk_pauses_the_helper_and_tells_the_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein voller Datenträger pausiert den Hilfsprozess, statt ihn bis zum Neustart abzuschalten.
+
+    RM-436: Ein einzelnes ENOSPC beim Anlegen des gemeinsamen Speichers
+    schaltete die Sitzung still auf Rechnen im Programm um. Jetzt rechnet sie
+    für ``FULL_DISK_PAUSE_SECONDS`` im Programm, jede solche Rechnung
+    hinterlässt ihrem Schritt einen Hinweis, und danach nimmt die nächste
+    große Rechnung den Hilfsprozess wieder. Andere Transferfehler bleiben
+    bleibende Gründe.
+    """
+    pool = kernel_process._Pool()
+    made: list[_PoolHelper] = []
+    calls = {"local": 0}
+
+    class Helper(_PoolHelper):
+        call = kernel_process._Helper.call
+
+        def __init__(self) -> None:
+            super().__init__()
+            made.append(self)
+
+    def job(_arrays: Any, _values: Any, check: Callable[[], None]) -> Any:
+        check()
+        calls["local"] += 1
+        return {"marker": np.array([1], dtype=np.int64)}, {}
+
+    def full(_arrays: Any) -> Any:
+        raise OSError(errno.ENOSPC, "Platzattrappe")
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", Helper)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "full_disk_probe", job)
+    monkeypatch.setattr(kernel_jobs, "pack", full)
+    source = {"marker": np.array([7], dtype=np.int64)}
+
+    def run() -> tuple[Any, str | None]:
+        return in_a_worker(
+            lambda: (
+                kernel_process.run("full_disk_probe", source, {}, weight=1),
+                kernel_process.take_notice(),
+            ),
+            timeout=10.0,
+        )
+
+    try:
+        _result, notice = run()
+        assert notice == kernel_process.DISK_FULL
+        assert calls["local"] == 1
+        assert pool.paused and pool.disabled and not pool._disabled
+        _result, notice = run()
+        assert notice == kernel_process.DISK_FULL, "auch in der Pause erfährt es der Schritt"
+        assert len(made) == 1, "in der Pause startet kein Hilfsprozess"
+
+        pool._paused_until = 0.0
+        assert not pool.paused and not pool.disabled
+        assert pool.take(None) is not None, "nach der Frist nimmt die Sitzung ihn wieder"
+        assert len(made) == 2
     finally:
         pool.shutdown()

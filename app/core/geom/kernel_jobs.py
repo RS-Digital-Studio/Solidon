@@ -619,21 +619,43 @@ def _yield_to_the_window() -> None:
     Um das ging es (RM-212), und die längere Rechnung zeigt Balken und
     *Abbrechen*. Gelingt das Zurückstellen nicht, rechnet er mit gleicher
     Priorität.
+
+    **Unter Windows nur, solange er rechnet** (RM-474): Dort teilt der Planer
+    die Zeit streng nach Klasse zu, und unter fremder Volllast kam auch die
+    Bereitschaft erst nach 3 s statt 0,6 s. Annehmen, Quittieren und Warten
+    laufen deshalb in normaler Klasse (:func:`_answer_promptly`); ``nice``
+    unter POSIX lässt sich ohne Recht nicht zurücknehmen und gilt ab dem Start.
     """
     try:
         if hasattr(os, "nice"):
             os.nice(_POSIX_NICENESS)
             return
-        import ctypes
-
-        # Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen.
-        windows: Any = ctypes
-        kernel32 = windows.WinDLL("kernel32")
-        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-        kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
-        kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), _WINDOWS_BELOW_NORMAL)
+        _windows_priority(_WINDOWS_BELOW_NORMAL)
     except OSError, AttributeError:
         return
+
+
+#: ``NORMAL_PRIORITY_CLASS`` unter Windows.
+_WINDOWS_NORMAL: Final = 0x00000020
+
+
+def _answer_promptly() -> None:
+    """Zwischen zwei Rechnungen hat der Hilfsprozess unter Windows normale Priorität."""
+    if hasattr(os, "nice"):
+        return
+    with suppress(OSError, AttributeError):
+        _windows_priority(_WINDOWS_NORMAL)
+
+
+def _windows_priority(priority_class: int) -> None:
+    import ctypes
+
+    # Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen.
+    windows: Any = ctypes
+    kernel32 = windows.WinDLL("kernel32")
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+    kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), priority_class)
 
 
 def _told(connection: Any, message: tuple[Any, ...]) -> bool:
@@ -695,7 +717,10 @@ def _serve(connection: Any) -> None:
         if parent is not None and not parent.is_alive():
             os._exit(0)
 
-    _yield_to_the_window()
+    # Unter POSIX einmal und für immer, unter Windows je Rechnung (RM-474).
+    lowered_per_job = not hasattr(os, "nice")
+    if not lowered_per_job:
+        _yield_to_the_window()
     if not _told(connection, ("ready", os.getpid())):
         return
     while True:
@@ -720,11 +745,15 @@ def _serve(connection: Any) -> None:
         arrays: Arrays = {}
         try:
             arrays = views(segment, layout)
+            if lowered_per_job:
+                _yield_to_the_window()
             outcome = JOBS[job](arrays, values, check)
         except Exception as problem:
             failure = (_portable(problem), traceback.format_exc())
         finally:
             arrays = {}
+            if lowered_per_job:
+                _answer_promptly()
         _closed(segment)
         if failure is not None:
             if not _told(connection, ("error", *failure)):

@@ -71,7 +71,11 @@ Nutzen da und sonst nichts.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
+- SuperSlicer stürzt bei runden Teilen nicht mehr ab: Die Schrägnaht, die er nicht kennt, bekommt er nicht mehr.
+- Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
+- *Druckoptimal ausrichten*, *Drehen* und *Verschieben* gelingen auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen. Der Körper bleibt exakt.
+- Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -91,12 +95,20 @@ Nutzen da und sonst nichts.
 - Lässt sich eine Bohrung an einem STEP-Körper nicht sauber schneiden, bohrt Solidon sie am Dreiecksmodell, statt einen kaputten Körper weiterzugeben.
 - Haben Sie beim Laden „Sofort laden“ gewählt, erkennen auch die Stücke von *Modell teilen* nicht minutenlang nach; „Alle Merkmale erkennen“ holt es nach.
 
+### Verrunden und Fasen
+
+- Verrunden einer Kantengruppe an einem STEP-Körper rundet jetzt die Kanten, die gehen, statt ganz abzusagen. Jede ausgelassene Kante findet *Stelle zeigen*.
+- Kanten an einer Wand, die nicht dicker ist als der Radius, bleiben scharf, und der Prüfbericht nennt den Radius, der dort passt. Bisher sagte die ganze Rundung ab.
+- Hat ein STEP-Körper an einer gewählten Stelle keine eigene Kante, bietet der Prüfbericht *Flächenbearbeitung beenden und erneut versuchen* an. Am Dreiecksmodell wird sie mitgerundet.
+- Fehlt Platz für den Austausch mit dem Rechenprozess, rechnet Solidon den Schritt trotzdem und sagt es im Prüfbericht. Bisher brach er mit dem Rat ab, gröber zu rechnen.
+
 ### Formen, Schrift und Zeichnen
 
 - Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.
 - Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
 - Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
+- Der Skeletteditor zeigt Knochen und Gelenk im Bild, und ein Gelenk sitzt in der Mitte des Körpers statt auf seiner Haut, sodass die Figur gleichmäßig beugt.
 - In den übersetzten Fassungen heißt die Stärke des Formpinsels nicht mehr wie eine Wanddicke.
 - Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
 - Im Fenster rechnet *Weich verschmelzen* jetzt fein, solange der Körper nicht sehr groß ist.
@@ -140,6 +152,8 @@ Nutzen da und sonst nichts.
 - Einige Befunde, die einen Schritt meinen, öffnen ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
 - Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 - Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.
+- Lasten andere Programme den Rechner aus, bricht *Abbrechen* eine lange Rechnung in unter einer Sekunde ab, statt nach Sekunden einen Neustart zu verlangen.
+- Ein lokales Sprachmodell darf im Chat zwölf statt acht Schritte je Auftrag gehen und löst so mehr Aufträge, die aus mehreren Teilen bestehen.
 
 ## 0.5.1
 
