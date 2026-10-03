@@ -15,7 +15,7 @@ import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Final, get_args, get_type_hints
+from typing import Any, Final, Literal, get_args, get_origin, get_type_hints
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -40,6 +40,96 @@ from app.core.types import (
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+@pytest.mark.parametrize("phase", ("before", "after_success", "after_refusal"))
+def test_cancel_around_preflight_packing(monkeypatch: pytest.MonkeyPatch, phase: str) -> None:
+    from app.core.errors import OperationCancelled
+    from app.core.export import writer
+    from app.core.geom import prepare
+    from app.core.scene.cancel import CancelSignal
+
+    profile = profiles.make_profile("prusa-mini", "pla")
+    setup = handover.SlicerSetup(Path("prusa-slicer-console.exe"), "prusa")
+    token = CancelSignal()
+    called: list[bool] = []
+
+    def arrangement(_meshes: Any, _profile: Any) -> bool:
+        if phase == "before":
+            token.cancel()
+        return False
+
+    def pack(_meshes: Any, _profile: Any) -> Any:
+        called.append(True)
+        token.cancel()
+        findings = (
+            [SimpleNamespace(code="arrange.needs_more_plates")] if phase == "after_refusal" else []
+        )
+        return SimpleNamespace(findings=findings)
+
+    monkeypatch.setattr(writer, "arrangement_holds", arrangement)
+    monkeypatch.setattr(prepare, "arrange_on_bed", pack)
+    meshes = [_preflight_box((100.0, 100.0, 10.0)) for _index in range(2)]
+    with pytest.raises(OperationCancelled):
+        handover._check_plate(meshes, profile, setup, token)
+    assert called == ([] if phase == "before" else [True])
+
+
+def test_a_replaced_support_suggestion_explains_the_support_actually_offered() -> None:
+    advice = SettingAdvice("support.style", "tree", "normal", "Baumstützen sparen Material.")
+    shown = slicer_keys.offered([advice], "superslicer")
+    assert len(shown) == 1
+    assert shown[0].value == "grid"
+    assert shown[0].reason == slicer_keys.substitute("support.style", "tree", "superslicer").reason
+    assert slicer_keys.offered([replace(advice, was="grid")], "superslicer") == []
+    assert slicer_keys.offered([advice], "prusaslicer") == [advice]
+
+
+@pytest.mark.parametrize(
+    "program,flavour",
+    [
+        ("prusaslicer", "prusa"),
+        ("superslicer", "prusa"),
+        ("orcaslicer", "orca"),
+        ("elegooslicer", "orca"),
+        ("bambustudio", "orca"),
+        ("crealityprint", "orca"),
+        ("cura", "cura"),
+    ],
+)
+def test_every_written_choice_belongs_to_the_measured_program(program, flavour) -> None:
+    """RM-480/RM-461: Jede Aufzählungszeile gegen einen unabhängig erhobenen
+    Bestand. Neue Aufzählungen ohne Messung machen den Wächter ebenfalls rot."""
+    measured = json.loads((MESHES.parent / "slicer_values.json").read_text(encoding="utf-8"))
+    known = measured["programs"][program]["values"]
+    base = print_settings.resolve(profiles.make_profile("generic-220", "pla"))
+    checked = 0
+    for entry in slicer_keys.TABLES[flavour]:
+        group, name = entry.path.split(".")
+        hint = get_type_hints(type(getattr(base, group)))[name]
+        choices = (
+            (False, True) if hint is bool else get_args(hint) if get_origin(hint) is Literal else ()
+        )
+        for choice in choices:
+            settings = print_settings.with_choice(base, entry.path, choice)
+            written = handover.as_mapping(settings, flavour, program=program)
+            written = slicer_keys.for_program(written, flavour, program)
+            keys = slicer_keys.PROGRAM_ALIASES.get(program, {}).get(entry.key, (entry.key,))
+            for key in keys:
+                if key not in written:
+                    continue
+                value = written.get(key, "")
+                if key in known:
+                    assert value in known[key], (program, entry.path, choice, value)
+                    checked += 1
+                    continue
+                if not value or value in {"true", "false"}:
+                    continue
+                try:
+                    float(value)
+                except ValueError:
+                    assert key in known, (program, entry.path, key)
+    assert checked >= 10, "Der Wächter muss echte Aufzählungswerte prüfen."
 
 
 def _layers(
@@ -943,7 +1033,7 @@ def test_every_setting_reaches_every_slicer(flavour: str) -> None:
         # Ableitungsstufe, ist seine Sache nicht.
         before = handover.values_for(settings, profile, flavour)  # type: ignore[arg-type]
         after = handover.values_for(
-            print_settings.with_path(settings, path, _other_value(settings, path)),
+            print_settings.with_choice(settings, path, _other_value(settings, path)),
             profile,
             flavour,  # type: ignore[arg-type]
         )
@@ -2612,7 +2702,8 @@ def test_nothing_cura_derives_is_left_to_its_default() -> None:
     if known is None:
         pytest.skip("keine Cura-Installation, deren Definition sich lesen ließe")
 
-    profile = profiles.make_profile()
+    # Die belegte Beschleunigung erreicht auch ihren abgeleiteten Prime-Tower-Wert.
+    profile = profiles.make_profile("sovol-sv06", "pla")
     written = handover.values_for(print_settings.resolve(profile), profile, "cura")
     derived: set[str] = set()
     frontier, seen = set(written), set(written)
@@ -3578,11 +3669,13 @@ def test_creality_slice_initializes_the_tower_inside_the_manufacturers_bed(
     model.write_text("solid x\nendsolid x\n")
     before = model.read_bytes()
     captured: list[dict[str, object]] = []
+    expected: dict[str, str] = {}
     original_write = handover.write_config
 
     def write(*args: Any, **kwargs: Any) -> handover.SlicerConfig:
         """Eine ausdrückliche Koordinate ist schon vor der CLI-Ableitung ein Sollwert."""
         written = original_write(*args, **kwargs)
+        expected.update(written.written)
         if not explicit:
             return written
         values = json.loads(written.process.read_text(encoding="utf-8"))
@@ -3603,6 +3696,11 @@ def test_creality_slice_initializes_the_tower_inside_the_manufacturers_bed(
         )
         # Creality nullt den inaktiven Einfilament-Turm. Beim aktiven Turm
         # oder einer ausdrücklichen Koordinate muss dieselbe Abweichung bleiben.
+        returned += "".join(
+            f"; {key} = {value}\n"
+            for key, value in expected.items()
+            if key not in {"wipe_tower_x", "wipe_tower_y"}
+        )
         returned += "; wipe_tower_x = 0.000\n; wipe_tower_y = 0.000\n"
         (tmp_path / "plate_1.gcode").write_text(returned, encoding="utf-8")
         return _Finished(b"")
@@ -3955,6 +4053,25 @@ def test_the_first_spools_value_is_verified_as_written(
     )
     payload = _gcode_printing_at(-10.0, 10.0) + "; temperature = 210\n"
     model, setup = _slicer_writing(monkeypatch, tmp_path, payload, flavour="prusa")
+    written: dict[str, str] = {}
+    original_write = handover.write_config
+
+    def remember_config(*args: Any, **kwargs: Any) -> handover.SlicerConfig:
+        config = original_write(*args, **kwargs)
+        written.update(config.written)
+        return config
+
+    def complete_gcode(*_args: object, **_kwargs: object) -> _Finished:
+        # Prusa bestätigt den ganzen Satz; nur die Temperatur kommt unabhängig
+        # aus der gestellten Druckdatei, damit der Spulenvergleich aussagekräftig bleibt.
+        rest = "".join(
+            f"; {key} = {value}\n" for key, value in written.items() if key != "temperature"
+        )
+        (tmp_path / "solidon.gcode").write_text(payload + rest, encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "write_config", remember_config)
+    monkeypatch.setattr(handover, "_run_slicer", complete_gcode)
 
     outcome = handover.slice_model(
         model,

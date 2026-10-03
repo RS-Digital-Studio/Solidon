@@ -466,6 +466,15 @@ Abschluss an das Hauptfenster zurück. Vor der Meldung, beim Klick und bei
 der Rückgabe wird der Druckkontext erneut verglichen. Ein älterer Auftrag
 darf weder die aktuelle Auswahl noch eine inzwischen geänderte Szene bearbeiten.
 
+Ein gleichzeitig abgebrochener Auftrag unterdrückt die nachlaufende Absage
+im Arbeiter und vor der Anzeige. Die Bauraumhandlung „Verkleinern …“ öffnet
+den vorhandenen Skalierdialog am ganzen betroffenen Körper; sie verspricht
+keinen aus den Nennmaßen errechneten Faktor. Runde Bettkonturen und eine
+begrenzte nutzbare Druckhöhe lassen sich daraus nicht sicher ableiten.
+„Anordnen“ verwendet die vorhandene projektweite Operation; die Meldung
+nennt deshalb ausdrücklich alle Projektteile. Ein Undo stellt deren vorherige
+Platten und Lagen wieder her.
+
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 
 - Kennzahlen aus Schichtanalyse und G-Code bleiben getrennt (Regel 14).

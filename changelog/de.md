@@ -53,6 +53,8 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- Die Analyse des benötigten Stützraums ist bei Hohlkörpern deutlich schneller und erhält feine Konturen.
+- Bei ineinandergesteckten Teilen zählt die Druckanalyse eingeschlossene Luft nicht mehr als Material. Das verbessert auch die Erkennung von Überhängen und nötigen Stützen.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
 - Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
 - Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.
@@ -70,9 +72,16 @@ Nutzen da und sonst nichts.
 - Jedes Teil kommt mit *Auf dem Bett anordnen* auf die erste Platte, auf der es Platz hat. Der Minigolf-Satz braucht so vier statt sechs Platten.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
 - Kommt ein weiteres Modell hinzu, ob aus einer Datei, einem Download oder erzeugt, zeigt das Bild die Platte, auf der es liegt.
+- Ein weiteres Modell kommt an die freie Stelle, die der Plattenmitte am nächsten liegt, statt hinten links in die Ecke.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
 - SuperSlicer stürzt bei runden Teilen nicht mehr ab: Die Schrägnaht, die er nicht kennt, bekommt er nicht mehr.
+- SuperSlicer erhält Gitterstützen mit Hinweis, wenn Baumstützen gewählt waren. Die Nahtwahl „Nächstgelegen“ kommt ohne falsche Warnung an.
+- TPU findet in PrusaSlicer und SuperSlicer das passende Filamentprofil samt Startwerten. Fehlt ein Profil, nennt Solidon die eigene Materialtabelle als Grundlage.
+- Cura beachtet die Beschleunigungsgrenzen und meldet begrenzte eigene Werte. Volle Füllschichten drucken mit dem Fülltempo; nur die Oberseite erhält das Oberflächentempo.
+- Kammertemperaturen kommen im richtigen Slicerfeld an. Druckerprofile ohne regelbare Kammerheizung erklären jetzt, warum der Wert nicht wirkt.
+- Das Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als Linien an und wird nicht mehr durch Gitter oder Würfel ersetzt.
+- Solidon meldet nach dem Schneiden auch Einstellungen, die PrusaSlicer oder die Orca-Slicer verworfen haben. Abweichende Rand-, Wand- und Stützarten werden ebenfalls erkannt.
 - Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
@@ -99,6 +108,7 @@ Nutzen da und sonst nichts.
 - Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
 - Lässt sich eine Bohrung an einem STEP-Körper nicht sauber schneiden, bohrt Solidon sie am Dreiecksmodell, statt einen kaputten Körper weiterzugeben.
 - Haben Sie beim Laden „Sofort laden“ gewählt, erkennen auch die Stücke von *Modell teilen* nicht minutenlang nach; „Alle Merkmale erkennen“ holt es nach.
+- Wählen Sie *Modell teilen* in einer Sammelzeile des Prüfberichts für mehrere Körper, teilt Solidon sie nacheinander. Bisher wurde nur der erste geteilt.
 
 ### Verrunden und Fasen
 
@@ -125,7 +135,7 @@ Nutzen da und sonst nichts.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 - Ein weiterer Zug in eine eben gegrabene Mulde gräbt tiefer, auch mit einem kleinen Pinsel. Bisher blieb er wirkungslos und galt als verfehlt.
 - Beim *Formen* zeigt das Fenster jeden Zug gleich schnell, auch nach vielen Zügen. Bisher wurde es mit jedem Zug langsamer.
-- *Stand festschreiben* legt eine Formsitzung so fein ab, wie Export und Druck sie rechnen, und das Fenster bleibt dabei bedienbar. Bisher wurde die gröbere Ansicht abgelegt.
+- Mit *Stand festschreiben* legt Solidon eine Formsitzung so fein ab, wie Export und Druck sie rechnen, und das Fenster bleibt bedienbar. Bisher wurde die gröbere Ansicht abgelegt.
 
 ### Erzeugen mit KI
 
@@ -144,6 +154,7 @@ Nutzen da und sonst nichts.
 - Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt.
 - Export, *Slicen* und *Im Slicer öffnen* bekommen immer die feine Rechnung, nicht die gröbere Ansicht des Fensters. Rundungen und Kegel kommen so mit voller Auflösung in die Datei.
 - Ein Export während einer laufenden Berechnung wartet auf das neue Ergebnis. Bisher konnte die Datei noch das alte Maß tragen.
+- Exportieren Sie nur einen Teil der Szene, nennen Dateidialog und Bestätigung den Umfang, etwa „1 von 2 Körpern“.
 - Ein Maß jenseits seiner Grenze lehnt die Parameterleiste ab, statt das Bild leer stehen zu lassen.
 - In der Parameterleiste zählt jeder Pfeilschritt, und der Fokus bleibt im Feld.
 - In der Parameterleiste tragen die Maße zweier Quader ihre Nummer, und ein Maß mit eigenem Arbeitsbereich hat einen Regler.
@@ -165,6 +176,10 @@ Nutzen da und sonst nichts.
 - Ein lokales Sprachmodell darf im Chat zwölf statt acht Schritte je Auftrag gehen und löst so mehr Aufträge, die aus mehreren Teilen bestehen.
 - Das Auswahlfenster passt wieder in seine Spalte, und die Maßspalte im Objektbaum zeigt das Maß ganz, etwa „Ø5,19 mm“ statt „…“.
 - An einer Bohrung öffnet *Merkmal ändern* direkt *Bohrung ändern* mit Vorschau, statt nur auf diesen Weg zu verweisen.
+- Klicken Sie während einer laufenden Vorschau auf *Übernehmen*, rechnet Solidon die Änderung nur noch einmal. Bisher rechnete es sie danach ein zweites Mal.
+- Die Differenzansicht schraffiert Hinzugekommenes und Entferntes in zwei Richtungen, sodass sich beides auch ohne Farbe unterscheiden lässt.
+- Fragt Solidon beim Öffnen nach der Einheit einer Datei, stehen die Maße in Ihrer Anzeigeeinheit und mit dem Dezimalzeichen Ihrer Sprache.
+- Ziehen Sie eine Datei herein, die Solidon nicht öffnet, etwa aus Blender, nennt es den Weg über 3MF, STEP oder STL. G-Code geht an *G-Code gegenprüfen*.
 
 ## 0.5.1
 

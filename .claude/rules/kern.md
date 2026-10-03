@@ -75,8 +75,8 @@ entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
   `units.exact_cos`/`exact_sin`), kein `x ** 2` (Plattform-`pow`) — `x * x`;
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
   andere Verteilungen über `exp`/`log`;
-- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Teile in der Folge
-  zusammensetzen, die ein Faden ergäbe (`analysis._above_material_shared`).
+- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Schichten und
+  Teile in fester Folge verrechnen (`analysis._support_volume`).
 
 Ersatzwerkzeuge: `app/core/geom/CLAUDE.md` („Plattformgleich gerechnet"). Ein
 neuer Weg zu Geometrie kommt in `tests/test_platform_identity.py` (`_WAYS`),

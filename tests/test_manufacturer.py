@@ -301,6 +301,168 @@ def _cc2() -> Profile:
     return profiles.make_profile("centauri-carbon-2", "pla")
 
 
+@pytest.mark.parametrize(
+    ("executable_name", "native", "switch"),
+    [
+        ("orca-slicer.exe", "chamber_temperature", True),
+        ("elegoo-slicer.exe", "chamber_temperature", True),
+        ("bambu-studio.exe", "chamber_temperatures", False),
+        ("CrealityPrint.exe", "chamber_temperature", True),
+    ],
+)
+@pytest.mark.parametrize("supported", [True, False, None])
+def test_chamber_control_uses_the_program_key_and_proven_machine(
+    bestand: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    executable_name: str,
+    native: str,
+    switch: bool,
+    supported: bool | None,
+) -> None:
+    """35 °C dürfen weder unter einem fremden Schlüssel verschwinden noch
+    eine Kammerheizung erfinden. Eine alte Pluralangabe darf nicht gewinnen."""
+    executable = bestand.with_name(executable_name)
+    executable.touch()
+    setup = _setup(executable)
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine_path = root / "machine" / "fdm_machine_common.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    if supported is not None:
+        machine["support_chamber_temp_control"] = "1" if supported else "0"
+    _write(machine_path, machine)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(chamber_temperature=["0"], chamber_temperatures=["0"])
+    _write(filament_path, filament)
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    settings = print_settings.with_choice(print_settings.resolve(_cc2()), "temperature.chamber", 35)
+
+    config = handover.write_config(settings, _cc2(), setup, tmp_path)
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert document[native] == ["35"]
+    other = "chamber_temperature" if native.endswith("temperatures") else "chamber_temperatures"
+    assert other not in document, "nur ein Name darf die Temperatur bestimmen"
+    assert config.written[native] == "35", "die Gegenprobe liest denselben Schlüssel"
+    if switch:
+        assert document["activate_chamber_temp_control"] == ["1" if supported else "0"]
+        assert config.written["activate_chamber_temp_control"] == ("1" if supported else "0")
+    else:
+        assert "activate_chamber_temp_control" not in document
+    project = handover.project_settings(settings, _cc2(), setup)
+    assert project[native] == ["35"]
+    assert other not in project
+    foundation = manufacturer.base_settings(_cc2(), settings.quality, setup)
+    assert foundation.chamber_control is supported
+    assert bool(manufacturer.chamber_limitation(foundation)) is (supported is not True)
+    findings = handover.foundation_findings(settings, _cc2(), setup)
+    assert any(f.code == "slicer.chamber_unavailable" for f in findings) is (supported is not True)
+
+
+@pytest.mark.parametrize("program", ["orcaslicer", "elegooslicer", "bambustudio", "crealityprint"])
+def test_chamber_readback_follows_the_same_name_as_the_slicer(tmp_path: Path, program: str) -> None:
+    """Bambus Plural und der alte Orca-Alias kommen auch beim Übernehmen an."""
+    from app.core.export import slicer_profiles
+
+    source = _write(tmp_path / "material.json", {"chamber_temperatures": ["42"]})
+    assert slicer_profiles.filament_values(source, program=program)["temperature.chamber"] == 42
+    _write(source, {"chamber_temperature": ["42"], "chamber_temperatures": ["37"]})
+    assert slicer_profiles.filament_values(source, program=program)["temperature.chamber"] == 37
+
+
+@pytest.mark.parametrize("executable_name", ["orca-slicer.exe", "bambu-studio.exe"])
+def test_chamber_values_stay_separate_for_each_spool(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, executable_name: str
+) -> None:
+    """Die Maschinenfreigabe ist gemeinsam, die Temperatur gehört jeder Spule."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    machine_path = (
+        bestand.parent / "resources" / "profiles" / "Elegoo" / "machine" / "fdm_machine_common.json"
+    )
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    _write(machine_path, {**machine, "support_chamber_temp_control": "1"})
+    executable = bestand.with_name(executable_name)
+    executable.touch()
+    setup = _setup(executable)
+    settings = print_settings.resolve(_cc2())
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name="A", material_type="PLA", temperature=replace(settings.temperature, chamber=35)
+            ),
+            SlotOverride(
+                name="B", material_type="PLA", temperature=replace(settings.temperature, chamber=50)
+            ),
+        ),
+    )
+    slots = (
+        MaterialSlot(index=0, name="A", material_type="PLA"),
+        MaterialSlot(index=1, name="B", material_type="PLA"),
+    )
+    project = handover.project_settings(settings, _cc2(), setup, slots=slots)
+    key = "chamber_temperatures" if executable_name == "bambu-studio.exe" else "chamber_temperature"
+    assert project[key] == ["35", "50"]
+    if executable_name != "bambu-studio.exe":
+        assert project["activate_chamber_temp_control"] == ["1", "1"]
+
+
+@pytest.mark.parametrize(("project_temperature", "slot_temperature"), [(35, 0), (0, 35)])
+def test_chamber_warning_uses_only_the_spools_that_are_printed(
+    bestand: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    project_temperature: int,
+    slot_temperature: int,
+) -> None:
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    settings = print_settings.with_choice(
+        print_settings.resolve(_cc2()), "temperature.chamber", project_temperature
+    )
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name="A",
+                material_type="PLA",
+                temperature=replace(settings.temperature, chamber=slot_temperature),
+            ),
+        ),
+    )
+    slot = MaterialSlot(index=0, name="A", material_type="PLA")
+    findings = handover.foundation_findings(settings, _cc2(), _setup(bestand), (slot,))
+    assert any(f.code == "slicer.chamber_unavailable" for f in findings) is (slot_temperature > 0)
+
+
+@pytest.mark.parametrize("own_temperature", [0, None])
+def test_only_a_chamber_choice_changes_the_manufacturers_heater_switch(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, own_temperature: int | None
+) -> None:
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine_path = root / "machine" / "fdm_machine_common.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    _write(machine_path, {**machine, "support_chamber_temp_control": "1"})
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    original_switch = "1" if own_temperature is not None else "0"
+    _write(
+        filament_path,
+        {
+            **filament,
+            "chamber_temperature": ["45"],
+            "activate_chamber_temp_control": [original_switch],
+        },
+    )
+    setup = _setup(bestand)
+    settings = print_settings.resolve(_cc2())
+    if own_temperature is not None:
+        settings = print_settings.with_choice(settings, "temperature.chamber", own_temperature)
+    config = handover.write_config(settings, _cc2(), setup, tmp_path)
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert document["chamber_temperature"] == (["0"] if own_temperature is not None else ["45"])
+    assert document["activate_chamber_temp_control"] == ["0"]
+
+
 def test_the_base_is_read_back_from_the_manufacturers_profile(
     bestand: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2188,6 +2350,94 @@ def test_without_prusas_printer_the_base_is_solidons_table(prusa_bundle: Path) -
     assert values["filament_type"] == "PLA", "PETG ging sonst als PLA hinaus (B11)"
     assert "bed_shape" in values and "start_gcode" not in values
     assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.printer_unknown"]
+
+
+@pytest.mark.parametrize("with_bundle", [False, True])
+def test_prusa_writes_flex_and_reports_its_missing_filament(
+    prusa_bundle: Path, with_bundle: bool
+) -> None:
+    """Ohne Herstellerfilament bleibt TPU lauffähig und die Herkunft sichtbar."""
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    setup = replace(_prusa_setup(prusa_bundle), base_filament="")
+    if not with_bundle:
+        setup = replace(setup, base_process="")
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+
+    written, _expected = handover.prusa_values(foundation.settings, profile, setup, console=True)
+    findings = handover.foundation_findings(foundation.settings, profile, setup)
+
+    assert written["filament_type"] == "FLEX"
+    assert "filament_settings_id" not in written
+    assert [entry.code for entry in findings] == ["slicer.filament_from_table"]
+    assert findings[0].values["source"] == "solidon_table"
+    assert findings[0].suggestions
+    assert (
+        foundation.settings.temperature.nozzle == print_settings.resolve(profile).temperature.nozzle
+    )
+
+
+def test_prusa_keeps_a_flexible_filaments_start_code(prusa_bundle: Path) -> None:
+    """Die richtige Vorwahl übernimmt die eigene Startsequenz des Filaments."""
+    from app.core.export import slicer_profiles
+
+    bundle = prusa_bundle.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    with bundle.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "\n[filament:Generic FLEX @MK4S]\nfilament_type = FLEX\n"
+            "filament_vendor = Generic\ntemperature = 230\nfirst_layer_temperature = 230\n"
+            "start_filament_gcode = M900 K0 ; Filament gcode\n"
+        )
+    found = slicer_profiles.find_profiles(prusa_bundle, "prusa", ("machine", "filament"))
+    machine = next(entry for entry in found if entry.kind == "machine")
+    filament = slicer_profiles.match_filament(found, machine, "TPU")
+    assert filament is not None
+    setup = replace(_prusa_setup(prusa_bundle), base_filament=slicer_profiles.identity(filament))
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+
+    written, _expected = handover.prusa_values(foundation.settings, profile, setup, console=True)
+
+    assert written["filament_type"] == "FLEX"
+    assert written["filament_settings_id"] == "Generic FLEX @MK4S"
+    assert written["start_filament_gcode"] == "M900 K0 ; Filament gcode"
+    assert handover.foundation_findings(foundation.settings, profile, setup) == []
+
+
+def test_a_missing_filament_does_not_hide_an_unknown_plate() -> None:
+    """Materialherkunft und unbekannte Platte brauchen beide ihren Hinweis."""
+    foundation = manufacturer.Foundation(
+        print_settings.resolve(_cc2()),
+        from_profile=frozenset({"shell.wall_count"}),
+        material_from_table=True,
+    )
+
+    assert [entry.code for entry in manufacturer.findings(foundation)] == [
+        "slicer.filament_from_table",
+        "slicer.plate_unknown",
+    ]
+
+
+def test_orca_receives_a_prusa_flex_slot_as_tpu_without_losing_its_profile(tmp_path: Path) -> None:
+    """Eine importierte FLEX-Spule ist für Orca TPU und behält passende Herstellerwerte."""
+    filament = _write(
+        tmp_path / "filament.json",
+        {
+            "type": "filament",
+            "name": "Generic TPU",
+            "filament_type": ["TPU"],
+            "filament_start_gcode": ["M900 K0"],
+        },
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "tpu-95a")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca", base_filament=str(filament))
+    slot = MaterialSlot(index=0, name="Flexible Spule", material_type="FLEX")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+
+    assert document["filament_type"] == ["TPU"]
+    assert document["filament_start_gcode"] == ["M900 K0"]
 
 
 def test_prusa_gets_the_whole_chain_and_only_the_deviation(prusa_bundle: Path) -> None:

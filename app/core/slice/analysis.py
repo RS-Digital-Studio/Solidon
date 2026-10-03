@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import math
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Final, Literal, cast
+from typing import Any, Final, Literal, cast
 
+import manifold3d
 import numpy as np
 import shapely
 from shapely.geometry import MultiPolygon
@@ -28,14 +30,12 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
 from app.core.errors import ValidationError
+from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
-
-if TYPE_CHECKING:
-    from concurrent.futures import Executor
 
 #: Die übersetzte Konturverkettung (§22.1), oder ``None``.
 #:
@@ -54,6 +54,11 @@ except ImportError:  # pragma: no cover — hängt daran, ob gebaut wurde
     _chain = None
 else:
     _chain = _compiled_chain
+
+#: Die Fassung des Ebenenschnitts, die dieser Kern vom übersetzten Teil
+#: verlangt — dieselbe Zahl wie ``_chain.PLANE_SEGMENTS_API``. Ein älterer Bau
+#: nimmt den NumPy-Weg (seit 3: gerichtete Segmente, RM-485).
+PLANE_SEGMENTS_API: Final = 3
 
 #: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
@@ -174,6 +179,11 @@ BRIDGE_FROM = 1.0
 #: Threads für zwanzig Polygone zu starten ist reiner Verwaltungsaufwand.
 PARALLEL_FROM = 40
 
+#: Bis zu zehn Ebenen spart der Segmentweg den vollständigen Körperaufbau.
+#: Gemessen am Laptop, MiniGolf, Piratenschiff und Aushöhlprojekt: für eine
+#: Ebene 0,001 bis 0,027 s statt 0,011 bis 0,389 s, auch bei zehn Ebenen schneller.
+DIRECT_SECTIONS_ABOVE = 10
+
 #: Obergrenze der Threads für die Stützsuche. Sechzehn statt acht brachten die
 #: 200 Kandidaten auf dieser Maschine ans gemessene Minimum. Die vollständige
 #: Analyse hat nach den Abkürzungen darunter kleinere Aufträge; dort sind zehn
@@ -189,25 +199,14 @@ PARALLEL_FROM = 40
 MAX_WORKERS = 16
 FULL_WORKERS = 6
 
-#: Wie viele Arbeiter die Stützsäulen unter sich aufteilen (:func:`_support_volume`).
+#: Wie viele Arbeiter die örtlichen Säulen- und Kanalfragen unter sich aufteilen.
 SUPPORT_WORKERS = 6
-
-#: Ab so vielen offenen Säulenstücken einer Schicht teilen sich die Arbeiter
-#: die Fragen und Differenzen (:func:`_above_material_shared`); darunter
-#: kostet das Herumreichen mehr, als es spart.
-SUPPORT_SHARE_FROM = 16
 
 #: So viele Schichten misst ein Arbeiter in einem Block (:func:`_measure_batch`).
 #: Groß genug, dass jeder GEOS-Aufruf ein Feld statt einer Schicht fragt;
 #: klein genug, dass sechs Arbeiter an 400 Schichten gleichmäßig zu tun haben
 #: und ein Abbruch nach höchstens einem Block je Arbeiter greift.
 BATCH_LAYERS = 16
-
-#: Ab dieser Zahl Stützflächen ist der Aufbau eines räumlichen Index billiger
-#: als ein vektorisierter GEOS-Test gegen jede einzelne. An 59 Kugelschichten
-#: mit bis zu 151 Teilen: 50 auf 35 ms; darunter bleibt der direkte Aufruf
-#: schneller und spart den Baumaufbau.
-SUPPORT_TREE_FROM = 64
 
 Detail = Literal["full", "support"]
 """Wie viel einer Schicht vermessen wird. ``support`` lässt alles aus, was die
@@ -478,6 +477,18 @@ def _footing_area(
     return 0.0 if shape is None or shape.is_empty else float(shape.area)
 
 
+def _material_cross(shape: ShapelyPolygon | None) -> manifold3d.CrossSection:
+    """Eine vorhandene Materialfläche als gerichtete Clipper-Konturen, ohne Vereinfachung."""
+    if shape is None or shape.is_empty:
+        return manifold3d.CrossSection()
+    oriented = shapely.orient_polygons(shape, exterior_cw=False)
+    rings = []
+    for part in _areas_of(oriented):
+        rings.append(np.asarray(part.exterior.coords, dtype=np.float64)[:-1])
+        rings.extend(np.asarray(ring.coords, dtype=np.float64)[:-1] for ring in part.interiors)
+    return manifold3d.CrossSection(rings, manifold3d.FillRule.Positive)
+
+
 def _support_volume(
     sections: list[ShapelyPolygon | None],
     measured: list[LayerMetrics | None],
@@ -486,96 +497,27 @@ def _support_volume(
     first_layer_height: float | None = None,
     cancelled: CancelToken | None = None,
 ) -> float:
-    """Das Volumen der **Stützsäulen** unter allen Überhängen, in mm³ (§22.2).
+    """Stützsäulen bis zum nächsten Material oder Bett, ohne Konturvereinfachung.
 
-    Gerechnet wurde hier ``Überhangfläche mal Schichthöhe``, aufsummiert. Das ist
-    das Volumen der auskragenden **Schale** — des Materials, das der Drucker
-    dort oben ablegt — und nicht das, was eine Stütze kostet. Zwei Dinge waren
-    daran falsch, und das zweite ist das schlimmere: Die Zahl war an einem Pilz
-    (Hut 40 auf 40 über einem Stiel 10 auf 10, 20 mm hoch) um den Faktor 380 zu
-    klein, **und** sie hing an der Schichthöhe: 79 mm³ bei 0,2 mm, 385 bei 1,0.
-    Eine Eigenschaft des Körpers, die sich mit der Auflösung ändert, mit der man
-    sie misst, ist keine.
-
-    Gestützt wird der Raum **unter** dem Überhang, bis zum nächsten Material
-    oder bis zur Platte. Gerechnet wird das in einem Durchgang von oben nach
-    unten: ``pending`` ist die Fläche, die auf dieser Höhe noch von unten
-    getragen werden muss. Sie wächst um den Überhang jeder Schicht und schrumpft
-    um alles, was die Schicht darunter an Material bietet — je Schichtabstand
-    kommt ihre Fläche mal der Fallhöhe dazu. Damit ist das Ergebnis von der
-    Schichthöhe unabhängig: halb so hohe Schichten sind doppelt so viele.
-
-    **Unter der untersten Schicht bleibt eine halbe Schichthöhe.** Der erste
-    Schnitt liegt eine halbe Schicht über der Unterkante des Körpers, und ob
-    dort die Platte steht, weiß der Schneider nicht — er kennt nur den Körper.
-    Der Term geht mit der Schichthöhe gegen null und ist damit kein Beitrag,
-    der eine Aussage trägt.
-
-    **Die Säulen werden nie vereinigt, und das ist der Unterschied zwischen
-    37 Millisekunden und 6,7 Sekunden.** Sie können sich nicht überschneiden:
-    Ein Überhang gehört zum Material seiner eigenen Schicht, und was von oben
-    kommt, ist eine Schicht vorher an genau diesem Material zerteilt worden.
-    Der erste Anlauf rief trotzdem ``unary_union`` — an einer Kugel mit
-    327 000 Dreiecken kostete das 33 ms je Schicht, weil das Verschneiden
-    hunderter schmaler Ringe genau die Arbeit ist, die eine Vereinigung teuer
-    macht. Gehalten wird deshalb eine **Liste** überschneidungsfreier Teile;
-    ihre Flächen addieren sich, und der räumliche Index sagt in einem Aufruf,
-    welche davon die Schicht darunter überhaupt berührt. Beide Wege ergeben
-    dieselbe Zahl (4016,6 mm³ an derselben Kugel), einer davon in einem
-    Hundertachtzigstel der Zeit.
-
-    **Und die Stücke einer Schicht verteilen sich auf Arbeiter** (RM-266).
-    Weil keine Säule eine andere beschneidet, ist jede Differenz einer Schicht
-    unabhängig von den übrigen; :func:`_above_material_shared` verteilt sie
-    auf die Arbeiter und setzt die Stücke in der Folge wieder zusammen, in der
-    sie einfädig entstünden. Bis dahin rechnete je Arbeiter eine Gruppe von
-    Startschichten ihren eigenen Durchgang (RM-201), und das trug nur, solange
-    die Überhänge sich über viele Startschichten verteilten: An der großen
-    Hälfte des Laptop-Ständers zerfallen die Säulen einer einzigen Startschicht
-    in über 500 Stücke, eine Gruppe rechnete 2,1 s, die übrigen fünf zusammen
-    0,2 s. Und die Gruppensumme hing in der letzten Stelle an der Zahl der
-    Kerne — dieselbe Naht kostete auf vier Kernen eine andere Zahl als auf
-    acht. Jetzt entsteht die Summe in einer einzigen, festen Folge, gleich wie
-    viele Arbeiter es sind.
+    Die gerichtete Säulenkontur wächst am Überhang und verliert an der
+    Schicht darunter. Jede Fläche wird einmal nach Clipper übertragen;
+    Zwischenkonturen bleiben dort. Summe und Schrittreihenfolge sind fest.
     """
-    if not any(
-        metrics is not None and metrics.overhang is not None and not metrics.overhang.is_empty
-        for metrics in measured
-    ):
-        return 0.0
-    workers = _workers(SUPPORT_WORKERS) if len(sections) >= PARALLEL_FROM else 1
-    from concurrent.futures import ThreadPoolExecutor
-
-    pool = ThreadPoolExecutor(max_workers=workers) if workers > 1 else None
-    try:
-        pending: list[ShapelyPolygon] = []
-        volume = 0.0
-        for index in range(len(sections) - 1, -1, -1):
-            if cancelled is not None:
-                cancelled.raise_if_cancelled()
-            metrics = measured[index]
-            if (
-                metrics is not None
-                and metrics.overhang is not None
-                and not metrics.overhang.is_empty
-            ):
-                pending += _areas_of(metrics.overhang)
-            if not pending:
-                continue
-            below = sections[index - 1] if index else None
-            if below is not None and not below.is_empty:
-                pending = _above_material(
-                    pending, below, cancelled=cancelled, pool=pool, workers=workers
-                )
-                if not pending:
-                    continue
-            volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * _layer_step(
-                index, layer_height, first_layer_height
-            )
-        return volume
-    finally:
-        if pool is not None:
-            pool.shutdown(wait=True, cancel_futures=True)
+    pending = manifold3d.CrossSection()
+    volume = 0.0
+    for index in range(len(sections) - 1, -1, -1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        metrics = measured[index]
+        if metrics is not None and metrics.overhang is not None:
+            pending += _material_cross(metrics.overhang)
+        if pending.is_empty():
+            continue
+        below = sections[index - 1] if index else None
+        if below is not None and not below.is_empty:
+            pending -= _material_cross(below)
+        volume += float(pending.area()) * _layer_step(index, layer_height, first_layer_height)
+    return volume
 
 
 def _layer_step(index: int, layer_height: float, first_layer_height: float | None) -> float:
@@ -596,98 +538,6 @@ def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
     """
     parts = getattr(shape, "geoms", [shape])
     return [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
-
-
-def _above_material(
-    pending: list[ShapelyPolygon],
-    below: ShapelyPolygon,
-    *,
-    cancelled: CancelToken | None = None,
-    pool: Executor | None = None,
-    workers: int = 1,
-) -> list[ShapelyPolygon]:
-    """Was von den Säulen übrig bleibt, wenn die Schicht darunter trägt.
-
-    Geschnitten wird nur, was sich überhaupt berührt, und gefragt wird in
-    **einem** Aufruf über alle Teile, nicht einmal je Teil. Bei kleinen Listen
-    ist das vektorisierte Prädikat am billigsten. Ab ``SUPPORT_TREE_FROM``
-    spart ein räumlicher Index genug Paarfragen, um seinen Aufbau zu bezahlen;
-    unterhalb dieser gemessenen Grenze bleibt er bewusst weg.
-
-    **Die Stücke bleiben in ihrer Folge**: erst die unberührten, dann die
-    Reste der berührten, beide nach ihrer Stelle in ``pending``. Der Baum
-    liefert seine Treffer in seiner eigenen Folge, und die wird sortiert —
-    sonst hinge die Summe der Flächen in der letzten Stelle daran, wie der
-    Baum gebaut ist, und an nichts am Körper.
-
-    Mit ``pool`` teilen sich die Arbeiter die Stücke (:func:`_above_material_shared`).
-    """
-    if pool is not None and workers > 1 and len(pending) >= SUPPORT_SHARE_FROM:
-        return _above_material_shared(pending, below, cancelled, pool, workers)
-    if len(pending) >= SUPPORT_TREE_FROM:
-        candidates = np.sort(shapely.STRtree(pending).query(below))
-        # ``below`` teilen die Arbeiter. Ein Baum-Prädikat würde dessen
-        # vorbereiteten GEOS-Index nebenläufig erst vervollständigen. Deshalb
-        # nur die Hüllboxen im Baum, dann exakt mit den eigenen Säulen zuerst.
-        parts = np.asarray(pending, dtype=object)[candidates]
-        touching = candidates[shapely.intersects(parts, below)].tolist()
-    else:
-        parts = np.asarray(pending, dtype=object)
-        touching = np.nonzero(shapely.intersects(parts, below))[0].tolist()
-    if not touching:
-        return pending
-    hit = set(touching)
-    kept = [part for number, part in enumerate(pending) if number not in hit]
-    for number in touching:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        kept += _areas_of(pending[number].difference(below))
-    return kept
-
-
-def _above_material_shared(
-    pending: list[ShapelyPolygon],
-    below: ShapelyPolygon,
-    cancelled: CancelToken | None,
-    pool: Executor,
-    workers: int,
-) -> list[ShapelyPolygon]:
-    """:func:`_above_material` auf mehreren Arbeitern — dieselben Stücke in
-    derselben Folge (RM-266).
-
-    Jeder Arbeiter nimmt jedes so vielte Stück (``pending[first::shares]``),
-    fragt, ob es die Schicht darunter berührt, und schneidet die berührten.
-    Gestreut statt in Blöcken, weil die Differenzen sehr verschieden viel
-    kosten und schwere Stücke nebeneinander liegen. Beide Fragen bleiben
-    dieselben GEOS-Aufrufe wie einfädig, nur ohne Baum: Der fragt ebenfalls
-    nur Hüllboxen, und die prüft GEOS vor jedem Prädikat selbst. Zurück kommt
-    dieselbe Liste wie einfädig, Stück für Stück bitgleich.
-
-    Abgebrochen wird zwischen den Anteilen; einer ist höchstens ein Bruchteil
-    einer Schicht.
-    """
-    parts = np.asarray(pending, dtype=object)
-    shares = min(len(parts), workers)
-
-    def share(first: int) -> tuple[Any, Any]:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        own = parts[first::shares]
-        touching = shapely.intersects(own, below)
-        return touching, shapely.difference(own[touching], below)
-
-    touched = np.zeros(len(parts), dtype=bool)
-    rests = np.empty(len(parts), dtype=object)
-    for first, (touching, cut) in enumerate(pool.map(share, range(shares))):
-        numbers = np.arange(first, len(parts), shares)
-        touched[numbers] = touching
-        rests[numbers[touching]] = cut
-    if not touched.any():
-        return pending
-    kept = [part for part, hit in zip(pending, touched.tolist(), strict=True) if not hit]
-    for rest in rests[touched]:
-        kept += _areas_of(rest)
-    return kept
 
 
 def _same_layer(shape: ShapelyPolygon, previous: ShapelyPolygon) -> bool:
@@ -928,6 +778,7 @@ def _cross_sections(
     *,
     capture_contours: bool,
     cancelled: CancelToken | None = None,
+    shell_source: tuple[MeshData, np.ndarray] | None = None,
 ) -> tuple[list[ShapelyPolygon | None], list[tuple[Polygon, ...] | None]]:
     """Schnitte und optional ihre bereits vorhandenen Kernkonturen.
 
@@ -944,6 +795,17 @@ def _cross_sections(
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    direct = _solid_sections(mesh, heights, cancelled=cancelled)
+    if direct is not None:
+        result: list[ShapelyPolygon | None] = []
+        contours: list[tuple[Polygon, ...] | None] = []
+        for rings in direct:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            shape = _shape_from_rings(rings)
+            result.append(shape)
+            contours.append(_to_polygons(shape) if capture_contours and shape is not None else None)
+        return result, contours
     points, layers, nodes = _plane_segments(mesh, heights, cancelled=cancelled)
     if not len(points):
         return empty, no_contours
@@ -966,8 +828,8 @@ def _cross_sections(
     # frei. Aufgefächert wird trotzdem nicht — sie kostet dann 11 ms für alle
     # vierhundert Schichten, und das Herumreichen der Aufträge wäre wieder
     # teurer als die Arbeit (gemessen: 23 ms auf vier Threads).
-    result: list[ShapelyPolygon | None] = []
-    contours: list[tuple[Polygon, ...] | None] = []
+    result = []
+    contours = []
     for start, end in zip(starts, ends, strict=True):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -976,11 +838,123 @@ def _cross_sections(
             contours.append(None)
             continue
         shape, own = _polygon_with_contours(
-            points[start:end], nodes[start:end], capture_contours=capture_contours
+            points[start:end],
+            nodes[start:end],
+            capture_contours=capture_contours,
+            shell_ids=lambda edges: _shells_for_edges(mesh, edges, shell_source, cancelled),
         )
         result.append(shape)
         contours.append(own)
     return result, contours
+
+
+def _shells_for_edges(
+    mesh: MeshData,
+    edges: np.ndarray,
+    source: tuple[MeshData, np.ndarray] | None,
+    cancelled: CancelToken | None,
+) -> np.ndarray:
+    """Netzschalen nur bei freier inverser Hülle, samt Herkunft eines Kontaktbands.
+
+    Geteilt werden Kanten nach Eckennummern. Räumlich gleiche Kanten anderer
+    Schalen bleiben getrennt. Im Netzcache liegen nur Felder, kein nativer Kern.
+    """
+    if source is not None:
+        original, used = source
+        ends = used[np.column_stack((edges // mesh.vertex_count, edges % mesh.vertex_count))]
+        edges = ends.min(axis=1) * original.vertex_count + ends.max(axis=1)
+        mesh = original
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    body = mesh.raw
+    key = "solidon_slice_shell_edges"
+    saved = body._cache[key]
+    if saved is None:
+        labels = kernel_process.run(
+            "component_labels",
+            {"edges": np.asarray(body.face_adjacency, dtype=np.int64)},
+            {"count": mesh.triangle_count},
+            weight=mesh.triangle_count,
+            cancelled=cancelled,
+        )[0]["labels"]
+        unique = np.asarray(body.edges_unique, dtype=np.int64)
+        owners = np.empty(len(unique), dtype=np.int64)
+        owners[body.edges_unique_inverse] = np.repeat(labels, 3)
+        codes = unique[:, 0] * mesh.vertex_count + unique[:, 1]
+        order = np.argsort(codes)
+        saved = codes[order], owners[order]
+        body._cache[key] = saved
+    codes, owners = saved
+    return np.asarray(owners[np.searchsorted(codes, edges)], dtype=np.int64)
+
+
+def _solid_sections(
+    mesh: MeshData, heights: np.ndarray, *, cancelled: CancelToken | None = None
+) -> list[list[np.ndarray]] | None:
+    """Direkte Schnitte als Felder; große Kernaufrufe laufen im Hilfsprozess."""
+    if len(heights) <= DIRECT_SECTIONS_ABOVE:
+        return None
+    # Kontaktprüfungen reichen offene Dreiecksbänder herein. Sie tragen
+    # gültige Schnitte, aber keinen Volumenkern; dessen nativer Aufbau kann
+    # an solchen Ausschnitten bereits vor der Statusantwort abbrechen.
+    if not mesh.is_watertight or not mesh.raw.is_winding_consistent:
+        return None
+    arrays, values = kernel_process.run(
+        "slice_sections",
+        {
+            "vertices": np.asarray(mesh.raw.vertices),
+            "faces": np.asarray(mesh.raw.faces),
+            "heights": heights,
+        },
+        {"volume": mesh.volume, "volume_band": EPS_GEOM * mesh.area},
+        weight=mesh.triangle_count,
+        cancelled=cancelled,
+    )
+    if not values["usable"]:
+        return None
+    rings = np.split(arrays["coordinates"], np.cumsum(arrays["sizes"])[:-1])
+    result: list[list[np.ndarray]] = [[] for height in heights]
+    for ring, owner in zip(rings if len(arrays["sizes"]) else [], arrays["owners"], strict=True):
+        result[int(owner)].append(ring)
+    return result
+
+
+def _cross_shape(section: manifold3d.CrossSection) -> ShapelyPolygon | None:
+    """Clipper-Ringe sind vereinigt und gerichtet; die Tiefe ordnet nur Löcher zu."""
+    return _shape_from_rings(section.to_polygons())
+
+
+def _shape_from_rings(rings: list[np.ndarray]) -> ShapelyPolygon | None:
+    """Vereinigte Clipper-Ringe mit positiven Hüllen und negativen Löchern."""
+    if not rings:
+        return None
+    if len(rings) == 1:
+        return ShapelyPolygon(rings[0])
+    outlines = shapely.polygons(
+        shapely.linearrings(
+            np.concatenate(rings),
+            indices=np.repeat(np.arange(len(rings)), [len(ring) for ring in rings]),
+        )
+    )
+    positive = shapely.is_ccw(shapely.get_exterior_ring(outlines))
+    shells = outlines[positive]
+    holes = outlines[~positive]
+    assigned: list[list[Any]] = [[] for shell in shells]
+    if len(holes):
+        # Ein Loch gehört zur kleinsten Hülle, die seine ganze Fläche trägt.
+        # Ein Punkt allein könnte auf einer Materialinsel im Loch liegen.
+        child, parent = shapely.STRtree(shells).query(holes, predicate="covered_by")
+        areas = shapely.area(shells)
+        for number, hole in enumerate(holes):
+            candidates = parent[child == number]
+            if len(candidates):
+                owner = int(candidates[np.argmin(areas[candidates])])
+                assigned[owner].append(hole.exterior)
+    parts = [
+        _repaired(ShapelyPolygon(shell.exterior, inner))
+        for shell, inner in zip(shells, assigned, strict=True)
+    ]
+    return parts[0] if len(parts) == 1 else cast(ShapelyPolygon, unary_union(parts))
 
 
 def _plane_segments(
@@ -1003,8 +977,9 @@ def _plane_segments(
     # Ein ignorierter lokaler Bau kann älter als die Quelle sein. Der
     # Quellklon bleibt dann funktionsfähig und sagt über die übersprungenen
     # Vergleichstests klar, dass ``build_slice_core.py`` erneut laufen muss.
-    # Version 2 bestätigt auch den optionalen Abbruchrückruf als fünftes Argument.
-    if _chain is not None and getattr(_chain, "PLANE_SEGMENTS_API", None) == 2:
+    # Version 2 bestätigte den optionalen Abbruchrückruf als fünftes Argument,
+    # Version 3 die gerichteten Segmente.
+    if _chain is not None and getattr(_chain, "PLANE_SEGMENTS_API", None) == PLANE_SEGMENTS_API:
         # ``ascontiguousarray`` kann einen schreibgeschützten Puffer unverändert
         # zurückgeben; der übersetzte Kern braucht schreibbare Speicherbereiche.
         args = (
@@ -1085,6 +1060,7 @@ def _plane_segments_numpy(
         return _no_segments()
 
     corners, height_above, crossing = corners[keep], height_above[keep], crossing[keep]
+    falls_first = above[keep]
     rows = np.arange(len(corners))[:, None]
     # Die zwei kreuzenden Kanten, in der Reihenfolge, in der das Dreieck sie
     # benennt.
@@ -1152,6 +1128,14 @@ def _plane_segments_numpy(
     nodes = np.minimum(corner_from, corner_to) * len(mesh.raw.vertices) + np.maximum(
         corner_from, corner_to
     )
+
+    # Die Richtung des Segments, wie im übersetzten Kern (RM-485): Es beginnt
+    # auf der Kante, die im Umlauf des Dreiecks von oben nach unten führt. Bei
+    # nach außen gerichteten Dreiecken liegt das Material dann links, ein
+    # Außenring läuft gegen den Uhrzeigersinn und ein Hohlraum mit ihm.
+    rising = ~falls_first[np.arange(len(edges)), edges[:, 0]]
+    points[rising] = points[rising][:, ::-1]
+    nodes[rising] = nodes[rising][:, ::-1]
     kept_points, kept_layers, kept_nodes = points, layers[keep], nodes
     order = np.argsort(kept_layers, kind="stable")
     return kept_points[order], kept_layers[order], kept_nodes[order]
@@ -1177,37 +1161,16 @@ def _lexicographically_after(first: Any, second: Any) -> Any:
     )
 
 
-def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
-    """Die geschlossenen Ringe einer Schicht, aus den Kantennummern verkettet.
+def _pairs_up(ends: Any) -> Any | None:
+    """Die Sortierung der Segmentenden, wenn jeder Knoten genau zwei trägt.
 
-    Ein Schnittpunkt gehört genau einer Kante, und eine Kante genau zwei
-    Dreiecken. Damit trägt jeder Knoten genau zwei Segmente, und die Ringe
-    sind schlicht die Zyklen dieser Zuordnung — kein Noden, keine
-    Fließkommaentscheidung, keine Toleranz.
-
-    ``None`` heißt „nicht hier entschieden" und hat zwei Gründe. Der erste:
-    ``_chain`` ist nicht gebaut. Der Weg lohnt sich nur übersetzt — als
-    Python-Schleife kostet derselbe Durchlauf 608 ms, wo GEOS für die
-    schwerere Aufgabe 826 ms braucht, und die Verkettung wäre ein Umbau ohne
-    Gewinn. Der zweite: Die Voraussetzung trägt nicht, weil ein Knoten einen
-    Grad ungleich zwei hat — eine offene Kante im Netz, oder eine Ebene genau
-    durch eine Ecke. Dann ist GEOS die richtige Antwort, denn es kommt auch
-    mit dem zurecht, was hier nicht mehr eindeutig ist.
-
-    Zurück kommen die Koordinaten in Ringreihenfolge und je Koordinate die
-    Nummer ihres Rings — genau die Form, die ``shapely.linearrings`` erwartet.
+    Ein Sort genügt für drei Aufgaben: gleiche Knoten paaren, Grad zwei
+    prüfen und ihre Nummern dicht machen. Vorher sortierte ``np.unique``
+    zuerst die großen Kantennummern und ``argsort`` danach dieselben Enden
+    noch einmal über ihre dichten Nummern — rund 20 ms für 400 Schichten.
     """
-    if _chain is None:
-        return None
-
-    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
     if len(ends) < 6:
         return None
-
-    # Ein Sort genügt für drei Aufgaben: gleiche Knoten paaren, Grad zwei
-    # prüfen und ihre Nummern dicht machen. Vorher sortierte ``np.unique``
-    # zuerst die großen Kantennummern und ``argsort`` danach dieselben Enden
-    # noch einmal über ihre dichten Nummern — rund 20 ms für 400 Schichten.
     order = np.argsort(ends, kind="stable")
     ordered = ends[order]
     if len(ordered) % 2 or np.any(ordered[0::2] != ordered[1::2]):
@@ -1216,6 +1179,51 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
     # Grenze zwischen den Paaren deckt jeden Grad über zwei ab.
     if np.any(ordered[1:-1:2] == ordered[2::2]):
         return None
+    return order
+
+
+def _directions_agree(nodes: Any) -> bool:
+    """Ob die gerichteten Segmente einer Schicht geschlossene Umläufe bilden.
+
+    Jeder Knoten trägt genau zwei Segmente, und an jedem endet eines, während
+    das andere beginnt. Nur dann hat die Umlaufzahl eines Punkts eine
+    Bedeutung; eine offene Kante oder ein Dreieck gegen die Richtung seiner
+    Nachbarn nimmt sie ihm (RM-485).
+    """
+    pairs = np.asarray(nodes, dtype=np.int64)
+    if _pairs_up(pairs.reshape(-1)) is None:
+        return False
+    return bool(np.array_equal(np.sort(pairs[:, 0]), np.sort(pairs[:, 1])))
+
+
+def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any, bool, Any] | None:
+    """Die geschlossenen Ringe einer Schicht, aus den Kantennummern verkettet.
+
+    Ein Schnittpunkt gehört genau einer Kante, und eine Kante genau zwei
+    Dreiecken. Damit trägt jeder Knoten genau zwei Segmente, und die Ringe
+    sind schlicht die Zyklen dieser Zuordnung — kein Noden, keine
+    Fließkommaentscheidung, keine Toleranz.
+
+    ``None`` heißt „nicht hier entschieden": Die Voraussetzung trägt nicht,
+    weil ein Knoten einen Grad ungleich zwei hat — eine offene Kante im Netz,
+    ein verzweigtes Netz. Dann ist GEOS die richtige Antwort, denn es kommt
+    auch mit dem zurecht, was hier nicht mehr eindeutig ist.
+
+    Ohne ``_chain`` ordnet NumPy dieselben Zyklen nach Netzknoten
+    (:func:`_numpy_rings`). Räumlich gleiche Punkte bleiben getrennt, wenn
+    das Netz sie nicht verbindet — auch an einer Rücklaufnaht.
+
+    Zurück kommen die Koordinaten in Ringreihenfolge, je Koordinate die
+    Nummer ihres Rings — genau die Form, die ``shapely.linearrings`` erwartet —
+    und ob jeder Ring in der Richtung seiner Segmente läuft. Nur dann sagt die
+    Umlaufrichtung, wo Material ist. Zuletzt stehen die Kanten-IDs in derselben Reihenfolge.
+    """
+    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
+    order = _pairs_up(ends)
+    if order is None:
+        return None
+    if _chain is None:
+        return _numpy_rings(points, nodes)
 
     dense_flat = np.empty(len(order), dtype=np.int64)
     dense_flat[order] = np.repeat(np.arange(len(order) // 2, dtype=np.int64), 2)
@@ -1245,24 +1253,141 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
     # Zwei Wege durch dieselbe Rechnung dürfen sich nicht in der letzten
     # Stelle unterscheiden. Der übersetzte ist der schnellere, nicht der
     # genauere — und das ist Absicht.
-    return np.round(points.reshape(-1, 2), 6)[walk[:written]], ring_of[:written]
+    #
+    # Ein ungerader Schritt heißt: Ein Segment wurde von seinem Ende her
+    # betreten, die Richtungen der Dreiecke widersprechen sich dort.
+    oriented = not bool(np.any(walk[:written] & 1))
+    return (
+        np.round(points.reshape(-1, 2), 6)[walk[:written]],
+        ring_of[:written],
+        oriented,
+        np.asarray(nodes).reshape(-1)[walk[:written]],
+    )
+
+
+def _numpy_rings(points: Any, nodes: Any) -> tuple[Any, Any, bool, Any] | None:
+    """Gerichtete Zyklen rein aus Netzknoten, unabhängig von gleichen XY-Punkten.
+
+    Zeigerverdopplung findet zuerst den kleinsten Segmentindex jedes Umlaufs,
+    dann den Abstand zu diesem Anfang. Sortieren dieser Abstände ordnet die
+    Ringe, ohne eine Python-Schleife je Segment und ohne räumliche Verkettung.
+    Das erhält Rücklaufnähte und berührende Schalen genau wie der native Weg.
+    """
+    if not _directions_agree(nodes):
+        return None
+    count = len(points)
+    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
+    order = _pairs_up(ends)
+    assert order is not None
+    first, second = order[0::2], order[1::2]
+    paired = np.empty(len(ends), dtype=np.int64)
+    paired[first], paired[second] = second, first
+    following = paired[1::2] // 2
+    labels = np.arange(count)
+    step = following.copy()
+    for _level in range(count.bit_length()):
+        labels = np.minimum(labels, labels[step])
+        step = step[step]
+    anchor = np.arange(count) == labels
+    distance = np.where(anchor, 0, 1)
+    step = np.where(anchor, np.arange(count), following)
+    for _level in range(count.bit_length()):
+        distance += distance[step]
+        step = step[step]
+    order = np.lexsort((-distance, labels))
+    lengths = np.bincount(labels, minlength=count)
+    order = order[lengths[labels[order]] >= 3]
+    if not len(order):
+        return None
+    _, ring_of = np.unique(labels[order], return_inverse=True)
+    return np.round(np.asarray(points)[order, 0], 6), ring_of, True, np.asarray(nodes)[order, 0]
+
+
+def _positive_rings(
+    coordinates: np.ndarray,
+    ring_of: np.ndarray,
+    edges: np.ndarray,
+    shells: Callable[[np.ndarray], np.ndarray] | None,
+) -> manifold3d.CrossSection | None:
+    """Gerichtete Fläche; ein quer selbstschneidender Umlauf ist mehrdeutig.
+
+    Eine Berührung oder eine zurücklaufende Naht kann dagegen eindeutig sein:
+    Nur eine Seite der Umlaufzahl trägt Fläche. Belegt sind diese Nähte am
+    Laptop-Ständer; die Acht mit zwei entgegengesetzten Lappen bleibt beim
+    Reparaturweg über die losen Segmente.
+    """
+    starts = np.flatnonzero(np.r_[True, ring_of[1:] != ring_of[:-1]])
+    rings = np.split(coordinates, starts[1:])
+    simple = shapely.is_simple(shapely.linearrings(coordinates, indices=ring_of))
+    for number in np.flatnonzero(~simple):
+        ring = [rings[number]]
+        positive = manifold3d.CrossSection(ring, manifold3d.FillRule.Positive)
+        negative = manifold3d.CrossSection(ring, manifold3d.FillRule.Negative)
+        if not positive.is_empty() and not negative.is_empty():
+            return None
+    outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
+    following = np.arange(1, len(coordinates) + 1)
+    following[np.r_[starts[1:], len(coordinates)] - 1] = starts
+    x, y = coordinates[:, 0], coordinates[:, 1]
+    positive_direction = np.add.reduceat(x * y[following] - x[following] * y, starts) > 0.0
+    negative_indices = np.flatnonzero(~positive_direction)
+    if len(negative_indices):
+        positive_area = unary_union(
+            [_repaired(outline) for outline in outlines[positive_direction]]
+        )
+        free = [number for number in negative_indices if not positive_area.covers(outlines[number])]
+        turn = np.zeros(len(rings), dtype=bool)
+        turn[free] = True
+        if free and len(rings) > 1:
+            if shells is None:
+                return None
+            owners = shells(edges[starts])
+            for owner in np.unique(owners[free]):
+                own = owners == owner
+                material = manifold3d.CrossSection(
+                    [ring for ring, belongs in zip(rings, own, strict=True) if belongs],
+                    manifold3d.FillRule.Negative,
+                )
+                for number in np.flatnonzero(positive_direction & ~own):
+                    foreign = manifold3d.CrossSection([rings[number]], manifold3d.FillRule.Positive)
+                    if not foreign.is_empty() and (foreign - material).is_empty():
+                        # Getrennte inverse Innenwand oder Materialinsel?
+                        # Ohne Herkunft ist das nicht entschieden. Die alte
+                        # Verschachtelung bleibt der konservative Reparaturweg.
+                        return None
+            turn = np.isin(owners, owners[free])
+        for number in np.flatnonzero(turn):
+            rings[number] = rings[number][::-1]
+    return manifold3d.CrossSection(rings, manifold3d.FillRule.Positive)
 
 
 def _polygon_with_contours(
-    points: Any, nodes: Any, *, capture_contours: bool
+    points: Any,
+    nodes: Any,
+    *,
+    capture_contours: bool,
+    shell_ids: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> tuple[ShapelyPolygon | None, tuple[Polygon, ...] | None]:
     """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
 
     Zuerst über die Kantennummern verkettet (:func:`_rings_from`); trägt deren
     Voraussetzung nicht, schließt GEOS die Ringe selbst aus den gerundeten
-    Koordinaten. Beide Wege enden an derselben Stelle: Zurück kommen Ringe,
-    keine Flächen — ein Außenring und der Ring einer Bohrung sehen gleich aus.
-    Was was ist, folgt daraus, wie tief ein Ring in den anderen sitzt — gerade
-    ist Material, ungerade ein Loch.
+    Koordinaten. Gerichtete Ringe werden mit positiver Umlaufzahl vereinigt:
+    Das Material liegt links, Hohlräume laufen andersherum als Außenränder.
+    Ohne widerspruchsfreie Richtung bleibt die bisherige Verschachtelung
+    mit Reparatur der losen Segmente.
     """
     chained = _rings_from(points, nodes)
     if chained is not None:
-        coordinates, ring_of = chained
+        coordinates, ring_of, oriented, edges = chained
+        if oriented:
+            section = _positive_rings(coordinates, ring_of, edges, shell_ids)
+            if section is not None and not section.is_empty():
+                shape = _cross_shape(section)
+                return (
+                    shape,
+                    _to_polygons(shape) if capture_contours and shape is not None else None,
+                )
         if len(ring_of) and ring_of[-1] == 0:
             # ``polygonize`` richtet einen einzelnen Außenring im Uhrzeigersinn
             # aus und schließt ihn. Beides ist hier ohne GEOS bekannt. Dieselbe
@@ -2933,77 +3058,38 @@ def _model_support(
     starting = sorted(starts, reverse=True)
     groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(layers) >= PARALLEL_FROM else 1
     member = {index: number % groups for number, index in enumerate(starting)}
-    # Je Schicht einmal gebaut, für alle Gruppen und die Kanalfrage danach.
-    # **Vorbereitet wird je Gruppe eine eigene Kopie**: GEOS vervollständigt
-    # den Index einer vorbereiteten Fläche erst bei der Abfrage, und geteilt
-    # zwischen Fäden ist das ein Wettlauf. Die Kopie kommt aus WKB; das kostet
-    # je Schicht Mikrosekunden, die Vorbereitung spart an der Waschschüssel
-    # 1,5 s — GEOS nutzt sie nur am ersten Argument, deshalb steht die Schicht
-    # vorn.
-    materials: dict[int, ShapelyPolygon] = {}
-    frozen: dict[int, bytes] = {}
+    # Material einmal je Schicht für alle Säulen und die unveränderte Kanalfrage.
+    materials: dict[int, tuple[ShapelyPolygon, manifold3d.CrossSection]] = {}
     building = threading.Lock()
 
-    def material_at(index: int) -> tuple[ShapelyPolygon, bytes]:
+    def material_at(index: int) -> tuple[ShapelyPolygon, manifold3d.CrossSection]:
         with building:
             if index not in materials:
-                materials[index] = _material(layers[index])
-                frozen[index] = shapely.to_wkb(materials[index])
-            return materials[index], frozen[index]
+                shape = _material(layers[index])
+                materials[index] = shape, _material_cross(shape)
+            return materials[index]
 
     def descend(group: int) -> dict[int, tuple[int, float]]:
-        pending: list[ShapelyPolygon] = []
-        owners: list[int] = []
+        pending: list[tuple[int, manifold3d.CrossSection]] = []
         landed: dict[int, tuple[int, float]] = {}
         for index in range(top, 0, -1):
             if member.get(index) == group:
-                for owner in starts[index]:
-                    pending.append(pieces[owner])
-                    owners.append(owner)
+                pending.extend((owner, _material_cross(pieces[owner])) for owner in starts[index])
             if not pending:
                 continue
-            shared, blob = material_at(index - 1)
-            if shared.is_empty:
+            _shared, below = material_at(index - 1)
+            if below.is_empty():
                 continue
-            below = shapely.from_wkb(blob)
-            shapely.prepare(below)
-            parts = np.asarray(pending, dtype=object)
-            if len(pending) >= SUPPORT_TREE_FROM:
-                # Sortiert: Der Baum liefert seine Treffer in seiner eigenen
-                # Folge, und die hängt an den übrigen Stücken der Gruppe. Die
-                # Flächen eines Stücks summieren sich so in derselben Folge,
-                # auf wie vielen Arbeitern auch immer (RM-187).
-                candidates = np.sort(shapely.STRtree(pending).query(below))
-                touching = candidates[shapely.intersects(below, parts[candidates])]
-            else:
-                touching = np.nonzero(shapely.intersects(below, parts))[0]
-            if not len(touching):
-                continue
-            hit = set(touching.tolist())
-            kept = [part for number, part in enumerate(pending) if number not in hit]
-            kept_owners = [owner for number, owner in enumerate(owners) if number not in hit]
-            # **In einem Aufruf je Schicht**, nicht je Stück: Ein vektorisierter
-            # GEOS-Aufruf gibt den Interpreter frei, und erst damit rechnen die
-            # Gruppen wirklich nebeneinander — Stück für Stück gerufen standen
-            # sie am Eiffelturm hintereinander an (7,8 s seriell, 6,0 s auf
-            # sechs Arbeitern).
-            chosen = parts[touching]
-            split, source = shapely.get_parts(shapely.difference(chosen, below), return_index=True)
-            flat = (shapely.get_type_id(split) == shapely.GeometryType.POLYGON) & ~shapely.is_empty(
-                split
-            )
-            split, source = split[flat], source[flat]
-            left = np.zeros(len(chosen))
-            np.add.at(left, source, shapely.area(split))
-            lost = shapely.area(chosen) - left
-            for position, number in enumerate(touching.tolist()):
-                if lost[position] > EPS_GEOM:
-                    owner = owners[number]
+            kept = []
+            for owner, column in pending:
+                remaining = column - below
+                lost = float(column.area() - remaining.area())
+                if lost > EPS_GEOM:
                     low, before = landed.get(owner, (index - 1, 0.0))
-                    landed[owner] = (low, before + float(lost[position]))
-            kept += split.tolist()
-            kept_owners += [owners[int(touching[position])] for position in source.tolist()]
-            pending, owners = kept, kept_owners
+                    landed[owner] = (low, before + lost)
+                if not remaining.is_empty():
+                    kept.append((owner, remaining))
+            pending = kept
         return landed
 
     if groups == 1:

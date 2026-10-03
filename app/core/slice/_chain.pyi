@@ -23,7 +23,7 @@ def plane_segments(
     npt.NDArray[np.int64],
     npt.NDArray[np.int64],
 ]:
-    """Schnittpunkte, Schichtnummern und Kantenkennungen."""
+    """Gerichtete Schnittpunkte (Material links), Schichten und Kantenkennungen."""
 
 def chain_rings(
     node: npt.NDArray[np.int64],

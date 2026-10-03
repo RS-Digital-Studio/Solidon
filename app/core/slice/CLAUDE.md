@@ -18,7 +18,7 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 | Datei | Rolle |
 |---|---|
 | `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken, Stützvolumen (§22); `model_support` merkt seine Antwort je Messung (Identität des Schichttupels) |
-| `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt und Konturverkettung (`tools/build_slice_core.py`, Budget §31); ohne ihn derselbe Weg über NumPy und `shapely.polygonize` |
+| `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt und Konturverkettung (`tools/build_slice_core.py`, Budget §31); ohne ihn gerichtete Verkettung über NumPy |
 | `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29): Stützort über `analysis.model_support` (außen, Kanal, Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße, ruhige Wände und Beschleunigung für schlanke Körper auf kleinem Fuß (`_calm_walls`), langsame erste Schicht über schmalen Stegen (`analysis.narrow_share`), Schrägnaht an runden Außenwänden (`analysis.smooth_outline_height`), Volumenstrom über `knowledge.print_settings.flow_speed_limit` (sein Deckel ist an `limits_flow` zu erkennen); `combine` vereint den Ausgabeumfang, ohne benötigte Stützen zu verlieren; Bremsen auf Tempo und Beschleunigung lockern keine frühere Regel (`_merged`, `_BRAKING_PATHS`); `for_part` gibt mit Profil den Rat je Körper für `PART_PATHS`, `SLICED_PATHS` sagt, welche davon den Schnitt des Körpers brauchen (danach schneidet der Export), `plate_paths` die plattenweiten Gründe, `connector_diameters` die Verbinder eines Körpers |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2) in einem Durchlauf, auch die erste Schicht mit Bauteillüfter (`fan_start`) |
 | `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
@@ -58,8 +58,19 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 
 ## Der Schnitt
 
-- **`PLANE_SEGMENTS_API = 2`** verlangt der Ebenenschnitt vom übersetzten
-  Teil, samt Abbruchrückruf und schreibbaren, zusammenhängenden Puffern;
+- **Material nach Umlaufrichtung**: Ab elf Ebenen gehen dichte, konsistente Netze zum Kernel-Job;
+  `_solid_sections` prüft dort Volumenerhalt und schneidet mit `Manifold.slice`. Negative Komponenten
+  nehmen den Segmentweg, der freie Schalen von Hohlräumen trennt. Sonst
+  liefern Cython oder NumPy gerichtete Segmente; `_numpy_rings` ordnet
+  Schalen nach Netzknoten wie Cython, auch an Rücklaufnähten. `CrossSection(Positive)`
+  vereinigt ihre Materialflächen. `_cross_shape` ordnet Löcher über ihre
+  ganze Fläche zu, auch bei Randberührung und Inseln im Loch.
+  Freie inverse Schalen drehen samt eigenen Löchern; ihre Kanten-IDs fragen
+  die Originaltopologie erst bei Bedarf. `_contact` reicht diese Herkunft
+  und das Abbruchtoken intern weiter. Zweipunktzyklen entfallen in beiden Wegen.
+
+- **`PLANE_SEGMENTS_API = 3`** verlangt der Ebenenschnitt vom übersetzten
+  Teil: Material links am Segment, Abbruchrückruf und schreibbare Puffer;
   schreibgeschützte Ansichten werden vorher kopiert. Ein älterer Bau nimmt den
   NumPy-Weg, die nativen Vergleichstests nennen den nötigen Neubau.
 - **Eine ungültige geschlossene Kontur** (eine Ebene durch die auslaufende Ecke
@@ -104,26 +115,25 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
   ein kürzerer Keil wird verfehlt oder fünffach gezählt (Test in
   `test_slice.py`).
 - **Kleine Ringe** rechnet `largest_overhang_patch` mit `units.ring_area` in
-  Python, ohne GEOS und NumPy; **mehrere verkettete Ringe** ohne `polygonize`
-  (`_nested`: ein Punkt je Ring, gerade Tiefe ist Material).
+  Python, ohne GEOS und NumPy; `_nested` bleibt für den Rückfall ohne
+  widerspruchsfreie Richtung, gerichtete Ringe nutzen Clipper2.
 - **Die Öffnung** (`_opening_loss`, `_protrusion`, `_minimum_widths`,
   `_halved`, `_width_outline`, `_canonical`) folgt der Regel „Die Öffnung
   zählt, was der Form fehlt“ in `schichtanalyse.md`.
-- **Die Säulen**: `_support_volume` läuft einmal von oben nach unten; ab
-  `SUPPORT_SHARE_FROM` offenen Stücken teilen sich `SUPPORT_WORKERS` die
-  Stücke einer Schicht (`_above_material_shared`), zurück in einfädiger Folge;
-  die untere Schicht lesen alle gemeinsam.
-  Einfädig nimmt `_above_material` den Baum nur für Hüllboxtreffer, sortiert
-  sie und prüft exakt mit den eigenen Säulenteilen als erstem Operand. **Ein
-  vorbereiteter GEOS-Index wird nie parallel als Prädikatindex benutzt** —
-  GEOS baut darin Suchstrukturen erst bei der Abfrage.
+- **Die Säulen**: `_support_volume` vereinigt Überhänge und zieht Material
+  darunter als gerichtete `CrossSection` ab; jede Fläche wird einmal
+  konvertiert, Zwischenkonturen bleiben in Clipper. Schichten und Summe
+  laufen in fester Folge, mit Abbruchprüfung je Schicht. `_material_cross`
+  orientiert vorhandene Außenringe und Löcher ohne Vereinfachung.
   `slice_body(support_volume=False)` lässt die Säulen aus (Druckvorschläge);
   der Druckdialog behält die Messung in der Sitzung
   (`Session.remember_analyses`).
 - **Der Stützort auf Arbeitern** (`model_support`): Gruppen je Startschicht,
-  jede mit eigener Kopie der Schicht (aus WKB), Differenzen einer Schicht in
-  einem Aufruf, Baumtreffer sortiert; die Kanalfrage je Schicht
-  (`_in_channels`), der Kanalraum auf Arbeitern (`channel_space`).
+  eine Clipper-Säule je ursprünglichem Stück. Materialkonturen entstehen
+  unter einem lokalen Schloss einmal je Schicht und werden unverändert
+  geteilt; `findings._column_under` teilt sie innerhalb eines Befundlaufs.
+  Standort, Inseln und Kanäle bleiben örtliche Fragen; deren GEOS-Öffnung
+  (`_in_channels`) und der Kanalraum (`channel_space`) bleiben bestehen.
 
 ## G-Code und Verbrauch
 

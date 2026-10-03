@@ -228,6 +228,46 @@ GROUPS = print_settings.GROUPS
 #: Farbknopf etwa nennt in seinem Tooltip den Hexwert, den sonst nichts zeigt.
 _OWN_TIP: Final = "solidonOwnTip"
 
+#: Rolle, unter der ein Auswahleintrag seinen eigenen Satz aufhebt, solange er
+#: den Grund trägt, aus dem das Programm ihn nicht kennt (:func:`_offer_choices`).
+_OWN_CHOICE_TIP: Final = Qt.ItemDataRole.UserRole + 41
+
+
+def _offer_choices(combo: QComboBox, path: str, program: str) -> None:
+    """Eine Wahl, die der Slicer nicht kennt, steht grau da, mit ihrem Ersatz als Grund.
+
+    SuperSlicer kennt keine Baumstütze (RM-480): Der Eintrag bleibt sichtbar —
+    wer ihn vermisst, sucht ihn —, lässt sich aber nicht wählen, und Tooltip
+    wie Bildschirmleser sagen, was stattdessen gedruckt wird
+    (``slicer_keys.NOT_OFFERED_BY_PROGRAM``). Wird das Programm gewechselt,
+    kommt der eigene Satz des Eintrags zurück.
+    """
+    model = combo.model()
+    if not isinstance(model, QStandardItemModel):
+        return
+    for index in range(combo.count()):
+        item = model.item(index)
+        replaced = slicer_keys.substitute(path, combo.itemData(index), program)
+        item.setEnabled(replaced is None)
+        own = item.data(_OWN_CHOICE_TIP)
+        if replaced is not None:
+            if own is None:
+                item.setData(
+                    (
+                        item.data(Qt.ItemDataRole.ToolTipRole),
+                        item.data(Qt.ItemDataRole.AccessibleDescriptionRole),
+                    ),
+                    _OWN_CHOICE_TIP,
+                )
+            item.setData(str(replaced.reason), Qt.ItemDataRole.ToolTipRole)
+            item.setData(str(replaced.reason), Qt.ItemDataRole.AccessibleDescriptionRole)
+        elif own is not None:
+            tip, described = own
+            item.setData(tip, Qt.ItemDataRole.ToolTipRole)
+            item.setData(described, Qt.ItemDataRole.AccessibleDescriptionRole)
+            item.setData(None, _OWN_CHOICE_TIP)
+
+
 #: Die eigene Beschreibung eines Zahlenfelds, bevor Grenzhinweise dazukommen.
 _REFUSAL_BASE_DESCRIPTION: Final = "solidonRefusalBaseDescription"
 _NOZZLE_RANGE_MM: Final[tuple[float, float]] = (0.1, 2.0)
@@ -2425,10 +2465,9 @@ class _SliceWorker(Worker):
     def work(self) -> None:
         results: list[handover.SliceOutcome] = []
         for index, entry in enumerate(self._runs, start=1):
-            if self.cancelled.is_cancelled:
-                return
-            self.step.emit(index, len(self._runs))
             try:
+                self.cancelled.raise_if_cancelled()
+                self.step.emit(index, len(self._runs))
                 outcome = handover.slice_model(
                     [entry.model],
                     self._settings,
@@ -2450,6 +2489,8 @@ class _SliceWorker(Worker):
                 # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
                 # und wer sie hinterher an den Drucker gibt, merkt das nicht.
                 if problem.values.get("constraint") == "slicer_build_volume":
+                    if self.cancelled.is_cancelled:
+                        return
                     part_index = problem.values.get("part_index")
                     problem.object_id = (
                         entry.object_ids[part_index]
@@ -2580,7 +2621,12 @@ class _OpenInSlicerWorker(Worker):
                 # hier ``None`` zurück.
                 beside = (
                     handover.cura_profile_beside(
-                        run.model, self._job.settings, self._job.profile, self._job.setup, run.slots
+                        run.model,
+                        self._job.settings,
+                        self._job.profile,
+                        self._job.setup,
+                        run.slots,
+                        findings=findings,
                     )
                     if self._job.with_settings
                     else None
@@ -5722,10 +5768,10 @@ class PrintSettingsDialog(QDialog):
                     (
                         entry
                         for entry in fitting
-                        if slicer_profiles.type_of(
-                            entry, self._profile_roots(), indexes=indexes
-                        ).casefold()
-                        == wanted_type.casefold()
+                        if slicer_keys.normalise_filament_type(
+                            slicer_profiles.type_of(entry, self._profile_roots(), indexes=indexes)
+                        )
+                        == slicer_keys.normalise_filament_type(wanted_type)
                     ),
                     None,
                 )
@@ -6143,7 +6189,11 @@ class PrintSettingsDialog(QDialog):
         # Klick folgenlos, und ein Wert wie ``nan`` warf aus dem Slot. Beides
         # sagt jetzt die Zustandszeile; die Einstellungen bleiben unberührt.
         try:
-            values = slicer_profiles.filament_values(source, self._profile_roots())
+            values = slicer_profiles.filament_values(
+                source,
+                self._profile_roots(),
+                program=slicer_keys.program_of(self._slicer_path) if self._slicer_path else "",
+            )
             settings = self.settings
             for path, value in values.items():
                 # Ohne Herstellergrundlage schreibt die Übergabe nur, was
@@ -6188,7 +6238,11 @@ class PrintSettingsDialog(QDialog):
         if self._foundation is not None and self._foundation.has_profile:
             return
         try:
-            values = slicer_profiles.filament_values(previous, self._profile_roots())
+            values = slicer_profiles.filament_values(
+                previous,
+                self._profile_roots(),
+                program=slicer_keys.program_of(self._slicer_path) if self._slicer_path else "",
+            )
         except AppError as problem:
             _log.warning("previous filament values could not be read: %s", problem)
             return
@@ -6399,10 +6453,8 @@ class PrintSettingsDialog(QDialog):
         Feldern im Operationsdialog: **grau und begründet**, nicht unsichtbar —
         wer eine Zeile vermisst, sucht sie.
 
-        Gemessen am 03.09.2026 trifft es eines von sechsundfünfzig Feldern bei
-        PrusaSlicer und fünf bei ``CuraEngine``; die Orca-Familie nimmt alles.
-        Vorher ließ sich an ihnen ziehen, ohne dass irgendetwas geschah — der
-        Wert stand im Projekt, in der Druckdatei stand er nie.
+        Die Programmtabelle nennt unbekannte Einstellungen, das Maschinenprofil
+        die Kammerheizung. Eine fehlende Heizungsangabe ist keine Freigabe.
 
         **Der eigene Hinweis wird gemerkt und zurückgegeben, nicht neu
         gebaut.** Ein Widget, das seinen Tooltip selbst führt, behält ihn: Der
@@ -6428,15 +6480,23 @@ class PrintSettingsDialog(QDialog):
                 else ""
             )
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
-            # Schichten ohne Lüfter ab, und nur dann steht ein Satz da.
+            # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
+            # eine Wahl, die das Programm nicht kennt (RM-480).
             specific = (
-                slicer_keys.limitation(flavour, path, self.settings)
+                slicer_keys.limitation(flavour, path, self.settings, program)
                 if flavour is not None
                 else None
             )
             if specific is not None:
                 reason = str(specific)
+            if flavour == "orca" and path == "temperature.chamber":
+                chamber_reason = manufacturer.chamber_limitation(self._foundation)
+                if chamber_reason is not None:
+                    ignored = True
+                    reason = str(chamber_reason)
             editor.setEnabled(not ignored)
+            if isinstance(editor, QComboBox):
+                _offer_choices(editor, path, program)
             for widget in (editor, self._labels.get(path)):
                 if widget is None:
                     continue
@@ -7025,11 +7085,13 @@ class PrintSettingsDialog(QDialog):
         if settings != self.settings:
             self.settings = settings
             self._load_into_editors()
-            self._mark_fields_this_slicer_ignores()
-            self._refresh_advice()
         else:
             self._refresh_auto_adhesion_values()
             self._update_inactive_setting_rows()
+        # Eine andere Maschinenfähigkeit ändert nicht zwingend Druckwerte.
+        # Feld und Vorschläge müssen trotzdem dieselbe neue Grundlage sehen.
+        self._mark_fields_this_slicer_ignores()
+        self._refresh_advice()
         self._refresh_search_target_for_conditions()
         self._mark_origins()
         self._show_foundation()
@@ -7436,6 +7498,10 @@ class PrintSettingsDialog(QDialog):
         selbst danach deckelt (``slicer_keys.caps_volumetric_speed``): Er
         änderte dort nichts am Druck, und an der Kobra 2 hob er über die
         Innenwand die Lückenfüllung des Herstellers an (27.09.2026).
+
+        Eine Wahl, die das Programm nicht kennt, wird als ihr Ersatz
+        vorgeschlagen (``slicer_keys.offered``): SuperSlicer bekommt Gitter statt
+        Baum angeboten (RM-480).
         """
         entries = self._advice_entries
         flavour = self._current_flavour()
@@ -7443,13 +7509,19 @@ class PrintSettingsDialog(QDialog):
             return entries
         caps = slicer_keys.caps_volumetric_speed(flavour)
         program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
+        chamber_unavailable = (
+            flavour == "orca"
+            and manufacturer.chamber_limitation(self._foundation_for_current_setup()) is not None
+        )
         shown: list[SettingAdvice] = []
         for entry in entries:
             if caps and advise.limits_flow(entry):
                 continue
+            if entry.path == "temperature.chamber" and chamber_unavailable:
+                continue
             if slicer_keys.takes(flavour, entry.path, program):
                 shown.append(entry)
-        return shown
+        return slicer_keys.offered(shown, program)
 
     def _profile_roots(self) -> tuple[Path, ...]:
         """Nutzer- und Herstellerprofile gehören zu demselben gewählten Slicer."""
@@ -8750,7 +8822,9 @@ class PrintSettingsDialog(QDialog):
         if self._settling:
             return
         if problem.values.get("constraint") == "slicer_build_volume" and (
-            self._job_context is None or self._job_context != self._print_context()
+            self._job_context is None
+            or self._job_context != self._print_context()
+            or (self._worker is not None and self._worker.cancelled.is_cancelled)
         ):
             return
         if findings:

@@ -29,6 +29,8 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- L'analyse de l'espace nécessaire aux supports est bien plus rapide sur les modèles creux et préserve les contours fins.
+- Pour les pièces qui se chevauchent, l'analyse d'impression ne compte plus l'air enfermé comme de la matière. La détection des surplombs et des supports nécessaires s'améliore aussi.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
 - Vous choisissez la buse dans les réglages d'impression parmi les tailles que connaît votre imprimante, et le slicer reçoit le profil correspondant.
 - Les réglages d'impression demandent dans l'ordre où l'un dépend de l'autre : slicer, imprimante, buse, plateau, filaments et qualité, puis les valeurs.
@@ -46,9 +48,16 @@ dans `website/version.json`.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
 - Quand un autre modèle arrive, depuis un fichier, un téléchargement ou généré, la vue montre le plateau où il se trouve.
+- Un autre modèle se place à l'emplacement libre le plus proche du centre du plateau, au lieu du coin arrière gauche.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
 - SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
+- SuperSlicer reçoit des supports en grille avec une explication si des supports arborescents étaient choisis. La couture la plus proche est appliquée sans fausse alerte.
+- TPU trouve le profil de filament et ses valeurs de démarrage dans PrusaSlicer et SuperSlicer. Si aucun profil n'est disponible, Solidon indique qu'il utilise son propre tableau de matériaux.
+- Cura respecte les limites d'accélération et signale les valeurs choisies réduites. Le remplissage plein garde sa vitesse ; seule la face supérieure utilise la vitesse de surface.
+- La température de chambre arrive dans le bon champ du slicer. Les profils sans chauffage de chambre réglable expliquent pourquoi la valeur reste sans effet.
+- Le remplissage Lignes arrive dans Bambu Studio et Creality Print sous forme de lignes, sans être remplacé par Grille ou Cubique.
+- Après le découpage, Solidon signale les réglages rejetés par PrusaSlicer ou les slicers Orca, ainsi que les changements de bordure, d'ordre des parois et de support.
 - La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 - Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent. Le corps reste exact.
@@ -75,6 +84,7 @@ dans `website/version.json`.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 - Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.
 - Si vous avez choisi « Charger maintenant », les pièces de *Scinder le modèle* ne lancent plus non plus des minutes de reconnaissance ; « Reconnaître toutes les caractéristiques » la rattrape.
+- Choisir « Scinder le modèle » sur une ligne récapitulative du rapport pour plusieurs corps les scinde l'un après l'autre. Avant, seul le premier l'était.
 
 ### Congés et chanfreins
 
@@ -101,7 +111,7 @@ dans `website/version.json`.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
 - Dans « Sculpter », la fenêtre affiche chaque trait aussi vite après de nombreux traits qu'au premier. Jusqu'ici, elle ralentissait à chaque trait.
-- « Figer l'état » enregistre une session de sculpture aussi finement que l'export et l'impression la calculent, et la fenêtre reste utilisable. Jusqu'ici, il figeait la vue plus grossière.
+- Avec « Figer l'état », Solidon enregistre une session de sculpture aussi finement que l'export et l'impression la calculent, et la fenêtre reste utilisable. Avant, il figeait la vue plus grossière.
 
 ### Générer avec l'IA
 
@@ -120,6 +130,7 @@ dans `website/version.json`.
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
 - L'export, « Trancher » et « Ouvrir dans le slicer … » reçoivent toujours le calcul fin, pas la vue plus grossière de la fenêtre. Congés et cônes arrivent ainsi en pleine résolution.
 - Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
+- Si vous n'exportez qu'une partie de la scène, la boîte de fichier et la confirmation indiquent l'étendue, par exemple « 1 corps sur 2 ».
 - La barre des paramètres refuse une cote hors de sa limite au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
 - Dans la barre des paramètres, les cotes de deux pavés portent leur numéro, et une cote avec sa propre plage de travail a un curseur.
@@ -141,6 +152,10 @@ dans `website/version.json`.
 - Un modèle de langage local peut faire douze étapes au lieu de huit par demande dans le chat et résout ainsi plus de demandes en plusieurs parties.
 - Le panneau de sélection tient de nouveau dans sa colonne, et la colonne des cotes de l'arbre montre la cote entière, par exemple « Ø5,19 mm » au lieu de « … ».
 - Sur un perçage, « Modifier l'élément » ouvre directement « Modifier le trou » avec aperçu, au lieu d'y renvoyer seulement.
+- Cliquer sur « Appliquer » pendant un aperçu en cours ne calcule la modification qu'une fois. Avant, Solidon la calculait ensuite une seconde fois.
+- La vue des différences hachure l'ajouté et le retiré dans deux directions, de sorte qu'on les distingue aussi sans couleur.
+- Quand Solidon demande l'unité d'un fichier à l'ouverture, les cotes s'affichent dans votre unité d'affichage et avec le séparateur décimal de votre langue.
+- Si vous déposez un fichier que Solidon n'ouvre pas, par exemple de Blender, il indique comment l'amener en 3MF, STEP ou STL. Le G-Code va à « Contrôler le G-Code ».
 
 ## 0.5.1
 

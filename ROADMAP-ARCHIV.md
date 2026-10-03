@@ -34,6 +34,14 @@ entfernt hat.
 | 2026-10-03 | [RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)](#rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026) |
 | 2026-10-03 | [RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)](#rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026) |
 | 2026-10-03 | [RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)](#rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026) |
+| 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
+| 2026-10-03 | [RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)](#rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026) |
+| 2026-10-03 | [RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)](#rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026) |
+| 2026-10-03 | [RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)](#rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026) |
+| 2026-10-03 | [RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)](#rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026) |
+| 2026-10-03 | [RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)](#rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026) |
+| 2026-10-03 | [RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)](#rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026) |
+| 2026-10-03 | [RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)](#rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
@@ -38093,6 +38101,372 @@ Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachm
 
 **Abschluss:** Die Auswertung reicht jeder Operation eine beobachtete Güte (`evaluate._WatchedQuality`: Vergleich, Hashwert und `pickle` merken die Frage) und meldet in `EvaluationResult.reads_quality`, ob ein Schritt sie gelesen hat; ein Cachetreffer trägt die Angabe mit, auch von der Platte, ein alter Eintrag ohne sie gilt als gefragt. `Session.fine_current` behandelt einen Entwurf ohne solche Frage als fein. Dazu fragt die Boolesche Kette erst hinter den verlustfreien Stufen nach der Güte (`boolean.boolean`): Beide Ketten beginnen mit `DRAFT_CHAIN`, und hielt *direkt*, war der Entwurf schon die feine Rechnung; vorher wählte die Kette ihre Stufen vorab und meldete so jede Bohrung als gütewirksam. Kegel und Ring rechnen seit RM-427 in beiden Stufen gleich, eine Bohrung an Quader und Platte ist im Entwurf bitgleich zur feinen Rechnung; weich verschmolzene Teile fragen weiter und werden fein nachgerechnet (RM-426). Tests in `test_evaluation.py` (Quader und Bohrung fragen nicht, *Bohrung ändern* an der Platte fragt nicht, Verschmelzen fragt, Treffer melden dasselbe) und `test_cache.py` (Angabe übersteht die Platte); ohne die Kettenänderung 2 von 4 rot (Gegenprobe). Weg-1-Detailsonde am echten Fenster (offscreen, F0FF), Klick bis Datei: Lochbrett-STEP 5,017 → 0,016 s, Rucksack-Halter 1,072 → 0,032 s, Platte 0,285 → 0,017 s (v0.5.1: 0,039 / 0,069 / 0,027 s); Dreiecke und Volumen der Dateien unverändert (2762 / 10 633,23 mm³, 15 978 / 27 026,24 mm³, 796 / 31 250,93 mm³). Rohwerte `F:\solidon-review-reports\regression-0.5.2\weg1\ergebnisse\detail-aufl494b-*`. Begonnen in `claude/rm-494`, abgeschlossen von Claude (Thread „Zweige auflösen“).
 
+## RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)
+
+<a id="rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026"></a>
+<a id="rm-485"></a>
+
+**RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_polygon_with_contours`/`_nested`
+  entscheiden Material und Loch nach der Verschachtelungstiefe der Ringe und werfen die
+  Umlaufrichtung weg. Bei mehreren sich überlappenden Schalen (Tinkercad- und viele
+  Thingiverse-Exporte, Baugruppen als eine STL) wird eine Fläche, die nur von Ringen
+  verschiedener Teile umschlossen ist, als Material gezählt. Gemessen: Rahmen aus vier
+  überlappenden Balken 1600 statt 1200 mm² in allen Schichten, Ring aus acht Zylindern 1195,6
+  statt 892,9 mm², `parametric-laptop-riser.stl` 46 von 460 Schichten über 1 %, 5 über 10 %
+  falsch (z 65,10: 2694 statt 2146 mm²). Kontrollfälle ohne eingeschlossene Luft (Kreuz, Mini
+  Golf v17, Piratenschiff) stimmen. Falsch werden damit Schichtfläche, Inseln, Überhänge,
+  Stützraum, Brücken und Materialschätzung im Prüfbericht.
+  **Stellen:** `app/core/slice/analysis.py:1251–1362`, Einzelringweg `:1264–1275`.
+  **Fix (allgemein):** Richtung jedes Schnittsegments aus dem Dreieck übernehmen, gerichtete
+  Ringe mit Füllregel Positive vereinigen (Clipper2 in `manifold3d.CrossSection`, schon im
+  Paket, ganzzahlig und plattformgleich); für gültige Körper direkt `Manifold.slice(z)` (am
+  Laptop-Ständer 0,33–0,50 statt 3,4–4,1 s). Clipper2 auf den heutigen Ringen ohne Richtung
+  ist ebenfalls falsch.
+  **Abnahme:** Geometrietests zuerst: Rahmen (1200 mm², Fenster ohne Insel/Überhang), Ring
+  aus acht Zylindern, Laptop-Ständer oder ein kleiner Korpuszwilling (je Schicht gleich
+  `Manifold.slice` bis 1e-6 relativ); Kreuz, Mini Golf v17, Piratenschiff, Hohlkugel und
+  `aushoehlen-und-teilen.p3d` unverändert. Bauplan §22, §31; Regel 6.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-1), `bibliotheken\sonden\b9_*`, `b3_*`.
+
+**Abschluss:** Ursache war die Entscheidung nach Verschachtelung ohne gerichtete Materialseite (546eff167, bereits in v0.5.0 und v0.5.1). Schnittsegmente tragen jetzt die Richtung des Dreiecks; Cython API 3 und NumPy verketten dieselbe Netztopologie. Positive Umlaufzahl in Clipper2 hält die Luft zwischen überlappenden Teilen frei. Gültige geschlossene Körper mit mehr als zehn Ebenen werden über den vorhandenen abbrechbaren Hilfsprozess direkt geschnitten. Wenige Ebenen und offene Kontaktbänder nehmen den Segmentweg. Cache-Version 37 entwertet frühere Ausrichtungen und Auto-Split-Ergebnisse. Vor dem Fix: vier rote Materialfälle (Rahmen 1600 statt 1200 mm², Zylinderring 1195,64 statt 892,94 mm², Teil im Teil, Korpuszwilling). Danach: alle Materialfälle mit Direkt-, Cython- und NumPy-Weg grün; Rahmen 1200 mm², freies Fenster, keine Insel, kein Überhang, kein Stützraum. Vollständige 0,2-mm-Raster von Laptop-Ständer, Mini Golf v17, gesamtem Piratenschiff, Aushöhlprojekt, Kreuz und Hohlkugel verglichen: maximal 4,492e-7 relativ zwischen Segment- und Direktschnitt am Laptop, Cython/NumPy dort identisch; die Kontrollmodelle bleiben innerhalb 8,932e-7 zum alten Stand. Das erste Entwicklungstor zeigte sieben native Auto-Split-Abbrüche an offenen Kontaktbändern; isoliert mit Exit 3221225477 reproduziert, vor dem nativen Aufbau durch Dichtheits- und Umlaufprüfung behoben. Die sieben Fälle und ein neuer Wächter bestehen. Wenige Schnitte: eine Ebene am Piratenschiff 0,0270 s im Segmentweg statt 0,3886 s im Direktweg; frühe Routenwahl bis zehn Ebenen mit roten Gegenproben abgesichert. Gezielte Läufe: 1144 bestanden, 3 übersprungen, 1 abgewählt; nach den letzten Guards 251 bestanden, 3 übersprungen. Endgültiges Entwicklungstor am eingefrorenen Stand: 20569 passed, 34 skipped in 628.82s (0:10:28); Ruff, Formatprüfung, mypy und Suite jeweils Exit 0. Keine Fenster-/Renderer-/Release-Leistungsprüfung. Sechs Changelog-Punkte in 0.5.2. Eigener Commit zu RM-485 mit diesen Quellen, dem neuen Korpuszwilling und diesem Abschluss; Rohprotokolle und Messskripte unter F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003, Bericht geometrie-bericht.md.
+ Die unabhängige Nachprüfung ergänzte zwei weitere Fehlerbilder: vollständig invertierte Rohre verloren ihre Öffnung (12 rote Fälle), und NumPy übernahm einen Zweipunktring, den Cython auslässt (ein roter Fall). Kanten-IDs ordnen Ringe jetzt bei Bedarf ihrer echten Netzschale zu; eigene Innenringe drehen mit, unabhängige Inseln bleiben erhalten. Der offene Kontaktband-Ausschnitt trägt dafür seine Originaltopologie weiter. Nur in diesem Bedarfspfad entsteht ein gecachter Komponentenindex; der normale positive Schnitt baut keinen Netzgraphen. Drei rote Fälle einer vollständig invertierten Hohlkugel mit getrennten Innenwänden belegen zusätzlich die Mehrdeutigkeit dieser Eingabe; dort bleibt der bestehende Verschachtelungsweg erhalten. Alle Schnitt-, Kern-, Stand- und Orientierungsfälle zusammen: 257 bestanden. Die sechs echten Modellkontrollen wurden nach den Änderungen erneut über alle Schichten geprüft. Die statische Nachprüfung hat keinen offenen Fund mehr. Der vorzeitig gestartete dritte Gesamtlauf wurde wegen des letzten Reviewfunds vollständig beendet und bleibt ausdrücklich als unvollständig dokumentiert.
+## RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)
+
+<a id="rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026"></a>
+<a id="rm-480"></a>
+
+**RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` und `generic-220`.
+  `support_material_style = organic` (Baumstütze) lässt SuperSlicer mit `0xC0000005` abstürzen —
+  isoliert gemessen, `snug` und `grid` rechnen; 3 der 108 Abstürze der Codex-Matrix (übernommener
+  Baumstützen-Vorschlag). `seam_position = nearest` wird dort zu `cost`, Solidon meldet
+  `slicer.setting_ignored`. Ursache wie RM-459: SuperSlicer läuft als Familie `prusa` mit
+  PrusaSlicers Wertebestand.
+  **Stellen:** `app/core/export/slicer_keys.py:233` (`_PRUSA_SUPPORT_STYLE`), `:244`
+  (`seam_position`), `:294`, `:915`, `:965–987` (`NOT_TAKEN_BY` nur je Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm aus dem gemessenen Bestand der installierten
+  Version (`discover.program_mark`); Baumstütze für SuperSlicer nicht anbieten, ein übernommener
+  Vorschlag wird „Gitter“ mit Hinweis; `nearest` → `cost` ohne Warnung.
+  **Abnahme:** Wächter jede Aufzählungszeile der Prusa-Tabelle gegen den Bestand jedes
+  erkannten Programms; Pilz, Würfel und ein Korpusmodell mit Baumstütze an SuperSlicer →
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-4, CP-9), `gcode\rest\`.
+
+**Abschluss:** Ursache war die gemeinsame Prusa-Wertetabelle für Programme mit unterschiedlichem Wertebestand. `PROGRAM_VALUES` übersetzt je Programm, `NOT_OFFERED_BY_PROGRAM` beschreibt einen Ersatz samt Grund. SuperSlicer erhält `cost` für die nächstgelegene Naht und Gitterstützen mit Kreuzmuster statt unbekanntem `organic`; Dialog, Rat, Platte und Objekt verwenden dieselbe Zuordnung. Eine gespeicherte Baumwahl bleibt gespeichert, der Export- und Slicerbericht nennt den Ersatz. Der Rat beschreibt jetzt tatsächlich Gitter. Die gemeinsame Bauart enthält bereits die Schreibweise für RM-461; dessen reale Füllmuster-Abnahme wird dort abgeschlossen.
+
+Gegenprobe am Ausgangsstand `6b87ba235`: beide neuen Exportfälle (eigene und übernommene Baumwahl) rot, weil `organic` in der Projektdatei stand. Echte Vorherläufe bestätigten `organic` → `grid` und `nearest` → `cost`; den historischen Absturz konnte der Stand nach RM-459 nicht mehr nachstellen. Mit Fix bestehen beide Exportfälle und alle sieben Programmwächter samt Ratprüfung (acht Fälle). Der Wächter prüft jede geschriebene Aufzählungszeile einschließlich umbenannter Schlüssel gegen `tests/data/slicer_values.json`: Prusa/SuperSlicer aus `--help-fff`, Cura aus Definitionen, vier Orca-Programme aus 44 echten Rundreisen. Zahlen an einem bekannten Aufzählungsschlüssel werden ebenfalls geprüft.
+
+Echte Abnahme mit SuperSlicer 2.5.59.13: Pilz, Würfel und `Wedge-Lock (Set).stl`, je MINI und `generic-220`, sechs von sechs Druckdateien. Alle sechs Konfigurationsblöcke enthalten `support_material_style=grid`, `support_material_pattern=rectilinear-grid` und `seam_position=cost`, ohne falschen Nahtbefund. MINI: 4648/2275/3854 s und 13,22/3,75/8,65 g; allgemeiner Drucker Pilz/Keil: 2921/2575 s und 12,36/8,56 g. Die zwei fehlenden Lüfterschlüssel des allgemeinen Druckers gehören zu RM-462. Belege: `F:\solidon-review-reports\gcode\codexB\rm480-nachher`, Vorher unter `gcode\agentB\rm480-vorher*`. Der neue Fensterfall für deaktivierte Baumwahl, Tastaturweg und Programmwechsel bleibt dem Release vorbehalten.
+
+Betroffene Nachprüfung über tools/affected_tests.py: 1152 bestanden, 4 übersprungen, 346 Fenster-/Renderer-/Leistungsfälle abgewählt, Exit 0. Der vorherige breite Lauf hatte 19491 bestandene, 81 übersprungene und 3708 abgewählte Fälle sowie einen Fehler im Beschriftungswächter durch zwischenzeitliche Cura-Änderungen; die Benennung wurde korrigiert und der Wächter in der grünen Nachprüfung erneut ausgeführt. Ruff war grün, mypy meldete 337 geprüfte Dateien ohne Fehler. Das gemeinsame erste Entwicklungstor auf dem zusammengeführten Stand `bd373b5a5` bestand mit 20483 Fällen, 61 übersprungenen und Exit 0; Ruff, Format und mypy ebenfalls Exit 0. Der spätere Claude-Historienmerge `4d590bd6e` ließ den geprüften Dateibaum unverändert und wurde auf main veröffentlicht.
+
+Kundensichtbare Korrektur eines veröffentlichten Fehlers: Der betreffende Tabellenstand `f934a42219` ist in `v0.5.1` enthalten (`git tag --contains`); ein Punkt steht an gleicher Stelle in allen sechs Changelogs für 0.5.2. Commit: `1fbdb5de8` (SuperSlicer erhält passende Stütz- und Nahtwerte).
+
+## RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)
+
+<a id="rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026"></a>
+<a id="rm-481"></a>
+
+**RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, SuperSlicer 2.5.59.13, alle
+  Bündeldrucker (`prusa-mk4s`, `prusa-mini`, `prusa-xl`, `sovol-sv06`). Solidon schreibt
+  `filament_type = TPU`, die Bündel führen Flex als `FLEX`: `filament_settings_id` bleibt leer,
+  kein Befund. Folge im G-Code des MK4S: Vermessen bei 170 statt 210 °C, Einzug `E-2` statt
+  `E-4`, kein Startcode des Herstellerfilaments. Keine Regression.
+  **Stellen:** `app/core/export/slicer_keys.py:841–846` (`FILAMENT_TYPES`),
+  `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
+  `app/ui/print_settings_dialog.py:5605–5625`, `app/core/export/handover.py:2357–2382`.
+  **Fix (allgemein):** Materialart je Familie an einer Stelle in Lese- und Schreibrichtung
+  übersetzen; fehlt ein Herstellerfilament, Befund mit Herkunft „Solidon-Tabelle statt
+  Slicerprofil“ (Regel 14).
+  **Abnahme:** je erkanntem Drucker und Material (PLA, PETG, ABS, ASA, TPU) eine nicht leere
+  Vorwahl, an mindestens drei Bündeldruckern gemessen. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-6), `gcode\rest\`.
+
+**Abschluss:** Ursache war der gemeinsame Schreibwert `TPU`, während PrusaSlicer und SuperSlicer Flexmaterial als `FLEX` führen. Die zentrale Übersetzung in `slicer_keys` wird beim Lesen, Vorwählen und Schreiben verwendet; PET und PETG bleiben getrennt. Orca-Filamentslots übernehmen ebenfalls die normalisierte Materialart. Ohne gewähltes Herstellerfilament nennt `slicer.filament_from_table` Solidons Materialtabelle als Quelle und bietet den Druckdialog an. Dialogvorwahl und Kern verwenden dieselbe Normalisierung.
+
+Gegenprobe: sechs neue Materialfälle waren vor dem Fix rot, sechs bereits korrekt; die zusätzliche FLEX-Slot-Prüfung war ebenfalls rot. Ohne Übersetzung schneidet der MK4S den echten TPU-Würfel mit leerer Filamentkennung, 170 °C beim Vermessen, Einzug E-2 und ohne Hersteller-Filamentstart. Mit Fix: `FLEX`, `Generic FLEX @MK4S`, 210 °C, E-4, M900 K0 und M142 S36.
+
+Abnahme mit installierten Bündeln: 25 von 25 Vorwahlen für PLA, PETG, ABS, ASA und TPU sind nicht leer (Prusa MK4S, MINI, XL, SV06 sowie SuperSlicer MINI); auch die geschriebenen Werte nennen das Profil. Fünf echte TPU-Würfelschnitte ohne ignorierte Einstellungen: MK4S 1218 s/4,01 g, MINI 2387 s/4,35 g, XL 2572 s/4,27 g, SV06 2901 s/4,82 g, SuperSlicer MINI 2526 s/4,21 g. Belege: `F:\solidon-review-reports\gcode\agentB\rm481-codex-materials.json`, `rm481-codex-gcode.json` und die Projekt-/Druckdateien unter `rm481-codex\arbeit`.
+
+Betroffene Prüfung über `tools/affected_tests.py tests/test_profiles.py tests/test_slicer_profiles.py tests/test_manufacturer.py --run`: 304 bestanden, Exit 0; der Stand umfasst bereits die zusätzlichen Kammerfälle. Die vorherige reine Materialprüfung hatte 285 bestandene Fälle. Übersetzungen: 216 bestanden, ein Releasefall abgewählt. Keine Fenster-, Renderer- oder Leistungsprüfungen ausgeführt. Das gemeinsame erste Entwicklungstor auf `bd373b5a5` bestand mit 20483 Fällen, 61 übersprungenen und Exit 0; Ruff, Format und mypy ebenfalls Exit 0. Der inhaltsgleiche Historienmerge `4d590bd6e` wurde auf main veröffentlicht.
+
+Kundensichtbarer Fehler in v0.5.1: `git tag --contains` bestätigt die Ursachenstände `9c59e3a5e` und `f934a42219`. Je ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `468f5de2f` (TPU übernimmt das passende Filamentprofil samt Startwerten), aufbauend auf `1fbdb5de8`.
+
+## RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)
+
+<a id="rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026"></a>
+<a id="rm-460"></a>
+
+**RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek.
+  - Bambu Studio 02.08.02.61 (alle 12 Profile): `chamber_temperature` fehlt im Konfigurationsblock;
+    Bambu führt `chamber_temperatures` (bleibt 0).
+  - ElegooSlicer 1.5.3.5 (alle mit Elegoo-/Bambu-Filamentprofil): `0` — die Filamentbasis bringt den
+    Altschlüssel `chamber_temperatures: ["0"]` mit und überschreibt Solidons Wert.
+  - OrcaSlicer 2.4.2, Creality Print 7.3: Wert steht im Block, aber `activate_chamber_temp_control
+    = 0` → kein `M141`/`M191` im G-Code. In keinem Lauf ein Kammerbefehl.
+  **Stellen:** `app/core/export/slicer_keys.py:411`, Rücklesung `slicer_profiles.py:3593`, `:3780`,
+  `manufacturer.py:924`.
+  **Fix (allgemein):** Wert an den Schlüssel, den dieses Programm liest, mit dem Schalter, ohne den er
+  nicht wirkt (wie `_positive_switch`); Altschlüssel der Basis mitsetzen oder entfernen; ohne
+  Kammerregelung (`support_chamber_temp_control = 0`) das Feld im Druckdialog als nicht wirksam
+  ausweisen.
+  **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
+  Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
+  Regression 02.10.2026: nein — v0.5.1 und v0.5.0 gleich (CC2 35 → `0`, P1S Schlüssel fehlt, kein `M141`/`M191`).
+
+**Abschluss:** Ursache waren unterschiedliche Schlüsselnamen und fehlende Aktivierungsschalter in der Orca-Familie. `native_key` übersetzt den Namen auch bei Gruppierung und Rücklesung. `normalise_chamber` löst geerbte Altnamen auf, bevor eigene Werte gesetzt werden; vollständige Spulenlisten bleiben erhalten. Die Grundlage liest `support_chamber_temp_control` als belegt vorhanden, belegt fehlend oder unbekannt. Ein positiver gewählter Wert aktiviert bei belegter Heizung den Filamentschalter; eine bewusste Null schaltet ihn ab. Bambu erhält seinen Plural ohne fremden Aktivierungsschlüssel. Dialog und Befund erklären dieselbe Hardwaregrenze, wirkungslose Vorschläge werden ausgefiltert. Gespeicherte Werte bleiben erhalten.
+
+Gegenprobe: 18 neue Kernfälle vor der Umsetzung rot; echte Vorherläufe aller vier Programme bestätigen den verlorenen Wert oder fehlenden Schalter. Nachher jeweils 35 °C am echten Würfel: Orca 2.4.2/P1S, Elegoo 1.5.3.5/Centauri Carbon 2, Bambu 02.08.02.61/P1S und Creality 7.3.0.6149/K1. Orca, Elegoo und Creality schreiben Singular 35, Bambu Plural 35. Alle vier Maschinen führen Hardwarefreigabe 0 und erzeugen deshalb den zutreffenden Hardwarehinweis bei Export und Slicen. Keine falsche Meldung über ignorierte Einstellungen. Zeiten/Massen: Orca 916 s/3,88 g, Elegoo 637 s/4,01 g, Bambu 886 s/3,71 g, Creality 875,566 s/3,46 g; die letzten beiden enthalten zugleich das Linienmuster für RM-461.
+
+Zusätzliche aktive Heizung: Qidi X-Max 3 in Orca hat Freigabe 1, der Aktivierungsschalter wechselt bei 35 °C von 0 auf 1 und der G-Code enthält `M141 S35` (1205 s/3,64 g). Bambu X1E übernimmt Plural 35; sein unveränderter Herstellerstart heizt erst ab 40 °C. Die ergänzende Probe bei 45 °C enthält `M141 S45` und `M191 S45`, Freigabe 1, 1678 s/4,13 g. Zwei Spulen behalten getrennte 35/50 °C. Originaldateien und Berichte: `F:\solidon-review-reports\gcode\agentB\rm460-codex-*.json` und deren Arbeitsordner; zusammengefasst in `rm460-report.md`.
+
+Prüfungen vor dem Anschlussreview: 1428 bestanden, 7 übersprungen, 63 abgewählt; abschließend 22 Kammerfälle grün. Der Anschlussreview ergänzte Gegenproben für Vorschläge ohne Heizung und eine unveränderte Wertebasis beim Wechsel der Grundlage: vier zunächst rot, danach fünf grün. Abschließender betroffener Lauf über `tools/affected_tests.py --run`: 153 bestanden, 3 übersprungen, 282 Fensterfälle abgewählt, Exit 0. Ruff, Format und mypy der geänderten Module grün. Drei neue Fensterfälle bleiben dem Release vorbehalten.
+
+Kundensichtbarer Fehler aus `f934a42219`, laut `git tag --contains` in v0.5.0 und v0.5.1. Je ein Punkt an derselben Stelle aller sechs Changelogs. Commit: `19ac6c8a9` (Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit).
+
+Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
+
+## RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)
+
+<a id="rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026"></a>
+<a id="rm-461"></a>
+
+**RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek. `sparse_infill_pattern`
+  `rectilinear` landet in Bambu Studio 02.08.02.61 als `cubic` (6 von 6 Läufen) und in Creality
+  Print 7.3 als `grid` (7 von 7); beide führen „Rectilinear“ unter `zig-zag`. Elegoo und Orca
+  richtig. Solidons Gegenprobe meldet `slicer.setting_ignored`, gedruckt wird trotzdem das falsche
+  Muster.
+  **Stellen:** `app/core/export/slicer_keys.py:335` (`"lines": "rectilinear"`), `:403` (eine Tabelle für
+  die ganze Orca-Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm übersetzen; jede Aufzählung einmal je Programm
+  gegen dessen Profilbestand prüfen.
+  **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
+  Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
+  Regression 02.10.2026: nein — Wert und Tabelle in v0.5.0, v0.5.1 und `09d8e9485` gleich (`slicer_keys.py:335`).
+
+**Abschluss:** Die gemeinsame Orca-Tabelle schrieb `rectilinear`, während Bambu Studio und Creality Print dieselbe Wahl unter `zig-zag` führen. Die allgemeine programmbezogene Übersetzung und der vollständige Aufzählungswächter wurden einmal in RM-480 gebaut (Commit `1fbdb5de8`); dieser Abschluss belegt den zweiten Fehler derselben Bauart.
+
+Echte Vorher-Rundreisen: Bambu ersetzte `rectilinear` durch `cubic`, Creality durch `grid`. Der Wächter prüft alle angebotenen booleschen und Literal-Wahlen über den echten Schreibweg für sieben Programme gegen den unabhängig gemessenen Bestand in `tests/data/slicer_values.json`. Kontrolllauf mit ausschließlich ausgeschalteter Bambu-/Creality-Wertübersetzung: zwei Fehler wegen `rectilinear`; unverändert zwei bestanden. Die sieben Programmfälle wurden bereits mit RM-480 grün geprüft. Belege: `B-rm461-countercheck.log`, `B-rm461-green.log` im Scratchpad sowie 44 ursprüngliche Orca-Rundreisen unter `F:\solidon-review-reports\gcode\agentB\werte`.
+
+Abnahme: echte Würfelschnitte in Bambu Studio 02.08.02.61/P1S und Creality Print 7.3.0.6149/K1 mit gewähltem Linienmuster. Beide Konfigurationsblöcke enthalten `sparse_infill_pattern=zig-zag`. Unabhängiges Lesen der G1-Bahnen zeigt je 92 Füllschichten und 644 lange Segmente; pro Schicht sieben parallele Linien, zwischen den Schichten wechselnd 135°/45°. Konkrete Zeilen und Bahnlängen stehen in `F:\solidon-review-reports\gcode\agentB\rm461-codex-lines.json`. Bambu 886 s/3,71 g, Creality 875,566 s/3,46 g. Keine falsche Füllmusterwarnung. Die ergänzende Kammerwahl ändert die Musterzuordnung nicht.
+
+Kundensichtbarer Tabellenfehler seit `f934a42219`, in v0.5.1 enthalten; je ein Punkt in allen sechs Changelogs für 0.5.2. Implementierung: `1fbdb5de8`; Abschlusscommit: `106ddb5b9` (Bambu und Creality drucken das gewählte Linienmuster).
+
+Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
+
+## RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)
+
+<a id="rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026"></a>
+<a id="rm-462"></a>
+
+**RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`. `handover.verify_settings` überspringt jeden
+  geschriebenen Schlüssel, der im Konfigurationsblock fehlt (`app/core/export/handover.py:5581`).
+  Orca-Familie und PrusaSlicer schreiben ihre Konfiguration aber vollständig (631 bzw. 358
+  Schlüssel) — was fehlt, hat das Programm verworfen: `chamber_temperature` in Bambu Studio
+  (RM-460) ohne Meldung; in SuperSlicer `fan_always_on`/`min_fan_speed`. `_RECOMPUTED`
+  (`:5533–5547`) nimmt `brim_type`, `wall_sequence`, `support_type` ganz aus der Gegenprobe — genau
+  die Aufzählungen, bei denen ein unbekannter Wert still auf die Vorgabe fällt (RM-461).
+  **Fix:** Für `orca` und `prusa` einen fehlenden geschriebenen Schlüssel als „vom Slicer nicht
+  übernommen“ melden (Ausnahmeliste je Programm für belegte Umbenennungen); die drei Aufzählungen
+  wieder vergleichen.
+  **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
+  Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
+  Regression 02.10.2026: nein — Code in v0.5.0, v0.5.1 und `09d8e9485` gleich.
+
+**Abschluss:** `verify_settings` übersprang jeden fehlenden Schlüssel; `_RECOMPUTED` nahm außerdem Randart, Wandfolge und Stützart aus. Der Aufrufer übergibt nun Familie und Programm. Bei Prusa und Orca erzeugt ein fehlender geschriebener Druckwert `slicer.setting_ignored`, Herkunft `gcode`, Darstellung `Soll → —`; die drei Aufzählungen werden wieder verglichen. Andere Familien und Aufrufe ohne Vollständigkeitsvertrag vergleichen vorhandene Werte.
+
+Eng belegte Ausnahmen: SuperSlicer übersetzt `min_fan_speed` zu `default_fan_speed`, wobei `fan_always_on=0` den jeweiligen Platz auf null setzt. Der native Wert bleibt geprüft. Quelle: SuperSlicer 2.5.59.13, `src/libslic3r/PrintConfig.cpp`, Alias bei 1132 und `handle_legacy` bei 7099–7107 (https://github.com/supermerill/SuperSlicer/blob/2.5.59.13/src/libslic3r/PrintConfig.cpp). Vier bekannte Orca-Materialoverrides dürfen ausschließlich als vollständige `nil`-Listen fehlen; numerische oder gemischte Listen bleiben geprüft. Nur Orca, Elegoo und Creality dürfen den Bambu-spezifischen Schalter `override_filament_scarf_seam_setting` weglassen. Keine pauschale Metadatenausnahme ergänzt.
+
+Gegenprobe: 21 neue Fälle ohne Fix rot, danach 21 grün, darunter fehlende Schlüssel, Umbenennung, alle drei Aufzählungen, Mehrspulen und der wirkliche `slice_model`-Anschluss mit gestelltem Slicer. Zwei ältere Anschlussprüfungen geben nun vollständige Blöcke zurück; ihr unabhängig vorgegebener Temperatur-/Turmwert bleibt bestehen. Zusammen 655 bestanden, 4 übersprungen, 6 Releasefälle abgewählt. Abschließender betroffener Lauf über `tools/affected_tests.py --run`: 562 bestanden, 7 übersprungen, 6 abgewählt, Exit 0. Ruff, Format und mypy grün; unabhängiger Schlussreview ohne belegte P1/P2.
+
+Echte Abnahme: Der unveränderte ursprüngliche Bambu-P1S-Würfel-A-Lauf hatte 78 geschriebene Werte und 566 zurückgelesene Schlüssel. Tatsächlich geschriebenes `chamber_temperature=35` fehlt im G-Code: vorher null Befunde, jetzt genau einer. Drei absichtlich andere Aufzählungssollwerte gegen echte Bambu-Werte erzeugen vorher null, nachher drei Befunde. SuperSlicer-Soll 60 gegen native 50 erzeugt vorher null, nachher einen Befund; richtige 50 bleiben still.
+
+Fünf von fünf neue Schnitte mit SuperSlicer 2.5.59.13/generic-220 und Bambu Studio 02.08.02.61/A1 erfolgreich und ohne falsche Übergabewarnung. SuperSlicer bestätigt bei drei Würfeln nativ 50, 60 und 0 Prozent (je 64 geschriebene/489 gelesene Werte); Bambu bestätigt Vorgabe und 60 Prozent (je 28/562, vier berechtigt fehlende nil-Overrides). Ein Bambu-Prozess wurde nach fertiger Druckdatei durch den vorhandenen Ergebniswächter beendet. Neue echte Läufe einspulig; Mehrspulen durch Regressionen und Codepfad geprüft. Belege: `F:\solidon-review-reports\B-rm462\final-evidence.json`, `probe-before.json`, `probe-after.json`, `bericht.md`; Druckdateien unter `F:\solidon-review-reports\gcode\codexB\rm462-nachher`.
+
+Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffentlichungen; kundensichtbar, deshalb ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `d6b13016f` (Verworfene Druckwerte werden nach dem Schneiden gemeldet). Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
+
+## RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)
+
+<a id="rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026"></a>
+<a id="rm-482"></a>
+
+**RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0, `sovol-sv06` und `generic-220`.
+  `printers.toml` führt dort keine Beschleunigung, also gilt die Stufe (8000/5000 mm/s²); der
+  G-Code trägt 99 × `M204 S8000` hinter Curas eigenem `M201 X500 Y500`. Die Firmware deckelt auf
+  500, Curas Zeit und Solidons `gcode.print_time` rechnen mit 8000. Die Grenzen der Definition
+  (`machine_max_acceleration_*` als `value`) erreichen CuraEngine nicht. Trifft jeden Drucker
+  ohne Beschleunigung in `printers.toml`.
+  **Stellen:** `app/core/knowledge/data/printers.toml:492–511`,
+  `app/core/knowledge/data/print_settings.toml:65–66`, `app/core/export/slicer_keys.py`
+  (`CURA`, `CURA_MIRRORED`), `app/core/export/handover.py` (`_cura_machine`).
+  **Fix (allgemein):** Maschinenwerte aus dem Herstellerprofil in `printers.toml` (SV06: 1000
+  Druck, 500 Leerfahrt); ohne Maschinenwert keine Stufenbeschleunigung an Cura; Grenzen der
+  Definitionskette als Zahl an CuraEngine.
+  **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
+  Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
+
+  **Stand 03.10.2026:** Der allgemeine Beschleunigungsfehler ist behoben:
+  Ohne belegten Maschinenwert oder bewusste Auswahl aktiviert Solidon keine
+  Stufenbeschleunigung. Numerische Werte der vollständigen Cura-Definitionskette,
+  einschließlich endlicher Zahlenliterale als Text, erreichen Konsole und Fenster.
+  Platten-, Objekt- und Endcodebeschleunigungen werden an den Achsgrenzen begrenzt.
+  Eigene oder übernommene Werte oberhalb dieser Grenze erzeugen einen Befund mit
+  angefordertem und tatsächlichem Wert samt Rückweg in den Druckdialog; die
+  Gegenprobe behält den tatsächlich geschriebenen Wert. Ein unvollständiger
+  Benutzerstapel fällt nicht auf Werkswerte zurück.
+  SV06 erhält Druck/Außenwand 1000 mm/s² aus dem belegten Herstellerprozess;
+  Curas Achsgrenze 500 bleibt wirksam. `printers.toml` gehört nicht zu den
+  gemeinsamen Geometrieeingängen des Bereichsnachweises; kein Bauteilmaß geändert.
+  **Messung:** 48 erfolgreiche echte Schnitte, drei Drucker × Würfel/Pilz ×
+  Cura 5.13.0/Prusa 2.9.6 × vier Stände. Vorher bei allen Cura-Fällen M204 S8000;
+  nachher SV06 S/P/T höchstens 500, generic-220 und erkannter Ender-3 ohne
+  von Solidon aktivierte M204-Steuerung. Zusätzliche echte eigene 2000/1500-Wahl:
+  zwei passende Begrenzungsbefunde auf 500, G-Code ebenfalls höchstens 500.
+  Standardweg Cura/Prusa, Würfel/Pilz in Sekunden: SV06 1547,11/1744 und
+  2828,85/2052 (11,29/37,86 %); generic-220 1073,52/1080 und 2230,90/2253
+  (0,60/0,98 %); Ender-3 1341,62/2336 und 2487,74/2763 (42,57/9,96 %).
+  Zweiter Ansatz mit denselben ausdrücklich gewählten Prozesswerten:
+  SV06 11,38/21,62 %, generic-220 0,60/0,98 %, Ender-3 5,19/1,50 %.
+  **Abnahme bleibt offen:** Beide Ansätze verfehlen am SV06-Pilz die verbindlichen
+  15 %. Die Herstellerdaten widersprechen sich (Cura X/Y 500, Prusa 1000).
+  Nächster Schritt: gültige Herstellergrenzen klären und den verbleibenden
+  Zeitanteil aus Geschwindigkeit, Kühlung, Beschleunigung und Bahnführung messen.
+  Keine Kalibrierzahl verdeckt die Abweichung.
+  **Prüfungen:** zuerst vier rote Kernfälle, danach 62 grün; Anschlussreview
+  zusätzlich sechs rote Berichts- und vier rote Zahlen-/Fensterdateifälle.
+  Abschließend 435 Kernfälle und 682 Wächter grün, Ruff/Format/mypy grün.
+  Betroffener Lauf mit `tools/affected_tests.py --run`: 1401 bestanden,
+  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Gemeinsames Entwicklungstor
+  auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0; Ruff, Format
+  und mypy ebenfalls grün. Fenster, Renderer und Leistung ausgeschlossen.
+  Belege: `F:\solidon-review-reports\B-rm482\bericht.md`, `after-final`,
+  `after-matched`, `review-choice-2`, `native-numeric-text.json`.
+  Kundensichtbar und seit `f934a42219` in v0.5.1: Changelog in sechs Sprachen
+  beschreibt ausschließlich die korrigierte Begrenzung. Commit: `c0e7eab7d`
+  (Cura berücksichtigt die belegten Beschleunigungsgrenzen des Druckers).
+
+**Abschluss:** Der Beschleunigungsfehler war mit `c0e7eab7d` behoben;
+der anschließende Zeitvergleich zeigte einen zweiten Übergabefehler:
+`speed.top_surface` wurde in Cura auf sämtliche geschlossenen Füllschichten
+angewendet. Am SV06-Pilz fuhren dadurch 19,98 m innere Haut mit 30 statt
+60 mm/s. Die allgemeine Zuordnung schreibt nun das Fülltempo nach
+`speed_topbottom` und das Oberflächentempo nach `speed_roofing`. Bei vorhandenen
+oberen Schichten aktiviert sie genau eine äußere Dachschicht, sonst keine.
+Die Spiegelung überschreibt das Oberflächentempo nicht mehr. Bügeln bleibt
+an dessen Tempo gebunden, in Konsole und importierbarem `.curaprofile`.
+Keine Modellverzweigung, Kalibrierzahl oder erhöhte Hardwaregrenze.
+
+**Nachgestellter Fehler und Gegenprobe:** Frischer Lauf auf `cafd47ccc`,
+CuraEngine 5.13.0 gegen PrusaSlicer 2.9.6, SV06/Pilz mit gleichen gewählten
+Prozesswerten: 2828,846424 gegen 2326 s, 21,62 % Unterschied. Elf neue
+Kernfälle waren vor dem Rollenfix rot. Das Anschlussreview fand zusätzlich
+die im Fenster vom Fülltempo abgeleitete Bügelgeschwindigkeit; zwei zuerst
+rote Profilfälle verlangen dort bei Füllung 73 und Oberfläche 30 genau
+20 statt 48,67 mm/s. Abschließend alle 13 grün. Sie lesen beide Engine-Ebenen
+und die echte Profil-ZIP-Struktur, einschließlich 0/1/4 Deckschichten und
+einzeln gewählter Felder.
+
+**Verbindliche Abnahme:** Zwölf erfolgreiche echte Schnitte über
+`write_assembly` und `slice_model`, drei Drucker × Würfel/Pilz × beide Slicer.
+Gleiche ausdrücklich gewählte Solidon-Prozesswerte, native Maschinen- und
+Beschleunigungswerte unverändert; Prozent = abs(Cura − Prusa) / Prusa.
+Der dritte Drucker ist die tatsächlich erkannte Cura-Definition
+`creality_ender3`, an Prusas `Creality Ender-3 (0.4 mm nozzle)` gebunden;
+sein Solidon-Profil enthält keine Beschleunigung. Modelle:
+`tests/data/meshes/cube_clean.stl` und `F:\3D Dateien\mushroom.stl`.
+
+| Drucker | Würfel Cura / Prusa | Abweichung | Pilz Cura / Prusa | Abweichung |
+|---|---|---|---|---|
+| Sovol SV06 | 1483,76 / 1389 s | 6,82 % | 2584,78 / 2326 s | 11,13 % |
+| generic-220 | 1011,91 / 1080 s | 6,30 % | 2024,88 / 2253 s | 10,13 % |
+| Erkannter Ender-3 | 1300,69 / 1415 s | 8,08 % | 2321,21 / 2451 s | 5,30 % |
+
+Alle sechs Paarungen liegen unter 15 %. Die unabhängige G-Code-Prüfung
+erfüllt 162 von 162 Bedingungen (Exit 0), einschließlich Modellhash,
+Wandabmessungen, Endhöhe und Materialbilanz. Alle fördernden Hautbahnen der
+vorletzten und letzten Schicht fahren beim SV06 60/30, sonst 80/40 mm/s.
+Cura-Zeit aus dem letzten
+`TIME_ELAPSED`, Prusa-Zeit aus dessen G-Code-Angabe, jeweils vollständig
+125 Pilz- und 100 Würfelschichten. SV06-M204 S/P/T höchstens 500 mm/s²,
+passend zu M201 X500/Y500; R ist der getrennte Rückzugswert. generic-220
+und erkannter Ender-3 erhalten weiterhin keine von Solidon aktivierte
+M204-Steuerung. Die frühere eigene 2000/1500-Wahl bleibt auf 500 begrenzt,
+mit zwei Befunden. Der Anschlusslauf nach der Verlagerung des Bügeltempos
+bestätigt am SV06-Pilz 2584,775568 s und unverändert höchstens 500 mm/s².
+
+Die frühere Standardpaarung war kein Vergleich desselben Prozesses:
+Ender-3 etwa 40/60/80 gegen 25/40/50 mm/s sowie 8 gegen 20 s
+Mindestschichtzeit. Diese Herstellerunterschiede werden nicht überschrieben.
+Auch Prusas SV06-Achsgrenze 1000 ist nur `time_estimate_only`; der Prusa-Code
+setzt kein M201. Die [offizielle SV06-Firmware](https://github.com/Sovol3d/Sv06-Source-Code/blob/366699b1f9c5742f8029081c47e6d9089ed8d531/Marlin/Configuration.h)
+belegt X/Y 500. Die fehlende native Jerk-Steuerung ist gesondert offen unter
+RM-503; diese Abnahme verspricht keine vollständige Synchronisierung aller
+Bewegungswerte oder eine gemessene Laufzeit auf physischer Hardware.
+
+**Entwicklungstor:** 20560 bestanden, 61 übersprungen, Exit 0
+(`suite-getrennt.sh`, 356,82 s); Ruff und Format (1080 Dateien) sowie mypy
+(337 Quelldateien) jeweils Exit 0. Betroffene 13 Fälle auch über
+`tools/affected_tests.py --run` grün. Der erste Torlauf fand einen verbotenen
+privaten Querimport zwischen Testdateien; die Profilfälle stehen nun bei
+den vorhandenen Exporthelfern, danach vollständiger Neulauf grün.
+Der anfangs serielle betroffene Lauf über fast die ganze Suite wurde durch
+dieses Tor ersetzt und zählt nicht als bestanden. Fenster, Renderer,
+Erzeugnisvergleiche und Leistung bleiben beim Release.
+
+**Gemeinsamer Stand:** Mit `2602e8c90` (RM-485/RM-486) zusammengeführt,
+native Schichtberechnung neu gebaut: 20671 bestanden, 35 übersprungen,
+375,39 s, Exit 0. Ruff, Format (1080 Dateien) und mypy (337 Quelldateien)
+jeweils Exit 0. Auf diesem Stand erneut zwölf echte Schnitte und unabhängig
+162/162 G-Code-Bedingungen erfüllt; alle sechs Zeitabweichungen unverändert
+unter 15 %. Belege: `continuation-integrated-suite.log`,
+`continuation-integrated-matched`, `fortsetzung-integration-abnahme.md/.json`.
+
+**Changelog:** Ja, der Zuordnungsfehler stammt aus `f934a42219`, enthalten
+auch in `v0.5.1` (`git tag --contains`). Der bestehende RM-482-Punkt unter
+0.5.2 ist in allen sechs Sprachen um die getrennten Tempi ergänzt, jeweils
+unter 200 Zeichen. **Commits:** `c0e7eab7d` (Beschleunigungsgrenzen),
+`d534706eb` (Vollschichten, sichtbare Oberseite und Profilimport).
+Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
+`continuation-before-matched`, `continuation-final-matched`,
+`continuation-reviewed-matched`, `fortsetzung-bahnen-bericht.md`,
+`fortsetzung-prozess-bericht.md`, `fortsetzung-hersteller.md` und
+`fortsetzung-abnahme.md`; Abschlussbericht außerdem im beauftragten
+`scratchpad/bericht-B.md`.
+
+## RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)
+
+<a id="rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026"></a>
+<a id="rm-486"></a>
+
+**RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_support_volume`/`_above_material`
+  vereinigen und ziehen die schwebende Säulenkontur Schicht für Schicht mit GEOS ab; über
+  Hohlräumen wächst sie auf Hunderttausende Punkte. Gemessen (F0FF, je zweimal):
+  `aushoehlen-und-teilen.p3d` 37,4–43,3 s mit GEOS, 0,062–0,068 s mit Clipper2, Stützraum
+  gleich auf 1,5e-12; CC2-Box und Screen-Cover gleich bis 2,4e-10, dort 0,01–0,17 s langsamer.
+  RM-405 b maß mit Vereinfachung 0,46 s und braucht dafür eine Toleranz; Clipper2 braucht
+  keine. Für RM-201: Clipper2 reist schon in manifold3d mit (BSL-1.0 in `licences.toml`), für
+  die Öffnung mit Gehrung ist es aber 2–7-mal langsamer als GEOS — dort bleibt die eigene
+  native Öffnung der Weg.
+  **Stellen:** `app/core/slice/analysis.py:481–645`, gleiche Bauart `:2991`,
+  `app/core/slice/findings.py:257`.
+  **Fix (allgemein):** Säulenkontur als `CrossSection` (Überhang `+`, Schicht darunter `-`,
+  Fläche über `area()`), Umwandlung einmal je Schicht, gerichtete Ringe aus RM-485
+  wiederverwenden; GEOS bleibt für die Öffnung.
+  **Abnahme:** `aushoehlen-und-teilen.p3d`, CC2-Box, Screen-Cover: Stützraum gleich auf 1e-9
+  relativ, Aushöhlbeispiel unter 0,5 s für `slice_body(detail="support")`, die einfachen
+  Modelle höchstens 0,2 s schlechter; neuer Weg in `test_platform_identity`. Bauplan §31.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
+
+**Abschluss:** Die GEOS-Säulenrechnung stammt aus 5c90fac6a und ist unter anderem in v0.5.0 und v0.5.1 enthalten. Sie führt jetzt die schwebende Kontur als CrossSection mit positiver Umlaufzahl: Überhang vereinigen, Material darunter abziehen, Fläche über area(). Bereits gerichtete Materialringe werden ohne Vereinfachung einmal je Schicht übernommen. model_support hält eine Säule je Herkunftsstück; Befunde teilen die umgewandelten Materialkonturen. Die GEOS-Öffnung bleibt unverändert. Cache-Version 38 verhindert alte Stützkennzahlen in gespeicherten Ausrichtungen. Vier analytische Sollfälle bestanden vor und nach der Umstellung: volle Säule 350 mm³, andere erste Höhe 290 mm³, Teilauflage 250 mm³, Loch 262,5 mm³. Abbruch und geteilte Konturen sind zusätzlich abgesichert. Der neue Weg steht in test_platform_identity: Stützvolumen, einzelne Säule und Standorturteil unter gezieltem Zahlenrauschen sowie mit einem anderen OpenBLAS-Kern (Nehalem). Vollständiger betroffener Lauf einschließlich dieser Datei, Slice-Fällen und Unterlagenwächtern: 886 bestanden, 3 übersprungen, 13 Releasefälle abgewählt in 115,64 s, Exit 0; Ruff, Format und gezielte Typprüfung grün. Reale Stützvolumina vor/nach RM-486: Aushöhlbeispiel maximal 1,665e-10, CC2-Box 6,02e-10, Screen-Cover 7,37e-11 relative Abweichung; alle unter 1e-9. Standort- und Kanalurteile bleiben erhalten. Gemessen auf i9-13900K, Affinität F0FF, OPENBLAS_NUM_THREADS=1, Alt/Neu abwechselnd und fremde Python-Prozesse protokolliert: vollständiges slice_body(detail="support") am Aushöhlbeispiel mit frischem Netz 0,328–0,354 s statt 0,438–0,466 s, wiederholt 0,316–0,360 s statt 0,429–0,477 s. In sechs zusätzlichen frischen Python-Prozessen, jeweils erste Analyse nach regulärem Projektladen, neu 0,29645/0,29768/0,29989 s, alt 0,39386/0,38721/0,39503 s. Das Projektladen kann native Kerne bereits benutzen; dies ist kein Nachweis eines völlig kalten nativen Kerns. CC2-Box neu 0,186–0,243 s statt 0,126–0,138 s, Screen-Cover neu 0,039–0,057 s statt 0,033–0,050 s; beide bleiben unter 0,2 s Mehrzeit. Die frühere 40-s-Messung gehört zum Stand vor RM-485; sie wird nicht als unmittelbare Vorhermessung dieser Umstellung ausgegeben. Gemeinsames Entwicklungstor: 20659 passed, 34 skipped in 611.69s (0:10:11); Ruff, Format, mypy und Suite jeweils Exit 0. Der aktuelle gemeinsame Slicerstand cafd47ccc ist per Merge enthalten. Sechs Kundenpunkte für 0.5.2. Messungen, Lastprotokolle, analytische Vorher-/Nachherläufe und Plattformnachweis: F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003\rm486-patch; Entwicklungstor unter rm486-gate-1.
+
 ## RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)
 
 <a id="rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026"></a>
@@ -38216,3 +38590,52 @@ Die Handlungen benutzen die Objekt-IDs aus demselben eingefrorenen Plattenauftra
 Die reale Abnahme wurde nach diesen Korrekturen unter `codex_A_479_final_review` wiederholt: dieselben drei Originalmodelle, passende Handlungsschlüssel, **null Slicerstarts**, unveränderte Quellprüfsummen. Der erste breite Lauf wurde wegen der konkreten Reviewfunde beendet (Exit −1) und gilt nicht als bestanden; sein Protokoll bleibt unter `%TEMP%/solidon-A-479-affected.txt` erhalten.
 
 Der korrigierte breite Lauf über `affected_tests.py --run` endete mit 20.417 bestandenen Prüfungen, 88 übersprungen und vier Fehlern (Exit 1, 687,62 s). Ein eigener Anschlussfehler war die fehlende Beschriftung von `part_index`; sie ist ergänzt, der Schlüssel bleibt in der Fehlermeldung verborgen. Drei Prüfungen von Unterprozess-Zusammenfassungen erbten die hier gesetzte Parallelisierung über `PYTEST_ADDOPTS`; die erwarteten Abwahlzahlen fehlen in der xdist-Ausgabe. Ohne diese Umgebungsoption bestehen alle sechs gezielt ausgewählten Beschriftungs- und Unterprozessprüfungen über `affected_tests.py --run` (18,18 s, Exit 0). Die Tests selbst wurden dafür nicht verändert. Belege: `%TEMP%/solidon-A-479-affected-final.txt` und `solidon-A-479-affected-repair.txt`. Ruff, Format und mypy (337 Quelldateien) sind grün; nach den Abschlussnachweisen bestehen die Dokumentations- und Changelogprüfungen mit 59 bestanden, 4 übersprungen. Das gemeinsame Entwicklungstor nach dem Merge bleibt der Nachweis vor dem Push.
+
+Commitnachweis zu RM-479: `c87ab91d3`.
+
+Die anschließende Folgenprüfung ergänzt drei Absicherungen: Zwei zuerst rote
+Fälle unterdrücken eine verspätete Bauraummeldung nach Abbruch im Arbeiter und
+vor der Anzeige. Drei weitere zuerst rote Fälle prüfen den Abbruch unmittelbar
+vor und nach der Packprobe, auch wenn sie Erfolg meldet. Die ursprüngliche
+Verkleinerung über Nennmaße ließ einen 231-mm-Körper auf einem runden
+220-mm-Bett weiterhin überstehen; bei 150 mm nutzbarer statt 220 mm nomineller
+Höhe vergrößerte sie einen 180-mm-Körper sogar auf 217,8 mm. Die Handlung
+„Verkleinern …“ öffnet deshalb hier den vorhandenen Skalierdialog am ganzen
+gebundenen Körper. Eine vorher gewählte Teilfläche darf nicht unbemerkt zur
+Merkmalbearbeitung führen. Sieben zuerst rote Fälle und drei Gegenkontrollen
+prüfen die Auswahl, den wirklichen Dialogeinstieg sowie gelöschte, veraltete
+und beschäftigte Zustände. Danach bestehen 74 fensterfreie Druckdialogfälle;
+Fenster wurden nicht erzeugt. „Anordnen“ wirkt auf alle Projektteile, was die
+Meldung nun ausdrücklich sagt. Die echte History-Gegenprobe stellt mit einem
+Undo alle drei Körper samt ihren ursprünglichen Platten und Netzen wieder her.
+
+Das erste gemeinsame Tor mit `origin/main` bei `5a7ab992f` bestand mit
+20.727 Prüfungen und 87 übersprungen, Exit 0 in 862,61 s; Ruff, Format und
+mypy (337 Dateien) ebenfalls Exit 0. Die erneute reale Abnahme am selben
+Merge-Stand bestätigt RM-475 mit sechs Druckdateien (maximal 0,552 %
+Teilungsabweichung), RM-476 mit acht Druckdateien und unveränderten
+Turmgrenzen im Bett sowie RM-479 mit drei passenden Absagen und null
+Slicerstarts. Belege: `codex_A_batch1_real.md` im Scratchpad und die dort
+genannten `integration-manifest.json` mit Quell- und Profilprüfsummen.
+Die nach diesem ersten Tor ergänzten Abbruch- und Bedienkorrekturen erhalten
+vor dem Push einen eigenen vollständigen Torlauf.
+
+Dieser Torlauf ist abgeschlossen: **20.741 bestanden, 87 übersprungen,
+Exit 0**, 1.072,63 s (`%TEMP%/solidon-A-batch1-followups-suite.txt`). Ruff,
+Format (1.080 Dateien) und mypy (337 Quelldateien) ebenfalls Exit 0. Mypys
+Eingrenzung der Abbrucheigenschaft über einen fremden Aufruf hinweg erforderte
+am Schleifenanfang den vorhandenen Vertrag `raise_if_cancelled()`; der
+bestehende Abbruchzweig fängt ihn wie zuvor ab. Die 74 fensterfreien
+Druckdialogfälle bestehen auch mit dieser endgültigen Schreibweise.
+Der parallel gefahrene betroffene Satz endete mit 6.180 bestanden,
+21 übersprungen und einem `KeyError: helper:display_simplify` im
+Hilfsprozess-Zählertest (Exit 1); dieser Fall bestand im vollständigen Tor.
+Beide Ausgänge bleiben getrennt dokumentiert, der rote Lauf gilt nicht
+nachträglich als grün.
+
+Die anschließende vollständige Wiederholung von `test_kernel_process.py`
+über `affected_tests.py --run` besteht mit **144 Prüfungen, einer
+Releaseprüfung abgewählt, Exit 0**, 30,98 s. Der Abschlussnachweis aus
+Roadmap-, Karten- und Changelogprüfungen besteht mit 77 Prüfungen und vier
+übersprungenen Plattformfällen. Protokolle: `solidon-A-batch1-kernel-repeat.txt`
+und `solidon-A-batch1-final-docs.txt` unter `%TEMP%`.

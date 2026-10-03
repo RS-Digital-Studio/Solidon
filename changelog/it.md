@@ -28,6 +28,8 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- L'analisi dello spazio necessario per i supporti è molto più rapida sui modelli cavi e mantiene i contorni fini.
+- Nelle parti sovrapposte, l'analisi di stampa non conta più l'aria racchiusa come materiale. Migliora anche il rilevamento degli sbalzi e dei supporti necessari.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
 - Scegli l'ugello nelle impostazioni di stampa tra le misure che la tua stampante conosce, e lo slicer riceve il profilo corrispondente.
 - Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.
@@ -45,9 +47,16 @@ scrive in `website/version.json`.
 - Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.
 - Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
 - Quando arriva un altro modello, da un file, da un download o generato, la vista mostra il piatto su cui si trova.
+- Un altro modello va nel posto libero più vicino al centro del piatto, invece che nell'angolo posteriore sinistro.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
 - SuperSlicer non si blocca più con i pezzi rotondi: non riceve più la cucitura a sciarpa che non conosce.
+- SuperSlicer riceve supporti a griglia con un avviso se erano stati scelti supporti ad albero. La cucitura più vicina viene applicata senza falsi avvisi.
+- TPU trova il profilo filamento e i valori di avvio in PrusaSlicer e SuperSlicer. Se manca un profilo, Solidon indica che usa la propria tabella dei materiali.
+- Cura rispetta i limiti di accelerazione e segnala i valori scelti ridotti. Il riempimento pieno usa la velocità di riempimento; solo la faccia superiore usa quella di superficie.
+- La temperatura della camera arriva nel campo corretto dello slicer. I profili senza riscaldamento regolabile della camera spiegano perché il valore non ha effetto.
+- Il riempimento Linee arriva in Bambu Studio e Creality Print come linee, senza essere sostituito da Griglia o Cubico.
+- Dopo il taglio, Solidon segnala le impostazioni scartate da PrusaSlicer o dagli slicer Orca, oltre alle modifiche a bordo, ordine delle pareti e tipo di supporto.
 - La preselezione del filamento prende Generic o la marca della tua stampante invece di un filamento speciale di terzi, ad esempio Generic PETG invece di BETA PETG sulla Bambu A1.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 - Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano *Orienta per la stampa*, *Ruota* e *Sposta*. Il corpo resta esatto.
@@ -74,6 +83,7 @@ scrive in `website/version.json`.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 - Se un foro non si riesce a tagliare in modo pulito in un corpo STEP, Solidon lo esegue sul modello a triangoli invece di passare avanti un corpo difettoso.
 - Se hai scelto «Carica subito», anche i pezzi di *Dividi il modello* non avviano più minuti di riconoscimento; «Riconosci tutte le caratteristiche» lo recupera.
+- Scegliendo «Dividi il modello» su una riga riassuntiva del rapporto per più corpi, Solidon li divide uno dopo l'altro. Prima veniva diviso solo il primo.
 
 ### Raccordi e smussi
 
@@ -100,7 +110,7 @@ scrive in `website/version.json`.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 - Un altro tratto in una cavità appena scavata la rende più profonda, anche con un pennello piccolo. Finora restava senza effetto e contava come mancato.
 - In «Modella», la finestra mostra ogni tratto con la stessa rapidità anche dopo molti tratti. Finora rallentava a ogni tratto.
-- «Fissa lo stato» salva una sessione di modellazione fine come la calcolano esportazione e stampa, e la finestra resta utilizzabile. Finora salvava la vista più grossolana.
+- Con «Fissa lo stato», Solidon salva una sessione di modellazione fine come la calcolano esportazione e stampa, e la finestra resta utilizzabile. Finora salvava la vista più grossolana.
 
 ### Generare con l'IA
 
@@ -119,6 +129,7 @@ scrive in `website/version.json`.
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
 - Esportazione, «Affetta» e «Apri nello slicer …» ricevono sempre il calcolo fine, non la vista più grossolana della finestra. Raccordi e coni arrivano nel file a piena risoluzione.
 - Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
+- Se esporti solo una parte della scena, la finestra del file e la conferma indicano quanto contiene, ad esempio «1 di 2 corpi».
 - La barra dei parametri rifiuta una misura oltre il suo limite invece di lasciare la vista vuota.
 - Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
 - Nella barra dei parametri le misure di due parallelepipedi portano il loro numero, e una misura con un proprio campo di lavoro ha un cursore.
@@ -140,6 +151,10 @@ scrive in `website/version.json`.
 - Un modello linguistico locale può fare dodici passi invece di otto per richiesta nella chat e risolve così più richieste composte da più parti.
 - Il pannello di selezione torna a stare nella sua colonna, e la colonna delle misure nell'albero mostra la misura intera, per esempio «Ø5,19 mm» invece di «…».
 - Su un foro, «Cambia elemento» apre direttamente «Cambia foro» con anteprima, invece di limitarsi a rimandarvi.
+- Premendo «Applica» durante un'anteprima in corso, Solidon calcola la modifica una sola volta. Prima la calcolava poi una seconda volta.
+- La vista delle differenze tratteggia ciò che si aggiunge e ciò che si toglie in due direzioni, così si distinguono anche senza colore.
+- Quando Solidon chiede l'unità di un file all'apertura, le misure compaiono nella tua unità di visualizzazione e con il separatore decimale della tua lingua.
+- Se trascini un file che Solidon non apre, ad esempio da Blender, ti dice come portarlo come 3MF, STEP o STL. Il G-Code va a «Controlla il G-Code».
 
 ## 0.5.1
 

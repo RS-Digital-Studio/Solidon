@@ -77,6 +77,8 @@ unter „Boolesches geht durch die Rückfallkette“.
   trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und Schnittkopie
   stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über gerundete
   Koordinaten verfehlte sie — der Körper bliebe offen.
+- `kernel_jobs.slice_sections` liefert direkte Schichtschnitte als Ringfelder
+  über `kernel_process.run`; Aufbau und Schnitt sind gemeinsam abbrechbar.
 - Eine Änderung am gemeinsamen Kern entwertet den Ergebnis-Cache
   (`paths.results_cache_dir()`, §38).
 

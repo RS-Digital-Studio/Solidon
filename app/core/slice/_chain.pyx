@@ -31,7 +31,9 @@ import numpy as np
 from libc.math cimport fabs
 
 #: Version 2 nimmt einen optionalen Abbruchrückruf als fünftes Argument an.
-PLANE_SEGMENTS_API = 2
+#: Version 3 richtet jedes Segment so, dass das Material links liegt (RM-485):
+#: Ein Bau der Version 2 liefert ungerichtete Segmente und wird nicht genommen.
+PLANE_SEGMENTS_API = 3
 
 
 cdef Py_ssize_t _lower_bound(double[::1] values, double target) noexcept nogil:
@@ -79,6 +81,13 @@ def plane_segments(double[:, ::1] vertices,
     Flächenreihenfolge. So muss der Aufrufer die Segmente nicht noch einmal
     global sortieren. ``epsilon`` kommt aus dem Einheitenmodul; der übersetzte
     Kern erfindet keine eigene Toleranz (Regel 7).
+
+    **Jedes Segment ist gerichtet**: Es beginnt auf der Kante, die im Umlauf
+    des Dreiecks von oberhalb der Ebene nach unten führt, und endet auf der,
+    die wieder hinaufführt. Bei nach außen gerichteten Dreiecken liegt das
+    Material dann links — ein Außenring läuft gegen den Uhrzeigersinn, ein
+    Hohlraum mit ihm. Daraus liest ``analysis`` Material über die
+    Umlaufrichtung statt über die Verschachtelungstiefe.
     """
     cdef Py_ssize_t face_count = faces.shape[0]
     cdef Py_ssize_t vertex_count = vertices.shape[0]
@@ -89,6 +98,8 @@ def plane_segments(double[:, ::1] vertices,
     cdef double z0, z1, z2, low_z, high_z, z
     cdef double sx, sy, sz, ex, ey, ez, swap_value
     cdef double start_height, end_height, span, fraction
+    cdef bint first_falls = 1
+    cdef long long swap_node
     cdef bint cancellable = check_cancelled is not None
     cdef Py_ssize_t faces_until_check = 8192
     cdef Py_ssize_t layers_until_check = 32768
@@ -232,6 +243,10 @@ def plane_segments(double[:, ::1] vertices,
                     sz, ez = vertices[start_id, 2], vertices[end_id, 2]
                     if (sz - z > 0.0) == (ez - z > 0.0):
                         continue
+                    if crossing_index == 0:
+                        # Fällt die erste geschnittene Kante im Umlauf des
+                        # Dreiecks, beginnt hier das Segment; sonst endet es.
+                        first_falls = sz - z > 0.0
                     sx, sy = vertices[start_id, 0], vertices[start_id, 1]
                     ex, ey = vertices[end_id, 0], vertices[end_id, 1]
                     if _after(sx, sy, sz, ex, ey, ez):
@@ -263,6 +278,16 @@ def plane_segments(double[:, ::1] vertices,
                         nodes[written, crossing_index] = end_id * vertex_count + start_id
                     crossing_index += 1
 
+                if not first_falls:
+                    swap_value = points[written, 0, 0]
+                    points[written, 0, 0] = points[written, 1, 0]
+                    points[written, 1, 0] = swap_value
+                    swap_value = points[written, 0, 1]
+                    points[written, 0, 1] = points[written, 1, 1]
+                    points[written, 1, 1] = swap_value
+                    swap_node = nodes[written, 0]
+                    nodes[written, 0] = nodes[written, 1]
+                    nodes[written, 1] = swap_node
                 layers[written] = layer
 
     if cancellable:
@@ -285,6 +310,11 @@ def chain_rings(long long[:, ::1] node,
     Zurück kommt ``(Ringe, beschriebene Länge)``. ``(-1, 0)`` heißt, dass sich
     ein Ring nicht geschlossen hat — dann trägt die Voraussetzung nicht, und
     der Aufrufer nimmt GEOS.
+
+    Ein Ring beginnt am Anfang seines ersten Segments und läuft dessen
+    Richtung entlang. Ein ungerader Eintrag in ``walk`` heißt, dass ein
+    Segment von seinem Ende her betreten wurde — die Richtungen der Dreiecke
+    passen dort nicht zusammen.
     """
     cdef Py_ssize_t count = node.shape[0]
     cdef Py_ssize_t first, written = 0, begin

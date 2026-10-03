@@ -41,6 +41,9 @@ from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
     has_user_profile_tree,
+    native_key,
+    normalise_chamber,
+    normalise_filament_type,
 )
 from app.core.knowledge import profiles as knowledge_profiles
 from app.core.log import get_logger
@@ -2090,7 +2093,14 @@ def _cura_definition_values(
         # Default ist dann gerade nicht der Wert, den Cura berechnet.
         if "value" in properties:
             value = properties["value"]
-            if isinstance(value, str):
+            if isinstance(value, str) and re.fullmatch(
+                r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value.strip()
+            ):
+                # Einige Hersteller schreiben Zahlen als Ausdruckstext.
+                # Nur ein endliches Zahlenliteral gilt; gerechnet wird hier nicht.
+                number = float(value)
+                value = number if math.isfinite(number) else None
+            elif isinstance(value, str):
                 if strict and key in {
                     "machine_width",
                     "machine_depth",
@@ -3275,7 +3285,7 @@ def match_filament(
     """
     if machine is None:
         return None
-    wanted = material_type.casefold()
+    wanted = normalise_filament_type(material_type)
     # Der Typ steht wie die Verträglichkeit meist nicht in der obersten Datei,
     # sondern eine Ebene höher: von 42 verträglichen Filamentprofilen nennen
     # ihn sieben selbst. Aufgelöst wird deshalb über die Kette — und erst
@@ -3288,7 +3298,7 @@ def match_filament(
     fitting = [
         entry
         for entry in filaments(profiles, machine, indexes=indexes)
-        if type_of(entry, roots, indexes=indexes).casefold() == wanted
+        if normalise_filament_type(type_of(entry, roots, indexes=indexes)) == wanted
     ]
     if not fitting:
         return None
@@ -3954,6 +3964,7 @@ def filament_readback(
     *,
     variant_name: str = "",
     extruder_id: str = "",
+    program: str = "",
 ) -> FilamentReadback:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 
@@ -3991,6 +4002,9 @@ def filament_readback(
         readback = PRUSA_FILAMENT_READBACK
     elif source.name.endswith((".xml.fdm_material", ".inst.cfg")):
         readback = _CURA_FILAMENT_READBACK
+    else:
+        resolved = normalise_chamber(resolved, program)
+        readback = tuple((path, native_key(key, program), kind) for path, key, kind in readback)
     values: dict[str, float | int] = {}
     for solidon, native, kind in readback:
         raw = resolved.get(native)
@@ -4025,6 +4039,9 @@ def filament_values(
     *,
     variant_name: str = "",
     extruder_id: str = "",
+    program: str = "",
 ) -> dict[str, float | int]:
     """Liest bekannte Materialwerte, wenn die Profilvariante eindeutig ist."""
-    return filament_readback(path, roots, variant_name=variant_name, extruder_id=extruder_id).values
+    return filament_readback(
+        path, roots, variant_name=variant_name, extruder_id=extruder_id, program=program
+    ).values

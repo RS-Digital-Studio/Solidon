@@ -1208,13 +1208,15 @@ def part_advice(
         return advise.combine(current, groups)
 
     # Was das Programm seiner Familie nicht kennt, schlägt der Rat nicht vor:
-    # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459).
-    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(
-        slicer_keys.program_of(setup.executable) if setup is not None else "", frozenset()
-    )
+    # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459). Eine
+    # Wahl, die es nicht kennt, schlägt er als ihren Ersatz vor (RM-480).
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
 
     def asked_here(current: PrintSettings) -> list[SettingAdvice]:
-        return [item for item in asked(current) if item.path not in unknown]
+        return slicer_keys.offered(
+            [item for item in asked(current) if item.path not in unknown], program
+        )
 
     advice = asked_here(settings)
     chain = dict(accepted or {})
@@ -1310,7 +1312,8 @@ def _part_values(
     unavailable = [
         item for item in asked if not same_value(item.value, read_path(split.plate, item.path))
     ]
-    return replace(_values_for(split, applied, unavailable, flavour), asked=asked)
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    return replace(_values_for(split, applied, unavailable, flavour, program=program), asked=asked)
 
 
 def _values_for(
@@ -1319,12 +1322,15 @@ def _values_for(
     unavailable: Sequence[SettingAdvice],
     flavour: SlicerFlavour,
     everywhere: Sequence[SettingAdvice] = (),
+    *,
+    program: str = "",
 ) -> _PartValues:
     """Objektwerte und wirksame Einstellungen eines Teils aus seinem Rat.
 
     ``everywhere`` sind übernommene Vorschläge, die beim Export kein Teil für
     sich verlangt hat (:func:`_unserved`). Sie stehen an diesem Teil wie sein
-    eigener Rat, tragen aber keinen Befund *dieses* Teils.
+    eigener Rat, tragen aber keinen Befund *dieses* Teils. ``program`` ist
+    die Marke des Slicers (``slicer_keys.program_of``, RM-480).
     """
     from app.core.export import handover
     from app.core.slice import advise
@@ -1332,7 +1338,7 @@ def _values_for(
     if not split.revert:
         carried = [*applied, *everywhere]
         return _PartValues(
-            handover.object_keys(split.plate, carried, flavour),
+            handover.object_keys(split.plate, carried, flavour, program=program),
             list(applied),
             list(unavailable),
             advise.apply(split.plate, carried),
@@ -1361,7 +1367,9 @@ def _values_for(
     ]
     keys = {
         key: value
-        for key, value in handover.object_keys(split.plate, changes, flavour).items()
+        for key, value in handover.object_keys(
+            split.plate, changes, flavour, program=program
+        ).items()
         if key in handover.CURA_PER_MESH
     }
     return _PartValues(keys, own, list(unavailable), advise.apply(split.plate, changes))
@@ -1848,7 +1856,14 @@ def write_assembly(
         everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
         part_values = {
-            key: _values_for(split, values.applied, values.unavailable, flavour, everywhere)
+            key: _values_for(
+                split,
+                values.applied,
+                values.unavailable,
+                flavour,
+                everywhere,
+                program=slicer_keys.program_of(setup.executable) if setup is not None else "",
+            )
             for key, values in part_values.items()
         }
         findings += [
@@ -1887,6 +1902,11 @@ def write_assembly(
         from app.core.export import handover
 
         findings += handover.setting_limitations(flavour, settings)
+        # Vor der Trennung gefragt, damit auch ein Wert je Teil zählt (RM-480).
+        findings += handover.substituted_choices(
+            accepted or settings,
+            slicer_keys.program_of(setup.executable) if setup is not None else "",
+        )
         findings += check_adhesion_clearance(
             meshes, settings, [entry.plate for entry in chosen], per_part=own
         )
@@ -1922,6 +1942,14 @@ def write_assembly(
             configured = handover.configured_slots(slots, settings)
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
+            if setup is not None:
+                findings += handover.cura_acceleration_findings(
+                    settings,
+                    profile,
+                    setup,
+                    {entry.id: part_values[entry.id].keys for entry in chosen},
+                    for_window=for_window,
+                )
         if for_window and takes_mesh_settings(flavour):
             if setup is not None and setup.flavour == "cura":
                 mismatch = handover.cura_active_printer_mismatch(
@@ -2218,12 +2246,17 @@ def _cura_window(
     width, depth, _height = profile.printer.build_volume
     active = slicer_profiles.cura_active_machine(setup.executable) if setup is not None else None
     bed = active.bed if active is not None and active.bed is not None else (width, depth)
+    motion = (
+        handover.cura_window_motion(setup, profile)
+        if setup is not None and any(part.keys for part in part_values.values())
+        else {}
+    )
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
-            settings=handover.for_the_cura_window(part_values[entry.id].keys),
+            settings=handover.for_the_cura_window(part_values[entry.id].keys, machine=motion),
             support_blocker=blockers.get(entry.id),
         )
         for entry in chosen

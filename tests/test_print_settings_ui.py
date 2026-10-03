@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 
 from app.core import activation
 from app.core.brep import edit
+from app.core.errors import SCALE_TO_FIT, ExternalToolError
 from app.core.export import handover, writer
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.geom.mesh import MeshData
@@ -54,7 +55,9 @@ from app.core.types import (
     SlotOverride,
 )
 from app.i18n import tr
+from app.ui import main_window as preflight_main
 from app.ui import print_settings_dialog as print_dialog
+from app.ui.dialogs import offered_actions
 from app.ui.labels import BoundedLengthSpin, BoundedSpin
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
@@ -2914,6 +2917,125 @@ def test_superslicer_greys_out_the_scarf_seam_and_drops_its_suggestion(
     suggestion = SettingAdvice(path="shell.scarf_seam", value=True, was=False, reason="rund")
     dialog._advice_entries = [suggestion]
     assert (suggestion in dialog._current_advice()) is not ignored
+
+
+@pytest.mark.parametrize("supported", [True, False, None])
+def test_chamber_advice_requires_the_current_machines_heater(supported: bool | None) -> None:
+    """Die reine Angebotsfunktion darf die graue Kammerzeile nicht umgehen."""
+    from app.core.export import manufacturer
+    from app.core.slice import advise
+
+    profile = profiles.make_profile("centauri-carbon-2", "abs")
+    settings = print_settings.with_path(print_settings.resolve(profile), "temperature.chamber", 0)
+    foundation = manufacturer.Foundation(settings, chamber_control=supported)
+    host = SimpleNamespace(
+        _advice_entries=advise._from_material(settings, profile),
+        _current_flavour=lambda: "orca",
+        _slicer_path=Path("elegoo-slicer.exe"),
+        _foundation_for_current_setup=lambda: foundation,
+    )
+    shown = PrintSettingsDialog._current_advice(host)
+    assert any(entry.path == "temperature.chamber" for entry in shown) is (supported is True)
+    assert settings.temperature.chamber == 0, "der gespeicherte Wert bleibt unverändert"
+
+
+@pytest.mark.parametrize("supported", [True, False])
+def test_rebase_refreshes_hardware_offers_even_when_values_are_unchanged(
+    monkeypatch: pytest.MonkeyPatch, supported: bool
+) -> None:
+    """Die reine Anschlussprobe braucht kein Fenster und keine Ereignisschleife."""
+    from app.core.export import manufacturer
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca", base_process="Neu")
+    foundation = manufacturer.Foundation(settings, chamber_control=supported)
+    monkeypatch.setattr(manufacturer, "base_settings", lambda *_args: foundation)
+    refreshed = []
+
+    def nothing() -> None:
+        pass
+
+    host = SimpleNamespace(
+        _settling=False,
+        _built=True,
+        _current_setup=lambda: setup,
+        session=SimpleNamespace(profile=profile),
+        settings=settings,
+        _foundation_key=None,
+        _foundation=manufacturer.Foundation(settings, chamber_control=not supported),
+        _load_into_editors=nothing,
+        _mark_fields_this_slicer_ignores=lambda: refreshed.append(host._foundation.chamber_control),
+        _refresh_advice=nothing,
+        _refresh_auto_adhesion_values=nothing,
+        _update_inactive_setting_rows=nothing,
+        _refresh_search_target_for_conditions=nothing,
+        _mark_origins=nothing,
+        _show_foundation=nothing,
+    )
+    PrintSettingsDialog._rebase(host)
+    assert host.settings == settings
+    assert refreshed == [supported]
+
+
+@pytest.mark.parametrize("supported", [True, False, None])
+def test_chamber_field_names_missing_hardware_and_recovers_after_selection(
+    dialog: PrintSettingsDialog, supported: bool | None
+) -> None:
+    """Feld und Beschriftung erklären dieselbe belegte Maschinenfähigkeit."""
+    from app.core.export import manufacturer
+
+    dialog._slicer_path = Path("orca-slicer.exe")
+    dialog._foundation = manufacturer.Foundation(dialog.settings, chamber_control=supported)
+    dialog._mark_fields_this_slicer_ignores()
+    editor = dialog._editors["temperature.chamber"]
+    assert editor.isEnabled() is (supported is True)
+    reason = manufacturer.chamber_limitation(dialog._foundation)
+    if reason is not None:
+        for widget in (editor, dialog._labels["temperature.chamber"]):
+            assert widget.toolTip() == str(reason)
+            assert widget.statusTip() == str(reason)
+            assert widget.accessibleDescription() == str(reason)
+    dialog._foundation = manufacturer.Foundation(dialog.settings, chamber_control=True)
+    dialog._mark_fields_this_slicer_ignores()
+    assert editor.isEnabled()
+    assert "ohne Wirkung" not in editor.toolTip()
+    assert "nicht belegt" not in editor.toolTip()
+
+
+def test_superslicer_explains_tree_supports_and_restores_them_on_program_change(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """RM-480: Die gespeicherte Wahl bleibt, angeboten wird der wirksame Ersatz.
+
+    Der Fensterfall gehört zum Release; der Kernersatz wird getrennt geprüft.
+    """
+    from PySide6.QtTest import QTest
+
+    editor = dialog._editors["support.style"]
+    assert isinstance(editor, QComboBox)
+    tree = editor.findData("tree")
+    assert tree >= 0
+    own_tip = editor.itemData(tree, Qt.ItemDataRole.ToolTipRole)
+    editor.setCurrentIndex(tree)
+    dialog._slicer_path = Path("superslicer.exe")
+    dialog._mark_fields_this_slicer_ignores()
+    assert editor.currentData() == "tree"
+    assert dialog.settings.support.style == "tree"
+    assert not editor.model().flags(editor.model().index(tree, 0)) & Qt.ItemFlag.ItemIsEnabled
+    assert "Gitter" in editor.toolTip()
+    assert "Gitter" in editor.itemData(tree, Qt.ItemDataRole.AccessibleDescriptionRole)
+    editor.setCurrentIndex(editor.findData("grid"))
+    for key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+        for _ in range(editor.count()):
+            QTest.keyClick(editor, key)
+            assert editor.currentData() != "tree"
+    dialog._slicer_path = Path("PrusaSlicer.exe")
+    dialog._mark_fields_this_slicer_ignores()
+    assert editor.model().flags(editor.model().index(tree, 0)) & Qt.ItemFlag.ItemIsEnabled
+    assert editor.itemData(tree, Qt.ItemDataRole.ToolTipRole) == own_tip
+    editor.setCurrentIndex(tree)
+    assert dialog.settings.support.style == "tree"
 
 
 def test_a_part_that_fits_no_bed_is_named_before_slicing(
@@ -7567,7 +7689,7 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
             works = any(
                 handover.values_for(layout, profile, flavour)
                 != handover.values_for(
-                    print_settings.with_path(layout, field.path, second), profile, flavour
+                    print_settings.with_choice(layout, field.path, second), profile, flavour
                 )
                 for layout in layouts
             )
@@ -9350,6 +9472,67 @@ class _PreflightSignalLog:
         self.calls.append(values)
 
 
+def test_preflight_failure_racing_with_cancel_is_suppressed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preflight_user_data: None
+) -> None:
+    from app.core.errors import ExternalToolError
+
+    profile = profiles.make_profile("prusa-mini", "pla")
+    run = print_dialog.PlateRun(
+        plate=0,
+        model=tmp_path / "plate.3mf",
+        meshes=(_preflight_box((231.0, 231.0, 10.0)),),
+        object_ids=("large",),
+    )
+    host = SimpleNamespace(
+        _runs=[run],
+        _settings=print_settings.resolve(profile),
+        _profile=profile,
+        _setup=handover.SlicerSetup(tmp_path / "PrusaSlicer.exe", "prusa"),
+        _usage={},
+        cancelled=CancelSignal(),
+        step=_PreflightSignalLog(),
+        failed=_PreflightSignalLog(),
+        done=_PreflightSignalLog(),
+    )
+
+    def cancelled_refusal(*_args: Any, **_kwargs: Any) -> None:
+        host.cancelled.cancel()
+        raise ExternalToolError(values={"constraint": "slicer_build_volume", "part_index": 0})
+
+    monkeypatch.setattr(handover, "slice_model", cancelled_refusal)
+
+    print_dialog._SliceWorker.work(host)
+
+    assert host.failed.calls == []
+    assert host.done.calls == []
+
+
+def test_queued_preflight_failure_after_cancel_button_is_suppressed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.errors import ExternalToolError
+
+    events: list[Any] = []
+    cancelled = CancelSignal()
+    cancelled.cancel()
+    host = SimpleNamespace(
+        _settling=False,
+        _worker=SimpleNamespace(cancelled=cancelled),
+        _job_context=("same",),
+        _print_context=lambda: ("same",),
+        _failed_save_copies=None,
+        state=SimpleNamespace(setText=events.append),
+    )
+    monkeypatch.setattr(print_dialog, "show_error", lambda problem, *_args: events.append(problem))
+
+    PrintSettingsDialog._slice_failed(
+        host, ExternalToolError(values={"constraint": "slicer_build_volume", "part_index": 0})
+    )
+
+    assert events == []
+
+
 def test_slice_worker_passes_the_same_prepared_snapshot_to_slice_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preflight_user_data: None
 ) -> None:
@@ -9683,9 +9866,8 @@ def test_preflight_internal_part_index_is_not_a_customer_value() -> None:
     assert "51" in lines[0]
 
 
-@pytest.mark.parametrize("action_id", ["split_model", "scale_to_fit"])
-def test_preflight_actions_use_the_offending_object_instead_of_the_selection(
-    preflight_user_data: None, action_id: str
+def test_preflight_split_uses_the_offending_object_instead_of_the_selection(
+    preflight_user_data: None,
 ) -> None:
     from app.core.errors import ExternalToolError
     from app.ui.main_window import MainWindow
@@ -9710,10 +9892,155 @@ def test_preflight_actions_use_the_offending_object_instead_of_the_selection(
         object_id="large", values={"constraint": "slicer_build_volume", "part_index": 1}
     )
 
-    if action_id == "split_model":
-        MainWindow._split_after_error(window, problem)
-        assert split == ["large"]
-    else:
-        MainWindow._scale_after_error(window, problem)
-        assert applied[0].inputs == ("large",)
-        assert applied[0].params["factor"] == pytest.approx(180.0 / 231.0 * 0.99)
+    MainWindow._split_after_error(window, problem)
+    assert split == ["large"]
+    assert applied == []
+
+
+@pytest.mark.parametrize("dimensions", [(231, 231, 10), (20, 20, 250)])
+def test_preflight_button_names_size_editing_without_an_automatic_fit_promise(dimensions):
+    with pytest.raises(ExternalToolError) as raised:
+        handover._check_plate(
+            [_preflight_box(dimensions)],
+            profiles.make_profile("prusa-mini", "pla"),
+            handover.SlicerSetup(Path("PrusaSlicer.exe"), "prusa"),
+        )
+    offered = offered_actions(raised.value, {"scale_to_fit": lambda error: None})
+    action = next(action for action in offered if action.id == "scale_to_fit")
+    assert str(action.label) == "Verkleinern …"
+    assert action.primary == SCALE_TO_FIT.primary
+    assert str(SCALE_TO_FIT.label) == "Auf den Bauraum verkleinern"
+
+
+def _preflight_scale_host(
+    *, object_id="large", deleted=False, current=True, quiet=True, accept_selection=True
+):
+    events = []
+    selected = ["other", "pin"]
+    objects = {
+        "other": SceneObject(
+            "other",
+            "Other",
+            _preflight_box((20, 20, 20)),
+            features={"pin": Feature("pin", "pin", "detected", {"diameter": 5.0})},
+        )
+    }
+    if not deleted:
+        objects["large"] = SceneObject("large", "Large", _preflight_box((231, 231, 10)))
+
+    def select(identity):
+        events.append(("select", identity))
+        if accept_selection:
+            selected[:] = [identity, None]
+
+    host = SimpleNamespace(
+        session=SimpleNamespace(
+            last_result=SimpleNamespace(scene=SimpleNamespace(objects=objects)),
+            result_current=current,
+            profile=profiles.make_profile("prusa-mini", "pla"),
+            history=SimpleNamespace(discardable=False),
+            apply=lambda *args, **kwargs: events.append(("applied", args)),
+        ),
+        object_tree=SimpleNamespace(
+            selected_objects=lambda: [selected[0]],
+            selected=lambda: selected[0],
+            selected_feature=lambda: selected[1],
+            select_object=select,
+        ),
+        _quiet_command_allowed=lambda: quiet,
+        _begin_from_the_start_screen=lambda: True,
+        _local_features=None,
+        settings=UiSettings(),
+    )
+    host._object_of = lambda error: preflight_main.MainWindow._object_of(host, error)
+    host._selected_feature_object = lambda: preflight_main.MainWindow._selected_feature_object(host)
+    host.feature_instead_of = lambda op: preflight_main.MainWindow.feature_instead_of(host, op)
+    host._sister_for_the_chosen_feature = lambda spec: (
+        preflight_main.MainWindow._sister_for_the_chosen_feature(host, spec)
+    )
+    host.run_operation = lambda spec, given, on_bodies: events.append(
+        ("dialog", spec.name, given, tuple(on_bodies))
+    )
+    error = ExternalToolError(object_id=object_id, values={"constraint": "slicer_build_volume"})
+    return host, events, error
+
+
+def test_scale_error_selects_whole_bound_object_and_opens_existing_dialog():
+    host, events, error = _preflight_scale_host()
+    assert host.feature_instead_of("scale_object").name == "resize_feature"
+    preflight_main.MainWindow._scale_after_error(host, error)
+    assert events == [("select", "large"), ("dialog", "scale_object", {"about": "bed"}, ("large",))]
+    assert host.object_tree.selected_feature() is None
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"object_id": None},
+        {"deleted": True},
+        {"current": False},
+        {"quiet": False},
+        {"accept_selection": False},
+    ],
+)
+def test_scale_action_does_not_open_for_unknown_deleted_stale_or_busy_context(options):
+    host, events, error = _preflight_scale_host(**options)
+    preflight_main.MainWindow._scale_after_error(host, error)
+    assert not any(event[0] in {"dialog", "applied"} for event in events)
+    if options != {"accept_selection": False}:
+        assert not events
+
+
+def test_other_scale_error_keeps_existing_automatic_behaviour():
+    host, events, error = _preflight_scale_host()
+    error.values.clear()
+    preflight_main.MainWindow._scale_after_error(host, error)
+    assert len(events) == 1 and events[0][0] == "applied"
+    draft = events[0][1][1][0]
+    assert draft.op == "scale_object" and draft.inputs == ("large",)
+    assert draft.params["factor"] == pytest.approx(180 / 231 * 0.99)
+
+
+def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_rewrite(
+    monkeypatch,
+):
+    host, events, error = _preflight_scale_host()
+    # Alle Auswahlentscheidungen bleiben die echten Methoden. Nur der
+    # Fensteraufbau endet am Eintritt in den vorhandenen Operationsdialog.
+    for name in (
+        "_from_selection",
+        "_spacing_for",
+        "_plane_through",
+        "_measured_from_body",
+        "_source_names",
+        "_parameter_values",
+        "_feature_names",
+        "_image_names",
+        "_edge_names",
+    ):
+        setattr(host, name, lambda *args, **kwargs: {})
+    host._object_names = lambda: {"other": "Other", "large": "Large"}
+    host._seat_for = lambda *args: None
+    host._sketch_surroundings = lambda: ()
+    host._slots_of_selection = lambda: ()
+    host._pick_image_source = lambda *args: None
+    host._pick_model_source = lambda *args: None
+    host._cancel_source_read = lambda *args: None
+    host.run_operation = lambda spec, given, on_bodies: preflight_main.MainWindow.run_operation(
+        host, spec, given, on_bodies=on_bodies
+    )
+
+    class ReachedDialogError(Exception):
+        pass
+
+    def capture(spec, names, parent, **kwargs):
+        events.append(("actual-dialog", spec.name, kwargs["source_objects"], kwargs["values"]))
+        raise ReachedDialogError()
+
+    monkeypatch.setattr(preflight_main, "OperationDialog", capture)
+    with pytest.raises(ReachedDialogError):
+        preflight_main.MainWindow._scale_after_error(host, error)
+    assert events == [
+        ("select", "large"),
+        ("actual-dialog", "scale_object", ("large",), {"about": "bed"}),
+    ]

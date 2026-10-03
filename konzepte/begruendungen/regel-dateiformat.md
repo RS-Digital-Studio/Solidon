@@ -378,6 +378,21 @@ CuraEngine die Extruderzüge unter Windows nicht.
 
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
+Eigene oder übernommene Beschleunigungen oberhalb der Maschinengrenze werden
+als Befund mit angefordertem und geschriebenem Wert weitergegeben, auch je
+Teil. `SlicerConfig.written` bleibt der tatsächliche Wert; der ursprüngliche
+Wunsch steht in `findings`. Fensterprofile und 3MF-Objektwerte begrenzt
+derselbe Mechanismus an der aktiven Cura-Instanz. Ein numerischer Text in
+`value` zählt als endliches Zahlenliteral, ein Ausdruck bleibt unbekannt.
+
+Ohne Druckerwert oder ausdrückliche Wahl gibt Cura keine Stufenbeschleunigung
+vor. Numerische Bewegungsgrenzen und die Leerfahrt kommen aus der
+Definitionskette; Platten- und Netzwerte sowie die Rückstellung vor dem
+Endcode halten deren X-/Y-Grenze ein. CuraEngine liest in Definitionen nur
+`default_value`; numerisches `value` muss deshalb ausdrücklich hinausgehen.
+Formeln bleiben unbekannt. Der Standardwert `machine_acceleration` braucht
+denselben Deckel: Cura schreibt ihn vor dem Endcode nochmals mit `M204`.
+
 Die Entscheidung Roberts vom 26.08.2026 lautete: „Der Anfahrcode bleibt der
 des Herstellers". Warum Solidon füllt: „gemessen:
 `START_PRINT EXTRUDER_TEMP={…}` stand wörtlich im G-Code". Die Rechnung

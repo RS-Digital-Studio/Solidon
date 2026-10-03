@@ -23281,6 +23281,17 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(object_id) if result and object_id else None
         if object_id is None or entry is None:
             return
+        if error.values.get("constraint") == "slicer_build_volume":
+            if not self.session.result_current or not self._quiet_command_allowed():
+                return
+            # Ein gewähltes Merkmal würde sonst die Körperoperation ersetzen.
+            self.object_tree.select_object(object_id)
+            if self.object_tree.selected() != object_id:
+                return
+            self.run_operation(
+                REGISTRY.get("scale_object"), {"about": "bed"}, on_bodies=(object_id,)
+            )
+            return
         volume = self.session.profile.printer.build_volume
         size = as_mesh_data(entry.mesh).bounds.size
         needed_any = [needed for needed in size if needed > 0.0]

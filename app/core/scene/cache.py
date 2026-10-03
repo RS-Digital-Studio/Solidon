@@ -144,7 +144,12 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Szenenkörper als Werkzeug, rechnet an nicht vereinbaren Teilen mit Befund
 #:   statt anzuhalten, und der Ort von ``boolean.parts_united`` kommt aus der
 #:   Suche über Hüllquaderbäume. Gespeicherte Ergebnisse trügen alte Befunde.
-CACHE_FORMAT_VERSION: Final = 36
+#: - 37 (RM-485): Gerichtete Schichtschnitte halten eingeschlossene Luft frei.
+#:   Ausrichtungen und Auto-Split-Ergebnisse aus der alten Materialfläche
+#:   müssen neu berechnet werden.
+#: - 38 (RM-486): Clipper-Säulen ersetzen GEOS-Differenzen. Gespeicherte
+#:   Ausrichtungen rechnen mit den neuen Stützkennzahlen erneut.
+CACHE_FORMAT_VERSION: Final = 38
 
 
 @dataclass(frozen=True, slots=True)
