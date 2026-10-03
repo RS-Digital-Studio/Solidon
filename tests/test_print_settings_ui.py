@@ -4564,7 +4564,9 @@ def test_imported_printer_identity_limits_nozzle_choices_to_its_model_and_vendor
         nozzle=0.6,
     )
     found = [source, foreign, active]
-    dialog.session.profile = replace(
+    # ``Session.profile`` ist abgeleitet (aus Dokument und Druckeinstellungen)
+    # und hat keinen Setter; die Attrappe steht deshalb an der Klasse.
+    imported = replace(
         dialog.session.profile,
         printer=slicer_profiles._discovered_printer(
             source,
@@ -4579,6 +4581,7 @@ def test_imported_printer_identity_limits_nozzle_choices_to_its_model_and_vendor
             "OrcaSlicer",
         ),
     )
+    monkeypatch.setattr(type(dialog.session), "profile", property(lambda _self: imported))
     dialog._slicer_path = Path("OrcaSlicer.exe")
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args, **_kwargs: active.name)
 
