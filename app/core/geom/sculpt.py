@@ -944,8 +944,9 @@ class SculptParams(BaseParams):
     consumes=1,
     produces=1,
     # 1: Spiegelkopien teilen sich glatt (RM-428), der Durchstich nennt
-    # seinen Zug (RM-419).
-    cache_version="1",
+    # seinen Zug (RM-419). 2: Der Befund ``sculpt.subtle`` ist neu gefasst
+    # (RM-084); der Plattencache gäbe sonst den alten Satz zurück.
+    cache_version="2",
     doc=_(
         "Trägt Material mit dem Pinsel auf und ab. Der ganze Vorgang ist ein Schritt "
         "im Verlauf und bleibt änderbar, so viele Züge er auch enthält."
@@ -1139,10 +1140,10 @@ def _sculpting_findings(
                 code="sculpt.subtle",
                 severity="warning",
                 message=_(
-                    "Die größte Bewegung dieser Sitzung bleibt unter einer Schichthöhe. In "
-                    "Druckrichtung entsteht so wenig kaum, seitlich entscheidet der Slicer "
-                    "darüber. Wer mehr wollte: Entweder liegen die Züge neben der Fläche, "
-                    "oder ihre Stärke ist für dieses Teil zu klein."
+                    "Die größte Bewegung dieser Sitzung bleibt unter einer Schichthöhe: "
+                    "In der Höhe druckt sich das kaum, seitlich entscheidet der Slicer. "
+                    "Sollte es mehr werden, liegen die Züge neben der Fläche, oder ihre "
+                    "Stärke ist für dieses Teil zu klein."
                 ),
                 object_id=object_id,
                 values={

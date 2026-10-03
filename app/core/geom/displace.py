@@ -381,7 +381,7 @@ class DisplaceParams(BaseParams):
         maximum=1.0,
         placement="advanced",
         doc=_(
-            "Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf; ein halb "
+            "Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf, 0,5 "
             "hebt und senkt — der Unterschied zwischen Stempel und Prägung."
         ),
     )

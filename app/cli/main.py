@@ -1047,7 +1047,7 @@ def _mistyped_operation(argv: list[str]) -> int | None:
         print(
             "  - "
             + tr(
-                "Bei «run» kommt die Operation zuerst, der Pfad danach: {command}",
+                "Bei „run“ kommt die Operation zuerst, der Pfad danach: {command}",
                 command="solidon3d run create_box <pfad>",
             ),
             file=sys.stderr,

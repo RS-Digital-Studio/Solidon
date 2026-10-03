@@ -1836,7 +1836,7 @@ def solve_sketch(
     # Spalte heraus (:func:`_matrix_rank`). Gezählt wurde sie trotzdem, und
     # eine übernommene Flächenkontur mit 2624 Strecken (Besenhalter aus
     # ``F:\3D Dateien``, 23.09.2026) machte die Zeichnung unlösbar —
-    # „mehr Punkte und Bedingungen, als der Löser verarbeitet" über
+    # „mehr Punkte und Bedingungen, als Solidon auf einmal lösen kann" über
     # Geometrie, die sich nicht bewegen kann.
     total_rows = sum(equation.rows for equation in equations) + sum(
         element.kind == "circle" for element in sketch.elements
@@ -1961,7 +1961,7 @@ def _too_large(sketch: Sketch, anchors: np.ndarray) -> ValidationError:
     """Die Absage für eine Skizze, deren dichter Teil das Budget sprengt (G-09)."""
     return ValidationError(
         field="sketch",
-        detail=_("Die Skizze hat mehr Punkte und Bedingungen, als der Löser verarbeitet."),
+        detail=_("Die Skizze hat mehr Punkte und Bedingungen, als Solidon auf einmal lösen kann."),
         constraint="too_large",
         values={
             "points": int(anchors.size // 2),

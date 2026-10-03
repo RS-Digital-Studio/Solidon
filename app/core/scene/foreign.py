@@ -174,7 +174,7 @@ def findings_for(document: Document) -> list[Finding]:
                 code="project.external_source",
                 severity="warning",
                 message=_(
-                    "Dieses Projekt verweist auf Dateien außerhalb des Containers. "
+                    "Dieses Projekt verweist auf Dateien außerhalb der Projektdatei. "
                     "Fehlt eine davon, hält die Auswertung an."
                 ),
                 values={

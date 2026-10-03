@@ -51,7 +51,7 @@ GATHERED_DIR: Final = "sources/gathered"
 #:
 #: Das Präfix allein reichte nicht: Wer sein Objekt ``source:meiner`` nannte,
 #: speicherte ein Projekt, das er nicht mehr öffnen konnte. Das Laden hielt
-#: mit „Zu diesem Schritt fehlt der ausgelagerte Inhalt im Container" an, und
+#: mit „Zu diesem Schritt fehlt der ausgelagerte Inhalt in der Projektdatei" an, und
 #: der Container war heil — nur der Name sah aus wie ein Verweis.
 _REFERENCE = re.compile(rf"^{re.escape(GATHERED_PREFIX)}gathered_\d+$")
 
@@ -138,8 +138,8 @@ def inline(data: dict[str, Any], payloads: dict[SourceId, bytes]) -> None:
                 raise ValidationError(
                     field=f"ops.{operation.get('id', '?')}.{name}",
                     detail=_(
-                        "Zu diesem Schritt fehlt der ausgelagerte Inhalt im Container — "
-                        "die Datei ist unvollständig."
+                        "Zu diesem Schritt fehlt der ausgelagerte Inhalt in der "
+                        "Projektdatei — sie ist unvollständig."
                     ),
                     constraint="missing_gathered",
                     values={"source": source_id},

@@ -1734,7 +1734,7 @@ def load(path: Path) -> Project:
                 if source.path not in names:
                     raise ValidationError(
                         field=f"sources.{source_id}",
-                        detail=_("Eine eingebettete Quelle fehlt im Container."),
+                        detail=_("Eine eingebettete Quelle fehlt in der Projektdatei."),
                         constraint="missing_payload",
                         values={"source": source_id, "path": source.path},
                     )

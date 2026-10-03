@@ -298,7 +298,9 @@ class ContainerParams(BaseParams):
         choices=("auto", "mesh", "brep"),
         placement="advanced",
         internal=True,
-        doc=_("Gespeicherter Rechenkern des Behälters."),
+        doc=_(
+            "Ob der Behälter als Dreiecksnetz oder mit echten Flächen und Kanten gerechnet wird."
+        ),
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
 

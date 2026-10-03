@@ -7466,3 +7466,56 @@ def test_every_holder_follows_its_dimensions(name: str) -> None:
     wide = _holder(name, mount="clamp", **{first: 50.0}, height=60.0)
     assert wide.mesh.bounds.size[0] == pytest.approx(narrow.mesh.bounds.size[0] + 20.0)
     assert wide.mesh.bounds.size[2] > narrow.mesh.bounds.size[2]
+
+
+# --- Suche nach Kundenwörtern (RM-017) ---------------------------------------------
+
+#: Die Wörter, unter denen ein Kunde die Nutfeder sucht, je Sprache. „Nutenstein“
+#: und „T-Nut“ fanden sie nicht: Das erste stand nirgends, das zweite zerfiel in
+#: zwei Wörter unter der Mindestlänge. In den übrigen Sprachen traf die Mutter in
+#: T-Form („tuerca en T“) nur die Mutternfalle.
+CUSTOMER_WORDS_FOR_THE_TONGUE: tuple[tuple[str, str], ...] = (
+    ("de", "Nutenstein"),
+    ("de", "T-Nut"),
+    ("de", "Aluprofil"),
+    ("de", "Alu-Profil"),
+    ("de", "Profil"),
+    ("de", "Nutfeder"),
+    ("en", "T-nut"),
+    ("en", "T-slot"),
+    ("en", "aluminium extrusion"),
+    ("es", "tuerca en T"),
+    ("es", "perfil de aluminio"),
+    ("fr", "écrou en T"),
+    ("fr", "profilé aluminium"),
+    ("it", "dado a T"),
+    ("it", "profilato di alluminio"),
+    ("pt", "porca em T"),
+    ("pt", "perfil de alumínio"),
+)
+
+
+@pytest.mark.parametrize(("language", "word"), CUSTOMER_WORDS_FOR_THE_TONGUE)
+def test_the_tongue_is_found_under_the_words_customers_use(language: str, word: str) -> None:
+    """Die Bausteinsuche liest Titel und Beschreibung in der Sprache der Oberfläche."""
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    previous = get_language()
+    if language != "de":
+        install_language(language)
+    set_language(language)
+    try:
+        found = [spec.name for spec in PARTS.search(word)]
+    finally:
+        set_language(previous)
+    assert "profile_tongue" in found, f"[{language}] „{word}“ fand {found}"
+
+
+def test_a_hyphenated_word_counts_whole_and_by_its_parts() -> None:
+    """„T-Nut“ zählt als ein Wort, „Alu-Profil“ zusätzlich über „Profil“."""
+    whole = {spec.name for spec in PARTS.search("T-Nut")}
+    assert whole == {"profile_tongue"}, "nur die Nutfeder nennt die T-Nut"
+    parts = {spec.name for spec in PARTS.search("Alu-Profil")}
+    assert parts == {spec.name for spec in PARTS.search("Profil")}
+    assert {spec.name for spec in PARTS.search("qwertz-uiop")} == set()

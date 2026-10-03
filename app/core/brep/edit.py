@@ -3416,8 +3416,8 @@ def _invalid_transform(*, result: bool = False) -> GeometryError:
         )
         if result
         else _(
-            "Diese Transformation ist nicht endlich und umkehrbar. "
-            "Prüfen Sie Maßstab und Richtung der Änderung."
+            "Mit diesem Maßstab oder dieser Richtung lässt sich der Körper nicht "
+            "umrechnen. Prüfen Sie beide Werte."
         ),
         suggestions=(CORRECT_INPUT, CANCEL),
     )
