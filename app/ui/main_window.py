@@ -9503,6 +9503,7 @@ class MainWindow(QMainWindow):
         if self._close_requested or not isValid(self):
             return
         self._refresh_chat_availability(probe_local)
+        self._show_invitation()
 
     def _backend_probe_crashed(self, detail: str) -> None:
         """Ohne Antwort gilt: kein Modell — der Chat sagt es, das Fenster läuft."""
@@ -20395,7 +20396,13 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         empty = result is not None and not result.scene.objects and not self.session.busy
         invitation = self.viewport.invitation
-        invitation.set_chat_available(self.session.agent_backend is not None)
+        # Nur eine beantwortete Modellfrage: ``agent_backend`` stellte sie
+        # sonst beim Fensterbau im Hauptthread (Schlüsselbund, Sockets), an
+        # ``_refresh_chat_availability`` und seinem Arbeiter vorbei. Bis die
+        # Antwort kommt, fehlt der Chatknopf; ``_backend_answered`` holt ihn.
+        invitation.set_chat_available(
+            self.session.backend_known and self.session.agent_backend is not None
+        )
         halted = self._halted_before_a_body(result) if empty else None
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
