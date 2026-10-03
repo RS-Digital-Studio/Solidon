@@ -506,6 +506,62 @@ def crossing_and_apart() -> None:
     write(trimesh.util.concatenate([first, second, apart]), "crossing_and_apart.stl")
 
 
+#: Die Teile von :func:`parts_enclosing_air` als (Ausdehnung, Mitte) — der Test
+#: rechnet die erste Schicht aus denselben Zahlen nach.
+ENCLOSING_FRAME_BARS = (
+    ((60.0, 8.0, 9.37), (0.0, 21.0, 4.685)),
+    ((60.0, 8.0, 11.13), (0.0, -21.0, 5.565)),
+    ((8.0, 50.6, 10.41), (25.7, 0.0, 5.205)),
+    ((8.4, 49.2, 8.83), (-25.1, 0.2, 4.415)),
+)
+
+
+def parts_enclosing_air() -> None:
+    """Teile, die sich überlappen und dabei Luft einschließen (RM-485).
+
+    So kommen Tinkercad-Exporte und Baugruppen als eine STL: jedes Teil eine
+    eigene, nach außen gerichtete Schale, keine vereinigt. Vier Balken bilden
+    einen Rahmen mit Fenster, ein schräger Balken teilt das Fenster, ein Ring
+    aus sechs Zylindern umschließt darüber einen Luftkern, ein Zylinder steckt
+    ganz in einem Balken, und ein umgekehrter Quader ist ein echter Hohlraum
+    im anderen. Kein Eckpunkt fällt auf den eines anderen Teils, damit das
+    Einlesen keine Schalen verschweißt.
+    """
+    parts = [
+        trimesh.creation.box(extents, trimesh.transformations.translation_matrix(centre))
+        for extents, centre in ENCLOSING_FRAME_BARS
+    ]
+    slanted = trimesh.creation.box((70.0, 5.0, 4.0))
+    slanted.apply_transform(trimesh.transformations.rotation_matrix(math.radians(12.0), (0, 1, 0)))
+    slanted.apply_translation((0.0, 0.5, 9.5))
+    parts.append(slanted)
+    for index in range(6):
+        angle = 2.0 * math.pi * index / 6.0
+        parts.append(
+            trimesh.creation.cylinder(
+                radius=4.0,
+                height=11.4,
+                sections=32,
+                transform=trimesh.transformations.translation_matrix(
+                    (7.0 * math.cos(angle), 7.0 * math.sin(angle), 15.6)
+                ),
+            )
+        )
+    parts.append(
+        trimesh.creation.cylinder(
+            radius=2.5,
+            height=6.0,
+            sections=24,
+            transform=trimesh.transformations.translation_matrix((0.0, 21.0, 4.4)),
+        )
+    )
+    cavity = trimesh.creation.box((10.0, 4.0, 5.0))
+    cavity.apply_translation((-5.0, -21.0, 5.0))
+    cavity.invert()
+    parts.append(cavity)
+    write(trimesh.util.concatenate(parts), "parts_enclosing_air.stl")
+
+
 def colored_3mf() -> None:
     """Zwei Farben in einer 3MF, je Dreieck (§34, §20)."""
     import sys
@@ -787,6 +843,7 @@ if __name__ == "__main__":
     clean_figure()
     broken_selfint()
     crossing_and_apart()
+    parts_enclosing_air()
     colored_3mf()
     island_tower()
     oversized()

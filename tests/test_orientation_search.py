@@ -172,9 +172,9 @@ def test_contact_selection_matches_brute_force_at_both_tolerance_edges(
         )
         from shapely.geometry import Polygon
 
-        return [Polygon(((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))]
+        return [Polygon(((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))], [None]
 
-    monkeypatch.setattr(orientation, "cross_sections", capture_band)
+    monkeypatch.setattr(orientation, "_cross_sections", capture_band)
     contact, centre = orientation._contact(body, np.eye(4), plane)
 
     # Die Sollmenge entsteht durch einen vollständigen Dreieckslauf, nicht

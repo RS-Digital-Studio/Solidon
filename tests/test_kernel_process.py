@@ -179,7 +179,15 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
         edges = np.asarray(_adjacency_by_place(body.raw), dtype=np.int64).reshape(-1, 2)
         return {"edges": edges}, {"count": body.triangle_count}
 
+    def sections() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        body = plate()
+        return {**mesh_input(body), "heights": np.array([0.1, 0.5, 1.0])}, {
+            "volume": body.volume,
+            "volume_band": 1e-6 * body.area,
+        }
+
     return [
+        ("slice_sections", sections),
         ("display_simplify", display),
         ("simplify_at_most", at_most),
         ("simplify_search", search),
@@ -3053,3 +3061,19 @@ def test_a_full_disk_pauses_the_helper_and_tells_the_step(monkeypatch: pytest.Mo
         assert len(made) == 2
     finally:
         pool.shutdown()
+
+
+def test_public_sections_use_the_helper_and_keep_identical_contours(offloaded: None) -> None:
+    """Der öffentliche Schnitt lagert den Körperaufbau samt Schichten aus."""
+    from app.core.slice.analysis import cross_sections
+
+    mesh = welded("plate_holes.stl")
+    heights = np.linspace(0.1, 1.0, 11)
+    here = cross_sections(mesh, heights)
+    there = in_a_worker(lambda: cross_sections(mesh, heights))
+    assert len(here) == len(there) == 11
+    assert all(
+        first is not None and second is not None for first, second in zip(here, there, strict=True)
+    )
+    assert [shape.wkb for shape in here] == [shape.wkb for shape in there]
+    assert kernel_process.statistics().get("helper:slice_sections") == 1

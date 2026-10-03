@@ -62,7 +62,7 @@ def test_a_cube_has_the_same_cross_section_all_the_way_up() -> None:
     assert result.first_layer_area == pytest.approx(400.0, rel=TOLERANCE)
 
 
-@pytest.mark.parametrize("api", [None, 1, 999])
+@pytest.mark.parametrize("api", [None, 1, 2, 999])
 @pytest.mark.parametrize("cancellable", [False, True])
 def test_an_incompatible_compiled_cut_uses_the_available_fallback(
     monkeypatch: pytest.MonkeyPatch, api: int | None, cancellable: bool
@@ -80,6 +80,7 @@ def test_an_incompatible_compiled_cut_uses_the_available_fallback(
         compiled.PLANE_SEGMENTS_API = api
     monkeypatch.setattr(analysis, "_chain", compiled)
 
+    monkeypatch.setattr(analysis, "_solid_sections", lambda *_args, **_kwargs: None)
     result = slice_body(mesh, 2.0, cancelled=CancelSignal() if cancellable else None)
 
     assert not calls
@@ -115,11 +116,13 @@ def test_a_current_compiled_cut_does_not_hide_internal_type_errors(
         raise TypeError("native internal type error")
 
     monkeypatch.setattr(
-        analysis, "_chain", SimpleNamespace(PLANE_SEGMENTS_API=2, plane_segments=broken_cut)
+        analysis,
+        "_chain",
+        SimpleNamespace(PLANE_SEGMENTS_API=analysis.PLANE_SEGMENTS_API, plane_segments=broken_cut),
     )
 
     with pytest.raises(TypeError, match="native internal type error"):
-        slice_body(mesh, 2.0, cancelled=CancelSignal())
+        analysis._plane_segments(mesh, np.array([5.0]), cancelled=CancelSignal())
 
 
 def test_compiled_plane_segments_make_readonly_inputs_writable(
@@ -140,7 +143,9 @@ def test_compiled_plane_segments_make_readonly_inputs_writable(
         return np.empty((0, 2, 2)), np.empty(0, dtype=np.int64), np.empty((0, 2), dtype=np.int64)
 
     monkeypatch.setattr(
-        analysis, "_chain", SimpleNamespace(PLANE_SEGMENTS_API=2, plane_segments=compiled)
+        analysis,
+        "_chain",
+        SimpleNamespace(PLANE_SEGMENTS_API=analysis.PLANE_SEGMENTS_API, plane_segments=compiled),
     )
 
     analysis._plane_segments(mesh, heights)
@@ -360,32 +365,23 @@ def test_the_support_volume_comes_out_the_same_on_any_number_of_workers(
     mm³ mit einem Arbeiter, …759 mit zweien, …76 mit dreien. Die Auto-Split-
     Suche vergleicht Nähte an diesem Wert; auf einem Rechner mit vier Kernen
     rechnete sie mit einer anderen Zahl als auf einem mit acht. Jetzt teilen
-    sich die Arbeiter die Stücke **einer** Schicht, und die Summe entsteht in
-    einer einzigen, festen Folge.
+    sich die Arbeiter die Schichtmessung; die Clipper-Säule und ihre Summe
+    entstehen danach in einer einzigen, festen Folge.
     """
     body = ceilings_over_drafted_walls(3)
-    shared = analysis._above_material_shared
-    asked: list[int] = []
-
-    def counting(pending: list[Any], *args: Any) -> list[Any]:
-        asked.append(len(pending))
-        return shared(pending, *args)
-
-    monkeypatch.setattr(analysis, "_above_material_shared", counting)
     answers = []
     for workers in (1, 2, 3, 6):
-        monkeypatch.setattr(analysis, "SUPPORT_WORKERS", workers)
+        monkeypatch.setattr(analysis, "_workers", lambda _wanted, count=workers: count)
         answers.append(slice_body(body, 0.25, detail="support").support_volume)
 
-    assert asked, "die Arbeiter teilten sich keine Schicht — der Test prüfte nur einen Faden"
     assert answers[0] > 50_000.0, "drei Decken stehen auf einem zerfallenden Gitter"
     assert answers[1:] == [answers[0]] * 3, [repr(value) for value in answers]
 
 
 def test_the_pieces_of_one_layer_are_cut_the_same_on_a_pool() -> None:
     """Die Arbeiter teilen sich die Stücke einer Schicht (RM-266). Was dabei
-    zurückkommt, sind dieselben Stücke in derselben Folge wie ohne sie —
-    Stück für Stück bitgleich, denn jede Differenz bleibt derselbe GEOS-Aufruf."""
+    zurückkommt, ist dieselbe Kontur wie ohne sie, Bit für Bit. Gemeinsame
+    Clipper-Eingaben dürfen auch mehrere Aufrufer unverändert teilen."""
     from concurrent.futures import ThreadPoolExecutor
 
     import shapely
@@ -395,15 +391,14 @@ def test_the_pieces_of_one_layer_are_cut_the_same_on_a_pool() -> None:
         shapely.box(-1.0 + 0.37 * index, 5.0 + 0.9 * index, 3.0 + 0.37 * index, 5.5 + 0.9 * index)
         for index in range(90)
     ]
-    alone = analysis._above_material(pending, below)
+    column = analysis._material_cross(shapely.union_all(pending))
+    material = analysis._material_cross(below)
+    alone = analysis._cross_shape(column - material)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        shared = analysis._above_material(pending, below, pool=pool, workers=4)
+        shared = list(pool.map(lambda _number: analysis._cross_shape(column - material), range(4)))
 
-    assert len(shared) == len(alone)
-    assert all(
-        shapely.equals_exact(mine, theirs, tolerance=0.0)
-        for mine, theirs in zip(shared, alone, strict=True)
-    )
+    assert alone is not None
+    assert all(shape is not None and shape.wkb == alone.wkb for shape in shared)
 
 
 @pytest.mark.parametrize("groups", [15, 16, 17])
@@ -414,8 +409,8 @@ def test_parallel_support_columns_keep_holes_and_boundary_contacts(
     """Gemeinsames Material darf parallel gelesen werden, auch mit GEOS-Index.
 
     Je Vierergruppe liegt eine Säule im Material, eine in einem Loch,
-    eine kreuzt den Rand und eine berührt ihn nur. Unter, auf und über
-    der Baumgrenze bleiben jeweils genau zehn Quadratmillimeter übrig.
+    eine kreuzt den Rand und eine berührt ihn nur. Auch die früheren
+    Baumgrenzen behalten jeweils zehn Quadratmillimeter je Gruppe übrig.
     """
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
@@ -442,16 +437,18 @@ def test_parallel_support_columns_keep_holes_and_boundary_contacts(
         expected.extend([hole, shapely.box(-1.0, y + 4.0, 0.0, y + 6.0), contact])
     expected_shape = shapely.union_all(expected)
     ready = Barrier(3)
+    column = analysis._material_cross(shapely.union_all(pending))
+    material = analysis._material_cross(below)
 
     def cut(_worker: int):
         ready.wait(timeout=10.0)
-        return analysis._above_material(pending, below)
+        return analysis._cross_shape(column - material)
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         results = list(pool.map(cut, range(3)))
 
-    for parts in results:
-        actual = shapely.union_all(parts)
+    for actual in results:
+        assert actual is not None
         assert actual.area == pytest.approx(groups * 10.0)
         assert actual.equals(expected_shape)
     assert bool(shapely.is_prepared(below)) is prepared
@@ -1117,6 +1114,229 @@ def test_a_layer_height_of_zero_is_refused() -> None:
     assert "Schichthöhe" in str(raised.value.detail)
 
 
+# --- Teile, die ineinanderstecken (RM-485) --------------------------------------
+
+
+@pytest.fixture
+def cut_path(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jede Materialentscheidung gilt direkt, über Cython und ohne Erweiterung."""
+    if request.param == "direct":
+        monkeypatch.setattr(analysis, "DIRECT_SECTIONS_ABOVE", 0)
+    else:
+        monkeypatch.setattr(analysis, "_solid_sections", lambda *_args, **_kwargs: None)
+    if request.param == "numpy":
+        monkeypatch.setattr(analysis, "_chain", None)
+    elif request.param == "compiled" and (
+        analysis._chain is None
+        or getattr(analysis._chain, "PLANE_SEGMENTS_API", None) != analysis.PLANE_SEGMENTS_API
+    ):
+        pytest.skip("Schnittkern ist nicht gebaut")
+
+
+def _placed_box(extents: tuple[float, ...], centre: tuple[float, ...]) -> trimesh.Trimesh:
+    return trimesh.creation.box(extents, trimesh.transformations.translation_matrix(centre))
+
+
+def overlapping_frame() -> MeshData:
+    """Vier Balken, die sich an den Ecken überlappen, jeder eine eigene Schale.
+
+    So kommt ein Rahmen aus Tinkercad: Teile nebeneinander statt vereinigt.
+    Außen 40 × 40, innen ein Fenster 20 × 20 — Material sind 1600 − 400 mm².
+    """
+    return on_bed(
+        trimesh.util.concatenate(
+            [
+                _placed_box((40.0, 10.0, 10.0), (0.0, 15.0, 5.0)),
+                _placed_box((40.0, 10.0, 10.0), (0.0, -15.0, 5.0)),
+                _placed_box((10.0, 40.0, 10.0), (15.0, 0.0, 5.0)),
+                _placed_box((10.0, 40.0, 10.0), (-15.0, 0.0, 5.0)),
+            ]
+        )
+    )
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_a_frame_of_overlapping_bars_keeps_its_window_open(cut_path: None) -> None:
+    """Luft, die nur von Ringen verschiedener Teile umschlossen ist, bleibt Luft.
+
+    Die Verschachtelungstiefe kennt keine Teile: Das Fenster liegt in keinem
+    Ring, hatte Tiefe null und zählte als Material — 1600 statt 1200 mm² in
+    jeder Schicht. Ob ein Ring Material umschließt, sagt seine Umlaufrichtung,
+    und die steht im Dreieck.
+    """
+    import shapely
+
+    result = slice_body(overlapping_frame(), 0.2)
+
+    assert len(result.layers) == 50
+    for layer in result.layers:
+        assert layer.area == pytest.approx(40.0 * 40.0 - 20.0 * 20.0, rel=1e-9)
+    section = cross_section(overlapping_frame(), 5.0)
+    assert section is not None
+    assert not section.contains(shapely.Point(0.0, 0.0)), "the window is air"
+    assert len(section.interiors) == 1, "the window is the hole of one frame"
+    assert total_overhang(result) == pytest.approx(0.0, abs=1e-9), "nothing hangs in the window"
+    assert not [z for z in island_layers(result) if z > 0.5], "nothing starts in the window"
+    assert result.support_volume == pytest.approx(0.0, abs=1e-9)
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_a_ring_of_cylinders_encloses_air_and_not_material(cut_path: None) -> None:
+    """Acht Zylinder r 6 auf einem Kreis r 15, die Nachbarn überlappen.
+
+    Der Sollwert ist die Vereinigung der acht Achtundvierzigecke, die die
+    Zylinder in jeder Höhe haben — gerechnet aus ihren eigenen Ecken, nicht
+    aus dem Schnitt.
+    """
+    import shapely
+
+    cylinders = []
+    for index in range(8):
+        angle = 2.0 * math.pi * index / 8.0
+        cylinders.append(
+            trimesh.creation.cylinder(
+                radius=6.0,
+                height=10.0,
+                sections=48,
+                transform=trimesh.transformations.translation_matrix(
+                    (15.0 * math.cos(angle), 15.0 * math.sin(angle), 5.0)
+                ),
+            )
+        )
+    outlines = [shapely.MultiPoint(c.vertices[:, :2]).convex_hull for c in cylinders]
+    expected = shapely.unary_union(outlines)
+
+    section = cross_section(on_bed(trimesh.util.concatenate(cylinders)), 5.0)
+
+    assert section is not None
+    assert section.area == pytest.approx(expected.area, rel=1e-6)
+    assert section.area < 900.0, "the old depth rule filled the core: 1195.6 mm²"
+    assert len(section.interiors) == 1, "the air in the middle is one hole"
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_a_part_inside_another_part_is_material_and_a_cavity_is_not(cut_path: None) -> None:
+    """Ein Zylinder ganz im Würfel ist Material, derselbe umgekehrt ein Hohlraum.
+
+    Beide liegen gleich tief im Würfel; die Tiefe machte aus beiden ein Loch.
+    Was sie trennt, ist die Richtung ihrer Schale — außen herum ist Teil,
+    innen herum ist Hohlraum.
+    """
+    cube = _placed_box((20.0, 20.0, 20.0), (0.0, 0.0, 10.0))
+    inner = trimesh.creation.cylinder(
+        radius=3.0,
+        height=10.0,
+        sections=32,
+        transform=trimesh.transformations.translation_matrix((0, 0, 10)),
+    )
+    bore = abs(float(trimesh.creation.cylinder(radius=3.0, height=1.0, sections=32).volume))
+    cavity = inner.copy()
+    cavity.invert()
+
+    solid = cross_section(MeshData.of(trimesh.util.concatenate([cube, inner])), 10.0)
+    hollow = cross_section(MeshData.of(trimesh.util.concatenate([cube, cavity])), 10.0)
+
+    assert solid is not None and hollow is not None
+    assert solid.area == pytest.approx(400.0, rel=1e-9)
+    assert not solid.interiors, "a part inside a part is no hole"
+    assert hollow.area == pytest.approx(400.0 - bore, rel=1e-6)
+    assert len(hollow.interiors) == 1, "a cavity stays a hole"
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_an_inside_out_body_is_read_by_its_nesting_as_before(cut_path: None) -> None:
+    """Eine freie Schale, die nach innen zeigt, widerspricht sich selbst.
+
+    Nach der Umlaufrichtung wäre sie Luft; der Import richtet solche Schalen
+    nach außen (``repair.turn_shells_outward``), und wo eine bis hierher
+    kommt, gilt ihre Richtung nicht — der Schnitt bleibt Material.
+    """
+    cube = _placed_box((20.0, 20.0, 20.0), (0.0, 0.0, 10.0))
+    cube.invert()
+
+    section = cross_section(MeshData.of(cube), 10.0)
+
+    assert section is not None
+    assert section.area == pytest.approx(400.0, rel=1e-9)
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_a_hollow_sphere_keeps_its_cavity_as_a_hole(cut_path: None) -> None:
+    """Der Kontrollfall der Gegenrichtung: ein echter Hohlraum bleibt Loch.
+
+    Der Sollwert sind die Schnitte der beiden Kugeln einzeln, je als eigener
+    gültiger Körper geschnitten, voneinander abgezogen.
+    """
+    import manifold3d
+
+    outer = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+    inner = trimesh.creation.icosphere(subdivisions=3, radius=7.0)
+
+    def cut(sphere: trimesh.Trimesh) -> float:
+        solid = manifold3d.Manifold(
+            manifold3d.Mesh64(
+                vert_properties=np.asarray(sphere.vertices, dtype=np.float64),
+                tri_verts=np.asarray(sphere.faces).astype(np.uint64),
+            )
+        )
+        return float(solid.slice(0.5).area())
+
+    expected = cut(outer) - cut(inner)
+    cavity = inner.copy()
+    cavity.invert()
+    body = MeshData.of(trimesh.util.concatenate([outer, cavity]))
+
+    section = cross_section(body, 0.5)
+
+    assert section is not None
+    assert len(section.interiors) == 1
+    assert section.area == pytest.approx(expected, rel=1e-6)
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_every_layer_of_parts_enclosing_air_matches_the_manifold_slice(cut_path: None) -> None:
+    """Der kleine Zwilling des Laptop-Ständers (``parts_enclosing_air.stl``).
+
+    Dreizehn Schalen: ein Rahmen aus vier Balken, ein schräger Balken durch
+    das Fenster, ein Ring aus sechs Zylindern um einen Luftkern, ein Zylinder
+    ganz im Balken und ein Hohlraum im anderen. Der Bezug je Schicht ist
+    ``Manifold.slice`` — Clipper2 mit Füllregel Positive auf den gerichteten
+    Dreiecken, unabhängig von Solidons Schnitt. Die erste Schicht rechnet
+    sich zusätzlich aus den Maßen der vier Balken nach.
+    """
+    import manifold3d
+    import shapely
+
+    from tests.data.make_corpus import ENCLOSING_FRAME_BARS
+
+    mesh = corpus("parts_enclosing_air.stl")
+    body = manifold3d.Manifold(
+        manifold3d.Mesh64(
+            vert_properties=np.asarray(mesh.raw.vertices, dtype=np.float64),
+            tri_verts=np.asarray(mesh.raw.faces).astype(np.uint64),
+        )
+    )
+    assert body.status() == manifold3d.Error.NoError
+    heights = np.arange(0.1, float(mesh.bounds.maximum[2]), 0.2)
+    assert len(heights) > 100
+
+    sections = analysis.cross_sections(mesh, heights)
+
+    for z, section in zip(heights, sections, strict=True):
+        expected = body.slice(float(z)).area()
+        actual = 0.0 if section is None else section.area
+        assert actual == pytest.approx(expected, rel=1e-6), f"layer at z={z:.1f}"
+    bars = shapely.unary_union(
+        [
+            shapely.box(cx - sx / 2, cy - sy / 2, cx + sx / 2, cy + sy / 2)
+            for (sx, sy, _sz), (cx, cy, _cz) in ENCLOSING_FRAME_BARS
+        ]
+    )
+    first = sections[0]
+    assert first is not None
+    assert first.area == pytest.approx(bars.area, rel=1e-6)
+
+
 # --- Ein Schnitt mit einem Loch mitten darin ------------------------------------
 
 
@@ -1761,3 +1981,322 @@ def test_a_part_without_a_cavity_has_no_wall_to_taper() -> None:
         taper_length(cross_section(on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0))), 10.0))
         == 0.0
     )
+
+
+def test_clipper_holes_touching_the_outline_keep_their_material_islands() -> None:
+    """Ein Loch berührt den Außenrand und enthält eine echte Materialinsel.
+
+    Ein Ringpunkt auf dem Rand hat keine Verschachtelungstiefe. Die Richtung
+    und die vollständige Lochfläche ordnen es trotzdem seiner Hülle zu.
+    Die Sollfläche ist 20² minus die Raute (10 × 10 / 2) plus die Insel 2².
+    """
+    import manifold3d
+
+    section = manifold3d.CrossSection(
+        [
+            [(0, 0), (20, 0), (20, 20), (0, 20)],
+            [(10, 0), (5, 5), (10, 10), (15, 5)],
+            [(9, 4), (11, 4), (11, 6), (9, 6)],
+        ],
+        manifold3d.FillRule.Positive,
+    )
+    shape = analysis._cross_shape(section)
+    assert shape is not None
+    assert shape.is_valid
+    assert shape.area == pytest.approx(400.0 - 50.0 + 4.0, abs=1e-9)
+
+
+@pytest.mark.parametrize("cut_path", ["compiled", "numpy"], indirect=True)
+def test_a_returning_seam_does_not_fill_a_window_between_parts(cut_path: None) -> None:
+    """Der überlappende Rahmen behält sein Fenster auch mit einer Rücklaufnaht.
+
+    Ein Rand läuft aus einer Ecke hinaus und exakt zurück. Er trägt nur
+    positive Fläche, kreuzt sich nicht quer und darf die gerichtete Füllung
+    der vier Balken nicht verlieren. Soll bleibt 40² minus 20².
+    """
+    loops = [
+        [(-20, 10), (20, 10), (20, 20), (-20, 20)],
+        [(-20, -20), (20, -20), (20, -10), (25, -5), (20, -10), (-20, -10)],
+        [(10, -20), (20, -20), (20, 20), (10, 20)],
+        [(-20, -20), (-10, -20), (-10, 20), (-20, 20)],
+    ]
+    points, nodes = [], []
+    offset = 0
+    for loop in loops:
+        for index, point in enumerate(loop):
+            following = (index + 1) % len(loop)
+            points.append((point, loop[following]))
+            nodes.append((offset + index, offset + following))
+        offset += len(loop)
+    shape, _contours = analysis._polygon_with_contours(
+        np.asarray(points, dtype=float), np.asarray(nodes, dtype=np.int64), capture_contours=True
+    )
+    assert shape is not None
+    assert shape.area == pytest.approx(1200.0, abs=1e-9)
+    assert len(shape.interiors) == 1
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_a_free_inverted_shell_survives_next_to_an_outward_neighbour(cut_path: None) -> None:
+    """Ein Nachbar macht aus der freien invertierten Schale keinen Hohlraum.
+
+    Der bisherige Reparaturweg liest sie als Material. Ihr kleinerer Umfang
+    lässt das Gesamtvolumen positiv; allein dessen Vorzeichen genügt nicht.
+    """
+    outer = _placed_box((20.0, 20.0, 20.0), (0.0, 0.0, 10.0))
+    inverted = _placed_box((10.0, 10.0, 10.0), (30.0, 0.0, 5.0))
+    inverted.invert()
+    section = cross_section(MeshData.of(trimesh.util.concatenate([outer, inverted])), 5.0)
+    assert section is not None
+    assert section.area == pytest.approx(400.0 + 100.0, abs=1e-9)
+    assert len(section.geoms) == 2
+
+
+def test_direct_sections_accept_readonly_noncontiguous_mesh_arrays() -> None:
+    """Die öffentliche Analyse kopiert native Eingaben bei Bedarf in C-Puffer."""
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    # DataStore normalisiert beim Setzen selbst. Direkt hinterlegte Ansichten
+    # stellen hier einen externen, nur lesbaren Netzpuffer nach.
+    vertices = np.asfortranarray(body.vertices).view(trimesh.caching.TrackedArray)
+    faces = np.asfortranarray(body.faces).view(trimesh.caching.TrackedArray)
+    vertices.setflags(write=False)
+    faces.setflags(write=False)
+    body._data.data["vertices"] = vertices
+    body._data.data["faces"] = faces
+    assert not body.vertices.flags.c_contiguous and not body.vertices.flags.writeable
+    assert not body.faces.flags.c_contiguous and not body.faces.flags.writeable
+    sections = analysis.cross_sections(MeshData.of(body), np.linspace(-5.0, 5.0, 11))
+    assert len(sections) == 11
+    assert all(section is not None and section.area == pytest.approx(400.0) for section in sections)
+
+
+def test_an_open_contact_band_never_enters_the_volume_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der offene Ausschnitt am Würfel trägt Schnitte, aber keinen Volumenkern."""
+    mesh = corpus("cube_clean.stl")
+    body = mesh.raw
+    height = float(mesh.bounds.minimum[2]) + 0.1
+    points = np.asarray(body.vertices)
+    faces = np.asarray(body.faces)
+    z = points[faces, 2]
+    kept = faces[(z.min(axis=1) < height) & (z.max(axis=1) > height)]
+    band = MeshData.of(trimesh.Trimesh(vertices=points, faces=kept, process=False))
+    assert not band.is_watertight
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("an open contact band must not be passed to the native volume kernel")
+
+    monkeypatch.setattr(analysis.kernel_process, "run", forbidden)
+    section = analysis.cross_sections(band, np.linspace(height, height + 1.0, 11))[0]
+    assert section is not None
+    extent = np.asarray(mesh.bounds.maximum) - np.asarray(mesh.bounds.minimum)
+    assert section.area == pytest.approx(float(extent[0] * extent[1]), abs=1e-9)
+
+
+@pytest.mark.parametrize("count", [1, 10])
+def test_few_sections_avoid_a_volume_build(count: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wenige Schnitte sparen den Körperaufbau und behalten das Rahmenfenster."""
+    mesh = overlapping_frame()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("a few sections must not build a native volume")
+
+    monkeypatch.setattr(analysis.kernel_process, "run", forbidden)
+    sections = analysis.cross_sections(mesh, np.linspace(0.1, 9.9, count))
+    assert len(sections) == count
+    assert all(
+        section is not None and section.area == pytest.approx(1200.0) for section in sections
+    )
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+@pytest.mark.parametrize("contact", [False, True])
+@pytest.mark.parametrize("neighbour", ["none", "separate", "overlap", "island", "enclosed"])
+def test_an_inverted_tube_keeps_its_hole_and_independent_material(
+    cut_path: None, contact: bool, neighbour: str
+) -> None:
+    """Die inverse Rohrschale dreht ihr Loch mit, aber keine unabhängige Insel.
+
+    Auch das offene Aufstandsband muss die Zugehörigkeit seiner Wände zum
+    Original behalten. Ein teilweise überlappender Nachbar macht die freie
+    Schale nicht zum Hohlraum; eine vollständig enthaltene bleibt dagegen Luft.
+    """
+    from shapely.geometry import Polygon as Shape
+    from shapely.geometry import box
+
+    from app.core.slice.orientation import _contact
+
+    count = 48
+    body = trimesh.creation.annulus(r_min=4, r_max=10, height=20, sections=count)
+    body.invert()
+    theta = np.arange(count) * 2 * np.pi / count
+    xy = np.column_stack((np.cos(theta), np.sin(theta)))
+    annulus = Shape(10 * xy, holes=[4 * xy])
+    parts = [body]
+    expected = annulus
+    if neighbour in ("separate", "overlap"):
+        centre = 30 if neighbour == "separate" else 8
+        other = trimesh.creation.box((6, 6, 20))
+        other.apply_translation((centre, 0, 0))
+        parts.append(other)
+        expected = expected.union(box(centre - 3, -3, centre + 3, 3))
+    elif neighbour == "island":
+        parts.append(trimesh.creation.cylinder(radius=1, height=20, sections=count))
+        expected = expected.union(Shape(xy))
+    elif neighbour == "enclosed":
+        parts.append(trimesh.creation.box((30, 30, 20)))
+        expected = box(-15, -15, 15, 15).difference(annulus)
+    mesh = MeshData.of(trimesh.util.concatenate(parts))
+    got = _contact(mesh, np.eye(4), 0.1)[0] if contact else cross_section(mesh, 0.5)
+    assert got is not None
+    assert got.symmetric_difference(expected).area < 1e-4
+
+
+@pytest.mark.parametrize("cut_path", ["compiled", "numpy"], indirect=True)
+def test_two_segment_cycles_leave_the_other_sections_intact(cut_path: None) -> None:
+    """Eine doppelseitige Dreiecksfläche liefert keine Ringfläche neben dem Würfel."""
+    cube = trimesh.creation.box((20, 20, 20))
+    sheet = trimesh.Trimesh(
+        vertices=[(30, 0, -1), (40, 0, -1), (30, 0, 1)],
+        faces=[(0, 1, 2), (2, 1, 0)],
+        process=False,
+    )
+    mesh = MeshData.of(trimesh.util.concatenate([cube, sheet]))
+    section = cross_section(mesh, 0.0)
+    assert section is not None
+    assert section.area == pytest.approx(400.0)
+
+
+@pytest.mark.parametrize("inverted", [False, True])
+def test_contact_shell_topology_is_lazy_cached_and_cancellable(
+    inverted: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nur inverse Mehrfachringe fragen die Originaltopologie, einmal je Netz."""
+    from app.core.slice.orientation import _contact
+
+    body = trimesh.creation.annulus(r_min=4, r_max=10, height=20, sections=48)
+    if inverted:
+        body.invert()
+    mesh = MeshData.of(body)
+    token = CancelSignal()
+    original = analysis.kernel_process.run
+    calls = []
+
+    def record(job, *args, **kwargs):
+        calls.append(job)
+        assert kwargs["cancelled"] is token
+        return original(job, *args, **kwargs)
+
+    monkeypatch.setattr(analysis.kernel_process, "run", record)
+    first = _contact(mesh, np.eye(4), 0.1, cancelled=token)[0]
+    second = _contact(mesh, np.eye(4), 0.2, cancelled=token)[0]
+    assert first is not None and second is not None
+    assert len(first.interiors) == len(second.interiors) == 1
+    assert first.area == pytest.approx(second.area, rel=1e-6)
+    assert calls == (["component_labels"] if inverted else [])
+
+
+@pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
+def test_inverted_separate_cavity_walls_keep_the_nesting_fallback(cut_path: None) -> None:
+    """Eine getrennte positive Innenwand ist bei inverser Außenwand mehrdeutig.
+
+    Ohne weitere Herkunft entscheidet weiterhin der Verschachtelungsweg.
+    Die beiden positiven Referenzkugeln liefern unabhängig die Differenzfläche.
+    """
+    import manifold3d
+
+    outer = trimesh.creation.icosphere(subdivisions=2, radius=10)
+    inner = trimesh.creation.icosphere(subdivisions=2, radius=7)
+
+    def cut(sphere: trimesh.Trimesh) -> float:
+        solid = manifold3d.Manifold(
+            manifold3d.Mesh64(
+                np.require(sphere.vertices, dtype=np.float64, requirements=("C", "W")),
+                np.require(sphere.faces, dtype=np.uint64, requirements=("C", "W")),
+            )
+        )
+        return float(solid.slice(0.5).area())
+
+    expected = cut(outer) - cut(inner)
+    inner.invert()
+    body = trimesh.util.concatenate([outer, inner])
+    body.invert()
+    section = cross_section(MeshData.of(body), 0.5)
+    assert section is not None
+    assert len(section.interiors) == 1
+    assert section.area == pytest.approx(expected, rel=1e-6)
+
+
+def test_clipper_columns_check_cancellation_between_layers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine laufende Säule lässt sich nach einer Konvertierung abbrechen."""
+    from shapely.geometry import box
+
+    roof = box(0, 0, 10, 10)
+    measured = [
+        analysis.LayerMetrics(
+            z=index + 0.5,
+            area=0.0,
+            overhang_area=0.0,
+            island_area=0.0,
+            min_width=0.0,
+            bridge_width=0.0,
+            contour_count=0,
+            overhang=roof if index == 3 else None,
+        )
+        for index in range(4)
+    ]
+    token = CancelSignal()
+    original = analysis._material_cross
+    calls = []
+
+    def cancel_after_conversion(shape):
+        calls.append(shape)
+        result = original(shape)
+        token.cancel()
+        return result
+
+    monkeypatch.setattr(analysis, "_material_cross", cancel_after_conversion)
+    with pytest.raises(OperationCancelled):
+        analysis._support_volume([None, None, None, roof], measured, 1.0, cancelled=token)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "first_height, carried_width, hole, expected",
+    [
+        (None, 0.0, False, 350.0),
+        (0.4, 0.0, False, 290.0),
+        (None, 4.0, False, 250.0),
+        (None, 0.0, True, 262.5),
+    ],
+)
+def test_clipper_columns_match_analytic_volume(
+    first_height: float | None, carried_width: float, hole: bool, expected: float
+) -> None:
+    """100 mm² Dach: volle Säule, andere erste Höhe, Teilauflage und 25 mm² Loch."""
+    from shapely.geometry import box
+
+    roof = box(0, 0, 10, 10)
+    if hole:
+        roof = roof.difference(box(2, 2, 7, 7))
+    below = box(0, 0, carried_width, 10) if carried_width else None
+    measured = [
+        analysis.LayerMetrics(
+            z=index + 0.5,
+            area=0.0,
+            overhang_area=0.0,
+            island_area=0.0,
+            min_width=0.0,
+            bridge_width=0.0,
+            contour_count=0,
+            overhang=roof if index == 3 else None,
+        )
+        for index in range(4)
+    ]
+    # Ohne Auflage 100 * 3,5; erste Höhe 0,4: 100 * 2,9.
+    # Teilauflage: 100 * 1 + 60 * 2,5; Loch: 75 * 3,5.
+    actual = analysis._support_volume(
+        [None, below, None, roof], measured, 1.0, first_layer_height=first_height
+    )
+    assert actual == pytest.approx(expected, abs=1e-9)

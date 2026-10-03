@@ -124,7 +124,7 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   Umlaufsinn eines Rings sind Sache des Wegs, nicht des Körpers.
 - **Mehrere verkettete Ringe ohne `polygonize`** (`_nested`): ein Punkt je
   Ring gegen die übrigen, gerade Tiefe ist Material.
-- **Die Säulen auf Arbeitern, je Schicht.** `_support_volume` läuft einmal
+- **Früherer GEOS-Weg (bis RM-486): Säulen auf Arbeitern, je Schicht.** `_support_volume` läuft einmal
   von oben nach unten; ab `SUPPORT_SHARE_FROM` offenen Stücken teilen sich
   `SUPPORT_WORKERS` Arbeiter die Stücke der Schicht
   (`_above_material_shared`, gestreut), und die Liste kommt in der Folge
@@ -140,7 +140,7 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
 - **Die Suchen lesen nur Zahlen.** `judge` ruft `slice_body(...,
   with_layers=False)`: Stützvolumen und Aufstandsfläche bitgleich, ohne
   Schichten in Konturen zurückzuübersetzen.
-- **Der Stützort auf Arbeitern** (`model_support`, 26.09.2026). Er führt
+- **Früherer Stützort auf Arbeitern** (`model_support`, 26.09.2026, bis RM-486). Er führt
   denselben Abstieg je Stück, in Gruppen je Startschicht; jede Gruppe
   bereitet ihre eigene Kopie der Schicht vor (aus WKB), die Differenzen
   einer Schicht gehen in einem Aufruf, und die Baumtreffer werden
@@ -152,6 +152,21 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   Korpus (16 323 Stücke, 14 755 davon auf dem Modell): die Beratung eine
   halbe Stunde → 2,8 s, der Kanalraum 9 → 2,3 s; an der Waschschüssel 1,1 →
   0,8 s und 1,1 → 0,3 s, mit denselben Antworten.
+
+- **Clipper-Säulen (RM-486).** Die feste Abwärtsfolge und ihre Summe bleiben,
+  aber Überhangvereinigung und Materialdifferenz rechnen mit `CrossSection`.
+  Gerichtete Außenringe und Löcher kommen ohne Vereinfachung aus den bereits
+  ermittelten Materialflächen. Jede Schicht wird nur einmal konvertiert;
+  Zwischenkonturen werden nicht nach GEOS zurückübersetzt. Die örtliche
+  Säule behält ihren ursprünglichen Besitzer auch nach einer Teilung.
+  `model_support` teilt die Materialkonturen unverändert zwischen Gruppen,
+  `findings._column_under` innerhalb eines Befundlaufs. Lokale Caches leben
+  nur für diesen Aufruf. Die GEOS-Öffnung und Kanalurteile bleiben erhalten.
+  Die frühere GEOS-Prädikatgrenze entfällt für diese Differenzen; Prüfungen
+  halten Abbruch, Löcher, Berührungen und gleiche Antworten auf mehreren
+  Arbeitern weiterhin fest. CrossSection quantisiert intern: Vergleiche
+  zwischen altem und neuem Weg prüfen deshalb relative Volumenabweichung
+  bis 1e-9, Plattformvergleiche desselben Wegs weiter den Fingerabdruck.
 
 ## G-Code und Verbrauch
 

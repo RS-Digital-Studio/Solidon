@@ -720,6 +720,50 @@ def _automatic_support_angle() -> str:
     return repr(angle)
 
 
+def _support_columns() -> str:
+    """Stützvolumen, einzelne Säule und Standorturteil durch denselben Clipper-Weg."""
+    from shapely.geometry import box
+
+    from app.core.slice import analysis, findings
+    from app.core.types import LayerInfo, SliceResult
+
+    roof = box(-3.17, -2.39, 11.73, 8.91).difference(box(1.11, 0.37, 3.43, 4.27))
+    material = box(-4.31, -3.71, 0.63, 9.37)
+    shapes = [None, material, None, roof]
+    measured = [
+        analysis.LayerMetrics(
+            z=index + 0.5,
+            area=0.0,
+            overhang_area=0.0,
+            island_area=0.0,
+            min_width=0.0,
+            bridge_width=0.0,
+            contour_count=0,
+            overhang=roof if index == 3 else None,
+        )
+        for index in range(4)
+    ]
+    volume = analysis._support_volume(shapes, measured, 1.0)
+    layers = tuple(
+        LayerInfo(
+            z=index + 0.5,
+            contours=() if shape is None else analysis._to_polygons(shape),
+            area=0.0 if shape is None else shape.area,
+            overhang_area=roof.area if index == 3 else 0.0,
+            islands=(),
+            min_width=0.0,
+            overhangs=analysis._to_polygons(roof) if index == 3 else (),
+        )
+        for index, shape in enumerate(shapes)
+    )
+    result = SliceResult(layers=layers, support_volume=volume, first_layer_area=0.0)
+    column = findings._column_under(roof, result, 3, 0.0)
+    place = analysis._model_support(result, analysis.CHANNEL_WIDTH, None)
+    return fingerprint(
+        [volume, column, place.open_area, place.open_patch, place.channel_area]
+    ) + repr((sorted(place.channels), place.island_on_model))
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "corner_chamfer": lambda: _worked_corner(False),
@@ -744,6 +788,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "section_cut": _slanted_cut,
     "step_assembly": _step_assembly,
     "thicken": _thickened_skin,
+    "support_columns": _support_columns,
 }
 
 

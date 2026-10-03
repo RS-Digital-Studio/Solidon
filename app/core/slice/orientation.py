@@ -34,7 +34,7 @@ from app.core.geom.orient import (
 from app.core.geom.orient import candidates as face_candidates
 from app.core.geom.transform import apply, moved_points, place_on_bed, translation
 from app.core.log import get_logger
-from app.core.slice.analysis import cross_sections, slice_body
+from app.core.slice.analysis import _cross_sections, slice_body
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -341,7 +341,11 @@ def _carried(
 
 
 def _contact(
-    mesh: MeshData, turn: np.ndarray, footing_height: float
+    mesh: MeshData,
+    turn: np.ndarray,
+    footing_height: float,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> tuple[ShapelyPolygon | None, np.ndarray]:
     """Die Aufstandsfläche des gedrehten Körpers und sein Schwerpunkt in XY —
     ohne das Netz zu drehen.
@@ -382,7 +386,14 @@ def _contact(
         faces=local.reshape(-1, 3),
         process=False,
     )
-    return cross_sections(MeshData.of(band), np.asarray([height], dtype=float))[0], centre
+    sections, _contours = _cross_sections(
+        MeshData.of(band),
+        np.asarray([height], dtype=float),
+        capture_contours=False,
+        cancelled=cancelled,
+        shell_source=(mesh, used),
+    )
+    return sections[0], centre
 
 
 def search_proxy(mesh: MeshData) -> MeshData:
@@ -540,7 +551,10 @@ def standing_check(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         contact, centre = _contact(
-            mesh, rotation_to_down(entry.direction), profile.printer.layer_height / 2.0
+            mesh,
+            rotation_to_down(entry.direction),
+            profile.printer.layer_height / 2.0,
+            cancelled=cancelled,
         )
         stable, footing = _carried(contact, centre, profile.printer.extrusion_width)
         area = 0.0 if contact is None or contact.is_empty else float(contact.area)

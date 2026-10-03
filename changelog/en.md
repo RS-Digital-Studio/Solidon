@@ -28,6 +28,8 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
+- For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.

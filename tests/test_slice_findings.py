@@ -360,18 +360,17 @@ def test_the_columns_come_out_the_same_on_any_number_of_workers(
 
     result = slice_body(cellar(), 0.25)
     assert len(result.layers) >= analysis.PARALLEL_FROM, "sonst liefe nur ein Arbeiter"
-    monkeypatch.setattr(analysis, "SUPPORT_TREE_FROM", 1)
     answers = []
     for workers in (1, 2, 6):
         monkeypatch.setattr(analysis, "SUPPORT_WORKERS", workers)
-        answers.append(model_support(result))
+        answers.append(analysis._model_support(result, analysis.CHANNEL_WIDTH, None))
     tree_order = shapely.STRtree.query
     monkeypatch.setattr(
         shapely.STRtree,
         "query",
         lambda tree, *args, **kwargs: tree_order(tree, *args, **kwargs)[::-1],
     )
-    answers.append(model_support(result))
+    answers.append(analysis._model_support(result, analysis.CHANNEL_WIDTH, None))
 
     assert answers[0].open_area > 1000.0, "die Säule setzt auf den Wänden auf"
     assert answers[1:] == [answers[0]] * 3

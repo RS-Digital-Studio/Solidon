@@ -32,6 +32,8 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
+| 2026-10-03 | [RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)](#rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026) |
+| 2026-10-03 | [RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)](#rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026) |
 | 2026-10-03 | [RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)](#rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026) |
 | 2026-10-03 | [RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)](#rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026) |
 | 2026-10-03 | [RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)](#rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026) |
@@ -38096,6 +38098,36 @@ Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachm
 
 **Abschluss:** Die Auswertung reicht jeder Operation eine beobachtete Güte (`evaluate._WatchedQuality`: Vergleich, Hashwert und `pickle` merken die Frage) und meldet in `EvaluationResult.reads_quality`, ob ein Schritt sie gelesen hat; ein Cachetreffer trägt die Angabe mit, auch von der Platte, ein alter Eintrag ohne sie gilt als gefragt. `Session.fine_current` behandelt einen Entwurf ohne solche Frage als fein. Dazu fragt die Boolesche Kette erst hinter den verlustfreien Stufen nach der Güte (`boolean.boolean`): Beide Ketten beginnen mit `DRAFT_CHAIN`, und hielt *direkt*, war der Entwurf schon die feine Rechnung; vorher wählte die Kette ihre Stufen vorab und meldete so jede Bohrung als gütewirksam. Kegel und Ring rechnen seit RM-427 in beiden Stufen gleich, eine Bohrung an Quader und Platte ist im Entwurf bitgleich zur feinen Rechnung; weich verschmolzene Teile fragen weiter und werden fein nachgerechnet (RM-426). Tests in `test_evaluation.py` (Quader und Bohrung fragen nicht, *Bohrung ändern* an der Platte fragt nicht, Verschmelzen fragt, Treffer melden dasselbe) und `test_cache.py` (Angabe übersteht die Platte); ohne die Kettenänderung 2 von 4 rot (Gegenprobe). Weg-1-Detailsonde am echten Fenster (offscreen, F0FF), Klick bis Datei: Lochbrett-STEP 5,017 → 0,016 s, Rucksack-Halter 1,072 → 0,032 s, Platte 0,285 → 0,017 s (v0.5.1: 0,039 / 0,069 / 0,027 s); Dreiecke und Volumen der Dateien unverändert (2762 / 10 633,23 mm³, 15 978 / 27 026,24 mm³, 796 / 31 250,93 mm³). Rohwerte `F:\solidon-review-reports\regression-0.5.2\weg1\ergebnisse\detail-aufl494b-*`. Begonnen in `claude/rm-494`, abgeschlossen von Claude (Thread „Zweige auflösen“).
 
+## RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)
+
+<a id="rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026"></a>
+<a id="rm-485"></a>
+
+**RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_polygon_with_contours`/`_nested`
+  entscheiden Material und Loch nach der Verschachtelungstiefe der Ringe und werfen die
+  Umlaufrichtung weg. Bei mehreren sich überlappenden Schalen (Tinkercad- und viele
+  Thingiverse-Exporte, Baugruppen als eine STL) wird eine Fläche, die nur von Ringen
+  verschiedener Teile umschlossen ist, als Material gezählt. Gemessen: Rahmen aus vier
+  überlappenden Balken 1600 statt 1200 mm² in allen Schichten, Ring aus acht Zylindern 1195,6
+  statt 892,9 mm², `parametric-laptop-riser.stl` 46 von 460 Schichten über 1 %, 5 über 10 %
+  falsch (z 65,10: 2694 statt 2146 mm²). Kontrollfälle ohne eingeschlossene Luft (Kreuz, Mini
+  Golf v17, Piratenschiff) stimmen. Falsch werden damit Schichtfläche, Inseln, Überhänge,
+  Stützraum, Brücken und Materialschätzung im Prüfbericht.
+  **Stellen:** `app/core/slice/analysis.py:1251–1362`, Einzelringweg `:1264–1275`.
+  **Fix (allgemein):** Richtung jedes Schnittsegments aus dem Dreieck übernehmen, gerichtete
+  Ringe mit Füllregel Positive vereinigen (Clipper2 in `manifold3d.CrossSection`, schon im
+  Paket, ganzzahlig und plattformgleich); für gültige Körper direkt `Manifold.slice(z)` (am
+  Laptop-Ständer 0,33–0,50 statt 3,4–4,1 s). Clipper2 auf den heutigen Ringen ohne Richtung
+  ist ebenfalls falsch.
+  **Abnahme:** Geometrietests zuerst: Rahmen (1200 mm², Fenster ohne Insel/Überhang), Ring
+  aus acht Zylindern, Laptop-Ständer oder ein kleiner Korpuszwilling (je Schicht gleich
+  `Manifold.slice` bis 1e-6 relativ); Kreuz, Mini Golf v17, Piratenschiff, Hohlkugel und
+  `aushoehlen-und-teilen.p3d` unverändert. Bauplan §22, §31; Regel 6.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-1), `bibliotheken\sonden\b9_*`, `b3_*`.
+
+**Abschluss:** Ursache war die Entscheidung nach Verschachtelung ohne gerichtete Materialseite (546eff167, bereits in v0.5.0 und v0.5.1). Schnittsegmente tragen jetzt die Richtung des Dreiecks; Cython API 3 und NumPy verketten dieselbe Netztopologie. Positive Umlaufzahl in Clipper2 hält die Luft zwischen überlappenden Teilen frei. Gültige geschlossene Körper mit mehr als zehn Ebenen werden über den vorhandenen abbrechbaren Hilfsprozess direkt geschnitten. Wenige Ebenen und offene Kontaktbänder nehmen den Segmentweg. Cache-Version 37 entwertet frühere Ausrichtungen und Auto-Split-Ergebnisse. Vor dem Fix: vier rote Materialfälle (Rahmen 1600 statt 1200 mm², Zylinderring 1195,64 statt 892,94 mm², Teil im Teil, Korpuszwilling). Danach: alle Materialfälle mit Direkt-, Cython- und NumPy-Weg grün; Rahmen 1200 mm², freies Fenster, keine Insel, kein Überhang, kein Stützraum. Vollständige 0,2-mm-Raster von Laptop-Ständer, Mini Golf v17, gesamtem Piratenschiff, Aushöhlprojekt, Kreuz und Hohlkugel verglichen: maximal 4,492e-7 relativ zwischen Segment- und Direktschnitt am Laptop, Cython/NumPy dort identisch; die Kontrollmodelle bleiben innerhalb 8,932e-7 zum alten Stand. Das erste Entwicklungstor zeigte sieben native Auto-Split-Abbrüche an offenen Kontaktbändern; isoliert mit Exit 3221225477 reproduziert, vor dem nativen Aufbau durch Dichtheits- und Umlaufprüfung behoben. Die sieben Fälle und ein neuer Wächter bestehen. Wenige Schnitte: eine Ebene am Piratenschiff 0,0270 s im Segmentweg statt 0,3886 s im Direktweg; frühe Routenwahl bis zehn Ebenen mit roten Gegenproben abgesichert. Gezielte Läufe: 1144 bestanden, 3 übersprungen, 1 abgewählt; nach den letzten Guards 251 bestanden, 3 übersprungen. Endgültiges Entwicklungstor am eingefrorenen Stand: 20569 passed, 34 skipped in 628.82s (0:10:28); Ruff, Formatprüfung, mypy und Suite jeweils Exit 0. Keine Fenster-/Renderer-/Release-Leistungsprüfung. Sechs Changelog-Punkte in 0.5.2. Eigener Commit zu RM-485 mit diesen Quellen, dem neuen Korpuszwilling und diesem Abschluss; Rohprotokolle und Messskripte unter F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003, Bericht geometrie-bericht.md.
+ Die unabhängige Nachprüfung ergänzte zwei weitere Fehlerbilder: vollständig invertierte Rohre verloren ihre Öffnung (12 rote Fälle), und NumPy übernahm einen Zweipunktring, den Cython auslässt (ein roter Fall). Kanten-IDs ordnen Ringe jetzt bei Bedarf ihrer echten Netzschale zu; eigene Innenringe drehen mit, unabhängige Inseln bleiben erhalten. Der offene Kontaktband-Ausschnitt trägt dafür seine Originaltopologie weiter. Nur in diesem Bedarfspfad entsteht ein gecachter Komponentenindex; der normale positive Schnitt baut keinen Netzgraphen. Drei rote Fälle einer vollständig invertierten Hohlkugel mit getrennten Innenwänden belegen zusätzlich die Mehrdeutigkeit dieser Eingabe; dort bleibt der bestehende Verschachtelungsweg erhalten. Alle Schnitt-, Kern-, Stand- und Orientierungsfälle zusammen: 257 bestanden. Die sechs echten Modellkontrollen wurden nach den Änderungen erneut über alle Schichten geprüft. Die statische Nachprüfung hat keinen offenen Fund mehr. Der vorzeitig gestartete dritte Gesamtlauf wurde wegen des letzten Reviewfunds vollständig beendet und bleibt ausdrücklich als unvollständig dokumentiert.
 ## RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)
 
 <a id="rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026"></a>
@@ -38385,14 +38417,49 @@ Der anfangs serielle betroffene Lauf über fast die ganze Suite wurde durch
 dieses Tor ersetzt und zählt nicht als bestanden. Fenster, Renderer,
 Erzeugnisvergleiche und Leistung bleiben beim Release.
 
+**Gemeinsamer Stand:** Mit `2602e8c90` (RM-485/RM-486) zusammengeführt,
+native Schichtberechnung neu gebaut: 20671 bestanden, 35 übersprungen,
+375,39 s, Exit 0. Ruff, Format (1080 Dateien) und mypy (337 Quelldateien)
+jeweils Exit 0. Auf diesem Stand erneut zwölf echte Schnitte und unabhängig
+162/162 G-Code-Bedingungen erfüllt; alle sechs Zeitabweichungen unverändert
+unter 15 %. Belege: `continuation-integrated-suite.log`,
+`continuation-integrated-matched`, `fortsetzung-integration-abnahme.md/.json`.
+
 **Changelog:** Ja, der Zuordnungsfehler stammt aus `f934a42219`, enthalten
 auch in `v0.5.1` (`git tag --contains`). Der bestehende RM-482-Punkt unter
 0.5.2 ist in allen sechs Sprachen um die getrennten Tempi ergänzt, jeweils
 unter 200 Zeichen. **Commits:** `c0e7eab7d` (Beschleunigungsgrenzen),
-dieser Abschluss-Commit „Cura trennt volle Füllschichten von der Oberseite“.
+`d534706eb` (Vollschichten, sichtbare Oberseite und Profilimport).
 Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
 `continuation-before-matched`, `continuation-final-matched`,
 `continuation-reviewed-matched`, `fortsetzung-bahnen-bericht.md`,
 `fortsetzung-prozess-bericht.md`, `fortsetzung-hersteller.md` und
 `fortsetzung-abnahme.md`; Abschlussbericht außerdem im beauftragten
 `scratchpad/bericht-B.md`.
+
+## RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)
+
+<a id="rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026"></a>
+<a id="rm-486"></a>
+
+**RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_support_volume`/`_above_material`
+  vereinigen und ziehen die schwebende Säulenkontur Schicht für Schicht mit GEOS ab; über
+  Hohlräumen wächst sie auf Hunderttausende Punkte. Gemessen (F0FF, je zweimal):
+  `aushoehlen-und-teilen.p3d` 37,4–43,3 s mit GEOS, 0,062–0,068 s mit Clipper2, Stützraum
+  gleich auf 1,5e-12; CC2-Box und Screen-Cover gleich bis 2,4e-10, dort 0,01–0,17 s langsamer.
+  RM-405 b maß mit Vereinfachung 0,46 s und braucht dafür eine Toleranz; Clipper2 braucht
+  keine. Für RM-201: Clipper2 reist schon in manifold3d mit (BSL-1.0 in `licences.toml`), für
+  die Öffnung mit Gehrung ist es aber 2–7-mal langsamer als GEOS — dort bleibt die eigene
+  native Öffnung der Weg.
+  **Stellen:** `app/core/slice/analysis.py:481–645`, gleiche Bauart `:2991`,
+  `app/core/slice/findings.py:257`.
+  **Fix (allgemein):** Säulenkontur als `CrossSection` (Überhang `+`, Schicht darunter `-`,
+  Fläche über `area()`), Umwandlung einmal je Schicht, gerichtete Ringe aus RM-485
+  wiederverwenden; GEOS bleibt für die Öffnung.
+  **Abnahme:** `aushoehlen-und-teilen.p3d`, CC2-Box, Screen-Cover: Stützraum gleich auf 1e-9
+  relativ, Aushöhlbeispiel unter 0,5 s für `slice_body(detail="support")`, die einfachen
+  Modelle höchstens 0,2 s schlechter; neuer Weg in `test_platform_identity`. Bauplan §31.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
+
+**Abschluss:** Die GEOS-Säulenrechnung stammt aus 5c90fac6a und ist unter anderem in v0.5.0 und v0.5.1 enthalten. Sie führt jetzt die schwebende Kontur als CrossSection mit positiver Umlaufzahl: Überhang vereinigen, Material darunter abziehen, Fläche über area(). Bereits gerichtete Materialringe werden ohne Vereinfachung einmal je Schicht übernommen. model_support hält eine Säule je Herkunftsstück; Befunde teilen die umgewandelten Materialkonturen. Die GEOS-Öffnung bleibt unverändert. Cache-Version 38 verhindert alte Stützkennzahlen in gespeicherten Ausrichtungen. Vier analytische Sollfälle bestanden vor und nach der Umstellung: volle Säule 350 mm³, andere erste Höhe 290 mm³, Teilauflage 250 mm³, Loch 262,5 mm³. Abbruch und geteilte Konturen sind zusätzlich abgesichert. Der neue Weg steht in test_platform_identity: Stützvolumen, einzelne Säule und Standorturteil unter gezieltem Zahlenrauschen sowie mit einem anderen OpenBLAS-Kern (Nehalem). Vollständiger betroffener Lauf einschließlich dieser Datei, Slice-Fällen und Unterlagenwächtern: 886 bestanden, 3 übersprungen, 13 Releasefälle abgewählt in 115,64 s, Exit 0; Ruff, Format und gezielte Typprüfung grün. Reale Stützvolumina vor/nach RM-486: Aushöhlbeispiel maximal 1,665e-10, CC2-Box 6,02e-10, Screen-Cover 7,37e-11 relative Abweichung; alle unter 1e-9. Standort- und Kanalurteile bleiben erhalten. Gemessen auf i9-13900K, Affinität F0FF, OPENBLAS_NUM_THREADS=1, Alt/Neu abwechselnd und fremde Python-Prozesse protokolliert: vollständiges slice_body(detail="support") am Aushöhlbeispiel mit frischem Netz 0,328–0,354 s statt 0,438–0,466 s, wiederholt 0,316–0,360 s statt 0,429–0,477 s. In sechs zusätzlichen frischen Python-Prozessen, jeweils erste Analyse nach regulärem Projektladen, neu 0,29645/0,29768/0,29989 s, alt 0,39386/0,38721/0,39503 s. Das Projektladen kann native Kerne bereits benutzen; dies ist kein Nachweis eines völlig kalten nativen Kerns. CC2-Box neu 0,186–0,243 s statt 0,126–0,138 s, Screen-Cover neu 0,039–0,057 s statt 0,033–0,050 s; beide bleiben unter 0,2 s Mehrzeit. Die frühere 40-s-Messung gehört zum Stand vor RM-485; sie wird nicht als unmittelbare Vorhermessung dieser Umstellung ausgegeben. Gemeinsames Entwicklungstor: 20659 passed, 34 skipped in 611.69s (0:10:11); Ruff, Format, mypy und Suite jeweils Exit 0. Der aktuelle gemeinsame Slicerstand cafd47ccc ist per Merge enthalten. Sechs Kundenpunkte für 0.5.2. Messungen, Lastprotokolle, analytische Vorher-/Nachherläufe und Plattformnachweis: F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003\rm486-patch; Entwicklungstor unter rm486-gate-1.
