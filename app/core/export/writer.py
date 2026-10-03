@@ -1942,6 +1942,14 @@ def write_assembly(
             configured = handover.configured_slots(slots, settings)
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
+            if setup is not None:
+                findings += handover.cura_acceleration_findings(
+                    settings,
+                    profile,
+                    setup,
+                    {entry.id: part_values[entry.id].keys for entry in chosen},
+                    for_window=for_window,
+                )
         if for_window and takes_mesh_settings(flavour):
             if setup is not None and setup.flavour == "cura":
                 mismatch = handover.cura_active_printer_mismatch(
@@ -2238,12 +2246,17 @@ def _cura_window(
     width, depth, _height = profile.printer.build_volume
     active = slicer_profiles.cura_active_machine(setup.executable) if setup is not None else None
     bed = active.bed if active is not None and active.bed is not None else (width, depth)
+    motion = (
+        handover.cura_window_motion(setup, profile)
+        if setup is not None and any(part.keys for part in part_values.values())
+        else {}
+    )
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
-            settings=handover.for_the_cura_window(part_values[entry.id].keys),
+            settings=handover.for_the_cura_window(part_values[entry.id].keys, machine=motion),
             support_blocker=blockers.get(entry.id),
         )
         for entry in chosen

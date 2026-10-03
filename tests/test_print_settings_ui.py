@@ -7589,7 +7589,7 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
             works = any(
                 handover.values_for(layout, profile, flavour)
                 != handover.values_for(
-                    print_settings.with_path(layout, field.path, second), profile, flavour
+                    print_settings.with_choice(layout, field.path, second), profile, flavour
                 )
                 for layout in layouts
             )

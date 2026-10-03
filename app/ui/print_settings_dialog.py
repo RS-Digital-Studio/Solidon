@@ -2593,7 +2593,12 @@ class _OpenInSlicerWorker(Worker):
                 # hier ``None`` zurück.
                 beside = (
                     handover.cura_profile_beside(
-                        run.model, self._job.settings, self._job.profile, self._job.setup, run.slots
+                        run.model,
+                        self._job.settings,
+                        self._job.profile,
+                        self._job.setup,
+                        run.slots,
+                        findings=findings,
                     )
                     if self._job.with_settings
                     else None

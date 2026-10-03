@@ -160,7 +160,11 @@ hält die unabhängig gemessenen Aufzählungswerte für den Wächter fest.
   (`_cura_machine`): mit `PrinterProfile.cura_definition` und installierter
   Datei `-j`, sonst `fdmprinter`; Start- und Endcode aus der Kette, gefüllt von
   `_filled`, je ein `-s` (`solidon_cura.txt` trägt keine Umbrüche);
-  `_temperature_switches`; ohne Definition `slicer.cura_printer_unknown`.
+  `_temperature_switches`; `_cura_motion_values` übernimmt numerische
+  Bewegungswerte, `_cura_limited_accelerations` begrenzt Platte und Netze;
+  eigene Kürzungen reisen als `SlicerConfig.findings` in den Bericht.
+  Fensterprofile und Objektwerte verwenden dieselbe Grenze der aktiven
+  Instanz (`cura_window_motion`); ohne Definition `slicer.cura_printer_unknown`.
 - **Cura übernimmt Einstellungen nur als Profil** (`cura_profile_beside`,
   Befund `handover.cura_profile`). Die Qualitätsstufe kommt vom Drucker, der in
   Cura aktiv ist, für Düse und Spule seines ersten Fachs

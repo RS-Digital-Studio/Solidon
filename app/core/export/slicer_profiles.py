@@ -2091,7 +2091,14 @@ def _cura_definition_values(
         # Default ist dann gerade nicht der Wert, den Cura berechnet.
         if "value" in properties:
             value = properties["value"]
-            if isinstance(value, str):
+            if isinstance(value, str) and re.fullmatch(
+                r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value.strip()
+            ):
+                # Einige Hersteller schreiben Zahlen als Ausdruckstext.
+                # Nur ein endliches Zahlenliteral gilt; gerechnet wird hier nicht.
+                number = float(value)
+                value = number if math.isfinite(number) else None
+            elif isinstance(value, str):
                 if strict and key in {
                     "machine_width",
                     "machine_depth",

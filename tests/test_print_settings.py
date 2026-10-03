@@ -994,7 +994,7 @@ def test_every_setting_reaches_every_slicer(flavour: str) -> None:
         # Ableitungsstufe, ist seine Sache nicht.
         before = handover.values_for(settings, profile, flavour)  # type: ignore[arg-type]
         after = handover.values_for(
-            print_settings.with_path(settings, path, _other_value(settings, path)),
+            print_settings.with_choice(settings, path, _other_value(settings, path)),
             profile,
             flavour,  # type: ignore[arg-type]
         )
@@ -2556,7 +2556,8 @@ def test_nothing_cura_derives_is_left_to_its_default() -> None:
     if known is None:
         pytest.skip("keine Cura-Installation, deren Definition sich lesen ließe")
 
-    profile = profiles.make_profile()
+    # Die belegte Beschleunigung erreicht auch ihren abgeleiteten Prime-Tower-Wert.
+    profile = profiles.make_profile("sovol-sv06", "pla")
     written = handover.values_for(print_settings.resolve(profile), profile, "cura")
     derived: set[str] = set()
     frontier, seen = set(written), set(written)

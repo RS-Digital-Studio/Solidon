@@ -7490,5 +7490,6 @@
   "Weitere Beispielprojekte": "More example projects",
   "Text und Anhänge vor dem Senden ansehen": "View the text and attachments before sending",
   "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer does not support tree supports and uses grid supports instead.",
-  "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "No slicer profile is selected for this material. Material values come from Solidon's table; choose a filament profile in the print dialog if needed."
+  "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "No slicer profile is selected for this material. Material values come from Solidon's table; choose a filament profile in the print dialog if needed.",
+  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "For Cura, acceleration is limited to the printer's limit. Check the value in the print dialog."
 }

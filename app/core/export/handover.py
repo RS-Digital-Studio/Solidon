@@ -905,12 +905,37 @@ def values_for(
     Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
     Zusammenführen laufen ließe, bekäme die Hälfte.
     """
-    values = as_mapping(effective_adhesion(settings, profile, flavour), flavour, program=program)
-    values |= _machine_keys(profile, flavour)
+    written = as_mapping(effective_adhesion(settings, profile, flavour), flavour, program=program)
+    written |= _machine_keys(profile, flavour)
     if flavour == "cura":
-        values = _cura_dependants(values, settings, profile)
-    _without_line_break(values, flavour)
-    return values
+        written = _cura_dependants(
+            _cura_accelerations(written, settings, profile), settings, profile
+        )
+    _without_line_break(written, flavour)
+    return written
+
+
+def _cura_accelerations(
+    written: Mapping[str, str], settings: PrintSettings, profile: Profile
+) -> dict[str, str]:
+    """Nur belegte oder bewusst gewählte Beschleunigungen, auch im Fensterprofil."""
+    configured = dict(written)
+    # Eine Qualitätsstufe kennt die Mechanik eines unbekannten Druckers nicht.
+    for path, key, native in (
+        ("speed.acceleration", "acceleration_print", profile.printer.acceleration),
+        (
+            "speed.outer_wall_acceleration",
+            "acceleration_wall_0",
+            profile.printer.outer_wall_acceleration,
+        ),
+    ):
+        if native is None and path not in settings.explicit:
+            configured.pop(key, None)
+    active = "acceleration_print" in configured or "acceleration_wall_0" in configured
+    configured["acceleration_enabled"] = "true" if active else "false"
+    if "acceleration_print" in configured:
+        configured.setdefault("acceleration_wall_0", configured["acceleration_print"])
+    return configured
 
 
 def effective_adhesion(
@@ -1880,7 +1905,7 @@ class CuraMachine:
     codes: Mapping[str, str] = field(default_factory=dict)
     switches: Mapping[str, str] = field(default_factory=dict)
     settings: Mapping[str, str] = field(default_factory=dict)
-    """Belegte Hardwarewerte der konfigurierten Maschine, ohne Prozesswerte."""
+    """Belegte Hardwarewerte samt daran begrenzten Prozessbeschleunigungen."""
     name: str = ""
     """``machine_name`` der Definition — CuraEngine schreibt ihn als
     ``;TARGET_MACHINE.NAME`` in den Kopf (:func:`cura_machine_differences`)."""
@@ -1918,6 +1943,8 @@ class SlicerConfig:
     """Die tatsächlich geschriebenen Sollwerte, einschließlich aller Filamentplätze."""
     cura_machine: CuraMachine | None = None
     """Nur bei Cura: Druckerdefinition, Start- und Endcode (:func:`_cura_machine`)."""
+    findings: tuple[Finding, ...] = ()
+    """Belegte Abweichungen von der eigenen Wahl; ``written`` bleibt der ausgegebene Wert."""
 
     @property
     def filament(self) -> Path | None:
@@ -2789,6 +2816,7 @@ def write_config(
     # nicht hier, sondern in ``cura_machine`` (:func:`_command`).
     flat = flat_values()
     machine = _cura_machine(setup, profile, flat)
+    limited = _cura_limit_findings(flat, machine.settings, paths=settings.explicit)
     flat |= machine.settings
     if machine.from_printer:
         # Die Druckerdefinition ist die Maschine (RM-330): Ihr Ursprung gilt,
@@ -2804,7 +2832,7 @@ def write_config(
         "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",
     )
-    return SlicerConfig(process=target, written=flat, cura_machine=machine)
+    return SlicerConfig(process=target, written=flat, cura_machine=machine, findings=tuple(limited))
 
 
 #: Schlüssel, die eine Spule aus sich selbst ergänzt und nie vom Nachbarn
@@ -3953,6 +3981,8 @@ def _command(
     config: SlicerConfig,
     output: Path,
     keep_arrangement: bool = False,
+    *,
+    findings: list[Finding] | None = None,
 ) -> list[str]:
     """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
     ein Dateiname mit Leerzeichen ist sonst zwei Argumente.
@@ -4077,7 +4107,10 @@ def _command(
     for model in models:
         for mesh in cura_meshes(Path(model)):
             arguments += ["-l", str(mesh.path)]
-            for key, value in mesh.settings.items():
+            limited = _cura_limited_accelerations(mesh.settings, engine.settings)
+            if findings is not None:
+                findings.extend(_cura_limit_findings(mesh.settings, limited, file=mesh.path.name))
+            for key, value in limited.items():
                 arguments += ["-s", f"{key}={value}"]
     arguments += ["-o", str(output / OUTPUT_NAME)]
     return arguments
@@ -4253,6 +4286,7 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         if (isinstance(source, slicer_profiles.SlicerProfile) and source.cura_instance is not None)
         else {}
     )
+    hardware |= _cura_motion_values(chain, values, profile.printer)
     # **Der Ursprung gehört der Maschine** (RM-330). Eine Druckerdefinition
     # oder Instanz mit ``machine_center_is_zero`` misst von der Bettmitte —
     # Curas Deltas etwa —, und CuraEngine verschiebt das Modell dann nicht.
@@ -4336,6 +4370,156 @@ def _cura_hardware_values(
         and isinstance(value, (str, int, float, bool))
     }
     return hardware
+
+
+def _cura_limited_accelerations(
+    values: Mapping[str, str], machine: Mapping[str, str]
+) -> dict[str, str]:
+    """Prozesswerte auf die belegte X-/Y-Grenze deckeln, auch je Netz."""
+    limits = [
+        number
+        for axis in ("x", "y")
+        if (number := _as_float(machine.get(f"machine_max_acceleration_{axis}"))) is not None
+        and math.isfinite(number)
+        and number > 0.0
+    ]
+    result = dict(values)
+    if not limits:
+        return result
+    limit = min(limits)
+    for key, value in values.items():
+        if not (key.startswith("acceleration_") or key.endswith("_acceleration")):
+            continue
+        number = _as_float(value)
+        if number is not None and math.isfinite(number) and number > limit:
+            result[key] = f"{limit:g}"
+    return result
+
+
+def _cura_limit_findings(
+    requested: Mapping[str, str],
+    written: Mapping[str, str],
+    *,
+    paths: frozenset[str] | None = None,
+    object_id: str | None = None,
+    file: str = "",
+) -> list[Finding]:
+    """Eine gekürzte Wahl bleibt als strukturierter Befund erhalten, auch je Teil.
+
+    Nur die im Dialog angebotenen Wurzeln zählen, nicht deren Cura-Spiegel.
+    Für die Platte gelten die eigenen und übernommenen Wahlen; ein Netz
+    trägt bereits nur seine Abweichungen und nennt deshalb jede Kürzung.
+    """
+    findings: list[Finding] = []
+    for entry in slicer_keys.TABLES["cura"]:
+        if entry.key not in ("acceleration_print", "acceleration_wall_0"):
+            continue
+        if paths is not None and entry.path not in paths:
+            continue
+        before = _as_float(requested.get(entry.key))
+        after = _as_float(written.get(entry.key))
+        if before is None or after is None or not before > after:
+            continue
+        findings.append(
+            Finding(
+                code="slicer.acceleration_limited",
+                severity="warning",
+                message=_(
+                    "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. "
+                    "Prüfen Sie den Wert im Druckdialog."
+                ),
+                object_id=object_id,
+                values={
+                    "setting": entry.path,
+                    "requested": before,
+                    "actual": after,
+                    **({"file": file} if file else {}),
+                },
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        )
+    return findings
+
+
+def cura_acceleration_findings(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    parts: Mapping[str, Mapping[str, str]],
+    *,
+    for_window: bool = False,
+) -> list[Finding]:
+    """Der Exportbericht nennt dieselben Kürzungen wie der CuraEngine-Lauf."""
+    if setup.flavour != "cura":
+        return []
+    requested = values_for(settings, profile, setup.flavour)
+    motion = (
+        cura_window_motion(setup, profile)
+        if for_window
+        else _cura_machine(setup, profile, requested).settings
+    )
+    limited = _cura_limited_accelerations(requested, motion)
+    # Beim Fenster meldet der Profilschreiber die Platte erst beim Schreiben,
+    # einschließlich der einzelnen Spulen. Hier reisen dann nur Objektwerte.
+    findings = (
+        [] if for_window else _cura_limit_findings(requested, limited, paths=settings.explicit)
+    )
+    for object_id, original in parts.items():
+        limited = _cura_limited_accelerations(original, motion)
+        findings.extend(_cura_limit_findings(original, limited, object_id=object_id))
+    return findings
+
+
+def _cura_motion_values(
+    chain: Mapping[str, object], written: Mapping[str, str], printer: PrinterProfile
+) -> dict[str, str]:
+    """Numerische Maschinenwerte der Definitionskette für CuraEngine auflösen.
+
+    CuraEngine liest nur ``default_value``. Der Profilauflöser liefert auch
+    numerisches ``value``, lässt Formeln aber aus. Grenzen bleiben deshalb
+    Herstellerdaten; die Stufenvorgabe ersetzt nie eine unbekannte Grenze.
+    """
+    motion: dict[str, str] = {}
+    for key, value in chain.items():
+        if key != "machine_acceleration" and not key.startswith(
+            ("machine_max_acceleration_", "machine_max_feedrate_", "machine_max_jerk_")
+        ):
+            continue
+        number = _as_float(str(value))
+        if number is not None and math.isfinite(number) and number >= 0.0:
+            motion[key] = f"{number:g}"
+    # Vor dem Endcode setzt CuraEngine diese Beschleunigung erneut mit M204.
+    # Auch die Rückstellung muss innerhalb der unveränderten Achsgrenzen liegen.
+    motion = _cura_limited_accelerations(motion, motion)
+    if written.get("acceleration_enabled") != "true":
+        return motion
+
+    process_values = {
+        key: value
+        for key, value in written.items()
+        if key.startswith("acceleration_") or key.endswith("_acceleration")
+    }
+    printing = process_values.get("acceleration_print", motion.get("machine_acceleration"))
+    if printing is not None:
+        process_values.setdefault("acceleration_print", printing)
+        process_values.setdefault("acceleration_wall_0", printing)
+        for source, targets in slicer_keys.CURA_MIRRORED.items():
+            if source in process_values:
+                for target in targets:
+                    process_values.setdefault(target, process_values[source])
+    travel = _as_float(str(chain.get("acceleration_travel", "")))
+    if travel is not None and math.isfinite(travel) and travel > 0.0:
+        process_values["acceleration_travel"] = f"{travel:g}"
+    process_values = _cura_limited_accelerations(process_values, motion)
+    acceleration = _as_float(process_values.get("acceleration_print"))
+    if acceleration:
+        first = min(printer.first_layer_acceleration or _FIRST_LAYER_ACCELERATION, acceleration)
+        process_values["acceleration_layer_0"] = f"{first:g}"
+        for key in slicer_keys.CURA_MIRRORED["acceleration_layer_0"]:
+            process_values[key] = f"{first:g}"
+        travel = _as_float(process_values.get("acceleration_travel")) or acceleration
+        process_values["acceleration_travel_layer_0"] = f"{first * travel / acceleration:g}"
+    return motion | process_values
 
 
 def cura_machine_differences(
@@ -5267,6 +5451,7 @@ def slice_model(
             else models
         )
         config = write_config(settings, profile, setup, workspace, slots)
+        limited_settings = list(config.findings)
         requested_values = config.written
         config = _creality_cli_tower_position(config, setup, cli_models)
         densities, diameters = _readback_materials(config, settings, profile, setup, slots)
@@ -5296,7 +5481,9 @@ def slice_model(
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
         # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
         completed = _run_slicer(
-            _command(setup, cli_models, config, target, wanted_arrangement),
+            _command(
+                setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
+            ),
             workspace,
             timeout,
             setup,
@@ -5539,6 +5726,7 @@ def slice_model(
         # Orca-Familie sagt dazu nur „process not compatible with printer".
         *machine_missing(setup, profile),
         *foundation_findings(settings, profile, setup, slots=slots),
+        *limited_settings,
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),
@@ -5690,12 +5878,39 @@ _CURA_CONTAINER_VERSION: Final = 4
 _CURA_PROFILE_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
 
 
-def for_the_cura_window(values: Mapping[str, str]) -> dict[str, str]:
+def cura_window_motion(setup: SlicerSetup, profile: Profile) -> Mapping[str, str]:
+    """Belegte Grenzen der aktiven Cura-Instanz, auf die das Fenster importiert."""
+    if not _cura_base(setup.executable):
+        return {}
+    active = slicer_profiles.cura_active_machine(setup.executable)
+    if active is None:
+        return {}
+    roots = _profile_roots(setup)
+    chosen = slicer_profiles.chosen_machine("cura", setup.executable)
+    source = (
+        slicer_profiles.profile_by_name(setup.executable, "cura", chosen, "machine")
+        if chosen
+        else None
+    )
+    if chosen and source is None:
+        raise _cura_instance_error(setup, active.name, missing=False)
+    chain = (
+        slicer_profiles.resolve_profile(source, roots)
+        if source is not None
+        else slicer_profiles.resolve_values(active.definition, roots)
+    )
+    return _cura_motion_values(chain, {}, profile.printer)
+
+
+def for_the_cura_window(
+    values: Mapping[str, str], *, machine: Mapping[str, str] | None = None
+) -> dict[str, str]:
     """Werte in der Schreibweise von Curas Fenster: Wahrheitswerte als
     ``True``/``False``, wie sein eigener Schreiber sie ablegt; die Konsole
     liest ``true``/``false`` (:func:`values_for`)."""
+    limited = _cura_limited_accelerations(values, machine or {})
     return {
-        key: {"true": "True", "false": "False"}.get(value, value) for key, value in values.items()
+        key: {"true": "True", "false": "False"}.get(value, value) for key, value in limited.items()
     }
 
 
@@ -5705,6 +5920,8 @@ def cura_profile_beside(
     profile: Profile,
     setup: SlicerSetup,
     slots: Sequence[MaterialSlot] = (),
+    *,
+    findings: list[Finding] | None = None,
 ) -> Finding | None:
     """Die Einstellungen als importierbares Cura-Profil neben dem Modell (§29).
 
@@ -5773,6 +5990,7 @@ def cura_profile_beside(
     quality = min(sorted(qualities), key=lambda kind: abs(qualities[kind] - wanted))
     definition = slicer_profiles.cura_quality_definition(setup.executable, active.definition)
     name = _one_line(model.stem) or "solidon"
+    motion = cura_window_motion(setup, profile)
 
     def container(values: Mapping[str, str], position: int | None) -> str:
         lines = [
@@ -5789,16 +6007,21 @@ def cura_profile_beside(
         if position is not None:
             lines.append(f"position = {position}")
         lines += ["", "[values]"]
-        for key, value in sorted(for_the_cura_window(values).items()):
+        limited = for_the_cura_window(values, machine=motion)
+        if findings is not None:
+            findings.extend(_cura_limit_findings(values, limited, paths=settings.explicit))
+        for key, value in sorted(limited.items()):
             lines.append(f"{key} = {value}")
         return "\n".join(lines) + "\n"
 
-    shared = as_mapping(settings_for_handover(settings, profile, "cura", slots, setup), "cura")
+    resolved = settings_for_handover(settings, profile, "cura", slots, setup)
+    shared = _cura_accelerations(as_mapping(resolved, "cura"), resolved, profile)
     _without_line_break(shared, setup.name)
     entries = [("solidon", container(shared, None))]
     if len(slots) > 1:
         for position, slot in enumerate(slots):
-            own = as_mapping(settings_for_slot(settings, profile, slot, setup), "cura")
+            resolved = settings_for_slot(settings, profile, slot, setup)
+            own = _cura_accelerations(as_mapping(resolved, "cura"), resolved, profile)
             _without_line_break(own, setup.name)
             entries.append((f"solidon_extruder_{position}", container(own, position)))
     target = model.with_suffix(CURA_PROFILE_SUFFIX)
