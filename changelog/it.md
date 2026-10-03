@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- Se in Cura è attiva un’altra stampante, il trasferimento indica entrambe e mostra dove adottare la scelta di Cura.
 - Risolto un arresto anomalo di ElegooSlicer e OrcaSlicer durante lo slicing di modelli multicolore con supporti a griglia.
 - L'analisi dello spazio necessario per i supporti è molto più rapida sui modelli cavi e mantiene i contorni fini.
 - Nelle parti sovrapposte, l'analisi di stampa non conta più l'aria racchiusa come materiale. Migliora anche il rilevamento degli sbalzi e dei supporti necessari.

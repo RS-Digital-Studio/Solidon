@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- If Cura has a different printer selected, the handoff names both printers and shows where to adopt Cura’s selection.
 - Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
 - Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.

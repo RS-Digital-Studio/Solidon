@@ -74,7 +74,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
-| [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
@@ -2468,16 +2467,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   erhalten. Zentrales Tor und tatsächliche Integration dieser Einheit
   stehen aus; native Qt-/Fenster-/Abbruchlatenz bleibt Releaseabnahme.
   B01-Export-/Sliceranschlüsse sind separat abgestimmt; RM298 bleibt `[~]`.
-
-<a id="rm-301"></a>
-
-- [ ] **RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons.** Aus dem Release 0.5.1 (Gesamtprüfung, Sichtprüfung B5 im
-  Cura-Fenster). Ist in Cura ein anderer Drucker aktiv als in Solidon, folgen Profil und
-  Bettlage im Cura-Fenster Curas Maschine (`CuraActiveMachine`), Temperaturen und Tempi aber
-  Solidons Drucker. Entscheidung der Release-Sitzung: Die Übergabe nennt dann beide Drucker
-  und bietet den aus Cura mit einem Klick an; vorher prüfen, wie weit das Angebot des
-  Druckdialogs („Ist Ihr Slicer auf einen anderen Drucker eingestellt …“) Cura schon
-  abdeckt. Abnahme: Übergabe an Cura mit abweichendem Drucker nennt beide.
 
 <a id="rm-302"></a>
 

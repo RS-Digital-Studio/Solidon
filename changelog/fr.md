@@ -29,6 +29,7 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- Si une autre imprimante est active dans Cura, le transfert nomme les deux et indique où reprendre le choix de Cura.
 - Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.
 - L'analyse de l'espace nécessaire aux supports est bien plus rapide sur les modèles creux et préserve les contours fins.
 - Pour les pièces qui se chevauchent, l'analyse d'impression ne compte plus l'air enfermé comme de la matière. La détection des surplombs et des supports nécessaires s'améliore aussi.

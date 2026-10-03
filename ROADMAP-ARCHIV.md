@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)](#rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026) |
 | 2026-10-03 | [RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)](#rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026) |
 | 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
 | 2026-10-03 | [RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)](#rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026) |
@@ -38519,3 +38520,18 @@ Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
   Registerabgleich 02.10. (Stand `3fd3b1ace`): „Nächster Schritt: die zwei Befunde beheben“ ist überholt, beide sind behoben.
 
 **Abschluss:** Der Import erhält alle 59.744 Dreiecke und fünf geschlossenen Schalen. Erst die 3MF-Ausgabe rundete 80.832 Koordinaten auf sechs Nachkommastellen; genau diese Rundung löst mit Farben und Gitterstützen den Absturz aus. `_write_geometry` erhält nun die float64-Werte von Körpern und Stützsperren mit 17 signifikanten Stellen. Acht bleibende Fälle für Einzelkörper und alle drei Projektfamilien waren vorher rot und danach grün. Reale Gegenprobe: ElegooSlicer 1.5.3.5 und OrcaSlicer 2.4.2 brechen mit alter Rundung bei `0xC0000409` ab; nach dem Fix liefern beide 800 Schichten und beide Werkzeuge. Elegoo: 472,32 g, 45.066,92 mm³ Stütze; Orca: 403,15 g, 48.167,38 mm³ Stütze. Alle Beilagen, Dreiecke, Farben und die Build-Matrix bleiben beim isolierten Vergleich bytegleich. Die frühere Rohnetzprobe verlor zugleich die Farben und war deshalb kein Beleg gegen die Netzaufbereitung. Das Originalprojekt läuft weiterhin durch. Anordnungs-/Mehrfarbenbefunde bleiben bei der parallel laufenden Übergabereihe und werden nicht unterdrückt. Ursache `c4b890e2c` ist in v0.5.1 enthalten; Kundenpunkt in allen sechs Dateien unter 0.5.2. Umsetzung im zugehörigen RM-252-Abschlusscommit, genaue Commit- und Torbelege im Bericht B. [Messung und Grenzen](konzepte/nachweise-release-0.5.1/reports/rm252-koordinaten-2026-10-03.md).
+
+## RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)
+
+<a id="rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026"></a>
+<a id="rm-301"></a>
+
+**RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons.** Aus dem Release 0.5.1 (Gesamtprüfung, Sichtprüfung B5 im
+  Cura-Fenster). Ist in Cura ein anderer Drucker aktiv als in Solidon, folgen Profil und
+  Bettlage im Cura-Fenster Curas Maschine (`CuraActiveMachine`), Temperaturen und Tempi aber
+  Solidons Drucker. Entscheidung der Release-Sitzung: Die Übergabe nennt dann beide Drucker
+  und bietet den aus Cura mit einem Klick an; vorher prüfen, wie weit das Angebot des
+  Druckdialogs („Ist Ihr Slicer auf einen anderen Drucker eingestellt …“) Cura schon
+  abdeckt. Abnahme: Übergabe an Cura mit abweichendem Drucker nennt beide.
+
+**Abschluss:** Die Umsetzung war bereits vorhanden: `4cf460e87` ergänzt den Befund am tatsächlichen Fensterexport; `048da569d` vermeidet eine Warnung bei gleicher Definition und gleichem Bett. Der frühere native Cura-5.13-Nachweis ist bei RM-417 dokumentiert. Aktuell über die normale `write_assembly(for_window=True)`-Übergabe nachgemessen: Installiertes Ender-3-V3-SE-Profil in einem isolierten Cura-Nutzerstand gegen Centauri Carbon 2 nennt mit und ohne mitgegebene Druckwerte beide Drucker und bietet die Druckeinstellungen an. Derselbe Ender in Solidon bleibt ohne Warnung. Roberts Nutzerkonfiguration wurde nicht geändert; im laufenden Prüfprozess war keine aktive native Auswahl vorhanden. Fünf bestehende Anschluss-/Gleichheitsfälle sind grün; bei im Prüfprozess abgeschalteter Warnung werden vier davon rot, die Kontrolle mit gleichem Drucker bleibt grün. Keine neue Produktivänderung und keine Fensterausführung. Der sichtbare Weg bleibt Druckdialog → Im Slicer öffnen, die Übernahme liegt im Druckdialog; keine Befehlspalette. Ursprung `d1c3d0462` ist in v0.5.1 enthalten; der bislang fehlende Kundenhinweis zur abweichenden Druckerauswahl steht nun in allen sechs 0.5.2-Changelogs. Belege: `F:\solidon-review-reports\B-slicer-rest\rm301` (`native.json`, `green.log`, `counter.log`); Abschlusscommit und zentrales Tor im Bericht B.
