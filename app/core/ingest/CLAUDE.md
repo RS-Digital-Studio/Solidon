@@ -24,6 +24,10 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
 
 ## Was die Stufe entscheidet
 
+- **Druckvorprüfung einer 3MF**: `read_objects(printable_only=True)` lässt
+  Build-Instanzen mit `printable="0"` oder `"false"` aus. Der normale Import
+  behält diese editierbaren Teile; die Filterung gilt nur dem Druckauftrag.
+
 - **Einheiten**: STL trägt keine; erkannt wird aus der Größe, bei
   Mehrdeutigkeit **gefragt** (`ctx.ask`, Regel 21). Mehrdeutig ist auch eine
   einzige Lesart unter 300 mm, solange eine zweite innerhalb `plausible_reach`

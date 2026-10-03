@@ -54,6 +54,7 @@ scrive in `website/version.json`.
 - Una parete esterna più lenta vale ora anche per i perimetri piccoli come fori e steli in PrusaSlicer e nella famiglia Orca.
 - PrusaSlicer e la famiglia Orca rispettano la densità dei supporti scelta. Il campo parte dall'1 %. Per stampare senza supporti, scegli «Nessuno».
 - Nelle stampe multicolore con OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, la torre di spurgo parte da una posizione adatta alle dimensioni del piatto.
+- I pezzi troppo grandi vengono segnalati prima di avviare lo slicer. Se non si trova spazio per tutti su un piatto, puoi distribuirli su più piatti.
 
 ### Fori, asole e divisione
 

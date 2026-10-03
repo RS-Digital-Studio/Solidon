@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
@@ -18,9 +19,13 @@ from typing import Any, Final, get_args, get_type_hints
 from xml.etree import ElementTree as ET
 
 import pytest
+import trimesh
 
-from app.core.errors import ExternalToolError, ValidationError
-from app.core.export import handover, slicer_keys, slicer_profiles
+from app.core import activation
+from app.core.build_area import size_excess
+from app.core.errors import AppError, ExternalToolError, OutOfBuildVolume, ValidationError
+from app.core.export import handover, slicer_keys, slicer_profiles, threemf
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.project import PROJECT_ENTRY, load, new_project, save
 from app.core.slice import advise, gcode
@@ -29,6 +34,7 @@ from app.core.types import (
     LayerInfo,
     MaterialSlot,
     Polygon,
+    Profile,
     SettingAdvice,
     SliceResult,
 )
@@ -2718,8 +2724,9 @@ def _slicer_saying(
     return model, handover.SlicerSetup(executable=executable, flavour="prusa")
 
 
+@pytest.mark.parametrize("returncode", [0, 0xC0000409])
 def test_a_plate_outside_the_volume_offers_arranging(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, returncode: int
 ) -> None:
     """Regel 17: Der Satz nennt die Ursache, und eine Handlung behebt sie.
 
@@ -2732,6 +2739,13 @@ def test_a_plate_outside_the_volume_offers_arranging(
     profile = profiles.make_profile()
     model, setup = _slicer_saying(
         monkeypatch, tmp_path, b"All objects are outside of the print volume.\n"
+    )
+    monkeypatch.setattr(
+        handover,
+        "_run_slicer",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], returncode, b"All objects are outside of the print volume.\n", b""
+        ),
     )
 
     with pytest.raises(ExternalToolError) as raised:
@@ -7377,3 +7391,240 @@ def test_auto_adhesion_preserves_an_explicit_zero_measure(
     assert effective.adhesion.kind == "skirt"
     assert effective.adhesion.skirt_loops == 0
     assert values[key] == "0"
+
+
+def _preflight_box(size: tuple[float, float, float], x: float = 0.0) -> MeshData:
+    raw = trimesh.creation.box(extents=size)
+    raw.apply_translation((x, 0.0, size[2] / 2.0))
+    return MeshData.of(raw)
+
+
+def _preflight_models(folder: Path, meshes: list[MeshData], transport: str) -> list[Path]:
+    if transport == "3mf":
+        model = folder / "model.3mf"
+        model.write_bytes(threemf.write_assembly([threemf.AssemblyPart(mesh) for mesh in meshes]))
+        return [model]
+    paths = []
+    for index, mesh in enumerate(meshes):
+        path = folder / f"body_{index}.stl"
+        path.write_bytes(trimesh.exchange.stl.export_stl(mesh.raw))
+        paths.append(path)
+    if transport == "cura":
+        model = folder / "model.stl"
+        model.write_bytes(
+            trimesh.exchange.stl.export_stl(trimesh.util.concatenate([mesh.raw for mesh in meshes]))
+        )
+        blocker = folder / "support_blocker.stl"
+        blocker.write_bytes(
+            trimesh.exchange.stl.export_stl(_preflight_box((400.0, 400.0, 10.0)).raw)
+        )
+        # Ein riesiger Hilfskörper ist kein Druckteil und darf die Platte
+        # nicht sperren. Die normale Netzliste bleibt vollständig beteiligt.
+        handover.write_cura_meshes(
+            model,
+            [
+                *(handover.CuraMesh(path) for path in paths),
+                handover.CuraMesh(blocker, {"anti_overhang_mesh": "true"}),
+            ],
+        )
+        return [model]
+    return paths
+
+
+@pytest.fixture
+def preflight_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    for variable in (
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ):
+        monkeypatch.setenv(variable, str(tmp_path / "user-data"))
+    monkeypatch.setattr(activation, "require", lambda *_args, **_kwargs: None)
+    profile = profiles.make_profile("prusa-mini", "pla")
+    calls: list[list[str]] = []
+
+    def crashed(
+        command: list[str], *_args: object, **_kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0xC0000409, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", crashed)
+
+    def run(
+        meshes: list[MeshData], transport: str, chosen: Profile | None = None
+    ) -> tuple[list[list[str]], AppError]:
+        current_profile = chosen or profile
+        models = _preflight_models(tmp_path, meshes, transport)
+        snapshot = tuple(meshes) if transport == "snapshot" else None
+        if snapshot is not None:
+
+            def unexpected_read(*_args: object, **_kwargs: object) -> None:
+                pytest.fail("Der vorbereitete Netzsatz darf nicht aus Dateien ersetzt werden")
+
+            monkeypatch.setattr(handover, "_meshes_from_files", unexpected_read)
+        executable = tmp_path / ("CuraEngine.exe" if transport == "cura" else "SuperSlicer.exe")
+        executable.write_bytes(b"")
+        setup = handover.SlicerSetup(
+            executable=executable, flavour="cura" if transport == "cura" else "prusa"
+        )
+        before = [mesh.raw.vertices.copy() for mesh in meshes]
+        with pytest.raises(AppError) as raised:
+            handover.slice_model(
+                models,
+                print_settings.resolve(current_profile),
+                current_profile,
+                setup,
+                output_dir=tmp_path / "output",
+                model_height=max(float(mesh.bounds.size[2]) for mesh in meshes),
+                model_meshes=snapshot,
+            )
+        assert all(
+            (old == mesh.raw.vertices).all() for old, mesh in zip(before, meshes, strict=True)
+        ), "Vorprüfung verändert kein Eingabenetz"
+        return calls, raised.value
+
+    return run
+
+
+@pytest.mark.parametrize("transport", ["stl", "3mf", "cura", "snapshot"])
+@pytest.mark.parametrize("case", ["square", "height", "two_plates"])
+def test_known_build_volume_problem_stops_before_the_slicer(
+    preflight_probe: Any, transport: str, case: str
+) -> None:
+    if case == "square":
+        meshes = [_preflight_box((231.0, 231.0, 10.0))]
+    elif case == "height":
+        meshes = [_preflight_box((20.0, 20.0, 181.0))]
+    else:
+        # Jedes 100-mm-Teil passt einzeln. Der bestehende Packweg braucht
+        # dafür zwei Platten; das behauptet keine globale Packoptimalität.
+        meshes = [_preflight_box((100.0, 100.0, 10.0)), _preflight_box((100.0, 100.0, 10.0))]
+        printer = profiles.make_profile("prusa-mini", "pla").printer
+        assert all(size_excess(mesh, printer) <= 0.0 for mesh in meshes)
+
+    calls, problem = preflight_probe(meshes, transport)
+
+    assert len(calls) == 0, (
+        f"Bekannter Bauraumgrund muss vor dem Slicerstart anhalten; Starts={len(calls)}, "
+        f"Meldung={problem}"
+    )
+    actions = {action.id for action in problem.suggestions}
+    text = str(problem.detail).casefold()
+    assert "abgestürzt" not in text
+    assert "check_profile" not in actions
+    if case == "two_plates":
+        assert not isinstance(problem, OutOfBuildVolume), (
+            "Einzelteile sind nicht übergroß; der Packweg benötigt mehr Platten"
+        )
+        assert "arrange_on_bed" in actions
+        assert "platt" in text
+        assert not any(
+            word in text for word in ("unmöglich", "in keiner drehung", "zu groß", "größer als")
+        )
+    else:
+        assert {"split_model", "scale_to_fit", "choose_printer"} <= actions
+
+
+@pytest.mark.parametrize("transport", ["stl", "3mf", "cura", "snapshot"])
+@pytest.mark.parametrize("case", ["shifted_cube", "diagonal_rod"])
+def test_a_part_that_can_be_placed_or_turned_is_allowed_to_start(
+    preflight_probe: Any, transport: str, case: str
+) -> None:
+    mesh = (
+        _preflight_box((40.0, 40.0, 10.0), x=300.0)
+        if case == "shifted_cube"
+        else _preflight_box((200.0, 20.0, 10.0))
+    )
+    printer = profiles.make_profile("prusa-mini", "pla").printer
+    assert size_excess(mesh, printer) <= 0.0
+
+    calls, problem = preflight_probe([mesh], transport)
+
+    assert len(calls) == 1, "Versatz oder eine passende Z-Drehung darf den Start nicht verhindern"
+    assert isinstance(problem, ExternalToolError)
+    assert "abgestürzt" in str(problem.detail), (
+        "Die gestartete Attrappe meldet weiterhin ihren unbekannten Absturzgrund"
+    )
+    assert "choose_slicer" in {action.id for action in problem.suggestions}
+
+
+@pytest.mark.parametrize("transport", ["stl", "snapshot"])
+@pytest.mark.parametrize("case", ["half_degree", "half_turn_on_triangle"])
+def test_preflight_does_not_turn_a_sampled_size_into_a_false_proof(
+    preflight_probe: Any, transport: str, case: str
+) -> None:
+    """Ein passender gedrehter Zeuge widerlegt die heuristische Größenabsage."""
+    import math
+
+    import numpy as np
+
+    from app.core.build_area import fits_on_bed
+
+    profile = profiles.make_profile("prusa-mini", "pla")
+    if case == "half_degree":
+        witness = _preflight_box((179.0, 169.0, 10.0))
+        raw = witness.raw.copy()
+        raw.apply_transform(
+            trimesh.transformations.rotation_matrix(math.radians(0.5), (0.0, 0.0, 1.0))
+        )
+    else:
+        profile = replace(
+            profile,
+            printer=replace(
+                profile.printer,
+                printable_area=((-90.0, -90.0), (90.0, -90.0), (-90.0, 90.0)),
+            ),
+        )
+        xy = ((-80.0, 80.0), (80.0, -80.0), (80.0, 80.0))
+        raw = trimesh.convex.convex_hull(np.array([(x, y, z) for z in (0.0, 10.0) for x, y in xy]))
+        turned = raw.copy()
+        turned.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (0.0, 0.0, 1.0)))
+        witness = MeshData.of(turned)
+    mesh = MeshData.of(raw)
+    assert fits_on_bed(witness, profile.printer)
+    assert size_excess(mesh, profile.printer) > 0.0
+
+    calls, problem = preflight_probe([mesh], transport, profile)
+
+    assert len(calls) == 1, "Eine passende Z-Drehung darf nicht als unmöglich abgewiesen werden"
+    assert "abgestürzt" in str(problem.detail)
+
+
+@pytest.mark.parametrize("disabled", ["0", "false"])
+def test_preflight_ignores_disabled_3mf_build_instances(
+    preflight_probe: Any, monkeypatch: pytest.MonkeyPatch, disabled: str
+) -> None:
+    """Der Import behält ausgeschaltete Teile, der Druckauftrag berücksichtigt sie nicht."""
+    from io import BytesIO
+
+    from app.core.ingest.threemf import read_objects
+
+    original = _preflight_models
+
+    def write_with_disabled_part(
+        folder: Path, meshes: list[MeshData], transport: str
+    ) -> list[Path]:
+        paths = original(folder, meshes, transport)
+        with zipfile.ZipFile(paths[0]) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        document = ET.fromstring(entries["3D/3dmodel.model"])
+        document.findall("{*}build/{*}item")[-1].set("printable", disabled)
+        entries["3D/3dmodel.model"] = ET.tostring(document)
+        output = BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for name, payload in entries.items():
+                archive.writestr(name, payload)
+        paths[0].write_bytes(output.getvalue())
+        assert len(read_objects(output.getvalue())) == 2, "Der normale Import bleibt vollständig"
+        return paths
+
+    monkeypatch.setitem(globals(), "_preflight_models", write_with_disabled_part)
+    calls, problem = preflight_probe(
+        [_preflight_box((20.0, 20.0, 20.0)), _preflight_box((400.0, 400.0, 10.0))], "3mf"
+    )
+
+    assert len(calls) == 1, "Eine ausgeschaltete Instanz darf die druckbare Platte nicht sperren"
+    assert "abgestürzt" in str(problem.detail)

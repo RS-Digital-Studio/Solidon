@@ -348,6 +348,26 @@ OrcaSlicer, PrusaSlicer und CuraEngine; die Regel dazu steht in
 ## Die vier Gegenproben nach dem Lauf
 
 `slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.
+
+Vor dem Prozessstart prüft es den unveränderten Netzsatz der einzelnen Platte.
+`_prepare_plate` verwendet dafür `mesh_for_export`, dieselbe feinere Vernetzung
+wie der Schreiber. `_SliceWorker` reicht genau diesen Satz weiter. Wer nur
+Dateipfade übergibt, verwendet die begrenzten STL-/3MF-Leser beziehungsweise
+Curas Netzliste ohne Hilfskörper. Ein bloßer Versatz sperrt den Lauf nicht;
+`size_excess` prüft mögliche Z-Drehungen. Wenn der vorhandene Packweg für
+mehrere Teile keine Anordnung auf einer Platte findet, lautet die Meldung
+genau so: Die Heuristik beweist keine mathematische Unmöglichkeit.
+
+Auch der positive Wert aus `size_excess` ist allein kein Beweis: Das Raster
+prüft ganze Grad, und ein Sperrzonen-Sentinel bedeutet nur eine erfolglose
+Platzierungsprobe. Vor der harten XY-Absage gilt deshalb die Schranke aus
+`size_excess_uncertainty`: Bei Winkelraster h ändert sich die Breite gegenüber
+der nächsten Probe höchstens um `2 D sin(h/4)`, mit D als XY-Diagonale des
+Hüllquaders. Nur ein darüber hinausgehender Überstand belegt Nichtpassen.
+Kleine Restüberstände bleiben unentschieden und dürfen zum Slicer. Die Höhe
+wird getrennt gemessen. Die 3MF-Vorprüfung lässt abgeschaltete Build-Instanzen
+aus; beim normalen Import bleiben sie editierbar.
+
 Jede sieht etwas, das die anderen durchlassen:
 
 | Prüfung | Frage |
@@ -437,6 +457,14 @@ Prüfbericht. Ein gleichzeitig nachgewiesener Bauraumübertritt hat Vorrang und
 trägt den Profilrückfall oder die ausgelassene Sperre als Einzelheit mit.
 
 ## Grenzen
+
+Bauraumfehler aus dem Schneideauftrag tragen einen Index in dessen Netzsatz.
+`PlateRun.object_ids` ordnet diesen Index den eingefrorenen Szenenobjekten zu;
+ohne eindeutige Zuordnung werden Teilen und Verkleinern nicht angeboten.
+Der Druckdialog merkt Szenenhandlungen vor und gibt sie erst nach seinem
+Abschluss an das Hauptfenster zurück. Vor der Meldung, beim Klick und bei
+der Rückgabe wird der Druckkontext erneut verglichen. Ein älterer Auftrag
+darf weder die aktuelle Auswahl noch eine inzwischen geänderte Szene bearbeiten.
 
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 

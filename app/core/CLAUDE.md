@@ -34,7 +34,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben) |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
-| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); `machine_shift` rechnet Solidons Bettmitte in Maschinenkoordinaten um (`PrinterProfile.bed_origin`); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten |
+| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); `machine_shift` rechnet Solidons Bettmitte in Maschinenkoordinaten um (`PrinterProfile.bed_origin`); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten; `size_excess_uncertainty` begrenzt den Winkelfehler vor einer harten Größenabsage |
 | `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): Vorbereitungsfingerabdrücke, Spulenbindungen, werkzeugweise G-Code-Mengen; `costs_for` rechnet Kosten je Währung aus übergebenen Daten. Das Journal schreibt `knowledge/filaments.py` |
 
 - **`Feature.measure_sources`** nennt je Parameter die Wertequelle (`native`,

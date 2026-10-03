@@ -8019,7 +8019,13 @@ class MainWindow(QMainWindow):
         self._store_settings()
         # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
         # bei der Orca-Familie einige tausend Einträge je Aufruf.
+        scene_action = dialog.take_scene_action()
         dialog.deleteLater()
+        if scene_action is not None:
+            action_id, error = scene_action
+            handler = self.error_handlers().get(action_id)
+            if handler is not None:
+                handler(error)
         self._offer_support()
 
     def _edit_filament_settings(self, slot: object) -> None:
@@ -22574,6 +22580,8 @@ class MainWindow(QMainWindow):
         """Der Körper, um den es geht — aus dem Fehler oder aus der Auswahl."""
         if error.object_id:
             return error.object_id
+        if error.values.get("constraint") == "slicer_build_volume":
+            return None
         chosen = self.object_tree.selected_objects()
         return chosen[0] if chosen else None
 

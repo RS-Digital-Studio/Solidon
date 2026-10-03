@@ -112,7 +112,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
-| [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
 | [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 4 von 16. G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
 | [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 7 von 16. G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
 | [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
@@ -3217,24 +3216,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
   weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
-
-<a id="rm-479"></a>
-
-- [ ] **RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher.**
-  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` (180 × 180 mm).
-  Besteckeinsatz (231 × 231 mm) und Siebhalter (sieben Teile, zusammen zu groß): Rückgabe
-  `0xC0000409`, Solidon: „abgestürzt … prüfen Sie Drucker- und Filamentprofile“, obwohl der
-  Export vorher `arrange.out_of_build_volume` bzw. `arrange.off_the_plate` meldet. Erklärt 64 der
-  108 SuperSlicer-Abstürze der Codex-Matrix (u. a. Filament-Regal, Bohrerhalter, Küchenhalter).
-  **Stellen:** `app/core/export/handover.py:5136–5154` (Absturzsatz vor jeder Ursache),
-  `:5751–5783` (`_outside_the_volume` kennt nur die Höhe), Anordnungsprüfung in
-  `app/core/export/writer.py`.
-  **Fix (allgemein):** Passt ein Teil in keiner Drehung um Z, hält die Übergabe mit derselben
-  Meldung wie für die Höhe an (Teilen, Verkleinern, anderer Drucker); nach einem Absturz zuerst
-  Solidons bekannte Ursache nennen, „Profile prüfen“ nur ohne.
-  **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
-  Lauf, kein Slicerstart. Bauplan §29, Regel 17.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
 
 <a id="rm-480"></a>
 

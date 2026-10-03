@@ -72,11 +72,11 @@ from app.core.errors import (
 )
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
-from app.core.export.writer import arrangement_holds, part_advice, write_assembly
+from app.core.export.writer import arrangement_holds, mesh_for_export, part_advice, write_assembly
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
@@ -1762,6 +1762,8 @@ class PlateRun:
 
     plate: int
     model: Path
+    meshes: tuple[MeshData, ...] | None = None
+    object_ids: tuple[str, ...] = ()
     slots: tuple[MaterialSlot, ...] = ()
     keep_arrangement: bool = False
     model_height: float | None = None
@@ -1969,7 +1971,8 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     # müssen dieselbe lokale Nummerierung tragen. Die projektweite Profilwahl
     # wird vor dem Schreiben über ihre vollständige Materialidentität aufgelöst.
     local_settings = replace(job.settings, slot_profiles=chosen)
-    keep = arrangement_holds([as_mesh_data(entry.mesh) for entry in on_plate], job.profile)
+    meshes = tuple(mesh_for_export(entry.mesh, job.profile) for entry in on_plate)
+    keep = arrangement_holds(meshes, job.profile)
     written, findings = write_assembly(
         on_plate,
         job.folder,
@@ -1991,6 +1994,8 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     return PlateRun(
         plate=plate,
         model=written,
+        meshes=meshes,
+        object_ids=tuple(entry.id for entry in on_plate),
         slots=handover.with_slot_profiles(slots, chosen),
         keep_arrangement=keep,
         model_height=max(
@@ -2432,6 +2437,7 @@ class _SliceWorker(Worker):
                     keep_arrangement=entry.keep_arrangement,
                     slots=entry.slots,
                     model_height=entry.model_height,
+                    model_meshes=entry.meshes,
                     expected_tools=entry.used_tools,
                     cancelled=self.cancelled,
                 )
@@ -2443,6 +2449,23 @@ class _SliceWorker(Worker):
                 # Eine Platte, die scheitert, nimmt den Auftrag mit: Was danach
                 # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
                 # und wer sie hinterher an den Drucker gibt, merkt das nicht.
+                if problem.values.get("constraint") == "slicer_build_volume":
+                    part_index = problem.values.get("part_index")
+                    problem.object_id = (
+                        entry.object_ids[part_index]
+                        if type(part_index) is int
+                        and entry.meshes is not None
+                        and len(entry.object_ids) == len(entry.meshes)
+                        and 0 <= part_index < len(entry.object_ids)
+                        and entry.object_ids[part_index]
+                        else None
+                    )
+                    if problem.object_id is None:
+                        problem.suggestions = tuple(
+                            action
+                            for action in problem.suggestions
+                            if action.id not in {SPLIT_MODEL.id, SCALE_TO_FIT.id}
+                        )
                 self.failed.emit(problem, list(entry.findings))
                 return
             outcome.findings = [*entry.findings, *outcome.findings]
@@ -2947,6 +2970,9 @@ class PrintSettingsDialog(QDialog):
         """Ob der aktuelle Kopierauftrag seine atomaren Zielwechsel vollendet hat."""
         self._failed_save_copies: tuple[tuple[Path, Path], ...] | None = None
         """Nur während der Meldung eines gescheiterten G-Code-Speicherauftrags."""
+        self.scene_action: tuple[str, AppError] | None = None
+        """Eine Szenenhandlung, die erst nach dem modalen Druckdialog ausgeführt wird."""
+        self._scene_action_context: tuple[Any, ...] | None = None
         self._state_shows_reason = False
         """Ob in der Zustandszeile gerade ein **Sperr-Grund** steht.
 
@@ -4677,6 +4703,27 @@ class PrintSettingsDialog(QDialog):
         auch ohne offenen Dialog auf.
         """
         known = dict(handlers_of(self.parentWidget()))
+        context = self._job_context
+        for action_id in ("split_model", "scale_to_fit", "arrange_on_bed"):
+            handler = known.get(action_id)
+            if handler is None:
+                continue
+
+            def after_dialog(
+                error: AppError,
+                action_id: str = action_id,
+                handler: Callable[[AppError], None] = handler,
+            ) -> None:
+                if error.values.get("constraint") == "slicer_build_volume":
+                    if context is None or context != self._print_context():
+                        return
+                    self.scene_action = (action_id, error)
+                    self._scene_action_context = context
+                    self.reject()
+                else:
+                    handler(error)
+
+            known[action_id] = after_dialog
         if self._failed_save_copies is not None:
 
             def retry(_error: AppError) -> None:
@@ -4691,6 +4738,14 @@ class PrintSettingsDialog(QDialog):
         known["choose_printer"] = self._open_printer_choice
         known["choose_slicer"] = lambda _error: self._open_slicer_section()
         return known
+
+    def take_scene_action(self) -> tuple[str, AppError] | None:
+        """Die vorgemerkte Handlung gehört nur dem unveränderten Druckauftrag."""
+        action = self.scene_action
+        self.scene_action = None
+        if action is None or self._scene_action_context != self._print_context():
+            return None
+        return action
 
     def _open_printer_choice(self, _error: AppError) -> None:
         """Die Druckerwahl dieses Dialogs öffnen, statt einen zweiten anzulegen."""
@@ -8693,6 +8748,10 @@ class PrintSettingsDialog(QDialog):
         der hier trägt schon die Ursache.
         """
         if self._settling:
+            return
+        if problem.values.get("constraint") == "slicer_build_volume" and (
+            self._job_context is None or self._job_context != self._print_context()
+        ):
             return
         if findings:
             self.reported.emit(list(findings))

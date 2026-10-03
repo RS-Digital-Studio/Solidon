@@ -1608,6 +1608,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "parameter": _("Parameter"),
     "params": _("Parameter"),
     "part": _("Baustein"),
+    "part_index": _("Teil"),
     "parts": _("Teile"),
     "path": _("Pfad"),
     "pitch": _("Steigung"),

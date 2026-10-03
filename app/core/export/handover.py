@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 from xml.etree import ElementTree as ET
 
-from app.core import activation, discover, expressions
+from app.core import activation, build_area, discover, expressions
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
@@ -69,7 +69,7 @@ from app.core.export.slicer_keys import (
     wants_bed_coordinates,
 )
 from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.threemf import SETTINGS_PATH
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
@@ -86,6 +86,7 @@ from app.core.types import (
     CancelToken,
     Finding,
     MaterialSlot,
+    Mesh,
     PrinterProfile,
     PrintSettings,
     Profile,
@@ -5163,6 +5164,100 @@ def _orca_cli_tower_position(
     return replace(config, written={**config.written, **placed})
 
 
+def _meshes_from_files(models: Sequence[Path], setup: SlicerSetup) -> tuple[MeshData, ...]:
+    """Liest Druckteile über die vorhandenen begrenzten Leser; Hilfsnetze zählen nicht."""
+    from app.core.ingest import loader
+    from app.core.ingest.threemf import read_objects as read_3mf_objects
+
+    parts: list[MeshData] = []
+    for model in models:
+        inputs = (
+            [
+                entry.path
+                for entry in cura_meshes(model)
+                if entry.settings.get("anti_overhang_mesh", "false").casefold() not in {"true", "1"}
+            ]
+            if setup.flavour == "cura"
+            else [model]
+        )
+        for source in inputs:
+            payload = loader.read_bounded_payload(source)
+            if source.suffix.lower() == ".3mf":
+                loader.check_unpacked(payload)
+                parts.extend(part.mesh for part in read_3mf_objects(payload, printable_only=True))
+            else:
+                try:
+                    parts.append(loader.read_model(payload, source.suffix))
+                except ValidationError as problem:
+                    if problem.constraint not in {
+                        "unreadable",
+                        "no_geometry",
+                        "unsupported_format",
+                    }:
+                        raise
+                    # Unlesbares belegt keine bestimmte Bauraumursache.
+    return tuple(parts)
+
+
+def _check_plate(
+    meshes: Sequence[Mesh],
+    profile: Profile,
+    setup: SlicerSetup,
+    cancelled: CancelToken | None = None,
+) -> None:
+    """Bekannte Bauraumgründe halten vor dem externen Prozess an."""
+    from app.core.export.writer import arrangement_holds
+    from app.core.geom.prepare import arrange_on_bed
+
+    for index, mesh in enumerate(meshes):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        height = float(mesh.bounds.size[2])
+        limit = build_area.printable_height(profile.printer)
+        if height > limit + EPS_GEOM:
+            raise ExternalToolError(
+                tool=setup.name,
+                title=SLICER_FAILED,
+                detail=_("Ein Teil ist höher, als dieser Drucker drucken kann."),
+                values={
+                    "height_mm": height,
+                    "limit_mm": limit,
+                    "constraint": "slicer_build_volume",
+                    "part_index": index,
+                },
+                suggestions=(SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER, CANCEL),
+            )
+        excess = build_area.size_excess(mesh, profile.printer)
+        if excess > build_area.size_excess_uncertainty(mesh) + EPS_GEOM:
+            raise ExternalToolError(
+                tool=setup.name,
+                title=SLICER_FAILED,
+                detail=_("Ein Teil ist größer als die Druckfläche, auch wenn es gedreht wird."),
+                values={
+                    "excess_mm": excess,
+                    "constraint": "slicer_build_volume",
+                    "part_index": index,
+                },
+                suggestions=(SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER, CANCEL),
+            )
+    if len(meshes) > 1:
+        data = [as_mesh_data(mesh) for mesh in meshes]
+        if not arrangement_holds(data, profile):
+            planned = arrange_on_bed(data, profile)
+            if any(finding.code == "arrange.needs_more_plates" for finding in planned.findings):
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Für diese Teile wurde keine Anordnung auf einer Druckplatte gefunden. "
+                        "Ordnen Sie die Teile auf mehrere Platten an oder wählen Sie "
+                        "einen größeren Drucker."
+                    ),
+                    suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, SCALE_TO_FIT, CANCEL),
+                    values={"constraint": "slicer_build_volume"},
+                )
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -5175,6 +5270,7 @@ def slice_model(
     slots: Sequence[MaterialSlot] = (),
     cancelled: CancelToken | None = None,
     model_height: float | None = None,
+    model_meshes: Sequence[Mesh] | None = None,
     expected_tools: Sequence[int] = (),
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
@@ -5227,6 +5323,9 @@ def slice_model(
             detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
             suggestions=(INSTALL_MISSING, EXPORT_ONLY),
         )
+
+    meshes = model_meshes if model_meshes is not None else _meshes_from_files(models, setup)
+    _check_plate(meshes, profile, setup, cancelled)
 
     started_perf_counter = time.perf_counter()
     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
@@ -5352,11 +5451,8 @@ def slice_model(
             if reason:
                 _log.info("%s refused the job: %s", setup.name, reason)
                 output = "\n".join(part for part in (output, reason) if part)
-            # **Vor den Ausgabeprüfungen**, denn ein abgestürztes Programm
-            # schreibt keinen Satz, an dem sie greifen könnten: Es fällt mitten
-            # im Lauf um, und was dasteht, ist die letzte Zeile davor. Der
-            # Kunde bekäme sonst nur „Der Slicer hat keine Druckdatei geschrieben“.
-            # Der Prozessstatus belegt den Absturz, aber nicht dessen Ursache.
+            # Ein bekannter Bauraumgrund hat Vorrang vor dem Absturzstatus.
+            # Ohne belegte Ursache nennt der Status weiterhin nur den Absturz.
             # Der Rückgabewert gehört ins Protokoll, nicht in den Satz: Unter
             # Windows kam -50 als 4294967246 beim Kunden an (KUNDE-09).
             _log.info(
@@ -5364,6 +5460,8 @@ def slice_model(
                 setup.name,
                 signed_exit_code(completed.returncode),
             )
+            if _says_outside_the_volume(output):
+                raise _outside_the_volume(setup, profile, output, model_height)
             if crashed(completed.returncode):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -5405,8 +5503,6 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
-            if _says_outside_the_volume(output):
-                raise _outside_the_volume(setup, profile, output, model_height)
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,

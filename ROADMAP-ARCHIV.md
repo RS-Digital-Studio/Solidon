@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)](#rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026) |
 | 2026-10-03 | [RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)](#rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026) |
 | 2026-10-03 | [RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)](#rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
@@ -38174,3 +38175,44 @@ Bambu/Kobra und Creality/MINI wurden für die Zweifarbenabnahme ausschließlich 
 Rohdaten, Kommandos, Herstellerprofil-Prüfsummen und vollständige Extrusionsgrenzen: `F:\solidon-review-reports\gcode\rest\codex_A_476_final_defaults\rm476-summary.json`; ursprüngliche und kontrollierte Gegenproben in `codex_A_476_baseline`, `codex_A_476_controlled_baseline`, `codex_A_476_mini_baseline` und `codex_A_476_k1_baseline`. Changelog in sechs Sprachen, weil veröffentlichte Versionen Kunden mit kleinen Druckbetten betreffen. Commit: „Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten“.
 
 Der breite betroffene Lauf brach bei 71 % nativ mit `0xC0000005` ab, ohne Python-Stapel und ohne Zusammenfassung; er gilt als fehlgeschlagen (`%TEMP%/solidon-A-476-affected.txt`). Das anschließende vollständige Entwicklungstor am unveränderten Stand bestand mit 20 520 Tests, 61 übersprungen, 507,44 s und Exit 0 (`solidon-A-476-suite.txt`). Ruff, Formatprüfung und mypy mit 337 Quelldateien sind grün; die Dokumentations- und Changelogprüfung bestand mit 77 Tests, 4 übersprungen. Fenster-, Renderer- und Leistungsläufe bleiben dem Release vorbehalten.
+
+Commitnachweis zu RM-476: `9bccaf23d`.
+
+## RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)
+
+<a id="rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026"></a>
+<a id="rm-479"></a>
+
+**RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` (180 × 180 mm).
+  Besteckeinsatz (231 × 231 mm) und Siebhalter (sieben Teile, zusammen zu groß): Rückgabe
+  `0xC0000409`, Solidon: „abgestürzt … prüfen Sie Drucker- und Filamentprofile“, obwohl der
+  Export vorher `arrange.out_of_build_volume` bzw. `arrange.off_the_plate` meldet. Erklärt 64 der
+  108 SuperSlicer-Abstürze der Codex-Matrix (u. a. Filament-Regal, Bohrerhalter, Küchenhalter).
+  **Stellen:** `app/core/export/handover.py:5136–5154` (Absturzsatz vor jeder Ursache),
+  `:5751–5783` (`_outside_the_volume` kennt nur die Höhe), Anordnungsprüfung in
+  `app/core/export/writer.py`.
+  **Fix (allgemein):** Passt ein Teil in keiner Drehung um Z, hält die Übergabe mit derselben
+  Meldung wie für die Höhe an (Teilen, Verkleinern, anderer Drucker); nach einem Absturz zuerst
+  Solidons bekannte Ursache nennen, „Profile prüfen“ nur ohne.
+  **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
+  Lauf, kein Slicerstart. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
+
+**Abschluss:** Die fehlende Vorprüfung besteht seit `f4f6e639d22074864862abb154cf6b9111d4dd68`, enthalten in v0.5.1: `slice_model` prüfte Dateien und Programm und startete anschließend den Slicer. Die Höhenmeldung aus `5063fc9f5c91510fa4e1a7efc99a2d6f935ad8b8` reagierte erst auf dessen Ausgabe. Drei tatsächliche SuperSlicer-2.5.59.13-Läufe am MINI mit 180 × 180 mm endeten jeweils nach einem Prozessstart mit `0xC0000409`; diese Zuordnung erklärt Solidons fehlende Prüfung, nicht die interne Ursache im fremden Programm.
+
+`slice_model` prüft jetzt vor Arbeitsordner, Profil und Prozess die Höhe, die mögliche Grundfläche nach Z-Drehung und bei mehreren Teilen die vorhandene Anordnung samt Packprobe. `_prepare_plate` trägt genau die gewählte Platte als `PlateRun.meshes` weiter, mit derselben Exportvernetzung wie `write_assembly`. Ohne diesen Netzsatz verwenden direkte Aufrufer die vorhandenen begrenzten STL-/3MF-Leser oder Curas Netzliste; Hilfskörper sind keine Druckteile. Originaldateien und Szenennetze bleiben unverändert. Eine fehlende Packanordnung wird als Ergebnis der vorhandenen Heuristik beschrieben, nicht als Beweis physischer Unmöglichkeit. Belegte Bauraumtexte haben auch nach einem fremden Absturz Vorrang vor der allgemeinen Absturzmeldung.
+
+Test zuerst: Am ursprünglichen Produktweg waren neun Absagefälle rot und sechs Gegenkontrollen grün. Die beiden Anschlussprüfungen für Exportvernetzung und Arbeiterweitergabe waren ebenfalls rot. Am integrierten Stand bestehen 22 gezielte Fälle; die Gegenprobe mit allein ausgeschalteter Vorprüfung lässt alle zwölf Absagefälle rot werden (STL, 3MF, Cura und vorbereiteter Netzsatz). Verschobener 40-mm-Würfel und diagonal passender 200 × 20-mm-Stab dürfen weiterhin den Slicer starten. Die vollständigen betroffenen Module einschließlich Übersetzungen, Paketgrenzen und Unterlagen bestanden mit 909 Tests, 8 übersprungen, 285 abgewählt, Exit 0. Mypy prüfte 337 Quelldateien ohne Befund.
+
+**Gemessene Abnahme des Produktcodes:** `codex_A_479_final` meldet bei allen drei Originalmodellen die Ursache und passende Handlungen, jeweils **null Slicerstarts**. Besteckeinsatz: 231,22993 × 231,22993 × 160 mm, Übermaß 51,22993 mm; Filament-Regal: nur Platte 0 / `obj_16`, 230 × 235 × 5 mm, Übermaß 55 mm. Beide bieten Teilen, Verkleinern und Druckerwahl. Die sieben Siebhalterteile passen einzeln, finden aber gemeinsam keine Anordnung auf einer MINI-Platte; die vorhandene Packprobe findet zwei gültige Platten mit Zuordnung `[0, 0, 0, 1, 1, 1, 1]`. Die Meldung bietet Anordnen und Druckerwahl. Alle Handlungsschlüssel wurden im tatsächlichen Lauf mitgeschrieben und geprüft; keiner bietet Profilprüfung an. Quellen sind vor und nach der Abnahme hashgleich.
+
+Belege: `F:\solidon-review-reports\gcode\rest\codex_A_479_baseline\rm479-summary.json` und `codex_A_479_final\rm479-summary.json`, jeweils mit drei Einzeldateien, Quellprüfsummen und Prozesszählung. Gegenproben und Modullauf: `%TEMP%/solidon-A-479-negative.txt`, `solidon-A-479-focused.txt`, `solidon-A-479-modules.txt`. Changelog in sechs Sprachen, weil die frühe Meldung Kunden veröffentlichter Versionen hilft. Commit: „Solidon meldet fehlenden Platz vor dem Slicerstart“.
+
+Die unabhängige Prüfung fand zwei unzulässige Absagen: Das Winkelraster verfehlte einen passenden 0,5°-Winkel, und deaktivierte 3MF-Instanzen zählten als Druckteile. Sechs neue Fälle waren zuerst rot. Die harte XY-Absage zieht jetzt die mathematische obere Schranke des Rasterfehlers ab: `2 D sin(Schritt/4)`, mit XY-Diagonale `D` als oberer Durchmessergrenze. Eine erfolglose Konturprobe mit dem Kennwert `EPS_GEOM` belegt ebenfalls keine unmögliche Größe. Der begrenzte 3MF-Leser überspringt ausschließlich für die Druckvorprüfung `printable=0/false`; der normale Import behält diese Instanzen. Die korrigierte Probe umfasst 27 grüne Fälle; fünf unabhängige Gegenkontrollen erreichen weiterhin den Prozessaufruf. Der anschließende Modullauf einschließlich Import und Druckkontur bestand mit 1.102 Prüfungen, 8 übersprungen, 16 abgewählt und Exit 0.
+
+Die Handlungen benutzen die Objekt-IDs aus demselben eingefrorenen Plattenauftrag wie die Netze. Ohne eindeutige Zuordnung entfällt die objektbezogene Handlung; die aktuelle Auswahl wird nicht ersatzweise geändert. Teilen, Verkleinern und Anordnen werden nach dem modalen Druckdialog ausgeführt. Auftrag und Szene müssen vor der Meldung, beim Klick und nach Dialogabschluss noch übereinstimmen. Die fünf Gegenproben für veraltete Aufträge waren vor der Absicherung rot; alle 58 fensterfreien Anschlussprüfungen bestehen danach. Fensterprüfungen wurden nicht ausgeführt.
+
+Die reale Abnahme wurde nach diesen Korrekturen unter `codex_A_479_final_review` wiederholt: dieselben drei Originalmodelle, passende Handlungsschlüssel, **null Slicerstarts**, unveränderte Quellprüfsummen. Der erste breite Lauf wurde wegen der konkreten Reviewfunde beendet (Exit −1) und gilt nicht als bestanden; sein Protokoll bleibt unter `%TEMP%/solidon-A-479-affected.txt` erhalten.
+
+Der korrigierte breite Lauf über `affected_tests.py --run` endete mit 20.417 bestandenen Prüfungen, 88 übersprungen und vier Fehlern (Exit 1, 687,62 s). Ein eigener Anschlussfehler war die fehlende Beschriftung von `part_index`; sie ist ergänzt, der Schlüssel bleibt in der Fehlermeldung verborgen. Drei Prüfungen von Unterprozess-Zusammenfassungen erbten die hier gesetzte Parallelisierung über `PYTEST_ADDOPTS`; die erwarteten Abwahlzahlen fehlen in der xdist-Ausgabe. Ohne diese Umgebungsoption bestehen alle sechs gezielt ausgewählten Beschriftungs- und Unterprozessprüfungen über `affected_tests.py --run` (18,18 s, Exit 0). Die Tests selbst wurden dafür nicht verändert. Belege: `%TEMP%/solidon-A-479-affected-final.txt` und `solidon-A-479-affected-repair.txt`. Ruff, Format und mypy (337 Quelldateien) sind grün; nach den Abschlussnachweisen bestehen die Dokumentations- und Changelogprüfungen mit 59 bestanden, 4 übersprungen. Das gemeinsame Entwicklungstor nach dem Merge bleibt der Nachweis vor dem Push.

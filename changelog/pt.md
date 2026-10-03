@@ -54,6 +54,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
 - O PrusaSlicer e a família Orca respeitam a densidade de suporte escolhida. O campo começa em 1 %. Para imprimir sem suportes, escolha «Nenhum».
 - Nas impressões multicoloridas com OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, a torre de purga recebe uma posição inicial adequada ao tamanho da mesa.
+- As peças demasiado grandes são indicadas antes de iniciar o slicer. Se não for encontrado espaço para todas numa placa, pode distribuí-las por várias placas.
 
 ### Furos, furos oblongos e divisão
 

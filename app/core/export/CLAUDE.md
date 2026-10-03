@@ -94,6 +94,13 @@ oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
 
 ## Die vier Gegenproben nach dem Lauf
 
+Vor dem Konsolenlauf prüft `slice_model` die Exportnetze der gewählten Platte
+auf Höhe, drehbare Grundfläche und eine Anordnung auf einer Platte.
+`PlateRun.meshes` hält den vorbereiteten Netzsatz; ohne ihn lesen begrenzte
+Importleser die Dateien. Stützsperren zählen nicht als Druckteile. Ein
+bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
+die normale Datei- und Fensterübergabe behält ihren Berichtweg.
+
 | Prüfung | Frage |
 |---|---|
 | `off_the_bed` | Liegt der Druck im Bauraum? |

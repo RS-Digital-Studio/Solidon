@@ -13,8 +13,11 @@ import time
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
+import numpy as np
 import pytest
+import trimesh
 from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,13 +33,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.export import handover
+from app.core import activation
+from app.core.brep import edit
+from app.core.export import handover, writer
 from app.core.export.slicer_profiles import SlicerProfile
+from app.core.geom.mesh import MeshData
+from app.core.ingest import threemf
 from app.core.knowledge import print_settings, profiles
+from app.core.scene.cancel import CancelSignal
 from app.core.slice import gcode
 from app.core.slice.analysis import total_overhang
+from app.core.slice.gcode import GcodeMetrics
 from app.core.types import (
     Feature,
+    Finding,
     MaterialSlot,
     Profile,
     SceneObject,
@@ -44,6 +54,7 @@ from app.core.types import (
     SlotOverride,
 )
 from app.i18n import tr
+from app.ui import print_settings_dialog as print_dialog
 from app.ui.labels import BoundedLengthSpin, BoundedSpin
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
@@ -1034,6 +1045,8 @@ def test_plate_job_keeps_inventory_identity_through_real_close_and_reopening(
             setupRequested=signal,
             filamentsRequested=signal,
             usage_notice=SimpleNamespace(changed=signal, requests={}),
+            scene_action=None,
+            take_scene_action=lambda: None,
             deleteLater=lambda: None,
         )
         dialog._profiles_for = lambda _slots: dialog.settings.slot_profiles
@@ -9257,3 +9270,450 @@ def test_the_refusal_at_the_slice_button_names_its_field(
     assert dialog._first_numeric_refusal() == (
         f"{setting_title('support.density')}: 95 liegt über der Obergrenze 90."
     )
+
+
+@pytest.fixture
+def preflight_user_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for variable in (
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ):
+        monkeypatch.setenv(variable, str(tmp_path / "user-data"))
+    monkeypatch.setattr(activation, "require", lambda *_args, **_kwargs: None)
+
+
+def _preflight_box(size: tuple[float, float, float], x: float = 0.0) -> MeshData:
+    raw = trimesh.creation.box(extents=size)
+    raw.apply_translation((x, 0.0, size[2] / 2.0))
+    return MeshData.of(raw)
+
+
+def test_prepare_plate_carries_only_the_written_plate_and_its_export_tessellation(
+    tmp_path: Path,
+    preflight_user_data: None,
+) -> None:
+    """Fremde Platten und die gröbere Ansicht gehören nicht zur Vorprüfung."""
+    profile = profiles.make_profile("prusa-mini", "pla")
+    exact = replace(edit.cylinder(40.0, 10.0), deflection=0.5)
+    selected = (
+        SceneObject("round", "Zylinder", exact, kind="brep", plate=0),
+        SceneObject("small", "Würfel", _preflight_box((20.0, 20.0, 10.0), x=60.0), plate=0),
+    )
+    excluded = SceneObject("large", "Andere Platte", _preflight_box((231.0, 231.0, 10.0)), plate=1)
+    expected = tuple(writer.mesh_for_export(entry.mesh, profile) for entry in selected)
+    assert expected[0].triangle_count > exact.triangle_count, (
+        "Der Kontrollkörper muss tatsächlich feiner exportiert als angezeigt werden"
+    )
+    before = [entry.mesh.raw.vertices.copy() for entry in (*selected, excluded)]
+    job = print_dialog._PlateJob(
+        objects=(*selected, excluded),
+        plates=(0, 1),
+        folder=tmp_path,
+        name="RM479",
+        setup=handover.SlicerSetup(tmp_path / "SuperSlicer.exe", "prusa"),
+        settings=print_settings.resolve(profile),
+        profile=profile,
+        slot_profiles={},
+        with_settings=False,
+    )
+
+    run = print_dialog._prepare_plate(job, 0)
+    written = threemf.read_objects(run.model.read_bytes())
+
+    assert len(written) == len(selected) == 2
+    assert sorted(part.mesh.triangle_count for part in written) == sorted(
+        mesh.triangle_count for mesh in expected
+    ), "Die tatsächlich geschriebene Datei muss die feinere Exportvernetzung tragen"
+    meshes = getattr(run, "meshes", None)
+    assert meshes is not None, "PlateRun trägt noch keinen Snapshot seiner Exportnetze"
+    assert isinstance(meshes, tuple)
+    assert len(meshes) == len(selected), "Ein Körper von Platte 1 darf Platte 0 nicht sperren"
+    assert getattr(run, "object_ids", ()) == ("round", "small"), (
+        "Die Fehlerzuordnung braucht dieselben Körper in derselben Reihenfolge wie die Netze"
+    )
+    for actual, wanted in zip(meshes, expected, strict=True):
+        assert isinstance(actual, MeshData)
+        assert actual.triangle_count == wanted.triangle_count
+        np.testing.assert_allclose(actual.raw.triangles, wanted.raw.triangles, atol=1e-9, rtol=0.0)
+    for previous, entry in zip(before, (*selected, excluded), strict=True):
+        np.testing.assert_array_equal(previous, entry.mesh.raw.vertices)
+
+
+class _PreflightSignalLog:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Any, ...]] = []
+
+    def emit(self, *values: Any) -> None:
+        self.calls.append(values)
+
+
+def test_slice_worker_passes_the_same_prepared_snapshot_to_slice_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preflight_user_data: None
+) -> None:
+    """Ein späterer Szenenstand darf die Vorprüfung des vorbereiteten Laufs nicht ersetzen."""
+    profile = profiles.make_profile("prusa-mini", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(tmp_path / "SuperSlicer.exe", "prusa")
+    snapshot = (_preflight_box((40.0, 40.0, 10.0)), _preflight_box((20.0, 20.0, 10.0), x=60.0))
+    slots = (MaterialSlot(index=0, name="PLA", colour="#ffffff", material="pla"),)
+    export_finding = Finding("export.kept", "info", "Exportbefund der gewählten Platte")
+    # Der Host stellt den künftigen Datensatz bereit: So wird die fehlende
+    # Weitergabe geprüft, unabhängig davon, ob PlateRun das Feld schon kennt.
+    entry = SimpleNamespace(
+        plate=0,
+        model=tmp_path / "plate-1.3mf",
+        meshes=snapshot,
+        slots=slots,
+        keep_arrangement=True,
+        model_height=10.0,
+        used_tools=(0,),
+        findings=(export_finding,),
+    )
+    host = SimpleNamespace(
+        _runs=[entry],
+        _settings=settings,
+        _profile=profile,
+        _setup=setup,
+        _usage={},
+        # Absichtlich ein anderer neuer Szenenstand; maßgeblich ist entry.
+        _objects=(SceneObject("later", "Späterer Stand", _preflight_box((231.0, 231.0, 10.0))),),
+        cancelled=CancelSignal(),
+        step=_PreflightSignalLog(),
+        failed=_PreflightSignalLog(),
+        done=_PreflightSignalLog(),
+        usageReady=_PreflightSignalLog(),
+    )
+    captured: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    outcome = handover.SliceOutcome(tmp_path / "plate-1.gcode", GcodeMetrics())
+
+    def receive(*args: Any, **kwargs: Any) -> handover.SliceOutcome:
+        captured.append((args, kwargs))
+        return outcome
+
+    monkeypatch.setattr(handover, "slice_model", receive)
+
+    print_dialog._SliceWorker.work(host)
+
+    assert len(captured) == 1
+    args, options = captured[0]
+    assert args == ([entry.model], settings, profile, setup)
+    assert options.get("model_meshes") is snapshot, (
+        "_SliceWorker reicht die Exportnetze seines vorbereiteten PlateRun noch nicht weiter"
+    )
+    assert options["slots"] is slots
+    assert options["model_height"] == pytest.approx(10.0)
+    assert options["expected_tools"] == (0,)
+    assert options["cancelled"] is host.cancelled
+    assert host.step.calls == [(1, 1)]
+    assert host.failed.calls == []
+    assert host.done.calls == [([outcome],)]
+    assert outcome.findings == [export_finding]
+
+
+@pytest.mark.parametrize(
+    ("part_index", "object_ids", "expected"),
+    [
+        (1, ("first", "second"), "second"),
+        (0, ("first", "second"), "first"),
+        (-1, ("first", "second"), None),
+        (2, ("first", "second"), None),
+        (True, ("first", "second"), None),
+        ("1", ("first", "second"), None),
+        (None, ("first", "second"), None),
+        (1, ("first",), None),
+        (1, ("first", ""), None),
+    ],
+)
+def test_preflight_worker_binds_only_a_valid_snapshot_object(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preflight_user_data: None,
+    part_index: object,
+    object_ids: tuple[str, ...],
+    expected: str | None,
+) -> None:
+    """Weder geänderte Auswahl noch ungültiger Index dürfen einen anderen Körper treffen."""
+    from app.core.errors import CANCEL, CHOOSE_PRINTER, SCALE_TO_FIT, SPLIT_MODEL, ExternalToolError
+
+    profile = profiles.make_profile("prusa-mini", "pla")
+    meshes = (_preflight_box((20.0, 20.0, 10.0)), _preflight_box((231.0, 231.0, 10.0)))
+    entry = SimpleNamespace(
+        plate=0,
+        model=tmp_path / "plate.3mf",
+        meshes=meshes,
+        object_ids=object_ids,
+        slots=(),
+        keep_arrangement=False,
+        model_height=10.0,
+        used_tools=(),
+        findings=(),
+    )
+    problem = ExternalToolError(
+        object_id="old-selection",
+        values={"constraint": "slicer_build_volume", "part_index": part_index},
+        suggestions=(SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER, CANCEL),
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> Any:
+        raise problem
+
+    monkeypatch.setattr(handover, "slice_model", refuse)
+    host = SimpleNamespace(
+        _runs=[entry],
+        _settings=print_settings.resolve(profile),
+        _profile=profile,
+        _setup=handover.SlicerSetup(tmp_path / "SuperSlicer.exe", "prusa"),
+        _usage={},
+        cancelled=CancelSignal(),
+        step=_PreflightSignalLog(),
+        failed=_PreflightSignalLog(),
+    )
+
+    print_dialog._SliceWorker.work(host)
+
+    delivered = host.failed.calls[0][0]
+    assert delivered.object_id == expected
+    actions = {action.id for action in delivered.suggestions}
+    assert {"split_model", "scale_to_fit"}.issubset(actions) == (expected is not None)
+    assert "choose_printer" in actions
+
+
+def test_preflight_failure_never_falls_back_to_the_current_selection() -> None:
+    from app.core.errors import ExternalToolError
+    from app.ui.main_window import MainWindow
+
+    host = SimpleNamespace(object_tree=SimpleNamespace(selected_objects=lambda: ["small-cube"]))
+    problem = ExternalToolError(values={"constraint": "slicer_build_volume"})
+
+    assert MainWindow._object_of(host, problem) is None
+    problem.object_id = "large-part"
+    assert MainWindow._object_of(host, problem) == "large-part"
+    assert MainWindow._object_of(host, ExternalToolError()) == "small-cube"
+
+
+@pytest.mark.parametrize("action_id", ["split_model", "scale_to_fit", "arrange_on_bed"])
+@pytest.mark.parametrize("changed_while_closing", [False, True])
+def test_preflight_scene_action_waits_for_the_print_dialog_to_finish(
+    monkeypatch: pytest.MonkeyPatch,
+    preflight_user_data: None,
+    action_id: str,
+    changed_while_closing: bool,
+) -> None:
+    """Eine beendete Fehlermeldung bedeutet noch keinen beendeten Druckdialog."""
+    from contextlib import nullcontext
+
+    from app.core.errors import ExternalToolError
+    from app.ui import main_window
+
+    events: list[str] = []
+    profile = profiles.make_profile("prusa-mini", "pla")
+    problem = ExternalToolError(
+        object_id="large-part", values={"constraint": "slicer_build_volume", "part_index": 1}
+    )
+    signal = SimpleNamespace(connect=lambda *_args: None)
+    handlers = {action_id: lambda error: events.append(f"handled:{error.object_id}")}
+    window = SimpleNamespace(
+        session=SimpleNamespace(request_fine=lambda: None),
+        settings=UiSettings(),
+        filaments=SimpleNamespace(return_to_print_button=SimpleNamespace(hide=lambda: None)),
+        usage_notice=SimpleNamespace(offer=lambda *_args, **_kwargs: None),
+        _end_inserting_for_output=lambda: None,
+        _gcode_returned=lambda *_args: None,
+        _slicer_findings=lambda *_args: None,
+        _count_delivery=lambda *_args: None,
+        _refresh_inventory=lambda: None,
+        _store_settings=lambda: None,
+        _offer_support=lambda: None,
+        error_handlers=lambda: handlers,
+    )
+    dialog = SimpleNamespace(
+        settings=print_settings.resolve(profile),
+        sliced=signal,
+        reported=signal,
+        handedOver=signal,
+        setupRequested=signal,
+        filamentsRequested=signal,
+        usage_notice=SimpleNamespace(changed=signal, requests={}),
+        scene_action=None,
+        _scene_action_context=None,
+        _job_context=("original-job",),
+        _print_context=lambda: current_context[0],
+        has_changes=lambda: False,
+        deleteLater=lambda: events.append("deleted"),
+        parentWidget=lambda: window,
+        _failed_save_copies=None,
+        _show_slicer_output=lambda *_args: None,
+        _open_printer_choice=lambda *_args: None,
+        reject=lambda: events.append("close-requested"),
+    )
+    current_context = [("original-job",)]
+    dialog.take_scene_action = lambda: print_dialog.PrintSettingsDialog.take_scene_action(dialog)
+
+    def execute() -> int:
+        events.append("modal-entered")
+        offered = print_dialog.PrintSettingsDialog.error_handlers(dialog)
+        # finished kann während der Fehlermeldung den laufenden Kontext leeren.
+        dialog._job_context = None
+        offered[action_id](problem)
+        assert events == ["modal-entered", "close-requested"]
+        assert dialog.scene_action == (action_id, problem)
+        events.append("workers-settled")
+        if changed_while_closing:
+            current_context[0] = ("new-job",)
+        events.append("modal-returned")
+        return 0
+
+    dialog.exec = execute
+    monkeypatch.setattr(print_dialog, "handlers_of", lambda _parent: handlers)
+    monkeypatch.setattr(main_window, "PrintSettingsDialog", lambda *_args: dialog)
+    monkeypatch.setattr(main_window, "waiting", nullcontext)
+    monkeypatch.setattr(main_window, "ensure_print_disclosure", lambda *_args: None)
+
+    main_window.MainWindow.action_print_settings(window)
+
+    expected = [
+        "modal-entered",
+        "close-requested",
+        "workers-settled",
+        "modal-returned",
+        "deleted",
+    ]
+    if not changed_while_closing:
+        expected.append("handled:large-part")
+    assert events == expected
+
+
+@pytest.mark.parametrize("job_context", [None, ("old-job",)])
+def test_preflight_failure_of_a_replaced_job_is_discarded(
+    monkeypatch: pytest.MonkeyPatch, job_context: tuple[str, ...] | None
+) -> None:
+    from app.core.errors import ExternalToolError
+
+    shown: list[Any] = []
+    changed: list[str] = []
+    host = SimpleNamespace(
+        _settling=False,
+        _worker=None,
+        _job_context=job_context,
+        _print_context=lambda: ("new-job",),
+        _failed_save_copies=None,
+        state=SimpleNamespace(setText=changed.append),
+        reported=_PreflightSignalLog(),
+    )
+    monkeypatch.setattr(print_dialog, "show_error", lambda problem, *_args: shown.append(problem))
+    problem = ExternalToolError(values={"constraint": "slicer_build_volume", "part_index": 1})
+
+    PrintSettingsDialog._slice_failed(host, problem, [Finding("old", "info", "Alter Auftrag")])
+
+    assert shown == []
+    assert changed == []
+    assert host.reported.calls == []
+
+
+def test_preflight_action_is_discarded_when_the_job_changes_in_the_error_dialog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.errors import ExternalToolError
+
+    invoked: list[str] = []
+    context = [("old-job",)]
+    dialog = SimpleNamespace(
+        parentWidget=lambda: None,
+        _job_context=context[0],
+        _print_context=lambda: context[0],
+        scene_action=None,
+        _scene_action_context=None,
+        _failed_save_copies=None,
+        _show_slicer_output=lambda *_args: None,
+        _open_printer_choice=lambda *_args: None,
+        reject=lambda: invoked.append("closed"),
+    )
+    monkeypatch.setattr(
+        print_dialog,
+        "handlers_of",
+        lambda _parent: {"split_model": lambda _error: invoked.append("split")},
+    )
+    offered = PrintSettingsDialog.error_handlers(dialog)
+    problem = ExternalToolError(
+        object_id="large", values={"constraint": "slicer_build_volume", "part_index": 1}
+    )
+    context[0] = ("new-job",)
+
+    offered["split_model"](problem)
+
+    assert invoked == []
+    assert dialog.scene_action is None
+
+
+def test_a_save_failure_without_print_job_context_still_appears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.errors import FileWriteError
+
+    shown: list[Any] = []
+    host = SimpleNamespace(
+        _settling=False,
+        _worker=None,
+        _job_context=None,
+        _failed_save_copies=None,
+        state=SimpleNamespace(setText=lambda _text: None),
+    )
+    monkeypatch.setattr(print_dialog, "show_error", lambda problem, *_args: shown.append(problem))
+    problem = FileWriteError()
+
+    PrintSettingsDialog._slice_failed(host, problem)
+
+    assert shown == [problem]
+
+
+def test_preflight_internal_part_index_is_not_a_customer_value() -> None:
+    from app.core.errors import ExternalToolError
+    from app.ui.dialogs import spoken_values
+
+    problem = ExternalToolError(
+        values={"constraint": "slicer_build_volume", "part_index": 7, "excess_mm": 51.0}
+    )
+
+    lines = spoken_values(problem)
+
+    assert len(lines) == 1
+    assert "51" in lines[0]
+
+
+@pytest.mark.parametrize("action_id", ["split_model", "scale_to_fit"])
+def test_preflight_actions_use_the_offending_object_instead_of_the_selection(
+    preflight_user_data: None, action_id: str
+) -> None:
+    from app.core.errors import ExternalToolError
+    from app.ui.main_window import MainWindow
+
+    selected = SceneObject("small", "Würfel", _preflight_box((20.0, 20.0, 20.0)))
+    oversized = SceneObject("large", "Großes Teil", _preflight_box((231.0, 231.0, 10.0)))
+    applied: list[Any] = []
+    split: list[str] = []
+    window = SimpleNamespace(
+        session=SimpleNamespace(
+            last_result=SimpleNamespace(
+                scene=SimpleNamespace(objects={"small": selected, "large": oversized})
+            ),
+            profile=profiles.make_profile("prusa-mini", "pla"),
+            apply=lambda _title, drafts: applied.extend(drafts),
+        ),
+        object_tree=SimpleNamespace(selected_objects=lambda: ["small"]),
+        action_auto_split=split.append,
+    )
+    window._object_of = lambda error: MainWindow._object_of(window, error)
+    problem = ExternalToolError(
+        object_id="large", values={"constraint": "slicer_build_volume", "part_index": 1}
+    )
+
+    if action_id == "split_model":
+        MainWindow._split_after_error(window, problem)
+        assert split == ["large"]
+    else:
+        MainWindow._scale_after_error(window, problem)
+        assert applied[0].inputs == ("large",)
+        assert applied[0].params["factor"] == pytest.approx(180.0 / 231.0 * 0.99)

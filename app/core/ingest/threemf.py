@@ -742,7 +742,11 @@ class Part:
 
 
 def read_objects(
-    payload: bytes, findings: list[Finding] | None = None, *, plates: bool = False
+    payload: bytes,
+    findings: list[Finding] | None = None,
+    *,
+    plates: bool = False,
+    printable_only: bool = False,
 ) -> list[Part]:
     """Jeder Körper, den der Build platziert, jeder dort, wohin die Datei ihn
     setzt.
@@ -757,6 +761,9 @@ def read_objects(
     Platten (:func:`_plate_layout`); ohne den Schalter bleiben sie, wo die
     Datei sie im Plattenraster hat — so, wie ältere Ladeschritte sie kennen.
 
+    ``printable_only`` lässt ausdrücklich abgeschaltete Build-Instanzen aus
+    der Druckvorprüfung weg. Der normale Import behält sie vollständig.
+
     Eine leere Liste heißt: das ist keine 3MF, die sich hier lesen lässt — der
     Aufrufer fällt auf den allgemeinen Loader zurück, statt für eine Datei eine
     Ausnahme zu bekommen, die ein anderer Leser durchaus schaffen mag.
@@ -770,11 +777,15 @@ def read_objects(
     Platte (§25).
     """
     with _reading_trees():
-        return _read_objects(payload, findings, plates=plates)
+        return _read_objects(payload, findings, plates=plates, printable_only=printable_only)
 
 
 def _read_objects(
-    payload: bytes, findings: list[Finding] | None, *, plates: bool = False
+    payload: bytes,
+    findings: list[Finding] | None,
+    *,
+    plates: bool = False,
+    printable_only: bool = False,
 ) -> list[Part]:
     """Der Rumpf von :func:`read_objects`, innerhalb von :func:`_reading_trees`."""
     # Träge, aus demselben Grund wie in ``_carved``: Ohne Aussparung braucht
@@ -782,7 +793,7 @@ def _read_objects(
     from app.core.geom.boolean import deepest
 
     noted = findings if findings is not None else []
-    leaves = _leaves(payload, noted, plates=plates)
+    leaves = _leaves(payload, noted, plates=plates, printable_only=printable_only)
 
     # Aussparungen zuerst, je Objekt gesammelt: Sie gehören zu jedem
     # druckbaren Teil desselben Objekts, und die Reihenfolge der Blätter
@@ -1727,7 +1738,13 @@ def _refine(
     ), final_tools
 
 
-def _leaves(payload: bytes, noted: list[Finding], *, plates: bool = False) -> list[_Leaf]:
+def _leaves(
+    payload: bytes,
+    noted: list[Finding],
+    *,
+    plates: bool = False,
+    printable_only: bool = False,
+) -> list[_Leaf]:
     """Läuft den Build ab und sammelt jedes Mesh, das er erreicht, der Reihe
     nach.
 
@@ -1789,6 +1806,8 @@ def _leaves(payload: bytes, noted: list[Finding], *, plates: bool = False) -> li
     items = models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item")
     layout = _plate_layout(items, settings, bed)
     for item in items:
+        if printable_only and item.get("printable", "1").strip().casefold() in {"0", "false"}:
+            continue
         identifier = item.get("objectid")
         if identifier is None:
             continue

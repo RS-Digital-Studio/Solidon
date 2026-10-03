@@ -55,6 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
 - PrusaSlicer y la familia Orca respetan la densidad de soporte elegida. El campo empieza en 1 %. Para imprimir sin soportes, elija «Ninguno».
 - En impresiones multicolor con OrcaSlicer, ElegooSlicer, Bambu Studio y Creality Print, la torre de purga recibe una posición inicial adaptada al tamaño de la cama.
+- Las piezas demasiado grandes se indican antes de iniciar el slicer. Si no se encuentra sitio para todas en una placa, puede distribuirlas en varias placas.
 
 ### Taladros, ranuras y división
 
