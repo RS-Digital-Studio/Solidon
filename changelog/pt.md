@@ -83,6 +83,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Solidon organiza na base as peças sobrepostas antes de fatiar com PrusaSlicer ou Cura e avisa se não encontrar uma disposição adequada.
 - Se o PrusaSlicer ou o SuperSlicer indicar uma primeira camada vazia, o Solidon identifica a peça e permite colocá-la na placa ou abrir as definições de impressão adequadas.
 - Os avisos do PrusaSlicer e do SuperSlicer aparecem no relatório mesmo quando o slicer conclui, e uma camada vazia como erro. A distância ao raft ajusta-se à parte.
+- Se o slicer dividir uma placa em vários ficheiros de impressão, o Solidon indica-o e propõe dispor ou exportar. Antes ficava em silêncio só com um deles.
 
 ### Furos, furos oblongos e divisão
 

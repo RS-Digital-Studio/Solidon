@@ -83,6 +83,7 @@ scrive in `website/version.json`.
 - Solidon dispone sul piatto le parti sovrapposte prima dello slicing con PrusaSlicer o Cura e avvisa se non trova una disposizione adatta.
 - Se PrusaSlicer o SuperSlicer segnala un primo strato vuoto, Solidon indica il pezzo e permette di posizionarlo sul piatto o aprire le impostazioni di stampa pertinenti.
 - Gli avvisi di PrusaSlicer e SuperSlicer compaiono nel rapporto anche se lo slicer riesce, uno strato vuoto come errore. La distanza dal raft si imposta a parte.
+- Se lo slicer divide un piatto in più file di stampa, Solidon lo segnala e propone di disporre o esportare. Prima ne prendeva in silenzio uno solo.
 
 ### Fori, asole e divisione
 

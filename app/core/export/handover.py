@@ -6202,6 +6202,7 @@ def slice_model(
         )
         if setup.flavour == "cura":
             command = _prepare_cura_cli(command, workspace, cancelled)
+        outputs_before = _output_files(target)
         completed = _run_slicer(
             command,
             workspace,
@@ -6212,10 +6213,10 @@ def slice_model(
         )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        # Der Name, den wir selbst genannt haben — die Orca-Familie benennt
-        # selbst, für sie bleibt es bei der jüngsten Datei.
+        # Nur die Dateien dieses Versuchs zählen. Auch die selbst benennende
+        # Orca-Familie muss eine einzelne vollständige Druckdatei liefern.
         expected = "" if names_its_own_output(setup.flavour) else OUTPUT_NAME
-        produced = _find_gcode(target, expected)
+        produced = _find_gcode(target, expected, before=outputs_before, tool=setup.name)
         if (
             produced is None
             and _creality_cli(setup)
@@ -6224,6 +6225,7 @@ def slice_model(
             # Creality Print vor 7.3 kennt ``--cli`` nicht und rechnet ohne ihn
             # auf der Konsole (:func:`_creality_cli`).
             _REFUSES_THE_CLI_FLAG.add(setup.executable)
+            outputs_before = _output_files(target)
             completed = _run_slicer(
                 _command(setup, cli_models, config, target, wanted_arrangement),
                 workspace,
@@ -6234,7 +6236,7 @@ def slice_model(
             )
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            produced = _find_gcode(target, expected)
+            produced = _find_gcode(target, expected, before=outputs_before, tool=setup.name)
         # Creality Print 7.3 rückt auf der Konsole jede Platte selbst zur Mitte,
         # auch eine haltende Anordnung (RM-414, :func:`_creality_cli`) — dann
         # gilt Solidons Plattenbelegung dort nie, und das steht dabei.
@@ -6258,6 +6260,7 @@ def slice_model(
             # benutzte Stufe ausgewiesen statt verschwiegen. Ein Slicer, der
             # auch so nichts schreibt, läuft in die Fehlerbehandlung darunter,
             # mit derselben Meldung wie bisher.
+            outputs_before = _output_files(target)
             completed = _run_slicer(
                 _command(setup, cli_models, config, target, False),
                 workspace,
@@ -6268,7 +6271,7 @@ def slice_model(
             )
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            produced = _find_gcode(target, expected)
+            produced = _find_gcode(target, expected, before=outputs_before, tool=setup.name)
             if produced is not None:
                 if refused_flag:
                     _REFUSES_THE_ARRANGE_FLAG.add(setup.executable)
@@ -7423,40 +7426,74 @@ def _copy_print_file(produced: Path, target: Path, *, cancelled: CancelToken | N
     return target
 
 
-def _find_gcode(directory: Path, expected: str = "") -> Path | None:
-    """Die Druckdatei dieses Laufs.
+def _output_files(directory: Path) -> dict[Path, tuple[int, int]]:
+    """Bestand vor einem Versuch, einschließlich leerer angefangener Dateien."""
+    outputs = {}
+    for entry in directory.iterdir():
+        if entry.is_file() and (
+            entry.suffix.casefold() in GCODE_SUFFIXES or entry.name == RESULT_FILE
+        ):
+            info = entry.stat()
+            outputs[entry] = info.st_mtime_ns, info.st_size
+    return outputs
 
-    ``expected`` ist der Name, den Solidon dem Slicer selbst genannt hat —
-    PrusaSlicer über ``--output``, CuraEngine über ``-o``. Wo es ihn gibt,
-    entscheidet er, und zwar aus einem Grund, der über Ordnung hinausgeht:
-    Der Zielordner kann der des Nutzers sein, und dort liegen fremde
-    Druckdateien. Die jüngste zu nehmen hieß dann, die Kennzahlen eines
-    fremden Programms in den Prüfbericht zu schreiben (Regel 14, §22.5).
 
-    Die Orca-Familie benennt selbst und hängt Plattennummern an; für sie
-    bleibt es bei der jüngsten. Und wo der erwartete Name fehlt, wird
-    zurückgefallen — aber nicht stillschweigend.
+def _find_gcode(
+    directory: Path,
+    expected: str = "",
+    *,
+    before: Mapping[Path, tuple[int, int]] | None = None,
+    tool: str = "Slicer",
+) -> Path | None:
+    """Genau eine neue Druckdatei, nie eine Auswahl aus mehreren Platten.
+
+    Jeder Versuch hat seinen eigenen Vorbestand. Reste einer Absage oder
+    fremde alte Dateien zählen weder als Erfolg noch als weitere Platte.
+    ``result.json`` kann mehrere Platten auch dann belegen, wenn nur noch
+    eine Druckdatei auffindbar ist. Ohne diesen Beleg bleibt mehr als eine
+    neue Druckdatei ebenfalls uneindeutig — auch bei gleichem Inhalt.
     """
+    outputs = {
+        entry: signature
+        for entry, signature in _output_files(directory).items()
+        if before is None or before.get(entry) != signature
+    }
+    result_path = directory / RESULT_FILE
+    plate_count = 0
+    if result_path in outputs and outputs[result_path][1] <= _RESULT_LIMIT:
+        try:
+            result = json.loads(result_path.read_bytes())
+        except OSError, ValueError:
+            result = None
+        if isinstance(result, dict) and isinstance(result.get("return_code"), int):
+            if result["return_code"] != 0:
+                return None
+            plates = result.get("sliced_plates")
+            if isinstance(plates, list):
+                plate_count = len(plates)
+    # Leer zählt nicht: Cura legt die Zieldatei schon vor dem Rechnen an.
     candidates = [
         entry
-        for entry in directory.iterdir()
-        # Leer zählt nicht als geschrieben. CuraEngine legt die Datei an,
-        # bevor es rechnet, und lässt sie liegen, wenn ihm die Maschine nicht
-        # reicht — der Lauf meldete dann Erfolg über null Bytes, und die
-        # Kennzahlen daraus waren sämtlich ``None``.
-        if entry.is_file()
-        and entry.suffix.casefold() in GCODE_SUFFIXES
-        and entry.stat().st_size > 0
+        for entry, signature in outputs.items()
+        if entry.suffix.casefold() in GCODE_SUFFIXES and signature[1] > 0
     ]
+    if len(candidates) > 1 or plate_count > 1:
+        raise ExternalToolError(
+            tool=tool,
+            title=SLICER_FAILED,
+            detail=_(
+                "Der Slicer hat mehrere Druckdateien oder Druckplatten ausgegeben. "
+                "Solidon kann daraus keine einzelne vollständige Druckdatei übernehmen. "
+                "Ordnen Sie die Teile neu an oder öffnen Sie die exportierten Modelle im Slicer."
+            ),
+            suggestions=(ARRANGE_ON_BED, EXPORT_ONLY, CANCEL),
+        )
     if not candidates:
         return None
-    if expected:
-        named = [entry for entry in candidates if entry.name == expected]
-        if named:
-            return named[0]
+    if expected and candidates[0].name != expected:
         _log.warning(
-            "the slicer wrote no %s in %s — falling back to the newest print file there",
+            "the slicer wrote no %s in %s — using its only new print file",
             expected,
             directory,
         )
-    return max(candidates, key=lambda entry: entry.stat().st_mtime)
+    return candidates[0]
