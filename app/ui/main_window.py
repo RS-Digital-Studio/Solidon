@@ -9456,6 +9456,7 @@ class MainWindow(QMainWindow):
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
         )
+        self.viewport.invitation.set_chat_available(backend is not None)
         self.chat.set_notice("")
         # Nach set_available, denn die Sperre überschreibt dessen Hinweis:
         # §2 C zählt den Chat zur schreibenden Seite, mit oder ohne Modell.
@@ -20442,7 +20443,14 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         empty = result is not None and not result.scene.objects and not self.session.busy
         invitation = self.viewport.invitation
-        invitation.set_chat_available(self.session.agent_backend is not None)
+        # **Nur eine bekannte Antwort** (RM-492): ``agent_backend`` liest sonst
+        # Schlüsselbund und Netz im Hauptfaden, am Arbeiter der Modellfrage
+        # vorbei — beim ersten Öffnen kurz nach dem Start bis zu 0,45 s
+        # Stillstand. Der Chatknopf kommt mit der Antwort
+        # (``_refresh_chat_availability``).
+        invitation.set_chat_available(
+            self.session.backend_known and self.session.agent_backend is not None
+        )
         halted = self._halted_before_a_body(result) if empty else None
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
