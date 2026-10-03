@@ -52,6 +52,8 @@ INSTALLER_SCRIPT: Final = ROOT / "packaging" / "solidon3d.iss"
 WORKFLOW: Final = ROOT / ".github" / "workflows" / "build.yml"
 ICNS: Final = ROOT / "packaging" / "solidon3d.icns"
 ICO: Final = ROOT / "packaging" / "solidon3d.ico"
+#: Das Ubuntu, dessen Systembibliotheken das Linux-Paket mitnimmt.
+LINUX_RUNNER: Final = "ubuntu-24.04"
 
 #: Was beim Suchen nach Datenverzeichnissen nicht zählt.
 IGNORED: Final = ("__pycache__", ".pyc", ".pyo", "CLAUDE.md")
@@ -433,18 +435,42 @@ def test_the_workflow_packages_every_delivered_platform() -> None:
     Fehlt einer von beiden, fehlt die Hälfte der Mac-Nutzer — ein auf arm64
     gebautes Paket startet auf einem Intel-Gerät nicht.
 
-    Drei der vier Labels enden auf ``-latest`` und wandern mit. Für Intel gibt
-    es das nicht; x64 läuft nur unter seiner Nummer, und die wechselt — erst
-    ``macos-13``, dann ``macos-26-intel``. Ein festes Label hier hätte den
+    Windows und Apple Silicon enden auf ``-latest`` und wandern mit. Für Intel
+    gibt es das nicht; x64 läuft nur unter seiner Nummer, und die wechselt —
+    erst ``macos-13``, dann ``macos-26-intel``. Ein festes Label hier hätte den
     Test nach dem nächsten Wechsel rot stehen lassen, ohne dass am Bau etwas
     fehlt. Geprüft wird deshalb, *dass* ein Intel-Mac dabei ist, nicht welche
-    Nummer er trägt.
+    Nummer er trägt. Linux steht dagegen mit Absicht fest
+    (:func:`test_linux_builds_on_the_ubuntu_its_licence_tables_name`).
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
     matrix = next(line for line in job_block(workflow, "package").splitlines() if "os: [" in line)
-    for runner in ("windows-latest", "ubuntu-latest", "macos-latest"):
+    for runner in ("windows-latest", LINUX_RUNNER, "macos-latest"):
         assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
     assert "-intel" in matrix, f"kein Intel-Mac in der Paket-Matrix: {matrix.strip()}"
+
+
+def test_linux_builds_on_the_ubuntu_its_licence_tables_name() -> None:
+    """Kein Workflow baut oder prüft auf ``ubuntu-latest``.
+
+    Das Linux-Paket nimmt die Systembibliotheken des Bauservers mit. Ihre
+    Fassungen stehen in der Lizenzbeilage, und die glibc des Servers ist die
+    Untergrenze, auf der das AppImage startet. ``ubuntu-latest`` wandert ab dem
+    19.10.2026 auf Ubuntu 26 und höbe beides ohne Commit an; ein Wechsel muss
+    diese Konstante, die Lizenztexte und die Untergrenze gemeinsam bewegen.
+    """
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows, "keine Workflows gefunden — dann prüft dieser Test nichts"
+    drifting = [
+        path.name
+        for path in workflows
+        for line in path.read_text("utf-8").splitlines()
+        if "ubuntu-latest" in line.split("#", 1)[0]
+    ]
+    assert not drifting, f"ubuntu-latest statt {LINUX_RUNNER} in: {drifting}"
+    assert LINUX_RUNNER in WORKFLOW.read_text(encoding="utf-8")
+    tables = ROOT / "app" / "core" / "knowledge" / "data" / "third_party_licenses.toml"
+    assert "Ubuntu " + LINUX_RUNNER.removeprefix("ubuntu-") in tables.read_text("utf-8")
 
 
 def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> None:
@@ -483,7 +509,7 @@ def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> Non
     suite = job_block(workflow, "suite")
     matrix = next(line for line in suite.splitlines() if "os: ${{" in line)
     assert "github.event_name == 'workflow_dispatch'" in matrix
-    for runner in ("windows-latest", "ubuntu-latest", "macos-latest"):
+    for runner in ("windows-latest", LINUX_RUNNER, "macos-latest"):
         assert runner in matrix
     tested = json.loads(re.search(r"fromJSON\('([^']+)'\)", matrix).group(1))
     package_matrix = next(
@@ -541,7 +567,7 @@ def _assert_ci_dependencies(workflow: str) -> None:
         assert not re.search(r"^    needs:", block, flags=re.MULTILINE), name
         assert "continue-on-error:" not in block, name
     contracts = job_block(workflow, "window-contracts")
-    assert "os: [windows-latest, ubuntu-latest, macos-latest]" in contracts
+    assert f"os: [windows-latest, {LINUX_RUNNER}, macos-latest]" in contracts
     windows = job_block(workflow, "windows")
     assert "runs-on: windows-latest" in windows
     count = re.search(r"--shard-index \$\{\{ matrix\.shard \}\} --shard-count (\d+) ", windows)
@@ -581,7 +607,7 @@ def test_the_package_waits_for_every_independent_required_check() -> None:
         ("--ci-shard ${{ matrix.shard }}/3", "--ci-shard 0/3"),
         ("  windows:\n", "  windows:\n    needs: suite\n"),
         ("  suite:\n", "  suite:\n    continue-on-error: true\n"),
-        ("os: [windows-latest, ubuntu-latest, macos-latest]", "os: [windows-latest]"),
+        (f"os: [windows-latest, {LINUX_RUNNER}, macos-latest]", "os: [windows-latest]"),
     ],
 )
 def test_the_ci_contract_rejects_lost_coverage_or_hidden_failures(before: str, after: str) -> None:

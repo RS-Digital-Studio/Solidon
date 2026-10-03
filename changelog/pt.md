@@ -46,7 +46,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
+- O SuperSlicer já não falha com peças redondas: já não recebe a costura chanfrada que não conhece.
+- A pré-seleção de filamento escolhe Generic ou a marca da sua impressora em vez de um filamento especial de terceiros, por exemplo Generic PETG em vez de BETA PETG na Bambu A1.
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
+- *Orientar para impressão*, *Rodar* e *Deslocar* funcionam também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte. O corpo continua exato.
+- Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
 
 ### Furos, furos oblongos e divisão
 
@@ -57,6 +61,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
 - No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
 - Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
+- Uma característica reconhecida a mais de um metro da origem mantém o seu lugar ao alterá-la. Antes o campo cortava o número sem aviso, e o furo mudava de sítio.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em cima escolhe o «Plano» — num eixo com inclinação, paralelo a uma face, por uma aresta ou por três pontos que clica na vista.
@@ -65,17 +70,26 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo não puder ser cortado de forma limpa num corpo STEP, o Solidon fura-o no modelo de triângulos em vez de passar adiante um corpo danificado.
 - Se escolheu «Carregar agora», também as peças de *Dividir o modelo* deixam de iniciar minutos de reconhecimento; «Reconhecer todas as características» recupera-o.
 
+### Arredondar e chanfrar
+
+- Arredondar um grupo de arestas num corpo STEP arredonda agora as arestas possíveis em vez de recusar tudo. *Mostrar o ponto* encontra cada aresta omitida.
+- As arestas junto a uma parede não mais espessa do que o raio ficam vivas, e o relatório indica o raio que cabe ali. Antes, todo o arredondamento era recusado.
+- Se um corpo STEP não tiver aresta própria num local escolhido, o relatório oferece *Terminar a edição de faces e tentar de novo*. No modelo de triângulos também é arredondado.
+- Se faltar espaço para a troca com o processo de cálculo, o Solidon calcula o passo mesmo assim e indica-o no relatório. Antes parava com o conselho de calcular de forma mais grosseira.
+
 ### Modelar, texto e esboço
 
 - Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.
 - A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.
 - O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.
 - Um traço sobre o plano de simetria atua uma vez em vez de duas.
+- O editor de esqueleto mostra ossos e articulação na vista, e uma articulação fica no meio do corpo em vez de na pele, assim a figura dobra de forma uniforme.
 - A barra de modelação chama agora «Intensidade» ao valor do pincel, em vez de «Espessura», que fazia pensar numa parede.
 - Se um traço de modelação fura a parede ou a deixa fina demais, o relatório indica-o, com «Mostrar o ponto».
 - Na janela, «Fundir suavemente» calcula agora fino, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
+- Os desenhos SVG chegam corretos: rotações, inclinações, cantos arredondados, elipses e arcos elípticos estão certos, e as camadas ocultas ficam de fora.
 - O destino de «Alinhar à característica» começa vazio, e o primeiro clique na vista preenche-o. «Aplicar» espera até lá em vez de pôr o corpo do lado errado.
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 - Outro traço numa cavidade acabada de escavar torna-a mais funda, também com um pincel pequeno. Até agora não tinha efeito e contava como falhado.
@@ -98,6 +112,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
 - A barra de parâmetros recusa uma medida fora do seu limite em vez de deixar a vista vazia.
 - Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
+- Na barra de parâmetros as medidas de dois paralelepípedos levam o seu número, e uma medida com intervalo de trabalho próprio tem um cursor.
 - Se um passo espera uma pergunta, «Aplicar» continua disponível e a pergunta aparece.
 - No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
 - As marcas nas listas leem-se em todas as linhas, e as cores aparecem como um ponto redondo ao lado.
@@ -112,6 +127,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
 - A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.
+- Quando outros programas ocupam o computador, *Cancelar* para um cálculo longo em menos de um segundo, em vez de pedir um reinício após vários segundos.
+- Um modelo de linguagem local pode dar doze passos em vez de oito por pedido no chat e resolve assim mais pedidos com várias partes.
 
 ## 0.5.1
 

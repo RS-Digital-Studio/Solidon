@@ -14,31 +14,30 @@ erzeugt aus dessen tatsächlicher Stückliste (SBOM).
 | contourpy | 1.4.0 | `BSD-3-Clause` | [Quelltext](https://github.com/contourpy/contourpy) |
 | cycler | 0.12.1 | `BSD-3-Clause` | [Quelltext](https://github.com/matplotlib/cycler) |
 | fast_simplification | 0.2.0 | `MIT` | [Quelltext](https://github.com/pyvista/fast-simplification) |
-| fonttools | 4.65.0 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
+| fonttools | 4.66.1 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
 | freetype-py | 2.5.1 | `BSD-3-Clause` | [Quelltext](https://github.com/rougier/freetype-py) |
 | hidapi | 0.15.0 | `BSD-3-Clause` | [Quelltext](https://github.com/trezor/cython-hidapi) |
 | hsluv | 5.0.4 | `MIT` | [Quelltext](https://www.hsluv.org) |
-| ImageIO | 2.37.4 | `BSD-2-Clause` | [Quelltext](https://github.com/imageio/imageio) |
+| ImageIO | 2.38.0 | `BSD-2-Clause` | [Quelltext](https://github.com/imageio/imageio) |
 | jaraco.classes | 3.4.0 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.classes) |
 | jaraco.context | 6.1.2 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.context) |
 | jaraco.functools | 4.6.0 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.functools) |
 | Jinja2 | 3.1.6 | `BSD-3-Clause` | [Quelltext](https://github.com/pallets/jinja/) |
 | keyring | 25.7.0 | `MIT` | [Quelltext](https://github.com/jaraco/keyring) |
 | kiwisolver | 1.5.1 | `BSD-3-Clause` | [Quelltext](https://github.com/nucleic/kiwi) |
-| lazy-loader | 0.5 | `BSD-3-Clause` | [Quelltext](https://github.com/scientific-python/lazy-loader) |
-| lxml | 6.1.3 | `BSD-3-Clause` | [Quelltext](https://github.com/lxml/lxml) |
-| manifold3d | 3.5.3 | `Apache-2.0` | [Quelltext](https://github.com/elalish/manifold) |
+| lazy-loader | 0.6 | `BSD-3-Clause` | [Quelltext](https://github.com/scientific-python/lazy-loader) |
+| manifold3d | 3.5.4 | `Apache-2.0` | [Quelltext](https://github.com/elalish/manifold) |
 | MarkupSafe | 3.0.3 | `BSD-3-Clause` | [Quelltext](https://github.com/pallets/markupsafe/) |
 | matplotlib | 3.11.2 | `LicenseRef-Matplotlib` | [Quelltext](https://matplotlib.org) |
 | more-itertools | 11.1.0 | `MIT` | [Quelltext](https://github.com/more-itertools/more-itertools) |
-| networkx | 3.6.1 | `BSD-3-Clause` | [Quelltext](https://networkx.org/) |
+| networkx | 3.7 | `BSD-3-Clause` | [Quelltext](https://networkx.org/) |
 | numpy | 2.5.3 | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` | [Quelltext](https://github.com/numpy/numpy) |
 | packaging | 26.3 | `Apache-2.0 OR BSD-2-Clause` | [Quelltext](https://github.com/pypa/packaging) |
 | pillow | 12.3.0 | `MIT-CMU` | [Quelltext](https://github.com/python-pillow/Pillow) |
 | pycparser | 3.0 | `BSD-3-Clause` | [Quelltext](https://github.com/eliben/pycparser) |
 | pygfx | 0.17.0 | `BSD-2-Clause` | [Quelltext](https://github.com/pygfx/pygfx) |
 | pylinalg | 0.6.8 | `BSD-2-Clause` | [Quelltext](https://github.com/pygfx/pylinalg) |
-| pyparsing | 3.3.2 | `MIT` | [Quelltext](https://github.com/pyparsing/pyparsing.git) |
+| pyparsing | 3.3.3 | `MIT` | [Quelltext](https://github.com/pyparsing/pyparsing.git) |
 | PySide6 | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
 | PySide6_Addons | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
 | PySide6_Essentials | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
@@ -51,10 +50,10 @@ erzeugt aus dessen tatsächlicher Stückliste (SBOM).
 | shiboken6 | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
 | six | 1.17.0 | `MIT` | [Quelltext](https://github.com/benjaminp/six) |
 | svg.path | 7.1 | `MIT` | [Quelltext](https://github.com/regebro/svg.path) |
-| tifffile | 2026.9.9 | `BSD-3-Clause` | [Quelltext](https://www.cgohlke.com) |
+| tifffile | 2026.9.20 | `BSD-3-Clause` | [Quelltext](https://www.cgohlke.com) |
 | trimesh | 5.1.0 | `MIT` | [Quelltext](https://github.com/mikedh/trimesh) |
-| uharfbuzz | 0.56.1 | `Apache-2.0` | [Quelltext](https://github.com/trufont/uharfbuzz) |
-| vhacdx | 0.0.10 | `BSD-3-Clause` | [Quelltext](https://github.com/trimesh/vhacdx) |
+| uharfbuzz | 0.56.2 | `Apache-2.0` | [Quelltext](https://github.com/trufont/uharfbuzz) |
+| vhacdx | 0.1.0 | `BSD-3-Clause` | [Quelltext](https://github.com/trimesh/vhacdx) |
 | wgpu | 0.32.0 | `BSD-2-Clause` | [Quelltext](https://github.com/pygfx/wgpu-py) |
 | xxhash | 4.0.1 | `BSD-2-Clause` | [Quelltext](https://github.com/ifduyue/python-xxhash) |
 
@@ -1272,13 +1271,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### fonttools 4.65.0
+### fonttools 4.66.1
 
 SPDX-Ausdruck: `MIT`
 
-#### fonttools-4.65.0.dist-info/licenses/LICENSE
+#### fonttools-4.66.1.dist-info/licenses/LICENSE
 
-Quelle: wheel:fonttools-4.65.0.dist-info/licenses/LICENSE
+Quelle: wheel:fonttools-4.66.1.dist-info/licenses/LICENSE
 
 SHA-256: `6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383`
 
@@ -1306,9 +1305,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### fonttools-4.65.0.dist-info/licenses/LICENSE.external
+#### fonttools-4.66.1.dist-info/licenses/LICENSE.external
 
-Quelle: wheel:fonttools-4.65.0.dist-info/licenses/LICENSE.external
+Quelle: wheel:fonttools-4.66.1.dist-info/licenses/LICENSE.external
 
 SHA-256: `94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69`
 
@@ -2711,13 +2710,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### ImageIO 2.37.4
+### ImageIO 2.38.0
 
 SPDX-Ausdruck: `BSD-2-Clause`
 
-#### imageio-2.37.4.dist-info/licenses/LICENSE
+#### imageio-2.38.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:imageio-2.37.4.dist-info/licenses/LICENSE
+Quelle: wheel:imageio-2.38.0.dist-info/licenses/LICENSE
 
 SHA-256: `246aae8eea14923e415b2f0eed0fbf1e70451feb48592b5683851c71df1e05b0`
 
@@ -2995,13 +2994,13 @@ to indicate the copyright and license terms:
 #------------------------------------------------------------------------------
 ```
 
-### lazy-loader 0.5
+### lazy-loader 0.6
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### lazy_loader-0.5.dist-info/licenses/LICENSE.md
+#### lazy_loader-0.6.dist-info/licenses/LICENSE.md
 
-Quelle: wheel:lazy_loader-0.5.dist-info/licenses/LICENSE.md
+Quelle: wheel:lazy_loader-0.6.dist-info/licenses/LICENSE.md
 
 SHA-256: `797b6937a4f976836efbbbb3ae333d7866ddc3eb3cb152972b2be348d3529372`
 
@@ -3037,193 +3036,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### lxml 6.1.3
-
-SPDX-Ausdruck: `BSD-3-Clause`
-
-#### lxml-6.1.3.dist-info/licenses/LICENSE.txt
-
-Quelle: wheel:lxml-6.1.3.dist-info/licenses/LICENSE.txt
-
-SHA-256: `8fc2b568133516e46845d2147917adeee1648e70ae9ab5ed6c5417afef4ce855`
-
-```text
-BSD 3-Clause License
-
-Copyright (c) 2004 Infrae. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-  1. Redistributions of source code must retain the above copyright
-     notice, this list of conditions and the following disclaimer.
-
-  2. Redistributions in binary form must reproduce the above copyright
-     notice, this list of conditions and the following disclaimer in
-     the documentation and/or other materials provided with the
-     distribution.
-
-  3. Neither the name of Infrae nor the names of its contributors may
-     be used to endorse or promote products derived from this software
-     without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL INFRAE OR
-CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-#### lxml-6.1.3.dist-info/licenses/LICENSES.txt
-
-Quelle: wheel:lxml-6.1.3.dist-info/licenses/LICENSES.txt
-
-SHA-256: `388fa99f3bde4447cd5a4cbb114037be026854db6cfe89e112691c1d8abdcf3c`
-
-```text
-lxml is copyright Infrae and distributed under the BSD license (see
-doc/licenses/BSD.txt), with the following exceptions:
-
-Some code, such a selftest.py, selftest2.py and
-src/lxml/_elementpath.py are derived from ElementTree and
-cElementTree. See doc/licenses/elementtree.txt for the license text.
-Newer versions reuse code from CPython's 'xml.etree' implementation,
-licensed under the PSF-License v2.
-See https://docs.python.org/3/license.html
-
-A copy of difflib is used as part of lxml.html, forked from the CPython
-standard library and licensed under the PSF-License v2.
-See https://docs.python.org/3/license.html
-
-lxml.cssselect and lxml.html are copyright Ian Bicking and distributed
-under the BSD license (see doc/licenses/BSD.txt).
-
-test.py, the test-runner script, is GPL and copyright Shuttleworth
-Foundation. See doc/licenses/GPL.txt. It is believed the unchanged
-inclusion of test.py to run the unit test suite falls under the
-"aggregation" clause of the GPL and thus does not affect the license
-of the rest of the package.
-
-The isoschematron implementation uses several XSL and RelaxNG resources:
- * The (XML syntax) RelaxNG schema for schematron, copyright International
-   Organization for Standardization (see
-   src/lxml/isoschematron/resources/rng/iso-schematron.rng for the license
-   text)
- * The skeleton iso-schematron-xlt1 pure-xslt schematron implementation
-   xsl stylesheets, copyright Rick Jelliffe and Academia Sinica Computing
-   Center, Taiwan (see the xsl files here for the license text:
-   src/lxml/isoschematron/resources/xsl/iso-schematron-xslt1/)
- * The xsd/rng schema schematron extraction xsl transformations are unlicensed
-   and copyright the respective authors as noted (see
-   src/lxml/isoschematron/resources/xsl/RNG2Schtrn.xsl and
-   src/lxml/isoschematron/resources/xsl/XSD2Schtrn.xsl)
-
-
-Binary wheels
--------------
-
-The officiall distributed binary wheels include bundled versions of the libraries
-zlib, iconv, libxml2, libxslt and libexslt.
-These libraries are linked, used and distributed under their following
-respective licenses:
-
-**zlib**: zlib-license, https://www.zlib.net/zlib_license.html
-
-**iconv**: LGPL 2.1, https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-
-**libxml2**: MIT
-
-Except where otherwise noted in the source code (e.g. the files dict.c and
-list.c, which are covered by a similar licence but with different Copyright
-notices) all the files are:
-
- Copyright (C) 1998-2012 Daniel Veillard.  All Rights Reserved.
- Copyright (C) The Libxml2 Contributors.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is fur-
-nished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FIT-
-NESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-**libxslt**: MIT
-
- Copyright (C) 2001-2002 Daniel Veillard.  All Rights Reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is fur-
-nished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FIT-
-NESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-DANIEL VEILLARD BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CON-
-NECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Except as contained in this notice, the name of Daniel Veillard shall not
-be used in advertising or otherwise to promote the sale, use or other deal-
-ings in this Software without prior written authorization from him.
-
-**libexslt**: MIT
-
- Copyright (C) 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard.
- All Rights Reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is fur-
-nished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FIT-
-NESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CON-
-NECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Except as contained in this notice, the name of the authors shall not
-be used in advertising or otherwise to promote the sale, use or other deal-
-ings in this Software without prior written authorization from him.
-```
-
-### manifold3d 3.5.3
+### manifold3d 3.5.4
 
 SPDX-Ausdruck: `Apache-2.0`
 
-#### manifold3d-3.5.3.dist-info/licenses/AUTHORS
+#### manifold3d-3.5.4.dist-info/licenses/AUTHORS
 
-Quelle: wheel:manifold3d-3.5.3.dist-info/licenses/AUTHORS
+Quelle: wheel:manifold3d-3.5.4.dist-info/licenses/AUTHORS
 
 SHA-256: `074a43d4b1626a34a0a14a036d00100524dd463604b2570c4d76c7baa63608f3`
 
@@ -3240,9 +3059,9 @@ Geoff deRosenroll <geoffder>
 Google LLC
 ```
 
-#### manifold3d-3.5.3.dist-info/licenses/LICENSE
+#### manifold3d-3.5.4.dist-info/licenses/LICENSE
 
-Quelle: wheel:manifold3d-3.5.3.dist-info/licenses/LICENSE
+Quelle: wheel:manifold3d-3.5.4.dist-info/licenses/LICENSE
 
 SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
 
@@ -5030,22 +4849,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### networkx 3.6.1
+### networkx 3.7
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### networkx-3.6.1.dist-info/licenses/LICENSE.txt
+#### networkx-3.7.dist-info/licenses/LICENSE.txt
 
-Quelle: wheel:networkx-3.6.1.dist-info/licenses/LICENSE.txt
+Quelle: wheel:networkx-3.7.dist-info/licenses/LICENSE.txt
 
-SHA-256: `3cf7c3a179d817b23b8b8568211769fefdf93797d207d984b8b2fa24d0220b33`
+SHA-256: `6025f323ea29dc2f0ee0abd9523bf910186f55b0e148e6ebf646c55566278e2e`
 
 ```text
 NetworkX is distributed with the 3-clause BSD license.
 
 ::
 
-   Copyright (c) 2004-2025, NetworkX Developers
+   Copyright (c) 2004-2026, NetworkX Developers
    Aric Hagberg <hagberg@lanl.gov>
    Dan Schult <dschult@colgate.edu>
    Pieter Swart <swart@lanl.gov>
@@ -9139,13 +8958,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### pyparsing 3.3.2
+### pyparsing 3.3.3
 
 SPDX-Ausdruck: `MIT`
 
-#### pyparsing-3.3.2.dist-info/licenses/LICENSE
+#### pyparsing-3.3.3.dist-info/licenses/LICENSE
 
-Quelle: wheel:pyparsing-3.3.2.dist-info/licenses/LICENSE
+Quelle: wheel:pyparsing-3.3.3.dist-info/licenses/LICENSE
 
 SHA-256: `a5425f9dc14ac74d4c5f0b679e941f2442e32cca7452a4418d5b1a49893ebe4e`
 
@@ -14720,13 +14539,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### tifffile 2026.9.9
+### tifffile 2026.9.20
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### tifffile-2026.9.9.dist-info/licenses/LICENSE
+#### tifffile-2026.9.20.dist-info/licenses/LICENSE
 
-Quelle: wheel:tifffile-2026.9.9.dist-info/licenses/LICENSE
+Quelle: wheel:tifffile-2026.9.20.dist-info/licenses/LICENSE
 
 SHA-256: `3cf196b1625812d2d119518294043e71017fe858355a58eb48e1e35b61213ce9`
 
@@ -14797,13 +14616,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### uharfbuzz 0.56.1
+### uharfbuzz 0.56.2
 
 SPDX-Ausdruck: `Apache-2.0`
 
-#### uharfbuzz-0.56.1.dist-info/licenses/LICENSE
+#### uharfbuzz-0.56.2.dist-info/licenses/LICENSE
 
-Quelle: wheel:uharfbuzz-0.56.1.dist-info/licenses/LICENSE
+Quelle: wheel:uharfbuzz-0.56.2.dist-info/licenses/LICENSE
 
 SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
 
@@ -15062,13 +14881,13 @@ ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
 PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 ```
 
-### vhacdx 0.0.10
+### vhacdx 0.1.0
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### vhacdx-0.0.10.dist-info/licenses/LICENSE
+#### vhacdx-0.1.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:vhacdx-0.0.10.dist-info/licenses/LICENSE
+Quelle: wheel:vhacdx-0.1.0.dist-info/licenses/LICENSE
 
 SHA-256: `0cef3813562ecea956317018a5ad41baea84e4317bc57924ff4dfa2ff5c51775`
 

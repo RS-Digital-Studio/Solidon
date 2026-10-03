@@ -35,7 +35,14 @@ from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
 from app.core.slice.analysis import total_overhang
-from app.core.types import Feature, MaterialSlot, Profile, SceneObject, SlotOverride
+from app.core.types import (
+    Feature,
+    MaterialSlot,
+    Profile,
+    SceneObject,
+    SettingAdvice,
+    SlotOverride,
+)
 from app.i18n import tr
 from app.ui.labels import BoundedLengthSpin, BoundedSpin
 from app.ui.print_settings_dialog import (
@@ -2872,6 +2879,25 @@ def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
         assert colour.upper() in editor.toolTip()
         assert editor.statusTip() == own_status
         assert editor.accessibleDescription() == own_description
+
+
+@pytest.mark.parametrize(
+    ("slicer", "ignored"), [("superslicer.exe", True), ("PrusaSlicer.exe", False)]
+)
+def test_superslicer_greys_out_the_scarf_seam_and_drops_its_suggestion(
+    dialog: PrintSettingsDialog, slicer: str, ignored: bool
+) -> None:
+    """RM-459: SuperSlicer gehört zur Prusa-Familie, kennt die Schrägnaht aber
+    nicht. Das Feld sagt es, und ein Vorschlag darauf steht nicht in der Liste."""
+    dialog._slicer_path = Path(slicer)
+    dialog._mark_fields_this_slicer_ignores()
+    editor = dialog._editors["shell.scarf_seam"]
+    assert editor.isEnabled() is not ignored
+    assert ("kennt diese Einstellung nicht" in editor.toolTip()) is ignored
+
+    suggestion = SettingAdvice(path="shell.scarf_seam", value=True, was=False, reason="rund")
+    dialog._advice_entries = [suggestion]
+    assert (suggestion in dialog._current_advice()) is not ignored
 
 
 def test_a_part_that_fits_no_bed_is_named_before_slicing(

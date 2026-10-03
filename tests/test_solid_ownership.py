@@ -1215,7 +1215,8 @@ def test_an_explicit_edge_selection_survives_a_genuine_copy_edge_reordering(
     edge_mappings = _reversing_copy(monkeypatch, builder)
 
     if operation == "fillet_group":
-        result, skipped = edit.fillet_group(source, 3.0, chosen)
+        group = edit.fillet_group(source, 3.0, chosen)
+        result, skipped = group.solid, group.omitted
         assert not skipped
     else:
         result = edit.fillet(source, 3.0, "vertical", selected_edges=chosen)

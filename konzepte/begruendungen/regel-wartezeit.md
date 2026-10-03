@@ -367,6 +367,41 @@ des Fensterendes. Nachweis:
 die fünf Dialogtests, die an der Erhebung nichts prüfen, nehmen dort die
 Fixture `quick_survey`, sonst zahlt jeder Teardown die HTTP-Frist.
 
+### Eine Erzeugung läuft im Hintergrund
+
+Der Erzeugen-Dialog lief mit `exec()` anwendungsmodal, solange der Generator
+rechnete — vierzig Sekunden bis viele Minuten, in denen im Fenster nichts ging
+und der Fortschritt nur im Dialog stand (RM-371, Gebietsprüfung Weg 3). §2.8
+verlangt darüber Fortschritt mit *Abbrechen* in der Statusleiste und eine
+bedienbare Oberfläche.
+
+* **Einer zur Zeit:** ComfyUI rechnet auf derselben Grafikkarte, an der der
+  Kunde sitzt; zwei Läufe wären doppelte Wartezeit. Ein zweiter Aufruf holt
+  den offenen Dialog nach vorn, auch mit einem neu abgelegten Bild.
+* **Zur Seite statt zu:** Der Dialog behält Eingaben und fertige Versuche;
+  ausgeblendet gibt er das Bild frei. Mit dem Ergebnis (oder einem Fehler mit
+  Ausweg) kommt er wieder, ohne die Tastatur zu nehmen — wer gerade einen Wert
+  tippt, tippt ihn zu Ende. Ein Abbruch ohne fertigen Versuch schließt ihn, die
+  Statuszeile sagt es.
+* **Kein Wartezeiger:** Der Besitzer `"generate"` steht zuletzt in
+  `_PROGRESS_PRIORITY` und in `_BACKGROUND_PROGRESS`; was der Kunde
+  währenddessen selbst anstößt, zeigt seinen Balken davor, und der Zeiger gilt
+  nur dem, worauf er wartet. Sonst stünde nach jeder Auswertung minutenlang
+  die Sanduhr.
+* **Projektwechsel:** Während des Laufs bleibt das Fenster auch für ein anderes
+  Projekt oder den Startbildschirm bedienbar. *Übernehmen* legt das Modell in
+  das, was dann offen ist (ein Schritt mit Strg+Z, Regel 19), vom
+  Startbildschirm aus über `_begin_from_the_start_screen`; der Dialog nennt
+  den Wechsel vorher (`_say_generation_destination`). Die Absagen an
+  Einfügemarke, Halt und Lizenz bleiben die von RM-361.
+* **Schließen hält an:** `wait_for_workers` bricht den Wurf ab, `release`
+  schließt den Dialog, denn sein `take` hält das Fenster.
+* **Ein hängender Abbruch hält niemanden fest:** Während ein abgebrochener
+  weiterer Versuch ausläuft, ist *Abbrechen* gesperrt (RM-418, sonst gingen die
+  fertigen Versuche verloren); Esc und das Fensterkreuz lassen den Dialog dann
+  zur Seite treten, und das Ende holt ihn mit den Versuchen zurück.
+  `discard` schließt ihn trotzdem, für das Ende des Fensters.
+
 ## Die grobe Vorschaustufe
 
 Ein großes Netz beantwortet keine Zahl in einer Sekunde. Gemessen am
@@ -995,6 +1030,9 @@ sie nicht — `gc.get_referrers` schon.
 *jedes* Objekt; eine Eins ist ein Zeiger auf genau eine Referenz, und die
 findet man, statt sie für Streuung zu halten.
 
+Warum die Knopfgruppe den `weak_slot` schlägt: `weak_slot` je Knopf riss
+`test_widget_lifetime` mit einer Zugriffsverletzung (Ursache bei RM-021).
+
 ### Ein Filter auf einem sterblichen Widget bestellt beim `Destroy` ab
 
 **Die Richtung entscheidet, nicht die Zählung.** Stirbt das *Filterobjekt*,
@@ -1176,6 +1214,19 @@ beim Beenden noch darin hängt, reißt den Prozess mit (0xC0000409). Er wartet
 50 ms — lokal der Normalfall, ohne Zwischenbild — und zeigt sonst die
 ungeprüfte Liste, die sich ausdünnt, sobald die Antwort da ist. Wer eine
 gemerkte Pfadliste prüft, prüft sie so.
+
+Auch die ComfyUI-Ordnerprüfung läuft außerhalb von Qt: `find_comfyui` und die
+Modellbestände können auf einem nicht erreichbaren Netzlaufwerk in einem
+Dateizugriff hängen. Höchstens zwei Daemon-Fäden prüfen systemweit; je Dialog
+bleibt nur der neueste noch nicht gestartete Pfad vorgemerkt. Jede Antwort
+trägt die Eingabegeneration und darf nach Pfadwechsel oder Schließen den
+Dialogzustand nicht ändern. Dauert eine Prüfung fünf Sekunden, bleibt
+*Einrichten* gesperrt und erklärt, dass ein anderer erreichbarer Ordner gewählt
+oder die Antwort abgewartet werden muss. Eine verspätete erfolgreiche Antwort
+darf freigeben; eine Fehler- oder Crashantwort derselben Generation nicht. Erst
+ein neuer Prüfversuch darf einen fehlgeschlagenen Timeout ablösen. So wird der
+potenziell blockierende Aufruf nach einem Timeout nicht direkt im Setup-
+`QThread` wiederholt.
 
 ### Ein Zeiger, der fragt, wird gedrosselt, nicht entprellt
 
