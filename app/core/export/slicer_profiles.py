@@ -1195,6 +1195,7 @@ def _cura_machine_instances(
     documents: ProfileDocuments,
     *,
     resolve_jerk: bool = False,
+    cura_raft_contact: dict[str, Any] | None = None,
 ) -> Iterator[tuple[SlicerProfile, dict[str, Any]]]:
     """Eigene Cura-Maschinen einschließlich ihrer Maschinen- und Düsencontainer.
 
@@ -1246,10 +1247,11 @@ def _cura_machine_instances(
             paths: Mapping[str, Path] = containers,
             *,
             motion: bool = False,
+            raft_contact: bool = False,
         ) -> dict[str, Any]:
             values: dict[str, Any] = {}
             positions: tuple[str, ...] = (_CURA_DEFINITION_CHANGES_INDEX, _CURA_VARIANT_INDEX)
-            positions += ("3", "2", "1", "0") if motion else ("0",)
+            positions += ("3", "2", "1", "0") if motion or raft_contact else ("0",)
             for position in positions:
                 identifier = stack.get(position, "").strip()
                 if not identifier or identifier.startswith("empty_"):
@@ -1259,6 +1261,15 @@ def _cura_machine_instances(
                 if parsed is None:
                     raise _incomplete_profile(source)
                 if parsed.has_section("values"):
+                    if raft_contact:
+                        # Die Herkunft bleibt auch in gewählten Prozesscontainern
+                        # erhalten; andere Prozesswerte werden hier nicht übernommen.
+                        values.update(
+                            (key, value)
+                            for key, value in parsed["values"].items()
+                            if key in {"raft_airgap", "layer_0_z_overlap"}
+                        )
+                        continue
                     # Formeln bleiben als ungültiger Wert stehen; sie dürfen
                     # keinen vorhandenen Default wieder sichtbar machen.
                     values.update(
@@ -1292,7 +1303,10 @@ def _cura_machine_instances(
                     documents=documents,
                     overrides=overrides,
                     resolve_jerk=False,
+                    cura_raft_contact=cura_raft_contact,
                 )
+                if cura_raft_contact is not None:
+                    cura_raft_contact.update(changes(stack, path, raft_contact=True))
                 if resolve_jerk:
                     overrides.update(changes(stack, path, motion=True))
                 trains = _cura_trains(folder, machine)
@@ -2101,6 +2115,7 @@ def _cura_definition_values(
     overrides: Mapping[str, Any] | None = None,
     extruder_overrides: Sequence[Mapping[str, Any]] = (),
     resolve_jerk: bool = False,
+    cura_raft_contact: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Definitionsdaten und bekannte Jerk-Beziehungen; fremde Ausdrücke bleiben unbekannt."""
     indexes = {} if indexes is None else indexes
@@ -2142,7 +2157,15 @@ def _cura_definition_values(
 
     values: dict[str, Any] = {}
     definitions = read(path, frozenset())
+    if cura_raft_contact is not None:
+        cura_raft_contact.clear()
     for key, properties in definitions.items():
+        if cura_raft_contact is not None and key in {"raft_airgap", "layer_0_z_overlap"}:
+            cura_raft_contact[key] = (
+                overrides[key]
+                if overrides is not None and key in overrides
+                else properties.get("value", properties.get("default_value"))
+            )
         if overrides is not None and key in overrides:
             values[key] = overrides[key]
             continue
@@ -2175,6 +2198,14 @@ def _cura_definition_values(
             values[key] = value
     if overrides is not None:
         values.update(overrides)
+        if cura_raft_contact is not None:
+            cura_raft_contact.update(
+                {
+                    key: value
+                    for key, value in overrides.items()
+                    if key in {"raft_airgap", "layer_0_z_overlap"}
+                }
+            )
     if resolve_jerk:
         motion = []
         for train in extruder_overrides or ({},):
@@ -2932,6 +2963,7 @@ def resolve_profile(
     strict: bool = False,
     documents: ProfileDocuments | None = None,
     cura_motion: bool = False,
+    cura_raft_contact: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Native Werte ausschreiben, ohne Formeln oder G-Code auszuführen.
 
@@ -2953,6 +2985,7 @@ def resolve_profile(
             indexes if indexes is not None else {},
             documents if documents is not None else {},
             resolve_jerk=cura_motion,
+            cura_raft_contact=cura_raft_contact,
         ):
             if entry.cura_instance == profile.cura_instance and entry.section == profile.section:
                 return native
@@ -2971,6 +3004,7 @@ def resolve_profile(
         strict=strict,
         documents=documents,
         cura_motion=cura_motion,
+        cura_raft_contact=cura_raft_contact,
     )
 
 
@@ -3036,6 +3070,7 @@ def resolve_values(
     strict: bool = False,
     documents: ProfileDocuments | None = None,
     cura_motion: bool = False,
+    cura_raft_contact: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
 
@@ -3058,6 +3093,7 @@ def resolve_values(
             indexes=indexes,
             documents=documents,
             resolve_jerk=cura_motion,
+            cura_raft_contact=cura_raft_contact,
         )
     if path.name.endswith(".xml.fdm_material"):
         return _cura_material_values(path)

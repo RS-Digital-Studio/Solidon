@@ -435,6 +435,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("adhesion.brim_width", "brim_width", _number),
     ("adhesion.brim_gap", "brim_object_gap", _number),
     ("adhesion.raft_layers", "raft_layers", _count),
+    ("adhesion.raft_gap", "raft_contact_distance", _number),
     ("retraction.avoid_crossing_walls", "reduce_crossing_wall", _flag),
 )
 
@@ -773,6 +774,11 @@ def _support_angle(values: Mapping[str, Any]) -> float | None:
 
 def _adhesion(values: Mapping[str, Any], defaults: Mapping[str, str]) -> object:
     """Die Haftungsart aus ``brim_type``, Skirt- und Raft-Angaben."""
+    # Orcas has_raft() fragt die belegte Schichtzahl; has_brim() schließt
+    # einen Raft aus. Eine Tabellenvorgabe darf keinen nativen Raft erfinden.
+    raft = _float(_text(values.get("raft_layers")) or "0") or 0.0
+    if raft > 0.0:
+        return "raft"
     kind = _text(values.get("brim_type")) or defaults.get("brim_type")
     if kind is None:
         return None
@@ -781,9 +787,6 @@ def _adhesion(values: Mapping[str, Any], defaults: Mapping[str, str]) -> object:
     if kind in ("outer_only", "inner_only", "outer_and_inner"):
         return "brim"
     if kind == "no_brim":
-        raft = _float(_text(values.get("raft_layers")) or "0") or 0.0
-        if raft > 0.0:
-            return "raft"
         skirts = _float(_text(values.get("skirt_loops")) or "0") or 0.0
         return "skirt" if skirts > 0.0 else "none"
     return Foreign(kind)
@@ -1008,6 +1011,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("adhesion.brim_width", "brim_width", _number),
     ("adhesion.brim_gap", "brim_separation", _number),
     ("adhesion.raft_layers", "raft_layers", _count),
+    ("adhesion.raft_gap", "raft_contact_distance", _number),
     ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
 )
 

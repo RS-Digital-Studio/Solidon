@@ -90,6 +90,11 @@ def _number(value: object) -> str:
     return f"{float(value):g}"  # type: ignore[arg-type]
 
 
+def _optional_number(value: object) -> str:
+    """Eine unbekannte Vorgabe bleibt beim Slicer; die Zahl null bleibt eine Zahl."""
+    return "" if value is None else _number(value)
+
+
 def _integer(value: object) -> str:
     return str(int(value))  # type: ignore[call-overload]
 
@@ -314,6 +319,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("adhesion.brim_width", "brim_width", _number),
     ("adhesion.brim_gap", "brim_separation", _number),
     ("adhesion.raft_layers", "raft_layers", _integer),
+    ("adhesion.raft_gap", "raft_contact_distance", _optional_number),
     ("retraction.length", "retract_length", _number),
     ("retraction.speed", "retract_speed", _number),
     ("retraction.z_hop", "retract_lift", _number),
@@ -466,6 +472,7 @@ ORCA: Final[tuple[Row, ...]] = (
     ("adhesion.brim_width", "brim_width", _number),
     ("adhesion.brim_gap", "brim_object_gap", _number),
     ("adhesion.raft_layers", "raft_layers", _integer),
+    ("adhesion.raft_gap", "raft_contact_distance", _optional_number),
     # Der Rückzug steht in der Orca-Familie am Drucker, nicht am Prozess —
     # ``retraction_length`` im Prozessprofil bleibt wirkungslos. Geschrieben
     # wird deshalb die Filament-Entsprechung: sie überschreibt den Wert der
@@ -613,6 +620,7 @@ CURA: Final[tuple[Row, ...]] = (
     ("adhesion.brim_width", "brim_width", _number),
     ("adhesion.brim_gap", "brim_gap", _number),
     ("adhesion.raft_layers", "raft_surface_layers", _integer),
+    ("adhesion.raft_gap", "raft_airgap", _optional_number),
     ("retraction.length", "retraction_amount", _number),
     ("retraction.speed", "retraction_speed", _number),
     ("retraction.z_hop", "retraction_hop", _number),

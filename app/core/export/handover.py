@@ -839,6 +839,10 @@ def as_mapping(
     for entry in slicer_keys.TABLES[flavour]:
         if paths is not None and entry.path not in paths:
             continue
+        if entry.path == "adhesion.raft_gap" and not raft_gap_active(
+            settings, flavour, also=native_adhesion_kinds
+        ):
+            continue
         value = entry.write(read_path(settings, entry.path))
         # Ein leerer Text heißt „dazu sagt Solidon nichts" (siehe
         # ``_number_or_silent``). Er darf weder in die Datei noch in die
@@ -1071,6 +1075,19 @@ def handed_over_adhesion_kinds(
     kind = effective.adhesion.kind
     return kind, print_settings.adhesion_kinds(kind) | native_adhesion_kinds(
         settings, profile, flavour, foundation
+    )
+
+
+def raft_gap_active(
+    settings: PrintSettings, flavour: SlicerFlavour, *, also: frozenset[str] = frozenset()
+) -> bool:
+    """Ob die wirksame Haftung den eigenen Abstand tatsächlich verwenden kann.
+
+    Cura zählt nur die Raft-Deckschichten; null lässt seine Basis stehen.
+    Prusa und Orca schalten den gesamten Raft über diese Schichtzahl aus.
+    """
+    return "raft" in (print_settings.adhesion_kinds(settings.adhesion.kind) | also) and (
+        flavour == "cura" or settings.adhesion.raft_layers > 0
     )
 
 
@@ -4662,6 +4679,7 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
     """
     base = _cura_base(setup.executable)
     if not base:
+        _cura_raft_overlap({}, values, setup.name)
         return CuraMachine()
     own = _cura_printer_definition(setup.executable, profile.printer)
     definition = Path(own or base)
@@ -4681,23 +4699,29 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
                     setup.executable, profile.printer
                 ),
             )
+    raft_contact: dict[str, Any] = {}
     if isinstance(source, slicer_profiles.SlicerProfile):
         definition = source.path
         own = str(definition)
         try:
-            chain = slicer_profiles.resolve_profile(source, roots, cura_motion=True)
+            chain = slicer_profiles.resolve_profile(
+                source, roots, cura_motion=True, cura_raft_contact=raft_contact
+            )
         except ExternalToolError as problem:
             if source.cura_instance is None:
                 raise
             raise _cura_instance_error(setup, profile.printer.title, missing=False) from problem
     else:
-        chain = slicer_profiles.resolve_values(definition, roots, cura_motion=True)
+        chain = slicer_profiles.resolve_values(
+            definition, roots, cura_motion=True, cura_raft_contact=raft_contact
+        )
     hardware = (
         _cura_hardware_values(chain, values)
         if (isinstance(source, slicer_profiles.SlicerProfile) and source.cura_instance is not None)
         else {}
     )
     hardware |= _cura_motion_values(chain, values, profile.printer)
+    hardware |= _cura_raft_overlap(raft_contact, values, setup.name)
     # **Der Ursprung gehört der Maschine** (RM-330). Eine Druckerdefinition
     # oder Instanz mit ``machine_center_is_zero`` misst von der Bettmitte —
     # Curas Deltas etwa —, und CuraEngine verschiebt das Modell dann nicht.
@@ -4730,6 +4754,31 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         name=str(chain.get("machine_name") or ""),
         origin_at_centre=centred,
         shift=(((0.0, 0.0) if centred else (width / 2.0, depth / 2.0)) if own else None),
+    )
+
+
+def _cura_raft_overlap(
+    contact: Mapping[str, Any], values: Mapping[str, str], tool: str
+) -> dict[str, str]:
+    """Curas belegte Kopplung oder seinen festen Wert an die Konsole geben."""
+    gap = _as_float(values.get("raft_airgap"))
+    if gap is None:
+        return {}
+    raw = contact.get("layer_0_z_overlap")
+    fixed = _as_float(str(raw)) if not isinstance(raw, bool) else None
+    if fixed is not None and fixed >= 0.0:
+        return {"layer_0_z_overlap": f"{fixed:g}"}
+    if isinstance(raw, str) and "".join(raw.split()) == "raft_airgap/2":
+        return {"layer_0_z_overlap": f"{gap / 2.0:g}"}
+    raise ExternalToolError(
+        tool=tool,
+        detail=_(
+            "Der gewählte Raft-Abstand hängt in diesem Cura-Profil von einer unbekannten "
+            "Einstellung ab. Verwenden Sie die Vorgabe des Slicers oder ändern Sie den "
+            "Abstand in Cura."
+        ),
+        values={"constraint": "raft_gap_dependency", "field": "adhesion.raft_gap"},
+        suggestions=(OPEN_PRINT_SETTINGS,),
     )
 
 
@@ -6352,6 +6401,14 @@ def slice_model(
                 suggestions=(CHECK_SLICER_PROFILE, SHOW_SLICER_OUTPUT, CHOOSE_SLICER, EXPORT_ONLY),
             )
         metrics = analysis.metrics
+        if setup.flavour == "prusa":
+            metrics = replace(
+                metrics,
+                warnings=_merged_warnings(
+                    metrics.warnings,
+                    _print_warnings(completed.stdout, completed.stderr),
+                ),
+            )
         produced_path = produced
 
         # Und die zweite Gegenprobe, an der Geometrie statt an den Werten:
@@ -7196,6 +7253,103 @@ def _result_written(directory: Path) -> Callable[[], bool]:
         return isinstance(data, dict) and isinstance(data.get("return_code"), int)
 
     return written
+
+
+def _warning_boundary(line: str) -> bool:
+    """Die Steuerzeilen der nativen Prusa-Kommandozeile."""
+    return (
+        re.match(r"^(?:print(?:_object)? warning:|\d+ => |Slicing result exported to )", line)
+        is not None
+    )
+
+
+def _print_warnings(*streams: bytes) -> tuple[str, ...]:
+    """Warnblöcke vollständig aus dem gemeinsamen Prozessbudget lesen.
+
+    Prusas Stabilitätsmeldung enthält je Absatz zwei freie Zeilen: Objekt
+    und Ursachen oder Ursache und Objektliste. Beide sind Nutztext, auch
+    wenn ein Name wie eine Fortschrittszeile heißt. Erst außerhalb dieser
+    Absätze begrenzen Steuerzeilen den Block. Das Format kommt aus
+    ``Print.cpp`` / ``PrintBase.cpp`` von PrusaSlicer 2.9.6.
+    """
+    warnings: list[str] = []
+    remaining = SLICER_OUTPUT_LIMIT
+    lines: list[str] = []
+
+    def finish() -> None:
+        warning = "\n".join(lines).strip()
+        if warning:
+            warnings.append(warning)
+        lines.clear()
+
+    for stream in streams:
+        text = stream[:remaining].decode("utf-8", errors="replace")
+        remaining -= min(len(stream), remaining)
+        output = text.replace("\r\n", "\n").split("\n")
+        active = False
+        stability = False
+        opaque = 0
+        for index, line in enumerate(output):
+            if active and opaque:
+                lines.append(line)
+                opaque -= 1
+                continue
+            start = re.match(r"^print(?:_object)? warning: ?(.*)$", line)
+            if start is not None:
+                finish()
+                lines.append(start.group(1))
+                active = True
+                stability = start.group(1) == "Detected print stability issues:"
+            elif _warning_boundary(line):
+                finish()
+                active = False
+                stability = False
+            elif active:
+                lines.append(line)
+                if stability and not line:
+                    following = output[index + 1 : index + 3]
+                    # Die Schlusszeile ist frei stehender Rat. Ein gleich
+                    # benanntes Objekt hat danach noch seine Ursachenzeile.
+                    closing = bool(
+                        following
+                        and following[0] == "Consider enabling supports."
+                        and (
+                            len(following) == 1
+                            or not following[1]
+                            or following[1] == "Also consider enabling brim."
+                            or _warning_boundary(following[1])
+                        )
+                    )
+                    if closing:
+                        stability = False
+                    else:
+                        opaque = 2
+        finish()
+    return tuple(warnings)
+
+
+def _merged_warnings(*groups: Sequence[str]) -> tuple[str, ...]:
+    """Vollständige Blöcke behalten, ihre kurzen Kommentare ersetzen.
+
+    Leerraum innerhalb von Namen bleibt bedeutend. Zwei verschiedene
+    mehrzeilige Texte werden nie über ihre flache Schreibweise vereinigt.
+    Nur ein einzeiliger Kommentar darf dem vollständigen Block weichen.
+    """
+    unique = dict.fromkeys(
+        warning.replace("\r\n", "\n").strip() for group in groups for warning in group
+    )
+    summaries = {
+        summary
+        for warning in unique
+        if "\n" in warning
+        for summary in (
+            warning.split("\n", 1)[0],
+            " ".join(line for line in warning.split("\n") if line),
+        )
+    }
+    return tuple(
+        warning for warning in unique if warning and ("\n" in warning or warning not in summaries)
+    )
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

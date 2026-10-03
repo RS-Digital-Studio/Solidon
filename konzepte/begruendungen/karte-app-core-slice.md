@@ -210,3 +210,27 @@ gilt bei belegter Bambu-Herkunft oder dessen Maschinenbefehlen; fremde
 Firmware erbt ihn nicht. Komprimierte Bambu-Kopfwerte folgen den
 einsbasierten Kennungen in `filament:`. Werkzeugnummern und Kopfkennungen
 werden vor der Allokation werkzeugweiser Ergebnislisten begrenzt.
+
+
+## Warnungen aus dem Slicerlauf
+
+Ein erfolgreiches Prozessende bedeutet nicht, dass der Slicer keine Probleme
+gemeldet hat. `handover._print_warnings` liest stdout und stderr innerhalb
+des gemeinsamen `SLICER_OUTPUT_LIMIT` und übernimmt Prusas Warnblöcke ab
+`print warning:` beziehungsweise `print_object warning:` einschließlich
+ihrer Folgezeilen. Eine neue Warnung, eine native Fortschrittszeile oder die
+Ausgabezeile beendet den vorherigen Block. Die freien Nutztextzeilen einer
+Stabilitätsmeldung bleiben Nutztext, auch wenn ein Objektname wie eine solche
+Steuerzeile aussieht. Zwischen den beiden Streams wird kein Block verbunden.
+
+`_merged_warnings` ergänzt den vollständigen Prozessblock zu den gelesenen
+G-Code-Kommentaren. Identische Blöcke werden einmal behalten; ein verkürzter
+einzeiliger Kommentar darf dem vollständigen Block weichen. Unterschiedliche
+mehrzeilige Meldungen bleiben dagegen erhalten, auch bei gleicher Überschrift.
+Leerraum innerhalb von Objektnamen und ihre Schreibweise sind bedeutend.
+
+Der Bericht führt diese Warnungen als `gcode.warning` mit Herkunft `gcode`.
+Damit bleiben Aussagen des Slicers von Solidons eigener Schichtanalyse
+unterscheidbar. Eine mit `Empty layer` beginnende Meldung trägt Fehlerstufe;
+andere Warnungen behalten ihre Warnstufe. Der Originaltext bleibt im Befund
+verfügbar und wird nicht durch den gekürzten Fehlerauszug des Prozesses ersetzt.

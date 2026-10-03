@@ -82,6 +82,7 @@ it into `website/version.json`.
 - Special characters in project or user names no longer prevent slicing. Cura can now read models with Turkish or Chinese names too.
 - Solidon arranges overlapping parts on the bed before slicing with PrusaSlicer or Cura and tells you if it cannot find a suitable layout.
 - When PrusaSlicer or SuperSlicer reports an empty first layer, Solidon names the part and offers to place it on the bed or open the relevant print settings.
+- Warnings from PrusaSlicer and SuperSlicer appear in the report even after successful slicing, an empty layer as an error. The raft gap can be set on its own.
 
 ### Holes, slots and splitting
 

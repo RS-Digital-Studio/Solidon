@@ -137,3 +137,28 @@ nicht diese Karte, denn die Zahl hier war zweimal hintereinander veraltet.
 Eine neue Kante ist damit eine
 Entscheidung und keine stille Zeile, eine abgebaute verschwindet auch aus der
 Liste, und ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
+
+
+## Verbrauchskennung mit unbekannten früheren Werten
+
+Ein additiv gespeicherter Druckwert darf einen unveränderten alten Druck nicht
+automatisch zu einem weiteren Lagerabzug machen. `filament_usage.prepare`
+lässt `adhesion.raft_gap` im Fingerabdruck weg, wenn der Wert unbekannt oder
+der Raft durch eine ausdrückliche andere Haftungswahl sicher ausgeschaltet ist.
+Eine automatische Haftungsart ist kein solcher Nachweis. Ein wirksamer
+numerischer Raftwert bleibt Bestandteil der neuen Kennung.
+
+`UsageRequest.legacy_fingerprint` trägt zusätzlich eine mögliche alte Kennung
+ohne Raftwert. Sie belegt keine Gleichheit: Der frühere Abstand ist aus dem
+alten Hash nicht rekonstruierbar. Sie wird weder als Alias ins Journal
+geschrieben noch zur Umbindung oder Korrektur einer alten Buchung verwendet.
+Eine vorhandene exakte neue Historie hat Vorrang, einschließlich ihrer
+zurückgenommenen Vorgänge. Sonst verhindert eine passende alte Historie die
+automatische Buchung und verlangt eine ausdrückliche Entscheidung.
+
+Der automatische Buchungsweg übergibt neue und mögliche alte Historie aus
+derselben Momentaufnahme als `expected_history` an `filaments.book`. Dessen
+atomare Prüfung ist in der Langkarte von `app/core/knowledge/` beschrieben.
+So kann eine konkurrierende Buchung zwischen Vorschlag und Schreiben keinen
+zusätzlichen Abzug auslösen. Weder Journalformat noch gespeicherte
+Vorgangskennungen ändern sich dafür.

@@ -107,6 +107,7 @@ Nutzen da und sonst nichts.
 - Sonderzeichen im Projekt- oder Benutzernamen verhindern die Druckdatei nicht mehr. Cura findet auch Modelle mit türkischen oder chinesischen Namen.
 - Solidon ordnet überlappende Teile vor dem Schneiden mit PrusaSlicer oder Cura auf dem Druckbett an und meldet, wenn es keine passende Anordnung findet.
 - Meldet PrusaSlicer oder SuperSlicer eine leere erste Schicht, nennt Solidon das Teil und bietet Aufsetzen aufs Bett sowie passende Druckeinstellungen an.
+- Warnungen von PrusaSlicer und SuperSlicer stehen auch nach gelungenem Slicen im Prüfbericht, eine leere Schicht als Fehler. Der Abstand zum Raft ist eigens einstellbar.
 
 ### Bohrungen, Langlöcher und Teilen
 

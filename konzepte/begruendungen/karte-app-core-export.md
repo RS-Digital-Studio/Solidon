@@ -571,3 +571,43 @@ zum Namen. Nur doppelte, leere oder mehrzeilige Namen erhalten in der privaten
 CLI-Kopie eine eindeutige Kennzeichnung. `PlateRun.name_bindings` verbindet
 genau diese ausgegebenen Namen mit den eingefrorenen Szenenkennungen. Das
 Projekt und seine Materialzuordnung bleiben unverändert.
+
+
+
+## Der Raftkontakt hat eine eigene Herkunft
+
+Der Luftabstand zwischen Raft und Körper ist `adhesion.raft_gap`. Er ist kein
+anderer Name für `support.z_gap`: Hersteller können beide Abstände unabhängig
+vorgeben. Prusa und Orca lesen und schreiben `raft_contact_distance`, Cura
+schreibt `raft_airgap`. Ein unbekannter Wert bleibt `None` und schreibt keinen
+Schlüssel; ein ausdrücklich gewählter Abstand von null wird geschrieben.
+Ohne belegte Grundlage wird keine Zahl als Herstellerwert angezeigt.
+
+Die Aktivierung gehört zur Haftung und folgt `raft_gap_active`. Bei Prusa und
+Orca erzeugt `raft_layers=0` keinen Raft. Curas `raft_surface_layers=0`
+entfernt dagegen nur die Deckschichten, nicht die Raftbasis. Ein positiver
+nativer Orca-Wert für `raft_layers` hat Vorrang vor seinem gleichzeitig
+gespeicherten `brim_type`; dafür zählt ausschließlich die belegte Profilzahl,
+nie die Schichtvorgabe der Dataclass.
+
+Curas Definitionsleser bewahrt für `raft_airgap` und `layer_0_z_overlap` die
+native Herkunft, bevor unbekannte Ausdrücke aus den Zahlenwerten entfallen.
+Bei einer Maschineninstanz ergänzen dieselben Containerleser DefinitionChanges,
+Variante, Qualität, Intent, Qualitätsänderungen und Nutzerwerte in ihrer
+wirksamen Stapelreihenfolge. Es entsteht keine allgemeine Übernahme fremder
+Prozesswerte. Die Kontakt-Herkunft bleibt getrennt von Extruder-Hardware und
+der über `cura_motion` angeforderten Jerk-Auflösung.
+
+Eine feste native Überlappung bleibt fest, auch wenn der Kunde den Raftabstand
+ändert. Nur die ausdrücklich erkannte Kopplung `raft_airgap / 2` wird mit dem
+neuen Abstand nachgeführt. Andere oder unbelegte Beziehungen halten die eigene
+Raftwahl mit einem Handlungsvorschlag an; Profilformeln werden nie ausgeführt.
+Ein einzelner lesbarer Kontaktwert macht aus Cura keine vollständig belegte
+`Foundation`. Ohne solche Grundlage bleibt die Anzeige bei der Slicer-Vorgabe,
+während eine ausdrückliche Raftwahl an die Übergabe gelangt.
+
+Der Abstand wird an der ersten tatsächlich extrudierten Körperschicht in
+Druckreihenfolge beurteilt: Bahnhöhe abzüglich ihrer Schichthöhe und der
+Raftoberkante. Die niedrigste spätere Körperbahn ist dafür ungeeignet, weil
+ein Slicer die Folgeschicht absenken kann. Native Schichtrundung und eine
+unabhängige Stützschichthöhe bleiben Eigenschaften des gewählten Slicerprofils.

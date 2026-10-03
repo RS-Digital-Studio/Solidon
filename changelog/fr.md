@@ -83,6 +83,7 @@ dans `website/version.json`.
 - Les caractères spéciaux dans les noms de projet ou d’utilisateur ne bloquent plus la création du fichier d’impression. Cura lit aussi les modèles aux noms turcs ou chinois.
 - Solidon dispose les pièces qui se chevauchent sur le plateau avant le tranchage avec PrusaSlicer ou Cura et vous prévient si aucune disposition adaptée n’est trouvée.
 - Si PrusaSlicer ou SuperSlicer signale une première couche vide, Solidon nomme la pièce et propose de la poser sur le plateau ou d'ouvrir les réglages d'impression adaptés.
+- Les avertissements de PrusaSlicer et SuperSlicer figurent dans le rapport même si le slicer réussit, une couche vide comme erreur. La distance au radeau se règle à part.
 
 ### Perçages, trous oblongs et découpe
 

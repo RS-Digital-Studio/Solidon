@@ -101,7 +101,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Materialteil umgesetzt und geprüft; Zeitabnahme nach drei gemessenen Ansätzen offen. Nächster Schritt: Mindesttempo, Erstschichttempi und unabhängig belegte Startzeit |
-| [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
@@ -3146,23 +3145,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   **Stand 03.10.2026 — Materialteil umgesetzt, Zeitabnahme offen:** Der Vergleich benutzt nur das aus bekannten Druckrollen gelesene Modellmaterial und belegte Werkzeugdichten. Spülung und Reinigungsturm erscheinen getrennt; unvollständig belegte Mengen bleiben ausdrücklich unbekannt. Bedingte Firmwarezweige, Cutter-Wiederförderung, unbekannte Rollen und fehlende Materialdaten werden nicht als vollständiges Modellmaterial ausgegeben. Gesamtverbrauch und Verbrauchsbuchung behalten ihren bisherigen Weg. Die Materialgegenprobe bleibt an acht frischen einfarbigen Würfel-/Pilz-Ausgaben der vier verlangten Slicer innerhalb 15 %; bei sechs lesbaren realen Farbdateien liegen die Abweichungen zwischen 0,49 und 9,90 %. Cura ohne übergebene Filamentdaten bleibt unbekannt. Der Parser trennt ausdrücklich ausgewiesene Modellzeit von Gesamtzeit; deren Differenz ist ein Zusatzanteil, keine belegte reine Startzeit. 173 Parser-Kopietests und drei Anschlussfälle grün; vier Reviewfunde durch rote Gegenproben beziehungsweise korrigierte Texte erledigt, unabhängige Nachprüfung ohne offenen Fund. Ursprung des Summenvergleichs d2ed623c1f, enthalten in v0.5.0/v0.5.1; sechs Changelog-Punkte beschreiben ausschließlich die Materialkorrektur.
   **Drei gemessene Zeitansätze:** Eine feste Mindestschichtzeit ignoriert das Mindestdrucktempo (SuperSlicer-Pilz: 7,03 s trotz 15 s Vorgabe). Schichtweise Wand-/Füll-/Deckflächen mit Tempogrenze erreichen fünf von acht Vorgaben; CC2 bleibt bei −33,51 % am Würfel und −28,43 % am Pilz, MK4S-Würfel bei −15,52 %. Ein Beschleunigungsband plus unabhängig angenäherter CC2-Startanteil von 110 s ergibt −14,55 %/−16,28 % und erfüllt die gemeinsame Abnahme ebenfalls nicht. Keine passende Startzeit aus der Differenz zur eigenen Schätzung abgeleitet; Warnschwelle unverändert. Der bestehende Zeitvergleich warnt weiterhin in sieben von acht Standardfällen. Nächster Schritt: belegtes Mindestdrucktempo und getrennte Erstschichttempi aus dem Herstellerprofil, unabhängig belegte Start-/Zusatzzeiten mit Drucker- und Profilidentität. Tragende Messwerte, Formeln, Modellidentitäten und Grenzen der Wiederholung stehen im Repository: [Material- und Zeitgegenprobe](konzepte/konzept-slicer-uebergabe.md#9-rm-465--material--und-zeitgegenprobe-vom-03102026).
-
-<a id="rm-484"></a>
-
-- [ ] **RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht.**
-  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, alle Bündeldrucker. 25 Läufe der Matrix
-  melden auf der Konsole `print warning: Detected print stability issues … Consider enabling
-  supports`, `prusa__sovol-sv06__wuerfel__B` sogar „Empty layer between 0.48 and 0.92“ (erste
-  Objektschicht 0,44 mm über dem Raft) — im Bericht steht nichts davon. Solidon liest Warnungen nur
-  aus `; WARNING:`-Kommentaren.
-  **Stellen:** `app/core/slice/gcode.py:532`, `:1588–1599`, `app/core/export/handover.py:5228–5291`.
-  **Fix (allgemein):** Konsolenausgabe gelungener Läufe nach den Warnmarken der Familie lesen
-  (`print warning:` samt Folgezeilen) und als `gcode.warning` mit Herkunft Slicer melden, „Empty
-  layer“ als Fehlerstufe; Raft-Abstand (`raft_contact_distance`) zu `support.z_gap` oder als
-  eigener Pfad.
-  **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
-  ohne leere Schicht. Bauplan §29, Regel 14.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
 
 <a id="rm-496"></a>
 

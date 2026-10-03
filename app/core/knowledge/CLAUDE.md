@@ -119,3 +119,16 @@ Art bleibt ohne Zuordnung.
   `_remember_written` macht das Geschriebene zur Momentaufnahme der Leser.
   Geschrieben wird neben dem Hauptthread (`CatalogueWrites`,
   `InventoryView._run`, §2.8).
+
+
+## Optionale Druckwerte und bestätigter Buchungsstand
+
+`adhesion.raft_gap=None` bezeichnet eine unbekannte Slicer-Vorgabe, keine
+gewählte Null. Alte Projekte erhalten damit keinen erfundenen Raftabstand;
+`support.z_gap` bleibt unabhängig. Zurücksetzen entfernt die eigene Wahl
+über `without_choice`, damit eine neue Grundlage wieder gelten kann.
+
+`filaments.book(expected_history=...)` prüft den zuvor gelesenen vollständigen
+Buchungsstand für betroffene Fingerabdrücke unter der Journalsperre, bevor es
+einen neuen Vorgang anlegt. Eine Abweichung verlangt erneutes Lesen; die
+Idempotenz einer bereits vorhandenen Vorgangskennung bleibt erhalten.

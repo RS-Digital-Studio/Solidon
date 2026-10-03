@@ -1318,6 +1318,7 @@ def _with_context(
         "adhesion.brim_width": "brim",
         "adhesion.brim_gap": "brim",
         "adhesion.raft_layers": "raft",
+        "adhesion.raft_gap": "raft",
     }.get(path)
     if needed is not None:
         settings = print_settings.with_path(settings, "adhesion.kind", needed)
@@ -1362,6 +1363,7 @@ def _other_value(settings: print_settings.PrintSettings, path: str) -> object:
         "support.style": "tree",
         "support.placement": "build_plate",
         "adhesion.kind": "raft",
+        "adhesion.raft_gap": 0.16,
         "filament.colour": "#123456",
     }
     return choices[path]
@@ -7798,7 +7800,7 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
         ("skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
         ("brim", {"adhesion.brim_width", "adhesion.brim_gap"}),
         ("auto", {"adhesion.brim_width", "adhesion.brim_gap"}),
-        ("raft", {"adhesion.raft_layers"}),
+        ("raft", {"adhesion.raft_layers", "adhesion.raft_gap"}),
     ],
 )
 def test_only_the_measures_of_the_chosen_bed_type_are_active(kind: str, active: set[str]) -> None:

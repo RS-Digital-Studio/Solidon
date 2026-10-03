@@ -605,7 +605,7 @@ def with_accepted(settings: PrintSettings, path: str, value: Any) -> PrintSettin
 ADHESION_PATHS: Final[dict[str, tuple[str, ...]]] = {
     "skirt": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
     "brim": ("adhesion.brim_width", "adhesion.brim_gap"),
-    "raft": ("adhesion.raft_layers",),
+    "raft": ("adhesion.raft_layers", "adhesion.raft_gap"),
 }
 
 #: Das Maß, ohne das eine Haftungsart nichts tut.

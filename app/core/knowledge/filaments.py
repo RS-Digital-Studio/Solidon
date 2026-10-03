@@ -32,6 +32,7 @@ from app.core.errors import (
     RESTORE_BACKUP,
     RETRY,
     SET_ASIDE_FILE,
+    Action,
     FileWriteError,
     InternalError,
     ValidationError,
@@ -1368,6 +1369,7 @@ def book(
     project_name: str = "",
     correct_manual_allocation: bool = False,
     expected_booking_updated_at: str | None = None,
+    expected_history: Mapping[str, Sequence[InventoryBooking]] | None = None,
 ) -> InventoryBooking:
     """Bucht einen ganzen Druck genau einmal oder ersetzt seine Schätzung durch G-Code.
 
@@ -1378,6 +1380,9 @@ def book(
     älteres Fenster keinen jüngeren Stand überschreibt. Im G-Code zusätzlich
     belegte Werkzeuge ergänzen eigene Filamentidentitäten; vorhandene Zeilen
     bleiben erhalten. Eine reine Wiederzustellung verändert auch dann nichts.
+    Automatische Neubuchungen können die zuvor gelesenen Vorgänge je
+    Fingerabdruck mitgeben; deren Zuordnung wird unter derselben Sperre
+    geprüft. Vorhandene Vorgangskennungen behalten ihre eigenen Prüfungen.
     """
     _validate_positions(positions)
     if (
@@ -1393,6 +1398,23 @@ def book(
         raise ValidationError(field="expected_booking_updated_at", constraint="format")
     with _transaction() as state:
         previous = state.journal.get(operation_id)
+        if previous is None and expected_history is not None:
+            for key, observed in expected_history.items():
+                current = {
+                    booking.operation_id: booking
+                    for booking in state.journal.values()
+                    if booking.fingerprint == key
+                }
+                if current != {booking.operation_id: booking for booking in observed}:
+                    raise ValidationError(
+                        constraint="booking_history_changed",
+                        title=_("Filamentbuchungen wurden inzwischen geändert"),
+                        detail=_(
+                            "Der Bestand wurde für diese Ausgabe nicht automatisch geändert. "
+                            "Prüfen Sie die aktuellen Buchungen."
+                        ),
+                        suggestions=(Action("correct_input", _("Buchung prüfen …"), primary=True),),
+                    )
         if previous is not None:
             if previous.fingerprint != fingerprint:
                 raise _booking_conflict()

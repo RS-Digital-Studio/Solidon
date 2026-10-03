@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError
+from app.core.errors import Action, AppError, ValidationError
 from app.core.export.threemf import slot_identity
 from app.core.filament_usage import UsageLine, UsageRequest, costs_for
 from app.core.knowledge import filaments
@@ -121,18 +121,56 @@ def _previous(
     ]
 
 
+def _legacy_bookings(
+    request: UsageRequest, snapshot: filaments.InventorySnapshot
+) -> tuple[filaments.InventoryBooking, ...]:
+    """Unsichere Altvorgänge nur melden, solange kein exakter Vorgang bekannt ist."""
+    if not request.legacy_fingerprints:
+        return ()
+    bookings = snapshot.bookings()
+    if any(booking.fingerprint == request.fingerprint for booking in bookings):
+        return ()
+    return tuple(
+        booking for booking in bookings if booking.fingerprint in request.legacy_fingerprints
+    )
+
+
+def _legacy_booking_text(bookings: tuple[filaments.InventoryBooking, ...]) -> str:
+    """Eine Rücknahme nicht als noch abgezogenen Bestand ausgeben."""
+    if not bookings:
+        return ""
+    if all(booking.reversed_at for booking in bookings):
+        return str(
+            tr(
+                "Für diese Teile gibt es eine frühere, zurückgenommene Buchung mit älteren "
+                "Angaben zu Brim und Raft. Prüfen Sie, ob dies ein weiterer Druck ist."
+            )
+        )
+    return str(
+        tr(
+            "Für diese Teile gibt es eine frühere Buchung mit älteren Angaben zu Brim und Raft. "
+            "Prüfen Sie, ob dies ein weiterer Druck ist."
+        )
+    )
+
+
 @dataclass(frozen=True)
 class _Snapshot:
     """Ein Leseergebnis ohne Widgets, im Dateiarbeiter zusammengetragen."""
 
     entries: tuple[filaments.CatalogueFilament, ...]
     bookings: tuple[filaments.InventoryBooking, ...]
+    legacy_bookings: tuple[filaments.InventoryBooking, ...] = ()
 
 
 def _snapshot(request: UsageRequest) -> _Snapshot:
     """Die abschließende Buchung prüft diesen Vorschlagsstand nochmals unter Sperre."""
     snapshot = filaments.read_snapshot()
-    return _Snapshot(snapshot.catalogue(), tuple(_previous(request, snapshot)))
+    return _Snapshot(
+        snapshot.catalogue(),
+        tuple(_previous(request, snapshot)),
+        _legacy_bookings(request, snapshot),
+    )
 
 
 class _UsageWork(Worker):
@@ -217,6 +255,7 @@ class UsageDialog(QDialog):
         self._new_operation_id = uuid4().hex
         self._entries: dict[str, filaments.CatalogueFilament] = {}
         self._bookings: dict[str, filaments.InventoryBooking] = {}
+        self._legacy_bookings: tuple[filaments.InventoryBooking, ...] = ()
         self._loaded = False
         self._created_identifier = ""
         self._pending = "load"
@@ -252,6 +291,11 @@ class UsageDialog(QDialog):
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
+        self.legacy_notice = QLabel(self)
+        self.legacy_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.legacy_notice.setWordWrap(True)
+        self.legacy_notice.hide()
+        layout.addWidget(self.legacy_notice)
         self.operation = QComboBox(self)
         self.operation.setAccessibleName(tr("Druckvorgang"))
         operation_label = QLabel(tr("Druckvorgang"), self)
@@ -423,6 +467,9 @@ class UsageDialog(QDialog):
         snapshot = cast(_Snapshot, result)
         self._entries = {entry.identifier: entry for entry in snapshot.entries}
         self._bookings = {booking.operation_id: booking for booking in snapshot.bookings}
+        self._legacy_bookings = snapshot.legacy_bookings
+        self.legacy_notice.setText(_legacy_booking_text(self._legacy_bookings))
+        self.legacy_notice.setVisible(bool(self._legacy_bookings))
         selected = self.operation.currentData()
         with QSignalBlocker(self.operation):
             self.operation.clear()
@@ -743,7 +790,13 @@ class UsageDialog(QDialog):
         self.correct_button.setEnabled(not reason)
         self.book_button.setVisible(not manual_correction)
         make_primary(self.correct_button if manual_correction else self.book_button)
-        self.book_button.setText(tr("G-Code-Angabe übernehmen") if existing else tr("Abziehen"))
+        self.book_button.setText(
+            tr("Weiteren Druck buchen")
+            if self._legacy_bookings
+            else tr("G-Code-Angabe übernehmen")
+            if existing
+            else tr("Abziehen")
+        )
         self.book_button.setEnabled(not reason)
         self.repeat_button.setVisible(bool(self._bookings))
         self.repeat_button.setEnabled(not busy)
@@ -905,7 +958,16 @@ def _reversed_count(request: UsageRequest) -> int:
 
 def _auto_book(request: UsageRequest) -> filaments.InventoryBooking | None:
     """Nur vorhandene Bindungen, vollständige Mengen und sichere Bestände buchen von selbst."""
-    existing = _previous(request)
+    snapshot = filaments.read_snapshot()
+    possible = _legacy_bookings(request, snapshot)
+    if possible:
+        raise ValidationError(
+            constraint="legacy_adhesion_gaps",
+            title=tr("Frühere Filamentbuchung prüfen"),
+            detail=_legacy_booking_text(possible),
+            suggestions=(Action("correct_input", tr("Buchung prüfen …"), primary=True),),
+        )
+    existing = _previous(request, snapshot)
     if len(existing) > 1 or not request.lines:
         return None
     if existing and any(one.source == "manual" for one in existing[0].positions):
@@ -950,6 +1012,13 @@ def _auto_book(request: UsageRequest) -> filaments.InventoryBooking | None:
         request.fingerprint,
         positions,
         project_name=request.project_name,
+        expected_history={
+            fingerprint: tuple(
+                booking for booking in snapshot.bookings() if booking.fingerprint == fingerprint
+            )
+            for fingerprint in (request.fingerprint, *request.legacy_fingerprints)
+            if fingerprint
+        },
     )
     # Ein zurückgenommener Vorgang ist keine Buchung — wer ihn zurückbekommt,
     # hat nichts abgezogen und darf es nicht als gebucht führen.

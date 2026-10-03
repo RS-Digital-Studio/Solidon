@@ -1296,6 +1296,8 @@ class AdhesionSettings:
     brim_width: float = 5.0
     brim_gap: float = 0.0
     raft_layers: int = 3
+    raft_gap: float | None = None
+    """Luft zwischen Raft und Teil in mm; ohne Zahl bleibt die Slicer-Vorgabe."""
 
 
 @dataclass(frozen=True, slots=True)

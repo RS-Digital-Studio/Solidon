@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-484: PrusaSlicers Warnungen erreichen den Bericht, und der Raftabstand ist eigens wählbar (03.10.2026)](#rm-484-prusaslicers-warnungen-erreichen-den-bericht-und-der-raftabstand-ist-eigens-wählbar-03102026) |
 | 2026-10-03 | [RM-305: Weitere Importe nutzen auch Druckplatten hinter der zwölften (03.10.2026)](#rm-305-weitere-importe-nutzen-auch-druckplatten-hinter-der-zwölften-03102026) |
 | 2026-10-03 | [RM-304: Weitere Modelle beachten die Filamente der belegten Druckplatten (03.10.2026)](#rm-304-weitere-modelle-beachten-die-filamente-der-belegten-druckplatten-03102026) |
 | 2026-10-03 | [RM-317: Objektwerte folgen den gemessenen Fähigkeiten jedes Slicers (03.10.2026)](#rm-317-objektwerte-folgen-den-gemessenen-fähigkeiten-jedes-slicers-03102026) |
@@ -39104,6 +39105,179 @@ Positive G-Code-Kontrollen (Körperlagen / positive E-Bahnen mit XY in mm): Prus
 
 Die positiven Kontrollen sind keine Zusage für ein insgesamt warnungsfreies Modell: SuperSlicer meldet am Segel bei 0,2 mm „Empty layer between 68.45 and 69.2.“, Prusa meldet Stabilität und geringe Haftung. Diese noch verlorenen Konsolenwarnungen gehören zum anschließenden RM-484. SuperSlicer nennt zusätzlich in allen vier Starts `binary_gcode=0` als unbekannte/substituierte Option; die Erfolgskontrolle liefert dennoch Text-G-Code. Die vollständigen Rohmeldungen bleiben erhalten.
 
-Der betroffene Kernlauf über `tools/affected_tests.py` endet mit **20.384 bestanden, 107 übersprungen, 917,28 s, Exit 0** (`solidon-A-483-affected.txt`). Ruff, Format (1086 Dateien) und mypy (337 Quelldateien) bestehen. Die Korrektur ist im eigenen Punktcommit mit der unten genannten Aussage enthalten; seine Kennung wird im gemeinsamen Abnahmecommit nachgetragen. Fenster-, Renderer- und Leistungsprüfungen bleiben Releasearbeit.
+Der betroffene Kernlauf über `tools/affected_tests.py` endet mit **20.384 bestanden, 107 übersprungen, 917,28 s, Exit 0** (`solidon-A-483-affected.txt`). Ruff, Format (1086 Dateien) und mypy (337 Quelldateien) bestehen. Die Korrektur ist in `b3fcceb4daad85cd66f530c5f2836ba840e3eec9` enthalten. Die anschließende Dokument- und Katalogprüfung besteht mit 275 Fällen, vier übersprungen und einem zurückgestellten Fensterfall, Exit 0. Fenster-, Renderer- und Leistungsprüfungen bleiben Releasearbeit.
 
 Changelog in allen sechs Sprachen, weil Ursache, Teilname und nutzbare Rückwege Kunden veröffentlichter Versionen betreffen. Commit: „Eine leere erste Schicht bekommt eine Meldung mit Teil und passenden Handlungen“.
+
+## RM-484: PrusaSlicers Warnungen erreichen den Bericht, und der Raftabstand ist eigens wählbar (03.10.2026)
+
+<a id="rm-484-prusaslicers-warnungen-erreichen-den-bericht-und-der-raftabstand-ist-eigens-wählbar-03102026"></a>
+<a id="rm-484"></a>
+
+**RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, alle Bündeldrucker. 25 Läufe der Matrix
+  melden auf der Konsole `print warning: Detected print stability issues … Consider enabling
+  supports`, `prusa__sovol-sv06__wuerfel__B` sogar „Empty layer between 0.48 and 0.92“ (erste
+  Objektschicht 0,44 mm über dem Raft) — im Bericht steht nichts davon. Solidon liest Warnungen nur
+  aus `; WARNING:`-Kommentaren.
+  **Stellen:** `app/core/slice/gcode.py:532`, `:1588–1599`, `app/core/export/handover.py:5228–5291`.
+  **Fix (allgemein):** Konsolenausgabe gelungener Läufe nach den Warnmarken der Familie lesen
+  (`print warning:` samt Folgezeilen) und als `gcode.warning` mit Herkunft Slicer melden, „Empty
+  layer“ als Fehlerstufe; Raft-Abstand (`raft_contact_distance`) zu `support.z_gap` oder als
+  eigener Pfad.
+  **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
+  ohne leere Schicht. Bauplan §29, Regel 14.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
+
+**Abschluss:** PrusaSlicer 2.9.6 schreibt Warnungen auch bei erfolgreichem
+Slicen in die Konsole; Solidon las nur Warnkommentare aus dem G-Code. Dieser
+Übergabeweg und die fehlende eigene Raftwahl stammen aus `f4f6e639d` vom
+01.08.2026, der Kommentarleser mit pauschaler Schwere `warning` aus
+`d2efb2577` vom 28.07.2026. `git tag --contains` nennt für beide v0.1.1 bis
+v0.5.1; die Codeprüfung in v0.5.1 bestätigt beide Lücken. `f934a42219` im
+Blame ist die spätere Wiederherstellung, nicht die Einführung
+(`codex_A_484_history.json`). Changelog: **ja**, weil Kunden veröffentlichter
+Versionen Warnungen fehlen und sie den tatsächlichen Raftabstand nicht
+gesondert wählen können.
+
+Der Warnungsweg übernimmt vollständige native `print warning:`- und
+`print_object warning:`-Blöcke aus beiden getrennten Ausgabeströmen innerhalb
+des gemeinsamen 8-MiB-Budgets. Objektzeilen bleiben auch bei Namen erhalten,
+die wie Fortschritt oder Meldungsanfänge aussehen. Unterschiedliche Namen
+einschließlich ihrer Leerzeichen bleiben unterscheidbar; verkürzte Dubletten
+weichen dem vollständigen Block. Die Herkunft bleibt `source="gcode"`,
+`Empty layer` erhält `error` samt vorhandener Handlung. Die vorangestellte
+Gegenprobe hatte **31 rote und 5 grüne Fälle**, Exit 1; mit dem Warnungsentwurf
+sind **36 Fälle grün**, Exit 0 (`rm484-warnings-reviewed.md`). Der Namensschutz
+gilt dem belegten englischen Prusa-2.9.6-Format; beliebige eingebettete
+Zeilenumbrüche sind in einem unmaskierten Freitextprotokoll nicht allgemein
+eindeutig zu trennen.
+
+`adhesion.raft_gap: float | None` hat ein eigenes Feld in der Haftungsgruppe,
+native Prusa-/Orca-Rücklesung und Schreibschlüssel für Prusa, Orca und Cura.
+`None` bedeutet „Vorgabe des Slicers“, numerische 0 eine echte Wahl; bestehende
+Stützabstände werden weder kopiert noch umgedeutet. Zurücksetzen verwendet
+`without_choice` und folgt wieder der Grundlage. Cura bekommt durch dieses
+Feld keine erfundene vollständige Herstellergrundlage. Sein Definitionsleser
+bewahrt die Herkunft von `layer_0_z_overlap`: Nur die belegte Formel
+`raft_airgap / 2` wird nachgeführt, feste Werte bleiben erhalten, unbekannte
+Formeln führen bei eigener Raftwahl zum örtlichen Feld zurück. Raft bleibt
+ohne Stützen bedienbar. Null Raftschichten schalten ihn bei Prusa/Orca ab;
+Curas null Deckschichten lassen Basis und Zwischenlage bestehen. Das additive
+Feld ändert weder Format 42 noch Geometriecache oder Operationsstack.
+
+Test zuerst: Der vollständige Raftlauf am unveränderten Produkt hatte
+**65 Fehler, 7 Einrichtungsfehler wegen des fehlenden Felds und 2 bestandene
+Fälle**, Exit 1; dieselben **74 Fälle** sind mit dem Scratchentwurf grün,
+Exit 0. Das unabhängige Review ergänzte **18 Folgen**: **8 rot/10 grün** vor
+der Korrektur; danach **196 grün** einschließlich 104 vorhandener
+Herstellerfälle. Behoben sind die Suche bei null Prusa-/Orca-Raftlagen,
+Curas lokaler Rückweg und der Vorrang einer tatsächlich positiv gelesenen
+nativen Orca-Raftzahl vor der daneben gespeicherten Brim-Art. Vier weitere
+rote Fälle belegten späte Cura-Fehlermeldungen nach Abbruch oder veraltetem/
+fehlendem Auftrag. Die Ergänzung der vorhandenen Kontextprüfungen besteht
+die unabhängigen **19 Fälle**: sechs ursprüngliche Raftfälle, sieben
+Kontextfälle und sechs Anschlüsse mit RM483. Beide lokalen Fehlerhandlungen
+bleiben im Druckdialog; kein verschachtelter Dialog und keine Befehlspalette.
+Belege: `rm484-raft-reviewed.md`, `rm484-raft-followup-reviewed.md` und
+`codex_A_484_final_independent_review.md`. Die vier alten Erwartungen eines
+früheren Bestandslaufs wurden für das additive Feld ergänzt; jener rote
+Bestandslauf wird nicht als grüner Integrationsnachweis gezählt.
+
+Beim Zusammenführen mit der Cura-Bewegungsauflösung müssen auch Kontaktwerte
+aus `quality`, `intent`, `quality_changes` und dem Nutzerprofil erhalten
+bleiben. Ohne den Anschluss wurden beispielsweise feste 0,07 mm von der
+geerbten Formel zu 0,08 mm überschrieben. Die vollständige Gegenprobe hatte
+**10 rote und vier grüne Fälle**; mit Anschluss sind **304 Fälle grün**,
+einschließlich 273 vorhandener Jerk-Fälle. Nur die beiden Kontaktfelder werden
+zusätzlich gesammelt; feste Werte, null, fremde Formeln und die native
+Stapelreihenfolge bleiben erhalten. Beleg: `main-merge-reviewed.md`.
+
+Der aktuelle Root-Gegenlauf vor der Produktintegration hatte **147 Fehler,
+25 grüne Kontrollen und 24 Aufbaufehler wegen fehlender neuer Schnittstellen**;
+die Aufbaufehler zählen nicht als fachliche Gegenbelege. Nach der Integration
+bestanden 1.158 Fälle; nur eine neue italienische Anrede war falsch.
+Nach ihrer Korrektur besteht die vollständige Sprach-/Meldungsprüfung mit
+**216 Fällen, einem zurückgestellten Fensterfall, Exit 0**. Ruff, Format
+(1095 Dateien) und mypy (337 Quelldateien) sind grün. Die unabhängige
+Komposition besteht außerdem 306 gezielte Fälle. Belege:
+`solidon-A-484-root-red.txt`, `solidon-A-484-focused.txt` und
+`solidon-A-484-translations-repaired.txt`.
+
+Die zehn frisch gespeicherten RM483-Konsolen wurden ohne erneuten
+Slicerstart eingelesen: drei vollständige Warnblöcke gelangen korrekt als
+`gcode.warning` mit Herkunft `gcode` und Handlung `show_output` zurück.
+SuperSlicers leere Schicht zwischen 68,45 und 69,2 mm erhält `error`;
+Prusas zwei Stabilitätsblöcke bewahren Objektname, Haftungsbefund und
+Stützen-/Brim-Rat. Die gesonderte SuperSlicer-Meldung zur unbekannten
+Konfigurationsoption `binary_gcode=0` bleibt im vollständigen Protokoll;
+sie wird nicht als geometrischer Warnbefund ausgegeben.
+Beleg: `rm484-konsolenanschluss-rm483.md`.
+
+Der Buchungsschutz hält unbekannte und nachweislich inaktive Raftwerte aus
+dem bisherigen Fingerabdruck heraus. Aktive Zahlen einschließlich 0 erhalten
+eine exakte neue Kennung und eine getrennte mögliche Altkennung. Alte
+Buchungen werden weder umgebunden noch als sichere Treffer ausgegeben.
+Ohne exakten Treffer hält die Automatik bei möglicher Altzuordnung an; die
+bestehende Buchungsansicht zeigt den Grund und bietet „Weiteren Druck buchen“
+oder Abbrechen. Neue exakte Vorgänge einschließlich Rücknahmen haben Vorrang.
+Für automatische Neubuchungen prüft `expected_history` die beobachteten
+relevanten Vorgänge unter derselben Journalsperre. Parallel hinzugekommene,
+zurückgenommene oder korrigierte Buchungen führen zum bestehenden Prüfweg;
+unbeteiligte Drucke und ausdrückliche Wiederholungen bleiben möglich. Es gibt
+kein neues Journalfeld und keine Migration. Der echte Wettlauf buchte vorher
+500 → 458 → 416 g statt nur 500 → 458 g. Die Buchungsgegenprobe war
+**20 rot/4 grün**, die vollständige atomare Gegenprobe **10 rot/7 grün**;
+mit beiden Entwürfen sind **41 Anschlussfälle und 163 vorhandene
+Verbrauchs-/Inventarprüfungen grün**, jeweils Exit 0. Ruff, Format und Mypy
+der drei betroffenen Quelldateien sind grün. Alle Lagerproben liefen mit
+eigenem `tmp_path/filaments.json` (`codex_A_484_booking_atomic_handoff.md`).
+
+Reale Ausgangsbelege: Der Pilz ohne Stützen erzeugt auf MK4S, MINI und SV06
+je eine native Stabilitätswarnung, bisher ohne Warnbefund im Bericht.
+Beim SV06-Würfel B bleibt trotz gewähltem Stützabstand 0,16 mm der native
+Raftabstand 0,20 mm. Nur dessen kontrollierte Änderung auf 0,16 mm beseitigt
+die Empty-layer-Warnung: Raftoberkante 0,48 mm, erste Körperbahn
+0,92 → 0,88 mm bei Schichthöhe 0,24 mm; 130 Körpersegmente und 41,66433 mm
+Filament bleiben gleich. Vier ergänzende Orca-/Cura-Läufe endeten mit Exit 0:
+Orca 2.4.2/Kobra2 mit unabhängiger Stützhöhe erreicht Luft 0,10 → 0,16 mm
+(Raft Z 0,88; Körper Z 1,18 → 1,24; Höhe 0,20 mm). Cura 5.13/Kobra2 erreicht
+0,30 → 0,16 mm (Raft Z 1,20; Körper Z 1,75 → 1,61; Höhe 0,25 mm).
+Gemessen wird die erste Körperextrusion nach Druckreihenfolge, nicht die
+kleinste Z-Höhe. Der reine native Cura-Vergleich ließ die Überlappung
+0,22 mm stehen, wodurch die zweite Körperlage 0,02 mm tiefer liegt.
+Diese Schlüsselgegenproben ersetzen weder die ausdrückliche neue Feldwahl
+im Produkt noch Curas vollständige Kopplung auf 0,08 mm. Orcas ausgeschaltete
+unabhängige Stützhöhe war nicht Teil dieser Vierermatrix.
+
+Die unveränderten nativen Rohbelege stehen unter
+`F:\solidon-review-reports\gcode\rest` in
+`codex_A_484_baseline/rm484-summary.json`,
+`codex_A_484_gap_probe/gap-summary.json` und
+`codex_A_484_native_coupling_v2/gap-measurement-corrected.json`.
+Die erste verworfene Orca-/Cura-Auswertung bleibt erhalten und zählt nicht.
+
+**Integrierte Abnahme (Claude, 03.10.2026, nach dem Codex-Limit):** Sechs
+neue native Starts über denselben Import- und Übergabeweg
+(`gcode\rest\claude_484_integriert`, Sonde `sonde.py` mit `RAFT_GAP=0.16`)
+am integrierten Stand aus `1c30ef2b5` + Merge `9470d1623` + diesem Commit:
+Pilz ohne Stützen an PrusaSlicer 2.9.6 mit MK4S, MINI und SV06 — je eine
+native Stabilitätswarnung und je ein `gcode.warning` im Bericht. Würfel B am
+SV06 mit eigener Raftwahl 0,16 mm: `raft_contact_distance = 0.16`, Luft
+zwischen Raftoberkante 0,48 mm und erster Körperbahn 0,88 mm bei 0,24 mm Lage
+**0,16 mm**, keine Empty-layer-Warnung. Orca 2.4.2/Kobra 2:
+`raft_contact_distance = 0.16`, Raftoberkante 0,56 mm, erste Körperlage
+0,96 mm bei 0,24 mm → **0,16 mm**. Cura 5.13/Kobra 2: `raft_airgap=0.16`,
+`layer_0_z_overlap=0.08` nach der belegten Formel, Raftoberkante 1,596 mm,
+erste Körperlage 1,986 mm bei 0,23 mm → **0,16 mm** (`luft_messen.py` und
+Schichtmarken; die Prusa-Auswertung der Sonde liest Orca- und Cura-Bahnarten
+nicht). Die Codex-Belege aus dem Scratchpad liegen unter
+`claude_484_integriert\codex-belege`.
+
+Zusammengeführt mit B (`adhesion.brim_gap`, Format 43): Haftungsgruppen tragen
+beide Abstände (`brim_width`/`brim_gap`, `raft_layers`/`raft_gap`); die neue
+Fehlerkennung `booking_history_changed` ist in `test_errors._NOT_A_RANGE`
+eingeordnet. Entwicklungstor am zusammengeführten Stand: 22.006 bestanden,
+83 übersprungen, danach `test_errors` 344 grün; Ruff, Format und mypy grün.
+Fenster-, Renderer- und Leistungsprüfungen bleiben Releasearbeit.
+

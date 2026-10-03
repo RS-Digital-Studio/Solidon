@@ -2611,3 +2611,43 @@ Text. Die allgemeine Fehleransicht verwendet PlainText. Ein Name, der wie eine
 Zahl, ein Einstellungswert oder HTML aussieht, wird weder umformatiert noch
 als Auszeichnung behandelt. `part_name` trägt die übersetzte Beschriftung
 „Teil“; nur diese Beschriftung wird übersetzt.
+
+
+
+## Ein optionaler Raftabstand im Druckdialog
+
+`adhesion.raft_gap` gehört zur Haftungsgruppe und bleibt unabhängig von der
+Stützgruppe bedienbar. Das Feld zeigt bei unbekannter Grundlage „Vorgabe des
+Slicers“ und nimmt eine eigene Zahl auch über die Tastatur an. Null ist ein
+zulässiger Abstand. Zurücksetzen verwendet den vorhandenen Grundlageweg mit
+`without_choice`; es speichert keine eigene `None`-Wahl. Ein Profilwechsel
+kann dadurch einen neu belegten nativen Wert anzeigen.
+
+Anzeige, Feldsuche und Übergabe fragen denselben Aktivitätsvertrag. Bei Prusa
+und Orca führt die Suche aus einem Raft mit null Schichten zum Schichtfeld;
+bei Cura kann der Abstand trotz null Deckschichten wirksam bleiben. Um einen
+Raftwert zu ändern, muss der Kunde keine Stützen einschalten. Ein fehlender
+nativer Wert wird weder aus der Stützlücke noch aus einer allgemeinen
+Materialvorgabe als scheinbarer Slicerwert angezeigt.
+
+Eine unbekannte Cura-Kopplung trägt `raft_gap_dependency` und den Feldpfad.
+Der vorhandene Fehlerweg führt im zugehörigen Druckdialog zu
+`_lift('adhesion.raft_gap')`. Fehlender, geänderter oder abgebrochener
+Auftragskontext verwirft diese Rückmeldung; eine alte Antwort darf weder ein
+neues Feld öffnen noch eine Fehlerbox nach dem Abbruch anzeigen.
+
+## Unsichere frühere Verbrauchsbuchungen
+
+Die Buchungsansicht behandelt `legacy_fingerprint` als möglichen früheren
+Vorgang, nicht als automatisch passenden Druck. Solange keine exakte neue
+Historie vorliegt, zeigt sie den fehlenden historischen Raftwert an; auch eine
+zurückgenommene alte Buchung bleibt dabei von einem laufenden Abzug
+unterscheidbar. „Weiteren Druck buchen“ ist die ausdrückliche neue Entscheidung.
+Alte Vorgänge werden nicht umgebunden und nicht automatisch korrigiert.
+
+Automatisches Buchen verwendet Spulen, exakte Historie und mögliche alte
+Historie aus derselben `InventorySnapshot`. Ändert sich der beobachtete Verlauf
+bis zur atomaren Journalprüfung, führt `booking_history_changed` über die
+vorhandene Handlung „Buchung prüfen …“ zurück in diese Ansicht und liest neu.
+Der Kunde bestätigt auf dem aktualisierten Stand; es entsteht kein weiterer
+Dialog und kein stiller zweiter Buchungsversuch.

@@ -83,6 +83,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los caracteres especiales en nombres de proyecto o usuario ya no impiden generar el archivo de impresión. Cura también lee modelos con nombres turcos o chinos.
 - Solidon coloca las piezas superpuestas en la base antes de laminarlas con PrusaSlicer o Cura y avisa si no encuentra una disposición adecuada.
 - Si PrusaSlicer o SuperSlicer indica que la primera capa está vacía, Solidon identifica la pieza y permite colocarla en la cama o abrir los ajustes de impresión correspondientes.
+- Las advertencias de PrusaSlicer y SuperSlicer aparecen en el informe aunque el slicer termine bien, una capa vacía como error. La separación del raft se ajusta aparte.
 
 ### Taladros, ranuras y división
 

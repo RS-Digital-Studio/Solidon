@@ -344,6 +344,9 @@ def test_the_title_follows_the_constraint_not_the_class() -> None:
 _NOT_A_RANGE = frozenset(
     {
         "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme",
+        # Eine Verbrauchsbuchung, die sich seit dem Druckauftrag geändert hat
+        # (knowledge/filaments.py): ein Zustand des Bestands, keine Zahl.
+        "booking_history_changed",
         "checksum", "choices",
         # Eine Berührlinie hängt von der Modellform ab, nicht von einer Zahlenspanne.
         "cut_surface_contact",

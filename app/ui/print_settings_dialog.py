@@ -968,6 +968,20 @@ FIELDS: tuple[Field, ...] = (
         maximum=20,
         note=_("Wie viele Schichten die Unterlage hat, auf der das Teil steht."),
     ),
+    Field(
+        "adhesion.raft_gap",
+        _("Abstand zum Raft"),
+        "adhesion",
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        step=0.05,
+        decimals=2,
+        note=_(
+            "Luft zwischen der Unterlage und der ersten Schicht des Teils. "
+            "Ohne eigene Zahl bleibt die Vorgabe des Slicers."
+        ),
+    ),
     # --- Rückzug ---
     Field(
         "retraction.length",
@@ -1140,6 +1154,8 @@ def shown_value(path: str, value: object) -> str:
     etwas vor, das der Nutzer nicht wiedererkennt, und der Prüfbericht nennt
     nach dem Export einen anderen Wert als der Dialog davor."""
     field = _FIELD_OF.get(path)
+    if path == "adhesion.raft_gap" and value is None:
+        return str(tr("Vorgabe des Slicers"))
     if isinstance(value, str):
         return choice_label(value)
     # Vor der Zahl, denn ``True`` ist auch ein ``int``: Ein Haken stand
@@ -1379,6 +1395,11 @@ def _make_setting_editor(
         number.setRange(field.minimum, field.maximum)
         number.setSingleStep(1 if field.kind == "int" else field.step)
         number.setDecimals(0 if field.kind == "int" else field.decimals)
+        if field.path == "adhesion.raft_gap":
+            # Wie optionale Op-Felder: Sondertext eine Anzeigestufe unter null.
+            number.setMinimum(field.minimum - 10.0**-field.decimals)
+            number.setSpecialValueText(tr("Vorgabe des Slicers"))
+            number.name_limits(field.minimum, field.maximum)
         number.setKeyboardTracking(False)
         number.valueChanged.connect(changed)
         editor = number
@@ -1461,7 +1482,11 @@ def _set_setting_editor(editor: QWidget, field: Field, value: object) -> None:
     elif isinstance(editor, _ColourButton):
         editor.set_value(str(value))
     elif isinstance(editor, QDoubleSpinBox):
-        editor.setValue(float(cast(Any, value)) * field.factor)
+        editor.setValue(
+            editor.minimum()
+            if value is None and field.path == "adhesion.raft_gap"
+            else float(cast(Any, value)) * field.factor
+        )
 
 
 def _setting_editor_value(editor: QWidget, field: Field) -> object:
@@ -1470,6 +1495,8 @@ def _setting_editor_value(editor: QWidget, field: Field) -> object:
         return editor.isChecked()
     if isinstance(editor, BoundedSpin):
         value = editor.value()
+        if field.path == "adhesion.raft_gap" and value < field.minimum:
+            return None
         return int(value) if field.kind == "int" else float(value) / field.factor
     if isinstance(editor, QSpinBox):
         return editor.value()
@@ -2623,7 +2650,8 @@ class _SliceWorker(Worker):
                 # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
                 # und wer sie hinterher an den Drucker gibt, merkt das nicht.
                 if (
-                    problem.values.get("constraint") in {"slicer_build_volume", "empty_first_layer"}
+                    problem.values.get("constraint")
+                    in {"slicer_build_volume", "empty_first_layer", "raft_gap_dependency"}
                     and self.cancelled.is_cancelled
                 ):
                     return
@@ -4490,7 +4518,29 @@ class PrintSettingsDialog(QDialog):
         control = {"support": "support.style", "adhesion": "adhesion.kind"}.get(field.group)
         if control is None or path == control:
             return None
-        return control if path in self._inactive_paths() else None
+        if path not in self._inactive_paths():
+            return None
+        if path == "adhesion.raft_gap":
+            flavour = self._current_flavour()
+            if flavour is not None and flavour in {"prusa", "orca"}:
+                settings = replace(
+                    self.settings,
+                    adhesion=replace(
+                        self.settings.adhesion,
+                        kind=cast(
+                            AdhesionType,
+                            _setting_editor_value(
+                                self._editors["adhesion.kind"], self._fields["adhesion.kind"]
+                            ),
+                        ),
+                    ),
+                )
+                _, kinds = handover.handed_over_adhesion_kinds(
+                    settings, self.session.profile, flavour, self._foundation_for_current_setup()
+                )
+                if "raft" in kinds:
+                    return "adhesion.raft_layers"
+        return control
 
     def _inactive_paths(self) -> frozenset[str]:
         """Was bei der sichtbaren Wahl nichts tut — gefragt im Kern (RM-341)."""
@@ -4519,13 +4569,20 @@ class PrintSettingsDialog(QDialog):
                 flavour,
                 self._foundation_for_current_setup(),
             )
-        return print_settings.inactive_paths(
+        inactive = print_settings.inactive_paths(
             str(
                 _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
             ),
             kind,
             also=also,
         )
+        if flavour is not None:
+            effective = handover.effective_adhesion(
+                settings, self.session.profile, flavour, self._foundation_for_current_setup()
+            )
+            if not handover.raft_gap_active(effective, flavour, also=also):
+                inactive |= {"adhesion.raft_gap"}
+        return inactive
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
         """Zeigt und benennt die Wahl, die ein bedingtes Trefferfeld freigibt."""
@@ -4939,6 +4996,16 @@ class PrintSettingsDialog(QDialog):
         known["check_profile"] = lambda _error: self._open_slicer_section()
         known["choose_printer"] = self._open_printer_choice
         known["choose_slicer"] = lambda _error: self._open_slicer_section()
+        previous_print_settings = known.get("open_print_settings")
+
+        def open_raft_gap_settings(error: AppError) -> None:
+            if error.values.get("constraint") == "raft_gap_dependency":
+                if context is not None and context == self._print_context():
+                    self._lift("adhesion.raft_gap")
+            elif previous_print_settings is not None:
+                previous_print_settings(error)
+
+        known["open_print_settings"] = open_raft_gap_settings
         return known
 
     def take_scene_action(self) -> tuple[str, AppError] | None:
@@ -7571,7 +7638,13 @@ class PrintSettingsDialog(QDialog):
             current_value = print_settings.read_path(self._effective_adhesion(self.settings), path)
         if not print_settings.same_value(value, current_value):
             before = self.settings.explicit
-            self.settings = print_settings.with_choice(self.settings, path, value)
+            self.settings = (
+                print_settings.without_choice(self.settings, path, self._base())
+                if path == "adhesion.raft_gap" and value is None
+                else print_settings.with_choice(self.settings, path, value)
+            )
+            if path == "adhesion.raft_gap" and value is None:
+                self._load_into_editors(frozenset({path}))
             # Eine Haftungsart bringt ihr Maß mit (``print_settings._with_a_measure``);
             # dessen Feld muss es dann auch zeigen — und nur dieses: Alle Felder
             # neu zu laden, löschte still eine abgelehnte Zahl anderswo.
@@ -8987,7 +9060,11 @@ class PrintSettingsDialog(QDialog):
         """
         if self._settling:
             return
-        if problem.values.get("constraint") in {"slicer_build_volume", "empty_first_layer"} and (
+        if problem.values.get("constraint") in {
+            "slicer_build_volume",
+            "empty_first_layer",
+            "raft_gap_dependency",
+        } and (
             self._job_context is None
             or self._job_context != self._print_context()
             or (self._worker is not None and self._worker.cancelled.is_cancelled)

@@ -1875,7 +1875,9 @@ def findings_for(metrics: GcodeMetrics) -> list[Finding]:
         findings.append(
             Finding(
                 code="gcode.warning",
-                severity="warning",
+                severity="error"
+                if re.match(r"Empty layer\b", warning, re.IGNORECASE)
+                else "warning",
                 message=_("Der Slicer hat gewarnt."),
                 values={"text": warning},
                 source="gcode",

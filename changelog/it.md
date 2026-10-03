@@ -82,6 +82,7 @@ scrive in `website/version.json`.
 - I caratteri speciali nei nomi di progetto o utente non impediscono più di creare il file di stampa. Cura legge anche i modelli con nomi turchi o cinesi.
 - Solidon dispone sul piatto le parti sovrapposte prima dello slicing con PrusaSlicer o Cura e avvisa se non trova una disposizione adatta.
 - Se PrusaSlicer o SuperSlicer segnala un primo strato vuoto, Solidon indica il pezzo e permette di posizionarlo sul piatto o aprire le impostazioni di stampa pertinenti.
+- Gli avvisi di PrusaSlicer e SuperSlicer compaiono nel rapporto anche se lo slicer riesce, uno strato vuoto come errore. La distanza dal raft si imposta a parte.
 
 ### Fori, asole e divisione
 

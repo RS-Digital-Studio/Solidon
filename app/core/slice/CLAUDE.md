@@ -184,3 +184,12 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 - **G-Code-Wörter brauchen keinen Leerraum**: `E` gilt auch direkt hinter einer
   Koordinate, und wissenschaftliche Zahlenschreibweise darf kein
   Extrusionswort verschlucken.
+
+
+## Warnungen aus dem Slicerlauf
+
+Prusas Prozesswarnungen ergänzen die G-Code-Warnungen als vollständige,
+begrenzt gelesene Blöcke. Dedupliziert wird ohne Verlust unterschiedlicher
+Objekte. `gcode.warning` behält die Herkunft `gcode`; `Empty layer` ist ein
+Fehlerbefund, auch bei erfolgreichem Prozessende. Das Leseprotokoll steht in
+`konzepte/begruendungen/karte-app-core-slice.md`.

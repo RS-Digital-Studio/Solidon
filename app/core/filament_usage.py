@@ -55,6 +55,8 @@ class UsageRequest:
     project_name: str
     plate: int
     lines: tuple[UsageLine, ...]
+    legacy_fingerprints: tuple[str, ...] = ()
+    """Mögliche Altkennungen vor Brim-/Raftfeldern; niemals belegte Gleichheiten."""
 
 
 def costs_for(
@@ -210,6 +212,8 @@ def prepare(
                 )
         lines = []
         effective = []
+        omitted_fields = ((), ("brim_gap",), ("raft_gap",), ("brim_gap", "raft_gap"))
+        legacy_effective: list[list[object]] = [[] for _omitted in omitted_fields]
         for original in slots:
             key = threemf.slot_identity(original)
             if key not in active_keys:
@@ -237,6 +241,32 @@ def prepare(
                 "accepted",
             ):
                 values.pop(field, None)
+            # Alle Kennungen teilen dieselben gebundenen Werte. Unbekannte
+            # oder sicher abgeschaltete Rafts bleiben ohne Feld; Auto ist offen.
+            if values["adhesion"].get("raft_gap") is None or (
+                "adhesion.kind" in mine.explicit
+                and mine.adhesion.kind in {"none", "skirt", "brim", "skirt_brim"}
+            ):
+                values["adhesion"].pop("raft_gap", None)
+            for omitted, entries in zip(omitted_fields, legacy_effective, strict=True):
+                entries.append(
+                    (
+                        identities[key],
+                        {
+                            **values,
+                            "adhesion": {
+                                name: value
+                                for name, value in values["adhesion"].items()
+                                if name not in omitted
+                            },
+                        },
+                    )
+                )
+            # Genau der additive Vorgabewert null behält die alte Kennung.
+            # Sein früher roh geschriebenes Feld bleibt oben ein Altkandidat.
+            brim_gap = values["adhesion"].get("brim_gap")
+            if brim_gap is not None and abs(brim_gap) <= 0.0:
+                values["adhesion"].pop("brim_gap")
             effective.append((identities[key], values))
             lines.append(
                 UsageLine(
@@ -254,7 +284,25 @@ def prepare(
             sorted(effective, key=digest),
             profile_key(profile),
         )
-        requests.append(UsageRequest(fingerprint, project_name, plate, tuple(lines)))
+        legacy_fingerprints = dict.fromkeys(
+            digest(
+                settings.inventory_project_id,
+                plate,
+                sorted(geometry),
+                sorted(entries, key=digest),
+                profile_key(profile),
+            )
+            for entries in legacy_effective
+        )
+        requests.append(
+            UsageRequest(
+                fingerprint,
+                project_name,
+                plate,
+                tuple(lines),
+                tuple(key for key in legacy_fingerprints if key and key != fingerprint),
+            )
+        )
     return tuple(requests)
 
 

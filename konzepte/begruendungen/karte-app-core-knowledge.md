@@ -221,3 +221,30 @@ Oberfläche liest nach jedem Schreiben neu und zerlegte dafür die eben
 geschriebene Datei ein zweites Mal. Ein fremder Austausch ändert den Stempel
 und wird wie bisher gelesen. Die Zusage darüber bleibt: Der Schreibweg selbst
 liest unter der Sperre neu und prüft vollständig.
+
+
+## Optionale Druckwerte und bestätigter Buchungsstand
+
+Ein optionaler Abstand beschreibt entweder eine bekannte Zahl oder einen
+unbekannten Wert. `adhesion.raft_gap` bleibt ohne belegte Quelle `None`; es gibt
+keine Materialvorgabe, die still als native Raftvorgabe ausgegeben wird. Die
+Zahl null ist dagegen ein wirksamer eigener Abstand. Ein älteres Projekt ohne
+dieses additive Feld liest den vorhandenen Dataclass-Default. Seine gewählte
+Stützlücke wird nicht auf das neue Feld übertragen und kein vorhandener
+Herstellerwert wird dabei ersetzt.
+
+Eigene Werte folgen demselben Herkunftsvertrag wie andere Druckfelder:
+`with_choice` speichert eine Zahl, `without_choice(..., base)` nimmt diese Wahl
+zurück. Ein als eigene Wahl gespeichertes `None` würde eine später gelesene
+Profilzahl überstimmen und ist deshalb kein Rückweg zur Grundlage. Die
+Unterscheidung wird beim Speichern und erneuten Unterlegen des Profils bewahrt.
+
+Eine Verbrauchsentscheidung kann auf einer inzwischen überholten Journalansicht
+beruhen. `filaments.book(expected_history=...)` erhält deshalb die vollständig
+beobachteten Vorgänge je betroffener Kennung. Bevor eine neue Vorgangskennung
+angelegt wird, vergleicht es diese unter derselben `_transaction`-Sperre mit
+dem erneut gelesenen Journal, nach `operation_id` und einschließlich Rücknahmen
+und Korrekturen. Abweichungen melden `booking_history_changed` mit dem Rückweg
+zur Buchungsprüfung. Ein bereits bekannter Vorgang behält seinen idempotenten
+Weg. Eine ausdrücklich bestätigte weitere Buchung verwendet diesen
+automatischen Beobachtungsnachweis nicht; sie ist eine neue Kundenhandlung.

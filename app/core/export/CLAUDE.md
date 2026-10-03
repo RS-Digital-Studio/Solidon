@@ -328,3 +328,10 @@ bieten keine Handlung an einer zufällig gewählten Szeneauswahl.
 
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 - Kennzahlen aus Schichtanalyse und G-Code bleiben getrennt (Regel 14).
+
+
+## Der Raftkontakt
+
+`adhesion.raft_gap` bleibt vom Stützabstand getrennt; `None` bewahrt die
+Slicer-Vorgabe, null ist ein Wert. `raft_gap_active` entscheidet je Familie.
+Native Herkunft und Cura-Kopplung stehen in der oben verknüpften Langkarte.
