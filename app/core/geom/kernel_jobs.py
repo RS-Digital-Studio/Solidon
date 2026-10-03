@@ -48,12 +48,10 @@ import multiprocessing
 import os
 import pickle
 import sys
-import tempfile
 import traceback
 from collections.abc import Callable, Mapping
 from contextlib import suppress
 from multiprocessing import shared_memory
-from pathlib import Path
 from typing import Any, Final
 
 import manifold3d
@@ -638,27 +636,6 @@ def _yield_to_the_window() -> None:
         return
 
 
-def _without_a_temp_folder() -> None:
-    """Räumt im Paket den Ordner weg, den PyInstaller jedem Prozess für matplotlib anlegt.
-
-    Der Laufzeithaken ``pyi_rth_mplconfig`` legt beim Start jedes Prozesses
-    des Pakets einen leeren Ordner im Temp-Verzeichnis an, setzt
-    ``MPLCONFIGDIR`` darauf und räumt ihn erst in ``atexit`` weg. Ein
-    Hilfsprozess endet aber oft hart (Abbrechen, ``shutdown``): Am gebauten
-    ``Solidon3D.exe`` blieb je Start ein Ordner liegen (Durchsicht RM-212, B4:
-    drei Starts, drei Ordner). Der Hilfsprozess lädt nie matplotlib; entfernt
-    wird nur ein leerer Ordner direkt im Temp-Verzeichnis.
-    """
-    folder = os.environ.get("MPLCONFIGDIR")
-    if not getattr(sys, "frozen", False) or not folder:
-        return
-    path = Path(folder)
-    with suppress(OSError):
-        if path.parent.resolve() == Path(tempfile.gettempdir()).resolve():
-            path.rmdir()
-            del os.environ["MPLCONFIGDIR"]
-
-
 def _told(connection: Any, message: tuple[Any, ...]) -> bool:
     """Sendet ``message`` an den Elternprozess — ``False``, wenn er nicht mehr zuhört."""
     try:
@@ -703,7 +680,6 @@ def serve(connection: Any) -> None:
     damit ``atexit`` noch aufräumt.
     """
     try:
-        _without_a_temp_folder()
         _serve(connection)
     except BaseException:
         if sys.stderr is not None:

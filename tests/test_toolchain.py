@@ -1409,26 +1409,26 @@ def test_the_pinned_set_is_read_completely() -> None:
 def test_the_geometry_extra_provides_real_lettering_contours() -> None:
     """Der Schriftlieferant gehört in den Installationsauftrag und liefert beide Konturarten.
 
-    Ein Constraint installiert kein Paket. Eine gewachsene Umgebung darf die
-    fehlende direkte Abhängigkeit nicht durch einen früheren VTK-Bestand verdecken.
+    Ein Constraint installiert kein Paket. Der Kern setzt Schrift ohne
+    Oberfläche, also muss HarfBuzz im Extra ``geom`` stehen und nicht nur über
+    pygfx im Extra ``ui`` ankommen.
     """
     from packaging.requirements import Requirement
 
     requirements = map(Requirement, _pyproject()["project"]["optional-dependencies"]["geom"])
     declared = {normal(entry.name): entry for entry in requirements}
-    assert "matplotlib" in declared, "Schriftkonturen brauchen Matplotlib direkt im Extra geom"
-    font_engine = declared["matplotlib"]
+    assert "uharfbuzz" in declared, "Schriftkonturen brauchen uharfbuzz direkt im Extra geom"
+    font_engine = declared["uharfbuzz"]
     assert font_engine.marker is None, "Schriftkonturen werden auf jeder Plattform benötigt"
-    assert pinned()["matplotlib"][1] in font_engine.specifier
-
-    from matplotlib.textpath import TextPath
+    assert pinned()["uharfbuzz"][1] in font_engine.specifier
+    assert "matplotlib" not in declared, "die Schriftzüge setzt HarfBuzz (RM-471)"
 
     from app.core.brep.lettering import glyph_contours
-    from app.core.geom.label_ops import font_properties, outlines
+    from app.core.geom import glyphs
+    from app.core.geom.label_ops import outlines
 
     font = "DejaVu Sans"
-    path = TextPath((0.0, 0.0), "B", size=10.0, prop=font_properties(font))
-    assert len(glyph_contours(path)) == 3
+    assert len(glyph_contours(glyphs.contours("B", 10.0, font, "regular"))) == 3
     filled = outlines("B", 10.0, font)
     assert len(filled) == 1 and filled[0].is_valid
     assert len(filled[0].interiors) == 2

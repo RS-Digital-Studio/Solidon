@@ -54,7 +54,7 @@ def test_fixed_licence_sources_do_not_follow_development_branches() -> None:
     assert not moving, moving
 
 
-@pytest.mark.parametrize("family", ["Liberation", "Comfortaa", "DancingScript"])
+@pytest.mark.parametrize("family", ["DejaVu", "Liberation", "Comfortaa", "DancingScript"])
 def test_font_licence_corruption_is_rejected(
     family: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

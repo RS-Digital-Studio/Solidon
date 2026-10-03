@@ -59,10 +59,10 @@ geom = [
   "fast-simplification>=0.1.9",
   # SVG-Pfade hinter dem Zeichnungsimport (§25). MIT; DXF liest trimesh selbst.
   "svg.path>=6.3",
-  # Schriftkonturen für Netz und exakten Kern sowie DejaVu-Schriften.
-  # Seit 3.8 mit eigenen Typdateien für die strikte Kernprüfung;
-  # direkte Laufzeitabhängigkeit. LicenseRef-Matplotlib.
-  "matplotlib>=3.8",
+  # Satz und Glyphenumrisse der Schriftzüge (``geom/glyphs.py``) aus den
+  # beiliegenden Schriftdateien; dieselbe HarfBuzz-Maschine setzt auch die
+  # Beschriftungen der Ansicht (pygfx). Apache-2.0, bringt HarfBuzz (MIT-artig) mit.
+  "uharfbuzz>=0.56",
 ]
 # Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
 ui = [
@@ -106,9 +106,10 @@ dev = [
   "mypy>=1.11",
   # Wertet Umgebungsmarker für die Lizenzprüfung aus.
   "packaging>=24.0",
-  # Die Tests öffnen Bilder und Schriftdateien selbst (``PIL``, ``fontTools``);
-  # zur Laufzeit kommen beide über matplotlib und imageio, Untergrenzen wie
-  # dort. MIT-CMU bzw. MIT.
+  # Die Tests öffnen Bilder und Schriftdateien selbst (``PIL``, ``fontTools``).
+  # Pillow kommt zur Laufzeit über imageio und scikit-image; fontTools ist
+  # reine Testabhängigkeit, die Anwendung liest Schriften über HarfBuzz.
+  # MIT-CMU bzw. MIT.
   "pillow>=10.1",
   "fonttools>=4.28.2",
   # Die SBOM-Tests prüfen auch Interpreter und PyInstaller-Bootloader. Deshalb
@@ -312,6 +313,8 @@ module = [
   "shapely.*",
   # Die OpenCASCADE-Anbindung ist eine kompilierte Erweiterung ohne Stubs (§30).
   "OCP.*",
+  # HarfBuzz über Cython, ohne ``py.typed`` (``geom/glyphs.py``).
+  "uharfbuzz",
 ]
 ignore_missing_imports = true
 
