@@ -5848,6 +5848,117 @@ def _check_plate(
                 )
 
 
+def _prepare_cura_cli(
+    command: list[str], workspace: Path, cancelled: CancelToken | None
+) -> list[str]:
+    """Curas Dateileser bekommt technische Namen, auch für Vorlagen und Blocker.
+
+    Die Definitionen bleiben vollständig: Nur ihre Dateiverweise ändern sich.
+    Curas Suchreihenfolge gilt dabei weiter, einschließlich der Verzeichnisse,
+    die beim Laden einer Definition hinzukommen. Originale bleiben unberührt.
+    """
+    roots = [
+        Path(entry)
+        for entry in os.environ.get("CURA_ENGINE_SEARCH_PATH", "").split(os.pathsep)
+        if entry
+    ]
+    for index, argument in enumerate(command[:-1]):
+        if argument == "-d":
+            roots = [Path(entry) for entry in command[index + 1].split(os.pathsep)]
+            break
+    roots = [path if path.is_absolute() else workspace / path for path in roots]
+    definitions = workspace / "definitions"
+    copied: dict[Path, str] = {}
+    active: set[Path] = set()
+
+    def invalid(path: Path) -> ExternalToolError:
+        return ExternalToolError(
+            tool="CuraEngine",
+            detail=_(
+                "Das Slicer-Profil „{name}“ ist unvollständig. "
+                "Prüfen Sie seine Vorlagen im Slicer.",
+                name=path.name,
+            ),
+            values={"name": path.name},
+            suggestions=(CHECK_SLICER_PROFILE, CHOOSE_SLICER, EXPORT_ONLY),
+        )
+
+    def reference(name: object, source: Path) -> str:
+        if not isinstance(name, str) or not name or Path(name).name != name or "\\" in name:
+            raise invalid(source)
+        for root in roots:
+            candidate = root / f"{name}.def.json"
+            if candidate.is_file():
+                return definition(candidate)
+        raise invalid(source)
+
+    def definition(source: Path) -> str:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        source = source.resolve()
+        if source in active or len(active) >= slicer_profiles.MAX_INHERITANCE:
+            raise invalid(source)
+        if source in copied:
+            return copied[source]
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, ValueError, RecursionError) as problem:
+            raise invalid(source) from problem
+        if not isinstance(data, dict):
+            raise invalid(source)
+        roots.append(source.parent)
+        active.add(source)
+        name = f"definition-{len(copied)}"
+        copied[source] = name
+        if "inherits" in data:
+            data["inherits"] = reference(data["inherits"], source)
+        metadata = data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            raise invalid(source)
+        trains = metadata.get("machine_extruder_trains", {})
+        if not isinstance(trains, dict):
+            raise invalid(source)
+        for key, value in trains.items():
+            trains[key] = reference(value, source)
+        (definitions / f"{name}.def.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+        active.remove(source)
+        return name
+
+    staged = [*command[:2], "-d", str(definitions)]
+    index = 2
+    mesh_count = 0
+    try:
+        definitions.mkdir()
+        while index < len(command):
+            flag = command[index]
+            if flag in {"-d", "-j", "-l", "-o", "-s"}:
+                value = command[index + 1]
+                if flag == "-d":
+                    index += 2
+                    continue
+                if flag == "-j":
+                    value = str(definitions / f"{definition(Path(value))}.def.json")
+                elif flag == "-l":
+                    target = workspace / f"model-{mesh_count}.stl"
+                    _copy_print_file(Path(value), target, cancelled=cancelled)
+                    value = str(target)
+                    mesh_count += 1
+                elif flag == "-o":
+                    value = str(workspace / OUTPUT_NAME)
+                staged.extend((flag, value))
+                index += 2
+            else:
+                staged.append(flag)
+                index += 1
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or workspace), detail=str(problem.strerror or problem)
+        ) from problem
+    return staged
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -5926,7 +6037,7 @@ def slice_model(
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
-    with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
+    with discover.workspace_for(setup.executable, "solidon-slice-", ascii_only=True) as workspace:
         cli_models = (
             [
                 _creality_cli_input(entry, workspace / f"model_{index}.3mf", cancelled)
@@ -5935,6 +6046,17 @@ def slice_model(
             if _is_creality_print(setup)
             else models
         )
+        if setup.flavour != "cura":
+            cli_models = [
+                (
+                    entry
+                    if entry.parent == workspace
+                    else _copy_print_file(
+                        entry, workspace / f"model-{index}{entry.suffix}", cancelled=cancelled
+                    )
+                )
+                for index, entry in enumerate(cli_models)
+            ]
         config = write_config(settings, profile, setup, workspace, slots)
         limited_settings = list(config.findings)
         requested_values = config.written
@@ -5943,7 +6065,9 @@ def slice_model(
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
         # wird — und ``_find_gcode`` sucht an der leeren Stelle.
-        target = (output_dir if output_dir is not None else workspace).resolve()
+        # Alle CLI-Dateipfade bleiben im privaten Arbeitsordner. Der Rückweg
+        # ins gewünschte Unicode-Ziel läuft nach dem Lesen über Python.
+        target = workspace
         try:
             target.mkdir(parents=True, exist_ok=True)
         except OSError as problem:
@@ -5965,10 +6089,13 @@ def slice_model(
         # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
         # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
+        command = _command(
+            setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
+        )
+        if setup.flavour == "cura":
+            command = _prepare_cura_cli(command, workspace, cancelled)
         completed = _run_slicer(
-            _command(
-                setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
-            ),
+            command,
             workspace,
             timeout,
             setup,
@@ -6099,6 +6226,17 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
+            if setup.flavour == "cura" and "failed to load model" in output.casefold():
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Der Slicer konnte eine Modelldatei nicht lesen. "
+                        "Übergeben Sie das Modell erneut oder wählen Sie einen anderen Slicer."
+                    ),
+                    values={"output": output},
+                    suggestions=(RETRY, CHOOSE_SLICER, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
+                )
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -6194,6 +6332,10 @@ def slice_model(
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
             produced = _kept_beside(models[0], produced, cancelled=cancelled)
+        else:
+            produced = _copy_print_file(
+                produced, output_dir.resolve() / produced.name, cancelled=cancelled
+            )
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -6957,11 +7099,16 @@ def _kept_beside(model: Path, produced: Path, *, cancelled: CancelToken | None =
     Ein Abbruch lässt deshalb weder eine Teildatei als Ergebnis zurück noch
     überschreibt er eine schon vorhandene Druckdatei.
     """
-    target = model.with_suffix(".gcode")
+    return _copy_print_file(produced, model.with_suffix(".gcode"), cancelled=cancelled)
+
+
+def _copy_print_file(produced: Path, target: Path, *, cancelled: CancelToken | None = None) -> Path:
+    """Kopiert vollständig und abbrechbar, bevor die Zieldatei ersetzt wird."""
     temporary: Path | None = None
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     try:
+        target.parent.mkdir(parents=True, exist_ok=True)
         with (
             produced.open("rb") as source,
             tempfile.NamedTemporaryFile(

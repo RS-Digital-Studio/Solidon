@@ -72,6 +72,8 @@ it into `website/version.json`.
 - PrusaSlicer and the Orca family now use the support density you set. The field starts at 1 %. To print without supports, choose “None”.
 - For multicolor prints in OrcaSlicer, ElegooSlicer, Bambu Studio and Creality Print, the prime tower now starts at a position suited to the bed size.
 - Oversized parts are reported before the slicer starts. If no arrangement fits all parts on one plate, you can choose to arrange them across several plates.
+- Special characters in project or user names no longer prevent slicing. Cura can now read models with Turkish or Chinese names too.
+- Solidon arranges overlapping parts on the bed before slicing with PrusaSlicer or Cura and tells you if it cannot find a suitable layout.
 
 ### Holes, slots and splitting
 

@@ -125,6 +125,11 @@ Importleser die Dateien. Stützsperren zählen nicht als Druckteile. Ein
 bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
 die normale Datei- und Fensterübergabe behält ihren Berichtweg.
 
+`prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
+Ohne eigene Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf
+exportlokal gepackt. `arrangement_holds` prüft auch tatsächliche Druckkontur,
+Sperrzonen und nutzbare Höhe; dies gilt ebenso für die Lageübernahme im Fenster.
+
 | Prüfung | Frage |
 |---|---|
 | `off_the_bed` | Liegt der Druck im Bauraum? |
@@ -174,6 +179,13 @@ hält die unabhängig gemessenen Aufzählungswerte für den Wächter fest.
 ## Stolperfallen
 
 ### Stützsperre und Cura
+
+Alle Slicer lesen technische Modellkopien und schreiben im privaten Arbeitsordner.
+Unter Windows sind diese Pfade ASCII; ein 8.3-Alias darf nicht wieder aufgelöst
+werden. Die Druckdatei gelangt danach atomar ins ursprüngliche Unicode-Ziel.
+Cura erhält zusätzlich Blocker und vollständige Definitionsketten mit technischen
+Namen (`handover._prepare_cura_cli`); nur Vererbung und Extruderzug-Verweise ändern
+sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
 
 - **Die Stützsperre** (`support.block_channels`, Regel in `dateiformat.md`):
   `writer._support_blocker` fragt zuerst die Schichten des Prüfberichts

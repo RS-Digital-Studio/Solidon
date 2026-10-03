@@ -72,6 +72,8 @@ scrive in `website/version.json`.
 - PrusaSlicer e la famiglia Orca rispettano la densità dei supporti scelta. Il campo parte dall'1 %. Per stampare senza supporti, scegli «Nessuno».
 - Nelle stampe multicolore con OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, la torre di spurgo parte da una posizione adatta alle dimensioni del piatto.
 - I pezzi troppo grandi vengono segnalati prima di avviare lo slicer. Se non si trova spazio per tutti su un piatto, puoi distribuirli su più piatti.
+- I caratteri speciali nei nomi di progetto o utente non impediscono più di creare il file di stampa. Cura legge anche i modelli con nomi turchi o cinesi.
+- Solidon dispone sul piatto le parti sovrapposte prima dello slicing con PrusaSlicer o Cura e avvisa se non trova una disposizione adatta.
 
 ### Fori, asole e divisione
 

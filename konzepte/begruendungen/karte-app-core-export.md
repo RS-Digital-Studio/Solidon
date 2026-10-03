@@ -409,6 +409,28 @@ nicht mehr; jedes Prädikat antwortet für `other` mit „nein“, es bekommt ST
 um den Ursprung, `slice_model` und `write_config` sagen mit Vorschlag ab
 (`_refuse_untranslated`), und `only_opens` ist die Frage dazu.
 
+## Gemeinsame Netze und Anordnung für die Konsole
+
+`prepare_slicer_meshes` vernetzt einmal je ausgewähltem Körper. Der Writer
+und die spätere Bauraumprüfung bekommen dieselben Netzinstanzen. PrusaSlicer,
+SuperSlicer und CuraEngine brauchen eine fertige Lage; die vier Programme der
+Orca-Familie ordnen selbst an. Diese Eigenschaft steht in `arranges_on_cli`.
+
+Eine bereits passende Platte bleibt unverändert. Andernfalls sucht der Writer
+aufrechte Z-Drehungen und packt die Teile mit der vorhandenen Anordnung auf
+genau eine Platte. Die reale Druckkontur, Sperrflächen und freigegebene Höhe
+entscheiden. Verschoben werden nur Exportkopien; Szenenobjekte, Materialslots
+und benannte Merkmale bleiben erhalten. Jede Projektplatte wird getrennt
+behandelt. Curas Stützsperren folgen derselben exportierten Lage und erhalten
+den Maschinenversatz genau einmal.
+
+Eine erfolglose Suche beweist keine mathematische Unmöglichkeit. Die Meldung
+sagt daher, dass keine Anordnung gefunden wurde, und bietet die vorhandene
+projektweite Anordnung oder die Druckerwahl an. Der Abbruch wird vor und nach
+dem synchronen Packer geprüft. Der normale Datei- und Fensterweg wird nicht
+automatisch gepackt; das gemeinsame Prädikat zur Lageübernahme berücksichtigt
+aber auch dort Druckkontur, Sperrzonen und nutzbare Höhe.
+
 ## Die Prüfung vor dem Export
 
 Sie läuft **vorher**, nicht nachher: Wasserdichtheit, Bauraum, Wandstärken.

@@ -73,6 +73,8 @@ dans `website/version.json`.
 - PrusaSlicer et la famille Orca respectent la densité des supports choisie. Le champ commence à 1 %. Pour imprimer sans supports, choisissez « Aucun ».
 - Pour les impressions multicolores avec OrcaSlicer, ElegooSlicer, Bambu Studio et Creality Print, la tour de purge démarre à une position adaptée à la taille du plateau.
 - Les pièces trop grandes sont signalées avant le lancement du slicer. Si leur disposition sur un seul plateau échoue, vous pouvez les répartir sur plusieurs plateaux.
+- Les caractères spéciaux dans les noms de projet ou d’utilisateur ne bloquent plus la création du fichier d’impression. Cura lit aussi les modèles aux noms turcs ou chinois.
+- Solidon dispose les pièces qui se chevauchent sur le plateau avant le tranchage avec PrusaSlicer ou Cura et vous prévient si aucune disposition adaptée n’est trouvée.
 
 ### Perçages, trous oblongs et découpe
 

@@ -73,6 +73,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - PrusaSlicer y la familia Orca respetan la densidad de soporte elegida. El campo empieza en 1 %. Para imprimir sin soportes, elija «Ninguno».
 - En impresiones multicolor con OrcaSlicer, ElegooSlicer, Bambu Studio y Creality Print, la torre de purga recibe una posición inicial adaptada al tamaño de la cama.
 - Las piezas demasiado grandes se indican antes de iniciar el slicer. Si no se encuentra sitio para todas en una placa, puede distribuirlas en varias placas.
+- Los caracteres especiales en nombres de proyecto o usuario ya no impiden generar el archivo de impresión. Cura también lee modelos con nombres turcos o chinos.
+- Solidon coloca las piezas superpuestas en la base antes de laminarlas con PrusaSlicer o Cura y avisa si no encuentra una disposición adecuada.
 
 ### Taladros, ranuras y división
 

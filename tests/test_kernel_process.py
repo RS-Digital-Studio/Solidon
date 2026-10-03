@@ -1226,9 +1226,13 @@ def test_the_coarse_preview_reduces_and_drills_in_the_helper(
     """
     from app.core.geom.mesh_ops import DECIMATE_FLOOR
     from app.core.scene import OperationDraft
+    from app.core.scene.cache import ResultCache
     from app.ui import session as session_module
 
     session, body, _mesh = _ellipsoid_session()
+    # Der Fall misst die Helferaufrufe, nicht einen früheren Plattentreffer.
+    # Die bereits fertig geladene Sitzung bekommt dafür einen eigenen Cache.
+    session.cache = ResultCache()
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
     draft = OperationDraft(

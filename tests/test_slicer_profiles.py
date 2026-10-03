@@ -2440,8 +2440,8 @@ def test_centred_cura_machine_measures_the_print_around_its_origin(
         for index, (x, y) in enumerate(((10, -10), (10, 10), (-10, 10), (-10, -10)))
     )
 
-    def slices(*_args: object, **_kwargs: object) -> object:
-        (output / "quadrat.gcode").write_text(square, encoding="utf-8")
+    def slices(command: list[str], *_args: object, **_kwargs: object) -> object:
+        Path(command[command.index("-o") + 1]).write_text(square, encoding="utf-8")
         return type("Finished", (), {"returncode": 0, "stdout": b"", "stderr": b""})()
 
     monkeypatch.setattr(handover, "_run_slicer", slices)

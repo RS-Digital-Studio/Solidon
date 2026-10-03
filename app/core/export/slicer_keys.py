@@ -1321,6 +1321,24 @@ def limitation(
     return None
 
 
+def arranges_on_cli(flavour: SlicerFlavour, program: str = "") -> bool:
+    """Ordnet die Konsole dieses Programms eine ungeordnete Platte selbst an?
+
+    Die vier Orca-Programme tun es. PrusaSlicer, SuperSlicer und CuraEngine
+    brauchen eine fertige Anordnung. Ohne Programmmarke gilt die Familie.
+    """
+    programs = {
+        "orcaslicer": True,
+        "bambustudio": True,
+        "elegooslicer": True,
+        "crealityprint": True,
+        "prusaslicer": False,
+        "superslicer": False,
+        "cura": False,
+    }
+    return programs.get(program, flavour == "orca")
+
+
 def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
     """Schreibt diese Familie G-Code mit dem Ursprung an der Bettecke?
 
