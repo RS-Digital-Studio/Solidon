@@ -66,7 +66,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Sicherheitskorrektur: Eine notwendige Vorvereinigung, die an einer selbstkreuzenden Schale scheitert, hält jetzt vor dem Solver an und bindet den Fehler an den betroffenen Körper. Am Original sind 1 243 aktuelle Schnittpaare belegt. Blenders exakter Boolean verschlechtert die Topologie; der 0,2-mm-Voxelremesh überschreitet `MAX_FACET_SAG`. Geometriereparatur und ursprüngliche Abnahme bleiben offen. |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt. Die 4 Abstürze am zweifarbigen Besteckeinsatz brauchen Solidons aufbereitetes Netz mit Gitterstützen; das Originalprojekt stürzt nicht ab. Offen: was an Solidons Netz den Slicer abstürzen lässt — erst danach eine Meldung beim Hersteller |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -1977,56 +1976,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Offen:** der Probedruck der Schüssel am Centauri Carbon 2 mit
   übernommenen Vorschlägen. Die Frage zum Brim je Teil beim Export ist mit
   [RM-250](ROADMAP-ARCHIV.md#rm-250) erledigt.
-
-<a id="rm-252"></a>
-
-- [ ] **RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt.**
-  Begonnen am 26.09.2026 auf Roberts Frage, ob Vorschläge und Übergabe an
-  alle unterstützten Slicer bei jedem Modell klappen. Das Werkzeug liegt in
-  `.claude/.state/uebergabe-korpus-2026-09-26/`: `alle.py` fährt 28 Modelle,
-  je Modell ein Prozess; `lauf.py` geht den Weg von Import, Druckdialog und
-  Übergabe an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (Bambu A1),
-  PrusaSlicer (MK4S) und CuraEngine (Ender 3 V3), je mit Standard,
-  übernommenen Vorschlägen und ohne Kanalsperre; `auswertung.py` fasst
-  zusammen. Auf Roberts Wort nach vier Modellen und 44 Läufen angehalten.
-  - **CuraEngine am Eiffelturm:** „Der Slicer hat mehr Ausgabe erzeugt, als
-    gesammelt wird" — mit Standard und mit Vorschlägen keine Druckdatei.
-  - **pista+biglie.3mf:** Alle vier Slicer sehen Teile neben dem Bett;
-    ElegooSlicer und OrcaSlicer ordnen selbst an, PrusaSlicer lehnt ab
-    („außerhalb seines Bauraums"). Zu klären, ob der Lauf oder die Übergabe
-    die Belegung verliert.
-  - Die Orca-Zeilen der Schüssel liefen noch mit einem Leser ohne Bambus
-    `; FEATURE:` — neu fahren, bevor die −15,7 % Modellbahn mit Sperre
-    etwas heißen.
-  - Sonst ließ die Kanalsperre die Modellbahn an Schüssel, Murmelbahn,
-    Okarina und Eiffelturm in ElegooSlicer, OrcaSlicer und PrusaSlicer
-    unverändert (±0,00 %) und nahm die Stütze im Kanal weg.
-  - Die Cura-Lüfterwarnung stand an jedem Lauf; seit dem 26.09.2026 misst
-    die Übergabe den Lüfterstart in der Druckdatei und meldet nur, was dort
-    steht.
-
-  Nächster Schritt: die zwei Befunde beheben, dann alle 28 Modelle.
-
-  **Durchsicht v0.5.1 (26.09.2026, druck):** CuraEngine läuft ohne `-v` (am Eiffelturm
-  12,3 MB → 50 kB Ausgabe, Druckdatei entsteht; `e401ce900`), und eine 3MF mit mehreren
-  Platten kommt auf ihre Platten (`a32a54ba2`). Korpusrest nachgefahren: 225 Läufe, 204
-  mit Druckdatei, 17 zu Recht abgelehnt. Vier Abstürze von ElegooSlicer/OrcaSlicer am
-  zweifarbigen Besteckeinsatz galten als Fehler des Slicers; die Bisektion
-  (`konzepte/nachweise-release-0.5.1/sonden/druck/besteck_bisekt.out`) ging aber von Solidons
-  Übergabedatei aus und setzte nur Plattenwerte zurück. **Nachgestellt am 28.09.2026:**
-  Das Originalprojekt schneidet in ElegooSlicer 1.5.3.4 auch mit `enable_support = 1`
-  und `support_type = normal(auto)` (Rückgabe 0, G-Code;
-  `konzepte/nachweise-release-0.5.1/review/rm252-meldung-2026-09-28/`), und mit dem rohen Netz der Datei läuft
-  Solidons Übergabe mit Gitterstützen durch (`besteck_absturz3.out`: 908 min, 670 m
-  Stütze); abgestürzt ist nur Solidons aufbereitetes Netz mit Gitterstützen
-  (`besteck_absturz2.out`). OrcaSlicer 2.4.2 liest das Elegoo-Projekt nicht
-  (`CLI::run found error`) und taugt dort nicht als Gegenprobe. Offen: was an Solidons
-  Netz (gleiche Dreieckzahl, dicht, fünf Schalen) den Slicer abstürzen lässt — ein
-  Fehler Solidons, oder einer des Slicers, den Solidon auslöst. Erst danach eine Meldung
-  beim Hersteller. Die Frage, ob der Stützvorschlag bei mehrfarbigen Teilen auf
-  Baumstützen ausweicht, ist seit Entscheidung J entschärft: Vorgeschlagen wird die
-  Stützart des Slicers.
-  Registerabgleich 02.10. (Stand `3fd3b1ace`): „Nächster Schritt: die zwei Befunde beheben“ ist überholt, beide sind behoben.
 
 <a id="rm-281"></a>
 

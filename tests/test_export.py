@@ -3310,6 +3310,44 @@ def test_a_body_named_like_the_geometry_mark_still_exports() -> None:
     assert model.count("<vertex ") == 8
 
 
+@pytest.mark.parametrize("route", ("single", "orca", "prusa", "cura"))
+@pytest.mark.parametrize("painted", (False, True))
+def test_threemf_preserves_coordinates_for_parts_and_support_blockers(
+    route: str, painted: bool
+) -> None:
+    """RM-252: Die Ausgabe darf Koordinaten auch unter EPS_GEOM nicht runden.
+
+    Am zweifarbigen Besteckeinsatz stürzte Elegoo mit Gitterstützen erst nach
+    dieser Rundung ab. Hier bleiben zusätzlich Sperrkörper und alle drei
+    Projektformate gegen denselben Verlust abgesichert.
+    """
+    raw = body().raw.copy()
+    raw.apply_transform(trimesh.transformations.rotation_matrix(0.123456789, (1, 2, 3)))
+    slots = tuple(index % 2 for index in range(len(raw.faces))) if painted else ()
+    mesh = MeshData.of(raw, slots=slots)
+    blocker_raw = raw.copy()
+    blocker_raw.apply_translation((0.123456789123456, -0.987654321987654, 0.000000123456789))
+    blocker = MeshData.of(blocker_raw)
+    expected = list(raw.vertices)
+    if route == "single":
+        payload = threemf.write(mesh)
+    else:
+        expected.extend(blocker_raw.vertices)
+        part = threemf.AssemblyPart(mesh=mesh, support_blocker=blocker)
+        payload = threemf.write_assembly(
+            [part], blocker_as_part=route != "prusa", cura=route == "cura"
+        )
+    with zipfile.ZipFile(BytesIO(payload)) as archive:
+        root = ET.fromstring(archive.read(threemf.MODEL_PATH))
+    written = [
+        tuple(float(vertex.attrib[axis]).hex() for axis in ("x", "y", "z"))
+        for vertex in root.findall(".//{*}vertex")
+    ]
+    # Die Bitdarstellung prüft hier die verlustfreie Speicherung, keine
+    # geometrische Nähe. Ein EPS-Vergleich hätte den Absturz übersehen.
+    assert sorted(written) == sorted(tuple(float(value).hex() for value in row) for row in expected)
+
+
 # --- Der Kundenweg STL → Operation → STL → Import (RM-166) --------------------
 
 

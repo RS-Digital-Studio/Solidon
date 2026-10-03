@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)](#rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026) |
 | 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
 | 2026-10-03 | [RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)](#rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026) |
 | 2026-10-03 | [RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)](#rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026) |
@@ -38463,3 +38464,58 @@ Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
   Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
 
 **Abschluss:** Die GEOS-Säulenrechnung stammt aus 5c90fac6a und ist unter anderem in v0.5.0 und v0.5.1 enthalten. Sie führt jetzt die schwebende Kontur als CrossSection mit positiver Umlaufzahl: Überhang vereinigen, Material darunter abziehen, Fläche über area(). Bereits gerichtete Materialringe werden ohne Vereinfachung einmal je Schicht übernommen. model_support hält eine Säule je Herkunftsstück; Befunde teilen die umgewandelten Materialkonturen. Die GEOS-Öffnung bleibt unverändert. Cache-Version 38 verhindert alte Stützkennzahlen in gespeicherten Ausrichtungen. Vier analytische Sollfälle bestanden vor und nach der Umstellung: volle Säule 350 mm³, andere erste Höhe 290 mm³, Teilauflage 250 mm³, Loch 262,5 mm³. Abbruch und geteilte Konturen sind zusätzlich abgesichert. Der neue Weg steht in test_platform_identity: Stützvolumen, einzelne Säule und Standorturteil unter gezieltem Zahlenrauschen sowie mit einem anderen OpenBLAS-Kern (Nehalem). Vollständiger betroffener Lauf einschließlich dieser Datei, Slice-Fällen und Unterlagenwächtern: 886 bestanden, 3 übersprungen, 13 Releasefälle abgewählt in 115,64 s, Exit 0; Ruff, Format und gezielte Typprüfung grün. Reale Stützvolumina vor/nach RM-486: Aushöhlbeispiel maximal 1,665e-10, CC2-Box 6,02e-10, Screen-Cover 7,37e-11 relative Abweichung; alle unter 1e-9. Standort- und Kanalurteile bleiben erhalten. Gemessen auf i9-13900K, Affinität F0FF, OPENBLAS_NUM_THREADS=1, Alt/Neu abwechselnd und fremde Python-Prozesse protokolliert: vollständiges slice_body(detail="support") am Aushöhlbeispiel mit frischem Netz 0,328–0,354 s statt 0,438–0,466 s, wiederholt 0,316–0,360 s statt 0,429–0,477 s. In sechs zusätzlichen frischen Python-Prozessen, jeweils erste Analyse nach regulärem Projektladen, neu 0,29645/0,29768/0,29989 s, alt 0,39386/0,38721/0,39503 s. Das Projektladen kann native Kerne bereits benutzen; dies ist kein Nachweis eines völlig kalten nativen Kerns. CC2-Box neu 0,186–0,243 s statt 0,126–0,138 s, Screen-Cover neu 0,039–0,057 s statt 0,033–0,050 s; beide bleiben unter 0,2 s Mehrzeit. Die frühere 40-s-Messung gehört zum Stand vor RM-485; sie wird nicht als unmittelbare Vorhermessung dieser Umstellung ausgegeben. Gemeinsames Entwicklungstor: 20659 passed, 34 skipped in 611.69s (0:10:11); Ruff, Format, mypy und Suite jeweils Exit 0. Der aktuelle gemeinsame Slicerstand cafd47ccc ist per Merge enthalten. Sechs Kundenpunkte für 0.5.2. Messungen, Lastprotokolle, analytische Vorher-/Nachherläufe und Plattformnachweis: F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003\rm486-patch; Entwicklungstor unter rm486-gate-1.
+
+## RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)
+
+<a id="rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026"></a>
+<a id="rm-252"></a>
+
+**RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt.**
+  Begonnen am 26.09.2026 auf Roberts Frage, ob Vorschläge und Übergabe an
+  alle unterstützten Slicer bei jedem Modell klappen. Das Werkzeug liegt in
+  `.claude/.state/uebergabe-korpus-2026-09-26/`: `alle.py` fährt 28 Modelle,
+  je Modell ein Prozess; `lauf.py` geht den Weg von Import, Druckdialog und
+  Übergabe an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (Bambu A1),
+  PrusaSlicer (MK4S) und CuraEngine (Ender 3 V3), je mit Standard,
+  übernommenen Vorschlägen und ohne Kanalsperre; `auswertung.py` fasst
+  zusammen. Auf Roberts Wort nach vier Modellen und 44 Läufen angehalten.
+  - **CuraEngine am Eiffelturm:** „Der Slicer hat mehr Ausgabe erzeugt, als
+    gesammelt wird" — mit Standard und mit Vorschlägen keine Druckdatei.
+  - **pista+biglie.3mf:** Alle vier Slicer sehen Teile neben dem Bett;
+    ElegooSlicer und OrcaSlicer ordnen selbst an, PrusaSlicer lehnt ab
+    („außerhalb seines Bauraums"). Zu klären, ob der Lauf oder die Übergabe
+    die Belegung verliert.
+  - Die Orca-Zeilen der Schüssel liefen noch mit einem Leser ohne Bambus
+    `; FEATURE:` — neu fahren, bevor die −15,7 % Modellbahn mit Sperre
+    etwas heißen.
+  - Sonst ließ die Kanalsperre die Modellbahn an Schüssel, Murmelbahn,
+    Okarina und Eiffelturm in ElegooSlicer, OrcaSlicer und PrusaSlicer
+    unverändert (±0,00 %) und nahm die Stütze im Kanal weg.
+  - Die Cura-Lüfterwarnung stand an jedem Lauf; seit dem 26.09.2026 misst
+    die Übergabe den Lüfterstart in der Druckdatei und meldet nur, was dort
+    steht.
+
+  Nächster Schritt: die zwei Befunde beheben, dann alle 28 Modelle.
+
+  **Durchsicht v0.5.1 (26.09.2026, druck):** CuraEngine läuft ohne `-v` (am Eiffelturm
+  12,3 MB → 50 kB Ausgabe, Druckdatei entsteht; `e401ce900`), und eine 3MF mit mehreren
+  Platten kommt auf ihre Platten (`a32a54ba2`). Korpusrest nachgefahren: 225 Läufe, 204
+  mit Druckdatei, 17 zu Recht abgelehnt. Vier Abstürze von ElegooSlicer/OrcaSlicer am
+  zweifarbigen Besteckeinsatz galten als Fehler des Slicers; die Bisektion
+  (`konzepte/nachweise-release-0.5.1/sonden/druck/besteck_bisekt.out`) ging aber von Solidons
+  Übergabedatei aus und setzte nur Plattenwerte zurück. **Nachgestellt am 28.09.2026:**
+  Das Originalprojekt schneidet in ElegooSlicer 1.5.3.4 auch mit `enable_support = 1`
+  und `support_type = normal(auto)` (Rückgabe 0, G-Code;
+  `konzepte/nachweise-release-0.5.1/review/rm252-meldung-2026-09-28/`), und mit dem rohen Netz der Datei läuft
+  Solidons Übergabe mit Gitterstützen durch (`besteck_absturz3.out`: 908 min, 670 m
+  Stütze); abgestürzt ist nur Solidons aufbereitetes Netz mit Gitterstützen
+  (`besteck_absturz2.out`). OrcaSlicer 2.4.2 liest das Elegoo-Projekt nicht
+  (`CLI::run found error`) und taugt dort nicht als Gegenprobe. Offen: was an Solidons
+  Netz (gleiche Dreieckzahl, dicht, fünf Schalen) den Slicer abstürzen lässt — ein
+  Fehler Solidons, oder einer des Slicers, den Solidon auslöst. Erst danach eine Meldung
+  beim Hersteller. Die Frage, ob der Stützvorschlag bei mehrfarbigen Teilen auf
+  Baumstützen ausweicht, ist seit Entscheidung J entschärft: Vorgeschlagen wird die
+  Stützart des Slicers.
+  Registerabgleich 02.10. (Stand `3fd3b1ace`): „Nächster Schritt: die zwei Befunde beheben“ ist überholt, beide sind behoben.
+
+**Abschluss:** Der Import erhält alle 59.744 Dreiecke und fünf geschlossenen Schalen. Erst die 3MF-Ausgabe rundete 80.832 Koordinaten auf sechs Nachkommastellen; genau diese Rundung löst mit Farben und Gitterstützen den Absturz aus. `_write_geometry` erhält nun die float64-Werte von Körpern und Stützsperren mit 17 signifikanten Stellen. Acht bleibende Fälle für Einzelkörper und alle drei Projektfamilien waren vorher rot und danach grün. Reale Gegenprobe: ElegooSlicer 1.5.3.5 und OrcaSlicer 2.4.2 brechen mit alter Rundung bei `0xC0000409` ab; nach dem Fix liefern beide 800 Schichten und beide Werkzeuge. Elegoo: 472,32 g, 45.066,92 mm³ Stütze; Orca: 403,15 g, 48.167,38 mm³ Stütze. Alle Beilagen, Dreiecke, Farben und die Build-Matrix bleiben beim isolierten Vergleich bytegleich. Die frühere Rohnetzprobe verlor zugleich die Farben und war deshalb kein Beleg gegen die Netzaufbereitung. Das Originalprojekt läuft weiterhin durch. Anordnungs-/Mehrfarbenbefunde bleiben bei der parallel laufenden Übergabereihe und werden nicht unterdrückt. Ursache `c4b890e2c` ist in v0.5.1 enthalten; Kundenpunkt in allen sechs Dateien unter 0.5.2. Umsetzung im zugehörigen RM-252-Abschlusscommit, genaue Commit- und Torbelege im Bericht B. [Messung und Grenzen](konzepte/nachweise-release-0.5.1/reports/rm252-koordinaten-2026-10-03.md).
