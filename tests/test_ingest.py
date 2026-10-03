@@ -1180,8 +1180,10 @@ def test_an_assembly_as_further_model_moves_as_one(profile: Profile) -> None:
             threemf.AssemblyPart(mesh=MeshData.of(rechts), name="Rechts"),
         ]
     )
-    cube = (MESHES / "cube_clean.stl").read_bytes()
-    project, _history = _imported_in_turn(profile, ("wuerfel.stl", cube), ("gruppe.3mf", group))
+    # Derselbe neutrale 3MF-Slot in beiden Dateien: Der STL-Würfel ohne
+    # Spulennamen gehört sonst nach dem Anordnungsvertrag in eine andere Gruppe.
+    cube = threemf.write_assembly([threemf.AssemblyPart(mesh=mesh_of("cube_clean.stl"))])
+    project, _history = _imported_in_turn(profile, ("wuerfel.3mf", cube), ("gruppe.3mf", group))
 
     result = _scene(project, profile)
     first, left, right = (result.scene.objects[key] for key in ("obj_1", "obj_2", "obj_3"))
@@ -1224,6 +1226,191 @@ def test_an_older_further_load_keeps_the_place_of_its_file(profile: Profile) -> 
     assert second.plate == 0
     assert tuple(second.mesh.bounds.minimum) == pytest.approx((-10.0, -10.0, -10.0))
     assert "arrange.free_spot" not in {entry.code for entry in result.scene.report.findings}
+
+
+@pytest.mark.parametrize(
+    ("filament", "nozzles", "expected_plate"),
+    [(None, 1, 1), ("Fremd", 1, 1), ("Rot", 1, 1), ("Fremd", 2, 1), ("Fremd", 3, 0)],
+)
+def test_a_further_colour_file_respects_the_filament_and_nozzles(
+    profile: Profile, filament: str | None, nozzles: int, expected_plate: int
+) -> None:
+    """RM-304: Rot und Schwarz brauchen neben der alten Spule drei Düsen."""
+    import dataclasses
+
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, nozzles=nozzles)
+    )
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project, history = _imported_in_turn(profile, ("erstes.stl", cube))
+    if filament is not None:
+        history.apply(
+            _("Filament"),
+            [
+                OperationDraft(
+                    op="assign_slot", inputs=("obj_1",), params={"slot": 0, "name": filament}
+                )
+            ],
+        )
+    payload = (MESHES / "colored.3mf").read_bytes()
+    project.document.sources["src_2"] = Source(
+        id="src_2", kind="import", path="sources/colored.3mf", sha256=""
+    )
+    project.sources["src_2"] = payload
+    plan = import_plan("src_2", "colored.3mf", payload, first_model=False)
+    history.apply(plan.title, [plan.draft])
+    result = _scene(project, profile)
+    added = result.scene.objects["obj_2"]
+    assert [str(slot.name) for slot in added.material_slots] == ["Rot", "Schwarz"]
+    assert added.plate == expected_plate
+    assert result.scene.objects["obj_1"].plate == 0
+    assert history.record_answers(result.answers)
+    assert history.undo()
+    assert set(_scene(project, profile).scene.objects) == {"obj_1"}
+    assert history.redo()
+    restored = _scene(project, profile).scene.objects["obj_2"]
+    assert restored.plate == added.plate
+    assert tuple(restored.mesh.bounds.minimum) == pytest.approx(tuple(added.mesh.bounds.minimum))
+
+
+@pytest.mark.parametrize(
+    ("standing_names", "standing_used", "incoming_names", "incoming_used", "nozzles", "plate"),
+    [
+        (("A", "B"), (0, 1), ("A", "C"), (0, 1), 1, 1),
+        (("A", "B"), (0, 1), ("A", "C"), (0, 1), 2, 1),
+        (("A", "B"), (0, 1), ("A", "C"), (0, 1), 3, 0),
+        (("A", "B"), (0, 1), ("A", "B"), (0, 1), 1, 0),
+        (("Alt", "A"), (1, 1), ("A",), (0, 0), 1, 0),
+        (("A", "Alt"), (0, 0), ("A",), (0, 0), 1, 0),
+        (("A",), (0, 0), ("Alt", "A"), (1, 1), 1, 0),
+    ],
+)
+def test_multicolour_files_share_only_their_used_filaments(
+    profile: Profile,
+    standing_names: tuple[str, ...],
+    standing_used: tuple[int, int],
+    incoming_names: tuple[str, ...],
+    incoming_used: tuple[int, int],
+    nozzles: int,
+    plate: int,
+) -> None:
+    """Zwei echte 3MF-Dateien mit je einem bemalten Körper, auch mit Altspulen."""
+    from dataclasses import replace
+
+    from app.core.geom.attributes import used_slots
+    from app.core.types import MaterialSlot
+
+    def payload(names: tuple[str, ...], used: tuple[int, int]) -> bytes:
+        mesh = MeshData(
+            raw=trimesh.creation.box((10, 10, 10)), slots=(used[0],) * 6 + (used[1],) * 6
+        )
+        return threemf_writer.write_assembly(
+            [
+                threemf_writer.AssemblyPart(
+                    mesh=mesh,
+                    slots=tuple(MaterialSlot(index=n, name=name) for n, name in enumerate(names)),
+                )
+            ]
+        )
+
+    profile = replace(profile, printer=replace(profile.printer, nozzles=nozzles))
+    project, history = _imported_in_turn(
+        profile,
+        ("vorhanden.3mf", payload(standing_names, standing_used)),
+        ("hinzu.3mf", payload(incoming_names, incoming_used)),
+    )
+    result = _scene(project, profile)
+    added = result.scene.objects["obj_2"]
+    assert added.plate == plate
+    assert len(used_slots(added.mesh)) == len(set(incoming_used))
+    assert added.mesh.triangle_count == 12
+    assert added.mesh.volume == pytest.approx(1000.0)
+    assert history.record_answers(result.answers)
+    changed = replace(profile, printer=replace(profile.printer, nozzles=8))
+    repeated = _scene(project, changed).scene.objects["obj_2"]
+    assert repeated.plate == plate
+    assert repeated.mesh.bounds == added.mesh.bounds
+    assert history.undo()
+    assert set(_scene(project, changed).scene.objects) == {"obj_1"}
+    assert history.redo()
+    assert _scene(project, changed).scene.objects["obj_2"].mesh.bounds == added.mesh.bounds
+
+
+@pytest.mark.parametrize("whole_file", [False, True])
+def test_a_further_step_file_uses_the_same_filament_separation(
+    profile: Profile, whole_file: bool
+) -> None:
+    """Der normale STEP-Eingang und sein Ganzdateiweg bleiben exakt und trennen mit."""
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    payload = (MESHES.parent / "step" / "multibody.step").read_bytes()
+    project, history = _imported_in_turn(profile, ("erster.stl", cube))
+    history.apply(
+        _("Filament"),
+        [OperationDraft(op="assign_slot", inputs=("obj_1",), params={"slot": 0, "name": "Fremd"})],
+    )
+    project.document.sources["src_2"] = Source(
+        id="src_2", kind="import", path="sources/gruppe.step", sha256=""
+    )
+    project.sources["src_2"] = payload
+    plan = import_plan("src_2", "gruppe.step", payload, first_model=False)
+    if whole_file:
+        plan.draft.params["bodies"] = '["*"]'
+    history.apply(plan.title, [plan.draft])
+    result = _scene(project, profile)
+    added = [entry for key, entry in result.scene.objects.items() if key != "obj_1"]
+    assert added and all(entry.kind == "brep" and entry.plate == 1 for entry in added)
+    assert min(entry.mesh.bounds.minimum[2] for entry in added) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("extension", ["3mf", "step"])
+def test_free_import_cache_follows_filaments_and_nozzles_until_the_spot_is_saved(
+    profile: Profile, extension: str
+) -> None:
+    """Die Hardware bleibt auch bei reads_process=False im Schlüssel; eine Antwort bleibt liegen."""
+    import dataclasses
+
+    from app.core.scene.cache import ResultCache
+
+    if extension == "step":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+    source = (
+        MESHES / "colored.3mf" if extension == "3mf" else MESHES.parent / "step" / "multibody.step"
+    )
+    project, history = _imported_in_turn(
+        profile, ("erster.stl", (MESHES / "cube_clean.stl").read_bytes())
+    )
+    history.apply(
+        _("Filament"),
+        [OperationDraft(op="assign_slot", inputs=("obj_1",), params={"slot": 0, "name": "Fremd"})],
+    )
+    assignment = project.document.ops[-1].id
+    payload = source.read_bytes()
+    project.document.sources["src_2"] = Source(
+        id="src_2", kind="import", path=f"sources/{source.name}", sha256=""
+    )
+    project.sources["src_2"] = payload
+    plan = import_plan("src_2", source.name, payload, first_model=False)
+    history.apply(plan.title, [plan.draft])
+    cache = ResultCache()
+    first = _scene(project, profile, cache=cache)
+    assert first.scene.objects["obj_2"].plate == 1
+    enough = dataclasses.replace(profile, printer=dataclasses.replace(profile.printer, nozzles=16))
+    assert _scene(project, enough, cache=cache).scene.objects["obj_2"].plate == 0
+    if extension == "3mf":
+        history.change_params(assignment, {"name": "Rot"})
+        # Der Name allein macht die graue Spule nicht zum roten und schwarzen Import.
+        assert _scene(project, profile, cache=cache).scene.objects["obj_2"].plate == 1
+    assert history.record_answers(first.answers)
+    kept = _scene(project, enough, cache=cache).scene.objects["obj_2"]
+    assert kept.plate == 1
+    assert tuple(kept.mesh.bounds.minimum) == pytest.approx(
+        tuple(first.scene.objects["obj_2"].mesh.bounds.minimum)
+    )
 
 
 def test_the_free_place_is_found_once_and_then_kept(profile: Profile) -> None:

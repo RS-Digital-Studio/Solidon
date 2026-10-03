@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- I modelli aggiunti con filamenti diversi vengono collocati su piatti separati se la stampante non ha abbastanza ugelli.
 - Cura usa i limiti di jerk del profilo, con valori distinti per pareti, riempimento e primo strato.
 - Se in Cura è attiva un’altra stampante, il trasferimento indica entrambe e mostra dove adottare la scelta di Cura.
 - Risolto un arresto anomalo di ElegooSlicer e OrcaSlicer durante lo slicing di modelli multicolore con supporti a griglia.

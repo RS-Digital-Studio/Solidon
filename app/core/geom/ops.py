@@ -595,7 +595,7 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="3",
+    cache_version="4",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,
@@ -640,6 +640,7 @@ def fit_to_size(ctx: OpContext) -> OpResult:
             ctx.scene,
             spot=(params.spot_x, params.spot_y, params.spot_plate),
             ignore={source.id},
+            objects=[fitted],
         )
         matrix = composed(translation(spot.offset), matrix)
         fitted = dataclasses.replace(

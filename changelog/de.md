@@ -53,6 +53,7 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- Weitere Modelle kommen bei unterschiedlichen Filamenten auf getrennte Druckplatten, wenn der Drucker nicht genügend Düsen hat.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.
 - Ist in Cura ein anderer Drucker aktiv, nennt die Übergabe beide Drucker und zeigt, wo Sie Curas Auswahl übernehmen können.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.

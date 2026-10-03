@@ -75,7 +75,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
-| [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
@@ -2471,17 +2470,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Millionen Dreiecken. (b) In `.claude/rules/operationen.md` fehlt seit dem Merge der Satz,
   dass ein einzelner Körper seine Matrix meldet; beim nächsten Verdichten gehört er zurück.
   Abnahme: ein Beleg je Körper und Auswertung, der Satz steht wieder.
-
-<a id="rm-304"></a>
-
-- [ ] **RM-304 — Freie Stelle nach Filament trennen.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F11;
-  Text der Gesamtprüfung). *Auf dem Bett anordnen* trennt nach Filament,
-  wo mehr Filamente als Düsen liegen (`prepare_ops._filament_groups`); `first_free_spot`
-  kennt keine Filamente, deshalb kann eine mehrfarbige 3MF auf eine Platte mit fremdem
-  Filament kommen. Weg: `first_free_spot` bekommt die Gruppen, oder §17.1 nennt die
-  Ausnahme. Abnahme: eine mehrfarbige 3MF als weiteres Modell landet nicht bei fremdem
-  Filament, oder der Bauplan sagt es.
 
 <a id="rm-305"></a>
 

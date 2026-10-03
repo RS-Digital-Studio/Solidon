@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-304: Weitere Modelle beachten die Filamente der belegten Druckplatten (03.10.2026)](#rm-304-weitere-modelle-beachten-die-filamente-der-belegten-druckplatten-03102026) |
 | 2026-10-03 | [RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)](#rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026) |
 | 2026-10-03 | [RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)](#rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026) |
 | 2026-10-03 | [RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)](#rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026) |
@@ -38790,3 +38791,24 @@ Releaseprüfung abgewählt, Exit 0**, 30,98 s. Der Abschlussnachweis aus
 Roadmap-, Karten- und Changelogprüfungen besteht mit 77 Prüfungen und vier
 übersprungenen Plattformfällen. Protokolle: `solidon-A-batch1-kernel-repeat.txt`
 und `solidon-A-batch1-final-docs.txt` unter `%TEMP%`.
+
+## RM-304: Weitere Modelle beachten die Filamente der belegten Druckplatten (03.10.2026)
+
+<a id="rm-304-weitere-modelle-beachten-die-filamente-der-belegten-druckplatten-03102026"></a>
+<a id="rm-304"></a>
+
+**RM-304 — Freie Stelle nach Filament trennen.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F11;
+  Text der Gesamtprüfung). *Auf dem Bett anordnen* trennt nach Filament,
+  wo mehr Filamente als Düsen liegen (`prepare_ops._filament_groups`); `first_free_spot`
+  kennt keine Filamente, deshalb kann eine mehrfarbige 3MF auf eine Platte mit fremdem
+  Filament kommen. Weg: `first_free_spot` bekommt die Gruppen, oder §17.1 nennt die
+  Ausnahme. Abnahme: eine mehrfarbige 3MF als weiteres Modell landet nicht bei fremdem
+  Filament, oder der Bauplan sagt es.
+
+**Abschluss:** Die Freiplatzsuche kannte nur Grenzquader. Import, STEP und Auf Maß bringen reichen ihre vollständigen neuen Objekte an die Platzierung weiter. Sie zählt alle tatsächlich benutzten Filamentidentitäten der neuen Objekte und jeder Kandidatenplatte gegen die verfügbaren Düsen; unbenutzte alte Deklarationen zählen nicht. Bei zu wenigen Düsen muss der vollständige Filamentsatz passen, auch bei mehreren Farben innerhalb eines einzelnen Körpers. Genügend Düsen erlauben die gemeinsame Platte. Die echte Scraper-3MF mit Magneten und drei Farben landet nach einem Würfel mit Foreign PETG gemeinsam auf Platte 2 statt Platte 1: 52.224 + 1.576 Dreiecke, drei Farben und relative Lage bleiben erhalten, beide Teile verschieben sich um (0; −36,5; 0) mm, der Würfel bleibt exakt stehen. Gespeicherte Antworten behalten ihren Ort; ohne Antwort berücksichtigen echte Cacheläufe geänderte Filamente und Düsen. Mit RM-305 zusammen 23 gezielte Fälle grün, vier Filament-Gegenproben ohne Anschluss rot, einschließlich STEP-Baugruppe, Ganzdatei und Maßänderung. Cacheversionen dieser Einheit: load 5, load_step 2, fit_to_size 4. Ursprung `eea4565ea` liegt in v0.5.1; je Sprache ein Kundenpunkt. Der normale Datei-/Ablageweg ist bis import_plan angeschlossen, ohne Befehlspalette; Fensterprüfungen bleiben dem Release vorbehalten. Belege: `F:\solidon-review-reports\B-slicer-rest\rm304-305\bericht.md`, `real-before.json`, `real-after.json`, `counterprobe.json`; Abschlusscommits und zentrales Tor im Bericht B.
+
+**Folgenprüfung:** Drei zusätzliche rote Fälle widerlegten die anfängliche Einordnung über die erste Spule: A/B neben A/C bei einer oder zwei Düsen sowie eine unbenutzte erste Altspule. Die gemeinsame Exportidentität und tatsächliche Flächennutzung lösen diese Fälle ohne Änderungen an gespeicherten Anordnungen. Elf neue Repository-Gegenfälle waren vor dem Folgefix rot; 39 gezielte Import-/Platz-/Cache-/Undo-Fälle und 425 Sprach-/Paketgrenzenfälle sind danach grün. Die vier externen Kontrollfälle bestehen, einschließlich gemeinsamer Platte bei drei Düsen. Der echte Scraper-Import wurde mit weiterhin 52.224/1.576 Dreiecken auf Platte 2 wiederholt. Belege: `F:\solidon-review-reports\B-slicer-rest\rm304-305\multicolour-abschluss.md`.
+
+Auch die vorläufige Platzfrage einer STEP-Baugruppe trägt jetzt alle Flächenfarben des endgültigen Körpers. Die echten Dateien `nested.step` und `instances.step` benötigen gemeinsam fünf Spulen: Bei einer oder vier Düsen kommt die zweite Baugruppe auf Platte 2, bei fünf auf Platte 1. Alle drei Varianten waren vorher rot; Lagebeziehungen, Abstände und exakte Körper bleiben erhalten. Die 60 STEP-Fälle sowie sieben STEP-/Cache-Anschlussfälle bestehen. Der zwischenzeitliche breite Lauf mit 54 bestandenen und einem fehlgeschlagenen Fall bleibt als roter Nachweis erhalten.
+

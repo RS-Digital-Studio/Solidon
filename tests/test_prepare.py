@@ -1759,6 +1759,209 @@ def test_arranging_by_material_keeps_the_filaments_apart(
     assert platten["obj_2"] != platten["obj_1"], "anderes Filament, andere Platte"
 
 
+@pytest.mark.parametrize(
+    ("existing", "incoming", "nozzles", "expected"),
+    [
+        (None, None, 1, 0),
+        ("petg", "petg", 1, 0),
+        ("petg", "tpu-95a", 1, 1),
+        ("petg", "tpu-95a", 2, 0),
+    ],
+)
+def test_free_placement_uses_the_existing_material_identity(
+    profile: Profile, existing: str | None, incoming: str | None, nozzles: int, expected: int
+) -> None:
+    """Unbenannte Spulen folgen derselben Materialidentität wie die Anordnung."""
+    from app.core.geom.prepare import placed_at_free_spot
+
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, nozzles=nozzles)
+    )
+    mesh = MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
+    first = SceneObject(id="old", name="Alt", mesh=mesh, material=existing)
+    added = SceneObject(id="", name="Neu", mesh=mesh, material=incoming)
+    placed = placed_at_free_spot(
+        mesh.bounds,
+        profile,
+        Scene(objects={first.id: first}),
+        spot=(None, None, 1),
+        objects=[added],
+    )
+    assert placed.plate == expected
+
+
+def test_fitting_a_model_to_size_separates_foreign_filaments(
+    document: Document, profile: Profile
+) -> None:
+    """Weg 3 legt am fertigen Maß mit derselben Filamenttrennung wie der Import."""
+    project, history = loaded(document, count=2)
+    for body_id, name in (("obj_1", "Alt"), ("obj_2", "Neu")):
+        history.apply(
+            _("Filament"),
+            [OperationDraft(op="assign_slot", inputs=(body_id,), params={"slot": 0, "name": name})],
+        )
+    history.apply(
+        _("Auf Maß bringen"),
+        [
+            OperationDraft(
+                op="fit_to_size", inputs=("obj_2",), params={"largest": 20.0, "free_spot": True}
+            )
+        ],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert result.scene.objects["obj_1"].plate == 0
+    assert result.scene.objects["obj_2"].plate == 1
+    assert max(result.scene.objects["obj_2"].mesh.bounds.size) == pytest.approx(20.0)
+
+
+@pytest.mark.parametrize(
+    ("existing", "nozzles", "expected"),
+    [("Rot", 1, 1), ("Rot", 2, 0), ("Fremd", 1, 1), ("Fremd", 2, 1), ("Fremd", 3, 0)],
+)
+def test_an_import_group_keeps_its_filaments_and_avoids_a_mixed_foreign_plate(
+    profile: Profile, existing: str, nozzles: int, expected: int
+) -> None:
+    """Mehrere neue Ausgaben haben noch dieselbe leere Kennung; jede zählt mit."""
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.types import MaterialSlot
+
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, nozzles=nozzles)
+    )
+    mesh = MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
+    standing = [
+        SceneObject(id=name, name=name, mesh=mesh, material_slots=(MaterialSlot(0, name),))
+        for name in dict.fromkeys(("Rot", existing))
+    ]
+    incoming = [
+        SceneObject(id="", name=name, mesh=mesh, material_slots=(MaterialSlot(0, name),))
+        for name in ("Rot", "Blau")
+    ]
+    placed = placed_at_free_spot(
+        mesh.bounds,
+        profile,
+        Scene(objects={entry.id: entry for entry in standing}),
+        spot=(None, None, 1),
+        objects=incoming,
+    )
+    assert placed.plate == expected
+
+
+@pytest.mark.parametrize("difference", ["colour", "material", "material_type"])
+def test_free_placement_uses_the_complete_spool_identity(profile: Profile, difference: str) -> None:
+    """Gleicher Name genügt weder bei anderer Farbe noch bei anderem Herstellerprofil."""
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.types import MaterialSlot
+
+    first_slot = MaterialSlot(0, "A", colour=(0.0, 0.0, 0.0), material="PLA", material_type="PLA")
+    changed = {"colour": (1.0, 0.0, 0.0), "material": "Other PLA", "material_type": "PETG"}
+    second_slot = dataclasses.replace(first_slot, **{difference: changed[difference]})
+    mesh = MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
+    first = SceneObject(id="old", name="Alt", mesh=mesh, material_slots=(first_slot,))
+    added = SceneObject(id="", name="Neu", mesh=mesh, material_slots=(second_slot,))
+    placed = placed_at_free_spot(
+        mesh.bounds,
+        profile,
+        Scene(objects={first.id: first}),
+        spot=(None, None, 1),
+        objects=[added],
+    )
+    assert placed.plate == 1
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_free_placement_counts_neutral_missing_slots(profile: Profile, missing: bool) -> None:
+    """Farblos zählt eine Spule; eine bemalte Fläche ohne Eintrag bleibt eine weitere."""
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.types import MaterialSlot
+
+    raw = trimesh.creation.box((20.0, 20.0, 20.0))
+    mesh = MeshData(raw=raw, slots=(0,) * 6 + ((7,) * 6 if missing else (0,) * 6))
+    first = SceneObject(id="old", name="Alt", mesh=mesh, material_slots=())
+    added = SceneObject(
+        id="", name="Neu", mesh=MeshData.of(raw), material_slots=(MaterialSlot(0, ""),)
+    )
+    placed = placed_at_free_spot(
+        mesh.bounds,
+        profile,
+        Scene(objects={first.id: first}),
+        spot=(None, None, 1),
+        objects=[added],
+    )
+    assert placed.plate == (1 if missing else 0)
+
+
+def test_other_plates_do_not_spend_the_nozzles_of_the_candidate(profile: Profile) -> None:
+    """Die Düsen müssen die benutzten Spulen der gemeinsamen Platte aufnehmen."""
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.types import MaterialSlot
+
+    profile = dataclasses.replace(profile, printer=dataclasses.replace(profile.printer, nozzles=2))
+    mesh = MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
+    standing = [
+        SceneObject(id=name, name=name, mesh=mesh, plate=n, material_slots=(MaterialSlot(0, name),))
+        for n, name in enumerate(("A", "B", "C"))
+    ]
+    added = SceneObject(id="", name="D", mesh=mesh, material_slots=(MaterialSlot(0, "D"),))
+    placed = placed_at_free_spot(
+        mesh.bounds,
+        profile,
+        Scene(objects={entry.id: entry for entry in standing}),
+        spot=(None, None, 1),
+        objects=[added],
+    )
+    assert placed.plate == 0
+
+
+@pytest.mark.parametrize("old_first", [False, True])
+def test_free_placement_ignores_unused_declarations(profile: Profile, old_first: bool) -> None:
+    """Eine alte Spulenwahl ohne Dreiecke trennt zwei gleiche aktive Spulen nicht."""
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.types import MaterialSlot
+
+    mesh = MeshData(raw=trimesh.creation.box((20, 20, 20)), slots=(1,) * 12)
+    old = SceneObject(
+        id="old",
+        name="Alt",
+        mesh=mesh,
+        material_slots=(MaterialSlot(0, "Altspule"), MaterialSlot(1, "A")),
+    )
+    current = SceneObject(
+        id="current",
+        name="Aktuell",
+        mesh=MeshData.of(mesh.raw),
+        material_slots=(MaterialSlot(0, "A"),),
+    )
+    standing, added = (old, current) if old_first else (current, old)
+    placed = placed_at_free_spot(
+        mesh.bounds,
+        profile,
+        Scene(objects={standing.id: standing}),
+        spot=(None, None, 1),
+        objects=[added],
+    )
+    assert placed.plate == 0
+
+
+def test_arrangement_keeps_its_first_spool_contract(profile: Profile) -> None:
+    """Der Importfix ändert die Auswertung gespeicherter Anordnungsaufträge nicht."""
+    from app.core.geom.prepare import filament_groups
+    from app.core.types import MaterialSlot
+
+    mesh = MeshData(raw=trimesh.creation.box((20, 20, 20)), slots=(0,) * 6 + (1,) * 6)
+    entries = [
+        SceneObject(
+            id=name,
+            name=name,
+            mesh=mesh,
+            material_slots=(MaterialSlot(0, "A"), MaterialSlot(1, name)),
+        )
+        for name in ("B", "C")
+    ]
+    assert filament_groups(profile, entries) is None
+
+
 def test_arranging_by_material_respects_the_plate_limit(
     document: Document, profile: Profile
 ) -> None:

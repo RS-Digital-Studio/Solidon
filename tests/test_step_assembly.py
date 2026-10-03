@@ -565,13 +565,33 @@ def test_the_first_model_goes_onto_the_bed_as_one_group(profile: Profile) -> Non
     assert "load.assembly_on_bed" in codes_of(project, profile)
 
 
-def test_a_further_step_file_comes_to_a_free_place_as_one_group(profile: Profile) -> None:
+@pytest.mark.parametrize(("nozzles", "expected_plate"), [(1, 1), (4, 1), (5, 0)])
+def test_a_further_step_file_comes_to_a_free_place_as_one_group(
+    profile: Profile, nozzles: int, expected_plate: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Eine STEP-Baugruppe als weiteres Modell (Robert, 28.09.2026): alle
     Körper auf einmal an die erste freie Stelle der ersten Platte, aufgesetzt,
     ohne Überschneidung mit dem ersten Modell — und die Lage zueinander bleibt.
-    Der Körper bleibt exakt."""
+    Der Körper bleibt exakt. Beide Dateien zusammen benutzen fünf Spulen."""
+    from dataclasses import replace
+
     from app.core.build_area import fits_on_bed
+    from app.core.geom.attributes import used_slots
+    from app.core.geom.mesh import as_mesh_data
     from app.core.geom.prepare import ARRANGE_SPACING
+    from app.core.ingest import step_ops
+
+    profile = replace(profile, printer=replace(profile.printer, nozzles=nozzles))
+    predicted: list[tuple[str, tuple[int, ...]]] = []
+    original = step_ops._bed_offset
+
+    def observe(*args: Any, **kwargs: Any) -> Any:
+        predicted[:] = [
+            (str(entry.name), used_slots(as_mesh_data(entry.mesh))) for entry in kwargs["objects"]
+        ]
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(step_ops, "_bed_offset", observe)
 
     project, history = imported("nested", first_model=True)
     first = scene_of(project, profile)
@@ -587,7 +607,10 @@ def test_a_further_step_file_comes_to_a_free_place_as_one_group(profile: Profile
     objects = scene_of(project, profile)
     added = [entry for key, entry in objects.items() if key not in first]
     assert len(added) == 4
-    assert all(entry.kind == "brep" and entry.plate == 0 for entry in added)
+    assert all(entry.kind == "brep" and entry.plate == expected_plate for entry in added)
+    assert predicted == [
+        (str(entry.name), used_slots(as_mesh_data(entry.mesh))) for entry in added
+    ], "Platzfrage und Ausgabe lesen dieselben Flächenfarben, einschließlich der gelben Oberseite"
     for key, entry in first.items():
         assert_bounds(bounds_of(objects[key].mesh.shape), bounds_of(entry.mesh.shape))
     boxes = [bounds_of(entry.mesh.shape) for entry in added]
@@ -595,6 +618,8 @@ def test_a_further_step_file_comes_to_a_free_place_as_one_group(profile: Profile
     for entry in added:
         assert fits_on_bed(entry.mesh, profile.printer), entry.name
         for other in first.values():
+            if other.plate != entry.plate:
+                continue
             a, b = bounds_of(entry.mesh.shape), bounds_of(other.mesh.shape)
             assert (
                 a[3] + ARRANGE_SPACING <= b[0] + BOUNDS

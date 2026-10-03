@@ -214,7 +214,7 @@ class LoadParams(BaseParams):
     # 4: Das Schließen in Schritt 4b füllt Löcher in ihrer Form, Außen gilt
     # je Schale (Durchsicht der Reparatur, 24.09.2026) — dieselbe Datei
     # ergibt ein anderes Netz als unter 3.
-    cache_version="4",
+    cache_version="5",
     # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
     # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
     title=_("Modell einfügen"),
@@ -634,6 +634,7 @@ def _to_a_free_spot(
         ctx.scene,
         spot=(params.spot_x, params.spot_y, params.spot_plate),
         keep_layout=several_plates,
+        objects=outputs,
     )
     return _placed(outputs, findings, answered, placed, keep_layout=several_plates)
 

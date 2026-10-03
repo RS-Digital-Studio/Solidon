@@ -111,6 +111,7 @@ class LoadStepParams(BaseParams):
 
 @register_op(
     name="load_step",
+    cache_version="2",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
     title=_("STEP laden"),
@@ -226,7 +227,11 @@ def _whole_file(ctx: OpContext, params: LoadStepParams, payload: bytes, stem: st
     solid = step.read(payload)
     findings = [_loaded(solid.face_count, solid.edge_count), _metadata_lost(), *_not_closed(solid)]
     offset, placing, plate, answered = _bed_offset(
-        ctx, step.shape_bounds(solid.shape), params, several=False
+        ctx,
+        step.shape_bounds(solid.shape),
+        params,
+        several=False,
+        objects=[SceneObject(id="", name=stem, mesh=solid, kind="brep")],
     )
     if offset is not None:
         solid = Solid(solid.shape.Moved(TopLoc_Location(offset)))
@@ -274,14 +279,26 @@ def _assembly(
         )
     chosen = [by_key[key] for key in keys]
     findings: list[Finding] = []
+    # Eine einzige CAD-Anzeigefarbe ist wie beim Netz kein gewähltes Filament.
+    colourful = len(assembly.colours) >= 2
+    filaments = [_filaments(body, colourful) for body in chosen]
     offset, placing, plate, answered = _bed_offset(
-        ctx, _group_bounds(chosen), params, several=len(chosen) > 1
+        ctx,
+        _group_bounds(chosen),
+        params,
+        several=len(chosen) > 1,
+        objects=[
+            SceneObject(
+                id="",
+                name=body.name,
+                mesh=Solid(body.shape, face_slots=slots),
+                kind="brep",
+                material_slots=materials,
+            )
+            for body, (slots, materials, _dropped) in zip(chosen, filaments, strict=True)
+        ],
     )
     findings.extend(placing)
-    # Farben sind eine Aussage der Datei erst, wenn sie mehr als eine kennt —
-    # dieselbe Regel wie bei der 3MF (``threemf._groups_of``): Die eine Farbe,
-    # in der ein CAD-Programm alles zeigt, hat niemand als Filament gewählt.
-    colourful = len(assembly.colours) >= 2
     outputs: list[SceneObject] = []
     references: dict[tuple[str, bool], tuple[Any, Solid, dict[str, Feature]]] = {}
     carried = 0
@@ -289,7 +306,7 @@ def _assembly(
         ctx.cancelled.raise_if_cancelled()
         ctx.progress(0.3 + 0.7 * index / len(chosen), str(_("STEP laden")))
         shape = body.shape if offset is None else body.shape.Moved(TopLoc_Location(offset))
-        slots, materials, dropped = _filaments(body, colourful)
+        slots, materials, dropped = filaments[index]
         solid = Solid(shape, face_slots=slots)
         placement = _composed(offset, body.placement)
         reference = references.get((body.geometry, body.mirrored))
@@ -455,6 +472,7 @@ def _bed_offset(
     params: LoadStepParams,
     *,
     several: bool,
+    objects: list[SceneObject],
 ) -> tuple[Any, list[Finding], int, dict[str, Any]]:
     """Der gemeinsame Versatz aufs Bett, in seine Mitte oder an die erste
     freie Stelle — mit seinen Befunden, der Platte und der festzuhaltenden
@@ -475,6 +493,7 @@ def _bed_offset(
             ctx.profile,
             ctx.scene,
             spot=(params.spot_x, params.spot_y, params.spot_plate),
+            objects=objects,
         )
         offset, findings, plate, answered = (
             placed.offset,

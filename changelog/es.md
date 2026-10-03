@@ -29,6 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
+- Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas.
 - Cura usa los límites de cambio brusco de velocidad del perfil, con valores separados para paredes, relleno y primera capa.
 - Si Cura tiene otra impresora seleccionada, el envío indica ambas y muestra dónde adoptar la selección de Cura.
 - Corregido un cierre inesperado de ElegooSlicer y OrcaSlicer al laminar modelos multicolor con soportes de rejilla.

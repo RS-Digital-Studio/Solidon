@@ -68,6 +68,7 @@ from app.core.types import (
     Profile,
     Quality,
     Scene,
+    SceneObject,
     Severity,
     SolverInfo,
     Vec3,
@@ -2992,6 +2993,7 @@ def first_free_spot(
     *,
     spacing: float = ARRANGE_SPACING,
     plates: int = MAX_PLATES,
+    avoid: Collection[int] = (),
 ) -> tuple[Vec3, int, bool]:
     """Wohin ein weiteres Modell kommt, ohne dass etwas anderes sich bewegt (§17.1, §29).
 
@@ -3011,6 +3013,7 @@ def first_free_spot(
     jeder Achse, in der es auf die Fläche passt (:func:`_into_the_middle`).
     Passt es auf keine belegte Platte, kommt es auf die nächste; ist keine
     mehr erlaubt, liegt es neben der letzten, ohne Überschneidung.
+    ``avoid`` nennt Platten mit fremdem Filament.
 
     ``body`` sind die Grenzen des ganzen Modells: Eine Baugruppe wird als
     Ganzes gelegt, die Teile behalten ihre Lage zueinander. Gelegt wird ein
@@ -3040,6 +3043,9 @@ def first_free_spot(
     final = min(last + 1, max(plates, 1) - 1)
     plate = 0
     while True:
+        if plate in avoid and plate < final:
+            plate += 1
+            continue
         standing = [bounds for bounds, at in occupied if at == plate]
         if not standing:
             # Eine leere Platte nimmt es mittig, wie die Anordnung.
@@ -3275,6 +3281,53 @@ class FreeSpot:
     findings: list[Finding]
 
 
+def filament_groups(profile: Profile, objects: Sequence[SceneObject]) -> dict[str, int] | None:
+    """Die bestehenden Filamentgruppen der Anordnung, wenn Düsen fehlen (§29).
+
+    Ein Teil mit mehreren Filamenten bleibt zusammen; seine erste Spule
+    bestimmt die Gruppe. Identität und Reihenfolge kommen aus der Übergabe.
+    """
+    from app.core.export.writer import plates_by_material
+
+    groups = plates_by_material(list(objects))
+    if len(set(groups.values())) <= max(1, profile.printer.nozzles):
+        return None
+    return groups
+
+
+def _foreign_filament_plates(
+    profile: Profile, standing: Sequence[SceneObject], incoming: Sequence[SceneObject]
+) -> set[int]:
+    """Welche belegten Platten ein ungeteilter Import nicht dazunehmen kann."""
+    from app.core.export.threemf import (
+        AssemblyPart,
+        SlotKey,
+        assembly_slots,
+        slot_identity,
+        slots_for_object,
+    )
+    from app.core.geom.attributes import used_slots
+
+    def filaments(entry: SceneObject) -> set[SlotKey]:
+        mesh = as_mesh_data(entry.mesh)
+        active = set(used_slots(mesh))
+        part = AssemblyPart(mesh=mesh, slots=slots_for_object(entry))
+        return {slot_identity(slot) for slot in assembly_slots(part) if slot.index in active}
+
+    # Beim Import zählen alle tatsächlich benutzten Spulen, auch innerhalb
+    # eines Körpers. Alte Deklarationen ohne Flächen brauchen keine Düse.
+    # Die bestehende Anordnungsgruppierung bleibt für gespeicherte Schritte.
+    arriving = {key for entry in incoming for key in filaments(entry)}
+    on_plate: dict[int, set[SlotKey]] = {}
+    for entry in standing:
+        on_plate.setdefault(entry.plate, set()).update(filaments(entry))
+    return {
+        plate
+        for plate, present in on_plate.items()
+        if present != arriving and len(present | arriving) > max(1, profile.printer.nozzles)
+    }
+
+
 def placed_at_free_spot(
     group: BoundingBox,
     profile: Profile,
@@ -3283,6 +3336,7 @@ def placed_at_free_spot(
     spot: tuple[float | None, float | None, int],
     ignore: Collection[ObjectId] = (),
     keep_layout: bool = False,
+    objects: Sequence[SceneObject] = (),
 ) -> FreeSpot:
     """Die freie Stelle, **einmal gerechnet und dann festgehalten** (§17.1, §15.7).
 
@@ -3320,7 +3374,11 @@ def placed_at_free_spot(
                 )
             )
     else:
-        shift, plate, crowded = first_free_spot(group, profile, standing_in(scene, ignore))
+        standing = [entry for key, entry in scene.objects.items() if key not in ignore]
+        avoid = _foreign_filament_plates(profile, standing, objects) if objects else set()
+        shift, plate, crowded = first_free_spot(
+            group, profile, [(entry.mesh.bounds, entry.plate) for entry in standing], avoid=avoid
+        )
         target = (centre[0] + shift[0], centre[1] + shift[1])
         moved = plate > 0 or not (is_close(shift[0], 0.0) and is_close(shift[1], 0.0))
         if crowded:

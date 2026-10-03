@@ -325,6 +325,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `fit_to_size`, §17.1): einmal über `first_free_spot` — Grenzquader, je
   Platte die Stelle nächst der Mitte (`_nearest_the_middle`), leer oder voll
   über `arrange_on_bed` —, dann festgehalten (`spot_*` aus `spot_param`);
+  Beim Import zählen alle tatsächlich benutzten Spulen je Kandidatenplatte
+  gegen die Düsen; `slot_identity` aus der Übergabe bestimmt ihre Identität.
+  Unbenutzte Deklarationen zählen nicht, Baugruppen bleiben zusammen. Die
+  Gruppierung gespeicherter Anordnungen bleibt unverändert.
   `arrange.no_free_spot` ohne Platz, ohne Verschiebung kein Befund. Abstand
   `ARRANGE_SPACING`; Weg 3 legt am fertigen Maß, nach der Reparatur.
 

@@ -91,6 +91,7 @@ from app.core.geom.prepare import (
     countersink,
     drill,
     edge_findings,
+    filament_groups,
     is_round_length,
     mouth_over_the_edge,
     named_for,
@@ -18466,32 +18467,12 @@ def _share_of(progress: ProgressFn | None, number: int, total: int) -> ProgressF
 
 #: Derselbe Umschalter an beiden Anordnungen, mit demselben Satz — wer ihn an
 #: einer Stelle liest, soll ihn an der anderen wiedererkennen. Was er tut,
-#: entscheidet der Drucker mit (:func:`_filament_groups`).
+#: entscheidet der Drucker mit (:func:`filament_groups`).
 BY_MATERIAL_DOC = _(
     "Legt Teile aus verschiedenen Filamenten auf verschiedene Platten. "
     "Eine Düse spült bei jedem Wechsel; hat der Drucker genug Düsen für alle "
     "Filamente, bleibt alles zusammen."
 )
-
-
-def _filament_groups(ctx: OpContext, objects: Sequence[SceneObject]) -> dict[str, int] | None:
-    """Welches Teil zu welchem Filament gehört — oder ``None``, wenn der Drucker
-    die Trennung nicht braucht (Entscheidung Robert, 19.09.2026: „kein
-    Reinigen, wenn der Drucker nicht mehr Düsen hat").
-
-    Eine Düse mit Wechselstation spült bei jedem Filamentwechsel, und zwei
-    Filamente auf einer Platte kosten das je gemeinsamer Schicht. Zwei Düsen
-    drucken zwei Filamente ohne Spülgang: Erst wenn mehr Filamente auf dem
-    Bett liegen, als der Drucker Düsen hat (:attr:`PrinterProfile.nozzles`),
-    lohnt sich eine Platte je Filament. Ein Teil, das selbst mehrere
-    Filamente trägt, bleibt ohnehin zusammen (``plates_by_material``).
-    """
-    from app.core.export.writer import plates_by_material
-
-    groups = plates_by_material(list(objects))
-    if len(set(groups.values())) <= max(1, ctx.profile.printer.nozzles):
-        return None
-    return groups
 
 
 def _arranged_in_filament_groups(
@@ -18827,7 +18808,7 @@ def _laid_out_after_turning(
     # Platten aufteilen, kein Reinigen wenn Drucker nicht mehr Düsen"). Es ist
     # dieselbe Regel wie bei *Auf dem Bett anordnen*, und sie fragt den
     # Drucker: Mit genug Düsen bleibt alles zusammen.
-    groups = _filament_groups(ctx, turned) if params.by_material else None
+    groups = filament_groups(ctx.profile, turned) if params.by_material else None
     if groups is not None:
         arrangement = _arranged_in_filament_groups(
             ctx, turned, groups, params.spacing, params.plates, occupied=standing
@@ -18910,7 +18891,7 @@ class ArrangeParams(BaseParams):
         title=_("Nach Filament trennen"),
         # **An, nicht aus** (Entscheidung Robert, 19.09.2026): Die Vorgabe soll
         # das druckbare Ergebnis sein, und ob die Trennung überhaupt nötig
-        # ist, entscheidet der Drucker (``_filament_groups``) — mit einem
+        # ist, entscheidet der Drucker (``filament_groups``) — mit einem
         # Filament oder genug Düsen ändert der Schalter nichts.
         default=True,
         doc=BY_MATERIAL_DOC,
@@ -18931,7 +18912,7 @@ class ArrangeParams(BaseParams):
 def arrange_bed(ctx: OpContext) -> OpResult:
     params = cast(ArrangeParams, ctx.params)
     meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
-    groups = _filament_groups(ctx, ctx.inputs) if params.by_material else None
+    groups = filament_groups(ctx.profile, ctx.inputs) if params.by_material else None
     if groups is not None:
         result = _arranged_in_filament_groups(
             ctx, ctx.inputs, groups, params.spacing, params.plates
