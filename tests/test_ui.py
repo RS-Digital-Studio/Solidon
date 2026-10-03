@@ -11397,6 +11397,8 @@ def test_split_restores_the_complete_export_progress(
     """Prüfung und Schreiben erhalten nach Split genau ihren eigenen Abbruchzustand zurück."""
 
     monkeypatch.setattr(window._leash, "start", lambda _worker: None)
+    # Am feinen Ergebnis beginnt der Export sofort (RM-426); um das Warten geht es hier nicht.
+    window.session.quality = "fine"
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._start_export(tmp_path / "halter.stl", "stl")
@@ -20715,23 +20717,27 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
 
 
-def _a_cone_in_draft(window: MainWindow) -> None:
-    """Ein Kegel, der im Entwurf mit halb so vielen Dreiecken steht wie fein."""
+def _a_blend_in_draft(window: MainWindow) -> None:
+    """Ein verschmolzenes Teil, das im Entwurf auf doppelt so grobem Raster steht wie fein.
+
+    Bis RM-427 tat es ein Kegel; seitdem rechnen Kegel und Ring in beiden
+    Stufen mit derselben Teilung. Gröber im Entwurf ist nur noch das
+    Verschmelzen über :data:`blend.DRAFT_SAMPLES` Rasterpunkten — hier rund
+    650 000 bei 0,6 mm.
+    """
+    box = {"width": 40.0, "depth": 40.0, "height": 40.0}
     assert window.session.apply(
-        "Kegel",
+        "Zwei verschmolzene Quader",
         [
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 20.0}),
             OperationDraft(
-                op="create_cone",
-                params={
-                    "bottom_diameter": 30.0,
-                    "top_diameter": 10.0,
-                    "height": 20.0,
-                    "segments": 64,
-                },
-            )
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.6}
+            ),
         ],
     )
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
 
@@ -20764,13 +20770,13 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
 
     from app.core.geom.mesh import as_mesh_data
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     result = window.session.last_result
     assert result is not None
     draft = sum(as_mesh_data(entry.mesh).triangle_count for entry in result.scene.objects.values())
     fine = _fine_triangles(window)
     assert fine > draft, "Voraussetzung: fein und Entwurf unterscheiden sich"
-    target = tmp_path / "kegel.stl"
+    target = tmp_path / "teil.stl"
 
     window._start_export(target, "stl")
     assert window.session.wait_for_idle(30_000)
@@ -20791,7 +20797,7 @@ def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:
     """
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     ran: list[str] = []
 
