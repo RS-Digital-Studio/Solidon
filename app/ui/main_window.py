@@ -2598,6 +2598,8 @@ class MainWindow(QMainWindow):
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
+        self.session.bakeFinished.connect(self._bake_finished)
+        self.session.bakeCancelled.connect(self._on_revision_cancelled)
         self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
         self.history_panel.drawingReuseRequested.connect(self.reuse_drawing)
         self.filaments = FilamentPanel(self)
@@ -6902,8 +6904,17 @@ class MainWindow(QMainWindow):
         Was der Dialog erklärte, steht jetzt in der Ansage danach — was sich
         geändert hat und wie es zurückgeht — und vorher im Tooltip des
         Eintrags im Verlauf.
+
+        Festgeschrieben wird die feine Rechnung, im Arbeiter mit Fortschritt
+        und *Abbrechen* (RM-365); die Ansage kommt mit ihrem Ende
+        (:meth:`_bake_finished`).
         """
-        if not self.session.bake_strokes(op_id):
+        if not self.session.bake_strokes_async(op_id):
+            self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
+
+    def _bake_finished(self, baked: bool) -> None:
+        """Was das Festschreiben bewirkt hat, und wie es zurückgeht."""
+        if not baked:
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
             return
         self.announce(

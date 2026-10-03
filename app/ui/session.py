@@ -1415,6 +1415,62 @@ class _RevisionWorker(Worker):
         super().release_finished_references()
 
 
+class _BakeWorker(Worker):
+    """Den Stand einer Formsitzung fein rechnen, abseits des Oberflächen-Threads (RM-365).
+
+    Das Fenster rechnet im Entwurf; festgeschrieben wurde das Entwurfsnetz,
+    und der Export war danach gröber als ohne Festschreiben — an der Figur
+    aus Weg 4 6 964 statt 9 974 Dreiecke, Volumen 2,6 % weniger, Form bis 0,94 mm
+    verschoben. Festgeschrieben wird, was Export und Druck brauchen: die feine
+    Rechnung bis zu diesem Schritt. Sie kann Sekunden kosten, deshalb hier,
+    mit Fortschritt und Abbrechen (§2.8); abgebrochen ist nichts geändert.
+    """
+
+    bakedWith = Signal(object)
+    failedWith = Signal(object)
+    cancelled = Signal()
+
+    def __init__(self, session: Session, document: Any, cancel: CancelSignal) -> None:
+        super().__init__()
+        self._session = session
+        self._document = document
+        self.cancel = cancel
+        self._project_generation = session._project_generation
+        self._profile = session.evaluation_profile
+        self._sources = ProjectSources(session.project, base_dir=session.base_dir)
+
+    def work(self) -> None:
+        session = self._session
+        session._pending.project_generation = self._project_generation
+        try:
+            result = evaluate(
+                self._document,
+                self._profile,
+                quality="fine",
+                progress=session.report_progress,
+                ask=session.ask_from_worker,
+                question_context=session.announce_question,
+                cancelled=self.cancel,
+                cache=session.cache,
+                sources=self._sources,
+            )
+        except OperationCancelled:
+            self.cancelled.emit()
+        except AppError as error:
+            self.failedWith.emit(error)
+        else:
+            self.bakedWith.emit(result)
+        finally:
+            session.announce_question(None, ())
+            session._pending.project_generation = None
+            session.report_progress(1.0, "")
+
+    def release_finished_references(self) -> None:
+        """Sitzung und Kopie nach der Zustellung lösen."""
+        del self._session, self._document, self._sources
+        super().release_finished_references()
+
+
 class _QuestionPending(OperationCancelled):
     """Die stille Vorschau ist an einer Rückfrage stehengeblieben.
 
@@ -1591,6 +1647,11 @@ class Session(QObject):
     """Die Einfügemarke ist gesetzt oder weg (P7.1) — trägt die Schrittkennung oder ``None``."""
     revisionCancelled = Signal()
     """Ein Umbau des Verlaufs wurde abgebrochen — geändert ist nichts."""
+    bakeFinished = Signal(bool)
+    """Das Festschreiben einer Formsitzung ist zu Ende — ``True``, wenn der
+    Stand festgeschrieben ist (RM-365)."""
+    bakeCancelled = Signal()
+    """Das Festschreiben wurde abgebrochen — geändert ist nichts."""
     """Eine ``AppError``, die die Oberfläche als Vorschlag zeigt (§2.7)."""
     counterpartFinished = Signal(object)
     """Die Passung eines Gegenstücks ist nachgetragen — trägt die neuen Befunde.
@@ -1703,6 +1764,9 @@ class Session(QObject):
         self._revision: _RevisionWorker | None = None
         """Der laufende Umbau des Verlaufs (P7), höchstens einer."""
         self._revision_cancel = CancelSignal()
+        self._bake: _BakeWorker | None = None
+        """Das laufende Festschreiben einer Formsitzung, höchstens eines (RM-365)."""
+        self._bake_cancel = CancelSignal()
         self._insert_before: OpId | None = None
         """Die Einfügemarke (P7.1): Neue Schritte kommen vor diesen, und die
         Oberfläche zeigt den Stand davor. Kein Dokumentzustand — sie gehört
@@ -1930,7 +1994,12 @@ class Session(QObject):
         Auch ein fertiger Faden zählt bis zur Zustellung seines Endsignals:
         Sein Ergebnis kann noch die nächste Auswertung anstoßen.
         """
-        return self._worker is not None or self._plan is not None or self._revision is not None
+        return (
+            self._worker is not None
+            or self._plan is not None
+            or self._revision is not None
+            or self._bake is not None
+        )
 
     @property
     def document_name(self) -> str:
@@ -2819,29 +2888,85 @@ class Session(QObject):
         über :meth:`change_params`, also als Transaktion, und ein Strg+Z gibt
         der Sitzung ihre Züge zurück. Eine Nachfrage davor gibt es deshalb
         nicht (Regel 19, nachgemessen am 22.09.2026).
+
+        **Fein gerechnet**, wie Export und Druck rechnen: Festgeschrieben wurde
+        das Entwurfsnetz des Fensters, und der Export war danach gröber als
+        ohne (RM-365). Synchron für Tests und Kommandozeile; das Fenster nimmt
+        :meth:`bake_strokes_async`.
         """
-        document = self.project.document
-        operation = next((entry for entry in document.ops if entry.id == op_id), None)
-        if operation is None or operation.op != "sculpt_strokes":
+        up_to = self._bake_document(op_id)
+        if up_to is None:
             return False
-        # Der Stand **unmittelbar nach dieser Formsitzung**, nicht der am Ende
-        # des Stapels: ``last_result`` trug auch, was danach auf dem Körper
-        # geschah — Verschieben um 10 mm steckte in der eingebetteten STL und
-        # lief bei der nächsten Auswertung ein zweites Mal, aus 5…15 wurden
-        # 15…25 (Gesamtreview 05.09.2026, UI-17). Gerechnet wird bis zu diesem
-        # Schritt; die Auswertung sortiert nach Kennung, und der Cache kennt
-        # jeden Schritt davor.
-        up_to = dataclasses.replace(
-            document, ops=[entry for entry in document.ops if entry.id <= op_id]
-        )
         result = evaluate(
             up_to,
             self.evaluation_profile,
-            quality=self.quality,
+            quality="fine",
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
         )
-        if result.stopped_at is not None:
+        return self._bake_from(op_id, up_to, result)
+
+    def bake_strokes_async(self, op_id: int) -> bool:
+        """:meth:`bake_strokes` im Arbeiter — der Weg des Fensters (RM-365).
+
+        Gibt zurück, ob die Rechnung startet; ihr Ende meldet ``bakeFinished``.
+        Fein gerechnet kostet der Stand Sekunden, und das Fenster bleibt dabei
+        bedienbar; *Abbrechen* lässt alles, wie es war.
+        """
+        up_to = self._bake_document(op_id)
+        if up_to is None or self._bake is not None:
+            return False
+        self._bake_cancel = CancelSignal()
+        worker = _BakeWorker(self, up_to, self._bake_cancel)
+        worker.bakedWith.connect(partial(self._on_baked, op_id, up_to, finished=worker))
+        worker.failedWith.connect(partial(self._on_bake_failed, finished=worker))
+        worker.cancelled.connect(partial(self._on_bake_cancelled, finished=worker))
+        worker.crashed.connect(
+            lambda detail, done=worker: self._on_bake_failed(
+                InternalError(detail=detail), finished=done
+            )
+        )
+        worker.finished.connect(partial(self._on_bake_done, worker))
+        self._bake = worker
+        self.busyChanged.emit(True)
+        self._leash.start(worker)
+        return True
+
+    def _bake_document(self, op_id: int) -> Any:
+        """Das Dokument bis zu dieser Formsitzung — ``None``, wenn es keine ist.
+
+        Der Stand **unmittelbar nach dieser Formsitzung**, nicht der am Ende
+        des Stapels: ``last_result`` trug auch, was danach auf dem Körper
+        geschah — Verschieben um 10 mm steckte in der eingebetteten STL und
+        lief bei der nächsten Auswertung ein zweites Mal, aus 5…15 wurden
+        15…25 (Gesamtreview 05.09.2026, UI-17). Gerechnet wird bis zu diesem
+        Schritt; die Auswertung sortiert nach Kennung, und der Cache kennt
+        jeden Schritt davor.
+        """
+        import copy
+
+        document = self.project.document
+        operation = next((entry for entry in document.ops if entry.id == op_id), None)
+        if operation is None or operation.op != "sculpt_strokes":
+            return None
+        return copy.deepcopy(
+            dataclasses.replace(
+                document, ops=[entry for entry in document.ops if entry.id <= op_id]
+            )
+        )
+
+    def _bake_from(self, op_id: int, up_to: Any, result: EvaluationResult) -> bool:
+        """Das fein gerechnete Ergebnis als Quelle festschreiben — wenn der
+        Schritt noch derselbe ist, für den gerechnet wurde."""
+        operation = next((entry for entry in up_to.ops if entry.id == op_id), None)
+        current = next((entry for entry in self.project.document.ops if entry.id == op_id), None)
+        if (
+            operation is None
+            or current is None
+            or current.params != operation.params
+            or current.inputs != operation.inputs
+            or result.stopped_at is not None
+        ):
             return False
         # Ein Körper hinein, einer heraus: Die Operation behält die
         # Objektkennung ihrer Eingabe, und das gesuchte Ergebnis steht unter
@@ -2855,6 +2980,32 @@ class Session(QObject):
         )
         self.change_params(op_id, {"baked": source_id})
         return True
+
+    def _on_baked(
+        self, op_id: int, up_to: Any, result: EvaluationResult, finished: _BakeWorker
+    ) -> None:
+        if finished is not self._bake or finished._project_generation != self._project_generation:
+            return
+        self.bakeFinished.emit(self._bake_from(op_id, up_to, result))
+
+    def _on_bake_failed(self, error: Any, finished: _BakeWorker) -> None:
+        if finished is not self._bake:
+            return
+        self.failed.emit(error)
+        self.bakeFinished.emit(False)
+
+    def _on_bake_cancelled(self, finished: _BakeWorker) -> None:
+        if finished is self._bake:
+            self.bakeCancelled.emit()
+
+    def _on_bake_done(self, finished: _BakeWorker) -> None:
+        """Das Festschreiben ist ausgelaufen — nur das aktuelle räumt sein Feld."""
+        if finished is self._bake:
+            worker, self._bake = self._bake, None
+            self._leash.hold_until_done(worker)
+            self.busyChanged.emit(self.busy)
+            return
+        self._leash.hold_until_done(finished)
 
     def _embed_source(
         self,
@@ -4720,8 +4871,10 @@ class Session(QObject):
         """
         self.cancel_evaluation()
         self.cancel_agent()
-        # Und ein laufender Umbau des Verlaufs (P7): Abgebrochen ist nichts geändert.
+        # Und ein laufender Umbau des Verlaufs (P7) oder ein Festschreiben:
+        # Abgebrochen ist nichts geändert.
         self._revision_cancel.cancel()
+        self._bake_cancel.cancel()
 
     def cancel_evaluation(self) -> None:
         """Hält nur die Auswertung samt eingereihtem Nachlauf an."""
@@ -5873,6 +6026,7 @@ class Session(QObject):
                 or self._agent
                 or self._split
                 or self._revision
+                or self._bake
                 or next(iter(self._previews), None)
                 or next(iter(self._placements), None)
                 or self._autosaving

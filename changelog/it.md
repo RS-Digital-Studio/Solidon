@@ -80,6 +80,7 @@ scrive in `website/version.json`.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 - Un altro tratto in una cavità appena scavata la rende più profonda, anche con un pennello piccolo. Finora restava senza effetto e contava come mancato.
 - In «Modella», la finestra mostra ogni tratto con la stessa rapidità anche dopo molti tratti. Finora rallentava a ogni tratto.
+- «Fissa lo stato» salva una sessione di modellazione fine come la calcolano esportazione e stampa, e la finestra resta utilizzabile. Finora salvava la vista più grossolana.
 
 ### Generare con l'IA
 

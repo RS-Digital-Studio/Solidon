@@ -132,7 +132,8 @@ ersten Bild alte Pixel. `widget.grab()` sieht das nicht; Beweisbilder nur über
 
 ### Umbau und Export rechnen im Arbeiter
 
-* **Ein Umbau des Verlaufs** (`_RevisionWorker`) rechnet auf einer Kopie und
+* **Ein Umbau des Verlaufs** (`_RevisionWorker`, *Festschreiben* fein im
+  `_BakeWorker`) rechnet auf einer Kopie und
   wird nur bei aktuellem Arbeiter und Projektstempel übernommen
   (`Session._on_revised`); Rückfragen über `ask_from_worker`, Abbrechen endet
   kooperativ mit `revisionCancelled`, und der Verlauf bleibt unverändert.

@@ -81,6 +81,7 @@ dans `website/version.json`.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
 - Dans « Sculpter », la fenêtre affiche chaque trait aussi vite après de nombreux traits qu'au premier. Jusqu'ici, elle ralentissait à chaque trait.
+- « Figer l'état » enregistre une session de sculpture aussi finement que l'export et l'impression la calculent, et la fenêtre reste utilisable. Jusqu'ici, il figeait la vue plus grossière.
 
 ### Générer avec l'IA
 

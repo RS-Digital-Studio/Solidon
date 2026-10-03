@@ -889,6 +889,106 @@ def test_baking_and_reopening_keeps_the_face_materials(
     assert restored.material_slots == before.material_slots
 
 
+def with_a_cone_session(window: MainWindow) -> tuple[str, int]:
+    """Ein Kegelstumpf und eine Formsitzung auf seiner Deckfläche."""
+    from app.core.geom.sculpt import strokes_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Stroke
+
+    assert window.session.apply(
+        "Kegel",
+        [
+            OperationDraft(
+                op="create_cone",
+                params={"bottom_diameter": 30.0, "top_diameter": 10.0, "height": 30.0},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    object_id = str(next(iter(window.session.last_result.scene.objects)))
+    top = float(window.session.last_result.scene.objects[object_id].mesh.raw.bounds[1][2])
+    stroke = Stroke(point=(0.0, 0.0, top), normal=(0.0, 0.0, 1.0), radius=6.0, strength=1.0)
+    assert window.session.apply(
+        "Formen",
+        [
+            OperationDraft(
+                op="sculpt_strokes",
+                inputs=(object_id,),
+                params={"strokes": strokes_to_text([stroke])},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    return object_id, window.session.project.document.ops[-1].id
+
+
+def test_baking_keeps_the_fine_result(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-365: *Festschreiben* fror das Entwurfsnetz des Fensters ein. An der
+    Figur aus Weg 4 standen danach 6 964 statt 9 974 Dreiecke im Export, das
+    Volumen 2,6 % weniger, die Form bis 0,94 mm verschoben. Festgeschrieben wird die
+    feine Rechnung — sie ist es, die gerechnet wird, und danach stehen dieselben
+    Dreiecke und dasselbe Volumen wie in der feinen Auswertung."""
+    import app.ui.session as session_module
+
+    object_id, op_id = with_a_cone_session(window)
+    fine = window.session.evaluate_now().scene.objects[object_id].mesh
+    asked: list[str] = []
+    real = session_module.evaluate
+
+    def spied(document: Any, *args: Any, **kwargs: Any) -> Any:
+        asked.append(str(kwargs.get("quality")))
+        return real(document, *args, **kwargs)
+
+    monkeypatch.setattr(session_module, "evaluate", spied)
+    assert window.session.bake_strokes(op_id)
+    assert asked == ["fine"], "das Festschreiben rechnet fein"
+    monkeypatch.setattr(session_module, "evaluate", real)
+    assert window.session.wait_for_idle(30_000)
+
+    baked = window.session.evaluate_now().scene.objects[object_id].mesh
+    assert baked.triangle_count == fine.triangle_count
+    assert baked.volume == pytest.approx(fine.volume, rel=1e-12)
+
+
+def test_baking_in_the_window_runs_beside_it_and_keeps_the_fine_result(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Weg des Fensters: *Festschreiben* im Verlauf rechnet fein im
+    Arbeiter, das Fenster wartet nicht darauf (§2.8), und festgehalten wird
+    der feine Stand."""
+    import threading
+    import time
+
+    import app.ui.session as session_module
+
+    object_id, op_id = with_a_cone_session(window)
+    fine = window.session.evaluate_now().scene.objects[object_id].mesh
+    release = threading.Event()
+    asked: list[str] = []
+    real = session_module.evaluate
+
+    def held(document: Any, *args: Any, **kwargs: Any) -> Any:
+        asked.append(str(kwargs.get("quality")))
+        release.wait(10)
+        return real(document, *args, **kwargs)
+
+    monkeypatch.setattr(session_module, "evaluate", held)
+    started = time.perf_counter()
+    window.bake_sculpt(op_id)
+    assert time.perf_counter() - started < 1.0, "das Fenster wartete auf das Festschreiben"
+    assert window.session.busy
+    release.set()
+    assert window.session.wait_for_idle(30_000)
+    monkeypatch.setattr(session_module, "evaluate", real)
+
+    assert asked and asked[0] == "fine", "das Festschreiben rechnet fein"
+    sculpt = next(entry for entry in window.session.project.document.ops if entry.id == op_id)
+    assert sculpt.params["baked"]
+    assert "Strg+Z" in window.status_message.text()
+    baked = window.session.evaluate_now().scene.objects[object_id].mesh
+    assert baked.triangle_count == fine.triangle_count
+
+
 def test_the_history_offers_baking_only_for_a_live_session(window: MainWindow) -> None:
     """Der Eintrag steht an einer Formsitzung und an keinem anderen Schritt.
 

@@ -81,6 +81,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 - Otro trazo en una cavidad recién excavada la hace más profunda, también con un pincel pequeño. Hasta ahora no surtía efecto y contaba como fallido.
 - Al «Modelar», la ventana muestra cada trazo igual de rápido, también tras muchos trazos. Hasta ahora se volvía más lenta con cada uno.
+- «Fijar el estado» guarda la sesión de modelado tan fina como la calculan la exportación y la impresión, y la ventana sigue utilizable. Antes guardaba la vista más basta.
 
 ### Generar con IA
 

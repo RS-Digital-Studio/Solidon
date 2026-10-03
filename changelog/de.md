@@ -105,6 +105,7 @@ Nutzen da und sonst nichts.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 - Ein weiterer Zug in eine eben gegrabene Mulde gräbt tiefer, auch mit einem kleinen Pinsel. Bisher blieb er wirkungslos und galt als verfehlt.
 - Beim *Formen* zeigt das Fenster jeden Zug gleich schnell, auch nach vielen Zügen. Bisher wurde es mit jedem Zug langsamer.
+- *Stand festschreiben* legt eine Formsitzung so fein ab, wie Export und Druck sie rechnen, und das Fenster bleibt dabei bedienbar. Bisher wurde die gröbere Ansicht abgelegt.
 
 ### Erzeugen mit KI
 

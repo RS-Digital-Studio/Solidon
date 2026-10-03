@@ -80,6 +80,7 @@ it into `website/version.json`.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
 - In *Sculpt*, the window shows every stroke just as quickly after many strokes as after the first. Until now it got slower with each stroke.
+- *Fix the state* stores a sculpting session as finely as export and printing compute it, and the window stays usable meanwhile. Until now it stored the coarser view.
 
 ### Generating with AI
 

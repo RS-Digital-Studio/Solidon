@@ -80,6 +80,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 - Outro traço numa cavidade acabada de escavar torna-a mais funda, também com um pincel pequeno. Até agora não tinha efeito e contava como falhado.
 - Em «Modelar», a janela mostra cada traço com a mesma rapidez, também depois de muitos traços. Até agora ficava mais lenta a cada traço.
+- «Fixar o estado» guarda uma sessão de modelação tão fina como a exportação e a impressão a calculam, e a janela continua utilizável. Até agora guardava a vista mais grosseira.
 
 ### Gerar com IA
 
