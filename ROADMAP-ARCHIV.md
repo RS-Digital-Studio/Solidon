@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-305: Weitere Importe nutzen auch Druckplatten hinter der zwölften (03.10.2026)](#rm-305-weitere-importe-nutzen-auch-druckplatten-hinter-der-zwölften-03102026) |
 | 2026-10-03 | [RM-304: Weitere Modelle beachten die Filamente der belegten Druckplatten (03.10.2026)](#rm-304-weitere-modelle-beachten-die-filamente-der-belegten-druckplatten-03102026) |
 | 2026-10-03 | [RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)](#rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026) |
 | 2026-10-03 | [RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)](#rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026) |
@@ -38812,3 +38813,17 @@ und `solidon-A-batch1-final-docs.txt` unter `%TEMP%`.
 
 Auch die vorläufige Platzfrage einer STEP-Baugruppe trägt jetzt alle Flächenfarben des endgültigen Körpers. Die echten Dateien `nested.step` und `instances.step` benötigen gemeinsam fünf Spulen: Bei einer oder vier Düsen kommt die zweite Baugruppe auf Platte 2, bei fünf auf Platte 1. Alle drei Varianten waren vorher rot; Lagebeziehungen, Abstände und exakte Körper bleiben erhalten. Die 60 STEP-Fälle sowie sieben STEP-/Cache-Anschlussfälle bestehen. Der zwischenzeitliche breite Lauf mit 54 bestandenen und einem fehlgeschlagenen Fall bleibt als roter Nachweis erhalten.
 
+## RM-305: Weitere Importe nutzen auch Druckplatten hinter der zwölften (03.10.2026)
+
+<a id="rm-305-weitere-importe-nutzen-auch-druckplatten-hinter-der-zwölften-03102026"></a>
+<a id="rm-305"></a>
+
+**RM-305 — Hinter der zwölften Platte eine Regel.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F13;
+  Text der Gesamtprüfung). Eine dazukommende 3MF mit Platten rückt hinter
+  die letzte belegte, ohne Grenze (`plates_behind`); `first_free_spot` betrachtet nur Platten
+  bis `MAX_PLATES`. Liegt etwas auf Platte 13, landet ein weiteres Modell neben Platte 12
+  statt auf einer leeren späteren. Abnahme: eine Regel für beide.
+  Registerabgleich 02.10.: `plates_behind` ist kein Funktionsname, sondern der Befundcode `arrange.plates_behind`.
+
+**Abschluss:** Mehrplattiger Import und freie Stelle folgen jetzt derselben Importregel aus §17.1: vorhandene passende Platte einschließlich Lücken, danach eine neue ohne Zwölfergrenze. Die mitgebrachte Aufteilung einer Datei bleibt zusammen hinter der letzten belegten Platte. MAX_PLATES begrenzt weiterhin nur den ausdrücklichen Anordnungsauftrag nach §29; das Zielplattenfeld kann vorhandene höhere Platten erreichen. Geprüft: zwölf, dreizehn und vierzehn volle Platten, Lücke auf Platte 8, 13 vorhandene plus zwei importierte Platten und anschließender Import auf freier Platte 14, Undo/Redo sowie gespeicherte Antworten. Zwei Gegenproben mit alter Grenze rot; gemeinsam mit RM-304 23 gezielte Fälle grün. Cacheversionen load/load_step/fit_to_size 6/3/5. Kopfzeile und Ansicht verwenden bereits die tatsächliche Plattenzahl; kein Palettenbefehl und keine Fensterprüfung als Ersatz für den sichtbaren Weg. Ursprung `eea4565ea` liegt in v0.5.1, daher je Sprache ein Kundenpunkt. Die zusätzlich entfernte Zielplattengrenze aus `44ef7ab8e` war unveröffentlicht und erhält keinen weiteren Punkt. Belege: `F:\solidon-review-reports\B-slicer-rest\rm304-305\bericht.md`, `targeted.log`, `cache-group.log`, `counterprobe.json`; Abschlusscommits und zentrales Tor im Bericht B.

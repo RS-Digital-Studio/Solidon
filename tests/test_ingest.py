@@ -1336,6 +1336,76 @@ def test_multicolour_files_share_only_their_used_filaments(
     assert _scene(project, changed).scene.objects["obj_2"].mesh.bounds == added.mesh.bounds
 
 
+@pytest.mark.parametrize(("last_plate", "gap"), [(12, None), (13, None), (14, 7)])
+def test_a_further_import_uses_all_existing_plates_before_opening_one(
+    profile: Profile, last_plate: int, gap: int | None
+) -> None:
+    """RM-305: Auch hinter zwölf Platten gilt die erste freie, dann eine neue."""
+    project, history = _imported_in_turn(profile, ("platte.stl", _box_stl(240.0, 240.0, 5.0)))
+    for plate in range(1, last_plate + 1):
+        if plate == gap:
+            continue
+        history.apply(
+            _("Kopie"),
+            [
+                OperationDraft(
+                    op="load",
+                    params={"source": "src_1", "unit": "mm", "place_on_bed": True, "centre": True},
+                )
+            ],
+        )
+        body_id = project.document.ops[-1].outputs[0]
+        history.apply(
+            _("Platte"),
+            [OperationDraft(op="translate_object", inputs=(body_id,), params={"plate": plate + 1})],
+        )
+    payload = (MESHES / "cube_clean.stl").read_bytes()
+    project.document.sources["src_2"] = Source(
+        id="src_2", kind="import", path="sources/weiteres.stl", sha256=""
+    )
+    project.sources["src_2"] = payload
+    plan = import_plan("src_2", "weiteres.stl", payload, "mm", first_model=False)
+    history.apply(plan.title, [plan.draft])
+    result = _scene(project, profile)
+    added = result.scene.objects[project.document.ops[-1].outputs[0]]
+    assert added.plate == (last_plate + 1 if gap is None else gap)
+    assert tuple(added.mesh.bounds.centre[:2]) == pytest.approx((0.0, 0.0))
+
+
+def test_imported_plate_layout_continues_beyond_twelve(profile: Profile) -> None:
+    """Mehrere mitgebrachte Platten bleiben hinter der letzten; die nächste Datei sucht dort."""
+    large = MeshData.of(trimesh.creation.box((240.0, 240.0, 5.0)))
+    small = MeshData.of(trimesh.creation.box((20.0, 20.0, 5.0)))
+    first = threemf_writer.write_assembly(
+        [threemf_writer.AssemblyPart(mesh=large, plate=n) for n in range(13)],
+        bed_centre=(128.0, 128.0),
+        layout=(256.0, 256.0),
+        project_settings={"printable_area": ["0x0", "256x0", "256x256", "0x256"]},
+    )
+    second = threemf_writer.write_assembly(
+        [threemf_writer.AssemblyPart(mesh=small, plate=n) for n in range(2)],
+        bed_centre=(128.0, 128.0),
+        layout=(256.0, 256.0),
+        project_settings={"printable_area": ["0x0", "256x0", "256x256", "0x256"]},
+    )
+    project, history = _imported_in_turn(
+        profile,
+        ("viele.3mf", first),
+        ("zwei.3mf", second),
+        ("wuerfel.3mf", threemf_writer.write_assembly([threemf_writer.AssemblyPart(mesh=small)])),
+    )
+    result = _scene(project, profile)
+    entries = list(result.scene.objects.values())
+    assert [entry.plate for entry in entries] == [*range(15), 13]
+    assert [tuple(entry.mesh.bounds.centre[:2]) for entry in entries[13:15]] == [
+        pytest.approx((0.0, 0.0)),
+        pytest.approx((0.0, 0.0)),
+    ]
+    assert history.record_answers(result.answers)
+    repeated = _scene(project, profile)
+    assert [entry.plate for entry in repeated.scene.objects.values()] == [*range(15), 13]
+
+
 @pytest.mark.parametrize("whole_file", [False, True])
 def test_a_further_step_file_uses_the_same_filament_separation(
     profile: Profile, whole_file: bool

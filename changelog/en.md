@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.
 - Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles.
 - Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.
 - If Cura has a different printer selected, the handoff names both printers and shows where to adopt Cura’s selection.

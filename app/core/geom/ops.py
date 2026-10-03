@@ -31,7 +31,6 @@ from app.core.geom.boolean import (
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import (
-    MAX_PLATES,
     free_spot_param,
     placed_at_free_spot,
     spot_param,
@@ -244,7 +243,6 @@ class TranslateParams(BaseParams):
         # endet (``MainWindow._on_transform_dragged``).
         default=0,
         minimum=0,
-        maximum=MAX_PLATES,
         placement="advanced",
         doc=_(
             "Auf welche Druckplatte der Körper wandert, gezählt wie im Plattenwähler; "
@@ -595,7 +593,7 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="4",
+    cache_version="5",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,

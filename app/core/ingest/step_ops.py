@@ -111,7 +111,7 @@ class LoadStepParams(BaseParams):
 
 @register_op(
     name="load_step",
-    cache_version="2",
+    cache_version="3",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
     title=_("STEP laden"),

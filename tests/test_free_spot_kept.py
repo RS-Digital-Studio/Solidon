@@ -205,10 +205,8 @@ def _box(x: float, y: float, z: float) -> bytes:
     return bytes(trimesh.creation.box(extents=(x, y, z)).export(file_type="stl"))
 
 
-def test_a_model_without_room_says_so_and_offers_to_arrange(profile: Profile) -> None:
-    """F10, N6: Sind alle zwölf Platten voll, steht nicht „an die erste freie
-    Stelle“, sondern ein eigener Satz mit dem Weg *Auf dem Bett anordnen* —
-    der verteilt neu, und der Würfel passt auf jedes leere Bett."""
+def test_a_model_after_twelve_full_plates_opens_the_next(profile: Profile) -> None:
+    """RM-305: Der Import ergänzt nach §17.1 auch hinter zwölf vollen Platten."""
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
     for number in range(12):
@@ -217,14 +215,13 @@ def test_a_model_without_room_says_so_and_offers_to_arrange(profile: Profile) ->
 
     result = _evaluated(project, profile)
 
-    assert result.scene.objects[cube].plate == 11, "neben der letzten erlaubten Platte"
+    assert result.scene.objects[cube].plate == 12, "auf der nächsten freien Platte"
+    assert tuple(result.scene.objects[cube].mesh.bounds.centre[:2]) == pytest.approx((0.0, 0.0))
     step = project.document.ops[-1].id
     said = [entry for entry in result.scene.report.findings if entry.op_id == step]
     codes = {entry.code for entry in said}
-    assert "arrange.no_free_spot" in codes
-    assert "arrange.free_spot" not in codes
-    refusal = next(entry for entry in said if entry.code == "arrange.no_free_spot")
-    assert [action.id for action in refusal.suggestions] == ["arrange_on_bed"]
+    assert "arrange.no_free_spot" not in codes
+    assert "arrange.free_spot" in codes
 
 
 @pytest.mark.parametrize(

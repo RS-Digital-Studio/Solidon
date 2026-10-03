@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.
 - Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes.
 - O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.
 - Se estiver selecionada outra impressora no Cura, a entrega identifica ambas e indica onde adotar a escolha do Cura.

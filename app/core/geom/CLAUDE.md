@@ -329,7 +329,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   gegen die Düsen; `slot_identity` aus der Übergabe bestimmt ihre Identität.
   Unbenutzte Deklarationen zählen nicht, Baugruppen bleiben zusammen. Die
   Gruppierung gespeicherter Anordnungen bleibt unverändert.
-  `arrange.no_free_spot` ohne Platz, ohne Verschiebung kein Befund. Abstand
+  Der Import nutzt vorhandene passende Platten samt Lücken und ergänzt danach
+  eine neue, auch über zwölf; nur ein begrenzter Anordnungsauftrag setzt
+  `MAX_PLATES`. Ohne Verschiebung gibt es keinen Befund. Abstand
   `ARRANGE_SPACING`; Weg 3 legt am fertigen Maß, nach der Reparatur.
 
 **Kanten und Flächen**:

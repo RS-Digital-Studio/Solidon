@@ -80,7 +80,8 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
   freie Stelle (`geom.prepare.placed_at_free_spot`, gelesen aus `ctx.scene`)
   und gibt Mitte und Platte als Antwort zurück (`spot_*`, §15.7); danach liest
   der Schritt die Szene nicht mehr. Eine Datei mit mehreren Platten rückt
-  hinter die letzte belegte. `load_step` fragt denselben Helfer. Netz- und
+  hinter die letzte belegte, auch über zwölf. Einzelne weitere Modelle nutzen
+  zuerst passende freie Stellen und Lücken. `load_step` fragt denselben Helfer. Netz- und
   STEP-Import reichen ihre Filamente vor der Platzierung weiter; gespeicherte
   `spot_*`-Antworten haben Vorrang vor später geänderten Düsen oder Filamenten.
 - **Native 3MF-Farben** — Werkzeugpaletten (Orca/Bambu-Metadaten,

@@ -29,6 +29,7 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- Les modèles ajoutés trouvent aussi une place après le douzième plateau. Les plateaux importés gardent leur disposition.
 - Les modèles ajoutés avec des filaments différents sont placés sur des plateaux séparés si l’imprimante n’a pas assez de buses.
 - Cura reprend les limites de jerk du profil, avec des valeurs distinctes pour les parois, le remplissage et la première couche.
 - Si une autre imprimante est active dans Cura, le transfert nomme les deux et indique où reprendre le choix de Cura.

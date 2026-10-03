@@ -2497,9 +2497,8 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
     return first.mesh, second.mesh, findings
 
 
-#: Über wie viele Druckplatten eine Szene verteilt werden darf. Keine
-#: technische Grenze — jenseits davon will, wer druckt, ein zweites Projekt
-#: statt einer Liste, die niemand mehr überblickt.
+#: Höchstzahl eines ausdrücklich begrenzten Anordnungsauftrags (§29).
+#: Importe ergänzen nach §17.1 die vorhandenen Platten ohne diese Grenze.
 MAX_PLATES = 12
 
 #: Die Luft zwischen zwei Teilen, die *Auf dem Bett anordnen* vorgibt — und die
@@ -2992,7 +2991,7 @@ def first_free_spot(
     occupied: Sequence[tuple[BoundingBox, int]],
     *,
     spacing: float = ARRANGE_SPACING,
-    plates: int = MAX_PLATES,
+    plates: int | None = None,
     avoid: Collection[int] = (),
 ) -> tuple[Vec3, int, bool]:
     """Wohin ein weiteres Modell kommt, ohne dass etwas anderes sich bewegt (§17.1, §29).
@@ -3011,9 +3010,10 @@ def first_free_spot(
     Grenzen und Platte), bleibt liegen und belegt seinen Platz auf seiner
     Platte. Eine leere Platte nimmt das Modell immer; mittig liegt es dort in
     jeder Achse, in der es auf die Fläche passt (:func:`_into_the_middle`).
-    Passt es auf keine belegte Platte, kommt es auf die nächste; ist keine
-    mehr erlaubt, liegt es neben der letzten, ohne Überschneidung.
-    ``avoid`` nennt Platten mit fremdem Filament.
+    Passt es auf keine belegte Platte, kommt es auf die nächste (§17.1), auch
+    hinter der zwölften. Nur ein ausdrücklich begrenzter Auftrag setzt
+    ``plates``; ist keine mehr erlaubt, liegt es neben der letzten, ohne
+    Überschneidung. ``avoid`` nennt Platten mit fremdem Filament.
 
     ``body`` sind die Grenzen des ganzen Modells: Eine Baugruppe wird als
     Ganzes gelegt, die Teile behalten ihre Lage zueinander. Gelegt wird ein
@@ -3040,7 +3040,7 @@ def first_free_spot(
     allowed = area.buffer(EPS_GEOM, join_style="mitre")
     low = moving.bounds.minimum
     last = max((plate for _bounds, plate in occupied), default=-1)
-    final = min(last + 1, max(plates, 1) - 1)
+    final = last + 1 if plates is None else min(last + 1, max(plates, 1) - 1)
     plate = 0
     while True:
         if plate in avoid and plate < final:
