@@ -15,7 +15,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from functools import partial
 from itertools import pairwise
-from typing import Any, Final, NamedTuple, cast
+from typing import Any, Final, NamedTuple, cast, override
 
 from PySide6.QtCore import (
     QEvent,
@@ -6421,7 +6421,7 @@ def feature_field(
     if kind == "bool":
         editor = RowCheckBox(parent)
     elif kind == "choice":
-        combo = QComboBox(parent)
+        combo = column_choice(QComboBox(parent))
         for value, text in field.choices or ():
             combo.addItem(choice_label(str(text)), value)
         explain_choices(combo)
@@ -6960,6 +6960,62 @@ def _feature_group_note(group: FeatureActionGroup) -> str:
             )
         )
     return " ".join(parts)
+
+
+#: Wie viele Zeichen eine Auswahl in einer Spalte mindestens zeigt (RM-488).
+COLUMN_CHOICE_LETTERS: Final = 12
+
+
+def column_choice(combo: QComboBox) -> QComboBox:
+    """Eine Auswahl, die mit ihrer Spalte schmal wird, statt sie zu sprengen (RM-488).
+
+    Qts Vorgabe nimmt den längsten Eintrag als Mindestbreite: „Senkung, Stufen
+    und Verengung mitnehmen“ machte das Auswahlfenster breiter als seine
+    Spalte, und jedes Feld daneben endete ohne Pfeile am Rand. Die offene
+    Liste bleibt so breit wie ihr längster Eintrag (Fusion), gekürzt wird nur
+    die geschlossene Anzeige.
+    """
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    combo.setMinimumContentsLength(COLUMN_CHOICE_LETTERS)
+    combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    return combo
+
+
+class ColumnScroller(QScrollArea):
+    """Ein Rollbereich, der nur senkrecht rollt und so breit bleibt wie sein Inhalt (RM-488).
+
+    Die Breite des Inhalts ist an die Spalte gebunden, in beide Richtungen:
+    ``setWidgetResizable`` zieht ihn auf die Spalte, und die Mindestbreite des
+    Inhalts wird die der Spalte. Ein waagrechter Balken unter Zahlenfeldern
+    versteckt ihre Pfeile und Info-Zeichen; ein zu breites Feld macht
+    stattdessen die Spalte breiter, statt rechts abgeschnitten zu werden.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+    @override
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        content = self.widget()
+        if content is None:
+            return hint
+        # Der senkrechte Balken zählt immer mit: Kommt er erst beim Rollen,
+        # darf er nichts verdecken, und die Spalte springt nicht.
+        bar = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent, None, self)
+        least = content.minimumSizeHint().width() + bar + 2 * self.frameWidth()
+        return QSize(max(hint.width(), least), hint.height())
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # ``setWidget`` trägt den Rollbereich als Filter am Inhalt ein; ein neu
+        # gelegter Inhalt kann eine neue Mindestbreite haben.
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            self.updateGeometry()
+        return super().eventFilter(watched, event)
 
 
 class FeaturePanel(QWidget):
@@ -7787,7 +7843,7 @@ class FeaturePanel(QWidget):
         if selected is None and certain and len(operations) == 1:
             selected = int(operations[0].id)
         if len(operations) > 1 or not certain:
-            choice = QComboBox(self)
+            choice = column_choice(QComboBox(self))
             choice.setObjectName("texture-step-choice")
             choice.setAccessibleName(tr("Textur bearbeiten"))
             choice.addItem(tr("Textur am Körper wählen …"), userData=None)
@@ -7980,7 +8036,7 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        choice = QComboBox(box)
+        choice = column_choice(QComboBox(box))
         choice.setAccessibleName(tr("Passungsart"))
         if len(choices) > 1:
             choice.addItem(tr("Passungsart wählen …"), "")

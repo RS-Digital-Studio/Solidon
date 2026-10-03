@@ -247,10 +247,10 @@ Stellen halten das, beide sind nötig:
   `_folded` macht aus gleich begründeten Absagen eine Zeile („Verschieben,
   Ändern, Drehen, Verdoppeln und Entfernen — <Satz>“); der Satz verneint die
   **Voraussetzung**, nicht eine Handlung („trägt kein Maß, an dem sich Lage
-  oder Größe ändern ließen“), und nennt den Weg, der bleibt. Maschinell
-  prüfbar ist das nicht („ändern“ ist beides) —
-  `test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing` hält nur,
-  dass keine Art auf `_UNKNOWN_KIND` zurückfällt.
+  oder Größe ändern ließen“), und nennt den Weg, der bleibt.
+- **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
+  die Mindestbreite des Inhalts; Auswahlfelder baut `column_choice`, sonst
+  verlangt ihr längster Eintrag die Spalte.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):
   `perceive.actions._kind_of` nennt `int` `count`, das Fenster baut ein
   Ganzzahlfeld und gibt `int` zurück; eine neue Feldart in `ActionField.kind`

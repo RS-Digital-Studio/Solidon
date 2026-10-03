@@ -1441,6 +1441,117 @@ def test_the_object_tree_lists_the_features(window: MainWindow) -> None:
     assert not any(text in ("hole", "face") for text in measures), "der Typ ist kein Maß"
 
 
+def _choose_and_wait(window: MainWindow, feature_id: str) -> None:
+    """Ein Merkmal im Baum wählen und warten, bis das Auswahlfenster steht."""
+    import time
+
+    window.object_tree.select_object("obj_1")
+    window.object_tree.select_feature("obj_1", feature_id)
+    deadline = time.monotonic() + 20.0
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+        if window.feature_panel.feature_id == feature_id and window._answers_worker is None:
+            break
+        QThread.msleep(10)
+    assert window.feature_panel.feature_id == feature_id, "das Auswahlfenster zeigt das Merkmal"
+    for _round in range(5):
+        QApplication.processEvents()
+
+
+def _cut_off_in_the_column(window: MainWindow) -> list[str]:
+    """Jedes sichtbare Bedienelement des Auswahlfensters, das über den Ausschnitt ragt."""
+    from PySide6.QtWidgets import (
+        QAbstractButton,
+        QAbstractSpinBox,
+        QComboBox,
+        QLabel,
+        QScrollArea,
+        QWidget,
+    )
+
+    scroller = window.feature_dock.findChild(QScrollArea)
+    assert scroller is not None
+    viewport = scroller.viewport()
+    content = scroller.widget()
+    assert content is not None
+    cut = []
+    for widget in content.findChildren(QWidget):
+        if not isinstance(widget, (QAbstractSpinBox, QComboBox, QAbstractButton, QLabel)):
+            continue
+        if not widget.isVisibleTo(content) or widget.width() <= 0:
+            continue
+        inner = widget.contentsRect()
+        left = widget.mapTo(viewport, inner.topLeft()).x()
+        if left < 0 or left + inner.width() > viewport.width():
+            text = getattr(widget, "text", lambda: "")()
+            cut.append(f"{type(widget).__name__} „{text}“ {left}+{inner.width()}")
+    if scroller.horizontalScrollBar().maximum() > 0:
+        cut.append(f"waagrechter Rollweg {scroller.horizontalScrollBar().maximum()}")
+    return cut
+
+
+@pytest.mark.parametrize("size", [(1280, 720), (1920, 1080)], ids=["1280", "1920"])
+def test_the_selection_column_fits_every_field_it_shows(
+    window: MainWindow, size: tuple[int, int]
+) -> None:
+    """RM-488: Bohrung, Fläche und Kante liegen ganz im Ausschnitt, ohne waagrechten Balken.
+
+    Seit v0.5.1 war der Inhalt breiter als die Spalte: Die Auswahl „Nur
+    Bohrungsdurchmesser / Senkung, Stufen und Verengung mitnehmen“ verlangte
+    ihre längste Zeile als Mindestbreite, alles daneben endete ohne Pfeile am
+    Rand, die „i“-Zeichen lagen rechts außerhalb, unten stand ein Rollbalken.
+    """
+    window.resize(*size)
+    window.show()
+    QApplication.processEvents()
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
+    face = next(key for key, feature in entry.features.items() if feature.kind == "face")
+    for feature_id in (hole, face):
+        _choose_and_wait(window, feature_id)
+        assert window.feature_dock.isVisibleTo(window)
+        cut = _cut_off_in_the_column(window)
+        assert not cut, f"{feature_id}: ragt über die Spalte: {cut}"
+    window.feature_panel.show_edge("edge-1", "Senkrecht · 8 mm · x -40, y -25", parameter_values={})
+    window.feature_dock.reveal()
+    for _round in range(5):
+        QApplication.processEvents()
+    cut = _cut_off_in_the_column(window)
+    assert not cut, f"Kante: ragt über die Spalte: {cut}"
+
+
+@pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
+def test_the_selection_column_fits_in_every_language(qt_app: QApplication, language: str) -> None:
+    """RM-488 in jeder Sprache: Eine längere Übersetzung verbreitert die Spalte, schneidet nie.
+
+    Die Auswahlfelder werden mit der Spalte schmal; was sich nicht kürzen
+    lässt (ein Haken, ein Knopftext), verbreitert die Spalte über die
+    Mindestbreite des Inhalts, statt rechts unter den Rand zu laufen.
+    """
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.resize(1280, 720)
+        window.show()
+        window.open_path(MESHES / "plate_holes.stl")
+        window.session.wait_for_idle()
+        QApplication.processEvents()
+        entry = window.session.last_result.scene.objects["obj_1"]
+        hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
+        face = next(key for key, feature in entry.features.items() if feature.kind == "face")
+        for feature_id in (hole, face):
+            _choose_and_wait(window, feature_id)
+            cut = _cut_off_in_the_column(window)
+            assert not cut, f"{language} {feature_id}: ragt über die Spalte: {cut}"
+    finally:
+        wait_for_map(window)
+        window.wait_for_workers()
+
+
 def test_a_fillet_says_what_it_is_and_how_big() -> None:
     """Im Objektbaum stand „fillet_1" — ein englisches Wort in der Oberfläche,
     an ``tr()`` vorbei, und daneben eine leere Maßspalte.
