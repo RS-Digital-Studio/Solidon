@@ -153,7 +153,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
-| [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
@@ -170,23 +169,20 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“ (Teil 1 und 3 mit RM-371). Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe](#rm-487) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1; passive Anpassung darf vergrößern, solange der Kunde die Größe nicht gezogen hat |
 | [RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken](#rm-488) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.0; Inhaltsbreite an die Spalte binden |
 | [RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken](#rm-489) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch den größeren Farbpunkt; Symbolgröße und Listenhöhe festlegen |
 | [RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“](#rm-490) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.4; Zusatzangabe kurz oder als Tooltip, Spalte nach Inhalt |
 | [RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“](#rm-491) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 (Auffindbarkeit); Überschrift nennt den Inhalt, Palette findet die Optionen |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
-| [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
+| [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
-| [RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“](#rm-495) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.4.1; Hinweis nicht zeigen, wenn der Kunde genau diese Handlung benutzt |
-| [RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü](#rm-497) | Bedienung und Darstellung | Versionsvergleich 03.10.: seit der Entscheidung vom 11.09. stehen Operationen im Auswahlfenster; Abnahmetext anpassen (Bauplan nur mit Ansage) |
+| [RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“](#rm-495) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1; Hinweis nicht zeigen, wenn der Kunde genau diese Handlung benutzt |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
-| [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
 | [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) erledigt: `hollow.done` trägt *Diesen Schritt ändern*; offen (b) `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -4563,23 +4559,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Feldabnahme und Nummernplatzierung auf Text in zwei Anleitungsbildern.
   Registerabgleich 02.10. (Stand `4449e3370`): offen — „`GuidePart` sind entfernt“ ist irreführend, im Code steht es noch (`app/core/guides.py:37`, `:184`); die Änderung liegt nur ungesichert im Arbeitsbaum.
 
-<a id="rm-303"></a>
-
-- [ ] **RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F14, N8;
-  Text der Gesamtprüfung). Der Zweig hat die Fenstertests
-  `test_ui.py` (sechs Tests mit `keep_the_files_place`),
-  `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
-  `test_generate_ui.py` (Schrittliste mit `place_on_bed`) angepasst; sie gelten mit dem
-  Release-Tor. Der Plattenwechsel nach dem Import (`_show_the_plate_of_the_import`) hat
-  keinen Fenstertest und gilt nur für Dateien vom Pfad: gesetzt in `_on_import_confirmed`,
-  das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
-  erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
-  mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
-  auf Platte 2 kommt. Dazu aus der dritten Nachprüfung (Nachtrag
-  `e85c77ed0`, schon ab `bc901772c`): Ein abgebrochener Import an der Einfügemarke lässt
-  seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
-
 <a id="rm-306"></a>
 
 - [ ] **RM-306 — Zweites Modell in der Ecke oder zur Mitte.** Aus dem Release 0.5.1 (Review von
@@ -4911,25 +4890,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
-<a id="rm-456"></a>
-
-- [ ] **RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test.**
-  Review 02.10.2026 der Claude-Commits bis `73d83b55b` über die Oberfläche.
-  - **Regression gegenüber 0.5.1 (gering):** Seit RM-372 (`e27743131`) bündelt eine Erzeugung ihre
-    Schritte in einer Verlaufsgruppe, die zugeklappt erscheint — in v0.5.1 waren nach dem Erzeugen
-    2 von 4 Schritten sichtbar, jetzt 0 von 4; der Kunde sieht erst nach Aufklappen, was geschah.
-    Fix: die Gruppe der gerade entstandenen Transaktion offen zeigen.
-  - **Testlücke RM-438 (`6f64f7ed1`):** Wird `before=self._sculpt_shown()` in
-    `app/ui/main_window.py:11698` entfernt, bleiben alle 23 Fenstertests grün, die Züge setzen — der
-    Kundenfehler (Formzug in die eben gegrabene Mulde gilt als verfehlt) könnte unbemerkt
-    zurückkehren. Fix: Fenstertest mit zwei Zügen in dieselbe Mulde.
-  - **Interner Wert sichtbar (gering, keine Verschlechterung):** Die Lizenzabsage beim Erzeugen
-    zeigt die Zeile „Handlung: change“.
-  **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
-  macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
-  Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
-  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
-
 <a id="rm-487"></a>
 
 - [ ] **RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe.**
@@ -5075,20 +5035,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   den Grund. Bauplan §2.7.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
 
-<a id="rm-497"></a>
-
-- [ ] **RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü.**
-  Versionsvergleich Weg 1 (03.10.2026). Seit der Entscheidung vom 11.09. stehen Operationen nicht
-  mehr im Kontextmenü, sondern rechts im Auswahlfenster (§18.5; §2.2 ist schon angepasst). Zwei
-  Abnahmesätze in §40 sprechen noch vom alten Weg: P0 „zwei Ops im Register, sichtbar in Menü,
-  Palette, Kontextmenü, CLI und Tool-Schema“ und P1 „Klick liefert die korrekte Feature-ID und das
-  passende Kontextmenü“ (`3d-agent-bauplan.md:3164`, `:3200` am Stand `809141fdd`). Der Docstring
-  `_on_viewport_context_menu` in `app/ui/main_window.py` ist als Kleinigkeit berichtigt.
-  **Fix:** Beide Sätze auf das Auswahlfenster umstellen (Bauplan nur mit Ansage; Thread, der RM-360
-  umgesetzt hat).
-  **Abnahme:** `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nur noch Menüs, die es gibt.
-  Beleg: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md`.
-
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5208,26 +5154,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-konzepte-nachrecherchiert-19082026).
   Registerabgleich 02.10.: Statuszeichen wäre nach der Legende `[~]`.
-
-<a id="rm-371"></a>
-
-- [ ] **RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3, W3-4).
-  Der Erzeugen-Dialog läuft mit `dialog.exec()` (`app/ui/main_window.py:6577`) und ist
-  anwendungsmodal, solange der Generator rechnet (40 s bis viele Minuten); der Fortschritt steht
-  nur im Dialog. §2.8: „Oberfläche bedienbar“, „nie ein blockierendes Fenster“. Beleg
-  `F:\solidon-review-reports\sonden\w3_modal.txt` (`ApplicationModal`).
-  **Ablauf:** Nach *Erzeugen* schließt bzw. verkleinert sich der Dialog nicht modal; der Lauf geht
-  im Arbeiter weiter, die Statusleiste zeigt Fortschritt, verstrichene Zeit und *Abbrechen*
-  (§2.8), die Anwendung bleibt bedienbar. Ist der Lauf fertig, erscheint die Versuchsliste wieder
-  (nichtmodal) mit *Übernehmen*; ein Wechsel des Projekts oder eine gesetzte Einfügemarke
-  wird beim Übernehmen behandelt (RM-361).
-  **Stellen:** `main_window.py:6575–6579` (`_generate`), `app/ui/generate_dialog.py` (Lauf,
-  `_on_failed` `:1060–1068`, Abbrechen `:1091–1099`), Statusleisten-Fortschritt wie beim Laden.
-  **Abnahme:** Test mit gestelltem langsamen Backend: während des Laufs ist kein modales Fenster
-  aktiv, ein Menüeintrag lässt sich auslösen, die Statusleiste zeigt Fortschritt und *Abbrechen*
-  bricht den Lauf; danach ist das Ergebnis übernehmbar. Bauplan §2.8, §15.3.
-  **Vorgabe Robert 02.10.2026 — allgemein:** gleiches nichtmodales Verhalten für jede lange Erzeugung (Text, Bild, später weitere Generatoren); Abnahme mit mindestens drei unterschiedlichen Läufen (Text, Bild, Abbruch).
 
 <a id="rm-441"></a>
 

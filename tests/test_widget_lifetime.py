@@ -770,8 +770,9 @@ def _openers() -> list[tuple[str, str, Callable[[object], None]]]:
         window._generate(None)  # type: ignore[attr-defined]
 
     return [
-        ("Bausteinkatalog", "app.ui.catalog.PartCatalog", open_catalogue),
-        ("Erzeugen-Dialog", "app.ui.generate_dialog.GenerateDialog", open_generator),
+        ("Bausteinkatalog", "app.ui.catalog.PartCatalog.exec", open_catalogue),
+        # Nichtmodal (RM-371): gezeigt mit ``show``, geschlossen wie vom Kunden.
+        ("Erzeugen-Dialog", "app.ui.generate_dialog.GenerateDialog.show", open_generator),
     ]
 
 
@@ -789,6 +790,8 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
     ``exec()`` wird ersetzt und nicht wirklich gefahren: Es hielte den Lauf an,
     bis jemand klickt. Zurückgegeben wird *abgebrochen* — der Weg dessen, der
     das Fenster wieder schließt, und genau der, auf dem niemand aufräumte.
+    Der nichtmodale Erzeugen-Dialog (RM-371) wird statt ``show()`` gleich
+    abgebrochen.
     """
     from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication, QDialog
@@ -804,9 +807,13 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
 
     def cancelled(dialog: QDialog) -> int:
         dialogs.append(weakref.ref(dialog))
+        if dialog_path.endswith(".show"):
+            # Ein nichtmodaler Dialog kehrt sofort zurück; abgebrochen wird er
+            # wie vom Kunden, über seinen Ausgang.
+            dialog.reject()
         return QDialog.DialogCode.Rejected
 
-    monkeypatch.setattr(dialog_path + ".exec", cancelled, raising=True)
+    monkeypatch.setattr(dialog_path, cancelled, raising=True)
 
     watchers = []
     windows = []

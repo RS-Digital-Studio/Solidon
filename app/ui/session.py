@@ -1566,6 +1566,11 @@ class Session(QObject):
     importConfirmed = Signal()
     """Der zuletzt angenommene Import hat sein Modell geliefert — jetzt gehört
     er nach „Zuletzt geöffnet“ (KUNDE-12)."""
+    modelPlaced = Signal(str)
+    """Ein weiteres Modell steht im Stapel — trägt die Kennung seines Körpers.
+
+    Derselbe Satz für alle drei Wege (RM-303): Datei, Download und erzeugtes
+    Modell. An der Einfügemarke kommt er erst, wenn der Umbau übernommen ist."""
     importFinished = Signal(bool)
     """Der asynchrone Einleseweg ist durch — ``True``, wenn etwas ankam.
 
@@ -1703,6 +1708,10 @@ class Session(QObject):
         self._revision: _RevisionWorker | None = None
         """Der laufende Umbau des Verlaufs (P7), höchstens einer."""
         self._revision_cancel = CancelSignal()
+        self._import_in_revision: tuple[_RevisionWorker, str] | None = None
+        """Ein Import an der Einfügemarke und seine Quelle, bis sein Umbau
+        übernommen ist — scheitert er oder wird er abgebrochen, geht die
+        Quelle wieder aus dem Dokument (RM-303)."""
         self._insert_before: OpId | None = None
         """Die Einfügemarke (P7.1): Neue Schritte kommen vor diesen, und die
         Oberfläche zeigt den Stand davor. Kein Dokumentzustand — sie gehört
@@ -2202,6 +2211,7 @@ class Session(QObject):
         self.last_quality = "draft"
         self.picture = None
         self._unconfirmed_import = None
+        self._import_in_revision = None
         self._coarse_scene = None
         self._stop_coarse_preparation()
         if self._insert_before is not None:
@@ -3427,8 +3437,17 @@ class Session(QObject):
         self.importFinished.emit(accepted)
 
     def _track_import(self, before: set[int], source_id: str) -> None:
-        """Den eben angenommenen Import bis zu seinem ersten Ergebnis vormerken."""
+        """Den eben angenommenen Import bis zu seinem ersten Ergebnis vormerken.
+
+        An der Einfügemarke steht er hier noch nicht im Stapel: Ein Arbeiter
+        rechnet den Umbau erst (:meth:`_insert`). Bis der übernommen ist,
+        gehört die Quelle zu ihm (:meth:`_settle_revision_import`).
+        """
         added = frozenset(entry.id for entry in self.project.document.ops) - before
+        if not added and self._insert_before is not None and self._revision is not None:
+            self._import_in_revision = (self._revision, source_id)
+            return
+        self._announce_the_body_of(source_id)
         last = self.history.transactions[-1] if self.history.transactions else None
         # Nur ein Import, der eine eigene Transaktion ist: Ein gebündelter
         # nähme mit der Rücknahme fremde Schritte mit.
@@ -3437,6 +3456,31 @@ class Session(QObject):
             if last is not None and added and frozenset(last.ops) == added
             else None
         )
+
+    def _announce_the_body_of(self, source_id: str) -> None:
+        """Den Körper melden, den der Ladeschritt dieser Quelle erzeugt (RM-303)."""
+        for entry in self.project.document.ops:
+            if entry.params.get("source") == source_id and entry.outputs:
+                self.modelPlaced.emit(str(entry.outputs[0]))
+                return
+
+    def _settle_revision_import(self, finished: _RevisionWorker | None, *, taken: bool) -> None:
+        """Ein Import an der Einfügemarke ist durch: Körper melden oder Quelle austragen.
+
+        Ohne das blieb die Datei eines abgebrochenen oder gescheiterten
+        Einfügens als Quelle im Dokument und reiste mit dem nächsten Speichern
+        in die Projektdatei — dieselbe Waise, die jeder andere Rücknahmepfad
+        hier verhindert (RM-303).
+        """
+        pending = self._import_in_revision
+        if pending is None or (finished is not None and pending[0] is not finished):
+            return
+        self._import_in_revision = None
+        source_id = pending[1]
+        if taken:
+            self._announce_the_body_of(source_id)
+        else:
+            self._drop_source(source_id)
 
     @property
     def import_unconfirmed(self) -> bool:
@@ -3566,6 +3610,7 @@ class Session(QObject):
             raise refusal
         generation = generate_into(self.project, result)
         self._changed()
+        self.modelPlaced.emit(str(generation.object_id))
         return generation.object_id
 
     def follow_print_settings(self, source: Callable[[], PrintSettings]) -> None:
@@ -4446,6 +4491,7 @@ class Session(QObject):
         try:
             commit_revision(self.history, revision)
         except AppError as error:
+            self._settle_revision_import(finished, taken=False)
             self.failed.emit(error)
             return
         if revision.plan.kind == "insert" and self._insert_before is not None:
@@ -4454,16 +4500,19 @@ class Session(QObject):
             self._insert_before = revision.plan.new_id(self._insert_before)
             self.insertionChanged.emit(self._insert_before)
         self._changed()
+        self._settle_revision_import(finished, taken=True)
         self.revisionDone.emit(revision)
 
     def _on_revision_failed(self, error: Any, finished: _RevisionWorker | None = None) -> None:
         if finished is not None and finished is not self._revision:
             return
+        self._settle_revision_import(finished, taken=False)
         self.failed.emit(error)
 
     def _on_revision_cancelled(self, finished: _RevisionWorker | None = None) -> None:
         if finished is not None and finished is not self._revision:
             return
+        self._settle_revision_import(finished, taken=False)
         self.revisionCancelled.emit()
 
     def _on_revision_done(self, finished: _RevisionWorker) -> None:
