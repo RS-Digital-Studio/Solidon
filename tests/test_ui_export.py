@@ -30,6 +30,19 @@ from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 
 
+@pytest.fixture(autouse=True)
+def _window_computes_fine(request: pytest.FixtureRequest) -> None:
+    """Die Exportmechanik am feinen Ergebnis, wie nach dem Warten (RM-426).
+
+    Seit RM-426 rechnet das Fenster im Entwurf, und ein Export bestellt erst
+    die feine Rechnung. Diese Datei prüft, was danach geschieht — Arbeiter,
+    Vorprüfung, Abbruch, späte Signale —, und rechnet deshalb von Anfang an
+    fein. Das Warten selbst prüft ``test_ui.py``.
+    """
+    if "window" in request.fixturenames:
+        request.getfixturevalue("window").session.quality = "fine"
+
+
 def test_an_unreadable_gcode_file_says_so(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1195,16 +1208,15 @@ def test_closing_the_print_settings_keeps_what_was_changed(
     steht, hält ``test_the_close_button_speaks_german`` fest. Dieser Test hält
     die andere Hälfte: dass die Werte den geschlossenen Dialog überleben.
     """
-    from PySide6.QtWidgets import QSpinBox
-
     from app.ui import main_window as module
+    from app.ui.labels import BoundedSpin
 
     class ClosingDialog(module.PrintSettingsDialog):
         """Wie ein Kunde, der einen Wert ändert und das Fenster wieder zumacht."""
 
         def exec(self) -> int:
             editor = self._editors["shell.wall_count"]
-            assert isinstance(editor, QSpinBox)
+            assert isinstance(editor, BoundedSpin)
             editor.setValue(7)
             self.reject()
             return int(self.result())

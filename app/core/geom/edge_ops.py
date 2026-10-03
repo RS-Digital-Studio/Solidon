@@ -33,7 +33,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from app.core.errors import CANCEL, CORRECT_INPUT, SHOW_LOCATION, GeometryError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    MESH_AND_RETRY,
+    SHOW_LOCATION,
+    GeometryError,
+    ValidationError,
+)
 from app.core.geom.boolean import BooleanOutcome, HasVolume
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -58,6 +65,7 @@ from app.core.types import (
     OpContext,
     OpResult,
     Profile,
+    ProgressFn,
     SceneObject,
     Vec3,
 )
@@ -226,7 +234,9 @@ class FilletParams(BaseParams):
     # Weltort (RM-274).
     # 13: exakte Rundungsgruppen lassen einzeln nicht baubare Kanten gezielt aus (RM-284).
     # 14: Gruppen binden nur vollständig belegte native Kanten und erhalten alle Orte (RM-322).
-    cache_version="14",
+    # 15: Gruppensuche je Kontur, Wand je Kontur, ein Befund für alle ausgelassenen Kanten,
+    #     Bindung je native Kante, Engstellen in Kanten gezählt (RM-435, RM-412, RM-436).
+    cache_version="15",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -400,7 +410,8 @@ class ChamferParams(BaseParams):
     # 12: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
     # 13: wie beim Verrunden (RM-274).
     # 14: dieselbe belegte Gruppenauswahl wie beim Verrunden (RM-322).
-    cache_version="14",
+    # 15: Bindung je native Kante, Engstellen in Kanten gezählt, Absage mit Maß (RM-435, RM-436).
+    cache_version="15",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -670,6 +681,7 @@ def _worked(
             cancelled=ctx.cancelled,
             shape=shape,
             law=law,
+            progress=ctx.progress,
         )
 
     body = as_mesh_data(source.mesh)
@@ -732,17 +744,62 @@ def _edge_result(
     )
 
 
-def _exact_group_skipped_finding(place: Vec3, worked: int) -> Finding:
-    """Nennt eine Kante, die OpenCASCADE aus einer Gruppe nicht sicher bauen konnte."""
+def _exact_group_skipped_finding(
+    outline: tuple[tuple[Vec3, Vec3], ...], skipped: int, worked: int
+) -> Finding:
+    """Nennt die Kanten, die eine Gruppe am exakten Körper auslassen musste — alle mit Ort.
+
+    **Ein Befund für alle**, mit dem Umriss jeder Kante (``outline``): Einer je
+    Kante bündelte das Fenster ab zweien zu einer Zeile ohne Ort, und der Kunde
+    musste raten, welche Kanten scharf blieben (RM-412). *Stelle zeigen*
+    umrandet sie alle. Der Satz nennt den Weg, nicht die Bibliothek.
+    """
     return Finding(
         code="edges.exact_group_skipped",
         severity="warning",
         message=_(
-            "OpenCASCADE konnte diese Kante in der gewählten Gruppe nicht sicher verrunden. "
-            "Sie blieb scharf; die übrigen Kanten wurden verrundet."
+            "Einige Kanten dieser Auswahl sind nicht verrundet: Der exakte Kern konnte die "
+            "Rundung dort nicht bilden. Die übrigen Kanten sind verrundet. Soll die Rundung "
+            "auch dort sitzen, versuchen Sie einen kleineren Radius, verrunden Sie diese "
+            "Kanten in einem eigenen Schritt, oder beenden Sie die Flächenbearbeitung."
         ),
-        values={"skipped": 1, "worked": worked},
-        location=place,
+        values={"skipped": skipped, "worked": worked},
+        location=outline[0][0],
+        outline=outline,
+        # Am Netz rundet derselbe Schritt auch, was der exakte Kern nicht baut —
+        # am Crimper eine 20-mm-Kante, deren Kontur durch einen tangential
+        # auslaufenden Knick läuft (RM-435).
+        suggestions=(SHOW_LOCATION, CORRECT_INPUT, MESH_AND_RETRY),
+    )
+
+
+def _thin_wall_finding(
+    outline: tuple[tuple[Vec3, Vec3], ...], skipped: int, worked: int, size: float, wall: float
+) -> Finding:
+    """Nennt die Kanten einer Gruppe, deren Wand nicht dicker ist als der Radius.
+
+    Die Gruppe lässt sie vor dem Bau aus, statt ganz abzusagen
+    (``brep.edit.fillet_group``); darunter passt der Radius dort. Derselbe Bau
+    wie ``edges.too_narrow``: Ort aller Kanten, Maß, Weg.
+    """
+    return Finding(
+        code="edges.thin_wall",
+        severity="warning",
+        message=_(
+            "Einige Kanten dieser Auswahl sind nicht verrundet: Die Wand neben ihnen ist nicht "
+            "dicker als dieser Radius. Dort passt nur ein Radius unter {largest}. Die übrigen "
+            "Kanten sind verrundet. Soll die Rundung auch dort sitzen, wählen Sie einen "
+            "kleineren Radius.",
+            largest=format_length(max(wall, 0.0)),
+        ),
+        values={
+            "skipped": skipped,
+            "worked": worked,
+            "size_mm": round(size, 3),
+            "largest_mm": round(max(wall, 0.0), 3),
+        },
+        location=outline[0][0],
+        outline=outline,
         suggestions=(SHOW_LOCATION, CORRECT_INPUT),
     )
 
@@ -760,6 +817,7 @@ def _on_a_solid(
     cancelled: CancelToken,
     shape: ChamferShape | None = None,
     law: RadiusLaw | None = None,
+    progress: ProgressFn | None = None,
 ) -> OpResult:
     """Der exakte Weg — träge geholt, weil OpenCASCADE optional ist (§36).
 
@@ -767,11 +825,17 @@ def _on_a_solid(
     Szene; dieser Zweig wird dort nie betreten, und der Import darf deshalb
     nicht beim Laden des Registers stattfinden.
     """
+    from itertools import pairwise
+
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid
 
     narrow: list[Finding] = []
+    # **Gefragt war die Gruppe, nicht die belegten Kanten**: Eine Absage erklärt
+    # sich über alle Züge der Auswahl (``_why_it_does_not_fit``) und nennt das
+    # größte passende Maß. Mit den belegten Kanten fragte sie nie (RM-435 M1).
+    asked = selected_edges
     group_was_fitted = False
     if selected_edges is None and not keys and choice != "named":
         fitted = _group_that_fits(
@@ -792,8 +856,6 @@ def _on_a_solid(
         """Auch ein gescheiterter Gruppenbau behält alle ausgewählten Stellen."""
         if not group_was_fitted:
             return error
-        from itertools import pairwise
-
         outline = [segment for finding in narrow for segment in finding.outline]
         for edge in edit._edges_at(cast(Solid, source.mesh), selected_edges or ()):
             cancelled.raise_if_cancelled()
@@ -805,17 +867,22 @@ def _on_a_solid(
                 error.suggestions = (SHOW_LOCATION, *error.suggestions)
         return error
 
-    exact_skipped: tuple[Vec3, ...] = ()
+    exact_skipped: tuple[int, ...] = ()
+    thin: tuple[int, ...] = ()
+    thinnest = math.inf
     try:
         if rounded:
             if group_was_fitted and (law is None or law.constant):
                 assert selected_edges is not None
-                solid, exact_skipped = edit.fillet_group(
+                group = edit.fillet_group(
                     cast(Solid, source.mesh),
                     size,
                     selected_edges,
                     cancelled=cancelled,
+                    progress=progress,
                 )
+                solid, exact_skipped, thin = group.solid, group.omitted, group.thin
+                thinnest = group.thinnest
             else:
                 solid = edit.fillet(
                     cast(Solid, source.mesh),
@@ -844,7 +911,7 @@ def _on_a_solid(
             size,
             choice,
             keys,
-            selected_edges,
+            asked,
             rounded,
             narrowest_face(profile),
             shape,
@@ -855,27 +922,38 @@ def _on_a_solid(
             with_places(refused)
             raise
         raise with_places(explained) from refused
-    if exact_skipped:
-        worked = max(0, len(selected_edges or ()) - len(exact_skipped))
+    if exact_skipped or thin:
+        worked = max(0, len(selected_edges or ()) - len(exact_skipped) - len(thin))
         narrow = [
             dataclasses.replace(entry, values={**entry.values, "worked": worked})
             if "worked" in entry.values
             else entry
             for entry in narrow
         ]
-        narrow.extend(_exact_group_skipped_finding(point, worked) for point in exact_skipped)
+
+        def outline_of(indices: Sequence[int]) -> tuple[tuple[Vec3, Vec3], ...]:
+            return tuple(
+                segment
+                for edge in edit._edges_at(cast(Solid, source.mesh), indices)
+                for segment in pairwise(edit.edge_points(edge))
+            )
+
+        if thin:
+            narrow.append(_thin_wall_finding(outline_of(thin), len(thin), worked, size, thinnest))
+        if exact_skipped:
+            narrow.append(
+                _exact_group_skipped_finding(outline_of(exact_skipped), len(exact_skipped), worked)
+            )
     if narrow and cast(Solid, source.mesh).is_watertight and not solid.is_watertight:
         # **Eine verkleinerte Gruppe liefert keinen offenen Körper** (RM-279 (ii)).
-        # An pegboard-goot tesselliert OpenCASCADE zwei der übrigen Rundungen
-        # offen, bei jedem Radius und auch einzeln gewählt. ``fillet_group``
-        # prüft solche Kanten erst nach den Gruppenkandidaten einzeln und baut
-        # die übrigen neu. Bleibt das Ergebnis offen, sagt diese Schranke ab.
+        # Die Rundung prüft ``fillet_group`` selbst; diese Schranke bleibt für
+        # die Fase, deren Gruppe in einem Bau entsteht.
         explained = _why_it_does_not_fit(
             source,
             size,
             choice,
             keys,
-            selected_edges,
+            asked,
             rounded,
             narrowest_face(profile),
             shape,
@@ -890,10 +968,20 @@ def _on_a_solid(
             )
         raise with_places(explained)
     empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
+    # **Eine Rundung oder Fase legt keine Wendel an**: Trägt der Eingang kein
+    # Gewinde, liest das Ergebnis keines (``known_threads=()``). Die Lesung
+    # passte an ``pegboard-gs-100-v2.step`` nach „alle Kanten“ R 0,5 66 Achsen
+    # an Rundungsränder an — über die Hälfte der Auswertung (RM-435).
+    threaded = any(feature.kind == "thread" for feature in source.features.values())
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+                source,
+                mesh=solid,
+                kind="brep",
+                features=features_of(
+                    solid, cancelled=cancelled, known_threads=None if threaded else ()
+                ),
             )
         ],
         findings=[
@@ -938,7 +1026,8 @@ def _group_that_fits(
         cancelled.raise_if_cancelled()
     entries = edges_of(mesh)
     chosen = wanted(entries, choice, (), rings_by_plane=rings_by_plane)
-    bindings = edit.native_edges_of_chains(solid, mesh, chosen, cancelled=cancelled)
+    segments = edit.native_edges_of_segments(solid, mesh, chosen, cancelled=cancelled)
+    bindings = [_bound_edges(claimed) for claimed in segments]
     bound = [entry for entry, binding in zip(chosen, bindings, strict=True) if binding]
     varying = law if law is not None and not law.constant else None
     try:
@@ -971,36 +1060,58 @@ def _group_that_fits(
         if id(entry) in limits
         for index in binding
     }
-    retained = bindings
+    retained = segments
     if narrow_indices:
         available = [
             (position, entry)
-            for position, (entry, binding) in enumerate(zip(chosen, bindings, strict=True))
-            if binding and not any(index in narrow_indices for index in binding)
+            for position, entry in enumerate(chosen)
+            if id(entry) not in limits and bindings[position]
         ]
-        # Ein Zug kann mehr als eine native Kante tragen. Entfernt die
-        # Bandprüfung ihn, fehlt sein Anteil auch an seinen übrigen Kanten.
-        # Die echte Kurvenprüfung entfernt solche Abhängigkeiten bis zum
-        # Fixpunkt; ein indirekt verlorener Beleg ist keine gemessene Engstelle.
-        rebound = edit.native_edges_of_chains(
+        # Ein Zug kann mehr als eine native Kante tragen, eine native Kante auf
+        # mehrere Züge verteilt sein. Ohne die Engstellen entscheidet die
+        # Kurvenprüfung deshalb je Kante neu: Was ein schmaler Zug mit belegte,
+        # ist jetzt unvollständig und fällt; die übrigen Kanten bleiben. Ein
+        # indirekt verlorener Beleg ist keine gemessene Engstelle.
+        rebound = edit.native_edges_of_segments(
             solid, mesh, [entry for _position, entry in available], cancelled=cancelled
         )
         by_position = dict(zip((position for position, _entry in available), rebound, strict=True))
-        retained = tuple(by_position.get(position, ()) for position in range(len(chosen)))
-    narrow, unmapped = [], []
+        retained = tuple(
+            by_position.get(position, (None,) * (len(entry.points) - 1))
+            for position, entry in enumerate(chosen)
+        )
+    narrow: list[MeshEdge] = []
+    unmapped: list[tuple[tuple[Vec3, Vec3], ...]] = []
+    # Strecken eines tragenden Zugs auf einer Kante, die ein schmaler Zug
+    # mitbelegt: Die Kante gibt es, sie ist nur anderswo zu schmal — das sagt
+    # ``edges.too_narrow``, nicht „keine eigene Kante“.
+    narrow_rest: list[tuple[Vec3, Vec3]] = []
     kept: dict[int, None] = {}
-    for entry, binding in zip(chosen, retained, strict=True):
+    for position, (entry, claimed) in enumerate(zip(chosen, retained, strict=True)):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if id(entry) in limits:
             narrow.append(entry)
-        elif not binding:
-            unmapped.append(entry)
-        else:
-            kept.update((index, None) for index in binding)
+            continue
+        kept.update((index, None) for index in _bound_edges(claimed))
+        first = segments[position]
+        narrow_rest.extend(
+            segment
+            for before, after, segment in zip(first, claimed, pairwise(entry.points), strict=True)
+            if after is None and before in narrow_indices
+        )
+        unmapped.extend(
+            _unbound_pieces(
+                entry,
+                tuple(
+                    after if after is not None or before not in narrow_indices else before
+                    for before, after in zip(first, claimed, strict=True)
+                ),
+            )
+        )
     if not kept:
         outline = tuple(segment for entry in chosen for segment in pairwise(entry.points))
-        values = {"skipped": len(chosen), "worked": 0, "size_mm": size}
+        values = {"skipped": len(narrow_indices) + len(unmapped), "worked": 0, "size_mm": size}
         if not unmapped:
             from app.core.geom.edges import too_large_for_the_faces
 
@@ -1014,33 +1125,45 @@ def _group_that_fits(
                 detail = _(
                     "Keine Kante dieser Auswahl lässt sich mit diesem Maß bearbeiten. "
                     "Bei {narrow} Kanten sind die angrenzenden Flächen zu schmal; dort muss "
-                    "das Maß unter {largest} liegen. An {unmapped} weiteren Stellen lässt "
-                    "sich keine eindeutige Kante des exakten Körpers bestimmen. "
-                    "Verkleinern Sie das Maß oder wählen Sie andere Kanten.",
-                    narrow=len(narrow),
+                    "das Maß unter {largest} liegen. An {unmapped} weiteren Stellen hat der "
+                    "exakte Körper keine eigene Kante, etwa weil der Knick innerhalb einer "
+                    "Fläche liegt. Verkleinern Sie das Maß, oder beenden Sie die "
+                    "Flächenbearbeitung: Am Dreiecksmodell lassen sich diese Stellen bearbeiten.",
+                    narrow=len(narrow_indices),
                     largest=format_length(max(largest, 0.0)),
                     unmapped=len(unmapped),
                 )
             else:
                 detail = _(
-                    "An keiner der {count} ausgewählten Stellen lässt sich eine eindeutige "
-                    "Kante des exakten Körpers bestimmen. Der Körper blieb unverändert. "
-                    "Prüfen Sie die markierten Stellen oder wählen Sie andere Kanten.",
+                    "An keiner der {count} ausgewählten Stellen hat der exakte Körper eine "
+                    "eigene Kante, etwa weil der Knick innerhalb einer Fläche liegt. Der Körper "
+                    "blieb unverändert. Am Dreiecksmodell lassen sich diese Stellen bearbeiten: "
+                    "Beenden Sie dafür die Flächenbearbeitung.",
                     count=len(unmapped),
                 )
             error = GeometryError(detail=detail)
         error.values.update(values)
         error.values.update(location=outline[0][0], outline=outline)
         error.object_id = source.id
-        error.suggestions = (SHOW_LOCATION, CORRECT_INPUT, CANCEL)
+        error.suggestions = (
+            (SHOW_LOCATION, MESH_AND_RETRY, CORRECT_INPUT, CANCEL)
+            if unmapped
+            else (SHOW_LOCATION, CORRECT_INPUT, CANCEL)
+        )
         raise error
     findings = []
     if narrow:
-        outline = tuple(segment for entry in narrow for segment in pairwise(entry.points))
+        outline = (
+            *(segment for entry in narrow for segment in pairwise(entry.points)),
+            *narrow_rest,
+        )
         findings.append(
             dataclasses.replace(
+                # Gezählt in nativen Kanten wie ``worked``: Am exakten Körper ist
+                # die Kante die Einheit, die der Kunde wählt und sieht. Netzzüge
+                # zählten an pb3041 zwei statt vierzehn (RM-436).
                 too_narrow_finding(
-                    len(narrow),
+                    len(narrow_indices),
                     min(limits.values()),
                     size,
                     worked=len(kept),
@@ -1052,24 +1175,53 @@ def _group_that_fits(
             )
         )
     if unmapped:
-        outline = tuple(segment for entry in unmapped for segment in pairwise(entry.points))
+        outline = tuple(segment for piece in unmapped for segment in piece)
         findings.append(
             Finding(
                 code="edges.unmapped",
                 severity="warning",
                 message=_(
-                    "An {skipped} Stellen lässt sich keine eindeutige Kante des exakten "
-                    "Körpers bestimmen. Diese Stellen blieben unverändert. Prüfen Sie "
-                    "die markierten Stellen oder wählen Sie andere Kanten.",
+                    "An {skipped} Stellen hat der exakte Körper keine eigene Kante, etwa weil "
+                    "der Knick innerhalb einer Fläche liegt. Diese Stellen blieben unverändert. "
+                    "Am Dreiecksmodell lassen sie sich mitbearbeiten: Beenden Sie dafür die "
+                    "Flächenbearbeitung.",
                     skipped=len(unmapped),
                 ),
                 values={"skipped": len(unmapped), "worked": len(kept)},
                 location=outline[0][0],
                 outline=outline,
-                suggestions=(SHOW_LOCATION, CORRECT_INPUT),
+                suggestions=(SHOW_LOCATION, MESH_AND_RETRY, CORRECT_INPUT),
             )
         )
     return tuple(kept), findings
+
+
+def _bound_edges(claimed: Sequence[int | None]) -> tuple[int, ...]:
+    """Die nativen Kanten, die die Strecken eines Zugs belegen — ohne Wiederholung."""
+    return tuple(dict.fromkeys(index for index in claimed if index is not None))
+
+
+def _unbound_pieces(
+    entry: MeshEdge, claimed: Sequence[int | None]
+) -> list[tuple[tuple[Vec3, Vec3], ...]]:
+    """Die zusammenhängenden Stücke eines Zugs ohne native Kante — je Stück eine Stelle.
+
+    Ein ganz unbelegter Zug ist ein Stück; ein teilweise belegter behält seine
+    Kanten und meldet nur, was übrig bleibt (RM-435 M2).
+    """
+    from itertools import pairwise
+
+    pieces: list[tuple[tuple[Vec3, Vec3], ...]] = []
+    current: list[tuple[Vec3, Vec3]] = []
+    for claim, segment in zip(claimed, pairwise(entry.points), strict=True):
+        if claim is None:
+            current.append(segment)
+        elif current:
+            pieces.append(tuple(current))
+            current = []
+    if current:
+        pieces.append(tuple(current))
+    return pieces
 
 
 def _why_it_does_not_fit(

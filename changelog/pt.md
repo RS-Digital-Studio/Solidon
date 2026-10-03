@@ -46,7 +46,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
+- O SuperSlicer já não falha com peças redondas: já não recebe a costura chanfrada que não conhece.
+- A pré-seleção de filamento escolhe Generic ou a marca da sua impressora em vez de um filamento especial de terceiros, por exemplo Generic PETG em vez de BETA PETG na Bambu A1.
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
+- *Orientar para impressão*, *Rodar* e *Deslocar* funcionam também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte. O corpo continua exato.
+- Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
 
 ### Furos, furos oblongos e divisão
 
@@ -65,6 +69,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 - Se um furo não puder ser cortado de forma limpa num corpo STEP, o Solidon fura-o no modelo de triângulos em vez de passar adiante um corpo danificado.
 - Se escolheu «Carregar agora», também as peças de *Dividir o modelo* deixam de iniciar minutos de reconhecimento; «Reconhecer todas as características» recupera-o.
+
+### Arredondar e chanfrar
+
+- Arredondar um grupo de arestas num corpo STEP arredonda agora as arestas possíveis em vez de recusar tudo. *Mostrar o ponto* encontra cada aresta omitida.
+- As arestas junto a uma parede não mais espessa do que o raio ficam vivas, e o relatório indica o raio que cabe ali. Antes, todo o arredondamento era recusado.
+- Se um corpo STEP não tiver aresta própria num local escolhido, o relatório oferece *Terminar a edição de faces e tentar de novo*. No modelo de triângulos também é arredondado.
+- Se faltar espaço para a troca com o processo de cálculo, o Solidon calcula o passo mesmo assim e indica-o no relatório. Antes parava com o conselho de calcular de forma mais grosseira.
 
 ### Modelar, texto e esboço
 
@@ -116,6 +127,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
 - A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.
+- Quando outros programas ocupam o computador, *Cancelar* para um cálculo longo em menos de um segundo, em vez de pedir um reinício após vários segundos.
 - Um modelo de linguagem local pode dar doze passos em vez de oito por pedido no chat e resolve assim mais pedidos com várias partes.
 
 ## 0.5.1

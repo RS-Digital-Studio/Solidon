@@ -839,6 +839,62 @@ def test_remesh_and_retry_never_guesses_a_target(history: History) -> None:
     assert document_to_data(history.document) == before
 
 
+def test_mesh_and_retry_never_guesses_a_target(history: History) -> None:
+    """Die Umwandlung vor dem Schritt nimmt dieselben Ziele wie die Reparatur — oder keine."""
+    create(history)
+    failed_id = history.operations[-1].id
+    before = document_to_data(history.document)
+
+    with pytest.raises(ValidationError) as caught:
+        history.mesh_and_retry(failed_id)
+
+    assert caught.value.constraint == "no_mesh_target"
+    assert caught.value.suggestions
+    assert document_to_data(history.document) == before
+
+
+def test_mesh_and_retry_rounds_the_exact_group_on_the_mesh_in_one_undo_step() -> None:
+    """*Flächenbearbeitung beenden und erneut versuchen* setzt die Umwandlung vor die Rundung.
+
+    Für Stellen ohne eigene Kante im exakten Körper (``edges.unmapped``,
+    RM-436): Danach rundet derselbe Schritt am Dreiecksmodell, und ein Undo
+    nimmt den ganzen Zug zurück.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles as material_profiles
+    from app.core.scene import evaluate
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    body = project.document.ops[-1].outputs[0]
+    history.apply(
+        "Verrunden",
+        [
+            OperationDraft(
+                op="fillet_edges", inputs=(body,), params={"radius": 1.0, "edges": "vertical"}
+            )
+        ],
+    )
+    step = project.document.ops[-1].id
+    before = [entry.op for entry in project.document.ops]
+
+    history.mesh_and_retry(step)
+
+    assert [entry.op for entry in project.document.ops] == [
+        "create_brep_box",
+        "brep_to_mesh",
+        "fillet_edges",
+    ]
+    result = evaluate(project.document, material_profiles.make_profile("centauri-carbon-2", "petg"))
+    assert result.complete
+    assert result.scene.objects[body].kind == "mesh"
+    history.undo()
+    assert [entry.op for entry in project.document.ops] == before
+
+
 def test_decimate_and_retry_never_turns_an_exact_body_into_triangles() -> None:
     """Vor einen Schritt des exakten Kerns kommt kein Verringern — es machte Dreiecke daraus."""
     from app.core.bootstrap import load_operations

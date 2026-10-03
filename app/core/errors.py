@@ -214,6 +214,12 @@ DECIMATE_AND_RETRY = Action("decimate_and_retry", _("Dreiecke verringern und ern
 #: Bis zur Durchsicht 0.5.1 stand es als ``remesh_first`` ohne Länge und ohne
 #: Draht da.
 REMESH_AND_RETRY = Action("remesh_and_retry", _("Kanten verfeinern und erneut versuchen"))
+#: Für Stellen, an denen der exakte Körper keine eigene Kante hat — ein Knick
+#: innerhalb einer Fläche (``edges.unmapped``): die Flächenbearbeitung vor dem
+#: Schritt beenden (``brep_to_mesh``), dann derselbe Schritt am Dreiecksmodell,
+#: das jeden Knick rundet (``History.mesh_and_retry``). Nicht vorn: Der Weg ist
+#: eine Einbahntür, Strg+Z nimmt ihn als Ganzes zurück (RM-436).
+MESH_AND_RETRY = Action("mesh_and_retry", _("Flächenbearbeitung beenden und erneut versuchen"))
 SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
 #: Wenn *Automatisch teilen* neben den gesperrten Sichtflächen keine Naht
 #: mehr findet (§22.3, RM-080): Die Sperren dieses Körpers aufheben — der

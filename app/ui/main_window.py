@@ -15526,8 +15526,8 @@ class MainWindow(QMainWindow):
     def _on_viewport_context_menu(self, x: int, y: int) -> None:
         """Zeigt am Zeiger dasselbe Menü, das der Objektbaum anbietet (§18.5).
 
-        Gebaut wird es dort, weil es dort schon steht: dieselbe Sichtbarkeit,
-        dieselben Operationen aus ``applies_to``. Zwei Menüs mit derselben
+        Gebaut wird es dort, weil es dort schon steht; Operationen stehen
+        im Auswahlfenster, nicht im Menü. Zwei Menüs mit derselben
         Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
 
         Die Ansicht meldet Gerätepixel, das Menü braucht Logikpunkte — die
@@ -17328,16 +17328,12 @@ class MainWindow(QMainWindow):
             refused = refused_feature_field(editors)
             if refused is not None:
                 refusal, focus_target = refused
-                refusal_state["reason"] = refusal
-                host.block_apply(refusal)
+                host.refuse_fields(refusal)
                 if interpret:
                     focus_target.setFocus()
                     window.announce(refusal)
                 return False
-            previous_refusal = refusal_state["reason"]
-            if previous_refusal is not None and host.blocked_reason == previous_refusal:
-                host.block_apply(None)
-            refusal_state["reason"] = None
+            host.refuse_fields(None)
             if interpret:
                 for editor in editors.values():
                     spins = (
@@ -17483,7 +17479,6 @@ class MainWindow(QMainWindow):
         # Felder bindet, löst er deshalb bei der Rückgabe selbst — sonst
         # läse ein alter ``read_fields`` in den Träger eines alten Flusses.
         bound: list[QMetaObject.Connection] = []
-        refusal_state: dict[str, str | None] = {"reason": None}
         for editor in editors.values():
             if isinstance(editor, QCheckBox):
                 bound.append(editor.toggled.connect(read_fields))
@@ -21956,6 +21951,7 @@ class MainWindow(QMainWindow):
             # Und in der Gegenrichtung: *Kanten verfeinern* vor ein *Glätten*, das
             # umschlug — mit der Länge, an der der Kern beides durchgespielt hat.
             "remesh_and_retry": self._remesh_after_error,
+            "mesh_and_retry": self._mesh_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
@@ -22587,6 +22583,19 @@ class MainWindow(QMainWindow):
         if object_id is None:
             return
         self.run_operation(REGISTRY.get("remesh_mesh"), {"edge": edge}, on_bodies=(object_id,))
+
+    def _mesh_after_error(self, error: AppError) -> None:
+        """*Flächenbearbeitung beenden* vor den Schritt des Befunds, dann derselbe Schritt am Netz.
+
+        Für Stellen, an denen der exakte Körper keine eigene Kante hat — ein
+        Knick innerhalb einer Fläche (``edges.unmapped``, RM-436): Am
+        Dreiecksmodell rundet derselbe Schritt jeden Knick. Ein Zug im
+        Verlauf (``History.mesh_and_retry``), Strg+Z nimmt ihn zurück. Steht
+        der Schritt nicht mehr im Verlauf, gibt es nichts davorzusetzen.
+        """
+        steps = self.session.project.document.ops
+        if error.op_id is not None and any(entry.id == error.op_id for entry in steps):
+            self.session.mesh_and_retry(error.op_id)
 
     def _change_selection_after_error(self, error: AppError) -> None:
         """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.

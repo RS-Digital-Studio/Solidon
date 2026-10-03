@@ -972,7 +972,9 @@ def test_an_evaluation_question_keeps_the_project_generation_from_its_creation(
     stopped: list[bool] = []
     session.askRequested.connect(requests.append)
     worker.cancelled.connect(lambda: stopped.append(True))
-    monkeypatch.setattr(session, "run_evaluation", lambda: session.ask_from_worker("Alt", ["Ja"]))
+    monkeypatch.setattr(
+        session, "run_evaluation", lambda *_args: session.ask_from_worker("Alt", ["Ja"])
+    )
     session._project_generation += 1
     try:
         worker.work()
@@ -1324,7 +1326,7 @@ def test_active_matching_questions_end_when_their_evaluation_is_invalidated(
         assert dialog.result() == QDialog.DialogCode.Rejected
         return dialog.result()
 
-    def evaluate():
+    def evaluate(*_args):
         session.announce_question(preview, (("part", "face_new_a"),))
         session.ask_from_worker("Welcher Bezug bleibt?", ["face_new_a"])
         pytest.fail("an invalidated evaluation cannot receive a matching answer")
@@ -4359,6 +4361,11 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
     from PySide6.QtTest import QTest
 
     _object_id, _hole, flow, fields = _hole_fields_in_placement(window)
+    # Fokus und damit ``focusOutEvent`` gibt es offscreen nur im aktiven Fenster;
+    # ohne das prüfte der Test den Fokuswechsel, den es nie gab.
+    window.show()
+    window.activateWindow()
+    QApplication.processEvents()
     diameter = fields["Durchmesser"]
     _minimum, _maximum = diameter._bounds_mm
     limit = diameter.value_mm() + 1.0
@@ -4375,6 +4382,7 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
     other.lineEdit().setFocus()
     QTest.keyClick(other.lineEdit(), Qt.Key.Key_End)
     QApplication.processEvents()
+    assert other.lineEdit().hasFocus() and not line.hasFocus(), "Voraussetzung: der Fokus wechselt"
     assert not line.isModified(), (
         "Fokuswechsel stellt die ungültige Zahl ohne Änderungsmarke wieder her"
     )
@@ -4400,27 +4408,37 @@ def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -
 def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
     window: MainWindow,
 ) -> None:
-    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt."""
-    from types import SimpleNamespace
+    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt.
 
+    Die Bohrung stammt aus einem echten Schritt mit ``=@bore``: Wählt der Kunde
+    sie, bietet das Fenster ihren Schritt an und holt dessen Maße ins Bild. Ein
+    erfundener Schritt, den der Verlauf nicht kennt, kam nie bis zur Maßgruppe.
+    """
     from app.ui.labels import LengthSpin
     from app.ui.op_dialog import ValueField
     from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
-    result = window.session.evaluate_now()
+    session = window.session
+    assert session.add_parameter(Parameter(name="bore", value=6.0))
+    assert session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert session.wait_for_idle(30_000)
+    body = session.project.document.ops[-1].outputs[0]
+    assert session.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(body,),
+                params={"diameter": "=@bore", "x": 0.0, "y": 0.0, "z": 10.0},
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    result = session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
     window.object_tree.select_feature(object_id, hole)
-    for _ in range(40):
-        QApplication.processEvents()
-
-    spec = REGISTRY.get("drill_hole")
-    step = SimpleNamespace(id=17, op="drill_hole", params={"diameter": "=@bore"})
-    window.feature_panel.offer_bore_step(step, spec, {"bore": 6.0})
-    window._place_measures("drill_hole", {"diameter": "=@bore"}, editing=False)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -5766,6 +5784,134 @@ def test_the_remesh_and_retry_button_refines_before_the_smoothing_and_runs_throu
     window.session.undo()
     window.session.wait_for_idle()
     assert list(window.session.project.document.ops) == ops_before
+
+
+def test_the_mesh_and_retry_button_rounds_the_places_without_an_exact_edge(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Knick ohne eigene Kante im exakten Körper hat einen Weg: am Dreiecksmodell (RM-436).
+
+    ``edges.unmapped`` bot nur „Prüfen Sie die markierten Stellen“ an; am Knick
+    innerhalb einer Fläche gibt es nichts zu prüfen. Der Knopf setzt
+    *Flächenbearbeitung beenden* vor den Schritt, und derselbe Schritt rundet
+    am Netz — ein Zug, Strg+Z nimmt ihn zurück. Der Befund wird hier an die
+    echte Gruppenbindung angehängt; Angebot, Handler, Verlauf und Auswertung
+    sind echt.
+    """
+    from app.core.errors import CORRECT_INPUT, MESH_AND_RETRY, SHOW_LOCATION
+    from app.core.geom import edge_ops
+    from app.core.types import Finding
+    from app.ui.panels import actions_for_document, as_error
+
+    real = edge_ops._group_that_fits
+
+    def with_a_place_without_an_edge(*args: Any, **kwargs: Any) -> Any:
+        kept, findings = real(*args, **kwargs)
+        place = (((0.0, 0.0, 1.0), (0.0, 1.0, 1.0)),)
+        unmapped = Finding(
+            code="edges.unmapped",
+            severity="warning",
+            message="An 1 Stellen hat der exakte Körper keine eigene Kante.",
+            values={"skipped": 1, "worked": len(kept)},
+            location=place[0][0],
+            outline=place,
+            suggestions=(SHOW_LOCATION, MESH_AND_RETRY, CORRECT_INPUT),
+        )
+        return kept, [*findings, unmapped]
+
+    monkeypatch.setattr(edge_ops, "_group_that_fits", with_a_place_without_an_edge)
+    window.session.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    window.session.wait_for_idle()
+    body = window.session.project.document.ops[-1].outputs[0]
+    window.session.apply(
+        "Verrunden",
+        [
+            OperationDraft(
+                op="fillet_edges", inputs=(body,), params={"radius": 1.0, "edges": "vertical"}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    finding = next(f for f in result.scene.report.findings if f.code == "edges.unmapped")
+    handlers = window.error_handlers()
+    offered = [
+        action.id
+        for action in actions_for_document(
+            finding,
+            window.session.project.document,
+            stopped_at=result.stopped_at,
+            live_objects=result.scene.objects,
+        )
+        if action.id in handlers
+    ]
+    assert MESH_AND_RETRY.id in offered, offered
+    ops_before = list(window.session.project.document.ops)
+
+    handlers[MESH_AND_RETRY.id](as_error(finding, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "create_brep_box",
+        "brep_to_mesh",
+        "fillet_edges",
+    ]
+    assert after.scene.objects[body].kind == "mesh"
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert list(window.session.project.document.ops) == ops_before
+
+
+def test_a_bundle_of_places_on_one_body_keeps_show_the_place_for_all(
+    qt_app: QApplication,
+) -> None:
+    """Gleiche Sätze an verschiedenen Stellen eines Körpers: Die Sammelzeile zeigt alle (RM-412).
+
+    Zwei ausgelassene Rundungskanten standen als „(2) …“ ohne Ort und ohne
+    *Stelle zeigen* da; der Kunde musste raten, welche Kanten scharf blieben.
+    Trägt jedes Mitglied seinen Umriss, fliegt die Zeile zur ersten Stelle und
+    umrandet alle. Ohne Umriss bleibt sie ohne Ort — ein zufälliger erster
+    wäre eine Behauptung.
+    """
+    from app.core.errors import SHOW_LOCATION
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel, as_error
+
+    first = (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)
+    second = (((5.0, 0.0, 0.0), (6.0, 0.0, 0.0)),)
+    common: dict[str, Any] = {
+        "code": "edges.too_narrow",
+        "severity": "warning",
+        "message": "Einige Kanten dieser Auswahl sind nicht verrundet.",
+        "object_id": "obj_1",
+        "suggestions": (SHOW_LOCATION,),
+    }
+    panel = ReportPanel()
+    panel.add_findings(
+        [
+            Finding(location=first[0][0], outline=first, values={"edge": 1}, **common),
+            Finding(location=second[0][0], outline=second, values={"edge": 2}, **common),
+        ]
+    )
+
+    assert panel.list.count() == 1
+    row = panel.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert row.location == first[0][0]
+    assert row.outline == first + second
+    assert as_error(row).values["outline"] == first + second
+
+    points = ReportPanel()
+    points.add_findings(
+        [
+            Finding(location=first[0][0], values={"edge": 1}, **common),
+            Finding(location=second[0][0], values={"edge": 2}, **common),
+        ]
+    )
+    bare = points.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert bare.location is None and bare.outline == ()
 
 
 def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count() -> None:
@@ -9558,10 +9704,22 @@ def test_a_boolean_that_failed_in_draft_can_go_the_full_chain(window: MainWindow
     entwurf = errors.BooleanFailedError(attempted=("direct", "welded"))
     assert "use_voxel_stage" in {a.id for a in offered_actions(entwurf, handlers)}
 
+    session = window.session
     handlers["use_voxel_stage"](entwurf)
-    assert window.session._quality_once == "fine", "der Lauf bleibt im Entwurf"
-    window.session.wait_for_idle()
-    assert window.session._quality_once is None, "und der nächste ist wieder Entwurf"
+    # Die Güte legt der Start des Arbeiters fest (RM-426), nicht mehr dessen Lauf.
+    assert session._worker is not None and session._worker.quality == "fine", (
+        "der Lauf bleibt im Entwurf"
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_quality == "fine"
+    session.evaluate_async()
+    assert session._worker is not None and session._worker.quality == "draft", (
+        "und der nächste ist wieder Entwurf"
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_quality == "draft"
 
 
 def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) -> None:
@@ -11397,6 +11555,8 @@ def test_split_restores_the_complete_export_progress(
     """Prüfung und Schreiben erhalten nach Split genau ihren eigenen Abbruchzustand zurück."""
 
     monkeypatch.setattr(window._leash, "start", lambda _worker: None)
+    # Am feinen Ergebnis beginnt der Export sofort (RM-426); um das Warten geht es hier nicht.
+    window.session.quality = "fine"
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._start_export(tmp_path / "halter.stl", "stl")
@@ -20768,23 +20928,27 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
 
 
-def _a_cone_in_draft(window: MainWindow) -> None:
-    """Ein Kegel, der im Entwurf mit halb so vielen Dreiecken steht wie fein."""
+def _a_blend_in_draft(window: MainWindow) -> None:
+    """Ein verschmolzenes Teil, das im Entwurf auf doppelt so grobem Raster steht wie fein.
+
+    Bis RM-427 tat es ein Kegel; seitdem rechnen Kegel und Ring in beiden
+    Stufen mit derselben Teilung. Gröber im Entwurf ist nur noch das
+    Verschmelzen über :data:`blend.DRAFT_SAMPLES` Rasterpunkten — hier rund
+    650 000 bei 0,6 mm.
+    """
+    box = {"width": 40.0, "depth": 40.0, "height": 40.0}
     assert window.session.apply(
-        "Kegel",
+        "Zwei verschmolzene Quader",
         [
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 20.0}),
             OperationDraft(
-                op="create_cone",
-                params={
-                    "bottom_diameter": 30.0,
-                    "top_diameter": 10.0,
-                    "height": 20.0,
-                    "segments": 64,
-                },
-            )
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.6}
+            ),
         ],
     )
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
 
@@ -20817,13 +20981,13 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
 
     from app.core.geom.mesh import as_mesh_data
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     result = window.session.last_result
     assert result is not None
     draft = sum(as_mesh_data(entry.mesh).triangle_count for entry in result.scene.objects.values())
     fine = _fine_triangles(window)
     assert fine > draft, "Voraussetzung: fein und Entwurf unterscheiden sich"
-    target = tmp_path / "kegel.stl"
+    target = tmp_path / "teil.stl"
 
     window._start_export(target, "stl")
     assert window.session.wait_for_idle(30_000)
@@ -20844,7 +21008,7 @@ def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:
     """
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     ran: list[str] = []
 

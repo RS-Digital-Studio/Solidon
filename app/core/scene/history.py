@@ -30,6 +30,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     DECIMATE_AND_RETRY,
+    MESH_AND_RETRY,
     RECOUNT_AND_RETRY,
     REMESH_AND_RETRY,
     REPAIR_AND_RETRY,
@@ -1004,6 +1005,33 @@ class History:
             )
         return self._prepared_and_retried(
             stopped_at, "remesh_mesh", {"edge": float(edge)}, REMESH_AND_RETRY.label, values
+        )
+
+    def mesh_and_retry(self, stopped_at: OpId) -> Transaction:
+        """Beendet die Flächenbearbeitung vor einem Schritt und rechnet ihn am Netz neu.
+
+        Für Stellen, an denen der exakte Körper keine eigene Kante hat — ein
+        Knick innerhalb einer Fläche (``edges.unmapped``): Vor den Suffix ab
+        ``stopped_at`` kommt je lebendem Eingang *Flächenbearbeitung beenden*
+        (``brep_to_mesh``) mit seiner Vorgabe, und derselbe Schritt rundet am
+        Dreiecksmodell jeden Knick. Eine Transaktion, dieselbe Zielschranke wie
+        die Reparatur (§15.5, Regel 16).
+        """
+        activation.require(activation.CHANGE)
+        if not repair_targets(self.document, stopped_at, self._registry):
+            raise ValidationError(
+                field="in",
+                detail=_(
+                    "Dieser Schritt verwendet kein vorhandenes Modell, dessen "
+                    "Flächenbearbeitung Solidon beenden kann."
+                ),
+                constraint="no_mesh_target",
+                values={"op": stopped_at},
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+                op_id=stopped_at,
+            )
+        return self._prepared_and_retried(
+            stopped_at, "brep_to_mesh", {}, MESH_AND_RETRY.label, None
         )
 
     def _prepared_and_retried(

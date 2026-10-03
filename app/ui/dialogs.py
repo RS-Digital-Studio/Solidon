@@ -112,6 +112,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     fit_dialog_to_screen,
     fit_height_after_show,
     make_danger,
@@ -3015,6 +3016,8 @@ NEEDS_OP: Final = frozenset(
         "decimate_and_retry",
         # Und vor ein umgeschlagenes *Glätten* das Verfeinern (Durchsicht 0.5.1).
         "remesh_and_retry",
+        # Und vor eine Rundung ohne Kante im exakten Körper die Umwandlung (RM-436).
+        "mesh_and_retry",
         # Öffnet den Schritt, den ein Befund meint (RM-374, *Größe ändern*).
         "change_step",
     }
@@ -3587,12 +3590,12 @@ class DonationDialog(QDialog):
         layout.addWidget(without_heading)
         layout.addWidget(without)
         layout.addLayout(helping)
-        scroll = DialogScrollArea(self)
-        scroll.setWidget(content)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
-        outer.addWidget(scroll, 1)
+        outer.addWidget(self._scroll, 1)
         outer.addWidget(buttons)
         no_primary(self)
         # Qt berechnet den ersten Höhenvorschlag vor der Mindestbreite und
@@ -3602,10 +3605,30 @@ class DonationDialog(QDialog):
         self.resize(self.minimumWidth(), self.sizeHint().height())
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._fit_providers()
         super().showEvent(event)
         # Der Vorschlag oben ist vor dem Stylesheet gerechnet; nachgemessen
         # verschwinden rund achtzig Punkte Leere über „Schließen“.
         fit_height_after_show(self)
+
+    def _fit_providers(self) -> None:
+        """Beide Anbieterknöpfe so breit wie der längere, der Dialog breit genug für beide.
+
+        Gemessen erst nach dem Polieren, wenn das Stylesheet den Innenabstand
+        gesetzt hat. Mit größerer Systemschrift oder längerer Übersetzung passen
+        die zwei Knöpfe nicht mehr in :data:`DONATION_WIDTH`; der Rollbereich
+        rollte dann quer, und der längere Knopf stand breiter da als der andere
+        — das Auge liest Größe als Rang. Der Dialog wächst stattdessen mit.
+        """
+        buttons = (self.support_button, self.gofundme_button)
+        equal = max(button.sizeHint().width() for button in buttons)
+        for button in buttons:
+            button.setMinimumWidth(equal)
+        content = self._scroll.widget()
+        content_layout = content.layout() if content is not None else None
+        if content_layout is not None:
+            content_layout.activate()
+        self.setMinimumWidth(max(DONATION_WIDTH, expanded_width(self._scroll)))
 
     @staticmethod
     def _purpose_row(parent: QWidget, symbol: str, point: str, detail: str) -> QHBoxLayout:
