@@ -78,6 +78,7 @@ Nutzen da und sonst nichts.
 - Cura berücksichtigt die Beschleunigungsgrenzen des Druckers. Wenn eine eigene Einstellung darüber liegt, nennt Solidon den begrenzten Wert im Bericht.
 - Kammertemperaturen kommen im richtigen Slicerfeld an. Druckerprofile ohne regelbare Kammerheizung erklären jetzt, warum der Wert nicht wirkt.
 - Das Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als Linien an und wird nicht mehr durch Gitter oder Würfel ersetzt.
+- Solidon meldet nach dem Schneiden auch Einstellungen, die PrusaSlicer oder die Orca-Slicer verworfen haben. Abweichende Rand-, Wand- und Stützarten werden ebenfalls erkannt.
 - Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.

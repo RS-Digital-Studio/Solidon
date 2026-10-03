@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)](#rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026) |
 | 2026-10-03 | [RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)](#rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026) |
 | 2026-10-03 | [RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)](#rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026) |
 | 2026-10-03 | [RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)](#rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026) |
@@ -38215,4 +38216,36 @@ Echte Vorher-Rundreisen: Bambu ersetzte `rectilinear` durch `cubic`, Creality du
 
 Abnahme: echte Würfelschnitte in Bambu Studio 02.08.02.61/P1S und Creality Print 7.3.0.6149/K1 mit gewähltem Linienmuster. Beide Konfigurationsblöcke enthalten `sparse_infill_pattern=zig-zag`. Unabhängiges Lesen der G1-Bahnen zeigt je 92 Füllschichten und 644 lange Segmente; pro Schicht sieben parallele Linien, zwischen den Schichten wechselnd 135°/45°. Konkrete Zeilen und Bahnlängen stehen in `F:\solidon-review-reports\gcode\agentB\rm461-codex-lines.json`. Bambu 886 s/3,71 g, Creality 875,566 s/3,46 g. Keine falsche Füllmusterwarnung. Die ergänzende Kammerwahl ändert die Musterzuordnung nicht.
 
-Kundensichtbarer Tabellenfehler seit `f934a42219`, in v0.5.1 enthalten; je ein Punkt in allen sechs Changelogs für 0.5.2. Implementierung: `1fbdb5de8`; dieser getrennte Abschluss wird unter „Bambu und Creality drucken das gewählte Linienmuster“ committed.
+Kundensichtbarer Tabellenfehler seit `f934a42219`, in v0.5.1 enthalten; je ein Punkt in allen sechs Changelogs für 0.5.2. Implementierung: `1fbdb5de8`; Abschlusscommit: `106ddb5b9` (Bambu und Creality drucken das gewählte Linienmuster).
+
+## RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)
+
+<a id="rm-462-verworfene-druckwerte-werden-nach-dem-schneiden-gemeldet-03102026"></a>
+<a id="rm-462"></a>
+
+**RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`. `handover.verify_settings` überspringt jeden
+  geschriebenen Schlüssel, der im Konfigurationsblock fehlt (`app/core/export/handover.py:5581`).
+  Orca-Familie und PrusaSlicer schreiben ihre Konfiguration aber vollständig (631 bzw. 358
+  Schlüssel) — was fehlt, hat das Programm verworfen: `chamber_temperature` in Bambu Studio
+  (RM-460) ohne Meldung; in SuperSlicer `fan_always_on`/`min_fan_speed`. `_RECOMPUTED`
+  (`:5533–5547`) nimmt `brim_type`, `wall_sequence`, `support_type` ganz aus der Gegenprobe — genau
+  die Aufzählungen, bei denen ein unbekannter Wert still auf die Vorgabe fällt (RM-461).
+  **Fix:** Für `orca` und `prusa` einen fehlenden geschriebenen Schlüssel als „vom Slicer nicht
+  übernommen“ melden (Ausnahmeliste je Programm für belegte Umbenennungen); die drei Aufzählungen
+  wieder vergleichen.
+  **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
+  Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
+  Regression 02.10.2026: nein — Code in v0.5.0, v0.5.1 und `09d8e9485` gleich.
+
+**Abschluss:** `verify_settings` übersprang jeden fehlenden Schlüssel; `_RECOMPUTED` nahm außerdem Randart, Wandfolge und Stützart aus. Der Aufrufer übergibt nun Familie und Programm. Bei Prusa und Orca erzeugt ein fehlender geschriebener Druckwert `slicer.setting_ignored`, Herkunft `gcode`, Darstellung `Soll → —`; die drei Aufzählungen werden wieder verglichen. Andere Familien und Aufrufe ohne Vollständigkeitsvertrag vergleichen vorhandene Werte.
+
+Eng belegte Ausnahmen: SuperSlicer übersetzt `min_fan_speed` zu `default_fan_speed`, wobei `fan_always_on=0` den jeweiligen Platz auf null setzt. Der native Wert bleibt geprüft. Quelle: SuperSlicer 2.5.59.13, `src/libslic3r/PrintConfig.cpp`, Alias bei 1132 und `handle_legacy` bei 7099–7107 (https://github.com/supermerill/SuperSlicer/blob/2.5.59.13/src/libslic3r/PrintConfig.cpp). Vier bekannte Orca-Materialoverrides dürfen ausschließlich als vollständige `nil`-Listen fehlen; numerische oder gemischte Listen bleiben geprüft. Nur Orca, Elegoo und Creality dürfen den Bambu-spezifischen Schalter `override_filament_scarf_seam_setting` weglassen. Keine pauschale Metadatenausnahme ergänzt.
+
+Gegenprobe: 21 neue Fälle ohne Fix rot, danach 21 grün, darunter fehlende Schlüssel, Umbenennung, alle drei Aufzählungen, Mehrspulen und der wirkliche `slice_model`-Anschluss mit gestelltem Slicer. Zwei ältere Anschlussprüfungen geben nun vollständige Blöcke zurück; ihr unabhängig vorgegebener Temperatur-/Turmwert bleibt bestehen. Zusammen 655 bestanden, 4 übersprungen, 6 Releasefälle abgewählt. Abschließender betroffener Lauf über `tools/affected_tests.py --run`: 562 bestanden, 7 übersprungen, 6 abgewählt, Exit 0. Ruff, Format und mypy grün; unabhängiger Schlussreview ohne belegte P1/P2.
+
+Echte Abnahme: Der unveränderte ursprüngliche Bambu-P1S-Würfel-A-Lauf hatte 78 geschriebene Werte und 566 zurückgelesene Schlüssel. Tatsächlich geschriebenes `chamber_temperature=35` fehlt im G-Code: vorher null Befunde, jetzt genau einer. Drei absichtlich andere Aufzählungssollwerte gegen echte Bambu-Werte erzeugen vorher null, nachher drei Befunde. SuperSlicer-Soll 60 gegen native 50 erzeugt vorher null, nachher einen Befund; richtige 50 bleiben still.
+
+Fünf von fünf neue Schnitte mit SuperSlicer 2.5.59.13/generic-220 und Bambu Studio 02.08.02.61/A1 erfolgreich und ohne falsche Übergabewarnung. SuperSlicer bestätigt bei drei Würfeln nativ 50, 60 und 0 Prozent (je 64 geschriebene/489 gelesene Werte); Bambu bestätigt Vorgabe und 60 Prozent (je 28/562, vier berechtigt fehlende nil-Overrides). Ein Bambu-Prozess wurde nach fertiger Druckdatei durch den vorhandenen Ergebniswächter beendet. Neue echte Läufe einspulig; Mehrspulen durch Regressionen und Codepfad geprüft. Belege: `F:\solidon-review-reports\B-rm462\final-evidence.json`, `probe-before.json`, `probe-after.json`, `bericht.md`; Druckdateien unter `F:\solidon-review-reports\gcode\codexB\rm462-nachher`.
+
+Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffentlichungen; kundensichtbar, deshalb ein Punkt in allen sechs Changelogs für 0.5.2. Commit: „Verworfene Druckwerte werden nach dem Schneiden gemeldet“. Das vollständige Entwicklungstor und die Kennung werden im gemeinsamen Abschluss ergänzt.

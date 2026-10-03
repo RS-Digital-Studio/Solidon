@@ -105,7 +105,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
-| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
 | [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
@@ -3089,23 +3088,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Archivierung von RM-442 belegt seine Freigabe nicht. Keine neue Umsetzung
   im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
   Review 02.10.: bestätigt über die Oberfläche — mit X-Symmetrie wirkt ein Zug nicht, wenn nur seine Spiegelkopie die eben verformte Fläche greift, der Bericht nennt ihn verfehlt (gleich wie in v0.5.1). Beleg Fall C in `F:\solidon-review-reports\sonden\v8k_rm442_ui.py`.
-
-<a id="rm-462"></a>
-
-- [ ] **RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`. `handover.verify_settings` überspringt jeden
-  geschriebenen Schlüssel, der im Konfigurationsblock fehlt (`app/core/export/handover.py:5581`).
-  Orca-Familie und PrusaSlicer schreiben ihre Konfiguration aber vollständig (631 bzw. 358
-  Schlüssel) — was fehlt, hat das Programm verworfen: `chamber_temperature` in Bambu Studio
-  (RM-460) ohne Meldung; in SuperSlicer `fan_always_on`/`min_fan_speed`. `_RECOMPUTED`
-  (`:5533–5547`) nimmt `brim_type`, `wall_sequence`, `support_type` ganz aus der Gegenprobe — genau
-  die Aufzählungen, bei denen ein unbekannter Wert still auf die Vorgabe fällt (RM-461).
-  **Fix:** Für `orca` und `prusa` einen fehlenden geschriebenen Schlüssel als „vom Slicer nicht
-  übernommen“ melden (Ausnahmeliste je Programm für belegte Umbenennungen); die drei Aufzählungen
-  wieder vergleichen.
-  **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
-  Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
-  Regression 02.10.2026: nein — Code in v0.5.0, v0.5.1 und `09d8e9485` gleich.
 
 <a id="rm-465"></a>
 

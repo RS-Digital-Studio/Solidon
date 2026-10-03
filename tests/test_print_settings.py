@@ -3414,11 +3414,13 @@ def test_creality_slice_initializes_the_tower_inside_the_manufacturers_bed(
     model.write_text("solid x\nendsolid x\n")
     before = model.read_bytes()
     captured: list[dict[str, object]] = []
+    expected: dict[str, str] = {}
     original_write = handover.write_config
 
     def write(*args: Any, **kwargs: Any) -> handover.SlicerConfig:
         """Eine ausdrückliche Koordinate ist schon vor der CLI-Ableitung ein Sollwert."""
         written = original_write(*args, **kwargs)
+        expected.update(written.written)
         if not explicit:
             return written
         values = json.loads(written.process.read_text(encoding="utf-8"))
@@ -3439,6 +3441,11 @@ def test_creality_slice_initializes_the_tower_inside_the_manufacturers_bed(
         )
         # Creality nullt den inaktiven Einfilament-Turm. Beim aktiven Turm
         # oder einer ausdrücklichen Koordinate muss dieselbe Abweichung bleiben.
+        returned += "".join(
+            f"; {key} = {value}\n"
+            for key, value in expected.items()
+            if key not in {"wipe_tower_x", "wipe_tower_y"}
+        )
         returned += "; wipe_tower_x = 0.000\n; wipe_tower_y = 0.000\n"
         (tmp_path / "plate_1.gcode").write_text(returned, encoding="utf-8")
         return _Finished(b"")
@@ -3791,6 +3798,25 @@ def test_the_first_spools_value_is_verified_as_written(
     )
     payload = _gcode_printing_at(-10.0, 10.0) + "; temperature = 210\n"
     model, setup = _slicer_writing(monkeypatch, tmp_path, payload, flavour="prusa")
+    written: dict[str, str] = {}
+    original_write = handover.write_config
+
+    def remember_config(*args: Any, **kwargs: Any) -> handover.SlicerConfig:
+        config = original_write(*args, **kwargs)
+        written.update(config.written)
+        return config
+
+    def complete_gcode(*_args: object, **_kwargs: object) -> _Finished:
+        # Prusa bestätigt den ganzen Satz; nur die Temperatur kommt unabhängig
+        # aus der gestellten Druckdatei, damit der Spulenvergleich aussagekräftig bleibt.
+        rest = "".join(
+            f"; {key} = {value}\n" for key, value in written.items() if key != "temperature"
+        )
+        (tmp_path / "solidon.gcode").write_text(payload + rest, encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "write_config", remember_config)
+    monkeypatch.setattr(handover, "_run_slicer", complete_gcode)
 
     outcome = handover.slice_model(
         model,

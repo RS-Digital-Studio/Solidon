@@ -115,6 +115,11 @@ oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
 | `verify_settings` | Hat der Slicer die geschriebenen Werte übernommen? |
 | `spools_left_out` | Sind **alle übergebenen Spulen** gedruckt worden? |
 
+`verify_settings` erhält Familie und Programmmarke: Prusa und Orca schreiben
+vollständige Blöcke, fehlende Druckwerte sind deshalb Befunde. Belegte
+Umbenennungen werden vor dem Vergleich übersetzt; reine `nil`-Overrides
+bleiben Vererbung. Randart, Wandfolge und Stützart werden ebenfalls verglichen.
+
 `verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
 Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
 ein wörtlicher Backslash erhalten.

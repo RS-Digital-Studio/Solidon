@@ -5743,7 +5743,11 @@ def slice_model(
         # benutzte Werkzeuge voraus; ausdrückliche Sollwerte bleiben vollständig.
         written = config.written if len(metrics.used_tools) > 1 else requested_values
         ignored = verify_settings(
-            analysis.settings, written, cura_machine_differences(analysis, config.cura_machine)
+            analysis.settings,
+            written,
+            cura_machine_differences(analysis, config.cura_machine),
+            flavour=setup.flavour,
+            program=slicer_keys.program_of(setup.executable),
         )
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
@@ -6113,14 +6117,17 @@ _RECOMPUTED: Final = frozenset(
         "nozzle_diameter",
         "bed_shape",
         "first_layer_speed",
-        "brim_type",
-        "wall_sequence",
-        "support_type",
     }
 )
 
 
-def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
+def verify(
+    text: str,
+    written: Mapping[str, str],
+    *,
+    flavour: SlicerFlavour | None = None,
+    program: str = "",
+) -> list[Finding]:
     """Kam an, was Solidon geschrieben hat? (§28.2)
 
     Die Slicer schreiben ihre wirksame Konfiguration als Kommentare in die
@@ -6128,16 +6135,50 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
     stimmt — und sie kommt von dem Programm selbst, nicht aus einer
     Dokumentation, die für die installierte Version womöglich nicht gilt.
 
-    Damit prüft sich jeder Slicer selbst, auch einer, den beim Bauen der
-    Tabelle niemand vorliegen hatte. Gemeldet wird nur, was **nachweislich**
-    abweicht: ein Schlüssel, den die Datei gar nicht nennt, sagt nichts —
-    kein Slicer schreibt alles.
+    Prusa und Orca schreiben vollständige Konfigurationsblöcke: Ein fehlender
+    Druckwert wurde nicht übernommen. Ohne bekannte Familie wird nur mit den
+    vorhandenen Werten verglichen, etwa bei einem einzelnen Kommentarblock.
     """
-    return verify_settings(gcode.analyze(text).settings, written)
+    return verify_settings(gcode.analyze(text).settings, written, flavour=flavour, program=program)
+
+
+def _verification_values(written: Mapping[str, str], program: str) -> Mapping[str, str]:
+    """SuperSlicers belegte Lüfterumbenennung, einschließlich ausgeschalteter Plätze.
+
+    In 2.5.59.13 heißt ``min_fan_speed`` intern ``default_fan_speed``;
+    ``fan_always_on=0`` setzt diesen Wert auf null (PrintConfig.cpp,
+    ``handle_legacy``). Die beiden Prusa-Schlüssel stehen nicht im G-Code.
+    """
+    if program != "superslicer" or "min_fan_speed" not in written:
+        return written
+    minimum = re.split(r"[,;]", written["min_fan_speed"].strip().strip("[]"))
+    switches = re.split(r"[,;]", written.get("fan_always_on", "1").strip().strip("[]"))
+    switches = [value.strip().strip('"') for value in switches]
+    if len(switches) != len(minimum) or any(value not in {"0", "1"} for value in switches):
+        return written
+    native = dict(written)
+    native.pop("min_fan_speed")
+    native.pop("fan_always_on", None)
+    native["default_fan_speed"] = ",".join(
+        value.strip().strip('"') if switch == "1" else "0"
+        for value, switch in zip(minimum, switches, strict=True)
+    )
+    return native
+
+
+#: Nur diese Orca-Materialfelder heben als ``nil`` keine Maschinenvorgabe auf.
+_INHERITED_MATERIAL_OVERRIDES: Final = frozenset(
+    {"filament_retraction_length", "filament_retraction_speed", "filament_z_hop", "filament_wipe"}
+)
 
 
 def verify_settings(
-    found: Mapping[str, str], written: Mapping[str, str], differences: Sequence[str] = ()
+    found: Mapping[str, str],
+    written: Mapping[str, str],
+    differences: Sequence[str] = (),
+    *,
+    flavour: SlicerFlavour | None = None,
+    program: str = "",
 ) -> list[Finding]:
     """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen.
 
@@ -6147,11 +6188,33 @@ def verify_settings(
     """
 
     ignored: list[str] = list(differences)
-    for key, wanted in written.items():
+    for key, wanted in _verification_values(written, program).items():
         if key in _RECOMPUTED:
             continue
+        if (
+            flavour == "orca"
+            and key in _INHERITED_MATERIAL_OVERRIDES
+            and all(
+                value.strip().strip('"') == "nil"
+                for value in re.split(r"[,;]", wanted.strip().strip("[]"))
+            )
+        ):
+            continue
         actual = found.get(key.casefold())
-        if actual is None or _same(
+        if actual is None:
+            if flavour not in {"prusa", "orca"}:
+                continue
+            # Nur Bambu kennt diesen Schalter; die drei gemessenen Verwandten
+            # schreiben ihre Nahtwerte unmittelbar und führen ihn nicht.
+            if key == "override_filament_scarf_seam_setting" and program in {
+                "orcaslicer",
+                "elegooslicer",
+                "crealityprint",
+            }:
+                continue
+            ignored.append(f"{key}: {wanted} → —")
+            continue
+        if _same(
             actual,
             wanted,
             unescape_gcode_quotes=key.casefold().endswith("_gcode"),

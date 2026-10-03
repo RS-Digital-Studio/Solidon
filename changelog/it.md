@@ -53,6 +53,7 @@ scrive in `website/version.json`.
 - Cura rispetta i limiti di accelerazione della stampante. Se un valore scelto li supera, Solidon indica il valore ridotto nel rapporto.
 - La temperatura della camera arriva nel campo corretto dello slicer. I profili senza riscaldamento regolabile della camera spiegano perché il valore non ha effetto.
 - Il riempimento Linee arriva in Bambu Studio e Creality Print come linee, senza essere sostituito da Griglia o Cubico.
+- Dopo il taglio, Solidon segnala le impostazioni scartate da PrusaSlicer o dagli slicer Orca, oltre alle modifiche a bordo, ordine delle pareti e tipo di supporto.
 - La preselezione del filamento prende Generic o la marca della tua stampante invece di un filamento speciale di terzi, ad esempio Generic PETG invece di BETA PETG sulla Bambu A1.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 - Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano *Orienta per la stampa*, *Ruota* e *Sposta*. Il corpo resta esatto.
