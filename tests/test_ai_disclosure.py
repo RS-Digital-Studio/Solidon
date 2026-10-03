@@ -191,13 +191,14 @@ def test_main_window_keeps_the_generation_record_in_its_live_settings(
     monkeypatch.setattr(ComfyBackend, "readiness", lambda *args: Readiness.READY)
     monkeypatch.setattr(ComfyBackend, "model_choices", lambda *args: {})
 
-    def close(dialog: GenerateDialog) -> int:
+    def close(dialog: GenerateDialog) -> None:
+        # Nichtmodal (RM-371): Das Fenster zeigt den Dialog mit ``show``.
         assert dialog.settings is window.settings
         remember_disclosure(dialog.settings, target)
         dialog.release()
-        return int(QDialog.DialogCode.Rejected)
+        dialog.reject()
 
-    monkeypatch.setattr(GenerateDialog, "exec", close)
+    monkeypatch.setattr(GenerateDialog, "show", close)
     window._generate(None)
     assert disclosure_is_current(window.settings, target)
 

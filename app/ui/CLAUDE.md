@@ -142,7 +142,7 @@ Karte, dort das Gesetz.
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |
 | `seal_dialog.py` | Dichtweg als Zeichnung oder Öffnung wählen (§19.2); schreibt keine Operation |
 | `seal_flow.py` | bindet die Dichtwegwahl an den normalen Operationsdialog |
-| `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27) |
+| `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27); nichtmodal, der Lauf steht in der Statusleiste |
 | `variants_dialog.py` | Variantengenerator (§28.3, §25) |
 | `comfy_dialog.py` | ComfyUI einrichten (§27, §36); Dateiprüfung siehe `wartezeit.md` |
 | `install_dialog.py` | was fehlt, und ein Knopf, der es holt (§36, §38); eine begonnene Installation läuft beim Schließen geordnet aus |

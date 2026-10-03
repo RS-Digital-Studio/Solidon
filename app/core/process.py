@@ -397,6 +397,34 @@ def release_helper(process: Any) -> None:
         _close_windows_job(cast("subprocess.Popen[Any]", popen))
 
 
+#: ``NORMAL_PRIORITY_CLASS`` unter Windows.
+_WINDOWS_NORMAL_PRIORITY: Final = 0x00000020
+
+
+def hurry_helper(process: Any) -> None:
+    """Hebt einen zurückgestellten Hilfsprozess vor seinem Ende auf normale Priorität.
+
+    Er rechnet eine Stufe unter der Anwendung (``kernel_jobs``). Unter Windows
+    plant der Kern aber auch das Beenden: ``TerminateProcess`` braucht für
+    jeden Faden des Kindes eine Zeitscheibe, und auf einem Rechner, den andere
+    Programme mit normaler Priorität auslasten, bekam der Hilfsprozess die erst
+    nach rund vier Sekunden — das Ende blieb unbestätigt, und der Kunde las
+    „Starten Sie Solidon neu“ (RM-474, unter 32 Lastprozessen zwei von vier
+    Abbrüchen). Unter POSIX gibt es den Rückweg ohne Recht nicht, und die
+    Planer dort lassen einen Prozess mit höherem ``nice`` nicht verhungern.
+    """
+    if os.name != "nt":
+        return
+    popen = getattr(process, "_popen", None)
+    handle = getattr(popen, "_handle", None)
+    if handle is None:
+        return
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+    kernel32.SetPriorityClass.restype = ctypes.c_int
+    kernel32.SetPriorityClass(ctypes.c_void_p(int(handle)), _WINDOWS_NORMAL_PRIORITY)
+
+
 def _resume_windows_process(process_id: int) -> None:
     """Setzt den ersten Thread eines sicher gebunden gestarteten Prozesses fort."""
 

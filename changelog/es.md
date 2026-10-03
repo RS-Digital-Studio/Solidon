@@ -47,7 +47,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
+- SuperSlicer ya no se bloquea con piezas redondas: ya no recibe la costura en bisel que no conoce.
+- La preselección de filamento toma Generic o la marca de su impresora en lugar de un filamento especial ajeno, por ejemplo Generic PETG en vez de BETA PETG en la Bambu A1.
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
+- *Orientar para imprimir*, *Girar* y *Trasladar* funcionan también con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte. El cuerpo sigue exacto.
+- Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
 
 ### Taladros, ranuras y división
 
@@ -67,12 +71,20 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.
 - Si eligió «Cargar ahora», las piezas de *Dividir el modelo* tampoco inician un reconocimiento de minutos; «Reconocer todas las características» lo recupera.
 
+### Redondear y achaflanar
+
+- Redondear un grupo de aristas en un cuerpo STEP redondea ahora las aristas posibles en lugar de rechazar todo. *Mostrar el punto* encuentra cada arista omitida.
+- Las aristas junto a una pared no más gruesa que el radio quedan vivas, y el informe indica el radio que cabe allí. Antes se rechazaba todo el redondeo.
+- Si un cuerpo STEP no tiene arista propia en una zona elegida, el informe ofrece *Finalizar la edición de caras y volver a intentarlo*. En el modelo de triángulos se redondea también.
+- Si no queda espacio para el intercambio con el proceso de cálculo, Solidon calcula el paso igualmente y lo indica en el informe. Antes se detenía aconsejando calcular más grueso.
+
 ### Modelar, texto y dibujo
 
 - Con «En ambas caras», «Aplicar texto» pone las letras también en la cara posterior, legibles desde fuera. Sirve para banderas, carteles y colgantes.
 - La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la cama. Los proyectos antiguos conservan su forma.
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
+- El editor de esqueleto muestra huesos y articulación en la vista, y una articulación queda en el centro del cuerpo en vez de en su piel, así la figura se dobla de forma pareja.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
 - En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
@@ -116,6 +128,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Algunos avisos que se refieren a un paso lo abren para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
 - La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
+- Si otros programas tienen el ordenador ocupado, *Cancelar* detiene un cálculo largo en menos de un segundo en lugar de pedir un reinicio tras varios segundos.
+- Un modelo de lenguaje local puede dar doce pasos en lugar de ocho por encargo en el chat y resuelve así más encargos de varias partes.
 
 ## 0.5.1
 

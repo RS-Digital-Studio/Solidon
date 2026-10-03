@@ -39,6 +39,9 @@ OHNE_KNOPF: dict[str, str] = {
         "Der Variantendialog bleibt offen, nennt die Werte ohne Ergebnis und setzt den "
         "Cursor in „Erster Wert“ (``variants_dialog._finished``)."
     ),
+    # Der Weg liegt außerhalb: Speicherplatz freigeben — der Satz nennt es, und
+    # Solidon nimmt den Hilfsprozess nach der Frist von selbst wieder (RM-436).
+    "kernel.disk_full": "Der Satz nennt den Weg: Speicherplatz freigeben.",
     # Auskünfte über den Rechenweg: Es ist nichts falsch, und es gibt nichts zu tun.
     "boolean.jittered": "Auskunft über die Rückfallstufe (§17.2), das Ergebnis ist gültig.",
     "brep.from_mesh.freeform": "Auskunft beim Umwandeln; der Rest bleibt, wie er im Netz war.",

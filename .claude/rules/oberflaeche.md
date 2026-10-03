@@ -185,9 +185,7 @@ danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
 `valueFromText`. Als Typprüfung bleibt `QDoubleSpinBox` richtig.
 
-**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an drei Orten:** Qt verwirft
-an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
-übernimmt 15. Die **Parameterleiste** und die Zahlenfelder des
+**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an drei Orten.** Die **Parameterleiste** und die Zahlenfelder des
 **Operationsdialogs** (`op_dialog.ValueField`, auch die Stückzahl) tragen ein
 `labels.BoundedSpin`: Eine Zahl jenseits der Grenzen bleibt markiert stehen,
 `valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas
@@ -199,7 +197,8 @@ der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
 direkt unter dem Feld, und der gemeinsame Knopf ist gesperrt, solange die
 scharfgestellte Handlung eine sichtbare abgelehnte Zahl enthält. Maßgruppen im
-Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann. **Eine
+Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann; die
+Sperre ist eigen (`QuietHost.refuse_fields`), kein Vorschauauftrag hebt sie. **Eine
 gespeicherte Zahl jenseits der Grenze wird nicht geklemmt:** Die Leiste weitet
 das Qt-Feld bis zu ihr (`ParameterPanel._set_limits`), nennt die wirksame
 Grenze darunter und nimmt jede Korrektur an — sonst zeigt sie die Grenze, und

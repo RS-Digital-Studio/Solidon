@@ -180,6 +180,15 @@ Registry oder Netz, nicht nur der bekannte.
   `tests/test_chat_ui.py::test_closing_the_key_dialog_does_not_wait_for_the_model_survey`;
   Tests ohne Bezug zur Erhebung nehmen die Fixture `quick_survey`.
 
+### Eine Erzeugung läuft im Hintergrund
+
+Weg 3 hält kein Fenster an: `GenerateDialog` ist nichtmodal, einer zur Zeit
+(`MainWindow._generator`). *Erzeugen* blendet ihn aus, der Besitzer
+`"generate"` zeigt Balken, Zeit und *Abbrechen* ohne Wartezeiger
+(`_BACKGROUND_PROGRESS`); `runEnded` holt ihn ohne Fokus zurück.
+*Übernehmen* gilt dem jetzt offenen Projekt, ein Wechsel steht vorher im
+Dialog. Jeder weitere Generator nimmt diesen Weg.
+
 ## Die grobe Vorschaustufe
 
 Ab `session.COARSE_PREVIEW_ABOVE` Dreiecken (rund 150 000, dort fällt die
@@ -372,9 +381,7 @@ gebundene Methode (`connect(self.rebuild)`); feste Werte in eine eigene
 Methode; Werte aus einer Schleife über
 `weak_slot(self, Editor._tool_chosen, name)` (`app/ui/leash.py`). **Haben die
 Knöpfe eine Gruppe, schlägt sie `weak_slot`:** ein Empfänger an
-`QButtonGroup.buttonClicked` als gebundene Methode (`ToolStrip._on_button`) —
-`weak_slot` je Knopf riss `test_widget_lifetime` mit einer Zugriffsverletzung
-(Ursache bei RM-021).
+`QButtonGroup.buttonClicked` als gebundene Methode (`ToolStrip._on_button`).
 
 * **Entscheidend ist, wer den Rückruf aufbewahrt:** Frei ist die gebundene
   Methode nur an einer Qt-Verbindung; in einem Python-Container
@@ -512,18 +519,12 @@ an der Leine — ein hängendes `stat` ist nicht abbrechbar, und ein `QThread`
 darin risse beim Beenden den Prozess mit. Nach 50 ms steht die ungeprüfte
 Liste. Jede gemerkte Pfadliste wird so geprüft.
 
-Auch die ComfyUI-Ordnerprüfung läuft außerhalb von Qt: `find_comfyui` und die
-Modellbestände können auf einem nicht erreichbaren Netzlaufwerk in einem
-Dateizugriff hängen. Höchstens zwei Daemon-Fäden prüfen systemweit; je Dialog
-bleibt nur der neueste noch nicht gestartete Pfad vorgemerkt. Jede Antwort
-trägt die Eingabegeneration und darf nach Pfadwechsel oder Schließen den
-Dialogzustand nicht ändern. Dauert eine Prüfung fünf Sekunden, bleibt
-*Einrichten* gesperrt und erklärt, dass ein anderer erreichbarer Ordner gewählt
-oder die Antwort abgewartet werden muss. Eine verspätete erfolgreiche Antwort
-darf freigeben; eine Fehler- oder Crashantwort derselben Generation nicht. Erst
-ein neuer Prüfversuch darf einen fehlgeschlagenen Timeout ablösen. So wird der
-potenziell blockierende Aufruf nach einem Timeout nicht direkt im Setup-
-`QThread` wiederholt.
+Auch die ComfyUI-Ordnerprüfung läuft in Daemon-Fäden (höchstens zwei
+systemweit, je Dialog nur der neueste Pfad vorgemerkt); eine Antwort ändert
+nach Pfadwechsel oder Schließen nichts. Nach fünf Sekunden bleibt
+*Einrichten* gesperrt und sagt warum; nur eine späte erfolgreiche Antwort
+derselben Generation gibt frei, einen gescheiterten Timeout löst erst ein
+neuer Versuch ab.
 
 ### Ein Zeiger, der fragt, wird gedrosselt, nicht entprellt
 

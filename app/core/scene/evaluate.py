@@ -51,6 +51,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
+from app.core.geom import kernel_process
 from app.core.geom.boolean import body_split, pieces
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
@@ -883,6 +884,7 @@ def _evaluate(
                 sources=sources,
                 bound_edges=binding.selections,
             )
+            kernel_process.take_notice()
             try:
                 produced = spec.fn(context)
             except AppError as error:
@@ -922,6 +924,11 @@ def _evaluate(
                 findings.append(_finding_from(wrapped, operation))
                 stopped_at = operation.id
                 break
+            finally:
+                # Ein Hinweis über **diesen Lauf**, nicht über die Geometrie: Er
+                # gehört in den Bericht, nie in den Ergebniscache (RM-436).
+                if kernel_process.take_notice() == kernel_process.DISK_FULL:
+                    findings.append(_disk_full_finding(operation))
             # §15.7: Die Antwort **hier** abholen und nicht weiter unten. Was
             # die Operation zurückgegeben hat, wird gleich in ein
             # ``CachedResult`` umgewandelt; weiter unten ist beides dasselbe
@@ -5798,6 +5805,26 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
             )
         )
     return findings
+
+
+def _disk_full_finding(operation: Operation) -> Finding:
+    """Sagt, dass eine große Rechnung des Schritts wegen vollem Datenträger im Programm lief.
+
+    Dann kann das Fenster dabei stehen (RM-212). Vorher schaltete ein voller
+    Datenträger den Hilfsprozess still bis zum Neustart ab; jetzt pausiert er
+    ihn (``kernel_process.FULL_DISK_PAUSE_SECONDS``), und der Kunde erfährt es
+    am Schritt — mit dem Weg, der außerhalb von Solidon liegt (RM-436).
+    """
+    return Finding(
+        code="kernel.disk_full",
+        severity="warning",
+        message=_(
+            "Für den Austausch mit dem Rechenprozess war kein Speicherplatz mehr frei. Diese "
+            "Rechnung lief deshalb im Programm selbst, und das Fenster konnte dabei stehen. "
+            "Geben Sie Speicherplatz frei; danach rechnet Solidon wieder im Hintergrund."
+        ),
+        op_id=operation.id,
+    )
 
 
 def _finding_from(error: AppError, operation: Operation) -> Finding:

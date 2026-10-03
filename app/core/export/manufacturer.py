@@ -555,47 +555,8 @@ def default_plate(machine: Mapping[str, Any], model: Mapping[str, Any] | None = 
 def _machine_model(
     machine_file: Path, model_name: str, roots: tuple[Path, ...] = ()
 ) -> dict[str, Any]:
-    """Die Modelldatei zu einem Maschinenprofil — im Herstellerordner daneben,
-    sonst irgendwo im Bestand.
-
-    Eine eigene Vorlage liegt unter ``user/``, das Modell ihres Druckers beim
-    Hersteller. Gesucht nur neben der Vorlage, fand Solidon für „Mein P1S" keine
-    Standardplatte und riet die glatte (Review Stufe A+B, R4).
-    """
-    if not model_name:
-        return {}
-    beside = _machine_model_beside(machine_file, model_name)
-    if beside:
-        return beside
-    for folder in roots:
-        for candidate in sorted(folder.glob("*/machine/**/*.json")):
-            if candidate.stem != model_name:
-                continue
-            loaded = slicer_profiles._load(candidate)
-            if (
-                loaded is not None
-                and loaded.get("type") == "machine_model"
-                and loaded.get("name") == model_name
-            ):
-                return loaded
-    return {}
-
-
-def _machine_model_beside(machine_file: Path, model_name: str) -> dict[str, Any]:
-    """Die Modelldatei im Maschinenordner neben dem Profil."""
-    for parent in machine_file.parents:
-        if parent.name.casefold() != "machine":
-            continue
-        for candidate in sorted(parent.glob("*.json")):
-            loaded = slicer_profiles._load(candidate)
-            if (
-                loaded is not None
-                and loaded.get("type") == "machine_model"
-                and loaded.get("name") == model_name
-            ):
-                return loaded
-        break
-    return {}
+    """Die Modelldatei zu einem Maschinenprofil (:func:`slicer_profiles.machine_model`)."""
+    return slicer_profiles.machine_model(machine_file, model_name, roots)
 
 
 def _read_process(
