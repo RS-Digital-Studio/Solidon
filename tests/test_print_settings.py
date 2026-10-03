@@ -75,6 +75,260 @@ def test_cancel_around_preflight_packing(monkeypatch: pytest.MonkeyPatch, phase:
     assert called == ([] if phase == "before" else [True])
 
 
+def _old_spool_dialog_state():
+    """Drei alte Profilplätze, davon zwei benutzt; echte Methoden ohne Fenster."""
+    from app.core.export import threemf
+    from app.core.types import Scene
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    red = MaterialSlot(0, "Rot", (1.0, 0.0, 0.0), material_type="PLA")
+    blue = MaterialSlot(1, "Blau", (0.0, 0.0, 1.0), material_type="PLA")
+    green = MaterialSlot(0, "Grün", (0.0, 1.0, 0.0), material_type="PLA")
+    first = _standing_box("Blau", (10.0, 10.0, 10.0))
+    first = replace(
+        first,
+        mesh=replace(first.mesh, slots=(1,) * first.mesh.triangle_count),
+        material_slots=(red, blue),
+        plate=0,
+    )
+    second = replace(_standing_box("Grün", (10.0, 10.0, 10.0)), material_slots=(green,), plate=1)
+    scene = Scene(objects={first.id: first, second.id: second})
+    project = new_project()
+    settings = replace(
+        print_settings.resolve(profiles.make_profile()),
+        slot_profiles=("Rotes Altprofil", "Blaues Profil", "Grünes Profil"),
+        slot_profile_bindings=None,
+        inventory_project_id="old-spools",
+    )
+    project.document.print_settings = settings
+    host = SimpleNamespace(
+        settings=settings,
+        session=SimpleNamespace(
+            project=project,
+            profile=profiles.make_profile(),
+            last_result=SimpleNamespace(scene=scene, stopped_at=None),
+            picture=None,
+        ),
+        _opened_with=settings,
+        _handover_project_id="old-spools",
+        _all_plates=lambda: (0, 1),
+        _chosen_plates=lambda: (0, 1),
+    )
+    host._plate_slots = lambda **kwargs: PrintSettingsDialog._plate_slots(host, **kwargs)
+    host._profiles_for = lambda slots: PrintSettingsDialog._profiles_for(host, slots)
+    return host, (first, second), tuple(threemf.slot_identity(slot) for slot in (red, blue, green))
+
+
+def test_old_spool_dialog_reads_profiles_before_active_slots_are_renumbered():
+    """Auch nur Platte zwei bekommt ihr altes Profil, ohne die Einstellung zu ändern."""
+    host, _objects, _keys = _old_spool_dialog_state()
+    original = host.settings
+    host._chosen_plates = lambda: (1,)
+    shown = host._plate_slots()
+    assert host._profiles_for(shown) == ("Grünes Profil",)
+    host._chosen_plates = lambda: (0,)
+    shown = host._plate_slots()
+    assert host._profiles_for(shown) == ("Blaues Profil",)
+    assert host.settings is original and original.slot_profile_bindings is None
+
+
+def test_old_spool_choice_preserves_other_legacy_profile_bindings():
+    """Eine neue blaue Profilwahl verschiebt keine fremde alte Bindung."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    host, _objects, (red, blue, green) = _old_spool_dialog_state()
+    shown = host._plate_slots()
+    position = next(index for index, slot in enumerate(shown) if str(slot.name) == "Blau")
+    box = SimpleNamespace(currentData=lambda: "Neues blaues Profil")
+    host.slot_rows = [(None, box)] * len(shown)
+    host._profile_name = lambda value: value
+    host._slot_names = [str(slot.name) for slot in shown]
+    host._check_print_result = lambda: None
+    host._refresh_advice = lambda: None
+    host.state = SimpleNamespace(setText=lambda text: None)
+    original = host.settings
+    PrintSettingsDialog._slot_filament_chosen(host, position)
+    chosen = {binding.key: binding.profile_name for binding in host.settings.slot_profile_bindings}
+    assert chosen == {red: "Rotes Altprofil", blue: "Neues blaues Profil", green: "Grünes Profil"}
+    assert original.slot_profile_bindings is None
+
+
+def test_old_spool_choice_survives_save_reopen_delete_and_undo(tmp_path: Path):
+    """Gebundene Wahlen schlagen die parallele Positionsliste auch nach dem Rundlauf."""
+    from app.core.export import threemf
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    host, _objects, (_red, blue, green) = _old_spool_dialog_state()
+    project = host.session.project
+    history = History(project.document)
+    for name, colour in (("Blau", "#0000ff"), ("Grün", "#00ff00")):
+        history.apply("Körper", [OperationDraft("create_box", params={"name": name})])
+        identifier = project.document.ops[-1].outputs[0]
+        history.apply(
+            "Filament",
+            [
+                OperationDraft(
+                    "assign_slot",
+                    (identifier,),
+                    {"slot": 0, "name": name, "colour": colour, "material_type": "PLA"},
+                )
+            ],
+        )
+    # Der letzte alte Szenenstand trägt noch die rote Deklaration. Beim
+    # erneuten Auswerten bleiben nur die tatsächlich zugewiesenen Filamente.
+    shown = host._plate_slots()
+    position = next(index for index, slot in enumerate(shown) if str(slot.name) == "Blau")
+    host.slot_rows = [(None, SimpleNamespace(currentData=lambda: "Neues blaues Profil"))] * len(
+        shown
+    )
+    host._profile_name = lambda value: value
+    host._slot_names = [str(slot.name) for slot in shown]
+    host._check_print_result = host._refresh_advice = lambda: None
+    host.state = SimpleNamespace(setText=lambda text: None)
+    PrintSettingsDialog._slot_filament_chosen(host, position)
+    project.document.print_settings = host.settings
+    opened = load(save(project, tmp_path / "alte-spulen.p3d"))
+    stored = opened.document.print_settings
+    assert stored == host.settings
+    result = evaluate(opened.document, host.session.profile)
+    assert result.complete
+    objects = tuple(result.scene.objects.values())
+    assert handover.chosen_slot_profiles(objects, stored) == {
+        blue: "Neues blaues Profil",
+        green: "Grünes Profil",
+    }
+    history = History(opened.document)
+    history.apply("Löschen", [OperationDraft("delete_object", (objects[0].id,))])
+    remaining = tuple(evaluate(opened.document, host.session.profile).scene.objects.values())
+    assert len(remaining) == 1
+    slots = threemf.merge_slots(
+        [threemf.AssemblyPart(remaining[0].mesh, slots=remaining[0].material_slots)]
+    )
+    assert slots[0].index == 0
+    assert handover.chosen_slot_profiles(remaining, stored) == {green: "Grünes Profil"}
+    assert stored.slot_profiles[0] == "Neues blaues Profil", (
+        "die alte Position ist nicht maßgeblich"
+    )
+    reopened = load(save(opened, tmp_path / "after-delete.p3d"))
+    assert handover.chosen_slot_profiles(
+        tuple(evaluate(reopened.document, host.session.profile).scene.objects.values()),
+        reopened.document.print_settings,
+    ) == {green: "Grünes Profil"}
+    assert history.undo()
+    assert handover.chosen_slot_profiles(
+        tuple(evaluate(opened.document, host.session.profile).scene.objects.values()), stored
+    ) == {blue: "Neues blaues Profil", green: "Grünes Profil"}
+
+
+@pytest.mark.parametrize("plates", [(0,), (1,), (0, 1)])
+def test_old_spool_job_binds_before_local_profile_numbers(tmp_path: Path, plates):
+    """Der normale Auftrag trägt die alte Identität vor jeder lokalen Werkzeugnummer."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _slots_with_profiles
+
+    host, objects, (red, blue, green) = _old_spool_dialog_state()
+    host._chosen_plates = lambda: plates
+    setup = handover.SlicerSetup(tmp_path / "elegoo-slicer.exe", "orca")
+    job = PrintSettingsDialog._plate_job(host, objects, plates, tmp_path, "Altspulen", setup)
+    assert job.settings.slot_profile_bindings is not None
+    assert {
+        binding.key: binding.profile_name for binding in job.settings.slot_profile_bindings
+    } == {red: "Rotes Altprofil", blue: "Blaues Profil", green: "Grünes Profil"}
+    for entry, expected in zip(objects, ("Blaues Profil", "Grünes Profil"), strict=True):
+        if entry.plate not in plates:
+            continue
+        slots, chosen = _slots_with_profiles(job, [entry])
+        assert len(slots) == 1 and slots[0].index == 0
+        assert chosen == (expected,)
+    assert host.settings.slot_profile_bindings is None
+    assert host.session.project.document.print_settings.slot_profile_bindings is None
+
+
+def test_old_spool_session_binds_the_complete_previous_scene():
+    """Vor einer neuen Szene werden auch unbemalte alte Plätze identitätsfest gebunden."""
+    from app.ui.session import Session
+
+    host, _objects, (red, blue, green) = _old_spool_dialog_state()
+    original = host.settings
+    Session._bind_filament_profiles(host.session)
+    bound = host.session.project.document.print_settings
+    assert {binding.key: binding.profile_name for binding in bound.slot_profile_bindings} == {
+        red: "Rotes Altprofil",
+        blue: "Blaues Profil",
+        green: "Grünes Profil",
+    }
+    assert original.slot_profile_bindings is None
+    Session._bind_filament_profiles(host.session)
+    assert host.session.project.document.print_settings is bound
+
+
+@pytest.mark.parametrize("way", ["console", "window", "export"])
+@pytest.mark.parametrize("plates", [(0,), (1,), (0, 1)])
+def test_old_spool_profiles_reach_the_written_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, way, plates
+):
+    """Alle drei Schreibwege behalten gewählte Profile und passende Werkzeugnummern."""
+    from app.core.export import threemf, writer
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _prepare_plate, _prepare_plates
+
+    host, objects, _keys = _old_spool_dialog_state()
+    host._chosen_plates = lambda: plates
+    available = []
+    for name, temperature in (
+        ("Rotes Altprofil", "260"),
+        ("Blaues Profil", "210"),
+        ("Grünes Profil", "235"),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(
+            json.dumps({"name": name, "nozzle_temperature": [temperature]}), encoding="utf-8"
+        )
+        available.append(slicer_profiles.SlicerProfile(path=path, name=name, kind="filament"))
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: available)
+    setup = handover.SlicerSetup(tmp_path / "orca.exe", "orca")
+    job = PrintSettingsDialog._plate_job(host, objects, plates, tmp_path, "Altspulen", setup)
+    outputs = []
+    if way == "console":
+        for plate in plates:
+            run = _prepare_plate(job, plate)
+            assert run.used_tools == (0,)
+            outputs.append((run.model, (plate,)))
+    elif way == "window":
+        outputs.append((_prepare_plates(replace(job, for_window=True)).model, plates))
+    else:
+        written, _findings = writer.write_assembly(
+            list(objects),
+            tmp_path,
+            project_name="Altspulen",
+            profile=host.session.profile,
+            plate=plates[0] if len(plates) == 1 else None,
+            settings=host.settings,
+            setup=setup,
+            flavour="orca",
+        )
+        outputs.append((written, plates))
+    for written, included in outputs:
+        with zipfile.ZipFile(written) as archive:
+            embedded = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+            model = ET.fromstring(archive.read(threemf.MODEL_PATH))
+        names = ["Solidon Blau", "Solidon Grün"]
+        temperatures = ["210", "235"]
+        if way == "export" and included == (1,):
+            # Der globale Platz 0 gehört zur tatsächlich benutzten blauen Spule
+            # der anderen Platte; nur dieser notwendige Platzhalter bleibt.
+            assert embedded["filament_settings_id"][1] == names[1]
+            assert embedded["nozzle_temperature"][1] == temperatures[1]
+            expected_tools = {"1"}
+        else:
+            assert embedded["filament_settings_id"] == [names[p] for p in included]
+            assert embedded["nozzle_temperature"] == [temperatures[p] for p in included]
+            expected_tools = {str(index) for index in range(len(included))}
+        assert {
+            node.get("p1") for node in model.iter() if node.tag.endswith("}triangle")
+        } == expected_tools
+    assert host.settings.slot_profile_bindings is None
+
+
 def test_a_replaced_support_suggestion_explains_the_support_actually_offered() -> None:
     advice = SettingAdvice("support.style", "tree", "normal", "Baumstützen sparen Material.")
     shown = slicer_keys.offered([advice], "superslicer")

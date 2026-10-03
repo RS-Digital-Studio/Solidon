@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- Os filamentos não utilizados de projetos antigos deixam de ser enviados ao fatiador. Os perfis continuam associados aos filamentos em uso.
 - Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.
 - Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes.
 - O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.

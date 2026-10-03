@@ -61,7 +61,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-218 — Bohrungskennungen beim Umbau des exakten Verlaufs erhalten](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Namensparser und alle sechs echten Passungs-/Umbau-/Undo-Fälle unabhängig freigegeben; zentrales Tor und Übernahme offen, Fensterabnahme im Release |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen; dazu am Langloch die Tiefe mit oder ohne Fase und der zweite Satz einer Kopie über die Kante (Durchsicht 0.5.1) |
-| [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: PLA-Vorgabe 50…100 % je Drucker und Curas Schichtzeitschwelle (80 s aus der Kurve heben den Lüfter in Schicht 1); der Hilfslüfter des Centauri (`M106 P2 S0`) ist Elegoos eigener Wert. Offen außerdem Kammerlüfter und unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
+| [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: PLA-Vorgabe 50…100 % je Drucker und Curas Schichtzeitschwelle (80 s aus der Kurve heben den Lüfter in Schicht 1); der Hilfslüfter des Centauri (`M106 P2 S0`) ist Elegoos eigener Wert. Unbenutzte Altspulen entfernt, alte Profilzuordnung bleibt erhalten; offen sind PLA-Lüfterpolitik, Curas Schichtzeitschwelle und Zuständigkeit der Lüfterschlüssel |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Sicherheitskorrektur: Eine notwendige Vorvereinigung, die an einer selbstkreuzenden Schale scheitert, hält jetzt vor dem Solver an und bindet den Fehler an den betroffenen Körper. Am Original sind 1 243 aktuelle Schnittpaare belegt. Blenders exakter Boolean verschlechtert die Topologie; der 0,2-mm-Voxelremesh überschreitet `MAX_FACET_SAG`. Geometriereparatur und ursprüngliche Abnahme bleiben offen. |
@@ -1742,7 +1742,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-228"></a>
 
-- [ ] **RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller.**
+- [~] **RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller.**
   Aus Roberts Befund „Modelllüfter immer 100 %" (Bericht luefter, 23.09.2026):
   Die Kurve aus Mindest- und Höchstwert mit Schichtzeitschwelle ist gebaut, alte
   Projekte lesen den gespeicherten Wert als Höchstwert und bekommen Mindestwert
@@ -1772,6 +1772,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `additional_cooling_fan_speed = 0` → `M106 P2 S0` ist auch Elegoos Wert für PLA am
   CC2 (Orca-Bestand `Generic PLA @Elegoo Centauri`, ElegooSlicer `ECC2/*`: nur PLA-CF
   setzt den Hilfslüfter) — kein Fehler Solidons.
+
+
+  **Stand 03.10.2026 — Spulenteil umgesetzt:** `merge_slots` berücksichtigt nur
+  Filamente mit tatsächlich benutzten Flächen. Fehlende Deklarationen und
+  notwendige Werkzeuglücken mehrerer Platten bleiben erhalten. Alte positionale
+  Filamentprofile werden vor dem Filtern an die vollständige ursprüngliche
+  Reihenfolge gebunden; danach folgt die Zuordnung der Filamentidentität durch
+  Plattenwahl, neue Profilwahl, Speichern, Öffnen, Löschen und Undo. Der Kern,
+  die Session und die sichtbaren Druckdialogwege verwenden denselben Anschluss.
+  Auch die Verbrauchsvorbereitung bindet alte Profilplätze vor dem Filtern.
+  Zwei neue Gegenfälle zeigten vorher vertauschte Materialprofile; Ausgabe und
+  Verbrauch stimmen jetzt bei 231/243 °C, 1,2/1,3 g/cm³ und 2,85/1,75 mm überein.
+  Echte Mehrplattenlücken bleiben erhalten, ein gespeicherter alter
+  Werkzeug-Snapshot liest seine frühere Druckdatei unverändert zurück.
+  Ohne frühe Bindung sind neun Anschlussgegenproben rot, weil Blau das rote
+  Temperaturprofil erhielte. 1.164 gezielte Kernfälle und ein zusätzlicher
+  Legacy-Rundlauf bestanden. Echte Wedge-Lock-Basis: Elegoo und Prusa erhalten
+  nur die benutzte Spule, Dreiecke und Farben bleiben erhalten. Die kombinierte
+  Wiederholung mit RM-252 bestätigt identische 1.144 Koordinaten, 2.292
+  Dreiecke und Lüfterwerte der benutzten Spule: Elegoo 791 statt 792 s,
+  4,73 g; Prusa unverändert 1.128 s und 4,68 g, beide 60 Schichten.
+  Messwerte und genaue Commits stehen im Bericht B und in
+  `F:\solidon-review-reports\B-slicer-rest\rm228\bericht.md`.
+  Ursache `67a5a3f014` liegt in v0.4.0 bis v0.5.1; ein Kundenpunkt je Sprache.
+  Die fünf alten `chufang.3mf`-Meldungen aus RM-312 betreffen tatsächlich
+  benutzte Filamente und gehören nicht zu diesem Altspulenfehler. Die oben
+  beschriebenen Lüfterentscheidungen bleiben offen; RM-228 wird deshalb
+  nicht archiviert. Fenster-, Renderer- und Leistungsläufe bleiben beim Release.
 
 <a id="rm-230"></a>
 

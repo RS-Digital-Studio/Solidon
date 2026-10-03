@@ -2,6 +2,7 @@
 
 import json
 import math
+import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -12,6 +13,7 @@ import trimesh
 from app.core import filament_usage
 from app.core.errors import ValidationError
 from app.core.export import handover, threemf
+from app.core.export.writer import write_assembly
 from app.core.filament_usage import from_gcode, prepare, spool_for, with_spool
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import filaments, profiles
@@ -368,13 +370,19 @@ def test_large_tool_number_does_not_allocate_a_list_for_every_missing_tool() -> 
     assert [line.grams for line in result.lines] == [None, None]
 
 
-def test_different_tools_convert_with_their_own_properties_without_compressing_gaps() -> None:
-    first = body()
+def test_different_tools_convert_with_their_own_properties_without_compressing_gaps(
+    tmp_path,
+) -> None:
+    first = body(plate=1)
     first.material_slots.insert(0, MaterialSlot(7, "Alt", None, None, "ABS"))
     first.material_slots.append(MaterialSlot(1, "PLA Weiß", None, None, "PLA"))
     first.mesh = MeshData(first.mesh.raw, tuple([0] * 6 + [1] * 6))
+    # Die Lücke gehört zu einer tatsächlich benutzten Spule der anderen
+    # Platte; eine bloß alte Deklaration belegt kein Werkzeug mehr.
+    other_plate = body("other")
+    other_plate.material_slots = [MaterialSlot(0, "Alt", None, None, "ABS")]
     profile = profiles.make_profile("centauri-carbon-2", "petg")
-    request = prepare([first], PrintSettings(), profile, "Projekt")[0]
+    request = prepare([other_plate, first], PrintSettings(), profile, "Projekt")[1]
     request = replace(
         request,
         lines=(
@@ -386,9 +394,24 @@ def test_different_tools_convert_with_their_own_properties_without_compressing_g
     assert [line.slot.index for line in converted.lines] == [1, 2]
     assert [line.grams for line in converted.lines] == pytest.approx([7.655276, 5.965099])
     assert all(line.converted_from_length for line in converted.lines)
+    path, _findings = write_assembly(
+        [other_plate, first],
+        tmp_path,
+        project_name="Auftrag",
+        profile=profile,
+        settings=PrintSettings(),
+        plate=1,
+    )
+    with zipfile.ZipFile(path) as archive:
+        model = ET.fromstring(archive.read(threemf.MODEL_PATH))
+    assert {
+        entry.get("p1") for entry in model.findall(f".//{{{threemf.CORE_NAMESPACE}}}triangle")
+    } == {"1", "2"}
 
 
-def test_unused_historical_slots_need_no_spool_but_keep_the_active_tool_number() -> None:
+def test_unused_historical_slots_follow_the_compact_new_export_and_keep_old_requests(
+    tmp_path,
+) -> None:
     first = body()
     first.material_slots.insert(0, MaterialSlot(7, "Alt", None, None, "PLA"))
     first.material_slots.append(MaterialSlot(9, "Auch alt", None, None, "ABS"))
@@ -396,13 +419,82 @@ def test_unused_historical_slots_need_no_spool_but_keep_the_active_tool_number()
     settings = PrintSettings()
     request = prepare([first], settings, profile, "Projekt")[0]
     assert len(request.lines) == 1
-    assert request.lines[0].slot.index == 1
+    assert request.lines[0].slot.index == 0
     assert request.lines[0].slot.name == "PETG Rot"
     assert request.lines[0].grams is not None and request.lines[0].grams > 0.0
-    per_tool = from_gcode(request, GcodeMetrics(filament_grams_by_tool=(0.0, 47.0, 0.0)))
+    per_tool = from_gcode(request, GcodeMetrics(filament_grams_by_tool=(47.0,)))
     assert per_tool.lines[0].grams == pytest.approx(47.0)
+    # Ein bereits vorbereiteter alter Druck behält seinen eigenen Snapshot
+    # und Werkzeug 1, auch wenn ein neuer Export heute Werkzeug 0 bekommt.
+    previous = replace(
+        request, lines=(replace(request.lines[0], slot=replace(request.lines[0].slot, index=1)),)
+    )
+    old_file = tmp_path / "old.gcode"
+    old_file.write_text("; filament used [g] = 0,47,0\nM83\nT1\nG1 X10 E100\n", encoding="utf-8")
+    old_usage = from_gcode(previous, analyze(old_file.read_text(encoding="utf-8")).metrics)
+    assert old_usage.lines[0].slot.index == 1
+    assert old_usage.lines[0].grams == pytest.approx(47.0)
+    assert old_usage.lines[0].slot.name == "PETG Rot"
     first.material_slots[0] = replace(first.material_slots[0], name="Alter Name geändert")
     assert prepare([first], settings, profile, "Projekt")[0].fingerprint == request.fingerprint
+
+
+@pytest.mark.parametrize("choices", [("Maker PETG", "Maker PLA"), ("Maker PETG", ""), ()])
+def test_legacy_profiles_agree_between_actual_export_and_usage(tmp_path, choices) -> None:
+    """Alte Profilplätze werden vor der Verdichtung an aktive Identitäten gebunden."""
+    red, blue = body("red"), body("blue")
+    unused = MaterialSlot(7, "Alt", None, None, "ABS")
+    red.material_slots.insert(0, unused)
+    blue.material_slots = [MaterialSlot(0, "PLA Blau", (0.0, 0.0, 1.0), None, "PLA")]
+    originals = (red.material_slots[1], blue.material_slots[0])
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = PrintSettings(slot_profiles=("Altes ABS", *choices) if choices else ())
+    for index, slot in enumerate(originals):
+        settings = with_spool(settings, slot, f"spool-{index}")
+        effective = replace(slot, material=choices[index] or None) if choices else slot
+        settings = handover.with_slot_override(
+            settings,
+            effective,
+            SlotOverride(
+                temperature=replace(settings.temperature, nozzle=231 + index * 12),
+                filament=replace(
+                    settings.filament,
+                    density=1.2 + index * 0.1,
+                    diameter=2.85 if index == 0 else 1.75,
+                ),
+            ),
+        )
+    saved = print_settings_to_data(settings)
+    request = prepare([red, blue], settings, profile, "Projekt")[0]
+    assert [line.slot.material for line in request.lines] == (
+        [value or None for value in choices] if choices else [None, None]
+    )
+    assert [line.slot.index for line in request.lines] == [0, 1]
+    assert [line.spool_identifier for line in request.lines] == ["spool-0", "spool-1"]
+    assert [line.density for line in request.lines] == pytest.approx([1.2, 1.3])
+    assert [line.diameter for line in request.lines] == pytest.approx([2.85, 1.75])
+    path, _findings = write_assembly(
+        [red, blue], tmp_path, project_name="Altspulen", profile=profile, settings=settings
+    )
+    with zipfile.ZipFile(path) as archive:
+        process = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+        model = ET.fromstring(archive.read(threemf.MODEL_PATH))
+    bases = model.findall(f".//{{{threemf.CORE_NAMESPACE}}}base")
+    assert [entry.get("name") for entry in bases] == ["PETG Rot", "PLA Blau"]
+    assert {
+        entry.get("p1") for entry in model.findall(f".//{{{threemf.CORE_NAMESPACE}}}triangle")
+    } == {"0", "1"}
+    assert [float(value) for value in process["nozzle_temperature"]] == [231.0, 243.0]
+    assert [float(value) for value in process["filament_density"]] == pytest.approx([1.2, 1.3])
+    assert [float(value) for value in process["filament_diameter"]] == pytest.approx([2.85, 1.75])
+    measured = from_gcode(request, analyze("M83\nT0\nG1 X10 E1000\nT1\nG1 X20 E2000\n").metrics)
+    assert [line.grams for line in measured.lines] == pytest.approx(
+        [math.pi * (2.85 / 2) ** 2 * 1.2, 2 * math.pi * (1.75 / 2) ** 2 * 1.3]
+    )
+    assert [line.spool_identifier for line in measured.lines] == ["spool-0", "spool-1"]
+    assert prepare([red, blue], settings, profile, "Projekt")[0] == request
+    assert print_settings_from_data(saved) == settings
+    assert print_settings_to_data(settings) == saved
 
 
 @pytest.mark.parametrize("material_type", [None, "", "UNKNOWN", "NewBlend-X"])
@@ -464,7 +556,7 @@ def test_missing_used_slot_stays_visible_as_unassigned_material() -> None:
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     request = prepare([first], PrintSettings(), profile, "Projekt")[0]
     assert len(request.lines) == 1
-    assert request.lines[0].slot.index == 1
+    assert request.lines[0].slot.index == 0
     assert request.lines[0].slot.material_type is None
     assert request.lines[0].grams is None
     assert request.lines[0].spool_identifier == ""

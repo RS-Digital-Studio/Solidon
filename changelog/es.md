@@ -29,6 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
+- Los filamentos sin uso de proyectos antiguos ya no se envían al laminador. Los perfiles siguen asociados a los filamentos utilizados.
 - Los modelos añadidos encuentran espacio también después de la duodécima placa. Las placas importadas conservan su distribución.
 - Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas.
 - Cura usa los límites de cambio brusco de velocidad del perfil, con valores separados para paredes, relleno y primera capa.

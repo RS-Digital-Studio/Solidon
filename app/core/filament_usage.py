@@ -13,7 +13,12 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
 from app.core.export import threemf
-from app.core.export.handover import configured_slots, override_for, settings_for_slot
+from app.core.export.handover import (
+    bind_object_profiles,
+    configured_slots,
+    override_for,
+    settings_for_slot,
+)
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import profiles
 from app.core.scene.hashing import digest, profile_key
@@ -137,9 +142,11 @@ def prepare(
 
     Die 3MF verwendet exportweite Werkzeugnummern. Ein einzelner Slicer-Lauf
     übergibt seine vollständigen, bereits mit Profilen belegten Slots in der
-    lokalen ``merge_slots``-Reihenfolge über ``slots_by_plate``. Ungenutzte
-    Slots entfallen erst bei den Bedarfzeilen, nie bei dieser Zuordnung.
+    lokalen ``merge_slots``-Reihenfolge über ``slots_by_plate``. Unbenutzte
+    Altspulen entfallen wie in der Ausgabe; verwendete Spulen anderer Platten
+    behalten ihre Werkzeugnummer. Alte Profilplätze werden vorher gebunden.
     """
+    settings = bind_object_profiles(settings, objects)
     whole_job = [
         threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         for body in objects

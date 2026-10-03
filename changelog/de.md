@@ -53,6 +53,7 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- Beim Öffnen älterer Projekte werden unbenutzte Filamente nicht mehr an den Slicer übergeben. Die Profile der benutzten Filamente bleiben zugeordnet.
 - Weitere Modelle finden auch hinter der zwölften Druckplatte einen freien Platz. Mitgebrachte Platten behalten ihre Aufteilung.
 - Weitere Modelle kommen bei unterschiedlichen Filamenten auf getrennte Druckplatten, wenn der Drucker nicht genügend Düsen hat.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.

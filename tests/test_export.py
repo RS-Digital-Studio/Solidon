@@ -45,6 +45,7 @@ from app.core.types import (
     Scene,
     SceneObject,
     SettingAdvice,
+    SlotProfileBinding,
     Source,
     SourceOrigin,
 )
@@ -65,6 +66,157 @@ def body(name: str = "cube_clean.stl"):
 
 def scene_object(object_id: str = "obj_1", name: str = "Halterung", mesh=None) -> SceneObject:
     return SceneObject(id=object_id, name=name, mesh=mesh or body())
+
+
+_OLD_RED = MaterialSlot(0, "Rot", (1.0, 0.0, 0.0), material_type="PLA")
+_OLD_BLUE = MaterialSlot(1, "Blau", (0.0, 0.0, 1.0), material_type="PLA")
+_OLD_UNUSED = MaterialSlot(2, "Alt", (0.0, 1.0, 0.0), material_type="PETG")
+
+
+def _old_spool_part(*slots, used=(0,), name="Körper", plate=0):
+    raw = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    raw.apply_translation((0.0, 0.0, 5.0))
+    mesh = MeshData.of(raw, slots=tuple(used[i % len(used)] for i in range(len(raw.faces))))
+    return threemf.AssemblyPart(mesh=mesh, slots=slots, name=name, plate=plate)
+
+
+def _material_bases(payload):
+    with zipfile.ZipFile(BytesIO(payload)) as archive:
+        model = ET.fromstring(archive.read(threemf.MODEL_PATH))
+    return [node.attrib for node in model.iter() if node.tag.endswith("}base")]
+
+
+@pytest.mark.parametrize("unused_position", [0, 1, 2])
+def test_unpainted_old_spool_is_not_an_extruder(unused_position):
+    """Altspulen dürfen an keiner Stelle der alten Liste hinausgehen."""
+    declared = [_OLD_RED, _OLD_BLUE]
+    declared.insert(unused_position, _OLD_UNUSED)
+    entry = _old_spool_part(*declared, used=(0, 1))
+    assert [(slot.index, str(slot.name)) for slot in threemf.merge_slots([entry])] == [
+        (0, "Rot"),
+        (1, "Blau"),
+    ]
+    assert [row["name"] for row in _material_bases(threemf.write_assembly([entry]))] == [
+        "Rot",
+        "Blau",
+    ]
+
+
+def test_only_remaining_colour_becomes_first_extruder():
+    """Alle roten Flächen gelöscht: Blau rückt vor, ohne seine Farbe zu ändern."""
+    entry = _old_spool_part(_OLD_RED, _OLD_BLUE, used=(1,))
+    assert [(slot.index, str(slot.name)) for slot in threemf.merge_slots([entry])] == [(0, "Blau")]
+    assert threemf.tools_in_use([entry]) == (0,)
+    with zipfile.ZipFile(BytesIO(threemf.write_assembly([entry]))) as archive:
+        model = ET.fromstring(archive.read(threemf.MODEL_PATH))
+    assert {node.get("p1") for node in model.iter() if node.tag.endswith("}triangle")} == {"0"}
+    assert _material_bases(threemf.write_assembly([entry])) == [
+        {"name": "Blau", "displaycolor": "#0000FF"}
+    ]
+
+
+def test_across_numbers_only_used_spools_by_first_actual_occurrence():
+    """Eine anderswo verwendete Spule behält ihre Auftragsnummer; Alt entfällt."""
+    first = _old_spool_part(_OLD_UNUSED, _OLD_BLUE, _OLD_RED, used=(0,), plate=0)
+    second = _old_spool_part(_OLD_UNUSED, _OLD_BLUE, _OLD_RED, used=(1,), plate=1)
+    job = [first, second]
+    assert [(slot.index, str(slot.name)) for slot in threemf.merge_slots(job)] == [
+        (0, "Rot"),
+        (1, "Blau"),
+    ]
+    assert [(slot.index, str(slot.name)) for slot in threemf.merge_slots([second], across=job)] == [
+        (1, "Blau")
+    ]
+    assert threemf.tools_in_use([second], across=job) == (1,)
+    assert [
+        row["name"] for row in _material_bases(threemf.write_assembly([second], across=job))
+    ] == ["Slot 0", "Blau"]
+
+
+def test_used_but_undeclared_slot_stays_neutral():
+    """Fehlende Deklaration darf die echte Bemalung nicht unterschlagen."""
+    entry = _old_spool_part(_OLD_UNUSED, used=(7,))
+    merged = threemf.merge_slots([entry])
+    assert len(merged) == 1
+    assert (
+        merged[0].colour is None and merged[0].material is None and merged[0].material_type is None
+    )
+    assert str(merged[0].name) == "Slot 7"
+    assert threemf.tools_in_use([entry]) == (0,)
+
+
+def test_colourless_body_keeps_one_neutral_tool():
+    """Ein Körper ohne Spulen bleibt druckbar."""
+    raw = MeshData.of(trimesh.creation.box())
+    entry = threemf.AssemblyPart(raw)
+    slots = threemf.merge_slots([entry])
+    assert len(slots) == 1 and slots[0].material_type is None
+    assert threemf.tools_in_use([entry]) == (0,)
+
+
+def test_same_colour_with_different_material_keeps_both_tools():
+    """Filamentidentität bleibt die bestehende gemeinsame Regel."""
+    other = replace(_OLD_RED, material_type="PETG")
+    entries = [_old_spool_part(_OLD_RED), _old_spool_part(other)]
+    assert [slot.material_type for slot in threemf.merge_slots(entries)] == ["PLA", "PETG"]
+
+
+def test_legacy_profile_positions_are_bound_before_unused_slots_disappear():
+    """Blau erhält sein gespeichertes Profil und niemals das der unbemalten roten Spule."""
+    entry = _old_spool_part(_OLD_RED, _OLD_BLUE, used=(1,))
+    body = SceneObject(id="one", name="Körper", mesh=entry.mesh, material_slots=entry.slots)
+    settings = replace(
+        print_settings.resolve(profiles.make_profile()),
+        slot_profiles=("Altes rotes Profil", "Eigenes blaues Profil"),
+        slot_profile_bindings=None,
+    )
+    assert handover.chosen_slot_profiles([body], settings) == {
+        threemf.slot_identity(_OLD_BLUE): "Eigenes blaues Profil"
+    }
+
+
+def test_identity_bound_profiles_survive_removal_and_new_indices():
+    """Bereits gebundene Profilwahl wird nicht erneut über ihre Nummer gelesen."""
+    entry = _old_spool_part(_OLD_RED, _OLD_BLUE, used=(1,))
+    body = SceneObject(id="one", name="Körper", mesh=entry.mesh, material_slots=entry.slots)
+    binding = SlotProfileBinding(
+        profile_name="Eigenes blaues Profil",
+        name=_OLD_BLUE.name,
+        colour=_OLD_BLUE.colour,
+        material=_OLD_BLUE.material,
+        material_type=_OLD_BLUE.material_type,
+    )
+    settings = replace(
+        print_settings.resolve(profiles.make_profile()),
+        slot_profiles=("Falsches altes Profil",),
+        slot_profile_bindings=(binding,),
+    )
+    assert handover.chosen_slot_profiles([body], settings) == {
+        threemf.slot_identity(_OLD_BLUE): "Eigenes blaues Profil"
+    }
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa"])
+def test_normal_export_does_not_deliver_or_warn_about_an_unused_spool(tmp_path, flavour):
+    """Der normale Exportanschluss liefert eine Spule und keinen falschen Materialbefund."""
+    entry = _old_spool_part(_OLD_UNUSED, _OLD_RED, used=(0,))
+    body = SceneObject(id="one", name="Körper", mesh=entry.mesh, material_slots=entry.slots)
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    path, findings = write_assembly(
+        [body],
+        tmp_path,
+        project_name="Altspule",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+    )
+    assert [row["name"] for row in _material_bases(path.read_bytes())] == ["Rot"]
+    assert "slicer.overrides_unreachable" not in {finding.code for finding in findings}
+    if flavour == "orca":
+        with zipfile.ZipFile(path) as archive:
+            settings = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+        assert settings["filament_type"] == ["PLA"]
 
 
 # --- naming ---------------------------------------------------------------------
@@ -770,10 +922,17 @@ def test_a_filament_keeps_its_extruder_across_the_plates_of_one_job() -> None:
     white = MaterialSlot(index=1, name="Weiß")
     red_again = MaterialSlot(index=2, name="Rot")
 
-    first = [threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box()), name="A", slots=(red,))]
+    box = trimesh.creation.box()
+    first = [
+        threemf.AssemblyPart(
+            mesh=MeshData.of(box, slots=(1,) * len(box.faces)), name="A", slots=(red,)
+        )
+    ]
     second = [
         threemf.AssemblyPart(
-            mesh=MeshData.of(trimesh.creation.box()), name="B", slots=(white, red_again)
+            mesh=MeshData.of(box, slots=(1, 2) * (len(box.faces) // 2)),
+            name="B",
+            slots=(white, red_again),
         )
     ]
 
@@ -949,14 +1108,14 @@ def test_the_exported_plates_of_one_job_agree_on_the_extruders(
         SceneObject(
             id="obj_1",
             name="A",
-            mesh=MeshData.of(trimesh.creation.box((10, 10, 10))),
+            mesh=MeshData.of(trimesh.creation.box((10, 10, 10)), slots=(1,) * 12),
             material_slots=[red],
             plate=0,
         ),
         SceneObject(
             id="obj_2",
             name="B",
-            mesh=MeshData.of(trimesh.creation.box((10, 10, 10))),
+            mesh=MeshData.of(trimesh.creation.box((10, 10, 10)), slots=(1, 2) * 6),
             material_slots=[white, red_again],
             plate=1,
         ),

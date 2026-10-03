@@ -2376,6 +2376,31 @@ def bind_slot_profiles(settings: PrintSettings, slots: Sequence[MaterialSlot]) -
     return replace(settings, slot_profile_bindings=bindings)
 
 
+def bind_object_profiles(settings: PrintSettings, objects: Sequence[SceneObject]) -> PrintSettings:
+    """Bindet alte Profilplätze vor dem Weglassen unbemalter Spulen.
+
+    Die vollständige ursprüngliche Szene bestimmt die alte Reihenfolge.
+    Danach folgen die Profile ihrer Filamentidentität, auch bei einer anderen
+    Plattenauswahl und Werkzeugnummer. Die Eingaben bleiben unverändert.
+    """
+    if settings.slot_profile_bindings is not None:
+        return settings
+    slots = (
+        threemf.merge_slots(
+            [
+                threemf.AssemblyPart(
+                    as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                )
+                for entry in objects
+            ],
+            include_unused=True,
+        )
+        if settings.slot_profiles
+        else ()
+    )
+    return bind_slot_profiles(settings, slots)
+
+
 def configured_slots(
     slots: Sequence[MaterialSlot], settings: PrintSettings
 ) -> tuple[MaterialSlot, ...]:
@@ -2401,6 +2426,7 @@ def chosen_slot_profiles(
     Datei, denn gespeicherte Profile ohne Bindung zählen nach der Stelle in
     dieser Liste (:func:`configured_slots`).
     """
+    settings = bind_object_profiles(settings, objects)
     merged = threemf.merge_slots(
         [
             threemf.AssemblyPart(as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry))

@@ -6102,25 +6102,14 @@ class PrintSettingsDialog(QDialog):
         Reihenfolge haben; sie werden über die vollständige Materialidentität
         auf diese feste Liste abgebildet.
         """
-        stored = self.settings.slot_profiles
-        shown = self._plate_slots(all_plates=True)
-        if self.settings.slot_profile_bindings is not None:
-            chosen = {
-                binding.key: binding.profile_name for binding in self.settings.slot_profile_bindings
-            }
+        result = self.session.last_result
+        objects = tuple(result.scene.objects.values()) if result is not None else ()
+        bound = handover.bind_object_profiles(self.settings, objects) if objects else self.settings
+        if bound.slot_profile_bindings is not None:
+            chosen = {binding.key: binding.profile_name for binding in bound.slot_profile_bindings}
             return tuple(chosen.get(threemf.slot_identity(slot), "") for slot in slots)
-        if not shown:
-            # Ohne Anzeigeliste gibt es nichts zu übersetzen — dann gilt die
-            # Position, wie bisher. Ein leeres Ergebnis wäre schlechter als
-            # eine Zuordnung, die in genau diesem Fall schon immer stimmte:
-            # Wer keine Szene hat, hat auch keine zweite Reihenfolge.
-            return tuple(stored)
-        by_slot = {
-            threemf.slot_identity(slot): stored[index]
-            for index, slot in enumerate(shown)
-            if index < len(stored) and stored[index]
-        }
-        return tuple(by_slot.get(threemf.slot_identity(slot), "") for slot in slots)
+        # Ohne Szene gibt es keine zweite Reihenfolge für die alte Wahl.
+        return tuple(self.settings.slot_profiles)
 
     def _slot_filament_chosen(self, position: int) -> None:
         """Die Wahl für einen Slot festhalten (§20).
@@ -6153,7 +6142,9 @@ class PrintSettingsDialog(QDialog):
         names = list(self.settings.slot_profiles)
         names += [""] * (max(len(all_slots), stored_position + 1) - len(names))
         names[stored_position] = chosen
-        bound = handover.bind_slot_profiles(self.settings, all_slots)
+        result = self.session.last_result
+        objects = tuple(result.scene.objects.values()) if result is not None else ()
+        bound = handover.bind_object_profiles(self.settings, objects)
         bindings = tuple(one for one in (bound.slot_profile_bindings or ()) if one.key != key)
         if key is not None and chosen:
             slot = shown[position]
@@ -8558,7 +8549,7 @@ class PrintSettingsDialog(QDialog):
             folder=folder,
             name=name,
             setup=setup,
-            settings=job_settings,
+            settings=handover.bind_object_profiles(job_settings, objects),
             profile=self.session.profile,
             slot_profiles=slot_profiles,
             with_settings=with_settings,

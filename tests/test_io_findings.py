@@ -138,7 +138,8 @@ def test_a_plate_without_the_first_job_colour_keeps_the_job_extruder() -> None:
 
 def test_a_plate_with_the_whole_job_is_unchanged() -> None:
     """Die Gegenprobe: Ohne Lücke ändert sich nichts an der Datei."""
-    job = [_part("Zweifarbig", (RED, WHITE))]
+    plain = _part("Zweifarbig", (RED, WHITE))
+    job = [threemf.AssemblyPart(MeshData(plain.mesh.raw, (0,) * 6 + (1,) * 6), slots=plain.slots)]
 
     payload = threemf.write_assembly(job, "Auftrag", across=job)
 

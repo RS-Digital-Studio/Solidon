@@ -1799,6 +1799,10 @@ def write_assembly(
         # keinen Gegenstand. Die Datei geht als reine Geometrie hinaus
         # (Resin-Konzept §4, B4).
         settings = None
+    if settings is not None:
+        from app.core.export import handover
+
+        settings = handover.bind_object_profiles(settings, objects if job is None else job)
     # Einmal je Körper vernetzt, für Prüfung, STL und 3MF dieselben Dreiecke
     # — ein exakter Körper so fein, wie der Drucker es braucht.
     exported = {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen}

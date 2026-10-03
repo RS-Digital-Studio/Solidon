@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- I filamenti inutilizzati dei vecchi progetti non vengono più inviati allo slicer. I profili restano associati ai filamenti in uso.
 - I modelli aggiunti trovano spazio anche oltre il dodicesimo piatto. I piatti importati mantengono la loro disposizione.
 - I modelli aggiunti con filamenti diversi vengono collocati su piatti separati se la stampante non ha abbastanza ugelli.
 - Cura usa i limiti di jerk del profilo, con valori distinti per pareti, riempimento e primo strato.

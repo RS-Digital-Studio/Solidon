@@ -669,7 +669,8 @@ def test_the_same_colour_becomes_the_same_extruder() -> None:
     rot = threemf.MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
     blau = threemf.MaterialSlot(index=1, name="Blau", colour=(0.0, 0.0, 1.0))
 
-    merged = threemf.merge_slots([_part((10, 10, 10), "A", rot, blau), _part((5, 5, 5), "B", rot)])
+    painted = threemf.AssemblyPart(MeshData(cube(10.0), (0,) * 6 + (1,) * 6), slots=(rot, blau))
+    merged = threemf.merge_slots([painted, _part((5, 5, 5), "B", rot)])
 
     assert [entry.name for entry in merged] == ["Rot", "Blau"]
     assert [entry.index for entry in merged] == [0, 1], "der Index ist die Extrudernummer"
@@ -741,14 +742,21 @@ def test_missing_used_slots_get_neutral_tools_instead_of_another_filament(
     known = threemf.MaterialSlot(1, "PETG Rot", (1.0, 0.0, 0.0), "Maker PETG", "PETG")
     part = threemf.AssemblyPart(MeshData(cube(10.0), assignment), slots=(known,))
     merged = threemf.merge_slots([part])
-    assert merged[0].material_type == "PETG"
-    assert len(merged) == (3 if 7 in assignment else 2)
-    assert all(slot.material_type is None and slot.material is None for slot in merged[1:])
+    if 1 in assignment:
+        assert merged[0].material_type == "PETG"
+        neutral = merged[1:]
+    else:
+        # Das deklarierte PETG ist ohne eigene Fläche keine gedruckte Spule.
+        neutral = merged
+    assert len(merged) == (2 if assignment else 1)
+    assert all(slot.material_type is None and slot.material is None for slot in neutral)
     payload = threemf.write_assembly([part])
     with zipfile.ZipFile(BytesIO(payload)) as container:
         root = ET.fromstring(container.read(threemf.MODEL_PATH))
     actual = [int(face.attrib["p1"]) for face in root.findall(f".//{{{CORE}}}triangle")]
-    expected = [1] * 12 if not assignment else [1] * 6 + ([0] * 6 if 1 in assignment else [2] * 6)
+    expected = (
+        [0] * 12 if not assignment else [1] * 6 + [0] * 6 if 1 in assignment else [0] * 6 + [1] * 6
+    )
     assert actual == expected
     restored = threemf_reader.read_objects(payload)[0]
     assert restored.mesh.volume == pytest.approx(part.mesh.volume)
@@ -758,12 +766,12 @@ def test_missing_slots_keep_global_tool_numbers_when_exporting_one_plate() -> No
     first = _part((10, 10, 10), "A", threemf.MaterialSlot(0, "PLA Weiß", material_type="PLA"))
     second = _part((10, 10, 10), "B", threemf.MaterialSlot(1, "PETG Rot", material_type="PETG"))
     merged = threemf.merge_slots([second], across=[first, second])
-    assert [slot.index for slot in merged] == [1, 2]
-    assert merged[1].material_type is None
+    assert [slot.index for slot in merged] == [1]
+    assert merged[0].material_type is None
     payload = threemf.write_assembly([second], across=[first, second])
     with zipfile.ZipFile(BytesIO(payload)) as container:
         root = ET.fromstring(container.read(threemf.MODEL_PATH))
-    assert {face.attrib["p1"] for face in root.findall(f".//{{{CORE}}}triangle")} == {"2"}
+    assert {face.attrib["p1"] for face in root.findall(f".//{{{CORE}}}triangle")} == {"1"}
 
 
 def coloured_container(

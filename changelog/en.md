@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Unused filaments from older projects are no longer sent to the slicer. Profiles stay linked to the filaments still in use.
 - Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.
 - Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles.
 - Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.

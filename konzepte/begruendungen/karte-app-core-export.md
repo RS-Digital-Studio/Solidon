@@ -478,3 +478,17 @@ Platten und Lagen wieder her.
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 
 - Kennzahlen aus Schichtanalyse und G-Code bleiben getrennt (Regel 14).
+
+## Benutzte Filamente und alte Profilplätze (§29)
+
+`threemf.merge_slots` übernimmt nur Filamentidentitäten mit Flächen. Seine
+Option `include_unused=True` rekonstruiert ausschließlich die alte vollständige
+Reihenfolge für `handover.bind_object_profiles`. Diese Bindung geschieht vor
+Plattenwahl und Werkzeugneunummerierung, auch am unveränderlichen Auftrag des
+Druckdialogs. Session, Dialog, Writer und Verbrauchsvorbereitung benutzen
+denselben Helfer. Bereits vorbereitete Verbrauchsaufträge behalten ihre
+damaligen Werkzeugnummern für das Rücklesen ihrer Druckdatei. Ein
+gespeichertes Profil folgt danach seiner Identität; eine unbenutzte Deklaration
+wird dadurch nicht zu einem benutzten Filament. Notwendige Werkzeuglücken eines
+mehrteiligen Auftrags bleiben neutrale Plätze; fehlende Deklarationen benutzter
+Flächen werden weiterhin ergänzt. Die Eingabeszene wird dabei nicht verändert.
