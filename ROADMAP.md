@@ -145,7 +145,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
-| [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
@@ -4379,17 +4378,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und Archivierung folgen nach bestandenem Tor. RM-283 bleibt zuständig für
   Feldabnahme und Nummernplatzierung auf Text in zwei Anleitungsbildern.
   Registerabgleich 02.10. (Stand `4449e3370`): offen — „`GuidePart` sind entfernt“ ist irreführend, im Code steht es noch (`app/core/guides.py:37`, `:184`); die Änderung liegt nur ungesichert im Arbeitsbaum.
-
-<a id="rm-306"></a>
-
-- [ ] **RM-306 — Zweites Modell in der Ecke oder zur Mitte.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F15;
-  Text der Gesamtprüfung). Das zweite Modell steht hinten links, nach der
-  Regel von *Auf dem Bett anordnen* (§29: hinterste, dann linkeste Stelle); zentriert wird
-  nur eine ganz neu angeordnete Platte. Robert wollte beim Anordnen „startpunkt mitte“
-  (§29, 09.09.2026). Frage: die Kandidaten der freien Stelle nach Abstand zur Plattenmitte
-  ordnen? Empfehlung der Release-Sitzung: ja, weil ein einzelnes weiteres Modell nahe der
-  Mitte besser zu sehen und zu erreichen ist. Abnahme: Entscheidung Robert, danach Test.
 
 <a id="rm-312"></a>
 

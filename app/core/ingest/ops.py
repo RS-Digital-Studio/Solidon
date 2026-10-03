@@ -62,7 +62,7 @@ _UNIT_CHOICES = ("auto", "mm", "cm", "in", "m")
 #: ``load_step`` derselbe Satz.
 FREE_SPOT_DOC = _(
     "Setzt das Modell auf und legt es neben die Teile, die schon im Projekt liegen: "
-    "an die erste freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. "
+    "so nah an der Plattenmitte wie möglich, auf der ersten Platte mit Platz. "
     "Geht vor „Mittig auf das Bett legen“."
 )
 

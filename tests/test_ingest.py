@@ -1011,9 +1011,9 @@ def _apart(one: Any, other: Any, spacing: float) -> bool:
 
 def test_a_further_model_lands_in_a_free_place_on_the_first_plate(profile: Profile) -> None:
     """Zwei Würfel aus ``cube_clean.stl``: Der erste liegt mittig, der zweite
-    kommt auf dieselbe Platte an die erste freie Stelle — hinten links, wie
-    *Auf dem Bett anordnen* (§29) —, ganz auf der Druckfläche, im Abstand der
-    Anordnung und aufgesetzt. Der erste bleibt, wo er war.
+    kommt auf dieselbe Platte an die freie Stelle nächst der Mitte (RM-306) —
+    ganz auf der Druckfläche, im Abstand der Anordnung und aufgesetzt. Der
+    erste bleibt, wo er war.
     """
     from app.core.build_area import fits_on_bed
     from app.core.geom.prepare import ARRANGE_SPACING
@@ -1028,11 +1028,91 @@ def test_a_further_model_lands_in_a_free_place_on_the_first_plate(profile: Profi
     assert fits_on_bed(second.mesh, profile.printer), "ganz auf der Druckfläche"
     assert second.mesh.bounds.minimum[2] == pytest.approx(0.0), "aufgesetzt"
     assert _apart(first, second, ARRANGE_SPACING), "und mit dem Abstand der Anordnung"
-    # Die hinterste, dann linkeste Stelle der Fläche mit Rand (-123 … 123).
-    assert second.mesh.bounds.minimum[0] == pytest.approx(-123.0)
-    assert second.mesh.bounds.maximum[1] == pytest.approx(123.0)
+    # Rechts neben dem ersten: 10 + 5 + 10 mm von der Mitte. Vier Stellen sind
+    # gleich nah; neben ihm verdeckt keiner den anderen in der Vorderansicht,
+    # und rechts folgt der Leserichtung.
+    assert tuple(second.mesh.bounds.centre[:2]) == pytest.approx((25.0, 0.0))
     codes = {entry.code for entry in result.scene.report.findings}
     assert "arrange.free_spot" in codes, "und der Bericht sagt, wo es hinkam"
+
+
+def _nearer_free_centres(
+    standing: list[Any], size: tuple[float, float], distance: float, profile: Profile
+) -> list[tuple[float, float]]:
+    """Jede erlaubte Mitte, die näher an der Plattenmitte liegt als ``distance``.
+
+    Abgezählt auf einem Raster von 0,25 mm, unabhängig von der Suche: ganz in
+    der Fläche mit dem Rand der Anordnung (Sperrecke eingeschlossen) und mit
+    dem Abstand zu jedem liegenden Körper.
+    """
+    import numpy as np
+    import shapely
+
+    from app.core.build_area import printable_area
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    area = printable_area(profile.printer, margin=ARRANGE_SPACING)
+    left, front, right, back = area.bounds
+    middle = ((left + right) / 2.0, (front + back) / 2.0)
+    steps = np.arange(-distance, distance + 0.25, 0.25)
+    x, y = (axis.ravel() for axis in np.meshgrid(middle[0] + steps, middle[1] + steps))
+    near = np.hypot(x - middle[0], y - middle[1]) < distance - 1e-6
+    x, y = x[near], y[near]
+    half = (size[0] / 2.0, size[1] / 2.0)
+    free = shapely.covers(
+        area.buffer(1e-6, join_style="mitre"),
+        shapely.box(x - half[0], y - half[1], x + half[0], y + half[1]),
+    )
+    for entry in standing:
+        low, high = entry.mesh.bounds.minimum, entry.mesh.bounds.maximum
+        free &= (
+            (x + half[0] + ARRANGE_SPACING <= low[0] + 1e-6)
+            | (high[0] + ARRANGE_SPACING <= x - half[0] + 1e-6)
+            | (y + half[1] + ARRANGE_SPACING <= low[1] + 1e-6)
+            | (high[1] + ARRANGE_SPACING <= y - half[1] + 1e-6)
+        )
+    return list(zip(x[free].tolist(), y[free].tolist(), strict=True))
+
+
+def test_a_further_model_lands_as_near_the_middle_as_there_is_room(profile: Profile) -> None:
+    """RM-306: Ein weiteres Modell kommt an die freie Stelle, die der
+    Plattenmitte am nächsten liegt — nicht in die hintere linke Ecke.
+
+    Der Sollwert kommt von außen: Neben einem mittigen Würfel von 20 mm liegt
+    die Mitte eines Klötzchens von 10 mm frühestens 10 + 5 + 5 = 20 mm weit
+    weg, und ein Raster über die Fläche findet keine erlaubte Stelle, die
+    näher läge. Ein drittes, breites Teil legt sich ebenso nah wie möglich an
+    beide — die Suche gilt für jede Belegung, nicht nur für eine Mitte.
+    """
+    import numpy as np
+
+    from app.core.build_area import fits_on_bed
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project, _history = _imported_in_turn(
+        profile,
+        ("erster.stl", cube),
+        ("klein.stl", _box_stl(10.0, 10.0, 10.0)),
+        ("breit.stl", _box_stl(60.0, 8.0, 6.0)),
+    )
+
+    result = _scene(project, profile)
+    first, small, wide = (result.scene.objects[key] for key in ("obj_1", "obj_2", "obj_3"))
+    assert [entry.plate for entry in (first, small, wide)] == [0, 0, 0]
+    for later in (small, wide):
+        assert fits_on_bed(later.mesh, profile.printer), later.name
+        assert later.mesh.bounds.minimum[2] == pytest.approx(0.0), later.name
+    assert _apart(first, small, ARRANGE_SPACING)
+    assert _apart(first, wide, ARRANGE_SPACING) and _apart(small, wide, ARRANGE_SPACING)
+
+    reach = float(np.hypot(*small.mesh.bounds.centre[:2]))
+    assert reach == pytest.approx(20.0), "so nah an der Mitte, wie der Abstand erlaubt"
+    assert not _nearer_free_centres([first], (10.0, 10.0), reach, profile)
+
+    reach = float(np.hypot(*wide.mesh.bounds.centre[:2]))
+    assert reach < 30.0, "nicht in eine Ecke, sondern an die beiden heran"
+    assert not _nearer_free_centres([first, small], (60.0, 8.0), reach, profile)
 
 
 def test_a_further_model_goes_to_the_next_plate_when_the_first_is_full(

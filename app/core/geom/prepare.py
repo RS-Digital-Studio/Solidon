@@ -2762,8 +2762,9 @@ def arrange_on_bed(
     mehr ein Teil. Robert fand es am Minigolf-Satz („warum werden die nicht
     auf eine platte was passt ausgerichtet?"): Drehscheibe und vier Stangen
     lagen neben dem Bett, während auf den ersten beiden Platten Platz war, und
-    mit zwölf erlaubten Platten wurden es sechs statt vier. Dieselbe Regel
-    befolgt :func:`first_free_spot` für ein einzelnes neues Modell.
+    mit zwölf erlaubten Platten wurden es sechs statt vier. Dieselbe
+    Plattenfolge befolgt :func:`first_free_spot` für ein einzelnes neues
+    Modell; auf der Platte sucht es dort die Stelle nächst der Mitte.
 
     Mehr Teile als Platten sind kein Fehler zum Verstecken: die letzte Platte
     nimmt den Rest, und der Bericht sagt, dass sie übervoll ist — denn ein
@@ -2943,14 +2944,17 @@ def first_free_spot(
     den anderen platten noch platz ist"). Ein weiteres Modell blieb an seinen
     Dateikoordinaten, und die liegen selten dort, wo auf dem Bett Platz ist.
 
-    Dieselbe Regel wie :func:`arrange_on_bed`, Platte für Platte in ihrer
-    Reihenfolge: die hinterste, dann linkeste freie Stelle, mit ``spacing`` zu
-    jedem Nachbarn und zum Rand. Was schon liegt (``occupied``, Grenzen und
-    Platte), bleibt liegen und belegt seinen Platz auf seiner Platte. Eine
-    leere Platte nimmt das Modell immer; mittig liegt es dort in jeder Achse,
-    in der es auf die Fläche passt (:func:`_into_the_middle`). Passt es auf
-    keine belegte Platte, kommt es auf die nächste; ist keine mehr erlaubt,
-    liegt es neben der letzten, ohne Überschneidung.
+    Platte für Platte in ihrer Reihenfolge wie :func:`arrange_on_bed`, auf der
+    ersten mit Platz an die freie Stelle, die der Plattenmitte am nächsten
+    liegt (:func:`_nearest_the_middle`, Entscheidung zu RM-306), mit
+    ``spacing`` zu jedem Nachbarn und zum Rand. Bis RM-306 war es die
+    hinterste, dann linkeste Stelle der Anordnung, und ein zweites Modell
+    stand in der Ecke statt neben dem ersten. Was schon liegt (``occupied``,
+    Grenzen und Platte), bleibt liegen und belegt seinen Platz auf seiner
+    Platte. Eine leere Platte nimmt das Modell immer; mittig liegt es dort in
+    jeder Achse, in der es auf die Fläche passt (:func:`_into_the_middle`).
+    Passt es auf keine belegte Platte, kommt es auf die nächste; ist keine
+    mehr erlaubt, liegt es neben der letzten, ohne Überschneidung.
 
     ``body`` sind die Grenzen des ganzen Modells: Eine Baugruppe wird als
     Ganzes gelegt, die Teile behalten ihre Lage zueinander. Gelegt wird ein
@@ -2972,19 +2976,46 @@ def first_free_spot(
         return MeshData.of(trimesh.creation.box(bounds=[low, high]))
 
     moving = block(body)
+    size = moving.bounds.size
     area = printable_area(profile.printer, margin=spacing)
+    allowed = area.buffer(EPS_GEOM, join_style="mitre")
+    low = moving.bounds.minimum
     last = max((plate for _bounds, plate in occupied), default=-1)
     final = min(last + 1, max(plates, 1) - 1)
     plate = 0
     while True:
-        standing = [(block(bounds), 0) for bounds, at in occupied if at == plate]
-        placed = arrange_on_bed([moving], profile, spacing, plates=1, occupied=standing).meshes[0]
-        if not standing or plate == final or fits_xy(placed, area):
+        standing = [bounds for bounds, at in occupied if at == plate]
+        if not standing:
+            # Eine leere Platte nimmt es mittig, wie die Anordnung.
+            placed = arrange_on_bed([moving], profile, spacing, plates=1).meshes[0]
+            break
+        taken = [
+            _Slot(
+                float(bounds.minimum[0]),
+                float(bounds.maximum[1]),
+                float(bounds.maximum[0] - bounds.minimum[0]),
+                float(bounds.maximum[1] - bounds.minimum[1]),
+            )
+            for bounds in standing
+        ]
+        spot = (
+            _nearest_the_middle(size, taken, area, allowed, spacing)
+            if size[2] <= printable_height(profile.printer) + EPS_GEOM
+            else None
+        )
+        if spot is not None:
+            shift = (float(spot.left - low[0]), float(spot.front - low[1]), -float(body.minimum[2]))
+            return shift, plate, False
+        if plate == final:
+            # Keine erlaubte Platte hat Platz: neben die letzte, ohne
+            # Überschneidung — so, wie die Anordnung es täte.
+            held = [(block(bounds), 0) for bounds in standing]
+            placed = arrange_on_bed([moving], profile, spacing, plates=1, occupied=held).meshes[0]
             break
         plate += 1
     shift = (
-        float(placed.bounds.minimum[0] - moving.bounds.minimum[0]),
-        float(placed.bounds.minimum[1] - moving.bounds.minimum[1]),
+        float(placed.bounds.minimum[0] - low[0]),
+        float(placed.bounds.minimum[1] - low[1]),
         -float(body.minimum[2]),
     )
     crowded = (
@@ -2993,6 +3024,117 @@ def first_free_spot(
         and _fits_alone(moving, profile, spacing)
     )
     return shift, plate, crowded
+
+
+#: Wie viele Kandidaten :func:`_nearest_the_middle` auf einmal gegen die
+#: liegenden Körper prüft. Nur eine Speichergrenze: Die Kandidaten kommen der
+#: Nähe nach, die erste freie entscheidet, und meist liegt sie im ersten Block.
+_SPOT_BATCH: Final = 4096
+
+#: Wie viele freie Kandidaten auf einmal gegen eine Fläche mit Sperrzone
+#: geprüft werden — die Fläche zu fragen kostet je Rechteck mehr als der
+#: Abstand zu allen Nachbarn zusammen.
+_SPOT_BITE: Final = 64
+
+
+def _nearest_the_middle(
+    size: Vec3, taken: Sequence[_Slot], area: Any, allowed: Any, spacing: float
+) -> _Slot | None:
+    """Die freie Stelle, deren Mitte der Plattenmitte am nächsten liegt (RM-306).
+
+    **Der Anlass** (Robert, 09.09.2026: „startpunkt mitte"; Entscheidung zu
+    RM-306): Ein weiteres Modell kam an die hinterste, dann linkeste freie
+    Stelle — auf dem 256er Bett 113 mm links und 113 mm hinter einem mittigen
+    ersten, am Rand des Bildes und weit weg von der Hand. Nahe der Mitte steht
+    es im Bild und ist zu erreichen.
+
+    **Die Kandidaten sind exakt, kein Raster.** Erlaubt ist eine Mitte, deren
+    Rechteck in der Fläche liegt und jedem liegenden Rechteck um ``spacing``
+    ausweicht. Die nächste solche Mitte ist die Plattenmitte selbst oder liegt
+    auf dem Rand des Erlaubten — und der besteht aus achsparallelen Strecken:
+    den Seiten jedes Nachbarn, um Abstand und halbe Größe hinausgerückt, den
+    Seiten der Fläche und den Ecken ihrer Kontur (Sperrzonen). Der nächste
+    Punkt einer solchen Strecke ist ihr Fußpunkt (eine Koordinate der Mitte)
+    oder ein Endpunkt (zwei Randlinien). Alle Paare aus diesen Linien und der
+    Mitte enthalten also die nächste Stelle. Nur eine schräge Kontur — ein
+    rundes Bett — hat Randpunkte dazwischen; für sie kommt ein Raster im
+    Schritt des Abstands dazu, damit ein Modell dort höchstens einen halben
+    Abstand weiter liegt als nötig.
+
+    Bei gleicher Entfernung entscheidet, was der Kunde in der Vorderansicht
+    besser sieht: neben dem Vorhandenen statt dahinter oder davor, dann rechts
+    (Leserichtung), dann hinten. Vektorisiert und blockweise der Nähe nach
+    geprüft, damit es auch neben Dutzenden Körpern beim Einlesen nicht zählt.
+    """
+    import shapely
+
+    if area.is_empty:
+        return None
+    left_edge, front_edge, right_edge, back_edge = area.bounds
+    half = (size[0] / 2.0, size[1] / 2.0)
+    middle = ((left_edge + right_edge) / 2.0, (front_edge + back_edge) / 2.0)
+    reach = (
+        (left_edge + half[0], right_edge - half[0]),
+        (front_edge + half[1], back_edge - half[1]),
+    )
+    if any(start > end + _TOUCH for start, end in reach):
+        return None
+    sides = np.array(
+        [[slot.left, slot.right, slot.front, slot.back] for slot in taken], dtype=float
+    ).reshape(-1, 4)
+    corners = get_coordinates(area)
+    lines: list[np.ndarray] = []
+    for axis in (0, 1):
+        start, end = reach[axis]
+        parts = [
+            np.array([middle[axis], start, end]),
+            corners[:, axis] - half[axis],
+            corners[:, axis] + half[axis],
+            sides[:, 2 * axis] - spacing - half[axis],
+            sides[:, 2 * axis + 1] + spacing + half[axis],
+        ]
+        if spacing > 0.0:
+            count = math.ceil(max(end - middle[axis], middle[axis] - start) / spacing)
+            parts.append(middle[axis] + spacing * np.arange(-count, count + 1))
+        values = np.concatenate(parts)
+        values = values[(values >= start - _TOUCH) & (values <= end + _TOUCH)]
+        lines.append(np.unique(np.clip(values, min(start, end), max(start, end))))
+    across, along = (grid.ravel() for grid in np.meshgrid(lines[0], lines[1]))
+    off_x, off_y = across - middle[0], along - middle[1]
+    order = np.lexsort(
+        (
+            -along,
+            -across,
+            np.round(np.abs(off_y) / EPS_GEOM),
+            np.round(np.hypot(off_x, off_y) / EPS_GEOM),
+        )
+    )
+    plain = bool(area.equals(box(*area.bounds)))
+    for first in range(0, len(order), _SPOT_BATCH):
+        chosen = order[first : first + _SPOT_BATCH]
+        left = across[chosen] - half[0]
+        right = across[chosen] + half[0]
+        front = along[chosen] - half[1]
+        back = along[chosen] + half[1]
+        free = np.all(
+            (right[:, None] + spacing <= sides[None, :, 0] + _TOUCH)
+            | (sides[None, :, 1] + spacing <= left[:, None] + _TOUCH)
+            | (sides[None, :, 3] + spacing <= front[:, None] + _TOUCH)
+            | (back[:, None] + spacing <= sides[None, :, 2] + _TOUCH),
+            axis=1,
+        )
+        hits = np.flatnonzero(free)
+        # Die Fläche fragt nur, wer bis hierher frei ist, und das in kleinen
+        # Bissen: Meist ist schon der erste Kandidat der richtige.
+        for start in range(0, hits.size, _SPOT_BITE):
+            bite = hits[start : start + _SPOT_BITE]
+            if not plain:
+                rectangles = shapely.box(left[bite], front[bite], right[bite], back[bite])
+                bite = bite[shapely.covers(allowed, rectangles)]
+            if bite.size:
+                index = int(bite[0])
+                return _Slot(float(left[index]), float(back[index]), size[0], size[1])
+    return None
 
 
 def standing_in(scene: Scene, ignore: Collection[ObjectId] = ()) -> list[tuple[BoundingBox, int]]:
@@ -3145,7 +3287,8 @@ def placed_at_free_spot(
                     code="arrange.free_spot",
                     severity="info",
                     message=_(
-                        "Das Modell kam an die erste freie Stelle auf Platte {number}.",
+                        "Das Modell kam an die freie Stelle, die der Mitte von Platte "
+                        "{number} am nächsten liegt.",
                         number=plate + 1,
                     ),
                     values={"plate": plate + 1},

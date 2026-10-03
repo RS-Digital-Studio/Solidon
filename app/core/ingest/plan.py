@@ -230,8 +230,8 @@ def import_plan(
     Ecke und liegt weit daneben. Beides ist für den ersten Blick auf ein
     frisches Projekt die falsche Lage (Entscheidung Robert, 03.09.2026).
 
-    **Jedes weitere** (``False``) kommt aufgesetzt an die erste freie Stelle,
-    Platte für Platte wie *Auf dem Bett anordnen* (§29): In die Mitte
+    **Jedes weitere** (``False``) kommt aufgesetzt an die freie Stelle nächst
+    der Plattenmitte, auf der ersten Platte mit Platz (RM-306): In die Mitte
     geschoben läge es im ersten, an seinen Dateikoordinaten meist außerhalb,
     obwohl auf den Platten Platz war (Robert, 28.09.2026). ``None`` heißt, der
     Aufrufer entscheidet nichts — die Datei behält ihre Lage.
@@ -330,7 +330,7 @@ def _placement(first_model: bool | None) -> dict[str, bool]:
     """Die Lage eines Ladeschritts als seine Parameter (§17.1, Schritt 6).
 
     Das erste Modell aufgesetzt und mittig, jedes weitere aufgesetzt an die
-    erste freie Stelle; ohne Angabe nichts — dann gilt die Lage der Datei.
+    freie Stelle nächst der Plattenmitte; ohne Angabe nichts — dann gilt die Lage der Datei.
     """
     if first_model is None:
         return {}

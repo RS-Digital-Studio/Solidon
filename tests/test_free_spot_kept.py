@@ -269,6 +269,36 @@ def test_a_model_longer_than_its_old_field_keeps_its_spot(profile: Profile) -> N
     assert second.plate == first.plate
 
 
+def test_a_spot_kept_before_the_middle_rule_stays_in_its_corner(profile: Profile) -> None:
+    """RM-306: Seitdem sucht die freie Stelle nächst der Plattenmitte. Ein
+    gespeichertes Projekt, dessen Ladeschritt die alte Ecke festhält (hinten
+    links, Mitte bei -113/113 auf dem 256er Bett), öffnet trotzdem mit dem
+    Modell in der Ecke — die festgehaltene Stelle ist eine Antwort, keine
+    Regel (§15.7). Ohne festgehaltene Stelle käme es neben den ersten."""
+    from dataclasses import replace
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    _import(project, history, "a.stl", CUBE)
+    chosen = _offered(project, "b.stl", CUBE)
+    kept = {**chosen.draft.params, "spot_x": -113.0, "spot_y": 113.0, "spot_plate": 1}
+    history.apply(chosen.title, [replace(chosen.draft, params=kept)])
+    body = project.document.ops[-1].outputs[0]
+
+    for _round in range(2):
+        placed = _evaluated(project, profile).scene.objects[body]
+        assert placed.plate == 0
+        assert tuple(placed.mesh.bounds.centre[:2]) == pytest.approx((-113.0, 113.0))
+        assert placed.mesh.bounds.minimum[2] == pytest.approx(0.0)
+
+    fresh = new_project("centauri-carbon-2", "petg")
+    again = History(fresh.document)
+    _import(fresh, again, "a.stl", CUBE)
+    searched = _import(fresh, again, "b.stl", CUBE)
+    centre = _evaluated(fresh, profile).scene.objects[searched].mesh.bounds.centre
+    assert tuple(centre[:2]) == pytest.approx((25.0, 0.0)), "neu gesucht: neben dem ersten"
+
+
 def test_a_model_that_did_not_move_gets_no_finding(profile: Profile) -> None:
     """F10: Ohne Verschiebung kein Befund — ein Modell, das schon an der
     freien Stelle liegt (hier: allein im Projekt, mittig), bekommt keinen Satz
