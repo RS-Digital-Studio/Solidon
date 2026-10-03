@@ -37337,7 +37337,8 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   Wachstumstest des Druckdialogs (`test_the_dialog_grows_when_the_profile_section_opens_itself`),
   seit `b837a73f8` rot, ist wieder grün. Sonde am echten Fenster (2560×1392): Erststart 680×621 →
   680×662 nach der Erkennung, Rollweite 41 → 0; *Modell erzeugen* ohne ComfyUI 480×243 → 480×275,
-  Rollweite 32 → 0, beide an derselben Stelle.
+  Rollweite 32 → 0, beide an derselben Stelle; nach dem Zusammenführen mit RM-371 (Erzeugen ohne
+  Modalfenster) 480×267 → 480×299, ebenfalls ohne Rollweite. Commit `3fcd402a9`.
 ## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
 
 <a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
