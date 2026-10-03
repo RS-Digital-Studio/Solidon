@@ -104,6 +104,7 @@ Nutzen da und sonst nichts.
 - Das Ziel von *An Merkmal ausrichten* ist anfangs leer, und der erste Klick ins Bild füllt es. *Übernehmen* wartet bis dahin, statt den Körper still an die falsche Seite zu setzen.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 - Ein weiterer Zug in eine eben gegrabene Mulde gräbt tiefer, auch mit einem kleinen Pinsel. Bisher blieb er wirkungslos und galt als verfehlt.
+- Beim *Formen* zeigt das Fenster jeden Zug gleich schnell, auch nach vielen Zügen. Bisher wurde es mit jedem Zug langsamer.
 
 ### Erzeugen mit KI
 

@@ -312,6 +312,143 @@ def test_a_mirrored_stroke_that_reaches_only_the_sculpted_face_gets_its_stage(
     assert "sculpt.strokes_missed" not in {f.code for f in result.findings}
 
 
+def test_the_preview_follows_the_session_stroke_by_stroke_and_bit_for_bit() -> None:
+    """RM-366: Die Vorschau rechnete nach jedem Zug die ganze Sitzung neu.
+
+    :class:`SculptPreview` setzt nur den neuen Zug auf, beginnt je neuer
+    Etappe einen Durchgang und rechnet bei Rückgängig oder anderer Spiegelung
+    ab der letzten unberührten Etappe — und zeigt dabei bitgleich, was die
+    Operation aus denselben Zügen rechnet (Regel 2).
+    """
+    from app.core.geom import sculpt
+
+    base = ball()
+    tools = ("draw", "smooth", "draw", "carve", "pinch", "inflate", "draw", "flatten")
+    strokes = [
+        on_ball(float(np.cos(step)), float(np.sin(step)), 0.4, tool=tools[step % 8], strength=0.8)
+        for step in range(16)
+    ]
+    built = 0
+    real = sculpt._Stage.__init__
+
+    def counted(self: object, *args: object, **kwargs: object) -> None:
+        nonlocal built
+        built += 1
+        real(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    sculpt._Stage.__init__ = counted  # type: ignore[method-assign]
+    try:
+        preview = sculpt.SculptPreview(base)
+        for count in range(1, len(strokes) + 1):
+            shown = preview.show(strokes[:count])
+            expected = apply_strokes(base, strokes[:count])
+            assert np.array_equal(
+                np.asarray(shown.raw.vertices), np.asarray(expected.raw.vertices)
+            ), count
+        built_by_preview = built - sum(
+            len(stages(strokes[:count])) for count in range(1, len(strokes) + 1)
+        )
+    finally:
+        sculpt._Stage.__init__ = real  # type: ignore[method-assign]
+    assert built_by_preview <= len(stages(strokes)) + 1, "je neue Etappe ein Durchgang"
+
+    for changed in (
+        strokes[:-1],
+        strokes[:5],
+        [dataclasses.replace(stroke, symmetry=1) for stroke in strokes],
+        strokes,
+    ):
+        shown = preview.show(changed)
+        expected = apply_strokes(base, changed)
+        assert np.array_equal(np.asarray(shown.raw.vertices), np.asarray(expected.raw.vertices))
+
+
+def test_a_stroke_from_the_preview_is_the_stroke_without_it() -> None:
+    """``stroke_at`` mit der Vorschau nimmt Fläche, Suchbaum und Normalen aus
+    ihrer Etappe — und entscheidet Etappe und Richtung genau wie ohne sie
+    (RM-366, RM-438, RM-454)."""
+    from app.core.geom import sculpt
+
+    base = ball()
+    points = np.asarray(base.raw.vertices, dtype=float)
+    spots = [int(np.argmax(points[:, axis])) for axis in range(3)]
+    preview = sculpt.SculptPreview(base)
+    strokes: list[Stroke] = []
+    # Je Stelle zweimal hintereinander — der zweite Zug trifft die Mulde des
+    # ersten —, dazwischen ein Glätten, und abwechselnd mit der Spiegelung der
+    # Sitzung.
+    clicks = [(0, "carve"), (0, "carve"), (1, "carve"), (1, "carve"), (2, "smooth")]
+    clicks += [(2, "carve"), (2, "carve"), (0, "carve")]
+    for number, (spot_number, tool) in enumerate(clicks):
+        spot = spots[spot_number]
+        shown = np.asarray(apply_strokes(base, strokes).raw.vertices, dtype=float)[spot]
+        where = (float(shown[0]), float(shown[1]), float(shown[2]))
+        brush = {
+            "radius": 3.0,
+            "strength": 4.0,
+            "tool": tool,
+            "mirrored": 1 if number % 2 else 0,
+        }
+        sculpt._last_stage.clear()
+        alone = stroke_at(base, where, before=strokes, **brush)  # type: ignore[arg-type]
+        preview.show(strokes)
+        guided = stroke_at(base, where, before=strokes, preview=preview, **brush)  # type: ignore[arg-type]
+        assert guided == alone, number
+        strokes.append(guided)
+    assert any(stroke.cut for stroke in strokes), "Voraussetzung: auch Züge in die Mulde"
+
+
+def test_a_click_that_begins_a_stage_builds_normals_and_tree_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-366: Ein Klick, der eine Etappe beginnt, rechnete Normalen und
+    Suchbaum über das ganze Netz zweimal — für den Zug (``stroke_at``) und
+    noch einmal für die Etappe der Vorschau. An einer Kugel mit 145 742 Ecken
+    war das die Hälfte des Klicks. Die Etappe übernimmt beides von der
+    gezeigten Fläche, auf der sie beginnt."""
+    from app.core.geom import sculpt
+
+    base = ball()
+    points = np.asarray(base.raw.vertices, dtype=float)
+    made = {"normals": 0, "tree": 0}
+    real_normals = trimesh.geometry.weighted_vertex_normals
+    real_tree = sculpt.cKDTree
+
+    def counted_normals(*args: object, **kwargs: object) -> object:
+        made["normals"] += 1
+        return real_normals(*args, **kwargs)  # type: ignore[arg-type]
+
+    def counted_tree(*args: object, **kwargs: object) -> object:
+        made["tree"] += 1
+        return real_tree(*args, **kwargs)
+
+    monkeypatch.setattr(trimesh.geometry, "weighted_vertex_normals", counted_normals)
+    monkeypatch.setattr(sculpt, "cKDTree", counted_tree)
+    preview = sculpt.SculptPreview(base)
+    strokes: list[Stroke] = []
+    for number in range(8):
+        spot = points[int(np.argmax(points @ np.array([np.cos(number), np.sin(number), 0.3])))]
+        made.update(normals=0, tree=0)
+        stroke = stroke_at(
+            base,
+            (float(spot[0]), float(spot[1]), float(spot[2])),
+            radius=4.0,
+            strength=0.5,
+            tool="smooth" if number % 2 else "draw",
+            before=strokes,
+            preview=preview,
+        )
+        strokes.append(stroke)
+        preview.show(strokes)
+        assert len(stages(strokes)) == number + 1, "Voraussetzung: jeder Klick eine Etappe"
+        # Ab dem zweiten Klick ist die gezeigte Fläche neu: genau einmal beides.
+        expected = {"normals": 1, "tree": 1}
+        if number == 0:
+            assert made["normals"] <= 1 and made["tree"] == 1, made
+        else:
+            assert made == expected, (number, made)
+
+
 def test_the_remembered_stage_never_answers_for_another_session() -> None:
     """Die gemerkte Etappenfläche spart die zweite Auswertung je Klick — und
     darf nach einem Rückgängig oder einer neuen Folge nie das Falsche sagen.

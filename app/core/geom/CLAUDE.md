@@ -152,7 +152,8 @@ exakten Grundkörper, `primitive_local_tool()` für Op und Vorschau) ·
 (`tool_in_outline()`; *Merkmal ändern* am Muster nimmt dasselbe
 `flat_tool()`; eben heißt
 `faces.FLAT_ENOUGH_FOR_A_TOOL`, nicht `EPS_GEOM`) · `texture.py` ·
-`sculpt.py`, `pose.py` (Sammelparameter-Ops) · `sketch_solid.py` (Umriss zu
+`sculpt.py`, `pose.py` (Sammelparameter-Ops; `SculptPreview` rechnet die
+Formsitzung Zug für Zug bitgleich zur Op) · `sketch_solid.py` (Umriss zu
 Netz ohne B-Rep) · `field_ops.py` (Schnittfeld: Raster
 `sketch.shapes.grid_centres`, Ursprung fest, Ränder am ganzen Werkzeugumriss,
 Kompensation nur Kreis und Langloch; am Netz gibt `_named_bores` nur benannte

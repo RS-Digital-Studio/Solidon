@@ -238,12 +238,18 @@ class _Stage:
     """
 
     def __init__(
-        self, body: trimesh.Trimesh, plane: np.ndarray, *, front_only: bool, mirror_once: bool
+        self,
+        body: trimesh.Trimesh,
+        plane: np.ndarray,
+        *,
+        front_only: bool,
+        mirror_once: bool,
+        tree: Any = None,
     ) -> None:
         self.body = body
         self.points = np.asarray(body.vertices, dtype=float)
         self.normals = np.asarray(body.vertex_normals, dtype=float)
-        self.tree = cKDTree(self.points)
+        self.tree = cKDTree(self.points) if tree is None else tree
         self.plane = plane
         self.front_only = front_only
         self.mirror_once = mirror_once
@@ -389,6 +395,7 @@ def stroke_at(
     cut: bool = False,
     before: Sequence[Stroke] = (),
     mirrored: int = 0,
+    preview: SculptPreview | None = None,
 ) -> Stroke:
     """Aus einem angeklickten Punkt einen Strich machen.
 
@@ -410,17 +417,29 @@ def stroke_at(
     Zug — sie bleiben nachträglich änderbar —, aber in die Frage, wo er wirkt:
     Auch ein Spiegelbild kann als einziges die Fläche greifen (RM-454).
 
+    ``preview`` ist die Vorschau der Sitzung (:class:`SculptPreview`), wenn
+    sie zu ``mesh`` und ``before`` passt: Ihre Etappe kennt Fläche, Suchbaum
+    und Normalen schon, und der Zug kostet keinen Suchbaum über das ganze Netz
+    (RM-366). Ohne sie entsteht derselbe Zug.
+
     Im Kern und nicht in der Oberfläche, weil es Geometrie ist. Was das Fenster
     beisteuert, sind zwei Zahlen und ein Klick.
     """
-    surface, cut = _surface_for(
-        mesh, before, point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
-    )
-    points = np.asarray(surface.raw.vertices, dtype=float)
-    if not len(points):
+    if preview is not None and preview.mesh is mesh and preview.strokes == tuple(before):
+        surface, cut, tree, normals = preview.surface_for(
+            point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
+        )
+    else:
+        surface, cut = _surface_for(
+            mesh, before, point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
+        )
+        points = np.asarray(surface.raw.vertices, dtype=float)
+        tree = cKDTree(points) if len(points) else None
+        normals = np.asarray(surface.raw.vertex_normals, dtype=float)
+    if tree is None:
         return Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=strength)
-    _away, index = cKDTree(points).query(np.asarray(point, dtype=float))
-    normal = np.asarray(surface.raw.vertex_normals, dtype=float)[int(index)]
+    _away, index = tree.query(np.asarray(point, dtype=float))
+    normal = normals[int(index)]
     return Stroke(
         point=point,
         normal=(float(normal[0]), float(normal[1]), float(normal[2])),
@@ -557,6 +576,167 @@ def apply_strokes(
     if progress is not None:
         progress(1.0)
     return mesh.replacing(body)
+
+
+#: Wie viele Etappenanfänge die Vorschau einer Formsitzung behält
+#: (:class:`SculptPreview`). Jeder ist ein Feld der Ecken; zurückgenommen wird
+#: meist der letzte Zug, und weiter zurück rechnet sie vom nächsten behaltenen
+#: Anfang aus.
+KEPT_STAGES: Final = 12
+
+
+class SculptPreview:
+    """Die Vorschau einer Formsitzung, Zug für Zug (RM-366).
+
+    Das Fenster rechnete nach jedem Klick und jedem Ziehschritt die ganze
+    Sitzung neu, im Oberflächen-Thread: an einer Figur mit 145 742 Ecken
+    0,03 s nach dem ersten Zug, 5,8 s nach dem vierzigsten im Wechsel mit
+    Glätten. Hier steht die laufende Etappe (:class:`_Stage`) mit ihrer
+    Fläche, ihrem Suchbaum und ihren Normalen: Ein Zug in ihr kostet seine
+    Kugelabfrage, eine neue Etappe einen Durchgang — nach dem vierzigsten
+    Zug so viel wie nach dem ersten. Zurückgenommen oder umgestellt wird ab
+    dem letzten Etappenanfang, den die Änderung nicht berührt.
+
+    Gerechnet wird dieselbe Folge wie in :func:`apply_strokes`, Etappe für
+    Etappe und Zug für Zug; die Vorschau ist bitgleich mit der Operation, die
+    beim Verlassen entsteht. Ein Dokumentzustand ist sie nicht (Regel 2).
+    """
+
+    def __init__(
+        self,
+        mesh: MeshData,
+        *,
+        centre: Vec3 | None = None,
+        front_only: bool = True,
+        mirror_once: bool = True,
+    ) -> None:
+        self.mesh = mesh
+        self.plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
+        self.front_only = front_only
+        self.mirror_once = mirror_once
+        self.strokes: tuple[Stroke, ...] = ()
+        self._starts: dict[int, np.ndarray] = {}
+        """Die Ecken am Anfang der Etappen, nach der Nummer ihres ersten Zugs."""
+        self._stage: _Stage | None = None
+        self._begin = 0
+        self._shown: MeshData = mesh
+        self._shown_tree: Any = None
+        self._input_tree: Any = None
+
+    @property
+    def shown(self) -> MeshData:
+        """Die Fläche nach allen Zügen — was die Vorschau zeigt."""
+        return self._shown
+
+    def show(self, strokes: Sequence[Stroke]) -> MeshData:
+        """Die Fläche nach ``strokes``, gerechnet ab der letzten Etappe, die
+        sich nicht geändert hat."""
+        strokes = tuple(strokes)
+        if strokes == self.strokes:
+            return self._shown
+        common = 0
+        limit = min(len(strokes), len(self.strokes))
+        while common < limit and strokes[common] == self.strokes[common]:
+            common += 1
+        begins = list(np.cumsum([0, *(len(part) for part in stages(strokes))])[:-1].tolist())
+        for index in [index for index in self._starts if index > common]:
+            del self._starts[index]
+        stage = self._stage
+        if not (
+            stage is not None
+            and self._begin in begins
+            and self._begin + len(stage.strokes) <= common
+        ):
+            stage = None
+        start = (
+            self._begin
+            if stage is not None
+            else max(
+                [index for index in self._starts if index in begins and index <= common],
+                default=0,
+            )
+        )
+        for number, begin in enumerate(begins):
+            end = begins[number + 1] if number + 1 < len(begins) else len(strokes)
+            if end <= start and begin < start:
+                continue
+            if stage is None or begin != self._begin:
+                body, tree = self._start_of(begin, common)
+                stage = _Stage(
+                    body,
+                    self.plane,
+                    front_only=self.front_only,
+                    mirror_once=self.mirror_once,
+                    tree=tree,
+                )
+                self._begin = begin
+            for stroke in strokes[begin + len(stage.strokes) : end]:
+                stage.add(stroke)
+            if end < len(strokes):
+                self._starts[end] = stage.points + stage.shift
+                stage = None
+        self._keep_few()
+        self._stage = stage
+        self.strokes = strokes
+        self._shown = self.mesh if stage is None else self.mesh.replacing(stage.moved())
+        self._shown_tree = None
+        return self._shown
+
+    def _start_of(self, begin: int, common: int) -> tuple[trimesh.Trimesh, Any]:
+        """Fläche und Suchbaum am Anfang der Etappe, deren erster Zug die
+        Nummer ``begin`` hat.
+
+        Beginnt sie, wo die gezeigte Fläche steht, sind es deren Körper und
+        Suchbaum: Der Zug, der die Etappe beginnt, hat Normalen und Baum dort
+        schon gebraucht (:meth:`surface_for`), und jede neue Etappe rechnete
+        beide ein zweites Mal — die Hälfte eines Klicks an einem großen Netz.
+        """
+        if begin == 0:
+            return self.mesh.raw, self._input_tree
+        if begin == len(self.strokes) == common:
+            return self._shown.raw, self._shown_tree
+        body = trimesh.Trimesh(
+            vertices=self._starts[begin], faces=self.mesh.raw.faces, process=False
+        )
+        return body, None
+
+    def _keep_few(self) -> None:
+        """Nur die jüngsten :data:`KEPT_STAGES` Anfänge — ältere rechnet sie nach."""
+        for index in sorted(self._starts)[:-KEPT_STAGES]:
+            del self._starts[index]
+
+    def surface_for(
+        self, point: Vec3, radius: float, *, tool: str, cut: bool, symmetry: int
+    ) -> tuple[MeshData, bool, Any, np.ndarray]:
+        """:func:`_surface_for` für den nächsten Zug — mit Suchbaum und Normalen
+        der Fläche, auf die er wirkt, aus der laufenden Etappe."""
+        stage = self._stage
+        if not self.strokes or stage is None:
+            if self._input_tree is None:
+                self._input_tree = cKDTree(np.asarray(self.mesh.raw.vertices, dtype=float))
+            normals = np.asarray(self.mesh.raw.vertex_normals, dtype=float)
+            return self.mesh, cut, self._input_tree, normals
+        fresh = cut or tool in ORDERED_TOOLS or self.strokes[-1].tool in ORDERED_TOOLS
+        if not fresh:
+            probe = Stroke(
+                point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=0.0, symmetry=symmetry
+            )
+            places = np.asarray([place for place, _way in _mirrored(probe, self.plane)])
+            away, _index = stage.tree.query(places)
+            if float(np.min(away)) <= radius * FALLOFF:
+                return self.mesh.replacing(stage.body), cut, stage.tree, stage.normals
+            away, _index = self._shown_query().query(places)
+            if float(np.min(away)) > radius * FALLOFF:
+                return self.mesh.replacing(stage.body), False, stage.tree, stage.normals
+            cut = True
+        normals = np.asarray(self._shown.raw.vertex_normals, dtype=float)
+        return self._shown, cut, self._shown_query(), normals
+
+    def _shown_query(self) -> Any:
+        """Der Suchbaum über die gezeigte Fläche — gebaut, wenn ihn ein Zug braucht."""
+        if self._shown_tree is None:
+            self._shown_tree = cKDTree(np.asarray(self._shown.raw.vertices, dtype=float))
+        return self._shown_tree
 
 
 # --- Serialisierung -------------------------------------------------------------

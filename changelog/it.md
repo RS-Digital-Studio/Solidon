@@ -79,6 +79,7 @@ scrive in `website/version.json`.
 - La destinazione di «Allinea alla caratteristica» parte vuota, e il primo clic nella vista la riempie. «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 - Un altro tratto in una cavità appena scavata la rende più profonda, anche con un pennello piccolo. Finora restava senza effetto e contava come mancato.
+- In «Modella», la finestra mostra ogni tratto con la stessa rapidità anche dopo molti tratti. Finora rallentava a ogni tratto.
 
 ### Generare con l'IA
 

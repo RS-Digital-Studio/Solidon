@@ -80,6 +80,7 @@ dans `website/version.json`.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide, et le premier clic dans la vue la remplit. « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
+- Dans « Sculpter », la fenêtre affiche chaque trait aussi vite après de nombreux traits qu'au premier. Jusqu'ici, elle ralentissait à chaque trait.
 
 ### Générer avec l'IA
 

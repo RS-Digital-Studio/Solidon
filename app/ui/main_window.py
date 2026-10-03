@@ -146,7 +146,7 @@ from app.core.geom.pose import armature_to_text
 from app.core.geom.sculpt import (
     BRUSH_TO_EDGE,
     SYMMETRY_BITS,
-    apply_strokes,
+    SculptPreview,
     median_edge,
     stages,
     stroke_at,
@@ -936,15 +936,18 @@ class _SculptWallWorker(Worker):
     ``done`` trägt die Nummer der Prüfung und die Zahl der zu dünnen Stellen
     — ``None``, wenn das Netz für die Karte zu groß ist. Das Fenster nimmt
     nur die Antwort der jüngsten Prüfung an.
+
+    Geprüft wird die Fläche, die die Vorschau schon zeigt: Der Arbeiter rechnete
+    alle Züge der Sitzung noch einmal, ohne Abbrechen, und das kostete bei
+    vierzig Etappen Sekunden neben dem Fenster (RM-366).
     """
 
     done = Signal(int, object)
 
-    def __init__(self, number: int, mesh: MeshData, strokes: list[Stroke], minimum: float) -> None:
+    def __init__(self, number: int, mesh: MeshData, minimum: float) -> None:
         super().__init__()
         self._number = number
         self._mesh: MeshData | None = mesh
-        self._strokes = strokes
         self._minimum = minimum
         self.cancelled = CancelSignal()
         """Der nächste Zug macht diese Prüfung wertlos — und das Schließen
@@ -954,10 +957,9 @@ class _SculptWallWorker(Worker):
         self.cancelled.cancel()
 
     def work(self) -> None:
-        mesh = self._mesh
-        if mesh is None:
+        sculpted = self._mesh
+        if sculpted is None:
             return
-        sculpted = apply_strokes(mesh, self._strokes)
         try:
             card = wall_thickness_map(
                 sculpted,
@@ -975,9 +977,8 @@ class _SculptWallWorker(Worker):
         self.done.emit(self._number, len(card.highlighted))
 
     def release_finished_references(self) -> None:
-        """Netz und Züge loslassen, sobald die Antwort zugestellt ist."""
+        """Das Netz loslassen, sobald die Antwort zugestellt ist."""
         self._mesh = None
-        self._strokes = []
         super().release_finished_references()
 
 
@@ -3152,6 +3153,8 @@ class MainWindow(QMainWindow):
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
+        self._sculpt_preview: SculptPreview | None = None
+        """Die Vorschau der laufenden Formsitzung, Zug für Zug (RM-366)."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
         self._sketch_body: ObjectId | None = None
@@ -11645,6 +11648,7 @@ class MainWindow(QMainWindow):
         # bekam eine eigene Etappe, ohne sie verlangt zu haben.
         self.sculpt_bar.cut.setChecked(False)
         self._sculpt_strokes = []
+        self._sculpt_preview = None
         self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
         self.tools.setVisible(False)
@@ -11776,8 +11780,11 @@ class MainWindow(QMainWindow):
                 **bar.values(),
                 # Geklickt wird auf die Vorschau, also nach diesen Zügen. Ob
                 # der neue Zug dort noch wirkt oder eine Etappe braucht, weiß
-                # nur, wer sie kennt (RM-438).
+                # nur, wer sie kennt (RM-438) — samt der Spiegelung, die die
+                # Leiste über alle Züge legt (RM-454).
                 before=self._sculpt_shown(),
+                mirrored=SYMMETRY_BITS.get(bar.plane(), 0),
+                preview=self._sculpt_preview_for(mesh),
             )
         )
         # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
@@ -11815,10 +11822,12 @@ class MainWindow(QMainWindow):
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
 
         Die Vorschau rechnet dieselbe Auswertung wie die Operation, nur auf dem
-        Anzeigenetz und ohne den Stapel darum: Tausend Züge auf dem
-        §31-Prüfnetz kosten 96 ms, ein einzelner also nichts, was jemand
-        bemerkt. Der Dokumentzustand ändert sich dabei nicht — er ändert sich
-        bei „Fertig", in einer Transaktion.
+        Anzeigenetz und ohne den Stapel darum — und nur, was sich geändert hat
+        (:class:`SculptPreview`): Sie rechnete nach jedem Klick die ganze
+        Sitzung neu, an einer Figur mit 145 742 Ecken 5,8 s nach dem
+        vierzigsten Zug im Wechsel mit Glätten (RM-366). Der Dokumentzustand
+        ändert sich dabei nicht — er ändert sich bei „Fertig", in einer
+        Transaktion.
         """
         strokes = self._sculpt_strokes
         self.sculpt_bar.show_count(len(strokes), len(stages(strokes)))
@@ -11836,9 +11845,17 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.refine,
         ):
             self._clear_preview()
-        self.viewport.show_preview_mesh(
-            self._sculpt_target, apply_strokes(mesh, self._sculpt_shown())
-        )
+        preview = self._sculpt_preview_for(mesh)
+        self.viewport.show_preview_mesh(self._sculpt_target, preview.show(self._sculpt_shown()))
+
+    def _sculpt_preview_for(self, mesh: MeshData) -> SculptPreview:
+        """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
+        anderes ist (*Jetzt vernetzen* mitten in der Sitzung)."""
+        preview = self._sculpt_preview
+        if preview is None or preview.mesh is not mesh:
+            preview = SculptPreview(mesh)
+            self._sculpt_preview = preview
+        return preview
 
     def _sculpt_shown(self) -> list[Stroke]:
         """Die Züge der Sitzung mit der gewählten Symmetrie — wie die Vorschau
@@ -11870,10 +11887,10 @@ class MainWindow(QMainWindow):
         if mesh is None:
             return
         self._sculpt_wall_number += 1
+        shown = self._sculpt_preview_for(mesh).show(self._sculpt_shown())
         worker = _SculptWallWorker(
             self._sculpt_wall_number,
-            mesh,
-            self._sculpt_shown(),
+            shown,
             self.session.profile.minimum_wall_thickness,
         )
         worker.done.connect(self._sculpt_walls_checked)
@@ -12051,6 +12068,7 @@ class MainWindow(QMainWindow):
         self._clear_preview()
         self._sculpt_target = None
         self._sculpt_strokes = []
+        self._sculpt_preview = None
         self._sculpt_check.stop()
         # Eine Antwort, die nach dem Verlassen ankommt, gehört niemandem mehr.
         self._sculpt_wall_number += 1

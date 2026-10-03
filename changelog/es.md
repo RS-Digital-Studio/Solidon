@@ -80,6 +80,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El destino de «Alinear a la característica» empieza vacío, y el primer clic en la vista lo rellena. «Aplicar» espera hasta entonces en vez de poner el cuerpo en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 - Otro trazo en una cavidad recién excavada la hace más profunda, también con un pincel pequeño. Hasta ahora no surtía efecto y contaba como fallido.
+- Al «Modelar», la ventana muestra cada trazo igual de rápido, también tras muchos trazos. Hasta ahora se volvía más lenta con cada uno.
 
 ### Generar con IA
 

@@ -297,6 +297,81 @@ def test_a_second_carve_into_the_shown_pit_starts_its_own_stage(
     assert second.cut, "der Zug in die gezeigte Mulde beginnt eine eigene Etappe"
 
 
+def test_the_preview_does_not_redo_the_whole_session_after_each_stroke(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-366: Nach jedem Klick rechnete die Vorschau alle Etappen der Sitzung
+    neu, im Oberflächen-Thread — an einer Figur mit 145 742 Ecken 5,8 s nach
+    dem vierzigsten Zug im Wechsel von Auftragen und Glätten, ohne Abbrechen.
+    Jetzt baut ein Klick höchstens eine Etappe, und das Bild ist bitgleich mit
+    dem, was die Operation aus denselben Zügen rechnet."""
+    import numpy as np
+
+    from app.core.geom import sculpt
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    mesh = window._sculpt_mesh(object_id)
+    assert mesh is not None
+    crown = mesh.bounds.maximum
+    built = 0
+    real = sculpt._Stage.__init__
+
+    def counted(self: object, *args: object, **kwargs: object) -> None:
+        nonlocal built
+        built += 1
+        real(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(sculpt._Stage, "__init__", counted)
+    bar = window.sculpt_bar
+    clicks = 16
+    for click in range(clicks):
+        bar.tool.setCurrentIndex(bar.tool.findData("smooth" if click % 2 else "draw"))
+        window._on_sculpt((0.0, 0.0, float(crown[2])))
+
+    assert len(sculpt.stages(window._sculpt_shown())) == clicks, "jeder Zug eine Etappe"
+    assert built <= clicks + 2, f"{built} Etappen gebaut für {clicks} Klicks"
+    preview = window._sculpt_preview
+    assert preview is not None
+    expected = sculpt.apply_strokes(mesh, window._sculpt_shown())
+    assert np.array_equal(np.asarray(preview.shown.raw.vertices), np.asarray(expected.raw.vertices))
+
+
+def test_the_session_mirror_reaches_the_stage_decision_in_the_window(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """RM-454 im Fenster: Die Leiste *Symmetrie* liegt über allen Zügen; ob ein
+    Zug eine eigene Etappe braucht, fragt jetzt auch sein Spiegelbild. Am
+    schiefen Prisma greift ein Klick auf die rechte Wand selbst nichts, sein
+    Spiegelbild aber genau die Mulde, die der Zug davor links gegraben hat."""
+    import numpy as np
+    import trimesh
+
+    from tests.test_sculpt import lopsided_prism
+
+    path = tmp_path / "prisma.stl"
+    path.write_bytes(trimesh.exchange.stl.export_stl(lopsided_prism().raw))
+    window.open_path(path)
+    assert window.session.wait_for_idle(30_000)
+    object_id = str(next(iter(window.session.last_result.scene.objects)))
+    mesh = window._sculpt_mesh(object_id)
+    assert mesh is not None
+    shift = np.asarray(mesh.raw.bounds[0], dtype=float) - np.array([-10.0, -10.0, -10.0])
+    window.start_sculpt(object_id)
+    bar = window.sculpt_bar
+    bar.symmetry.setCurrentIndex(bar.symmetry.findData("x"))
+    bar.tool.setCurrentIndex(bar.tool.findData("carve"))
+    bar.radius.set_value_mm(0.4)
+    bar.strength.set_value_mm(1.0)
+
+    window._on_sculpt(tuple(float(value) for value in np.array([-10.0, 0.0, 0.0]) + shift))
+    window._on_sculpt(tuple(float(value) for value in np.array([9.0, 0.0, 0.0]) + shift))
+
+    first, second = window._sculpt_strokes
+    assert not first.cut
+    assert second.cut, "nur das Spiegelbild greift — auf der Fläche nach der ersten Etappe"
+
+
 def test_undo_takes_back_a_stroke_not_the_operation(window: MainWindow) -> None:
     """Das Rückgängig des Editors läuft auf der Strichliste.
 
@@ -749,10 +824,12 @@ def test_the_export_says_a_stroke_pierced_the_wall(
 
     monkeypatch.setattr(QMessageBox, "exec", cancel)
     window.action_export()
+    # Der Export wartet erst auf die feine Rechnung (RM-426) und prüft dann.
+    assert window.session.wait_for_idle(60_000)
     wait_for_export(window)
 
-    assert seen, "the export wrote without showing the pierced wall"
-    assert "Wand dahinter" in seen[0], f"the dialog does not name the pierce: {seen[0]!r}"
+    assert seen, "der Export schrieb, ohne die durchstochene Wand zu zeigen"
+    assert "Wand dahinter" in seen[0], f"der Dialog nennt den Durchstich nicht: {seen[0]!r}"
     assert not target.exists()
 
 
@@ -963,7 +1040,8 @@ def test_the_button_makes_the_mesh_fine_enough_for_the_brush(window: MainWindow)
     window.start_sculpt()
 
     window.sculpt_bar.refine.click()
-    window.session.wait_for_idle()
+    # Das Vernetzen der Figur dauert unter Last länger als die Vorgabe von 10 s.
+    assert window.session.wait_for_idle(120_000)
 
     assert [entry.op for entry in window.session.project.document.ops][-1] == "remesh_uniform"
     mesh = window._sculpt_mesh(str(window.object_tree.selected()))
@@ -978,7 +1056,8 @@ def test_the_button_goes_when_the_warning_goes(window: MainWindow) -> None:
     window.sculpt_bar.radius.setValue(1.0)
     window.start_sculpt()
     window.sculpt_bar.refine.click()
-    window.session.wait_for_idle()
+    # Das Vernetzen der Figur dauert unter Last länger als die Vorgabe von 10 s.
+    assert window.session.wait_for_idle(120_000)
 
     mesh = window._sculpt_mesh(str(window.object_tree.selected()))
     assert mesh is not None
