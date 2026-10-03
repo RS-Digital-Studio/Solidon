@@ -283,13 +283,33 @@ Kunde, dem die Konsole eine gerettete Datei gab, soll im Fenster nicht an der
 ungeretteten scheitern. Die Originaldatei, der allgemeine Mehrplattenexport
 und andere Slicer benutzen die vollständige Datei.
 
-Im selben CLI-Weg werden fehlende Reinigungsturmkoordinaten nach Crealitys
-Herstellermodus, Bettkontur und Turmbreite initialisiert. Das ersetzt die sonst
-fehlende Fensterinitialisierung für rechteckige Betten bei 0 oder 90 Grad.
+Die Konsolen von OrcaSlicer, ElegooSlicer, Bambu Studio und Creality Print
+bekommen fehlende Reinigungsturmkoordinaten aus `_orca_cli_tower_position`.
+Crealitys bekannter Herstellermodus bleibt maßgeblich. Ohne Modus beginnt der
+Turm bei rechteckigen Betten unten, bei 0 Grad links und bei 90 Grad rechts:
+Die gedrehte Tiefe wächst nach links. Der Rand beträgt die vorhandenen 15 mm
+Freiraum zuzüglich der nativen Brimbreite. Passt bereits die bekannte Breite
+mit beiden Rändern nicht oder verbrauchen die Ränder die andere Bettachse,
+bleiben die Koordinaten aus; ein geklemmter Wert würde keinen Platz schaffen.
+
+Fehlt `prime_tower_brim_width`, gilt der Herstellerstandard **3 mm** aus
+`PrintConfig.cpp`: [OrcaSlicer v2.4.0](https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/v2.4.0/src/libslic3r/PrintConfig.cpp),
+[ElegooSlicer](https://raw.githubusercontent.com/elegooofficial/ElegooSlicer/main/src/libslic3r/PrintConfig.cpp),
+[Bambu Studio v02.02.01.60](https://raw.githubusercontent.com/bambulab/BambuStudio/v02.02.01.60/src/libslic3r/PrintConfig.cpp)
+und [Creality Print](https://raw.githubusercontent.com/CrealityOfficial/CrealityPrint/master/src/libslic3r/PrintConfig.cpp)
+setzen ihn mit `ConfigOptionFloat(3.)`. Die installierten Orca- und
+Elegoo-Fassungen bestätigen ihn im G-Code auch ohne Schlüssel im Prozess.
+Ein ausdrücklich negativer Wert bezeichnet dagegen eine automatische Breite;
+ohne bekannten Herstellermodus bleibt er ebenso wie ein ungültiger Wert ohne
+ergänzte Position.
+
 Explizite Koordinaten aus Maschinen-, Prozess- oder eingebetteten 3MF-Profilen
 bleiben erhalten, auch wenn nur eine Achse vorgegeben ist. Unbekannte Modi und
-andere Konturen oder Winkel werden nicht geraten. Die geschriebenen Koordinaten
-gehen bei tatsächlich mehreren im G-Code verwendeten Werkzeugen in die
+andere Konturen oder Winkel werden nicht geraten. Die Initialposition ist
+keine Platzgarantie: Tiefe, Rippen und Reinigungsvolumen bestimmen die
+tatsächliche Turmfläche erst beim Slicen; auch Sperrflächen prüft weiterhin
+die G-Code-Bauraumprüfung. Die geschriebenen Koordinaten gehen bei tatsächlich
+mehreren im G-Code verwendeten Werkzeugen in die
 Einstellungsgegenprobe ein: Creality nullt den inaktiven Einfilament-Turm. Dabei
 zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen oder
 eine möglicherweise unbekannte Eingangsbelegung. Ausdrückliche Sollwerte werden

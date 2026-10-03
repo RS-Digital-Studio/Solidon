@@ -3317,6 +3317,107 @@ def _creality_tower_config(tmp_path: Path) -> handover.SlicerConfig:
 
 
 @pytest.mark.parametrize(
+    "program", ["orca-slicer.exe", "elegoo-slicer.exe", "bambu-studio.exe", "CrealityPrint.exe"]
+)
+@pytest.mark.parametrize("bed", [180, 220])
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("explicit_brim", [False, True])
+def test_missing_tower_positions_start_inside_the_native_bed(
+    tmp_path: Path, program: str, bed: int, rotation: int, explicit_brim: bool
+) -> None:
+    """RM-476: Ohne Fenstermodus blieb der Turm bei 15/220, selbst auf 180 mm."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps({"printable_area": f"0x0,{bed}x0,{bed}x{bed},0x{bed}"}), encoding="utf-8"
+    )
+    process = {
+        "enable_prime_tower": "1",
+        "prime_tower_width": "35",
+        "wipe_tower_rotation_angle": str(rotation),
+    }
+    if explicit_brim:
+        process["prime_tower_brim_width"] = "3"
+    config.process.write_text(json.dumps(process), encoding="utf-8")
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    written = json.loads(config.process.read_text(encoding="utf-8"))
+    assert float(written["wipe_tower_x"][0]) == pytest.approx(bed - 18 if rotation else 18)
+    assert float(written["wipe_tower_y"][0]) == pytest.approx(18)
+    assert {key: value for key, value in written.items() if key in process} == process
+    assert positioned.written["wipe_tower_y"] == "18.0"
+
+
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("brim", [0, 3, 25])
+def test_automatic_tower_position_reserves_the_brim_on_a_shifted_bed(
+    tmp_path: Path, rotation: int, brim: int
+) -> None:
+    """Der Rand kommt zur nativen Brimbreite hinzu; der Ursprung ist nicht stets null."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps({"printable_area": ["10x20", "230x20", "230x260", "10x260"]}),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps(
+            {
+                "enable_prime_tower": "1",
+                "prime_tower_width": "35",
+                "prime_tower_brim_width": str(brim),
+                "wipe_tower_rotation_angle": str(rotation),
+            }
+        ),
+        encoding="utf-8",
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    margin = 15 + brim
+    assert float(positioned.written["wipe_tower_x"]) == pytest.approx(
+        230 - margin if rotation else 10 + margin
+    )
+    assert float(positioned.written["wipe_tower_y"]) == pytest.approx(20 + margin)
+
+
+@pytest.mark.parametrize(
+    ("width", "brim", "initialized"),
+    [(144, "3", True), (144.1, "3", False), (35, "nan", False), (35, "-1", False)],
+)
+def test_an_automatic_tower_does_not_hide_an_impossible_or_unknown_margin(
+    tmp_path: Path, width: float, brim: str, initialized: bool
+) -> None:
+    """Ein zu großer Turm wird nicht durch geklemmte Koordinaten passend gerechnet."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps({"printable_area": "0x0,180x0,180x180,0x180"}), encoding="utf-8"
+    )
+    config.process.write_text(
+        json.dumps(
+            {
+                "enable_prime_tower": "1",
+                "prime_tower_width": str(width),
+                "prime_tower_brim_width": brim,
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = config.process.read_bytes()
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    assert bool(positioned.written) is initialized
+    if not initialized:
+        assert config.process.read_bytes() == before
+
+
+@pytest.mark.parametrize(
     ("mode", "unrotated", "rotated"),
     [
         ("Left Upper", (15, 185), (35, 25)),
@@ -3341,7 +3442,7 @@ def test_creality_cli_uses_the_manufacturers_tower_modes(
     config.process.write_text(json.dumps(process), encoding="utf-8")
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
 
-    positioned = handover._creality_cli_tower_position(config, setup, ())
+    positioned = handover._orca_cli_tower_position(config, setup, ())
 
     written = json.loads(config.process.read_text(encoding="utf-8"))
     keys = ("wipe_tower_x", "wipe_tower_y")
@@ -3384,7 +3485,7 @@ def test_creality_cli_keeps_every_explicit_tower_coordinate(
     before = {path: path.read_bytes() for path in tmp_path.iterdir()}
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
 
-    assert handover._creality_cli_tower_position(config, setup, models) is config
+    assert handover._orca_cli_tower_position(config, setup, models) is config
     assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
 
 
@@ -3400,17 +3501,17 @@ def test_creality_cli_keeps_every_explicit_tower_coordinate(
         ("CrealityPrint.exe", {"printable_area": "110x0,220x110,110x220,0x110"}),
     ],
 )
-def test_creality_tower_initialization_leaves_other_or_unproven_cases_alone(
+def test_tower_initialization_leaves_unproven_cases_alone(
     tmp_path: Path, program: str, values: dict[str, str]
 ) -> None:
-    """Andere Slicer und unbelegte Platzierungsregeln behalten ihren Auftrag unverändert."""
+    """Fremde Platzierungsmodi und unbelegte Regeln lassen den Auftrag unverändert."""
     config = _creality_tower_config(tmp_path)
     process = json.loads(config.process.read_text(encoding="utf-8"))
     process.update(values)
     config.process.write_text(json.dumps(process), encoding="utf-8")
     before = config.process.read_bytes()
     setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
-    assert handover._creality_cli_tower_position(config, setup, ()) is config
+    assert handover._orca_cli_tower_position(config, setup, ()) is config
     assert config.process.read_bytes() == before
 
 
@@ -3422,7 +3523,7 @@ def test_creality_tower_uses_the_actual_shifted_bed_bounds(tmp_path: Path) -> No
     machine["printable_area"] = ["10x20", "230x20", "230x260", "10x260"]
     config.machine.write_text(json.dumps(machine), encoding="utf-8")
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
-    positioned = handover._creality_cli_tower_position(config, setup, ())
+    positioned = handover._orca_cli_tower_position(config, setup, ())
     assert float(positioned.written["wipe_tower_x"]) == pytest.approx(30.0)
     assert float(positioned.written["wipe_tower_y"]) == pytest.approx(225.0)
 

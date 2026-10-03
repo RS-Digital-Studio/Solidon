@@ -110,7 +110,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
-| [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 2 von 16. G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
@@ -3180,24 +3179,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
   Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
   Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
-
-<a id="rm-476"></a>
-
-- [ ] **RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, OrcaSlicer 2.4.2, ElegooSlicer 1.5.3.5,
-  Bambu Studio 02.08.02.61, Modell `tests/data/meshes/colored.3mf` (zwei Farben). Ohne
-  `wipe_tower_x/y` bleibt die Konsolenvorgabe 15/220 stehen: Kobra 2 (220 mm) Turm bis y 236,3
-  (Orca) bzw. 258,3 (Elegoo), A1 mini (180 mm) bis y 246,8 (Orca) bzw. 242,6 (Bambu). Solidon
-  meldet danach `gcode.off_the_bed`, die Druckdatei ist unbrauchbar. Auf 256-mm-Betten passt es
-  zufällig. Für Creality Print setzt Solidon die Position bereits selbst. Keine Regression
-  gegenüber v0.5.1.
-  **Stellen:** `app/core/export/handover.py:4892–4975` (`_creality_cli_tower_position`, nur
-  `crealityprint`), `:170–171`; `slicer_keys.py` schreibt `wipe_tower_x/y` für keine Familie.
-  **Fix (allgemein):** Startposition des Turms als Regel je Programm der Orca-Familie, immer so,
-  dass Turmfläche plus Rand im nutzbaren Bett liegt.
-  **Abnahme:** je Programm (Orca, Elegoo, Bambu, Creality) zwei Farben auf einem 180- und einem
-  220-mm-Bett, Turm im Bett, kein `gcode.off_the_bed`. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G2), `gcode\rest\`.
 
 <a id="rm-477"></a>
 

@@ -78,6 +78,7 @@ Nutzen da und sonst nichts.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
 - Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
 - Die eingestellte Stützdichte wird in PrusaSlicer und der Orca-Familie korrekt übernommen. Das Feld beginnt bei 1 %. Für einen Druck ohne Stützen wählen Sie „Keine“.
+- Bei Mehrfarbdrucken mit OrcaSlicer, ElegooSlicer, Bambu Studio und Creality Print erhält der Reinigungsturm eine zur Bettgröße passende Startposition.
 
 ### Bohrungen, Langlöcher und Teilen
 

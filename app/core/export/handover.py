@@ -171,6 +171,10 @@ COPY_BLOCK_BYTES: Final = 1024 * 1024
 CREALITY_TOWER_SIDE_OFFSET: Final = 15.0
 CREALITY_TOWER_TOP_OFFSET: Final = 35.0
 
+#: Vorgabe aller vier Orca-Programme, PrintConfig.cpp/prime_tower_brim_width.
+#: Auch im G-Code ihrer nativen Kobra-Profile ohne diesen Schlüssel: 3 mm.
+ORCA_TOWER_DEFAULT_BRIM: Final = 3.0
+
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
 #: **Dieselbe Liste, die der Öffnen-Dialog anbietet** (`ui.main_window`
@@ -5051,20 +5055,22 @@ def _for_the_creality_window(model: Path) -> Path:
     return model
 
 
-def _creality_cli_tower_position(
+def _orca_cli_tower_position(
     config: SlicerConfig, setup: SlicerSetup, models: Sequence[Path]
 ) -> SlicerConfig:
-    """Initialisiert nur fehlende CLI-Turmkoordinaten nach dem Herstellerprofil.
+    """Initialisiert fehlende Turmkoordinaten der vier Orca-Konsolen (RM-476).
 
-    Crealitys Fenster übersetzt den Platzierungsmodus in Projektkoordinaten;
-    das CLI lässt sonst 15/220 stehen, auch auf einem 220-mm-Bett. Übernommen
-    wird die Herstellerregel für rechteckige Betten und 0/90 Grad. Gespeicherte
-    Koordinaten gewinnen immer, auch aus einer eingebetteten 3MF-Konfiguration.
-    Die G-Code-Gegenprobe bleibt für tatsächliche Turmmaße und Sperrflächen nötig.
+    Crealitys bekannter Platzierungsmodus bleibt maßgeblich. Ohne Modus
+    beginnt der Turm unten mit Abstand zum Rand, statt bei der festen
+    Konsolenvorgabe 15/220. Bei 90 Grad wächst seine Tiefe nach links.
+    Gespeicherte Koordinaten gewinnen immer, auch aus einer 3MF-Beilage.
+    Native Breite und Brim begrenzen den Start; erst die G-Code-Gegenprobe
+    kennt die wirkliche Fläche einschließlich Rippen und Reinigungsvolumen.
     """
     if (
         setup.flavour != "orca"
-        or discover.program_mark(setup.executable.name) != "crealityprint"
+        or discover.program_mark(setup.executable.name)
+        not in {"crealityprint", "orcaslicer", "elegooslicer", "bambustudio"}
         or config.machine is None
     ):
         return config
@@ -5086,12 +5092,13 @@ def _creality_cli_tower_position(
                 embedded = json.loads(container.read(threemf.PROJECT_SETTINGS_PATH))
                 if not isinstance(embedded, dict) or any(key in embedded for key in coordinates):
                     return config
-        horizontal, _, vertical = str(values.get("prime_tower_position_type", "")).partition(" ")
-        if horizontal not in {"Left", "Middle", "Right"} or vertical not in {
-            "Upper",
-            "Center",
-            "Below",
-        }:
+        mode = str(values.get("prime_tower_position_type", "")).strip()
+        horizontal, _, vertical = mode.partition(" ")
+        if mode and (
+            discover.program_mark(setup.executable.name) != "crealityprint"
+            or horizontal not in {"Left", "Middle", "Right"}
+            or vertical not in {"Upper", "Center", "Below"}
+        ):
             return config
         if str(values.get("enable_prime_tower", "0")) != "1":
             return config
@@ -5116,7 +5123,19 @@ def _creality_cli_tower_position(
         left, bottom, right, top = area.bounds
         side = CREALITY_TOWER_SIDE_OFFSET
         upper = CREALITY_TOWER_TOP_OFFSET
-        if is_zero(rotation):
+        if not mode:
+            brim = float(values.get("prime_tower_brim_width", ORCA_TOWER_DEFAULT_BRIM))
+            if not math.isfinite(brim) or brim < 0.0:
+                return config
+            margin = side + brim
+            across, along = right - left, top - bottom
+            if not is_zero(rotation):
+                across, along = along, across
+            if width + 2 * margin > across or 2 * margin >= along:
+                return config
+            x = left + margin if is_zero(rotation) else right - margin
+            placed = dict(zip(coordinates, (str(x), str(bottom + margin)), strict=True))
+        elif is_zero(rotation):
             xs = {
                 "Left": left + side,
                 "Middle": (left + right - width) / 2,
@@ -5126,7 +5145,8 @@ def _creality_cli_tower_position(
         else:
             xs = {"Left": left + upper, "Middle": (left + right) / 2, "Right": right - side}
             ys = {"Upper": top - width - side, "Center": (bottom + top) / 2, "Below": bottom + side}
-        placed = dict(zip(coordinates, (str(xs[horizontal]), str(ys[vertical])), strict=True))
+        if mode:
+            placed = dict(zip(coordinates, (str(xs[horizontal]), str(ys[vertical])), strict=True))
         process.update({key: [value] for key, value in placed.items()})
         config.process.write_text(
             json.dumps(process, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -5225,7 +5245,7 @@ def slice_model(
         )
         config = write_config(settings, profile, setup, workspace, slots)
         requested_values = config.written
-        config = _creality_cli_tower_position(config, setup, cli_models)
+        config = _orca_cli_tower_position(config, setup, cli_models)
         densities, diameters = _readback_materials(config, settings, profile, setup, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet

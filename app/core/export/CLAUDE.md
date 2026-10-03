@@ -213,16 +213,17 @@ fragen es; gemessener Bestand in `tests/data/superslicer_3mf_keys.json`.
 - **Creality Print** bekommt in Konsole und Fenster
   (`_for_the_creality_window`) eine Kopie ohne den einzelnen `plate`-Block aus
   `Metadata/model_settings.config` (Absturz mit mehreren Filamenten), nur bei
-  belegter einzelner Platte; sonst bleibt alles ganz. Fehlende
-  Reinigungsturmkoordinaten ergänzt der Konsolenweg nach Herstellermodus,
-  Bettkontur und Turmbreite (rechteckig, 0 oder 90 Grad); ausdrückliche
-  bleiben, Unbekanntes wird nicht geraten; bei mehreren benutzten Werkzeugen
-  prüft die Gegenprobe sie. Ab 7.3 rechnet die Konsole nur mit `--cli` und
-  `--need-gcode-file`, ohne `--arrange` (`_creality_cli`), und ordnet eine
-  Platte dort selbst an — auch eine, deren Anordnung nicht hält, geht deshalb
+  belegter einzelner Platte; sonst bleibt alles ganz. Ab 7.3 rechnet die Konsole
+  nur mit `--cli` und `--need-gcode-file`, ohne `--arrange` (`_creality_cli`),
+  und ordnet eine Platte dort selbst an — auch eine, deren Anordnung nicht hält, geht deshalb
   ohne Vorgabe hinaus (gemessen, `_creality_cli`); eine Fassung, die
   `--cli` ablehnt, bekommt den alten Aufruf. Das Fenster fragt nach dem
   Drucker und nimmt dessen Profile (`window_findings`).
+- **Reinigungsturm:** Die vier Orca-Konsolen ergänzen fehlende Koordinaten
+  nach Crealitys bekanntem Modus oder ohne Modus unten mit Rand für Breite und Brim
+  (rechteckiges Bett, 0 oder 90 Grad). Kundenkoordinaten bleiben erhalten;
+  Unbekanntes wird nicht geraten. Erst die G-Code-Gegenprobe prüft die
+  tatsächliche Turmfläche. Herleitung: `konzepte/begruendungen/karte-app-core-export.md`.
 
 ### Die Prüfung vor dem Export
 

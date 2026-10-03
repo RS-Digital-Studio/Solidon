@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)](#rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026) |
 | 2026-10-03 | [RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)](#rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
@@ -38125,3 +38126,51 @@ Claudes uncommittierter Anfang wurde übernommen und korrigiert: Er hatte Bahnbr
 Der betroffene Lauf meldete 20 213 bestanden, 88 übersprungen, 3710 abgewählt und zwei Fehler außerhalb der Änderung, Exit 1: Hilfsprozess-Zählung in `test_kernel_process.py` und ein `TypeError` aus Pythons `ast.iter_child_nodes` in `test_toolchain.py`. Die unmittelbare isolierte Wiederholung beider Fälle bestand (2 bestanden in 9,45 s, Exit 0). Der erste Lauf bleibt als rot dokumentiert; das vollständige Entwicklungstor vor der Zusammenführung ist gesondert zu fahren. Ruff und Formatprüfung bestanden, mypy prüfte 337 Quelldateien ohne Befund. Protokolle: `%TEMP%/solidon-A-475-affected.txt`, `solidon-A-475-recheck.txt` und `solidon-A-475-mypy.txt`.
 
 Abnahme mit echtem Pilz, Gitterstütze, jeweils 15 und 50 %: ElegooSlicer 1.5.3.5 / CC2 und OrcaSlicer 2.4.2 / Kobra 2 schreiben Breite 0,42 mm, Lücke 2,13678 bzw. 0,37708 mm; PrusaSlicer 2.9.6 / MK4S schreibt Breite 0,45 mm, Lücke 2,30678 bzw. 0,40708 mm. Die daraus unabhängig berechneten Dichten sind 15,00003 bzw. 49,99998 %. Gemessene Teilungen in einer mittleren Stützschicht: CC2 und Kobra 2 jeweils 2,51 / 0,75 mm (Soll 2,51386 / 0,75416), MK4S 2,71 / 0,81 mm (Soll 2,71386 / 0,81416). Alle sechs Läufe erzeugen G-Code. Rohdaten, Kommandos, Protokolle und Datei-Prüfsummen: `F:\solidon-review-reports\gcode\rest\codex_A_475_final\`; Messung `support_measurements.json` mit Auswertung der Extrusionswege, relativen/absoluten E-Werten und G92. Changelog in sechs Sprachen, weil Kunden veröffentlichter Versionen betroffen sind. Commit: „Die eingestellte Stützdichte erreicht PrusaSlicer und die Orca-Familie“.
+
+Commitnachweis zu RM-475: `d81677165`.
+
+## RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)
+
+<a id="rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026"></a>
+<a id="rm-476"></a>
+
+**RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, OrcaSlicer 2.4.2, ElegooSlicer 1.5.3.5,
+  Bambu Studio 02.08.02.61, Modell `tests/data/meshes/colored.3mf` (zwei Farben). Ohne
+  `wipe_tower_x/y` bleibt die Konsolenvorgabe 15/220 stehen: Kobra 2 (220 mm) Turm bis y 236,3
+  (Orca) bzw. 258,3 (Elegoo), A1 mini (180 mm) bis y 246,8 (Orca) bzw. 242,6 (Bambu). Solidon
+  meldet danach `gcode.off_the_bed`, die Druckdatei ist unbrauchbar. Auf 256-mm-Betten passt es
+  zufällig. Für Creality Print setzt Solidon die Position bereits selbst. Keine Regression
+  gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:4892–4975` (`_creality_cli_tower_position`, nur
+  `crealityprint`), `:170–171`; `slicer_keys.py` schreibt `wipe_tower_x/y` für keine Familie.
+  **Fix (allgemein):** Startposition des Turms als Regel je Programm der Orca-Familie, immer so,
+  dass Turmfläche plus Rand im nutzbaren Bett liegt.
+  **Abnahme:** je Programm (Orca, Elegoo, Bambu, Creality) zwei Farben auf einem 180- und einem
+  220-mm-Bett, Turm im Bett, kein `gcode.off_the_bed`. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G2), `gcode\rest\`.
+
+**Abschluss:** Am Stand nach RM-475 mit `colored.3mf` und zwei tatsächlich benutzten Werkzeugen nachgestellt: Ohne Startkoordinaten reicht der Turm auf dem Kobra 2 bis y = 236,336 mm (Orca) beziehungsweise 258,290 mm (Elegoo), auf dem A1 mini bis 246,757 mm (Orca/Elegoo) beziehungsweise 242,643 mm (Bambu). Der bisherige Helfer initialisierte ausschließlich Crealitys bekannten Fenstermodus. Die enge Regel stammt aus `78884688ea2d0c02900d0c8a8849dced37c6aa68`, enthalten in v0.4.1 bis v0.5.1; die Mehrfarbübergabe besteht bereits seit `47da07a18b0e5e1bf6ed7ada553621a982fb4ddd` (v0.1.1 bis v0.5.1).
+
+Die gemeinsame Initialisierung der vier Orca-Programme ergänzt fehlende Koordinaten auf rechteckigen Betten für 0 und 90 Grad: unten mit der nativen Brimbreite zusätzlich zum Herstellerabstand von 15 mm. Fehlt die Brimangabe, gilt der belegte Programmstandard 3 mm. Eine bekannte Breite, die mit Rand nicht passt, bekommt keine erfundene Position; unbekannte Konturen, Winkel oder automatische Brimwerte bleiben beim Slicer. Gespeicherte Positionen aus Maschine, Prozess oder 3MF bleiben erhalten, ebenso Crealitys vorhandener Platzierungsmodus. Die tatsächliche Fläche einschließlich Rippen und variabler Tiefe wird weiterhin am G-Code geprüft.
+
+Gegenprobe vor dem Fix: 16 von 16 Positionsfällen rot. Die zusätzliche Matrix ohne Brimangabe war gegen den ersten Zwischenstand ebenfalls in 16 Fällen rot; explizite Brimwerte waren in 16 Fällen grün. Danach 89 Turmprüfungen bestanden, 499 abgewählt, Exit 0. Der erste reale Zwischenstand bestand vier von acht Kombinationen und machte die fehlenden Programmstandards sichtbar; sein Nachweis bleibt unter `codex_A_476_final` erhalten.
+
+**Gemessene Abnahme:** Alle acht Läufe des korrigierten Standes erzeugen G-Code mit Werkzeugen 0 und 1 und ohne `gcode.off_the_bed`. Tatsächliche XY-Grenzen der extrudierten Türme in mm:
+
+| Programm | Bett | X | Y |
+|---|---|---|---|
+| OrcaSlicer 2.4.2 | A1 mini, 180 mm | 15,332–45,124 | 14,799–44,757 |
+| OrcaSlicer 2.4.2 | Kobra 2, 220 mm | 14,470–81,530 | 12,564–34,336 |
+| ElegooSlicer 1.5.3.5 | A1 mini, 180 mm | 15,332–45,124 | 14,799–44,757 |
+| ElegooSlicer 1.5.3.5 | Kobra 2, 220 mm | 13,384–82,616 | 12,110–56,290 |
+| Bambu Studio 02.08.02.61 | A1 mini, 180 mm | 15,691–41,329 | 14,807–40,643 |
+| Bambu Studio 02.08.02.61 | Kobra 2, 220 mm | 14,943–46,032 | 14,921–44,573 |
+| Creality Print 7.3 | Prusa MINI, 180 mm | 11,601–84,399 | 11,601–30,299 |
+| Creality Print 7.3 | K1, 220 mm | 89,301–112,199 | 181,801–204,699 |
+
+Bambu/Kobra und Creality/MINI wurden für die Zweifarbenabnahme ausschließlich mit `enable_prime_tower=1` gerechnet, weil das native Profil ihn abschaltet. Crealitys mitgeliefertes A1-mini-Profil scheitert unabhängig zunächst an `tree_support_wall_count=-1`, nach kontrollierter Korrektur dieses inaktiven Wertes an unbekannten Bambu-Wechselcodevariablen; das Kobra-Profil an fehlendem `G92 E0` im Schichtcode. Diese Ansätze sind erhalten, die Positionsabnahme verwendet deshalb die passenden nativen MINI- und K1-Profile mit unveränderten Start- und Wechselcodes. Installierte Profile sind vor und nach der Probe hashgleich. Diese fremden Profilfehler werden nicht als behoben behauptet.
+
+Rohdaten, Kommandos, Herstellerprofil-Prüfsummen und vollständige Extrusionsgrenzen: `F:\solidon-review-reports\gcode\rest\codex_A_476_final_defaults\rm476-summary.json`; ursprüngliche und kontrollierte Gegenproben in `codex_A_476_baseline`, `codex_A_476_controlled_baseline`, `codex_A_476_mini_baseline` und `codex_A_476_k1_baseline`. Changelog in sechs Sprachen, weil veröffentlichte Versionen Kunden mit kleinen Druckbetten betreffen. Commit: „Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten“.
+
+Der breite betroffene Lauf brach bei 71 % nativ mit `0xC0000005` ab, ohne Python-Stapel und ohne Zusammenfassung; er gilt als fehlgeschlagen (`%TEMP%/solidon-A-476-affected.txt`). Das anschließende vollständige Entwicklungstor am unveränderten Stand bestand mit 20 520 Tests, 61 übersprungen, 507,44 s und Exit 0 (`solidon-A-476-suite.txt`). Ruff, Formatprüfung und mypy mit 337 Quelldateien sind grün; die Dokumentations- und Changelogprüfung bestand mit 77 Tests, 4 übersprungen. Fenster-, Renderer- und Leistungsläufe bleiben dem Release vorbehalten.
