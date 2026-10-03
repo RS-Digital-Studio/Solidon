@@ -3620,8 +3620,9 @@ class DonationDialog(QDialog):
         for button in buttons:
             button.setMinimumWidth(equal)
         content = self._scroll.widget()
-        if content is not None and content.layout() is not None:
-            content.layout().activate()
+        content_layout = content.layout() if content is not None else None
+        if content_layout is not None:
+            content_layout.activate()
         self.setMinimumWidth(max(DONATION_WIDTH, expanded_width(self._scroll)))
 
     @staticmethod
