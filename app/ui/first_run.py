@@ -727,6 +727,19 @@ class FirstRunDialog(QDialog):
         self.wait_for_survey()
         self._leash.wait_all(timeout_ms)
 
+    def _natural_width(self) -> int:
+        """Die natürliche Breite samt des zugeklappten eigenen Druckers.
+
+        Das verborgene Formular trägt nichts zur äußeren sizeHint bei; seine
+        ganze Breite muss schon beim Öffnen Platz haben, samt dem Rollbalken,
+        den das Aufklappen bringt (``style.expanded_width``).
+        """
+        form = self.custom_printer.layout()
+        forms = (form,) if isinstance(form, QFormLayout) else ()
+        return max(
+            self.sizeHint().width(), self.minimumWidth(), expanded_width(self._scroll, *forms)
+        )
+
     def _grow_to_content(self, intent: ContentFitIntent = "passive") -> None:
         """Aktualisiert den Inhalt nach dem Auslöser, der ihn sichtbar machte.
 
@@ -738,14 +751,7 @@ class FirstRunDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
-        # Das verborgene Formular des eigenen Druckers trägt nichts zur
-        # äußeren sizeHint bei; seine ganze Breite muss schon beim Öffnen
-        # Platz haben, samt dem Rollbalken, den das Aufklappen bringt.
-        form = self.custom_printer.layout()
-        forms = (form,) if isinstance(form, QFormLayout) else ()
-        natural_width = max(
-            self.sizeHint().width(), self.minimumWidth(), expanded_width(self._scroll, *forms)
-        )
+        natural_width = self._natural_width()
         content_layout = self._contents.layout()
         may_size_initially = intent == "initial" and not self._height.initial_fit_done
         if may_size_initially:

@@ -44,12 +44,13 @@ scrive in `website/version.json`.
 - Anche nella ricerca rapida, «Orienta per la stampa» controlla che un pezzo stia in piedi in modo sicuro.
 - Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.
 - Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
+- Quando arriva un altro modello, da un file, da un download o generato, la vista mostra il piatto su cui si trova.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
 - SuperSlicer non si blocca più con i pezzi rotondi: non riceve più la cucitura a sciarpa che non conosce.
 - La preselezione del filamento prende Generic o la marca della tua stampante invece di un filamento speciale di terzi, ad esempio Generic PETG invece di BETA PETG sulla Bambu A1.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
-- *Orienta per la stampa*, *Ruota* e *Sposta* funzionano anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte. Il corpo resta esatto.
+- Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano *Orienta per la stampa*, *Ruota* e *Sposta*. Il corpo resta esatto.
 - Una parete esterna più lenta vale ora anche per i perimetri piccoli come fori e steli in PrusaSlicer e nella famiglia Orca.
 
 ### Fori, asole e divisione
@@ -100,6 +101,7 @@ scrive in `website/version.json`.
 - Ogni tentativo nell'elenco indica la sua frase o immagine e il seme. Se il tuo input non corrisponde più al tentativo scelto, la finestra dice quale verrà applicato.
 - Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già.
 - Se un errore durante la generazione indica la configurazione come via d'uscita, compare come pulsante nella finestra.
+- Mentre si genera un modello, la finestra resta utilizzabile. La finestra di dialogo si sposta di lato, e la barra di stato mostra avanzamento, tempo e «Annulla».
 - La finestra di generazione indica il volume alla misura con cui arriva il pezzo.
 - Un modello generato si annulla con un solo Ctrl+Z. Prima ne servivano tre o quattro.
 - Se «Applica» viene rifiutato durante la generazione, la finestra resta aperta con tutti i tentativi e indica la via d'uscita invece di scartare la mesh.
@@ -129,6 +131,8 @@ scrive in `website/version.json`.
 - L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
 - Quando altri programmi tengono occupato il computer, *Annulla* ferma un calcolo lungo in meno di un secondo invece di chiedere un riavvio dopo alcuni secondi.
 - Un modello linguistico locale può fare dodici passi invece di otto per richiesta nella chat e risolve così più richieste composte da più parti.
+- Il pannello di selezione torna a stare nella sua colonna, e la colonna delle misure nell'albero mostra la misura intera, per esempio «Ø5,19 mm» invece di «…».
+- Su un foro, «Cambia elemento» apre direttamente «Cambia foro» con anteprima, invece di limitarsi a rimandarvi.
 
 ## 0.5.1
 

@@ -466,7 +466,13 @@ class GenerateDialog(QDialog):
         self._model_fields: dict[str, QComboBox] = {}
         advanced_form.addRow(self._models)
 
-        self.advanced = collapsible(tr("Weitere Einstellungen"), advanced, open_now=False)
+        self.advanced = collapsible(
+            tr("Weitere Einstellungen"),
+            advanced,
+            open_now=False,
+            contents=tr("Startwert und Modell"),
+            remember="generate.more",
+        )
 
         # Lange Hinweise bleiben vollständig im Rollbereich erreichbar, ohne
         # Statuswechsel als bewusste Fenstergrößenänderung zu behandeln.
@@ -576,6 +582,11 @@ class GenerateDialog(QDialog):
         return self._readiness is mesh.Readiness.READY
 
     @property
+    def running(self) -> bool:
+        """Ob gerade ein Wurf läuft — vor dem Schließen des Fensters gefragt (RM-499)."""
+        return self._busy
+
+    @property
     def readiness(self) -> mesh.Readiness | None:
         """Wie weit der Generator vorbereitet ist — oder ob die Antwort läuft."""
         return self._readiness
@@ -652,7 +663,7 @@ class GenerateDialog(QDialog):
         self._grow_to_content("explicit")
 
     def _grow_to_content(self, intent: ContentFitIntent = "passive") -> None:
-        """Misst das Layout, ohne Statusmeldungen den Außenrahmen bewegen zu lassen."""
+        """Misst das Layout; passiv wächst der Rahmen nur um verdeckten Inhalt (RM-487)."""
         layout = self.layout()
         if layout is None or not self.isVisible():
             return

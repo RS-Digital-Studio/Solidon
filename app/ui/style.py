@@ -479,9 +479,19 @@ def _content_size_for_intent(
     height_floor: int = 0,
     available_height: int | None = None,
 ) -> QSize | None:
-    """Reine Größenentscheidung; äußere Qt-Messungen bleiben beim Aufrufer."""
+    """Reine Größenentscheidung; äußere Qt-Messungen bleiben beim Aufrufer.
+
+    ``passive`` wächst nur in der Höhe und gibt nie Höhe zurück: Nachgereichter
+    Inhalt — das Ergebnis einer Hintergrundprüfung samt Knopf — braucht Platz,
+    ein kürzerer Inhalt danach ließe den Rahmen bei jedem Statuswechsel springen.
+    """
     if intent == "passive":
-        return None
+        height = natural.height()
+        if available_height is not None:
+            height = min(height, available_height)
+        if height <= current.height():
+            return None
+        return QSize(current.width(), height)
     if intent == "explicit":
         height = natural.height()
         if available_height is not None:
@@ -494,22 +504,45 @@ def _content_size_for_intent(
     return QSize(width, max(natural.height(), height_floor))
 
 
+def _hidden_height(scroll: QScrollArea) -> int:
+    """Wie viel vom Inhalt unter dem Rand des Rollbereichs liegt, in Punkten.
+
+    Gemessen an der Breite, die der Inhalt wirklich hat, nicht am Ausschnitt:
+    Ist er breiter und rollt quer, bräche er in der schmaleren Breite in mehr
+    Zeilen um, als er hat.
+    """
+    content = scroll.widget()
+    if content is None:
+        return 0
+    layout = content.layout()
+    if layout is not None:
+        layout.activate()
+    needed = content.sizeHint().expandedTo(content.minimumSizeHint()).height()
+    if layout is not None and layout.hasHeightForWidth():
+        width = max(content.width(), scroll.viewport().width())
+        needed = max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
+    return max(0, needed - scroll.viewport().height())
+
+
 class ContentHeight:
     """Größenvertrag für Dialoge mit Rollbereich.
 
     Eine anfängliche Messung passt den aktuellen Dialoginhalt ein. Explizites
     Auf- und Zuklappen darf Höhe zurückgeben oder hinzufügen und hält den
-    Fensteranker; passive Inhaltsänderungen lassen den Außenrahmen stehen.
+    Fensteranker; passive Inhaltsänderungen dürfen den Rahmen nach der
+    Anfangsmessung bis zum Bildschirmrand vergrößern, nie verkleinern, und
+    halten den Anker, sobald einmal ausdrücklich geklappt wurde.
     Sobald der Kunde Breite oder Höhe ändert, bleiben beide Maße für die
     Dialoglebenszeit maßgeblich. Mehrinhalt rollt dann im Scrollbereich.
     """
 
-    __slots__ = ("_initialized", "fitted", "user")
+    __slots__ = ("_anchored", "_initialized", "fitted", "user")
 
     def __init__(self) -> None:
         self.fitted: QSize | None = None
         self.user: QSize | None = None
         self._initialized = False
+        self._anchored = False
 
     @property
     def initial_fit_done(self) -> bool:
@@ -551,6 +584,18 @@ class ContentHeight:
         self._remember_size(dialog)
 
     @staticmethod
+    def _available_height_on_screen(dialog: QWidget) -> int | None:
+        """Die Höhe, die ``fit_dialog_to_screen`` dem Dialog höchstens lässt."""
+        # Ein ungezeigtes Fenster hat noch keinen Bildschirm, auch wenn Qt
+        # es anders verspricht.
+        screen: QScreen | None = dialog.screen()
+        if screen is None:
+            return None
+        room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
+        border_height = dialog.frameGeometry().height() - dialog.height()
+        return max(1, room.height() - border_height)
+
+    @staticmethod
     def _available_height_at_anchor(dialog: QWidget) -> int:
         screen = dialog.screen()
         room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
@@ -573,8 +618,9 @@ class ContentHeight:
         if self.user is not None:
             self._remember_size(dialog)
             return
-        anchor = dialog.frameGeometry().topLeft() if intent == "explicit" else None
-        if intent == "explicit":
+        keeps_anchor = self._keeps_anchor(intent)
+        anchor = dialog.frameGeometry().topLeft() if keeps_anchor else None
+        if keeps_anchor:
             available = self._available_height_at_anchor(dialog)
             if available is not None:
                 height = min(height, available)
@@ -582,7 +628,7 @@ class ContentHeight:
         layout = dialog.layout()
         if layout is not None:
             layout.activate()
-        if intent == "explicit":
+        if keeps_anchor:
             if anchor is not None and dialog.frameGeometry().topLeft() != anchor:
                 dialog.move(anchor)
         else:
@@ -590,6 +636,16 @@ class ContentHeight:
         self._remember_size(dialog)
         if intent == "initial":
             self._initialized = True
+        elif intent == "explicit":
+            self._anchored = True
+
+    def _keeps_anchor(self, intent: ContentFitIntent) -> bool:
+        """Ob der Dialog oben stehen bleibt, statt hinaufzurücken.
+
+        Ausdrückliches Klappen hält die Überschrift unter dem Zeiger; danach
+        rückt auch nachgereichter Inhalt den Dialog nicht mehr hinauf.
+        """
+        return intent == "explicit" or (intent == "passive" and self._anchored)
 
     def fit(
         self,
@@ -601,10 +657,15 @@ class ContentHeight:
         natural_width: int = 0,
         natural_size: QSize | None = None,
     ) -> None:
-        """Misst Inhalt einmal, nach ausdrücklichem Klappen oder ohne Rahmenzug.
+        """Misst Inhalt nach dem Anlass, der ihn geändert hat.
 
         ``initial`` passt die Anfangsgröße an; ``explicit`` hält Breite und
-        Anker; ``passive`` ändert nur das Layout im Scrollbereich.
+        Anker; ``passive`` — nachgereichter Inhalt, Status, Suche — hält die
+        Breite und wächst höchstens auf die Bildschirmhöhe; fehlt unter dem
+        Dialog Platz, rückt er nur so weit hinauf wie nötig, nach einem
+        ausdrücklichen Klappen nicht mehr (RM-487). Vor der Anfangsmessung
+        und nach einem Zug des Kunden ändert ``passive`` nur das Layout im
+        Scrollbereich.
         """
         if isinstance(scroll, DialogScrollArea):
             scroll._content_height = self
@@ -613,11 +674,24 @@ class ContentHeight:
             return
         if intent == "initial" and self._initialized:
             intent = "passive"
+        # Erst die liegengebliebenen Layout-Anfragen: Ein Zuklappen meldet sich
+        # bei den Eltern über ``LayoutRequest`` in der Warteschlange, und der
+        # Nullzeitgeber der Klappe kam davor an — gemessen wurde der
+        # aufgeklappte Inhalt, und die Einstellungen gaben ihre Höhe nicht zurück.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         floor = self.floor(dialog)
+        if intent == "passive" and (self.user is not None or not self._initialized):
+            return
         scroll.updateGeometry()
         layout.invalidate()
         layout.activate()
-        wanted = natural_size if natural_size is not None else dialog.sizeHint()
+        if intent == "passive":
+            # Gewachsen wird um das, was im Rollbereich verdeckt läge — nicht
+            # auf einen Größenwunsch, der auch ohne verdeckten Inhalt größer sein
+            # kann (ein Umbruch, gemessen an einer anderen Breite).
+            wanted = QSize(dialog.width(), dialog.height() + _hidden_height(scroll))
+        else:
+            wanted = natural_size if natural_size is not None else dialog.sizeHint()
         target = _content_size_for_intent(
             dialog.size(),
             wanted,
@@ -626,7 +700,11 @@ class ContentHeight:
             natural_width=natural_width,
             height_floor=floor,
             available_height=(
-                self._available_height_at_anchor(dialog) if intent == "explicit" else None
+                self._available_height_at_anchor(dialog)
+                if self._keeps_anchor(intent)
+                else self._available_height_on_screen(dialog)
+                if intent == "passive"
+                else None
             ),
         )
         if target is None:

@@ -510,14 +510,29 @@ def rows_height(view: QAbstractItemView) -> int:
         # leere Liste.
         wanted = view.fontMetrics().height() + 2 * SPACE
 
-    # Was die Liste über ihren Zeilen noch braucht — Rahmen und, beim Baum,
-    # die Spaltenköpfe. Aus der Differenz gelesen und nicht aus einzelnen
-    # Zahlen zusammengesetzt: das Stylesheet darf beides ändern, ohne dass
-    # hier jemand nachzieht.
+    # Was die Liste über ihren Zeilen noch braucht — Rahmen, beim Baum die
+    # Spaltenköpfe und ein **sichtbarer waagrechter Balken**. Gelesen aus der
+    # Differenz, wo die Liste angezeigt ist: das Stylesheet darf alles davon
+    # ändern, ohne dass hier jemand nachzieht. Vor dem Anzeigen ist die
+    # Differenz eine Zahl aus dem Bau (eine Liste von null Punkten über einem
+    # Sichtfeld von 28 ergab -28, RM-489); dann gilt die Summe der Teile, und
+    # sie bleibt auch danach der Boden, damit ein Balken, der gerade erst
+    # erschienen ist, nicht eine Zeile verdeckt.
+    chrome = 2 * view.frameWidth()
+    if tree is not None and not tree.isHeaderHidden():
+        head = tree.header()
+        chrome += head.sizeHint().height() if head is not None else 0
+    bar = view.horizontalScrollBar()
+    policy = view.horizontalScrollBarPolicy()
+    if bar is not None and (
+        policy == Qt.ScrollBarPolicy.ScrollBarAlwaysOn
+        or (policy == Qt.ScrollBarPolicy.ScrollBarAsNeeded and bar.isVisibleTo(view))
+    ):
+        chrome += bar.sizeHint().height()
     viewport = view.viewport()
-    if viewport is not None:
-        wanted += view.height() - viewport.height()
-    return wanted
+    if viewport is not None and view.isVisible():
+        chrome = max(chrome, view.height() - viewport.height())
+    return wanted + chrome
 
 
 def natural_height(zone: QWidget) -> int:

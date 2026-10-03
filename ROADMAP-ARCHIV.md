@@ -32,6 +32,8 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
+| 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
+| 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
 | 2026-10-02 | [RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)](#rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026) |
@@ -47,6 +49,8 @@ entfernt hat.
 | 2026-10-03 | [RM-488: Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken (03.10.2026)](#rm-488-auswahlfenster-am-merkmal-felder-rechts-abgeschnitten-kopfzeile-gekappt-waagrechter-rollbalken-03102026) |
 | 2026-10-03 | [RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)](#rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026) |
 | 2026-10-03 | [RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)](#rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026) |
+| 2026-10-03 | [RM-491: Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“ (03.10.2026)](#rm-491-einstellungen-sieben-optionen-liegen-ohne-hinweis-hinter-weitere-einstellungen-03102026) |
+| 2026-10-03 | [RM-489: Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken (03.10.2026)](#rm-489-linke-spalte-bei-19201080-objektbaum-gekürzt-oder-filamentliste-mit-zwei-rollbalken-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
 | 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
 | 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
@@ -37292,6 +37296,50 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
 
+## RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)
+
+<a id="rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026"></a>
+<a id="rm-487"></a>
+
+**RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe.**
+  Versionsvergleich 0.5.2 (02.10.2026), Oberfläche offscreen, `grab()`. **Regression gegenüber
+  v0.5.1.** Erststart: Nach der Programmerkennung (3–10 s) wächst der Inhalt um 56 px, der Rahmen
+  nicht (v0.5.1: 680×651 → 723); „Zusatzprogramme verwalten …“ und „Chat einrichten …“ liegen zu
+  0 % im Ausschnitt, ein Rollbalken erscheint. „Modell erzeugen“ ohne ComfyUI: 480×243 statt
+  480×293, der Knopf „Zusätzliche Programme …“ liegt 32 px unter dem Rand, der Kunde liest „ohne das
+  bleibt dieser Weg zu“ und sieht keinen Ausweg (Regel 17). Gemeinsame Ursache: Inhalt aus einer
+  Hintergrundprüfung zählt als passive Anpassung, die den Rahmen seit `b837a73f8`/`2a0bbf121` nie
+  vergrößert. Trifft jeden Dialog, der nach dem Öffnen Inhalt nachreicht.
+  **Stellen:** `app/ui/style.py:515` (`ContentSizeFit.fit`), `app/ui/first_run.py:612`, `:730`,
+  `app/ui/generate_dialog.py:509–528`, `:632`, `:1231`.
+  **Fix (allgemein):** Solange der Kunde die Größe nicht selbst gezogen hat, darf eine passive
+  Anpassung den Rahmen bis zur verfügbaren Schirmhöhe vergrößern; nur Schrumpfen und das
+  Überschreiben einer Nutzergröße bleiben gesperrt.
+  **Abnahme:** Wächter an Erststart, „Modell erzeugen“ und einem dritten Dialog mit
+  nachgereichtem Inhalt: nach Eingang der Prüfung liegt jeder Knopf vollständig im Ausschnitt;
+  eine gezogene Nutzergröße bleibt erhalten. Bauplan §2.8.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U3, U6), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** **Abschluss:** `style.ContentHeight.fit` lässt eine passive Anpassung nach der Anfangsmessung
+  wieder wachsen, solange der Kunde die Größe nicht gezogen hat: um den Teil, der im Rollbereich
+  verdeckt läge (`style._hidden_height`, gemessen an der wirklichen Inhaltsbreite), höchstens bis
+  zur Bildschirmhöhe, nie breiter und nie zurück. Reicht der Platz unter dem Dialog nicht, rückt
+  `fit_dialog_to_screen` ihn hinauf; nach einem ausdrücklichen Klappen hält auch Passives den Anker
+  (`_keeps_anchor`), damit die Überschrift unter dem Zeiger bleibt. Die beiden Gründe der Sperre aus
+  `b837a73f8` bleiben: Eine gezogene Größe überschreibt nichts, und ein wechselnder Status kann den
+  Rahmen höchstens einmal vergrößern statt bei jedem Wechsel zu springen. Warum, steht in
+  `konzepte/begruendungen/regel-fenster.md` („Passive Größenänderungen wachsen, schrumpfen nie“),
+  die Regel in `fenster.md`. Wächter in `tests/test_dialog_layout_regressions.py` an Erststart,
+  *Modell erzeugen* und *ComfyUI einrichten* (Ordnersuche ohne Fund), je automatisch und mit
+  gezogener Größe; am Stand davor nennen sie genau die verdeckten Knöpfe aus dem Befund
+  („Zusatzprogramme verwalten …“, „Chat einrichten …“, „Zusätzliche Programme …“) und den
+  abgeschnittenen Ordnerhinweis. Dazu `test_style.py` ohne Fenster. Sieben Fenstertests, die das
+  Stehenbleiben des Rahmens festschrieben, prüfen jetzt Wachsen ohne Zurückgeben; der
+  Wachstumstest des Druckdialogs (`test_the_dialog_grows_when_the_profile_section_opens_itself`),
+  seit `b837a73f8` rot, ist wieder grün. Sonde am echten Fenster (2560×1392): Erststart 680×621 →
+  680×662 nach der Erkennung, Rollweite 41 → 0; *Modell erzeugen* ohne ComfyUI 480×243 → 480×275,
+  Rollweite 32 → 0, beide an derselben Stelle; nach dem Zusammenführen mit RM-371 (Erzeugen ohne
+  Modalfenster) 480×267 → 480×299, ebenfalls ohne Rollweite. Commit `3fcd402a9`.
 ## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
 
 <a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
@@ -37759,6 +37807,64 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Nachgestellt am pegboard-STEP und an `plate_holes.stl`: Im Bedienweg des Kunden erscheint der Satz nach *Bohrung ändern* im Auswahlfenster nicht (Feld ändern, Vorschau, *Übernehmen*; danach drei Sekunden kein Band). Im Versionsvergleich stammte das Band aus dem Schritt davor: Der Prüfstand löste in der Karte rechts den seit RM-360 verborgenen Knopf *Merkmal ändern* per `click()` aus, ließ den Dialog ohne Vorschau offen, und dessen Band stand noch beim Übernehmen im Auswahlfenster. Die Befehlspalette sperrt *Merkmal ändern* an einer Bohrung, im Menü steht es nicht. Behoben ist die Sackgasse dahinter für jeden Aufrufer: Eine Merkmalsoperation, die die Art des gewählten Merkmals nicht annimmt, öffnet die Schwester derselben Zeile (`MainWindow._sister_for_the_chosen_feature` über `actions.instead_of`) — *Merkmal ändern* an einer Bohrung öffnet *Bohrung ändern* an dieser Bohrung, statt eines Dialogs, dessen einziger Satz „Dafür ist „Bohrung ändern“ da“ war; an einem Merkmal, das sie annimmt, bleibt die Operation, was sie ist. Test `test_operation_ui.py::test_changing_a_hole_through_the_wrong_sister_opens_the_right_one`, ohne die Umleitung rot (Gegenprobe). Fenstersonde am echten Fenster am pegboard-STEP: 4 von 4, der Dialog ist *Bohrung ändern*, das Band nennt den Grund („Die Bohrung hat bereits diesen Durchmesser.“). Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)
+
+<a id="rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026"></a>
+<a id="rm-499"></a>
+
+**RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren.**
+  Fund aus RM-371 (03.10.2026). Seit „Modell erzeugen“ nichtmodal ist (RM-371), lässt sich das
+  Hauptfenster während eines Laufs schließen. Der Lauf bricht ab, und fertige, nicht übernommene
+  Versuche gehen ohne Rückfrage verloren — Minuten Rechenzeit, die kein Strg+Z zurückholt. Vorher
+  verhinderte der modale Dialog das Schließen.
+  **Fix:** Beim Schließen fragen, wenn ein Lauf läuft oder fertige Versuche nicht übernommen sind
+  (kein rücknehmbarer Schritt, Regel 19 erlaubt die Frage), mit *Übernehmen und schließen*,
+  *Verwerfen und schließen* und *Abbrechen*.
+  **Abnahme:** Test mit laufendem Lauf und mit fertigem Versuch; ohne Erzeugung bleibt das
+  Schließen unverändert.
+
+**Abschluss:** Schließen fragt jetzt, wenn eine Erzeugung läuft oder fertige Versuche nicht übernommen sind (`MainWindow._may_lose_the_generation`, `dialogs.confirm_generation_loss`, `GenerateDialog.running`): „Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab.“ bzw. „Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.“, mit *Zur Erzeugung* als Vorgabe (holt den Dialog nach vorn, das Fenster bleibt offen) und *Trotzdem schließen*. Ohne Erzeugung bleibt das Schließen, wie es war; die Frage nach ungesicherten Änderungen folgt danach unverändert. Regel 19 erlaubt die Frage, weil kein Strg+Z einen abgebrochenen Lauf zurückholt. Texte in allen fünf Katalogen. Tests in `test_generate_ui.py`: `test_closing_the_window_names_what_a_generation_would_lose` (laufend und fertig, je beide Antworten) und `test_closing_without_a_generation_asks_nothing_about_it`; ohne die Frage 4 von 4 rot (Gegenprobe). Fenstersonde am echten Fenster mit gestelltem langsamem Generator: 7 von 7 — gefragt während des Laufs und mit fertigem Versuch, *Zur Erzeugung* lässt das Fenster offen und holt den Dialog nach vorn, danach *Übernehmen* wie gewohnt. Umgesetzt von Claude (Thread „Bedienung und KI“).
+## RM-489: Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken (03.10.2026)
+
+<a id="rm-489-linke-spalte-bei-19201080-objektbaum-gekürzt-oder-filamentliste-mit-zwei-rollbalken-03102026"></a>
+<a id="rm-489"></a>
+
+**RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1.** Seit `e969f88ce` steht
+  die Farbe als großer runder Punkt in der Filamentliste; die Zeile wird höher und breiter. Dunkel:
+  Die Liste bekommt einen waagrechten und einen senkrechten Balken, „Im Regal“ verschwindet. Hell:
+  Die Liste passt, dafür wird der Objektbaum gekürzt („Rechte Seite“ fehlt). Bei 1280×720 ebenso
+  ein waagrechter Balken. v0.5.0 und v0.5.1 zeigten alle Baumzeilen und beide Überschriften.
+  **Stellen:** `app/ui/filament_picker.py:211` (`swatch`), `:1966–1995` (`_fit` ohne waagrechten
+  Balken).
+  **Fix (allgemein):** Symbolgröße der Liste auf die bisherige Zeilenhöhe festlegen, lange
+  Einträge kürzen statt waagrecht rollen, `_fit` rechnet einen sichtbaren Balken mit.
+  **Abnahme:** drei Modelle mit 1, 2 und 4 Filamenten bei 1920×1080 und 1280×720, beide Schemata:
+  alle Baumzeilen und beide Überschriften sichtbar, kein waagrechter Balken. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U1), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** Drei Ursachen, alle allgemein behoben. `swatch` legt neben das Bild doppelter Auflösung eines in einfacher; Qt misst den Punkt wieder mit 14 statt 28 Punkten, die Spulenzeile ist 26 statt 34 Punkte hoch, auf 200 % bleibt er rund (die zwei Aufrufer mit größerem Punkt nennen ihre Größe jetzt selbst). Die Filamentliste hat feste Symbolgröße, rollt nie waagrecht, kürzt lange Namen mit „…“ (`_WithinTheWidth`) und trägt den vollen Text im Tooltip. `overlay.rows_height` zählt einen sichtbaren waagrechten Balken auch vor dem ersten Anzeigen. Dazu die eigentliche Ursache für „Rechte Seite fehlt“: Der Objektbaum wollte Höhe der Körperzeile (mit Vorschaubild) mal Zeilenzahl, 583 statt rund 300 Punkte bei elf Zeilen, und nahm sie der Filamentliste; `ObjectTree.wanted_height` und `_fit` messen jetzt je Zeile (`rows_height`), das verwaiste `_rows`/`_visible_rows` ist entfernt. Tests (rot am Ausgangsstand, grün danach): `test_filament_picker.py::test_a_colour_dot_is_no_bigger_than_the_field_it_replaced`, `::test_a_long_filament_name_is_shortened_instead_of_rolled_sideways`, `test_ui.py::test_the_object_tree_asks_only_for_the_rows_it_has`; `test_overlay.py::test_the_row_count_sees_every_open_level` misst jetzt `rows_height`. Fenstersonde am echten Fenster (Modelle mit 1, 2 und 4 Filamenten, lange Spulennamen, 1920×1080 und 1280×720, hell und dunkel): bei 1920×1080 alle Baumzeilen, beide Überschriften, kein waagrechter Balken in allen sechs Fällen (vorher 3 von 6 Fällen mit Fehlern, v0.5.1 ebenso 4 von 6); bei 1280×720 nirgends ein waagrechter Balken, Baumzeilen und „Im Regal“ wie in v0.5.1 nur über den Rollbalken erreichbar, weil die Spalte für vier offene Abschnitte nicht reicht. Regel `fenster.md` (Kartenhöhen) und Begründung nachgezogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `dd7e1e923`.
+
+## RM-491: Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“ (03.10.2026)
+
+<a id="rm-491-einstellungen-sieben-optionen-liegen-ohne-hinweis-hinter-weitere-einstellungen-03102026"></a>
+<a id="rm-491"></a>
+
+**RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1** (Auffindbarkeit, aus
+  `48ffcf145`; anderer Ort als „Bausteine verwalten“). Navigation, Differenzansicht,
+  Tastenbelegung, Chat-Vorschläge ohne Nachfrage, KI-Hinweis, Fernsteuerung (MCP) und Port liegen
+  eingeklappt; nichts verrät von außen, dass dort die Tastenbelegung oder die Fernsteuerung steht.
+  **Stellen:** `app/ui/settings_dialog.py:586`.
+  **Fix (allgemein):** Die Überschrift eingeklappter Bereiche nennt ihren Inhalt (z. B. „Maus,
+  Tastatur, Chat, Fernsteuerung“), der Bereich merkt sich seinen Zustand, und die Befehlspalette
+  findet jede Einzeloption.
+  **Abnahme:** Einstellungen, „Bausteine verwalten“ und ein dritter eingeklappter Bereich nennen
+  ihren Inhalt; Palette findet „Tastenbelegung“ und „Fernsteuerung“. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U4), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** Allgemein im gemeinsamen Baustein gelöst: `panels.collapsible(contents=…, remember=…)`. Zugeklappt steht der Inhalt als klickbare Zeile unter der Überschrift (gleicher Satz in Kurzhilfe und zugänglicher Beschreibung), `remember=` merkt den Zustand in `UiSettings.open_sections` über Dialoge und Neustarts (`panels.keep_sections_in`, gebunden im Hauptfenster). Alle zugeklappten Abschnitte nennen ihren Inhalt: Einstellungen („Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung“, mit gesehener 3D-Maus auch sie), „Bausteine verwalten“, Spulen-„Weitere Angaben“, Lager-Einstellungen, Erzeugen, Druckeinstellungen (beide Klappen), Parametergrenzen, Startbildschirm, Rückmeldung; ausgenommen die Filamente der linken Spalte (Titel ist der Inhalt, Spaltenhöhe RM-489). Die Befehlspalette findet jede sichtbare Zeile der Einstellungen als „Einstellungen: <Zeile>“ (`settings_dialog.option_titles`, eine Quelle für Formular und Palette) und öffnet den Dialog aufgeklappt mit dem Feld im Fokus (`MainWindow.show_setting`, `SettingsDialog.show_option`; ein gesperrtes Feld gibt den Fokus an seinen Haken). Neue Texte in allen fünf Katalogen. Tests (rot am Ausgangsstand, grün danach): `test_interface_limits.py::test_every_closed_section_names_what_it_holds` (Quelltextwächter, ohne Fenster), `test_ui_settings.py::test_the_closed_settings_name_what_lies_behind_them`, `::test_a_setting_from_the_palette_opens_its_row` (4 Fälle), `::test_the_palette_offers_every_visible_setting_under_its_row_name`, `::test_the_remembered_sections_travel_in_the_settings_file`, `test_catalog_ui.py::test_the_closed_management_names_what_it_holds`, `test_filament_picker.py::test_the_closed_spool_details_name_what_they_hold`, `test_ui.py::test_the_palette_finds_every_setting_behind_the_closed_section`. Fenstersonde am echten Fenster: 6 von 6 (vorher 2 von 6, und die beiden nur scheinbar: die Palette meldete „Kein Befehl passt zu ‚Tastenbelegung‘“). Regel `fenster.md` (Klappen) und Begründung nachgezogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `dd7e1e923`.
 
 ## RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)
 

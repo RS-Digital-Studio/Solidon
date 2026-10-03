@@ -289,7 +289,9 @@ class UsageDialog(QDialog):
             heading = QHBoxLayout()
             marker = QLabel(card)
             marker.setPixmap(
-                swatch(slot_colours(int(line.slot.index), line.slot)).pixmap(NORMAL * 3, NORMAL * 3)
+                swatch(slot_colours(int(line.slot.index), line.slot), NORMAL * 3).pixmap(
+                    NORMAL * 3, NORMAL * 3
+                )
             )
             name = QLabel(slot_title(line), card)
             name.setTextFormat(Qt.TextFormat.PlainText)
