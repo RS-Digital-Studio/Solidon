@@ -12,6 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import StepNeed
 from app.core.scene.project import new_project, save
@@ -329,3 +331,89 @@ def test_the_session_inserts_at_the_marker_and_the_marker_moves_along(
         LEFT_X,
         RIGHT_X,
     ]
+
+
+@pytest.mark.parametrize("ending", ["cancelled", "failed", "taken"])
+def test_an_import_at_the_marker_takes_its_source_along_when_it_does_not_land(
+    monkeypatch: Any, ending: str
+) -> None:
+    """RM-303: Ein abgebrochener Import an der Einfügemarke ließ seine Datei zurück.
+
+    An der Marke rechnet ein Arbeiter den Import erst; die Quelle steht da
+    schon im Dokument. Brach der Kunde ab oder scheiterte der Umbau, blieb sie
+    dort und reiste mit dem nächsten Speichern in die Projektdatei. Kommt der
+    Import an, meldet die Sitzung seinen Körper — derselbe Satz wie am Ende
+    des Stapels, damit das Fenster seine Platte zeigt.
+    """
+    import copy
+    from types import SimpleNamespace
+
+    from app.core.errors import InternalError
+    from app.core.scene import evaluate
+    from app.core.scene.history import RevisionPlan
+    from app.core.scene.project import ProjectSources
+    from app.core.scene.revision import dependencies, revise
+    from app.ui.session import Session
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+    session = Session()
+    for name in ("cube_clean.stl", "block_with_rounded_edge.stl"):
+        assert session.import_model(meshes / name, unit="mm")
+        stop_evaluation(session)
+    assert session.start_inserting(session.project.document.ops[1].id)
+    stop_evaluation(session)
+    before = set(session.project.document.sources)
+    placed: list[str] = []
+    session.modelPlaced.connect(placed.append)
+
+    # Der Arbeiter läuft hier nicht; sein Ausgang wird so zugestellt, wie er
+    # ihn meldet. Sonst entschiede die Uhr, ob ein Abbruch vor dem Ende ankommt.
+    worker = SimpleNamespace(_project_generation=session._project_generation)
+    handed: list[Any] = []
+
+    def held(planned: Any, _baseline: Any) -> bool:
+        handed.append(planned)
+        session._revision = worker
+        return True
+
+    monkeypatch.setattr(session, "_start_revision", held)
+    assert session.import_model(meshes / "block_with_rounded_edge.stl", unit="mm")
+    [planned] = handed
+    added = set(session.project.document.sources) - before
+    assert len(added) == 1, "die Quelle steht schon im Dokument, solange der Arbeiter rechnet"
+    assert not placed, "gemeldet wird erst, was im Stapel steht"
+
+    if ending == "cancelled":
+        session._on_revision_cancelled(finished=worker)
+    elif ending == "failed":
+        session._on_revision_failed(InternalError(detail="test"), finished=worker)
+    else:
+
+        def run(document: Any) -> Any:
+            return evaluate(
+                document,
+                session.evaluation_profile,
+                cache=session.cache,
+                sources=ProjectSources(session.project, base_dir=session.base_dir),
+            )
+
+        history = History(copy.deepcopy(session.project.document))
+        baseline = run(history.document)
+        context = dependencies(history.document, baseline)
+        plan = planned if isinstance(planned, RevisionPlan) else planned(history, context, run)
+        session._on_revised(revise(history, plan, evaluate=run, baseline=baseline), worker)
+    session._revision = None
+
+    sources = set(session.project.document.sources)
+    if ending == "taken":
+        assert added <= sources
+        body = next(
+            entry.outputs[0]
+            for entry in session.project.document.ops
+            if entry.params.get("source") in added
+        )
+        assert placed == [body]
+    else:
+        assert not added & sources, "die Datei reiste sonst mit dem nächsten Speichern mit"
+        assert not added & set(session.project.sources)
+        assert not placed

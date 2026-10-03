@@ -18524,6 +18524,59 @@ def test_looking_at_one_plate_puts_the_outline_back(window: MainWindow) -> None:
     assert high == pytest.approx(box.maximum[0], abs=1.0)
 
 
+@pytest.mark.parametrize("way", ["file", "download", "generated"])
+def test_a_further_model_brings_its_plate_into_view(
+    window: MainWindow, tmp_path: Path, way: str
+) -> None:
+    """RM-303: Bei gewählter Platte 1 kommt ein weiteres Modell auf Platte 2 — und ins Bild.
+
+    Bis 0.5.1 wechselte nur eine Datei vom Pfad die Platte. Ein Download und
+    ein erzeugtes Modell landeten auf Platte 2, während das Bild weiter
+    Platte 1 zeigte; nur ein Befund nannte, wo das neue Modell steht. Neben
+    einem Brett von 200 auf 200 mm hat kein zweites Modell Platz.
+    """
+    import trimesh
+
+    from app.core.ingest.fetch import FetchedModel
+    from tests.scripted_backend import ScriptedMeshBackend
+
+    board = tmp_path / "brett.stl"
+    trimesh.creation.box(extents=(200.0, 200.0, 20.0)).export(board)
+    window.open_path(board)
+    assert window.session.wait_for_idle()
+    plates = window.header.plates
+    plates.setCurrentIndex(plates.findData(0))
+    assert window.header.plate == 0
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    if way == "file":
+        second = tmp_path / "wuerfel.stl"
+        second.write_bytes(cube)
+        window.open_path(second)
+    elif way == "download":
+        window._downloaded(
+            FetchedModel(
+                name="wuerfel.stl",
+                payload=cube,
+                url="https://example.invalid/wuerfel.stl",
+                retrieved="2026-10-03T00:00:00+00:00",
+            )
+        )
+    else:
+        # Derselbe Aufruf wie *Übernehmen* im Erzeugen-Dialog (``_take_generated``).
+        generated = ScriptedMeshBackend(fallback=cube).text_to_mesh("ein Würfel", seed=1)
+        window.session.add_generated(generated)
+    assert window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    result = window.session.last_result
+    assert result is not None
+    assert sorted(entry.plate for entry in result.scene.objects.values()) == [0, 1], (
+        "ohne zweite Platte prüft der Test nichts"
+    )
+    assert window.header.plate == 1, "das neue Modell steht auf Platte 2 und gehört ins Bild"
+
+
 def test_the_section_plane_cuts_every_plate_at_its_own_place(window: MainWindow) -> None:
     """Und die Entscheidung daneben: Der Schnitt ist eine Szenenebene (RM-119).
 

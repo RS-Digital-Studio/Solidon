@@ -7443,5 +7443,16 @@
   "{name} ändern": "Alterar {name}",
   "Einheit von {name}": "Unidade de {name}",
   "{name} als Regler": "{name} como controlo deslizante",
-  "Von {low} bis {high}": "De {low} a {high}"
+  "Von {low} bis {high}": "De {low} a {high}",
+  "Bricht die Erzeugung ab. Fertige Versuche bleiben zur Wahl.": "Cancela a geração. As tentativas concluídas continuam disponíveis.",
+  "Das Modell ist fertig — „Übernehmen“ legt es ins Projekt.": "O modelo está pronto — «Aplicar» adiciona-o ao projeto.",
+  "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen stehen unten in der Statusleiste.": "O modelo está a ser gerado em segundo plano — o progresso e Cancelar estão em baixo, na barra de estado.",
+  "Das erzeugte Modell liegt im Projekt. Strg+Z nimmt es zurück.": "O modelo gerado está no projeto. Ctrl+Z desfá-lo.",
+  "Die Erzeugung ist nicht gelungen. Warum und was hilft, steht im Dialog.": "A geração não resultou. O motivo e o que ajuda estão no diálogo.",
+  "Die Erzeugung wurde abgebrochen.": "A geração foi cancelada.",
+  "Die Erzeugung wurde abgebrochen. Die fertigen Versuche bleiben.": "A geração foi cancelada. As tentativas concluídas mantêm-se.",
+  "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in dieses Projekt.": "Entretanto está aberto outro projeto. «Aplicar» adiciona o modelo a este projeto.",
+  "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in „{name}“.": "Entretanto está aberto outro projeto. «Aplicar» adiciona o modelo a «{name}».",
+  "Modell wird erzeugt …": "A gerar o modelo …",
+  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Aplicar» inicia um novo projeto com o modelo."
 }

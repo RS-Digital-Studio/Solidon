@@ -7443,5 +7443,16 @@
   "{name} ändern": "Modifica {name}",
   "Einheit von {name}": "Unità di {name}",
   "{name} als Regler": "{name} come cursore",
-  "Von {low} bis {high}": "Da {low} a {high}"
+  "Von {low} bis {high}": "Da {low} a {high}",
+  "Bricht die Erzeugung ab. Fertige Versuche bleiben zur Wahl.": "Annulla la generazione. I tentativi completati restano disponibili.",
+  "Das Modell ist fertig — „Übernehmen“ legt es ins Projekt.": "Il modello è pronto: «Applica» lo aggiunge al progetto.",
+  "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen stehen unten in der Statusleiste.": "Il modello viene generato in background: avanzamento e Annulla sono in basso, nella barra di stato.",
+  "Das erzeugte Modell liegt im Projekt. Strg+Z nimmt es zurück.": "Il modello generato è nel progetto. Ctrl+Z lo annulla.",
+  "Die Erzeugung ist nicht gelungen. Warum und was hilft, steht im Dialog.": "La generazione non è riuscita. Il motivo e cosa aiuta sono nella finestra di dialogo.",
+  "Die Erzeugung wurde abgebrochen.": "La generazione è stata annullata.",
+  "Die Erzeugung wurde abgebrochen. Die fertigen Versuche bleiben.": "La generazione è stata annullata. I tentativi completati restano.",
+  "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in dieses Projekt.": "Nel frattempo è aperto un altro progetto. «Applica» aggiunge il modello a questo progetto.",
+  "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in „{name}“.": "Nel frattempo è aperto un altro progetto. «Applica» aggiunge il modello a «{name}».",
+  "Modell wird erzeugt …": "Generazione del modello …",
+  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Applica» avvia un nuovo progetto con il modello."
 }
