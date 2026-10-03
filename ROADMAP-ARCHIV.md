@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)](#rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
@@ -38089,3 +38090,35 @@ Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachm
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Die Auswertung reicht jeder Operation eine beobachtete Güte (`evaluate._WatchedQuality`: Vergleich, Hashwert und `pickle` merken die Frage) und meldet in `EvaluationResult.reads_quality`, ob ein Schritt sie gelesen hat; ein Cachetreffer trägt die Angabe mit, auch von der Platte, ein alter Eintrag ohne sie gilt als gefragt. `Session.fine_current` behandelt einen Entwurf ohne solche Frage als fein. Dazu fragt die Boolesche Kette erst hinter den verlustfreien Stufen nach der Güte (`boolean.boolean`): Beide Ketten beginnen mit `DRAFT_CHAIN`, und hielt *direkt*, war der Entwurf schon die feine Rechnung; vorher wählte die Kette ihre Stufen vorab und meldete so jede Bohrung als gütewirksam. Kegel und Ring rechnen seit RM-427 in beiden Stufen gleich, eine Bohrung an Quader und Platte ist im Entwurf bitgleich zur feinen Rechnung; weich verschmolzene Teile fragen weiter und werden fein nachgerechnet (RM-426). Tests in `test_evaluation.py` (Quader und Bohrung fragen nicht, *Bohrung ändern* an der Platte fragt nicht, Verschmelzen fragt, Treffer melden dasselbe) und `test_cache.py` (Angabe übersteht die Platte); ohne die Kettenänderung 2 von 4 rot (Gegenprobe). Weg-1-Detailsonde am echten Fenster (offscreen, F0FF), Klick bis Datei: Lochbrett-STEP 5,017 → 0,016 s, Rucksack-Halter 1,072 → 0,032 s, Platte 0,285 → 0,017 s (v0.5.1: 0,039 / 0,069 / 0,027 s); Dreiecke und Volumen der Dateien unverändert (2762 / 10 633,23 mm³, 15 978 / 27 026,24 mm³, 796 / 31 250,93 mm³). Rohwerte `F:\solidon-review-reports\regression-0.5.2\weg1\ergebnisse\detail-aufl494b-*`. Begonnen in `claude/rm-494`, abgeschlossen von Claude (Thread „Zweige auflösen“).
+
+## RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)
+
+<a id="rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026"></a>
+<a id="rm-480"></a>
+
+**RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` und `generic-220`.
+  `support_material_style = organic` (Baumstütze) lässt SuperSlicer mit `0xC0000005` abstürzen —
+  isoliert gemessen, `snug` und `grid` rechnen; 3 der 108 Abstürze der Codex-Matrix (übernommener
+  Baumstützen-Vorschlag). `seam_position = nearest` wird dort zu `cost`, Solidon meldet
+  `slicer.setting_ignored`. Ursache wie RM-459: SuperSlicer läuft als Familie `prusa` mit
+  PrusaSlicers Wertebestand.
+  **Stellen:** `app/core/export/slicer_keys.py:233` (`_PRUSA_SUPPORT_STYLE`), `:244`
+  (`seam_position`), `:294`, `:915`, `:965–987` (`NOT_TAKEN_BY` nur je Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm aus dem gemessenen Bestand der installierten
+  Version (`discover.program_mark`); Baumstütze für SuperSlicer nicht anbieten, ein übernommener
+  Vorschlag wird „Gitter“ mit Hinweis; `nearest` → `cost` ohne Warnung.
+  **Abnahme:** Wächter jede Aufzählungszeile der Prusa-Tabelle gegen den Bestand jedes
+  erkannten Programms; Pilz, Würfel und ein Korpusmodell mit Baumstütze an SuperSlicer →
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-4, CP-9), `gcode\rest\`.
+
+**Abschluss:** Ursache war die gemeinsame Prusa-Wertetabelle für Programme mit unterschiedlichem Wertebestand. `PROGRAM_VALUES` übersetzt je Programm, `NOT_OFFERED_BY_PROGRAM` beschreibt einen Ersatz samt Grund. SuperSlicer erhält `cost` für die nächstgelegene Naht und Gitterstützen mit Kreuzmuster statt unbekanntem `organic`; Dialog, Rat, Platte und Objekt verwenden dieselbe Zuordnung. Eine gespeicherte Baumwahl bleibt gespeichert, der Export- und Slicerbericht nennt den Ersatz. Der Rat beschreibt jetzt tatsächlich Gitter. Die gemeinsame Bauart enthält bereits die Schreibweise für RM-461; dessen reale Füllmuster-Abnahme wird dort abgeschlossen.
+
+Gegenprobe am Ausgangsstand `6b87ba235`: beide neuen Exportfälle (eigene und übernommene Baumwahl) rot, weil `organic` in der Projektdatei stand. Echte Vorherläufe bestätigten `organic` → `grid` und `nearest` → `cost`; den historischen Absturz konnte der Stand nach RM-459 nicht mehr nachstellen. Mit Fix bestehen beide Exportfälle und alle sieben Programmwächter samt Ratprüfung (acht Fälle). Der Wächter prüft jede geschriebene Aufzählungszeile einschließlich umbenannter Schlüssel gegen `tests/data/slicer_values.json`: Prusa/SuperSlicer aus `--help-fff`, Cura aus Definitionen, vier Orca-Programme aus 44 echten Rundreisen. Zahlen an einem bekannten Aufzählungsschlüssel werden ebenfalls geprüft.
+
+Echte Abnahme mit SuperSlicer 2.5.59.13: Pilz, Würfel und `Wedge-Lock (Set).stl`, je MINI und `generic-220`, sechs von sechs Druckdateien. Alle sechs Konfigurationsblöcke enthalten `support_material_style=grid`, `support_material_pattern=rectilinear-grid` und `seam_position=cost`, ohne falschen Nahtbefund. MINI: 4648/2275/3854 s und 13,22/3,75/8,65 g; allgemeiner Drucker Pilz/Keil: 2921/2575 s und 12,36/8,56 g. Die zwei fehlenden Lüfterschlüssel des allgemeinen Druckers gehören zu RM-462. Belege: `F:\solidon-review-reports\gcode\codexB\rm480-nachher`, Vorher unter `gcode\agentB\rm480-vorher*`. Der neue Fensterfall für deaktivierte Baumwahl, Tastaturweg und Programmwechsel bleibt dem Release vorbehalten.
+
+Betroffene Nachprüfung über tools/affected_tests.py: 1152 bestanden, 4 übersprungen, 346 Fenster-/Renderer-/Leistungsfälle abgewählt, Exit 0. Der vorherige breite Lauf hatte 19491 bestandene, 81 übersprungene und 3708 abgewählte Fälle sowie einen Fehler im Beschriftungswächter durch zwischenzeitliche Cura-Änderungen; die Benennung wurde korrigiert und der Wächter in der grünen Nachprüfung erneut ausgeführt. Ruff war grün, mypy meldete 337 geprüfte Dateien ohne Fehler. Das vollständige Entwicklungstor folgt nach dem vereinbarten Paket aus zwei bis drei abgeschlossenen Punkten.
+
+Kundensichtbare Korrektur eines veröffentlichten Fehlers: Der betreffende Tabellenstand `f934a42219` ist in `v0.5.1` enthalten (`git tag --contains`); ein Punkt steht an gleicher Stelle in allen sechs Changelogs für 0.5.2. Commit: `SuperSlicer erhält passende Stütz- und Nahtwerte`.

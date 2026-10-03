@@ -7454,11 +7454,6 @@
   "„{text}“ · Startwert {seed}": "“{text}” · seed {seed}",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "“Open at face” applies only without chosen openings. Enter the face under “Openings” and clear this field.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… shortened. The full report is in the saved folder as “bericht.txt” — please attach it.",
-  "Einfügen beenden und Modell erzeugen": "Finish inserting and generate model",
-  "Einfügen beenden und übernehmen": "Finish inserting and apply",
-  "Größe ändern": "Change size",
-  "Reliefhöhe ändern": "Change relief height",
-  "Zellgröße ändern": "Change cell size",
   "{title} {number}": "{title} {number}",
   "{name} ändern": "Change {name}",
   "Einheit von {name}": "Unit of {name}",
@@ -7493,5 +7488,6 @@
   "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Walls, infill, temperatures, supports, speed and more",
   "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Printer, base profile, filament and build plate in the slicer",
   "Weitere Beispielprojekte": "More example projects",
-  "Text und Anhänge vor dem Senden ansehen": "View the text and attachments before sending"
+  "Text und Anhänge vor dem Senden ansehen": "View the text and attachments before sending",
+  "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer does not support tree supports and uses grid supports instead."
 }

@@ -785,6 +785,7 @@ def as_mapping(
     paths: frozenset[str] | None = None,
     *,
     native_adhesion_kinds: frozenset[str] = frozenset(),
+    program: str = "",
 ) -> dict[str, str]:
     """Die Einstellungen in der Sprache dieses Slicers (§29).
 
@@ -803,8 +804,13 @@ def as_mapping(
     heißt alle — dort, wo kein Herstellerprofil darunter liegt. Was ohne
     seinen Partner nicht wirkt, kommt mit (:data:`COUPLED_PATHS`). Bei Prusa
     Auto bleiben zusätzlich die im nativen Prozess aktiven Haftungsarten stehen.
+
+    ``program`` ist die Marke des Programms (``slicer_keys.program_of``): Eine
+    Wahl, die es nicht kennt, geht als ihr Ersatz hinaus, ein Aufzählungswert
+    in seiner Schreibweise (RM-480, RM-461). Nur Solidons eigene Werte gehen
+    hier durch — die des Herstellerprofils sind schon in ihr.
     """
-    settings = _fan_curve_in_order(settings)
+    settings = _fan_curve_in_order(offered_settings(settings, program))
     if paths is not None:
         paths = _with_partners(paths, settings)
     written: dict[str, str] = {}
@@ -817,7 +823,7 @@ def as_mapping(
         # Gegenprobe: geschrieben überschriebe er den Wert des Herstellers,
         # verglichen meldete er eine Abweichung von nichts.
         if value != "":
-            written[entry.key] = value
+            written[entry.key] = slicer_keys.program_value(entry.key, value, program)
     chosen = _only_chosen_adhesion(
         written, settings, flavour, native_adhesion_kinds=native_adhesion_kinds
     )
@@ -826,6 +832,21 @@ def as_mapping(
     if paths is not None and "support.density" not in paths:
         return chosen
     return _support_spacing(chosen, settings, flavour)
+
+
+def offered_settings(settings: PrintSettings, program: str) -> PrintSettings:
+    """Die Einstellungen mit dem Ersatz für jede Wahl, die dieses Programm nicht kennt.
+
+    SuperSlicer kennt keine Baumstütze (RM-480): Wer sie gewählt oder einen
+    Vorschlag dazu übernommen hat, bekommt dort Gitterstützen — mit allem, was
+    Solidon zu Gitter schreibt, auch dem Kreuzmuster. Die Herkunft bleibt
+    (``with_path``), den Satz dazu nennt ``slicer_keys.limitation``.
+    """
+    for path, table in slicer_keys.NOT_OFFERED_BY_PROGRAM.get(program, {}).items():
+        replaced = table.get(read_path(settings, path))
+        if replaced is not None:
+            settings = with_path(settings, path, replaced.value)
+    return settings
 
 
 #: Werte, die ohne ihren Partner nicht tun, was die Wahl verlangt (Review
@@ -873,7 +894,9 @@ def _fan_curve_in_order(settings: PrintSettings) -> PrintSettings:
     return replace(settings, cooling=replace(cooling, minimum_fan_speed=cooling.fan_speed))
 
 
-def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
+def values_for(
+    settings: PrintSettings, profile: Profile, flavour: SlicerFlavour, *, program: str = ""
+) -> dict[str, str]:
     """Alles, was dieser Slicer bekommt — Einstellungen, Maschine, Abgeleitetes.
 
     Die eine Stelle, an der die drei Stufen zusammenkommen. Sie hat einen
@@ -882,7 +905,7 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
     Zusammenführen laufen ließe, bekäme die Hälfte.
     """
-    values = as_mapping(effective_adhesion(settings, profile, flavour), flavour)
+    values = as_mapping(effective_adhesion(settings, profile, flavour), flavour, program=program)
     values |= _machine_keys(profile, flavour)
     if flavour == "cura":
         values = _cura_dependants(values, settings, profile)
@@ -993,6 +1016,8 @@ def by_section(
     settings: PrintSettings,
     flavour: SlicerFlavour,
     paths: frozenset[str] | None = None,
+    *,
+    program: str = "",
 ) -> dict[slicer_keys.ProfileSection, dict[str, str]]:
     """Dieselben Werte, getrennt nach dem Profil, in das sie gehören (§29).
 
@@ -1016,7 +1041,7 @@ def by_section(
     :func:`_cura_dependants` sieht diese Funktion gar nicht, denn sie liest
     :func:`as_mapping` und nicht :func:`values_for`.
     """
-    complete = as_mapping(settings, flavour, paths)
+    complete = as_mapping(settings, flavour, paths, program=program)
     split: dict[slicer_keys.ProfileSection, dict[str, str]] = {"process": {}}
     placed: set[str] = set()
     for entry in slicer_keys.TABLES[flavour]:
@@ -1030,7 +1055,11 @@ def by_section(
 
 
 def object_keys(
-    settings: PrintSettings, advice: Sequence[SettingAdvice], flavour: SlicerFlavour
+    settings: PrintSettings,
+    advice: Sequence[SettingAdvice],
+    flavour: SlicerFlavour,
+    *,
+    program: str = "",
 ) -> dict[str, str]:
     """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
 
@@ -1055,8 +1084,8 @@ def object_keys(
     applied = _applied(settings, advice)
     paths = _with_partners(frozenset(entry.path for entry in advice), applied)
     keys = {entry.key for entry in slicer_keys.TABLES[flavour] if entry.path in paths}
-    before = as_mapping(settings, flavour)
-    changed = as_mapping(applied, flavour)
+    before = as_mapping(settings, flavour, program=program)
+    changed = as_mapping(applied, flavour, program=program)
     written = {
         key: value for key, value in changed.items() if key in keys or before.get(key) != value
     }
@@ -2452,7 +2481,9 @@ def prusa_values(
     aus PrusaSlicer 2.9 ab (RM-459).
     """
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    written, expected = _prusa_values(settings, profile, setup, slots, console=console)
+    written, expected = _prusa_values(
+        settings, profile, setup, slots, console=console, program=program
+    )
     return (
         slicer_keys.for_program(written, "prusa", program),
         slicer_keys.for_program(expected, "prusa", program),
@@ -2466,8 +2497,9 @@ def _prusa_values(
     slots: Sequence[MaterialSlot],
     *,
     console: bool,
+    program: str,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """:func:`prusa_values` ohne den Blick auf das Programm."""
+    """:func:`prusa_values` vor dem Filter auf die Schlüssel des Programms."""
     effective = settings_for_handover(settings, profile, "prusa", slots, setup)
     chain: manufacturer.PrusaChain | None = None
     if setup is not None:
@@ -2477,7 +2509,7 @@ def _prusa_values(
             # Den Grund nennt der Befund der Grundlage (``slicer.process_unreadable``).
             _log.warning("Prusa profile unreadable, writing Solidon's table: %s", problem)
     if setup is None or chain is None:
-        flat = values_for(effective, profile, "prusa")
+        flat = values_for(effective, profile, "prusa", program=program)
         flat["filament_type"] = slicer_keys.filament_type(profile.material.id)
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
@@ -2502,7 +2534,7 @@ def _prusa_values(
         paths = paths - {"adhesion.kind"}
     own = _followers_not_faster(
         {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values},
-        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_kinds),
+        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_kinds, program=program),
         _suggested_speed_keys(effective, "prusa"),
         followers=_PRUSA_FOLLOWERS,
     )
@@ -2548,6 +2580,7 @@ def write_config(
     """
     _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
+    program = slicer_keys.program_of(setup.executable)
 
     # Gerechnet wird in dem Zweig, der es braucht: Die Orca-Familie schreibt
     # ihre Werte aus ``by_section`` und ``_orca_*``, nicht aus dieser Abbildung
@@ -2585,8 +2618,8 @@ def write_config(
         # bisher alles; das entscheidet jedes Dokument für sich.
         foundation = manufacturer.base_settings(profile, settings.quality, setup)
         paths = _deviating(settings, foundation)
-        split = by_section(settings, setup.flavour)
-        deviating = by_section(settings, setup.flavour, paths)
+        split = by_section(settings, setup.flavour, program=program)
+        deviating = by_section(settings, setup.flavour, paths, program=program)
         plate = foundation.plate if foundation.has_profile else ""
         # Das Maschinenprofil zuerst: Der Prozess daneben nennt es in
         # ``compatible_printers``, und beide Namen kommen aus
@@ -2638,7 +2671,7 @@ def write_config(
                 if slot.material
                 else setup
             )
-            part = split if mine is settings else by_section(mine, setup.flavour)
+            part = split if mine is settings else by_section(mine, setup.flavour, program=program)
             own_paths = _for_the_slot(
                 paths,
                 settings,
@@ -2655,7 +2688,9 @@ def write_config(
                     profile,
                     own,
                     slot,
-                    deviating=by_section(mine, setup.flavour, own_paths).get("filament", {}),
+                    deviating=by_section(mine, setup.flavour, own_paths, program=program).get(
+                        "filament", {}
+                    ),
                     plate=plate or None,
                 )
             )
@@ -2870,12 +2905,13 @@ def project_settings(
     # Slicer — und übernimmt nur, was derselbe Drucker ist.
     setup = replace(setup, machine_profile=machine_for(setup, profile))
 
-    split = by_section(settings, setup.flavour)
+    program = slicer_keys.program_of(setup.executable)
+    split = by_section(settings, setup.flavour, program=program)
     # Dieselbe Grundlage wie im Konsolenlauf (:func:`write_config`): auf dem
     # Herstellerprofil nur die Abweichung, dazu die Druckplatte.
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     paths = _deviating(settings, foundation)
-    deviating = by_section(settings, setup.flavour, paths)
+    deviating = by_section(settings, setup.flavour, paths, program=program)
     plate = foundation.plate if foundation.has_profile else ""
 
     # Eine Projektdatei trägt kein ``inherits`` — sie muss die Werte
@@ -2941,7 +2977,7 @@ def project_settings(
             if slot is not None and slot.material
             else setup
         )
-        slot_values = by_section(mine, setup.flavour).get("filament", {})
+        slot_values = by_section(mine, setup.flavour, program=program).get("filament", {})
         slot_paths = (
             paths
             if slot is None
@@ -2962,7 +2998,9 @@ def project_settings(
                 profile,
                 own,
                 slot,
-                deviating=by_section(mine, setup.flavour, slot_paths).get("filament", {}),
+                deviating=by_section(mine, setup.flavour, slot_paths, program=program).get(
+                    "filament", {}
+                ),
                 plate=plate or None,
             )
         )
@@ -3748,6 +3786,26 @@ def setting_limitations(
         )
         for path in sorted(paths)
         if (message := slicer_keys.limitation(flavour, path, settings)) is not None
+    ]
+
+
+def substituted_choices(settings: PrintSettings, program: str) -> list[Finding]:
+    """Wahlen, die dieses Programm nicht kennt und als Ersatz bekommt (RM-480).
+
+    :func:`offered_settings` schreibt den Ersatz; hier steht, dass es einer
+    ist — vor dem Öffnen wie nach dem Slicen, denn die Druckdatei bestätigt
+    den Ersatz, nicht die Wahl.
+    """
+    return [
+        Finding(
+            code="slicer.choice_substituted",
+            severity="warning",
+            message=replaced.reason,
+            values={"path": path},
+            suggestions=(OPEN_PRINT_SETTINGS, CHOOSE_SLICER),
+        )
+        for path, table in slicer_keys.NOT_OFFERED_BY_PROGRAM.get(program, {}).items()
+        if (replaced := table.get(read_path(settings, path))) is not None
     ]
 
 
@@ -5191,6 +5249,9 @@ def slice_model(
         )
 
     started_perf_counter = time.perf_counter()
+    # Gefragt an der Wahl vor der Trennung: Ein Ersatz gilt der Platte wie dem
+    # Teil, das den Wert als Objektwert trägt (RM-480).
+    substituted = substituted_choices(settings, slicer_keys.program_of(setup.executable))
     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
@@ -5467,6 +5528,7 @@ def slice_model(
     # nach dem Slicen die Druckdatei selbst (``fan_in_off_layers``).
     findings = [
         *setting_limitations(setup.flavour),
+        *substituted,
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
         *unreachable_overrides(settings, setup, slots, profile=profile),

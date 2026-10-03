@@ -124,6 +124,10 @@ Stand: Was ein Programm nicht kennt, steht je Programmmarke in
 `for_program`; SuperSlicer stürzt an fremden 3MF-Schlüsseln ab). Rat
 (`writer.part_advice`, `split_for_parts`), Beilage (`prusa_values`) und Dialog
 fragen es; gemessener Bestand in `tests/data/superslicer_3mf_keys.json`.
+Aufzählungen übersetzt `PROGRAM_VALUES` je Programm; nicht verfügbare Wahlen
+stehen mit Ersatz und Grund in `NOT_OFFERED_BY_PROGRAM`. Dialog, Rat, Platte
+und Objektwerte fragen denselben Bestand. `tests/data/slicer_values.json`
+hält die unabhängig gemessenen Aufzählungswerte für den Wächter fest.
 
 ## Stolperfallen
 

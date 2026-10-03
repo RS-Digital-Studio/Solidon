@@ -14,7 +14,7 @@ import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Final, get_args, get_type_hints
+from typing import Any, Final, Literal, get_args, get_origin, get_type_hints
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -34,6 +34,63 @@ from app.core.types import (
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def test_a_replaced_support_suggestion_explains_the_support_actually_offered() -> None:
+    advice = SettingAdvice("support.style", "tree", "normal", "Baumstützen sparen Material.")
+    shown = slicer_keys.offered([advice], "superslicer")
+    assert len(shown) == 1
+    assert shown[0].value == "grid"
+    assert shown[0].reason == slicer_keys.substitute("support.style", "tree", "superslicer").reason
+    assert slicer_keys.offered([replace(advice, was="grid")], "superslicer") == []
+    assert slicer_keys.offered([advice], "prusaslicer") == [advice]
+
+
+@pytest.mark.parametrize(
+    "program,flavour",
+    [
+        ("prusaslicer", "prusa"),
+        ("superslicer", "prusa"),
+        ("orcaslicer", "orca"),
+        ("elegooslicer", "orca"),
+        ("bambustudio", "orca"),
+        ("crealityprint", "orca"),
+        ("cura", "cura"),
+    ],
+)
+def test_every_written_choice_belongs_to_the_measured_program(program, flavour) -> None:
+    """RM-480/RM-461: Jede Aufzählungszeile gegen einen unabhängig erhobenen
+    Bestand. Neue Aufzählungen ohne Messung machen den Wächter ebenfalls rot."""
+    measured = json.loads((MESHES.parent / "slicer_values.json").read_text(encoding="utf-8"))
+    known = measured["programs"][program]["values"]
+    base = print_settings.resolve(profiles.make_profile("generic-220", "pla"))
+    checked = 0
+    for entry in slicer_keys.TABLES[flavour]:
+        group, name = entry.path.split(".")
+        hint = get_type_hints(type(getattr(base, group)))[name]
+        choices = (
+            (False, True) if hint is bool else get_args(hint) if get_origin(hint) is Literal else ()
+        )
+        for choice in choices:
+            settings = print_settings.with_choice(base, entry.path, choice)
+            written = handover.as_mapping(settings, flavour, program=program)
+            written = slicer_keys.for_program(written, flavour, program)
+            keys = slicer_keys.PROGRAM_ALIASES.get(program, {}).get(entry.key, (entry.key,))
+            for key in keys:
+                if key not in written:
+                    continue
+                value = written.get(key, "")
+                if key in known:
+                    assert value in known[key], (program, entry.path, choice, value)
+                    checked += 1
+                    continue
+                if not value or value in {"true", "false"}:
+                    continue
+                try:
+                    float(value)
+                except ValueError:
+                    assert key in known, (program, entry.path, key)
+    assert checked >= 10, "Der Wächter muss echte Aufzählungswerte prüfen."
 
 
 def _layers(

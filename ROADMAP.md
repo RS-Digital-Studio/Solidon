@@ -115,7 +115,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
-| [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 4 von 16. G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
 | [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 7 von 16. G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
 | [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
@@ -3277,25 +3276,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
   Lauf, kein Slicerstart. Bauplan §29, Regel 17.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
-
-<a id="rm-480"></a>
-
-- [ ] **RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“.**
-  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` und `generic-220`.
-  `support_material_style = organic` (Baumstütze) lässt SuperSlicer mit `0xC0000005` abstürzen —
-  isoliert gemessen, `snug` und `grid` rechnen; 3 der 108 Abstürze der Codex-Matrix (übernommener
-  Baumstützen-Vorschlag). `seam_position = nearest` wird dort zu `cost`, Solidon meldet
-  `slicer.setting_ignored`. Ursache wie RM-459: SuperSlicer läuft als Familie `prusa` mit
-  PrusaSlicers Wertebestand.
-  **Stellen:** `app/core/export/slicer_keys.py:233` (`_PRUSA_SUPPORT_STYLE`), `:244`
-  (`seam_position`), `:294`, `:915`, `:965–987` (`NOT_TAKEN_BY` nur je Familie).
-  **Fix (allgemein):** Aufzählungswerte je Programm aus dem gemessenen Bestand der installierten
-  Version (`discover.program_mark`); Baumstütze für SuperSlicer nicht anbieten, ein übernommener
-  Vorschlag wird „Gitter“ mit Hinweis; `nearest` → `cost` ohne Warnung.
-  **Abnahme:** Wächter jede Aufzählungszeile der Prusa-Tabelle gegen den Bestand jedes
-  erkannten Programms; Pilz, Würfel und ein Korpusmodell mit Baumstütze an SuperSlicer →
-  Druckdatei. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-4, CP-9), `gcode\rest\`.
 
 <a id="rm-481"></a>
 

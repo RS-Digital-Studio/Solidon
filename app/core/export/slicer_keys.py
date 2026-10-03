@@ -23,14 +23,15 @@ Ruhe (§29).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
-    from app.core.types import PrintSettings
+    from app.core.types import PrintSettings, SettingAdvice
 
 SlicerFlavour = Literal["prusa", "orca", "cura", "other"]
 """Die Familie eines Slicers — und ``other`` für jedes Programm, dessen
@@ -1030,6 +1031,81 @@ PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 }
 
 
+#: Aufzählungswerte, die ein **Programm** anders führt als seine Familie — je
+#: Programmmarke, darunter Schlüssel des Slicers und geschriebener Wert → Wert
+#: dieses Programms. Ein unbekannter Wert fällt im Slicer still auf seine
+#: Vorgabe: ``rectilinear`` druckten Bambu Studio als ``cubic`` und Creality
+#: Print als ``grid``, beide führen dieselben Linien als ``zig-zag``; Orca und
+#: ElegooSlicer lesen ``zig-zag`` als ``rectilinear`` (RM-461). SuperSlicer
+#: führt die nächstgelegene Naht als ``cost`` (RM-480).
+#:
+#: Gemessen am Bestand der installierten Fassung
+#: (``tests/data/slicer_values.json``: Prusa-Familie über ``--help-fff``,
+#: Orca-Familie über die Rundreise durch den Konfigurationsblock, Cura über
+#: die Definitionen); der Wächter hält jede Aufzählungszeile dagegen.
+PROGRAM_VALUES: Final[dict[str, dict[str, dict[str, str]]]] = {
+    "superslicer": {"seam_position": {"nearest": "cost"}},
+    "bambustudio": {"sparse_infill_pattern": {"rectilinear": "zig-zag"}},
+    "crealityprint": {"sparse_infill_pattern": {"rectilinear": "zig-zag"}},
+}
+
+
+class Substitute(NamedTuple):
+    """Was ein Programm statt einer Wahl druckt, die es nicht kennt — und der Satz dazu."""
+
+    value: object
+    reason: TranslatableText
+
+
+#: Wahlen in Solidon, die ein **Programm** nicht kennt, mit dem, was es
+#: stattdessen bekommt. Der Druckdialog bietet sie dort nicht an, der Rat
+#: schlägt den Ersatz vor, und eine schon getroffene Wahl geht als Ersatz
+#: hinaus, mit Hinweis (RM-480). SuperSlicer 2.5.59.13 kennt nur ``grid`` und
+#: ``snug``; mit ``organic`` stürzte sein 3MF-Leser neben einem unbekannten
+#: Schlüssel ab (``0xC0000005``), allein wurde still Gitter daraus — mit
+#: PrusaSlicers unverbundenem Linienmuster statt Solidons Kreuzgitter.
+NOT_OFFERED_BY_PROGRAM: Final[dict[str, dict[str, dict[object, Substitute]]]] = {
+    "superslicer": {
+        "support.style": {
+            "tree": Substitute(
+                "grid", _("SuperSlicer kennt keine Baumstützen und stützt mit Gitter.")
+            ),
+        },
+    },
+}
+
+
+def substitute(path: str, value: object, program: str) -> Substitute | None:
+    """Was dieses Programm statt dieser Wahl bekommt — ``None``, wenn es sie kennt."""
+    return NOT_OFFERED_BY_PROGRAM.get(program, {}).get(path, {}).get(value)
+
+
+def offered(advice: Sequence[SettingAdvice], program: str) -> list[SettingAdvice]:
+    """Der Rat in den Wahlen, die dieses Programm kennt.
+
+    Ein Vorschlag auf eine Wahl aus :data:`NOT_OFFERED_BY_PROGRAM` wird zu
+    ihrem Ersatz — SuperSlicer bekommt statt der Baumstütze Gitter angeboten
+    (RM-480). Ist der Ersatz schon eingestellt, bleibt nichts vorzuschlagen.
+    """
+    shown: list[SettingAdvice] = []
+    for entry in advice:
+        replaced = substitute(entry.path, entry.value, program)
+        if replaced is None:
+            shown.append(entry)
+        elif replaced.value != entry.was:
+            shown.append(replace(entry, value=replaced.value, reason=replaced.reason))
+    return shown
+
+
+def program_value(key: str, value: str, program: str) -> str:
+    """Ein geschriebener Aufzählungswert in der Sprache dieses Programms.
+
+    Die Übersetzung steht in :data:`PROGRAM_VALUES`; ohne Eintrag bleibt der
+    Wert der Familie.
+    """
+    return PROGRAM_VALUES.get(program, {}).get(key, {}).get(value, value)
+
+
 def program_of(executable: str | Path) -> str:
     """Die Programmmarke eines Slicers — ``""``, wenn keiner bekannt ist."""
     from app.core import discover
@@ -1091,7 +1167,7 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
 
 
 def limitation(
-    flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None
+    flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None, program: str = ""
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1102,7 +1178,15 @@ def limitation(
     Schichten auch in der Pause kühlt, zeigt erst die Druckdatei
     (``handover.fan_in_off_layers``); darum behauptet der Satz nicht, der
     Lüfter bleibe in Schicht 1 aus.
+
+    Ebenso eine Wahl, die das Programm nicht kennt und ersetzt
+    (:data:`NOT_OFFERED_BY_PROGRAM`) — der Satz kommt nur, solange sie steht.
     """
+    if settings is not None and program:
+        group, name = path.split(".", 1)
+        replaced = substitute(path, getattr(getattr(settings, group), name), program)
+        if replaced is not None:
+            return replaced.reason
     if flavour == "cura" and path == "cooling.disable_first_layers":
         if settings is None or settings.cooling.disable_first_layers < 2:
             return None
