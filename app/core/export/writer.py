@@ -1115,6 +1115,15 @@ class _PartValues:
     gleich ob die Platte ihn schon trägt (:func:`_plate_wide_findings`)."""
 
 
+@dataclass(frozen=True, slots=True)
+class _PartAdviceMemo:
+    """Der letzte Rat am Netz, samt allen Eingaben und der gelesenen Analyse."""
+
+    inputs: tuple[object, ...]
+    result: SliceResult | None
+    advice: tuple[SettingAdvice, ...]
+
+
 def part_advice(
     entry: SceneObject,
     mesh: MeshData,
@@ -1151,6 +1160,10 @@ def part_advice(
     wird er angewandt und erneut gefragt, bis nichts dazukommt — höchstens
     einmal je übernommenem Pfad. In die Kette geht nur, was übernommen ist, und
     nur mit dem übernommenen Wert; ``was`` bleibt der Wert von ``settings``.
+
+    Der letzte Rat je Objekt bleibt am Netz für weitere Platten desselben Auftrags.
+    Vor dem Vergleich werden die Spulenprofile erneut aufgelöst; Passungen,
+    Verbinder, Übernahmen und die gelesene Analyse gehören zum Schlüssel.
     """
     # Erst hier: ``handover`` zieht die G-Code-Auswertung mit, und ein Export
     # soll nicht davon abhängen, dass ein Slicer im Spiel ist.
@@ -1158,10 +1171,31 @@ def part_advice(
     from app.core.slice import advise
     from app.core.slice.analysis import cross_section
 
+    connectors = advise.connector_diameters([entry])
+    processes = handover.slot_processes(entry, settings, profile, setup, slot_profiles)
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    inputs = (
+        settings,
+        processes,
+        tuple(fit_kinds),
+        connectors,
+        flavour,
+        program,
+        dict(accepted or {}),
+    )
+    cache = getattr(mesh.raw, "_cache", None)
+    name = f"solidon_export_advice|{entry.id}"
+    stored = cache[name] if cache is not None else None
+    if isinstance(stored, _PartAdviceMemo) and stored.inputs == inputs and stored.result is result:
+        return list(stored.advice)
     lowest = float(mesh.bounds.minimum[2])
     section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
     footprint = 0.0 if section is None or section.is_empty else float(section.area)
-    connectors = advise.connector_diameters([entry])
+
+    def remember(advice: list[SettingAdvice]) -> list[SettingAdvice]:
+        if cache is not None:
+            cache[name] = _PartAdviceMemo(inputs, result, tuple(advice))
+        return advice
 
     def asked(current: PrintSettings) -> list[SettingAdvice]:
         groups = [
@@ -1178,14 +1212,17 @@ def part_advice(
                     flavour=flavour,
                 ),
             )
-            for process in handover.slot_processes(entry, current, profile, setup, slot_profiles)
+            for process in (
+                processes
+                if current is settings
+                else handover.slot_processes(entry, current, profile, setup, slot_profiles)
+            )
         ]
         return advise.combine(current, groups)
 
     # Was das Programm seiner Familie nicht kennt, schlägt der Rat nicht vor:
     # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459). Eine
     # Wahl, die es nicht kennt, schlägt er als ihren Ersatz vor (RM-480).
-    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
     unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
 
     def asked_here(current: PrintSettings) -> list[SettingAdvice]:
@@ -1211,16 +1248,18 @@ def part_advice(
         current = advise.apply(current, follows)
         advice = asked_here(current)
     if not served:
-        return advice
+        return remember(advice)
     # Was eine spätere Runde zu einem schon angewandten Pfad sagt, hat den
     # Stand der früheren gesehen und gewinnt; ``was`` gilt ``settings``.
     merged = dict(served)
     merged.update((item.path, item) for item in advice)
-    return [
-        replace(item, was=read_path(settings, item.path))
-        for item in merged.values()
-        if not same_value(item.value, read_path(settings, item.path))
-    ]
+    return remember(
+        [
+            replace(item, was=read_path(settings, item.path))
+            for item in merged.values()
+            if not same_value(item.value, read_path(settings, item.path))
+        ]
+    )
 
 
 def _part_values(
@@ -1244,6 +1283,8 @@ def _part_values(
     **Der Rat reist mit heraus**: ein Wert ohne Begründung ist im Zweifel
     schlechter als die Vorgabe, weil niemand ihn nachprüfen kann.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if split is None:
         return _PartValues({}, [], [], None)
     wanted = split.per_part | split.unavailable
@@ -1280,6 +1321,8 @@ def _part_values(
         flavour=flavour,
         accepted=split.accepted_per_part(),
     )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     applied = [item for item in advice if item.path in split.per_part]
     asked = tuple(item for item in advice if item.path in split.unavailable)
     # Was die Platte schon mit diesem Wert trägt, bekommt das Teil auch —
@@ -1457,6 +1500,14 @@ def _finding_value(value: object) -> float | str:
     return value if isinstance(value, int | float | str) else str(value)
 
 
+@dataclass(frozen=True, slots=True)
+class _BodyAnalysisMemo:
+    """Der letzte Exportschnitt einer Detailstufe, mit Raster, Winkel und Brückenbreite."""
+
+    inputs: tuple[float, float, float, float]
+    result: SliceResult
+
+
 def _body_analysis(
     entry: SceneObject,
     mesh: MeshData,
@@ -1483,13 +1534,25 @@ def _body_analysis(
     from app.core.slice.analysis import slice_body
     from app.core.slice.findings import remembered_analysis
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     wall, angle = profile_table.analysis_limits(
         profile_table.for_process(profile, settings, effective=True), entry
     )
     result = remembered_analysis(mesh, settings, angle, wall)
     if result is not None:
         return result
-    return slice_body(
+    # Ein Exportschnitt ist ohne Stützvolumen kein vollständiger Bericht.
+    # Er bleibt deshalb separat; seine volle Detailstufe genügt auch der Sperre.
+    cache = getattr(mesh.raw, "_cache", None)
+    key = (settings.layers.layer_height, settings.layers.first_layer_height, angle, wall)
+    name = "solidon_export_slice"
+    if cache is not None:
+        for candidate in ("full", detail):
+            stored = cache[f"{name}|{candidate}"]
+            if isinstance(stored, _BodyAnalysisMemo) and stored.inputs == key:
+                return stored.result
+    result = slice_body(
         mesh,
         settings.layers.layer_height,
         first_layer_height=settings.layers.first_layer_height,
@@ -1499,6 +1562,11 @@ def _body_analysis(
         support_volume=False,
         cancelled=cancelled,
     )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if cache is not None:
+        cache[f"{name}|{detail}"] = _BodyAnalysisMemo(key, result)
+    return result
 
 
 #: Die Befunde, mit denen der Export sagt, was ein Teil anders bekommt als die
@@ -1664,6 +1732,8 @@ def _support_blocker(
         cancelled.raise_if_cancelled()
     prisms = []
     for bottom, top, flat in slabs:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         region = shapely.simplify(flat, BLOCKER_SIMPLIFY, preserve_topology=True)
         rings: list[np.ndarray] = []
         for part in getattr(region, "geoms", [region]):
@@ -1868,14 +1938,17 @@ def write_assembly(
     for_window: bool = False,
     job: Sequence[SceneObject] | None = None,
     mesh_plan: tuple[dict[str, MeshData], bool] | None = None,
+    before_write: Callable[[], None] | None = None,
     comparison: Callable[[Sequence[tuple[SceneObject, MeshData, PrintSettings | None]]], None]
     | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
-    ``cancelled`` erreicht die teure Stufe, die Stützsperre für Kanäle
-    (:func:`_support_blocker`); ein Abbruch wirft ``OperationCancelled``, bevor
-    eine Datei entsteht.
+    ``cancelled`` erreicht Prüfung, Rat und Stützsperre für Kanäle
+    (:func:`_support_blocker`); ein Abbruch wirft ``OperationCancelled``.
+
+    Beim Dateiexport meldet ``before_write`` die Grenze nach der Vorbereitung:
+    Erst dann sperrt der Aufrufer den Abbruch für das Schreiben der fertigen 3MF.
 
     Ein ausdrücklicher Dateiexport (`for_slicer=False`) bleibt 3MF.
     Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format,
@@ -1911,6 +1984,8 @@ def write_assembly(
     eines Druckers, der von der Ecke misst, und die Bettform, die die
     Übergabe daneben schreibt, sagt dasselbe.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     # §2 C: auch die Baugruppe ist ein Export — dieselbe Grenze wie write_plan.
     activation.require(activation.EXPORT)
     chosen = objects if plate is None else [entry for entry in objects if entry.plate == plate]
@@ -1928,7 +2003,13 @@ def write_assembly(
         list(checked)
         if checked is not None
         else check_before_export(
-            chosen, profile, sources or {}, "3mf", scene=scene, document=document
+            chosen,
+            profile,
+            sources or {},
+            "3mf",
+            scene=scene,
+            document=document,
+            cancelled=cancelled,
         )
     )
     if profile.printer.is_resin:
@@ -2253,35 +2334,37 @@ def write_assembly(
                 findings += handover.foundation_findings(
                     settings, profile, setup, slots=configured_slots
                 )
-    target = _written(
-        directory / (given_name(project_name, "projekt") + ".3mf"),
-        threemf.write_assembly(
-            parts,
-            project_name,
-            across=whole_job,
-            bed_centre=bed_centre,
-            project_settings=_plate_settings(
-                settings,
-                profile,
-                flavour,
-                setup,
-                configured_slots,
-            ),
-            prusa_config=_plate_config(
-                settings,
-                profile,
-                flavour,
-                configured_slots,
-                setup,
-            ),
-            # Das Bettmaß, an dem die Platten ins Raster rücken — nur wo es
-            # mehrere gibt. Ein Versatz auf einer einzelnen wäre eine
-            # Verschiebung ohne Grund, und die Datei trüge eine Matrix, die
-            # nichts sagt.
-            layout=(width, depth) if len({p.plate for p in parts}) > 1 else None,
-            blocker_as_part=helpers_as_parts(flavour),
+    payload = threemf.write_assembly(
+        parts,
+        project_name,
+        across=whole_job,
+        bed_centre=bed_centre,
+        project_settings=_plate_settings(
+            settings,
+            profile,
+            flavour,
+            setup,
+            configured_slots,
         ),
+        prusa_config=_plate_config(
+            settings,
+            profile,
+            flavour,
+            configured_slots,
+            setup,
+        ),
+        # Das Bettmaß, an dem die Platten ins Raster rücken — nur wo es
+        # mehrere gibt. Ein Versatz auf einer einzelnen wäre eine
+        # Verschiebung ohne Grund, und die Datei trüge eine Matrix, die
+        # nichts sagt.
+        layout=(width, depth) if len({p.plate for p in parts}) > 1 else None,
+        blocker_as_part=helpers_as_parts(flavour),
     )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if before_write is not None:
+        before_write()
+    target = _written(directory / (given_name(project_name, "projekt") + ".3mf"), payload)
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
     if for_window and setup is not None:
         from app.core.export import handover

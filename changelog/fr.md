@@ -29,6 +29,7 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- La préparation de l’export 3MF peut être annulée. Pour plusieurs plateaux, Solidon réutilise les couches et les suggestions déjà calculées.
 - Les filaments inutilisés des anciens projets ne sont plus transmis au logiciel de tranchage. Les profils restent associés aux filaments utilisés.
 - Les modèles ajoutés trouvent aussi une place après le douzième plateau. Les plateaux importés gardent leur disposition.
 - Les modèles ajoutés avec des filaments différents sont placés sur des plateaux séparés si l’imprimante n’a pas assez de buses.

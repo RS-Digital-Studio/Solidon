@@ -2318,7 +2318,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zum anfänglichen Prusa-Fähigkeitsbefund wird unter RM-317 durch große und
   kleine Konturen aufgelöst; ohne diesen Rollenanschluss keine gemeinsame
   Freigabe. Belege: `F:\solidon-review-reports\B-slicer-rest\rm289\bericht.md`
-  und `review.md`. B2/B6, B9–B11, N4 und N8 bleiben offen; RM-289 wird
+  und `review.md`. B2/B6, B10/B11 und N4 bleiben offen; RM-289 wird
   nicht archiviert. Genaue Commits und gemeinsames Tor stehen im Bericht B.
 
 
@@ -2334,6 +2334,31 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Exit 0; Gegenprobe zwei rot. Keine Produktverhaltensänderung und deshalb
   kein Changelog-Punkt. Beleg: `rm289/b13-connection.log` und
   `b13-counter.log` im B-Berichtsordner.
+
+
+  **B9 und N8 umgesetzt:** Die Exportvorbereitung behält je unveränderlichem
+  Netz höchstens einen Schnitt pro Detailstufe und den letzten Rat je
+  Objektkennung. Raster, Stützschwelle, Brückenbreite, tatsächliche Profile,
+  Passungen und übernommene Werte müssen passen; Geometrieänderungen verwerfen
+  die Merker. Ein Exportschnitt ersetzt keinen vollständigen Prüfbericht.
+  Vorprüfung, Rat und Stützsperre beachten Abbruch auch bei warmem Cache.
+  Erst das Schreiben der fertigen Nutzlast sperrt den Abbruch.
+
+  Kalte Matrix mit drei Klötzen, Pilz und Waschschüssel über Orca, Prusa und
+  Cura: **47 → 21 Schnitte**. Alle 30 Ausgabedateien behalten
+  Geometrie, Teilwerte, Sperrkörper und Beilagen; Befunde bleiben gleich.
+  Der finale Familienwechsel benötigt insgesamt sieben Schnitte und beim
+  Wechsel selbst keinen zusätzlichen. Je 45 von 45 Bedingungen bestanden.
+  Vier echte Abbruchzeitpunkte, kalt und warm, erzeugen keine Exportdatei;
+  vorhandene Zieldateien bleiben bytegleich. Gegenprobe: acht rot; finale
+  Auswahl 273 grün. Sechs Rasterwahlen halten höchstens zwei statt zwölf
+  Analysen; drei Materialien auf gemeinsamem Netz verlangen drei statt acht
+  Ratsabfragen. Unabhängige Prüfung ohne offenen Fund.
+
+  Ursachen `6a066c2bc`, `2cf02ad2d`, `22a2a20ad` und `eeadc09b1` liegen in
+  v0.5.1; ein Kundenpunkt in allen sechs Sprachen. Belege samt Quellhashes
+  unter `F:\solidon-review-reports\B-slicer-rest\rm289\n8-b9`.
+  B2/B6, B10/B11 und N4 bleiben separat; RM-289 bleibt im Register.
 
 <a id="rm-292"></a>
 

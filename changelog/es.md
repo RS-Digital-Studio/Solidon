@@ -29,6 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
+- Se puede cancelar la preparación de la exportación 3MF. En trabajos con varias placas, Solidon reutiliza las capas y sugerencias ya calculadas.
 - Los filamentos sin uso de proyectos antiguos ya no se envían al laminador. Los perfiles siguen asociados a los filamentos utilizados.
 - Los modelos añadidos encuentran espacio también después de la duodécima placa. Las placas importadas conservan su distribución.
 - Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas.

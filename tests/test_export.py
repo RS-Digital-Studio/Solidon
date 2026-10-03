@@ -54,6 +54,368 @@ from app.core.units import MAX_FACET_SAG
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+@pytest.mark.parametrize("reported", [False, True])
+def test_export_reuses_its_own_layers_for_advice_and_blocker(
+    tmp_path: Path,
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+    flavour: SlicerFlavour,
+    reported: bool,
+) -> None:
+    """B9: Ohne vorbereiteten Bericht wird derselbe Körper genau einmal geschnitten."""
+    from app.core.slice import analysis
+
+    entry = scene_object(mesh=tunnel_block())
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
+    settings = print_settings.with_accepted(settings, "support.block_channels", True)
+    if reported:
+        from app.core.slice.findings import analysed
+
+        split = handover.split_for_parts(settings, profile, None, flavour)
+        own = profiles.for_process(profile, split.base, effective=True)
+        wall, angle = profiles.analysis_limits(own, entry)
+        analysed(as_mesh_data(entry.mesh), split.base, angle, wall)
+    calls = []
+    original = analysis.slice_body
+
+    def measured(*args, **kwargs):
+        calls.append(kwargs.get("detail", "full"))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(analysis, "slice_body", measured)
+    written, findings = write_assembly(
+        [entry],
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+        for_slicer=True,
+        mesh_plan=({entry.id: as_mesh_data(entry.mesh)}, False),
+    )
+    assert "export.support_blocker" in {item.code for item in findings}
+    if flavour == "orca":
+        assert _orca_parts(written) == [("2", "normal_part"), ("2", "support_blocker")]
+    elif flavour == "prusa":
+        assert [row[0] for row in _blocker_ranges(written)] == ["ModelPart", "SupportBlocker"]
+    else:
+        assert any(
+            dict(mesh.settings).get("anti_overhang_mesh") == "true"
+            for mesh in handover.cura_meshes(written)
+        )
+    assert calls == ([] if reported else ["full"]), (
+        "Rat und Sperre benutzen denselben vollständigen Schnitt"
+    )
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_every_plate_reuses_the_jobs_part_advice(
+    tmp_path: Path,
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+    shared: bool,
+) -> None:
+    """N8: Ein übernommener Vorschlag ohne Bedarf fragt jeden Körper nur einmal."""
+    objects = [replace(scene_object(f"obj_{n}"), plate=n) for n in range(3)]
+    if shared:
+        for number, entry in enumerate(objects):
+            entry.mesh = objects[0].mesh
+            entry.material = ("pla", "petg", "tpu-95a")[number]
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile), "adhesion.kind", "brim"
+    )
+    calls = []
+    original = advise.for_part
+
+    def measured(*args, **kwargs):
+        calls.append(args[1])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(advise, "for_part", measured)
+    for plate in range(3):
+        written, findings = write_assembly(
+            objects,
+            tmp_path / str(plate),
+            project_name="t",
+            profile=profile,
+            settings=settings,
+            plate=plate,
+            for_slicer=False,
+            job=objects,
+        )
+        assert written.is_file()
+        assert any(item.code == "export.part_setting_all" for item in findings)
+    assert len(calls) == len(objects), "die Plattenzahl vervielfacht den Rat nicht"
+
+
+@pytest.mark.parametrize("checked", [None, []])
+def test_a_cancelled_file_export_stops_before_checking_or_writing(
+    tmp_path: Path, profile: Profile, checked: list[Finding] | None
+) -> None:
+    """B9: Auch ohne Rat oder Stützsperre gilt der Abbruch im Dateipfad."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+    token.cancel()
+    with pytest.raises(OperationCancelled):
+        write_assembly(
+            [scene_object()],
+            tmp_path,
+            project_name="t",
+            profile=profile,
+            for_slicer=False,
+            checked=checked,
+            cancelled=token,
+        )
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("phase", ["advice", "payload", "write"])
+def test_file_worker_can_cancel_during_part_advice_without_a_window(
+    tmp_path: Path,
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+) -> None:
+    """B9: Die echten Arbeitermethoden bleiben vor der Schreibgrenze abbrechbar.
+
+    Nur die Qt-Hülle wird weggelassen; der gelesene Methodenrumpf ruft den
+    echten Schreiber und den echten Rat auf. Fenster bleiben der Freigabe vorbehalten.
+    """
+    import ast
+    from threading import Lock
+    from types import SimpleNamespace
+
+    from app.core.errors import AppError, OperationCancelled
+    from app.core.export import manufacturer, writer
+    from app.core.scene.cancel import CancelSignal
+
+    source = Path(__file__).parents[1] / "app/ui/main_window.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    worker = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "_ExportWorker"
+    )
+    methods = [
+        node
+        for node in worker.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"work", "cancel", "_assembly", "_begin_write"}
+    ]
+    isolated = ast.Module(
+        body=[
+            ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
+            ast.ClassDef(
+                name="ExportWorker", bases=[], keywords=[], body=methods, decorator_list=[]
+            ),
+        ],
+        type_ignores=[],
+    )
+    namespace = {
+        "AppError": AppError,
+        "OperationCancelled": OperationCancelled,
+        "write_assembly": write_assembly,
+        "check_before_export": check_before_export,
+        "remembered_setup": lambda *_: None,
+        "discover": SimpleNamespace(find_program=lambda *_: None),
+        "tools": SimpleNamespace(SLICERS=()),
+        "manufacturer": manufacturer,
+        "prepare_usage": lambda *_: (),
+        "handover": handover,
+    }
+    exec(compile(ast.fix_missing_locations(isolated), str(source), "exec"), namespace)
+    instance = namespace["ExportWorker"]()
+    events = []
+    for name in ("writing", "aborted", "done", "failed", "checked", "usageReady"):
+        setattr(
+            instance,
+            name,
+            SimpleNamespace(emit=lambda *args, event=name: events.append((event, args))),
+        )
+    entry = scene_object()
+    instance.__dict__.update(
+        _objects=[entry],
+        _all_objects=[entry],
+        _target=tmp_path / "t.3mf",
+        _format="3mf",
+        _profile=profile,
+        _sources={},
+        _settings=print_settings.with_accepted(
+            print_settings.resolve(profile), "adhesion.kind", "brim"
+        ),
+        _ui_settings=None,
+        _material="pla",
+        _inventory_settings=None,
+        _project_name="t",
+        _scene=None,
+        _document=None,
+        _checked=[],
+        _evaluated=(),
+        cancelled=CancelSignal(),
+        _phase_lock=Lock(),
+        _writing=False,
+        _profiles_for_selection=lambda settings: settings,
+    )
+    owner, name = {
+        "advice": (advise, "for_part"),
+        "payload": (threemf, "write_assembly"),
+        "write": (writer, "_written"),
+    }[phase]
+    original = getattr(owner, name)
+
+    def stopped(*args, **kwargs):
+        assert instance.cancel() is (phase != "write")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(owner, name, stopped)
+    instance.work()
+    if phase == "write":
+        assert [name for name, _ in events] == ["writing", "done"]
+        assert (tmp_path / "t.3mf").is_file()
+    else:
+        assert [name for name, _ in events] == ["aborted"]
+        assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("changed", ["height", "first", "angle", "wall", "mesh"])
+def test_export_layers_follow_every_geometric_input(profile: Profile, changed: str) -> None:
+    """Ein gemerkter Exportschnitt ersetzt nur dieselbe Analyse, nie einen anderen Druck."""
+    from app.core.export import writer
+
+    entry = scene_object()
+    mesh = as_mesh_data(entry.mesh)
+    settings = print_settings.resolve(profile)
+    first = writer._body_analysis(entry, mesh, settings, profile, None, detail="support")
+    full = writer._body_analysis(entry, mesh, settings, profile, None)
+    assert first is not full, "die Sparstufe genügt dem vollständigen Rat nicht"
+    assert writer._body_analysis(entry, mesh, settings, profile, None, detail="support") is full
+    if changed == "mesh":
+        mesh.raw.apply_scale(1.1)
+    elif changed == "wall":
+        settings = print_settings.with_path(settings, "layers.line_width", 0.6)
+    else:
+        path, value = {
+            "height": ("layers.layer_height", 0.3),
+            "first": ("layers.first_layer_height", 0.3),
+            "angle": ("support.threshold_angle", 20.0),
+        }[changed]
+        settings = print_settings.with_path(settings, path, value)
+    assert writer._body_analysis(entry, mesh, settings, profile, None) is not full
+
+
+@pytest.mark.parametrize(
+    "changed", ["material", "settings", "fits", "accepted", "mesh", "slot_profile", "program"]
+)
+def test_part_advice_cache_follows_its_inputs(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, changed: str
+) -> None:
+    """Der Rat überlebt keine geänderte Eingabe; native Profile werden erneut aufgelöst."""
+    from app.core.export import writer
+
+    entry = scene_object()
+    mesh = as_mesh_data(entry.mesh)
+    settings = print_settings.resolve(profile)
+    fits = ()
+    accepted = {}
+    setup = None
+    calls = []
+    original = advise.for_part
+
+    def measured(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(advise, "for_part", measured)
+
+    def ask():
+        return writer.part_advice(
+            entry,
+            mesh,
+            settings,
+            profile,
+            setup,
+            {},
+            result=None,
+            fit_kinds=fits,
+            accepted=accepted,
+            flavour="orca",
+        )
+
+    before = ask()
+    assert ask() == before
+    assert len(calls) == 1
+    if changed == "material":
+        entry.material = "tpu-95a"
+    elif changed == "settings":
+        settings = print_settings.with_path(settings, "speed.outer_wall", 200.0)
+    elif changed == "fits":
+        fits = ("press",)
+    elif changed == "accepted":
+        accepted["adhesion.kind"] = "brim"
+    elif changed == "mesh":
+        mesh.raw.apply_scale(1.1)
+    elif changed == "slot_profile":
+        slot_processes = handover.slot_processes
+
+        def new_profile(*args, **kwargs):
+            return tuple(
+                replace(
+                    item,
+                    settings=print_settings.with_path(item.settings, "speed.outer_wall", 200.0),
+                )
+                for item in slot_processes(*args, **kwargs)
+            )
+
+        monkeypatch.setattr(handover, "slot_processes", new_profile)
+    else:
+        setup = handover.SlicerSetup(Path("SuperSlicer.exe"), "prusa")
+    ask()
+    assert len(calls) > 1
+
+
+def test_export_cache_is_not_a_full_report_and_cannot_hide_cancellation(profile: Profile) -> None:
+    """Der Exportschnitt ohne Stützvolumen ist kein Bericht; auch warm gilt Abbrechen."""
+    from app.core.errors import OperationCancelled
+    from app.core.export import writer
+    from app.core.scene.cancel import CancelSignal
+    from app.core.slice.findings import remembered_analysis
+
+    entry = scene_object()
+    mesh = as_mesh_data(entry.mesh)
+    settings = print_settings.resolve(profile)
+    writer._body_analysis(entry, mesh, settings, profile, None)
+    own = profiles.for_process(profile, settings, effective=True)
+    wall, angle = profiles.analysis_limits(own, entry)
+    assert remembered_analysis(mesh, settings, angle, wall) is None
+    token = CancelSignal()
+    token.cancel()
+    with pytest.raises(OperationCancelled):
+        writer._body_analysis(entry, mesh, settings, profile, token)
+
+
+def test_export_retains_only_the_latest_layers_per_detail(profile: Profile) -> None:
+    """Viele Prozesswahlen halten höchstens zwei Schnitte, fremde Merker bleiben bestehen."""
+    from app.core.export import writer
+
+    entry = scene_object()
+    mesh = as_mesh_data(entry.mesh)
+    cache = mesh.raw._cache
+    foreign = object()
+    cache["unrelated_analysis"] = foreign
+    settings = print_settings.resolve(profile)
+    for number in range(6):
+        current = print_settings.with_path(settings, "layers.layer_height", 0.2 + number * 0.01)
+        writer._body_analysis(entry, mesh, current, profile, None, detail="support")
+        last = writer._body_analysis(entry, mesh, current, profile, None)
+        assert writer._body_analysis(entry, mesh, current, profile, None, detail="support") is last
+    own_keys = [key for key in cache.cache if key.startswith("solidon_export_slice|")]
+    assert len(own_keys) <= 2, own_keys
+    assert cache["unrelated_analysis"] is foreign
+
+
 def body(name: str = "cube_clean.stl"):
     """Auf dem Bett, wohin ein Teil kurz vor dem Export gehört.
 

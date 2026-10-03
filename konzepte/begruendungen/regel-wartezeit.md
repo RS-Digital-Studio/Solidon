@@ -10,6 +10,13 @@ Abschnitt" meinen deshalb die alte Anordnung.
 
 ## Wartezeit
 
+Die Vorbereitung des 3MF-Exports kann lange rechnen. `_ExportWorker` lässt
+Abbruch bis `writer.write_assembly(before_write=…)` zu; dieser Rückruf kommt
+nach Prüfung, Schichtanalyse, Teilrat und Aufbau der vollständigen Nutzlast.
+Erst das eigentliche Schreiben sperrt den Abbruch. Ein früherer Abbruch
+erhält vorhandene Zieldateien und erzeugt keine neue Datei. Wiederverwendete
+Schichten und Vorschläge umgehen die Abbruchprüfung nicht.
+
 **Verstrichene Zeit ist keine Restschätzung.** `loading.ProgressTiming` führt
 einen Sekundentakt für Schleier und Statuszeile gemeinsam; er läuft auch bei
 unverändertem Fortschrittsanteil und ausgeschalteten Animationen. Eine

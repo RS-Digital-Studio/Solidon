@@ -143,10 +143,9 @@ ersten Bild alte Pixel. `widget.grab()` sieht das nicht; Beweisbilder nur über
   kooperativ mit `revisionCancelled`, und der Verlauf bleibt unverändert.
   `busy` und `wait_for_idle` umfassen ihn; ein zweiter Umbau währenddessen
   wird abgesagt, nicht eingereiht.
-* **Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`) —
-  eine halb geschriebene Datei ist keine; der Menüeintrag ist währenddessen
-  gesperrt. **Wer einen Arbeiter ohne Abbrechen baut, begründet das im
-  Docstring.**
+* **Die Exportvorbereitung ist abbrechbar** (`_ExportWorker`); erst das Schreiben
+  der fertigen Nutzlast sperrt den Abbruch und den Menüeintrag. Arbeiter ohne
+  Abbruch begründen die Grenze im Docstring.
 * **Vorprüfung und Schreiben sind ein Auftrag:** Geschrieben wird genau der
   geprüfte Stand (Dokument und lokale Einstellungen beim Start kopiert), nie
   die heutige Auswahl; erst ein ausdrücklich neuer Versuch prüft neu.

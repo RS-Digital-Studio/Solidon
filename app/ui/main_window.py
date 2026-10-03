@@ -1189,7 +1189,7 @@ class _ExportWorker(Worker):
     sind das mehr als zwei Sekunden mit stehendem Fenster — und §2.8 verlangt
     darüber ein Fenster, das bedienbar bleibt.
 
-    Die Vorprüfung ist über das gemeinsame Token abbrechbar. Abbruch und
+    Vorprüfung und Baugruppenvorbereitung sind über dasselbe Token abbrechbar. Abbruch und
     Übergang zum Schreiben entscheiden unter derselben kurzen Sperre:
     Ein angenommener Abbruch beginnt keine Datei; die begonnene Ausgabe
     läuft vollständig zu Ende. Das gilt auch für mehrere Ausgabedateien.
@@ -1268,6 +1268,13 @@ class _ExportWorker(Worker):
             self.cancelled.cancel()
             return True
 
+    def _begin_write(self) -> None:
+        """Die fertige Datei schreiben; davor bleiben Prüfung und Rat abbrechbar."""
+        with self._phase_lock:
+            self.cancelled.raise_if_cancelled()
+            self._writing = True
+        self.writing.emit()
+
     def after_check(self, findings: list[Finding]) -> _ExportWorker:
         """Den geprüften Auftrag zum Schreiben weiterreichen, ohne ihn neu einzusammeln."""
         return _ExportWorker(
@@ -1307,10 +1314,6 @@ class _ExportWorker(Worker):
                     self.checked.emit(found)
                     return
                 self._checked = found
-            with self._phase_lock:
-                self.cancelled.raise_if_cancelled()
-                self._writing = True
-            self.writing.emit()
             if self._format == "3mf":
                 self._settings = self._profiles_for_selection(self._settings)
                 self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
@@ -1324,6 +1327,7 @@ class _ExportWorker(Worker):
             if self._format == "3mf":
                 written, findings = self._assembly()
             else:
+                self._begin_write()
                 written, findings = self._files()
         except OperationCancelled:
             if self._writing:
@@ -1410,6 +1414,8 @@ class _ExportWorker(Worker):
             scene=self._scene,
             document=self._document,
             checked=self._checked,
+            cancelled=self.cancelled,
+            before_write=self._begin_write,
             # Der ganze Auftrag, nicht nur die Auswahl: Verlangt ein nicht
             # gewähltes Teil einen übernommenen Vorschlag, bleibt er dort und
             # geht nicht an die gewählten (Review Nachtrag 0.5.1, N6).

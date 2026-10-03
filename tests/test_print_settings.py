@@ -7761,6 +7761,8 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _scene=None,
             _document=None,
             _checked=None,
+            cancelled=None,
+            _begin_write=lambda: None,
         )
         (written,), findings = main_window._ExportWorker._assembly(worker)  # type: ignore[arg-type]
         return _supported_parts(written, "orca"), {entry.code for entry in findings}

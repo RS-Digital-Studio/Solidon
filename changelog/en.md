@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Preparing a 3MF export can be cancelled. For jobs with several build plates, Solidon reuses calculated layers and suggestions.
 - Unused filaments from older projects are no longer sent to the slicer. Profiles stay linked to the filaments still in use.
 - Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.
 - Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles.
