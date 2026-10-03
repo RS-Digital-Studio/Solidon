@@ -474,6 +474,38 @@ def window(qt_app: QApplication) -> MainWindow:
     return window
 
 
+def test_changing_a_hole_through_the_wrong_sister_opens_the_right_one(
+    window: MainWindow,
+) -> None:
+    """RM-495: *Merkmal ändern* an einer Bohrung öffnete einen Dialog, der nichts kann.
+
+    *Merkmal ändern* und *Bohrung ändern* sind eine Handlung mit zwei
+    Operationen. Über Befehlspalette, Menü oder Karte an einer Bohrung
+    gewählt, stand ein Dialog ohne Vorschau da, und das Band sagte „Dafür ist
+    „Bohrung ändern“ da“. Jetzt öffnet derselbe Weg *Bohrung ändern* an der
+    gewählten Bohrung; an einem Merkmal, das *Merkmal ändern* annimmt, bleibt
+    es dabei.
+    """
+    from app.core.registry import REGISTRY
+
+    result = window.session.last_result
+    assert result is not None
+    entry = next(iter(result.scene.objects.values()))
+    hole = next(fid for fid, feature in entry.features.items() if feature.kind == "hole")
+    select(window, str(hole))
+    window.run_operation(REGISTRY.get("resize_feature"))
+    dialog = window._op_dialog
+    assert dialog is not None, "ein Dialog gehört dazu"
+    try:
+        assert dialog.spec.name == "resize_hole", dialog.spec.name
+        assert dialog.values().get("at_feature") == str(hole)
+    finally:
+        dialog.reject()
+
+    sister = window._sister_for_the_chosen_feature(REGISTRY.get("resize_hole"))
+    assert sister is None, "die passende Operation bleibt, was sie ist"
+
+
 def test_wait_for_idle_distinguishes_completion_from_timeout(qt_app: QApplication) -> None:
     class NeverFinishes:
         def wait(self, _timeout_ms: int) -> bool:

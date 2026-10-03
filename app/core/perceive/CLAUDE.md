@@ -145,6 +145,9 @@ hält beide Wege zusammen.
   in `uncertain`.
 - **Jede Maßquelle hat ein sichtbares Wort** (`MEASURE_SOURCE_WORDS`,
   `measure_qualifier`) — Steckbrief, Bohrhinweis und Panel lesen dieselben.
+  Die Maßspalte des Objektbaums ist dafür zu schmal: Dort steht die Zahl ganz,
+  ein warnendes Wort wird `labels.MEASURE_MARK` (≈), das Wort tragen Tooltip
+  und Vorlesetext (`feature_measure(marked=True)`, RM-490).
 
 ## Analysekarten (`maps.py`)
 

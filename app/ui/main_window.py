@@ -72,7 +72,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
@@ -326,6 +325,7 @@ from app.ui.overlay import CARD_PADDING, CardColumn, OverlayHost, card_styleshee
 from app.ui.palette import text_colour
 from app.ui.panels import (
     SEVERITY_MARKER,
+    ColumnScroller,
     FeaturePanel,
     HistoryPanel,
     MeasurementLabel,
@@ -9692,6 +9692,7 @@ class MainWindow(QMainWindow):
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
         )
+        self.viewport.invitation.set_chat_available(backend is not None)
         self.chat.set_notice("")
         # Nach set_available, denn die Sperre überschreibt dessen Hinweis:
         # §2 C zählt den Chat zur schreibenden Seite, mit oder ohne Modell.
@@ -12738,12 +12739,10 @@ class MainWindow(QMainWindow):
         stacked.addWidget(self.feature_panel)
         stacked.addWidget(self.selection_operations, 1)
 
-        scroller = QScrollArea(self)
+        # Rollt nur senkrecht; die Mindestbreite des Inhalts ist die der
+        # Spalte (RM-488: sonst ein waagrechter Balken, Felder ohne Pfeile).
+        scroller = ColumnScroller(self)
         scroller.setWidget(inside)
-        # Ohne dies bleibt das Panel auf seiner Wunschbreite stehen und wird
-        # waagerecht gerollt statt umgebrochen.
-        scroller.setWidgetResizable(True)
-        scroller.setFrameShape(QScrollArea.Shape.NoFrame)
 
         # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
         # 1600 auf 1000 Punkten mit gewählter Bohrung (13.09.2026): Sichtfeld
@@ -13401,6 +13400,24 @@ class MainWindow(QMainWindow):
             return None
         spec = REGISTRY.get(twin)
         return spec if feature.kind in (spec.applies_to or ()) else None
+
+    def _sister_for_the_chosen_feature(self, spec: OperationSpec) -> OperationSpec | None:
+        """Die Operation derselben Zeile, die für das gewählte Merkmal gilt (RM-495).
+
+        *Merkmal ändern* und *Bohrung ändern* sind eine Handlung mit zwei
+        Operationen (``actions.instead_of``). Wer an einer Bohrung die falsche
+        wählte — über Befehlspalette, Menü oder Karte —, bekam einen Dialog
+        ohne Vorschau und ohne *Übernehmen*, dessen einziger Satz „Dafür ist
+        „Bohrung ändern“ da“ war. ``None``, wenn die Operation das Merkmal
+        annimmt, keines gewählt ist oder die Zeile keine Schwester hat.
+        """
+        from app.core.perceive.actions import instead_of
+
+        feature = self._selected_feature_object()
+        if feature is None or not spec.applies_to or feature.kind in spec.applies_to:
+            return None
+        sister: OperationSpec | None = instead_of(spec.name, feature.kind)
+        return sister
 
     def _delete_the_chosen_feature(self) -> bool:
         """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
@@ -17810,6 +17827,7 @@ class MainWindow(QMainWindow):
             self._local_features.invalidate()
         if spec.name == "delete_object" and self._delete_the_chosen_feature():
             return
+        spec = self._sister_for_the_chosen_feature(spec) or spec
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
             feature_id = self.object_tree.selected_feature()
@@ -20654,7 +20672,14 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         empty = result is not None and not result.scene.objects and not self.session.busy
         invitation = self.viewport.invitation
-        invitation.set_chat_available(self.session.agent_backend is not None)
+        # **Nur eine bekannte Antwort** (RM-492): ``agent_backend`` liest sonst
+        # Schlüsselbund und Netz im Hauptfaden, am Arbeiter der Modellfrage
+        # vorbei — beim ersten Öffnen kurz nach dem Start bis zu 0,45 s
+        # Stillstand. Der Chatknopf kommt mit der Antwort
+        # (``_refresh_chat_availability``).
+        invitation.set_chat_available(
+            self.session.backend_known and self.session.agent_backend is not None
+        )
         halted = self._halted_before_a_body(result) if empty else None
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
