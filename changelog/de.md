@@ -56,6 +56,8 @@ Nutzen da und sonst nichts.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.
 - Ist in Cura ein anderer Drucker aktiv, nennt die Übergabe beide Drucker und zeigt, wo Sie Curas Auswahl übernehmen können.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.
+- Nach dem Slicen vergleicht Solidon auch Stützmaterial und Modellschichten je Druckplatte. Der Prüfbericht zeigt die interne Schätzung und die Werte aus der Druckdatei.
+- Die Material-Gegenprobe vergleicht nur das gedruckte Modell. Spülmaterial wird getrennt gezeigt; unvollständig lesbare Mengen werden kenntlich gemacht.
 - Die Analyse des benötigten Stützraums ist bei Hohlkörpern deutlich schneller und erhält feine Konturen.
 - Bei ineinandergesteckten Teilen zählt die Druckanalyse eingeschlossene Luft nicht mehr als Material. Das verbessert auch die Erkennung von Überhängen und nötigen Stützen.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
@@ -89,6 +91,9 @@ Nutzen da und sonst nichts.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
 - Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
+- Die eingestellte Stützdichte wird in PrusaSlicer und der Orca-Familie korrekt übernommen. Das Feld beginnt bei 1 %. Für einen Druck ohne Stützen wählen Sie „Keine“.
+- Bei Mehrfarbdrucken mit OrcaSlicer, ElegooSlicer, Bambu Studio und Creality Print erhält der Reinigungsturm eine zur Bettgröße passende Startposition.
+- Zu große Teile meldet Solidon vor dem Slicerstart. Findet es für mehrere Teile keinen Platz auf einer Platte, können Sie sie auf mehrere Platten anordnen lassen.
 
 ### Bohrungen, Langlöcher und Teilen
 

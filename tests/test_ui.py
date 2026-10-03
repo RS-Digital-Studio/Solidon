@@ -14452,6 +14452,7 @@ def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
     estimate = estimate_total(bodies, settings)
     measured = gcode.GcodeMetrics(
         filament_grams=estimate.grams * 0.8,
+        resolved_model_grams=estimate.grams * 0.8,
         print_seconds=estimate.seconds * 0.8,
     )
 
@@ -14489,7 +14490,11 @@ def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
     estimate = estimate_total(bodies, settings)
 
     window._compare_totals(
-        gcode.GcodeMetrics(filament_grams=estimate.grams * 0.95, print_seconds=estimate.seconds)
+        gcode.GcodeMetrics(
+            filament_grams=estimate.grams * 0.95,
+            resolved_model_grams=estimate.grams * 0.95,
+            print_seconds=estimate.seconds,
+        )
     )
 
     assert "gcode.deviation" not in _report_codes(window)
@@ -21669,3 +21674,232 @@ def test_every_entry_of_the_invitation_does_what_the_menu_does(window: MainWindo
     assert window.right.currentWidget() is window.chat, "der Chat steht vorn"
     assert window.chat.input.isVisible()
     assert window.focusWidget() is window.chat.input, "der Cursor steht im sichtbaren Feld"
+
+
+@pytest.mark.parametrize("known", [False, True])
+def test_model_material_comparison_never_uses_total_consumption(known: bool) -> None:
+    """Spülen kann den Gesamtverbrauch erhöhen, ohne die Modellgegenprobe zu verändern."""
+    from types import SimpleNamespace
+
+    from app.core.slice import gcode
+    from app.ui.print_settings_dialog import SliceComparison
+
+    findings = []
+    host = SimpleNamespace(
+        report=SimpleNamespace(add_findings=lambda values: findings.extend(values))
+    )
+    metrics = gcode.GcodeMetrics(
+        filament_grams=30.0,
+        model_material_cm3=2.0 if known else None,
+        material_cm3_by_role={"model": (2.0,)} if known else {},
+        filament_densities=(1.5,),
+        used_tools=(0,),
+    )
+    MainWindow._compare_totals(host, metrics, SliceComparison(grams=3.0, seconds=None))
+    assert not [finding for finding in findings if finding.code == "gcode.deviation"]
+    assert (
+        bool([finding for finding in findings if finding.code == "gcode.model_material_unknown"])
+        is not known
+    )
+    assert metrics.grams() == pytest.approx(30.0), "Die Verbrauchsbuchung behält die Gesamtmenge"
+
+
+def test_known_model_material_replaces_previous_unknown_report() -> None:
+    """Eine neue Druckdatei räumt den alten Hinweis zur unbekannten Modellmenge ab."""
+    from types import SimpleNamespace
+
+    from app.core.export.handover import SliceOutcome
+    from app.core.slice import gcode
+    from app.ui.panels import ReportPanel
+    from app.ui.print_settings_dialog import SliceComparison
+
+    def quiet(*_args, **_kwargs):
+        pass
+
+    report = SimpleNamespace(
+        _findings=[],
+        list=SimpleNamespace(selectedItems=list),
+        _rebuild=quiet,
+        _count_up=quiet,
+        _refilter=quiet,
+        _preselect=quiet,
+        _show_controls=quiet,
+        _grew=quiet,
+        _show_first_of=quiet,
+    )
+    report.add_findings = lambda values, **kwargs: ReportPanel.add_findings(
+        report, values, **kwargs
+    )
+    host = SimpleNamespace(report=report, _focus_report=quiet, announce=quiet)
+    host._compare_totals = lambda *args: MainWindow._compare_totals(host, *args)
+    comparison = SliceComparison(grams=3.0, seconds=None)
+    for known in (False, True):
+        metrics = gcode.GcodeMetrics(
+            filament_grams=30.0,
+            resolved_model_grams=3.0 if known else None,
+        )
+        outcome = SliceOutcome(gcode_path=Path("plate.gcode"), metrics=metrics, findings=[])
+        MainWindow._gcode_returned(host, [outcome], comparison)
+        unknown = [
+            entry for entry in report._findings if entry.code == "gcode.model_material_unknown"
+        ]
+        assert bool(unknown) is not known
+
+
+def test_slice_signal_shows_frozen_support_and_model_layers_in_the_report(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Slicen-Klick, Arbeiter, Dialogsignal und echte Berichtsliste behalten die Plattenwerte.
+
+    Der externe Prozess ist abgegrenzt; der gefrorene Auftrag wird erst nach
+    einem Auswahlwechsel im Hauptfenster zurückgegeben. Die echte Pilzdatei
+    prüft der gesonderte Slicer-Abnahmelauf, dieser Test den Fensteranschluss.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.core.slice import gcode
+    from app.core.slice.estimate import PlateComparison
+    from app.ui import print_settings_dialog as module
+
+    _with_two_objects(window)
+    result = window.session.last_result
+    assert result is not None
+    result.scene.objects = {
+        key: dataclasses.replace(entry, plate=plate)
+        for (key, entry), plate in zip(result.scene.objects.items(), (3, 1), strict=True)
+    }
+    monkeypatch.setattr(type(window.session), "fine_current", property(lambda _self: True))
+    dialog = module.PrintSettingsDialog(window.session, UiSettings())
+    assert dialog.wait_for_slicers()
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", "prusa")
+    monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [3, 1])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    snapshots = {3: PlateComparison(3, 123.0, 156), 1: PlateComparison(1, 0.0, 42)}
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda job, plate: module.PlateRun(
+            plate,
+            tmp_path / f"plate-{plate}.3mf",
+            slots=(MaterialSlot(0, ""),),
+            comparison=snapshots[plate],
+        ),
+    )
+    entered = threading.Event()
+    finish = threading.Event()
+
+    def slice_model(paths, *_args, **_kwargs):
+        entered.set()
+        assert finish.wait(5.0)
+        plate = int(paths[0].stem.rsplit("-", 1)[1])
+        snapshot = snapshots[plate]
+        return handover.SliceOutcome(
+            tmp_path / f"plate-{plate}.gcode",
+            gcode.GcodeMetrics(
+                support_mm3=snapshot.support_material_mm3,
+                model_layer_count=snapshot.model_layer_count,
+                layer_count=209 if plate == 3 else 42,
+            ),
+        )
+
+    monkeypatch.setattr(module.handover, "slice_model", slice_model)
+    completed = []
+
+    def returned(outcomes):
+        window._gcode_returned(outcomes, dialog.slice_comparison)
+        completed.append(True)
+
+    dialog.sliced.connect(returned)
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        # Die Attrappe ersetzt die bereits erfolgreich geprüfte Slicer-Erkennung.
+        dialog.slice_button.setEnabled(True)
+        assert dialog.slice_button.isVisible()
+        QTest.mouseClick(dialog.slice_button, Qt.MouseButton.LeftButton)
+        assert entered.wait(5.0)
+        monkeypatch.setattr(window.object_tree, "selected_objects", lambda: ["excluded"])
+
+        def changed_settings():
+            raise AssertionError("Der Rückweg darf die heutigen Druckwerte nicht lesen")
+
+        monkeypatch.setattr(window, "effective_print_settings", changed_settings)
+        finish.set()
+        wait_until(QApplication.instance(), lambda: bool(completed))
+        rows = [
+            window.report.list.item(index)
+            for index in range(window.report.list.count())
+            if window.report.list.item(index).data(Qt.ItemDataRole.UserRole).code
+            == "gcode.plate_comparison"
+        ]
+        assert len(rows) == 4
+        texts = "\n".join(row.text() for row in rows)
+        assert "Platte 4" in texts and "Platte 2" in texts
+        assert "Stützmaterial" in texts and "Modellschichten" in texts
+        assert "123" in texts and "156" in texts and "42" in texts
+        assert all("intern geschätzt" in row.text() and "im G-Code" in row.text() for row in rows)
+        assert "209" not in texts, "Zusätzliche Stützlagen sind keine Modelllagen"
+    finally:
+        finish.set()
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("missing", ["support", "layers", "mapping"])
+def test_known_plate_comparison_replaces_previous_unknown_report(missing: str) -> None:
+    """Der nächste Slicerlauf ersetzt fehlende Plattenwerte und unklare Zuordnungen."""
+    from types import SimpleNamespace
+
+    from app.core.export.handover import SliceOutcome
+    from app.core.slice import gcode
+    from app.core.slice.estimate import PlateComparison
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel
+    from app.ui.print_settings_dialog import SliceComparison
+
+    def quiet(*_args, **_kwargs):
+        pass
+
+    internal = Finding(code="test.internal", severity="info", message="Interne Prüfung")
+    report = SimpleNamespace(
+        _findings=[internal],
+        list=SimpleNamespace(selectedItems=list),
+        _rebuild=quiet,
+        _count_up=quiet,
+        _refilter=quiet,
+        _preselect=quiet,
+        _show_controls=quiet,
+        _grew=quiet,
+        _show_first_of=quiet,
+    )
+    report.add_findings = lambda values, **kwargs: ReportPanel.add_findings(
+        report, values, **kwargs
+    )
+    host = SimpleNamespace(
+        report=report, _focus_report=quiet, announce=quiet, _compare_totals=quiet
+    )
+    expected = PlateComparison(3, 10.0, 4)
+    for known in (False, True):
+        snapshots = (expected,)
+        if not known and missing == "mapping":
+            snapshots += (PlateComparison(1, 20.0, 8),)
+        comparison = SliceComparison(grams=None, seconds=None, plates=snapshots)
+        metrics = gcode.GcodeMetrics(
+            support_mm3=None if not known and missing == "support" else 10.0,
+            model_layer_count=None if not known and missing == "layers" else 4,
+        )
+        outcome = SliceOutcome(gcode_path=Path("plate.gcode"), metrics=metrics, findings=[])
+        MainWindow._gcode_returned(host, [outcome], comparison)
+        unknown = [
+            entry for entry in report._findings if entry.code == "gcode.plate_comparison_unknown"
+        ]
+        assert bool(unknown) is not known
+        assert internal in report._findings, "Unabhängige interne Befunde bleiben erhalten"
+        if known:
+            comparisons = [
+                entry for entry in report._findings if entry.code == "gcode.plate_comparison"
+            ]
+            assert len(comparisons) == 2
+            assert all(entry.values["estimated_source"] == "internal" for entry in comparisons)
+            assert all(entry.values["measured_source"] == "gcode" for entry in comparisons)

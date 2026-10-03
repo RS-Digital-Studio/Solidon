@@ -32,6 +32,8 @@ dans `website/version.json`.
 - Cura reprend les limites de jerk du profil, avec des valeurs distinctes pour les parois, le remplissage et la première couche.
 - Si une autre imprimante est active dans Cura, le transfert nomme les deux et indique où reprendre le choix de Cura.
 - Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.
+- Après le tranchage, Solidon compare aussi les supports et les couches du modèle par plateau. Le rapport présente l'estimation interne et les valeurs du fichier d'impression.
+- La comparaison de matière porte uniquement sur le modèle imprimé. La purge est affichée séparément, avec une indication si sa quantité ne peut pas être lue entièrement.
 - L'analyse de l'espace nécessaire aux supports est bien plus rapide sur les modèles creux et préserve les contours fins.
 - Pour les pièces qui se chevauchent, l'analyse d'impression ne compte plus l'air enfermé comme de la matière. La détection des surplombs et des supports nécessaires s'améliore aussi.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
@@ -65,6 +67,9 @@ dans `website/version.json`.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 - Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent. Le corps reste exact.
 - Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
+- PrusaSlicer et la famille Orca respectent la densité des supports choisie. Le champ commence à 1 %. Pour imprimer sans supports, choisissez « Aucun ».
+- Pour les impressions multicolores avec OrcaSlicer, ElegooSlicer, Bambu Studio et Creality Print, la tour de purge démarre à une position adaptée à la taille du plateau.
+- Les pièces trop grandes sont signalées avant le lancement du slicer. Si leur disposition sur un seul plateau échoue, vous pouvez les répartir sur plusieurs plateaux.
 
 ### Perçages, trous oblongs et découpe
 

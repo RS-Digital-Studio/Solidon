@@ -748,20 +748,87 @@ def _support_gap(
     return _float(text)
 
 
+#: Was eine Bahn an Breite an die Nachbarbahn abgibt, je Millimeter
+#: Schichthöhe: PrusaSlicer und die Orca-Familie rechnen eine Bahn als
+#: Rechteck mit Halbkreisen an den Flanken (``Flow::spacing``,
+#: ``rounded_rectangle_extrusion_spacing``: Breite - Höhe · (1 - π/4)).
+_FLANK_SHARE: Final = 1.0 - math.pi / 4.0
+
+
+def support_line_spacing(line_width: float, layer_height: float) -> float:
+    """Wie weit zwei Stützlinien mindestens auseinanderliegen, die sich berühren.
+
+    Das ist die Strecke, die PrusaSlicer und die Orca-Familie zu ihrem
+    Stützabstand addieren (``support_material_flow.spacing()`` in
+    ``SupportParameters``): Ihr ``support_material_spacing`` bzw.
+    ``support_base_pattern_spacing`` ist die **Lücke** zwischen zwei Linien,
+    nicht ihre Teilung (RM-475). Eine eigene Dichte schreibt diese Breite
+    zusammen mit der Lücke; beim Rücklesen gilt die native Stützbahnbreite.
+    """
+    return max(line_width - layer_height * _FLANK_SHARE, 0.0)
+
+
+def support_gap(density: float, line_width: float, layer_height: float) -> float:
+    """Die Lücke zwischen zwei Stützlinien, die PrusaSlicer und die Orca-Familie
+    zur Dichte brauchen (RM-475).
+
+    Der Linienabstand geteilt durch die positive Dichte ergibt die Teilung;
+    abzüglich des Linienabstands bleibt die Lücke. Null ist als Dichte nicht
+    darstellbar und wird vor diesem Aufruf an der Übergabe abgewiesen.
+    """
+    spacing = support_line_spacing(line_width, layer_height)
+    return max(spacing / density - spacing, 0.0)
+
+
+def _support_width(
+    values: Mapping[str, Any], read: Mapping[str, object], context: _Context, *, prusa: bool
+) -> float:
+    """Native Stützbreite mit den Auto- und Prozentregeln von ``Flow.cpp``.
+
+    Null erbt die allgemeine Breite, danach die Düse. Prusa bezieht Prozent
+    auf die Schichthöhe, die Orca-Familie auf den Düsendurchmesser.
+    """
+    layer = read.get("layers.layer_height")
+    height = float(layer) if isinstance(layer, int | float) else 0.0
+    keys = (
+        ("support_material_extrusion_width", "extrusion_width")
+        if prusa
+        else ("support_line_width", "line_width")
+    )
+    for key in keys:
+        text = _prusa_first(values.get(key)) if prusa else _text(values.get(key))
+        if text is None:
+            continue
+        number = _float(text.removesuffix("%"))
+        if number is not None and number > 0.0:
+            return (
+                number * (height if prusa else context.nozzle) / 100.0
+                if text.endswith("%")
+                else number
+            )
+    width = read.get("layers.line_width")
+    return float(width) if isinstance(width, int | float) else context.nozzle
+
+
 def _support_density(
-    values: Mapping[str, Any], read: Mapping[str, object], context: _Context
+    values: Mapping[str, Any], read: Mapping[str, object], context: _Context, *, prusa: bool = False
 ) -> float | None:
-    """Die Stützdichte aus dem Linienabstand — die Umkehrung von
-    ``handover._support_spacing`` (Abstand = Bahnbreite / Dichte)."""
-    text = _text(values.get("support_base_pattern_spacing"))
+    """Die Stützdichte aus der Lücke zwischen zwei Linien — die Umkehrung von
+    :func:`support_gap` (Dichte = Linienabstand / (Lücke + Linienabstand))."""
+    text = (
+        _prusa_first(values.get("support_material_spacing"))
+        if prusa
+        else _text(values.get("support_base_pattern_spacing"))
+    )
     spacing = _float(text) if text is not None else None
     if spacing is None or spacing < 0.0:
         return None
-    if is_zero(spacing):
-        return 0.0
-    width = read.get("layers.line_width")
-    base = float(width) if isinstance(width, int | float) else context.nozzle
-    return min(1.0, base / spacing)
+    base = _support_width(values, read, context, prusa=prusa)
+    layer = read.get("layers.layer_height")
+    height = float(layer) if isinstance(layer, int | float) else 0.0
+    strand = support_line_spacing(base, height)
+    pitch = spacing + strand
+    return 1.0 if is_zero(pitch) else min(1.0, strand / pitch)
 
 
 def _read_filament(
@@ -1256,12 +1323,8 @@ def _prusa_support_gap(values: Mapping[str, Any], outer_width: float | None) -> 
 def _prusa_support_density(
     values: Mapping[str, Any], read: Mapping[str, object], context: _Context
 ) -> float | None:
-    """Die Stützdichte aus dem Linienabstand, wie bei der Orca-Familie."""
-    return _support_density(
-        {"support_base_pattern_spacing": _prusa_first(values.get("support_material_spacing"))},
-        read,
-        context,
-    )
+    """Die Stützdichte aus der Lücke zwischen zwei Linien, wie bei der Orca-Familie."""
+    return _support_density(values, read, context, prusa=True)
 
 
 def _prusa_adhesion(values: Mapping[str, Any]) -> object:

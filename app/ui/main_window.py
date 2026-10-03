@@ -216,7 +216,7 @@ from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
-from app.core.slice.estimate import support_material
+from app.core.slice.estimate import plates_findings, support_material
 from app.core.slice.estimate import total as estimate_total
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
@@ -8019,7 +8019,13 @@ class MainWindow(QMainWindow):
         self._store_settings()
         # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
         # bei der Orca-Familie einige tausend Einträge je Aufruf.
+        scene_action = dialog.take_scene_action()
         dialog.deleteLater()
+        if scene_action is not None:
+            action_id, error = scene_action
+            handler = self.error_handlers().get(action_id)
+            if handler is not None:
+                handler(error)
         self._offer_support()
 
     def _edit_filament_settings(self, slot: object) -> None:
@@ -8076,6 +8082,16 @@ class MainWindow(QMainWindow):
             )
         if comparison is not None:
             self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]), comparison)
+            self.report.add_findings(
+                plates_findings(
+                    comparison.plates,
+                    [entry.metrics for entry in outcomes],
+                    [
+                        any(finding.code == "slicer.arranged_itself" for finding in entry.findings)
+                        for entry in outcomes
+                    ],
+                )
+            )
         self._focus_report()
         self.announce(
             tr("Geslicet: {file}", file=outcomes[0].gcode_path.name)
@@ -8299,11 +8315,23 @@ class MainWindow(QMainWindow):
             ]
             estimate = estimate_total(bodies, settings)
             comparison = SliceComparison(grams=estimate.grams, seconds=estimate.seconds)
-            grams = metrics.grams(settings.filament.density, settings.filament.diameter)
+            grams = metrics.model_grams(settings.filament.density)
         else:
-            grams = metrics.grams(None, None)
+            grams = metrics.model_grams()
 
         findings: list[Finding] = []
+        if grams is None and comparison.grams is not None:
+            findings.append(
+                Finding(
+                    code="gcode.model_material_unknown",
+                    severity="info",
+                    message=_(
+                        "Die Druckdatei weist das Modellmaterial nicht mit vollständig "
+                        "bekannten Materialwerten getrennt aus."
+                    ),
+                    source="gcode",
+                )
+            )
         if grams is not None and comparison.grams is not None and comparison.grams > 0.0:
             findings += gcode.compare(comparison.grams, grams, "material").findings
         if (
@@ -22574,6 +22602,8 @@ class MainWindow(QMainWindow):
         """Der Körper, um den es geht — aus dem Fehler oder aus der Auswahl."""
         if error.object_id:
             return error.object_id
+        if error.values.get("constraint") == "slicer_build_volume":
+            return None
         chosen = self.object_tree.selected_objects()
         return chosen[0] if chosen else None
 
@@ -23272,6 +23302,17 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
         if object_id is None or entry is None:
+            return
+        if error.values.get("constraint") == "slicer_build_volume":
+            if not self.session.result_current or not self._quiet_command_allowed():
+                return
+            # Ein gewähltes Merkmal würde sonst die Körperoperation ersetzen.
+            self.object_tree.select_object(object_id)
+            if self.object_tree.selected() != object_id:
+                return
+            self.run_operation(
+                REGISTRY.get("scale_object"), {"about": "bed"}, on_bodies=(object_id,)
+            )
             return
         volume = self.session.profile.printer.build_volume
         size = as_mesh_data(entry.mesh).bounds.size

@@ -34,6 +34,10 @@ entfernt hat.
 | 2026-10-03 | [RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)](#rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026) |
 | 2026-10-03 | [RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)](#rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026) |
 | 2026-10-03 | [RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)](#rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026) |
+| 2026-10-03 | [RM-466: Nach dem Slicen erscheinen Stützmaterial und Modelllagen mit beiden Herkünften (03.10.2026)](#rm-466-nach-dem-slicen-erscheinen-stützmaterial-und-modelllagen-mit-beiden-herkünften-03102026) |
+| 2026-10-03 | [RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)](#rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026) |
+| 2026-10-03 | [RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)](#rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026) |
+| 2026-10-03 | [RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)](#rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026) |
 | 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
 | 2026-10-03 | [RM-486: Die Stützsäulen rechnen mit gerichteten Konturen ohne Vereinfachung (03.10.2026)](#rm-486-die-stützsäulen-rechnen-mit-gerichteten-konturen-ohne-vereinfachung-03102026) |
 | 2026-10-03 | [RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)](#rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026) |
@@ -38574,3 +38578,215 @@ Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
   Beschleunigungsgrenzen und den Vergleich mit gleichen Prozesswerten.
 
 **Abschluss:** Die Maschinenübergabe ließ den nativen Schalter und abhängige Rollen fallen; gewählte Prozess- und Extrudercontainer wurden dafür ebenfalls nicht gelesen. Der vollständige bekannte Jerk-Bestand wird jetzt ohne Ausführen fremder Ausdrücke aufgelöst und in beide CuraEngine-Ebenen sowie das importierbare Fensterprofil geschrieben. Eigene Werte gehen vor; unbekannte aktive Ausdrücke und unvollständige Stapel halten mit Handlungsvorschlag an. Die Folgenprüfung hat die Hardwareaufnahme von der Bewegungsprüfung getrennt: alle 635 lesbaren installierten Drucker bleiben auswählbar, auch wenn erst ihre Übergabe einen unbekannten Jerk meldet. 527 Maschinen-/Profilfälle grün; rote Gegenproben für fehlende Rollen, Containerpriorität, Leerfahrt-Verweise und unabhängige Hardwareaufnahme. Die unabhängige Folgenprüfung ergänzt fünf zuvor rote Mehrdüsenfälle: Extrudercontainer beachten das geerbte settable_per_extruder; globale Schalter bleiben global, ausgeschaltete Altrollen wirken nicht. Eine aktive Gegenprobe hält echte Unterschiede weiterhin an. Die vollständige Schalter-Matrix ergänzt Druck- und Leerfahrtsteuerung an/aus, einen/zwei Extruder und gleiche, verschiedene oder ungültige Rollen. 26 weitere Gegenproben waren rot; 146 Schalter- und Anschlussfälle sind danach grün. Ausgeschaltete Leerfahrtwerte werden vor Auflösung und Vergleich ausgelassen; die strikte Ausgabe entfernt auch rohe Restwerte, sodass unbekannte inaktive Formeln weder CLI noch Fensterprofil erreichen. Das gilt auch nach Zusammenführung einer nativen Instanz: 96 Anschlusskombinationen prüfen Definition/Instanz und CLI/Fenster, acht weitere den konkreten Prozessschalter über unbekannter Definitionsformel. Zwölf neue Gegenproben waren vorher rot. Die vollständige gewählte Prozesskette wird vor der Schalterentscheidung gelesen; zwei ältere Teststapel verweisen dafür auf ihren tatsächlich vorhandenen Qualitätscontainer. CuraEngine 5.13 am Würfel: SV06 Druck 5/Leerfahrt 10 statt ausschließlich Start-M205 8, 1456,261771 statt 1483,763798 s; Ender-3 nativ aus bleibt ohne M205 bei 1300,685344 s. Eigene Rollen einschließlich erster Schicht sind an tatsächlichen Bewegungen gelesen; korrekt gebundener Ender mit eingeschalteter Steuerung liefert 2 → 3,5 → 5. SV06/Pilz 2552,113900 s, 9,72 % über dem RM-482-Prusa-Vergleich; Würfel 4,84 %. Der Herstellerwiderspruch E40 im Zeitmodell gegen M203 E50 bleibt ausgewiesen und wird nicht durch geratene Hardwarewerte verdeckt. Ursache `b5a18cbe0` liegt in v0.5.1, deshalb Kundenpunkt in allen sechs Changelogs. Belege: `F:\solidon-review-reports\B-slicer-rest\rm503\bericht.md`, native G-Codes, Profilbeilagen, `motion-analysis.json` und `discovery-compare.json`; genaue Abschlusscommits und zentrales Tor im Bericht B. Kein ausgeführter Fenster-/Renderer-/Leistungslauf.
+
+## RM-466: Nach dem Slicen erscheinen Stützmaterial und Modelllagen mit beiden Herkünften (03.10.2026)
+
+<a id="rm-466-nach-dem-slicen-erscheinen-stützmaterial-und-modelllagen-mit-beiden-herkünften-03102026"></a>
+<a id="rm-466"></a>
+
+**RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1).**
+  G-Code-Gegenprüfung 02.10.2026. §28.1 verlangt Stützmaterialvolumen und Schichtzahl aus dem G-Code
+  als Gegenprobe. Nach *Slicen* vergleicht `_gcode_returned` → `_compare_totals` nur Zeit und
+  Material (`app/ui/main_window.py:7466–7490`, `:7672–7718`); `_compare_support` läuft nur nach
+  *G-Code prüfen* mit einer von Hand gewählten Datei (`:7583–7592`). `support_mm3` und `layer_count`
+  werden gelesen, aber weder verglichen noch gezeigt. Gemessen (Pilz A, G-Code gegen
+  Schichtanalyse): CC2 9 969 gegen 14 764 mm³, P1S 6 219 gegen 7 171, MK4S 6 629 gegen 8 889, Kobra 2
+  (Orca) 4 207 gegen 32 112 mm³.
+  **Fix:** `_gcode_returned` ruft dieselbe Stützgegenprobe wie der manuelle Weg und vergleicht die
+  Schichtzahl mit dem Raster der Analyse (erste Schichthöhe); Befunde mit Herkunft.
+  **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
+  Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
+  Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
+
+**Abschluss:** Nach dem Slicen erscheinen pro Platte Stützmaterial und Modelllagen mit interner Schätzung und G-Code-Wert, auch bei Übereinstimmung. Ursache war der auf Zeit und Gesamtmaterial beschränkte Rückweg nach dem Slicer; der manuelle G-Code-Weg besaß bereits eine Stützgegenprobe. Der alte Rückweg ist bis f934a42219/d2ed623c1f belegt und in v0.5.1 enthalten. Sechs Changelog-Einträge beschreiben die sichtbare Korrektur.
+
+`writer.write_assembly` gibt die tatsächlich exportierten Netze und endgültigen Teilwerte an die Gegenprobe. Ein unveränderliches `PlateComparison` reist mit dem Slicerauftrag; die Rückmeldung liest weder eine inzwischen andere Auswahl noch geänderte Dialogwerte. Die vollständige gemeinsame Schichtanalyse benutzt die gewählte erste Schichthöhe und den exportierten Stützwinkel. Modelllagen zählen vereinigte physische Druckhöhen. Neue Slicer-Anordnung, verschiedene überlappende Stützverträge, Kanalsperren oder eingeschränkter Stützort lassen eine nicht belegbare Stützmenge unbekannt. Export ohne Gegenprobe löst keine zusätzliche Analyse aus.
+
+Der G-Code-Parser trennt vollständige Mengen von gelesenen Teilmengen. Bedingte Förderung und unbekannte bewegte Druckrollen können Modell- und Stützmenge unbekannt machen; Gesamtverbrauch und Verbrauchsbuchung bleiben erhalten. Bedingte Z-Befehle, G90/G91 und G92 werden mit physischer Höhe und getrenntem Ursprung behandelt. Reine Höhenunsicherheit verwirft keine belegte Materialmenge. Später belegte Höhen machen frühere unbekannte Druckhöhen nicht rückwirkend bekannt. Auch der manuelle Rückweg vergleicht keine unvollständige Stützmenge.
+
+Gegenproben: Fensteranschluss ohne Korrektur rot (keine statt vier Plattenzeilen); drei Rückmeldungen vor der Herkunftskorrektur rot, danach sieben grün. Kalibrierter Winkel gegen explizite 70°: drei rote Fälle, danach 19 grün. G92-Ursprung: 16 rote und zwei bereits grüne Fälle, danach beide vollständigen Parser-/Vergleichsdateien mit 240 Fällen grün. Unabhängige Nachprüfung von 23 Fallgruppen ohne offenen Fund, darunter Nullmengen, Rückzüge, unbekannte Rollen, bedingte Extrusion, physische Höhen, verschiedene Raster, mehrere Platten, Auswahlwechsel und erneute Rückmeldung. Integrierte betroffene Kerntests: 544 bestanden, 914 Fenster-/Rendererfälle zurückgestellt. Ein ausdrücklich verlangter Windows-Fensteranschluss bestand separat; sein Lauf protokollierte eine native RPC-Ausnahme, endete aber mit Exit 0. Die zusätzlichen echten Oberflächenläufe bestanden ohne diesen Befund.
+
+Echte Pilz-Gegenprobe, Folgehöhe 0,20 mm, erste Höhe 0,28 mm, Gitterstütze überall mit 15 %: Elegoo CC2 4497,417338 mm³ intern gegen 5908,736634 mm³ G-Code mit korrekt sichtbarer Abweichung; Prusa MK4S 4505,141380 gegen 4921,934267 mm³ innerhalb der Vergleichsgrenze. Beide zählen 125/125 Modelllagen. Der endgültige native Windows-Lauf vom 03.10.2026, 09:12 UTC, betätigt den sichtbaren Berichtknopf „An den Slicer übergeben …“ und „Slicen“, ohne Befehlspalette. Echte Einstellungswidgets schalten anschließend Stütze aus und ändern Folge-/Ersthöhe auf 0,25/0,12 mm: 0/0 mm³ und 101/101 Lagen ersetzen die alten Zeilen. Der dritte Lauf wird nach dem Start des eigenen Prusa-Prozesses über „Abbrechen“ beendet: 0,1125 s, kein sliced-Signal, kein neues Ergebnis, letzte gültige Befunde erhalten, Knopf wieder frei und Status „Abgebrochen.“. Import und anfängliche Profilwahl sind Prüfvorbedingungen; ein nativer Dateidialog- oder Mehrplattenlauf wird nicht behauptet. Nach dem endgültigen Parserfix wurden acht Standard- und neun reale Farb-/Stützdateien erneut gelesen: Materialwerte, Gesamtsummen und Buchungsgrundlage unverändert.
+
+Der erste vollständige Torlauf fand noch die fehlende Handlung an der neuen Abweichungswarnung (20.766 bestanden, ein Regelwächter rot). Sie bietet jetzt über den bestehenden Handlungspfad „Druckeinstellungen öffnen“ an; der allgemeine Druckdialog öffnet sichtbar mit seiner regulären Plattenwahl und ändert keine Einstellung automatisch. Übereinstimmung und unbekannte Werte erhalten keinen zusätzlichen Knopf. Die gezielte Gegenprobe war vorher rot und prüft danach auch die beiden Informationsfälle. Der erste Torlauf wird nicht als bestanden gezählt.
+
+Die zusätzliche native Elegoo-Folge vom 03.10.2026, 09:38 UTC, bestätigt den Handlungsweg an der wirklichen Stützabweichung 4497,417338/5908,736634 mm³: Informationszeile ohne neuen Knopf, Warnzeile mit sichtbarem „Druckeinstellungen öffnen“, Klick öffnet den echten Druckdialog, sichtbares „Schließen“ führt zurück. Kein weiterer Slicerprozess und keine veränderten Vergleichszeilen. Die betroffenen Handlungs- und Befundprüfungen bestehen mit 267 Fällen. Damit umfasst die unabhängige Fallmatrix 24 Gruppen.
+
+Gemeinsames Entwicklungstor: 20767 passed, 34 skipped in 796.04s (0:13:16); Ruff, Format, mypy und Suite jeweils Exit 0. Der Abschlusscommit trägt diesen Archivabschnitt und übernimmt den zwischenzeitlichen Slicerstand 5a7ab992f. Messdateien und vollständige Fallmatrix liegen zusätzlich unter `tmp/schichtanalyse-gegenproben-20261003/`; die tragenden Ergebnisse stehen vollständig in diesem Abschnitt. Keine Release-Abnahme behauptet.
+
+**Gemeinsamer Stand nach dem Nachziehen von A:** C-Abschluss `f7f71b17e` und Materialteil `948c54cd8` mit `27e0debd9` (RM-475/476/479) zusammengeführt. Beide Ergänzungen der Plattenvorbereitung bleiben erhalten: Exportnetze für die Bauraumprüfung und endgültige Writer-Werte für die Gegenprobe. Übersetzungen semantisch dreiseitig vereinigt, beide Testblöcke übernommen. Nach dem wegen weitergelaufenem main abgewiesenen Push: 1491 betroffene Kerntests bestanden, 4 übersprungen, 975 Fenster-/Rendererfälle abgewählt; Ruff, Format und mypy jeweils Exit 0, Dokumentationsprüfung 77 bestanden/4 übersprungen. Das vorstehende vollständige Tor gehört zum C-Abschluss vor diesem Merge; der gemeinsame Stand ist durch diese gezielten Nachprüfungen belegt.
+
+Erneute echte Oberflächenabnahme am gemeinsamen Stand am 03.10.2026, 09:56–09:58 UTC: Die korrigierte Stützdichte verändert erwartungsgemäß die Druckdatei. Prusa MK4S jetzt 4505,141380 mm³ intern gegen 7140,946953 mm³ G-Code; Elegoo CC2 4497,417338 gegen 5638,776696 mm³. Beide Abweichungen werden sichtbar ausgewiesen, die Modelllagen bleiben 125/125. Prusa-Folge mit Stützen aus und Raster 0,25/0,12 mm: 0/0 mm³ und 101/101 Lagen ersetzen auch die vorherige echte Warnung. Abbruch des dritten tatsächlich gestarteten Slicerprozesses: 0,225234 s, kein neues Ergebnis und gültige Befunde erhalten. Elegoo-Warnknopf öffnet den echten Druckdialog, Schließen führt unverändert zurück; keine zusätzliche Slicerausführung. Beide nativen Folgen Exit 0. Diese Nachmessungen ersetzen die früheren G-Code-Mengen als Werte des gemeinsamen Stands; die interne Stützmenge bleibt eine Schätzung.
+
+## RM-475: Die Stützdichte geht als Lücke an Orca und PrusaSlicer, 0 % ist nicht mehr die dichteste Stütze (03.10.2026)
+
+<a id="rm-475-die-stützdichte-geht-als-lücke-an-orca-und-prusaslicer-0--ist-nicht-mehr-die-dichteste-stütze-03102026"></a>
+<a id="rm-475"></a>
+
+**RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2,
+  PrusaSlicer 2.9.6, Weg Bibliothek (Vorwahl wie der Druckdialog). Orca und PrusaSlicer führen den
+  Stützabstand als **Lücke** zwischen zwei Linien, Solidon schreibt `Bahnbreite / Dichte` als
+  Teilung. Gemessen am Pilz (CC2, Schicht z = 10 mm): 15 % → 12 %, 50 % → 31 %, und 0 % ergibt
+  die dichteste Stütze (28 922 mm³, 42,4 g statt 13,5 g, 62,7 statt 23,2 min), während Solidons
+  Schätzung 0 mm³ nennt. Die Rücklesung des Herstellerwerts irrt ebenso (Orca Kobra 2:
+  `support_base_pattern_spacing = 0.2` als 100 % statt 66 %). Trifft jeden Drucker der Familien
+  `orca` und `prusa` mit Stützen; am Kobra 2 gleich gemessen. Keine Regression gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:1175–1197` (`_support_spacing`),
+  `app/core/export/manufacturer.py:783–797` und `:1285–1290` (Rücklesung),
+  `app/core/slice/estimate.py:100–134`, Feld `app/ui/print_settings_dialog.py:807–817`.
+  **Fix (allgemein):** `spacing = s / d − s` und zurück `d = s / (spacing + s)` mit `s` =
+  Linienabstand der Stützbahn; 0 % ist als Abstand nicht darstellbar — keine Stützfüllung
+  schreiben oder das Feld auf den kleinsten darstellbaren Wert begrenzen und es im Dialog sagen.
+  **Abnahme:** je Familie ein Lauf mit 15 % und 50 %, gemessene Teilung gegen Bahnbreite / Dichte
+  (drei Drucker: CC2, Kobra 2, MK4S); Test `_support_spacing` gegen `_support_density` und die
+  Formel. Bauplan §28, §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G1), `gcode\rest\`.
+
+**Abschluss:** Nachgestellt am Stand `6b87ba235` (PrusaSlicer 2.9.6, MK4S, Pilz, Weg Bibliothek): 15 % schrieb `support_material_spacing = 3`, gemessene Teilung 3,36 mm; 0 % schrieb `0` und ergab 28 675 mm³ Stütze (62,5 min, 41,6 g). Ursache `5537ae25a4bf280530ad2b552c4506a9ca8d98ed`, enthalten in v0.1.1 bis v0.5.1: Beide Familien rechnen `d = s / (Lücke + s)`, Solidon schrieb die Teilung als Lücke.
+
+Der Fix schreibt `Lücke = s/d − s`, mit `s = Breite − Schichthöhe · (1 − π/4)` nach der Fließquerschnittsrechnung der Slicer. Eine ausdrücklich gewählte Dichte schreibt die verwendete Stützbahnbreite mit; Schichthöhe und Bahnbreite ziehen den Abstand nach. Die Rücklesung berücksichtigt native Stützbreiten samt Auto- und Prozentwerten. Das ganzzahlige Prozentfeld beginnt bei 1 %; gespeicherte Nullwerte bleiben erhalten, eine aktive Übergabe mit 0 % fordert eine neue Wahl oder das Abschalten der Stützen. Sechs signifikante Stellen vermeiden einen falschen Abweichungsbefund durch die G-Code-Rundung.
+
+Claudes uncommittierter Anfang wurde übernommen und korrigiert: Er hatte Bahnbreite statt `s` im Zähler und änderte gespeicherte 0 % still auf 5 %. Die unabhängige Gegenprobe ergab acht rote Fälle gegen diesen Zwischenstand; am ursprünglichen Stand waren zehn Regressionen rot. Die Formel-, Rücklese-, Nullwert- und Profiltests sind jetzt grün; der vollständige Lauf von `test_print_settings.py` und `test_manufacturer.py` meldete 613 bestanden, 4 übersprungen, 6 abgewählt, Exit 0.
+
+Der betroffene Lauf meldete 20 213 bestanden, 88 übersprungen, 3710 abgewählt und zwei Fehler außerhalb der Änderung, Exit 1: Hilfsprozess-Zählung in `test_kernel_process.py` und ein `TypeError` aus Pythons `ast.iter_child_nodes` in `test_toolchain.py`. Die unmittelbare isolierte Wiederholung beider Fälle bestand (2 bestanden in 9,45 s, Exit 0). Der erste Lauf bleibt als rot dokumentiert; das vollständige Entwicklungstor vor der Zusammenführung ist gesondert zu fahren. Ruff und Formatprüfung bestanden, mypy prüfte 337 Quelldateien ohne Befund. Protokolle: `%TEMP%/solidon-A-475-affected.txt`, `solidon-A-475-recheck.txt` und `solidon-A-475-mypy.txt`.
+
+Abnahme mit echtem Pilz, Gitterstütze, jeweils 15 und 50 %: ElegooSlicer 1.5.3.5 / CC2 und OrcaSlicer 2.4.2 / Kobra 2 schreiben Breite 0,42 mm, Lücke 2,13678 bzw. 0,37708 mm; PrusaSlicer 2.9.6 / MK4S schreibt Breite 0,45 mm, Lücke 2,30678 bzw. 0,40708 mm. Die daraus unabhängig berechneten Dichten sind 15,00003 bzw. 49,99998 %. Gemessene Teilungen in einer mittleren Stützschicht: CC2 und Kobra 2 jeweils 2,51 / 0,75 mm (Soll 2,51386 / 0,75416), MK4S 2,71 / 0,81 mm (Soll 2,71386 / 0,81416). Alle sechs Läufe erzeugen G-Code. Rohdaten, Kommandos, Protokolle und Datei-Prüfsummen: `F:\solidon-review-reports\gcode\rest\codex_A_475_final\`; Messung `support_measurements.json` mit Auswertung der Extrusionswege, relativen/absoluten E-Werten und G92. Changelog in sechs Sprachen, weil Kunden veröffentlichter Versionen betroffen sind. Commit: „Die eingestellte Stützdichte erreicht PrusaSlicer und die Orca-Familie“.
+
+Commitnachweis zu RM-475: `d81677165`.
+
+## RM-476: Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten (03.10.2026)
+
+<a id="rm-476-mehrfarbdrucke-beginnen-den-reinigungsturm-innerhalb-kleiner-druckbetten-03102026"></a>
+<a id="rm-476"></a>
+
+**RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, OrcaSlicer 2.4.2, ElegooSlicer 1.5.3.5,
+  Bambu Studio 02.08.02.61, Modell `tests/data/meshes/colored.3mf` (zwei Farben). Ohne
+  `wipe_tower_x/y` bleibt die Konsolenvorgabe 15/220 stehen: Kobra 2 (220 mm) Turm bis y 236,3
+  (Orca) bzw. 258,3 (Elegoo), A1 mini (180 mm) bis y 246,8 (Orca) bzw. 242,6 (Bambu). Solidon
+  meldet danach `gcode.off_the_bed`, die Druckdatei ist unbrauchbar. Auf 256-mm-Betten passt es
+  zufällig. Für Creality Print setzt Solidon die Position bereits selbst. Keine Regression
+  gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:4892–4975` (`_creality_cli_tower_position`, nur
+  `crealityprint`), `:170–171`; `slicer_keys.py` schreibt `wipe_tower_x/y` für keine Familie.
+  **Fix (allgemein):** Startposition des Turms als Regel je Programm der Orca-Familie, immer so,
+  dass Turmfläche plus Rand im nutzbaren Bett liegt.
+  **Abnahme:** je Programm (Orca, Elegoo, Bambu, Creality) zwei Farben auf einem 180- und einem
+  220-mm-Bett, Turm im Bett, kein `gcode.off_the_bed`. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G2), `gcode\rest\`.
+
+**Abschluss:** Am Stand nach RM-475 mit `colored.3mf` und zwei tatsächlich benutzten Werkzeugen nachgestellt: Ohne Startkoordinaten reicht der Turm auf dem Kobra 2 bis y = 236,336 mm (Orca) beziehungsweise 258,290 mm (Elegoo), auf dem A1 mini bis 246,757 mm (Orca/Elegoo) beziehungsweise 242,643 mm (Bambu). Der bisherige Helfer initialisierte ausschließlich Crealitys bekannten Fenstermodus. Die enge Regel stammt aus `78884688ea2d0c02900d0c8a8849dced37c6aa68`, enthalten in v0.4.1 bis v0.5.1; die Mehrfarbübergabe besteht bereits seit `47da07a18b0e5e1bf6ed7ada553621a982fb4ddd` (v0.1.1 bis v0.5.1).
+
+Die gemeinsame Initialisierung der vier Orca-Programme ergänzt fehlende Koordinaten auf rechteckigen Betten für 0 und 90 Grad: unten mit der nativen Brimbreite zusätzlich zum Herstellerabstand von 15 mm. Fehlt die Brimangabe, gilt der belegte Programmstandard 3 mm. Eine bekannte Breite, die mit Rand nicht passt, bekommt keine erfundene Position; unbekannte Konturen, Winkel oder automatische Brimwerte bleiben beim Slicer. Gespeicherte Positionen aus Maschine, Prozess oder 3MF bleiben erhalten, ebenso Crealitys vorhandener Platzierungsmodus. Die tatsächliche Fläche einschließlich Rippen und variabler Tiefe wird weiterhin am G-Code geprüft.
+
+Gegenprobe vor dem Fix: 16 von 16 Positionsfällen rot. Die zusätzliche Matrix ohne Brimangabe war gegen den ersten Zwischenstand ebenfalls in 16 Fällen rot; explizite Brimwerte waren in 16 Fällen grün. Danach 89 Turmprüfungen bestanden, 499 abgewählt, Exit 0. Der erste reale Zwischenstand bestand vier von acht Kombinationen und machte die fehlenden Programmstandards sichtbar; sein Nachweis bleibt unter `codex_A_476_final` erhalten.
+
+**Gemessene Abnahme:** Alle acht Läufe des korrigierten Standes erzeugen G-Code mit Werkzeugen 0 und 1 und ohne `gcode.off_the_bed`. Tatsächliche XY-Grenzen der extrudierten Türme in mm:
+
+| Programm | Bett | X | Y |
+|---|---|---|---|
+| OrcaSlicer 2.4.2 | A1 mini, 180 mm | 15,332–45,124 | 14,799–44,757 |
+| OrcaSlicer 2.4.2 | Kobra 2, 220 mm | 14,470–81,530 | 12,564–34,336 |
+| ElegooSlicer 1.5.3.5 | A1 mini, 180 mm | 15,332–45,124 | 14,799–44,757 |
+| ElegooSlicer 1.5.3.5 | Kobra 2, 220 mm | 13,384–82,616 | 12,110–56,290 |
+| Bambu Studio 02.08.02.61 | A1 mini, 180 mm | 15,691–41,329 | 14,807–40,643 |
+| Bambu Studio 02.08.02.61 | Kobra 2, 220 mm | 14,943–46,032 | 14,921–44,573 |
+| Creality Print 7.3 | Prusa MINI, 180 mm | 11,601–84,399 | 11,601–30,299 |
+| Creality Print 7.3 | K1, 220 mm | 89,301–112,199 | 181,801–204,699 |
+
+Bambu/Kobra und Creality/MINI wurden für die Zweifarbenabnahme ausschließlich mit `enable_prime_tower=1` gerechnet, weil das native Profil ihn abschaltet. Crealitys mitgeliefertes A1-mini-Profil scheitert unabhängig zunächst an `tree_support_wall_count=-1`, nach kontrollierter Korrektur dieses inaktiven Wertes an unbekannten Bambu-Wechselcodevariablen; das Kobra-Profil an fehlendem `G92 E0` im Schichtcode. Diese Ansätze sind erhalten, die Positionsabnahme verwendet deshalb die passenden nativen MINI- und K1-Profile mit unveränderten Start- und Wechselcodes. Installierte Profile sind vor und nach der Probe hashgleich. Diese fremden Profilfehler werden nicht als behoben behauptet.
+
+Rohdaten, Kommandos, Herstellerprofil-Prüfsummen und vollständige Extrusionsgrenzen: `F:\solidon-review-reports\gcode\rest\codex_A_476_final_defaults\rm476-summary.json`; ursprüngliche und kontrollierte Gegenproben in `codex_A_476_baseline`, `codex_A_476_controlled_baseline`, `codex_A_476_mini_baseline` und `codex_A_476_k1_baseline`. Changelog in sechs Sprachen, weil veröffentlichte Versionen Kunden mit kleinen Druckbetten betreffen. Commit: „Mehrfarbdrucke beginnen den Reinigungsturm innerhalb kleiner Druckbetten“.
+
+Der breite betroffene Lauf brach bei 71 % nativ mit `0xC0000005` ab, ohne Python-Stapel und ohne Zusammenfassung; er gilt als fehlgeschlagen (`%TEMP%/solidon-A-476-affected.txt`). Das anschließende vollständige Entwicklungstor am unveränderten Stand bestand mit 20 520 Tests, 61 übersprungen, 507,44 s und Exit 0 (`solidon-A-476-suite.txt`). Ruff, Formatprüfung und mypy mit 337 Quelldateien sind grün; die Dokumentations- und Changelogprüfung bestand mit 77 Tests, 4 übersprungen. Fenster-, Renderer- und Leistungsläufe bleiben dem Release vorbehalten.
+
+Commitnachweis zu RM-476: `9bccaf23d`.
+
+## RM-479: Solidon meldet fehlenden Platz vor dem Slicerstart (03.10.2026)
+
+<a id="rm-479-solidon-meldet-fehlenden-platz-vor-dem-slicerstart-03102026"></a>
+<a id="rm-479"></a>
+
+**RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` (180 × 180 mm).
+  Besteckeinsatz (231 × 231 mm) und Siebhalter (sieben Teile, zusammen zu groß): Rückgabe
+  `0xC0000409`, Solidon: „abgestürzt … prüfen Sie Drucker- und Filamentprofile“, obwohl der
+  Export vorher `arrange.out_of_build_volume` bzw. `arrange.off_the_plate` meldet. Erklärt 64 der
+  108 SuperSlicer-Abstürze der Codex-Matrix (u. a. Filament-Regal, Bohrerhalter, Küchenhalter).
+  **Stellen:** `app/core/export/handover.py:5136–5154` (Absturzsatz vor jeder Ursache),
+  `:5751–5783` (`_outside_the_volume` kennt nur die Höhe), Anordnungsprüfung in
+  `app/core/export/writer.py`.
+  **Fix (allgemein):** Passt ein Teil in keiner Drehung um Z, hält die Übergabe mit derselben
+  Meldung wie für die Höhe an (Teilen, Verkleinern, anderer Drucker); nach einem Absturz zuerst
+  Solidons bekannte Ursache nennen, „Profile prüfen“ nur ohne.
+  **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
+  Lauf, kein Slicerstart. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
+
+**Abschluss:** Die fehlende Vorprüfung besteht seit `f4f6e639d22074864862abb154cf6b9111d4dd68`, enthalten in v0.5.1: `slice_model` prüfte Dateien und Programm und startete anschließend den Slicer. Die Höhenmeldung aus `5063fc9f5c91510fa4e1a7efc99a2d6f935ad8b8` reagierte erst auf dessen Ausgabe. Drei tatsächliche SuperSlicer-2.5.59.13-Läufe am MINI mit 180 × 180 mm endeten jeweils nach einem Prozessstart mit `0xC0000409`; diese Zuordnung erklärt Solidons fehlende Prüfung, nicht die interne Ursache im fremden Programm.
+
+`slice_model` prüft jetzt vor Arbeitsordner, Profil und Prozess die Höhe, die mögliche Grundfläche nach Z-Drehung und bei mehreren Teilen die vorhandene Anordnung samt Packprobe. `_prepare_plate` trägt genau die gewählte Platte als `PlateRun.meshes` weiter, mit derselben Exportvernetzung wie `write_assembly`. Ohne diesen Netzsatz verwenden direkte Aufrufer die vorhandenen begrenzten STL-/3MF-Leser oder Curas Netzliste; Hilfskörper sind keine Druckteile. Originaldateien und Szenennetze bleiben unverändert. Eine fehlende Packanordnung wird als Ergebnis der vorhandenen Heuristik beschrieben, nicht als Beweis physischer Unmöglichkeit. Belegte Bauraumtexte haben auch nach einem fremden Absturz Vorrang vor der allgemeinen Absturzmeldung.
+
+Test zuerst: Am ursprünglichen Produktweg waren neun Absagefälle rot und sechs Gegenkontrollen grün. Die beiden Anschlussprüfungen für Exportvernetzung und Arbeiterweitergabe waren ebenfalls rot. Am integrierten Stand bestehen 22 gezielte Fälle; die Gegenprobe mit allein ausgeschalteter Vorprüfung lässt alle zwölf Absagefälle rot werden (STL, 3MF, Cura und vorbereiteter Netzsatz). Verschobener 40-mm-Würfel und diagonal passender 200 × 20-mm-Stab dürfen weiterhin den Slicer starten. Die vollständigen betroffenen Module einschließlich Übersetzungen, Paketgrenzen und Unterlagen bestanden mit 909 Tests, 8 übersprungen, 285 abgewählt, Exit 0. Mypy prüfte 337 Quelldateien ohne Befund.
+
+**Gemessene Abnahme des Produktcodes:** `codex_A_479_final` meldet bei allen drei Originalmodellen die Ursache und passende Handlungen, jeweils **null Slicerstarts**. Besteckeinsatz: 231,22993 × 231,22993 × 160 mm, Übermaß 51,22993 mm; Filament-Regal: nur Platte 0 / `obj_16`, 230 × 235 × 5 mm, Übermaß 55 mm. Beide bieten Teilen, Verkleinern und Druckerwahl. Die sieben Siebhalterteile passen einzeln, finden aber gemeinsam keine Anordnung auf einer MINI-Platte; die vorhandene Packprobe findet zwei gültige Platten mit Zuordnung `[0, 0, 0, 1, 1, 1, 1]`. Die Meldung bietet Anordnen und Druckerwahl. Alle Handlungsschlüssel wurden im tatsächlichen Lauf mitgeschrieben und geprüft; keiner bietet Profilprüfung an. Quellen sind vor und nach der Abnahme hashgleich.
+
+Belege: `F:\solidon-review-reports\gcode\rest\codex_A_479_baseline\rm479-summary.json` und `codex_A_479_final\rm479-summary.json`, jeweils mit drei Einzeldateien, Quellprüfsummen und Prozesszählung. Gegenproben und Modullauf: `%TEMP%/solidon-A-479-negative.txt`, `solidon-A-479-focused.txt`, `solidon-A-479-modules.txt`. Changelog in sechs Sprachen, weil die frühe Meldung Kunden veröffentlichter Versionen hilft. Commit: „Solidon meldet fehlenden Platz vor dem Slicerstart“.
+
+Die unabhängige Prüfung fand zwei unzulässige Absagen: Das Winkelraster verfehlte einen passenden 0,5°-Winkel, und deaktivierte 3MF-Instanzen zählten als Druckteile. Sechs neue Fälle waren zuerst rot. Die harte XY-Absage zieht jetzt die mathematische obere Schranke des Rasterfehlers ab: `2 D sin(Schritt/4)`, mit XY-Diagonale `D` als oberer Durchmessergrenze. Eine erfolglose Konturprobe mit dem Kennwert `EPS_GEOM` belegt ebenfalls keine unmögliche Größe. Der begrenzte 3MF-Leser überspringt ausschließlich für die Druckvorprüfung `printable=0/false`; der normale Import behält diese Instanzen. Die korrigierte Probe umfasst 27 grüne Fälle; fünf unabhängige Gegenkontrollen erreichen weiterhin den Prozessaufruf. Der anschließende Modullauf einschließlich Import und Druckkontur bestand mit 1.102 Prüfungen, 8 übersprungen, 16 abgewählt und Exit 0.
+
+Die Handlungen benutzen die Objekt-IDs aus demselben eingefrorenen Plattenauftrag wie die Netze. Ohne eindeutige Zuordnung entfällt die objektbezogene Handlung; die aktuelle Auswahl wird nicht ersatzweise geändert. Teilen, Verkleinern und Anordnen werden nach dem modalen Druckdialog ausgeführt. Auftrag und Szene müssen vor der Meldung, beim Klick und nach Dialogabschluss noch übereinstimmen. Die fünf Gegenproben für veraltete Aufträge waren vor der Absicherung rot; alle 58 fensterfreien Anschlussprüfungen bestehen danach. Fensterprüfungen wurden nicht ausgeführt.
+
+Die reale Abnahme wurde nach diesen Korrekturen unter `codex_A_479_final_review` wiederholt: dieselben drei Originalmodelle, passende Handlungsschlüssel, **null Slicerstarts**, unveränderte Quellprüfsummen. Der erste breite Lauf wurde wegen der konkreten Reviewfunde beendet (Exit −1) und gilt nicht als bestanden; sein Protokoll bleibt unter `%TEMP%/solidon-A-479-affected.txt` erhalten.
+
+Der korrigierte breite Lauf über `affected_tests.py --run` endete mit 20.417 bestandenen Prüfungen, 88 übersprungen und vier Fehlern (Exit 1, 687,62 s). Ein eigener Anschlussfehler war die fehlende Beschriftung von `part_index`; sie ist ergänzt, der Schlüssel bleibt in der Fehlermeldung verborgen. Drei Prüfungen von Unterprozess-Zusammenfassungen erbten die hier gesetzte Parallelisierung über `PYTEST_ADDOPTS`; die erwarteten Abwahlzahlen fehlen in der xdist-Ausgabe. Ohne diese Umgebungsoption bestehen alle sechs gezielt ausgewählten Beschriftungs- und Unterprozessprüfungen über `affected_tests.py --run` (18,18 s, Exit 0). Die Tests selbst wurden dafür nicht verändert. Belege: `%TEMP%/solidon-A-479-affected-final.txt` und `solidon-A-479-affected-repair.txt`. Ruff, Format und mypy (337 Quelldateien) sind grün; nach den Abschlussnachweisen bestehen die Dokumentations- und Changelogprüfungen mit 59 bestanden, 4 übersprungen. Das gemeinsame Entwicklungstor nach dem Merge bleibt der Nachweis vor dem Push.
+
+Commitnachweis zu RM-479: `c87ab91d3`.
+
+Die anschließende Folgenprüfung ergänzt drei Absicherungen: Zwei zuerst rote
+Fälle unterdrücken eine verspätete Bauraummeldung nach Abbruch im Arbeiter und
+vor der Anzeige. Drei weitere zuerst rote Fälle prüfen den Abbruch unmittelbar
+vor und nach der Packprobe, auch wenn sie Erfolg meldet. Die ursprüngliche
+Verkleinerung über Nennmaße ließ einen 231-mm-Körper auf einem runden
+220-mm-Bett weiterhin überstehen; bei 150 mm nutzbarer statt 220 mm nomineller
+Höhe vergrößerte sie einen 180-mm-Körper sogar auf 217,8 mm. Die Handlung
+„Verkleinern …“ öffnet deshalb hier den vorhandenen Skalierdialog am ganzen
+gebundenen Körper. Eine vorher gewählte Teilfläche darf nicht unbemerkt zur
+Merkmalbearbeitung führen. Sieben zuerst rote Fälle und drei Gegenkontrollen
+prüfen die Auswahl, den wirklichen Dialogeinstieg sowie gelöschte, veraltete
+und beschäftigte Zustände. Danach bestehen 74 fensterfreie Druckdialogfälle;
+Fenster wurden nicht erzeugt. „Anordnen“ wirkt auf alle Projektteile, was die
+Meldung nun ausdrücklich sagt. Die echte History-Gegenprobe stellt mit einem
+Undo alle drei Körper samt ihren ursprünglichen Platten und Netzen wieder her.
+
+Das erste gemeinsame Tor mit `origin/main` bei `5a7ab992f` bestand mit
+20.727 Prüfungen und 87 übersprungen, Exit 0 in 862,61 s; Ruff, Format und
+mypy (337 Dateien) ebenfalls Exit 0. Die erneute reale Abnahme am selben
+Merge-Stand bestätigt RM-475 mit sechs Druckdateien (maximal 0,552 %
+Teilungsabweichung), RM-476 mit acht Druckdateien und unveränderten
+Turmgrenzen im Bett sowie RM-479 mit drei passenden Absagen und null
+Slicerstarts. Belege: `codex_A_batch1_real.md` im Scratchpad und die dort
+genannten `integration-manifest.json` mit Quell- und Profilprüfsummen.
+Die nach diesem ersten Tor ergänzten Abbruch- und Bedienkorrekturen erhalten
+vor dem Push einen eigenen vollständigen Torlauf.
+
+Dieser Torlauf ist abgeschlossen: **20.741 bestanden, 87 übersprungen,
+Exit 0**, 1.072,63 s (`%TEMP%/solidon-A-batch1-followups-suite.txt`). Ruff,
+Format (1.080 Dateien) und mypy (337 Quelldateien) ebenfalls Exit 0. Mypys
+Eingrenzung der Abbrucheigenschaft über einen fremden Aufruf hinweg erforderte
+am Schleifenanfang den vorhandenen Vertrag `raise_if_cancelled()`; der
+bestehende Abbruchzweig fängt ihn wie zuvor ab. Die 74 fensterfreien
+Druckdialogfälle bestehen auch mit dieser endgültigen Schreibweise.
+Der parallel gefahrene betroffene Satz endete mit 6.180 bestanden,
+21 übersprungen und einem `KeyError: helper:display_simplify` im
+Hilfsprozess-Zählertest (Exit 1); dieser Fall bestand im vollständigen Tor.
+Beide Ausgänge bleiben getrennt dokumentiert, der rote Lauf gilt nicht
+nachträglich als grün.
+
+Die anschließende vollständige Wiederholung von `test_kernel_process.py`
+über `affected_tests.py --run` besteht mit **144 Prüfungen, einer
+Releaseprüfung abgewählt, Exit 0**, 30,98 s. Der Abschlussnachweis aus
+Roadmap-, Karten- und Changelogprüfungen besteht mit 77 Prüfungen und vier
+übersprungenen Plattformfällen. Protokolle: `solidon-A-batch1-kernel-repeat.txt`
+und `solidon-A-batch1-final-docs.txt` unter `%TEMP%`.

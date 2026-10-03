@@ -32,6 +32,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cura usa los límites de cambio brusco de velocidad del perfil, con valores separados para paredes, relleno y primera capa.
 - Si Cura tiene otra impresora seleccionada, el envío indica ambas y muestra dónde adoptar la selección de Cura.
 - Corregido un cierre inesperado de ElegooSlicer y OrcaSlicer al laminar modelos multicolor con soportes de rejilla.
+- Tras laminar, Solidon también compara el material de soporte y las capas del modelo por placa. El informe muestra la estimación interna y los valores del archivo de impresión.
+- La comparación de material considera solo el modelo impreso. La purga se muestra por separado y se indica si su cantidad no puede leerse por completo.
 - El análisis del espacio necesario para soportes es mucho más rápido en modelos huecos y conserva los contornos finos.
 - En piezas superpuestas, el análisis de impresión ya no cuenta el aire encerrado como material. También mejora la detección de voladizos y soportes necesarios.
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
@@ -65,6 +67,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
 - También con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte funcionan *Orientar para imprimir*, *Girar* y *Trasladar*. El cuerpo sigue exacto.
 - Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
+- PrusaSlicer y la familia Orca respetan la densidad de soporte elegida. El campo empieza en 1 %. Para imprimir sin soportes, elija «Ninguno».
+- En impresiones multicolor con OrcaSlicer, ElegooSlicer, Bambu Studio y Creality Print, la torre de purga recibe una posición inicial adaptada al tamaño de la cama.
+- Las piezas demasiado grandes se indican antes de iniciar el slicer. Si no se encuentra sitio para todas en una placa, puede distribuirlas en varias placas.
 
 ### Taladros, ranuras y división
 

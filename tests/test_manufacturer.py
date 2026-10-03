@@ -482,7 +482,10 @@ def test_the_base_is_read_back_from_the_manufacturers_profile(
     assert base.support.style == "none"
     assert base.support.threshold_angle == pytest.approx(60.0), "30 gegen die Waagerechte"
     assert base.support.xy_gap == pytest.approx(0.35)
-    assert base.support.density == pytest.approx(0.42 / 2.1)
+    # RM-475: Die Zahl ist die Lücke zwischen zwei Linien; zur Teilung kommt
+    # der Linienabstand (Breite - Höhe * (1 - pi/4)) dazu.
+    strand = 0.42 - 0.2 * (1 - math.pi / 4)
+    assert base.support.density == pytest.approx(strand / (2.1 + strand))
     assert base.retraction.avoid_crossing_walls is False
     assert base.retraction.z_hop == pytest.approx(0.4), "nil im Filament: der Wert der Maschine"
     assert base.retraction.length == pytest.approx(0.8)
@@ -2228,7 +2231,10 @@ def test_prusas_bundle_is_read_back_like_the_orca_family(prusa_bundle: Path) -> 
     assert base.support.style == "none", "nur an Verstärkern stützt nichts"
     assert base.support.threshold_angle == pytest.approx(55.0), "35 gegen die Waagerechte"
     assert base.support.xy_gap == pytest.approx(0.36), "80 % der Außenwand"
-    assert base.support.density == pytest.approx(0.45 / 2.0)
+    strand = 0.45 - 0.2 * (1 - math.pi / 4)
+    assert base.support.density == pytest.approx(strand / (2.0 + strand)), (
+        "die Lücke plus Linienabstand (RM-475)"
+    )
     assert base.adhesion.kind == "none", "die Spüllinie steht im Startcode"
     assert base.retraction.length == pytest.approx(0.8), "das Filament überstimmt"
     assert base.retraction.z_hop == pytest.approx(0.2), "nil: der Wert des Druckers"

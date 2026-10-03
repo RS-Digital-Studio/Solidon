@@ -594,6 +594,10 @@ def adhesion_kinds(kind: str) -> frozenset[str]:
     return frozenset({kind}) & frozenset(ADHESION_PATHS)
 
 
+#: Kleinster positiver Wert im ganzzahligen Prozentfeld. Null lässt sich in
+#: PrusaSlicer und der Orca-Familie nicht als Stützfüllung schreiben (RM-475).
+LEAST_SUPPORT_DENSITY: Final = 0.01
+
 #: Die Detailwerte der Stützen — sie wirken nur, wenn Stützen gedruckt werden.
 SUPPORT_DETAILS: Final = (
     "support.placement",

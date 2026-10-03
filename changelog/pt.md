@@ -31,6 +31,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.
 - Se estiver selecionada outra impressora no Cura, a entrega identifica ambas e indica onde adotar a escolha do Cura.
 - Corrigida uma falha do ElegooSlicer e do OrcaSlicer ao preparar modelos multicoloridos com suportes em grelha.
+- Após fatiar, Solidon também compara o material de suporte e as camadas do modelo por placa. O relatório mostra a estimativa interna e os valores do ficheiro de impressão.
+- A comparação de material considera apenas o modelo impresso. A purga aparece separadamente, com indicação quando a quantidade não pode ser lida por completo.
 - A análise do espaço necessário para suportes é muito mais rápida nos modelos ocos e preserva os contornos finos.
 - Nas peças sobrepostas, a análise de impressão deixa de contar o ar fechado como material. Também melhora a deteção de saliências e dos suportes necessários.
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
@@ -64,6 +66,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
 - Também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte funcionam *Orientar para impressão*, *Rodar* e *Deslocar*. O corpo continua exato.
 - Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
+- O PrusaSlicer e a família Orca respeitam a densidade de suporte escolhida. O campo começa em 1 %. Para imprimir sem suportes, escolha «Nenhum».
+- Nas impressões multicoloridas com OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, a torre de purga recebe uma posição inicial adequada ao tamanho da mesa.
+- As peças demasiado grandes são indicadas antes de iniciar o slicer. Se não for encontrado espaço para todas numa placa, pode distribuí-las por várias placas.
 
 ### Furos, furos oblongos e divisão
 

@@ -540,3 +540,140 @@ hatte das für die Orca-Familie gebaut; PrusaSlicer liest dasselbe aus
 `Metadata/Slic3r_PE.config`, und dort stand nichts. Für Cura bleibt es beim
 STL und der Kommandozeile — seine 3MF-Seite sitzt im Fenster, nicht in der
 Rechenmaschine.
+
+## 9. RM-465 — Material- und Zeitgegenprobe vom 03.10.2026
+
+Diese Messung begründet den Stand des offenen Punkts in `ROADMAP.md`.
+Die Materialkorrektur ist umgesetzt; die drei Zeitansätze sind diagnostische
+Rechnungen und wurden nicht als Zeitkorrektur ins Produkt übernommen.
+Die Akzeptanzgrenze bleibt 15 %. Der bisherige Zeitvergleich warnt weiterhin
+bei sieben von acht einfarbigen Standardfällen.
+
+### Modelle und Messweg
+
+- Würfel: `tests/data/meshes/cube_clean.stl`, 20 mm Kantenlänge,
+  8000 mm³ Volumen und 2400 mm² Oberfläche, SHA256
+  `1fafb705288b1c45ea766ac863a57f12a1da338c46d9c54f43f9a944876d9d28`.
+- Pilz: Roberts separat vorhandene `mushroom.stl`, SHA256
+  `55e189bf2f516cdfbeedb2bd787db34dae7268025d1f2cd56405725bb4b23f45`.
+  Die Originaldatei wurde nur gelesen und ist nicht Teil des Repositorys.
+  Für eine exakte Wiederholung dieser Referenz ist dieselbe Datei erforderlich.
+- Je Körper ein echter einfarbiger PLA-Lauf mit dem Standardprozess der
+  genannten Maschine: Creality/K1, Elegoo/Centauri Carbon 2,
+  PrusaSlicer/MK4S und SuperSlicer/MINI. Die Tabellen sind Momentaufnahmen
+  der lokal installierten Slicer; neue Versionen und Profile gesondert ausweisen.
+- Die interne Schätzung erhält Geometrie und aufgelöste Druckeinstellungen.
+  Der Vergleichswert kommt aus der anschließend erzeugten Druckdatei.
+  Kein gemessener Gesamtzeitwert fließt in die interne Schätzung ein.
+- Abweichung der Zeit: `(Schätzung − G-Code-Gesamtzeit) / G-Code-Gesamtzeit`.
+  Materialabweichung: absoluter Unterschied geteilt durch G-Code-Modellmasse.
+
+### Umgesetzte Materialtrennung
+
+Der Parser zählt bekannte Modellrollen, Stützen, Haftung, Spülung und
+unbekannte Rollen getrennt je Werkzeug. Nur vollständig zuordenbares
+Modellmaterial mit belegter Dichte dient dem Modellvergleich. Bedingte
+Firmwarezweige, Cutter-Wiederförderung und fehlende Materialdaten bleiben
+ausdrücklich unvollständig. Der bisherige Gesamtverbrauch und die Buchung
+des Filamentverbrauchs ändern sich nicht.
+
+| Slicer / Maschine | Körper | Schätzung Modell g | Druckdatei Modell g | Druckdatei gesamt g | Abweichung |
+|---|---|---:|---:|---:|---:|
+| Creality / K1 | Pilz | 5,5642 | 5,6404 | 5,6400 | 1,35 % |
+| Creality / K1 | Würfel | 3,4394 | 3,4835 | 3,4800 | 1,27 % |
+| Elegoo / CC2 | Pilz | 5,6090 | 5,7618 | 6,2900 | 2,65 % |
+| Elegoo / CC2 | Würfel | 3,4671 | 3,4767 | 4,0100 | 0,28 % |
+| Prusa / MK4S | Pilz | 5,7891 | 5,9916 | 6,0500 | 3,38 % |
+| Prusa / MK4S | Würfel | 3,5659 | 3,7220 | 3,7800 | 4,19 % |
+| SuperSlicer / MINI | Pilz | 5,7891 | 6,4186 | 6,4500 | 9,81 % |
+| SuperSlicer / MINI | Würfel | 3,5659 | 3,6972 | 3,7500 | 3,55 % |
+
+Sechs bereits vorhandene lesbare Farbdateien bestätigen die Trennung:
+Bambu 8,57 %, Creality 5,94 %, Elegoo 9,56 %, Orca 9,90 %, Prusa 0,49 %
+und SuperSlicer 2,86 % Modellmassenabweichung. Beispielsweise stehen bei
+Bambu 6,9742 g Modellmaterial 48,02 g Gesamtverbrauch gegenüber; die
+internen 6,3765 g werden ausschließlich mit dem Modell verglichen.
+Bei Cura ohne belegten Filamentdurchmesser beziehungsweise Dichte bleibt
+die Modellmasse unbekannt. Aus lesbaren Spülbewegungen allein wird keine
+vollständige Spülmenge behauptet.
+
+Die integrierte Gegenprobe über alle acht frischen Standarddateien und neun
+vorhandene reale Farb-/Stützdateien bestätigt unveränderte Gesamtmassen,
+Werkzeugbuchung, Stützmengen, Gesamt-Schichtzahlen und gemeldete Zeiten.
+Die Parser- und Anschlussregressionen liegen in `tests/test_gcode.py`,
+`tests/test_print_settings_ui.py` und `tests/test_ui.py`. Sie prüfen auch,
+dass ein späterer vollständiger Vergleich einen früheren Unbekannt-Befund
+im echten Berichtspfad ersetzt.
+
+### Ergebnis
+
+Die Mindestschichtzeit ist **keine garantierte Untergrenze** der tatsächlichen Schichtzeit. Ein Slicer bremst nur bis zum Mindestdrucktempo. Das ist am SuperSlicer-Pilz direkt belegt und erklärt den größten Fehler des schichtweisen Prototyps. Die Beschleunigungs- und Startanteile bleiben eine eigene Frage. Ein allgemeines, belegtes Zeitmodell innerhalb 15 % für alle acht Fälle wurde mit dieser Sonde nicht erreicht.
+
+### Schätzung aus Geometrie und Einstellungen
+
+Die diagnostische Rechnung verwendet die Flächenaufteilung des ersten Prototyps: Außenwand, innere Wände, volle Deck-/Bodenflächen und Füllung je Schicht. Der vorhandene angenommene Fahrweganteil von 25 % bleibt unverändert. Hinzu kommt eine obere Grenze der durch Bremsen erreichbaren Zeit:
+
+`max(geschätzte Schichtzeit, min(Mindestschichtzeit, geschätzte Bahnlänge / Mindestdrucktempo / 0,75))`.
+
+Die Mindesttempi wurden für diese diagnostische Sonde aus den Konfigurationskommentaren gelesen: `min_print_speed` = 15 mm/s bei SuperSlicer, 20 bei PrusaSlicer; `slow_down_min_speed` = 20 bei Elegoo und Creality. **Für produktive interne Schätzung müssen diese Werte aus dem gewählten Herstellerprofil kommen.** Der gemessene Zeitwert geht in keine Schätzung ein. `CoolingSettings` führt diesen Grenzwert derzeit nicht.
+
+| Slicer / Maschine | Körper | Erster Prototyp s | Mit Tempogrenze s | G-Code gesamt s | Abweichung der neuen Schätzung |
+|---|---|---:|---:|---:|---:|
+| Creality / K1 | Pilz | 1132,7 | 990,5 | 1150,9 | −13,94 % |
+| Creality / K1 | Würfel | 809,8 | 809,8 | 883,7 | −8,37 % |
+| Elegoo / CC2 | Pilz | 700,7 | 700,7 | 979,0 | −28,43 % |
+| Elegoo / CC2 | Würfel | 423,5 | 423,5 | 637,0 | −33,51 % |
+| Prusa / MK4S | Pilz | 1054,6 | 1054,6 | 1082,0 | −2,53 % |
+| Prusa / MK4S | Würfel | 637,8 | 637,8 | 755,0 | −15,52 % |
+| SuperSlicer / MINI | Pilz | 3931,0 | 3094,3 | 2702,0 | +14,52 % |
+| SuperSlicer / MINI | Würfel | 2229,5 | 2229,5 | 2275,0 | −2,00 % |
+
+Analytischer Bezug des Pilzstiels im SuperSlicer-Raster: Querschnitt 10 × 10 = 100 mm², 0,15-mm-Schicht; abgeschätztes Material 6,4269 mm³. Bei 0,45-mm-Bahnbreite ergibt das 95,2133 mm Bahnlänge. 15 mm/s erlauben 6,3476 s Materialauftrag, mit dem vorhandenen Fahrweganteil 8,4634 s. Ein hartes Maximum mit 15 s verlangt damit eine Abbremsung unter das zulässige Tempo. Beispielschicht 80 liegt bei z = 12,125 mm.
+
+### Unabhängige Lesung der vorhandenen Bahnen
+
+Die unabhängige Bahnauswertung liest die vorhandenen G0/G1-Bahnen und summiert Weg / Solltempo. E-only-Bewegungen werden ebenfalls gezählt. Das ist **eine Messung des G-Codes**, keine interne Vorhersage. Beschleunigung, Aufheizen und Maschinenmakros fehlen. G2/G3 werden gezählt, aber nicht zeitlich aufgelöst; daher nur die CC2-Werte (ein einzelner Endcodebogen) und die SuperSlicer-Werte (keine Bögen) als vergleichbare Belege verwenden. Die anderen vier Läufe werden wegen nicht zeitlich aufgelöster Bögen hier nicht für diesen Vergleich herangezogen.
+
+| Fall | Nominale Modellbahnzeit s | Gemeldete Gesamtzeit s | Mittlere Schicht Weg/F s |
+|---|---:|---:|---:|
+| CC2 Würfel | 427,4 | 637 | 4,09 |
+| CC2 Pilz | 731,8 | 979 | 4,02 |
+| SuperSlicer Würfel | 2097,4 | 2275 | 15,01 |
+| SuperSlicer Pilz | 2314,3 | 2702 | 7,03 |
+
+Der CC2-Prototyp trifft damit die nominale Modellbahnzeit bereits recht gut. Die fehlende Zeit steckt wesentlich außerhalb dieser Größe. Vor der ersten Modellschicht stehen im CC2-Würfel M73 P17 R8 und bei Gesamt637 s ungefähr110 s Startanteil; diese Quantisierung beweist keine exakte Startdauer. Auch nach dessen Abzug bleiben etwa100 s (Würfel) beziehungsweise137 s (Pilz) gegenüber Weg/F. Eine pauschale Erhöhung der Extrusionsmenge würde die bereits passende Materialbilanz verschlechtern.
+
+Der CC2-G-Code enthält je Schicht mehrere Rückzüge, automatische spiralförmige Z-Anhebung, Z-Absenken, wechselnde Beschleunigungen und bei den inneren Bahnen weitere Richtungswechsel. Ihre Dauer ist aus einem Volumenstrom oder der Schichtzahl allein nicht bestimmbar. Ohne eine belegte zusätzliche Bewegungsannahme oder eine unabhängig gelernte Maschinenzeit ist ein erfundener fester Aufschlag kein sauberer Abschluss von RM-465.
+
+### Weitere Grenze der verfügbaren Einstellungen
+
+`manufacturer._first_layer_speed` und `_prusa_first_layer_speed` führen absichtlich das schnellere von Wand- und Fülltempo in Solidons einem Feld. CC2: Wände50/Füllung105, Feld105 mm/s. MK4S: Wände40/Füllung100, Feld100 mm/s. Für einen Dialogwert ist diese Entscheidung dokumentiert; als einheitliches Erstschichttempo unterschätzt sie die Wände. Ebenso kennt die schnelle Schätzung keine getrennten Brücken-/Innenbrückenschichten: Der Pilz enthält diese im G-Code sichtbar.
+
+### Empfehlung für die Umsetzung
+
+1. Mindestdrucktempo aus derselben aufgelösten Herstellerprofilkette wie die Mindestschichtzeit übernehmen. Ohne belegten Wert keine garantierte Mindestdauer behaupten.
+2. Startzeit ausschließlich aus einem unabhängig belegten Startabschnitt einer früheren Druckdatei lernen; sie mit Herkunft und passender Maschinen-/Profilidentität getrennt halten.
+3. Die Schnittauswertung von der Mikrosekunden-Schätzung aus Volumen/Oberfläche getrennt halten. Die Aufteilung von Wänden/Decklagen ist nur im bereits geschnittenen Druckweg bezahlbar.
+4. Die verbleibende CC2-Lücke offen dokumentieren, solange Beschleunigungs- und Auto-Lift-Anteile keinen tragfähigen unabhängigen Ansatz haben. Keine Modell-/Slicerfaktoren und keine Änderung der 15-%-Schwelle.
+
+### Letzter Ansatz: Beschleunigung an den bekannten Wandkonturen
+
+Zusätzlich wurde jede aus dem Schnitt bekannte Wandmittellinie gebildet; gerade Fortsetzungen wurden vereinfacht. Es entstehen keine Füllbahnen und kein G-Code. Für jedes gerade Segment der Länge `L`, Tempo `v`, Beschleunigung `a` ist die maximale Bewegungszeit bei vollständigem Halt an beiden Enden:
+
+- `L/v + v/a`, falls `L >= v²/a` (Trapezprofil),
+- `2 sqrt(L/a)`, sonst (Dreiecksprofil).
+
+Die Differenz zu `L/v` ist eine **Obergrenze des Verlusts an diesem Segment** im vereinfachten konstanten Beschleunigungsmodell. Die untere Grenze beträgt null; Eckgeschwindigkeit, Ruckbegrenzung und Abweichungstoleranz kennt `PrintSettings` nicht. Für scharfe Winkel wird in der Praxis gebremst, aber der tatsächlich erlaubte Eckdurchlauf lässt sich ohne diese Angaben nicht bestimmen. Erste Schichten wurden bei dieser Schranke ausgelassen, weil ihre Beschleunigung abweicht.
+
+CC2-Profil: außen5000, innen10000 mm/s², außen160/innen200 mm/s vor Kühlung. Zwei Auswertungen: Profiltempo ergibt eine grobe obere Grenze; das um den zuvor berechneten Kühlfaktor verminderte Tempo ergibt eine engere, ihrerseits von der Kühlannahme abhängige Grenze.
+
+| CC2 | Wandverlust obere Grenze mit Profiltempo | Mit geschätztem gekühltem Tempo | Zeit inkl.110s Start und gekühlter oberer Grenze | Abweichung |
+|---|---:|---:|---:|---:|
+| Würfel | 20,592s | 10,792s | 544,309s | −14,55 % |
+| Pilz | 25,792s | 8,989s | 819,654s | −16,28 % |
+
+Nähme man die gröbere ungekühlte Obergrenze als festen Zuschlag, ergäben sich554,109s (−13,01 %) und836,457s (−14,56 %). Dass damit die Abnahme gerade grün wäre, begründet diese Wahl **nicht**: Die G-Code-Bahnen laufen sichtbar gekühlt. Der Ansatz an den vorhandenen Konturen reicht als belastbarer Punktwert nicht. Bei SuperSlicer-Pilz beträgt die gekühlte Wandobergrenze25,996s; ihr schlichtes Addieren verschiebt den bisher knapp grünen Vergleich wieder über15 %.
+
+Zusätzlich steckt Beschleunigung bereits im angenommenen25-%-Fahrweganteil. Ein separater Zuschlag kann ihn doppelt zählen. Die Wandrechnung ist deshalb nur als Fehlerschranke/Diagnose verwendbar, nicht ungeprüft als additiver Produktivfix.
+
+**Ohne neue Profilfelder implementierbar:** geometrische Wand-Beschleunigungsintervalle aus `speed.acceleration`/`outer_wall_acceleration`; schon vorhandener Rückzugsweg und -tempo als Teilkosten, wenn die Rückzugsanzahl unabhängig bekannt ist. **Nicht aus den vorhandenen Feldern bestimmbar:** tatsächliche Eckgeschwindigkeit, Füllweg-Anzahl und Wendepunkte, Mindestdrucktempo, getrenntes Erstschichttempo, Z-Achsen-Tempo/-Beschleunigung und Auto-Lift-Bahn. Eine exakte Restzeit würde eine Bewegungsplanung erfordern; ein solcher eigener Slicer gehört ausdrücklich nicht in Solidon.

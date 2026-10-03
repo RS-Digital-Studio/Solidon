@@ -31,6 +31,8 @@ it into `website/version.json`.
 - Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.
 - If Cura has a different printer selected, the handoff names both printers and shows where to adopt Cura’s selection.
 - Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
+- After slicing, Solidon also compares support material and model layers for each plate. The report shows the internal estimate alongside values from the print file.
+- The material cross-check compares only the printed model. Purge material is shown separately, with a note when the amount cannot be read in full.
 - Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
@@ -64,6 +66,9 @@ it into `website/version.json`.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 - On STEP surface models too, for turns of almost 180° and on partly recognised faces, *Orient for printing*, *Rotate* and *Move* now work. The body stays exact.
 - A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
+- PrusaSlicer and the Orca family now use the support density you set. The field starts at 1 %. To print without supports, choose “None”.
+- For multicolor prints in OrcaSlicer, ElegooSlicer, Bambu Studio and Creality Print, the prime tower now starts at a position suited to the bed size.
+- Oversized parts are reported before the slicer starts. If no arrangement fits all parts on one plate, you can choose to arrange them across several plates.
 
 ### Holes, slots and splitting
 

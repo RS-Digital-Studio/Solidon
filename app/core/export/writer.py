@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
@@ -1730,6 +1730,8 @@ def write_assembly(
     cancelled: CancelToken | None = None,
     for_window: bool = False,
     job: Sequence[SceneObject] | None = None,
+    comparison: Callable[[Sequence[tuple[SceneObject, MeshData, PrintSettings | None]]], None]
+    | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
@@ -1878,6 +1880,13 @@ def write_assembly(
             )
             for item in everywhere
         ]
+    # Die Gegenprobe liest genau diese Vernetzung und diese endgültigen
+    # Teilwerte, einschließlich der auf alle Teile verteilten Empfehlungen.
+    # Der Aufrufer arbeitet bereits neben Qt; kein zweiter Empfehlungsdurchgang.
+    if comparison is not None:
+        comparison(
+            tuple((entry, exported[entry.id], part_values[entry.id].effective) for entry in chosen)
+        )
     # Die Sperre nennt sich selbst, mit dem Namen des Teils
     # (``export.support_blocker``); ein zweiter Satz dazu wäre derselbe.
     findings += _part_setting_findings(

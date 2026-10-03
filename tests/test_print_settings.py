@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
@@ -18,9 +19,13 @@ from typing import Any, Final, Literal, get_args, get_origin, get_type_hints
 from xml.etree import ElementTree as ET
 
 import pytest
+import trimesh
 
-from app.core.errors import ExternalToolError, ValidationError
-from app.core.export import handover, slicer_keys, slicer_profiles
+from app.core import activation
+from app.core.build_area import size_excess
+from app.core.errors import AppError, ExternalToolError, OutOfBuildVolume, ValidationError
+from app.core.export import handover, slicer_keys, slicer_profiles, threemf
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.project import PROJECT_ENTRY, load, new_project, save
 from app.core.slice import advise, gcode
@@ -29,11 +34,45 @@ from app.core.types import (
     LayerInfo,
     MaterialSlot,
     Polygon,
+    Profile,
     SettingAdvice,
     SliceResult,
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+@pytest.mark.parametrize("phase", ("before", "after_success", "after_refusal"))
+def test_cancel_around_preflight_packing(monkeypatch: pytest.MonkeyPatch, phase: str) -> None:
+    from app.core.errors import OperationCancelled
+    from app.core.export import writer
+    from app.core.geom import prepare
+    from app.core.scene.cancel import CancelSignal
+
+    profile = profiles.make_profile("prusa-mini", "pla")
+    setup = handover.SlicerSetup(Path("prusa-slicer-console.exe"), "prusa")
+    token = CancelSignal()
+    called: list[bool] = []
+
+    def arrangement(_meshes: Any, _profile: Any) -> bool:
+        if phase == "before":
+            token.cancel()
+        return False
+
+    def pack(_meshes: Any, _profile: Any) -> Any:
+        called.append(True)
+        token.cancel()
+        findings = (
+            [SimpleNamespace(code="arrange.needs_more_plates")] if phase == "after_refusal" else []
+        )
+        return SimpleNamespace(findings=findings)
+
+    monkeypatch.setattr(writer, "arrangement_holds", arrangement)
+    monkeypatch.setattr(prepare, "arrange_on_bed", pack)
+    meshes = [_preflight_box((100.0, 100.0, 10.0)) for _index in range(2)]
+    with pytest.raises(OperationCancelled):
+        handover._check_plate(meshes, profile, setup, token)
+    assert called == ([] if phase == "before" else [True])
 
 
 def test_a_replaced_support_suggestion_explains_the_support_actually_offered() -> None:
@@ -1398,6 +1437,113 @@ def test_curas_zigzag_keeps_the_density_and_a_tree_carries_none() -> None:
     assert branches["support_wall_count"] == "1"
 
 
+#: Wie PrusaSlicer und die Orca-Familie den Platz einer Bahn rechnen
+#: (``Flow::rounded_rectangle_extrusion_spacing``): Breite - Höhe * (1 - pi/4).
+def _flow_spacing(width: float, height: float) -> float:
+    return width - height * (1.0 - 3.141592653589793 / 4.0)
+
+
+@pytest.mark.parametrize(
+    ("flavour", "key"),
+    [("prusa", "support_material_spacing"), ("orca", "support_base_pattern_spacing")],
+)
+@pytest.mark.parametrize("density", [0.15, 0.5, 1.0])
+def test_the_support_density_goes_to_prusa_and_orca_as_the_gap_between_lines(
+    flavour: str, key: str, density: float
+) -> None:
+    """RM-475: PrusaSlicer und die Orca-Familie führen den Stützabstand als
+    **Lücke** zwischen zwei Linien (``SupportParameters``: Teilung = Abstand +
+    ``support_material_flow.spacing()``). Solidon schrieb die Teilung
+    Bahnbreite / Dichte hinein; gedruckt wurde 15 % als 12 % und 50 % als 31 %
+    (G-Code-Gegenprüfung 02.10.2026). Geprüft wird die Formel des Slicers,
+    einschließlich seiner tatsächlich geschriebenen Stützbahnbreite."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.density",
+        density,
+    )
+    width, height = settings.layers.line_width, settings.layers.layer_height
+
+    gap = float(handover.as_mapping(settings, flavour)[key])
+
+    spacing = _flow_spacing(width, height)
+    assert spacing / (gap + spacing) == pytest.approx(density, abs=1e-5)
+    width_key = "support_material_extrusion_width" if flavour == "prusa" else "support_line_width"
+    assert float(handover.as_mapping(settings, flavour)[width_key]) == pytest.approx(width)
+
+
+def test_the_support_gap_reads_back_as_the_density_it_was_written_from() -> None:
+    """Rücklesung und Übergabe rechnen dieselbe Formel in beide Richtungen
+    (RM-475): Orcas Kobra-2-Profil mit 0,2 mm Lücke war als 100 % gelesen
+    worden, Prusas Bündelwert 2,5 mm als 17 %."""
+    from app.core.export import manufacturer
+
+    width, height = 0.42, 0.2
+    read = {"layers.line_width": width, "layers.layer_height": height}
+    context = manufacturer._Context(nozzle=0.4)
+    for density in (0.05, 0.15, 0.5, 0.9):
+        gap = manufacturer.support_gap(density, width, height)
+        back = manufacturer._support_density(
+            {"support_base_pattern_spacing": f"{gap:g}"}, read, context
+        )
+        assert back == pytest.approx(density, rel=1e-4)
+    kobra = manufacturer._support_density({"support_base_pattern_spacing": "0.2"}, read, context)
+    assert kobra == pytest.approx(
+        _flow_spacing(width, height) / (0.2 + _flow_spacing(width, height))
+    )
+    assert manufacturer._support_density(
+        {"support_base_pattern_spacing": "0"}, read, context
+    ) == pytest.approx(1.0), "Lücke null ist die dichteste Stütze, nicht keine"
+
+
+def test_no_support_density_becomes_the_densest_support() -> None:
+    """0 % ergab in PrusaSlicer und der Orca-Familie die dichteste Stütze
+    (Lücke 0: am Pilz 28,9 cm³ statt 5,8 cm³). Das Prozentfeld beginnt bei 1.
+    Gespeicherte Nullwerte bleiben erhalten und bekommen eine Absage mit
+    Handlung, bevor daraus eine Druckdatei wird (RM-475)."""
+    from app.core.errors import ValidationError
+    from app.core.scene import serialise
+    from app.ui.print_settings_dialog import FIELDS
+
+    least = print_settings.LEAST_SUPPORT_DENSITY
+    profile = profiles.make_profile()
+    grid = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    nothing = print_settings.with_path(grid, "support.density", 0.0)
+    for flavour in ("prusa", "orca"):
+        with pytest.raises(ValidationError) as caught:
+            handover.as_mapping(nothing, flavour)
+        assert caught.value.suggestions
+
+    field = next(one for one in FIELDS if one.path == "support.density")
+    assert field.minimum == pytest.approx(least * field.factor)
+
+    stored = serialise.print_settings_to_data(nothing)
+    assert serialise.print_settings_from_data(stored, "pla").support.density == pytest.approx(0.0)
+    assert least == pytest.approx(0.01), "kleinster positiver Wert im ganzzahligen Prozentfeld"
+
+
+@pytest.mark.parametrize("prusa", [False, True])
+@pytest.mark.parametrize("native_width", ["0.4", "100%", "0"])
+def test_support_density_reads_the_native_support_width(prusa: bool, native_width: str) -> None:
+    """Supportbreite und allgemeine Breite unterscheiden sich absichtlich;
+    Prozent gilt bei Prusa der Schichthöhe, bei Orca der Düse."""
+    from app.core.export import manufacturer
+
+    values = (
+        {"support_material_spacing": "0.2", "support_material_extrusion_width": native_width}
+        if prusa
+        else {"support_base_pattern_spacing": "0.2", "support_line_width": native_width}
+    )
+    read = {"layers.line_width": 0.45, "layers.layer_height": 0.2}
+    width = 0.45 if native_width == "0" else 0.2 if native_width == "100%" and prusa else 0.4
+    strand = _flow_spacing(width, 0.2)
+    actual = manufacturer._support_density(
+        values, read, manufacturer._Context(nozzle=0.4), prusa=prusa
+    )
+    assert actual == pytest.approx(strand / (0.2 + strand))
+
+
 #: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
 #: Profilbestand von OrcaSlicer und seinen Ablegern. Ein Name daneben fällt
 #: still auf die Vorgabe zurück — geprüft wird deshalb hier und nicht im Druck.
@@ -2669,8 +2815,9 @@ def _slicer_saying(
     return model, handover.SlicerSetup(executable=executable, flavour="prusa")
 
 
+@pytest.mark.parametrize("returncode", [0, 0xC0000409])
 def test_a_plate_outside_the_volume_offers_arranging(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, returncode: int
 ) -> None:
     """Regel 17: Der Satz nennt die Ursache, und eine Handlung behebt sie.
 
@@ -2683,6 +2830,13 @@ def test_a_plate_outside_the_volume_offers_arranging(
     profile = profiles.make_profile()
     model, setup = _slicer_saying(
         monkeypatch, tmp_path, b"All objects are outside of the print volume.\n"
+    )
+    monkeypatch.setattr(
+        handover,
+        "_run_slicer",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], returncode, b"All objects are outside of the print volume.\n", b""
+        ),
     )
 
     with pytest.raises(ExternalToolError) as raised:
@@ -3268,6 +3422,107 @@ def _creality_tower_config(tmp_path: Path) -> handover.SlicerConfig:
 
 
 @pytest.mark.parametrize(
+    "program", ["orca-slicer.exe", "elegoo-slicer.exe", "bambu-studio.exe", "CrealityPrint.exe"]
+)
+@pytest.mark.parametrize("bed", [180, 220])
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("explicit_brim", [False, True])
+def test_missing_tower_positions_start_inside_the_native_bed(
+    tmp_path: Path, program: str, bed: int, rotation: int, explicit_brim: bool
+) -> None:
+    """RM-476: Ohne Fenstermodus blieb der Turm bei 15/220, selbst auf 180 mm."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps({"printable_area": f"0x0,{bed}x0,{bed}x{bed},0x{bed}"}), encoding="utf-8"
+    )
+    process = {
+        "enable_prime_tower": "1",
+        "prime_tower_width": "35",
+        "wipe_tower_rotation_angle": str(rotation),
+    }
+    if explicit_brim:
+        process["prime_tower_brim_width"] = "3"
+    config.process.write_text(json.dumps(process), encoding="utf-8")
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    written = json.loads(config.process.read_text(encoding="utf-8"))
+    assert float(written["wipe_tower_x"][0]) == pytest.approx(bed - 18 if rotation else 18)
+    assert float(written["wipe_tower_y"][0]) == pytest.approx(18)
+    assert {key: value for key, value in written.items() if key in process} == process
+    assert positioned.written["wipe_tower_y"] == "18.0"
+
+
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("brim", [0, 3, 25])
+def test_automatic_tower_position_reserves_the_brim_on_a_shifted_bed(
+    tmp_path: Path, rotation: int, brim: int
+) -> None:
+    """Der Rand kommt zur nativen Brimbreite hinzu; der Ursprung ist nicht stets null."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps({"printable_area": ["10x20", "230x20", "230x260", "10x260"]}),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps(
+            {
+                "enable_prime_tower": "1",
+                "prime_tower_width": "35",
+                "prime_tower_brim_width": str(brim),
+                "wipe_tower_rotation_angle": str(rotation),
+            }
+        ),
+        encoding="utf-8",
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    margin = 15 + brim
+    assert float(positioned.written["wipe_tower_x"]) == pytest.approx(
+        230 - margin if rotation else 10 + margin
+    )
+    assert float(positioned.written["wipe_tower_y"]) == pytest.approx(20 + margin)
+
+
+@pytest.mark.parametrize(
+    ("width", "brim", "initialized"),
+    [(144, "3", True), (144.1, "3", False), (35, "nan", False), (35, "-1", False)],
+)
+def test_an_automatic_tower_does_not_hide_an_impossible_or_unknown_margin(
+    tmp_path: Path, width: float, brim: str, initialized: bool
+) -> None:
+    """Ein zu großer Turm wird nicht durch geklemmte Koordinaten passend gerechnet."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps({"printable_area": "0x0,180x0,180x180,0x180"}), encoding="utf-8"
+    )
+    config.process.write_text(
+        json.dumps(
+            {
+                "enable_prime_tower": "1",
+                "prime_tower_width": str(width),
+                "prime_tower_brim_width": brim,
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = config.process.read_bytes()
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    assert bool(positioned.written) is initialized
+    if not initialized:
+        assert config.process.read_bytes() == before
+
+
+@pytest.mark.parametrize(
     ("mode", "unrotated", "rotated"),
     [
         ("Left Upper", (15, 185), (35, 25)),
@@ -3292,7 +3547,7 @@ def test_creality_cli_uses_the_manufacturers_tower_modes(
     config.process.write_text(json.dumps(process), encoding="utf-8")
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
 
-    positioned = handover._creality_cli_tower_position(config, setup, ())
+    positioned = handover._orca_cli_tower_position(config, setup, ())
 
     written = json.loads(config.process.read_text(encoding="utf-8"))
     keys = ("wipe_tower_x", "wipe_tower_y")
@@ -3335,7 +3590,7 @@ def test_creality_cli_keeps_every_explicit_tower_coordinate(
     before = {path: path.read_bytes() for path in tmp_path.iterdir()}
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
 
-    assert handover._creality_cli_tower_position(config, setup, models) is config
+    assert handover._orca_cli_tower_position(config, setup, models) is config
     assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
 
 
@@ -3351,17 +3606,17 @@ def test_creality_cli_keeps_every_explicit_tower_coordinate(
         ("CrealityPrint.exe", {"printable_area": "110x0,220x110,110x220,0x110"}),
     ],
 )
-def test_creality_tower_initialization_leaves_other_or_unproven_cases_alone(
+def test_tower_initialization_leaves_unproven_cases_alone(
     tmp_path: Path, program: str, values: dict[str, str]
 ) -> None:
-    """Andere Slicer und unbelegte Platzierungsregeln behalten ihren Auftrag unverändert."""
+    """Fremde Platzierungsmodi und unbelegte Regeln lassen den Auftrag unverändert."""
     config = _creality_tower_config(tmp_path)
     process = json.loads(config.process.read_text(encoding="utf-8"))
     process.update(values)
     config.process.write_text(json.dumps(process), encoding="utf-8")
     before = config.process.read_bytes()
     setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
-    assert handover._creality_cli_tower_position(config, setup, ()) is config
+    assert handover._orca_cli_tower_position(config, setup, ()) is config
     assert config.process.read_bytes() == before
 
 
@@ -3373,7 +3628,7 @@ def test_creality_tower_uses_the_actual_shifted_bed_bounds(tmp_path: Path) -> No
     machine["printable_area"] = ["10x20", "230x20", "230x260", "10x260"]
     config.machine.write_text(json.dumps(machine), encoding="utf-8")
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
-    positioned = handover._creality_cli_tower_position(config, setup, ())
+    positioned = handover._orca_cli_tower_position(config, setup, ())
     assert float(positioned.written["wipe_tower_x"]) == pytest.approx(30.0)
     assert float(positioned.written["wipe_tower_y"]) == pytest.approx(225.0)
 
@@ -7253,3 +7508,240 @@ def test_auto_adhesion_preserves_an_explicit_zero_measure(
     assert effective.adhesion.kind == "skirt"
     assert effective.adhesion.skirt_loops == 0
     assert values[key] == "0"
+
+
+def _preflight_box(size: tuple[float, float, float], x: float = 0.0) -> MeshData:
+    raw = trimesh.creation.box(extents=size)
+    raw.apply_translation((x, 0.0, size[2] / 2.0))
+    return MeshData.of(raw)
+
+
+def _preflight_models(folder: Path, meshes: list[MeshData], transport: str) -> list[Path]:
+    if transport == "3mf":
+        model = folder / "model.3mf"
+        model.write_bytes(threemf.write_assembly([threemf.AssemblyPart(mesh) for mesh in meshes]))
+        return [model]
+    paths = []
+    for index, mesh in enumerate(meshes):
+        path = folder / f"body_{index}.stl"
+        path.write_bytes(trimesh.exchange.stl.export_stl(mesh.raw))
+        paths.append(path)
+    if transport == "cura":
+        model = folder / "model.stl"
+        model.write_bytes(
+            trimesh.exchange.stl.export_stl(trimesh.util.concatenate([mesh.raw for mesh in meshes]))
+        )
+        blocker = folder / "support_blocker.stl"
+        blocker.write_bytes(
+            trimesh.exchange.stl.export_stl(_preflight_box((400.0, 400.0, 10.0)).raw)
+        )
+        # Ein riesiger Hilfskörper ist kein Druckteil und darf die Platte
+        # nicht sperren. Die normale Netzliste bleibt vollständig beteiligt.
+        handover.write_cura_meshes(
+            model,
+            [
+                *(handover.CuraMesh(path) for path in paths),
+                handover.CuraMesh(blocker, {"anti_overhang_mesh": "true"}),
+            ],
+        )
+        return [model]
+    return paths
+
+
+@pytest.fixture
+def preflight_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    for variable in (
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ):
+        monkeypatch.setenv(variable, str(tmp_path / "user-data"))
+    monkeypatch.setattr(activation, "require", lambda *_args, **_kwargs: None)
+    profile = profiles.make_profile("prusa-mini", "pla")
+    calls: list[list[str]] = []
+
+    def crashed(
+        command: list[str], *_args: object, **_kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0xC0000409, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", crashed)
+
+    def run(
+        meshes: list[MeshData], transport: str, chosen: Profile | None = None
+    ) -> tuple[list[list[str]], AppError]:
+        current_profile = chosen or profile
+        models = _preflight_models(tmp_path, meshes, transport)
+        snapshot = tuple(meshes) if transport == "snapshot" else None
+        if snapshot is not None:
+
+            def unexpected_read(*_args: object, **_kwargs: object) -> None:
+                pytest.fail("Der vorbereitete Netzsatz darf nicht aus Dateien ersetzt werden")
+
+            monkeypatch.setattr(handover, "_meshes_from_files", unexpected_read)
+        executable = tmp_path / ("CuraEngine.exe" if transport == "cura" else "SuperSlicer.exe")
+        executable.write_bytes(b"")
+        setup = handover.SlicerSetup(
+            executable=executable, flavour="cura" if transport == "cura" else "prusa"
+        )
+        before = [mesh.raw.vertices.copy() for mesh in meshes]
+        with pytest.raises(AppError) as raised:
+            handover.slice_model(
+                models,
+                print_settings.resolve(current_profile),
+                current_profile,
+                setup,
+                output_dir=tmp_path / "output",
+                model_height=max(float(mesh.bounds.size[2]) for mesh in meshes),
+                model_meshes=snapshot,
+            )
+        assert all(
+            (old == mesh.raw.vertices).all() for old, mesh in zip(before, meshes, strict=True)
+        ), "Vorprüfung verändert kein Eingabenetz"
+        return calls, raised.value
+
+    return run
+
+
+@pytest.mark.parametrize("transport", ["stl", "3mf", "cura", "snapshot"])
+@pytest.mark.parametrize("case", ["square", "height", "two_plates"])
+def test_known_build_volume_problem_stops_before_the_slicer(
+    preflight_probe: Any, transport: str, case: str
+) -> None:
+    if case == "square":
+        meshes = [_preflight_box((231.0, 231.0, 10.0))]
+    elif case == "height":
+        meshes = [_preflight_box((20.0, 20.0, 181.0))]
+    else:
+        # Jedes 100-mm-Teil passt einzeln. Der bestehende Packweg braucht
+        # dafür zwei Platten; das behauptet keine globale Packoptimalität.
+        meshes = [_preflight_box((100.0, 100.0, 10.0)), _preflight_box((100.0, 100.0, 10.0))]
+        printer = profiles.make_profile("prusa-mini", "pla").printer
+        assert all(size_excess(mesh, printer) <= 0.0 for mesh in meshes)
+
+    calls, problem = preflight_probe(meshes, transport)
+
+    assert len(calls) == 0, (
+        f"Bekannter Bauraumgrund muss vor dem Slicerstart anhalten; Starts={len(calls)}, "
+        f"Meldung={problem}"
+    )
+    actions = {action.id for action in problem.suggestions}
+    text = str(problem.detail).casefold()
+    assert "abgestürzt" not in text
+    assert "check_profile" not in actions
+    if case == "two_plates":
+        assert not isinstance(problem, OutOfBuildVolume), (
+            "Einzelteile sind nicht übergroß; der Packweg benötigt mehr Platten"
+        )
+        assert "arrange_on_bed" in actions
+        assert "platt" in text
+        assert not any(
+            word in text for word in ("unmöglich", "in keiner drehung", "zu groß", "größer als")
+        )
+    else:
+        assert {"split_model", "scale_to_fit", "choose_printer"} <= actions
+
+
+@pytest.mark.parametrize("transport", ["stl", "3mf", "cura", "snapshot"])
+@pytest.mark.parametrize("case", ["shifted_cube", "diagonal_rod"])
+def test_a_part_that_can_be_placed_or_turned_is_allowed_to_start(
+    preflight_probe: Any, transport: str, case: str
+) -> None:
+    mesh = (
+        _preflight_box((40.0, 40.0, 10.0), x=300.0)
+        if case == "shifted_cube"
+        else _preflight_box((200.0, 20.0, 10.0))
+    )
+    printer = profiles.make_profile("prusa-mini", "pla").printer
+    assert size_excess(mesh, printer) <= 0.0
+
+    calls, problem = preflight_probe([mesh], transport)
+
+    assert len(calls) == 1, "Versatz oder eine passende Z-Drehung darf den Start nicht verhindern"
+    assert isinstance(problem, ExternalToolError)
+    assert "abgestürzt" in str(problem.detail), (
+        "Die gestartete Attrappe meldet weiterhin ihren unbekannten Absturzgrund"
+    )
+    assert "choose_slicer" in {action.id for action in problem.suggestions}
+
+
+@pytest.mark.parametrize("transport", ["stl", "snapshot"])
+@pytest.mark.parametrize("case", ["half_degree", "half_turn_on_triangle"])
+def test_preflight_does_not_turn_a_sampled_size_into_a_false_proof(
+    preflight_probe: Any, transport: str, case: str
+) -> None:
+    """Ein passender gedrehter Zeuge widerlegt die heuristische Größenabsage."""
+    import math
+
+    import numpy as np
+
+    from app.core.build_area import fits_on_bed
+
+    profile = profiles.make_profile("prusa-mini", "pla")
+    if case == "half_degree":
+        witness = _preflight_box((179.0, 169.0, 10.0))
+        raw = witness.raw.copy()
+        raw.apply_transform(
+            trimesh.transformations.rotation_matrix(math.radians(0.5), (0.0, 0.0, 1.0))
+        )
+    else:
+        profile = replace(
+            profile,
+            printer=replace(
+                profile.printer,
+                printable_area=((-90.0, -90.0), (90.0, -90.0), (-90.0, 90.0)),
+            ),
+        )
+        xy = ((-80.0, 80.0), (80.0, -80.0), (80.0, 80.0))
+        raw = trimesh.convex.convex_hull(np.array([(x, y, z) for z in (0.0, 10.0) for x, y in xy]))
+        turned = raw.copy()
+        turned.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (0.0, 0.0, 1.0)))
+        witness = MeshData.of(turned)
+    mesh = MeshData.of(raw)
+    assert fits_on_bed(witness, profile.printer)
+    assert size_excess(mesh, profile.printer) > 0.0
+
+    calls, problem = preflight_probe([mesh], transport, profile)
+
+    assert len(calls) == 1, "Eine passende Z-Drehung darf nicht als unmöglich abgewiesen werden"
+    assert "abgestürzt" in str(problem.detail)
+
+
+@pytest.mark.parametrize("disabled", ["0", "false"])
+def test_preflight_ignores_disabled_3mf_build_instances(
+    preflight_probe: Any, monkeypatch: pytest.MonkeyPatch, disabled: str
+) -> None:
+    """Der Import behält ausgeschaltete Teile, der Druckauftrag berücksichtigt sie nicht."""
+    from io import BytesIO
+
+    from app.core.ingest.threemf import read_objects
+
+    original = _preflight_models
+
+    def write_with_disabled_part(
+        folder: Path, meshes: list[MeshData], transport: str
+    ) -> list[Path]:
+        paths = original(folder, meshes, transport)
+        with zipfile.ZipFile(paths[0]) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        document = ET.fromstring(entries["3D/3dmodel.model"])
+        document.findall("{*}build/{*}item")[-1].set("printable", disabled)
+        entries["3D/3dmodel.model"] = ET.tostring(document)
+        output = BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for name, payload in entries.items():
+                archive.writestr(name, payload)
+        paths[0].write_bytes(output.getvalue())
+        assert len(read_objects(output.getvalue())) == 2, "Der normale Import bleibt vollständig"
+        return paths
+
+    monkeypatch.setitem(globals(), "_preflight_models", write_with_disabled_part)
+    calls, problem = preflight_probe(
+        [_preflight_box((20.0, 20.0, 20.0)), _preflight_box((400.0, 400.0, 10.0))], "3mf"
+    )
+
+    assert len(calls) == 1, "Eine ausgeschaltete Instanz darf die druckbare Platte nicht sperren"
+    assert "abgestürzt" in str(problem.detail)

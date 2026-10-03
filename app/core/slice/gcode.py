@@ -35,6 +35,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.types import BoundingBox, CancelToken, Finding, MetricSource
+from app.core.units import EPS_GEOM, EPS_SETTING
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -95,6 +96,33 @@ class GcodeMetrics:
     filament_mm_sources: tuple[str | None, ...] = ()
     #: Volumen einer Zusammenführung von Platten mit eigener Werkzeugbelegung.
     resolved_material_cm3: float | None = None
+    #: Nur ein ausdrücklich genannter Modellzeitwert, keine interne Schätzung.
+    model_print_seconds: float | None = None
+    #: Aus tatsächlich extrudierten Modellrollen; Gesamtzahl bleibt separat.
+    model_layer_count: int | None = None
+    support_only_layer_count: int | None = None
+    #: Rollen aus TYPE/FEATURE/FLUSH, je Rolle nach Werkzeugnummer aufgeteilt.
+    #: Unbezeichnete Förderung bleibt unbekannt; Kopfwerte werden nicht verteilt.
+    material_cm3_by_role: dict[str, tuple[float | None, ...]] = field(default_factory=dict)
+    model_material_cm3: float | None = None
+    purge_material_cm3: float | None = None
+    unclassified_material_cm3: float | None = None
+    #: Modellmasse einer Zusammenführung, ohne Werkzeugnummern der Platten zu vermischen.
+    resolved_model_grams: float | None = None
+    #: Gelesene Rollen mit bedingter oder nicht eindeutig aufgelöster Förderung.
+    uncertain_material_roles: tuple[str, ...] = ()
+    #: Nur bei vollständiger Rollenbilanz und ohne unbekannte/bedingte Förderung.
+    #: False lässt die ausgewiesene Abschnittssumme stehen, behauptet aber
+    #: keinen vollständig geplanten Spülverbrauch.
+    purge_material_complete: bool = False
+
+    @property
+    def additional_seconds(self) -> float | None:
+        """Zusatzzeit aus dem Modell-/Gesamtzeitpaar; keine belegte reine Startzeit."""
+        if self.print_seconds is None or self.model_print_seconds is None:
+            return None
+        difference = self.print_seconds - self.model_print_seconds
+        return difference if difference >= 0.0 else None
 
     @property
     def print_minutes(self) -> float | None:
@@ -235,6 +263,28 @@ class GcodeMetrics:
                     amount = converted if math.isfinite(converted) else None
             amounts.append(amount)
         return tuple(amounts)
+
+    def model_grams(self, density: float | None = None) -> float | None:
+        """Nur Modellrollen, mit werkzeugrichtiger Dichte und belegtem Volumen.
+
+        Eine ausdrücklich übergebene Ersatzdichte gilt nur beim Verbrauch
+        genau eines Werkzeugs. Unbekannte Rollen oder Volumina werden nicht
+        aus dem Gesamtverbrauch ergänzt.
+        """
+        if self.resolved_model_grams is not None:
+            return self.resolved_model_grams
+        if self.model_material_cm3 is None:
+            return None
+        volumes = self.material_cm3_by_role.get("model", ())
+        supplied: tuple[float | None, ...] = ()
+        if len(self.used_tools) == 1:
+            tool = self.used_tools[0]
+            supplied = (None,) * tool + (density,)
+        amounts = GcodeMetrics(
+            filament_cm3_by_tool=volumes,
+            filament_densities=self.filament_densities,
+        ).grams_by_tool(densities=supplied)
+        return _complete_sum(amounts)
 
 
 @dataclass(slots=True)
@@ -432,6 +482,26 @@ class _ExtrusionState:
     model_extent: _Extent = field(default_factory=_Extent)
     all_paths_inside: bool = True
     model_paths_inside: bool = True
+    role_lengths: dict[str, dict[int, float]] = field(default_factory=dict)
+    role_volumes: dict[str, dict[int, float]] = field(default_factory=dict)
+    model_layer_pending: bool = False
+    model_heights: set[float] = field(default_factory=set)
+    model_heights_known: bool = True
+    support_layer_pending: bool = False
+    support_heights: set[float] = field(default_factory=set)
+    support_heights_known: bool = True
+    model_complete: bool = True
+    unmarked_unknown_motion: bool = False
+    seen_model_role: bool = False
+    uncertain_roles: set[str] = field(default_factory=set)
+    role_position_uncertain: bool = False
+    role_debt_uncertain: bool = False
+    role_mode_uncertain: bool = False
+
+    def classify(self, role: str, tool: int, amount: float, *, volumetric: bool) -> None:
+        """Ordnet schon rückzugsbereinigte Förderung einer belegten Rolle zu."""
+        amounts = (self.role_volumes if volumetric else self.role_lengths).setdefault(role, {})
+        amounts[tool] = amounts.get(tool, 0.0) + amount
 
     def step(self, value: float) -> float:
         """Förderweg aus der E-Achse im aktuellen Extrusionsmodus."""
@@ -467,7 +537,7 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     ("print_seconds", r";\s*estimated printing time.*?=\s*(?P<value>[0-9hmsd ]+)"),
     ("print_seconds", r";\s*TIME:\s*(?P<value>[0-9.]+)"),
     ("print_seconds", r";\s*total print time.*?:\s*(?P<value>[0-9hmsd ]+)"),
-    ("print_seconds", r";\s*model printing time\s*:\s*(?P<value>[0-9hmsd ]+)"),
+    ("model_print_seconds", r";\s*model printing time\s*:\s*(?P<value>[0-9hmsd ]+)"),
     (
         "filament_mm",
         r";\s*(?P<total>total )filament length \[(?P<unit>mm)\]\s*:\s*(?P<value>.*?)\s*$",
@@ -494,6 +564,69 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 _SUPPORT_TOOL = re.compile(r";\s*(?:TYPE|FEATURE):\s*(?P<type>.+)", re.IGNORECASE)
+
+# Belegte Rollen der Orca-, Prusa- und Cura-Familie. Eine neue fremde Rolle
+# wird nicht stillschweigend zu Modellmaterial erklärt.
+_MODEL_ROLES = frozenset(
+    {
+        "outer wall",
+        "inner wall",
+        "sparse infill",
+        "internal solid infill",
+        "top surface",
+        "bottom surface",
+        "bridge",
+        "internal bridge",
+        "overhang wall",
+        "gap infill",
+        "floating vertical shell",
+        "ironing",
+        "perimeter",
+        "external perimeter",
+        "internal perimeter",
+        "overhang perimeter",
+        "internal infill",
+        "solid infill",
+        "top solid infill",
+        "bridge infill",
+        "internal bridge infill",
+        "thin wall",
+        "thin walls",
+        "wall-inner",
+        "wall-outer",
+        "fill",
+        "skin",
+        "wall-overhang",
+    }
+)
+_PURGE_ROLES = frozenset({"prime tower", "wipe tower", "purge", "flush"})
+_ADHESION_ROLES = frozenset({"skirt", "brim", "skirt/brim", "raft"})
+_MATERIAL_ROLES = ("model", "purge", "support", "adhesion", "unknown")
+_FLUSH_MARK = re.compile(r"^;\s*FLUSH_(START|END)\s*$", re.IGNORECASE)
+
+
+def _material_role(value: str) -> str:
+    """Eine positive Zuordnung; unbekannte Kommentartexte bleiben unbekannt."""
+    value = value.casefold().strip()
+    if value in _MODEL_ROLES:
+        return "model"
+    if value in _PURGE_ROLES:
+        return "purge"
+    if "support" in value:
+        return "support"
+    if value in _ADHESION_ROLES:
+        return "adhesion"
+    return "unknown"
+
+
+def _distinct_layer_heights(values: set[float]) -> list[float]:
+    """Gleiche physische Höhe bei mehreren Objekten und doppelten Marken nur einmal."""
+    distinct: list[float] = []
+    for value in sorted(values):
+        if not distinct or not math.isclose(value, distinct[-1], rel_tol=0.0, abs_tol=EPS_GEOM):
+            distinct.append(value)
+    return distinct
+
 
 #: Eine Bewegung — ``G0`` fährt leer, ``G1`` gerade, ``G2``/``G3`` im Bogen.
 #: Die Bogenformen stehen mit dabei, weil eine Kreiswand mit Bogenanpassung
@@ -668,6 +801,9 @@ def analyze_lines(
 
     position: list[float | None] = [None, None, None]
     axes_absolute = True
+    axes_mode_uncertain = False
+    physical_height: float | None = None
+    height_offset: float | None = 0.0
     arc_centres_absolute = False
     independent = _ExtrusionState()
     marlin = _ExtrusionState()
@@ -677,6 +813,14 @@ def analyze_lines(
     bambu_commands = False
     bambu_tools: tuple[int, ...] = ()
     active_support = False
+    active_role = "unknown"
+    flushing = False
+    custom_role = False
+    macro_purge_lengths: dict[float, float] = {}
+    conditional_depth = 0
+    restoring_filament = False
+    role_tool_uncertain = False
+    role_volume_mode_uncertain = False
     seen_type = False
     has_first_layer = False
     after_first_layer = False
@@ -734,6 +878,9 @@ def analyze_lines(
                 layer_changes += 1
             if _LAYER_MARK.match(stripped):
                 layer_pending = True
+                for state in extrusion_states:
+                    state.model_layer_pending = True
+                    state.support_layer_pending = True
             setting = _SETTING_LINE.match(stripped)
             if setting is not None:
                 settings.setdefault(setting.group("key").casefold(), setting.group("value"))
@@ -753,6 +900,14 @@ def analyze_lines(
             if kind is not None:
                 seen_type = True
                 active_support = "support" in kind.group("type").casefold()
+                active_role = _material_role(kind.group("type"))
+                custom_role = kind.group("type").strip().casefold() == "custom"
+                if active_role == "model":
+                    for state in extrusion_states:
+                        state.seen_model_role = True
+            flush = _FLUSH_MARK.fullmatch(stripped)
+            if flush is not None:
+                flushing = flush[1].casefold() == "start"
             shape = _BED_SHAPE.match(stripped)
             if shape is not None and corners is None and not bed_invalid:
                 corners, bed_invalid = _bed_corners(shape.group("corners"))
@@ -783,6 +938,16 @@ def analyze_lines(
             found.group("name").upper(): float(found.group("value"))
             for found in _WORD.finditer(command_text)
         }
+        if bambu_commands and family == "M" and code in (622, 623):
+            conditional_depth = (
+                conditional_depth + 1 if code == 622 else max(0, conditional_depth - 1)
+            )
+            continue
+        if bambu_commands and family == "M" and code in (628, 629):
+            # Wiederförderung nach dem Cutter-Rückzug: Eine noch aktive
+            # Prime-tower-Rolle macht daraus keine belegte Spülmenge.
+            restoring_filament = code == 628
+            continue
         if family == "M" and code in (106, 107):
             # Der Bauteillüfter: ohne Nummer oder Nummer 0, bei Bambu Nummer 1
             # (2 und 3 sind dort Hilfs- und Bauraumlüfter). Marlins Skala geht
@@ -795,8 +960,10 @@ def analyze_lines(
         if family == "M" and code in (82, 83):
             for state in extrusion_states:
                 state.absolute = code == 82
+                state.role_mode_uncertain = conditional_depth > 0
             continue
         if family == "M" and code == 200:
+            role_volume_mode_uncertain = conditional_depth > 0
             target_tool = _tool_number(words.get("T", active_tool))
             diameter = words.get("D")
             if diameter is not None:
@@ -807,6 +974,16 @@ def analyze_lines(
             if "S" in words and (diameter is None or diameter > 0.0):
                 volumetric = words["S"] > 0.0
             continue
+        if family == "M" and code == 6211 and "L" in words and "T" in words:
+            # CC2s eigenes Wechselmakro führt L Millimeter Spülfilament des
+            # Zielwerkzeugs. Es verändert weder E-Modus noch E-Koordinate.
+            # Die Herkunft kann erst im Profilblock am Dateiende stehen.
+            # Die bestehende Gesamtverbrauchsbuchung bleibt davon unberührt.
+            macro_tool = words["T"]
+            amount = words["L"]
+            if math.isfinite(amount) and amount > 0.0:
+                macro_purge_lengths[macro_tool] = macro_purge_lengths.get(macro_tool, 0.0) + amount
+            continue
         if family == "M" and code in (620, 621):
             bambu_commands = True
             continue
@@ -814,21 +991,40 @@ def analyze_lines(
             if bambu_commands and code in _BAMBU_SPECIAL_TOOLS:
                 continue
             active_tool = _tool_number(code)
+            role_tool_uncertain = conditional_depth > 0
             tool_selected = True
             continue
         if family != "G":
             continue
         if code in (90, 91):
             axes_absolute = code == 90
+            axes_mode_uncertain = conditional_depth > 0
             marlin.absolute = axes_absolute
+            marlin.role_mode_uncertain = conditional_depth > 0
             continue
         if code == 92:
+            if "Z" in words:
+                # G92 bewegt nicht. Bei bekannter physischer Höhe setzt es
+                # nur den Ursprung; ein unklarer Ursprung kann durch spätere
+                # absolute Z-Fahrten nicht als bekannt angenommen werden.
+                if conditional_depth:
+                    height_offset = None
+                elif physical_height is not None:
+                    height_offset = physical_height - words["Z"]
+                elif position[2] is None and height_offset is not None:
+                    # Vor der ersten belegten Höhe genügt eine gemeinsame
+                    # Bezugsbasis; gezählt werden verschiedene Druckhöhen.
+                    physical_height = words["Z"]
+                    height_offset = 0.0
+                else:
+                    height_offset = None
             for axis, name in enumerate("XYZ"):
                 if name in words:
                     position[axis] = words[name]
             if "E" in words:
                 for state in extrusion_states:
                     state.position = words["E"]
+                    state.role_position_uncertain = conditional_depth > 0
             continue
         if code not in (0, 1, 2, 3):
             continue
@@ -845,6 +1041,16 @@ def analyze_lines(
             else:
                 endpoint[axis] = None
         position = endpoint
+        if "Z" in words:
+            # Physische Höhen zählen, nicht die nach G92 verschobenen Werte.
+            # Relative Bewegung braucht keinen bekannten Ursprung, absolute
+            # Bewegung dagegen schon. Ein Zweig belegt keine gemeinsame Höhe.
+            if conditional_depth or axes_mode_uncertain:
+                physical_height = None
+            elif axes_absolute:
+                physical_height = words["Z"] + height_offset if height_offset is not None else None
+            elif physical_height is not None:
+                physical_height += words["Z"]
 
         steps = [state.step(words["E"]) for state in extrusion_states] if "E" in words else []
         if not steps:
@@ -859,6 +1065,10 @@ def analyze_lines(
         # Material fließt auch ohne XY-Weg und bei G0. Erst die Prüfung der
         # Druckbahnen darunter schließt Reinigung und Leerfahrten aus.
         for state, step in zip(extrusion_states, steps, strict=True):
+            if conditional_depth:
+                state.role_position_uncertain = True
+                if step < 0.0 or state.retracted.get(active_tool, (0.0, False))[0] > 0.0:
+                    state.role_debt_uncertain = True
             amount = state.consume(active_tool, step, volumetric=volumetric, area=area)
             consumed.append(amount)
             if step > 0.0:
@@ -885,6 +1095,57 @@ def analyze_lines(
             )
             for name, position_before, position_after in zip("XY", start, endpoint, strict=False)
         )
+        role = "unknown" if restoring_filament else "purge" if flushing else active_role
+        # Eine stationäre Nachförderung ist keine Modellbahn. Ohne ausdrückliche
+        # Spülmarkierung bleibt sie unbekannt, statt Material hinzuzuerfinden.
+        if role == "model" and not travelled:
+            role = "unknown"
+        for state, amount in zip(extrusion_states, consumed, strict=True):
+            # Der gelesene Zweig kann rechnerisch null liefern, während der
+            # andere Zweig fördert. Unsicherheit gilt deshalb vor der Menge.
+            uncertain = bool(
+                conditional_depth
+                or (state.absolute and state.role_position_uncertain)
+                or state.role_debt_uncertain
+                or state.role_mode_uncertain
+                or role_tool_uncertain
+                or role_volume_mode_uncertain
+            )
+            if uncertain:
+                state.uncertain_roles.add(role)
+                if role == "model":
+                    state.model_complete = False
+                elif role == "support":
+                    state.support_heights_known = False
+            if role == "unknown" and travelled and not custom_role and (amount > 0.0 or uncertain):
+                if after_first_layer:
+                    state.model_complete = False
+                    state.uncertain_roles.add("support")
+                else:
+                    # Erst am Dateiende steht fest, ob eine spätere erste
+                    # Schicht diese unbekannte Bahn als Startcode abtrennt.
+                    state.unmarked_unknown_motion = True
+            if amount <= 0.0:
+                continue
+            state.classify(role, active_tool, amount, volumetric=volumetric)
+            if role == "model" and travelled:
+                if physical_height is None:
+                    state.model_heights_known = False
+                if state.model_layer_pending:
+                    if physical_height is not None:
+                        state.model_heights.add(physical_height)
+                    else:
+                        state.model_heights_known = False
+                    state.model_layer_pending = False
+            elif role == "support" and travelled:
+                if physical_height is None:
+                    state.support_heights_known = False
+                if state.support_layer_pending:
+                    if physical_height is not None:
+                        state.support_heights.add(physical_height)
+                    else:
+                        state.support_heights_known = False
+                    state.support_layer_pending = False
         if code == 0 or not travelled:
             continue
         end = (endpoint[0], endpoint[1], endpoint[2])
@@ -953,6 +1214,9 @@ def analyze_lines(
         metrics.layer_count = layer_changes or None
     dialect = settings.get("gcode_flavor", firmware or "").casefold().strip()
     state = marlin if dialect in ("marlin", "marlin2", "marlin(legacy)") else independent
+    if state.unmarked_unknown_motion and not has_first_layer:
+        state.model_complete = False
+        state.uncertain_roles.add("support")
     used_tools = state.used_tools
     if bambu_tools:
         _bambu_amounts(metrics, pattern_values, bambu_tools)
@@ -992,7 +1256,13 @@ def analyze_lines(
             support_cm3 += sum(state.support_volumes.values()) / 1000.0
         if state.unknown_amounts.intersection(state.support.keys() | state.support_volumes.keys()):
             support_cm3 = None
-        metrics.support_mm3 = support_cm3 * 1000.0 if support_cm3 is not None else None
+        # Die gelesene Teilmenge ist keine vollständige Stützmenge, wenn ein
+        # bedingter Zweig oder eine unbekannte Druckrolle weitere Stütze trägt.
+        metrics.support_mm3 = (
+            support_cm3 * 1000.0
+            if support_cm3 is not None and "support" not in state.uncertain_roles
+            else None
+        )
     motion_lengths: dict[int, float | None] = dict(state.lengths)
     for tool, volume in state.unknown_volume_lengths.items():
         area = _filament_area(_at(metrics.filament_diameters, tool))
@@ -1022,6 +1292,68 @@ def analyze_lines(
                     volume_cm3 += max(state.volumes.get(tool, 0.0), 0.0) / 1000.0
             tool_volumes.append(volume_cm3)
         metrics.filament_cm3_by_tool = tuple(tool_volumes)
+    cc2_profile = any(
+        "centauri carbon 2" in settings.get(key, "").casefold().replace("-", " ").replace("_", " ")
+        for key in ("printer_model", "printer_settings_id")
+    )
+    if "elegoo" in metrics.slicer.casefold() or cc2_profile:
+        for raw_tool, macro_length in macro_purge_lengths.items():
+            state.classify("purge", _tool_number(raw_tool), macro_length, volumetric=False)
+    role_tools = set(used_tools)
+    for role_amounts in (*state.role_lengths.values(), *state.role_volumes.values()):
+        role_tools.update(role_amounts)
+    count = max(role_tools, default=-1) + 1
+    for role in _MATERIAL_ROLES:
+        values: list[float | None] = []
+        for tool in range(count):
+            length = state.role_lengths.get(role, {}).get(tool, 0.0)
+            volume = state.role_volumes.get(role, {}).get(tool, 0.0)
+            role_volume = (
+                _volume(length, _at(metrics.filament_diameters, tool)) if length > 0.0 else 0.0
+            )
+            if role_volume is not None:
+                role_volume += volume / 1000.0
+            if tool in state.unknown_amounts and (length > 0.0 or volume > 0.0):
+                role_volume = None
+            values.append(role_volume)
+        metrics.material_cm3_by_role[role] = tuple(values)
+    if state.seen_model_role and state.model_complete:
+        metrics.model_material_cm3 = _complete_sum(metrics.material_cm3_by_role["model"])
+        model_heights = _distinct_layer_heights(state.model_heights)
+        support_heights = _distinct_layer_heights(state.support_heights)
+        metrics.model_layer_count = (
+            len(model_heights) if has_first_layer and state.model_heights_known else None
+        )
+        if has_first_layer and state.model_heights_known and state.support_heights_known:
+            model_index = 0
+            support_only = 0
+            for height in support_heights:
+                while (
+                    model_index < len(model_heights)
+                    and model_heights[model_index] < height - EPS_GEOM
+                ):
+                    model_index += 1
+                if model_index >= len(model_heights) or not math.isclose(
+                    model_heights[model_index], height, rel_tol=0.0, abs_tol=EPS_GEOM
+                ):
+                    support_only += 1
+            metrics.support_only_layer_count = support_only
+    metrics.purge_material_cm3 = _complete_sum(metrics.material_cm3_by_role["purge"])
+    metrics.unclassified_material_cm3 = _complete_sum(metrics.material_cm3_by_role["unknown"])
+    metrics.uncertain_material_roles = tuple(sorted(state.uncertain_roles))
+    role_total = _complete_sum(
+        tuple(value for values in metrics.material_cm3_by_role.values() for value in values)
+    )
+    total_volume = metrics.material_cm3
+    metrics.purge_material_complete = (
+        metrics.purge_material_cm3 is not None
+        and metrics.unclassified_material_cm3 is not None
+        and metrics.unclassified_material_cm3 <= 0.0
+        and not state.uncertain_roles
+        and role_total is not None
+        and total_volume is not None
+        and math.isclose(role_total, total_volume, rel_tol=EPS_SETTING, abs_tol=0.0)
+    )
     metrics.warnings = tuple(warnings)
     metrics.used_tools = tuple(sorted(used_tools))
     stated_weight_total = "filament_grams" in stated_totals
@@ -1239,8 +1571,8 @@ def _set(
     if name == "slicer":
         metrics.slicer = value
         return
-    if name == "print_seconds":
-        metrics.print_seconds = _seconds(value)
+    if name in ("print_seconds", "model_print_seconds"):
+        setattr(metrics, name, _seconds(value))
         return
     if name in ("filament_mm", "filament_grams"):
         # Die Kommas trennen Extruder, keine Dezimalstellen. Eine explizite
@@ -1461,6 +1793,15 @@ def combine(parts: Sequence[GcodeMetrics]) -> GcodeMetrics:
     return GcodeMetrics(
         slicer=parts[0].slicer,
         print_seconds=total(lambda entry: entry.print_seconds),
+        model_print_seconds=total(lambda entry: entry.model_print_seconds),
+        model_material_cm3=total(lambda entry: entry.model_material_cm3),
+        purge_material_cm3=total(lambda entry: entry.purge_material_cm3),
+        unclassified_material_cm3=total(lambda entry: entry.unclassified_material_cm3),
+        resolved_model_grams=total(lambda entry: entry.model_grams()),
+        uncertain_material_roles=tuple(
+            sorted({role for entry in parts for role in entry.uncertain_material_roles})
+        ),
+        purge_material_complete=all(entry.purge_material_complete for entry in parts),
         filament_mm=total(lambda entry: entry.filament_mm),
         filament_grams=total(lambda entry: entry.filament_grams),
         support_mm3=total(lambda entry: entry.support_mm3),
@@ -1485,6 +1826,37 @@ def findings_for(metrics: GcodeMetrics) -> list[Finding]:
                 severity="info",
                 message=_("Druckzeit aus dem G-Code."),
                 values={"minutes": round(metrics.print_minutes, 1)},
+                source="gcode",
+            )
+        )
+    elif metrics.model_print_seconds is not None:
+        findings.append(
+            Finding(
+                code="gcode.model_time",
+                severity="info",
+                message=_("Modellzeit aus dem G-Code."),
+                values={"minutes": round(metrics.model_print_seconds / 60.0, 1)},
+                source="gcode",
+            )
+        )
+    if metrics.purge_material_cm3 is not None and metrics.purge_material_cm3 > 0.0:
+        findings.append(
+            Finding(
+                code="gcode.purge",
+                severity="info",
+                message=_(
+                    "Aus ausgewiesenen G-Code-Abschnitten gelesenes Spülmaterial: {volume} cm³.",
+                    volume=round(metrics.purge_material_cm3, 2),
+                )
+                if metrics.purge_material_complete
+                else _(
+                    "Spülmaterial aus lesbaren G-Code-Abschnitten: {volume} cm³. "
+                    "Die vollständige Menge ist unbekannt.",
+                    volume=round(metrics.purge_material_cm3, 2),
+                ),
+                values={
+                    "volume_cm3": metrics.purge_material_cm3,
+                },
                 source="gcode",
             )
         )

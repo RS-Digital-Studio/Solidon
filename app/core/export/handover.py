@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 from xml.etree import ElementTree as ET
 
-from app.core import activation, discover, expressions
+from app.core import activation, build_area, discover, expressions
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
@@ -69,7 +69,7 @@ from app.core.export.slicer_keys import (
     wants_bed_coordinates,
 )
 from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.threemf import SETTINGS_PATH
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
@@ -86,6 +86,7 @@ from app.core.types import (
     CancelToken,
     Finding,
     MaterialSlot,
+    Mesh,
     PrinterProfile,
     PrintSettings,
     Profile,
@@ -170,6 +171,10 @@ COPY_BLOCK_BYTES: Final = 1024 * 1024
 #: Crealitys GUI-Startpositionen, aus PartPlate.cpp/set_default_wipe_tower_pos_for_plate.
 CREALITY_TOWER_SIDE_OFFSET: Final = 15.0
 CREALITY_TOWER_TOP_OFFSET: Final = 35.0
+
+#: Vorgabe aller vier Orca-Programme, PrintConfig.cpp/prime_tower_brim_width.
+#: Auch im G-Code ihrer nativen Kobra-Profile ohne diesen Schlüssel: 3 mm.
+ORCA_TOWER_DEFAULT_BRIM: Final = 3.0
 
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
@@ -887,6 +892,8 @@ def offered_settings(settings: PrintSettings, program: str) -> PrintSettings:
 COUPLED_PATHS: Final[Mapping[str, tuple[str, ...]]] = {
     "adhesion.kind": tuple(print_settings.ADHESION_MEASURES.values()),
     "cooling.fan_speed": ("cooling.minimum_fan_speed",),
+    "layers.layer_height": ("support.density",),
+    "layers.line_width": ("support.density",),
 }
 
 
@@ -1345,22 +1352,38 @@ def _support_spacing(
     """Die Stützdichte, wo der Slicer sie als Abstand führt (§29).
 
     Solidon sagt „15 Prozent", Cura auch. PrusaSlicer und die Orca-Familie
-    kennen dort keinen Anteil, sondern den Abstand zweier Stützlinien in
-    Millimetern — ``support_material_spacing`` beim einen,
-    ``support_base_pattern_spacing`` beim anderen. Ohne die Umrechnung war die
-    Einstellung für zwei von drei Slicern folgenlos, und der Dialog bot sie
-    trotzdem an.
+    kennen dort keinen Anteil, sondern die **Lücke** zwischen zwei
+    Stützlinien in Millimetern — ``support_material_spacing`` beim einen,
+    ``support_base_pattern_spacing`` beim anderen; die Teilung ist Lücke plus
+    Linienabstand (:func:`manufacturer.support_gap`). Als Teilung geschrieben
+    druckten 15 % als 12 %, und 0 % als die dichteste Stütze (RM-475).
 
-    Gerechnet wie Cura es rechnet: Bahnbreite mal hundert durch Prozent —
-    ohne dessen Kreuzungsfaktor, denn beide legen ihre Stützfüllung als *eine*
-    Linienschar. Eine Dichte von null heißt „keine Füllung"; der Abstand dazu
-    ist keine Zahl, und der Slicer meint mit 0 dasselbe.
+    Die Teilung ist Linienabstand durch Dichte. Die dafür verwendete
+    Stützbahnbreite geht mit, damit das Herstellerprofil die Rechnung nicht
+    verändert. Eine aktive Null-Dichte verlangt eine neue Wahl; eine Lücke
+    null wäre das Gegenteil des Gemeinten. Ohne Stützen wirkt der Wert nicht.
     """
     key = {"prusa": "support_material_spacing", "orca": "support_base_pattern_spacing"}.get(flavour)
     if key is None:
         return written
     density = settings.support.density
-    written[key] = "0" if density <= 0.0 else f"{settings.layers.line_width / density:g}"
+    if density < print_settings.LEAST_SUPPORT_DENSITY and settings.support.style != "none":
+        raise ValidationError(
+            field="support.density",
+            detail=_(
+                "Wählen Sie mindestens 1 % Stützdichte oder schalten Sie die Stützen aus. "
+                "Dieser Slicer kann 0 % Stützfüllung nicht darstellen."
+            ),
+            suggestions=(OPEN_PRINT_SETTINGS,),
+        )
+    density = max(density, print_settings.LEAST_SUPPORT_DENSITY)
+    gap = manufacturer.support_gap(
+        density, settings.layers.line_width, settings.layers.layer_height
+    )
+    # Beide Familien schreiben sechs signifikante Stellen in den G-Code.
+    written[key] = f"{gap:.6g}"
+    width_key = "support_material_extrusion_width" if flavour == "prusa" else "support_line_width"
+    written[width_key] = f"{settings.layers.line_width:.9g}"
     return written
 
 
@@ -5336,20 +5359,22 @@ def _for_the_creality_window(model: Path) -> Path:
     return model
 
 
-def _creality_cli_tower_position(
+def _orca_cli_tower_position(
     config: SlicerConfig, setup: SlicerSetup, models: Sequence[Path]
 ) -> SlicerConfig:
-    """Initialisiert nur fehlende CLI-Turmkoordinaten nach dem Herstellerprofil.
+    """Initialisiert fehlende Turmkoordinaten der vier Orca-Konsolen (RM-476).
 
-    Crealitys Fenster übersetzt den Platzierungsmodus in Projektkoordinaten;
-    das CLI lässt sonst 15/220 stehen, auch auf einem 220-mm-Bett. Übernommen
-    wird die Herstellerregel für rechteckige Betten und 0/90 Grad. Gespeicherte
-    Koordinaten gewinnen immer, auch aus einer eingebetteten 3MF-Konfiguration.
-    Die G-Code-Gegenprobe bleibt für tatsächliche Turmmaße und Sperrflächen nötig.
+    Crealitys bekannter Platzierungsmodus bleibt maßgeblich. Ohne Modus
+    beginnt der Turm unten mit Abstand zum Rand, statt bei der festen
+    Konsolenvorgabe 15/220. Bei 90 Grad wächst seine Tiefe nach links.
+    Gespeicherte Koordinaten gewinnen immer, auch aus einer 3MF-Beilage.
+    Native Breite und Brim begrenzen den Start; erst die G-Code-Gegenprobe
+    kennt die wirkliche Fläche einschließlich Rippen und Reinigungsvolumen.
     """
     if (
         setup.flavour != "orca"
-        or discover.program_mark(setup.executable.name) != "crealityprint"
+        or discover.program_mark(setup.executable.name)
+        not in {"crealityprint", "orcaslicer", "elegooslicer", "bambustudio"}
         or config.machine is None
     ):
         return config
@@ -5371,12 +5396,13 @@ def _creality_cli_tower_position(
                 embedded = json.loads(container.read(threemf.PROJECT_SETTINGS_PATH))
                 if not isinstance(embedded, dict) or any(key in embedded for key in coordinates):
                     return config
-        horizontal, _, vertical = str(values.get("prime_tower_position_type", "")).partition(" ")
-        if horizontal not in {"Left", "Middle", "Right"} or vertical not in {
-            "Upper",
-            "Center",
-            "Below",
-        }:
+        mode = str(values.get("prime_tower_position_type", "")).strip()
+        horizontal, _, vertical = mode.partition(" ")
+        if mode and (
+            discover.program_mark(setup.executable.name) != "crealityprint"
+            or horizontal not in {"Left", "Middle", "Right"}
+            or vertical not in {"Upper", "Center", "Below"}
+        ):
             return config
         if str(values.get("enable_prime_tower", "0")) != "1":
             return config
@@ -5401,7 +5427,19 @@ def _creality_cli_tower_position(
         left, bottom, right, top = area.bounds
         side = CREALITY_TOWER_SIDE_OFFSET
         upper = CREALITY_TOWER_TOP_OFFSET
-        if is_zero(rotation):
+        if not mode:
+            brim = float(values.get("prime_tower_brim_width", ORCA_TOWER_DEFAULT_BRIM))
+            if not math.isfinite(brim) or brim < 0.0:
+                return config
+            margin = side + brim
+            across, along = right - left, top - bottom
+            if not is_zero(rotation):
+                across, along = along, across
+            if width + 2 * margin > across or 2 * margin >= along:
+                return config
+            x = left + margin if is_zero(rotation) else right - margin
+            placed = dict(zip(coordinates, (str(x), str(bottom + margin)), strict=True))
+        elif is_zero(rotation):
             xs = {
                 "Left": left + side,
                 "Middle": (left + right - width) / 2,
@@ -5411,7 +5449,8 @@ def _creality_cli_tower_position(
         else:
             xs = {"Left": left + upper, "Middle": (left + right) / 2, "Right": right - side}
             ys = {"Upper": top - width - side, "Center": (bottom + top) / 2, "Below": bottom + side}
-        placed = dict(zip(coordinates, (str(xs[horizontal]), str(ys[vertical])), strict=True))
+        if mode:
+            placed = dict(zip(coordinates, (str(xs[horizontal]), str(ys[vertical])), strict=True))
         process.update({key: [value] for key, value in placed.items()})
         config.process.write_text(
             json.dumps(process, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -5428,6 +5467,105 @@ def _creality_cli_tower_position(
     return replace(config, written={**config.written, **placed})
 
 
+def _meshes_from_files(models: Sequence[Path], setup: SlicerSetup) -> tuple[MeshData, ...]:
+    """Liest Druckteile über die vorhandenen begrenzten Leser; Hilfsnetze zählen nicht."""
+    from app.core.ingest import loader
+    from app.core.ingest.threemf import read_objects as read_3mf_objects
+
+    parts: list[MeshData] = []
+    for model in models:
+        inputs = (
+            [
+                entry.path
+                for entry in cura_meshes(model)
+                if entry.settings.get("anti_overhang_mesh", "false").casefold() not in {"true", "1"}
+            ]
+            if setup.flavour == "cura"
+            else [model]
+        )
+        for source in inputs:
+            payload = loader.read_bounded_payload(source)
+            if source.suffix.lower() == ".3mf":
+                loader.check_unpacked(payload)
+                parts.extend(part.mesh for part in read_3mf_objects(payload, printable_only=True))
+            else:
+                try:
+                    parts.append(loader.read_model(payload, source.suffix))
+                except ValidationError as problem:
+                    if problem.constraint not in {
+                        "unreadable",
+                        "no_geometry",
+                        "unsupported_format",
+                    }:
+                        raise
+                    # Unlesbares belegt keine bestimmte Bauraumursache.
+    return tuple(parts)
+
+
+def _check_plate(
+    meshes: Sequence[Mesh],
+    profile: Profile,
+    setup: SlicerSetup,
+    cancelled: CancelToken | None = None,
+) -> None:
+    """Bekannte Bauraumgründe halten vor dem externen Prozess an."""
+    from app.core.export.writer import arrangement_holds
+    from app.core.geom.prepare import arrange_on_bed
+
+    resize = replace(SCALE_TO_FIT, label=_("Verkleinern …"))
+    for index, mesh in enumerate(meshes):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        height = float(mesh.bounds.size[2])
+        limit = build_area.printable_height(profile.printer)
+        if height > limit + EPS_GEOM:
+            raise ExternalToolError(
+                tool=setup.name,
+                title=SLICER_FAILED,
+                detail=_("Ein Teil ist höher, als dieser Drucker drucken kann."),
+                values={
+                    "height_mm": height,
+                    "limit_mm": limit,
+                    "constraint": "slicer_build_volume",
+                    "part_index": index,
+                },
+                suggestions=(SPLIT_MODEL, resize, CHOOSE_PRINTER, CANCEL),
+            )
+        excess = build_area.size_excess(mesh, profile.printer)
+        if excess > build_area.size_excess_uncertainty(mesh) + EPS_GEOM:
+            raise ExternalToolError(
+                tool=setup.name,
+                title=SLICER_FAILED,
+                detail=_("Ein Teil ist größer als die Druckfläche, auch wenn es gedreht wird."),
+                values={
+                    "excess_mm": excess,
+                    "constraint": "slicer_build_volume",
+                    "part_index": index,
+                },
+                suggestions=(SPLIT_MODEL, resize, CHOOSE_PRINTER, CANCEL),
+            )
+    if len(meshes) > 1:
+        data = [as_mesh_data(mesh) for mesh in meshes]
+        if not arrangement_holds(data, profile):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            planned = arrange_on_bed(data, profile)
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            if any(finding.code == "arrange.needs_more_plates" for finding in planned.findings):
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Für diese Teile wurde keine Anordnung auf einer Druckplatte gefunden. "
+                        "Sie können alle Teile des Projekts neu auf Platten anordnen "
+                        "oder einen größeren Drucker wählen."
+                    ),
+                    suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, resize, CANCEL),
+                    values={"constraint": "slicer_build_volume"},
+                )
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -5440,6 +5578,7 @@ def slice_model(
     slots: Sequence[MaterialSlot] = (),
     cancelled: CancelToken | None = None,
     model_height: float | None = None,
+    model_meshes: Sequence[Mesh] | None = None,
     expected_tools: Sequence[int] = (),
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
@@ -5493,6 +5632,9 @@ def slice_model(
             suggestions=(INSTALL_MISSING, EXPORT_ONLY),
         )
 
+    meshes = model_meshes if model_meshes is not None else _meshes_from_files(models, setup)
+    _check_plate(meshes, profile, setup, cancelled)
+
     started_perf_counter = time.perf_counter()
     # Gefragt an der Wahl vor der Trennung: Ein Ersatz gilt der Platte wie dem
     # Teil, das den Wert als Objektwert trägt (RM-480).
@@ -5514,7 +5656,7 @@ def slice_model(
         config = write_config(settings, profile, setup, workspace, slots)
         limited_settings = list(config.findings)
         requested_values = config.written
-        config = _creality_cli_tower_position(config, setup, cli_models)
+        config = _orca_cli_tower_position(config, setup, cli_models)
         densities, diameters = _readback_materials(config, settings, profile, setup, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
@@ -5623,11 +5765,8 @@ def slice_model(
             if reason:
                 _log.info("%s refused the job: %s", setup.name, reason)
                 output = "\n".join(part for part in (output, reason) if part)
-            # **Vor den Ausgabeprüfungen**, denn ein abgestürztes Programm
-            # schreibt keinen Satz, an dem sie greifen könnten: Es fällt mitten
-            # im Lauf um, und was dasteht, ist die letzte Zeile davor. Der
-            # Kunde bekäme sonst nur „Der Slicer hat keine Druckdatei geschrieben“.
-            # Der Prozessstatus belegt den Absturz, aber nicht dessen Ursache.
+            # Ein bekannter Bauraumgrund hat Vorrang vor dem Absturzstatus.
+            # Ohne belegte Ursache nennt der Status weiterhin nur den Absturz.
             # Der Rückgabewert gehört ins Protokoll, nicht in den Satz: Unter
             # Windows kam -50 als 4294967246 beim Kunden an (KUNDE-09).
             _log.info(
@@ -5635,6 +5774,8 @@ def slice_model(
                 setup.name,
                 signed_exit_code(completed.returncode),
             )
+            if _says_outside_the_volume(output):
+                raise _outside_the_volume(setup, profile, output, model_height)
             if crashed(completed.returncode):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -5676,8 +5817,6 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
-            if _says_outside_the_volume(output):
-                raise _outside_the_volume(setup, profile, output, model_height)
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,

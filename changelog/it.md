@@ -31,6 +31,8 @@ scrive in `website/version.json`.
 - Cura usa i limiti di jerk del profilo, con valori distinti per pareti, riempimento e primo strato.
 - Se in Cura è attiva un’altra stampante, il trasferimento indica entrambe e mostra dove adottare la scelta di Cura.
 - Risolto un arresto anomalo di ElegooSlicer e OrcaSlicer durante lo slicing di modelli multicolore con supporti a griglia.
+- Dopo lo slicing, Solidon confronta anche il materiale dei supporti e gli strati del modello per piatto. Il rapporto mostra la stima interna e i valori del file di stampa.
+- Il confronto del materiale considera solo il modello stampato. Lo spurgo è mostrato separatamente, segnalando se la quantità non può essere letta completamente.
 - L'analisi dello spazio necessario per i supporti è molto più rapida sui modelli cavi e mantiene i contorni fini.
 - Nelle parti sovrapposte, l'analisi di stampa non conta più l'aria racchiusa come materiale. Migliora anche il rilevamento degli sbalzi e dei supporti necessari.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
@@ -64,6 +66,9 @@ scrive in `website/version.json`.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 - Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano *Orienta per la stampa*, *Ruota* e *Sposta*. Il corpo resta esatto.
 - Una parete esterna più lenta vale ora anche per i perimetri piccoli come fori e steli in PrusaSlicer e nella famiglia Orca.
+- PrusaSlicer e la famiglia Orca rispettano la densità dei supporti scelta. Il campo parte dall'1 %. Per stampare senza supporti, scegli «Nessuno».
+- Nelle stampe multicolore con OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, la torre di spurgo parte da una posizione adatta alle dimensioni del piatto.
+- I pezzi troppo grandi vengono segnalati prima di avviare lo slicer. Se non si trova spazio per tutti su un piatto, puoi distribuirli su più piatti.
 
 ### Fori, asole e divisione
 

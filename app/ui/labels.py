@@ -1478,6 +1478,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "entry": _("Eintrag"),
     "entries": _("Einträge"),
     "estimated": _("Geschätzt"),
+    "estimated_source": _("Quelle der Schätzung"),
+    "measured_source": _("Quelle des G-Code-Werts"),
     "expected": _("Erwartet"),
     "got": _("Bekommen"),
     "expected_prefix": _("Erwarteter Anfang"),
@@ -1608,6 +1610,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "parameter": _("Parameter"),
     "params": _("Parameter"),
     "part": _("Baustein"),
+    "part_index": _("Teil"),
     "parts": _("Teile"),
     "path": _("Pfad"),
     "pitch": _("Steigung"),
@@ -1849,6 +1852,11 @@ def value_text(key: str, value: object) -> str:
             # bleibt stehen: Sie ist dann die einzige Auskunft, die es gibt.
             return f"{localised_value(value)} {unit}"
         return show(number)
+    if key in {"estimated_source", "measured_source"}:
+        if value == "internal":
+            return tr("Interne Schichtanalyse")
+        if value == "gcode":
+            return tr("G-Code")
     return localised_value(value)
 
 
