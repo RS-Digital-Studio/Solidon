@@ -2749,6 +2749,35 @@ def test_superslicer_gets_no_scarf_seam_it_cannot_read(tmp_path: Path, profile: 
     assert _plate_value(prusa, "prusa", "scarf_seam_placement") == "contours"
 
 
+@pytest.mark.parametrize("accepted", [False, True])
+def test_superslicer_gets_grid_instead_of_an_unsupported_tree(
+    tmp_path: Path, profile: Profile, accepted: bool
+) -> None:
+    """RM-480: Auch ein übernommener Baumvorschlag erreicht Platte und Teil als
+    Kreuzgitter; der Export sagt dem Kunden, dass er die Stützart ersetzt."""
+    choose = print_settings.with_accepted if accepted else print_settings.with_choice
+    settings = choose(print_settings.resolve(profile), "support.style", "tree")
+    settings = print_settings.with_choice(settings, "shell.seam_position", "nearest")
+    setup = handover.SlicerSetup(Path("superslicer_console.exe"), "prusa")
+    written, findings = write_assembly(
+        [scene_object()],
+        tmp_path,
+        project_name="Stützen",
+        profile=profile,
+        settings=settings,
+        flavour="prusa",
+        setup=setup,
+    )
+    with zipfile.ZipFile(written) as archive:
+        plate = archive.read("Metadata/Slic3r_PE.config").decode("utf-8")
+        parts = archive.read("Metadata/Slic3r_PE_model.config").decode("utf-8")
+    assert "organic" not in plate + parts
+    assert "rectilinear-grid" in plate + parts
+    assert "seam_position = cost" in plate
+    assert any(item.code == "slicer.choice_substituted" for item in findings)
+    assert settings.support.style == "tree", "Die gespeicherte Wahl bleibt erhalten."
+
+
 def test_superslicer_reads_the_fill_pattern_of_its_own_bundle_under_todays_name() -> None:
     """RM-459: ``external_fill_pattern`` steht in SuperSlicers eigenem Bündel,
     sein 3MF-Leser kennt nur ``top_fill_pattern`` und ``bottom_fill_pattern``.

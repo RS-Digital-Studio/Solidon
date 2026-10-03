@@ -2903,6 +2903,41 @@ def test_superslicer_greys_out_the_scarf_seam_and_drops_its_suggestion(
     assert (suggestion in dialog._current_advice()) is not ignored
 
 
+def test_superslicer_explains_tree_supports_and_restores_them_on_program_change(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """RM-480: Die gespeicherte Wahl bleibt, angeboten wird der wirksame Ersatz.
+
+    Der Fensterfall gehört zum Release; der Kernersatz wird getrennt geprüft.
+    """
+    from PySide6.QtTest import QTest
+
+    editor = dialog._editors["support.style"]
+    assert isinstance(editor, QComboBox)
+    tree = editor.findData("tree")
+    assert tree >= 0
+    own_tip = editor.itemData(tree, Qt.ItemDataRole.ToolTipRole)
+    editor.setCurrentIndex(tree)
+    dialog._slicer_path = Path("superslicer.exe")
+    dialog._mark_fields_this_slicer_ignores()
+    assert editor.currentData() == "tree"
+    assert dialog.settings.support.style == "tree"
+    assert not editor.model().flags(editor.model().index(tree, 0)) & Qt.ItemFlag.ItemIsEnabled
+    assert "Gitter" in editor.toolTip()
+    assert "Gitter" in editor.itemData(tree, Qt.ItemDataRole.AccessibleDescriptionRole)
+    editor.setCurrentIndex(editor.findData("grid"))
+    for key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+        for _ in range(editor.count()):
+            QTest.keyClick(editor, key)
+            assert editor.currentData() != "tree"
+    dialog._slicer_path = Path("PrusaSlicer.exe")
+    dialog._mark_fields_this_slicer_ignores()
+    assert editor.model().flags(editor.model().index(tree, 0)) & Qt.ItemFlag.ItemIsEnabled
+    assert editor.itemData(tree, Qt.ItemDataRole.ToolTipRole) == own_tip
+    editor.setCurrentIndex(tree)
+    assert dialog.settings.support.style == "tree"
+
+
 def test_a_part_that_fits_no_bed_is_named_before_slicing(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -7454,11 +7454,6 @@
   "„{text}“ · Startwert {seed}": "«{text}» · semente {seed}",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "«Abrir na face» só vale sem aberturas escolhidas. Introduza a face em «Aberturas» e esvazie este campo.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. O relatório completo está na pasta guardada como «bericht.txt» — anexe-o, por favor.",
-  "Einfügen beenden und Modell erzeugen": "Terminar a inserção e gerar modelo",
-  "Einfügen beenden und übernehmen": "Terminar a inserção e aplicar",
-  "Größe ändern": "Alterar tamanho",
-  "Reliefhöhe ändern": "Alterar altura do relevo",
-  "Zellgröße ändern": "Alterar tamanho da célula",
   "{title} {number}": "{title} {number}",
   "{name} ändern": "Alterar {name}",
   "Einheit von {name}": "Unidade de {name}",
@@ -7493,5 +7488,6 @@
   "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Paredes, preenchimento, temperaturas, suportes, velocidade e mais",
   "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Impressora, perfil base, filamento e placa de impressão no slicer",
   "Weitere Beispielprojekte": "Mais projetos de exemplo",
-  "Text und Anhänge vor dem Senden ansehen": "Ver o texto e os anexos antes de enviar"
+  "Text und Anhänge vor dem Senden ansehen": "Ver o texto e os anexos antes de enviar",
+  "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "O SuperSlicer não suporta suportes em árvore e usa suportes em grelha."
 }

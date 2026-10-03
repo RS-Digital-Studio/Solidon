@@ -228,6 +228,46 @@ GROUPS = print_settings.GROUPS
 #: Farbknopf etwa nennt in seinem Tooltip den Hexwert, den sonst nichts zeigt.
 _OWN_TIP: Final = "solidonOwnTip"
 
+#: Rolle, unter der ein Auswahleintrag seinen eigenen Satz aufhebt, solange er
+#: den Grund trägt, aus dem das Programm ihn nicht kennt (:func:`_offer_choices`).
+_OWN_CHOICE_TIP: Final = Qt.ItemDataRole.UserRole + 41
+
+
+def _offer_choices(combo: QComboBox, path: str, program: str) -> None:
+    """Eine Wahl, die der Slicer nicht kennt, steht grau da, mit ihrem Ersatz als Grund.
+
+    SuperSlicer kennt keine Baumstütze (RM-480): Der Eintrag bleibt sichtbar —
+    wer ihn vermisst, sucht ihn —, lässt sich aber nicht wählen, und Tooltip
+    wie Bildschirmleser sagen, was stattdessen gedruckt wird
+    (``slicer_keys.NOT_OFFERED_BY_PROGRAM``). Wird das Programm gewechselt,
+    kommt der eigene Satz des Eintrags zurück.
+    """
+    model = combo.model()
+    if not isinstance(model, QStandardItemModel):
+        return
+    for index in range(combo.count()):
+        item = model.item(index)
+        replaced = slicer_keys.substitute(path, combo.itemData(index), program)
+        item.setEnabled(replaced is None)
+        own = item.data(_OWN_CHOICE_TIP)
+        if replaced is not None:
+            if own is None:
+                item.setData(
+                    (
+                        item.data(Qt.ItemDataRole.ToolTipRole),
+                        item.data(Qt.ItemDataRole.AccessibleDescriptionRole),
+                    ),
+                    _OWN_CHOICE_TIP,
+                )
+            item.setData(str(replaced.reason), Qt.ItemDataRole.ToolTipRole)
+            item.setData(str(replaced.reason), Qt.ItemDataRole.AccessibleDescriptionRole)
+        elif own is not None:
+            tip, described = own
+            item.setData(tip, Qt.ItemDataRole.ToolTipRole)
+            item.setData(described, Qt.ItemDataRole.AccessibleDescriptionRole)
+            item.setData(None, _OWN_CHOICE_TIP)
+
+
 #: Die eigene Beschreibung eines Zahlenfelds, bevor Grenzhinweise dazukommen.
 _REFUSAL_BASE_DESCRIPTION: Final = "solidonRefusalBaseDescription"
 _NOZZLE_RANGE_MM: Final[tuple[float, float]] = (0.1, 2.0)
@@ -6369,15 +6409,18 @@ class PrintSettingsDialog(QDialog):
                 else ""
             )
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
-            # Schichten ohne Lüfter ab, und nur dann steht ein Satz da.
+            # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
+            # eine Wahl, die das Programm nicht kennt (RM-480).
             specific = (
-                slicer_keys.limitation(flavour, path, self.settings)
+                slicer_keys.limitation(flavour, path, self.settings, program)
                 if flavour is not None
                 else None
             )
             if specific is not None:
                 reason = str(specific)
             editor.setEnabled(not ignored)
+            if isinstance(editor, QComboBox):
+                _offer_choices(editor, path, program)
             for widget in (editor, self._labels.get(path)):
                 if widget is None:
                     continue
@@ -7377,6 +7420,10 @@ class PrintSettingsDialog(QDialog):
         selbst danach deckelt (``slicer_keys.caps_volumetric_speed``): Er
         änderte dort nichts am Druck, und an der Kobra 2 hob er über die
         Innenwand die Lückenfüllung des Herstellers an (27.09.2026).
+
+        Eine Wahl, die das Programm nicht kennt, wird als ihr Ersatz
+        vorgeschlagen (``slicer_keys.offered``): SuperSlicer bekommt Gitter statt
+        Baum angeboten (RM-480).
         """
         entries = self._advice_entries
         flavour = self._current_flavour()
@@ -7390,7 +7437,7 @@ class PrintSettingsDialog(QDialog):
                 continue
             if slicer_keys.takes(flavour, entry.path, program):
                 shown.append(entry)
-        return shown
+        return slicer_keys.offered(shown, program)
 
     def _profile_roots(self) -> tuple[Path, ...]:
         """Nutzer- und Herstellerprofile gehören zu demselben gewählten Slicer."""
