@@ -111,7 +111,8 @@ das der Orca-Familie als `finished` mit (Bambu endet manchmal nicht danach).
 
 `AdhesionSettings.brim_gap` bezeichnet den Abstand am korrigierten Fuß.
 `manufacturer.native_brim_gap` übersetzt den belegten Bezug für Konsole und
-Projekt-/Objektwerte; Grenzen und Rückwege stehen in der Export-Herleitung.
+Projekt-/Objektwerte, `part_brim_gap` je Teil (Creality: Fußkorrektur des
+Teils); Grenzen und Rückwege stehen in der Export-Herleitung.
 
 ## Die Lüfterkurve
 

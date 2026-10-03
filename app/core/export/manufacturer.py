@@ -674,6 +674,31 @@ def native_brim_gap(value: float, foot: float | None, program_name: str) -> str:
     return f"{native:.9g}"
 
 
+#: Das Programm, dessen Brim am unkorrigierten Umriss hängt und das keinen
+#: negativen Abstand annimmt (RM-318): Creality Print legt den Brim um die
+#: Erstschichtgruppen vor der Fußkorrektur (``Brim.cpp``,
+#: ``firstLayerObjGroups``), ``brim_object_gap`` hat die Grenzen 0 bis 2
+#: (``PrintConfig.cpp``), und ``brim_use_efc_outline`` gibt es dort nicht.
+#: Die Fußkorrektur ist dagegen ein Objektwert (``PrintObjectConfig``).
+_FOOT_PER_PART: Final = frozenset({"crealityprint"})
+
+
+def part_brim_gap(value: float, foot: float | None, program: str) -> dict[str, str]:
+    """Der Brim-Abstand eines Teils in den Schlüsseln seines Slicers (RM-318).
+
+    Wo der Slicer den Abstand am unkorrigierten Umriss misst und keinen
+    negativen nimmt, senkt Solidon die Fußkorrektur **dieses Teils** genau so
+    weit, dass der Brim im gewünschten Abstand am tatsächlichen Fuß liegt:
+    Abstand null heißt Korrektur null, der native Abstand bleibt null. Die
+    übrigen Teile behalten die Korrektur des Herstellers. Was der Kunde für die
+    ganze Platte wählt, bleibt bei :func:`native_brim_gap` — die Korrektur
+    aller Teile zu senken, ist keine Antwort auf einen Brim-Abstand.
+    """
+    if foot is not None and program in _FOOT_PER_PART and value - foot < 0.0:
+        return {"brim_object_gap": "0", "elefant_foot_compensation": f"{max(value, 0.0):.9g}"}
+    return {"brim_object_gap": native_brim_gap(value, foot, program)}
+
+
 def _first_layer_speed(
     values: Mapping[str, Any], context: _Context, defaults: Mapping[str, str]
 ) -> object:

@@ -1196,8 +1196,8 @@ def object_keys(
         ):
             written.pop("brim_object_gap")
         else:
-            written["brim_object_gap"] = manufacturer.native_brim_gap(
-                applied.adhesion.brim_gap, brim_foot_offset, program
+            written.update(
+                manufacturer.part_brim_gap(applied.adhesion.brim_gap, brim_foot_offset, program)
             )
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 

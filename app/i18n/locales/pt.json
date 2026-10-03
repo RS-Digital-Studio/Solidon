@@ -901,6 +901,7 @@
   "Dafür ist „{title}“ da.": "É para isso que serve «{title}».",
   "Dafür muss ein Körper ausgewählt sein.": "Para isso é preciso selecionar um corpo.",
   "Dafür muss zuerst etwas gerechnet sein.": "Primeiro tem de existir algo calculado.",
+  "Damit der Brim an diesem Teil anliegt, ist seine Fußkorrektur im Slicer auf {value} gesenkt. Die erste Schicht wird dort so breit wie das Modell.": "Para que a aba encoste nesta peça, a sua compensação da base no fatiador é reduzida para {value}. Aí, a primeira camada fica tão larga como o modelo.",
   "Damit hilft der Support weiter: {address}": "Com isto o suporte pode ajudar: {address}",
   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "Assim «{field}» no passo {number} ({operation}) chegaria a {result}; o máximo permitido é {limit}.",
   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind mindestens {limit}.": "Assim «{field}» no passo {number} ({operation}) chegaria a {result}; o mínimo permitido é {limit}.",

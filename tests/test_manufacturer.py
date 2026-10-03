@@ -234,7 +234,11 @@ def test_choosing_a_brim_does_not_invent_an_unreadable_gap() -> None:
 def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     bestand: Path, tmp_path: Path, chosen: bool, program: str
 ) -> None:
-    """Der Objektweg und der ganze Auftrag verwenden denselben nativen Bezug."""
+    """Der Objektweg und der ganze Auftrag verwenden denselben nativen Bezug.
+
+    Creality Print misst den Brim am unkorrigierten Umriss und nimmt keinen
+    negativen Abstand (RM-318): Je Teil senkt Solidon dort die Fußkorrektur
+    dieses Teils, für die ganze Platte hält es mit Handlung an."""
     from xml.etree import ElementTree as ET
 
     import trimesh
@@ -261,7 +265,7 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     for index, mesh in enumerate(meshes):
         mesh.apply_translation((index * 50.0, 0, -mesh.bounds[0, 2]))
         objects.append(SceneObject(id=f"obj_{index}", name=f"Part_{index}", mesh=MeshData.of(mesh)))
-    if program == "creality":
+    if program == "creality" and chosen:
         with pytest.raises(ValidationError) as caught:
             write_assembly(
                 objects,
@@ -291,7 +295,18 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
         {item.get("key"): item.get("value") for item in obj.findall("metadata")}
         for obj in config.iter("object")
     ]
-    if chosen:
+    if program == "creality":
+        # Nur die Stange: Abstand nativ null, Fußkorrektur dieses Teils null;
+        # die Platte und der breite Körper behalten 0,15 mm.
+        assert project["brim_object_gap"] == "0.1"
+        assert keys[0]["brim_object_gap"] == "0"
+        assert keys[0]["elefant_foot_compensation"] == "0"
+        assert "elefant_foot_compensation" not in keys[1]
+        assert "brim_object_gap" not in keys[1]
+        lowered = [item for item in findings if item.code == "export.brim_foot_lowered"]
+        assert [item.object_id for item in lowered] == ["obj_0"]
+        assert lowered[0].severity == "info"
+    elif chosen:
         assert float(project["brim_object_gap"]) == pytest.approx(-0.15)
         assert all("brim_object_gap" not in own for own in keys)
     else:

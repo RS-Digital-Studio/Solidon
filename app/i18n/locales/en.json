@@ -901,6 +901,7 @@
   "Dafür ist „{title}“ da.": "That is what “{title}” is for.",
   "Dafür muss ein Körper ausgewählt sein.": "A body has to be selected for that.",
   "Dafür muss zuerst etwas gerechnet sein.": "Something has to be computed first.",
+  "Damit der Brim an diesem Teil anliegt, ist seine Fußkorrektur im Slicer auf {value} gesenkt. Die erste Schicht wird dort so breit wie das Modell.": "So that the brim touches this part, its base compensation in the slicer is lowered to {value}. The first layer there is as wide as the model.",
   "Damit hilft der Support weiter: {address}": "Support can help with this: {address}",
   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "This would set “{field}” in step {number} ({operation}) to {result}; the maximum is {limit}.",
   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind mindestens {limit}.": "This would set “{field}” in step {number} ({operation}) to {result}; the minimum is {limit}.",

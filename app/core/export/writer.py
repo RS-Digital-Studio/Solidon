@@ -1626,6 +1626,31 @@ def _part_setting_findings(
     ]
 
 
+def _lowered_foot_findings(parts: Sequence[tuple[ObjectId, Mapping[str, str]]]) -> list[Finding]:
+    """Wo die Fußkorrektur eines Teils dem Brim weicht (RM-318).
+
+    Creality Print misst den Brim am unkorrigierten Umriss und nimmt keinen
+    negativen Abstand: Damit der Brim am Fuß anliegt, senkt Solidon die
+    Korrektur genau dieses Teils (``manufacturer.part_brim_gap``). Die erste
+    Schicht wird dort so breit wie das Modell; der Brim liegt daran an.
+    """
+    return [
+        Finding(
+            code="export.brim_foot_lowered",
+            severity="info",
+            message=_(
+                "Damit der Brim an diesem Teil anliegt, ist seine Fußkorrektur im Slicer "
+                "auf {value} gesenkt. Die erste Schicht wird dort so breit wie das Modell.",
+                value=format_length(float(keys["elefant_foot_compensation"])),
+            ),
+            values={"value": keys["elefant_foot_compensation"]},
+            object_id=part,
+        )
+        for part, keys in parts
+        if "elefant_foot_compensation" in keys
+    ]
+
+
 def _plate_wide_findings(
     chosen: Sequence[SceneObject],
     asked: Mapping[ObjectId, Sequence[SettingAdvice]],
@@ -2182,6 +2207,7 @@ def write_assembly(
         applied=False,
     )
     findings += _plate_wide_findings(chosen, asked, split)
+    findings += _lowered_foot_findings([(entry.id, part_values[entry.id].keys) for entry in chosen])
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag — je Teil mit

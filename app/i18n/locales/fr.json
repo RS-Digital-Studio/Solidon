@@ -901,6 +901,7 @@
   "Dafür ist „{title}“ da.": "C'est à cela que sert « {title} ».",
   "Dafür muss ein Körper ausgewählt sein.": "Il faut pour cela sélectionner un corps.",
   "Dafür muss zuerst etwas gerechnet sein.": "Il faut d'abord qu'un calcul ait eu lieu.",
+  "Damit der Brim an diesem Teil anliegt, ist seine Fußkorrektur im Slicer auf {value} gesenkt. Die erste Schicht wird dort so breit wie das Modell.": "Pour que la bordure touche cette pièce, sa compensation de la base est réduite à {value} dans le logiciel de tranchage. La première couche y est aussi large que le modèle.",
   "Damit hilft der Support weiter: {address}": "Avec cela, le support peut aider : {address}",
   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "Ainsi «{field}» à l'étape {number} ({operation}) atteindrait {result} ; le maximum autorisé est {limit}.",
   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind mindestens {limit}.": "Ainsi «{field}» à l'étape {number} ({operation}) atteindrait {result} ; le minimum autorisé est {limit}.",
