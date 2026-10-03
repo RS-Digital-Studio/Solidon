@@ -22,65 +22,55 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 
 ## Fenster
 
-**Höchstens drei sichtbare Zonen:** links Objektbaum, Parameter und Verlauf als
-einklappbare Abschnitte, Mitte der Viewport, rechts **entweder** Chat **oder**
-Prüfbericht, umschaltbar und ganz ausblendbar; eine neue Warnung schaltet zum
-Bericht. Keine Betriebsarten (`AGENTS.md`) — es gibt einen Zustand, die Szene.
-
-**Die Handlungen an der Auswahl stehen in einer zweiten Karte darunter**
-(Entscheidung Robert): eigener Rand, derselbe Stil, `MARGIN` dazwischen, und
-durch die Lücke ist das Modell zu sehen (die Maske von `overlay.CardColumn`
-nimmt sie aus). Für F9, Warnungszähler und Höhenverteilung bleibt es **eine**
-Zone; die zweite Karte folgt ihrem Inhalt.
-
-**Eine Handlungsquittung steht zusätzlich dort, wo gehandelt wurde:**
-`MainWindow.announce` behält die Statuszeile und zeigt eine passive Quittung im
-vorhandenen Overlay — kein Fokus, keine Mausklicks, kein RichText, mindestens
-acht Sekunden, längere Texte länger. Eine neue ersetzt die alte, Fortschritt
-überschreibt sie nicht, Kontextwechsel und Fensterabbau beenden sie samt
-Zeitgeber; keine neue Zone, kein zweites Live-Ereignis für Bildschirmleser.
-
-**Eine Einladung steht über der Ansicht, nie unter einer Karte** (Entscheidung
-Robert). `SurveyNotice` (nach 15 aktiven Minuten) und `SupportNotice` (nach dem
-dritten erfolgreichen Export oder Slicer-Start einer Version) sind
-`survey.ViewNotice`: nicht modal, ohne Fokus beim Erscheinen, weg erst auf
-Klick.
-
-- **Der Platz wird gesucht:** `spot` nimmt die oberste freie Stelle zwischen
-  allem, was über `keep_clear_of` gemeldet ist (Zonen, Ansichtsleiste,
-  Vorschauband, Ziehwert-Leiste) — zuerst oben zwischen den Karten, sonst unter
-  der kürzeren. **Wer etwas Neues über die Ansicht legt, meldet es dort an.**
-- **Ausgewichen wird in einer Richtung** — die Unterstützung weicht der
-  Rückfrage; gegenseitiges Ausweichen schiebt im Kreis.
-- **Angeboten wird nur, wo sie jemand sieht:** nicht hinter einem modalen
-  Dialog (beim Druckdialog nach `exec`), nicht über dem Startbildschirm, sonst
-  beim nächsten Ergebnis; „gesehen“ setzt erst das Zeigen.
-- **Gezählt wird das Ergebnis, nicht der Versuch:** `_announce_written` und
-  `PrintSettingsDialog.handedOver` kommen nur nach geschriebener Datei bzw.
-  gelungenem Slicen oder Öffnen an — Abbruch, Fehler und die Rückfrage vor
-  Fehlern nie.
-
-**Wer auf dem Startbildschirm zu arbeiten beginnt, beginnt das leere Projekt:**
-Kürzel und Befehlspalette sind dort erreichbar, und `run_operation` und
-`start_sketch` gehen über `_begin_from_the_start_screen` — wie Einfügen und
-Download ersetzt der Anfang das offene Projekt (mit der Frage aus
-`_may_discard`, wenn etwas verloren ginge) und wechselt in den Arbeitsbereich,
-damit die Vorschau nicht hinter dem Startbildschirm liegt; `start_empty` sagt,
-ob es dazu kam.
-
-**Ein Klick baut das Fenster einmal, auch wenn er mehrere Signale sendet:** Der
-Objektbaum geht über `_on_tree_selection`, das die Menüeinträge dem
-Merkmalsignal überlässt, und `_fields_this_round` merkt sich das Merkmal, das
-`featureSelected` in derselben Runde gebaut hat (samt `FeaturePanel.serial`).
-Wer ein weiteres Signal an dieselbe Geste hängt, zählt, wie oft der teure Teil
-läuft.
-
-**Die Tour ist ein Angebot, keine Sperre:** Solange ein Beispielprojekt offen
-ist, trägt die rechte Spalte einen dritten Reiter (`app/ui/tour.py`, Schritte in
-`app/core/tour.py`); er erkennt getane Schritte über `projectChanged`, „Weiter“
-schaltet auch ohne Erkennung. Der Warnungssprung lässt der aktiven Tour den
-Reiter, ein anderes Projekt räumt ihn weg. Die Erkennungswerte passen zu
-`tools/make_examples.py` (`tests/test_tour.py`).
+- Offene Formen-/Skelett-/Zeichengesten gehören zur Speicherfrage.
+  `_has_unsaved_gestures` vergleicht mit gespeicherten Parametern, auch nach
+  Löschen aller Gesten. Speichern übernimmt erst den Editor; ein noch nötiger
+  Operationsdialog sperrt den Projektwechsel bis Übernehmen. Verwerfen und
+  eingehender Projektwechsel räumen Ziele, Karten, Vorschauen und
+  Wiederherstellungsdaten gemeinsam ab.
+- Gespeicherte Gesten öffnen auf ihrem Eingang:
+  `Session.scene_before_step_async` im Vorschauarbeiter, Antwort gebunden an
+  Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
+  im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
+- Formen/Skelett haben denselben lokalen Undo-Weg für Menü und Strg+Z; leerer
+  Editor nimmt keinen Dokument-Schritt zurück. Zeichnen hat eigene Kürzel
+  und deaktiviert die globale Aktion.
+- Höchstens drei sichtbare Zonen: links einklappbarer Baum/Parameter/Verlauf,
+  Mitte Viewport, rechts Chat oder Bericht (wechselbar/ausblendbar). Neue
+  Warnung öffnet Bericht. Keine Betriebsarten (`AGENTS.md`).
+- Auswahlhandlungen stehen in einer zweiten Karte unter der rechten Karte:
+  eigener Rand, gleicher Stil, `MARGIN` Abstand und durchsichtige Lücke über
+  `overlay.CardColumn`-Maske. Für F9, Warnungszähler und Höhenverteilung bleibt
+  dies eine Zone; zweite Karte folgt dem Inhalt.
+- `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
+  kein Fokus, keine Klicks, kein RichText; mindestens acht Sekunden, lange
+  Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.
+  Kontextwechsel/Abbau beendet den Timer. Keine neue Zone und kein zweites
+  Live-Ereignis für Bildschirmleser.
+- Einladungen stehen über der Ansicht, nie unter Karten: `survey.ViewNotice`
+  für `SurveyNotice` nach 15 aktiven Minuten und `SupportNotice` nach dem
+  dritten erfolgreichen Export/Slicerstart einer Version; nichtmodal,
+  ohne Fokus beim Erscheinen, bis zum Klick sichtbar.
+  `spot` sucht die oberste freie Stelle gegen `keep_clear_of` (Zonen,
+  Ansichtsleiste, Vorschau-/Ziehwertband), zuerst zwischen, sonst unter der
+  kürzeren Karte. Neue Overlays dort anmelden. Nur Unterstützung weicht der
+  Rückfrage aus, nie gegenseitig. Nicht über Startseite/modalem Dialog zeigen
+  (Druckdialog nach `exec`), sonst beim nächsten Ergebnis. Erst Zeigen zählt
+  als gesehen; `_announce_written`/`handedOver` zählen nur erfolgreiche Datei,
+  Slicen oder Öffnen, nie Versuch, Abbruch, Fehler oder Rückfrage.
+- Arbeitsbeginn auf der Startseite ersetzt das leere/offene Projekt über
+  `_begin_from_the_start_screen` mit `_may_discard`; `start_empty` meldet Erfolg.
+  `run_operation`/`start_sketch` sowie Einfügen/Download wechseln so in den
+  Arbeitsbereich; Kürzel/Palette bleiben erreichbar, Vorschau liegt nicht
+  hinter der Startseite.
+- Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
+  dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
+  derselben Runde. Bei neuen Signalen die teuren Aufrufe zählen.
+- Tour ist ein Angebot: dritter rechter Reiter für Beispielprojekte
+  (`ui/tour.py`, Schritte `core/tour.py`), Erkennung über `projectChanged`,
+  Weiter auch ohne Erkennung. Warnung lässt aktive Tour stehen, Projektwechsel
+  räumt sie ab. Erkennungswerte müssen zu `make_examples.py` passen
+  (`test_tour.py`).
 
 ## Rückfragen
 
@@ -176,56 +166,39 @@ Stellen halten das, beide sind nötig:
 
 ## Der Prüfbericht
 
-- **Dasselbe Problem bietet dieselben Handlungen**, gleich wer es meldet:
-  `FINDING_ACTIONS` (`panels.py`) hält die Zuordnung,
-  `tests/test_value_labels.py` die **Familie** — Befunde mit demselben Namen
-  hinter dem Punkt tragen alle eine Handlung, wenn einer sie trägt.
-- **Die Kennung trifft den Fall:** „passt nicht“ und „liegt woanders“
-  trennt, ob der Körper überhaupt hineinpasst (`prepare._fits_at_all`); einer
-  3MF mit Bettkoordinaten (Bambu Studio, Orca, Elegoo) hilft *Auf dem Bett
-  anordnen*, nicht *Modell teilen*.
-- **Gleiche Meldungen sind eine Zeile, die Zahl davor in Klammern**
-  (Entscheidung Robert): gebündelt ab zwei nach Satz, Kennung, Schwere, Schritt
-  und Handlungen. Die Sammelzeile trägt alle Körper, wählt beim Klick alle,
-  ihre Handlung fragt, für welche sie gilt; Merkmale trägt sie nur gleiche,
-  Orte eines Körpers mit Umrissen alle.
-- **Die Handlungen stehen sichtbar da, nicht im Rechtsklick:** eine Knopfzeile
-  unter der Liste über `actions_for(finding)`, dieselbe Quelle wie das
-  Kontextmenü (§2.7).
-- **Wer einen Befund baut, gibt ihm einen Weg** (`suggestions=`;
-  `test_finding_ways.py`, sonst ein Grund in `OHNE_KNOPF`); was ohne Schritt
-  oder Körper nichts täte, blendet der Bericht aus
-  (`panels.actions_for_document`, `tests/test_finding_actions.py`).
-- **Ein Fehler aus einer Operation ist ein Befund, kein Dialog**
-  (`op.<operation>.<Ausnahme>`, die Kette hält an). Seine Handlung ist
-  *Eingabe korrigieren*: `edit_operation(op_id, field)` öffnet den Schritt mit
-  dem Cursor im genannten Feld und ersetzt ihn beim Übernehmen (§15.4). Was die
-  Schrittkennung braucht, steht in `dialogs.NEEDS_OP`, was den lebenden Körper
-  braucht, in `panels.NEEDS_LIVE_BODY`; wer einen Handler baut, der
-  `_object_of`, `_entry_of` oder `error.object_id` liest, trägt ihn dort ein
-  (`test_finding_actions`). Nur eine nackte Bindung (`=@breite`,
-  `expressions.bound_name`) führt in die Parameterleiste.
-- **Eine Befundzeile aus einer Operation steht nie ohne Knopf da:** Bleibt nach
-  dem Abgleich mit `error_handlers` nichts, bietet `panels.handled_actions`
-  *Eingabe korrigieren* an, mit dem Rat in dessen Kurzhilfe (der Fehlerdialog
-  zeigt Räte als Sätze, `dialogs.unhandled_advice`). Knopfzeile, Kontextmenü
-  und Vorwahl fragen dieselbe Funktion.
-- **Lokale Formenerkennung aus einem Befund behält dessen Ziel:** Die nächste
-  Oberflächenwahl bleibt an seine Körper gebunden, erst der Treffer bestimmt
-  einen; die Baumauswahl ersetzt das Ziel nie, Maus und Tastatur führen über
-  denselben Originaltreffer.
-- **Ein Klick auf einen Befund bleibt nie folgenlos** (§2.7), gestuft: **Ort**
-  → die Kamera fliegt hin, eine vergängliche Marke steht dort (`mark_finding`:
-  Ring in der Befundfarbe `FINDING_COLOUR` vor dem Material, nie in der
-  Auswahlfarbe, Radius aus dem Abstand, Titel auf eigenem Grund in
-  Oben-Richtung der Kamera, bei `Finding.outline` dazu der Rand der Fläche —
-  `ansicht.md`, „Was gefärbt wird“); **Körper** → er wird ausgewählt; **`op_id`** → der
-  Verlauf zeigt den Schritt (`HistoryPanel.point_at`), auch ohne Körper.
-  Fallen: Der Ort kommt aus der Szene und wird für die Ansicht verschoben
-  (`view_point_of`); der Ort eines Kartenbefunds wird in `_map_ready`
-  nachgeholt; eine Transaktion aus mehreren Schritten trägt nur `OPS_ROLE` am
-  Gruppenknoten. Die Marke wird nicht nach vorn gezogen, die Beschriftung trägt
-  `always_visible`.
+- Gleiche Probleme bieten dieselben Handlungen: `panels.FINDING_ACTIONS`;
+  `test_value_labels.py` prüft die Kennungsfamilie hinter dem Punkt.
+- „Passt nicht“ und „liegt woanders“ unterscheiden sich über `prepare._fits_at_all`.
+  Einer 3MF mit Bettkoordinaten (Bambu/Orca/Elegoo) hilft *Auf dem Bett anordnen*,
+  nicht *Modell teilen*.
+- Gleiche Meldungen bündeln ab zwei nach Satz, Kennung, Schwere, Schritt und
+  Handlungen; Anzahl davor in Klammern. Klick wählt alle Körper, Handlung fragt
+  die Teilmenge. Nur gemeinsame Merkmale, aber alle Umrissorte eines Körpers
+  werden mitgeführt.
+- `actions_for(finding)` speist sichtbare Knopfzeile und Kontextmenü (§2.7).
+  Jeder Befund bekommt `suggestions` oder begründetes `OHNE_KNOPF`
+  (`test_finding_ways.py`); `actions_for_document` entfernt Handlungen ohne
+  notwendigen Schritt/Körper (`test_finding_actions.py`).
+- Op-Fehler sind Befunde `op.<operation>.<Ausnahme>` mit Kettenhalt, kein Dialog.
+  *Eingabe korrigieren* ruft `edit_operation(op_id, field)` auf und ersetzt den
+  Schritt (§15.4). Handler mit `_entry_of` gehören in `dialogs.NEEDS_OP`,
+  solche mit `_object_of`/`error.object_id` in `panels.NEEDS_LIVE_BODY`.
+  Nur nackte `=@breite`-Bindungen (`expressions.bound_name`) führen in die
+  Parameterleiste.
+- Bleibt nach `error_handlers` kein Knopf, bietet `handled_actions` *Eingabe
+  korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
+  `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
+  benutzen denselben Abgleich.
+- Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
+  bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
+  verwenden denselben Treffer.
+- Befundklick (§2.7): Ort → Kameraflug und `mark_finding`; sonst Körper → Auswahl;
+  sonst `op_id` → `HistoryPanel.point_at`. Ortsmarken verwenden `FINDING_COLOUR`
+  vor Material, Abstand als Radius, Titelgrund in Kamera-Oben-Richtung und
+  `Finding.outline` als Rand (`ansicht.md`, „Was gefärbt wird“). Marke nicht
+  nach vorn ziehen; nur Beschriftung `always_visible`. Szenenorte gehen durch
+  `view_point_of`, Kartenorte kommen in `_map_ready`. Mehrschritt-Transaktionen
+  tragen am Gruppenknoten nur `OPS_ROLE`.
 
 ## Das Merkmalfenster
 
@@ -314,50 +287,30 @@ Ansichtsseite steht in `griffe.md`.
 
 ## Der Hauptknopf
 
-**Ein Hauptknopf entsteht über `style.make_primary()`, nie über
-`setDefault(True)`:** `make_primary` setzt die Schrift am Widget; das Fett bleibt als zweite
-Kodierung neben der Akzentfarbe (Regel 18). **Ein Knopf, der verwirft, entsteht
-über `style.make_danger()`** — Fehlerrot (`ROLES["error"]`) als Fläche, Schrift
-aus `readable_on`, das Wort als zweite Kodierung (*Abbrechen* unter
-*Übernehmen*; Entscheidung Robert); `tests/test_style.py` misst die Fläche am
-gezeichneten Knopf.
-
-**Wo keiner gesetzt wird, setzt Qt selbst einen:** `QDialog` macht beim ersten
-`show()` den ersten Knopf mit `autoDefault` zum Default — Akzentfarbe ohne
-halbfette Schrift. Ein Fenster ohne Handlung nimmt `style.no_primary()`, eines
-mit Handlung `make_primary`, auch wenn der Knopf gesperrt startet. Das zeigt nur
-das angezeigte Fenster: `tests/test_style.py` hält beide Richtungen
-(`test_every_default_button_of_the_surface_goes_through_make_primary`,
-`test_no_window_wears_an_accent_it_never_asked_for`), misst gegen die
-gezeichnete Schrift und verbietet `setDefault(True)` außerhalb von `style.py`.
-
-**Der Fokus macht keinen Hauptknopf, Enter gehört trotzdem dem per Tastatur
-gewählten Knopf:** Ein `QPushButton` mit `autoDefault` (im `QDialog` Vorgabe)
-macht sich beim Fokus zum Default. Der Zuhörer `style._FocusTakesNoAccent`
-(einmal je Anwendung, über `make_primary`/`no_primary`) nimmt jedem
-Nebenknopf beim Fokus `autoDefault`; ohne das gäbe der Knopf Enter an den
-Default weiter. Den per Tab/Umschalt+Tab erreichten Knopf klickt der Zuhörer
-bei Enter deshalb selbst (`style.enter_belongs_to_focus`), der Akzent bleibt.
-Maus, `setFocus` und vom gesperrten oder verborgenen Knopf vertriebener Fokus
-(Qt meldet ihn als Tab) lassen Enter beim Hauptknopf; ein Fensterwechsel
-ändert die Wahl nicht. Kein
-Dialog tut dafür etwas selbst. Wächter: `tests/test_enter_key.py` und
-`test_no_button_takes_the_accent_when_it_gets_the_focus` (Fokus zugestellt —
-mit `WA_DontShowOnScreen` wird kein Fenster aktiv).
-
-**Ein typloses Stylesheet am Vorfahren nimmt dem Hauptknopf seine Farben:** Eine
-Regel ohne Selektor gilt für jeden Nachkommen (auch aus dem Stylesheet der
-Großeltern) und **ersetzt** dort das Anwendungs-Stylesheet — für die
-Eigenschaften, die sie setzt; gefährlich ist `background` (ein typloses
-`border:` wie in `_flash` nimmt nichts). Stylesheets gehen deshalb an den
-`objectName`; wo eine breite Regel bleiben muss, bekommt der Hauptknopf darin
-seine Farben ausdrücklich (`#surveyNotice #surveyGive` in `app/ui/survey.py`);
-`make_primary` bleibt in beiden Fällen. Ein grüner Klicktest sagt nichts über
-das Bild eines Knopfes.
-
-**Der Knopf heißt nicht wie sein Werkzeug:** Der Umschalter nennt das Werkzeug,
-der Knopf die Handlung („Trennen“, „Jetzt trennen“;
-`tests/test_interface_limits.py`).
+- Hauptaktionen entstehen über `style.make_primary`, nie direkt über
+  `setDefault(True)`: Akzent und halbfette Schrift bilden zwei Kodierungen.
+  Verwerfen verwendet `make_danger` (Fehlerrot, Schrift aus `readable_on`,
+  Handlungswort; etwa *Abbrechen* unter *Übernehmen*). `test_style.py` prüft
+  gezeichnete Fläche/Schrift und verbietet den direkten Default-Aufruf.
+- Dialoge ohne Hauptaktion rufen `no_primary`, andere `make_primary` auch bei
+  anfangs gesperrtem Knopf. Sonst macht Qt beim ersten Anzeigen den ersten
+  `autoDefault`-Knopf selbst zum Hauptknopf. Nur ein gezeigtes Fenster belegt
+  dieses Verhalten.
+- Fokus verschiebt keinen Akzent. `style._FocusTakesNoAccent` wird einmal
+  durch `make_primary`/`no_primary` angemeldet, nimmt Nebenknöpfen `autoDefault`
+  und klickt den per Tab/Umschalt+Tab gewählten bei Enter selbst
+  (`enter_belongs_to_focus`). Maus, `setFocus` und von gesperrten/verborgenen
+  Knöpfen vertriebener Fokus (Qt meldet Tab) lassen Enter beim Hauptknopf.
+  Fensterwechsel erhält die Wahl; kein Dialog baut eigene Logik dafür.
+  `test_enter_key.py` und `test_style.py` prüfen zugestellten Fokus;
+  `WA_DontShowOnScreen` aktiviert kein Fenster.
+- Stylesheets ohne Selektor am Vorfahren ersetzen für gesetzte Eigenschaften
+  die Anwendungsfarben aller Nachkommen: besonders `background`, nicht ein
+  reines `border` wie `_flash`. Deshalb `objectName`-Selektoren; bei notwendiger
+  breiter Regel Hauptknopffarben ausdrücklich setzen (`#surveyNotice #surveyGive`)
+  und weiterhin `make_primary` verwenden. Klicktests belegen keine Knopffarbe.
+- Umschalter nennen das Werkzeug, Knöpfe die Handlung (*Trennen*, *Jetzt
+  trennen*); `test_interface_limits.py`.
 
 ## Ein Dialog, der höher ist als sein Inhalt
 
@@ -498,3 +451,16 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   Dialog die Vorbereitung und sperrt den Versand; Abwahl und Schließen gehen,
   ein geschlossener Dialog verwirft späte Antworten. `report.log_tail()` liest
   rückwärts höchstens 1 MiB für die letzten 400 Zeilen.
+
+
+### Formsitzung: Mauszüge und Analyse
+
+- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch außerhalb des
+  Modells. Seine räumlichen Proben teilen die optionale `Stroke.gesture`-Kennung
+  im vorhandenen Strichparameter. Kennung null hält alte Einzelzüge lesbar;
+  die Zusatzkennung verändert deren Geometrie nicht.
+- Zählung, lokales Rückgängig und Wiederholen verwenden diese Gruppe, einschließlich
+  noch wartender Arbeiterproben. Eine neue Geste leert lokales Wiederholen;
+  Beenden des Editors beendet auch einen noch gehaltenen Pinsel im Navigator.
+- Die sichtbare Gestenleiste trägt ihre eigene `MapLegend` mit Skala und Herkunft.
+  Ein Kartenwechsel entwertet alte Befunde und Wartehinweise zusammen.

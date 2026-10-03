@@ -415,7 +415,7 @@ def test_the_channel_question_is_answered_once_per_measurement() -> None:
     Der Druckdialog stellte sie nach jedem geänderten Feld neu, an der
     Waschschüssel je 3,9 s. Dieselbe Messung bekommt dieselbe Antwort,
     ohne zu rechnen; eine neue Messung derselben Form wird neu gefragt, und
-    die Frage nach einzelnen Stücken läuft immer.
+    auch eine wiederholte Frage nach denselben einzelnen Stücken bleibt gemerkt.
     """
     import app.core.slice.analysis as analysis
 
@@ -428,8 +428,197 @@ def test_the_channel_question_is_answered_once_per_measurement() -> None:
     assert model_support(again) is not first, "eine neue Messung wird neu gefragt"
     assert model_support(again) == first
     single = frozenset({min(first.channels)})
-    assert model_support(result, only=single) is not model_support(result, only=single)
+    assert model_support(result, only=single) is model_support(result, only=single)
     assert len(analysis._ANSWERS) <= analysis._ANSWERS_KEPT
+
+
+def test_the_second_print_report_reuses_the_channel_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der echte Verbraucher fragt dieselben Überhänge beim zweiten Bericht nicht neu."""
+    from app.core.slice import analysis, findings
+    from app.core.types import Scene, SceneObject
+
+    original = analysis._model_support
+    questions: list[object] = []
+
+    def counted(*args, **kwargs):
+        questions.append(kwargs.get("only", args[2] if len(args) > 2 else None))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(analysis, "_model_support", counted)
+    body = SceneObject(id="obj_1", name="Tunnel", mesh=bare_tunnel(20.0))
+    scene = Scene(objects={body.id: body})
+    settings = print_settings.resolve(petg())
+    first = findings.print_findings(scene, petg(), settings)
+    count = len(questions)
+    assert count > 0, "Der erste Prüfbericht hat die Kanalfrage gestellt."
+    assert any(question is not None for question in questions), "Der Bericht fragt Teilmengen."
+    events = []
+    assert findings.print_findings(scene, petg(), settings, check_status=events.append) == first
+    assert len(questions) == count, "Auch die Teilfrage kommt aus dem Merker."
+    assert events[-1].key == "slice.print_findings" and events[-1].state == "completed"
+
+
+@pytest.mark.parametrize("missing", [(), ("material",)])
+def test_print_check_status_does_not_infer_success_from_empty_findings(
+    monkeypatch, missing
+) -> None:
+    """Ohne Grundlage bleibt die Prüfung offen, nach echter Arbeit ist sie abgeschlossen."""
+    from app.core.slice import findings
+    from app.core.types import Scene, SceneObject
+
+    entry = SceneObject(id="obj_1", name="Quader", mesh=on_bed(brick(10, 10, 10, (0, 0, 5))))
+    scene = Scene(objects={entry.id: entry})
+    calls = []
+
+    def measured(*args, **kwargs):
+        calls.append(True)
+        return []
+
+    monkeypatch.setattr(findings.advise, "warnings_for", measured)
+    monkeypatch.setattr(findings, "body_findings", measured)
+    events = []
+    assert (
+        findings.print_findings(
+            scene,
+            petg(),
+            print_settings.resolve(petg()),
+            check_status=events.append,
+            missing_basis=missing,
+        )
+        == []
+    )
+    assert len(calls) == (0 if missing else 2)
+    final = {(item.key, item.object_id): item for item in events}
+    assert set(final) == {("slice.settings", None), ("slice.print_findings", entry.id)}
+    assert all(item.state == ("not_started" if missing else "completed") for item in final.values())
+    assert all(item.missing_basis == missing for item in final.values())
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_print_check_status_keeps_unfinished_bodies_and_propagates_failure(
+    monkeypatch, cancel
+) -> None:
+    """Ein abgebrochener oder gescheiterter Körper macht den nachfolgenden nicht fertig."""
+    from app.core.errors import OperationCancelled
+    from app.core.slice import findings
+    from app.core.types import Scene, SceneObject
+
+    entries = [
+        SceneObject(id=f"obj_{number}", name="Quader", mesh=on_bed(brick(10, 10, 10, (0, 0, 5))))
+        for number in range(3)
+    ]
+    scene = Scene(objects={entry.id: entry for entry in entries})
+    problem = OperationCancelled() if cancel else ValueError("belegte Testausnahme")
+
+    def measured(entry, *args, **kwargs):
+        if entry.id == "obj_1":
+            raise problem
+        return []
+
+    monkeypatch.setattr(findings.advise, "warnings_for", lambda *args, **kwargs: [])
+    monkeypatch.setattr(findings, "body_findings", measured)
+    events = []
+    with pytest.raises(type(problem)) as caught:
+        findings.print_findings(
+            scene, petg(), print_settings.resolve(petg()), check_status=events.append
+        )
+    assert caught.value is problem
+    final = {item.object_id: item for item in events if item.key == "slice.print_findings"}
+    assert [final[entry.id].state for entry in entries] == [
+        "completed",
+        "cancelled" if cancel else "failed",
+        "not_started",
+    ]
+
+
+def test_print_check_cancelled_before_work_never_completes_a_body() -> None:
+    """Ein bereits abgebrochener Auftrag hinterlässt keinen fertigen Prüfstand."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+    from app.core.slice import findings
+    from app.core.types import Scene, SceneObject
+
+    entry = SceneObject(id="obj_1", name="Quader", mesh=on_bed(brick(10, 10, 10, (0, 0, 5))))
+    token = CancelSignal()
+    token.cancel()
+    events = []
+    with pytest.raises(OperationCancelled):
+        findings.print_findings(
+            Scene(objects={entry.id: entry}),
+            petg(),
+            print_settings.resolve(petg()),
+            cancelled=token,
+            check_status=events.append,
+        )
+    assert not any(item.state == "completed" for item in events)
+    assert [item.state for item in events if item.object_id == entry.id] == ["not_started"]
+
+
+def test_print_check_without_geometry_is_explicitly_not_applicable() -> None:
+    """Die leere Szene belegt keine erfolgreiche Körperprüfung."""
+    from app.core.slice import findings
+    from app.core.types import Scene
+
+    events = []
+    findings.print_findings(
+        Scene(), petg(), print_settings.resolve(petg()), check_status=events.append
+    )
+    body = [item for item in events if item.key == "slice.print_findings"]
+    assert len(body) == 1
+    assert body[0].state == "not_applicable" and body[0].applicable is False
+
+
+@pytest.mark.parametrize("missing", [(), ("material",)])
+@pytest.mark.parametrize("cancel", [False, True])
+def test_print_check_accounts_for_mesh_preparation_failure(monkeypatch, missing, cancel) -> None:
+    """Auch die Netzbereitstellung gehört zur Prüfung; ohne Grundlage beginnt sie nicht."""
+    from app.core.errors import OperationCancelled
+    from app.core.slice import findings
+    from app.core.types import Scene, SceneObject
+
+    entry = SceneObject(id="obj_1", name="Quader", mesh=on_bed(brick(10, 10, 10, (0, 0, 5))))
+    problem = OperationCancelled() if cancel else ValueError("Netzbereitstellung")
+    calls = []
+
+    def unavailable(_geometry):
+        calls.append(True)
+        raise problem
+
+    monkeypatch.setattr(findings, "as_mesh_data", unavailable)
+    events = []
+    arguments = {"check_status": events.append, "missing_basis": missing}
+    scene = Scene(objects={entry.id: entry})
+    if missing:
+        assert (
+            findings.print_findings(scene, petg(), print_settings.resolve(petg()), **arguments)
+            == []
+        )
+        assert not calls
+    else:
+        with pytest.raises(type(problem)) as caught:
+            findings.print_findings(scene, petg(), print_settings.resolve(petg()), **arguments)
+        assert caught.value is problem
+    body = [item for item in events if item.object_id == entry.id]
+    assert body[-1].state == ("not_started" if missing else "cancelled" if cancel else "failed")
+    assert not any(item.state == "completed" for item in body)
+
+
+def test_print_check_marks_an_empty_mesh_as_not_applicable() -> None:
+    """Ein vorhandener leerer Körper ist ausdrücklich ungeprüft, nicht erfolgreich."""
+    from app.core.slice import findings
+    from app.core.types import Scene, SceneObject
+
+    entry = SceneObject(id="obj_1", name="Leer", mesh=MeshData.of(trimesh.Trimesh()))
+    events = []
+    findings.print_findings(
+        Scene(objects={entry.id: entry}),
+        petg(),
+        print_settings.resolve(petg()),
+        check_status=events.append,
+    )
+    body = [item for item in events if item.object_id == entry.id]
+    assert body[-1].state == "not_applicable"
+    assert body[-1].applicable is False
 
 
 def test_the_dialog_can_take_the_reports_layers() -> None:

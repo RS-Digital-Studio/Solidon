@@ -90,8 +90,8 @@
         <li><b>Arrastra el GLB o el STL.</b> También con texturas — los
         colores sobreviven a la importación.</li>
         <li><b>Cadena de reparación e informe de comprobación.</b> Agujeros,
-        normales invertidas, triángulos degenerados; después queda escrito
-        qué saldrá mal al imprimir.</li>
+        normales invertidas, triángulos degenerados; el informe muestra después
+        los riesgos detectados para la impresión.</li>
         <li><b>Convertir los colores a tus filamentos.</b> Al número que de
         verdad hay en la máquina — no a un máximo.</li>
         <li><b>Dividir, poner pasadores, distribuir.</b> Pasadores con
@@ -114,7 +114,7 @@
           <tr><td>Aristas no manifold, caras degeneradas</td><td><span class="yes">✓ sí</span></td><td><span class="yes">✓ sí</span></td></tr>
           <tr><td>Volumen</td><td><span class="yes">✓ sí</span></td><td><span class="yes">✓ sí</span></td></tr>
           <tr><td>Espesor de pared frente a la boquilla de esta impresora</td><td><span class="no">— no</span></td><td><span class="yes">✓ sí</span></td></tr>
-          <tr><td>Ángulo de voladizo por capa</td><td><span class="no">— no</span></td><td><span class="yes">✓ sí</span></td></tr>
+          <tr><td>Área sin soporte por capa</td><td><span class="no">— no</span></td><td><span class="yes">✓ sí</span></td></tr>
           <tr><td>Islas: material sin conexión hacia abajo</td><td><span class="no">— no</span></td><td><span class="yes">✓ sí</span></td></tr>
           <tr><td>Luces de puente, punto más estrecho</td><td><span class="no">— no</span></td><td><span class="yes">✓ sí</span></td></tr>
           <tr><td>Necesidad de soportes y mejor orientación</td><td><span class="no">— no</span></td><td><span class="yes">✓ sí</span></td></tr>
@@ -144,7 +144,7 @@
       caso.</p>
 
       <h2>Chat local: qué modelo para qué tarjeta</h2>
-      <p class="sub">El chat funciona gratis con Ollama en tu propio ordenador. El modelo tiene que caber entero en la memoria gráfica; si no, el procesador ayuda y cada respuesta tarda muchas veces más. Estos cuatro llaman con fiabilidad a las herramientas de Solidon y preguntan cuando una consulta no está clara:</p>
+      <p class="sub">El chat funciona gratis con Ollama en tu propio ordenador. El modelo tiene que caber entero en la memoria gráfica; si no, el procesador ayuda y cada respuesta tarda muchas veces más. Estos cuatro modelos se probaron con las herramientas de Solidon. La tabla muestra aciertos, tiempos de respuesta y limitaciones:</p>
       <table class="compare">
         <thead>
           <tr><th>Modelo</th><th>Memoria gráfica</th><th>Prueba y suite</th></tr>

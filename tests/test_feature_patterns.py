@@ -88,6 +88,43 @@ def _codes(result: Any) -> dict[str, Any]:
     return {finding.code: finding for finding in result.findings}
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_shifted_feature_ring_uses_and_stores_the_body_centre(
+    profile: Profile, kernel: str, quality: str
+) -> None:
+    """Ein Loch bei X=65 wird um die Plattenmitte X=50 nach X=35 kopiert."""
+    from app.core.geom.transform import moved_object, translation
+
+    source = (
+        _exact_plate_with_bore(15.0, 0.0)
+        if kernel == "brep"
+        else _mesh_plate_with_bore(profile, 15.0, 0.0)
+    )
+    source = moved_object(source, translation((50.0, 20.0, 0.0)))
+    hole = _holes(source)[0]
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get("pattern_feature")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            profile=profile,
+            params=spec.params(at_features=(hole.id,), kind="circular", count=2, angle=180.0),
+            quality=quality,
+            seed=17,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    assert result.answered == {"cx": 50.0, "cy": 20.0, "cz": 5.0}
+    assert _centres(_holes(result.outputs[0])) == [(35.0, 20.0), (65.0, 20.0)]
+
+
 # --- exakt -----------------------------------------------------------------------
 
 
@@ -211,6 +248,8 @@ def test_a_mirrored_blind_bore_opens_on_the_other_side(profile: Profile) -> None
         dx=0.0,
         dy=0.0,
         dz=1.0,
+        cx=0.0,
+        cy=0.0,
         cz=5.0,
     )
 

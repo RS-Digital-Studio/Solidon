@@ -348,6 +348,8 @@ _NOT_A_RANGE = frozenset(
         # (knowledge/filaments.py): ein Zustand des Bestands, keine Zahl.
         "booking_history_changed",
         "checksum", "choices",
+        # Ein getrenntes Teil in der Bohrung (geom/prepare_ops.py): die Form, keine Zahl.
+        "separate_bore_contents",
         # Eine Berührlinie hängt von der Modellform ab, nicht von einer Zahlenspanne.
         "cut_surface_contact",
         # Die Zeichenfläche als Ziel von „Bis zur Fläche" (sketch/ops.py): eine
@@ -495,6 +497,9 @@ _NOT_A_RANGE = frozenset(
         "beyond_table", "known_axis",
         # Ein fremdes Muster ohne gewählten Stil: eine Auswahl, keine Zahl.
         "pattern_style",
+        # Nicht belegbare Texturoberflächen oder Rückseiten und verzerrte
+        # Träger sind Formfragen; keine Zahl kann den fehlenden Beleg ersetzen.
+        "pattern_carrier", "pattern_deformed", "pattern_surface", "pattern_open_back",
         # Den Verlauf umbauen (RM-188 P7): ein Ziel, an dem der Schritt schon
         # steht, und ein Schritt, der schon aus- oder eingeschaltet ist — Lagen
         # im Verlauf, keine Zahl in einem Feld.

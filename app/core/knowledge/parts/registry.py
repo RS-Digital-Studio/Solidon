@@ -783,7 +783,9 @@ def register_part(
 #: um das Spiel weiter (``fasteners.py``, RM-276, 27.09.2026).
 #: Version 22: Ein schmaler Halter mit Schlüsselloch behält seine Breite und
 #: hängt an einem Loch in der Mitte statt an zwei (``holders.py``, RM-443).
-LIBRARY_VERSION: Final = "22"
+#: Version 23: Herstellerbezogene Nutfedern mit verjüngtem Kopf; bisherige
+#: Profilgrößen bleiben für gespeicherte Konstruktionen maßgleich.
+LIBRARY_VERSION: Final = "23"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

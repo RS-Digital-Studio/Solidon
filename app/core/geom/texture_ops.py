@@ -32,6 +32,8 @@ from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     BaseParams,
+    CancelToken,
+    Feature,
     Finding,
     OpContext,
     OpResult,
@@ -916,7 +918,7 @@ def refined_for_bending(body: MeshData, radius: float, sag: float = BEND_SAG) ->
     return refined(body, edge)
 
 
-def wrapped(body: MeshData, diameter: float) -> MeshData:
+def wrapped(body: MeshData, diameter: float, *, cancelled: CancelToken | None = None) -> MeshData:
     """Biegt ein flaches Musterfeld um einen Zylinder.
 
     Die x-Richtung des Feldes wird zum Umfang, y zur Zylinderachse, z bleibt die
@@ -968,7 +970,30 @@ def wrapped(body: MeshData, diameter: float) -> MeshData:
     theta = points[:, 0] / radius
     reach = radius + points[:, 2]
     turned = np.column_stack((reach * np.cos(theta), reach * np.sin(theta), points[:, 1]))
-    return MeshData.of(trimesh.Trimesh(vertices=turned, faces=body.raw.faces, process=False))
+    result = MeshData.of(trimesh.Trimesh(vertices=turned, faces=body.raw.faces, process=False))
+    if body.bounds.size[0] >= math.pi * diameter - EPS_GEOM:
+        # Zufällige Zellen sind an der Naht nicht periodisch. Zwei zuvor
+        # getrennte Prismen können nach dem Biegen ineinanderstehen; sie
+        # müssen vor dem Schnitt ein Volumen bilden, sonst verzieht der
+        # Kern sogar den unveränderten Mantel außerhalb des Texturfeldes.
+        from app.core.geom.boolean import boolean
+        from app.core.geom.mesh import face_components, without_faces
+
+        components = face_components(result.raw, cancelled=cancelled)
+        if len(components) > 1:
+            rows = np.arange(len(result.raw.faces))
+            pieces = [
+                MeshData.of(without_faces(result.raw, np.isin(rows, component)))
+                for component in components
+            ]
+            result = boolean(
+                "union",
+                pieces,
+                stages=("direct",),
+                cancelled=cancelled,
+                object_ids=(None,) * len(pieces),
+            ).mesh
+    return result
 
 
 def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) -> MeshData:
@@ -1197,7 +1222,13 @@ def _merged(shapes: list[Any]) -> list[Any]:
     ]
 
 
-def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> MeshData:
+def texture_tool(
+    source: SceneObject,
+    params: TextureParams,
+    seed: int = 0,
+    *,
+    cancelled: CancelToken | None = None,
+) -> MeshData:
     """Der Werkzeugkörper für Vorschau und Operation, bereits in Weltkoordinaten."""
     from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.geom.label_ops import label_solid, place
@@ -1261,7 +1292,7 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
     lift = -BOOLEAN_OVERLAP - clearance if params.mode == "raised" else -params.depth
     body = apply(body, translation((0.0, 0.0, lift)))
     if params.wrap == "cylinder":
-        body = wrapped(body, params.wrap_diameter)
+        body = wrapped(body, params.wrap_diameter, cancelled=cancelled)
         placed = place(body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), 0.0)
     else:
         placed = place(
@@ -1271,12 +1302,187 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
     return placed
 
 
+def _texture_feature(
+    source: SceneObject, mesh: MeshData, tool: MeshData, params: TextureParams, ctx: OpContext
+) -> Feature | None:
+    """Die ausdrücklich gezeichnete Textur mit ihren tatsächlichen Ergebnisdreiecken."""
+    from app.core.geom.label_ops import placement_matrix
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import along
+    from app.core.perceive.patterns import bound_texture, frame_for, mouths_of, surface_triangles
+    from app.core.sketch.planes import frame_of
+
+    check = ctx.cancelled.raise_if_cancelled
+    original = as_mesh_data(source.mesh)
+    cells = set(surface_triangles(mesh, tool, check_cancelled=check))
+    cells.difference_update(
+        surface_triangles(mesh, original, candidates=sorted(cells), check_cancelled=check)
+    )
+    if not cells:
+        return None
+    normal = (params.nx, params.ny, params.nz)
+    length = math.hypot(*normal)
+    normal = (
+        cast(Vec3, tuple(value / length for value in normal))
+        if length > EPS_GEOM
+        else (0.0, 0.0, 1.0)
+    )
+    centre = (params.x, params.y, params.z)
+    width, height = params.width, params.height
+    angle = params.angle
+    carrier: dict[str, Any] = {"carrier": "plane"}
+    if params.coverage == "whole_face":
+        from app.core.geom.face_ops import _chosen_face
+        from app.core.geom.faces import _triangles_of, face_normal
+
+        chosen = _chosen_face(source, params.face)
+        assert chosen is not None  # Bereits beim Werkzeugbau geprüft.
+        normal = face_normal(chosen)
+        corners = np.asarray(original.raw.triangles)[_triangles_of(original, chosen)]
+        origin = corners.reshape(-1, 3).mean(axis=0)
+        frame = frame_of(normal, cast(Vec3, tuple(origin)))
+        x_axis, y_axis = np.asarray(frame.x_axis), np.asarray(frame.y_axis)
+        cosine, sine = units.exact_cos_degrees(angle), units.exact_sin_degrees(angle)
+        x_axis, y_axis = cosine * x_axis + sine * y_axis, -sine * x_axis + cosine * y_axis
+        relative = corners.reshape(-1, 3) - origin
+        flat = np.column_stack((along(relative, x_axis), along(relative, y_axis)))
+        low, high = flat.min(axis=0), flat.max(axis=0)
+        middle = (low + high) / 2.0
+        centre = cast(
+            Vec3, tuple(float(value) for value in origin + middle[0] * x_axis + middle[1] * y_axis)
+        )
+        width, height = (float(value) for value in high - low)
+    elif params.wrap == "cylinder":
+        matrix = placement_matrix((0.0, 0.0, 0.0), 0.0, centre, normal, 0.0)
+        radial = matrix[:3, 0]
+        centre = cast(
+            Vec3,
+            tuple(
+                float(value) for value in np.asarray(centre) + radial * params.wrap_diameter / 2.0
+            ),
+        )
+        carrier = {
+            "carrier": "cylinder",
+            "carrier_axis": normal,
+            "carrier_diameter": params.wrap_diameter,
+        }
+        normal = cast(Vec3, tuple(float(value) for value in radial))
+        angle = 0.0
+        width = min(width, math.pi * params.wrap_diameter)
+    frame = frame_of(normal, centre)
+    direction = tuple(
+        float(value)
+        for value in np.asarray(frame.x_axis) * units.exact_cos_degrees(angle)
+        + np.asarray(frame.y_axis) * units.exact_sin_degrees(angle)
+    )
+    pitch = (
+        wrap_pitch(params.pattern, params.pitch, params.wrap_diameter, params.width)
+        if carrier["carrier"] == "cylinder"
+        else params.pitch
+    )
+    feature_params = {
+        "texture": True,
+        "style": params.pattern,
+        "mode": params.mode,
+        "pitch": pitch,
+        "cell_depth": params.depth,
+        "centre": centre,
+        "normal": normal,
+        "direction": direction,
+        "width": width,
+        "height": height,
+        "angle": angle,
+        "coverage": params.coverage,
+        "through": False,
+        **carrier,
+    }
+    cell_width = cell_width_for(params.pattern, pitch, None)
+    if cell_width is not None:
+        feature_params["cell_width"] = cell_width
+    # Der Name reserviert keinen vorhandenen Vorgänger.
+    number = 1
+    while (
+        f"texture_{number}" in source.features or f"texture_{number}" in source.reserved_feature_ids
+    ):
+        number += 1
+    feature = bound_texture(
+        mesh,
+        Feature(
+            id=f"texture_{number}",
+            kind="pattern",
+            provenance="generated",
+            params=feature_params,
+            measure_sources={
+                key: "parameter"
+                for key in (
+                    "pitch",
+                    "cell_depth",
+                    "cell_width",
+                    "centre",
+                    "normal",
+                    "width",
+                    "height",
+                    "carrier_axis",
+                    "carrier_diameter",
+                )
+                if key in feature_params
+            },
+        ),
+        sorted(cells),
+    )
+    mouths = mouths_of(mesh, feature, source.features)
+    if mouths:
+        developed = frame_for(feature)
+        middle, levels = developed.developed(np.asarray(centre))
+        distances = [
+            (mouth.polygon.centroid.x - middle[0, 0], mouth.polygon.centroid.y - middle[0, 1])
+            for mouth in mouths
+        ]
+        chosen_mouth = mouths[
+            min(
+                range(len(mouths)),
+                key=lambda index: (
+                    distances[index][0] * distances[index][0]
+                    + distances[index][1] * distances[index][1]
+                ),
+            )
+        ]
+        anchor = developed.world(
+            np.array([chosen_mouth.polygon.centroid.x, chosen_mouth.polygon.centroid.y]), levels[0]
+        )[0]
+        feature = replace(
+            feature, params={**feature.params, "anchor": tuple(float(v) for v in anchor)}
+        )
+    return feature
+
+
+def texture_depth_tool(source: SceneObject, feature: Feature, depth: float) -> MeshData | None:
+    """Ändert nur die Tiefe der belegten Zellen, ohne Raster oder Zufall neu zu zeichnen."""
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.label_ops import label_solid
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import apply, translation
+    from app.core.perceive.patterns import frame_for, mouths_of
+
+    mesh = as_mesh_data(source.mesh)
+    frame = frame_for(feature, mesh, source.features)
+    mouths = mouths_of(mesh, feature, source.features)
+    raised = feature.params.get("mode") == "raised"
+    overlap = BOOLEAN_OVERLAP + frame.clearance
+    body = label_solid([mouth.polygon for mouth in mouths], depth + overlap)
+    if body is None:
+        return None
+    level = float(frame.developed(np.asarray(feature.params["centre"]))[1][0])
+    body = apply(body, translation((0.0, 0.0, level - overlap if raised else level - depth)))
+    return MeshData.of(frame.placed(body.raw))
+
+
 @register_op(
     name="apply_texture",
     result_kind="mesh",
-    # 2 seit dem 22.09.2026: Die Noppen der Vorgabe berühren sich nicht mehr
-    # (``DIMPLE_FILL``) — dieselben Werte zeichnen ein anderes Bild.
-    cache_version="2",
+    # Belegte Texturgruppen und vereinigte Werkzeugzellen an der Wickelnaht
+    # ändern Merkmalsausgabe und Geometrie bereits gespeicherter Schritte.
+    cache_version="3",
     title=_("Textur aufbringen"),
     category="surface",
     params=TextureParams,
@@ -1319,7 +1525,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
     check_printable(params.pattern, drawn_pitch, params.depth, ctx.profile.printer)
 
     source = ctx.inputs[0]
-    placed = texture_tool(source, params, ctx.seed or 0)
+    placed = texture_tool(source, params, ctx.seed or 0, cancelled=ctx.cancelled)
 
     kind: BooleanKind = "union" if params.mode == "raised" else "difference"
     body_mesh = as_mesh_data(source.mesh)
@@ -1391,8 +1597,27 @@ def apply_texture(ctx: OpContext) -> OpResult:
             )
 
     _log.info("textured with %r, %s", params.pattern, params.mode)
+    feature = _texture_feature(source, outcome.mesh, placed, params, ctx)
+    if feature is None and nothing is None:
+        from app.core.errors import SHOW_HISTORY
+
+        findings.append(
+            Finding(
+                code="texture.unrecognised",
+                severity="warning",
+                message=_("Ein benanntes Merkmal ist nach dieser Operation nicht mehr auffindbar."),
+                object_id=source.id,
+                suggestions=(CORRECT_INPUT, SHOW_HISTORY),
+            )
+        )
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=outcome.mesh,
+                features={feature.id: feature} if feature is not None else {},
+            )
+        ],
         solver=outcome.solver,
         findings=findings,
     )

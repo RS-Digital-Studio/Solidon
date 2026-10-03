@@ -873,7 +873,10 @@ def crossing_pairs(
 
     low = np.maximum(first_low, second_low)
     high = np.minimum(first_high, second_high)
-    crossing = np.isfinite(low) & np.isfinite(high) & (high >= low - EPS_GEOM)
+    # Nicht koplanare Nachbarn können sich nur auf ihrer bereits belegten
+    # gemeinsamen Kante treffen. Die teure Kollinearitätsprüfung unten
+    # entscheidet daran nichts mehr; koplanare Überlagerungen wurden oben geprüft.
+    crossing = np.isfinite(low) & np.isfinite(high) & (high >= low - EPS_GEOM) & ~shared_edge
     gap = high < low
     steep, low, high, unit, origin, gap, line_rounding, shared_edge = (
         steep[crossing],
@@ -925,19 +928,18 @@ def crossing_pairs(
             rows = rows[intervals_meet]
             if not len(rows):
                 continue
-            collinear = (
-                _point_on_line_with_rounding(
-                    first_start[rows], second_start[rows], second_end[rows]
-                )
-                & _point_on_line_with_rounding(
-                    first_end[rows], second_start[rows], second_end[rows]
-                )
-                & _point_on_line_with_rounding(
-                    second_start[rows], first_start[rows], first_end[rows]
-                )
-                & _point_on_line_with_rounding(second_end[rows], first_start[rows], first_end[rows])
-            )
-            edge_contact[rows] |= collinear
+            # Nur eine vollständig kollineare Kante ist Kontakt. Nach dem
+            # ersten Gegenbeleg müssen die übrigen Punkte nicht mehr fragen.
+            for probe, start, end in (
+                (first_start, second_start, second_end),
+                (first_end, second_start, second_end),
+                (second_start, first_start, first_end),
+                (second_end, first_start, first_end),
+            ):
+                rows = rows[_point_on_line_with_rounding(probe[rows], start[rows], end[rows])]
+                if not len(rows):
+                    break
+            edge_contact[rows] = True
     # Ein einzelner Punkt und ein innerhalb der Rundungsgrenze liegender Spalt
     # belegen keine Durchdringung. Ein größerer, bis EPS_GEOM reichender Spalt
     # bleibt ein Schnitt; ein Segment braucht beide tragenden Randkanten.

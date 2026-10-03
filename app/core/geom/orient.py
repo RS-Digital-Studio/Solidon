@@ -35,6 +35,11 @@ from app.core.types import BoundingBox, CancelToken, Finding, PrinterProfile, Ve
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
+try:
+    from app.core.slice import _chain
+except ImportError:
+    _chain = None  # type: ignore[assignment]
+
 #: Wie viele Kandidatenrichtungen über die sechs Achsrichtungen hinaus
 #: angesehen werden.
 MAX_FACE_CANDIDATES = 12
@@ -333,6 +338,14 @@ def evaluate_directions(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         verticals = np.asarray([rotation_to_down(direction)[2, :3] for direction in batch])
+        if _chain is not None and hasattr(_chain, "orientation_scores"):
+            rows = _chain.orientation_scores(
+                vertices, normals, centres, areas, grid.steps, grid.exponent, verticals, threshold
+            )
+            return [
+                Orientation(direction, float(row[0]), float(row[1]), float(row[2]), float(row[3]))
+                for direction, row in zip(batch, rows, strict=True)
+            ]
         vertex_heights = _heights(verticals, vertices)
         normal_heights = _heights(verticals, normals)
         centre_heights = _heights(verticals, centres)
@@ -341,15 +354,22 @@ def evaluate_directions(
         flat_bottom = (normal_heights < -0.999) & (centre_heights < bottom[:, None] + 0.05)
         downward = normal_heights < threshold
         hanging = downward & ~flat_bottom
-        footprints = grid.sums(flat_bottom)
-        overhangs = grid.sums(hanging)
+        footprints = [IntegerGrid(grid.steps[row], grid.exponent).total() for row in flat_bottom]
+        overhangs = [IntegerGrid(grid.steps[row], grid.exponent).total() for row in hanging]
         # Der Stützraum unter jeder Überhangfläche bis zum Bett: projizierte
         # Fläche mal Höhe ihrer Mitte. Je Lage exakt summiert (``IntegerGrid``),
         # damit zwei spiegelgleiche Lagen dieselbe Zahl tragen.
-        lifted = np.where(
-            hanging, areas[None, :] * -normal_heights * (centre_heights - bottom[:, None]), 0.0
-        )
-        supports = [IntegerGrid.of(row).total() for row in lifted]
+        # Ungetragene Flächen allein brauchen Werte. Die virtuellen Nullen
+        # zählen für den Rasterexponenten weiter mit — bitgleich zum Vollfeld.
+        supports = [
+            IntegerGrid.of(
+                areas[row]
+                * -normal_heights[index, row]
+                * (centre_heights[index, row] - bottom[index]),
+                count=len(areas),
+            ).total()
+            for index, row in enumerate(hanging)
+        ]
         return [
             Orientation(
                 direction=direction,
@@ -516,23 +536,26 @@ def ranked_orientations(
             best_standing.direction,
         ):
             break
+        # Die Reserve muss stehen. Ein schmaler Auflageschnitt verwirft
+        # unbrauchbare Lagen, bevor deren ganze Hülle aufs Bett gesetzt wird.
+        if not standing(entry):
+            continue
         if (
             printer is not None
             and fitting_transform(mesh, entry.direction, printer, margin=margin) is None
         ):
             continue
-        if standing(entry):
-            selected[replace_index] = entry
-            selected.sort(
-                key=lambda item: (
-                    -item.score,
-                    -item.footprint,
-                    item.overhang,
-                    item.height,
-                    item.direction,
-                )
+        selected[replace_index] = entry
+        selected.sort(
+            key=lambda item: (
+                -item.score,
+                -item.footprint,
+                item.overhang,
+                item.height,
+                item.direction,
             )
-            break
+        )
+        break
     return selected
 
 
@@ -817,27 +840,39 @@ def orient_for_print(
     bleibt die reine geometrische Heuristik; die FDM-Operation gibt sie immer mit.
     """
     scored = ranked_orientations(
-        mesh, cancelled=cancelled, printer=printer, margin=margin, overhang_limit=overhang_limit
+        mesh,
+        cancelled=cancelled,
+        overhang_limit=overhang_limit,
     )
     if not scored:
         raise NoFittingOrientationError()
     best = None
+    first_fitting = None
+    matrix = None
     for entry in scored:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        placed = (
+            fitting_transform(mesh, entry.direction, printer, margin=margin)
+            if printer is not None
+            else print_transform(mesh, entry.direction)
+        )
+        if placed is None:
+            continue
+        if first_fitting is None:
+            first_fitting = (entry, placed)
         can_stand = standing is None or standing(entry)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if can_stand:
             best = entry
+            matrix = placed
             break
+    no_footing = best is None
     if best is None:
-        raise NoStandingOrientationError()
-    matrix = (
-        fitting_transform(mesh, best.direction, printer, margin=margin)
-        if printer is not None
-        else print_transform(mesh, best.direction)
-    )
+        if first_fitting is None:
+            raise NoFittingOrientationError()
+        best, matrix = first_fitting
     assert matrix is not None
     turned = apply(mesh, matrix)
 
@@ -856,6 +891,16 @@ def orient_for_print(
             },
         )
     ]
+    if no_footing:
+        findings.append(
+            Finding(
+                code="orient.no_footing",
+                severity="warning",
+                message=NoStandingOrientationError.default_title,
+                suggestions=(OPEN_PRINT_SETTINGS, SHOW_SUPPORT_NEED),
+                source="internal",
+            )
+        )
     # Die Überhanggrenze gilt der Düse: Was sie nicht mehr trägt, braucht
     # Stützen. Ein Resinteil hängt ohnehin an Stützen, und ob es welche
     # braucht, entscheidet dort die Saugglocke, nicht der Überhang
@@ -866,7 +911,9 @@ def orient_for_print(
             Finding(
                 code="orient.support_likely",
                 severity="warning",
-                message=_("Auch in der besten Lage bleibt viel Überhang — Stützen sind nötig."),
+                message=_(
+                    "Auch die beste geprüfte Lage hat große Überhänge. Prüfen Sie den Stützbedarf."
+                ),
                 # Regel 17: Die Stützkarte zeigt, wo der Überhang bleibt.
                 suggestions=(SHOW_SUPPORT_NEED,),
             )

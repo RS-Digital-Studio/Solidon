@@ -911,6 +911,9 @@ MEASURE_GAP = 14
 #: Geräteverhältnis multiplizierte, verdoppelte sie bei 200 Prozent.
 SKETCH_POINT_PIXELS = 10
 
+#: Radius des Nullrings der Zeichenebene in logischen Bildpunkten.
+SKETCH_ORIGIN_RADIUS_PIXELS = 7.0
+
 #: Schriftgröße der Maß- und Griffkarten im Skizzenmodus, in Logikpunkten.
 #: Eine Zahl für den Renderer und für die Platzierung
 #: (:meth:`Viewport._sketch_card_sizes`), sonst rechnete die eine mit einer
@@ -4516,18 +4519,11 @@ RETICLE_ARM: Final = 10
 RETICLE_THICKNESS: Final = 4
 
 
-class _ReticleArm(QWidget):
-    """Ein Arm des Fadenkreuzes — ein eigenes, **deckendes** Fenster über der Grafikfläche.
+class _SurfacePickerFocus(QWidget):
+    """Ein einzelner Punkt hält Fokus und Namen der gerenderten Stellenwahl.
 
-    **Durchsichtig kann über der Grafikfläche nichts liegen** (RM-238, native
-    Abnahme 0.5.1). Das Kreuz war ein ``QLabel`` mit dem durchsichtigen
-    Messzeiger; als natives Kind der Ansicht (``hold_above_the_view``) stand es
-    in einem Quadrat von 32 mal 32 Punkten in der Fensterfarbe — genau über der
-    Stelle, die gewählt werden soll (Bildschirmaufnahme: alle 1024 Bildpunkte
-    des Quadrats verdeckt). Eine Fenstermaske ist keine Lösung
-    (über Vulkan verliert sie das Gerät). Vier schmale Arme sind
-    je ein volles Rechteck: dunkler Rand, heller Kern, auf jeder Oberfläche zu
-    sehen, und die Mitte bleibt frei.
+    Er liegt auf dem dunklen Rand des oberen Arms; weder eine Fensterfläche
+    noch eine Fenstermaske überdeckt die gewählte Stelle.
     """
 
     def __init__(self, parent: QWidget) -> None:
@@ -4538,7 +4534,6 @@ class _ReticleArm(QWidget):
     def paintEvent(self, _event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(ON_LIGHT_FIELD))
-        painter.fillRect(self.rect().adjusted(1, 1, -1, -1), QColor(ON_DARK_FIELD))
         painter.end()
 
 
@@ -5037,6 +5032,8 @@ class Viewport(QWidget):
     Ansicht meldet einen Ort, das Fenster sammelt zwei davon zu einer Linie,
     und getrennt wird einzig in der Operation (Regel 2)."""
     sculptRequested = Signal(object)
+    sculptGestureStarted = Signal()
+    sculptGestureFinished = Signal()
     """Eine Stelle, an der ein Pinselzug gesetzt wird (§25).
 
     Derselbe Vertrag wie beim Bemalen und aus demselben Grund: Die Ansicht
@@ -5078,8 +5075,8 @@ class Viewport(QWidget):
         self._surface_picker: Callable[[float, float], None] | None = None
         self._surface_picker_point = (0.0, 0.0)
         self._surface_picker_mark: QWidget | None = None
-        """Der Arm des Fadenkreuzes, der den Tastaturfokus hält (der obere)."""
-        self._surface_picker_arms: tuple[QWidget, ...] = ()
+        """Der Fokuspunkt am oberen Arm der Stellenwahl."""
+        self._surface_picker_items: list[Item] = []
         #: Welche Flugtasten gerade liegen, und der Takt, der sie fährt.
         self._flying: set[str] = set()
         self._flight_timer: QTimer | None = None
@@ -5137,6 +5134,7 @@ class Viewport(QWidget):
         """Worauf die Kamera zuletzt eingepasst wurde — auf nichts, auf den
         Bauraum oder auf die Körper. Wechselt der Zustand, wird einmal neu
         eingepasst; innerhalb desselben Zustands bleibt jeder Zoom stehen."""
+        self._preserve_scene_camera = False
         self._fitted_bounds: tuple[float, float, float, float, float, float] | None = None
         """Die Maße, auf die eingepasst wurde — der Vergleich für
         :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
@@ -5384,6 +5382,7 @@ class Viewport(QWidget):
         :meth:`_redraw_difference` bei jeder Vorschau ab und baut ihn nur
         wieder auf, wenn ein Erzeuger ihn will — der Griff an einem gesetzten
         Baustein ginge dabei mit, obwohl der Baustein noch steht."""
+        self._transform_reference: Vec3 | None = None
         self._gizmo_wanted = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
@@ -7183,10 +7182,11 @@ class Viewport(QWidget):
         """Ob die angefragte Szene bereits die sichtbaren Pick-Flächen trägt."""
         return result is not None and self._result is result
 
-    def show_scene(self, result: EvaluationResult | None) -> None:
+    def show_scene(self, result: EvaluationResult | None, *, preserve_camera: bool = False) -> None:
         """Bereitet teure Netze im Arbeiter vor und behält bis dahin das Bild."""
         self.drop_move_proposal()
 
+        self._preserve_scene_camera = preserve_camera
         self._requested_result = result
         self._scene_generation += 1
         generation = self._scene_generation
@@ -7461,7 +7461,8 @@ class Viewport(QWidget):
         # eine Aussage über die Szene und nicht über den Renderer — offscreen
         # gibt es keinen, und ein Test, der sich dort überspringt, prüft nie
         # etwas.
-        self._fit_once_for(result)
+        if not self._preserve_scene_camera:
+            self._fit_once_for(result)
         if result is None:
             # Eine leere Szene hat keine Auswahl, kein gewähltes Merkmal und
             # keine Maße. Vor dem Renderer-Zweig, aus demselben Grund wie das
@@ -7920,15 +7921,14 @@ class Viewport(QWidget):
                 if mark.window().focusWidget() is mark:
                     self.setFocus(Qt.FocusReason.OtherFocusReason)
                 mark.hide()
-                for arm in self._surface_picker_arms:
-                    arm.hide()
+            for item in self._surface_picker_items:
+                item.set_visible(False)
+            self._draw()
             return
         if self.renderer is None:
             return
         if self._surface_picker_mark is None:
-            # Oben, unten, links, rechts — der obere hält den Fokus und den Namen.
-            arms = tuple(_ReticleArm(self) for _side in range(4))
-            mark = arms[0]
+            mark = _SurfacePickerFocus(self)
             mark.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             mark.setAccessibleName(tr("Stelle auswählen"))
             mark.setAccessibleDescription(
@@ -7938,14 +7938,16 @@ class Viewport(QWidget):
                 )
             )
             self._surface_picker_mark = mark
-            self._surface_picker_arms = arms
         width, height = self.renderer.view_size()
         self._surface_picker_point = (width / 2.0, height / 2.0)
         self._place_surface_picker()
         self._surface_picker_mark.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._draw()
 
     def _place_surface_picker(self) -> None:
-        """Das Kreuz in Qt-Punkten zeichnen, den Treffer in Gerätepixeln halten."""
+        """Vier Arme im Bildraum zeichnen; der Treffer bleibt in Gerätepixeln."""
+        import numpy as np
+
         mark = self._surface_picker_mark
         renderer = self.renderer
         if mark is None or renderer is None or self._surface_picker is None:
@@ -7957,7 +7959,7 @@ class Viewport(QWidget):
         widget = renderer.widget
         origin = widget.mapTo(self, QPoint()) if widget is not None else QPoint()
         ratio = self._device_ratio()
-        centre_x, centre_y = origin.x() + x / ratio, origin.y() + y / ratio
+        centre_x, centre_y = x / ratio, y / ratio
         half = RETICLE_THICKNESS / 2
         reach = RETICLE_GAP + RETICLE_ARM
         places = (
@@ -7966,12 +7968,62 @@ class Viewport(QWidget):
             (centre_x - reach, centre_y - half, RETICLE_ARM, RETICLE_THICKNESS),
             (centre_x + RETICLE_GAP, centre_y - half, RETICLE_ARM, RETICLE_THICKNESS),
         )
-        for arm, (left, top, arm_width, arm_height) in zip(
-            self._surface_picker_arms, places, strict=True
-        ):
-            arm.setGeometry(round(left), round(top), arm_width, arm_height)
-            arm.show()
-            arm.raise_()
+        # Dieselbe affine Bildraumprojektion wie die Maßtinte: drei
+        # Kamerafragen für alle Ecken, unabhängig von Kamera und Skalierung.
+        basis = [renderer.display_to_world(px, py, 0.05) for px, py in ((0, 0), (1, 0), (0, 1))]
+        if any(point is None for point in basis):
+            for item in self._surface_picker_items:
+                item.set_visible(False)
+            mark.hide()
+            return
+        base = np.asarray(basis[0], dtype=np.float64)
+        along_x = np.asarray(basis[1], dtype=np.float64) - base
+        along_y = np.asarray(basis[2], dtype=np.float64) - base
+        for inset, colour in enumerate((ON_LIGHT_FIELD, ON_DARK_FIELD)):
+            corners: list[tuple[float, float]] = []
+            for left, top, arm_width, arm_height in places:
+                right, bottom = left + arm_width - inset, top + arm_height - inset
+                left, top = left + inset, top + inset
+                corners.extend(
+                    (
+                        (left, top),
+                        (right, top),
+                        (right, bottom),
+                        (left, top),
+                        (right, bottom),
+                        (left, bottom),
+                    )
+                )
+            screen = np.asarray(corners, dtype=np.float64) * ratio
+            points = base + screen[:, :1] * along_x + screen[:, 1:] * along_y
+            if inset < len(self._surface_picker_items):
+                item = self._surface_picker_items[inset]
+                item.update_points(points)
+                item.set_visible(True)
+            else:
+                item = renderer.add_surface(
+                    points,
+                    np.arange(len(points), dtype=np.int64).reshape(-1, 3),
+                    name=f"surface-picker-{inset}",
+                    style=SurfaceStyle(
+                        colour=colour,
+                        lighting=False,
+                        show_edges=False,
+                        pickable=False,
+                        keep_in_front=True,
+                        draw_order=90 + inset,
+                    ),
+                    capacity=len(points),
+                )
+                self._surface_picker_items.append(item)
+        mark.setGeometry(
+            origin.x() + round(min(max(centre_x - half, 0), max(0, width / ratio - 1))),
+            origin.y() + round(min(max(centre_y - reach, 0), max(0, height / ratio - 1))),
+            1,
+            1,
+        )
+        mark.show()
+        mark.raise_()
 
     def _surface_picker_key(self, event: Any) -> bool:
         """Nur die Tasten der ausstehenden Auswahl verbrauchen."""
@@ -8001,6 +8053,7 @@ class Viewport(QWidget):
             x, y = self._surface_picker_point
             self._surface_picker_point = (x + dx * step, y + dy * step)
             self._place_surface_picker()
+            self._draw()
         event.accept()
         return True
 
@@ -8053,6 +8106,7 @@ class Viewport(QWidget):
         # sich nichts geändert hat.
         self._order_by_depth()
         self._layout_feature_labels()
+        self._place_surface_picker()
         ready = self._difference_is_ready()
         if ready and self._displayed_difference is not self._difference:
             # **Die Freigabe hängt am gezeigten Bild** (``differenceApplied``):
@@ -9504,8 +9558,16 @@ class Viewport(QWidget):
         self._sculpting = active
         self._brush_radius = radius if active else 0.0
         if not active:
+            self.stop_sculpt_gesture()
             self._hide_brush()
         self._update_cursor()
+
+    def stop_sculpt_gesture(self) -> None:
+        """Rücknahme und Editorende schließen auch eine noch gehaltene Maustaste ab."""
+        if self._navigator is not None:
+            self._navigator.stop_painting()
+        self._last_drag_stroke = None
+        self.sculptGestureFinished.emit()
 
     def set_brush_radius(self, radius: float) -> None:
         """Der Ring folgt dem Regler, nicht erst dem nächsten Zug."""
@@ -9654,10 +9716,9 @@ class Viewport(QWidget):
     def _set_hover_target(self, object_id: ObjectId | None, feature_id: FeatureId | None) -> None:
         """Hover-Zeiger, sichtbare Fläche und Beschriftung gemeinsam setzen."""
         found = feature_id is not None
-        target_changed = (object_id, feature_id) != (
-            self._hovered_object,
-            self._hovered_feature,
-        )
+        object_id = object_id if found else None
+        previous = (self._hovered_object, self._hovered_feature)
+        target_changed = (object_id, feature_id) != previous
         role_changed = found != self._hover_feature
         if not target_changed and not role_changed:
             return
@@ -9665,8 +9726,16 @@ class Viewport(QWidget):
         self._hovered_object = object_id if found else None
         self._hovered_feature = feature_id
         if target_changed and self.renderer is not None:
-            self._redraw_features()
-            self._draw()
+            selected = self.highlighted_feature_refs()
+            # Bereits gewählte Merkmale tragen ihre Fläche und Beschriftung.
+            # Ein nach dem Klick eintreffender Hover ändert nur den Hinweis.
+            if (previous == (None, None) or previous in selected) and (
+                feature_id is None or (object_id, feature_id) in selected
+            ):
+                self._refresh_feature_hint()
+            else:
+                self._redraw_features()
+                self._draw()
         if role_changed:
             self._update_cursor()
 
@@ -9819,6 +9888,7 @@ class Viewport(QWidget):
         """
         if fresh:
             self._last_drag_stroke = None
+            self.sculptGestureStarted.emit()
         point = self._world_at(x, y)
         if point is None:
             return
@@ -11007,12 +11077,44 @@ class Viewport(QWidget):
                 return result
         return entry
 
-    def _redraw_features(self) -> None:
-        if self.renderer is None:
-            return
+    def _refresh_feature_hint(self) -> None:
+        """Hover spricht zum Zeiger, die Auswahl weiterhin zum Bildschirmleser."""
         self.setToolTip("")
         if self._snap_shown is None:
             self.setAccessibleDescription("")
+        if self._result is None:
+            return
+        hovered = (self._hovered_object, self._hovered_feature)
+        candidates = [*self.highlighted_feature_refs(), hovered]
+        for object_id, feature_id in candidates:
+            if object_id is None or feature_id is None:
+                continue
+            entry = self._result.scene.objects.get(object_id)
+            if entry is None or not self._in_pick_view(object_id, entry):
+                continue
+            feature = self._shown_feature_body(entry).features.get(feature_id)
+            if feature is None:
+                continue
+            hovered_now = (object_id, feature_id) == hovered
+            if not hovered_now and self.accessibleDescription():
+                continue
+            hint = "\n".join(
+                text
+                for text in (feature_label(feature_id, feature), feature_measure_tip(feature))
+                if text
+            )
+            # Der Tooltip gehört nur dem Merkmal unter dem Zeiger. Die Ansicht
+            # trägt keinen statusTip: Qt würde damit die eigene Statuszeile
+            # verdrängen. Die Auswahl bleibt für Bildschirmleser benannt.
+            if hovered_now:
+                self.setToolTip(hint)
+            if self._snap_shown is None:
+                self.setAccessibleDescription(hint)
+
+    def _redraw_features(self) -> None:
+        if self.renderer is None:
+            return
+        self._refresh_feature_hint()
         self._redraw_feature_patch()
         self._redraw_edge_patch()
         self._redraw_protected_patch()
@@ -11067,29 +11169,6 @@ class Viewport(QWidget):
             if feature_id not in entry.features:
                 continue
             feature = entry.features[feature_id]
-            hovered_now = (object_id, feature_id) == (self._hovered_object, self._hovered_feature)
-            if hovered_now or (
-                not self.accessibleDescription() and (object_id, feature_id) in selected_refs
-            ):
-                hint = "\n".join(
-                    text
-                    for text in (feature_label(feature_id, feature), feature_measure_tip(feature))
-                    if text
-                )
-                # **Der Tooltip gehört dem Merkmal unter dem Zeiger, sonst
-                # niemandem.** Bis zum 21.09.2026 trug die ganze Ansicht den
-                # Hinweis des bloß gewählten Merkmals — er stand überall im
-                # Bild, auch über leerem Bauraum. Und einen ``statusTip`` trägt
-                # die Ansicht gar nicht mehr: Qt schickt ihn beim Betreten als
-                # ``QStatusTipEvent`` an die Statuszeile, und deren
-                # ``showMessage`` verdrängt die eigenen Widgets dort — drei
-                # Zeilen Merkmalstext statt Maße und Ankündigung. Der
-                # Bildschirmleser bekommt den Hinweis weiter, auch für die
-                # Auswahl: Für ihn ist er die zweite Kodierung (Regel 18).
-                if hovered_now:
-                    self.setToolTip(hint)
-                if self._snap_shown is None:
-                    self.setAccessibleDescription(hint)
             explicit = (object_id, feature_id) in selected_refs or (object_id, feature_id) == (
                 self._hovered_object,
                 self._hovered_feature,
@@ -13927,6 +14006,8 @@ class Viewport(QWidget):
         :meth:`gizmo_feature` — die beiden liefen einmal zusammen und
         deckten damit nur den Fall ab, den die Fläche stellt.
         """
+        if self._transform_reference is not None:
+            return None
         if self._selected_feature is None:
             return None
         feature = self._features_of_selection().get(self._selected_feature)
@@ -13970,6 +14051,8 @@ class Viewport(QWidget):
         """
         # **Ein gewähltes Bausteindach trägt den Griff an einem seiner
         # Merkmale** (:meth:`set_part_grip`) — sonst gäbe es dort keinen.
+        if self._transform_reference is not None:
+            return None
         marked = self._selected_feature or self._part_grip
         if marked is None:
             return None
@@ -14142,6 +14225,20 @@ class Viewport(QWidget):
         self._knobs_stay = stay
         self.set_gizmo(self._gizmo_wanted)
 
+    def set_transform_reference(self, point: Vec3 | None) -> None:
+        """Der bewusst gewählte Körperbezug gilt für Griffvorschau und Operation."""
+        previous = self._transform_reference
+        if point is None and previous is None:
+            return
+        if (
+            point is not None
+            and previous is not None
+            and all(abs(a - b) <= EPS_GEOM for a, b in zip(point, previous, strict=True))
+        ):
+            return
+        self._transform_reference = point
+        self.set_gizmo(self._gizmo_wanted)
+
     def set_gizmo(self, active: bool) -> None:
         """Den Bewegungsgriff an die Auswahl hängen oder abnehmen (§18.11).
 
@@ -14193,7 +14290,7 @@ class Viewport(QWidget):
         # daran gar kein Griff (Befund Robert, 10.09.2026: „bei langloch fehlt
         # dann auch noch das im viewport"). Wer beide Mengen über einen Kamm
         # schert, macht die eine Fähigkeit von der anderen abhängig.
-        slotted = self.slot_handle_feature()
+        slotted = self.slot_handle_feature() if self._transform_reference is None else None
         marked = chosen if chosen is not None else slotted
         # **Was aus einem Baustein kam, trägt den Griff des Bausteins** — und
         # sonst nichts. Die zwei Regeln darunter gelten ihm deshalb nicht:
@@ -14253,8 +14350,16 @@ class Viewport(QWidget):
             self.gizmoStatus.emit("")
             return
         self.gizmoStatus.emit("" if only_knobs else gizmo_sentence(marked, part=of_a_part))
+        reference = (
+            self.view_point_of(self._transform_reference, self._selected)
+            if self._transform_reference is not None
+            else None
+        )
         scale = self._gizmo_scale_for(
-            actor, self._face_seat[0] if marked is not None and self._face_seat else None
+            actor,
+            reference
+            if reference is not None
+            else (self._face_seat[0] if marked is not None and self._face_seat else None),
         )
         if (chosen is not None or marked is None) and not only_knobs:
             # **Kein Bewegungsgriff, wo nichts zu bewegen ist.** An einem
@@ -14267,6 +14372,7 @@ class Viewport(QWidget):
             self._gizmo = Gizmo(
                 self.renderer,
                 actor,
+                origin=reference,
                 scale=scale,
                 line_radius=GIZMO_LINE_RADIUS,
                 axes=None if build.normal is None else normal_frame(build.normal),
@@ -14485,7 +14591,11 @@ class Viewport(QWidget):
                 grip.pressing
                 or (
                     self.renderer is not None
-                    and grip.fits(item, rotation=rotation, scale=self._gizmo_scale_for(item))
+                    and grip.fits(
+                        item,
+                        rotation=rotation,
+                        scale=self._gizmo_scale_for(item, item.matrix()[:3, 3]),
+                    )
                 )
             )
         ):
@@ -14506,7 +14616,10 @@ class Viewport(QWidget):
         self._placement_grip = Gizmo(
             self.renderer,
             item,
-            scale=self._gizmo_scale_for(item),
+            # Die Matrix setzt den lokalen Ansatzpunkt auf die gewählte Fläche.
+            # Die Mitte eines langen Bohrwerkzeugs kann weit darunter liegen.
+            origin=tuple(item.matrix()[:3, 3]),
+            scale=self._gizmo_scale_for(item, item.matrix()[:3, 3]),
             line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_placement_grip_released,
             rotation=rotation,
@@ -16822,6 +16935,27 @@ class Viewport(QWidget):
 
         add_segments(layers.minor, self._grid_minor_colour, 1, 0.32, "sketch_grid_minor")
         add_segments(layers.major, self._grid_major_colour, 1, 0.72, "sketch_grid_major")
+        # Der Ursprung gehört auch auf eine leere oder körpergebundene Ebene.
+        # Der Ring steht vor dem Material und bleibt beim Zoomen gleich groß.
+        origin_radius = self._device_pixels(SKETCH_ORIGIN_RADIUS_PIXELS) / max(
+            self.pixels_per_mm(frame), EPS_GEOM
+        )
+        self._sketch_actors.append(
+            renderer.add_lines(
+                shapes.closed_ring(shapes.circle_points(frame.origin, frame.normal, origin_radius)),
+                name="sketch_origin",
+                colour=self._sketch_label_colour,
+                width=2.0,
+                connected=True,
+                keep_in_front=True,
+            )
+        )
+        add_cards(
+            [to_world(frame, (2.0 * origin_radius, -2.0 * origin_radius))],
+            ["0"],
+            2,
+            "sketch_origin_label",
+        )
         if layers.axes:
             # ``sketch_grid`` liefert erst die senkrechte Y-, dann die
             # waagerechte X-Achse. Buchstaben ergänzen die Farben (Regel 18).
@@ -18767,6 +18901,12 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
         if found is not None:
             found._on_paint_drag(x, y, fresh)
 
+    def on_paint_end() -> None:
+        found = weak()
+        if found is not None:
+            found._last_drag_stroke = None
+            found.sculptGestureFinished.emit()
+
     def is_sculpting() -> bool:
         found = weak()
         return found is not None and found._sculpting
@@ -18892,4 +19032,5 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
         on_camera,
         on_tilt,
         on_end,
+        on_paint_end,
     )

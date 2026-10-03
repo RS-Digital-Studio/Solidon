@@ -45,7 +45,7 @@ NAME_DOC: Final = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt
 #: Regel 7 gegenüber dem Nutzer — keine Zahlenkonstante für eine Toleranz,
 #: sondern ein Verweis ins Materialprofil (``auto:<material>``). Eine Regel,
 #: die an einer Stelle steht, sollte auch an einer Stelle erklärt werden.
-AUTO_FROM_PROFILE_DOC: Final = _("Null heißt: Wert aus dem kalibrierten Materialprofil.")
+AUTO_FROM_PROFILE_DOC: Final = _("Null heißt: Wert aus dem gewählten Materialprofil.")
 
 #: Der Titel des Maßes, das zwei Flächen auf Abstand hält.
 PLAY_TITLE: Final = _("Spiel")
@@ -498,6 +498,41 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
             values={"choices": list(spec.choices)},
         )
     return value
+
+
+@op_params
+class SurfaceBoundParams(BaseParams):
+    """Gespeicherter Flächenbezug und unabhängig bindbare Kantenabstände."""
+
+    surface_target: str = param(
+        title=_("Flächenbezug"),
+        default="",
+        internal=True,
+        placement="advanced",
+        targets_feature=True,
+        doc=_("Der Körper und die Fläche, an denen die Platzierung mitgeführt wird."),
+    )
+    surface_anchor: str = param(
+        title=_("Flächenbezug"),
+        default="",
+        internal=True,
+        placement="advanced",
+        doc=_("Gespeicherte Lage und ausdrücklich gewählte Kanten der Platzierung."),
+    )
+    surface_distance_1: float = param(
+        title=_("Abstand zur ersten Kante"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Abstand zur ersten gewählten Bezugskante auf der Fläche."),
+    )
+    surface_distance_2: float = param(
+        title=_("Abstand zur zweiten Kante"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Abstand zur zweiten gewählten Bezugskante auf der Fläche."),
+    )
 
 
 def validate[P: BaseParams](params_class: type[P], values: Mapping[str, Any]) -> P:

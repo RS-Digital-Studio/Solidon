@@ -376,7 +376,8 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="housing-with-lid",
         title=_("Ein Gehäuse mit Deckel"),
         summary=_(
-            "Eine Dose aushöhlen, den passenden Deckel erzeugen und beides druckfertig hinlegen."
+            "Eine Dose aushöhlen, den passenden Deckel erzeugen und beides auf dem Druckbett "
+            "anordnen."
         ),
         steps=(
             # Klick und Knopf in je einem Bild: Zusammen wurde der Ausschnitt
@@ -426,7 +427,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
             step(
                 _(
-                    "Dose und Deckel liegen druckfertig nebeneinander. Gedruckt wird wie in "
+                    "Dose und Deckel liegen nebeneinander. Prüfen und drucken Sie sie wie in "
                     "[Ein Modell prüfen und drucken](manual:print-a-model)."
                 ),
                 "viewport",
@@ -440,8 +441,8 @@ GUIDES: Final[tuple[Guide, ...]] = (
         key="split-a-large-part",
         title=_("Ein zu großes Teil teilen"),
         summary=_(
-            "Ein Teil, das nicht auf das Bett passt, in Stücke mit Stiften teilen "
-            "und druckfertig hinlegen."
+            "Ein Teil, das nicht auf das Bett passt, in Stücke mit Stiften teilen und auf dem "
+            "Druckbett anordnen."
         ),
         steps=(
             step(
@@ -459,8 +460,8 @@ GUIDES: Final[tuple[Guide, ...]] = (
             step(_("Klicken Sie im *Prüfbericht* auf *Auf dem Bett anordnen*."), "report.action"),
             step(
                 _(
-                    "Die Stücke liegen druckfertig nebeneinander. Gedruckt wird wie in "
-                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
+                    "Die Stücke liegen nebeneinander. Prüfen und drucken Sie sie wie in [Ein "
+                    "Modell prüfen und drucken](manual:print-a-model)."
                 ),
                 "viewport",
                 "report.slicer",
@@ -746,7 +747,13 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 ),
                 "report.action",
             ),
-            step(_("Das Modell ist heil. Der Schritt steht im *Verlauf*."), "history.last"),
+            step(
+                _(
+                    "Die Reparatur ist abgeschlossen. Prüfen Sie die übrigen Befunde. Der "
+                    "Schritt steht im *Verlauf*."
+                ),
+                "history.last",
+            ),
         ),
         teaches=("repair",),
         topics=("trouble",),

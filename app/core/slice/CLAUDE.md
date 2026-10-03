@@ -17,8 +17,8 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 
 | Datei | Rolle |
 |---|---|
-| `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken, Stützvolumen (§22); `model_support` merkt seine Antwort je Messung (Identität des Schichttupels) |
-| `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt und Konturverkettung (`tools/build_slice_core.py`, Budget §31); ohne ihn gerichtete Verkettung über NumPy |
+| `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken, Stützvolumen (§22); `model_support` merkt seine Antwort je Messung (Identität des Schichttupels), Linienbreite und optionaler Auswahl der Überhänge im gemeinsamen begrenzten Merker |
+| `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt, Konturverkettung, Abtastspannen und bitgleiche Orientierungsprojektionen (`tools/build_slice_core.py`, Budget §31); ohne ihn gerichtete Verkettung über NumPy |
 | `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29): Stützort über `analysis.model_support` (außen, Kanal, Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße, ruhige Wände und Beschleunigung für schlanke Körper auf kleinem Fuß (`_calm_walls`), langsame erste Schicht über schmalen Stegen (`analysis.narrow_share`), Schrägnaht an runden Außenwänden (`analysis.smooth_outline_height`), Volumenstrom über `knowledge.print_settings.flow_speed_limit` (vor der Zusammenführung nach Slicerfähigkeit gefiltert, `limits_flow`); `combine` vereint den Ausgabeumfang, ohne benötigte Stützen zu verlieren; Bremsen auf Tempo und Beschleunigung lockern keine frühere Regel (`_merged`, `_BRAKING_PATHS`); `for_part` gibt mit Profil den Rat je Körper für `PART_PATHS`, `SLICED_PATHS` sagt, welche davon den Schnitt des Körpers brauchen (danach schneidet der Export), `plate_paths` die plattenweiten Gründe, `connector_diameters` die Verbinder eines Körpers |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2) in einem Durchlauf, auch die erste Schicht mit Bauteillüfter (`fan_start`) |
 | `estimate.py` | Kostenschätzung sowie eingefrorene Plattengegenprobe aus tatsächlich exportierten Netzen und Teilwerten (`plate_comparison`); vollständige gemeinsame Stützanalyse, belegte Modelllagen, beide Herkünfte je Platte (`plates_findings`) |
@@ -26,6 +26,15 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 | `orientation.py` | Die Suche nach einer Druckorientierung (§28.2); dazu eine kleine Grundflächen-Vorauswahl für Auto Split mit demselben Stützvolumen und derselben Fünf-Prozent-Grenze (§22.3) |
 
 ## Die Orientierungssuche
+
+`findings.print_findings(check_status=..., missing_basis=...)` belegt die
+Durchführung unabhängig von seiner Befundliste: Einstellungen für die Szene,
+Schichtbefunde je Körper. Fehlende bestätigte Grundlagen halten nur die
+abhängigen Prüfungen offen. Abbruch und Fehler werden vor dem Weiterreichen
+gemeldet; noch nicht begonnene Körper bleiben offen. Der Aufrufer bindet diese
+Werte an seine Dokumentrevision und bestätigt die ursprünglichen Profilkennungen
+vor einer Ersatzauflösung. Ein Analysecache allein belegt keine vollständige
+Ausführung der nachgelagerten Befund- und Orientierungssuche.
 
 - **Kandidaten** kommen deterministisch aus den flächengeordneten Normalen der
   konvexen Hülle (Stichprobe `HULL_SAMPLE`), den Achsen und großen
@@ -39,6 +48,8 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
   dafür wird keine Einsparung behauptet.
 - **Stützräume am ausgedünnten Ersatznetz** (20 000 Dreiecke), **Standfläche
   und Stand am Original**, auch in der Vorauswahl.
+  `best_face_candidate` erzeugt den Suchkörper einmal nach der Vorauswahl und
+  reicht das Original als `footing_mesh` an alle tatsächlich geschnittenen Lagen.
 - **Stehen heißt, die erste Schicht lässt sich drucken**: Schwerpunkt in der
   Hülle der Auflage; mit Druckerprofil misst `judge(…, line_width=)` die
   Auflage eine halbe Linienbreite nach innen (`Candidate.footing`) — eine
@@ -58,8 +69,25 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 
 ## Der Schnitt
 
+- **Kleine Ringgruppen** bekommen Grenzen, Umlaufsinn und Elternschaft aus
+  `_chain.ring_nesting`: sowohl beim Segmentaufbau als auch beim Zurücklesen
+  schon vereinigter Clipper-Ringe für Stützsäulen und direkte Schnitte.
+  Bei mehr als 16 Ringen, ungesichertem Vorzeichen,
+  Randkontakt oder einem älteren Kern bleibt der GEOS-Index zuständig. Die
+  Gültigkeit der zusammengesetzten Materialfläche wird in beiden Wegen mit
+  GEOS geprüft; der native Helfer ersetzt keine topologische Prüfung.
+
+- **Wiederholte Schichten** werden zuerst über Fläche, Umfang, Hüllbox und
+  vereinfachte Ecken verglichen. Wechselt die Vereinfachung an ihrer
+  Toleranzgrenze die Eckenzahl, entscheidet die gegenseitige Überdeckung der
+  ursprünglichen Materialflächen innerhalb `SAME_LAYER_TOLERANCE`. So verändert
+  reine Rundung nicht die Stichprobenfolge für die Verjüngung; versetzte Löcher
+  und echte Formschrägen bleiben verschiedene Schichten.
+
 - **Material nach Umlaufrichtung**: Ab elf Ebenen gehen dichte, konsistente Netze zum Kernel-Job;
-  `_solid_sections` prüft dort Volumenerhalt und schneidet mit `Manifold.slice`. Negative Komponenten
+  `_solid_sections` prüft dort Volumenerhalt und schneidet mit `Manifold.slice`. Eine
+  Ablehnung des unveränderten Netzes liegt als Wahrheitswert im automatisch bei
+  Geometrieänderungen geleerten Netzcache. Negative Komponenten
   nehmen den Segmentweg, der freie Schalen von Hohlräumen trennt. Sonst
   liefern Cython oder NumPy gerichtete Segmente; `_numpy_rings` ordnet
   Schalen nach Netzknoten wie Cython, auch an Rücklaufnähten. `CrossSection(Positive)`
@@ -110,7 +138,8 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
   Element. `_islands_many` baut den GEOS-Index der Vorgänger einmal.
   `FULL_WORKERS` steht bei sechs, die Messreihe an der Konstante.
 - **Spannweiten ohne Overlay**: `_supported_span` bündelt gleiche Richtungen
-  und schneidet als Abtastzeile in NumPy (`_cuts_along`, Paritätsregel).
+  und schneidet als Abtastzeile im optionalen Cythonkern oder in NumPy
+  (`_cuts_along`, gleiche Paritätsregel).
 - **Der Keil an jeder `TAPER_SAMPLE`. Schicht**, dazwischen fortgeschrieben;
   ein kürzerer Keil wird verfehlt oder fünffach gezählt (Test in
   `test_slice.py`).
@@ -120,11 +149,13 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 - **Die Öffnung** (`_opening_loss`, `_protrusion`, `_minimum_widths`,
   `_halved`, `_width_outline`, `_canonical`) folgt der Regel „Die Öffnung
   zählt, was der Form fehlt“ in `schichtanalyse.md`.
-- **Die Säulen**: `_support_volume` vereinigt Überhänge und zieht Material
-  darunter als gerichtete `CrossSection` ab; jede Fläche wird einmal
-  konvertiert, Zwischenkonturen bleiben in Clipper. Schichten und Summe
-  laufen in fester Folge, mit Abbruchprüfung je Schicht. `_material_cross`
-  orientiert vorhandene Außenringe und Löcher ohne Vereinfachung.
+- **Die Säulen**: `_support_volume` verfolgt disjunkte Überhänge unabhängig
+  bis zum Bett. Ein eigener vorbereiteter GEOS-Index je Säule bestimmt die
+  berührten Schichten; nur dort zieht Clipper Material ab. Freie Höhenabschnitte
+  tragen dieselbe Fläche weiter. Schichtkonturen werden einmal erzeugt,
+  Aufträge begrenzt auf die Zahl der Arbeiter vergeben und ihre Volumina in
+  fester Folge summiert. Abbruch wird vor jeder Umwandlung und jedem Schnitt
+  geprüft. `_material_cross` orientiert Ringe ohne Vereinfachung.
   `slice_body(support_volume=False)` lässt die Säulen aus (Druckvorschläge);
   der Druckdialog behält die Messung in der Sitzung
   (`Session.remember_analyses`).

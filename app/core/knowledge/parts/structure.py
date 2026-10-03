@@ -23,7 +23,7 @@ from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, face, result, subtract, union
+from app.core.knowledge.parts.build import bore, face, intersect, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     FACE_ON_THE_BODY,
@@ -140,6 +140,17 @@ PROFILE_TONGUE_ADDED = PartChange(
     reason=(
         "Die Aluprofil-Nutmaße lagen seit der Erstbestückung in der Tabelle, "
         "ohne dass ein Baustein sie las (§24.2)."
+    ),
+)
+
+PROFILE_TONGUE_MANUFACTURERS = PartChange(
+    version="23",
+    date="2026-10-03",
+    reason="Zwei benannte Profilquerschnitte sind gegen Herstellerzeichnung und STEP geprüft.",
+    effect=_(
+        "Die neuen Motedis-Profile berücksichtigen Stegdicke und schräge Kammerwände. "
+        "Ältere Profilangaben behalten ihre Maße; wählen Sie für eine neue Passung "
+        "das genaue Profil."
     ),
 )
 
@@ -424,9 +435,9 @@ def cable_gland(raw: BaseParams) -> PartResult:
 class ProfileTongueParams(BaseParams):
     size: str = param(
         title=_("Profil"),
-        default="2020",
+        default="motedis-2020-b6",
         choices=_PROFILES,
-        doc=_("Die Nutgröße der Schiene — bei den üblichen Profilen die Zahl im Namen."),
+        doc=_("Wählen Sie Hersteller und Nuttyp. Gleiche Außenmaße bedeuten nicht dieselbe Nut."),
     )
     length: float = param(
         title=_("Länge"),
@@ -456,10 +467,25 @@ class ProfileTongueParams(BaseParams):
         maximum=8.0,
         placement="advanced",
         doc=_(
-            "Null heißt: so hoch, dass der Kopf die Kammer ausfüllt und den "
-            "Nutgrund nicht berührt. Mehr als die Kammertiefe passt nicht hinein."
+            "Null nutzt die Kammertiefe mit Spiel zum Nutgrund. Ein kleinerer Wert "
+            "kürzt den Kopf; seine Verjüngung bleibt passend zur Kammer."
         ),
     )
+
+
+def _profile_tongue_feasible(raw: BaseParams) -> TranslatableText | None:
+    """Das Spiel und die Kopfhöhe müssen innerhalb der belegten Kammer bleiben."""
+    params = cast(ProfileTongueParams, raw)
+    entry = standards.profile_slot(params.size)
+    if not entry.taper_to_slot:
+        return None
+    available = entry.depth - 2.0 * params.play
+    if available <= EPS_GEOM or params.head > available + EPS_GEOM:
+        return _(
+            "Der Kopf passt mit diesem Spiel nicht in die Kammer. "
+            "Verringern Sie Kopfhöhe oder Spiel."
+        )
+    return None
 
 
 @register_part(
@@ -468,6 +494,7 @@ class ProfileTongueParams(BaseParams):
     group="structure",
     params=ProfileTongueParams,
     features=["tongue"],
+    feasible=_profile_tongue_feasible,
     doc=_(
         "Ein T-förmiger Fuß, der von der Stirnseite in die Nut einer Aluschiene "
         "geschoben wird und dort hält. Hals und Kopf kommen aus der "
@@ -475,11 +502,20 @@ class ProfileTongueParams(BaseParams):
         "Nutrichtung flach — steht sie senkrecht, ist die Schulter unter dem "
         "Kopf ein Überhang."
     ),
-    changes=[PROFILE_TONGUE_ADDED, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET, FACE_ON_THE_BODY],
+    changes=[
+        PROFILE_TONGUE_ADDED,
+        FACE_GIVES_DIRECTION,
+        MATERIAL_OF_TARGET,
+        FACE_ON_THE_BODY,
+        PROFILE_TONGUE_MANUFACTURERS,
+    ],
 )
 def profile_tongue(raw: BaseParams) -> PartResult:
     params = cast(ProfileTongueParams, raw)
     entry = standards.profile_slot(params.size)
+    problem = _profile_tongue_feasible(params)
+    if problem is not None:
+        raise ValidationError("head", problem, constraint="feasible")
 
     # Alle vier Maße aus der Tabelle, keines im Code (§24.2). Das Spiel geht
     # jeweils von der Feder ab, nie auf die Nut auf: Die Nut ist gegeben.
@@ -509,6 +545,18 @@ def profile_tongue(raw: BaseParams) -> PartResult:
     # bricht.
     neck = shapes.box(neck_width, params.length, neck_height + BOOLEAN_OVERLAP)
     head = shapes.tapered_bar(head_width, neck_width, params.length, head_height, lead_in)
+    if entry.taper_to_slot:
+        # Die Seitenflanken folgen der vollen Kammer, auch wenn die Kopfhöhe
+        # verkürzt ist. Ein gekürzter Kopf bekommt keine steilere Ersatzform.
+        full_height = entry.depth - 2.0 * params.play
+        outline = (
+            (-head_width / 2.0, 0.0),
+            (head_width / 2.0, 0.0),
+            (neck_width / 2.0, full_height),
+            (-neck_width / 2.0, full_height),
+        )
+        chamber = shapes.turned(shapes.prism_across(outline, params.length), 90.0)
+        head = intersect(head, chamber)
     body = union(neck, shapes.moved(head, (0.0, 0.0, neck_height)))
 
     # Die tragende Fläche: die Unterseite des Kopfes rechts und links des

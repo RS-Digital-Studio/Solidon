@@ -390,6 +390,144 @@ def test_detect_region_preserves_geometry_and_repeated_ids(profile) -> None:
     )
 
 
+def test_local_pattern_replaces_its_previously_recognised_cells(profile) -> None:
+    """Die zwölf Waben sind nach der Bereichssuche genau eine anklickbare Auswahl."""
+    from app.core.perceive.features import detect_faces
+    from app.core.perceive.ops import DetectRegionParams, detect_region
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+    from tests.test_pattern_features import honeycomb_plate
+
+    mesh, count = honeycomb_plate(columns=4, rows=3, across_flats=3, pitch=4, thickness=3)
+    cells = {
+        f"face_{number}": replace(feature, id=f"face_{number}")
+        for number, feature in enumerate(detect_faces(mesh), start=1)
+    }
+    source = SceneObject("own", "Wabenplatte", mesh, features=cells)
+    ctx = OpContext(
+        Scene(objects={source.id: source}),
+        [source],
+        DetectRegionParams(radius=30, x=-10, z=1.5),
+        profile,
+        "fine",
+        None,
+        lambda *_args: None,
+        lambda *_args: pytest.fail("unerwartete Frage"),
+        NeverCancelled(),
+    )
+    output = detect_region(ctx).outputs[0]
+    patterns = [feature for feature in output.features.values() if feature.kind == "pattern"]
+    assert len(patterns) == 1 and patterns[0].params["count"] == count
+    assert len(output.features) == 7, "sechs Außenflächen und ein Wabenmuster"
+    assert output.mesh is mesh and len(source.features) == 6 + 6 * count
+    assert detect_region(replace(ctx, inputs=[output])).outputs[0].features == output.features
+
+
+def test_imported_local_pattern_keeps_one_selection_through_cache_save_and_undo(
+    profile, tmp_path, monkeypatch
+) -> None:
+    """Eine kleine Suche, dann das ganze Feld: alte Zell-IDs bleiben nur reserviert."""
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.perceive.features import detect_faces
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.hashing import feature_digest
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from app.core.types import Source
+    from tests.test_pattern_features import honeycomb_plate
+
+    load_operations()
+    # Die Größenentscheidung wird isoliert; die Erkennung selbst rechnet echt.
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    mesh, _count = honeycomb_plate(columns=4, rows=3, across_flats=3, pitch=4, thickness=3)
+    project = new_project()
+    project.sources["src_1"] = mesh.raw.export(file_type="stl")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/waben.stl", sha256=""
+    )
+    history = History(project.document)
+    history.apply(
+        "Wabenplatte laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    directory = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+
+    def inspect(item=project, result_cache=cache):
+        result = evaluate(
+            item.document,
+            profile,
+            sources=ProjectSources(item),
+            cache=result_cache,
+            ask=lambda _question, choices: choices[0],
+        )
+        assert result.complete, result.scene.report.findings
+        return result.scene.objects["obj_1"]
+
+    imported = inspect()
+    assert not imported.features
+    cell = min(detect_faces(imported.mesh), key=lambda feature: feature.params["area"])
+    params = dict(zip(("x", "y", "z"), cell.params["centre"], strict=True))
+    params.update(zip(("nx", "ny", "nz"), cell.params["normal"], strict=True))
+    history.apply(
+        "Einzelne Wabenseite erkennen",
+        [OperationDraft(op="detect_region", inputs=("obj_1",), params={**params, "radius": 2})],
+    )
+    small = inspect()
+    assert len(small.features) == 1
+    cell_ids = set(small.features)
+    history.apply(
+        "Ganzes Wabenfeld erkennen",
+        [OperationDraft(op="detect_region", inputs=("obj_1",), params={**params, "radius": 30})],
+    )
+    whole = inspect()
+    assert len(whole.features) == 7
+    assert cell_ids.isdisjoint(whole.features)
+    assert cell_ids <= set(whole.reserved_feature_ids)
+    patterns = [feature for feature in whole.features.values() if feature.kind == "pattern"]
+    assert len(patterns) == 1 and patterns[0].params["count"] == 12
+    assert whole.mesh.volume == pytest.approx(imported.mesh.volume)
+    assert inspect().features == whole.features
+    reopened = load(save(project, tmp_path / "waben.p3d"))
+    assert inspect(reopened, ResultCache()).features == whole.features
+    disk = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    # JSON speichert Vektoren als Listen; verglichen werden dieselben Werte
+    # einschließlich Herkunft, Auswahl und Maße über den gemeinsamen Codec.
+    from_disk = inspect(reopened, disk)
+    assert {
+        name: feature_digest(feature, name) for name, feature in from_disk.features.items()
+    } == {name: feature_digest(feature, name) for name, feature in whole.features.items()}
+    assert disk.statistics.disk_hits >= 3
+    history.undo()
+    assert inspect().features == small.features
+    history.redo()
+    assert inspect().features == whole.features
+
+    # Ein alter Bezug auf die einzelne Seitenwand darf nicht plötzlich das
+    # ganze Muster bemalen. Die bestehende Verweisprüfung hält den Schritt an.
+    History(reopened.document).apply(
+        "Alte Zellfläche färben",
+        [
+            OperationDraft(
+                op="paint_slot",
+                inputs=("obj_1",),
+                params={"at_feature": next(iter(cell_ids)), "slot": 1, "colour": "#CC2233"},
+            )
+        ],
+    )
+    blocked = evaluate(
+        reopened.document, profile, sources=ProjectSources(reopened), cache=ResultCache()
+    )
+    assert not blocked.complete
+    assert blocked.stopped_at == reopened.document.ops[-1].id
+    assert any(
+        finding.severity == "error" and finding.suggestions
+        for finding in blocked.scene.report.findings
+    )
+
+
 def test_large_path_revalidates_known_features_after_translation(monkeypatch) -> None:
     """Die bisher frühe Rückgabe bei großen Netzen darf alte Merkmale nicht liegen lassen."""
     import importlib
@@ -2029,3 +2167,26 @@ def test_a_counterbore_that_opens_into_a_cove_is_measured_at_its_spot() -> None:
             if feature.kind == "hole"
         )
         assert diameters == [6.0, 11.0], required
+
+
+@pytest.mark.parametrize("damaged", [False, True])
+def test_budgeted_known_through_wall_never_publishes_a_blind_or_broken_hole(
+    monkeypatch: pytest.MonkeyPatch, damaged: bool
+) -> None:
+    """Ein alter Durchgangsauftrag ersetzt weder Boden- noch Originalrandprüfung."""
+    from app.core.perceive import features, local
+
+    mesh = blind_cylinder()
+    hole = next(feature for feature in features.detect(mesh).values() if feature.kind == "hole")
+    expected = replace(hole, params={**hole.params, "through": True, "local_search_radius": 8.0})
+    if damaged:
+        raw = mesh.raw.copy()
+        raw.update_faces(np.arange(len(raw.faces) - 1))
+        mesh = MeshData.of(raw)
+    # Der Würfel übersteigt das Budget, die Wand samt Mündungsring passt hinein.
+    region = local._region(mesh, np.asarray(expected.params["centre"]), 8.0, None, bounded=False)
+    assert region is not None
+    wall = local._known_through_wall(mesh, region, expected)
+    assert 0 < len(wall) < len(region)
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(wall))
+    assert local.detect_known(mesh, {expected.id: expected}, required=()) == {}

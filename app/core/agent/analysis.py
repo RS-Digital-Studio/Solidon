@@ -217,7 +217,9 @@ def _advice(
         fit_kinds=[fit.kind for fit in document.fits],
     )
     if not advice:
-        lines.append(tr("Die Einstellungen passen zu Teil, Material und Drucker."))
+        lines.append(
+            tr("Aus den geprüften Grundlagen ergibt sich kein weiterer Einstellungsvorschlag.")
+        )
         return lines
     lines.extend(f"{entry.path}: {entry.was} → {entry.value} — {entry.reason}" for entry in advice)
     lines.append(tr("Nenne die Vorschläge samt Grund — geändert wird über den Druckdialog."))

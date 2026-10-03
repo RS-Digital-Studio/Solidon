@@ -1135,6 +1135,50 @@ def test_dimension_fields_stand_beside_the_body_and_keep_their_leaders(
         viewport.close()
 
 
+def test_a_tall_measure_card_does_not_push_all_dimensions_into_the_emergency_row(
+    qt_app: QApplication, monkeypatch
+) -> None:
+    """Die Fachkarte darf Platz beanspruchen, ohne die Maßzuordnung zu verlieren."""
+    flow, session, viewport, dialog = _layout(qt_app, (1200, 850), 1.0, "bottom")
+    try:
+        monkeypatch.setattr(dialog, "values_stand_elsewhere", True)
+        group = QWidget(viewport)
+        layout = QVBoxLayout(group)
+        label = QLabel("Ursprüngliche Bohrung ändern", group)
+        label.setMinimumSize(340, 550)
+        layout.addWidget(label)
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        viewport.renderer.world_to_display = lambda point: (
+            600 + point[0] * 13,
+            450 + point[1] * 10,
+            0.5,
+        )
+        flow.set_measure_fields(
+            group, editors=(), interpret=lambda: True, refresh=lambda _values: None
+        )
+        flow.redraw()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        body = QRect(340, 250, 521, 401)
+        assert flow._measure_box.isVisible()
+        for field in fields:
+            assert field.isVisible()
+            assert viewport.rect().contains(field.geometry())
+            assert not field.geometry().intersects(body), field.geometry()
+            assert not field.geometry().intersects(flow._measure_box.geometry())
+        assert len({field.y() for field in fields}) > 1, "nicht alle Maße in eine Notreihe"
+        assert len(flow._canvas.leaders) == len(fields) + 1
+        assert not any(
+            _crosses(first, second) for first, second in combinations(flow._canvas.leaders, 2)
+        ), "die Zuordnungslinien bleiben voneinander getrennt"
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
 def test_dimension_fields_keep_their_places_when_the_spot_moves_a_little(
     qt_app: QApplication,
 ) -> None:

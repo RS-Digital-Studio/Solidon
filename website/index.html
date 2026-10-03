@@ -88,7 +88,7 @@
       "name": "Kann ich eigene Bausteine anlegen, ohne zu programmieren?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle im Bausteinkatalog Auswahl als Baustein speichern. Beim Anlegen wird der Baustein über seinen ganzen Maßbereich durchgerechnet; danach steht er mit Vorschaubild und Feldern neben den mitgelieferten. Er bleibt auf deinem Rechner — und reist als Rezept in jeder Projektdatei mit, die ihn benutzt: eine Liste von Schritten und Werten, kein Programm. Wer die Datei bekommt, kann damit rechnen, ohne etwas zu installieren."
+        "text": "Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle im Bausteinkatalog Auswahl als Baustein speichern. Beim Anlegen wird der Baustein an festgelegten Kombinationen seines Maßbereichs geprüft; danach steht er mit Vorschaubild und Feldern neben den mitgelieferten. Er bleibt auf deinem Rechner — und reist als Rezept in jeder Projektdatei mit, die ihn benutzt: eine Liste von Schritten und Werten, kein Programm. Wer die Datei bekommt, kann damit rechnen, ohne etwas zu installieren."
       }
     },
     {
@@ -144,7 +144,7 @@
       "name": "Läuft das auf einem Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Ab Version 0.4.1 sind die Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben."
+        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht. Wähle das Paket für die Prozessorart deines Macs. Ab Version 0.4.1 sind die Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben."
       }
     },
     {
@@ -222,7 +222,7 @@
         <p class="hero-kicker">3D-Modelle bearbeiten &amp; erstellen — ohne CAD-Vorkenntnisse</p>
         <h1>Aus STL wird das Teil, das du brauchst.</h1>
         <p class="lead">Modell hineinziehen, Bohrung anklicken, neues Maß
-        eintippen. Solidon3D prüft vor dem Slicen, ob dein Teil druckbar ist,
+        eintippen. Solidon3D prüft vor dem Slicen erkannte Druckrisiken
         und gibt es an deinen Slicer weiter. Ohne Cloud, ohne Konto.</p>
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
@@ -378,7 +378,7 @@
       <div class="stats">
         <div><b>142</b><span>Operationen in der Downloadversion</span></div>
         <div><b>35</b><span>geprüfte Bausteine</span></div>
-        <div><b>59</b><span>Normteilmaße hinterlegt</span></div>
+        <div><b>61</b><span>Normteilmaße hinterlegt</span></div>
         <div><b>20</b><span>Druckerprofile ab Werk</span></div>
         <div><b>12</b><span>Beispielprojekte dabei</span></div>
         <div><b>0</b><span>Konten, Cloud, Telemetrie</span></div>
@@ -407,9 +407,7 @@
                  alt="Eine eingelesene STL, eine Figur aus drei Kugeln, groß in der 3D-Ansicht. Rechts der Prüfbericht: 0 Fehler, 1 Warnung, 5 Hinweise. Die Warnung sagt, dass es sehr kleine Einzelteile gibt; die Hinweise nennen, was Solidon3D beim Einlesen repariert hat, etwa 18 von 18 offenen Kanten geschlossen.">
           </a>
           <h3>Modell hereinziehen</h3>
-          <p>Eine STL von Printables oder ein eigenes Projekt. Der Prüfbericht
-          sagt sofort, was beim Drucken schiefginge, und jeder Befund trägt
-          einen Vorschlag, was zu tun ist.</p>
+          <p>Eine STL von Printables oder ein eigenes Projekt. Der Prüfbericht zeigt erkannte Druckrisiken, und jeder Befund trägt einen Vorschlag, was zu tun ist.</p>
         </li>
         <li class="step-card">
           <a class="step-media" href="bilder/schritt-druck.webp?v=0a013531">
@@ -445,13 +443,11 @@
         </li>
         <li>
           <q>Der Deckel klemmt. Beim dritten Versuch passte er.</q>
-          <p><b>Passungen aus dem Materialprofil.</b> Spiel, Presssitz oder
-          bündig werden aus einer einmal gedruckten Kalibrierleiter
-          abgeleitet, nicht geschätzt.</p>
+          <p><b>Passungen aus dem Materialprofil.</b> Mit einer gedruckten Kalibrierleiter passt du die Startwerte für Spiel, Presssitz und bündige Passung an deinen Drucker und dein Filament an.</p>
         </li>
         <li>
           <q>Das Teil ist 40 mm zu groß fürs Bett.</q>
-          <p><b>Teilen und verstiften in einem Schritt.</b> Auto-Split legt
+          <p><b>Teilen und verstiften in einem Schritt.</b> <em>Automatisch teilen</em> legt
           Passstifte, Bohrungen und die zugehörigen Passungen gleich mit
           an.</p>
         </li>
@@ -564,14 +560,12 @@
                alt="Eine zylindrische Vorratsdose mit gedrucktem Außengewinde am Hals, daneben der passende Schraubdeckel mit gerändeltem Rand">
           <figcaption><b>Vorratsdose</b> Das Gewinde am Hals und das im Deckel
           kommen aus derselben Steigung, das Spiel dazwischen aus dem
-          Materialprofil. Deckel drauf, und er sitzt.</figcaption>
+          Materialprofil. Prüfe die Passung mit einem kleinen Probedruck.</figcaption>
         </figure>
         <figure>
           <img src="bilder/galerie-klappbox.webp?v=41b70727" width="900" height="578" loading="lazy"
                alt="Eine flache Box mit angeformtem Deckel; zwischen beiden läuft ein dünnes Filmscharnier, vorn hält ein Schnappverschluss">
-          <figcaption><b>Klappbox</b> Deckel und Boden sind ein Stück. Das
-          Filmscharnier ist 0,4 mm dünn — dick genug zum Drucken, dünn genug
-          zum tausendfachen Klappen.</figcaption>
+          <figcaption><b>Klappbox</b> Deckel und Boden sind ein Stück. Ein 0,4 mm dünnes Filmscharnier verbindet sie ohne separaten Scharnierstift.</figcaption>
         </figure>
         <figure>
           <img src="bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
@@ -594,19 +588,15 @@
         <figure>
           <a href="bilder/beleg-bericht.webp?v=9df0f73f"><img src="bilder/beleg-bericht.webp?v=9df0f73f" width="1907" height="1192" loading="lazy" decoding="async"
                alt="Eine Dose mit Deckel groß in der Ansicht, rechts ihr Prüfbericht: 0 Fehler, 2 Warnungen, 6 Hinweise. Die Warnungen sagen, dass die Passung enger sitzt als vorgesehen und dass eine Fläche des Deckels frei überhängt und Stützen braucht; darunter Hinweise zu Aushöhlen, Deckel und Material."></a>
-          <figcaption><b>Prüfbericht und Schichtanalyse.</b> Was beim Drucken
-          schiefgeht, steht da, bevor der Slicer die Zeit verbraucht:
-          Überhänge, Inseln, zu dünne Wände und Stützbedarf, gezählt nach
-          Fehler, Warnung und Hinweis. Die Orientierungssuche schlägt die Lage
-          vor, die am wenigsten davon erzeugt.</figcaption>
+          <figcaption><b>Prüfbericht und Schichtanalyse.</b> Vor dem Slicen prüft Solidon3D Überhänge, Inseln, dünne Wände und Stützbedarf. Der Bericht unterscheidet Fehler, Warnungen und Hinweise. Die Orientierungssuche schlägt eine Lage mit weniger Stützbedarf vor.</figcaption>
         </figure>
         <figure>
           <a href="bilder/beleg-bausteine.webp?v=2cd1f250"><img src="bilder/beleg-bausteine.webp?v=2cd1f250" width="1560" height="1144" loading="lazy" decoding="async"
                alt="Der Bausteinkatalog, über dem Fenster geöffnet: die Gruppen Verbindungen, Mechanik und Befestigung mit Heat-Set-Einpressbuchse, Mutternfalle, gedruckter Mutter, Schraube, Gewinde, Schraubenloch mit Senkung, Scharnieren, Rastnase, Schnappverbindungen, Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger, Profilklemmen und Wandhalter, jeder mit Vorschau und seinen Maßen. Unten die Knöpfe Einfügen und Auswahl als Baustein speichern."></a>
           <figcaption><b>Geprüfte Bausteine, auch eigene.</b> Mutternfalle,
           Heat-Set-Buchse, Filmscharnier, Lochwand-Einhänger: Die Maße kommen
-          aus einer Normteiltabelle, und jeder Baustein ist über seinen ganzen
-          Maßbereich durchgerechnet. Ein eigenes Teil speicherst du ohne
+          aus einer Normteiltabelle, und jeder Baustein ist an festgelegten Kombinationen seines
+          Maßbereichs geprüft. Ein eigenes Teil speicherst du ohne
           Programmieren als Baustein; es reist als Rezept in jeder Projektdatei
           mit.</figcaption>
         </figure>
@@ -690,12 +680,13 @@
         keine Hotline und ein Fahrplan, der sich nach einer Person
         richtet.</li>
         <li><b>Keine Maßgarantie aus generierten Meshes.</b> Was aus Text
-        oder Bild entsteht, wird druckbar gemacht; maßhaltig konstruiert wird
+        oder Bild entsteht, lässt sich prüfen und für den Druck bearbeiten; mit Maßen konstruiert wird
         über Weg 1 und 2.</li>
         <li><b>Die KI bringt ihre eigenen Kosten mit.</b> Der Chat läuft mit
         eigenem API-Schlüssel, typisch sind Centbeträge je Vorschlag.
-        Kostenlos geht es lokal über Ollama, mit einer Grafikkarte ab 8 GB
-        Speicher; ab 10 GB antwortet es zwei- bis dreimal schneller.</li>
+        Ohne API-Gebühren geht es lokal über Ollama. Speicherbedarf und Tempo
+        hängen vom gewählten Modell und deiner Hardware ab; der
+        <a href="/ki-modelle.html">KI-Leitfaden</a> zeigt erprobte Konfigurationen.</li>
       </ul>
     </div>
   </section>
@@ -870,7 +861,7 @@
           <div class="donate">
             <p class="donate-terms">Freiwillig und ohne Gegenleistung: Die
             Zahlung ist keine Bestellung, schaltet nichts frei und wird nicht auf
-            einen späteren Kauf angerechnet. Wir stellen keine steuerliche
+            einen späteren Kauf angerechnet. Ich stelle keine steuerliche
             Bestätigung aus; behandle die Zahlung nicht als steuerlich
             abziehbar. PayPal oder GoFundMe öffnet sich erst nach deiner Wahl im
             nächsten Schritt; <a href="/datenschutz.html">Details im
@@ -878,7 +869,7 @@
             <button class="donate-button" type="button" data-choice="support">Freiwillig unterstützen <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
             <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Freiwillige Unterstützung über PayPal oder GoFundMe">
               <p class="auswahl-titel">Freiwillig unterstützen</p>
-              <p>Die Zahlung ist keine Bestellung, begründet keine Gegenleistung, schaltet nichts frei und wird nicht auf einen späteren Kauf angerechnet. Wir stellen keine steuerliche Bestätigung aus.</p>
+              <p>Die Zahlung ist keine Bestellung, begründet keine Gegenleistung, schaltet nichts frei und wird nicht auf einen späteren Kauf angerechnet. Ich stelle keine steuerliche Bestätigung aus.</p>
               <p>Wähle PayPal oder GoFundMe. Erst der jeweilige Knopf öffnet die externe Seite. Dabei verlässt du solidon3d.de; es gilt die Datenschutzerklärung des gewählten Anbieters: <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal</a> oder <a href="https://www.gofundme.com/c/privacy">GoFundMe</a>.</p>
               <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Mit PayPal unterstützen</a>
               <a class="btn" href="https://gofund.me/08c5f0edb" rel="noopener noreferrer">Mit GoFundMe unterstützen</a>
@@ -982,8 +973,8 @@
           <summary>Kann ich eigene Bausteine anlegen, ohne zu programmieren?</summary>
           <p>Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle
           im Bausteinkatalog <b>Auswahl als Baustein speichern</b>. Beim
-          Anlegen wird der Baustein über seinen ganzen Maßbereich
-          durchgerechnet; danach steht er mit Vorschaubild und Feldern neben
+          Anlegen wird der Baustein an festgelegten Kombinationen seines Maßbereichs
+          geprüft; danach steht er mit Vorschaubild und Feldern neben
           den mitgelieferten.</p>
           <p>Er bleibt auf deinem Rechner — und <b>reist als Rezept in jeder
           Projektdatei mit</b>, die ihn benutzt: eine Liste von Schritten und
@@ -1044,8 +1035,8 @@
         <details>
           <summary>Läuft das auf einem Mac?</summary>
           <p>Ja, für Apple Silicon und für Intel als getrennte Versionen — ein
-          Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht,
-          und das betrifft jedes Gerät vor 2020. Ab Version 0.4.1 sind die
+          Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht.
+          Wähle das Paket für die Prozessorart deines Macs. Ab Version 0.4.1 sind die
           Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere
           Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen,
           und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“

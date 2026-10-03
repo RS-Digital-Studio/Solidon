@@ -111,8 +111,7 @@
           <p>All’apertura, Solidon3D cerca nella maglia di triangoli ciò che un
           tempo era progetto: fori, perni, svasature, cupole e sedi,
           raccordi, gole, filettature, facce piane e spigoli aperti. Ogni
-          caratteristica trovata riceve un’identità che sopravvive ai passi
-          successivi, e un clic mostra i suoi valori <b>misurati</b>, come quote nella vista e a destra nel pannello Selezione: posizione, diametro, profondità,
+          caratteristica trovata riceve un’identità usata come riferimento nei passi successivi, e un clic mostra i suoi valori <b>misurati</b>, come quote nella vista e a destra nel pannello Selezione: posizione, diametro, profondità,
           asse.</p>
           <p class="note">Cambiare un numero è l’operazione.
           <b>Nessuna modalità, nessun secondo dialogo</b>: l’anteprima
@@ -121,8 +120,7 @@
           azioni agiscono direttamente sull’elemento riconosciuto. Finora,
           spostare un foro di tre millimetri voleva dire tapparlo e forarne uno
           nuovo a coordinate nuove — due passi, sei numeri a mano, e l’identità
-          era persa. Ora è un passo solo, e ogni accoppiamento che punta a quel
-          foro mantiene il suo riferimento.</p>
+          era persa. Ora è un passo solo, e gli accoppiamenti continuano a riferirsi a quel foro. I riferimenti che non si possono più risolvere vengono segnalati.</p>
           <p>È il foro stesso a dire quale vite gli spetta («Probabilmente adatto a M5 (Foro passante fine)»), e dove non ne va bene nessuna, dice
           anche quello. Sei fori uguali passano alla stessa misura in un colpo
           solo, come un’unica azione che un annulla ritira insieme. Due
@@ -161,8 +159,7 @@
           <p class="note">Il trascinamento diventa un passo della cronologia.
           <b>Ciò che è stato spinto nell’immagine è poi un numero in quel
           passo</b> — e resta modificabile dieci passi più tardi.</p>
-          <p>Se sollevi un pezzo, l’ombra scappa di lato: l’unica informazione
-          sull’altezza che l’immagine dà da sé. La selezione sfuma invece di
+          <p>Se sollevi un pezzo, l’ombra scappa di lato: un aiuto visivo per valutarne l’altezza. La selezione sfuma invece di
           saltare.</p>
           <p>E su una faccia la barra di spostamento offre solo ciò che lì è
           possibile: ruotare e scalare restano in grigio, con il motivo nel
@@ -218,7 +215,7 @@
           Cosa diventa il contorno lo decidi solo dopo: estruderlo, inciderlo come
           tasca, farlo ruotare attorno a un asse, guidarlo lungo un arco o tenderlo
           tra due contorni.</p>
-          <p class="note">Il contorno resta una curva esatta. <b>Un cerchio disegnato diventa un cilindro rotondo, non un
+          <p class="note">In un solido esatto, il contorno mantiene la sua curva. <b>Un cerchio disegnato diventa un cilindro rotondo, non un
           poligono con tanti angoli.</b></p>
           <p>La griglia mostra a cosa si aggancia il magnete, e il suo passo
           si può digitare. La quota sta accanto al puntatore, e la barra
@@ -246,9 +243,9 @@
           <span class="kicker">Parametrico</span>
           <h3>Cambiare un numero — non ricostruire il modello</h3>
           <p>La cronologia è non distruttiva: ogni passo resta modificabile,
-          ogni numero si può girare anche dopo. Spessore di parete da 2,40 a
+          ogni valore si può modificare anche dopo. Spessore di parete da 2,40 a
           3,60? Svuotatura, coperchio, fori e accoppiamenti si ricalcolano —
-          nello stesso ordine, con lo stesso risultato.</p>
+          nello stesso ordine, con i nuovi valori.</p>
           <p class="note">Parametri di progetto con un nome invece di numeri
           sparsi: <b>una modifica in un punto, non in sette.</b></p>
           <p>I limiti si possono cambiare in seguito, anche dopo che il
@@ -259,7 +256,7 @@
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
                aria-label="Un disegno: il campo «spessore di parete» passa da 2,40 a 3,60 millimetri, la sezione della scatola riceve pareti e fondo più spessi, la cronologia sotto resta invariata.">
-            <text class="ink" x="24" y="30" font-weight="600">Girare il numero</text>
+            <text class="ink" x="24" y="30" font-weight="600">Modificare il valore</text>
 
             <rect class="field" x="24" y="52" width="216" height="38" rx="4"/>
             <text class="dim" x="38" y="76">Spessore di parete</text>
@@ -283,14 +280,14 @@
             <rect class="hot anim fig-wall-bar" x="300" y="212" width="16" height="5" rx="2"/>
             <text class="dim" x="300" y="238">Spessore di parete</text>
           </svg>
-          <figcaption>Spessore girato — la cronologia resta la stessa.</figcaption>
+          <figcaption>Spessore modificato — la cronologia resta la stessa.</figcaption>
         </figure>
       </div>
 
       <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocchi</span>
-          <h3>Una sede per dado in quattro clic, non in quattro mezz'ore</h3>
+          <h3>Una sede per dado pronta da dimensionare</h3>
           <p>La faccia cliccata conta: un blocco si posa dove hai indicato
           nel modello — prima ogni operazione su una faccia costava due
           clic. Il catalogo a destra conosce ora anche supporto a
@@ -302,13 +299,10 @@
           poi supporto a parete, gancio per pannello forato, clip per cavi,
           squadretta e piede. Le quote vengono da una tabella dei componenti
           normalizzati, non dall'istinto.</p>
-          <p class="note">Ogni blocco è testato su tutto il suo intervallo di
-          parametri: <b>a tenuta stagna, spessore minimo di parete, nessuna
-          autointersezione.</b></p>
+          <p class="note">Ogni blocco è verificato alle combinazioni dei suoi valori limite: <b>maglia chiusa, spessore minimo di parete e assenza di autointersezioni.</b></p>
           <p>Chi sceglie un blocco prima di indicare un punto viene
           interpellato da Solidon3D, invece di vederlo piazzato all'origine.
-          Anche il catalogo si apre senza un modello caricato — inserire un
-          blocco è allora bloccato, con il motivo indicato.</p>
+          Anche il catalogo si apre senza un modello caricato — per inserire un blocco, crea prima un solido o importa un modello con i pulsanti del catalogo.</p>
           <p>L'albero degli oggetti mostra cosa porta con sé un blocco: le
           sue caratteristiche compaiono come voci proprie sotto di esso, e il
           nodo propone di modificare esattamente quel passo.</p>
@@ -332,7 +326,7 @@
           selezione come blocco</b>: da quel momento sta accanto ai
           blocchi forniti, con anteprima e campi, e decidi tu per ogni quota
           fino a dove si può regolare.</p>
-          <p>Creare calcola, non si limita a salvare: il blocco viene
+          <p>Durante la creazione viene verificata anche la geometria: il blocco viene
           costruito una volta a ogni angolo del suo intervallo — se da qualche
           parte non esce un corpo utilizzabile, sta scritto sulla voce prima
           che si veda in stampa.</p>
@@ -346,19 +340,17 @@
             <a href="../bilder/beleg-eigener-baustein-it.webp?v=d6cd3098"><img src="../bilder/beleg-eigener-baustein-it.webp?v=d6cd3098" width="456" height="1347" loading="lazy" decoding="async"
                  alt="La finestra «Salva la selezione come blocco», aperta dal catalogo: in alto nome, gruppo, descrizione, licenza e autore, poi per ogni quota — qui larghezza e profondità — etichetta, unità, valore minimo e massimo, valore predefinito e posto nella finestra, poi i punti su cui si potrà fare clic con il loro nome nella ricetta; in basso «Test dell’intervallo: 8 combinazioni» e il pulsante Crea blocco."></a>
           </div>
-          <figcaption>La finestra chiede cinque cose — e calcola l'intero intervallo prima di salvare.</figcaption>
+          <figcaption>La finestra chiede cinque cose — e calcola le combinazioni dei valori limite prima di salvare.</figcaption>
         </figure>
       </div>
 
       <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Superfici</span>
-          <h3>Otto motivi, e tutti verificati per la stampabilità</h3>
+          <h3>Otto motivi verificati secondo il profilo di stampa</h3>
           <p>Nervatura, onda, zigrinatura dritta e incrociata, nido d'ape,
           bugne, Voronoi e rumore — come <b>geometria vera</b> e come
-          reticolo esatto, non come campo di altezze campionato. Altrimenti
-          una zigrinatura stampa poltiglia arrotondata invece di rombi
-          netti.</p>
+          reticolo esatto, non come campo di altezze campionato. Il dettaglio stampato dipende anche dall’ugello, dal materiale e dalle impostazioni dello slicer.</p>
           <p class="note">Prima di calcolare, la domanda se il motivo su
           questa macchina può nascere del tutto: <b>creste più strette
           dell'ugello e goffrature più basse di uno strato vengono
@@ -382,11 +374,10 @@
       <div class="showcase" id="inspection-report">
         <div>
           <span class="kicker">Rapporto di verifica</span>
-          <h3>Sai prima della stampa cosa andrà storto</h3>
-          <p>Ogni file aperto riceve un rapporto: punti aperti, triangoli
+          <h3>Individua i rischi di stampa e correggili prima dello slicing</h3>
+          <p>Ogni modello aperto riceve un rapporto: punti aperti, triangoli
           orientati male, pareti sotto i due cordoni di estrusione, unità
-          mancanti. Ordinato in errori, avvisi e note — e ogni voce salta nel
-          modello al punto di cui parla.</p>
+          mancanti. Ordinato in errori, avvisi e note — e le voci localizzate indicano il punto interessato nel modello.</p>
           <p class="note">Ogni rilievo porta con sé un'azione proposta.
           <b>Qui un errore non finisce mai con «operazione non
           riuscita».</b></p>
@@ -405,16 +396,16 @@
           <span class="kicker">Analisi degli strati</span>
           <h3>Vedere ciò che vedrà la stampante</h3>
           <p>Solidon3D taglia il modello in strati e misura cosa ne segue:
-          angoli di sbalzo, isole sospese, pareti sotto i due cordoni,
+          aree senza supporto, isole sospese, pareti sotto i due cordoni,
           campate dei ponti e volume dei supporti. La ricerca
-          dell'orientamento propone la posizione che ne genera di meno.</p>
+          dell'orientamento cerca una posizione che richieda meno supporti tra gli orientamenti valutati.</p>
           <p class="note">Nessuno slicer proprio — e nessun numero mescolato:
           <b>cosa viene dall'analisi e cosa dal G-code, sta scritto
           accanto.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Un disegno: una linea di analisi sale dal piano di stampa attraverso un pezzo; uno dopo l'altro compaiono tre rilievi — sbalzo di 78 gradi, isola sospesa e una parete sotto i due cordoni.">
+               aria-label="Un disegno: una linea di analisi sale dal piano di stampa attraverso un pezzo; uno dopo l'altro compaiono tre rilievi — sbalzo di 90 gradi, isola sospesa e una parete sotto i due cordoni.">
             <text class="ink" x="24" y="30" font-weight="600">Analisi degli strati</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -442,7 +433,7 @@
               <text class="ink" x="386" y="183" font-size="12">Parete &lt; 2 cordoni</text>
             </g>
           </svg>
-          <figcaption>Tre rilievi che lo slicer conosce solo dopo lo slicing.</figcaption>
+          <figcaption>Tre rilievi che puoi esaminare prima dello slicing.</figcaption>
         </figure>
       </div>
 
@@ -452,7 +443,7 @@
           <h3>Passarlo allo slicer, con valori adatti al pezzo</h3>
           <p>Solidon3D non scrive G-code: lo fa il tuo slicer. Le impostazioni di stampa dicono prima cosa richiede questo pezzo: dalla geometria arrivano proposte come un brim quando la base è piccola o più tempo per strato quando in alto resta poca superficie — ognuna con il suo motivo, e ognuna si può togliere.</p>
           <p><b>Apri nello slicer</b> passa il pezzo, se vuoi con i valori, a PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer o Cura. <b>Affetta</b> lascia calcolare il tuo slicer in background; ciò che misura compare poi nel rapporto di verifica.</p>
-          <p class="note">Misurato e stimato non si mescolano mai: <b>ciò che viene dal G-code è segnato come misurato</b> e sta accanto alla stima di Solidon, non al suo posto.</p>
+          <p class="note">I valori del G-code descrivono la stampa prevista. <b>La loro origine è indicata accanto alla stima di Solidon.</b> Tempo e consumo effettivi possono essere diversi.</p>
         </div>
         <figure class="shot">
           <div class="stage">
@@ -465,7 +456,7 @@
 
       <div class="showcase" id="auto-split" data-operations="split_bodies split_line split_pinned cut_away">
         <div>
-          <span class="kicker">Dividere e divisione automatica</span>
+          <span class="kicker">Dividi a mano o automaticamente</span>
           <h3>«Troppo grande per il piatto» non è più un motivo per lasciar perdere</h3>
           <p><b>Indicare invece di calcolare:</b> due clic sul pezzo
           tracciano una linea, e si divide fra i due — dritto dentro lo
@@ -474,18 +465,16 @@
           <p>Le metà vengono già preparate per l'incastro: le spine in una,
           i fori corrispondenti nell'altra. Tondo, esagonale, coda di
           rondine o scatto — quelli spigolosi bloccano la torsione, la coda
-          di rondine anche la trazione, e lo scatto si aggancia e tiene
-          senza colla. Il gioco fra le parti viene dal profilo del
-          materiale: niente lima e niente secondo tentativo. L'accoppiamento
+          di rondine anche la trazione, e lo scatto è progettato per un collegamento a incastro. Verifica la tenuta sul pezzo stampato. Il gioco fra le parti viene dal profilo del
+          materiale. L'accoppiamento
           resta nel progetto come relazione e viene riverificato a ogni
           modifica successiva.</p>
           <p>E a chi serve un solo lato basta <b>Tagliare via</b>: un piano,
           un lato resta, la faccia di taglio viene chiusa. Così un supporto
           importato riceve una parete posteriore liscia, e una vaschetta
           diventa un bicchiere con le pareti tutte alla stessa altezza.</p>
-          <p>Chi non vuole neppure guardare usa <b>Dividi
-          automaticamente</b>: Solidon3D cerca da sé il piano di taglio e
-          taglia finché ogni pezzo non entra.</p>
+          <p>Per cercare automaticamente i piani di taglio, usa <b>Dividi
+          automaticamente</b>: Solidon3D cerca tagli che permettano ai pezzi di entrare nel volume di stampa e segnala quando non trova una soluzione adatta.</p>
           <p class="note">Il volume di stampa viene dal profilo della
           stampante. <b>Venti sono inclusi di serie</b>, due dei quali per la resina, e se ne possono
           creare di propri.</p>
@@ -544,14 +533,13 @@
           sono già configurati nello slicer, li importi da lì — di proposito,
           non in automatico.</p>
           <p>Nel progetto assegni una bobina a interi corpi o a singole facce;
-          il pannello filamenti a sinistra conta quale corpo porta quale
-          bobina. Dopo la
+          il pannello filamenti a sinistra mostra quale bobina è assegnata a ciascun corpo. Dopo la
           consegna allo slicer, Solidon3D propone di scalare il consumo — come
           stima o come pianificato nel G-code, ogni quantità con la sua
           origine. Se chiedere, non scalare mai o scalare senza chiedere lo
           imposti nel magazzino.</p>
           <p class="note">La cronologia delle registrazioni mostra ogni stampa
-          e la ritira su richiesta. <b>Eliminare qui significa archiviare</b>
+          e la ritira su richiesta. <b>Le bobine si possono archiviare e ripristinare</b>
           — con «Mostra le bobine archiviate» una bobina torna con il suo
           identificativo e la sua cronologia.</p>
         </div>
@@ -598,13 +586,12 @@
           farà prima di farlo, e viene applicata come un tutto: esattamente
           una transazione, che un solo Annulla ritira per intero.</p>
           <p class="note">La geometria la calcola il codice, mai il modello
-          linguistico. <b>Ogni quota nella proposta è esatta — niente è
-          «generato all'incirca».</b></p>
+          linguistico. <b>La proposta usa quote e parametri espliciti; puoi esaminare il risultato prima di applicarlo.</b></p>
           <p class="note">Ed è misurato, non promesso: una suite di
           <b>39 richieste di riferimento</b> gira prima e dopo ogni modifica
           alla regolamentazione dell'agente. Al 22 settembre 2026, con un
           modello locale da 14 miliardi
-          di parametri e senza alcun cloud: 24 su 39 risposte bene, il 98%
+          di parametri e senza alcun cloud: 24 risposte corrette su 39, il 98%
           delle chiamate agli strumenti valide al primo tentativo — e ogni
           richiesta ambigua è finita in una domanda di ritorno, non in una
           supposizione.</p>
@@ -848,8 +835,7 @@
           <summary>Comandabile da remoto via MCP — anche da Claude Code</summary>
           <div class="tool-content"><p>Un
         secondo programma richiama le stesse operazioni dei menu: spento di
-        serie, solo sul proprio computer, e ogni chiamata remota è una
-        transazione che un Annulla ritira.
+        serie, solo sul proprio computer, e ogni chiamata remota che modifica il progetto è una transazione che un Annulla ritira.
         <a href="#mcp">Che cosa può fare l’interfaccia e che cosa no</a>.</p></div>
         </details>
       </div>

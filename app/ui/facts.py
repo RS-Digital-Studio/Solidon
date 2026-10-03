@@ -96,7 +96,8 @@ class PrintFacts(QToolButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         hint = tr(
             "Geschätzt aus Volumen und Oberfläche, ohne Stützen und ohne "
-            "Haftungshilfe. Gemessene Werte liefert die Gegenprobe aus dem G-Code."
+            "Haftungshilfe. Die Gegenprobe aus dem G-Code liefert Werte für den "
+            "geplanten Druck."
         )
         way = tr("Klicken öffnet die Druckeinstellungen.")
         self.setToolTip(f"{hint} {way}")

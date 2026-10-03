@@ -25,20 +25,26 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import numpy as np
 
-from app.core.errors import CORRECT_INPUT, ValidationError
+from app.core.errors import CORRECT_INPUT, AmbiguityError, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, edge_table, unique_edges
+from app.core.geom.transform import along as projected_along
+from app.core.geom.transform import composed, inverse_affine, moved_points, turned
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.registry.surfaces import SIDE_NAMES as SIDE_NAMES
 from app.core.types import (
+    IDENTITY_FRAME,
+    AskFn,
+    CancelToken,
     Document,
     Feature,
     FeatureRef,
@@ -54,7 +60,14 @@ from app.core.types import (
     measure_status,
     vec3_or_none,
 )
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, dot3, format_length, round_display
+from app.core.units import (
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    dot3,
+    exact_cos_degrees,
+    format_length,
+    round_display,
+)
 from app.i18n import TranslatableText, tr
 
 if TYPE_CHECKING:
@@ -591,7 +604,14 @@ def _target_field(spec: OperationSpec) -> str:
     aufgeschrieben ist: Eine zweite Operation mit Zielfläche hätte ihr Feld
     sonst exakt so nennen müssen.
     """
-    return next((entry.name for entry in spec.params.spec() if entry.targets_feature), "")
+    return next(
+        (
+            entry.name
+            for entry in spec.params.spec()
+            if entry.targets_feature and not entry.internal
+        ),
+        "",
+    )
 
 
 def _from_the_bore(spec: OperationSpec, feature: Feature, names: set[str]) -> dict[str, Any]:
@@ -839,16 +859,20 @@ def seats_on(spec: OperationSpec, feature: Feature) -> bool:
     entries = spec.params.spec()
     names = {entry.name for entry in entries}
     normal = vec3_or_none(feature.params.get("normal"))
+    planar = feature.kind == "face" and normal is not None and math.hypot(*normal) > EPS_GEOM
+    curved = (
+        "surface_anchor" in names
+        and feature.kind in {"hole", "pin", "cone", "sphere", "torus", "fillet", "curved_face"}
+        and bool(feature.face_indices)
+    )
     return (
         spec.consumes == 0
         and not spec.takes_whole_scene
         and set(POSITION) <= names
         and set(NORMAL) <= names
         and not any(entry.kind in {"feature", "features"} for entry in entries)
-        and feature.kind == "face"
         and vec3_or_none(feature.params.get("centre")) is not None
-        and normal is not None
-        and math.hypot(*normal) > EPS_GEOM
+        and (planar or curved)
     )
 
 
@@ -876,7 +900,7 @@ def seat_on_face(
     Richtung; einen Rest unter dem Bett meldet dann der Endstand
     (``arrange.below_bed``). Leer, wo :func:`seats_on` nein sagt.
     """
-    if not seats_on(spec, feature):
+    if not seats_on(spec, feature) or feature.kind != "face":
         return {}
     centre = vec3_or_none(feature.params.get("centre"))
     raw = vec3_or_none(feature.params.get("normal"))
@@ -1026,6 +1050,531 @@ class PlacementTool:
     outward_axis: Vec3 | None = None
     angle: float | None = None
     position_dependent_axis: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SurfaceBinding:
+    """Aktuell aufgelöste Lage, Cachebezug und erst nach Erfolg zu speichernde Antworten."""
+
+    values: Mapping[str, Any]
+    context: Mapping[str, Any]
+    answers: Mapping[str, Any]
+    prepared: PreparedSurface | None = None
+    placed: SurfacePlacement | None = None
+    source_id: ObjectId | None = None
+
+
+def clear_surface_binding(spec: OperationSpec) -> dict[str, Any]:
+    """Den gespeicherten Flächenbezug ausdrücklich lösen; die Ortswerte bleiben."""
+    from app.core.knowledge.parts.ops import placement_fields
+
+    names = placement_fields(spec.params)
+    declared = {field.name for field in spec.params.spec()}
+    return {
+        names[name]: ""
+        for name in ("surface_target", "surface_anchor")
+        if names.get(name) in declared
+    }
+
+
+def _surface_feature(source: SceneObject, indices: Sequence[int]) -> Feature | None:
+    """Nur ein eindeutiger erkannter Träger der gewählten Originaldreiecke."""
+    wanted = set(indices)
+    candidates = [
+        entry
+        for entry in source.features.values()
+        if wanted and wanted.issubset(entry.face_indices)
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def surface_at_feature(
+    source: SceneObject,
+    feature: Feature,
+    *,
+    point: Vec3 | None = None,
+    cancelled: CancelToken | None = None,
+) -> SurfacePlacement:
+    """Ein echter Punkt auf dem gewählten ebenen oder gekrümmten Träger.
+
+    Ein vorhandener Viewporttreffer hat Vorrang. Ohne Treffer wird die
+    Flächenmitte genommen, wenn sie auf Material liegt; sonst ein Punkt auf
+    dem zur Mitte nächsten Originaldreieck. Die Vorschau zeigt diesen Ansatz.
+    """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    mesh = as_mesh_data(source.mesh)
+    indices = np.asarray(feature.face_indices, dtype=np.int64)
+    if not len(indices) or int(indices.min()) < 0 or int(indices.max()) >= len(mesh.raw.faces):
+        raise _reference_error()
+    triangles = np.asarray(mesh.raw.triangles)[indices]
+    centres = triangles.mean(axis=1)
+    centre = point or vec3_or_none(feature.params.get("centre")) or _vec(centres.mean(axis=0))
+    from trimesh.triangles import closest_point
+
+    closest = cast(Callable[[np.ndarray, np.ndarray], np.ndarray], closest_point)
+    best = float("inf")
+    nearest = np.asarray(centre, dtype=np.float64)
+    index = int(indices[0])
+    for offset in range(0, len(triangles), PICK_TRIANGLE_BLOCK):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        block = triangles[offset : offset + PICK_TRIANGLE_BLOCK]
+        candidates = closest(block, np.broadcast_to(centre, (len(block), 3)))
+        distances = np.linalg.norm(candidates - centre, axis=1)
+        chosen = int(np.argmin(distances))
+        if distances[chosen] < best:
+            best = float(distances[chosen])
+            nearest = candidates[chosen]
+            index = int(indices[offset + chosen])
+    if point is not None and best > MAX_FACET_SAG + EPS_GEOM:
+        raise _placement_error()
+    prepared = prepare_surface(mesh, index, source.features)
+    target = nearest
+    normal = np.asarray(prepared.frame.normal)
+    target -= dot3(target - prepared.frame.origin, normal) * normal
+    try:
+        placed = at_point(prepared, _vec(target))
+    except ValidationError:
+        if point is not None:
+            raise
+        placed = at_point(prepared, _vec(mesh.raw.triangles[index].mean(axis=0)))
+    if not prepared.planar and source.kind == "brep":
+        from app.core.brep.canonical import projected_surface_point
+        from app.core.brep.kernel import Solid
+        from app.core.sketch.planes import frame_of
+
+        if isinstance(source.mesh, Solid):
+            native = source.mesh.faces_of_triangles((index,))
+            if len(native) == 1:
+                projected = projected_surface_point(
+                    source.mesh.faces()[native[0]], point or placed.point
+                )
+                if projected is not None:
+                    location, outward = projected
+                    placed = replace(
+                        placed, point=location, normal=outward, frame=frame_of(outward, location)
+                    )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    return placed
+
+
+def bound_surface_values(
+    spec: OperationSpec, source: SceneObject, placement: SurfacePlacement
+) -> dict[str, Any]:
+    """Einen Flächentreffer mit seinen wirklichen Bezugskanten dauerhaft speichern.
+
+    Die beiden Abstände bleiben gewöhnliche mm-Parameter und dürfen Ausdrücke
+    tragen. Die Beschreibung speichert Koordinaten und den belegten Körperrahmen,
+    niemals die vergängliche Nummer einer Dreieckskante.
+    """
+    from app.core.knowledge.parts.ops import placement_fields
+
+    fields = placement_fields(spec.params)
+    if fields.get("surface_anchor") not in {entry.name for entry in spec.params.spec()}:
+        raise _reference_error()
+    if not np.isfinite((*placement.point, *placement.normal)).all():
+        raise _placement_error()
+    feature = _surface_feature(source, placement.face_indices)
+    mesh = as_mesh_data(source.mesh)
+    vertices = np.asarray(mesh.raw.triangles)[list(placement.face_indices)].reshape(-1, 3)
+    if not len(vertices):
+        raise _placement_error()
+    centre = (vec3_or_none(feature.params.get("centre")) if feature is not None else None) or _vec(
+        (vertices.min(axis=0) + vertices.max(axis=0)) / 2.0
+    )
+    record = {
+        "version": 1,
+        "object": source.id,
+        "point": placement.point,
+        "normal": placement.normal,
+        "centre": centre,
+        "frame": source.frame or IDENTITY_FRAME,
+        "planar": placement.planar,
+        "edges": [
+            {"start": edge.start, "end": edge.end, "inward": edge.inward, "kind": edge.kind}
+            for edge in placement.edges
+        ],
+    }
+    if feature is not None and feature.kind in {"hole", "pin", "sphere"}:
+        radius = feature.params.get("radius")
+        if radius is None and isinstance(feature.params.get("diameter"), int | float):
+            radius = float(feature.params["diameter"]) / 2.0
+        if isinstance(radius, int | float) and math.isfinite(radius) and radius > EPS_GEOM:
+            record["radius"] = float(radius)
+            if feature.kind in {"hole", "pin"}:
+                axis = vec3_or_none(feature.params.get("axis"))
+                if axis is not None:
+                    record["axis"] = axis
+    values = surface_values(spec, placement, source=source)
+    values[fields["surface_target"]] = f"{source.id}:{feature.id}" if feature is not None else ""
+    values[fields["surface_anchor"]] = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+    for index in range(2):
+        values[fields[f"surface_distance_{index + 1}"]] = (
+            placement.edges[index].distance if index < len(placement.edges) else 0.0
+        )
+    return values
+
+
+def _surface_record(text: Any) -> dict[str, Any]:
+    """Fremde Projektdaten nur als begrenzte, endliche Geometriebeschreibung lesen."""
+    try:
+        if not isinstance(text, str) or len(text) > 65_536:
+            raise ValueError
+        record = json.loads(text)
+        if (
+            not isinstance(record, dict)
+            or type(record.get("version")) is not int
+            or record["version"] != 1
+        ):
+            raise ValueError
+        if not isinstance(record.get("object"), str) or not record["object"]:
+            raise ValueError
+        for key in ("point", "normal", "centre"):
+            if vec3_or_none(record.get(key)) is None or not np.isfinite(record[key]).all():
+                raise ValueError
+        if math.hypot(*record["normal"]) <= EPS_GEOM:
+            raise ValueError
+        frame = np.asarray(record.get("frame"), dtype=np.float64)
+        if inverse_affine(frame) is None:
+            raise ValueError
+        if "axis" in record and (
+            vec3_or_none(record["axis"]) is None
+            or not np.isfinite(record["axis"]).all()
+            or math.hypot(*record["axis"]) <= EPS_GEOM
+        ):
+            raise ValueError
+        if not isinstance(record.get("planar"), bool):
+            raise ValueError
+        if "radius" in record and (
+            not isinstance(record["radius"], int | float)
+            or not math.isfinite(record["radius"])
+            or record["radius"] <= EPS_GEOM
+        ):
+            raise ValueError
+        edges = record.get("edges")
+        if not isinstance(edges, list) or len(edges) > 2:
+            raise ValueError
+        for edge in edges:
+            if not isinstance(edge, dict) or edge.get("kind") not in {"outer", "inner", "axis"}:
+                raise ValueError
+            for key in ("start", "end", "inward"):
+                if vec3_or_none(edge.get(key)) is None or not np.isfinite(edge[key]).all():
+                    raise ValueError
+            if (
+                math.hypot(*edge["inward"]) <= EPS_GEOM
+                or math.dist(edge["start"], edge["end"]) <= EPS_GEOM
+            ):
+                raise ValueError
+        return record
+    except (ValueError, TypeError, OverflowError, np.linalg.LinAlgError) as error:
+        raise _reference_error() from error
+
+
+def _bound_choice(
+    source: SceneObject,
+    candidates: Sequence[EdgeReference],
+    *,
+    ask: AskFn,
+    announce: Callable[[Any], None] | None,
+    cancelled: CancelToken,
+) -> EdgeReference:
+    """Mehrere geometrisch passende Kanten zeigt derselbe vorhandene Frageweg."""
+    from app.core.scene.edge_binding import EdgeTarget
+
+    cancelled.raise_if_cancelled()
+    if not candidates:
+        raise _reference_error()
+    if len(candidates) == 1:
+        return candidates[0]
+    tokens = [str(index + 1) for index in range(len(candidates))]
+    targets = tuple(
+        EdgeTarget(
+            token,
+            source.id,
+            (edge.start, edge.end),
+            _vec((np.asarray(edge.start) + edge.end) / 2.0),
+            math.dist(edge.end, edge.start),
+            False,
+            True,
+        )
+        for token, edge in zip(tokens, candidates, strict=True)
+    )
+    question = tr("Mehrere Kanten passen zum gespeicherten Bezug. Welche Kante ist gemeint?")
+    if announce is not None:
+        announce(targets)
+    try:
+        chosen = ask(question, tokens)
+        cancelled.raise_if_cancelled()
+        if chosen not in tokens:
+            raise AmbiguityError(question, tuple(tokens))
+        return candidates[tokens.index(chosen)]
+    finally:
+        if announce is not None:
+            announce(())
+
+
+def bind_surface(
+    spec: OperationSpec,
+    values: Mapping[str, Any],
+    objects: Mapping[ObjectId, SceneObject],
+    hashes: Mapping[ObjectId, str],
+    *,
+    ask: AskFn,
+    announce: Callable[[Any], None] | None,
+    cancelled: CancelToken,
+) -> SurfaceBinding:
+    """Die gespeicherte Fläche vor dem Verbrauchercache gegen den aktuellen Träger binden."""
+    from app.core.knowledge.parts.ops import normal_fields, placement_fields
+    from app.core.perceive.features import EPS_ANGLE
+
+    fields = placement_fields(spec.params)
+    text = values.get(fields["surface_anchor"], "")
+    if not text:
+        return SurfaceBinding(values, {}, {})
+    cancelled.raise_if_cancelled()
+    record = _surface_record(text)
+    named = str(values.get(fields["surface_target"], ""))
+    feature = None
+    identifier = record["object"]
+    if named:
+        try:
+            reference = FeatureRef.parse(named)
+        except ValueError as error:
+            raise _reference_error() from error
+        identifier = reference.object_id
+    source = objects.get(identifier)
+    if source is None:
+        raise _reference_error()
+    if named:
+        feature = source.features.get(reference.feature_id)
+        if feature is None:
+            raise _reference_error()
+    mesh = as_mesh_data(source.mesh)
+    inverse = inverse_affine(np.asarray(record["frame"]))
+    if inverse is None:
+        raise _reference_error()
+    matrix = composed(np.asarray(source.frame or IDENTITY_FRAME), inverse)
+
+    def point(value: Any) -> np.ndarray:
+        return cast(np.ndarray, moved_points(np.asarray([value]), matrix)[0])
+
+    inverse = inverse_affine(matrix)
+    if inverse is None:
+        raise _reference_error()
+    normal = turned(np.asarray(record["normal"]), inverse.T)
+    normal /= math.hypot(*normal)
+    previous_point = point(record["point"])
+    indices = (
+        tuple(feature.face_indices) if feature is not None else tuple(range(len(mesh.raw.faces)))
+    )
+    if not indices:
+        raise _reference_error()
+    answers: dict[str, Any] = {}
+    changed_reference = False
+    if record["planar"]:
+        normals = np.asarray(mesh.raw.face_normals)[list(indices)]
+        parallel = np.asarray(indices)[
+            projected_along(normals, normal) >= exact_cos_degrees(EPS_ANGLE)
+        ]
+        patches: list[PreparedSurface] = []
+        covered: set[int] = set()
+        for triangle in parallel:
+            cancelled.raise_if_cancelled()
+            if int(triangle) not in covered:
+                prepared = prepare_surface(mesh, int(triangle), source.features)
+                if prepared.planar:
+                    patches.append(prepared)
+                    covered.update(prepared.face_indices)
+        if not patches:
+            raise _reference_error()
+        if len(patches) > 1:
+            exact = [
+                entry
+                for entry in patches
+                if abs(dot3(previous_point - entry.frame.origin, normal)) <= EPS_GEOM
+            ]
+            if len(exact) == 1:
+                patches = exact
+            else:
+                candidates = [
+                    EdgeReference(
+                        str(index),
+                        entry.frame.origin,
+                        _vec(np.asarray(entry.frame.origin) + entry.frame.x_axis),
+                        entry.frame.y_axis,
+                    )
+                    for index, entry in enumerate(patches)
+                ]
+                chosen = _bound_choice(
+                    source, candidates, ask=ask, announce=announce, cancelled=cancelled
+                )
+                patches = [patches[int(chosen.id)]]
+                changed_reference = True
+        prepared = patches[0]
+        chosen_edges: list[EdgeReference] = []
+        for saved in record["edges"]:
+            direction = turned(np.asarray(saved["end"]) - saved["start"], matrix)
+            inward = np.cross(prepared.frame.normal, direction)
+            if dot3(inward, turned(np.asarray(saved["inward"]), matrix)) < 0.0:
+                inward = -inward
+            inward /= math.hypot(*inward)
+            candidates = [
+                edge
+                for edge in prepared.edges
+                if edge.kind == saved["kind"]
+                and dot3(edge.inward, inward) >= exact_cos_degrees(EPS_ANGLE)
+            ]
+            coincident = [
+                edge
+                for edge in candidates
+                if abs(dot3(np.asarray(edge.start) - point(saved["start"]), inward)) <= EPS_GEOM
+            ]
+            if len(coincident) == 1:
+                candidates = coincident
+            changed_reference = changed_reference or len(candidates) > 1
+            chosen_edges.append(
+                _bound_choice(source, candidates, ask=ask, announce=announce, cancelled=cancelled)
+            )
+        target = previous_point - dot3(previous_point - prepared.frame.origin, normal) * normal
+        if len(chosen_edges) == 2:
+            rows = _reference_rows(prepared.frame, chosen_edges)
+            if not _independent(prepared.frame, chosen_edges):
+                raise _reference_error()
+            offsets = [
+                float(values.get(fields[f"surface_distance_{index + 1}"], 0.0))
+                + dot3(np.asarray(edge.start) - prepared.frame.origin, edge.inward)
+                for index, edge in enumerate(chosen_edges)
+            ]
+            uv = _solved_distances(rows, offsets)
+            target = (
+                np.asarray(prepared.frame.origin)
+                + uv[0] * np.asarray(prepared.frame.x_axis)
+                + uv[1] * np.asarray(prepared.frame.y_axis)
+            )
+        elif chosen_edges:
+            edge = chosen_edges[0]
+            distance = float(values.get(fields["surface_distance_1"], 0.0))
+            target += (distance - dot3(target - edge.start, edge.inward)) * np.asarray(edge.inward)
+        if values.get("surface_seat") == "centred":
+            from app.core.sketch.planes import to_world
+
+            middle = prepared.area.centroid
+            target = np.asarray(to_world(prepared.frame, (float(middle.x), float(middle.y))))
+        placed = at_point(prepared, _vec(target), references=chosen_edges)
+        if changed_reference:
+            updated = bound_surface_values(spec, source, placed)
+            answers = {
+                fields[name]: updated[fields[name]] for name in ("surface_anchor", "surface_target")
+            }
+    else:
+        if values.get("surface_seat") == "centred" and feature is not None:
+            placed = surface_at_feature(source, feature, cancelled=cancelled)
+        else:
+            placed = _bound_curved_surface(
+                source, mesh, indices, feature, record, matrix, normal, cancelled
+            )
+        prepared = prepare_surface(mesh, placed.face_indices[0], source.features)
+    resolved = dict(values)
+    resolved.update(zip((fields[name] for name in POSITION), placed.point, strict=True))
+    resolved.update(zip(normal_fields(spec.params), placed.normal, strict=True))
+    if fields[FEATURE_FIELD] in resolved:
+        resolved[fields[FEATURE_FIELD]] = ""
+    cancelled.raise_if_cancelled()
+    return SurfaceBinding(
+        resolved,
+        {
+            "#surface_binding": (
+                hashes.get(source.id, ""),
+                placed.point,
+                placed.normal,
+                tuple((edge.start, edge.end, edge.inward) for edge in placed.edges),
+            )
+        },
+        answers,
+        prepared,
+        placed,
+        source.id,
+    )
+
+
+def _bound_curved_surface(
+    source: SceneObject,
+    mesh: MeshData,
+    indices: Sequence[int],
+    feature: Feature | None,
+    record: Mapping[str, Any],
+    matrix: np.ndarray,
+    normal: np.ndarray,
+    cancelled: CancelToken,
+) -> SurfacePlacement:
+    """Den gespeicherten Tangentenpunkt auf seinen aktuellen gekrümmten Träger legen."""
+    from app.core.geom.mesh import ray_hits_batch
+    from app.core.sketch.planes import frame_of
+
+    vertices = np.asarray(mesh.raw.triangles)[list(indices)].reshape(-1, 3)
+    centre = (vec3_or_none(feature.params.get("centre")) if feature is not None else None) or _vec(
+        (vertices.min(axis=0) + vertices.max(axis=0)) / 2.0
+    )
+    local_offset = np.asarray(record["point"]) - record["centre"]
+    offset = turned(local_offset, matrix)
+    if feature is not None and "radius" in record:
+        radius = feature.params.get("radius")
+        if radius is None and isinstance(feature.params.get("diameter"), int | float):
+            radius = float(feature.params["diameter"]) / 2.0
+        if isinstance(radius, int | float):
+            if feature.kind == "sphere":
+                old_span = math.hypot(*local_offset)
+                scale = math.hypot(*offset) / old_span if old_span > EPS_GEOM else 1.0
+                offset *= float(radius) / (float(record["radius"]) * scale)
+            else:
+                axis = vec3_or_none(feature.params.get("axis"))
+                if axis is not None:
+                    direction = np.asarray(axis) / math.hypot(*axis)
+                    axial = dot3(offset, direction) * direction
+                    radial = offset - axial
+                    old_axis = vec3_or_none(record.get("axis"))
+                    scale = 1.0
+                    if old_axis is not None:
+                        old_direction = np.asarray(old_axis) / math.hypot(*old_axis)
+                        old_radial = (
+                            local_offset - dot3(local_offset, old_direction) * old_direction
+                        )
+                        span = math.hypot(*old_radial)
+                        if span > EPS_GEOM:
+                            scale = math.hypot(*radial) / span
+                    offset = axial + radial * float(radius) / (float(record["radius"]) * scale)
+    expected = np.asarray(centre) + offset
+    origin = expected + normal * mesh.bounds.diagonal
+    travel, faces = ray_hits_batch(
+        np.asarray(mesh.raw.triangles)[list(indices)],
+        origin[None, :],
+        -normal[None, :],
+        cancelled=cancelled,
+    )
+    cancelled.raise_if_cancelled()
+    if not np.isfinite(travel[0]) or faces[0] < 0:
+        raise _placement_error()
+    triangle = int(indices[int(faces[0])])
+    point = origin - normal * float(travel[0])
+    outward = _vec(mesh.raw.face_normals[triangle])
+    if source.kind == "brep":
+        from app.core.brep.canonical import projected_surface_point
+        from app.core.brep.kernel import Solid
+
+        if isinstance(source.mesh, Solid):
+            native = source.mesh.faces_of_triangles((triangle,))
+            if len(native) == 1:
+                measured = projected_surface_point(
+                    source.mesh.faces()[next(iter(native))], _vec(point)
+                )
+                if measured is not None:
+                    point = np.asarray(measured[0])
+                    outward = measured[1]
+    return SurfacePlacement(
+        _vec(point), outward, frame_of(outward, _vec(point)), False, (triangle,), (), ()
+    )
 
 
 def _vec(values: Any) -> Vec3:
@@ -1202,7 +1751,7 @@ def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool
     vertices = np.asarray(raw.vertices, dtype=np.float64)
     normals = np.asarray(raw.face_normals, dtype=np.float64)
     normal = normals[face_index]
-    if not np.isfinite(normal).all() or np.linalg.norm(normal) <= EPS_GEOM:
+    if not np.isfinite(normal).all() or math.hypot(*normal) <= EPS_GEOM:
         raise _reject(
             "point",
             tr(
@@ -1216,8 +1765,8 @@ def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool
     pairs = _welded_adjacency(raw, vertices)
     origin = vertices[np.asarray(raw.faces)[face_index, 0]]
     triangles = np.asarray(raw.triangles, dtype=np.float64)
-    coplanar = (normals @ normal >= np.cos(np.radians(EPS_ANGLE))) & (
-        np.max(np.abs((triangles - origin) @ normal), axis=1) <= EPS_GEOM
+    coplanar = (projected_along(normals, normal) >= exact_cos_degrees(EPS_ANGLE)) & (
+        np.max(np.abs(projected_along(triangles - origin, normal)), axis=1) <= EPS_GEOM
     )
     # Das angeklickte Dreieck gehört immer dazu — auch wenn es an der
     # Genauigkeitsgrenze aus der eigenen Ebene fiele.
@@ -1233,15 +1782,16 @@ def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool
     _, labels = connected_components(graph, directed=False)
     found = labels == labels[face_index]
     border = pairs[found[pairs[:, 0]] != found[pairs[:, 1]]]
-    border_angles = np.degrees(
-        np.arccos(
-            np.clip(np.einsum("ij,ij->i", normals[border[:, 0]], normals[border[:, 1]]), -1.0, 1.0)
-        )
-    )
+    alignment = np.sum(normals[border[:, 0]] * normals[border[:, 1]], axis=1)
     # Dieselbe Krümmungsgrenze wie die Merkmalsanalyse: Mantelstreifen und
     # kleine Kugeldreiecke versprechen keine Maße einer ebenen Konstruktionsfläche.
-    smooth = int(np.count_nonzero((border_angles > EPS_ANGLE) & (border_angles < CURVATURE_LIMIT)))
-    planar = not len(border_angles) or smooth * 2 < len(border_angles)
+    smooth = int(
+        np.count_nonzero(
+            (alignment < exact_cos_degrees(EPS_ANGLE))
+            & (alignment > exact_cos_degrees(CURVATURE_LIMIT))
+        )
+    )
+    planar = not len(alignment) or smooth * 2 < len(alignment)
     return tuple(int(index) for index in np.flatnonzero(found)), planar
 
 
@@ -1299,8 +1849,8 @@ def _straight_boundary(
         one, two = point - before, after - point
         cross = one[0] * two[1] - one[1] * two[0]
         if (
-            abs(cross) > EPS_GEOM * max(np.linalg.norm(one), np.linalg.norm(two))
-            or np.dot(one, two) < 0.0
+            abs(cross) > EPS_GEOM * max(math.hypot(*one), math.hypot(*two))
+            or float(np.sum(one * two)) < 0.0
         ):
             keep.append(point)
     return [(start, keep[(index + 1) % len(keep)]) for index, start in enumerate(keep)]
@@ -1472,7 +2022,9 @@ def _prepared_surface(
     frame = frame_of(normal, _vec(mesh.raw.triangles[face_index, 0]))
     triangles = np.asarray(mesh.raw.triangles)[list(indices)]
     relative = triangles - frame.origin
-    xy = np.stack((relative @ frame.x_axis, relative @ frame.y_axis), axis=-1)
+    xy = np.stack(
+        (projected_along(relative, frame.x_axis), projected_along(relative, frame.y_axis)), axis=-1
+    )
     area = _patch_area(xy)
     if area.is_empty or not area.is_valid or area.geom_type != "Polygon":
         raise _reject(
@@ -1501,18 +2053,22 @@ def _prepared_surface(
             if axis is None or centre is None:
                 continue
             vector = np.asarray(axis)
-            length = float(np.linalg.norm(vector))
-            if length <= EPS_GEOM or abs(float(vector @ frame.normal) / length) < 1.0 - EPS_GEOM:
+            length = math.hypot(*vector)
+            if length <= EPS_GEOM or abs(dot3(vector, frame.normal) / length) < 1.0 - EPS_GEOM:
                 continue
             if feature.face_indices:
                 vertices = np.asarray(mesh.raw.triangles)[list(feature.face_indices)].reshape(-1, 3)
                 relative = vertices - frame.origin
-                rim = relative[np.abs(relative @ frame.normal) <= EPS_GEOM]
+                rim = relative[np.abs(projected_along(relative, frame.normal)) <= EPS_GEOM]
                 if len(rim):
-                    round_points.append(np.column_stack((rim @ frame.x_axis, rim @ frame.y_axis)))
+                    round_points.append(
+                        np.column_stack(
+                            (projected_along(rim, frame.x_axis), projected_along(rim, frame.y_axis))
+                        )
+                    )
             elif feature.kind in {"hole", "pin"}:
                 depth = float(feature.params.get("depth", 0.0))
-                distance = abs(float((np.asarray(centre) - frame.origin) @ frame.normal))
+                distance = abs(dot3(np.asarray(centre) - frame.origin, frame.normal))
                 if distance <= depth / 2.0 + EPS_GEOM:
                     round_circles.append(
                         (
@@ -1523,7 +2079,7 @@ def _prepared_surface(
         for ring_index, ring in enumerate((area.exterior, *area.interiors)):
             for start, end in _straight_boundary(ring.coords, round_points, round_circles):
                 direction = end - start
-                direction /= np.linalg.norm(direction)
+                direction /= math.hypot(*direction)
                 inward = np.array([-direction[1], direction[0]])
                 midpoint = (start + end) / 2.0
                 # Die GEOS-Ringorientierung ist nicht Teil unseres Vertrags.
@@ -1549,14 +2105,12 @@ def _prepared_surface(
         if feature.kind not in {"hole", "pin", "slot"} or centre is None or axis is None:
             continue
         vector = np.asarray(axis, dtype=np.float64)
-        length = float(np.linalg.norm(vector))
-        if length <= EPS_GEOM or abs(float(vector @ frame.normal) / length) < 1.0 - EPS_GEOM:
+        length = math.hypot(*vector)
+        if length <= EPS_GEOM or abs(dot3(vector, frame.normal) / length) < 1.0 - EPS_GEOM:
             continue
         # Ein Zylinderzentrum liegt meist in der Wandmitte. Sein Achsschnitt
         # mit genau dieser Ebene ist die nutzbare Mitte an der Mündung.
-        amount = np.dot(np.asarray(frame.origin) - centre, frame.normal) / np.dot(
-            vector, frame.normal
-        )
+        amount = dot3(np.asarray(frame.origin) - centre, frame.normal) / dot3(vector, frame.normal)
         feature_depth = feature.params.get("depth")
         if (
             isinstance(feature_depth, int | float)
@@ -1996,16 +2550,30 @@ MAX_REFERENCE_CONDITION: Final = 10.0
 
 def _reference_rows(frame: PlaneFrame, edges: Sequence[EdgeReference]) -> np.ndarray:
     return np.asarray(
-        [(np.dot(edge.inward, frame.x_axis), np.dot(edge.inward, frame.y_axis)) for edge in edges],
+        [(dot3(edge.inward, frame.x_axis), dot3(edge.inward, frame.y_axis)) for edge in edges],
         dtype=np.float64,
     )
 
 
 def _independent(frame: PlaneFrame, edges: Sequence[EdgeReference]) -> bool:
-    return (
-        len(edges) < 2
-        or float(np.linalg.cond(_reference_rows(frame, edges))) <= MAX_REFERENCE_CONDITION
-    )
+    if len(edges) < 2:
+        return True
+    rows = _reference_rows(frame, edges)
+    a, b = float(np.sum(rows[0] * rows[0])), float(np.sum(rows[1] * rows[1]))
+    c = float(np.sum(rows[0] * rows[1]))
+    high = (a + b + math.sqrt((a - b) * (a - b) + 4.0 * c * c)) / 2.0
+    determinant = float(rows[0, 0] * rows[1, 1] - rows[0, 1] * rows[1, 0])
+    return high <= MAX_REFERENCE_CONDITION * abs(determinant)
+
+
+def _solved_distances(rows: np.ndarray, offsets: Sequence[float]) -> Point2:
+    """Zwei unabhängige Ebenenkoordinaten direkt lösen, ohne LAPACK-Rundung."""
+    a, b, c, d = (float(value) for value in rows.reshape(-1))
+    determinant = a * d - b * c
+    if abs(determinant) <= EPS_GEOM:
+        raise _reference_error()
+    first, second = offsets
+    return ((first * d - b * second) / determinant, (a * second - first * c) / determinant)
 
 
 def _reference_error() -> ValidationError:
@@ -2136,13 +2704,13 @@ def _nearest_references(prepared: PreparedSurface, point: Vec3) -> list[EdgeRefe
     for index, edge in enumerate(prepared.edges):
         start, end = np.asarray(edge.start), np.asarray(edge.end)
         step = end - start
-        share = float(np.clip(np.dot(here - start, step) / np.dot(step, step), 0.0, 1.0))
-        distance = float(np.linalg.norm(here - (start + share * step)))
+        share = float(np.clip(dot3(here - start, step) / dot3(step, step), 0.0, 1.0))
+        distance = math.hypot(*(here - (start + share * step)))
         ranked.append(((order[edge.kind], distance), edge.id, index))
     chosen: list[EdgeReference] = []
     for _rank, _name, index in sorted(ranked):
         edge = prepared.edges[index]
-        edge = replace(edge, distance=float(np.dot(here - np.asarray(edge.start), edge.inward)))
+        edge = replace(edge, distance=dot3(here - np.asarray(edge.start), edge.inward))
         if _independent(prepared.frame, [*chosen, edge]):
             chosen.append(edge)
         if len(chosen) == 2:
@@ -2160,8 +2728,7 @@ def at_point(
 
     if (
         not np.isfinite(point).all()
-        or abs(float(np.dot(np.asarray(point) - prepared.frame.origin, prepared.frame.normal)))
-        > EPS_GEOM
+        or abs(dot3(np.asarray(point) - prepared.frame.origin, prepared.frame.normal)) > EPS_GEOM
     ):
         raise _placement_error()
     xy = to_plane(prepared.frame, point)
@@ -2179,7 +2746,7 @@ def at_point(
         # Qt-Hauptthread, beim Loslassen des Platzierungsgriffs (RM-200).
         _checked_references(prepared, references)
         chosen = [
-            replace(edge, distance=float(np.dot(np.asarray(point) - edge.start, edge.inward)))
+            replace(edge, distance=dot3(np.asarray(point) - edge.start, edge.inward))
             for edge in references
         ]
     else:
@@ -2188,12 +2755,10 @@ def at_point(
     for feature_id, centre in prepared.centres:
         difference = np.asarray(point) - centre
         offset = (
-            float(difference @ prepared.frame.x_axis),
-            float(difference @ prepared.frame.y_axis),
+            dot3(difference, prepared.frame.x_axis),
+            dot3(difference, prepared.frame.y_axis),
         )
-        centres.append(
-            CentreReference(feature_id, centre, offset, float(np.linalg.norm(difference)))
-        )
+        centres.append(CentreReference(feature_id, centre, offset, math.hypot(*difference)))
     return SurfacePlacement(
         point,
         prepared.frame.normal,
@@ -2221,11 +2786,9 @@ def point_with_distances(
     _checked_references(prepared, placement.edges)
     rows, offsets = [], []
     for edge, distance in zip(placement.edges, distances, strict=True):
-        rows.append((np.dot(edge.inward, frame.x_axis), np.dot(edge.inward, frame.y_axis)))
-        offsets.append(distance + np.dot(np.asarray(edge.start) - frame.origin, edge.inward))
-    values = np.linalg.solve(
-        np.asarray(rows, dtype=np.float64), np.asarray(offsets, dtype=np.float64)
-    )
+        rows.append((dot3(edge.inward, frame.x_axis), dot3(edge.inward, frame.y_axis)))
+        offsets.append(distance + dot3(np.asarray(edge.start) - frame.origin, edge.inward))
+    values = _solved_distances(np.asarray(rows, dtype=np.float64), offsets)
     from app.core.sketch.planes import to_world
 
     result = at_point(prepared, to_world(frame, _vec2(values)))

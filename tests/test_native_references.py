@@ -465,9 +465,9 @@ def test_native_reselection_does_not_rename_a_proven_changed_rounding(accepted: 
 
     def choose(question: str, choices: list[str]) -> str:
         assert "fillet_1" in question
-        assert "fillet_2" in choices and "fillet_3" not in choices
+        assert "fillet_5" in choices and "fillet_3" not in choices
         asked.append(tuple(choices))
-        return "fillet_2" if accepted else "Nicht weiterführen"
+        return "fillet_5" if accepted else "Nicht weiterführen"
 
     recorded: dict[str, dict] = {}
 
@@ -590,9 +590,9 @@ def test_a_later_radius_change_uses_the_proven_rounding_after_native_renumbering
         assert reselected, f"Unerwartete Zuordnungsfrage: {question}"
         assert not asked, "Die gespeicherte Wahl muss kalt und warm wiederverwendet werden."
         assert "fillet_1" in question
-        assert "fillet_2" in choices and "fillet_3" not in choices
+        assert "fillet_5" in choices and "fillet_3" not in choices
         asked.append(tuple(choices))
-        return "fillet_2"
+        return "fillet_5"
 
     for _warm in (False, True):
         result = evaluate(
@@ -695,9 +695,9 @@ def test_a_reference_nobody_needs_later_does_not_stop(monkeypatch: pytest.Monkey
     _solid, found = _exact_box()
     name = next(iter(found))
 
-    outcome, calls = _native_call(monkeypatch, None, needed={})
+    outcome, calls = _native_call(monkeypatch, _matched({key: key for key in found}), needed={})
 
-    assert calls == [], "nichts gebraucht, nichts zugeordnet, nichts zu beweisen"
+    assert calls == [1], "Die sichtbaren Namen entstehen unabhängig von späteren Bezügen."
     assert name in outcome.features
 
 
@@ -723,12 +723,12 @@ def test_a_continuation_of_the_operation_carries_the_reference(
 
     outcome, calls = _native_call(
         monkeypatch,
-        None,
+        _matched({key: key for key in found}),
         needed={name: ("Passung a",)},
         continuations=(FeatureContinuation(FeatureRef("body", name), name),),
     )
 
-    assert calls == []
+    assert calls == [1]
     assert name in outcome.features
 
 
@@ -1005,6 +1005,97 @@ def test_a_deliberate_bore_change_keeps_its_reference_cold_and_warm(profile: Pro
     warm = evaluate(project.document, profile, sources=sources, cache=cache)
     assert warm.complete and cache.statistics.hits >= 3
     assert warm.scene.objects["obj_1"].features[hole].params["diameter"] == pytest.approx(14.0)
+
+
+@pytest.mark.parametrize("diameter", [4.0, 8.0])
+def test_following_a_resized_countersink_keeps_the_floor_in_the_real_stack(
+    profile: Profile, diameter: float, tmp_path: Path
+) -> None:
+    """Der Sackboden bleibt nach gemeinsamem Einlaufwechsel ein echter Folgeschritt."""
+    exact_kernel()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_brep_box", params={"width": 30.0, "depth": 24.0, "height": 12.0}
+            )
+        ],
+    )
+    history.apply(
+        "Sackbohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "depth": 10.0, "z": 12.0, "compensate": False},
+            )
+        ],
+    )
+    history.apply(
+        "Senkung",
+        [
+            OperationDraft(
+                op="countersink_hole", inputs=("obj_1",), params={"diameter": 10.0, "z": 12.0}
+            )
+        ],
+    )
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    initial = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert initial.complete, initial.scene.report.findings
+    features = initial.scene.objects["obj_1"].features
+    hole = next(feature for feature in features.values() if feature.kind == "hole")
+    floor = next(
+        feature
+        for feature in features.values()
+        if feature.kind == "face" and feature.params["centre"][2] == pytest.approx(2.0)
+    )
+    history.apply(
+        "Bohrung und Senkung ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={
+                    "at_feature": hole.id,
+                    "diameter": diameter,
+                    "entrance_mode": "follow",
+                    "compensate": False,
+                },
+            )
+        ],
+    )
+    history.apply(
+        "Boden versetzen",
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={"face": floor.id, "distance": 0.25}
+            )
+        ],
+    )
+    for current_cache in (cache, ResultCache()):
+        result = evaluate(project.document, profile, sources=sources, cache=current_cache)
+        assert result.complete, result.scene.report.findings
+        kept = result.scene.objects["obj_1"].features[floor.id]
+        assert kept.params["centre"][2] == pytest.approx(2.25)
+        assert kept.params["area"] == pytest.approx(math.pi * diameter**2 / 4.0)
+    assert history.undo() is not None
+    undone = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert undone.complete
+    assert undone.scene.objects["obj_1"].features[floor.id].params["centre"][2] == pytest.approx(
+        2.0
+    )
+    assert history.redo() is not None
+    from app.core.scene.project import load, save
+
+    reopened = load(save(project, tmp_path / "bodenfolge.p3d"))
+    reloaded = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+    assert reloaded.complete, reloaded.scene.report.findings
+    assert reloaded.scene.objects["obj_1"].features[floor.id].params["centre"][2] == pytest.approx(
+        2.25
+    )
 
 
 def test_without_the_operations_continuation_the_same_change_would_stop(
@@ -1554,3 +1645,260 @@ def test_the_session_hands_the_blocked_references_to_the_check() -> None:
         assert ast.unparse(blocked[0].value) == "result.blocked_references", (
             f"Zeile {call.lineno}: {ast.unparse(blocked[0].value)}"
         )
+
+
+@pytest.mark.parametrize("shape", ["drilled_box", "hollow_cylinder"])
+@pytest.mark.parametrize("warm", [False, True])
+def test_native_face_names_do_not_depend_on_a_later_consumer(
+    profile: Profile, shape: str, warm: bool, tmp_path: Path
+) -> None:
+    """Eine später angeklickte Fläche behält im Lauf dieselbe Lage wie in der Ansicht (RM-388)."""
+    exact_kernel()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    if shape == "hollow_cylinder":
+        history.apply(
+            "Zylinder",
+            [OperationDraft(op="create_brep_cylinder", params={"diameter": 45.0, "height": 17.0})],
+        )
+        history.apply(
+            "Aushöhlen",
+            [
+                OperationDraft(
+                    op="hollow_object", inputs=("obj_1",), params={"wall": 2.0, "open_top": True}
+                )
+            ],
+        )
+    else:
+        history.apply(
+            "Quader",
+            [
+                OperationDraft(
+                    op="create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}
+                )
+            ],
+        )
+        history.apply(
+            "Bohrung",
+            [
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=("obj_1",),
+                    params={"diameter": 6.0, "depth": 10.0, "x": 0.0, "y": 0.0, "z": 10.0},
+                )
+            ],
+        )
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    visible = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert visible.complete, visible.scene.report.findings
+    body = visible.scene.objects["obj_1"]
+    top = next(
+        feature
+        for feature in body.features.values()
+        if feature.kind == "face"
+        and feature.params["normal"][2] > 0.9
+        and feature.params["centre"][2] > body.mesh.bounds.maximum[2] - 1e-6
+    )
+    # Ein echter Verbraucher: Vor dem Anhängen wurde der Randring oben ausgewählt.
+    history.apply(
+        "Fläche versetzen",
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={"face": top.id, "distance": 0.5}
+            )
+        ],
+    )
+    result = evaluate(
+        project.document, profile, sources=sources, cache=cache if warm else ResultCache()
+    )
+    assert result.complete, result.scene.report.findings
+    after = result.scene.objects["obj_1"].features[top.id]
+    assert after.params["normal"] == pytest.approx(top.params["normal"])
+    assert after.params["centre"][2] == pytest.approx(top.params["centre"][2] + 0.5)
+    assert history.undo() is not None
+    undone = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert undone.complete
+    assert undone.scene.objects["obj_1"].features[top.id].params["centre"] == pytest.approx(
+        top.params["centre"]
+    )
+    assert history.redo() is not None
+    redone = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert redone.complete
+    assert redone.scene.objects["obj_1"].features[top.id].params["centre"] == pytest.approx(
+        after.params["centre"]
+    )
+    from app.core.scene.project import load, save
+
+    reopened = load(save(project, tmp_path / "flaechenbezug.p3d"))
+    cold = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+    assert cold.complete
+    assert cold.scene.objects["obj_1"].features[top.id].params["centre"] == pytest.approx(
+        after.params["centre"]
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("side", [-1, 0, 1])
+def test_cutting_a_u_keeps_equal_top_pieces_ambiguous(
+    profile: Profile, reverse: bool, side: int, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Zwei gleich große Reste brauchen auch am registrierten Abschneiden eine Wahl (RM-450)."""
+    exact_kernel()
+    from app.core.bootstrap import load_operations
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom import prepare_ops
+    from app.core.geom.transform import translation
+    from app.core.registry import REGISTRY, OperationSpec, Registry
+    from app.core.types import BaseParams
+
+    body = edit.unified(
+        edit.boolean(
+            "difference",
+            [
+                edit.box(40.0, 30.0, 10.0),
+                edit.transformed(edit.box(20.0, 30.0, 20.0), translation((0.0, 5.0, -5.0))),
+            ],
+        )
+    )
+    features = features_of(body)
+    top = next(f for f in features.values() if f.kind == "face" and f.params["normal"][2] > 0.9)
+    source = SceneObject(id="obj_1", name="U-Körper", kind="brep", mesh=body, features=features)
+    original = prepare_ops._cut_faces_continued
+
+    def ordered(kept, found, continued, mesh):
+        return original(
+            kept, dict(reversed(tuple(found.items()))) if reverse else found, continued, mesh
+        )
+
+    monkeypatch.setattr(prepare_ops, "_cut_faces_continued", ordered)
+    load_operations()
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+    registry.register(
+        OperationSpec(
+            name="probe_u",
+            title="U-Körper",
+            category="primitive",
+            params=BaseParams,
+            fn=lambda ctx: OpResult(outputs=[source]),
+            consumes=0,
+            produces=1,
+        )
+    )
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document, registry=registry)
+    history.apply("U-Körper", [OperationDraft(op="probe_u")])
+    history.apply(
+        "Abschneiden",
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=("obj_1",),
+                params={"axis": "y", "position": 0.0, "keep": "above"},
+            )
+        ],
+    )
+    history.apply(
+        "Alte Deckfläche versetzen",
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={"face": top.id, "distance": 0.5}
+            )
+        ],
+    )
+    calls = []
+    preview = _Chooser(10.0)
+    cache = ResultCache()
+
+    def decline(question, choices):
+        calls.append((question, choices))
+        if side:
+            for object_id, candidate in preview.candidates:
+                feature = preview.preview.scene.objects[object_id].features[candidate]
+                if feature.params["normal"][2] > 0.9 and feature.params["centre"][0] * side > 0.0:
+                    assert candidate in choices
+                    return candidate
+            pytest.fail("die gewählte obere Restfläche fehlt in der Fragevorschau")
+        return "Nicht weiterführen"
+
+    result = evaluate(
+        project.document,
+        profile,
+        registry=registry,
+        sources=ProjectSources(project),
+        ask=decline,
+        cache=cache,
+        question_context=preview.context,
+    )
+    assert calls and top.id in calls[0][0]
+    assert len([name for name in calls[0][1] if name.startswith("face_")]) >= 2
+    if not side:
+        assert not result.complete
+        assert FeatureRef("obj_1", top.id) in result.blocked_references
+        return
+    assert result.complete, result.scene.report.findings
+    chosen = result.scene.objects["obj_1"].features[top.id]
+    assert chosen.params["centre"][0] * side > 0.0
+    assert chosen.params["centre"][2] == pytest.approx(10.5)
+    assert history.record_matches(result.matches)
+    assert history.undo() is not None
+    undone = evaluate(
+        project.document, profile, registry=registry, sources=ProjectSources(project), cache=cache
+    )
+    assert undone.complete
+    assert undone.scene.objects["obj_1"].mesh.bounds.maximum[2] == pytest.approx(10.0)
+    assert history.redo() is not None
+    for active_cache in (cache, ResultCache()):
+        again = evaluate(
+            project.document,
+            profile,
+            registry=registry,
+            sources=ProjectSources(project),
+            cache=active_cache,
+            ask=lambda *_: pytest.fail("die gespeicherte Wahl trägt den Bezug"),
+        )
+        assert again.complete
+        assert again.scene.objects["obj_1"].features[top.id].params["centre"] == pytest.approx(
+            chosen.params["centre"]
+        )
+    from app.core.scene.project import load, save
+
+    reopened = load(save(project, tmp_path / "gewaehlter-rest.p3d"))
+    cold = evaluate(
+        reopened.document,
+        profile,
+        registry=registry,
+        sources=ProjectSources(reopened),
+        ask=lambda *_: pytest.fail("die Wahl bleibt nach dem Öffnen gültig"),
+    )
+    assert cold.complete
+    assert cold.scene.objects["obj_1"].features[top.id].params["centre"] == pytest.approx(
+        chosen.params["centre"]
+    )
+
+
+def test_cut_face_continuation_excludes_a_foreign_coplanar_face() -> None:
+    """Eine größere fremde Fläche in derselben Ebene stammt nicht vom alten Quader."""
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.prepare_ops import _cut_faces_continued
+
+    body = edit.box(20.0, 20.0, 10.0)
+    top = next(
+        f for f in features_of(body).values() if f.kind == "face" and f.params["normal"][2] > 0.9
+    )
+    own = dataclasses.replace(
+        top, id="face_100", params={**top.params, "area": 100.0, "centre": (0.0, 0.0, 10.0)}
+    )
+    foreign = dataclasses.replace(
+        top, id="face_101", params={**top.params, "area": 1000.0, "centre": (100.0, 0.0, 10.0)}
+    )
+    for candidates in ({own.id: own, foreign.id: foreign}, {foreign.id: foreign, own.id: own}):
+        found, continued = _cut_faces_continued({top.id: top}, candidates, (), body)
+        assert found[top.id].params["area"] == pytest.approx(100.0)
+        assert foreign.id in found
+        assert continued == ((top.id, top.id),)

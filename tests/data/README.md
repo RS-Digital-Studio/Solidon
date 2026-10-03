@@ -11,6 +11,8 @@ aufgenommen, nicht als Sonderfall im Code.
 
 ---
 
+`profile_slot_motedis.json`: Eigene Querschnittsmessungen aus den verlinkten Hersteller-STEP-Dateien für Motedis 2020 B-Typ/Nut 6 und 3030 B-Typ/Nut 8; Steg 1,5/2,2 mm, Kammer 4,0/6,8 mm und lichte Breiten über der Tiefe. `test_parts.py` prüft die Nutfeder in beiden Kernen gegen diese unabhängigen Maße. Eine physische Passungsprobe ist damit nicht behauptet.
+
 ## Projektdateien
 
 | Datei | Inhalt | Erwartung | Test |
@@ -19,6 +21,8 @@ aufgenommen, nicht als Sonderfall im Code.
 | `projects/example_v1.p3d` | Format 1 mit Parametern, Ausdruck, Passung, Quelle mit Lizenz, Agenten-Transaktion, Bericht und Vorschaubild | öffnet, zwei Ops (`rename_object`, `duplicate_object`), `half` trägt `=@width/2`, Passung trägt `auto:petg` | `test_project.py::test_the_checked_in_example_still_opens` |
 | `projects/slender_arrangement_v42.p3d` | Historische Anordnung einer Platte 120 × 120 × 4 mm und einer Stange 8 × 8 × 122 mm, Format 42 | Migration und Undo behalten die alte Lage; neue Anordnung darf die Stange zur freien Mitte verschieben | `test_project.py` |
 | `projects/example_v43.p3d` | Format 43 mit gespeicherter Wahl für die Mittellage schlanker Teile | Öffnen und Speichern erhalten den Parameter und die vollständige Migrationskette | `test_project.py` |
+| `projects/example_v44.p3d` | Format 44: Stücknummern, Profilnutfeder-Größe und Drehmitte der Muster gespeichert | Öffnet über 44 → 45 mit unveränderten Schritten | `test_project.py` |
+| `projects/example_v45.p3d` | Format 45 mit Revisionsherkunft der Schritte | Aktuelles Format, öffnet ohne Migration | `test_project.py` |
 
 Je Formatversion bleibt eine Beispieldatei liegen (§16.2). Sie wird nie
 nachträglich verändert — sie ist der Beweis, dass die Migrationskette
@@ -189,6 +193,7 @@ Alle diese Gegenproben werden im Test konstruiert; Kundenmodelle sind nicht kopi
 
 | Datei | Inhalt | Test |
 |---|---|---|
+| `meshes/same_layer_rounding.wkt` | Zwei analytische 10-mm-Quadrate mit beinahe gerader Oberkante auf beiden Seiten der Vereinfachungsgrenze; minimale Fassung einer Schnittfolge aus dem eigenen Beispiel „Aushöhlen und Teilen“ | Schichtvergleich bleibt bei 0,00000002 mm Konturabweichung gleich, obwohl die Vereinfachung verschieden viele Ecken behält | `test_slice.py` |
 | `LICENSE` | MIT für den ganzen Korpus, weil er mit veröffentlicht wird | — |
 | `make_corpus.py` · `make_recognition_corpus.py` · `make_thread_corpus.py` · `make_step_assembly_corpus.py` | die Erzeuger der Netze, der Erkennungskörper, der Gewinde und der Baugruppen | `test_thread_import.py` und `test_step_assembly.py` vergleichen Datei und Erzeuger |
 | `ci_core_durations.json` · `ci_window_durations.json` | Sekunden je Testdatei der Kernsuite bzw. je Fensterdatei, mit Ersatzwert und Herkunft; erzeugt von `tools/ci_shards.py` aus JUnit-Berichten, verteilen nur | `test_ci_runner.py`, `test_packaging.py` |
@@ -200,5 +205,7 @@ Alle diese Gegenproben werden im Test konstruiert; Kundenmodelle sind nicht kopi
 | `superslicer_3mf_keys.json` | gemessener Schlüsselbestand des 3MF-Lesers von SuperSlicer 2.5.59.13: bekannt und unbekannt je Schlüssel der Prusa-Beilage | jede Zeile, die SuperSlicer nach `slicer_keys.for_program` bekommt, ist bekannt (RM-459) | `test_export.py` |
 | `slicer_values.json` | Aufzählungswerte aus Prusa-/SuperSlicer-Hilfe, Cura-Definitionen und 44 Rundreisen durch die vier Orca-Programme | jede geschriebene Aufzählungszeile gegen den Bestand des Programms (RM-480, RM-461) | `test_print_settings.py` |
 | `recipes/historical_box_v1.json` | ein gespeicherter Quader-Baustein aus der ersten Dokumentfassung (Format 1) | migriert, öffnet und exportiert | `test_part_file.py` |
+| `projects/auto_split_unnumbered_v42.p3d` | Leiste 600 × 30 × 20 mm, zwei zusammenhängende Schnitte bei X −100/+100 ohne Nummern; letzter Schnitt gelöscht und im Undo enthalten | Format 43 → 44 nummeriert aktive Stücke, Undo/Redo und Speichern erhalten Geometrie und Namen | `test_project.py` |
+| `projects/revision_titles_v44.p3d` | Quader und versetzte Kugel mit den Schrittnamen Rumpf, Kopf und Kopf setzen, ohne gespeicherte Revisionsherkunft | Format 44 → 45 erhält Geometrie und Titel; fehlende Herkunft wird nicht geraten | `test_project.py` |
 | `linux/paket-0.2.1-abhaengigkeiten.json` | die Bibliotheksabhängigkeiten je Datei des Linux-Pakets 0.2.1 | das Linux-Paket lässt keine Abhängigkeit offen | `test_packaging.py` |
 | `spacemouse/compact-2026-09-02.jsonl` | eine ausgedünnte Aufzeichnung der SpaceMouse Compact in Phasen zu vier Sekunden, mit Kopfzeile | beide Tasten sind benannt; dieselbe Aufnahme ergibt zweimal dieselbe Kamera | `test_spacemouse.py` |

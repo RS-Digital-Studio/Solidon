@@ -1478,7 +1478,7 @@ class History:
             raise UserError(
                 title=_("Diesen Schritt kann Solidon nicht ändern."),
                 detail=_(
-                    "Der Schritt ist in dieser Fassung nicht bekannt. Seine Werte "
+                    "Der Schritt ist in dieser Version nicht bekannt. Seine Werte "
                     "bleiben erhalten; alles andere im Projekt lässt sich weiter "
                     "ändern."
                 ),
@@ -1834,7 +1834,8 @@ class History:
         """Wie :meth:`_swap_operation`, für mehrere Schritte in **einer**
         Transaktion — ein Strg+Z legt alle zurück (Regel 16, §15.5).
 
-        ``along`` bringt Parameter mit, die dieselbe Transaktion anlegt."""
+        ``along`` bringt alle zusätzlichen Dokumentänderungen derselben Geste
+        mit, etwa benannte Maße und das neue Passungspaar eines Deckels."""
         swapped = tuple(
             _copy_operation_matches(
                 changed, previous_outputs=entry.outputs, previous_inputs=entry.inputs
@@ -1844,13 +1845,19 @@ class History:
         self._reseed()
         self._forget_undone()
         changes = DocumentChange(
-            before=DocumentState(
-                parameters=along.before.parameters if along is not None else None,
-                edited_ops={entry.id: _copy_operation_matches(entry) for entry, _changed in pairs},
+            before=dataclasses.replace(
+                along.before if along is not None else DocumentState(),
+                edited_ops={
+                    **(along.before.edited_ops or {} if along is not None else {}),
+                    **{entry.id: _copy_operation_matches(entry) for entry, _changed in pairs},
+                },
             ),
-            after=DocumentState(
-                parameters=along.after.parameters if along is not None else None,
-                edited_ops={changed.id: _copy_operation_matches(changed) for changed in swapped},
+            after=dataclasses.replace(
+                along.after if along is not None else DocumentState(),
+                edited_ops={
+                    **(along.after.edited_ops or {} if along is not None else {}),
+                    **{changed.id: _copy_operation_matches(changed) for changed in swapped},
+                },
             ),
         )
         transaction = Transaction(
@@ -2153,6 +2160,7 @@ class History:
             origin=origin,
             changes=self._revision_changes(suffix, renumbered, settled),
             revision="insert",
+            renumbered=dict(renumbered),
         )
         return RevisionPlan(
             kind="insert",
@@ -2257,6 +2265,7 @@ class History:
             ops=tuple(entry.id for entry in planned),
             changes=self._revision_changes(operations[first:], renumbered, None),
             revision="move",
+            renumbered=dict(renumbered),
         )
         return RevisionPlan(
             kind="move",

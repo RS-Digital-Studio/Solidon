@@ -37,9 +37,9 @@ from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import SEGMENTS, box, cone, cylinder, mesh_only
 from app.core.registry import NAME_DOC, op_params, param, register_op
+from app.core.registry.params import SurfaceBoundParams
 from app.core.sketch.planes import frame_of
 from app.core.types import (
-    BaseParams,
     Feature,
     Finding,
     OpContext,
@@ -244,7 +244,7 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
 
 
 @op_params
-class PositionedPrimitiveParams(BaseParams):
+class PositionedPrimitiveParams(SurfaceBoundParams):
     """Gemeinsamer freier Bezugspunkt, lokale Z-Richtung und Drehung.
 
     Öffentlich, weil der exakte Kern dieselben sieben Felder trägt
@@ -308,6 +308,13 @@ class PositionedPrimitiveParams(BaseParams):
         placement="advanced",
         doc=_ANGLE_DOC,
     )
+    surface_seat: str = param(
+        title=_("Sitz auf der Fläche"),
+        default="point_on_surface",
+        choices=("point_on_surface", "centred"),
+        placement="advanced",
+        doc=_("Setzt die Unterseite an den gewählten Punkt oder mittig auf die Fläche."),
+    )
 
 
 @op_params
@@ -323,7 +330,7 @@ class BoxParams(PositionedPrimitiveParams):
         # Parameter werden mit @ geschrieben." Ein Beispiel, das der eigene
         # Auswerter ablehnt, ist schlechter als keines — es schickt jemanden
         # los, der die Hilfe gelesen hat.
-        doc=_("Ausdehnung in X. Darf ein Ausdruck sein, etwa =@breite*2."),
+        doc=_("Breite des Körpers vor dem Ausrichten. Darf ein Ausdruck sein, etwa =@breite*2."),
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -331,7 +338,7 @@ class BoxParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Ausdehnung in Y."),
+        doc=_("Tiefe des Körpers vor dem Ausrichten."),
     )
     height: float = param(
         title=_("Höhe"),
@@ -339,7 +346,7 @@ class BoxParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Ausdehnung in Z, also nach oben."),
+        doc=_("Abstand von der Unterseite zur Oberseite des Körpers."),
     )
     anchor: str = param(
         title=_("Bezugspunkt"),
@@ -367,7 +374,7 @@ class BoxParams(PositionedPrimitiveParams):
     # das Sprachmodell — eine Regel aus rules.toml, gelandet in dem Feld, das
     # der Nutzer im Dialog liest. Wer auf „Quader anlegen" klickt, hat sich
     # entschieden; die Regel steht dort, wo sie hingehört, und gilt weiter.
-    doc=_("Legt einen Quader an, mittig auf dem Druckbett oder auf einer Ecke."),
+    doc=_("Legt einen Quader auf dem Druckbett oder auf einer gewählten Fläche an."),
 )
 def create_box(ctx: OpContext) -> OpResult:
     params = cast(BoxParams, ctx.params)
@@ -383,7 +390,7 @@ class CylinderParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Außendurchmesser. Der Zylinder steht auf dem Druckbett."),
+        doc=_("Außendurchmesser des Körpers."),
     )
     height: float = param(
         title=_("Höhe"),
@@ -391,7 +398,7 @@ class CylinderParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Höhe nach oben, von der Standfläche aus."),
+        doc=_("Abstand von der Unterseite zur Oberseite des Körpers."),
     )
     segments: int = param(
         title=_("Segmente"),
@@ -416,7 +423,7 @@ class CylinderParams(PositionedPrimitiveParams):
     params=CylinderParams,
     consumes=0,
     produces=1,
-    doc=_("Legt einen Zylinder an, stehend auf dem Druckbett."),
+    doc=_("Legt einen Zylinder auf dem Druckbett oder auf einer gewählten Fläche an."),
 )
 def create_cylinder(ctx: OpContext) -> OpResult:
     params = cast(CylinderParams, ctx.params)
@@ -432,7 +439,7 @@ class ConeParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.0,
         maximum=1000.0,
-        doc=_("Durchmesser auf dem Druckbett. Null macht diese Seite zur Spitze."),
+        doc=_("Durchmesser der Unterseite. Null macht diese Seite zur Spitze."),
     )
     top_diameter: float = param(
         title=_("Oberer Durchmesser"),
@@ -448,7 +455,7 @@ class ConeParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Höhe nach oben, von der Standfläche aus."),
+        doc=_("Abstand von der Unterseite zur Oberseite des Körpers."),
     )
     segments: int = param(
         title=_("Segmente"),
@@ -475,7 +482,9 @@ class ConeParams(PositionedPrimitiveParams):
     produces=1,
     # Im Entwurf nicht mehr gröber (RM-427): gespeicherte Entwurfsnetze gelten nicht.
     cache_version="2",
-    doc=_("Legt einen Kegel oder Kegelstumpf stehend auf dem Druckbett an."),
+    doc=_(
+        "Legt einen Kegel oder Kegelstumpf auf dem Druckbett oder auf einer gewählten Fläche an."
+    ),
 )
 def create_cone(ctx: OpContext) -> OpResult:
     params = cast(ConeParams, ctx.params)
@@ -496,7 +505,7 @@ class SphereParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Außendurchmesser. Die Kugel sitzt auf dem Druckbett auf."),
+        doc=_("Außendurchmesser des Körpers."),
     )
     segments: int = param(
         title=_("Segmente"),
@@ -523,7 +532,7 @@ class SphereParams(PositionedPrimitiveParams):
     params=SphereParams,
     consumes=0,
     produces=1,
-    doc=_("Legt eine Kugel an, aufsitzend auf dem Druckbett."),
+    doc=_("Legt eine Kugel auf dem Druckbett oder auf einer gewählten Fläche an."),
 )
 def create_sphere(ctx: OpContext) -> OpResult:
     params = cast(SphereParams, ctx.params)
@@ -574,7 +583,9 @@ class TorusParams(PositionedPrimitiveParams):
     produces=1,
     # Im Entwurf nicht mehr gröber (RM-427): gespeicherte Entwurfsnetze gelten nicht.
     cache_version="2",
-    doc=_("Legt einen geschlossenen runden Ring aufsitzend auf dem Druckbett an."),
+    doc=_(
+        "Legt einen geschlossenen runden Ring auf dem Druckbett oder auf einer gewählten Fläche an."
+    ),
 )
 def create_torus(ctx: OpContext) -> OpResult:
     params = cast(TorusParams, ctx.params)
@@ -585,7 +596,7 @@ def create_torus(ctx: OpContext) -> OpResult:
 #: Die Felder des Rohrs, die beide Kerne gleich tragen (P2.8). Der Netz-Zwilling
 #: hat dazu ``segments``; Lage, Richtung und Drehung kommen aus
 #: :class:`PositionedPrimitiveParams`.
-TUBE_OUTER_DOC = _("Durchmesser von Außenkante zu Außenkante. Das Rohr steht auf dem Druckbett.")
+TUBE_OUTER_DOC = _("Durchmesser von Außenkante zu Außenkante.")
 TUBE_INNER_GIVEN_DOC = _(
     "Aus: Die Wandstärke bestimmt die Öffnung. An: Der Innendurchmesser bestimmt sie, "
     "und die Wand ergibt sich daraus."
@@ -662,8 +673,8 @@ class TubeParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt ein Rohr an, stehend auf dem Druckbett — einen Zylinder mit durchgehender "
-        "Öffnung, bemaßt über die Wandstärke oder den Innendurchmesser."
+        "Legt ein Rohr auf dem Druckbett oder auf einer gewählten Fläche an, bemaßt über die "
+        "Wandstärke oder den Innendurchmesser."
     ),
 )
 def create_tube(ctx: OpContext) -> OpResult:
@@ -782,6 +793,7 @@ def placement_values_of(matrix: Any) -> dict[str, float]:
     Feld gegen Feld nicht.
     """
     from app.core.sketch.planes import frame_of
+    from app.core.units import dot3, exact_atan2_degrees
 
     values = np.asarray(matrix, dtype=float)
     if values.shape != (4, 4) or not np.isfinite(values).all():
@@ -792,7 +804,7 @@ def placement_values_of(matrix: Any) -> dict[str, float]:
         )
     position = tuple(float(value) for value in values[:3, 3])
     normal = values[:3, 2]
-    length = float(np.linalg.norm(normal))
+    length = math.hypot(*normal)
     if is_zero(length):
         return {
             "x": position[0],
@@ -807,17 +819,15 @@ def placement_values_of(matrix: Any) -> dict[str, float]:
     frame = frame_of(cast(Vec3, tuple(float(value) for value in unit)), cast(Vec3, position))
     reference = np.asarray(frame.x_axis, dtype=float)
     across = values[:3, 0]
-    across_length = float(np.linalg.norm(across))
+    across_length = math.hypot(*across)
     if is_zero(across_length):
         angle = 0.0
     else:
         across = across / across_length
         # Der Winkel zwischen beiden Querachsen, mit Vorzeichen um die
         # gemeinsame Hochachse — ``arctan2`` beantwortet beides in einem.
-        angle = math.degrees(
-            math.atan2(
-                float(np.dot(np.cross(reference, across), unit)), float(np.dot(reference, across))
-            )
+        angle = exact_atan2_degrees(
+            dot3(np.cross(reference, across), unit), dot3(reference, across)
         )
     return {
         "x": position[0],

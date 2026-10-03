@@ -42,7 +42,7 @@ from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
 #: Fassung des Hinweistextes. Ändert sich der Text inhaltlich, steigt sie, und
 #: der Hinweis erscheint erneut — sonst hätte jemand einer Aussage zugestimmt,
 #: die er nie gelesen hat.
-PRINT_DISCLOSURE_VERSION = "1.1"
+PRINT_DISCLOSURE_VERSION = "1.2"
 
 _log = get_logger(__name__)
 
@@ -138,13 +138,14 @@ def _body_text() -> str:
     geschieht — nicht den Eindruck, dass wir uns absichern.
     """
     return tr(
-        "Solidon rechnet Temperaturen, Geschwindigkeiten und Kühlung aus den Profilen "
-        "für Material, Drucker und Qualitätsstufe. Das sind Erfahrungswerte und keine "
-        "geprüften Vorgaben für Ihren Drucker, Ihr Filament und Ihr Teil.\n\n"
-        "Speichern Sie eine 3MF-Datei oder öffnen Sie das Projekt im Slicer, reisen "
-        "diese Werte mit. Ihr Slicer übernimmt sie dann anstelle seiner eigenen.\n\n"
-        "Prüfen Sie die Werte, bevor Sie drucken — besonders bei einem neuen Filament "
-        "oder einem Drucker, den Sie noch nicht kalibriert haben."
+        "Solidon nutzt das gewählte Herstellerprofil, soweit es unterstützt "
+        "und lesbar ist. Fehlende Grundlagen kommen aus Solidons Tabellen. "
+        "Ihre Änderungen und übernommenen Vorschläge ergänzen diese "
+        "Grundlage.\n\nWenn Sie Druckeinstellungen mitgeben, übernimmt der "
+        "Slicer die unterstützten Werte aus der Übergabe. Ohne diese Mitgabe "
+        "verwendet er seine eigenen Druckeinstellungen.\n\nPrüfen Sie die "
+        "wirksamen Werte vor dem Druck, besonders bei einem neuen Filament "
+        "oder einer noch nicht geprüften Kombination aus Drucker und Material."
     )
 
 
@@ -154,9 +155,9 @@ def _share_label() -> str:
 
 def _share_note() -> str:
     return tr(
-        "Ohne Haken enthält eine gespeicherte 3MF nur die Geometrie, und Ihr Slicer "
-        "arbeitet mit seinem eigenen Profil. Sie können das jederzeit in den "
-        "Druckeinstellungen ändern."
+        "Ohne Haken bleiben Geometrie und Filamentzuordnung in der 3MF erhalten; "
+        "Ihr Slicer verwendet seine eigenen Druckeinstellungen. Sie können die "
+        "Mitgabe jederzeit in den Druckeinstellungen ändern."
     )
 
 

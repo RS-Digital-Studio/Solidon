@@ -80,7 +80,7 @@
       "name": "Can I create my own building blocks without programming?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. Build the part once, create parameters for its dimensions and choose Save selection as a part in the catalogue. Creating it computes the block across its whole range; afterwards it sits next to the supplied ones with a preview image and fields. It stays on your computer — and travels as a recipe inside every project file that uses it: a list of steps and values, not a program. Whoever receives the file can compute with it without installing anything."
+        "text": "Yes. Build the part once, create parameters for its dimensions and choose Save selection as a part in the catalogue. Creating it checks the block at specified combinations within its range; afterwards it sits next to the supplied ones with a preview image and fields. It stays on your computer — and travels as a recipe inside every project file that uses it: a list of steps and values, not a program. Whoever receives the file can compute with it without installing anything."
       }
     },
     {
@@ -144,7 +144,7 @@
       "name": "Does it run on a Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes, as separate builds for Apple Silicon and Intel — a package built on arm64 will not start on an Intel Mac, and that covers every machine made before 2020. From version 0.4.1 the packages are notarised with Apple and open on a double-click. An older version reports that macOS cannot verify the file is free of malware and offers “Move to Trash” as the first button: choose “Done” there, then release the package in System Settings under “Privacy & Security” with “Open Anyway”."
+        "text": "Yes, as separate builds for Apple Silicon and Intel — a package built on arm64 will not start on an Intel Mac. Choose the package for your Mac’s processor type. From version 0.4.1 the packages are notarised with Apple and open on a double-click. An older version reports that macOS cannot verify the file is free of malware and offers “Move to Trash” as the first button: choose “Done” there, then release the package in System Settings under “Privacy & Security” with “Open Anyway”."
       }
     },
     {
@@ -220,8 +220,8 @@
     <div class="hero">
       <div class="hero-text">
         <p class="hero-kicker">Edit and create 3D models — no CAD experience needed</p>
-        <h1>Turn any STL into the part you need.</h1>
-        <p class="lead">Drop in a model, click a hole, type a new size. Solidon3D checks before slicing whether your part will print, and hands it to your slicer. No cloud, no account.</p>
+        <h1>Adapt an STL to make the part you need.</h1>
+        <p class="lead">Drop in a model, click a hole, type a new size. Solidon3D checks for detected printing risks before slicing, and hands it to your slicer. No cloud, no account.</p>
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
              data-release-href data-release-download
@@ -369,7 +369,7 @@
       <div class="stats">
         <div><b>142</b><span>operations in the download version</span></div>
         <div><b>35</b><span>tested building blocks</span></div>
-        <div><b>59</b><span>standard part sizes</span></div>
+        <div><b>61</b><span>standard part sizes</span></div>
         <div><b>20</b><span>printer profiles included</span></div>
         <div><b>12</b><span>example projects included</span></div>
         <div><b>0</b><span>accounts, cloud, telemetry</span></div>
@@ -392,7 +392,7 @@
           <a class="step-media" href="../bilder/schritt-bericht-en.webp?v=99b75f4c"><img src="../bilder/schritt-bericht-en.webp?v=99b75f4c" width="1907" height="1192" loading="lazy" decoding="async"
                alt="An imported STL, a figure made of three spheres, large in the 3D view. On the right the report: 0 errors, 1 warning, 5 notes. The warning says there are very small separate pieces; the notes list what Solidon3D repaired during import, such as 18 of 18 open edges closed."></a>
           <h3>Drag in your model</h3>
-          <p>An STL from Printables or a project of your own. The report tells you right away what would go wrong when printing, and every finding comes with a suggestion of what to do.</p>
+          <p>An STL from Printables or a project of your own. The report shows detected printing risks, and every finding suggests what to do.</p>
         </li>
         <li class="step-card">
           <a class="step-media" href="../bilder/schritt-druck-en.webp?v=8ef6c49a"><img src="../bilder/schritt-druck-en.webp?v=8ef6c49a" width="1561" height="976" loading="lazy" decoding="async"
@@ -421,13 +421,11 @@
         </li>
         <li>
           <q>The lid jams. It fitted on the third try.</q>
-          <p><b>Fits from the material profile.</b> Clearance, press fit or
-          flush are derived from a calibration ladder you print once, not
-          guessed.</p>
+          <p><b>Fits from the material profile.</b> A printed calibration ladder lets you adjust the starting values for clearance, press fits and flush fits to your printer and filament.</p>
         </li>
         <li>
           <q>The part is 40 mm too big for the bed.</q>
-          <p><b>Split and pin in one step.</b> Auto split creates the
+          <p><b>Split and pin in one step.</b> <em>Split automatically</em> creates the
           alignment pins, the holes and the matching fits along with
           them.</p>
         </li>
@@ -521,7 +519,7 @@
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
                alt="A cylindrical storage jar with a printed external thread on its neck, the matching screw lid with a knurled rim beside it">
-          <figcaption><b>Storage jar</b> The thread on the neck and the one in the lid come from the same pitch, the clearance between them from the material profile. Put the lid on and it sits.</figcaption>
+          <figcaption><b>Storage jar</b> The thread on the neck and the one in the lid come from the same pitch, the clearance between them from the material profile. Check the fit with a small test print.</figcaption>
         </figure>
         <figure>
 
@@ -529,7 +527,7 @@
 
                alt="A shallow box with an integral lid; a thin living hinge runs between them, a snap catch holds it shut at the front">
 
-          <figcaption><b>Hinged box</b> Lid and base are one piece. The living hinge is 0.4 mm thin — thick enough to print, thin enough to fold a thousand times.</figcaption>
+          <figcaption><b>Hinged box</b> Lid and base are one piece. A 0.4 mm living hinge joins them without a separate hinge pin.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
@@ -549,12 +547,12 @@
         <figure>
           <a href="../bilder/beleg-bericht-en.webp?v=a9b378b8"><img src="../bilder/beleg-bericht-en.webp?v=a9b378b8" width="1907" height="1192" loading="lazy" decoding="async"
                alt="A box with a lid, large in the view, and its report on the right: 0 errors, 2 warnings, 6 notes. The warnings say that the fit is tighter than intended and that a face of the lid overhangs freely and needs supports; below them notes on hollowing, the lid and the material."></a>
-          <figcaption><b>Report and layer analysis.</b> What goes wrong when printing stands there before the slicer spends the time: overhangs, islands, walls that are too thin and support needs, counted by error, warning and note. The orientation search suggests the pose that produces the least of it.</figcaption>
+          <figcaption><b>Report and layer analysis.</b> Before slicing, Solidon3D checks overhangs, islands, thin walls and support needs. The report distinguishes errors, warnings and notes. The orientation search suggests a pose that needs less support.</figcaption>
         </figure>
         <figure>
           <a href="../bilder/beleg-bausteine-en.webp?v=cf12fca7"><img src="../bilder/beleg-bausteine-en.webp?v=cf12fca7" width="1560" height="1144" loading="lazy" decoding="async"
                alt="The Parts catalogue, opened over the window: the groups Fasteners, Mechanics and Mounting with heat-set insert, nut trap, printed nut, screw, printable thread, screw hole with countersink, barrel hinge, ball bearing, dowel pin and bore, hinge eye, latch, living hinge, snap connectors, foot, keyhole hanger, magnet pocket, pegboard hook, profile clamp liner and shell and wall mount, each with a preview and its dimensions. At the bottom the buttons Insert and Save selection as a part."></a>
-          <figcaption><b>Tested building blocks, your own too.</b> Nut trap, heat-set insert, living hinge, pegboard hook: the dimensions come from a standard-parts table, and each block is computed across its full size range. You save a part of your own as a block without programming; it travels as a recipe inside every project file.</figcaption>
+          <figcaption><b>Tested building blocks, your own too.</b> Nut trap, heat-set insert, living hinge, pegboard hook: the dimensions come from a standard-parts table, and each block is checked at specified combinations within its size range. You save a part of your own as a block without programming; it travels as a recipe inside every project file.</figcaption>
         </figure>
       </div>
 
@@ -611,8 +609,8 @@
         <li><b>Not a model library.</b> You bring the models, from Printables, MakerWorld, Thingiverse or your own folder.</li>
         <li><b>Not cloud CAD.</b> No accounts, no storage on someone else’s server, no telemetry. Projects are files on your machine.</li>
         <li><b>No team.</b> Solidon3D is built by one person. That means short paths and an answer from the person who built it. It also means no hotline and a roadmap that follows one person.</li>
-        <li><b>No dimensional guarantees from generated meshes.</b> What comes from text or images is made printable; accurate design happens on ways 1 and 2.</li>
-        <li><b>The AI brings its own cost.</b> The chat runs on your own API key, typically cents per proposal. Running it locally through Ollama is free, with a graphics card of 8 GB or more; from 10 GB it answers two to three times faster.</li>
+        <li><b>No dimensional guarantees from generated meshes.</b> What comes from text or images can be checked and prepared for printing; design with dimensions happens on ways 1 and 2.</li>
+        <li><b>The AI brings its own cost.</b> The chat runs on your own API key, typically cents per proposal. Running it locally through Ollama has no API fees. Memory requirements and speed depend on the model and hardware; the <a href="/en/ai-models.html">AI guide</a> lists tested configurations.</li>
       </ul>
     </div>
   </section>
@@ -752,11 +750,11 @@
           </div>
 
           <div class="donate">
-            <p class="donate-terms">This is not an order, provides nothing in return and is not credited toward a later purchase. We do not issue a tax certificate for the payment; do not treat it as tax-deductible. PayPal or GoFundMe opens only after you choose it in the local notice; <a href="/datenschutz.html">privacy details</a>.</p>
+            <p class="donate-terms">This is not an order, provides nothing in return and is not credited toward a later purchase. I do not issue a tax certificate for the payment; do not treat it as tax-deductible. PayPal or GoFundMe opens only after you choose it in the local notice; <a href="/datenschutz.html">privacy details</a>.</p>
             <button class="donate-button" type="button" data-choice="support">Support voluntarily <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
             <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Voluntary support through PayPal or GoFundMe">
               <p class="auswahl-titel">Support voluntarily</p>
-              <p>The payment is not an order, provides nothing in return, unlocks nothing and is not credited toward a later purchase. We do not issue a tax certificate for it; do not treat it as tax-deductible.</p>
+              <p>The payment is not an order, provides nothing in return, unlocks nothing and is not credited toward a later purchase. I do not issue a tax certificate for it; do not treat it as tax-deductible.</p>
               <p>Choose PayPal or GoFundMe. Only the respective button opens the external page. You will leave solidon3d.de; the chosen provider’s privacy statement applies: <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal</a> or <a href="https://www.gofundme.com/c/privacy">GoFundMe</a>.</p>
               <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Continue to PayPal</a>
               <a class="btn" href="https://gofund.me/08c5f0edb" rel="noopener noreferrer">Continue to GoFundMe</a>
@@ -843,7 +841,7 @@
           <summary>Can I create my own building blocks without programming?</summary>
           <p>Yes. Build the part once, create parameters for its dimensions
           and choose <b>Save selection as a part</b> in the catalogue.
-          Creating it computes the block across its whole range; afterwards it
+          Creating it checks the block at specified combinations within its range; afterwards it
           sits next to the supplied ones with a preview image and fields.</p>
           <p>It stays on your computer — and <b>travels as a recipe inside
           every project file</b> that uses it: a list of steps and values, not
@@ -904,8 +902,7 @@
         <details>
           <summary>Does it run on a Mac?</summary>
           <p>Yes, as separate builds for Apple Silicon and Intel — a package built
-          on arm64 will not start on an Intel Mac, and that covers every machine
-          made before 2020. From version 0.4.1 the packages are notarised with
+          on arm64 will not start on an Intel Mac. Choose the package for your Mac’s processor type. From version 0.4.1 the packages are notarised with
           Apple and open on a double-click. An older version reports that macOS
           cannot verify the file is free of malware and offers “Move to Trash”
           as the first button: choose “Done” there, then release the package in

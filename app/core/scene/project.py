@@ -1116,6 +1116,29 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
         if changes is not None:
             _validate_state_schema(changes.get("before", {}), f"{where}.changes.before")
             _validate_state_schema(changes.get("after", {}), f"{where}.changes.after")
+        renumbered = _nested_mapping(transaction.get("renumbered", {}), f"{where}.renumbered")
+        assert renumbered is not None
+        if renumbered:
+            if revision not in ("insert", "move") or changes is None:
+                raise ValueError(f"schema:{where}.renumbered")
+            previous = changes.get("before", {}).get("edited_ops") or {}
+            removed = changes.get("after", {}).get("edited_ops") or {}
+            destinations: set[int] = set()
+            for old, new in renumbered.items():
+                _schema_integer(new, f"{where}.renumbered.{old}")
+                if (
+                    not old.isdecimal()
+                    or str(int(old)) != old
+                    or int(old) <= 0
+                    or new <= int(old)
+                    or new not in op_ids
+                    or new in destinations
+                    or previous.get(old) is None
+                    or old not in removed
+                    or removed[old] is not None
+                ):
+                    raise ValueError(f"schema:{where}.renumbered.{old}")
+                destinations.add(new)
 
     for index, entry in enumerate(_records(data, "chat")):
         _validate_origin_schema(entry.get("origin"), f"chat[{index}].origin")

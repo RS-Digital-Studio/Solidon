@@ -269,7 +269,7 @@ class ShortcutsWindow(QDialog):
         # öffnet „Modell erzeugen" — eine Übersicht über Tastenkürzel, die ein
         # falsches nennt, ist schlimmer als keine.
         note = QLabel(
-            tr("Alles ist außerdem über die Befehlspalette erreichbar.")
+            tr("Die Menüs und Werkzeugleisten zeigen weitere Bedienwege.")
             + (f" — {palette_key}" if palette_key else ""),
             self,
         )

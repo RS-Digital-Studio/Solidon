@@ -1005,7 +1005,9 @@ def test_a_model_opened_from_the_first_steps_is_not_replaced_by_the_empty_projec
         return plan(*args, **kwargs)
 
     monkeypatch.setattr(session, "import_plan", slow_plan)
-    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_args, **_kwargs: (str(model), ""))
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileNames", lambda *_args, **_kwargs: ([str(model)], "")
+    )
 
     class OpenDialog(FirstRunDialog):
         def look(self) -> None:

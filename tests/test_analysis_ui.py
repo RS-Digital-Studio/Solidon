@@ -554,7 +554,7 @@ def test_calibration_invalidates_analysis_caches_and_late_workers(
             window._analysis_map("overhang", entry.id)
             previous = workers[-1]
             previous_map_key = window._analysis_cache_key(entry, "overhang")
-            previous_slice_key = window._analysis_cache_key(entry)
+            previous_slice_key = window._slice_cache_key(entry)
             profile = window.session.profile
             old_limits = profiles.analysis_limits(profile, entry)
             calibration.apply(
@@ -568,7 +568,7 @@ def test_calibration_invalidates_analysis_caches_and_late_workers(
             )
             assert window.session.last_result is result
             assert window._analysis_cache_key(entry, "overhang") != previous_map_key
-            assert window._analysis_cache_key(entry) != previous_slice_key
+            assert window._slice_cache_key(entry) != previous_slice_key
             old_map = maps.AnalysisMap(
                 kind="overhang",
                 title="Überhang",
@@ -608,6 +608,7 @@ def test_calibration_invalidates_analysis_caches_and_late_workers(
         finally:
             window._map_worker = None
             window._slice_worker = None
+            window._foundation_worker = None
             for worker in workers:
                 worker.release_finished_references()
                 worker.deleteLater()
@@ -3556,8 +3557,12 @@ def test_a_finished_worker_never_drops_its_successor(window: MainWindow) -> None
     from app.ui.main_window import _SliceWorker
 
     entry = window.session.last_result.scene.objects["obj_1"]
-    first = _SliceWorker(entry, 0.2)
-    second = _SliceWorker(entry, 0.2)
+    first = _SliceWorker(
+        entry, window.effective_print_settings(), overhang_angle=45.0, bridge_from=0.8
+    )
+    second = _SliceWorker(
+        entry, window.effective_print_settings(), overhang_angle=45.0, bridge_from=0.8
+    )
     window._slice_worker = second
 
     window._slice_worker_done(first)
@@ -3579,7 +3584,7 @@ def test_scrubbing_starts_one_worker_per_body_not_one_per_step(window: MainWindo
     einmal in der Reihe, egal wie oft geschoben wird.
     """
     entry = window.session.last_result.scene.objects["obj_1"]
-    key = window._analysis_cache_key(entry)
+    key = window._slice_cache_key(entry)
     sentinel = object()
     window._slice_key = None
     window._slice_worker = sentinel
@@ -3617,12 +3622,171 @@ def test_a_superseded_workers_result_is_dropped(window: MainWindow) -> None:
 
     window._slice_ready(
         outcome,
-        window._analysis_cache_key(window.session.last_result.scene.objects["obj_1"]),
+        window._slice_cache_key(window.session.last_result.scene.objects["obj_1"]),
         object(),
     )
 
     assert window._slice_cache is None, "ein abgelöster Arbeiter schreibt keinen Cache"
     assert window._slice_key is None
+
+
+@pytest.mark.parametrize("change", ["height", "first", "angle", "wall", "mesh", "orientation"])
+def test_the_layer_worker_reuses_the_report_cache_and_invalidates_changed_inputs(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """Der echte Netzmerker gilt nur für dasselbe Netz, Raster und Druckgrenzen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import print_settings, profiles
+    from app.core.slice import findings
+    from app.core.types import SliceResult
+    from app.ui.main_window import _SliceWorker
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(10.0, 20.0, 30.0)))
+    entry = SimpleNamespace(mesh=mesh)
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    calls: list[Any] = []
+
+    def measure(body, height, **kwargs):
+        kwargs["cancelled"].raise_if_cancelled()
+        calls.append((height, kwargs["first_layer_height"], body))
+        return SliceResult(layers=(), support_volume=float(len(calls)), first_layer_area=0.0)
+
+    monkeypatch.setattr(findings, "slice_body", measure)
+    angle, wall = 45.0, 0.84
+
+    def run() -> SliceResult:
+        worker = _SliceWorker(entry, settings, overhang_angle=angle, bridge_from=wall)
+        values = []
+        worker.done.connect(values.append)
+        worker.work()
+        worker.deleteLater()
+        assert len(values) == 1
+        return values[0]
+
+    original = run()
+    assert run() is original
+    assert len(calls) == 1
+    if change == "height":
+        settings = dataclasses.replace(
+            settings, layers=dataclasses.replace(settings.layers, layer_height=0.3)
+        )
+    elif change == "first":
+        settings = dataclasses.replace(
+            settings, layers=dataclasses.replace(settings.layers, first_layer_height=0.4)
+        )
+    elif change == "angle":
+        angle = 37.0
+    elif change == "wall":
+        wall = 1.1
+    elif change == "mesh":
+        mesh.raw.apply_scale((1.1, 1.0, 1.0))
+    else:
+        mesh.raw.apply_transform(
+            ((0.0, 0.0, 1.0, 0.0), (0.0, 1.0, 0.0, 0.0), (-1.0, 0.0, 0.0, 0.0), (0, 0, 0, 1))
+        )
+    changed = run()
+    assert changed is not original
+    assert run() is changed
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("when", ["before", "during"])
+def test_a_cancelled_layer_worker_never_publishes_a_result(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, when: str
+) -> None:
+    """Abbruch erreicht den Kern; auch eine bereits fertige späte Antwort bleibt weg."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import print_settings, profiles
+    from app.core.types import SliceResult
+    from app.ui import main_window as module
+
+    entry = SimpleNamespace(mesh=MeshData.of(trimesh.creation.box()))
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    worker = module._SliceWorker(entry, settings, overhang_angle=45.0, bridge_from=0.84)
+    calls = []
+
+    def measure(*args, cancelled):
+        calls.append(cancelled)
+        cancelled.cancel()
+        return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
+
+    monkeypatch.setattr(module, "analysed", measure)
+    values = []
+    worker.done.connect(values.append)
+    if when == "before":
+        worker.cancel.cancel()
+    worker.work()
+    assert not values
+    assert len(calls) == (0 if when == "before" else 1)
+    worker.deleteLater()
+
+
+@pytest.mark.parametrize("change", ["first", "mesh"])
+def test_a_late_slice_cannot_replace_the_changed_raster_or_body(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """Gleiche Dreieckszahl reicht weder nach neuem Raster noch nach Drehung."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.types import SliceResult
+
+    entry = window.session.last_result.scene.objects["obj_1"]
+    key = window._slice_cache_key(entry)
+    current = object()
+    served = []
+    window._slice_worker = current
+    window._slice_waiters = [served.append]
+    window._slice_cache = None
+    window._slice_pending = key
+    if change == "first":
+        settings = window.effective_print_settings()
+        changed = dataclasses.replace(
+            settings,
+            layers=dataclasses.replace(
+                settings.layers, first_layer_height=settings.layers.first_layer_height + 0.1
+            ),
+        )
+        monkeypatch.setattr(window, "effective_print_settings", lambda: changed)
+    else:
+        body = as_mesh_data(entry.mesh).raw.copy()
+        body.apply_transform(
+            ((0.0, 0.0, 1.0, 0.0), (0.0, 1.0, 0.0, 0.0), (-1.0, 0.0, 0.0, 0.0), (0, 0, 0, 1))
+        )
+        window.session.last_result.scene.objects[entry.id] = dataclasses.replace(
+            entry, mesh=type(as_mesh_data(entry.mesh)).of(body)
+        )
+    try:
+        outcome = SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
+        window._slice_ready(outcome, key, current)
+        assert window._slice_cache is None
+        assert not served
+        assert window._slice_pending is None
+    finally:
+        window._slice_worker = None
+
+
+def test_new_layer_requests_cancel_the_previous_worker(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ablösen hält die vorige Rechnung an, statt nur ihre Antwort zu verstecken."""
+    from app.core.scene.cancel import CancelSignal
+
+    previous = SimpleNamespace(cancel=CancelSignal())
+    window._slice_worker = previous
+    window._slice_pending = ("old",)
+    window._slice_key = None
+    monkeypatch.setattr(window._leash, "start", lambda worker: None)
+    window._slice_of("obj_1")
+    worker = window._slice_worker
+    try:
+        assert previous.cancel.is_cancelled
+        assert worker is not previous
+    finally:
+        window._slice_worker = None
+        worker.deleteLater()
 
 
 def test_the_layer_analysis_takes_both_limits_from_the_material(
@@ -3646,11 +3810,12 @@ def test_the_layer_analysis_takes_both_limits_from_the_material(
 
     seen: list[tuple[float | None, float | None]] = []
 
-    def measure(_mesh, _height, *, overhang_angle, bridge_from):
+    def measure(_mesh, _settings, overhang_angle, bridge_from, *, cancelled):
+        assert cancelled is not None
         seen.append((overhang_angle, bridge_from))
         return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(module, "analysed", measure)
     entry = window.session.last_result.scene.objects["obj_1"]
     wall, angle = profile_module.analysis_limits(window.session.profile, entry)
 
@@ -3673,7 +3838,7 @@ def test_when_the_slice_arrives_every_waiter_is_served_once(window: MainWindow) 
     served: list[object] = []
     current = object()
     window._slice_worker = current
-    key = window._analysis_cache_key(window.session.last_result.scene.objects["obj_1"])
+    key = window._slice_cache_key(window.session.last_result.scene.objects["obj_1"])
     window._slice_pending = key
     window._slice_waiters = [served.append]
     try:
@@ -7748,7 +7913,9 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
         panel.show_result(
             EvaluationResult(scene=Scene(objects=objects, report=Report(findings=(material,))))
         )
-        assert panel.summary.text().startswith(tr("Druckbereit"))
+        assert panel.summary.text().startswith(tr("Bewertung unvollständig"))
+        panel.set_review_context("Prüfumfang vollständig nachgewiesen", ())
+        assert panel.summary.text().startswith(tr("Bereit zur Übergabe"))
         assert f"1 × {tr('Hinweis')}" in panel.summary.text()
         assert not panel.list.selectedItems(), "ein Hinweis zur Einrichtung ist nicht vorgewählt"
 
@@ -7763,7 +7930,7 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
                 scene=Scene(objects=objects, report=Report(findings=(warning, material)))
             )
         )
-        assert not panel.summary.text().startswith(tr("Druckbereit"))
+        assert panel.summary.text().startswith(tr("Entscheidung erforderlich"))
         assert f"1 × {tr('Warnung')}" in panel.summary.text()
 
         # Gegenprobe: Ein Hinweis **am Körper** mit Handlung wird vorgewählt.

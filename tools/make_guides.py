@@ -72,7 +72,19 @@ from PySide6.QtGui import (
     QPolygonF,
     qGray,
 )
-from PySide6.QtWidgets import QApplication, QMenu, QToolTip
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QAbstractItemView,
+    QAbstractSpinBox,
+    QApplication,
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QTextEdit,
+    QToolTip,
+    QWidget,
+)
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core import figures, guides
@@ -156,7 +168,7 @@ AWAY: Final = 64
 #: Ecke ihres Rahmens, halb innen, halb außen; am Fensterrand stünde sie ohne
 #: diesen Rand über dem Menü oder dem ersten Knopf — so verdeckte die Nummer
 #: der Werkzeugleiste im ersten Probelauf das Wort „Datei".
-BORDER: Final = 30
+BORDER: Final = 2 * (BADGE + 3) + 8
 
 #: Wie stark der Rest des Bildes zurücktritt.
 DIM: Final = QColor(0, 0, 0, 105)
@@ -208,7 +220,14 @@ def _palette() -> dict[str, str]:
     return THEMES["dark"]
 
 
-def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> QImage:
+def annotate(
+    piece: QImage,
+    spots: list[Spot],
+    *,
+    legend: bool,
+    number: int,
+    protected: tuple[QRect, ...] = (),
+) -> QImage:
     """Das Bildschirmfoto mit Rand, Rahmen, Nummern und Pfeilen.
 
     Ein gewöhnlicher Schritt dunkelt alles außer seinen Zielen ab; das erste
@@ -263,9 +282,17 @@ def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> 
             continue
         away = not legend and _small(spot)
         others = [other for other in frames if other is not frame]
-        centre = _badge_centre(frame, others, bounds, taken, away=away, picture=piece)
+        centre = _badge_centre(
+            frame,
+            others,
+            bounds,
+            taken,
+            away=away,
+            picture=piece,
+            protected=[QRectF(area.translated(BORDER, BORDER)) for area in protected],
+        )
         taken.append(centre)
-        if away:
+        if away or not frame.contains(centre):
             _arrow(painter, centre, frame, amber, halo)
         _badge(painter, centre, str(label), amber, ink)
     painter.end()
@@ -367,6 +394,7 @@ def _badge_centre(
     *,
     away: bool,
     picture: QImage | None = None,
+    protected: list[QRectF] | None = None,
 ) -> QPointF:
     """Wo die Nummer steht — und nie auf einem anderen Bereich.
 
@@ -419,6 +447,7 @@ def _badge_centre(
         return (
             bounds.contains(disc)
             and not any(other.intersects(disc) for other in others)
+            and not any(area.intersects(disc) for area in protected or ())
             and all(
                 abs(centre.x() - spot.x()) > 2 * BADGE + 4
                 or abs(centre.y() - spot.y()) > 2 * BADGE + 4
@@ -441,12 +470,59 @@ def _badge_centre(
         return score
 
     usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
+    if not usable:
+        # Ein dichter Dialog kann ringsum nur Text tragen. Im zusätzlichen
+        # Bildrand bleibt ein sicherer Platz; eine Nummer verdeckt nie Text.
+        margin = BADGE + 3
+        candidates = [
+            point
+            for distance in range(margin, int(bounds.width()) - margin, 2 * margin + 4)
+            for point in (QPointF(distance, margin), QPointF(distance, bounds.bottom() - margin))
+        ] + [
+            point
+            for distance in range(margin, int(bounds.height()) - margin, 2 * margin + 4)
+            for point in (QPointF(margin, distance), QPointF(bounds.right() - margin, distance))
+        ]
+        usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
+        if not usable:
+            raise ValueError("Kein freier Platz für die Schrittnummer; Bildausschnitt vergrößern.")
+        return min(
+            (candidates[rank] for rank in usable),
+            key=lambda point: (point.x() - middle.x()) ** 2 + (point.y() - middle.y()) ** 2,
+        )
     chosen = candidates[
         min(usable, key=lambda rank: unrest(candidates[rank]) + CALM_ORDER * rank) if usable else 0
     ]
     x = min(max(chosen.x(), bounds.left() + reach), bounds.right() - reach)
     y = min(max(chosen.y(), bounds.top() + reach), bounds.bottom() - reach)
     return QPointF(x, y)
+
+
+def _text_areas(window: QWidget) -> tuple[QRect, ...]:
+    """Sichtbare Textträger einschließlich Menüs und Dialogen sperren.
+
+    Listen werden ganz gesperrt: Delegates zeichnen ihren Text selbst und
+    tragen keine eigenen Widgets. So bleibt auch eine übersetzte Zeile frei.
+    """
+    origin = window.mapToGlobal(QPoint())
+    kinds = (
+        QAbstractButton,
+        QAbstractItemView,
+        QAbstractSpinBox,
+        QComboBox,
+        QLabel,
+        QLineEdit,
+        QMenu,
+        QTextEdit,
+    )
+    areas = []
+    for top in QApplication.topLevelWidgets():
+        if top is not window and not window.isAncestorOf(top):
+            continue
+        for widget in (top, *top.findChildren(QWidget)):
+            if isinstance(widget, kinds) and widget.isVisible():
+                areas.append(QRect(widget.mapToGlobal(QPoint()) - origin, widget.size()))
+    return tuple(areas)
 
 
 def _busyness(picture: QImage | None, centre: QPointF, radius: float) -> float:
@@ -603,7 +679,13 @@ class GuideRun:
             crop = framed(focus.intersected(image.rect()), RATIO, image.rect(), MARGIN)
         corner = crop.topLeft()
         inside = [Spot(spot.rect.translated(-corner), spot.point, spot.pointer) for spot in spots]
-        picture = annotate(image.copy(crop), inside, legend=step.is_legend, number=number)
+        picture = annotate(
+            image.copy(crop),
+            inside,
+            legend=step.is_legend,
+            number=number,
+            protected=tuple(area.translated(-corner) for area in _text_areas(self.window)),
+        )
         if picture.width() > MAX_WIDTH:
             picture = picture.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
         target = _picture_path(self.folder, self.guide.figure_key(number))

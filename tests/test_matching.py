@@ -2724,3 +2724,70 @@ def test_only_a_clearly_nearest_surface_settles_twins() -> None:
     assert settled_by_surface(one, {"a": step["x"]}, step, 40.0).mapping == {"a": "x"}
     close = {"x": np.array([0.0, 0.0, 0.392]), "y": np.array([0.0, 0.0, 0.422])}
     assert settled_by_surface(one, {"a": close["x"]}, close, 40.0) == one
+
+
+def test_movement_consumers_share_one_proof_but_changed_inputs_do_not(monkeypatch) -> None:
+    """Netzpaar und Matrix tragen einen Beleg; andere Ecken brauchen einen neuen (RM-302)."""
+    import importlib
+
+    from app.core.geom.transform import rotation
+
+    features = importlib.import_module("app.core.perceive.features")
+    mesh = body("plate_holes.stl")
+    features.detect(mesh)
+    matrix = rotation("z", 37.0) @ translation((12.0, -7.5, 3.0))
+    moved = apply(mesh, matrix)
+    checked = features._moved_twin_checked
+    calls = []
+
+    def counted(source, target, transform):
+        calls.append(1)
+        return checked(source, target, transform)
+
+    monkeypatch.setattr(features, "_moved_twin_checked", counted)
+    assert features.moved_from(moved, [mesh]) is not None
+    assert features.carry_detection(mesh, moved, matrix)
+    assert features.moved_twin(mesh, moved, matrix)
+    assert calls == [1]
+    other = matrix.copy()
+    other[0, 3] += 1.0
+    assert not features.moved_twin(mesh, moved, other)
+    assert calls == [1, 1]
+    changed = moved.raw.copy()
+    changed.vertices[0, 0] += 0.5
+    assert not features.moved_twin(mesh, MeshData.of(changed), matrix)
+    assert calls == [1, 1, 1]
+
+
+@pytest.mark.parametrize(
+    "step, params",
+    [
+        ("translate_object", {"dx": 80.0}),
+        ("pattern", {"kind": "circular", "count": 3, "angle": 120.0}),
+    ],
+)
+def test_evaluation_proves_each_moved_mesh_only_once(profile, monkeypatch, step, params) -> None:
+    """Die wirklichen Verbraucher teilen den Beleg auch beim Cachetreffer (RM-302)."""
+    import importlib
+    from collections import Counter
+
+    from app.core.scene import ResultCache, evaluate
+
+    features = importlib.import_module("app.core.perceive.features")
+    project, sources = _plate_project([("Bewegen", step, params)])
+    original = features._moved_twin_checked
+    calls = Counter()
+
+    def checked(source, target, matrix):
+        calls[(features._mesh_key(source), features._mesh_key(target), matrix.tobytes())] += 1
+        return original(source, target, matrix)
+
+    monkeypatch.setattr(features, "_moved_twin_checked", checked)
+    cache = ResultCache()
+    for _ in range(2):
+        features.forget_cache()
+        calls.clear()
+        result = evaluate(project.document, profile, sources=sources, cache=cache)
+        assert result.complete, result.scene.report.findings
+        assert calls, "ohne Bewegungsbeleg prüft dieser Lauf nichts"
+        assert all(count == 1 for count in calls.values()), calls

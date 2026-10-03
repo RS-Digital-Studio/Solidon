@@ -642,8 +642,7 @@ def test_geometry_markers_in_names_survive_export_and_import(
         root = ET.fromstring(container.read(threemf.MODEL_PATH))
     title = root.find(f"{{{CORE}}}metadata[@name='Title']")
     assert title is not None and title.text == name
-    # Beim Einzelkörper liest der Import eine einzige Standardfarbe
-    # absichtlich ohne Slot; der geschriebene Materialname bleibt dennoch Pflicht.
+    # Der geschriebene Materialname bleibt Pflicht, auch beim Einzelkörper.
     materials = root.findall(f"{{{CORE}}}resources/{{{CORE}}}basematerials/{{{CORE}}}base")
     assert [entry.get("name") for entry in materials] == [name]
     assert [entry.get("displaycolor") for entry in materials] == ["#FF0000"]
@@ -657,10 +656,10 @@ def test_geometry_markers_in_names_survive_export_and_import(
         assert actual.mesh.volume == pytest.approx(expected.mesh.volume)
         assert actual.mesh.raw.extents == pytest.approx(expected.mesh.raw.extents)
         assert actual.mesh.triangle_count == expected.mesh.triangle_count
-        if assembly:
-            assert [entry.name for entry in actual.slots] == [name]
-            assert actual.slots[0].colour == pytest.approx((1.0, 0.0, 0.0))
-            assert set(actual.mesh.slots) == {0}
+        # Auch der Einzelkörper behält seine Filamentwahl (gleiche Extruderzuordnung).
+        assert [entry.name for entry in actual.slots] == [name]
+        assert actual.slots[0].colour == pytest.approx((1.0, 0.0, 0.0))
+        assert set(actual.mesh.slots) == {0}
 
 
 def test_the_same_colour_becomes_the_same_extruder() -> None:

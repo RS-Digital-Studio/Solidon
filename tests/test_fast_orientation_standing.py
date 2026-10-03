@@ -122,7 +122,7 @@ def test_the_first_standing_heuristic_rank_wins_not_the_smallest_support_estimat
 
 
 @pytest.mark.parametrize("quality", ["draft", "fine"])
-def test_no_standing_pose_is_refused_with_an_action_and_keeps_the_input(
+def test_no_standing_pose_warns_with_an_action_and_keeps_the_input(
     profile: Profile, quality: Quality
 ) -> None:
     """Eine ganze kleine Würfelfläche ist kleiner als die profilgebundene Mindestauflage."""
@@ -134,14 +134,104 @@ def test_no_standing_pose_is_refused_with_an_action_and_keeps_the_input(
     vertices, faces = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
     source = SceneObject(id="obj_1", name="Kleiner Würfel", mesh=mesh)
 
-    with pytest.raises(orient.NoStandingOrientationError) as problem:
-        run_fast(source, profile, quality)
-
-    assert not isinstance(problem.value, orient.NoFittingOrientationError)
-    assert {action.id for action in problem.value.suggestions} - {"cancel"}
-    assert "steht" in str(problem.value.title).lower()
+    result = run_fast(source, profile, quality)
+    assert len(result.outputs) == 1
+    finding = next(item for item in result.findings if item.code == "orient.no_footing")
+    assert finding.object_id == source.id
+    assert {action.id for action in finding.suggestions} - {"cancel"}
     np.testing.assert_array_equal(mesh.raw.vertices, vertices)
     np.testing.assert_array_equal(mesh.raw.faces, faces)
+
+
+def test_a_sphere_does_not_prevent_the_other_body_from_being_oriented(profile: Profile) -> None:
+    """RM-326: Kugel R10 und Quader bleiben gemeinsam bearbeitbar; nur die Kugel warnt."""
+    sphere = SceneObject(
+        id="sphere", name="Kugel", mesh=MeshData.of(trimesh.creation.icosphere(radius=10.0))
+    )
+    box = SceneObject(
+        id="box", name="Quader", mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 50.0)))
+    )
+    spec = REGISTRY.get("orient_for_print")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in (sphere, box)}),
+            inputs=[sphere, box],
+            params=spec.params(thorough=False, arrange=False),
+            profile=profile,
+            quality="draft",
+            seed=41,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    assert len(result.outputs) == 2
+    assert [item.object_id for item in result.findings if item.code == "orient.no_footing"] == [
+        sphere.id
+    ]
+    assert result.outputs[1].mesh.bounds.size[2] == pytest.approx(20.0)
+
+
+def test_fast_copies_share_the_search_but_keep_their_own_attributes(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-410: Gleiche verschobene Körper suchen einmal; Namen und Material bleiben eigen."""
+    from app.core.geom.transform import apply, translation
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 50.0)))
+    copies = [
+        SceneObject(
+            id=f"copy_{index}",
+            name=f"Kopie {index}",
+            mesh=apply(mesh, translation((40.0 * index, 0.0, 0.0))),
+        )
+        for index in range(3)
+    ]
+    original = prepare_ops.orient_for_print
+    searched = []
+
+    def counted(*args, **kwargs):
+        searched.append(args[0])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "orient_for_print", counted)
+    spec = REGISTRY.get("orient_for_print")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in copies}),
+            inputs=copies,
+            params=spec.params(thorough=False, arrange=False),
+            profile=profile,
+            quality="draft",
+            seed=1,
+            progress=lambda fraction, text: None,
+            ask=lambda q, c: c[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    assert len(searched) == 1
+    assert [entry.name for entry in result.outputs] == [entry.name for entry in copies]
+    for output in result.outputs:
+        assert output.mesh.bounds.size[2] == pytest.approx(20.0)
+        assert output.mesh.volume == pytest.approx(20.0 * 30.0 * 50.0)
+
+
+def test_fast_orientation_stops_fitting_after_the_first_standing_pose(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-410: Schlechtere Ränge brauchen nach einem stehenden Gewinner keine Passung."""
+    original = MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 50.0)))
+    seen = []
+    fit = orient.fitting_transform
+
+    def recorded(mesh, *args, **kwargs):
+        seen.append(mesh)
+        return fit(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(orient, "fitting_transform", recorded)
+    result = orient.orient_for_print(original, printer=profile.printer, standing=lambda entry: True)
+    assert seen == [original]
+    assert result.mesh.bounds.size[2] == pytest.approx(20.0)
 
 
 def test_no_fitting_pose_keeps_its_distinct_refusal(

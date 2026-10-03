@@ -312,6 +312,7 @@ class NavigatorCallbacks(NamedTuple):
     on_camera: Callable[[], None]
     on_tilt: Callable[[int], None]
     on_end: Callable[[], None]
+    on_paint_end: Callable[[], None] = lambda: None
 
 
 class Navigator:
@@ -362,6 +363,13 @@ class Navigator:
 
     def set_scheme(self, scheme: NavigationScheme) -> None:
         self._scheme = scheme
+
+    def stop_painting(self) -> None:
+        """Beim Editorwechsel endet eine gehaltene Pinselgeste ohne späteren Auswahlklick."""
+        if self._painting:
+            self._painting = False
+            self._left_at = None
+            self._calls.on_paint_end()
 
     # --- Ereignisse -----------------------------------------------------------------
 
@@ -478,6 +486,7 @@ class Navigator:
                 # Klick, und der wählt gleich darunter aus.
                 self._calls.on_body_drag("end", event.x, event.y)
             if painted:
+                self._calls.on_paint_end()
                 # Die Züge sind schon beim Drücken und Ziehen gesetzt — der
                 # Klickpfad malte denselben Punkt ein zweites Mal.
                 return

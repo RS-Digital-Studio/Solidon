@@ -19,9 +19,10 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Werden Normteilmaße vor dem Sortieren geprüft und bleiben gültige Größen stabil geordnet? | `test_standards.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
+| Bleibt eine selbst aufgebrachte Textur eine Auswahl durch Bearbeiten, Undo/Redo, Projektdatei, Cache, Bewegung, Schnitt und Körperumwandlung? | `test_texture_lifecycle.py`; Stile, Feldgrenzen, Auswahl und Merkmalshandlungen in `test_texture_ops.py` |
 | Bestätigt eine synchrone Auswertung zuerst das alte Arbeiterende, und bleiben überholte Fragen nach dem Reset ungültig? | `test_evaluation.py` — echte Session-Methoden an Namespace, Ereignis/Faden, keine Qt-Instanz |
 | Jede Rückfallstufe einmal erzwungen? | `test_boolean.py` |
-| Wählt die schnelle FDM-Ausrichtung eine tragfähige Lage oder hält sie mit Befund an? | `test_fast_orientation_standing.py` — Korpusring, beide Güten, Profil, Abbruch und Resin-Ausnahme |
+| Wählt die schnelle FDM-Ausrichtung eine tragfähige Lage und lässt sie ohne Stand die Szene mit Befund weiterlaufen? | `test_fast_orientation_standing.py` — Korpusring, beide Güten, Profil, Abbruch, gleiche Körper und Resin-Ausnahme |
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
@@ -52,7 +53,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Wird eine gewählte Kante vor dem Verbrauchercache gebunden, und fragt eine Kollision? | `test_edge_binding.py`; die Fensterhälfte in `test_viewport_decisions.py` und `test_ui.py` |
 | Zylinder- und Rundflächenmaße aus den Originalpunkten, stabil unter starrer Bewegung? | `test_cylinder_measurements.py`, `test_round_surface_measurements.py` |
 | Sagen beide Kerne an einer angeschnittenen Bohrung dasselbe? | `test_partial_bores.py` |
-| Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen |
+| Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, getrennte Importfelder und deren unabhängige Bearbeitung, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen |
+| Ersetzt eine örtlich erkannte Textur die alten Einzelzellen auch nach Import, Speichern und Undo? | `test_local_detection.py` — echte Bereichssuche, reservierte Zellkennungen, leerer Cache und Plattencache; alte Zellbezüge halten mit Rückweg an |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
 | Bekommt ein Gewinde sein Gegenstück am anderen Teil, im Tabellenmaß und als ein Schritt? | `test_thread_counterpart.py`; das Fenster ohne Dialog in `test_counterpart_ui.py` |
@@ -68,6 +70,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Filamentlager, Buchungen und Verbrauch · im Fenster | `test_filament_inventory.py`, `test_filament_usage.py` · `test_filament_inventory_ui.py`, `test_filament_assignment.py`, `test_filament_usage_ui.py`, `test_filament_workflow.py` — isolierte Lagerdateien, nie der Nutzerbestand |
 | Zeichnet der Renderer, was der Vertrag verspricht? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py`, `test_render_factory.py`, `test_feature_label_layout.py` (`rendering`, nur beim Release; ohne Adapter ein Skip mit Grund); `test_render_shapes.py`, `test_navigator.py` ohne echten Renderer |
 | Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern, und teilen überlappende `undisturbed`-Aufrufe ihren GC-Schutz? | `test_leash.py` — Quellenprüfung und Mehrfaden-Gegenprobe |
+| Nachbau im Prüfbericht: Kandidaten, Vergleich, Verluste, Abbruch/Projektwechsel, Undo/Redo und Dateirundreise | `test_rebuild_ui.py`; Geometrievertrag in `test_rebuild.py` |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
 | Bleiben Dialoginhalt, Klappen und Aktionsleisten erreichbar und Fenster im Bildschirm? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; die Abläufe der Einstellungen in `test_ui_settings.py` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
@@ -98,6 +101,11 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 ## Stolperfallen
 
+- **Ungebundene Platzierungsdialoge und Viewport-Attrappen gehören der Fixture.**
+  Nach `PlacementFlow.dispose()` und `Session.release()` schließt sie beide
+  Qt-Wurzeln, meldet `deleteLater` an und stellt `DeferredDelete` zu, während
+  die Python-Hüllen noch gehalten werden. `close()` allein zerstört sie nicht;
+  ihr nativer Abbau darf nicht dem späteren zyklischen Sammler überlassen bleiben.
 - **`tests.helpers.exact_kernel()` steht vor jedem `OCP`-Import**, auch am
   Modulanfang: Lokal wird ein fehlender Kern so ein Skip, unter `CI` hält
   `conftest.py` an, statt dass sich die Dateien des exakten Kerns still

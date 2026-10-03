@@ -132,10 +132,9 @@ class DropArea(QPushButton):
     """
 
     fileDropped = Signal(Path)
+    filesDropped = Signal(object)
     urlDropped = Signal(str)
     """Ein Verweis aus dem Browser, gezogen statt heruntergeladen (§16.3)."""
-    leftOut = Signal(int)
-    """Wie viele weitere Dateien mitgezogen und nicht geöffnet wurden."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -308,9 +307,10 @@ class DropArea(QPushButton):
         self._set_hover(False)
         paths = accepted_paths(event)
         if paths:
-            self.fileDropped.emit(paths[0])
             if len(paths) > 1:
-                self.leftOut.emit(len(paths) - 1)
+                self.filesDropped.emit(paths)
+            else:
+                self.fileDropped.emit(paths[0])
             event.acceptProposedAction()
             return
         url = accepted_url(event)
@@ -549,25 +549,22 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
 
 
 def accepted_paths(event: QDragEnterEvent | QDropEvent) -> list[Path]:
-    """Alle fallengelassenen Dateien, mit denen diese Anwendung etwas anfangen
-    kann — in der Reihenfolge des Ziehens.
+    """Modelldateien in Ziehreihenfolge; eine Mehrfachauswahl bleibt vollständig.
 
-    Geöffnet wird weiter nur die erste; mehrere Dateien auf einmal sind
-    zurückgestellt (RM-131). Die Liste ist dafür da, dass die übrigen nicht
-    still wegfallen: Wer siebzehn Teile eines Schiffs zieht und eines
-    bekommt, soll es gesagt bekommen (:data:`DropArea.leftOut`).
+    Unbekannte Dateien in einer Auswahl erreichen ebenfalls den Importplan,
+    damit ein Fehler die ganze Auswahl benennt und nichts still verschwindet.
     """
     data = event.mimeData()
     if not data.hasUrls():
         return []
-    found: list[Path] = []
-    for url in data.urls():
-        if not url.isLocalFile():
-            continue
-        path = Path(url.toLocalFile())
-        if path.suffix.lower() in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
-            found.append(path)
-    return found
+    paths = [Path(url.toLocalFile()) for url in data.urls() if url.isLocalFile()]
+    if len(paths) > 1:
+        return paths
+    return [
+        path
+        for path in paths
+        if path.suffix.lower() in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX)
+    ]
 
 
 class StartActionCard(QPushButton):
@@ -826,11 +823,10 @@ class StartScreen(QWidget):
     hieß anders und stand in der Werkzeugleiste (Review 02.09.2026).
     """
     fileDropped = Signal(Path)
+    filesDropped = Signal(object)
     urlDropped = Signal(str)
     """Eine Adresse aus dem Browser ist hier gelandet — dieselbe Handlung wie
     eine Datei, nur liegt sie noch nicht auf der Platte (§16.3)."""
-    leftOut = Signal(int)
-    """Wie viele weitere Dateien mitgezogen und nicht geöffnet wurden."""
     forgetRequested = Signal(Path)
     """Ein Eintrag soll aus der Liste verschwinden — die Datei bleibt."""
     manualRequested = Signal()
@@ -921,8 +917,8 @@ class StartScreen(QWidget):
         drop = DropArea(self)
         self.drop_area = drop
         drop.fileDropped.connect(self.fileDropped)
+        drop.filesDropped.connect(self.filesDropped)
         drop.urlDropped.connect(self.urlDropped)
-        drop.leftOut.connect(self.leftOut)
         drop.clicked.connect(self.importRequested)
 
         # „Wo fange ich an?" steht im Handbuch — aber der Weg dorthin führte
@@ -1335,9 +1331,10 @@ class StartScreen(QWidget):
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
         paths = accepted_paths(event)
         if paths:
-            self.fileDropped.emit(paths[0])
             if len(paths) > 1:
-                self.leftOut.emit(len(paths) - 1)
+                self.filesDropped.emit(paths)
+            else:
+                self.fileDropped.emit(paths[0])
             event.acceptProposedAction()
             return
         url = accepted_url(event)

@@ -22,10 +22,12 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
 from app.i18n import TranslatableText, _, tr
+from app.ui.analysis_bar import GestureAnalysis
 from app.ui.labels import LengthSpin, choice_label
 from app.ui.style import NORMAL, TIGHT, make_primary
 
@@ -135,6 +137,7 @@ class SculptBar(QWidget):
         #: Was ihr im Weg steht — zu grobes Netz, zu dünne Wand. Leer, solange
         #: nichts im Weg steht: eine Warnung, die immer dasteht, ist keine.
         self.warning = QLabel("", self)
+        self.warning.setWordWrap(True)
 
         #: Die Handlung zur Warnung. Sie stand als Satz da — „erst gleichmäßig
         #: vernetzen" — und ließ den Nutzer allein damit: Sitzung verlassen,
@@ -154,7 +157,10 @@ class SculptBar(QWidget):
         make_primary(self.done)
         self.done.clicked.connect(self.finished)
 
-        layout = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        layout = QHBoxLayout()
+        outer.addLayout(layout)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(QLabel(tr("Werkzeug"), self))
         layout.addWidget(self.tool)
@@ -169,6 +175,8 @@ class SculptBar(QWidget):
         layout.addWidget(self.warning, stretch=1)
         layout.addWidget(self.refine)
         layout.addWidget(self.done)
+        self.analysis = GestureAnalysis(self)
+        outer.addWidget(self.analysis)
 
     # --- Ablesen ---------------------------------------------------------------
 
@@ -200,7 +208,11 @@ class SculptBar(QWidget):
         # Die Einzahl steht daneben, sie wird nicht gebildet (P0.1): Nach dem
         # ersten Zug stand hier „1 Züge, 1 Etappen".
         if strokes == 1:
-            self.state.setText(tr("Ein Zug, eine Etappe"))
+            self.state.setText(
+                tr("Ein Zug, eine Etappe")
+                if stages <= 1
+                else tr("Ein Zug, {stages} Etappen").format(stages=stages)
+            )
             return
         if stages == 1:
             self.state.setText(tr("{strokes} Züge, eine Etappe").replace("{strokes}", str(strokes)))

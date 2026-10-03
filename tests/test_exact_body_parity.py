@@ -24,6 +24,7 @@ from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import BaseParams, Feature, OpContext, OpResult, Profile, SceneObject, Source
+from app.core.units import EPS_GEOM
 from tests.helpers import exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -68,6 +69,16 @@ def _rectangle(width: float, height: float) -> str:
 # Quellen: test_brep, test_prepare, test_features, test_missing_ops und die
 # jeweiligen Familientests. Jede Zeile nennt einen konkreten gültigen Auftrag.
 CASES = [
+    # Der Einsatz entsteht aus Behälter und Deckel desselben Kerns; beide
+    # Eingänge bleiben unverändert stehen (``keeps_inputs``).
+    Case(
+        "add_container_insert",
+        "container",
+        {"shape": "round", "diameter": 60.0, "height": 40.0},
+        (("mesh", ("mesh", "mesh", "mesh")), ("brep", ("brep", "brep", "brep"))),
+        "container_insert",
+        (27.0, 3.0),
+    ),
     # Ausrichten ist eine starre Bewegung wie Verschieben und Drehen; bis zum
     # 22.09.2026 machte es aus einem exakten Körper trotzdem ein Netz.
     Case(
@@ -203,6 +214,15 @@ CASES = [
         CREATE_MESH,
         "volume",
         700.0 * math.pi,
+    ),
+    Case(
+        "create_container",
+        "none",
+        {"shape": "round", "lid": "push", "diameter": 60.0, "height": 40.0},
+        # Ohne Vorgabe rechnet der Behälter exakt, wo der Kern verfügbar ist.
+        (("none", ("brep", "brep")),),
+        "container",
+        math.pi * (30.0**2 * 40.0 - 27.0**2 * 37.0),
     ),
     Case(
         "create_cylinder",
@@ -1017,6 +1037,27 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
         return [
             dataclasses.replace(entry, id=f"obj_{i}") for i, entry in enumerate(made.outputs, 1)
         ]
+    if source == "container":
+        from app.core.scene.cancel import NeverCancelled
+        from app.core.types import Scene
+
+        spec = REGISTRY.get("create_container")
+        made = spec.fn(
+            OpContext(
+                Scene(),
+                [],
+                spec.params(shape="round", lid="push", kernel=kind),
+                profile,
+                "fine",
+                None,
+                lambda *_: None,
+                _unexpected_question,
+                NeverCancelled(),
+            )
+        )
+        return [
+            dataclasses.replace(entry, id=f"obj_{i}") for i, entry in enumerate(made.outputs, 1)
+        ]
     if source == "cube":
         return [_object(_native_box(20.0, 20.0, 20.0, (0.0, 0.0, -10.0)), kind)]
     if source == "host":
@@ -1428,6 +1469,24 @@ def _assert_invariant(
         assert [hole.params["diameter"] for hole in holes] == pytest.approx([2.25, 2.25])
         assert outputs[0].mesh.volume > 1600.0
         assert 1400.0 < outputs[1].mesh.volume < 1600.0
+    elif rule == "container":
+        body, cap = outputs
+        assert body.mesh.bounds.size[:2] == pytest.approx((60.0, 60.0), abs=0.06)
+        assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+        assert body.mesh.bounds.maximum[2] == pytest.approx(40.0, abs=1e-6)
+        assert body.mesh.volume == pytest.approx(expected, rel=0.005)
+        # Der Steckdeckel trägt 2,4 mm über dem Rand und greift in die Öffnung.
+        assert cap.mesh.bounds.maximum[2] == pytest.approx(42.4, abs=1e-6)
+        assert cap.mesh.bounds.minimum[2] < 40.0
+    elif rule == "container_insert":
+        inner, floor = expected
+        body, cap, insert = outputs
+        assert body.mesh.volume == pytest.approx(inputs[0].mesh.volume, rel=1e-9)
+        assert cap.mesh.volume == pytest.approx(inputs[1].mesh.volume, rel=1e-9)
+        bounds = insert.mesh.bounds
+        assert max(abs(value) for value in (*bounds.minimum[:2], *bounds.maximum[:2])) < inner
+        assert bounds.minimum[2] >= floor - EPS_GEOM
+        assert bounds.maximum[2] <= cap.mesh.bounds.minimum[2] + EPS_GEOM
     elif rule == "lid":
         lid = outputs[1]
         assert lid.mesh.bounds.size[:2] == pytest.approx(expected, abs=0.03)

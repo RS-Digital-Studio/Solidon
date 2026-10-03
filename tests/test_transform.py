@@ -265,7 +265,8 @@ def test_the_transformations_are_registered_completely() -> None:
     for name in ("translate_object", "rotate_object", "scale_object", "place_on_bed"):
         spec = REGISTRY.get(name)
         assert spec.category == "transform"
-        assert (spec.consumes, spec.produces) == (1, 1)
+        expected = (-1, -1) if name in {"translate_object", "rotate_object"} else (1, 1)
+        assert (spec.consumes, spec.produces) == expected
         assert str(spec.doc)
 
 
@@ -1018,3 +1019,272 @@ def test_the_centre_anchor_is_called_what_it_computes() -> None:
             f"{name}: die Kurzhilfe verspricht den Schwerpunkt"
         )
         assert "Mitte" in str(about.doc), f"{name}: die Kurzhilfe nennt die Mitte nicht"
+
+
+@pytest.mark.parametrize(
+    "reference,expected",
+    [
+        ("bed", (0.0, 0.0, 5.0)),
+        ("centre", (0.0, 0.0, 0.0)),
+        ("corner_000", (10.0, 15.0, 5.0)),
+        ("corner_001", (10.0, 15.0, -5.0)),
+        ("corner_010", (10.0, -15.0, 5.0)),
+        ("corner_011", (10.0, -15.0, -5.0)),
+        ("corner_100", (-10.0, 15.0, 5.0)),
+        ("corner_101", (-10.0, 15.0, -5.0)),
+        ("corner_110", (-10.0, -15.0, 5.0)),
+        ("corner_111", (-10.0, -15.0, -5.0)),
+    ],
+)
+def test_absolute_translation_recomputes_reference_after_upstream_size_change(
+    profile, reference, expected
+):
+    """An absolute target remains fixed when an earlier dimension changes."""
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Box", [OperationDraft(op="create_box", params={"width": 20, "depth": 30, "height": 10})]
+    )
+    history.apply(
+        "Position",
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"mode": "absolute", "reference": reference, "x": 0, "y": 0, "z": 0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, detect_features=False)
+    assert result.stopped_at is None
+    assert result.scene.objects["obj_1"].mesh.bounds.centre == pytest.approx(expected)
+    history.change_params(1, {"width": 40})
+    changed = evaluate(project.document, profile, detect_features=False)
+    from app.core.geom.transform import reference_point
+
+    assert reference_point(list(changed.scene.objects.values()), reference) == pytest.approx(
+        (0, 0, 0)
+    )
+
+
+def test_absolute_translation_moves_a_group_as_one_assembly(profile):
+    """All selected bodies retain their relative positions, with one undo."""
+    from app.core.geom.transform import reference_point
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Boxes", [OperationDraft(op="create_box"), OperationDraft(op="create_box")])
+    history.apply(
+        "Offset", [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50})]
+    )
+    history.apply(
+        "Position",
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1", "obj_2"),
+                params={"mode": "absolute", "x": 0, "y": 0, "z": 0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, detect_features=False)
+    assert result.stopped_at is None
+    bodies = list(result.scene.objects.values())
+    assert reference_point(bodies) == pytest.approx((0, 0, 0))
+    assert bodies[1].mesh.bounds.centre[0] - bodies[0].mesh.bounds.centre[0] == pytest.approx(50)
+    history.undo()
+    previous = evaluate(project.document, profile, detect_features=False)
+    assert previous.scene.objects["obj_2"].mesh.bounds.centre[0] == pytest.approx(50)
+
+
+@pytest.mark.parametrize("angles", [(0, 0, 0), (20, 30, 40), (0, 90, 0), (180, 0, -90)])
+def test_absolute_rotation_reaches_target_after_earlier_rotation_and_reload(
+    profile, tmp_path, angles
+):
+    """Absolute angles refer to the creation frame and survive a project reload."""
+    import numpy as np
+
+    from app.core.geom.transform import composed, orientation_matrix, rotation
+    from app.core.scene.project import load, new_project, save
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Box", [OperationDraft(op="create_box")])
+    history.apply(
+        "Turn",
+        [OperationDraft(op="rotate_object", inputs=("obj_1",), params={"axis": "y", "angle": 25})],
+    )
+    history.apply(
+        "Target",
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1",),
+                params={
+                    "mode": "absolute",
+                    **dict(zip(("angle_x", "angle_y", "angle_z"), angles, strict=True)),
+                },
+            )
+        ],
+    )
+    target = composed(rotation("z", angles[2]), rotation("y", angles[1]), rotation("x", angles[0]))[
+        :3, :3
+    ]
+    for active in (project, load(save(project, tmp_path / "rotation.p3d"))):
+        result = evaluate(active.document, profile, detect_features=False)
+        assert result.stopped_at is None
+        assert np.allclose(orientation_matrix(result.scene.objects["obj_1"]), target)
+    history.change_params(2, {"axis": "x", "angle": 72})
+    result = evaluate(project.document, profile, detect_features=False)
+    assert np.allclose(orientation_matrix(result.scene.objects["obj_1"]), target)
+
+
+def test_absolute_rotation_preserves_a_group_and_undo_restores_it(profile):
+    """The first selected body defines one rotation for the whole assembly."""
+    import numpy as np
+
+    from app.core.scene.project import new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Bodies", [OperationDraft(op="create_box"), OperationDraft(op="create_sphere")])
+    history.apply(
+        "Offset", [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50})]
+    )
+    before = evaluate(project.document, profile, detect_features=False)
+    history.apply(
+        "Turn",
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1", "obj_2"),
+                params={"mode": "absolute", "angle_z": 90},
+            )
+        ],
+    )
+    after = evaluate(project.document, profile, detect_features=False)
+    assert after.stopped_at is None
+    difference = (
+        np.asarray(after.scene.objects["obj_2"].mesh.bounds.centre)
+        - after.scene.objects["obj_1"].mesh.bounds.centre
+    )
+    assert difference[:2] == pytest.approx((0, 50))
+    history.undo()
+    undone = evaluate(project.document, profile, detect_features=False)
+    assert undone.object_hashes == before.object_hashes
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        None,
+        ((-1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)),
+        ((1, 0.2, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)),
+    ],
+)
+def test_absolute_rotation_explains_unknown_reflected_or_sheared_frames(frame):
+    """An unproven frame offers relative rotation instead of guessed angles."""
+    from app.core.errors import ValidationError
+    from app.core.geom.transform import orientation_angles
+    from app.core.types import SceneObject
+
+    body = SceneObject(id="one", name="Body", mesh=cube(), frame=frame)
+    with pytest.raises(ValidationError) as caught:
+        orientation_angles(body)
+    assert "relativ" in str(caught.value.detail)
+
+
+def test_absolute_translation_binds_feature_to_the_first_input(profile):
+    """A group reference resolves on its first input and moves every selected body."""
+    from app.core.geom.transform import reference_point
+    from app.core.registry import needed_inputs
+    from app.core.scene import orphans
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Feature, OpContext, Operation, Scene, SceneObject
+
+    bodies = [
+        SceneObject(
+            id=key,
+            name=key,
+            mesh=cube(),
+            features={
+                "anchor": Feature(
+                    id="anchor", kind="plane", provenance="generated", params={"centre": centre}
+                )
+            },
+        )
+        for key, centre in (("a", (5.0, 6.0, 7.0)), ("b", (15.0, 16.0, 17.0)))
+    ]
+    spec = REGISTRY.get("translate_object")
+    assert needed_inputs(spec) == 1
+    params = {
+        "mode": "absolute",
+        "reference": "feature",
+        "reference_feature": "anchor",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+    }
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={body.id: body for body in bodies}),
+            inputs=bodies,
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=0,
+            progress=lambda *_: None,
+            ask=lambda _q, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    assert reference_point(result.outputs, "feature", "anchor") == pytest.approx((0, 0, 0))
+    assert reference_point(result.outputs[1:], "feature", "anchor") == pytest.approx((10, 10, 10))
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[Operation(id=1, op="translate_object", inputs=["a", "b"], params=params)],
+    )
+    references = orphans.references(document)
+    assert len(references) == 1
+    assert references[0].ref.object_id == "a"
+
+
+@pytest.mark.parametrize(
+    "reference", ["centre", "bed", *(f"corner_{index:03b}" for index in range(8))]
+)
+def test_absolute_quarter_turn_uses_the_selected_reference(profile, reference):
+    """A quarter turn preserves the selected pivot, including every box corner."""
+    from app.core.geom.transform import reference_point
+    from app.core.scene.project import new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Box", [OperationDraft(op="create_box", params={"width": 20, "depth": 30, "height": 10})]
+    )
+    before = evaluate(project.document, profile, detect_features=False)
+    body = before.scene.objects["obj_1"]
+    px, py, _pz = reference_point([body], reference)
+    cx, cy, cz = body.mesh.bounds.centre
+    history.apply(
+        "Turn",
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1",),
+                params={"mode": "absolute", "about": reference, "angle_z": 90},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, detect_features=False)
+    assert result.stopped_at is None
+    assert result.scene.objects["obj_1"].mesh.bounds.centre == pytest.approx(
+        (px - (cy - py), py + (cx - px), cz)
+    )
+    assert result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((30, 20, 10))

@@ -132,6 +132,10 @@ EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
 #: ``organizer → perceive`` nutzt beim Bauen den gemeinsamen Ebenennachweis
 #: für Originaldreiecke. Der Import bleibt innerhalb des Flächenhelfers;
 #: eine Kopie der Prüfung oder eine neue eifrige Importkante ist nicht nötig.
+#: ``scene → brep`` misst beim Auflösen einer gespeicherten Flächenbindung
+#: Punkt und Normale auf der nativen Originalfläche. Die Tessellation belegt
+#: die Auswahl, ersetzt aber keine Tangente der exakten Fläche. Der optionale
+#: Kern wird erst im BRep-Zweig angefordert; der eifrige Kreis wächst nicht.
 LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
     {
         ("brep", "knowledge"),
@@ -149,6 +153,7 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("knowledge", "sketch"),
         ("organizer", "perceive"),
         ("registry", "knowledge"),
+        ("scene", "brep"),
         ("scene", "organizer"),
         # Die Flächenkontur einer Netzfläche (RM-188 P3.4): Die Randringe und
         # die Rundmerkmale, die einen Ring als Kreis belegen, stehen in

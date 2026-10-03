@@ -1028,6 +1028,10 @@ class NewFilamentDialog(QDialog):
         editor.setFocus()
         if isinstance(editor, QLineEdit):
             editor.selectAll()
+        self._scroll.ensureWidgetVisible(editor)
+
+        # Aufklappen ändert erst beim nächsten Layout den Rollbereich.
+        QTimer.singleShot(0, self, lambda: self._scroll.ensureWidgetVisible(editor))
         return True
 
     def _mark_stock_edited(self, *_args: object) -> None:
@@ -1911,7 +1915,7 @@ class FilamentPanel(QWidget):
         self.settings_button = QPushButton(tr("Druckwerte …"), self)
         self.settings_button.setEnabled(False)
         self.settings_button.clicked.connect(self._request_override)
-        self.delete_button = QPushButton(tr("Filament löschen"), self)
+        self.delete_button = QPushButton(tr("Spule archivieren"), self)
         self.delete_button.setIcon(icon("delete", self.delete_button))
         self.delete_button.setEnabled(False)
         self.delete_button.clicked.connect(self._remove)
@@ -2345,7 +2349,7 @@ class FilamentPanel(QWidget):
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
         menu.addAction(tr("Ändern …"), self._edit)
-        action = menu.addAction(icon("delete", self), tr("Filament löschen"), self._remove)
+        action = menu.addAction(icon("delete", self), tr("Spule archivieren"), self._remove)
         action.setToolTip(removal_hint())
         try:
             menu.exec(self.list.viewport().mapToGlobal(where))

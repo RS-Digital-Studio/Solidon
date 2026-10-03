@@ -1761,9 +1761,9 @@ def _support_blocker(
         code="export.support_blocker",
         severity="info",
         message=_(
-            "In „{name}“ liegen Decken in schmalen Kanälen. Dort sperrt Solidon die "
-            "Stützen im Slicer — sie kämen nicht mehr heraus, und die Decken tragen "
-            "sich selbst.",
+            "In „{name}“ liegen Decken in schmalen Kanälen. Die gewählte Kanalsperre hält dort "
+            "Stützen fern, die sich nach dem Druck schlecht entfernen ließen. Prüfen Sie im "
+            "Slicer, ob die Decken ohne Stützen gedruckt werden können.",
             name=source_text(entry.name),
         ),
         values={

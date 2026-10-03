@@ -95,7 +95,7 @@ class BrepBoxParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Ausdehnung in X."),
+        doc=_("Breite des Körpers vor dem Ausrichten."),
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -103,7 +103,7 @@ class BrepBoxParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Ausdehnung in Y."),
+        doc=_("Tiefe des Körpers vor dem Ausrichten."),
     )
     height: float = param(
         title=_("Höhe"),
@@ -111,7 +111,7 @@ class BrepBoxParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Ausdehnung in Z, also nach oben."),
+        doc=_("Abstand von der Unterseite zur Oberseite des Körpers."),
     )
     # Derselbe Bezugspunkt wie am Netz-Zwilling (P2.8): Seit der exakte Quader
     # der sichtbare ist, darf ihm kein Feld fehlen, das der Kunde hatte.
@@ -178,7 +178,7 @@ class BrepCylinderParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Höhe nach oben, von der Standfläche aus."),
+        doc=_("Abstand von der Unterseite zur Oberseite des Körpers."),
     )
     name: str = param(
         title=_("Name"),
@@ -198,10 +198,7 @@ class BrepCylinderParams(PositionedPrimitiveParams):
     # **Der Vorteil gehört in den Satz, nicht in die Abkürzung.** „B-Rep" sagt
     # einem Kunden nichts; was er wissen will, ist, was er damit kann. Der
     # Quader nebenan sagte es, der Zylinder nicht.
-    doc=_(
-        "Legt einen Zylinder mit echten Kanten an, stehend auf dem Druckbett — an sie lassen "
-        "sich später Fasen und Verrundungen setzen."
-    ),
+    doc=_("Legt einen Zylinder auf dem Druckbett oder auf einer gewählten Fläche an."),
 )
 def create_brep_cylinder(ctx: OpContext) -> OpResult:
     params = cast(BrepCylinderParams, ctx.params)
@@ -227,7 +224,7 @@ class BrepConeParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.0,
         maximum=1000.0,
-        doc=_("Durchmesser auf dem Druckbett. Null macht diese Seite zur Spitze."),
+        doc=_("Durchmesser der Unterseite. Null macht diese Seite zur Spitze."),
     )
     top_diameter: float = param(
         title=_("Oberer Durchmesser"),
@@ -243,7 +240,7 @@ class BrepConeParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Höhe nach oben, von der Standfläche aus."),
+        doc=_("Abstand von der Unterseite zur Oberseite des Körpers."),
     )
     name: str = param(
         title=_("Name"),
@@ -261,8 +258,7 @@ class BrepConeParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt einen Kegel oder Kegelstumpf mit einer echten Kegelfläche an, stehend auf dem "
-        "Druckbett — an seine Kanten lassen sich später Fasen und Verrundungen setzen."
+        "Legt einen Kegel oder Kegelstumpf auf dem Druckbett oder auf einer gewählten Fläche an."
     ),
 )
 def create_brep_cone(ctx: OpContext) -> OpResult:
@@ -301,7 +297,7 @@ class BrepSphereParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Außendurchmesser. Die Kugel sitzt auf dem Druckbett auf."),
+        doc=_("Außendurchmesser des Körpers."),
     )
     name: str = param(
         title=_("Name"),
@@ -318,7 +314,7 @@ class BrepSphereParams(PositionedPrimitiveParams):
     params=BrepSphereParams,
     consumes=0,
     produces=1,
-    doc=_("Legt eine Kugel mit einer echten Kugelfläche an, aufsitzend auf dem Druckbett."),
+    doc=_("Legt eine Kugel auf dem Druckbett oder auf einer gewählten Fläche an."),
 )
 def create_brep_sphere(ctx: OpContext) -> OpResult:
     params = cast(BrepSphereParams, ctx.params)
@@ -367,8 +363,7 @@ class BrepTorusParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt einen Ring mit einer echten Ringfläche an, liegend auf dem Druckbett — der "
-        "Querschnitt bleibt auch beim Vergrößern wirklich rund."
+        "Legt einen geschlossenen runden Ring auf dem Druckbett oder auf einer gewählten Fläche an."
     ),
 )
 def create_brep_torus(ctx: OpContext) -> OpResult:
@@ -451,9 +446,8 @@ class BrepTubeParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt ein Rohr mit echten Kreisflächen an, stehend auf dem Druckbett — bemaßt über "
-        "die Wandstärke oder den Innendurchmesser; an seine Kanten lassen sich später Fasen "
-        "und Verrundungen setzen."
+        "Legt ein Rohr auf dem Druckbett oder auf einer gewählten Fläche an, bemaßt über die "
+        "Wandstärke oder den Innendurchmesser."
     ),
 )
 def create_brep_tube(ctx: OpContext) -> OpResult:
@@ -581,8 +575,8 @@ class ThreadParams(PositionedPrimitiveParams):
         minimum=0.25,
         maximum=8.0,
         doc=_(
-            "Höhenzuwachs je Umdrehung. Grob gedruckte Gewinde wollen eine "
-            "grobe Steigung — unter einem Millimeter druckt kaum ein Drucker sauber."
+            "Höhenzuwachs je Umdrehung. Ob sich die Gewindegänge sauber drucken lassen, hängt "
+            "von Drucker, Material und Einstellungen ab; prüfen Sie ein kleines Passungsstück."
         ),
     )
     length: float = param(

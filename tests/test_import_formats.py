@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import trimesh
-from PIL import Image
 
 from app.core.errors import ValidationError
 from app.core.export import threemf
@@ -28,7 +27,7 @@ from app.core.ingest.plan import MODEL_SUFFIXES, import_plan
 from app.core.scene import History, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Profile, Source
-from tests.helpers import exact_kernel
+from tests.helpers import exact_kernel, pbr_glb
 
 
 def _box() -> trimesh.Trimesh:
@@ -259,19 +258,8 @@ def test_gltf_companions_are_rejected_before_base64_exceeds_the_limit(
     assert caught.value.suggestions
 
 
-def _pbr_glb() -> bytes:
-    body = _box()
-    span = np.ptp(body.vertices[:, :2], axis=0)
-    uv = (body.vertices[:, :2] - body.vertices[:, :2].min(axis=0)) / span
-    image = Image.new("RGB", (2, 2))
-    image.putdata([(255, 0, 0), (0, 0, 255), (255, 0, 0), (0, 0, 255)])
-    material = trimesh.visual.material.PBRMaterial(name="Rot und Blau", baseColorTexture=image)
-    body.visual = trimesh.visual.TextureVisuals(uv=uv, material=material)
-    return _bytes(trimesh.Scene({"Farbig": body}).export(file_type="glb"))
-
-
 def test_a_gltf_pbr_texture_survives_import_and_normalisation() -> None:
-    imported = read_model(_pbr_glb(), ".glb")
+    imported = read_model(pbr_glb(), ".glb")
     result = normalise(imported, "mm")
 
     colours = face_colours(result.mesh.raw)
@@ -281,7 +269,7 @@ def test_a_gltf_pbr_texture_survives_import_and_normalisation() -> None:
 
 
 def test_imported_colours_survive_the_evaluation_cache() -> None:
-    imported = read_model(_pbr_glb(), ".glb")
+    imported = read_model(pbr_glb(), ".glb")
     normalised = normalise(imported, "mm").mesh
 
     restored = MeshData.from_bytes(normalised.to_bytes())

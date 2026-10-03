@@ -53,6 +53,7 @@ from app.core.knowledge.profiles import for_object
 from app.core.knowledge.strength import spring_load
 from app.core.log import get_logger
 from app.core.registry import Registry, op_params, param, register_op
+from app.core.registry.params import SurfaceBoundParams
 from app.core.types import (
     BaseParams,
     BRepBody,
@@ -96,7 +97,7 @@ GRIP_FIELD = "grip"
 #: bekommt sie ohnehin eingetragen; wer den Baustein danach bewegt, nimmt das
 #: Gizmo (§18.11). ``at_feature`` bleibt vorn, denn das ist die fachliche
 #: Frage „wohin" und keine abgelesene Zahl.
-_PLACEMENT: tuple[tuple[str, str, Any], ...] = (
+_PLACEMENT: tuple[tuple[str, Any, Any], ...] = (
     (
         "x",
         "float",
@@ -226,6 +227,15 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
     ),
 )
 
+#: Die gespeicherte Flächenbindung (§17.1): gewählte Fläche, Ansatzpunkt und
+#: die beiden Kantenabstände. Sie reist an jedem Baustein mit, gehört aber
+#: nicht zu den Ortsangaben, die der Agent liest — die Bindung entsteht am
+#: Fenster. Deshalb eine eigene Gruppe neben :data:`_PLACEMENT`, dessen Namen
+#: ``registry.surfaces.PART_PLACEMENT_PARAMS`` wörtlich spiegelt.
+_SURFACE_BINDING: tuple[tuple[str, Any, Any], ...] = tuple(
+    (entry.name, entry.type, entry) for entry in SurfaceBoundParams.fields()
+)
+
 
 #: Der Namensraum der Bausteinoperationen. Als Konstante, weil ihn zwei
 #: Richtungen brauchen: :func:`op_name` setzt ihn, :func:`part_of` nimmt ihn ab.
@@ -273,7 +283,7 @@ def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams
         normal = (f"surface_{normal[0]}", f"surface_{normal[1]}", f"surface_{normal[2]}")
     names = dict(zip(("nx", "ny", "nz"), normal, strict=True))
     occupied = owned | set(normal)
-    for field, _annotation, _declaration in _PLACEMENT:
+    for field, _annotation, _declaration in (*_PLACEMENT, *_SURFACE_BINDING):
         if field in names:
             continue
         public = field
@@ -293,7 +303,7 @@ def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams
             if entry.default is not dataclasses.MISSING
             else dataclasses.field(metadata=entry.metadata)
         )
-    for name, annotation, declaration in _PLACEMENT:
+    for name, annotation, declaration in (*_PLACEMENT, *_SURFACE_BINDING):
         if standalone and name == "at_feature":
             continue
         name = names.get(name, name)
@@ -313,7 +323,7 @@ def placement_fields(params: type[BaseParams]) -> dict[str, str]:
     declared = getattr(params, "_placement_fields", None)
     if declared is not None:
         return dict(declared)
-    return {name: name for name, _annotation, _declaration in _PLACEMENT}
+    return {name: name for name, _annotation, _declaration in (*_PLACEMENT, *_SURFACE_BINDING)}
 
 
 def _placement_value(params: Any, name: str, default: Any = None) -> Any:
@@ -472,7 +482,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         # (``_host_split``), und ein schräg gesetzter abtragender Baustein
         # öffnet bis über seine Fläche (``_opened_to_the_face``): Ein Ergebnis
         # von davor trüge weder den Satz noch die freie Öffnung.
-        cache_version=f"{_result_version(spec)}:targets:5",
+        cache_version=f"{_result_version(spec)}:targets:6",
         params=params,
         consumes=1,
         produces=1,
@@ -1002,7 +1012,15 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     lip = None
     rim = None
     if subtractive:
-        rim = _over_the_rim(body, placed, anchor, direction, cancelled=ctx.cancelled)
+        mouth, outward = _mouth_frame(ctx.params, anchor, direction, spec.keeps_up)
+        rim = _over_the_rim(
+            body,
+            placed,
+            mouth,
+            outward,
+            surface=_surface_at_anchor(source, mouth),
+            cancelled=ctx.cancelled,
+        )
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     addition = spec.host_add(part_params) if spec.host_add is not None else None
@@ -1151,8 +1169,46 @@ SPRING_ARMS: Final[dict[str, tuple[str, str, str]]] = {
 }
 
 
+def _mouth_frame(
+    params: Any, anchor: Vec3, direction: Vec3 | None, keeps_up: bool
+) -> tuple[Vec3, Vec3]:
+    """Tatsächlicher Mündungsort und Außenrichtung nach der gespeicherten Platzierung."""
+    frame = _matrix(params, anchor, direction=direction, keeps_up=keeps_up)
+    point = (float(frame[0][3]), float(frame[1][3]), float(frame[2][3]))
+    outward = (float(frame[0][2]), float(frame[1][2]), float(frame[2][2]))
+    length = math.hypot(*outward)
+    return point, (outward[0] / length, outward[1] / length, outward[2] / length)
+
+
+def _surface_at_anchor(source: SceneObject, anchor: Vec3) -> Feature | None:
+    """Die belegte Fläche am Ansatzpunkt, auch bei einer freien Platzierung."""
+    import numpy as np
+
+    from app.core.geom.mesh import on_surface
+
+    body = as_mesh_data(source.mesh)
+    _points, distances, triangles = on_surface(body.raw, np.asarray([anchor], dtype=np.float64))
+    if float(distances[0]) > MAX_FACET_SAG:
+        return None
+    triangle = int(triangles[0])
+    return next(
+        (
+            feature
+            for feature in source.features.values()
+            if feature.kind == "face" and triangle in feature.face_indices
+        ),
+        None,
+    )
+
+
 def _over_the_rim(
-    body: Mesh, tool: Mesh, anchor: Vec3, direction: Vec3 | None, *, cancelled: CancelToken
+    body: Mesh,
+    tool: Mesh,
+    anchor: Vec3,
+    direction: Vec3 | None,
+    *,
+    surface: Feature | None = None,
+    cancelled: CancelToken,
 ) -> Finding | None:
     """Reicht ein abtragender Baustein seitlich über den Rand seiner Fläche?
 
@@ -1164,12 +1220,14 @@ def _over_the_rim(
     jeden abtragenden Baustein.
 
     **Gefragt wird am Umriss, nicht am Hüllquader.** Jeder Punkt des
-    Werkzeugs unter der Mündung wird auf die Mündungsebene gelegt und von
+    Werkzeugs bis einschließlich der Mündung wird auf die Mündungsebene gelegt und von
     außen entlang der Flächennormalen beschossen: Trifft der Strahl den Körper
     nicht, liegt unter diesem Teil des Umrisses keine Fläche — er reicht über
     den Rand. Eine gewölbte Fläche, etwa eine Zylinderwand, trifft der Strahl
     weiter, solange der Umriss über ihr liegt; ein Durchgangsloch tritt nach
     hinten aus und nicht seitlich, sein Umriss liegt ganz über der Fläche.
+    Bei einer gewählten ebenen Fläche zählt nur ihr eigener Umriss: Eine
+    Seitenwand hinter ihrem Rand ist keine Fortsetzung des Rinnenbodens.
     """
     if direction is None:
         return None
@@ -1185,18 +1243,32 @@ def _over_the_rim(
     origin = np.asarray(anchor, dtype=float)
     points = np.asarray(as_mesh_data(tool).raw.vertices, dtype=float)
     depth = np.sum((points - origin) * normal, axis=1)
-    below = depth < -100.0 * EPS_GEOM
+    below = depth <= EPS_GEOM
     if not below.any():
         return None
     footprint = points[below] - depth[below][:, None] * normal
+    # Ein Werkzeug kann über die Mündung hinausreichen. Seine Kanten tragen
+    # dann den Umriss an der Ebene, auch ohne einen Eckpunkt genau bei null.
+    edges = np.asarray(as_mesh_data(tool).raw.edges_unique)
+    edge_depth = depth[edges]
+    crossing = (edge_depth[:, 0] < 0.0) & (edge_depth[:, 1] > 0.0)
+    crossing |= (edge_depth[:, 1] < 0.0) & (edge_depth[:, 0] > 0.0)
+    if crossing.any():
+        cuts = edges[crossing]
+        fractions = depth[cuts[:, 0]] / (depth[cuts[:, 0]] - depth[cuts[:, 1]])
+        mouth = points[cuts[:, 0]] + fractions[:, None] * (points[cuts[:, 1]] - points[cuts[:, 0]])
+        footprint = np.concatenate((footprint, mouth))
     host = as_mesh_data(body)
     low, high = host.bounds.minimum, host.bounds.maximum
     reach = float(np.sqrt(np.sum((np.asarray(high) - np.asarray(low)) ** 2))) + float(
         np.max(-depth[below])
     )
     starts = footprint + reach * normal
+    triangles = np.asarray(host.raw.triangles, dtype=float)
+    if surface is not None and surface.kind == "face" and surface.face_indices:
+        triangles = triangles[list(surface.face_indices)]
     distances, _hit = ray_hits_batch(
-        np.asarray(host.raw.triangles, dtype=float),
+        triangles,
         starts,
         np.broadcast_to(-normal, starts.shape).copy(),
         cancelled=cancelled,
@@ -1205,8 +1277,28 @@ def _over_the_rim(
     missed = ~np.isfinite(distances)
     if not missed.any():
         return None
+    if missed.all():
+        # Liegt der ganze Umriss neben dem Körper, ragt nichts über einen Rand:
+        # Der Baustein verfehlt seinen Träger, und das sagen schon
+        # ``boolean.without_effect`` und ``parts.hanging_loose``. Bei einer
+        # gewählten Fläche entscheidet der ganze Körper, nicht nur ihr Umriss.
+        if surface is None or not (surface.kind == "face" and surface.face_indices):
+            return None
+        whole, _hit = ray_hits_batch(
+            np.asarray(host.raw.triangles, dtype=float),
+            starts,
+            np.broadcast_to(-normal, starts.shape).copy(),
+            cancelled=cancelled,
+        )
+        if not np.isfinite(whole).any():
+            return None
     outside = footprint[missed]
     farthest = outside[int(np.argmax(np.sum((outside - origin) ** 2, axis=1)))]
+    suggestion = (
+        _rim_placement_suggestion(triangles, footprint, anchor, direction, cancelled)
+        if surface is not None and surface.kind == "face"
+        else None
+    )
     return Finding(
         code="part.over_the_edge",
         severity="warning",
@@ -1216,8 +1308,49 @@ def _over_the_rim(
             "kleinere Maße."
         ),
         location=(float(farthest[0]), float(farthest[1]), float(farthest[2])),
+        values={"suggestion": suggestion} if suggestion is not None else {},
         # Regel 17: Die Lage steht im Schritt; die Stelle zeigt, wo er hinausragt.
         suggestions=(CORRECT_INPUT, SHOW_LOCATION),
+    )
+
+
+def _rim_placement_suggestion(
+    triangles: Any, footprint: Any, origin: Vec3, normal: Vec3, cancelled: CancelToken
+) -> TranslatableText | None:
+    """Eine mittige Lage nur vorschlagen, wenn der ganze Umriss auf die Fläche passt."""
+    import numpy as np
+    from shapely import union_all
+    from shapely.affinity import translate
+    from shapely.geometry import MultiPoint, Polygon
+
+    from app.core.sketch.planes import frame_of
+    from app.core.units import format_length
+
+    frame = frame_of(normal, origin)
+    basis = np.column_stack((frame.x_axis, frame.y_axis))
+    face_points = (triangles - np.asarray(origin)) @ basis
+    tool_points = (footprint - np.asarray(origin)) @ basis
+    cancelled.raise_if_cancelled()
+    area = union_all([Polygon(points) for points in face_points])
+    outline = MultiPoint(tool_points).convex_hull
+    cancelled.raise_if_cancelled()
+    if area.is_empty or outline.is_empty:
+        return None
+    low_u, low_v, high_u, high_v = area.bounds
+    tool_low_u, tool_low_v, tool_high_u, tool_high_v = outline.bounds
+    du = (low_u + high_u - tool_low_u - tool_high_u) / 2.0
+    dv = (low_v + high_v - tool_low_v - tool_high_v) / 2.0
+    moved = translate(outline, xoff=du, yoff=dv)
+    # Auch innere Ausschnitte gehören zum Flächenrand. Ein Hüllquader allein
+    # wäre hier wieder derselbe falsche Beleg wie bei der ursprünglichen Warnung.
+    if not area.buffer(EPS_GEOM).covers(moved):
+        return None
+    shift = basis @ np.asarray((du, dv))
+    return _(
+        "Zusätzlicher Versatz in die Fläche: X {x}, Y {y}, Z {z}.",
+        x=format_length(float(shift[0])),
+        y=format_length(float(shift[1])),
+        z=format_length(float(shift[2])),
     )
 
 
@@ -1474,7 +1607,15 @@ def _insert_at_exact(
     lip = None
     rim = None
     if subtractive:
-        rim = _over_the_rim(body, placed, anchor, direction, cancelled=ctx.cancelled)
+        mouth, outward = _mouth_frame(ctx.params, anchor, direction, spec.keeps_up)
+        rim = _over_the_rim(
+            body,
+            placed,
+            mouth,
+            outward,
+            surface=_surface_at_anchor(source, mouth),
+            cancelled=ctx.cancelled,
+        )
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     added_features: dict[str, Feature] = {}

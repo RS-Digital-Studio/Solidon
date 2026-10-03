@@ -28,12 +28,115 @@ den NumPy-Weg und für die Ringe GEOS; gebaut wird es mit
 
 import numpy as np
 
-from libc.math cimport fabs
+from libc.math cimport fabs, frexp, isfinite, ldexp, nearbyint
+from libc.float cimport DBL_EPSILON
+from libc.stdlib cimport qsort
 
 #: Version 2 nimmt einen optionalen Abbruchrückruf als fünftes Argument an.
 #: Version 3 richtet jedes Segment so, dass das Material links liegt (RM-485):
 #: Ein Bau der Version 2 liefert ungerichtete Segmente und wird nicht genommen.
 PLANE_SEGMENTS_API = 3
+
+
+cdef int _compare_span(const void* first, const void* second) noexcept nogil:
+    cdef double left = (<double*>first)[0]
+    cdef double right = (<double*>second)[0]
+    return (left > right) - (left < right)
+
+
+cdef Py_ssize_t _span_bound(const double[::1] values, double target, bint upper) noexcept nogil:
+    cdef Py_ssize_t low = 0, high = values.shape[0], middle
+    while low < high:
+        middle = low + (high - low) // 2
+        if values[middle] < target or (upper and values[middle] <= target):
+            low = middle + 1
+        else:
+            high = middle
+    return low
+
+
+def cuts_along(const double[::1] across_head, const double[::1] across_tail,
+               const double[::1] along_head, const double[::1] along_tail,
+               const double[::1] positions, const double[::1] normal,
+               const double[::1] direction, double epsilon):
+    """Paritätspaare je Abtastlage, mit denselben Formeln wie im NumPy-Weg.
+
+    Je Kante werden nur die echt gekreuzten Lagen besucht. Der Speicher gehört
+    NumPy; auch bei einer Ausnahme bleibt kein manuell reservierter Puffer.
+    """
+    cdef Py_ssize_t edges = across_head.shape[0], columns = positions.shape[0]
+    if (across_tail.shape[0] != edges or along_head.shape[0] != edges
+            or along_tail.shape[0] != edges or normal.shape[0] != 2
+            or direction.shape[0] != 2):
+        raise ValueError("Die Projektionsfelder müssen dieselbe Länge und zwei Achsen haben.")
+    order_array = np.argsort(np.asarray(positions), kind="stable")
+    sorted_array = np.asarray(positions)[order_array]
+    counts_array = np.zeros(columns, dtype=np.intp)
+    cdef Py_ssize_t[::1] order = order_array, counts = counts_array
+    cdef double[::1] sorted_positions = sorted_array
+    cdef Py_ssize_t edge, column, slot, lo, hi, total = 0, start, count, pair, output = 0
+    cdef double head, tail, position, lower, upper, share, first, second
+    with nogil:
+        for edge in range(edges):
+            head, tail = across_head[edge], across_tail[edge]
+            lower = head if head < tail else tail
+            upper = tail if head < tail else head
+            lo = _span_bound(sorted_positions, lower, True)
+            hi = _span_bound(sorted_positions, upper, False)
+            for slot in range(lo, hi):
+                position = sorted_positions[slot]
+                if (head - position) * (tail - position) < 0.0:
+                    counts[order[slot]] += 1
+                    total += 1
+    if total == 0:
+        return None
+    fill_array = np.empty(columns, dtype=np.intp)
+    along_array = np.empty(total, dtype=np.float64)
+    cdef Py_ssize_t[::1] fill = fill_array
+    cdef double[::1] along = along_array
+    starts_array = np.empty((total // 2, 2), dtype=np.float64)
+    ends_array = np.empty((total // 2, 2), dtype=np.float64)
+    lengths_array = np.empty(total // 2, dtype=np.float64)
+    cdef double[:, ::1] starts = starts_array, ends = ends_array
+    cdef double[::1] lengths = lengths_array
+    with nogil:
+        start = 0
+        for column in range(columns):
+            fill[column] = start
+            start += counts[column]
+        for edge in range(edges):
+            head, tail = across_head[edge], across_tail[edge]
+            lower = head if head < tail else tail
+            upper = tail if head < tail else head
+            lo = _span_bound(sorted_positions, lower, True)
+            hi = _span_bound(sorted_positions, upper, False)
+            for slot in range(lo, hi):
+                position = sorted_positions[slot]
+                if (head - position) * (tail - position) < 0.0:
+                    column = order[slot]
+                    share = (position - head) / (tail - head)
+                    along[fill[column]] = along_head[edge] + share * (along_tail[edge] - along_head[edge])
+                    fill[column] += 1
+        start = 0
+        for column in range(columns):
+            count = counts[column]
+            if count >= 2:
+                qsort(&along[start], count, sizeof(double), _compare_span)
+                position = positions[column]
+                for pair in range(count // 2):
+                    first = along[start + 2 * pair]
+                    second = along[start + 2 * pair + 1]
+                    if second - first > epsilon:
+                        starts[output, 0] = position * normal[0] + first * direction[0]
+                        starts[output, 1] = position * normal[1] + first * direction[1]
+                        ends[output, 0] = position * normal[0] + second * direction[0]
+                        ends[output, 1] = position * normal[1] + second * direction[1]
+                        lengths[output] = second - first
+                        output += 1
+            start += count
+    if output == 0:
+        return None
+    return starts_array[:output], ends_array[:output], lengths_array[:output]
 
 
 cdef Py_ssize_t _lower_bound(double[::1] values, double target) noexcept nogil:
@@ -361,3 +464,193 @@ def chain_rings(long long[:, ::1] node,
     if broken:
         return -1, 0
     return ring, written
+
+
+cdef double _project(const double[:, :] points, Py_ssize_t index,
+                     double x, double y, double z) noexcept nogil:
+    # Getrennte Grundoperationen wie NumPy, auch bei erlaubter FMA-Kontraktion.
+    cdef volatile double result = x * points[index, 0]
+    cdef volatile double product = y * points[index, 1]
+    result = result + product
+    product = z * points[index, 2]
+    result = result + product
+    return result
+
+
+def orientation_scores(
+    const double[:, :] vertices, const double[:, :] normals,
+    const double[:, :] centres, const double[:] areas,
+    const long long[:] area_steps, int area_exponent,
+    const double[:, :] verticals, double threshold,
+):
+    """Dieselben Grundoperationen und IntegerGrid-Summen ohne große Zwischenfelder."""
+    cdef Py_ssize_t count = normals.shape[0]
+    cdef Py_ssize_t number, index
+    cdef double x, y, z, low, high, value, normal, centre, largest
+    cdef double[:] lifted = np.empty(count, dtype=np.float64)
+    cdef double[:, :] result = np.zeros((verticals.shape[0], 4), dtype=np.float64)
+    cdef long long footprint, overhang, support
+    cdef int exponent
+    cdef bint flat
+    if (vertices.shape[1] != 3 or normals.shape[1] != 3 or centres.shape[1] != 3
+        or verticals.shape[1] != 3 or centres.shape[0] != count
+        or areas.shape[0] != count or area_steps.shape[0] != count):
+        raise ValueError("orientation array shapes")
+    if not vertices.shape[0]:
+        return np.asarray(result)
+    with nogil:
+        for number in range(verticals.shape[0]):
+            x, y, z = verticals[number, 0], verticals[number, 1], verticals[number, 2]
+            low = high = _project(vertices, 0, x, y, z)
+            for index in range(1, vertices.shape[0]):
+                value = _project(vertices, index, x, y, z)
+                if value < low:
+                    low = value
+                if value > high:
+                    high = value
+            footprint = overhang = 0
+            largest = 0.0
+            for index in range(count):
+                normal = _project(normals, index, x, y, z)
+                centre = _project(centres, index, x, y, z)
+                flat = normal < -0.999 and centre < low + 0.05
+                lifted[index] = 0.0
+                if flat:
+                    footprint += area_steps[index]
+                if normal < threshold and not flat:
+                    overhang += area_steps[index]
+                    value = fabs((areas[index] * -normal) * (centre - low))
+                    lifted[index] = value
+                    if value > largest:
+                        largest = value
+            result[number, 0] = ldexp(<double>footprint, -area_exponent)
+            result[number, 1] = ldexp(<double>overhang, -area_exponent)
+            result[number, 2] = high - low
+            if largest > 0.0 and isfinite(largest):
+                frexp(<double>count * largest, &exponent)
+                exponent = 60 - exponent
+                support = 0
+                for index in range(count):
+                    support += <long long>nearbyint(ldexp(lifted[index], exponent))
+                result[number, 3] = ldexp(<double>support, -exponent)
+    return np.asarray(result)
+
+
+cdef bint _ring_tree(
+    const double[:, ::1] xy,
+    const long long[::1] ring_of,
+    long long[::1] starts,
+    long long[::1] ends,
+    double[::1] areas,
+    long long[::1] depths,
+    long long[::1] parents,
+) noexcept nogil:
+    # Nur eine kleine Ringgruppe. Bei Randkontakt oder ungesichertem Vorzeichen
+    # bleibt die robuste GEOS-Prädikatsrechnung zuständig.
+    cdef Py_ssize_t count = xy.shape[0], rings = starts.shape[0]
+    cdef Py_ssize_t i, j, k, after, child, container, current
+    cdef double px, py, ax, ay, bx, by, left, right, det, bound, total, area_terms
+    cdef bint inside
+    cdef bint held[16][16]
+    if not count or rings > 16 or not rings:
+        return False
+    starts[0] = 0
+    current = 0
+    for i in range(count):
+        if not isfinite(xy[i, 0]) or not isfinite(xy[i, 1]):
+            return False
+        if ring_of[i] != current:
+            if ring_of[i] != current + 1 or current + 1 >= rings:
+                return False
+            ends[current] = i
+            current += 1
+            starts[current] = i
+    ends[current] = count
+    if current + 1 != rings:
+        return False
+    for i in range(rings):
+        if ends[i] - starts[i] < 3:
+            return False
+        total = area_terms = 0.0
+        for j in range(starts[i], ends[i]):
+            after = j + 1 if j + 1 < ends[i] else starts[i]
+            left = xy[j, 0] * xy[after, 1]
+            right = xy[after, 0] * xy[j, 1]
+            total += left - right
+            area_terms += fabs(left) + fabs(right)
+        # Eine konservative Rundungsschranke sichert auch den Umlaufsinn ab;
+        # bei großer Verschiebung und winziger Fläche entscheidet GEOS.
+        if not isfinite(total) or not isfinite(area_terms):
+            return False
+        if fabs(total) <= 16 * DBL_EPSILON * (ends[i] - starts[i]) * area_terms:
+            return False
+        areas[i] = total
+        depths[i] = 0
+        parents[i] = -1
+    for child in range(rings):
+        px = xy[starts[child], 0]
+        py = xy[starts[child], 1]
+        for container in range(rings):
+            held[child][container] = False
+            if child == container:
+                continue
+            inside = False
+            for k in range(starts[container], ends[container]):
+                after = k + 1 if k + 1 < ends[container] else starts[container]
+                ax, ay = xy[k, 0], xy[k, 1]
+                bx, by = xy[after, 0], xy[after, 1]
+                if (ay > py) != (by > py):
+                    left = (bx - ax) * (py - ay)
+                    right = (by - ay) * (px - ax)
+                    det = left - right
+                    bound = 16 * DBL_EPSILON * (fabs(left) + fabs(right))
+                    if not isfinite(det) or fabs(det) <= bound:
+                        return False
+                    if (det > 0) == (by > ay):
+                        inside = not inside
+                elif min(ax, bx) <= px <= max(ax, bx) and min(ay, by) <= py <= max(ay, by):
+                    # Auch ein waagerechter Rand und ein oberer Eckpunkt
+                    # sind Kontakte, obwohl der halboffene Strahl sie auslässt.
+                    left = (bx - ax) * (py - ay)
+                    right = (by - ay) * (px - ax)
+                    bound = 16 * DBL_EPSILON * (fabs(left) + fabs(right))
+                    if fabs(left - right) <= bound:
+                        return False
+            held[child][container] = inside
+            if inside:
+                depths[child] += 1
+    for child in range(rings):
+        for container in range(rings):
+            if held[child][container] and depths[container] == depths[child] - 1:
+                parents[child] = container
+    return True
+
+
+def ring_nesting(const double[:, ::1] coordinates, const long long[::1] ring_of):
+    """Ringgrenzen und Elternschaft, oder kein Nachweis bei unsicherer Geometrie.
+
+    Die Flächen- und Strahldeterminanten müssen ihren Rundungsfehler deutlich
+    übersteigen. Geometrische Randkontakte und mehr als 16 Ringe bleiben beim
+    GEOS-Index. Die Gültigkeit der fertig verschachtelten Fläche prüft weiterhin
+    der Aufrufer; dieser Helfer ersetzt nur die gleichförmigen Vorarbeiten.
+    """
+    cdef Py_ssize_t count = coordinates.shape[0], rings
+    if coordinates.shape[1] != 2 or ring_of.shape[0] != count:
+        raise ValueError("Jede Ringkennung braucht genau einen zweidimensionalen Punkt.")
+    if not count or ring_of[count - 1] < 0 or ring_of[count - 1] >= 16:
+        return None
+    rings = ring_of[count - 1] + 1
+    starts_array = np.empty(rings, dtype=np.int64)
+    ends_array = np.empty(rings, dtype=np.int64)
+    areas_array = np.empty(rings, dtype=np.float64)
+    depths_array = np.empty(rings, dtype=np.int64)
+    parents_array = np.empty(rings, dtype=np.int64)
+    cdef long long[::1] starts = starts_array, ends = ends_array
+    cdef long long[::1] depths = depths_array, parents = parents_array
+    cdef double[::1] areas = areas_array
+    cdef bint proven
+    with nogil:
+        proven = _ring_tree(coordinates, ring_of, starts, ends, areas, depths, parents)
+    if not proven:
+        return None
+    return starts_array, ends_array, areas_array, depths_array, parents_array

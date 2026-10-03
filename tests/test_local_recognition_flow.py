@@ -356,6 +356,7 @@ def test_surface_picker_keys_use_device_pixels_and_keep_unrelated_keys(ratio):
         renderer=object(),
         _device_pixels=lambda value: value * ratio,
         _place_surface_picker=lambda: placements.append(True),
+        _draw=lambda: None,
     )
 
     def press(key, modifier=Qt.KeyboardModifier.NoModifier, repeat=False):
@@ -377,44 +378,50 @@ def test_surface_picker_keys_use_device_pixels_and_keep_unrelated_keys(ratio):
     assert not press(Qt.Key.Key_Right)
 
 
-def test_surface_picker_position_is_clamped_and_drawn_in_logical_pixels():
-    """Eine kleine Ansicht hält den Treffer im Bild und das Kreuz darüber.
-
-    Das Kreuz sind vier Arme um eine freie Mitte (RM-238): Die Mitte liegt in
-    Qt-Punkten beim gehaltenen Gerätepixel geteilt durch den Faktor.
-    """
+@pytest.mark.parametrize("ratio", (1.0, 1.5, 2.0))
+def test_surface_picker_position_is_clamped_and_drawn_in_logical_pixels(ratio):
+    """Die Grafik trägt vier zweifarbige Arme; Mitte und Tastatur bleiben frei."""
     from types import SimpleNamespace
 
+    import numpy as np
+
     from app.ui.viewport import RETICLE_ARM, RETICLE_GAP, RETICLE_THICKNESS, Viewport
+    from tests.render_fakes import RecordingRenderer
 
     placed: list[tuple[int, int, int, int]] = []
-
-    def arm() -> SimpleNamespace:
-        return SimpleNamespace(
-            setGeometry=lambda *geometry: placed.append(geometry),
-            show=lambda: None,
-            raise_=lambda: None,
-        )
-
-    arms = tuple(arm() for _side in range(4))
+    mark = SimpleNamespace(
+        setGeometry=lambda *geometry: placed.append(geometry),
+        show=lambda: None,
+        raise_=lambda: None,
+    )
+    renderer = RecordingRenderer()
+    renderer.size = (201, 101)
     view = SimpleNamespace(
         _surface_picker=lambda x, y: None,
         _surface_picker_point=(500.0, -10.0),
-        _surface_picker_mark=arms[0],
-        _surface_picker_arms=arms,
-        renderer=SimpleNamespace(view_size=lambda: (201, 101), widget=None),
-        _device_ratio=lambda: 2.0,
+        _surface_picker_mark=mark,
+        _surface_picker_items=[],
+        renderer=renderer,
+        _device_ratio=lambda: ratio,
     )
     Viewport._place_surface_picker(view)
     assert view._surface_picker_point == (200.0, 0.0)
-    half = RETICLE_THICKNESS // 2
-    reach = RETICLE_GAP + RETICLE_ARM
-    assert placed == [
-        (100 - half, 0 - reach, RETICLE_THICKNESS, RETICLE_ARM),
-        (100 - half, 0 + RETICLE_GAP, RETICLE_THICKNESS, RETICLE_ARM),
-        (100 - reach, 0 - half, RETICLE_ARM, RETICLE_THICKNESS),
-        (100 + RETICLE_GAP, 0 - half, RETICLE_ARM, RETICLE_THICKNESS),
-    ], "die Mitte bleibt frei, die Arme liegen um den Treffer"
+    assert len(placed) == 1 and placed[0][2:] == (1, 1), "nur ein Fokuspunkt bleibt als Widget"
+    assert len(renderer.items) == 2
+    for inset, item in enumerate(renderer.items):
+        screen = np.asarray([renderer.world_to_display(tuple(p))[:2] for p in item.points])
+        screen = (screen - (200.0, 0.0)) / ratio
+        assert np.all(np.max(np.abs(screen), axis=1) >= RETICLE_GAP + inset)
+        assert np.max(np.abs(screen)) == pytest.approx(RETICLE_GAP + RETICLE_ARM - inset)
+        assert np.ptp(screen[:6, 0]) == pytest.approx(RETICLE_THICKNESS - 2 * inset)
+        style = renderer.drawn[inset][1]["style"]
+        assert style.keep_in_front and not style.pickable and not style.lighting
+    before = [item.points.copy() for item in renderer.items]
+    view._surface_picker_point = (60.0, 40.0)
+    Viewport._place_surface_picker(view)
+    assert len(renderer.items) == 2, "Bewegen verwendet dieselben Grafikpuffer"
+    for old, item in zip(before, renderer.items, strict=True):
+        assert item.updates == 1 and not np.array_equal(item.points, old)
 
 
 def test_ending_the_surface_picker_gives_the_keyboard_back_to_the_view():
@@ -440,7 +447,8 @@ def test_ending_the_surface_picker_gives_the_keyboard_back_to_the_view():
     view = SimpleNamespace(
         _surface_picker=lambda x, y: None,
         _surface_picker_mark=mark,
-        _surface_picker_arms=(),
+        _surface_picker_items=(),
+        _draw=lambda: None,
         setFocus=lambda _reason: happened.append("Ansicht fokussiert"),
     )
     holder["focus"] = mark
@@ -459,21 +467,20 @@ def test_keyboard_surface_choice_opens_local_recognition_and_cancel_hides_the_cr
     local_window, qt_app, monkeypatch
 ):
     """Pfeile und Eingabe erreichen dieselbe Vorschau wie ein Modellklick."""
-    from types import SimpleNamespace
-
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
+
+    from tests.render_fakes import RecordingRenderer
 
     window = local_window
     viewport = window.viewport
     flow = window.local_features()
     # Der echte Renderer gehört zur visuellen Release-Abnahme; hier wird nur
     # der Anschluss der Qt-Tasten an die bestehende Originaltrefferprüfung geprüft.
-    monkeypatch.setattr(
-        viewport,
-        "renderer",
-        SimpleNamespace(view_size=lambda: (800, 600), device_ratio=lambda: 1.0, widget=None),
-    )
+    renderer = RecordingRenderer()
+    renderer.size = (800, 600)
+    monkeypatch.setattr(viewport, "renderer", renderer)
+    monkeypatch.setattr(viewport, "_draw", lambda: None)
     hits = []
     original_hit = surface_hit(window)
 
@@ -494,6 +501,7 @@ def test_keyboard_surface_choice_opens_local_recognition_and_cancel_hides_the_cr
     flow.invalidate()
     assert viewport._surface_picker_mark.isHidden()
     assert viewport._surface_picker is None
+    assert all(not item.visible() for item in viewport._surface_picker_items)
 
 
 def test_recognize_fully_reopens_the_question_of_its_load_step(local_window, monkeypatch):

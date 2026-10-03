@@ -1407,8 +1407,15 @@ def test_a_generated_chapter_shows_its_title_in_the_window_too(qt_app: QApplicat
     window.show_page(manual.reference_key("holes"))
     reference = window.text.toPlainText()
     assert reference.startswith(str(CATEGORIES["holes"])), reference[:80]
-    # Der Kategoriename darf im Fließtext vorkommen; nur die Titelzeile zählt.
-    assert reference.splitlines().count(str(CATEGORIES["holes"])) == 1, "und nicht zweimal"
+    # Der Kategoriename kann auch ein Feldtitel sein; nur wirkliche
+    # Kapitelüberschriften zählen, keine gleichlautenden Klartextzeilen.
+    headings = []
+    block = window.text.document().begin()
+    while block.isValid():
+        if block.blockFormat().headingLevel() == 1:
+            headings.append(block.text())
+        block = block.next()
+    assert headings.count(str(CATEGORIES["holes"])) == 1, "und nicht zweimal"
 
 
 # --- Der erzeugte Referenzteil (Konzept Teil 7) ---------------------------------

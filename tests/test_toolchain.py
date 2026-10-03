@@ -3833,3 +3833,285 @@ def test_the_message_hook_finds_the_interpreter_from_a_worktree() -> None:
     assert assignments, "der Hook wählt keinen Interpreter mehr"
     assert all(line.startswith('PY="$wurzel/') for line in assignments), assignments
     assert "--git-common-dir" in hook
+
+
+@pytest.fixture
+def screen_capture_probe(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Bildgriff und Fensterbesitz kontrollieren, ohne ein Fenster aufzubauen."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QPoint, QRect
+
+    from tools import make_figures
+
+    events: list[str] = []
+    images: list[Any] = []
+    owners = iter(["", ""])
+    clock = [0.0]
+
+    class Image:
+        def __init__(self) -> None:
+            self.number = len(images)
+            self.isNull = lambda: False
+
+        def save(self, path: str) -> bool:
+            events.append(f"save:{self.number}")
+            Path(path).write_text(str(self.number), encoding="utf-8")
+            return True
+
+    def grab(*args: Any) -> Any:
+        events.append(f"grab:{args}")
+        image = Image()
+        images.append(image)
+        return image
+
+    def covered(*args: Any) -> str:
+        events.append("check")
+        return next(probe.owners)
+
+    screen = SimpleNamespace(grabWindow=grab, geometry=lambda: QRect(200, 300, 1000, 1000))
+    widget = SimpleNamespace(
+        screen=lambda: screen,
+        winId=lambda: 42,
+        rect=lambda: QRect(0, 0, 500, 400),
+        mapToGlobal=lambda point: point + QPoint(240, 350),
+        window=lambda: widget,
+        raise_=lambda: events.append("raise"),
+        activateWindow=lambda: events.append("activate"),
+        grab=lambda: grab("widget"),
+    )
+    probe = SimpleNamespace(
+        module=make_figures, widget=widget, events=events, images=images, owners=owners, clock=clock
+    )
+    monkeypatch.setattr(make_figures, "foreign_window_over", covered)
+    monkeypatch.setattr(make_figures.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(make_figures, "settle", lambda *args: clock.__setitem__(0, clock[0] + 1))
+    return probe
+
+
+def test_screen_capture_waits_for_a_free_window_and_checks_the_taken_image(
+    screen_capture_probe: Any,
+) -> None:
+    probe = screen_capture_probe
+    probe.owners = iter(["Fremdes Projekt", "", ""])
+    image = probe.module.grab_uncovered(probe.widget)
+    assert image is probe.images[0]
+    assert probe.events == ["check", "raise", "activate", "check", "grab:(42,)", "check"]
+
+
+def test_screen_capture_discards_a_foreign_window_arriving_between_checks(
+    screen_capture_probe: Any,
+) -> None:
+    probe = screen_capture_probe
+    probe.owners = iter(["", "Andere Sitzung", "", ""])
+    image = probe.module.grab_uncovered(probe.widget)
+    assert image is probe.images[1]
+    assert probe.events == ["check", "grab:(42,)", "check"] * 2
+
+
+def test_screen_capture_bounds_the_wait_before_any_picture(screen_capture_probe: Any) -> None:
+    from itertools import repeat
+
+    probe = screen_capture_probe
+    probe.owners = repeat("Andere Sitzung")
+    with pytest.raises(SystemExit, match="Andere Sitzung") as error:
+        probe.module.grab_uncovered(probe.widget, seconds=1.0)
+    assert "--schirm N" in str(error.value)
+    assert not probe.images
+    assert probe.clock[0] <= 2.0
+
+
+def test_screen_capture_bounds_repeated_changes_during_the_picture(
+    screen_capture_probe: Any,
+) -> None:
+    probe = screen_capture_probe
+    probe.owners = iter(["", "Wechselndes Fenster"] * 10)
+    with pytest.raises(SystemExit, match="wurde nicht gespeichert"):
+        probe.module.grab_uncovered(probe.widget)
+    assert len(probe.images) == 10
+    assert not any(event.startswith("save:") for event in probe.events)
+
+
+def test_screen_capture_checks_the_same_crop_before_and_after(
+    screen_capture_probe: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtCore import QRect
+
+    probe = screen_capture_probe
+    area = QRect(-10, 20, 510, 300)
+    checked: list[Any] = []
+    monkeypatch.setattr(
+        probe.module, "foreign_window_over", lambda widget, rect: checked.append(rect) or ""
+    )
+    probe.module.grab_uncovered(probe.widget, area)
+    assert checked == [area, area]
+    assert "grab:(0, 30, 70, 510, 300)" in probe.events
+
+
+def test_screen_capture_rejects_an_empty_image(
+    screen_capture_probe: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    probe = screen_capture_probe
+    monkeypatch.setattr(
+        probe.widget.screen(), "grabWindow", lambda *args: SimpleNamespace(isNull=lambda: True)
+    )
+    with pytest.raises(SystemExit, match=r"sichtbar machen.*wiederholen"):
+        probe.module.grab_uncovered(probe.widget)
+
+
+@pytest.mark.parametrize("covered", [False, True])
+def test_handbook_screen_capture_keeps_the_old_file_when_the_picture_is_covered(
+    screen_capture_probe: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, covered: bool
+) -> None:
+    from types import SimpleNamespace
+
+    probe = screen_capture_probe
+    target = tmp_path / "main-window.png"
+    monkeypatch.chdir(tmp_path)
+    target.write_text("vorher", encoding="utf-8")
+    monkeypatch.setattr(
+        probe.module.figures, "find", lambda key: SimpleNamespace(path=lambda language: target)
+    )
+    probe.owners = iter(["", "Fremdes Fenster"] * 10 if covered else ["", ""])
+    if covered:
+        with pytest.raises(SystemExit, match="nicht gespeichert"):
+            probe.module.shoot(probe.widget, "main-window", "de", from_screen=True)
+        assert target.read_text(encoding="utf-8") == "vorher"
+    else:
+        probe.module.shoot(probe.widget, "main-window", "de", from_screen=True)
+        assert target.read_text(encoding="utf-8") == "0"
+        assert probe.events[-1] == "save:0"
+
+
+def test_handbook_widget_capture_needs_no_screen_ownership(
+    screen_capture_probe: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from types import SimpleNamespace
+
+    probe = screen_capture_probe
+    target = tmp_path / "dialog.png"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        probe.module.figures, "find", lambda key: SimpleNamespace(path=lambda language: target)
+    )
+    probe.owners = iter([])
+    probe.module.shoot(probe.widget, "dialog", "de")
+    assert probe.events == ["grab:('widget',)", "save:0"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "make_gallery",
+        "make_feature_images",
+        "make_video",
+        "make_longform_video",
+        "make_workshop_videos",
+        "make_web_images",
+    ],
+)
+def test_screen_capture_consumers_cannot_bypass_the_common_guard(name: str) -> None:
+    """Jeder native Griff passiert die gemeinsame Vor- und Nachprüfung."""
+    tree = ast.parse((_ROOT / "tools" / f"{name}.py").read_text(encoding="utf-8"))
+    direct = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "grabWindow"
+    ]
+    assert not direct, f"{name}: ungeschützte Bildschirmaufnahme in Zeilen {direct}"
+
+
+def test_screen_capture_abort_reaches_the_caller_without_taking_a_picture(
+    screen_capture_probe: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    probe = screen_capture_probe
+
+    def interrupted(*args: Any) -> str:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(probe.module, "foreign_window_over", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        probe.module.grab_uncovered(probe.widget)
+    assert not probe.images
+
+
+def test_screen_capture_without_waiting_rejects_a_covered_diagnostic(
+    screen_capture_probe: Any,
+) -> None:
+    probe = screen_capture_probe
+    probe.owners = iter(["Andere Sitzung"])
+    with pytest.raises(SystemExit, match="Andere Sitzung"):
+        probe.module.grab_uncovered(probe.widget, seconds=0.0)
+    assert probe.clock[0] == 0.0
+    assert not probe.images
+
+
+@pytest.mark.parametrize("owner_offset,title", [(0, ""), (1, "Andere Sitzung"), (1, "")])
+def test_screen_capture_ownership_uses_processes_and_pointer_sized_window_handles(
+    monkeypatch: pytest.MonkeyPatch, owner_offset: int, title: str
+) -> None:
+    import ctypes
+    from ctypes import wintypes
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QPoint, QRect
+
+    from tools import make_figures
+
+    calls: list[tuple[int, int]] = []
+    handle = (1 << 48) + 42
+
+    def at(point: Any) -> int:
+        calls.append((point.x, point.y))
+        return handle
+
+    def process(window: int, owner: Any) -> int:
+        assert window == handle
+        owner._obj.value = os.getpid() + owner_offset
+        return 1
+
+    def ancestor(window: int, mode: int) -> int:
+        assert window == handle and mode == 2
+        return handle
+
+    def text(window: int, buffer: Any, limit: int) -> int:
+        assert window == handle and limit == 200
+        buffer.value = title
+        return len(title)
+
+    api = SimpleNamespace(
+        WindowFromPoint=at,
+        GetWindowThreadProcessId=process,
+        GetAncestor=ancestor,
+        GetWindowTextW=text,
+    )
+    monkeypatch.setattr(make_figures.sys, "platform", "win32")
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=api), raising=False)
+    widget = SimpleNamespace(
+        rect=lambda: QRect(0, 0, 1000, 500),
+        mapToGlobal=lambda point: point + QPoint(-1000, 50),
+    )
+    found = make_figures.foreign_window_over(widget)
+    if owner_offset:
+        assert found == (title or f"ein Fenster des Prozesses {os.getpid() + owner_offset}")
+        assert len(calls) == 1
+    else:
+        assert not found
+        assert len(calls) == make_figures.COVER_GRID**2
+    assert api.GetWindowThreadProcessId.argtypes[0] is wintypes.HWND
+    assert api.GetAncestor.argtypes[0] is wintypes.HWND
+    assert api.GetWindowTextW.argtypes[0] is wintypes.HWND
+    assert all(x < 0 and y >= 50 for x, y in calls)
+
+
+def test_screen_capture_retries_share_one_deadline(screen_capture_probe: Any) -> None:
+    probe = screen_capture_probe
+    probe.owners = iter(["Vorher", "", "Währenddessen", "Vorher", "", "Währenddessen"])
+    with pytest.raises(SystemExit, match="nicht gespeichert"):
+        probe.module.grab_uncovered(probe.widget, seconds=2.0)
+    assert probe.clock[0] == 2.0
+    assert len(probe.images) == 2

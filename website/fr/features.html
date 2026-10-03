@@ -109,8 +109,7 @@
           <p>À l’ouverture, Solidon3D cherche dans le maillage ce qui fut un
           jour de la conception : perçages, tenons, fraisures, dômes et
           cuvettes, congés, gorges, filetages, faces planes et arêtes
-          ouvertes. Chaque caractéristique trouvée reçoit une identité qui
-          survit aux étapes suivantes — et un clic affiche ses valeurs <b>mesurées</b>, sous forme de cotes dans la vue et, à droite, dans le panneau Sélection&nbsp;: position,
+          ouvertes. Chaque caractéristique trouvée reçoit une identité utilisée comme référence dans les étapes suivantes — et un clic affiche ses valeurs <b>mesurées</b>, sous forme de cotes dans la vue et, à droite, dans le panneau Sélection&nbsp;: position,
           diamètre, profondeur, axe.</p>
           <p class="note">Changer un nombre, c’est l’opération.
           <b>Pas de mode, pas de second dialogue</b> — et l’aperçu dans l’image
@@ -120,8 +119,7 @@
           décaler un perçage de trois millimètres voulait dire le boucher et en
           percer un autre à de nouvelles coordonnées — deux étapes, six nombres
           à la main, et l’identité était perdue. C’est maintenant une seule
-          étape, et chaque ajustement qui pointe vers ce perçage garde sa
-          référence.</p>
+          étape, et les ajustements continuent de référencer ce perçage. Les références qui ne peuvent plus être résolues sont signalées.</p>
           <p>Le perçage dit lui-même quelle vis lui convient («&nbsp;Correspond probablement à M5 (Trou de passage fin)&nbsp;»), et là où rien ne convient,
           il le dit aussi. Six perçages semblables passent à la même cote d’un
           seul geste, comme une action unique qu’une annulation reprend d’un
@@ -161,8 +159,7 @@
           <p class="note">Le glissement devient une étape de l’historique.
           <b>Ce qui a été poussé dans l’image est ensuite un nombre dans cette
           étape</b> — et reste modifiable dix étapes plus tard.</p>
-          <p>Soulevez une pièce et l’ombre file sur le côté : la seule
-          indication de hauteur qu’une image donne d’elle-même. La sélection se
+          <p>Soulevez une pièce et l’ombre file sur le côté : une aide visuelle pour apprécier sa hauteur. La sélection se
           fond au lieu de sauter.</p>
           <p>Et sur une face, la barre de déplacement n’offre que ce qui y est
           possible : pivoter et mettre à l’échelle sont grisés, avec la raison
@@ -218,7 +215,7 @@
           Ce que devient le contour, vous le décidez après : l’extruder, l’entailler
           en poche, le mettre en révolution, le mener le long d’un arc ou le tendre
           entre deux contours.</p>
-          <p class="note">Le contour reste une courbe exacte. <b>Un cercle dessiné devient un cylindre rond, pas un
+          <p class="note">Dans un solide exact, le contour conserve sa courbe. <b>Un cercle dessiné devient un cylindre rond, pas un
           polygone à beaucoup de sommets.</b></p>
           <p>La grille montre à quoi l'aimantation se mesure, et son pas se
           saisit au clavier. La cote se tient près du pointeur, et la barre
@@ -246,10 +243,10 @@
           <span class="kicker">Paramétrique</span>
           <h3>Changer un chiffre — pas reconstruire le modèle</h3>
           <p>L'historique est non destructif&nbsp;: chaque étape reste
-          modifiable, chaque chiffre peut être tourné après coup. L'épaisseur
+          modifiable, chaque valeur peut être modifiée après coup. L'épaisseur
           de paroi de 2,40 à 3,60&nbsp;? L'évidement, le couvercle, les
           perçages et les ajustements se recalculent — dans le même ordre,
-          avec le même résultat.</p>
+          avec les nouvelles valeurs.</p>
           <p class="note">Des paramètres de projet nommés au lieu de chiffres
           éparpillés&nbsp;: <b>une modification à un endroit, pas à sept.</b></p>
           <p>Les bornes se modifient après coup, même une fois le paramètre
@@ -260,7 +257,7 @@
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
                aria-label="Un dessin&nbsp;: le champ «&nbsp;épaisseur de paroi&nbsp;» passe de 2,40 à 3,60 millimètres, la coupe de la boîte prend des parois plus épaisses et un fond plus épais, et l'historique en dessous reste inchangé.">
-            <text class="ink" x="24" y="30" font-weight="600">Tourner le chiffre</text>
+            <text class="ink" x="24" y="30" font-weight="600">Modifier la valeur</text>
 
             <rect class="field" x="24" y="52" width="216" height="38" rx="4"/>
             <text class="dim" x="38" y="76">Épaisseur de paroi</text>
@@ -284,14 +281,14 @@
             <rect class="hot anim fig-wall-bar" x="300" y="212" width="16" height="5" rx="2"/>
             <text class="dim" x="300" y="238">Épaisseur de paroi</text>
           </svg>
-          <figcaption>Épaisseur de paroi tournée — l'historique reste le même.</figcaption>
+          <figcaption>Épaisseur de paroi modifiée — l'historique reste le même.</figcaption>
         </figure>
       </div>
 
       <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocs</span>
-          <h3>Un piège à écrou en quatre clics au lieu de quatre demi-heures</h3>
+          <h3>Un piège à écrou prêt à dimensionner</h3>
           <p>La face cliquée compte&nbsp;: un bloc se pose là où vous avez
           pointé dans le modèle — chaque opération sur une face coûtait
           auparavant deux clics. Le catalogue à droite connaît désormais aussi support mural, nervure, languette et rainure,
@@ -302,13 +299,10 @@
           plus support mural, crochet pour panneau perforé, clip de câble,
           gousset et pied. Les cotes viennent d'une table de pièces
           normalisées, pas de l'intuition.</p>
-          <p class="note">Chaque bloc est testé sur toute sa plage de
-          paramètres&nbsp;: <b>étanche, épaisseur de paroi minimale, aucune
-          auto-intersection.</b></p>
+          <p class="note">Chaque bloc est testé aux combinaisons de ses valeurs limites : <b>maillage fermé, épaisseur de paroi minimale et absence d’auto-intersection.</b></p>
           <p>Qui choisit un bloc avant de pointer un endroit se voit
           interrogé par Solidon3D, plutôt que de le voir posé à l'origine. Le
-          catalogue lui-même s'ouvre aussi sans modèle chargé — poser un bloc
-          est alors verrouillé, avec le motif indiqué.</p>
+          catalogue lui-même s'ouvre aussi sans modèle chargé — pour insérer un bloc, créez d’abord un solide ou importez un modèle avec les boutons du catalogue.</p>
           <p>L'arbre des objets montre ce qu'apporte un bloc&nbsp;: ses
           caractéristiques figurent en entrées propres en dessous, et le
           nœud propose de modifier exactement cette étape.</p>
@@ -333,8 +327,7 @@
           lors à côté des blocs fournis, avec aperçu et champs, et vous
           décidez par cote jusqu'où elle peut être réglée.</p>
           <p>La création calcule, elle ne se contente pas d'enregistrer&nbsp;:
-          le bloc est construit une fois à chaque coin de sa plage — si nulle
-          part il n'en sort un corps utilisable, c'est écrit sur l'entrée
+          le bloc est construit une fois à chaque coin de sa plage — si une combinaison ne produit pas de solide utilisable, c'est écrit sur l'entrée
           avant que cela ne se voie à l'impression.</p>
           <p class="note">Il est à vous, il reste sur votre ordinateur — et
           <b>il voyage comme recette dans chaque fichier de projet</b> qui
@@ -347,18 +340,17 @@
             <a href="../bilder/beleg-eigener-baustein-fr.webp?v=5acb1ce1"><img src="../bilder/beleg-eigener-baustein-fr.webp?v=5acb1ce1" width="429" height="1347" loading="lazy" decoding="async"
                  alt="La boîte de dialogue « Enregistrer la sélection comme bloc », ouverte depuis le catalogue : en haut nom, groupe, description, licence et auteur, puis pour chaque cote — ici largeur et profondeur — libellé, unité, valeur minimale et maximale, valeur par défaut et place dans la boîte de dialogue, ensuite les emplacements sur lesquels on pourra cliquer, avec leur nom dans la recette ; en bas « Test de plage : 8 combinaisons » et le bouton Créer le bloc."></a>
           </div>
-          <figcaption>Le dialogue pose cinq questions — et calcule toute la plage avant d'enregistrer.</figcaption>
+          <figcaption>Le dialogue pose cinq questions — et calcule les combinaisons de valeurs limites avant d’enregistrer.</figcaption>
         </figure>
       </div>
 
       <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Surfaces</span>
-          <h3>Huit motifs, tous vérifiés imprimables</h3>
+          <h3>Huit motifs vérifiés selon le profil d’impression</h3>
           <p>Nervure, onde, moletage droit et croisé, nid d'abeille, picots,
           Voronoi et bruit — en <b>vraie géométrie</b> et en treillis exact,
-          pas en champ de hauteur échantillonné. Sinon, un moletage imprime
-          de la bouillie arrondie au lieu de losanges nets.</p>
+          pas en champ de hauteur échantillonné. Le détail imprimé dépend aussi de la buse, du matériau et des réglages du slicer.</p>
           <p class="note">Avant tout calcul, la question de savoir si le
           motif peut seulement exister sur cette machine&nbsp;: <b>les crêtes
           plus fines que la buse et les reliefs moins hauts qu'une couche
@@ -383,12 +375,11 @@
       <div class="showcase" id="inspection-report">
         <div>
           <span class="kicker">Rapport de contrôle</span>
-          <h3>Vous savez avant d'imprimer ce qui va mal tourner</h3>
-          <p>Chaque fichier ouvert reçoit un rapport&nbsp;: zones ouvertes,
+          <h3>Repérez les risques d’impression et corrigez-les avant le tranchage</h3>
+          <p>Chaque modèle ouvert reçoit un rapport&nbsp;: zones ouvertes,
           triangles mal orientés, parois sous deux cordons d'extrusion,
           unités manquantes. Classé en erreurs, avertissements et remarques —
-          et chaque entrée saute dans le modèle à l'endroit dont elle
-          parle.</p>
+          et les entrées localisées indiquent l’endroit concerné dans le modèle.</p>
           <p class="note">Chaque constat porte une action proposée.
           <b>Ici, une erreur ne se termine jamais par «&nbsp;échec&nbsp;».</b></p>
         </div>
@@ -406,16 +397,16 @@
           <span class="kicker">Analyse des couches</span>
           <h3>Voir ce que l'imprimante verra</h3>
           <p>Solidon3D découpe le modèle en couches et mesure ce qui en
-          découle&nbsp;: angles de surplomb, îlots flottants, parois sous
+          découle&nbsp;: surfaces sans support, îlots flottants, parois sous
           deux cordons, portées de pont et volume de support. La recherche
-          d'orientation propose la position qui en produit le moins.</p>
+          d'orientation cherche une position nécessitant moins de supports parmi les orientations évaluées.</p>
           <p class="note">Pas de slicer maison — et pas de chiffres
           mélangés&nbsp;: <b>ce qui vient de l'analyse et ce qui vient du
           G-Code est toujours indiqué.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Un dessin&nbsp;: une ligne d'analyse monte du plateau à travers une pièce&nbsp;; trois constats apparaissent l'un après l'autre — un surplomb de 78 degrés, un îlot flottant et une paroi sous deux cordons.">
+               aria-label="Un dessin&nbsp;: une ligne d'analyse monte du plateau à travers une pièce&nbsp;; trois constats apparaissent l'un après l'autre — un surplomb de 90 degrés, un îlot flottant et une paroi sous deux cordons.">
             <text class="ink" x="24" y="30" font-weight="600">Analyse des couches</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -443,7 +434,7 @@
               <text class="ink" x="386" y="183" font-size="12">Paroi &lt; 2 cordons</text>
             </g>
           </svg>
-          <figcaption>Trois constats que le slicer ne connaît qu'après le slicing.</figcaption>
+          <figcaption>Trois constats que vous pouvez examiner avant le tranchage.</figcaption>
         </figure>
       </div>
 
@@ -453,7 +444,7 @@
           <h3>Transmettre au slicer, avec des valeurs adaptées à la pièce</h3>
           <p>Solidon3D n’écrit pas de G-code&nbsp;: c’est le travail de votre slicer. Les réglages d’impression disent à l’avance ce que cette pièce exige&nbsp;: la géométrie fournit des suggestions comme une bordure (brim) pour une petite surface d’appui ou plus de temps par couche quand il reste peu de surface en haut — chacune avec sa raison, et chacune peut être décochée.</p>
           <p><b>Ouvrir dans le slicer</b> transmet la pièce, avec les valeurs si vous le souhaitez, à PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer ou Cura. <b>Trancher</b> laisse votre slicer calculer en arrière-plan&nbsp;; ce qu’il mesure apparaît ensuite dans le rapport de contrôle.</p>
-          <p class="note">Le mesuré et l’estimé ne sont jamais mélangés&nbsp;: <b>ce qui vient du G-code est marqué comme mesuré</b> et figure à côté de l’estimation de Solidon, pas à sa place.</p>
+          <p class="note">Les valeurs du G-code décrivent l’impression prévue. <b>Leur origine figure à côté de l’estimation de Solidon.</b> La durée et la consommation réelles peuvent différer.</p>
         </div>
         <figure class="shot">
           <div class="stage">
@@ -476,17 +467,15 @@
           des goupilles dans l'une, les trous correspondants dans l'autre.
           Rond, six pans, queue d'aronde ou clip — les formes anguleuses
           bloquent la rotation, la queue d'aronde retient aussi
-          l'arrachement, et le clip s'encliquette et tient sans colle. Le jeu
-          entre les deux vient du profil de matériau&nbsp;: pas de limage,
-          pas de deuxième essai. L'ajustement reste dans le projet comme
+          l'arrachement, et le clip est conçu pour un assemblage par encliquetage. Vérifiez la retenue sur la pièce imprimée. Le jeu
+          entre les deux vient du profil de matériau. L'ajustement reste dans le projet comme
           relation et se revérifie à chaque modification ultérieure.</p>
           <p>Et pour ne garder qu'un côté, il y a <b>Découper</b>&nbsp;: un
           plan, un côté reste, la face de coupe est fermée. Un support importé
           reçoit ainsi une paroi arrière plane, et un bac devient un gobelet
           dont les parois arrivent à la même hauteur.</p>
-          <p>Pour ne pas même y regarder, il y a <b>Diviser
-          automatiquement</b>&nbsp;: Solidon3D cherche lui-même le plan de
-          coupe et coupe jusqu'à ce que chaque morceau tienne.</p>
+          <p>Pour rechercher automatiquement les plans de coupe, utilisez <b>Diviser
+          automatiquement</b>&nbsp;: Solidon3D cherche des coupes permettant de placer les morceaux dans le volume d’impression et signale s’il ne trouve pas de solution adaptée.</p>
           <p class="note">Le volume d'impression vient du profil
           d'imprimante. <b>Vingt sont fournis d'origine</b>, dont deux pour la résine, et vous pouvez
           créer les vôtres.</p>
@@ -551,7 +540,7 @@
           chaque quantité avec son origine. Demander, ne jamais déduire ou
           déduire sans demander&nbsp;: cela se règle dans le stock.</p>
           <p class="note">L’historique des écritures montre chaque impression et
-          la retire sur demande. <b>Supprimer signifie ici archiver</b> — sous
+          la retire sur demande. <b>Les bobines peuvent être archivées et restaurées</b> — sous
           « Afficher les bobines archivées », une bobine revient avec son
           identifiant et son historique.</p>
         </div>
@@ -600,8 +589,7 @@
           bloc&nbsp;: exactement une transaction, qu'un seul Annuler retire
           entièrement.</p>
           <p class="note">La géométrie est calculée par du code, jamais par
-          le modèle de langage. <b>Chaque cote d'une proposition est exacte —
-          rien n'est «&nbsp;généré à peu près&nbsp;».</b></p>
+          le modèle de langage. <b>La proposition utilise des cotes et des paramètres explicites ; vous pouvez examiner le résultat avant de l’appliquer.</b></p>
           <p class="note">Et c'est mesuré, pas promis&nbsp;: une suite de
           <b>39 requêtes de référence</b> tourne avant et après chaque
           modification du corpus de règles de l'agent. Au 22&nbsp;septembre 2026,
@@ -757,11 +745,11 @@
         <details class="tool-card" id="profilklemmen" data-operations="create_profile_clamp_liner create_profile_clamp_set create_profile_clamp_shell insert_profile_clamp_liner insert_profile_clamp_shell replace_profile_liners">
           <summary>Fixer des pièces sur des tubes et des profilés</summary>
           <div class="tool-content">
-          <p>Adapte un support à un profil rond, ovale ou dessiné par tes soins. Une section produit
-          deux demi-coquilles à visser et deux garnitures séparées. Choisis un matériau
+          <p>Adaptez un support à un profil rond, ovale ou dessiné par vos soins. Une section produit
+          deux demi-coquilles à visser et deux garnitures séparées. Choisissez un matériau
           pour les coquilles et un autre pour les garnitures ; les logements des vis et
           des écrous correspondent à la taille normalisée choisie.</p>
-          <p>Si le collier doit ensuite épouser un autre profil, remplace les garnitures. Solidon
+          <p>Si le collier doit ensuite épouser un autre profil, remplacez les garnitures. Solidon
           vérifie leur compatibilité avec les coquilles existantes. Coquilles et
           garnitures sont aussi disponibles comme blocs individuels, à créer séparément
           ou à insérer dans un modèle.</p>
@@ -770,14 +758,14 @@
         <details class="tool-card" id="dichtungen" data-operations="create_seal create_seal_gasket insert_seal_gasket insert_seal_groove">
           <summary>Créer une gorge et son joint sur mesure</summary>
           <div class="tool-content">
-          <p>Dessine un trajet fermé pour le joint ou choisis une ouverture dans une face plane.
+          <p>Dessinez un trajet fermé pour le joint ou choisissez une ouverture dans une face plane.
           Solidon creuse la gorge et crée un joint séparé avec son propre matériau.
-          Règle la largeur et la profondeur de la gorge ainsi que le dépassement du
+          Réglez la largeur et la profondeur de la gorge ainsi que le dépassement du
           joint ; sa section peut être rectangulaire ou ronde.</p>
           <p>L’épaisseur de paroi restante sous la gorge et sur ses côtés est vérifiée sur le corps.
           La gorge et le joint existent aussi comme blocs individuels, à insérer dans un
           modèle ou pour créer un joint indépendant.</p>
-          <p class="note">Le modèle représente le joint non déformé. Vérifie l’étanchéité de l’assemblage sur la
+          <p class="note">Le modèle représente le joint non déformé. Vérifiez l’étanchéité de l’assemblage sur la
           pièce imprimée.</p>
           </div>
         </details>
@@ -851,7 +839,7 @@
           <summary>Pilotable à distance via MCP — y compris depuis Claude Code</summary>
           <div class="tool-content"><p>Un deuxième programme appelle les mêmes opérations que les
         menus&nbsp;: désactivé par défaut, sur votre machine seulement, et
-        chaque appel distant est une transaction qu'un Annuler retire.
+        chaque appel distant qui modifie le projet est une transaction qu'un Annuler retire.
         <a href="#mcp">Ce que l’interface peut faire et ce qu’elle ne peut pas</a>.</p></div>
         </details>
       </div>

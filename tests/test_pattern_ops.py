@@ -83,7 +83,9 @@ def test_a_circular_pattern_puts_its_copies_on_the_circle() -> None:
         trimesh.creation.box(extents=(4.0, 4.0, 4.0)).apply_translation((25.0, 0.0, 0.0))
     )
 
-    result = run("pattern", start, kind="circular", count=6, angle=360.0, axis="z")
+    result = run(
+        "pattern", start, kind="circular", count=6, angle=360.0, axis="z", cx=0.0, cy=0.0, cz=0.0
+    )
 
     assert len(result.outputs) == 6
     for x, y, _z in centres(result):
@@ -120,6 +122,37 @@ def test_a_linear_pattern_without_a_direction_is_refused() -> None:
         run("pattern", cube(), kind="linear", count=3, spacing=15.0, dx=0.0, dy=0.0, dz=0.0)
 
     assert problem.value.field == "dx"
+
+
+@pytest.mark.parametrize("operation", ["pattern", "mirror_object"])
+def test_pattern_and_mirror_store_the_initial_body_centre(operation: str) -> None:
+    """Eine verschobene Quelle behält ihre Mitte als gespeicherten Bewegungsanker."""
+    source = cube()
+    source.mesh.raw.apply_translation((40.0, 12.0, 5.0))
+    parameters = {"kind": "circular", "count": 4} if operation == "pattern" else {}
+    result = run(operation, source, **parameters)
+    assert result.answered == {"cx": 40.0, "cy": 12.0, "cz": 5.0}
+    assert all(centre == pytest.approx((40.0, 12.0, 5.0)) for centre in centres(result))
+
+
+@pytest.mark.parametrize("operation", ["pattern", "mirror_object"])
+def test_pattern_and_mirror_accept_a_fixed_world_point(operation: str) -> None:
+    """180 Grad oder Spiegeln an X=10 führt X=40 nach X=-20."""
+    source = cube()
+    source.mesh.raw.apply_translation((40.0, 0.0, 5.0))
+    parameters = {"kind": "circular", "count": 2, "angle": 180.0} if operation == "pattern" else {}
+    result = run(operation, source, cx=10.0, cy=0.0, cz=5.0, **parameters)
+    assert centres(result)[-1] == pytest.approx((-20.0, 0.0, 5.0))
+    assert result.answered == {}
+
+
+@pytest.mark.parametrize("operation", ["pattern", "mirror_object"])
+def test_pattern_and_mirror_refuse_an_incomplete_fixed_point(operation: str) -> None:
+    """Ein halber Punkt wird nicht mit stillen Nullwerten vervollständigt."""
+    parameters = {"kind": "circular", "count": 2} if operation == "pattern" else {}
+    with pytest.raises(ValidationError) as problem:
+        run(operation, cube(), cx=10.0, **parameters)
+    assert problem.value.suggestions
 
 
 # --- Aufdicken (D15) -------------------------------------------------------------
@@ -162,3 +195,138 @@ def test_thicken_leaves_a_closed_body_alone() -> None:
         run("thicken", cube(), thickness=2.0)
 
     assert problem.value.field == "thickness"
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("operation", ["pattern", "mirror_object", "pattern_feature"])
+def test_fixed_centre_survives_cache_source_change_undo_and_project_round_trip(
+    kernel, quality, operation, profile, tmp_path
+) -> None:
+    """Die gespeicherte Mitte bleibt bei Quelländerung, Cache, Undo und Dateirundreise fest."""
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import ResultCache
+    from app.core.scene.project import load, new_project, save
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    cache = ResultCache()
+    create = "create_brep_box" if kernel == "brep" else "create_box"
+    history.apply(
+        "Platte", [OperationDraft(op=create, params={"width": 60.0, "depth": 40.0, "height": 10.0})]
+    )
+    body = project.document.ops[-1].outputs[0]
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(body,), params={"dx": 50.0, "dy": 20.0})],
+    )
+    move = project.document.ops[-1].id
+
+    def measured():
+        result = evaluate(project.document, profile, quality=quality, cache=cache)
+        assert result.complete, result.scene.report.findings
+        History(project.document).record_answers(result.answers)
+        return result
+
+    if operation == "pattern_feature":
+        history.apply(
+            "Bohren",
+            [
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=(body,),
+                    params={
+                        "x": 65.0,
+                        "y": 20.0,
+                        "z": 10.0,
+                        "diameter": 6.0,
+                        "depth": 0.0,
+                        "compensate": False,
+                    },
+                )
+            ],
+        )
+        drilled = measured().scene.objects[body]
+        hole = next(feature.id for feature in drilled.features.values() if feature.kind == "hole")
+        parameters = {"kind": "circular", "count": 2, "angle": 180.0, "at_features": [hole]}
+    else:
+        parameters = (
+            {"kind": "circular", "count": 2, "angle": 180.0} if operation == "pattern" else {}
+        )
+    history.apply(
+        "Drehen oder spiegeln", [OperationDraft(op=operation, inputs=(body,), params=parameters)]
+    )
+    step = project.document.ops[-1].id
+
+    def signature():
+        scene = measured().scene
+        return sorted(
+            (
+                entry.id,
+                tuple(round(v, 6) for v in entry.mesh.bounds.centre),
+                round(entry.mesh.volume, 5),
+            )
+            for entry in scene.objects.values()
+        )
+
+    initial = signature()
+    assert signature() == initial
+    assert {key: project.document.ops[-1].params[key] for key in ("cx", "cy", "cz")} == {
+        "cx": 50.0,
+        "cy": 20.0,
+        "cz": 5.0,
+    }
+    history.change_params(move, {"dx": 55.0})
+    changed = signature()
+    assert changed != initial
+    if operation != "pattern_feature":
+        assert any(entry[1][0] == pytest.approx(45.0) for entry in changed)
+    else:
+        # Die vor dem Muster gesetzte Bohrung bleibt bei X=65, ihre Kopie bei X=35.
+        holes = [
+            feature
+            for entry in measured().scene.objects.values()
+            for feature in entry.features.values()
+            if feature.kind == "hole"
+        ]
+        assert sorted(round(feature.params["centre"][0], 5) for feature in holes) == [35.0, 65.0]
+    history.undo()
+    assert signature() == initial
+    history.redo()
+    assert signature() == changed
+    path = tmp_path / f"{operation}-{kernel}-{quality}.p3d"
+    save(project, path)
+    project = load(path)
+    cache = ResultCache()
+    assert signature() == changed
+    assert next(op for op in project.document.ops if op.id == step).params["cx"] == pytest.approx(
+        50.0
+    )
+    History(project.document).undo()
+    assert signature() == initial
+
+
+@pytest.mark.parametrize(
+    "about, expected", [("origin", (-40.0, 12.0, 5.0)), ("bed", (40.0, 12.0, 5.0))]
+)
+def test_explicit_legacy_mirror_anchor_is_honoured(about, expected) -> None:
+    """Direkte API-Aufrufe behalten Ursprung und Druckbett als gültige Anker."""
+    source = cube()
+    source.mesh.raw.apply_translation((40.0, 12.0, 5.0))
+    result = run("mirror_object", source, about=about)
+    assert centres(result)[0] == pytest.approx(expected)
+    assert result.answered
+    following = run("mirror_object", source, about=about, follow_anchor=True)
+    assert centres(following) == centres(result)
+    assert not following.answered
+    explicit = run(
+        "mirror_object", source, about=about, follow_anchor=True, cx=10.0, cy=0.0, cz=5.0
+    )
+    assert centres(explicit)[0] == pytest.approx((-20.0, 12.0, 5.0))
+
+
+def test_linear_pattern_ignores_unused_partial_centre() -> None:
+    assert centres(run("pattern", cube(), kind="linear", count=2, spacing=15.0, cx=3.0)) == [
+        (0.0, 0.0, 0.0),
+        (15.0, 0.0, 0.0),
+    ]

@@ -841,7 +841,7 @@ def test_g17_wall_scale_remains_ordered_when_every_wall_exceeds_the_cap(profile)
     assert result.threshold == minimum
     assert result.low < result.threshold < result.high
     assert result.note == (
-        "Untergrenze sind zwei Extrusionsbreiten. Die Skala endet weit darüber; "
+        "Untergrenze sind zwei Bahnbreiten. Die Skala endet weit darüber; "
         "alles Dickere trägt dieselbe Farbe."
     )
 
@@ -1324,7 +1324,7 @@ def test_p0_box_transforms_keep_six_current_faces(document, profile, kind, quali
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
-@pytest.mark.parametrize("mode", ["linear", "circular"])
+@pytest.mark.parametrize("mode", ["linear", "circular", "circular_world"])
 def test_p0_pattern_copies_keep_all_six_feature_locations(document, profile, kind, mode):
     """Jede Kopie führt die Namen, Maße und tatsächlichen Orte aller sechs Seiten mit."""
     from app.core.scene import History, OperationDraft, evaluate
@@ -1360,7 +1360,14 @@ def test_p0_pattern_copies_keep_all_six_feature_locations(document, profile, kin
             OperationDraft(
                 op="pattern",
                 inputs=("obj_1",),
-                params={"kind": mode, "count": 4, "spacing": 20.0, "dx": 0.0, "dy": 1.0},
+                params={
+                    "kind": "linear" if mode == "linear" else "circular",
+                    "count": 4,
+                    "spacing": 20.0,
+                    "dx": 0.0,
+                    "dy": 1.0,
+                    **({"cx": 0.0, "cy": 0.0, "cz": 0.0} if mode == "circular_world" else {}),
+                },
             )
         ],
     )
@@ -1372,11 +1379,15 @@ def test_p0_pattern_copies_keep_all_six_feature_locations(document, profile, kin
         x, y, z = value
         return ((x, y, z), (-y, x, z), (-x, -y, z), (y, -x, z))[index]
 
+    def turn_place(value, index):
+        pivot = np.array((17.0, -9.0, 13.0) if mode == "circular" else (0.0, 0.0, 0.0))
+        return pivot + turn(np.asarray(value) - pivot, index)
+
     for index, entry in enumerate(after.scene.objects.values()):
         centre = (
             (17.0, -9.0 + 20.0 * index, 13.0)
             if mode == "linear"
-            else turn((17.0, -9.0, 13.0), index)
+            else turn_place((17.0, -9.0, 13.0), index)
         )
         assert entry.mesh.bounds.centre == pytest.approx(centre, abs=1e-6)
         assert entry.mesh.volume == pytest.approx(10.0 * 6.0 * 4.0, abs=1e-5)
@@ -1389,7 +1400,7 @@ def test_p0_pattern_copies_keep_all_six_feature_locations(document, profile, kin
             initial_normal = np.zeros(3)
             initial_normal[axis] = np.sign(old.params["normal"][axis])
             x, y, z = np.array((17.0, -9.0, 13.0)) + initial_normal * (5.0, 3.0, 2.0)
-            place = (x, y + 20.0 * index, z) if mode == "linear" else turn((x, y, z), index)
+            place = (x, y + 20.0 * index, z) if mode == "linear" else turn_place((x, y, z), index)
             normal = initial_normal if mode == "linear" else turn(initial_normal, index)
             assert current.kind == "face"
             assert current.params["centre"] == pytest.approx(place, abs=1e-6)
@@ -1497,9 +1508,8 @@ def test_p0_scaled_mesh_faces_survive_cache_project_and_history(profile, tmp_pat
 
 def test_p0_multiple_orientations_keep_existing_mesh_feature_names(document, profile, monkeypatch):
     """Zwei eigene Drehungen führen auch erkannte Merkmale vorhandener Objektkennungen mit."""
-    from types import SimpleNamespace
-
     from app.core.geom import prepare_ops
+    from app.core.geom.orient import Orientation, OrientResult
     from app.core.scene import History, OperationDraft, evaluate
 
     load_operations()
@@ -1508,9 +1518,9 @@ def test_p0_multiple_orientations_keep_existing_mesh_feature_names(document, pro
         "Zwei stehende Quader",
         [
             OperationDraft(
-                op="create_box", params={"width": 4.0, "depth": 6.0, "height": 10.0, "x": x}
+                op="create_box", params={"width": 4.0, "depth": 6.0, "height": height, "x": x}
             )
-            for x in (17.0, 57.0)
+            for x, height in ((17.0, 10.0), (57.0, 12.0))
         ],
     )
     before = evaluate(document, profile)
@@ -1528,8 +1538,11 @@ def test_p0_multiple_orientations_keep_existing_mesh_feature_names(document, pro
     monkeypatch.setattr(
         prepare_ops,
         "orient_for_print",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            transform=np.asarray(next(matrices), dtype=float), findings=[]
+        lambda mesh, **_kwargs: OrientResult(
+            mesh=mesh,
+            chosen=Orientation((0.0, 1.0, 0.0), 40.0, 0.0, 4.0),
+            transform=np.asarray(next(matrices), dtype=float),
+            findings=[],
         ),
     )
     history.apply(
@@ -1546,7 +1559,7 @@ def test_p0_multiple_orientations_keep_existing_mesh_feature_names(document, pro
     assert after.complete
     expected = (
         ("obj_1", (17.0, 0.0, 3.0), (4.0, 10.0, 6.0)),
-        ("obj_2", (57.0, 0.0, 2.0), (10.0, 6.0, 4.0)),
+        ("obj_2", (58.0, 0.0, 2.0), (12.0, 6.0, 4.0)),
     )
     for index, (identifier, centre, size) in enumerate(expected):
         entry = after.scene.objects[identifier]
@@ -1563,7 +1576,9 @@ def test_p0_multiple_orientations_keep_existing_mesh_feature_names(document, pro
             assert current.params["centre"] == pytest.approx(
                 np.asarray(centre) + np.asarray(normal) * np.asarray(size) / 2.0, abs=1e-6
             )
-            assert current.params["area"] == pytest.approx((60.0, 40.0, 24.0)[axis], abs=1e-5)
+            assert current.params["area"] == pytest.approx(
+                ((60.0, 40.0, 24.0) if index == 0 else (72.0, 48.0, 24.0))[axis], abs=1e-5
+            )
             assert current.created_by == old.created_by
             assert current.provenance == old.provenance
 

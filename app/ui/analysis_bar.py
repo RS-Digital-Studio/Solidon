@@ -24,10 +24,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
-from app.core.perceive.maps import AnalysisMap, MapKind
+from app.core.perceive.maps import TITLES, AnalysisMap, MapKind
 from app.core.types import SliceResult
 from app.i18n import tr
 from app.ui.labels import TrackSlider, area, length, length_bound
@@ -73,6 +74,54 @@ MAP_ORDER: tuple[MapKind, ...] = (
     "fits",
     "support",
 )
+
+
+class GestureAnalysis(QWidget):
+    """Kartenwahl und Druckbefund, gemeinsam für Formen und Skelett."""
+
+    changed = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.choice = BarComboBox(self)
+        self.choice.setAccessibleName(tr("Analysekarte"))
+        self.choice.setToolTip(tr("Zeigt Wandstärke oder Überhänge während der Bearbeitung."))
+        self.choice.addItem(tr("Keine Karte"), "")
+        for kind in ("wall", "overhang"):
+            self.choice.addItem(str(TITLES[kind]), kind)
+        self.choice.currentIndexChanged.connect(self.changed)
+        self.note = QLabel("", self)
+        self.note.setWordWrap(True)
+        self.note.setAccessibleName(tr("Druckbefund"))
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("Analysekarte"), self))
+        row.addWidget(self.choice)
+        row.addWidget(self.note, 1)
+        layout.addLayout(row)
+        self.legend = MapLegend(self)
+        self.legend.hide()
+        layout.addWidget(self.legend)
+
+    def chosen(self) -> str:
+        """Der Schlüssel der gewünschten Karte; leer lässt die normale Fläche."""
+        return str(self.choice.currentData() or "")
+
+    def show_note(self, text: str) -> None:
+        """Der Befund bleibt als Text lesbar, auch ohne farbige Karte."""
+        self.note.setText(text)
+
+    def show_map(self, analysis: AnalysisMap | None) -> None:
+        """Skala und Herkunft bleiben bei der sichtbaren Karte im Editor."""
+        self.legend.show_map(analysis)
+        if analysis is not None:
+            text = f"{tr('Geometrie')} · {self.legend.note.text()}"
+            self.legend.note.setText(text)
+            self.legend.note.setToolTip(text)
+            self.legend.note.setAccessibleDescription(text)
+        self.legend.setVisible(analysis is not None)
+
 
 #: Wie viele Farbfelder eine stufenlose Legende zeigt.
 LEGEND_STEPS = 5
@@ -339,12 +388,15 @@ class AnalysisBar(QWidget):
             (
                 "wall",
                 tr("Wandstärke"),
-                tr("Färbt, wo eine Wand dünner ist, als der Drucker sauber drucken kann."),
+                tr(
+                    "Zeigt Wandstärken und markiert Stellen unter der Mindestwand "
+                    "des gewählten Profils."
+                ),
             ),
             (
                 "overhang",
                 tr("Überhang"),
-                tr("Färbt Flächen, die so steil hängen, dass der Drucker Stützen braucht."),
+                tr("Markiert Überhänge anhand des Grenzwinkels aus dem gewählten Profil."),
             ),
             (
                 "defects",
@@ -357,7 +409,7 @@ class AnalysisBar(QWidget):
             (
                 "curvature",
                 tr("Krümmung"),
-                tr("Zeigt, wo die Oberfläche eng gebogen ist — dort werden Schichten sichtbar."),
+                tr("Zeigt, wie stark die Oberfläche an jeder Stelle gekrümmt ist."),
             ),
             (
                 "deviation",
@@ -367,7 +419,7 @@ class AnalysisBar(QWidget):
             (
                 "features",
                 tr("Merkmale"),
-                tr("Hebt Bohrungen, Taschen und Flächen hervor, die sich einzeln ändern lassen."),
+                tr("Hebt erkannte Merkmale wie Bohrungen, Taschen und Flächen hervor."),
             ),
             (
                 "fits",

@@ -108,6 +108,10 @@ im Einzelnen stehen unter denselben Überschriften in
 
 ## Die Ebene steht im Bild
 
+* **Jede Ebene trägt ihren Nullring und die Ziffer 0**, auch ohne Zeichnung
+  (`Viewport.show_sketch`). Der Ring liegt vor dem Material, bleibt bei jedem
+  Zoom und Geräteverhältnis gleich groß und nimmt keine Klicks an. Beim
+  Ebenenwechsel wird er neu gesetzt, beim Verlassen mit der Zeichnung geräumt.
 * **Benannt nach dem, was man sieht** (Draufsicht, Vorderansicht,
   Seitenansicht), die Ebene in Klammern; Achsenbuchstaben aus `PLANE_AXES`,
   auf einer angeklickten Fläche keine. Die Ziffern 1, 2, 3 gehen über
@@ -456,3 +460,11 @@ selben Ort, gesucht über die gelösten Punkte —, dann Klick.
   zeichnen …*** (`FeaturePanel.sketchRequested`), ein Schritt mit Zeichnung
   *Zeichnung weiterverwenden* (Entscheidung Robert: eine neue, freie Kopie;
   §30.1 bleibt).
+* **Ein Schritt mit Zeichnung öffnet direkt den Zeichenmodus**
+  (`MainWindow.edit_operation`), mit seiner Schrittkennung und dem betroffenen
+  Skizzenfeld. *Fertig* gibt die neue Zeichnung in denselben Schritt zurück;
+  der Dialog zeigt davor die Erzeugungsmaße. Ein gezielter Sprung in ein
+  Zahlenfeld öffnet weiterhin den Zahlendialog samt Weg zurück ins Zeichnen.
+  Auch *Verwerfen → Strg+Z* bewahrt Schritt und Skizzenfeld. Das Angebot
+  gehört seiner Projektidentität; gleiche Schrittanzahl eines anderen
+  Projekts berechtigt nicht zum Zurückholen.

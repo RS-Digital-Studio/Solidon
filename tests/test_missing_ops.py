@@ -3273,3 +3273,127 @@ def test_both_sides_on_a_hollow_body_put_the_back_outside(profile: Profile) -> N
     assert body.bounds.minimum[0] == pytest.approx(-20.6, abs=0.01), "die Rückseite steht außen"
     assert body.bounds.maximum[0] == pytest.approx(20.6, abs=0.01)
     assert "label.no_back_side" not in {entry.code for entry in result.findings}
+
+
+@pytest.mark.parametrize("quality", ("draft", "fine"))
+def test_both_sides_after_hollowing_with_a_vent_use_the_outer_back(
+    profile: Profile, quality: Quality
+) -> None:
+    """RM422: Die Entlüftung verbindet Innen- und Außenhaut; ihr Zusammenhang
+    darf die Rückseite der Schrift nicht in die entstandene Höhlung verlegen."""
+    from app.core.geom.label_ops import opposite_side
+
+    def apply(name: str, entry: SceneObject, **params: object):
+        spec = REGISTRY.get(name)
+        return spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(**params),
+                profile=profile,
+                quality=quality,
+                seed=0,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    source = SceneObject(id="obj_1", name="Kasten", mesh=block(40.0, 30.0, 20.0))
+    hollowed = apply("hollow_object", source, wall=4.0, vents=1)
+    entry = hollowed.outputs[0]
+    body = as_mesh_data(entry.mesh)
+    assert body.cavity is not None
+    assert len(body.raw.split(only_watertight=False)) == 1, "die Entlüftung verbindet beide Häute"
+    assert opposite_side(body, (20.0, 0.0, 10.0), (1.0, 0.0, 0.0)) == pytest.approx(
+        (-20.0, 0.0, 10.0), abs=0.01
+    )
+    result = apply(
+        "label_text",
+        entry,
+        text="L",
+        size=8.0,
+        depth=0.6,
+        x=20.0,
+        y=0.0,
+        z=10.0,
+        nx=1.0,
+        ny=0.0,
+        nz=0.0,
+        both_sides=True,
+    )
+    labelled = as_mesh_data(result.outputs[0].mesh)
+    assert labelled.bounds.minimum[0] == pytest.approx(-20.6, abs=0.01)
+    assert labelled.bounds.maximum[0] == pytest.approx(20.6, abs=0.01)
+    assert labelled.is_watertight
+    assert "label.no_back_side" not in {finding.code for finding in result.findings}
+
+
+@pytest.mark.parametrize("quality", ("draft", "fine"))
+def test_vented_back_side_survives_move_cache_undo_and_reopening(
+    profile: Profile, quality: Quality, tmp_path: Path
+) -> None:
+    """Die Höhlung bleibt nach Bewegung, im Plattencache und beim Wiederöffnen belegt."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import load, save
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Kasten", [OperationDraft("create_box", params={"width": 40, "depth": 30, "height": 20})]
+    )
+    history.apply(
+        "Aushöhlen", [OperationDraft("hollow_object", ("obj_1",), {"wall": 4, "vents": 1})]
+    )
+    history.apply("Verschieben", [OperationDraft("translate_object", ("obj_1",), {"dx": 7})])
+
+    def compute(document, cache):
+        result = evaluate(document, profile, quality=quality, cache=cache)
+        assert result.complete, result.scene.report.findings
+        return result
+
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path / "cache")
+    cache = ResultCache(disk=disk)
+    before = compute(project.document, cache).scene.objects["obj_1"].mesh
+    assert as_mesh_data(before).cavity is not None
+    history.apply(
+        "Beschriften",
+        [
+            OperationDraft(
+                "label_text",
+                ("obj_1",),
+                {
+                    "text": "L",
+                    "size": 8,
+                    "depth": 0.6,
+                    "x": 27,
+                    "y": 0,
+                    "z": 10,
+                    "nx": 1,
+                    "ny": 0,
+                    "nz": 0,
+                    "both_sides": True,
+                },
+            )
+        ],
+    )
+    labelled = compute(project.document, cache)
+    final = labelled.scene.objects["obj_1"].mesh
+    assert final.is_watertight
+    assert final.bounds.minimum[0] == pytest.approx(-13.6, abs=0.01)
+    assert final.bounds.maximum[0] == pytest.approx(27.6, abs=0.01)
+    assert "label.no_back_side" not in {finding.code for finding in labelled.scene.report.findings}
+    history.undo()
+    undone = compute(project.document, cache).scene.objects["obj_1"].mesh
+    assert undone.volume == pytest.approx(before.volume, rel=1e-9)
+    history.redo()
+    assert compute(project.document, cache).scene.objects["obj_1"].mesh.volume == pytest.approx(
+        final.volume, rel=1e-9
+    )
+    reopened = load(save(project, tmp_path / "entluefteter-kasten.p3d"))
+    for restored_cache in (ResultCache(), ResultCache(disk=disk)):
+        restored = compute(reopened.document, restored_cache).scene.objects["obj_1"].mesh
+        assert restored.bounds == final.bounds
+        assert restored.volume == pytest.approx(final.volume, rel=1e-9)
+    assert restored_cache.statistics.disk_hits > 0

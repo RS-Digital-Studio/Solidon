@@ -53,7 +53,7 @@
       "name": "Qui est derrière ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Une seule personne : Robert Schneider, RS Digital, Bamberg. La conception, le programme, le manuel, le site et l'assistance viennent d'une même main — la réponse à vos retours est écrite par celui qui a écrit le code. La vraie question, c'est ce qui arrive si cette personne s'arrête. C'est pourquoi Solidon3D est fait pour ne pas vous retenir : il fonctionne sans compte et sans réseau, vos projets sont des fichiers sur votre machine, et un fichier de projet est une archive ZIP contenant du JSON — lisible sans le programme. L'export utilise des formats que connaissent tous les slicers et tous les CAO : STL, 3MF, STEP, OBJ."
+        "text": "Une seule personne : Robert Schneider, RS Digital, Bamberg. La conception, le programme, le manuel, le site et l'assistance viennent d'une même main — la réponse à vos retours est écrite par celui qui a écrit le code. La vraie question, c'est ce qui arrive si cette personne s'arrête. C'est pourquoi Solidon3D est fait pour ne pas vous retenir : il fonctionne sans compte et sans réseau, vos projets sont des fichiers sur votre machine, et un fichier de projet est une archive ZIP contenant du JSON — lisible sans le programme. L'export utilise des formats courants pour les slicers et la CAO : STL, 3MF, STEP, OBJ."
       }
     },
     {
@@ -77,7 +77,7 @@
       "name": "Puis-je créer mes propres blocs sans programmer ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui. Construisez la pièce une fois, créez des paramètres pour ses cotes et choisissez dans le catalogue Enregistrer la sélection comme bloc. La création calcule le bloc sur toute sa plage ; il figure ensuite à côté des blocs fournis, avec aperçu et champs. Il reste sur votre ordinateur — et voyage comme recette dans chaque fichier de projet qui l'utilise : une liste d'étapes et de valeurs, pas un programme. Qui reçoit le fichier peut calculer avec, sans rien installer."
+        "text": "Oui. Construisez la pièce une fois, créez des paramètres pour ses cotes et choisissez dans le catalogue Enregistrer la sélection comme bloc. La création calcule le bloc aux combinaisons de ses valeurs limites ; il figure ensuite à côté des blocs fournis, avec aperçu et champs. Il reste sur votre ordinateur — et voyage comme recette dans chaque fichier de projet qui l'utilise : une liste d'étapes et de valeurs, pas un programme. Qui reçoit le fichier peut calculer avec, sans rien installer."
       }
     },
     {
@@ -85,7 +85,7 @@
       "name": "Faut-il de l'expérience en CAO ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Non. La voie 1 se contente d'un clic et d'une phrase dans le chat, la voie 2 d'une description et de chiffres à tourner. Et le dessin lui-même est conçu pour les débutants, car chaque outil dit ce que fera le prochain clic et chaque contrainte explique en une phrase ce qu'elle tient."
+        "text": "Non. Vous pouvez adapter les modèles avec le panneau Sélection et construire avec les menus et les blocs. Le chat offre une autre façon de donner des instructions. Et le dessin lui-même est conçu pour les débutants, car chaque outil dit ce que fera le prochain clic et chaque contrainte explique en une phrase ce qu'elle tient."
       }
     },
     {
@@ -101,7 +101,7 @@
       "name": "Suis-je obligé d'utiliser une IA ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Non. Le chat est une voie parmi quatre. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, le panneau Sélection, ligne de commande et les 142 opérations."
+        "text": "Non. Le chat est facultatif. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, le panneau Sélection, ligne de commande et les 142 opérations."
       }
     },
     {
@@ -117,7 +117,7 @@
       "name": "Puis-je piloter Solidon3D depuis Claude Code ou un autre outil d'IA ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui. Solidon3D embarque un serveur MCP : un programme comme Claude Code y appelle les mêmes opérations que celles des menus. Il est désactivé par défaut, n'accepte de connexions que depuis votre propre machine (127.0.0.1), ne prend de l'extérieur ni chemin de fichier ni code source — et chaque appel distant est une transaction de l'historique, qu'un seul Annuler retire entièrement."
+        "text": "Oui. Solidon3D embarque un serveur MCP : un programme comme Claude Code y appelle les mêmes opérations que celles des menus. Il est désactivé par défaut, n'accepte de connexions que depuis votre propre machine (127.0.0.1), ne prend de l'extérieur ni chemin de fichier ni code source — et chaque appel distant qui modifie le projet est une transaction de l'historique, qu'un seul Annuler retire entièrement."
       }
     },
     {
@@ -125,7 +125,7 @@
       "name": "Mes modèles partent-ils quelque part ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Tes fichiers de projet restent sur ton ordinateur. Dans le chat, le modèle de langage choisi reçoit ton message, un résumé de la scène et l’historique de la conversation. S’il accepte les images, des vues rendues du modèle peuvent aussi être transmises. Avec Anthropic ou un serveur Ollama distant, ces données quittent ton ordinateur. Ollama installé sur ton propre ordinateur les traite localement. Avant la première requête au modèle, Solidon3D affiche la destination choisie. Le réseau sert aussi à l’activation de l’appareil, à la recherche de mises à jour —que tu peux désactiver— et aux téléchargements que tu lances. Un message au support affiche son contenu avant l’envoi. Solidon3D ne transmet aucune statistique d’utilisation et ne stocke pas tes projets dans le cloud."
+        "text": "Vos fichiers de projet restent sur votre ordinateur. Dans le chat, le modèle de langage choisi reçoit votre message, un résumé de la scène et l’historique de la conversation. S’il accepte les images, des vues rendues du modèle peuvent aussi être transmises. Avec Anthropic ou un serveur Ollama distant, ces données quittent votre ordinateur. Ollama installé sur votre propre ordinateur les traite localement. Avant la première requête au modèle, Solidon3D affiche la destination choisie. Le réseau sert aussi à l’activation de l’appareil, à la recherche de mises à jour —que vous pouvez désactiver— et aux téléchargements que vous lancez. Un message au support affiche son contenu avant l’envoi. Solidon3D ne transmet aucune statistique d’utilisation et ne stocke pas vos projets dans le cloud."
       }
     },
     {
@@ -141,7 +141,7 @@
       "name": "Ça tourne sur Mac ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d’avant 2020. Depuis la version 0.4.1, les paquets sont notariés chez Apple et s’ouvrent d’un double-clic. Une version plus ancienne signale que macOS ne peut pas vérifier que le fichier est exempt de logiciel malveillant et propose « Placer dans la corbeille » comme premier bouton : y choisir « Terminé », puis autoriser le paquet dans les Réglages Système, sous « Confidentialité et sécurité », avec « Ouvrir quand même »."
+        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel; choisissez le paquet adapté au processeur indiqué dans « À propos de ce Mac ». Depuis la version 0.4.1, les paquets sont notariés chez Apple et s’ouvrent d’un double-clic. Une version plus ancienne signale que macOS ne peut pas vérifier que le fichier est exempt de logiciel malveillant et propose « Placer dans la corbeille » comme premier bouton : y choisir « Terminé », puis autoriser le paquet dans les Réglages Système, sous « Confidentialité et sécurité », avec « Ouvrir quand même »."
       }
     },
     {
@@ -157,7 +157,7 @@
       "name": "Ça marche avec mon imprimante ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Vingt profils sont fournis d'origine : dix-huit imprimantes à filament, dont Elegoo, Bambu Lab, Prusa, Creality, Anycubic et Sovol, et deux imprimantes résine selon le volume d'impression. Vous pouvez créer les vôtres — il faut le volume d'impression et la hauteur de couche, plus la buse pour une imprimante à filament ou la taille de pixel et l'épaisseur de paroi minimale pour une imprimante résine. Pour les ajustements s'ajoute un calibrage, une seule fois."
+        "text": "Vingt profils sont fournis d'origine : dix-huit imprimantes à filament, dont Elegoo, Bambu Lab, Prusa, Creality, Anycubic et Sovol, et deux imprimantes résine selon le volume d'impression. Vous pouvez créer les vôtres — il faut le volume d'impression et la hauteur de couche, plus la buse pour une imprimante à filament ou la taille de pixel et l'épaisseur de paroi minimale pour une imprimante résine. Pour les ajustements, calibrez le profil pour la combinaison d’imprimante et de matériau."
       }
     },
     {
@@ -218,7 +218,7 @@
       <div class="hero-text">
         <p class="hero-kicker">Modifier et créer des modèles 3D — sans connaissances en CAO</p>
         <h1>Transformez un STL en la pièce qu’il vous faut.</h1>
-        <p class="lead">Déposez un modèle, cliquez sur un perçage, tapez la nouvelle cote. Avant le tranchage, Solidon3D vérifie si la pièce s'imprimera et la transmet à votre slicer. Sans cloud, sans compte.</p>
+        <p class="lead">Déposez un modèle, cliquez sur un perçage, tapez la nouvelle cote. Avant le tranchage, Solidon3D vérifie les risques d’impression de la pièce et la transmet à votre slicer. Sans cloud, sans compte.</p>
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
              data-release-href data-release-download
@@ -306,7 +306,7 @@
           <span>Imprime une pièce déjà contrôlée</span>
         </li>
       </ol>
-      <p class="flow-note">Solidon3D <b>n’est pas un slicer</b> ni <b>une bibliothèque de modèles</b>. Il se place entre les deux&nbsp;: entre le fichier qui ne convient pas et le slicer qui l’imprime sans poser de question.</p>
+      <p class="flow-note">Solidon3D <b>n’est pas un slicer</b> ni <b>une bibliothèque de modèles</b>. Il se place entre les deux&nbsp;: entre le fichier qui ne convient pas et le slicer qui prépare le fichier d’impression.</p>
     </div>
   </section>
 
@@ -348,7 +348,7 @@
                   <p class="pruefhinweis">La version 0.5.0 pour Windows est signée numériquement. La signature identifie l’éditeur et permet de détecter les modifications ultérieures. Microsoft Defender SmartScreen peut encore afficher un avertissement pour les nouveaux fichiers. Avant de lancer le programme d’installation, vérifiez la source du téléchargement et l’éditeur affiché.</p>
                 </div>
                 <div data-tab="macOS" data-release-show hidden>
-                  <p class="pruefhinweis"><b>macOS.</b> Depuis la version 0.4.1, les paquets sont notariés par Apple : l’installation et le premier lancement se font sans demande. Si macOS bloque une version plus ancienne, autorisez-la une fois dans <i>Réglages Système</i> → <i>Confidentialité et sécurité</i> → <i>Ouvrir quand même</i>.</p>
+                  <p class="pruefhinweis"><b>macOS.</b> Depuis la version 0.4.1, les paquets sont notariés par Apple : macOS peut demander une confirmation au premier lancement. Si macOS bloque une version plus ancienne, autorisez-la une fois dans <i>Réglages Système</i> → <i>Confidentialité et sécurité</i> → <i>Ouvrir quand même</i>.</p>
                 </div>
                 <div data-tab="Linux" data-release-show hidden>
                   <p class="pruefhinweis"><b>Linux.</b> Un Flatpak ne s'installe pas par double-clic, mais depuis un terminal&nbsp;: <code>flatpak install ./Solidon3D-*.flatpak</code> dans le dossier où vous l'avez téléchargé. Solidon3D apparaît ensuite dans le menu des applications. L’AppImage, elle, est un fichier unique et ne s’installe pas&nbsp;: il lui faut seulement le droit de s’exécuter, <code>chmod +x Solidon3D-*.AppImage</code>, ou clic droit, Propriétés, «&nbsp;Autoriser l’exécution&nbsp;» dans le gestionnaire de fichiers. Un double-clic l’ouvre ensuite.</p>
@@ -367,7 +367,7 @@
       <div class="stats">
         <div><b>142</b><span>opérations dans la version téléchargeable</span></div>
         <div><b>35</b><span>blocs testés</span></div>
-        <div><b>59</b><span>cotes de pièces normalisées</span></div>
+        <div><b>61</b><span>cotes de pièces normalisées</span></div>
         <div><b>20</b><span>profils d'imprimante fournis</span></div>
         <div><b>12</b><span>projets d'exemple inclus</span></div>
         <div><b>0</b><span>compte, cloud, télémétrie</span></div>
@@ -384,13 +384,13 @@
           <a class="step-media" href="../bilder/schritt-start-fr.webp?v=18a0989d"><img src="../bilder/schritt-start-fr.webp?v=18a0989d" width="1472" height="920" loading="lazy" decoding="async"
                alt="L’écran d’accueil de Solidon3D : en haut la zone où déposer modèles et projets, en dessous les boutons Nouveau projet, Ouvrir un modèle, Ouvrir un projet et Manuel, et le stock de filament avec six bobines. Puis quatre visites guidées avec image d’aperçu, ainsi que Donner mon avis et Soutenir volontairement Solidon."></a>
           <h3>Télécharger la démo et lancer</h3>
-          <p>Sans compte, sans clé, sans configuration. Quatre visites guidées et douze projets d’exemple vous attendent sur l’écran d’accueil.</p>
+          <p>Sans compte ni clé. Le premier lancement vous guide dans le choix de l’imprimante. Quatre visites guidées et douze projets d’exemple vous attendent sur l’écran d’accueil.</p>
         </li>
         <li class="step-card">
           <a class="step-media" href="../bilder/schritt-bericht-fr.webp?v=3a0516cc"><img src="../bilder/schritt-bericht-fr.webp?v=3a0516cc" width="1907" height="1192" loading="lazy" decoding="async"
                alt="Un STL importé, une figurine de trois sphères, en grand dans la vue 3D. À droite le rapport de contrôle : 0 erreur, 1 avertissement, 5 remarques. L’avertissement signale de très petites pièces séparées ; les remarques disent ce que Solidon3D a réparé à l’import, par exemple 18 arêtes ouvertes sur 18 refermées."></a>
           <h3>Glisser le modèle</h3>
-          <p>Un STL de Printables ou votre propre projet. Le rapport de contrôle dit tout de suite ce qui échouerait à l’impression, et chaque constat propose quoi faire.</p>
+          <p>Un STL de Printables ou votre propre projet. Le rapport présente les risques d’impression détectés, et chaque constat propose une action.</p>
         </li>
         <li class="step-card">
           <a class="step-media" href="../bilder/schritt-druck-fr.webp?v=bf7bced8"><img src="../bilder/schritt-druck-fr.webp?v=bf7bced8" width="1577" height="986" loading="lazy" decoding="async"
@@ -419,9 +419,7 @@
         </li>
         <li>
           <q>Le couvercle coince. Il n'est entré qu'au troisième essai.</q>
-          <p><b>Des ajustements tirés du profil de matériau.</b> Jeu,
-          ajustement serré ou affleurant sont déduits d'une échelle de
-          calibrage imprimée une seule fois, pas estimés.</p>
+          <p><b>Des ajustements tirés du profil de matériau.</b> Une échelle de calibrage imprimée permet d'adapter les valeurs de départ du jeu, des ajustements serrés et affleurants à votre imprimante et à votre filament.</p>
         </li>
         <li>
           <q>La pièce dépasse le plateau de 40&nbsp;mm.</q>
@@ -445,9 +443,7 @@
                alt="Le résultat de l’enregistrement ci-dessus : le perçage cliqué mesure maintenant 6,50 millimètres, et le rapport de contrôle à droite indique 0 erreur et 0 avertissement.">
           <span class="tag">Voie 1 — Adapter</span>
           <h3>Modifier un modèle téléchargé</h3>
-          <p>Déposez le fichier — ou tirez le lien depuis MakerWorld,
-          Printables ou Thingiverse directement du navigateur dans la
-          fenêtre, sans passer par le dossier de téléchargements. Lisez le
+          <p>Déposez un fichier ou un lien direct vers un fichier de modèle compatible. Pour une page de MakerWorld, Printables ou Thingiverse, ouvrez la page dans le navigateur, téléchargez le modèle puis déposez le fichier dans Solidon3D. Lisez le
           rapport de contrôle, cliquez une face ou un perçage — puis dites
           dans le chat ce que cela doit devenir, ou choisissez l’action à droite. Comparez avant/après, appliquez, exportez.</p>
           <a class="way-more" href="/fr/features.html#recognised-features">Les caractéristiques des modèles téléchargés</a>
@@ -468,8 +464,7 @@
           <span class="tag">Voie 2 — Construire</span>
           <h3>Construire du neuf, avec des cotes</h3>
           <p>Décrivez ce qu'il vous faut. L'agent crée des paramètres et pose
-          des blocs testés — filetages, inserts à chaud, charnières. Tournez
-          les chiffres, le modèle suit aussitôt. Essayez le curseur&nbsp;: chacune des 24 images a été calculée à part, pas étirée.</p>
+          des blocs testés — filetages, inserts à chaud, charnières. Modifiez les valeurs et le modèle est recalculé. Essayez le curseur&nbsp;: chacune des 24 images a été calculée à part, pas étirée.</p>
           <a class="way-more" href="/fr/features.html#building-blocks">Des blocs vérifiés</a>
         </div>
         <div class="way" id="generated">
@@ -510,7 +505,7 @@
   <section id="results">
     <div class="wrap">
       <h2>Ce qui finit sur le plateau</h2>
-      <p class="sub">Quatre pièces, construites et vérifiées dans Solidon3D. Chacune porte un détail qu’aucun éditeur de cubes ne vous donne&nbsp;: un filetage qui prend, une charnière d’un seul tenant, un crochet qui accroche vraiment. Toutes ont été faites avec les mêmes menus que les vôtres — étape par étape, et chaque étape peut être annulée.</p>
+      <p class="sub">Quatre pièces, construites et vérifiées dans Solidon3D. Elles montrent un filetage avec son couvercle, une charnière d’un seul tenant et des crochets à languette ressort. Toutes ont été faites avec les mêmes menus que les vôtres — étape par étape, et chaque étape peut être annulée.</p>
 
       <div class="weg">
         <figure>
@@ -521,7 +516,7 @@
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
                alt="Un pot cylindrique avec un filetage extérieur imprimé sur le col et, à côté, le couvercle vissant à bord moleté">
-          <figcaption><b>Pot à couvercle vissant</b> Le filetage du col et celui du couvercle viennent du même pas, et le jeu entre les deux du profil de matériau. Vous posez le couvercle&nbsp;: il tient.</figcaption>
+          <figcaption><b>Pot à couvercle vissant</b> Le filetage du col et celui du couvercle sont créés dans la même opération, et le jeu entre les deux du profil de matériau. Vérifiez l’ajustement sur une éprouvette imprimée.</figcaption>
         </figure>
         <figure>
 
@@ -529,12 +524,12 @@
 
                alt="Une boîte plate à couvercle intégré&nbsp;; entre les deux court une charnière film mince, et devant un cliquet la ferme">
 
-          <figcaption><b>Boîte à charnière</b> Le couvercle et le fond sont d’une seule pièce. La charnière film fait 0,4 mm — assez pour l’imprimer, assez peu pour la plier mille fois.</figcaption>
+          <figcaption><b>Boîte à charnière</b> Le couvercle et le fond forment une seule pièce. Une charnière souple de 0,4 mm les relie sans axe séparé.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
                alt="Un bac d’atelier ouvert avec deux crochets pour panneau perforé en haut de sa paroi arrière, chacun avec un ergot et une languette ressort">
-          <figcaption><b>Bac d’atelier</b> Deux crochets à 80 mm, chacun avec une languette ressort&nbsp;: quand vous sortez quelque chose, vous soulevez le bac — et il reste accroché.</figcaption>
+          <figcaption><b>Bac d’atelier</b> Deux crochets à 80 mm, chacun avec une languette ressort&nbsp;: les languettes sont conçues pour retenir le bac sur le panneau.</figcaption>
         </figure>
       </div>
     </div>
@@ -549,12 +544,12 @@
         <figure>
           <a href="../bilder/beleg-bericht-fr.webp?v=1d633041"><img src="../bilder/beleg-bericht-fr.webp?v=1d633041" width="1907" height="1192" loading="lazy" decoding="async"
                alt="Une boîte avec couvercle, en grand dans la vue, et à droite son rapport de contrôle : 0 erreur, 2 avertissements, 6 remarques. Les avertissements signalent que l’ajustement est plus serré que prévu et qu’une face du couvercle est en porte-à-faux et demande des supports ; en dessous, des remarques sur l’évidement, le couvercle et le matériau."></a>
-          <figcaption><b>Rapport et analyse des couches.</b> Ce qui cloche à l’impression y figure avant que le slicer n’y passe le temps&nbsp;: surplombs, îlots, parois trop fines et besoin de supports, comptés par erreur, avertissement et remarque. La recherche d’orientation propose la position qui en produit le moins.</figcaption>
+          <figcaption><b>Rapport et analyse des couches.</b> Avant le tranchage, Solidon3D vérifie les surplombs, les îlots, les parois fines et les besoins en supports. Le rapport distingue erreurs, avertissements et remarques. La recherche d’orientation propose une position demandant moins de supports.</figcaption>
         </figure>
         <figure>
           <a href="../bilder/beleg-bausteine-fr.webp?v=cc96c7c0"><img src="../bilder/beleg-bausteine-fr.webp?v=cc96c7c0" width="1560" height="1144" loading="lazy" decoding="async"
                alt="Le catalogue des blocs, ouvert par-dessus la fenêtre : les groupes Visserie, Mécanique et Fixation avec insert à chaud, piège à écrou, écrou imprimé, vis, filetage imprimable, trou de vis avec fraisure, charnière à axe, roulement à billes, goupille et alésage, œil de charnière, ergot d’encliquetage, charnière-film, clips, pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé, collier et support mural, chacun avec son aperçu et ses dimensions. En bas les boutons Insérer et Enregistrer la sélection comme bloc."></a>
-          <figcaption><b>Des blocs vérifiés, les vôtres aussi.</b> Piège à écrou, insert à chaud, charnière-film, crochet pour panneau perforé&nbsp;: les cotes viennent d’un tableau de pièces normalisées, et chaque bloc est calculé sur toute sa plage de dimensions. Une pièce à vous s’enregistre comme bloc sans programmer&nbsp;; elle voyage comme recette dans chaque fichier de projet.</figcaption>
+          <figcaption><b>Des blocs vérifiés, les vôtres aussi.</b> Piège à écrou, insert à chaud, charnière-film, crochet pour panneau perforé&nbsp;: les cotes viennent d’un tableau de pièces normalisées, et chaque bloc est vérifié aux combinaisons de ses dimensions limites. Une pièce à vous s’enregistre comme bloc sans programmer&nbsp;; elle voyage comme recette dans chaque fichier de projet.</figcaption>
         </figure>
       </div>
 
@@ -562,11 +557,11 @@
       <div class="feature-card-grid">
         <article class="feature-card feature-card-number">
           <div class="feature-card-figure" aria-hidden="true"><b>39</b><span>requêtes de référence</span></div>
-          <div class="feature-card-copy"><h3><a href="/fr/features.html#ai-agent">Un agent IA qui ne devine rien</a></h3><p>Une phrase dans le chat devient une proposition qu’un seul Annuler retire entièrement. La géométrie est calculée par du code, jamais par le modèle de langage, et c’est mesuré&nbsp;: une suite de <b>39 requêtes de référence</b> tourne avant et après chaque modification du corpus de règles de l’agent.</p></div>
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#ai-agent">Des propositions IA que vous pouvez vérifier</a></h3><p>Une phrase dans le chat devient une proposition qu’un seul Annuler retire entièrement. La géométrie est calculée par du code, jamais par le modèle de langage, et c’est mesuré&nbsp;: une suite de <b>39 requêtes de référence</b> tourne avant et après chaque modification du corpus de règles de l’agent.</p></div>
         </article>
         <article class="feature-card">
           <img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À gauche, le perçage fraisé d’origine ; à droite, le perçage et la fraisure agrandis ensemble. Les dimensions extérieures de la pièce restent identiques.">
-          <div class="feature-card-copy"><h3><a href="/fr/features.html#bohrung-senkung">Le trou s’agrandit. Son entrée s’adapte.</a></h3><p>Cliquez un perçage reconnu pour le déplacer, le pivoter, le dupliquer ou le recoter. S’il a une fraisure en haut ou un épaulement en dessous, vous décidez de ce qui suit. Chaque ajustement qui pointe vers lui garde sa référence.</p></div>
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#bohrung-senkung">Le trou s’agrandit. Son entrée s’adapte.</a></h3><p>Cliquez un perçage reconnu pour le déplacer, le pivoter, le dupliquer ou le recoter. S’il a une fraisure en haut ou un épaulement en dessous, vous décidez de ce qui suit. Les ajustements gardent des références au perçage ; celles qui ne peuvent plus être résolues sont signalées.</p></div>
         </article>
         <article class="feature-card">
           <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organisateur à six compartiments et cloisons de différentes hauteurs.">
@@ -613,8 +608,8 @@
         <li><b>Pas une bibliothèque de modèles.</b> Les modèles, vous les apportez, de Printables, MakerWorld, Thingiverse ou de votre propre dossier.</li>
         <li><b>Pas une CAO dans le cloud.</b> Aucun compte, aucun stockage en ligne, aucune télémétrie. Les projets sont des fichiers sur votre machine.</li>
         <li><b>Pas d’équipe.</b> Solidon3D est développé par une seule personne. Cela veut dire des chemins courts et une réponse de celui qui l’a construit. Cela veut dire aussi&nbsp;: pas de hotline, et une feuille de route au rythme d’une personne.</li>
-        <li><b>Aucune garantie de cote sur les maillages générés.</b> Ce qui naît d’un texte ou d’une image est rendu imprimable&nbsp;; la construction à la cote passe par les voies 1 et 2.</li>
-        <li><b>L’IA vient avec ses propres coûts.</b> Le chat tourne avec votre propre clé API, typiquement quelques centimes par proposition. En local via Ollama, c’est gratuit, avec une carte graphique de 8 Go ou plus ; dès 10 Go, il répond deux à trois fois plus vite.</li>
+        <li><b>Aucune garantie de cote sur les maillages générés.</b> Ce qui naît d’un texte ou d’une image peut être vérifié, réparé et préparé pour l’impression&nbsp;; la construction à la cote passe par les voies 1 et 2.</li>
+        <li><b>L’IA vient avec ses propres coûts.</b> Le chat avec votre propre clé API est facturé selon le fournisseur et le modèle choisis. Ollama local ne facture pas les requêtes ; la mémoire nécessaire et la vitesse dépendent du modèle et de votre matériel.</li>
       </ul>
     </div>
   </section>
@@ -725,14 +720,14 @@
         <div class="support-card support-about">
           <h3>Qui est derrière</h3>
           <p>Je suis Robert Schneider, de la région de Bamberg en Allemagne, électronicien de formation et développeur logiciel depuis 2025. Avant, je programmais déjà en amateur. Je fais Solidon3D seul, avec mon entreprise RS Digital : le programme, le manuel, ce site et le support. Si vous m’écrivez, c’est moi qui réponds.</p>
-          <p>Je programme avec des outils d’IA. Ce que Solidon3D doit faire et ce à quoi un résultat est comparé, c’est moi qui le décide. La géométrie est calculée avec manifold3d et OpenCASCADE, le noyau géométrique qu’utilise aussi FreeCAD. Avant chaque version, plus de 20 000 tests automatiques tournent sous Windows, macOS et Linux et comparent les cotes à des valeurs calculées. J’imprime moi-même sur une Elegoo Centauri Carbon 2 et j’essaie les nouvelles fonctions sur de vrais modèles trouvés en ligne.</p>
+          <p>Je programme avec des outils d’IA. Ce que Solidon3D doit faire et ce à quoi un résultat est comparé, c’est moi qui le décide. La géométrie est calculée avec manifold3d et OpenCASCADE, le noyau géométrique qu’utilise aussi FreeCAD. Avant chaque version, plus de 20 000 tests automatiques tournent sous Windows, macOS et Linux ; ils comprennent des vérifications des cotes par rapport à des valeurs calculées. J’imprime moi-même sur une Elegoo Centauri Carbon 2 et j’essaie les nouvelles fonctions sur de vrais modèles trouvés en ligne.</p>
           <h3>À quoi sert l’argent</h3>
           <ul class="support-list">
             <li><b>Outils de développement :</b> Claude et Codex, les deux outils d’IA avec lesquels je programme, chacun dans sa formule la plus élevée.</li>
             <li><b>Entreprise :</b> les frais courants de RS Digital.</li>
             <li><b>Exploitation :</b> hébergement et domaine pour le site, les téléchargements et l’activation.</li>
           </ul>
-          <p class="support-paid"><b>Déjà payé de ma poche :</b> l’Apple Developer Program, sans lequel les paquets Mac ne s’ouvriraient pas d’un double clic, et le certificat de signature de code Windows de Certum.</p>
+          <p class="support-paid"><b>Déjà payé de ma poche :</b> l’Apple Developer Program, que j’utilise pour signer et notariser les paquets Mac, et le certificat de signature de code Windows de Certum.</p>
         </div>
 
         <div class="support-give">
@@ -754,11 +749,11 @@
           </div>
 
           <div class="donate">
-            <p class="donate-terms">Ce paiement n’est ni une commande ni la contrepartie d’un service et ne sera pas déduit d’un achat ultérieur. Nous ne délivrons pas d’attestation fiscale&nbsp;; ne le traitez pas comme fiscalement déductible. PayPal ou GoFundMe ne s’ouvre qu’après votre choix dans la notice locale&nbsp;; <a href="/datenschutz.html">informations sur la confidentialité</a>.</p>
+            <p class="donate-terms">Ce paiement n’est ni une commande ni la contrepartie d’un service et ne sera pas déduit d’un achat ultérieur. Je ne délivre pas d’attestation fiscale&nbsp;; ne le traitez pas comme fiscalement déductible. PayPal ou GoFundMe ne s’ouvre qu’après votre choix dans la notice locale&nbsp;; <a href="/datenschutz.html">informations sur la confidentialité</a>.</p>
             <button class="donate-button" type="button" data-choice="support">Soutenir volontairement <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
             <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Soutien volontaire via PayPal ou GoFundMe">
               <p class="auswahl-titel">Soutenir volontairement</p>
-              <p>Le paiement n’est pas une commande, n’accorde aucune contrepartie, ne débloque rien et n’est pas déduit d’un achat ultérieur. Nous ne délivrons pas de reçu fiscal.</p>
+              <p>Le paiement n’est pas une commande, n’accorde aucune contrepartie, ne débloque rien et n’est pas déduit d’un achat ultérieur. Je ne délivre pas de reçu fiscal.</p>
               <p>Choisissez PayPal ou GoFundMe. Seul le bouton correspondant ouvre la page externe. Vous quitterez solidon3d.de&nbsp;; la déclaration de confidentialité du prestataire choisi s’appliquera&nbsp;: <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal</a> ou <a href="https://www.gofundme.com/c/privacy">GoFundMe</a>.</p>
               <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Continuer vers PayPal</a>
               <a class="btn" href="https://gofund.me/08c5f0edb" rel="noopener noreferrer">Continuer vers GoFundMe</a>
@@ -796,7 +791,7 @@
         <tr><td>Chat (optionnel)</td><td>votre propre clé API (coûts
         récurrents chez le fournisseur) ou Ollama avec l’un des modèles
         recommandés — dès une carte graphique avec 8&nbsp;Go de mémoire
-        (pleine vitesse dès 10&nbsp;Go), 16&nbsp;Go pour les plus grands</td></tr>
+        (mémoire et vitesse selon le modèle et le matériel), 16&nbsp;Go pour les plus grands</td></tr>
         <tr><td>Modèle généré (optionnel)</td><td>un fichier GLB ou
         STL externe, ou Solidon3D installe TripoSG et le modèle
         d’image SDXL sur demande</td></tr>
@@ -821,7 +816,7 @@
           retenir : il fonctionne sans compte et sans réseau, vos projets sont des
           fichiers sur votre machine, et un fichier de projet est une archive ZIP
           contenant du JSON — lisible sans le programme. L'export utilise des
-          formats que connaissent tous les slicers et tous les CAO : STL, 3MF,
+          formats courants pour les slicers et la CAO : STL, 3MF,
           STEP, OBJ.</p>
         </details>
         <details>
@@ -848,8 +843,7 @@
           <summary>Puis-je créer mes propres blocs sans programmer&nbsp;?</summary>
           <p>Oui. Construisez la pièce une fois, créez des paramètres pour ses
           cotes et choisissez dans le catalogue <b>Enregistrer la sélection
-          comme bloc</b>. La création calcule le bloc sur toute sa
-          plage&nbsp;; il figure ensuite à côté des blocs fournis, avec aperçu
+          comme bloc</b>. La création calcule le bloc aux combinaisons de ses valeurs limites&nbsp;; il figure ensuite à côté des blocs fournis, avec aperçu
           et champs.</p>
           <p>Il reste sur votre ordinateur — et <b>voyage comme recette dans
           chaque fichier de projet</b> qui l'utilise&nbsp;: une liste d'étapes
@@ -858,8 +852,7 @@
         </details>
         <details>
           <summary>Faut-il de l'expérience en CAO&nbsp;?</summary>
-          <p>Non. La voie 1 se contente d'un clic et d'une phrase dans le chat, la voie 2
-          d'une description et de chiffres à tourner. Et le dessin lui-même
+          <p>Non. Vous pouvez adapter les modèles avec le panneau Sélection et construire avec les menus et les blocs. Le chat offre une autre façon de donner des instructions. Et le dessin lui-même
           est conçu pour les débutants, car chaque outil dit ce que fera le
           prochain clic et chaque contrainte explique en une phrase ce
           qu'elle tient.</p>
@@ -873,7 +866,7 @@
         </details>
         <details>
           <summary>Suis-je obligé d'utiliser une IA&nbsp;?</summary>
-          <p>Non. Le chat est une voie parmi quatre. Sans clé et sans
+          <p>Non. Le chat est facultatif. Sans clé et sans
           Ollama, tout reste entièrement utilisable, hormis le chat — menus, le panneau Sélection, ligne de commande et les 142 opérations.</p>
         </details>
         <details>
@@ -890,15 +883,14 @@
           comme Claude Code y appelle les mêmes opérations que celles des
           menus. Il est désactivé par défaut, n'accepte de connexions que
           depuis votre propre machine (127.0.0.1), ne prend de l'extérieur
-          ni chemin de fichier ni code source — et chaque appel distant est
-          une transaction de l'historique, qu'un seul Annuler retire
+          ni chemin de fichier ni code source — et chaque appel distant qui modifie le projet est une transaction de l'historique, qu'un seul Annuler retire
           entièrement.</p>
         </details>
         <details>
           <summary>Mes modèles partent-ils quelque part&nbsp;?</summary>
-          <p>Tes fichiers de projet restent sur ton ordinateur. Dans le chat, le modèle de langage choisi reçoit ton message, un résumé de la scène et l’historique de la conversation. S’il accepte les images, des vues rendues du modèle peuvent aussi être transmises.</p>
-          <p>Avec Anthropic ou un serveur Ollama distant, ces données quittent ton ordinateur. Ollama installé sur ton propre ordinateur les traite localement. Avant la première requête au modèle, Solidon3D affiche la destination choisie.</p>
-          <p>Le réseau sert aussi à l’activation de l’appareil, à la recherche de mises à jour —que tu peux désactiver— et aux téléchargements que tu lances. Un message au support affiche son contenu avant l’envoi. Solidon3D ne transmet aucune statistique d’utilisation et ne stocke pas tes projets dans le cloud.</p>
+          <p>Vos fichiers de projet restent sur votre ordinateur. Dans le chat, le modèle de langage choisi reçoit votre message, un résumé de la scène et l’historique de la conversation. S’il accepte les images, des vues rendues du modèle peuvent aussi être transmises.</p>
+          <p>Avec Anthropic ou un serveur Ollama distant, ces données quittent votre ordinateur. Ollama installé sur votre propre ordinateur les traite localement. Avant la première requête au modèle, Solidon3D affiche la destination choisie.</p>
+          <p>Le réseau sert aussi à l’activation de l’appareil, à la recherche de mises à jour —que vous pouvez désactiver— et aux téléchargements que vous lancez. Un message au support affiche son contenu avant l’envoi. Solidon3D ne transmet aucune statistique d’utilisation et ne stocke pas vos projets dans le cloud.</p>
         </details>
         <details>
           <summary>Quels formats Solidon3D lit-il et écrit-il&nbsp;?</summary>
@@ -915,8 +907,7 @@
         <details>
           <summary>Ça tourne sur Mac&nbsp;?</summary>
           <p>Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet
-          compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne
-          toute machine d’avant 2020. Depuis la version 0.4.1, les paquets sont
+          compilé pour arm64 ne démarre pas sur un Mac Intel; choisissez le paquet adapté au processeur indiqué dans « À propos de ce Mac ». Depuis la version 0.4.1, les paquets sont
           notariés chez Apple et s’ouvrent d’un double-clic. Une version plus
           ancienne signale que macOS ne peut pas vérifier que le fichier est
           exempt de logiciel malveillant et propose «&nbsp;Placer dans la
@@ -938,8 +929,7 @@
           Vous pouvez créer les vôtres — il faut le volume d'impression et
           la hauteur de couche, plus la buse pour une imprimante à filament
           ou la taille de pixel et l'épaisseur de paroi minimale pour une
-          imprimante résine. Pour les ajustements s'ajoute un calibrage, une
-          seule fois.</p>
+          imprimante résine. Pour les ajustements, calibrez le profil pour la combinaison d’imprimante et de matériau.</p>
         </details>
         <details>
           <summary>Qu’est-ce qui vient après la démo, et combien ça coûte ?</summary>

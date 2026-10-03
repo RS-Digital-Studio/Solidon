@@ -132,6 +132,20 @@ schaltete während jeder Vorschau in keinem Fenster ein Haken (RM-448).
 
 ## Messen
 
+### Stellenwahl mit der Tastatur
+
+Das Fadenkreuz der Oberflächenauswahl zeichnet der Renderer in festen
+Bildmaßen: vier Arme, schwarze Unterlage und weiße Innenfläche, freie Mitte.
+Die beiden Elemente bleiben bestehen und erhalten bei Bewegung oder
+Kamerawechsel neue Punkte. Sie sind nicht pickbar. Ein einzelnes QWidget
+von einem Bildpunkt am oberen Arm trägt Tastaturfokus und zugänglichen Namen;
+beim Beenden kehrt sein Fokus in die Ansicht zurück.
+
+Eine große Fachkarte darf bei Platzmangel den Rand des Körpers überdecken.
+Dieser Ausweg gilt nur für diese Karte: Setzpunkt und Bewegungsgriff bleiben
+frei, die kurzen Maßfelder behalten ihre Plätze außerhalb des Körpers.
+Ein Platzmangel der Fachkarte schiebt nicht sämtliche Maße in eine Notreihe.
+
 **Messen ist orthografisch, und zwar von selbst** (§18.1 — perspektivisch zielt
 der Nutzer falsch): `MainWindow._on_measure_mode` schaltet beim Betreten um und
 beim Verlassen zurück, nicht beim Wechsel der Messart; `settings.projection`
@@ -158,35 +172,31 @@ Rückkehrziel (`action_projection`).
 ## Was gefärbt wird
 
 * **Die Auswahlfarbe gehört dem Genauesten**: Bei gewähltem Merkmal ist
-  `highlighted_object()` `None`, `highlighted_faces()` nennt dessen Dreiecke
-  (eigene Auskunft, offscreen gibt es keinen Renderer); ebenso unter einer
-  Analysekarte (§19.1). Dass der Körper gewählt ist, zeigen Objektbaum und
-  Statusleiste; das gewählte Merkmal behält seine Beschriftung (Regel 18).
-* **Eine Marke nennt nur das warnende Herkunftswort** (`compact=True` an
-  `feature_label` und `measure_qualifier`) — „gemessen“ an jeder Marke drängte
-  Beschriftungen hinaus.
-* **Die Befundmarke trägt nie die Auswahlfarbe** (`FINDING_COLOUR`): *Stelle
-  zeigen* wählt den Körper, und ein Ring in seiner Farbe verschwand darin. Ist
-  die Stelle eine Fläche (`Finding.outline`, etwa eine geschlossene Öffnung),
-  wird sie umrandet, der Satz steht auf eigenem Grund, und die Marke steht
-  `FINDING_OUTLINE_MS`. Der Rand reist mit dem Ort (`loader.moved_findings`)
-  und im Plattencache (`cache._finding_to_cache`), nicht in der Projektdatei.
-* **Schweben ist halbtransparent, Auswahl deckend** — Schweben kündigt an,
-  ohne eine Auswahl zu behaupten.
-* **Eine Bohrungsmarkierung verschließt die Öffnung nicht**: Innenwand von beiden
-  Seiten durchscheinend; andere Merkmalsflächen deckend und beidseitig.
-* **Eine Änderungsvorschau besitzt die Modellfarben** (Orange nur entfernt, Blau
-  nur hinzugekommen); Auswahl- und Schwebefläche weichen, bis Vorher
-  festgehalten oder die Vorschau zu ist — Baum, Statusleiste und Beschriftung
-  halten die Auswahl.
-* **Nur Sichtbares trägt eine Markierung.** Nach Neuberechnung bleibt der Körper
-  gewählt, ein verschwundenes Merkmal fällt auf ihn zurück; ein eindeutig
-  zugeordnetes Bausteinmerkmal übernimmt die aktuellen `face_indices`.
-* **Gerechnet gegen das Netz der Szene**, nicht das Anzeigenetz;
+  `highlighted_object()` `None`; `highlighted_faces()` nennt seine Dreiecke,
+  auch unter Analysekarten (§19.1). Beide Auskünfte sind offscreen prüfbar.
+  Baum und Statusleiste zeigen den Körper, die Beschriftung das Merkmal (Regel 18).
+* **Marken nennen nur warnende Herkunft**: `compact=True` an `feature_label`
+  und `measure_qualifier`; „gemessen“ an jeder Marke verdrängt Beschriftungen.
+* **Befundmarken tragen `FINDING_COLOUR`, nie Auswahlfarbe**: *Stelle zeigen*
+  wählt den Körper; gleichfarbige Ringe verschwinden. Flächenbefunde
+  (`Finding.outline`, etwa Öffnungen) bekommen Umrandung und Textgrund für
+  `FINDING_OUTLINE_MS`. Der Rand reist in `loader.moved_findings` und
+  `cache._finding_to_cache`, nie in der Projektdatei.
+* **Schweben halbtransparent, Auswahl deckend**: Schweben kündigt an.
+  Über gewählten Merkmalen ändern sich nur Zeiger und Hinweis; Fläche und
+  Beschriftung bleiben, auch bei Hover nach dem Klick.
+* **Bohrungsmarken lassen Öffnungen frei**: Innenwände beidseitig durchscheinend,
+  andere Merkmalsflächen beidseitig deckend.
+* **Änderungsvorschauen besitzen die Modellfarben**: Orange nur entfernt,
+  Blau nur hinzugekommen. Auswahl-/Schwebeflächen weichen bis Vorher oder
+  Vorschauende; Baum, Statusleiste und Beschriftung halten die Auswahl.
+* **Nur Sichtbares markieren**: Nach Auswertung bleibt der Körper gewählt,
+  verschwundene Merkmale fallen auf ihn zurück; eindeutig zugeordnete
+  Bausteinmerkmale übernehmen aktuelle `face_indices`.
+* **Gegen das Szenennetz rechnen**, nie das Anzeigenetz;
   `FEATURE_PATCH_LIFT` hebt entlang der Normalen.
-* **Umgebungsverdeckung und Kontaktschatten weichen einer Analysekarte** (sie
-  färbt nach Zahlen) — über Eigenschaften (`ambient_occlusion`,
-  `contact_shadows`), nicht über den Renderer, damit offscreen prüfbar.
+* **Analysekarten verdrängen Umgebungsverdeckung und Kontaktschatten** über
+  `ambient_occlusion`/`contact_shadows`, offscreen prüfbar ohne Renderer.
 
 ## Schatten und Licht
 
@@ -496,38 +506,28 @@ regelt `zeichenflaeche.md`.
 
 ## Was nur das Bild zeigt
 
-**Was man nicht angesehen hat, ist ungeprüft** (§35): Ein Dialog ist erst
-fertig, wenn er gerendert angesehen wurde.
+Ein Dialog ist erst nach gerenderter Sichtprüfung geprüft (§35).
 
-* **Unter der echten Plattform**: Offscreen hat Qt hier keine Schrift — jede
-  Beschriftung ein Kästchen, jede Breitenmessung an einem Widget falsch
-  (dieselbe Falle in `/erzeugen`). Ohne Fenster auf dem Schirm genügt
-  `apply_style(app, "dark")`, `show()`, `processEvents()`, `grab().save(…)`.
-* **Mehrere Sprachen**: `install_catalog(sprache, read_catalog(sprache))` wie
-  `make_figures.py` (`set_language` setzt nur eine Variable) und
-  `install_qt_translations(app, sprache)` für Qts Knöpfe (ohne ihn steht
-  „Cancel“ im Bild — das ist kein Fund). **Sind zwei Bilder gleich groß, zeigen
-  sie dasselbe.**
-* **Den Viewport holt nur `grabWindow`** am wirklich gezeigten Fenster —
-  `widget.grab()` liefert eine schwarze Mitte.
-* **Ein Prüfstand am echten Fenster**: `bootstrap.load_operations()` zuerst;
-  kein `QT_QPA_PLATFORM`; eine `QTimer.singleShot`-Kette statt Warteschleife,
-  dazu `faulthandler.dump_traceback_later`; kein `window.start()` (modaler
-  Erststartdialog); `app.processEvents()` vor jedem Schuss, sonst zeigt ein
-  Bild zwei Zustände.
-* **Nicht umbrechende Zeilen**: `sizeHint().width()` gegen `width()` in jeder
-  Sprache, denn was gequetscht wird, meldet Qt nicht; Layouts bei Mindestgröße **und** vollem Bildschirm ansehen; ein
-  Kachelmodus braucht `doItemsLayout()` nach echter Änderung. Zahlen an Bildern
-  werden angesehen, nicht nur gerechnet.
-* **Die Attrappen erben vom abstrakten Vertrag** (`tests/render_fakes.py`) —
-  eine Methode, die der Vertrag nicht hat, hat auch die Attrappe nicht; sonst
-  versteckte sie einen Absturz wie die Suite.
-* **Ein Widget, das nachgibt, darf nicht weniger verlangen**: Eine Leiste, die
-  bei Enge auf Symbole schaltet, meldet in `sizeHint()` weiter die volle Breite,
-  gemerkt im breiten Zustand — sonst kommt sie nie zurück (dieselbe Lehre in der
-  Höhe: `fenster.md`). `SizePolicy.Fixed` lähmt die Leiste,
-  `SizePolicy.Ignored` gibt null Punkte; was hilft, ist
-  `setSizeConstraint(SetNoConstraint)`.
-* **Ein Messwert, der zu glatt ist, ist selbst der Befund**: Wo Sprache,
-  Schrift oder Inhalt eingehen und dieselbe Zahl herauskommt, ist ein Weg
-  abgeschnitten.
+- Echte Plattform verwenden: Offscreen fehlen hier Schrift und gültige
+  Breitenmetriken (`/erzeugen`). Für reine Widgets ohne Bildschirmfenster:
+  `apply_style(app, "dark")`, `show`, `processEvents`, `grab().save`.
+- Sprachen über `install_catalog(sprache, read_catalog(sprache))` laden;
+  `set_language` setzt nur die Variable. Für Qt-Knöpfe zusätzlich
+  `install_qt_translations(app, sprache)`, sonst ist „Cancel“ kein Produktfund.
+  Gleich große Bilder auf tatsächlich verschiedene Sprachinhalte prüfen.
+- Viewport nur am gezeigten Fenster per `grabWindow`; `widget.grab` liefert
+  schwarze Mitte. Echte Prüfstände laden zuerst `bootstrap.load_operations`,
+  setzen kein `QT_QPA_PLATFORM`, verwenden `QTimer.singleShot`-Ketten und
+  `faulthandler.dump_traceback_later`. Kein `window.start` mit modalem Erstlauf;
+  vor jedem Bild `processEvents`, sonst können zwei Zustände erscheinen.
+- Nicht umbrechende Zeilen: `sizeHint().width()` gegen `width()` je Sprache.
+  Mindestgröße und Vollbild ansehen, Bildermaße tatsächlich betrachten.
+  Kachelmodus nach Änderungen mit `doItemsLayout` neu anordnen.
+- Rendererattrappen erben den abstrakten Vertrag (`tests/render_fakes.py`);
+  keine zusätzlichen Methoden, die echte Abstürze verdecken.
+- Bei Enge auf Symbole reduzierte Leisten melden weiterhin die im breiten
+  Zustand gemerkte volle `sizeHint`-Breite, sonst wachsen sie nie zurück
+  (Höhenentsprechung in `fenster.md`). `SizePolicy.Fixed` lähmt,
+  `Ignored` meldet null; `setSizeConstraint(SetNoConstraint)` verwenden.
+- Unverändert glatte Messwerte trotz anderer Sprache, Schrift oder Inhalt
+  sind selbst ein Befund: möglicherweise wurde der Messweg abgeschnitten.

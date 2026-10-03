@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
@@ -81,6 +82,7 @@ class TransformBar(QWidget):
     #: — eine Zusage, die kein Empfänger je einlöste. Das Signal bleibt für
     #: Tests und Bilder, die wissen wollen, wann umgeschaltet wurde.
     roleChanged = Signal(str)
+    referenceChanged = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -136,7 +138,15 @@ class TransformBar(QWidget):
         # beim Fokusverlust. Tippen und danach in ein anderes Feld wechseln
         # wandte den Wert sonst zweimal an: aus 5 mm wurden 10 mm, aus 90° 180°,
         # und zurück brauchte es zwei Strg+Z.
-        for spin in (self.dx, self.dy, self.dz, self.angle_value, self.factor, self.largest):
+        for spin in (
+            self.dx,
+            self.dy,
+            self.dz,
+            self.angle_value,
+            *self.target_angles,
+            self.factor,
+            self.largest,
+        ):
             spin.lineEdit().returnPressed.connect(self._maybe_apply_on_return)
         self.snap = self._snap_button()
 
@@ -285,14 +295,40 @@ class TransformBar(QWidget):
     # --- die drei Feldsätze -----------------------------------------------------
 
     def _move_fields(self) -> QWidget:
-        """X, Y, Z in Millimetern — der Weg, nicht die Zielstelle."""
+        """Relativer Weg oder absolute Lage eines benannten Bezugspunkts."""
         holder = QWidget(self)
-        row = QHBoxLayout(holder)
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        mode_row = QHBoxLayout()
+        self.move_mode = QComboBox(holder)
+        self.move_mode.setAccessibleName(tr("Verschieben"))
+        self.move_mode.addItem(tr("um"), userData="relative")
+        self.move_mode.addItem(tr("nach"), userData="absolute")
+        self.move_reference = QComboBox(holder)
+        self.move_reference.setAccessibleName(tr("Bezugspunkt"))
+        from app.core.geom.ops import TranslateParams
+
+        for item in next(
+            field for field in TranslateParams.spec() if field.name == "reference"
+        ).choices:
+            self.move_reference.addItem(choice_label(item), item)
+        self.move_reference.setVisible(False)
+        self.move_feature = QComboBox(holder)
+        self.move_feature.setAccessibleName(tr("Bezugsmerkmal"))
+        self.move_feature.setVisible(False)
+        mode_row.addWidget(self.move_mode)
+        mode_row.addWidget(self.move_reference)
+        mode_row.addWidget(self.move_feature)
+        layout.addLayout(mode_row)
+        row = QHBoxLayout()
+        layout.addLayout(row)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(TIGHT)
         self.dx = LengthSpin(holder)
         self.dy = LengthSpin(holder)
         self.dz = LengthSpin(holder)
+        self.move_labels: list[QLabel] = []
         for name, spin in (("X", self.dx), ("Y", self.dy), ("Z", self.dz)):
             spin.set_range_mm(-500.0, 500.0)
             spin.set_value_mm(0.0)
@@ -303,16 +339,88 @@ class TransformBar(QWidget):
             # X, Y und Z gibt es in dieser Leiste nur hier — und das Wort ist
             # dasselbe wie am Rollenknopf darüber.
             spin.setAccessibleName(f"{_role_name('move')} {name}")
-            row.addWidget(QLabel(name, holder))
+            label = QLabel(name, holder)
+            self.move_labels.append(label)
+            row.addWidget(label)
             row.addWidget(spin)
+        self.move_mode.currentIndexChanged.connect(self._move_reference_changed)
+        self.move_reference.currentIndexChanged.connect(self._move_reference_changed)
+        self.move_feature.currentIndexChanged.connect(self.referenceChanged)
         return holder
+
+    def _move_reference_changed(self) -> None:
+        absolute = self.move_mode.currentData() == "absolute"
+        for spin in (self.dx, self.dy, self.dz):
+            spin.set_range_mm(-1e9 if absolute else -500.0, 1e9 if absolute else 500.0)
+        self.move_reference.setVisible(absolute)
+        self.move_feature.setVisible(absolute and self.move_reference.currentData() == "feature")
+        if not absolute:
+            for spin in (self.dx, self.dy, self.dz):
+                spin.setEnabled(True)
+                spin.set_value_mm(0.0)
+        labels = (
+            (tr("Mitte bei X"), tr("Mitte bei Y"), tr("Boden auf Z"))
+            if absolute and self.move_reference.currentData() == "bed"
+            else (tr("Ziel X"), tr("Ziel Y"), tr("Ziel Z"))
+            if absolute
+            else ("X", "Y", "Z")
+        )
+        for label, spin, text in zip(
+            self.move_labels, (self.dx, self.dy, self.dz), labels, strict=True
+        ):
+            label.setText(text)
+            spin.setAccessibleName(text)
+        self.referenceChanged.emit()
+
+    def show_position(self, point: tuple[float, float, float]) -> None:
+        """Die aktuelle Lage vorbelegen, ohne eine Operation auszulösen."""
+        if self.move_mode.currentData() == "absolute":
+            for spin, value in zip((self.dx, self.dy, self.dz), point, strict=True):
+                spin.setEnabled(True)
+                spin.set_value_mm(value)
+
+    def unavailable_position(self, reason: str) -> None:
+        """Fehlt ein gewählter Bezug, bleiben keine Zahlen eines anderen Körpers stehen."""
+        if self.move_mode.currentData() == "absolute":
+            for spin in (self.dx, self.dy, self.dz):
+                spin.clear()
+                spin.setEnabled(False)
+                spin.setToolTip(reason)
 
     def _rotate_fields(self) -> QWidget:
         """Achse und Winkel — mehr braucht eine Drehung um eine Hauptachse nicht."""
         holder = QWidget(self)
-        row = QHBoxLayout(holder)
-        row.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        mode_row = QHBoxLayout()
+        row = QHBoxLayout()
         row.setSpacing(TIGHT)
+        layout.addLayout(mode_row)
+        layout.addLayout(row)
+        self.rotate_mode = QComboBox(holder)
+        self.rotate_mode.setAccessibleName(tr("Drehen"))
+        self.rotate_mode.addItem(tr("um"), userData="relative")
+        self.rotate_mode.addItem(tr("nach"), userData="absolute")
+        mode_row.addWidget(self.rotate_mode)
+        self.rotate_reference = QComboBox(holder)
+        self.rotate_reference.setAccessibleName(tr("Drehpunkt"))
+        for reference in (
+            "centre",
+            "bed",
+            "origin",
+            *(f"corner_{index:03b}" for index in range(8)),
+            "feature",
+        ):
+            self.rotate_reference.addItem(choice_label(reference), reference)
+        self.rotate_reference.hide()
+        self.rotate_feature = QComboBox(holder)
+        self.rotate_feature.setAccessibleName(tr("Bezugsmerkmal"))
+        self.rotate_feature.hide()
+        mode_row.addWidget(self.rotate_reference)
+        mode_row.addWidget(self.rotate_feature)
+        self.rotate_reference.currentIndexChanged.connect(self._rotate_mode_changed)
+        self.rotate_feature.currentIndexChanged.connect(self.referenceChanged)
         self.axis = QComboBox(holder)
         # **Ein Bildschirmleser liest keine Beschriftung daneben.** Das Etikett
         # links steht im Layout, nicht im Barrierefreiheitsbaum; ohne eigenen
@@ -351,12 +459,64 @@ class TransformBar(QWidget):
         )
         self.to_bed.setAccessibleDescription(self.to_bed.toolTip())
 
-        row.addWidget(QLabel(tr("Achse"), holder))
+        self.rotate_axis_label = QLabel(tr("Achse"), holder)
+        self.rotate_angle_label = QLabel(tr("Winkel"), holder)
+        row.addWidget(self.rotate_axis_label)
         row.addWidget(self.axis)
-        row.addWidget(QLabel(tr("Winkel"), holder))
+        row.addWidget(self.rotate_angle_label)
         row.addWidget(self.angle_value)
         row.addWidget(self.to_bed)
+        self.target_angles = []
+        self.target_angle_labels = []
+        for text in (tr("Zielwinkel X"), tr("Zielwinkel Y"), tr("Zielwinkel Z")):
+            label = QLabel(text, holder)
+            spin = NumberSpin(holder)
+            spin.setRange(-360.0, 360.0)
+            spin.setDecimals(2)
+            spin.setSuffix(tr(" °"))
+            spin.setAccessibleName(text)
+            label.setBuddy(spin)
+            label.hide()
+            spin.hide()
+            self.target_angles.append(spin)
+            self.target_angle_labels.append(label)
+            row.addWidget(label)
+            row.addWidget(spin)
+        self.rotate_mode.currentIndexChanged.connect(self._rotate_mode_changed)
         return holder
+
+    def _rotate_mode_changed(self) -> None:
+        absolute = self.rotate_mode.currentData() == "absolute"
+        self.rotate_reference.setVisible(absolute)
+        self.rotate_feature.setVisible(
+            absolute and self.rotate_reference.currentData() == "feature"
+        )
+        for widget in (
+            self.axis,
+            self.angle_value,
+            self.rotate_axis_label,
+            self.rotate_angle_label,
+            self.to_bed,
+        ):
+            widget.setVisible(not absolute)
+        for absolute_widget in (*self.target_angles, *self.target_angle_labels):
+            absolute_widget.setVisible(absolute)
+        self.referenceChanged.emit()
+
+    def show_orientation(self, angles: tuple[float, float, float]) -> None:
+        """Die belegte heutige Drehstellung ohne Anwendung vorbelegen."""
+        if self.rotate_mode.currentData() == "absolute":
+            for spin, value in zip(self.target_angles, angles, strict=True):
+                spin.setEnabled(True)
+                spin.setValue(value)
+
+    def unavailable_orientation(self, reason: str) -> None:
+        """Unbekannte Achsen zeigen keine Winkel der vorherigen Auswahl."""
+        if self.rotate_mode.currentData() == "absolute":
+            for spin in self.target_angles:
+                spin.clear()
+                spin.setEnabled(False)
+                spin.setToolTip(reason)
 
     def _scale_fields(self) -> QWidget:
         """Prozent oder Millimeter — dieselbe Absicht, zwei Wege.
@@ -431,12 +591,31 @@ class TransformBar(QWidget):
         """
         role = self.role()
         if role == "move":
+            if self.move_mode.currentData() == "absolute":
+                return "translate_object", {
+                    "mode": "absolute",
+                    "reference": self.move_reference.currentData(),
+                    "reference_feature": self.move_feature.currentData() or "",
+                    "x": self.dx.value_mm(),
+                    "y": self.dy.value_mm(),
+                    "z": self.dz.value_mm(),
+                }
             return "translate_object", {
                 "dx": self.dx.value_mm(),
                 "dy": self.dy.value_mm(),
                 "dz": self.dz.value_mm(),
             }
         if role == "rotate":
+            if self.rotate_mode.currentData() == "absolute":
+                return "rotate_object", {
+                    "mode": "absolute",
+                    "about": self.rotate_reference.currentData(),
+                    "reference_feature": self.rotate_feature.currentData() or "",
+                    **{
+                        f"angle_{axis}": spin.value()
+                        for axis, spin in zip(("x", "y", "z"), self.target_angles, strict=True)
+                    },
+                }
             return "rotate_object", {
                 "axis": self.axis.currentData(),
                 "angle": float(self.angle_value.value()),

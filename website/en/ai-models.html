@@ -90,7 +90,7 @@
         <li><b>Drop in a GLB or STL.</b> Textured as well — the colours survive
         the import.</li>
         <li><b>Repair chain and report.</b> Holes, flipped normals, degenerate
-        triangles; afterwards it says what will go wrong on the plate.</li>
+        triangles; the report then shows detected printing risks.</li>
         <li><b>Map the colours onto your filaments.</b> Onto the number
         actually loaded in the machine, not onto a maximum.</li>
         <li><b>Split, pin, arrange.</b> Dowels with clearance from the material
@@ -111,7 +111,7 @@
           <tr><td>Non-manifold edges, degenerate faces</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
           <tr><td>Volume</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
           <tr><td>Wall thickness against this printer's nozzle</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
-          <tr><td>Overhang angle per layer</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Unsupported area per layer</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
           <tr><td>Islands: material with nothing below it</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
           <tr><td>Bridge spans, narrowest section</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
           <tr><td>Support needed, and the best orientation</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
@@ -139,7 +139,7 @@
       usable regardless.</p>
 
       <h2>Local chat: which model for which card</h2>
-      <p class="sub">The chat runs free of charge through Ollama on your own computer. The model has to fit entirely into graphics memory — otherwise the processor joins in and every answer takes many times as long. These four call Solidon's tools reliably and ask back when a request is unclear:</p>
+      <p class="sub">The chat runs free of charge through Ollama on your own computer. The model has to fit entirely into graphics memory — otherwise the processor joins in and every answer takes many times as long. These four models were tested with Solidon's tools. The table shows success rates, response times and limitations:</p>
       <table class="compare">
         <thead>
           <tr><th>Model</th><th>Graphics memory</th><th>Check and suite</th></tr>

@@ -42,6 +42,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core import figures
@@ -179,7 +180,12 @@ def foreign_window_over(widget: QWidget, rect: QRect | None = None) -> str:
     user32 = ctypes.windll.user32  # type: ignore[attr-defined]
     user32.WindowFromPoint.argtypes = [wintypes.POINT]
     user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
     user32.GetAncestor.restype = wintypes.HWND
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
     area = rect if rect is not None else widget.rect()
     own = os.getpid()
     shares = tuple(0.02 + 0.96 * index / (COVER_GRID - 1) for index in range(COVER_GRID))
@@ -214,7 +220,7 @@ def wait_until_uncovered(
     deadline = time.monotonic() + seconds
     reported = ""
     while other := foreign_window_over(widget, rect):
-        if time.monotonic() > deadline:
+        if time.monotonic() >= deadline:
             raise SystemExit(
                 f"Über der Aufnahme liegt seit {seconds:.0f} s „{other}“. Das Fenster "
                 "schließen oder den Lauf auf einen freien Schirm legen (--schirm N)."
@@ -226,6 +232,46 @@ def wait_until_uncovered(
         top.raise_()
         top.activateWindow()
         settle(QApplication.instance(), 20)  # type: ignore[arg-type]
+
+
+def grab_uncovered(widget: QWidget, rect: QRect | None = None, *, seconds: float = 30.0) -> QPixmap:
+    """Ein Bildschirmbild nur nach freier Vor- und Nachprüfung zurückgeben.
+
+    ``rect`` liegt in Widgetkoordinaten und darf eigene Dialoge einschließen.
+    Ohne Ausschnitt bleibt der bisherige native Fenstergriff erhalten. Eine
+    Überdeckung beim Abgreifen verwirft das Bild, bevor irgendein Aufrufer es
+    speichern kann. Alle Versuche teilen eine Frist; spätestens der zehnte
+    verdeckte Griff beendet auch eine ständig wechselnde Überdeckung.
+    """
+    deadline = time.monotonic() + seconds
+    other = ""
+    for _attempt in range(10):
+        wait_until_uncovered(widget, rect, seconds=max(0.0, deadline - time.monotonic()))
+        screen = widget.screen() or QApplication.primaryScreen()
+        if screen is None:
+            raise SystemExit(
+                "Kein Bildschirm verfügbar. Aufnahme auf einem sichtbaren Schirm starten."
+            )
+        if rect is None:
+            shot = screen.grabWindow(widget.winId())
+        else:
+            corner = widget.mapToGlobal(rect.topLeft()) - screen.geometry().topLeft()
+            shot = screen.grabWindow(0, corner.x(), corner.y(), rect.width(), rect.height())
+        other = foreign_window_over(widget, rect)
+        if not other:
+            if shot.isNull():
+                raise SystemExit(
+                    "Die Bildschirmaufnahme ist leer. Das Fenster auf dem gewählten "
+                    "Schirm sichtbar machen und die Aufnahme wiederholen."
+                )
+            return shot
+        if time.monotonic() >= deadline:
+            break
+    raise SystemExit(
+        f"Während der Aufnahme lag „{other}“ über dem Bild. Fremde Fenster vom "
+        "Aufnahmeschirm nehmen (--schirm N) und den Lauf wiederholen; dieses Bild "
+        "wurde nicht gespeichert."
+    )
 
 
 def settle(app: QApplication, rounds: int = 12) -> None:
@@ -404,11 +450,7 @@ def shoot(widget: QWidget, key: str, language: str, *, from_screen: bool = False
         raise SystemExit(f"Keine Abbildung namens {key!r} im Katalog")
     target = figure.path(language)
     target.parent.mkdir(parents=True, exist_ok=True)
-    if from_screen:
-        screen = widget.screen() or QApplication.primaryScreen()
-        shot = screen.grabWindow(widget.winId())
-    else:
-        shot = widget.grab()
+    shot = grab_uncovered(widget) if from_screen else widget.grab()
     if not shot.save(str(target)):
         raise SystemExit(f"{target} ließ sich nicht schreiben — kein leises Fertig")
     print(f"  {key:14s} → {target.relative_to(Path.cwd()) if target.is_absolute() else target}")

@@ -1457,7 +1457,8 @@ class SketchCanvas(QWidget):
         Auf XY liegen sie **parallel** zur Zeichenfläche: der Körper wächst aus
         dem Bild heraus, jede gezeichnete Linie ist eine Kontur. Auf XZ und YZ
         stehen sie quer dazu — dann läuft die Schichtung durch die Zeichnung
-        hindurch, und was hier waagerecht aussieht, ist im Druck eine Fuge.
+        hindurch. Die Schichten bleiben parallel zum Druckbett; nur das
+        Verhältnis zur Zeichenebene ändert sich.
 
         Bei einer angeklickten Fläche entscheidet ihre Neigung, und die ist
         bekannt: die Anwendung reicht sie mit der Fläche herein. Der Satz sagt
@@ -1474,34 +1475,36 @@ class SketchCanvas(QWidget):
             # 20 mm über der Draufsicht liegt sie flach, um 30° gekippt schräg.
             frame = self.plane_frame(plane)
             if frame is None:
-                return tr("Die Schichtrichtung folgt der Neigung dieser Ebene.")
+                return tr(
+                    "Die Neigung dieser Zeichenebene ist noch nicht bestimmt. Die "
+                    "Druckschichten bleiben parallel zum Druckbett."
+                )
             upright = abs(frame.normal[2])
             if upright > _FLAT_ENOUGH:
-                return tr("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus.")
+                return tr("Bei dieser Lage liegen die Druckschichten parallel zur Zeichnung.")
             if upright < _STEEP_ENOUGH:
                 return tr(
-                    "Schichten stehen quer zur Zeichnung — was hier waagerecht liegt, "
-                    "wird eine Fuge."
+                    "Bei dieser Lage stehen Zeichenebene und Druckschichten senkrecht zueinander."
                 )
-            return tr("Diese Ebene ist geneigt — der Körper wächst schräg zur Schichtung.")
+            return tr("Bei dieser Lage steht die Zeichenebene schräg zu den Druckschichten.")
         if plane.startswith("feature:"):
             normal = self._face_normals.get(plane.partition(":")[2])
             if normal is None:
-                return tr("Auf einer Fläche des Körpers — die Schichtrichtung folgt ihrer Neigung.")
+                return tr(
+                    "Die Neigung dieser Zeichenebene ist noch nicht bestimmt. Die "
+                    "Druckschichten bleiben parallel zum Druckbett."
+                )
             upright = abs(normal[2])
             if upright > _FLAT_ENOUGH:
-                return tr("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus.")
+                return tr("Bei dieser Lage liegen die Druckschichten parallel zur Zeichnung.")
             if upright < _STEEP_ENOUGH:
                 return tr(
-                    "Schichten stehen quer zur Zeichnung — was hier waagerecht liegt, "
-                    "wird eine Fuge."
+                    "Bei dieser Lage stehen Zeichenebene und Druckschichten senkrecht zueinander."
                 )
-            return tr("Diese Fläche ist geneigt — der Körper wächst schräg zur Schichtung.")
+            return tr("Bei dieser Lage steht die Zeichenebene schräg zu den Druckschichten.")
         if plane == "plane:xy":
-            return tr("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus.")
-        return tr(
-            "Schichten stehen quer zur Zeichnung — was hier waagerecht liegt, wird eine Fuge."
-        )
+            return tr("Bei dieser Lage liegen die Druckschichten parallel zur Zeichnung.")
+        return tr("Bei dieser Lage stehen Zeichenebene und Druckschichten senkrecht zueinander.")
 
     def offer_faces(self, faces: Mapping[str, tuple[float, float, float]]) -> None:
         """Die planaren Flächen, auf denen gezeichnet werden kann.

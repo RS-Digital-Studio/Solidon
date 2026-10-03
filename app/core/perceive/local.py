@@ -1278,6 +1278,32 @@ def _with_its_facet(indices: np.ndarray, plane: np.ndarray) -> tuple[np.ndarray,
     return plane, True
 
 
+def _known_through_wall(mesh: MeshData, indices: np.ndarray, feature: Feature) -> np.ndarray:
+    """Bekannte Durchgangswand samt Originalnachbarn innerhalb des Suchbudgets.
+
+    Dicht unterteilte Deckflächen dürfen die Nachmessung einer kleinen Wand
+    nicht verdrängen. Senkrechte Normalen zur bekannten Achse sind nur die
+    Vorauswahl; Fit, vollständige Ränder und Durchgang werden anschließend
+    unverändert am ganzen Original belegt. Ohne erneuten Durchgangsnachweis
+    darf diese engere Suche kein Merkmal veröffentlichen.
+    """
+    if feature.kind != "hole" or not feature.params.get("through"):
+        return np.empty(0, dtype=np.int64)
+    axis = detection.axis_of(feature)
+    if axis is None:
+        return np.empty(0, dtype=np.int64)
+    normals = np.asarray(mesh.raw.face_normals)[indices]
+    wall = indices[np.abs(normals @ axis) <= math.sin(math.radians(detection.EPS_ANGLE))]
+    if not len(wall) or len(wall) > LOCAL_FACE_LIMIT:
+        return np.empty(0, dtype=np.int64)
+    inside = np.zeros(mesh.triangle_count, dtype=bool)
+    inside[wall] = True
+    pairs = np.asarray(mesh.raw.face_adjacency)
+    neighbours = pairs[inside[pairs].any(axis=1)].ravel()
+    joined = np.union1d(wall, neighbours)
+    return joined if len(joined) <= LOCAL_FACE_LIMIT else np.empty(0, dtype=np.int64)
+
+
 _KNOWN: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 _KNOWN_LOCK = threading.Lock()
 
@@ -1505,10 +1531,15 @@ def detect_known(
             assert indices is not None
             if len(indices) + len(plane) > LOCAL_FACE_LIMIT and seed is not None:
                 indices = _connected_to(stitched, indices, seed)
+            region = indices
             indices, crowded = _with_its_facet(indices, plane)
-            if crowded and not len(indices):
-                failure = "budget"
-                continue
+            targeted = crowded and not len(indices)
+            if targeted:
+                _check(check_cancelled)
+                indices = _known_through_wall(stitched, region, feature)
+                if not len(indices):
+                    failure = "budget"
+                    continue
             key: _SearchKey = (
                 tuple(int(index) for index in indices),
                 tuple(int(index) for index in plane),
@@ -1533,6 +1564,17 @@ def detect_known(
                     else LocalDetection(reason="no_feature")
                 )
                 results[key] = result
+            if targeted:
+                # Diese Nachmessung belegt nur Durchgangswände. Eine fehlende
+                # Höhlung oder ein Sackboden benötigt den vollständigen Kontext.
+                result = replace(
+                    result,
+                    features={
+                        name: candidate
+                        for name, candidate in result.features.items()
+                        if candidate.kind == "hole" and candidate.params.get("through")
+                    },
+                )
             # Ein ganz verschlossenes Loch darf verschwinden. Große ebene
             # Kontextflächen allein belegen keinen abgeschnittenen Lochrest.
             # Ein gekrümmter Suchrand oder eine unvollständige Höhlung dagegen

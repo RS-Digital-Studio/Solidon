@@ -1539,3 +1539,33 @@ def test_a_stroke_beside_the_mirror_plane_leaves_no_notch() -> None:
             left = np.diff(height[(x >= -3.0) & (x <= 0.0)])
             right = np.diff(height[(x >= 0.0) & (x <= 3.0)])
             assert (left >= -1e-12).all() and (right <= 1e-12).all(), "eingipflig, keine Kerbe"
+
+
+def test_gesture_metadata_roundtrips_without_changing_old_strokes():
+    """Gestenkennungen gruppieren Proben, Altdateien bleiben bitgleich auswertbar."""
+    from dataclasses import replace
+
+    from app.core.geom.sculpt import stroke_count
+
+    stroke = on_ball(1.0, 0.0, 0.0)
+    old = strokes_to_text([stroke, stroke])
+    assert '"g"' not in old
+    assert stroke_count(strokes_from_text(old)) == 2
+    grouped = [replace(stroke, gesture=1), replace(stroke, gesture=1), replace(stroke, gesture=2)]
+    again = strokes_from_text(strokes_to_text(grouped))
+    assert again == grouped
+    assert stroke_count(again) == 2
+
+
+@pytest.mark.parametrize("value", [-1, 1.5, True, "1", None])
+def test_unreadable_gesture_metadata_has_a_recovery_action(value):
+    """Fremde Gruppendaten werden nicht still abgeschnitten oder geraten."""
+    import json
+
+    from app.core.errors import ValidationError
+
+    data = json.loads(strokes_to_text([on_ball(1.0, 0.0, 0.0)]))
+    data[0]["g"] = value
+    with pytest.raises(ValidationError) as caught:
+        strokes_from_text(json.dumps(data))
+    assert caught.value.suggestions

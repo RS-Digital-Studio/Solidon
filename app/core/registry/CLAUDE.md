@@ -35,6 +35,9 @@ driftet ab — deshalb gibt es keine.
 
 ## Parameterarten mit Folgen
 
+- `ParamSpec.internal` kennzeichnet gespeicherte Kompatibilitätswerte. CLI,
+  Agentenschema und beide Referenzfassungen bieten sie nicht als Eingabe an;
+  Validierung und Projektdatei behalten sie für alte Schritte.
 - `documentation()` und `parameter_table()` behalten mit `technical=True`
   interne Schlüssel und Ausführungsverträge für technische Aufrufer. Das
   Handbuch verwendet `technical=False`: Kundentitel, Bedienort, Kürzel,

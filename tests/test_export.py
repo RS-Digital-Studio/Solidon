@@ -225,6 +225,9 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
         "handover": handover,
+        # Der Übergabebeleg (RM-090) ist Oberfläche; hier zählt nur der Abbruch.
+        "handoff_receipt": lambda **_kwargs: None,
+        "tr": str,
     }
     exec(compile(ast.fix_missing_locations(isolated), str(source), "exec"), namespace)
     instance = namespace["ExportWorker"]()

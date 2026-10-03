@@ -1,9 +1,12 @@
 # Konzept — ein Druckziel, vier Wege, ein vertrauenswürdiger Ablauf
 
-> **Stand 30.08.2026 · Produkt- und Gestaltungskonzept, kein
-> Umsetzungsauftrag.** Der Bauplan bestimmt den Produktumfang, die Roadmap
-> bestimmt offene Arbeit und Reihenfolge. Dieses Dokument erklärt die
-> gemeinsame Produktrichtung. Bei einem Widerspruch gilt der Bauplan.
+> **Entscheidung 03.10.2026 · Die fünf Erlebnisse aus §4 gelten gemeinsam.**
+> Robert hat Druckziel, Übergabestatus, Befundkarte, Änderungsvorschau und
+> Übergabebeleg als gemeinsamen Vertrag angenommen (RM-090). §4.6 grenzt
+> Daten, Zuständigkeiten und Abnahme ab. Die Umsetzung ist damit nicht als
+> abgeschlossen bestätigt; offene Arbeit führt ausschließlich RM-090.
+> Die übrigen Gestaltungsempfehlungen behalten ihren Konzeptstatus.
+> Bei einem Widerspruch gilt der Bauplan; er wird hier nicht geändert.
 
 Anlass ist die Rückmeldung eines Dentalanwenders, der beruflich mit exocad und
 3Shape, privat mit Fusion und Solid Edge sowie mit FDM- und Resindruckern
@@ -23,8 +26,9 @@ führt sie unter einem gemeinsamen Kundenerlebnis zusammen.
 | Geltung | Inhalt |
 |---|---|
 | **Durch Bauplan und Entscheidungen festgelegt** | Vier Hauptwege in einer gemeinsamen Szene; non-destruktiver Verlauf; jede Geometrieänderung als registrierte Operation; ein Undo je Agentenvorschlag; bestehendes Fensterschema mit Werkzeugleiste, linker Projektzone, Viewport, rechtem Bericht/Chat und Status; kein Einfach-/Profi-Modus; nach der Gerätefreischaltung ohne Konto und offline nutzbar; ohne KI fällt nur der Chat aus; kein eigener Slicer. |
-| **Dieses Konzept empfiehlt** | Ein sichtbares Druckziel, einen ehrlich eingegrenzten Übergabestatus, ein einheitliches Muster für Befund und Änderungsvorschlag, einen Übergabebeleg sowie eine ruhigere visuelle Hierarchie im bestehenden Fenster. |
-| **Nicht Gegenstand dieses Dokuments** | Umsetzung, Termine, Priorisierung, neue Roadmap-Einträge, ein Umbau zum Befehlsband oder eine Änderung der Produktgrenzen. |
+| **Als gemeinsamer Vertrag angenommen (RM-090)** | Die fünf Erlebnisse aus §§4.1–4.5 mit Daten-, Zuständigkeits- und Abnahmevertrag aus §4.6; Anschluss an die vorhandenen Anzeigen und Fachwege. |
+| **Dieses Konzept empfiehlt darüber hinaus** | Eine ruhigere visuelle Hierarchie im bestehenden Fenster. |
+| **Nicht Gegenstand dieses Dokuments** | Termine, eine eigene Arbeitsliste, ein Umbau zum Befehlsband oder eine Änderung der Produktgrenzen. |
 
 ### 1.2 Die Positionierung in einem Satz
 
@@ -276,6 +280,181 @@ STL-Format nicht zuverlässig mitgeführt.
 [Trotzdem als STL speichern]
 3MF wählen
 ```
+
+### 4.6 Gemeinsamer Daten- und Abnahmevertrag (RM-090)
+
+Die Entscheidung umfasst alle fünf Erlebnisse für alle vier Hauptwege
+(Bauplan §2.2). Sie verbindet die vorhandenen Profile, Prüfungen, Vorschauen
+und Ausgaben. Sie erweitert weder den fachlich unterstützten Prüfumfang noch
+die freigegebenen Resin-Verfahren oder Slicerfähigkeiten. Die folgenden
+Vertragsangaben sind semantische Anforderungen; konkrete Typen und APIs
+werden in der zuständigen Kernschicht festgelegt (Bauplan §9).
+
+#### Gemeinsame Grundlage und Zuständigkeiten
+
+Jede bewertende Anzeige bezeichnet eindeutig den Dokumentstand, die
+betroffenen Objektkennungen und den Umfang (Szene, Auswahl oder Platten),
+die tatsächlichen Profilkennungen mit ihrer Herkunft und die für die Aussage
+relevante Orientierung. Eine Änderung dieser Grundlage entwertet abhängige
+Ergebnisse. Eine reine Kameraänderung tut das nicht. Auswahlprüfungen werden
+nie als Prüfung des gesamten Projekts ausgegeben.
+
+Für jede unterstützte Prüfung sind Anwendbarkeit, benötigte Grundlagen und
+Ergebnisstand unterscheidbar: noch nicht begonnen, läuft, abgeschlossen,
+abgebrochen, fehlgeschlagen oder für dieses Ziel nicht anwendbar. Eine fehlende
+Grundlage ist kein bestandenes Ergebnis. Ein nicht unterstützter Prüfumfang
+wird benannt und fließt nicht als erfolgreich durchgeführte Prüfung ein.
+Abschluss und Befundfreiheit sind getrennte Angaben.
+
+| Verantwortung | Vertrag |
+|---|---|
+| `core/knowledge`, Objektprofile und Projektzustand | Liefern tatsächliches Druckziel, Profilherkunft, fehlende oder ersetzte Angaben und fachliche Gültigkeit. Eine Ersatzvorgabe darf die Vollständigkeit der ursprünglichen Grundlage nicht vortäuschen. |
+| `core/perceive`, `core/geom`, `core/slice` | Liefern Befunde, Orte, Werte, Unsicherheit und Herkunft ihrer unterstützten Prüfungen; sie bestimmen Schwellen und fachliche Folgen. Die UI rechnet keine Ersatzanalyse. |
+| `core/scene` und Vorschauauswertung | Liefern reproduzierbare Vorher-/Nachher-Stände, Unterschiede und die registrierten Operationen einer Übernahme. |
+| `core/export` und bestehender Slicer-/G-Code-Weg | Liefern ausgeführten Umfang, Dateien, Formateigenschaften, Gegenprobe sowie getrennte Übergabe-, Slicer- und G-Code-Ergebnisse. |
+| Session und Arbeiter in `ui/` | Binden Aufträge und Rückgaben an ihre Grundlage, verwalten Fortschritt und Abbruch und verwerfen verspätete Antworten. |
+| Bestehende UI-Zonen | Zeigen dieselben fachlichen Angaben, verständliche Folgen und passende Handlungen. Menüs, Werkzeugleisten, Dialoge und Viewport bleiben vollständige Einstiege; kein Abnahmeschritt verlangt die Befehlspalette oder den Chat. |
+
+Geometrie-, Schichtanalyse- und G-Code-Werte tragen ihre Herkunft nach
+Bauplan §22.5. Unbekannte Werte bleiben unbekannt. Der Vertrag übernimmt die
+Wartezeit- und Abbruchregeln aus §2.8, das Fensterschema aus §2.5 und die
+Vorschauqualität aus §26.5; dafür entsteht kein zweiter Mechanismus.
+
+#### Druckziel: wissen, wofür eine Aussage gilt
+
+**Anschluss:** `HeaderBar.show_profile`, `MainWindow._update_header`, der
+Druckerknopf, Datei → Drucken vorbereiten, die Objekt-/Filamentzuordnung und
+der vorhandene Bauraum im Viewport. Die dauerhafte Zusammenfassung zeigt
+Drucker/Verfahren und Vollständigkeit; bei mehreren Materialien nennt sie
+die Mehrfachzuordnung und führt zu deren bestehenden Angaben.
+
+**Datenvertrag:** Ein Ziel umfasst Druckerprofil und Bauraum, Verfahren,
+Material je betroffenem Körper sowie die jeweils relevante Orientierung.
+Fehlende Spule, unbekanntes Profil und fehlendes Materialprofil sind
+unterschiedliche Sachverhalte: Ob eine fehlende Lagerreferenz die Bewertung
+einschränkt, bestimmt die tatsächlich noch verfügbare Profilgrundlage.
+Fehlt eine notwendige Angabe, bleiben nur davon unabhängige geometrische
+Aussagen gültig. Profilwechsel löst die notwendigen Neubewertungen aus.
+
+**Abnahme:** FDM, fachlich unterstütztes Resin, mehrere Materialien,
+fehlende Spule mit weiterhin gültigem Profil, fehlendes Materialprofil und
+unbekanntes importiertes Druckerprofil jeweils öffnen und sichtbar erklären.
+Ziel ändern, abbrechen, übernehmen, rückgängig/wiederholen und das Projekt
+wieder öffnen: Kopf, Objektzuordnung und Bericht nennen dieselbe Grundlage.
+Während einer Neubewertung bleibt der vorige gültige Stand als solcher
+erkennbar; kein Urteil wird dem neuen Ziel zugeschrieben, bevor es dazu passt.
+
+#### Übergabestatus: den nächsten sinnvollen Schritt erkennen
+
+**Anschluss:** Der vorhandene `ReportPanel` und der Weg zur Druckvorbereitung.
+Die vier Zustände aus §4.2 ersetzen eine bloße Ableitung von „Druckbereit“
+aus leeren Fehler-/Warnungslisten. Text, Symbol, Prüfumfang und eine
+hervorgehobene Hauptaktion gehören zusammen.
+
+**Datenvertrag:** Bekannte schwere Befunde ergeben „Übergabe nicht empfohlen“;
+zusätzliche unvollständige Prüfungen bleiben sichtbar. Ohne solchen Befund
+ergibt eine fehlende Grundlage oder ausstehende, abgebrochene oder
+fehlgeschlagene notwendige Prüfung „Bewertung unvollständig“. Bei vollständiger
+unterstützter Bewertung mit einem offenen Risiko gilt „Entscheidung
+erforderlich“. Erst ohne diese Einschränkungen gilt „Bereit zur Übergabe“.
+Bewusst angenommene Risiken bleiben im Bericht und Beleg sichtbar; ihre
+Annahme ist keine fachliche Widerlegung. Ein schwerer Befund wird durch eine
+Exportentscheidung nicht zu einem positiven Status.
+
+**Abnahme:** Jeden Zustand einschließlich Überschneidung schwerer Befund plus
+fehlende Prüfung auslösen. Laufende, abgebrochene und fehlerhafte Prüfung
+zeigt ihren nächsten Schritt. Profil-/Orientierungsänderung, Undo/Redo und
+später eintreffende Befunde aktualisieren den Status. Trotz Restbefund bleibt
+der Export erreichbar; eine Bestätigung benennt genau den aktuellen Umfang
+und die verbleibenden Risiken. Kein Weg verspricht eine Druckgarantie.
+
+#### Befundkarte: Ursache, Folge und Handlung verstehen
+
+**Anschluss:** `ReportPanel._append`, `actions_for`, die vorhandene
+Fundstellenaktivierung und Analysekarten. Die Reihenfolge aus §4.3 gilt auch
+ohne Tooltip. Einzelheiten bleiben aufklappbar und per Tastatur erreichbar.
+
+**Datenvertrag:** Ein Befund trägt seinen Bezug zur gemeinsamen Grundlage,
+Art/Schweregrad, verständliche Aussage und Folge, bekannte räumliche Bezüge,
+Herkunft und Werte samt Einheiten sowie geeignete Handlungen mit bekannten
+Nebenfolgen. Ohne sicheren Ort wird keiner erfunden. Eine ungeklärte Folge
+oder eine nicht verfügbare Handlung wird mit Grund und Rückweg erklärt.
+
+**Abnahme:** Netzfehler, Wandstärke, Überhang, Profilunsicherheit,
+Schichtanalyse und G-Code-Befund jeweils gegen die fünf Fragen aus §4.3
+prüfen. Fundstelle, Haupthandlung und Einzelheiten sind mit Maus und Tastatur
+erreichbar. Ortloser Befund und nach Änderung verschwundener Körper führen
+zu einem verständlichen Zustand. Kartenwechsel entfernt fremde Legenden und
+Wartehinweise; Material-/Orientierungswechsel entwertet abhängige Aussagen.
+
+#### Änderungsvorschau: Folgen vor der Übernahme beurteilen
+
+**Anschluss:** Bestehende Session-Vorschau, `SceneDifference`,
+Operationsdialoge, Berichtshandlungen und Chatvorschläge. Derselbe Vergleich
+steht unabhängig vom Einstieg bereit.
+
+**Datenvertrag:** Vorher und Nachher gehören zum selben Vorschlag und
+räumlichen Bezug. Die kompakte Erklärung nennt Ziel, betroffene Objekte,
+Grundlage, Unsicherheit, Außenmaße, Körperzahl, behobene/verbleibende Befunde
+und bekannte Verluste. Noch nicht berechnete Befundänderungen sind sichtbar
+unbekannt. Grobe Vorschau und abweichende Endqualität werden benannt.
+Übernehmen bestätigt ausschließlich den aktuell sichtbaren, passenden Stand
+und erzeugt genau eine Transaction; ein globales Undo nimmt sie vollständig
+zurück. Eingabekorrekturen benutzen die bestehende Reihenfolge der Vorschauen.
+
+**Abnahme:** Reparatur, Maßänderung, Teilen und Materialzuweisung vom Menü
+und einer passenden Berichtshandlung aus vergleichen; der Chat verwendet
+denselben Vertrag, wenn eingerichtet. Frühes Übernehmen, schnelle Eingaben,
+Auswahl-/Projektwechsel, Undo während der Rechnung, Abbruch, Fehler und
+verspätete Antworten dürfen weder eine fremde Erklärung noch ein veraltetes
+Ergebnis übernehmen. Nach Übernahme, Undo/Redo und Speichern/Wiederöffnen
+bleiben Ergebnis und Verlauf reproduzierbar. Mehrdeutigkeit verlangt die
+fachliche Rückfrage, bevor daraus eine Änderung wird.
+
+#### Übergabebeleg: nachvollziehen, was wirklich ausgegeben wurde
+
+**Anschluss:** `_ExportWorker`, `_announce_written`, Druckvorbereitung und
+`_opened_in_slicer`; Dateibeleg und Slicerfortschritt bleiben unterscheidbar.
+
+**Datenvertrag:** Der Beleg stammt aus dem eingefrorenen ausgeführten Auftrag
+und dessen Ergebnissen. Er enthält Ziel/Profil/Verfahren/Material/Orientierung,
+Objekte und Platten, tatsächlich geschriebene Dateien mit Ort, Format und
+Einheit, erhaltene/verlorene Eigenschaften, angenommene Risiken und Herkunft
+der Kennzahlen. Die Export-Gegenprobe benennt geprüftes Artefakt und Umfang
+oder ausdrücklich „nicht durchgeführt“ mit Grund. Ein erfolgreicher
+Dateischreibvorgang ist noch keine Gegenprobe und kein erfolgreicher
+Slicerstart; eingelesener G-Code ist ein eigener Nachweis.
+
+**Abnahme:** 3MF-Baugruppe, mehrere STL, Auswahl und Gesamtszene, mehrere
+Platten sowie Übergabe mit und ohne mitgegebene Einstellungen. Profilwechsel
+während des Arbeiters verändert den alten Beleg nicht. Abbruch, teilweise
+geschriebene Ausgabe, Schreibfehler, abweichende Gegenprobe und fehlender
+Slicer nennen tatsächliche Ergebnisse und konkrete Wiederholungsschritte.
+Ein späteres Undo ändert das Projekt, nicht die bereits erzeugte Datei;
+diese Bindung bleibt im Beleg sichtbar. Ein neuer Export hat einen neuen
+Beleg. Ohne Ziel-Slicer ist ein normaler Dateiexport vollständig möglich.
+
+#### Umsetzungsstand und gemeinsame Abnahme
+
+Die Bestandsprüfung zur Entscheidung hat folgende Anschlüsse gefunden; sie
+ist keine Erledigtmeldung. Die verbindliche offene Arbeitsliste steht bei
+[RM-090](../ROADMAP.md#rm-090):
+
+| Erlebnis | Vorhanden | Noch herzustellender Anschluss |
+|---|---|---|
+| Druckziel | Druckerknopf, Profile, Körpermaterial, Bauraum | Gemeinsame sichtbare Vollständigkeit und fachlicher Umgang mit fehlenden/ersetzten Profilen |
+| Übergabestatus | Bericht, Befundzähler, Export trotz Befund | Gemeinsame Ableitung aus Grundlagen, Prüfzuständen und Befunden statt „Druckbereit“ allein nach Zählern |
+| Befundkarte | Meldung, Symbol, Ort, Handlung; Herkunft teilweise im Tooltip | Durchgehend sichtbare Folge/Grundlage und zugängliche Einzelheiten/Nebenfolgen |
+| Änderungsvorschau | Reihenfolge, Szenenvergleich, sichere Übernahme, eine Transaction | Gemeinsame Erklärung von Maßen, Körperzahl, Befundänderungen und Verlusten an allen Einstiegen |
+| Übergabebeleg | Datei-/Slicerquittung, getrennte Ergebniswege | Beleg des ausgeführten Auftrags samt Risiken/Formateigenschaften und tatsächlichem Gegenprobenachweis |
+
+Die Abnahme fährt die vier Hauptwege durch dieselben fünf Erlebnisse. Sie
+belegt die Zustandsmatrix mit gezielten Kern-/Anschlusstests und die sichtbare
+Bedienung am echten Fenster: Menü-/Werkzeugweg, Tastaturfokus, sechs Sprachen,
+helles/dunkles Thema, knappe Fensterbreite, Abbruch und Wiederaufnahme. Jeder
+Lauf nennt Modell, Zielgrundlage, geprüften Umfang und Ergebnis; offene
+Kernabhängigkeiten bleiben ausdrücklich offen. Der Dokumentationsbeschluss
+allein erfüllt keines dieser Implementierungs- oder Fensterkriterien.
 
 ## 5. Das bestehende Fenster wird klarer, nicht neu erfunden
 

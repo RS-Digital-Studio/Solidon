@@ -68,7 +68,7 @@ from app.ui.session import Session  # noqa: E402
 from app.ui.settings import UiSettings  # noqa: E402
 from app.ui.theme import apply_theme  # noqa: E402
 from tools import make_video as video_base  # noqa: E402
-from tools.make_figures import release_viewport  # noqa: E402
+from tools.make_figures import grab_uncovered, release_viewport  # noqa: E402
 from tools.make_showpiece import SIZES as HOUSING_SIZES  # noqa: E402
 from tools.make_showpiece import steps as housing_steps  # noqa: E402
 
@@ -234,12 +234,7 @@ class Recorder:
             renderer.render_now()
             self.app.processEvents()
 
-        screen = self.window.screen()
-        if screen is None:
-            raise SystemExit("Kein Bildschirm verfügbar — kein Video erzeugt.")
-        captured = screen.grabWindow(self.window.winId()).toImage()
-        if captured.isNull():
-            raise SystemExit("Das sichtbare Solidon-Fenster ließ sich nicht aufnehmen.")
+        captured = grab_uncovered(self.window).toImage()
         captured.setDevicePixelRatio(1.0)
         frame = captured.scaled(
             *self.frame_size,

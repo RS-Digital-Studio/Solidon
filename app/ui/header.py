@@ -607,6 +607,13 @@ class HeaderBar(QWidget):
             self.printer.full_text(),
         )
 
+    def show_target(self, title: str, details: str) -> None:
+        """Die belegte Zielgrundlage bleibt am vorhandenen Druckerknopf erreichbar."""
+        self.printer.setText(title)
+        self.printer.setToolTip(details)
+        self.printer.setAccessibleDescription(details)
+        self._reflow()
+
 
 def header_stylesheet(theme: str) -> str:
     """Eine Kante nach unten, sonst nichts.

@@ -31,6 +31,16 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-175: Der Bauplan nennt alle 18 Bedingungsarten und die Zweiklick-Werkzeuge (03.10.2026)](#rm-175-der-bauplan-nennt-alle-18-bedingungsarten-und-die-zweiklick-werkzeuge-03102026) |
+| 2026-10-03 | [RM-278: Ein Zug in der Öffnung einer Senkbohrung lässt den Körper stehen und nennt den nächsten Schritt (03.10.2026)](#rm-278-ein-zug-in-der-öffnung-einer-senkbohrung-lässt-den-körper-stehen-und-nennt-den-nächsten-schritt-03102026) |
+| 2026-10-03 | [RM-291: Das Fadenkreuz der Stellenwahl zeichnet der Renderer (03.10.2026)](#rm-291-das-fadenkreuz-der-stellenwahl-zeichnet-der-renderer-03102026) |
+| 2026-10-03 | [RM-299: Die Handbuchanleitungen ordnen allein über die Gliederung und nennen Spulen aus dem Katalog (03.10.2026)](#rm-299-die-handbuchanleitungen-ordnen-allein-über-die-gliederung-und-nennen-spulen-aus-dem-katalog-03102026) |
+| 2026-10-03 | [RM-302: Ein bewegter Körper belegt seine Merkmale einmal je Geometrie und Matrix (03.10.2026)](#rm-302-ein-bewegter-körper-belegt-seine-merkmale-einmal-je-geometrie-und-matrix-03102026) |
+| 2026-10-03 | [RM-321: Vorschau und Schnitt eines gezogenen Langlochs liegen an jeder Mündung gleich (03.10.2026)](#rm-321-vorschau-und-schnitt-eines-gezogenen-langlochs-liegen-an-jeder-mündung-gleich-03102026) |
+| 2026-10-03 | [RM-326: Die schnelle Druckausrichtung richtet alle Körper aus und meldet den, der nirgends steht (03.10.2026)](#rm-326-die-schnelle-druckausrichtung-richtet-alle-körper-aus-und-meldet-den-der-nirgends-steht-03102026) |
+| 2026-10-03 | [RM-409: Auto Split plant weiter, wenn eine Stiftbohrung beim Beurteilen scheitert (03.10.2026)](#rm-409-auto-split-plant-weiter-wenn-eine-stiftbohrung-beim-beurteilen-scheitert-03102026) |
+| 2026-10-03 | [RM-421: Die Randprüfung der Bausteine zählt Mündung und Material hinter dem Rand (03.10.2026)](#rm-421-die-randprüfung-der-bausteine-zählt-mündung-und-material-hinter-dem-rand-03102026) |
+| 2026-10-03 | [RM-450: Abschneiden fragt bei gleich großen Restflächen nach (03.10.2026)](#rm-450-abschneiden-fragt-bei-gleich-großen-restflächen-nach-03102026) |
 | 2026-10-03 | [RM-484: PrusaSlicers Warnungen erreichen den Bericht, und der Raftabstand ist eigens wählbar (03.10.2026)](#rm-484-prusaslicers-warnungen-erreichen-den-bericht-und-der-raftabstand-ist-eigens-wählbar-03102026) |
 | 2026-10-03 | [RM-305: Weitere Importe nutzen auch Druckplatten hinter der zwölften (03.10.2026)](#rm-305-weitere-importe-nutzen-auch-druckplatten-hinter-der-zwölften-03102026) |
 | 2026-10-03 | [RM-304: Weitere Modelle beachten die Filamente der belegten Druckplatten (03.10.2026)](#rm-304-weitere-modelle-beachten-die-filamente-der-belegten-druckplatten-03102026) |
@@ -39281,3 +39291,437 @@ eingeordnet. Entwicklungstor am zusammengeführten Stand: 22.006 bestanden,
 83 übersprungen, danach `test_errors` 344 grün; Ruff, Format und mypy grün.
 Fenster-, Renderer- und Leistungsprüfungen bleiben Releasearbeit.
 
+## RM-175: Der Bauplan nennt alle 18 Bedingungsarten und die Zweiklick-Werkzeuge (03.10.2026)
+
+<a id="rm-175-der-bauplan-nennt-alle-18-bedingungsarten-und-die-zweiklick-werkzeuge-03102026"></a>
+<a id="rm-175"></a>
+
+**RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen.**
+  Seit dem 14.09.2026 kennt der Löser fünfzehn Bedingungsarten statt zwölf (`angle` in
+  Grad, `equal` für Länge oder Radius, `midpoint`), „konzentrisch" ist bewusst keine Art,
+  und der Editor zeichnet Vieleck und Langloch aus zwei Klicks — frei gezeichnet, bemaßt
+  getippt. §30.1 nennt noch die zwölf Arten; der Bauplan wird nur mit Ansage geändert.
+  Abnahme: sechs Sätze nachtragen (Liste der Arten, Wertebereich des Winkelmaßes 0 bis 180
+  Grad und Speicherung in Grad, „konzentrisch" als Oberflächenname, die zwei Werkzeuge,
+  die Regel „gezeichnet heißt frei, getippt heißt bemaßt" samt Ausnahme für Felder der
+  Leiste, und nach §16.2 der Satz, dass eine neue Bedingungsart `format_version` nicht
+  erhöht). Der Wortlaut steht im Paketbericht W2 der Sitzung vom 14.09.2026.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026).
+  Registerabgleich 02.10.: offen, Eintrag veraltet — der Code kennt 18 Bedingungsarten statt 15 (dazu `on_curve`, `smooth`, `curvature`, `app/core/types.py:2529`); der „Paketbericht W2“ mit dem Wortlaut ist nicht versioniert.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Bauplan §9 zählt alle 18 Arten aus
+  `SketchConstraintKind` auf, §30.1 nennt Winkel in Grad strikt zwischen 0 und 180°, `concentric`
+  als Oberflächenname, Punkt auf Kurve, tangenten- und krümmungsstetig sowie Vieleck und Langloch
+  aus zwei Klicks; §16.2 sagt, dass eine neue serialisierte Bedingungsart `format_version` erhöht.
+  Nachgetragen mit `803337234` (02.10.2026) auf Roberts ausdrücklichen Wunsch. Die Bestandsprüfung
+  fand keine fehlende Ergänzung. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\bedienung\construction-ui.md` (RM-175).
+
+**Abschluss:** Der Nachtrag steht seit `803337234` (02.10.2026, auf Roberts
+ausdrücklichen Wunsch) im Bauplan. §9 zählt die 18 Arten aus
+`SketchConstraintKind` in `app/core/types.py` auf, auch `on_curve`, `smooth`
+und `curvature`, die nach dem ursprünglichen Auftrag hinzukamen. §30.1 nennt
+Winkel in Grad strikt zwischen 0 und 180°, `concentric` als Oberflächenname,
+die Referenzbedingung und Vieleck und Langloch aus zwei Klicks; der durch die
+Klicks bestimmte Wert bleibt frei, ein getippter wird Maßbedingung. Die offene
+Frage ist anders entschieden, als der alte Auftragstext erwartete: Nach §16.2
+erhöht eine neue serialisierte Bedingungsart `format_version`. Die
+Bestandsprüfung vom 03.10.2026 fand keine fehlende Ergänzung
+(`F:\solidon-review-reports\codex-2026-10-03\bedienung\construction-ui.md`).
+Changelog: **nein**, der Punkt ändert nur den Bauplan.
+
+## RM-278: Ein Zug in der Öffnung einer Senkbohrung lässt den Körper stehen und nennt den nächsten Schritt (03.10.2026)
+
+<a id="rm-278-ein-zug-in-der-öffnung-einer-senkbohrung-lässt-den-körper-stehen-und-nennt-den-nächsten-schritt-03102026"></a>
+<a id="rm-278"></a>
+
+**RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper.**
+  Aus der Durchsicht v0.5.1 (rest-auswahl, REST-AUSWAHL-03; am Stand davor genauso).
+  Wabenhalter, `hole_4` gewählt, Maße im Bild; Druck 1,6 mm neben der Mitte (in der
+  Öffnung Ø 4,4), Zug 5,4 mm nach außen: ein Schritt `translate_object`, der ganze Halter
+  wandert, die Auswahl ist weg
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-auswahl/scenario_langloch.py`,
+  `out/langloch-neu.txt`). Ursache: Der Klick wählt am Wabenhalter Bohrung und Senkung
+  zusammen (`_one_cavity`); die Ansicht hält dann kein einzelnes `_selected_feature`,
+  `slot_handle_feature()` gibt nichts, es stehen keine Langlochknöpfe, und
+  `_pull_at_the_hole` greift nicht — der Druck fällt an den Navigator, und dort führt
+  links den gewählten Körper. Das ist das Bild, das Robert am 11.09.2026 meldete („wenn
+  ich … zum langloch ziehen will verschiebe ich immer den körper“), hier an
+  Senkbohrungen. Rückweg für den Kunden heute: Strg+Z. Die Bedienregel bleibt bei der
+  bestehenden Geometriegrenze: Eine Senkung wird nicht mit einem Langloch aufgeweitet.
+  Deshalb bleibt die Form unverändert; der Viewport merkt den Linksdruck in der
+  gemeinsam gewählten Öffnung bis `CLICK_SLACK`. Ein einfacher Klick läuft über den
+  normalen Auswahlweg; ein echter Zug auf der Bohrung oder der sichtbaren Senkfläche
+  wird vor Platzierung und Navigator abgefangen. Zusätzliche Tastendrücke lösen die
+  Sperre nicht; sie endet erst beim Loslassen der linken Taste. Der Viewport zeigt den
+  passenden Handlungshinweis aus `actions_for`. Wer die ganze Senkbohrung versetzen
+  will, nutzt die bestehende Gruppenhandlung *Merkmal verschieben*. Regressionen:
+  `test_viewport_decisions.py::test_a_selected_countersunk_cavity_refuses_the_slot_pull_before_drag_fallback`
+  und `test_viewport_decisions.py::test_a_blocked_slot_pull_is_announced_as_a_hint`;
+  beide bestanden, Ruff, Format und `git diff --check` grün, unabhängiges Review ohne
+  Befund.
+  Native Abnahme am Wabenhalter bleibt Release-Sache. Abnahme: Ein Zug in der Öffnung
+  einer gewählten Senkbohrung erzeugt keinen `translate_object` und die Statuszeile nennt
+  den nächsten Handlungsschritt.
+  Registerabgleich 02.10.: Ab `796c6d003` umgesetzt (beide Regressionstests grün); offen nur die Abnahme am Fenster.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Am Fenster abgenommen: Wabenhalter
+  über die Startansicht geöffnet, Bohrung 3 und 4 im Modell gewählt (Bohrung und Senkung gemeinsam).
+  Ein Zug aus der Mündung wird abgefangen, die Statuszeile verlangt, zuerst die Senkung zu entfernen
+  oder eine Bohrung ohne Senkung zu wählen. Auch der versetzte Zug an Bohrung 4 lässt Lage, Maße und
+  Verlauf stehen, kein `translate_object`; ein einfacher Klick wechselt weiter zwischen den
+  Bohrungen. Bildschirmpunkte belegen keinen Millimeterwert des alten 1,6/5,4-mm-Falls. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\bedienung\root-evidence.md` (RM-278), Bilder
+  `native-rm278-*.jpg`.
+
+**Abschluss:** Umgesetzt in `796c6d003` (02.10.2026): Echte Züge ab
+`CLICK_SLACK` auf Bohrung oder Senkfläche fängt die Ansicht vor Platzierung
+und Navigator ab, ein einfacher Klick bleibt normal; Regressionen und
+unabhängiges Review waren grün, das Entwicklungstor von `cafd47ccc` enthält
+den Commit. Am 03.10.2026 am echten Fenster abgenommen: Wabenhalter über die
+Startansicht, Bohrung 3 und 4; Zug aus der Mündung und versetzter Zug an
+Bohrung 4 erzeugen keinen `translate_object`, Lage, Maße und Verlauf bleiben,
+die Statuszeile nennt den Weg (Senkung entfernen oder Bohrung ohne Senkung
+wählen). Bilder `native-rm278-before.jpg`, `native-rm278-drag-blocked.jpg` und
+`native-rm278-hole4-blocked.jpg` unter
+`F:\solidon-review-reports\codex-2026-10-03\bedienung\`. Changelog: **ja** —
+der Fehler bestand laut Durchsicht v0.5.1 schon am Stand davor, `796c6d003`
+liegt in keinem Tag.
+
+## RM-291: Das Fadenkreuz der Stellenwahl zeichnet der Renderer (03.10.2026)
+
+<a id="rm-291-das-fadenkreuz-der-stellenwahl-zeichnet-der-renderer-03102026"></a>
+<a id="rm-291"></a>
+
+**RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht.** Aus der Durchsicht v0.5.1 (Inventar 1.4,
+  `konzepte/nachweise-release-0.5.1/reports/fenster.md`, Empfehlung). Heute liegen vier deckende Arme als Widgets über der
+  Ansicht (`app/ui/viewport.py`, FENSTER-17, `336c7fdc8`). Weg: die Arme in den Renderer,
+  Fokus und Namen weiter über ein kleines Widget. Kein Fehler. Abnahme: das Fadenkreuz
+  zeichnet der Renderer, Tastaturweg und Name bleiben.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die vier Arme zeichnet der
+  Renderer, zwei dauerhafte Flächen mit freier Mitte; ein einzelner Bildpunkt trägt den Qt-Fokus,
+  kein Teil ist wählbar, vorhandene Puffer werden wiederverwendet. 22 Fälle in
+  `test_local_recognition_flow.py` (Skalierung 1/1,5/2, Bewegung, Auswahl, Abbruch, Fokusrückgabe).
+  Am Fenster: Weg 1 → Körper → *Ändern* → *Merkmale an dieser Stelle erkennen* → Pfeil rechts →
+  Enter; die Marke wandert, die örtliche Erkennung öffnet, Abbrechen schließt ohne Verlaufsschritt,
+  auch über Rechtsklick. Unabhängige Durchsicht ohne Befund. Belege unter
+  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `root-evidence.md` (RM-291),
+  `rm291-rendered-reticle.jpg`, `root-independent-review.md`.
+
+**Abschluss:** Die vier Arme liegen nicht mehr als deckende Widgets über der
+Ansicht, sondern im Renderer (`Viewport.set_surface_picker`,
+`_place_surface_picker`); Fokus und Name trägt ein einzelner Bildpunkt.
+Trefferkoordinaten in Gerätepixeln und logische Armmaße sind getrennt, kein
+Teil ist wählbar, Außen- und Innenfarbe bleiben vor jedem Material sichtbar,
+beim Ende kehrt der Fokus zurück. 22 Fälle grün, unabhängige Durchsicht ohne
+Befund (`root-independent-review.md`). Am 03.10.2026 am echten Fenster
+abgenommen: Weg 1, Stellenwahl mit Pfeiltaste und Enter, Abbrechen ohne
+Verlaufsschritt, Einstieg auch über Rechtsklick (Bild
+`rm291-rendered-reticle.jpg` unter
+`F:\solidon-review-reports\codex-2026-10-03\bedienung\`). Changelog: **nein**
+— der Punkt war eine Empfehlung ohne Fehler, Tastaturweg und Name bleiben.
+
+## RM-299: Die Handbuchanleitungen ordnen allein über die Gliederung und nennen Spulen aus dem Katalog (03.10.2026)
+
+<a id="rm-299-die-handbuchanleitungen-ordnen-allein-über-die-gliederung-und-nennen-spulen-aus-dem-katalog-03102026"></a>
+<a id="rm-299"></a>
+
+**RM-299 — Handbuch: Reste aus dem Code-Review.** Aus dem Release 0.5.1
+  (Code-Review des Handbuchumbaus,
+  `konzepte/nachweise-release-0.5.1/reports/review-handbuch.md`). (B5)
+  `Guide.part` und `GuidePart` sind entfernt. Startliste, Handbuchseite und
+  Videokapitel beziehen ihre Zuordnung jetzt allein aus `manual.OUTLINE`.
+  (B6) `tools/make_guides.py` bildet die Filamentnamen aus `tr()` im aktiven
+  Katalog; die feste Sechs-Sprachen-Tabelle ist entfernt. Nachweis:
+  `tests/test_guides.py -m "not rendered"` (113 bestanden), der fokussierte
+  Fenster-Test zur Seitengruppierung (1 bestanden), Kernisolation und harte
+  Regeln (437 bestanden), Ruff und Format sauber; unabhängiges Review ohne
+  Befund. Das gemeinsame Entwicklungstor bleibt wegen fremder Änderungen im
+  Arbeitsbaum rot; der Index enthält gemischte RM-Arbeit. Sicherer Einzelcommit
+  und Archivierung folgen nach bestandenem Tor. RM-283 bleibt zuständig für
+  Feldabnahme und Nummernplatzierung auf Text in zwei Anleitungsbildern.
+  Registerabgleich 02.10. (Stand `4449e3370`): offen — „`GuidePart` sind entfernt“ ist irreführend, im Code steht es noch (`app/core/guides.py:37`, `:184`); die Änderung liegt nur ungesichert im Arbeitsbaum.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Am Integrationsstand nachgesehen:
+  `GuidePart` und `Guide.part` fehlen in `app`, `tools` und `tests`; Startliste, Handbuchseite und
+  Videokapitel ordnen allein über `manual.OUTLINE`, Spulennamen kommen aus `tr()` im aktiven
+  Katalog. Die Anleitungstests liefen im Hauptbaum im Prozess mit 222 grünen Fällen. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\bedienung\import-history-move.md` (RM-283/299).
+
+**Abschluss:** B5 und B6 aus dem Code-Review des Handbuchumbaus liegen seit
+`2ffb1887c` (02.10.2026) auf main: `Guide.part` und `GuidePart` sind entfernt
+(am Integrationsstand weder in `app` noch in `tools` oder `tests`),
+Startliste, Handbuchseite und Videokapitel ordnen allein über
+`manual.OUTLINE`, `tools/make_guides.py` bildet Filamentnamen aus `tr()` im
+aktiven Katalog. Nachweis: `tests/test_guides.py` ohne Fensterfälle (113), der
+Fenstertest zur Seitengruppierung, Kernisolation und harte Regeln (437),
+unabhängiges Review ohne Befund; das Entwicklungstor von `cce40d5ad` (20 569
+bestanden) enthält den Commit. Projektdateien speichern keine Anleitungsteile,
+eine Altdatei kann daran nicht scheitern. Feldabnahme und Nummernplatzierung
+bleiben bei RM-283. Changelog: **nein**, interne Quelle der Anleitungen.
+
+## RM-302: Ein bewegter Körper belegt seine Merkmale einmal je Geometrie und Matrix (03.10.2026)
+
+<a id="rm-302-ein-bewegter-körper-belegt-seine-merkmale-einmal-je-geometrie-und-matrix-03102026"></a>
+<a id="rm-302"></a>
+
+**RM-302 — Merkmale an Kopien: Reste aus dem Review.** Aus dem Release 0.5.1 (Review von `merkmale-an-kopien`,
+  `konzepte/nachweise-release-0.5.1/reports/review-kopien.md`). (a) Der Beleg `moved_twin` läuft
+  je bewegtem Körper und Auswertung zwei- bis dreimal, rund 32 ms je Aufruf bei 1,3
+  Millionen Dreiecken. (b) In `.claude/rules/operationen.md` fehlt seit dem Merge der Satz,
+  dass ein einzelner Körper seine Matrix meldet; beim nächsten Verdichten gehört er zurück.
+  Abnahme: ein Beleg je Körper und Auswertung, der Satz steht wieder.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `perceive/features.py::moved_twin`
+  merkt die Antwort nach beiden Geometrieabdrücken und der tatsächlichen Matrix in `SHARED_ANSWERS`;
+  andere Ecken oder eine andere Matrix ergeben einen neuen Beleg. Tests zählen die wirklichen
+  Prüfaufrufe für Verschieben und Kreismuster, kalt und aus dem Cache. Der Satz, dass ein einzeln
+  bewegter Körper seine Matrix in `OpResult.transform` meldet, steht wieder in
+  `.claude/rules/operationen.md`. Kumiko: erste Prüfung 8,65 ms, weitere 12–54 µs unter Last. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md` (RM-302).
+
+**Abschluss:** (a) `moved_twin` lief je bewegtem Körper und Auswertung zwei-
+bis dreimal, rund 32 ms je Aufruf bei 1,3 Millionen Dreiecken. Jetzt merkt
+`perceive/features.py` den Wahrheitswert nach beiden Geometrieabdrücken und
+der tatsächlichen Matrix (`SHARED_ANSWERS`); andere Ecken oder eine andere
+Matrix ergeben einen neuen Beleg. Die Tests zählen die echten Prüfaufrufe an
+direkter Prüfung, Übernahme, Auswertung, Verschieben und Kreismuster, kalt und
+aus dem Cache (`tests/test_matching.py`). (b) Der Satz zur Matrix eines
+einzeln bewegten Körpers steht wieder in `.claude/rules/operationen.md`. Am
+Kumiko-Gitter kostet die erste Prüfung 8,65 ms, jede weitere 12–54 µs, unter
+Last und ohne §31-Anspruch
+(`F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md`).
+Changelog: **nein**, eine interne Wiederholung ohne anderes Ergebnis.
+
+## RM-321: Vorschau und Schnitt eines gezogenen Langlochs liegen an jeder Mündung gleich (03.10.2026)
+
+<a id="rm-321-vorschau-und-schnitt-eines-gezogenen-langlochs-liegen-an-jeder-mündung-gleich-03102026"></a>
+<a id="rm-321"></a>
+
+**RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung
+  auf der Gegenseite gespiegelt.** Die Op zählt den Winkel gegen
+  `slot_frame` der positiven Achse (`units.positive_axis`), das
+  Vorschauwerkzeug entsteht in `placement` im Rahmen der Sitzfläche
+  (`seat_of`, deren Normale nach außen zeigt). Gerechnet am 30.09.2026 mit
+  beiden Rahmen: Sitz -Z, Winkel 45° → Vorschau (-0,707; 0,707; 0), Schnitt
+  (0,707; 0,707; 0); ebenso gespiegelt an -X und -Y, gleich an +Z. Dazu eine
+  Bohrung, die 0,5° bis 2,6° schief zu ihrer Sitzfläche steht
+  (`SLOT_ACROSS_LIMIT` bis `_SEAT_PARALLEL`): Winkel 0 in der Vorschau +X, im
+  Schnitt je nach Kipprichtung bis 90° daneben (gerechnet bei 1° und 2°,
+  Richtungen 0°/45°/90°: 90°, 45°, 0° Unterschied). Betrifft
+  Sacklöcher von unten und aus Seitenflächen nach -X/-Y, auch *Bohrung
+  ändern* an einem Langloch dort; *Bohrung setzen* mit Haken nicht (dort ist
+  die Flächennormale die Achse des Schnitts). So schon vor dem Umbau
+  (`surface.frame`). Nicht am Fenster gesehen — Fenstertests laufen zum
+  Release. Vorschlag: Das Vorschauwerkzeug von `slot_hole` und `resize_hole`
+  im Rahmen des Schnitts bauen (Winkel dort spiegeln, wo die Sitznormale
+  gegen die Achse zeigt), `PlacementFlow._tool_axes` nimmt dann die Achse.
+  Abnahme: Umriss der Vorschau und geschnittenes Langloch an einem Sackloch
+  von unten bei 45° auf 0,5° gleich. **Umsetzung und Geometrieprüfungen erledigt:** Vorschau
+  und Schnitt teilen den Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei einer
+  leicht geneigten Mündung. Die native Viewport-Abnahme bleibt dem Release vorbehalten.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Am Fenster abgenommen: Prüfkörper
+  40 × 30 × 12 mm mit Sackbohrung von unten als 3MF exportiert und neu geöffnet; *Zum Langloch
+  ziehen* mit 10,30 mm und 45° zeigt in Vorschau und Schnitt denselben diagonalen Umriss, genau ein
+  Schritt, Strg+Z und Strg+Y. Folgefund: Eine Richtung aus der rechten Spalte ging beim Wechsel zur
+  Maßkarte verloren (Karte 0°, Übernehmen aus). Die rechte Eingabe beginnt jetzt den Entwurf, nur
+  geänderter Text ist vor Rückschreiben geschützt (8 Fälle); am Fenster einmal 45 und Tab, Karte,
+  Vorschau und Übernehmen stimmen, Ergebnis 5,15 × 10,30 mm. Belege unter
+  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `root-evidence.md` (RM-321),
+  `construction-ui.md` (RM321).
+
+**Abschluss:** Vorschau und Schnitt teilen seit der Umsetzung auf main den
+Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei leicht
+geneigter Mündung; den Vergleich auf 0,5° hält
+`test_existing_slot_preview_uses_the_positive_feature_axis_for_every_angle`.
+Am 03.10.2026 am echten Fenster abgenommen: Sackbohrung von unten in einem als
+3MF neu geöffneten Prüfkörper, 45°, Vorschau und Ergebnis mit demselben
+diagonalen Umriss, ein Schritt, Undo und Redo (`native-rm321-preview-45.jpg`,
+`native-rm321-result-45.jpg`). Dabei gefunden und behoben: Die Richtung aus
+der rechten Spalte ging beim Wechsel zur Maßkarte verloren; jetzt beginnt die
+rechte Eingabe den Entwurf (`construction-slot-blind2.txt`, 8 Fälle), am
+Fenster nachgeprüft (`native-rm321-handoff-fixed.jpg`, alle unter
+`F:\solidon-review-reports\codex-2026-10-03\bedienung\`). Changelog: Die
+Richtung selbst trägt der 0.5.2-Punkt zum Winkel eines Langlochs; für den
+Feldübergang ist ein Punkt vorgeschlagen, falls sein Ursprung in v0.5.1 liegt.
+
+## RM-326: Die schnelle Druckausrichtung richtet alle Körper aus und meldet den, der nirgends steht (03.10.2026)
+
+<a id="rm-326-die-schnelle-druckausrichtung-richtet-alle-körper-aus-und-meldet-den-der-nirgends-steht-03102026"></a>
+<a id="rm-326"></a>
+
+**RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht.**
+  Review seit 0.5.1, Befund A-M1, Commit `206dca76d` (Codex).
+  `app/core/geom/orient.py:785` wirft `NoStandingOrientationError`, `prepare_ops.py:17359–17376`
+  bricht damit die ganze Szenenoperation ab. Vertrag `app/core/types.py:1061–1063`: „Ein Teil,
+  dessen jede Lage darunter bleibt, wird davon nicht abgelehnt.“ Der gründliche Zwilling hält ihn
+  (`slice/orientation.py:766–778`, Befund `orient.no_footing`).
+  **Fehlerfall:** *Druckoptimal ausrichten* mit „Gründlich suchen“ aus, Szene aus Kugel R 10 und
+  Quader → Absage „Das Modell steht in keiner geprüften Lage sicher …“, kein Körper wird
+  ausgerichtet. Mit „Gründlich suchen“ an: beide ausgerichtet plus `orient.no_footing`. Jedes Teil
+  unter 4,2 × 4,2 mm Fuß sperrt so die ganze Platte. Die angebotenen Auswege (Druckeinstellungen,
+  Stützbedarf, „größere Plattenhaftung“) ändern die Absage nicht (Regel 17).
+  **Fix:** Steht keine Lage, die beste der Heuristik nehmen und `orient.no_footing` am Körper
+  melden, statt zu werfen.
+  **Abnahme:** Test Kugel plus Quader, schneller Weg: beide Körper ausgerichtet, Befund an der
+  Kugel, kein Abbruch. Bauplan §22.2, §2.7. Beleg: `bericht-A.md` (M1), Sonde `a_orient_kugel.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. `thorough=False` sagt mit `NoStandingOrientationError` ab, `thorough=True` richtet beide Körper aus und meldet `orient.no_footing` (Sonde `a_orient_kugel.py`).
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die schnelle FDM-Ausrichtung nimmt
+  für einen Körper ohne tragende Lage die erste passende Lage der Heuristik und meldet
+  `orient.no_footing` an ihm; die übrigen Körper werden weiter ausgerichtet. Ein Körper, der nicht
+  in den Bauraum passt, behält seine eigene Absage, Resin bleibt ohne Standfrage. Kernfälle an Kugel
+  Ø 20 und Quader 20 × 30 × 50: beide Kerne und Güten, Abbruch, Originalvolumen, Merkmalsfortführung
+  in Mehrkörperschritten. Prüfprojekt `rm326-kugel-quader.p3d`. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM-326).
+
+**Abschluss:** `geom/orient.py` warf `NoStandingOrientationError`, sobald ein
+Körper in keiner geprüften Lage stand, und die ganze Szenenoperation sagte ab.
+Jetzt nimmt die schnelle Suche für diesen Körper die erste passende Lage der
+Heuristik und meldet `orient.no_footing` an ihm, wie der gründliche Zwilling;
+die übrigen Körper werden ausgerichtet. Ein Körper, der nicht in den Bauraum
+passt, behält seine Absage, Resin bleibt ohne Standfrage. Abnahmetest Kugel
+plus Quader im schnellen Weg
+(`test_a_sphere_does_not_prevent_the_other_body_from_being_oriented`), dazu
+beide Kerne und Güten, Abbruch, Originalvolumen und Merkmalsfortführung
+(Bericht `geometrie\druckvorbereitung\bericht.md` unter
+`F:\solidon-review-reports\codex-2026-10-03`). Changelog: **nein** als eigener
+Fehler — die Absage kam mit `206dca76d` (29.09.2026), der in keinem Tag liegt;
+der 0.5.2-Punkt zur schnellen Suche lässt sich um das Verhalten ergänzen.
+
+## RM-409: Auto Split plant weiter, wenn eine Stiftbohrung beim Beurteilen scheitert (03.10.2026)
+
+<a id="rm-409-auto-split-plant-weiter-wenn-eine-stiftbohrung-beim-beurteilen-scheitert-03102026"></a>
+<a id="rm-409"></a>
+
+**RM-409 — Auto Split bricht ganz ab, wenn eine einzige Stiftbohrung beim Beurteilen scheitert.**
+  Review 02.10.2026, Modelltest, am HEAD `4449e3370`.
+  **Fehlerfall:** `parametric-laptop-riser.stl`, *Auto Split*: Die Suche endet mit `GeometryError`
+  und bietet nur „Eingabe korrigieren / Abbrechen“. `app/core/geom/autosplit.py:1925` fängt nur
+  `BooleanFailedError`; die Vorfrage in `app/core/geom/boolean.py:214–225` wirft aber die
+  Oberklasse `GeometryError` (über `_support_after_cut` → `pins.add_pins` → `boolean`).
+  **Fix:** Im Beurteilen eines Kandidaten jeden `GeometryError` als „unbekannt teuer“ werten und
+  weitersuchen (Fixprobe: Plan mit 1 Schnitt in 10 s); erst wenn kein Kandidat bleibt, absagen —
+  mit Grund. Auch nach RM-382 nötig, weil eine Stiftbohrung durch eine kaputte Schale weiter hält.
+  **Abnahme:** Test am Laptop-Ständer bzw. einem Zwilling mit selbstkreuzender Schale: Auto Split
+  liefert einen Plan. Bauplan §25 (P10), Regel 17.
+  Belege: `modelle\diagnose.md` (Befund 8), Sonden `d8_*`.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Am echten Laptop-Ständer zweimal
+  geplant: Naht bei Y = −107,4186 mm mit zwei Schwalbenschwanzstiften auf A (41,1/38,4 s unter
+  Last); der historische `GeometryError` trat nicht mehr auf, die analytischen Wächter erzwingen ihn
+  weiter. Danach der Schnitt selbst, Cache kalt und warm, Undo, Redo, Speichern und Laden in beiden
+  Güten: acht Läufe ohne Ausnahme, Ausgaben mit 3 234 und 172 990 Dreiecken. Getrennte Teile,
+  Mindestwand und Importreparatur bleiben als Befunde. Prüfprojekte `rm409-laptop-vorher.p3d` und
+  `rm409-laptop-nachher.p3d`. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM409).
+
+**Abschluss:** Der Fix kam mit `6d395169c` (02.10.2026): `autosplit.py` wertet
+beim Beurteilen eines Kandidaten jeden `GeometryError` als unbekannt teuer und
+sucht weiter, statt nur `BooleanFailedError` zu fangen; analytische Wächter
+erzwingen beide Ausnahmepfade. Am echten `parametric-laptop-riser.stl`
+lieferte Auto Split am 03.10.2026 zweimal denselben Plan (Naht bei Y =
+−107,4186 mm, zwei Schwalbenschwanzstifte auf A), der Schnitt lief
+vollständig, und acht Neulade- und Folgeläufe in beiden Güten blieben ohne
+Ausnahme; die Befunde zu getrennten Teilen, Mindestwand und Importreparatur
+bleiben (`rm409-followup.json`, `rm409-reload.json` unter
+`F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\`).
+Changelog: **nein** — in v0.5.1 warf die Boolesche Vorfrage keinen
+`GeometryError`, der Fehler hat keine Version erreicht.
+
+## RM-421: Die Randprüfung der Bausteine zählt Mündung und Material hinter dem Rand (03.10.2026)
+
+<a id="rm-421-die-randprüfung-der-bausteine-zählt-mündung-und-material-hinter-dem-rand-03102026"></a>
+<a id="rm-421"></a>
+
+**RM-421 — Randprüfung der Bausteine übersieht Mündungsweite und Material hinter dem Rand.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-392 (archiviert). Abnahmefall
+  (Schlüsselloch) behoben, ebenso Magnettasche, Lagersitz, Kabeldurchführung, Mutternfalle an 4 mm.
+  - **Mündungsweite zählt nicht:** `below = depth < -100·EPS_GEOM`
+    (`app/core/knowledge/parts/ops.py:1151`) lässt Senkung und Fase an der Mündung weg —
+    Schraubloch an einer 5 mm hohen Seite: je 1,07 mm² Verlust oben und unten, Netz ohne Befund,
+    exakt mit Befund (Kerne sagen Verschiedenes); bei 5,5 mm und bei der Einpressbuchse an 4,5 mm
+    melden beide nichts.
+  - **Material hinter dem Rand:** Eine Magnettasche in einer 6 mm breiten Rinne schneidet je 1,1 mm
+    in beide Seitenwände, ohne Befund.
+  - **Niedrig:** Der Lagevorschlag für das Schlüsselloch aus RM-392 fehlt.
+  **Fix:** den vollen Umriss einschließlich Senkung/Fase prüfen; zusätzlich gegen benachbarte Wände
+  hinter der Fläche; dieselbe Prüfung an beiden Kernen.
+  **Abnahme:** Tests: Schraubloch an 5 und 5,5 mm, Einpressbuchse an 4,5 mm, Magnettasche in 6-mm-Rinne
+  → Befund an beiden Kernen; Gegenproben an 40 mm still. Bauplan §24.3, §17.3.
+  Belege: `verif-4cf460e87-geometrie.md`, Sonden `v4g_rm392_*`.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die Randprüfung nimmt den echten
+  Weltansatzpunkt, den ganzen Werkzeugumriss an der Eintrittsebene samt Senkung und Fase und die
+  Dreiecke der gewählten Trägerfläche; eine Wand hinter einem schmalen Boden trägt nicht mehr. Der
+  Lagevorschlag wird am Flächenpolygon samt Löchern geprüft (Schlüsselloch an 20 mm hoher Wand: Z
+  −4,00 mm). Vorher 14 fehlende Warnungen und zwei rote Vorschläge, danach 117 Bausteinfälle grün.
+  Claude: Verfehlt ein Baustein den Körper ganz, meldet die Prüfung nicht zusätzlich
+  `part.over_the_edge`; die Kabeldurchführung im Beispiel „Dose mit Deckel“ sitzt mit Wandnormale
+  (−1, 0, 0). Beleg: `F:\solidon-review-reports\codex-2026-10-03\geometrie\geometrie\RM421.md`.
+
+**Abschluss:** `knowledge/parts/ops.py` prüft mit `_mouth_frame`,
+`_surface_at_anchor` und `_over_the_rim` den tatsächlichen Weltansatzpunkt,
+den vollständigen Werkzeugumriss an der Eintrittsebene einschließlich Senkung
+und Fase sowie die Dreiecke der gewählten Trägerfläche, an beiden Kernen; die
+Cacheversion der Einfügeoperationen ist erhöht. Abnahme erfüllt: Schraubloch
+an 5 und 5,5 mm, Einpressbuchse an 4,5 mm und Magnettasche in einer 6-mm-Rinne
+melden an beiden Kernen und Güten, 40 mm bleiben still; der Lagevorschlag fürs
+Schlüsselloch kommt wieder (Z −4,00 mm) und wird am Flächenpolygon geprüft.
+Vorher 14 fehlende Warnungen, danach 117 Fälle grün, Lebenslauf über Cache,
+Undo/Redo und Speichern; am `carpet-corner-clip.step` melden beide Kerne den
+überstehenden Senkungsrand
+(`F:\solidon-review-reports\codex-2026-10-03\geometrie\geometrie\RM421.md`).
+Claude ergänzte, dass ein ganz verfehlender Baustein nur
+`boolean.without_effect` bzw. `parts.hanging_loose` meldet, und setzte die
+Kabeldurchführung im Beispiel „Dose mit Deckel“ mit Wandnormale; die Beispiele
+sind neu erzeugt. Changelog: **ja**, als Ergänzung des 0.5.2-Punkts zum
+Schlüsselloch am Flächenrand (RM-392, in keinem Tag).
+
+## RM-450: Abschneiden fragt bei gleich großen Restflächen nach (03.10.2026)
+
+<a id="rm-450-abschneiden-fragt-bei-gleich-großen-restflächen-nach-03102026"></a>
+<a id="rm-450"></a>
+
+**RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger.**
+  Quellenreview am festen Stand `6c9420b1f`, G-CUT-01:
+  `_cut_faces_continued` (`app/core/geom/prepare_ops.py:17740–17748` am
+  geprüften Stand) wählt koplanare parallele Flächen nur nach Fläche; bei
+  Gleichstand entscheidet die Kandidatenreihenfolge. Räumliche Herkunft
+  fehlt. Die bestätigte Fortführung kann die nötige Rückfrage unterdrücken.
+  **Fix:** Vorhandene R4-Zuordnung mit Lage und Gleichstandsbehandlung nutzen
+  oder eindeutige Herkunft durch native Builderhistorie belegen.
+  **Abnahme:** Registriertes Abschneiden eines U-Körpers mit zwei gleich
+  großen Restflächen und echter nachfolgender Flächenreferenz; umgekehrte
+  Kandidatenreihenfolge und fremde koplanare Fläche einbeziehen. Mehrdeutigkeit
+  bleibt eine Rückfrage. Bauplan §21.2, harte Regel 21.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-geometrie.md`.
+  Der Gegenfall ist aus den Quellen abgeleitet, noch nicht ausgeführt;
+  vor dem Fix gegen den aktuellen Hauptzweig prüfen.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):**
+  `geom/prepare_ops.py::_cut_faces_continued` prüft räumliche Herkunft und Gleichstand; die
+  gemeinsame Prüfung liegt jetzt in `perceive/matching.py` (`planar_source`, `planar_faces`,
+  `pieces_in_place`). Nur eine eindeutig größte Restfläche bekommt eine Fortführung, gleich große
+  Reste eines U-Körpers bleiben eine Rückfrage, Ablehnen sperrt den alten Bezug. Tests kehren die
+  Kandidatenfolge um und schließen eine größere fremde koplanare Fläche aus; beide Wahlen samt
+  Lebenslauf grün (`test_cutting_a_u_keeps_equal_top_pieces_ambiguous`,
+  `test_cut_face_continuation_excludes_a_foreign_coplanar_face`). Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md` (RM-450).
+
+**Abschluss:** `_cut_faces_continued` wählte koplanare parallele Flächen nur
+nach ihrer Fläche, bei Gleichstand entschied die Kandidatenreihenfolge. Jetzt
+prüft es räumliche Herkunft und Gleichstand über `perceive/matching.py`
+(`planar_source`, `planar_faces`, `pieces_in_place`): Nur eine eindeutig
+größte Restfläche wird fortgeführt, gleiche Reste bleiben wählbar, Ablehnen
+sperrt den alten Bezug. Abnahme erfüllt mit registriertem Abschneiden eines
+U-Körpers samt echter Folgereferenz, umgekehrter Kandidatenfolge und fremder
+koplanarer Fläche (`test_cutting_a_u_keeps_equal_top_pieces_ambiguous`,
+`test_cut_face_continuation_excludes_a_foreign_coplanar_face`), beide Wahlen
+mit Lebenslauf
+(`F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md`).
+Changelog: **nein** — die Fortführung kam mit `c2ed098ec` (02.10.2026) und
+liegt in keinem Tag.

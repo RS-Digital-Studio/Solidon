@@ -359,6 +359,7 @@ def test_texture_faces_keep_their_step_after_another_operation_and_second_textur
             [],
             previous_bounds=source.mesh.bounds,
             touches_features=spec.touches_features,
+            source_mesh=source.mesh,
         )
 
     first = textured(source, 1.0, 4)
@@ -371,11 +372,244 @@ def test_texture_faces_keep_their_step_after_another_operation_and_second_textur
         lambda q, c: c[0],
         [],
         previous_bounds=first.mesh.bounds,
+        source_mesh=first.mesh,
     )
     assert {f.id for f in following.features.values() if f.created_by == 4} == first_ids
     second = textured(following, -1.0, 6)
     assert {f.id for f in second.features.values() if f.created_by == 4} == first_ids
     assert any(f.created_by == 6 for f in second.features.values())
+
+
+def _evaluated_surface_operation(
+    source: object,
+    *,
+    op: str = "apply_texture",
+    step: int = 4,
+    quality: str = "fine",
+    **values: object,
+) -> object:
+    """Fährt den Schritt mit der Merkmalsauswertung der wirklichen Operationsfolge."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.evaluate import REMOVAL_CODES, _with_features
+    from app.core.types import OpContext, Operation, Profile, Scene
+
+    load_operations()
+    spec = REGISTRY.get(op)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}, parameters={}),
+            inputs=[source],
+            params=spec.params(**values),
+            profile=Profile(printer=NOZZLE, material=None),
+            quality=quality,
+            seed=17,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return _with_features(
+        result.outputs[0],
+        dict(source.features),
+        Operation(id=step, op=op, params=values, seed=17),
+        lambda question, choices: choices[0],
+        [],
+        previous_bounds=source.mesh.bounds,
+        source_mesh=source.mesh,
+        touches_features=spec.touches_features,
+        announced_gone=frozenset(
+            name
+            for finding in result.findings
+            if finding.code in REMOVAL_CODES
+            for name in finding.feature_ids
+        ),
+    )
+
+
+@pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+@pytest.mark.parametrize("coverage", ["rectangle", "whole_face"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_small_applied_texture_is_one_selectable_feature(
+    pattern: str, mode: str, coverage: str, quality: str
+) -> None:
+    """Auch unter der Erkennungsschwelle gehören alle Texturzellen zu ihrer Textur."""
+    import trimesh
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    result = _evaluated_surface_operation(
+        source,
+        quality=quality,
+        pattern=pattern,
+        mode=mode,
+        coverage=coverage,
+        face="top",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+        angle=23.0,
+    )
+    textures = [feature for feature in result.features.values() if feature.kind == "pattern"]
+    assert len(textures) == 1, [(f.id, f.kind) for f in result.features.values()]
+    texture = textures[0]
+    assert texture.created_by == 4
+    assert texture.face_indices
+    assert set(texture.face_indices) <= set(range(len(result.mesh.raw.faces)))
+    assert result.mesh.raw.is_watertight
+    # Kein Dreieck der Textur steht gleichzeitig als einzelne Wand, Noppe
+    # oder Rundung zur Auswahl. Die übrigen Körperflächen bleiben erreichbar.
+    others = [feature for feature in result.features.values() if feature.id != texture.id]
+    assert any(feature.kind == "face" for feature in others)
+    assert all(not set(texture.face_indices).intersection(f.face_indices) for f in others)
+    from app.core.perceive.relations import cell_owner_table
+
+    ids, owners = cell_owner_table(result.features, len(result.mesh.raw.faces))
+    assert all(ids[owners[index]] == texture.id for index in texture.face_indices)
+
+
+@pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+@pytest.mark.parametrize("around", [False, True])
+def test_an_applied_cylinder_texture_is_one_selectable_feature(
+    pattern: str, mode: str, around: bool
+) -> None:
+    """Ein kleines Wickelfeld und ein voller Umlauf behalten dieselbe Texturidentität."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+    from app.core.perceive.relations import cell_owner_table
+    from app.core.types import SceneObject
+
+    mesh = MeshData.of(trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96))
+    source = SceneObject(id="shaft", name="Griff", mesh=mesh, features=detect(mesh))
+    result = _evaluated_surface_operation(
+        source,
+        pattern=pattern,
+        mode=mode,
+        width=2.0 * math.pi * 10.0 if around else 9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        wrap="cylinder",
+        wrap_diameter=20.0,
+    )
+    textures = [feature for feature in result.features.values() if feature.kind == "pattern"]
+    assert len(textures) == 1, [(f.id, f.kind) for f in result.features.values()]
+    texture = textures[0]
+    assert texture.created_by == 4
+    assert texture.face_indices
+    assert result.mesh.raw.is_watertight
+    ids, owners = cell_owner_table(result.features, len(result.mesh.raw.faces))
+    assert all(ids[owners[index]] == texture.id for index in texture.face_indices)
+    assert any(feature.kind == "face" for feature in result.features.values())
+
+    plain = _evaluated_surface_operation(result, op="remove_feature", step=5, at_feature=texture.id)
+    assert plain.mesh.raw.is_watertight
+    assert plain.mesh.raw.volume == pytest.approx(mesh.raw.volume, abs=1e-6)
+    assert plain.mesh.bounds.minimum == pytest.approx(mesh.bounds.minimum)
+    assert plain.mesh.bounds.maximum == pytest.approx(mesh.bounds.maximum)
+    assert not any(feature.kind == "pattern" for feature in plain.features.values())
+
+
+@pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+@pytest.mark.parametrize("coverage", ["rectangle", "whole_face"])
+def test_a_small_declared_texture_can_be_removed_as_a_whole(
+    pattern: str, mode: str, coverage: str
+) -> None:
+    """Die generische Merkmalshandlung entfernt auch eine Textur mit bekannter Herkunft."""
+    import trimesh
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern=pattern,
+        mode=mode,
+        coverage=coverage,
+        face="top",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+        angle=23.0,
+    )
+    patterns = [feature for feature in textured.features.values() if feature.kind == "pattern"]
+    assert len(patterns) == 1
+    plain = _evaluated_surface_operation(
+        textured, op="remove_feature", step=5, at_feature=patterns[0].id
+    )
+    assert plain.mesh.raw.is_watertight
+    assert plain.mesh.raw.volume == pytest.approx(12.0 * 10.0 * 4.0, abs=1e-6)
+    assert not any(feature.kind == "pattern" for feature in plain.features.values())
+
+
+def test_a_through_texture_stays_a_texture_and_removes_every_opening() -> None:
+    """Die bekannte Noppentextur bleibt beim Durchbruch als Ganzes bearbeitbar."""
+    import trimesh
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern="dimple",
+        mode="engraved",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=6.0,
+        z=2.0,
+    )
+    patterns = [feature for feature in textured.features.values() if feature.kind == "pattern"]
+    assert len(patterns) == 1
+    plain = _evaluated_surface_operation(
+        textured, op="remove_feature", step=5, at_feature=patterns[0].id
+    )
+    assert plain.mesh.raw.is_watertight
+    assert plain.mesh.raw.volume == pytest.approx(12.0 * 10.0 * 4.0, abs=1e-6)
+    assert not any(feature.kind in {"pattern", "hole"} for feature in plain.features.values())
+
+
+@pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+@pytest.mark.parametrize("coverage", ["rectangle", "whole_face"])
+def test_changing_only_texture_depth_preserves_its_footprint(
+    pattern: str, mode: str, coverage: str
+) -> None:
+    """Eine um die Hälfte tiefere Textur ändert die Materialmenge, nicht ihre Zellenfläche."""
+    import trimesh
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern=pattern,
+        mode=mode,
+        coverage=coverage,
+        face="top",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+        angle=23.0,
+    )
+    patterns = [feature for feature in textured.features.values() if feature.kind == "pattern"]
+    assert len(patterns) == 1
+    changed = _evaluated_surface_operation(
+        textured, op="resize_feature", step=5, at_feature=patterns[0].id, cell_depth=0.9
+    )
+    assert changed.mesh.raw.is_watertight
+    assert changed.mesh.volume - source.mesh.volume == pytest.approx(
+        1.5 * (textured.mesh.volume - source.mesh.volume), rel=1e-5, abs=1e-6
+    )
+    groups = [feature for feature in changed.features.values() if feature.kind == "pattern"]
+    assert len(groups) == 1
+    assert groups[0].id == patterns[0].id
+    assert groups[0].params["cell_depth"] == pytest.approx(0.9)
 
 
 @pytest.mark.parametrize(
@@ -414,7 +648,11 @@ def test_texture_panel_actions_keep_expressions_and_only_show_effective_fields(
     }
     step = Operation(id=17, op="apply_texture", params=params)
     actions = texture_actions(step, REGISTRY.get("apply_texture"))
-    assert len(actions) == 1
+    assert len(actions) == 2
+    removal = actions[1]
+    assert str(removal.title) == "Textur entfernen"
+    assert removal.step == step.id and removal.op is None
+    assert not removal.fields and not removal.fixed
     action = actions[0]
     assert action.step == 17 and action.op == "apply_texture"
     fields = {field.name: field for field in action.fields}
@@ -874,6 +1112,7 @@ def test_an_engraved_texture_beside_the_body_says_so() -> None:
 
     assert result.outputs[0].mesh.volume == pytest.approx(40.0 * 30.0 * 6.0, rel=1e-6)
     assert "boolean.without_effect" in [finding.code for finding in result.findings]
+    assert not any(feature.kind == "pattern" for feature in result.outputs[0].features.values())
 
 
 def test_a_texture_that_cannot_print_is_refused_before_anything_is_built() -> None:
@@ -1088,3 +1327,483 @@ def test_a_turn_that_a_wrap_does_not_apply_is_not_offered_and_is_said() -> None:
         nz=1.0,
     )
     assert "texture.angle_on_wrap" in [finding.code for finding in result.findings]
+
+
+@pytest.mark.parametrize("normal_length", [0.5, 1.0, 2.0])
+def test_cutting_through_texture_floors_keeps_the_group_and_removes_without_a_skin(
+    normal_length: float,
+) -> None:
+    """Nach dem Bodenschnitt sind die Taschen Durchgänge; Entfernen hält die Schnittfläche."""
+    import trimesh
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern="dimple",
+        mode="engraved",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+        nz=normal_length,
+    )
+    original_groups = [
+        feature for feature in textured.features.values() if feature.kind == "pattern"
+    ]
+    assert len(original_groups) == 1
+    original = original_groups[0]
+    assert not original.params["through"]
+
+    # Die neue Unterseite liegt über dem Taschenboden bei z = 1,4 mm.
+    cut = _evaluated_surface_operation(
+        textured, op="cut_away", step=5, axis="z", position=1.7, keep="above"
+    )
+    groups = [
+        feature
+        for feature in cut.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    assert groups[0].id == original.id
+    assert groups[0].created_by == original.created_by
+    assert groups[0].face_indices
+    assert groups[0].params["through"]
+    assert groups[0].params["cell_depth"] == pytest.approx(0.3)
+
+    plain = _evaluated_surface_operation(cut, op="remove_feature", step=6, at_feature=groups[0].id)
+    assert plain.mesh.is_watertight
+    # Die volle Restplatte misst 12 mal 10 mal 0,3 mm; kein Stopfen ragt unter sie.
+    assert plain.mesh.volume == pytest.approx(12.0 * 10.0 * 0.3, abs=1e-6)
+    assert plain.mesh.bounds.minimum == pytest.approx((-6.0, -5.0, 1.7))
+    assert plain.mesh.bounds.maximum == pytest.approx((6.0, 5.0, 2.0))
+    assert not any(feature.kind == "pattern" for feature in plain.features.values())
+
+
+@pytest.mark.parametrize("tilt", [3.0, 5.0])
+def test_removing_a_texture_after_a_slanted_floor_cut_preserves_the_cut(tilt: float) -> None:
+    """Teilweise offene Taschen schließen bis zur heutigen schrägen Unterseite."""
+    import numpy as np
+    import trimesh
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern="dimple",
+        mode="engraved",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+    )
+    cut_params = {
+        "axis": "z",
+        "position": 1.5,
+        "keep": "above",
+        "tilt": tilt,
+        "tilt_axis": "y",
+    }
+    # Unabhängige Sollform: derselbe Schnitt am noch glatten Quader.
+    expected = _evaluated_surface_operation(source, op="cut_away", step=5, **cut_params)
+    cut = _evaluated_surface_operation(textured, op="cut_away", step=5, **cut_params)
+    groups = [
+        feature
+        for feature in cut.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    plain = _evaluated_surface_operation(cut, op="remove_feature", step=6, at_feature=groups[0].id)
+    assert plain.mesh.is_watertight
+    assert plain.mesh.volume == pytest.approx(expected.mesh.volume, abs=1e-6)
+    assert plain.mesh.bounds.minimum == pytest.approx(expected.mesh.bounds.minimum)
+    assert plain.mesh.bounds.maximum == pytest.approx(expected.mesh.bounds.maximum)
+    # Kein Punkt des gefüllten Musters liegt auf der abgeschnittenen Seite.
+    points = np.asarray(plain.mesh.raw.vertices)
+    angle = math.radians(tilt)
+    distance = points[:, 0] * math.sin(angle) + (points[:, 2] - 1.5) * math.cos(angle)
+    assert np.min(distance) >= -1e-6
+    assert not any(feature.kind == "pattern" for feature in plain.features.values())
+
+
+def test_separating_loose_parts_keeps_each_share_of_the_applied_texture(profile: object) -> None:
+    """In Einzelteile zerlegen verteilt eine bekannte Textur auf ihre wirklichen Teile."""
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    for x in (-6.0, 6.0):
+        history.apply(
+            "Getrennte Platte",
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={"width": 8.0, "depth": 10.0, "height": 4.0, "x": x},
+                )
+            ],
+        )
+    history.apply(
+        "Lose Platten zusammenfassen",
+        [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"), seed=17)],
+    )
+    history.apply(
+        "Beide Platten texturieren",
+        [
+            OperationDraft(
+                op="apply_texture",
+                inputs=("obj_1",),
+                params={
+                    "pattern": "dimple",
+                    "mode": "engraved",
+                    "width": 20.0,
+                    "height": 7.0,
+                    "pitch": 4.0,
+                    "depth": 0.6,
+                    "z": 4.0,
+                },
+                seed=17,
+            )
+        ],
+    )
+    texture_step = history.operations[-1].id
+    before = evaluate(project.document, profile)
+    assert before.complete
+    assert len(before.scene.objects) == 1
+    original = next(iter(before.scene.objects.values()))
+    groups = [
+        feature
+        for feature in original.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    assert groups[0].face_indices
+    original_area = as_mesh_data(original.mesh).raw.area_faces[list(groups[0].face_indices)].sum()
+
+    history.apply(
+        "In Einzelteile zerlegen",
+        [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 2})],
+    )
+    after = evaluate(project.document, profile)
+    assert after.complete
+    assert len(after.scene.objects) == 2
+    area = 0.0
+    for piece in after.scene.objects.values():
+        found = [
+            feature
+            for feature in piece.features.values()
+            if feature.kind == "pattern" and feature.recognised
+        ]
+        assert len(found) == 1
+        assert found[0].created_by == texture_step
+        assert found[0].face_indices
+        mesh = as_mesh_data(piece.mesh)
+        assert max(found[0].face_indices) < mesh.triangle_count
+        area += mesh.raw.area_faces[list(found[0].face_indices)].sum()
+        assert mesh.is_watertight
+    assert area == pytest.approx(original_area)
+
+
+@pytest.mark.parametrize("pattern", ["rib", "dimple"])
+@pytest.mark.parametrize("tilt", [3.0, 5.0])
+def test_a_cut_texture_without_closed_back_contours_offers_its_history(
+    pattern: str, tilt: float
+) -> None:
+    """Offene Randzellen dürfen beim Füllen weder Löcher behalten noch außen anwachsen."""
+    import trimesh
+
+    from app.core.errors import SHOW_HISTORY, ValidationError
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern=pattern,
+        mode="engraved",
+        coverage="whole_face",
+        face="top",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+    )
+    cut = _evaluated_surface_operation(
+        textured,
+        op="cut_away",
+        step=5,
+        axis="z",
+        position=1.5,
+        keep="above",
+        tilt_axis="y",
+        tilt=tilt,
+    )
+    groups = [
+        feature
+        for feature in cut.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    volume = cut.mesh.volume
+    with pytest.raises(ValidationError) as refused:
+        _evaluated_surface_operation(cut, op="remove_feature", step=6, at_feature=groups[0].id)
+    assert refused.value.constraint == "pattern_open_back"
+    assert SHOW_HISTORY in refused.value.suggestions
+    assert cut.mesh.volume == pytest.approx(volume)
+
+
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+def test_a_full_turn_texture_leaves_the_cylinder_unchanged_outside_its_band(mode: str) -> None:
+    """Überlagerte Zellen an der Naht dürfen den freien Mantel nicht bis zum Ende verziehen."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    mesh = MeshData.of(trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96))
+    source = SceneObject(id="shaft", name="Griff", mesh=mesh, features=detect(mesh))
+    result = _evaluated_surface_operation(
+        source,
+        pattern="voronoi",
+        mode=mode,
+        width=2.0 * math.pi * 10.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        wrap="cylinder",
+        wrap_diameter=20.0,
+    )
+    # Das Feld liegt von z = -3,5 bis 3,5 mm. Jede Fläche außerhalb gehört
+    # weiterhin zum Originalmantel; die Stirnflächen liegen bei z = ±10 mm.
+    centres = np.asarray(result.mesh.raw.triangles_center)
+    outside = (np.abs(centres[:, 2]) > 3.5 + 1e-6) & (np.abs(centres[:, 2]) < 10.0 - 1e-6)
+    assert np.count_nonzero(outside) >= 96
+    _nearest, distances, _faces = trimesh.proximity.closest_point_naive(mesh.raw, centres[outside])
+    assert float(distances.max()) <= 1e-6
+    assert result.mesh.is_watertight
+
+
+def _textured_bore_case(
+    carrier: str, mode: str, through: bool, placement: str
+) -> tuple[object, object, dict[str, object], dict[str, object]]:
+    """Textur und spätere Bohrung mit derselben Bodenlage, eben oder radial."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    across = 1.6 if placement == "inside" else 1.0
+    lift = 0.6 if mode == "raised" else 0.0
+    texture_params: dict[str, object] = {
+        "pattern": "rib",
+        "mode": mode,
+        "width": 9.0,
+        "height": 7.0,
+        "pitch": 4.0,
+        "depth": 0.6,
+    }
+    if carrier == "plane":
+        source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+        texture_params["z"] = 2.0
+        bore_params = {
+            "x": across,
+            "y": 0.0,
+            "z": 2.0 + lift,
+            "depth": 0.0 if through else 2.0 + lift,
+        }
+    else:
+        mesh = MeshData.of(trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96))
+        source = SceneObject(id="shaft", name="Griff", mesh=mesh, features=detect(mesh))
+        texture_params.update(wrap="cylinder", wrap_diameter=20.0)
+        angle = across / 10.0
+        bore_params = {
+            "x": (10.0 + lift) * math.cos(angle),
+            "y": (10.0 + lift) * math.sin(angle),
+            "z": 0.0,
+            "nx": math.cos(angle),
+            "ny": math.sin(angle),
+            "nz": 0.0,
+            "depth": 0.0 if through else 2.0 + lift,
+        }
+    textured = _evaluated_surface_operation(source, **texture_params)
+    bore_params.update(diameter=1.0, compensate=False)
+    return source, textured, texture_params, bore_params
+
+
+@pytest.mark.parametrize("carrier", ["plane", "cylinder"])
+@pytest.mark.parametrize("through", [False, True])
+@pytest.mark.parametrize("placement", ["inside", "edge"])
+def test_removing_an_engraved_texture_preserves_a_later_bore(
+    carrier: str, through: bool, placement: str
+) -> None:
+    """Eine spätere Bohrung bleibt bis zur glatten Oberfläche offen, auch im Zellinneren."""
+    source, textured, _texture_params, bore_params = _textured_bore_case(
+        carrier, "engraved", through, placement
+    )
+    # Die Sollform entsteht durch dieselbe Bohrung im untexturierten Träger.
+    expected = _evaluated_surface_operation(source, op="drill_hole", step=5, **bore_params)
+    bored = _evaluated_surface_operation(textured, op="drill_hole", step=5, **bore_params)
+    before_holes = [feature for feature in bored.features.values() if feature.kind == "hole"]
+    assert len(before_holes) == 1
+    assert before_holes[0].params["through"] is through
+    groups = [
+        feature
+        for feature in bored.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    plain = _evaluated_surface_operation(
+        bored, op="remove_feature", step=6, at_feature=groups[0].id
+    )
+    assert plain.mesh.is_watertight
+    assert plain.mesh.volume == pytest.approx(expected.mesh.volume, abs=1e-6)
+    assert plain.mesh.bounds.minimum == pytest.approx(expected.mesh.bounds.minimum)
+    assert plain.mesh.bounds.maximum == pytest.approx(expected.mesh.bounds.maximum)
+    expected_holes = [feature for feature in expected.features.values() if feature.kind == "hole"]
+    actual_holes = [feature for feature in plain.features.values() if feature.kind == "hole"]
+    assert len(expected_holes) == len(actual_holes) == 1
+    actual, original = actual_holes[0], expected_holes[0]
+    assert actual.recognised and actual.face_indices
+    assert actual.params["through"] is through
+    assert actual.params["depth"] == pytest.approx(original.params["depth"])
+    assert actual.params["diameter"] == pytest.approx(original.params["diameter"])
+    assert not any(feature.kind == "pattern" for feature in plain.features.values())
+
+
+@pytest.mark.parametrize("carrier", ["plane", "cylinder"])
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+@pytest.mark.parametrize("through", [False, True])
+@pytest.mark.parametrize("placement", ["inside", "edge"])
+def test_changing_texture_depth_preserves_a_later_bore(
+    carrier: str, mode: str, through: bool, placement: str
+) -> None:
+    """Die Mündung reicht bis zum neuen Relief; ein Blindboden bleibt an seinem Ort."""
+    from app.core.errors import SHOW_HISTORY
+    from app.core.units import EPS_GEOM
+
+    _source, textured, _texture_params, bore_params = _textured_bore_case(
+        carrier, mode, through, placement
+    )
+    initial = next(feature for feature in textured.features.values() if feature.kind == "pattern")
+    # Erst Tiefe ändern, dann bohren muss dieselbe Form ergeben wie die
+    # umgekehrte Folge. Der vorhandene Zellfußabdruck bleibt dabei gleich.
+    expected_texture = _evaluated_surface_operation(
+        textured, op="resize_feature", step=5, at_feature=initial.id, cell_depth=0.9
+    )
+    expected_bore = dict(bore_params)
+    if mode == "raised":
+        for position, direction, default in (("x", "nx", 0.0), ("y", "ny", 0.0), ("z", "nz", 1.0)):
+            expected_bore[position] += 0.3 * float(bore_params.get(direction, default))
+        if not through:
+            expected_bore["depth"] += 0.3
+    expected = _evaluated_surface_operation(
+        expected_texture, op="drill_hole", step=5, **expected_bore
+    )
+    bored = _evaluated_surface_operation(textured, op="drill_hole", step=5, **bore_params)
+    before_holes = [feature for feature in bored.features.values() if feature.kind == "hole"]
+    assert len(before_holes) == 1
+    assert before_holes[0].params["through"] is through
+    groups = [
+        feature
+        for feature in bored.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    if carrier == "cylinder" and placement == "edge":
+        # Der gemischte Zell-/Bohrungsrand belegt den früheren Umriss nicht
+        # eindeutig. Der Originalschritt bleibt im sichtbaren Verlauf erreichbar.
+        volume = bored.mesh.volume
+        with pytest.raises(ValidationError) as refused:
+            _evaluated_surface_operation(
+                bored, op="resize_feature", step=6, at_feature=groups[0].id, cell_depth=0.9
+            )
+        assert refused.value.constraint == "pattern_open_back"
+        assert SHOW_HISTORY in refused.value.suggestions
+        assert bored.mesh.volume == pytest.approx(volume)
+        assert before_holes[0].params["through"] is through
+        return
+    changed = _evaluated_surface_operation(
+        bored, op="resize_feature", step=6, at_feature=groups[0].id, cell_depth=0.9
+    )
+    assert changed.mesh.is_watertight
+    assert changed.mesh.volume == pytest.approx(expected.mesh.volume, abs=1e-6)
+    assert changed.mesh.bounds.minimum == pytest.approx(expected.mesh.bounds.minimum)
+    assert changed.mesh.bounds.maximum == pytest.approx(expected.mesh.bounds.maximum)
+    expected_holes = [feature for feature in expected.features.values() if feature.kind == "hole"]
+    actual_holes = [feature for feature in changed.features.values() if feature.kind == "hole"]
+    assert len(expected_holes) == len(actual_holes) == 1
+    actual, original = actual_holes[0], expected_holes[0]
+    assert actual.recognised and actual.face_indices
+    assert actual.params["through"] is through
+    assert actual.params["depth"] == pytest.approx(original.params["depth"])
+    assert actual.params["diameter"] == pytest.approx(original.params["diameter"])
+    assert actual.params["centre"] == pytest.approx(original.params["centre"], abs=EPS_GEOM)
+    textures = [feature for feature in changed.features.values() if feature.kind == "pattern"]
+    assert len(textures) == 1
+    assert textures[0].measure_sources["cell_depth"] == "facets"
+    assert not set(textures[0].face_indices).intersection(actual.face_indices)
+
+
+@pytest.mark.parametrize("through", [False, True])
+def test_a_texture_with_a_later_freeform_opening_offers_its_history(through: bool) -> None:
+    """Eine freie Mündung im Zellboden darf beim Entfernen nicht zugedeckt werden."""
+    from dataclasses import replace
+
+    import trimesh
+    from shapely.geometry import Polygon
+
+    from app.core.errors import SHOW_HISTORY
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation
+
+    source = _face_source(trimesh.creation.box(extents=(12.0, 10.0, 4.0)))
+    textured = _evaluated_surface_operation(
+        source,
+        pattern="rib",
+        mode="engraved",
+        width=9.0,
+        height=7.0,
+        pitch=4.0,
+        depth=0.6,
+        z=2.0,
+    )
+    # Das Dreieck liegt vollständig in der Zelle von x = 0,598 bis 2,598 mm.
+    # Es ist weder eine Bohrung noch ein Langloch mit belegbarem Wandquerschnitt.
+    lower = -3.0 if through else 0.0
+    tool = trimesh.creation.extrude_polygon(
+        Polygon(((1.2, -0.4), (2.0, -0.4), (1.6, 0.4))), height=3.0 - lower
+    )
+    tool.apply_translation((0.0, 0.0, lower))
+    mesh = MeshData.of(trimesh.boolean.difference([textured.mesh.raw, tool]))
+    cut = _with_features(
+        replace(textured, mesh=mesh, features={}),
+        dict(textured.features),
+        Operation(id=5, op="subtract_objects", params={}),
+        lambda question, choices: choices[0],
+        [],
+        previous_bounds=textured.mesh.bounds,
+        source_mesh=textured.mesh,
+        touches_features=True,
+    )
+    assert cut.mesh.is_watertight
+    assert cut.mesh.volume < textured.mesh.volume - 0.1
+    groups = [
+        feature
+        for feature in cut.features.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    assert len(groups) == 1
+    assert groups[0].face_indices
+    assert not any(feature.kind in {"hole", "slot"} for feature in cut.features.values())
+    volume = cut.mesh.volume
+    with pytest.raises(ValidationError) as refused:
+        _evaluated_surface_operation(cut, op="remove_feature", step=6, at_feature=groups[0].id)
+    assert refused.value.constraint == "pattern_open_back"
+    assert SHOW_HISTORY in refused.value.suggestions
+    assert cut.mesh.volume == pytest.approx(volume)

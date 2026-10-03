@@ -77,7 +77,13 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
-from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES, forget_out_of_memory
+from app.core.perceive.local import (
+    CONFIRMED_FEATURE_LIMIT_TRIANGLES,
+    FEATURE_LIMIT_TRIANGLES,
+    forget_out_of_memory,
+    recognition_gigabytes,
+    recognition_minutes,
+)
 from app.core.registry import REGISTRY, validate
 from app.core.scene import (
     CancelSignal,
@@ -125,6 +131,7 @@ from app.core.split import (
     protected_patches,
 )
 from app.core.types import (
+    CheckState,
     DocumentChange,
     Feature,
     FeatureId,
@@ -145,8 +152,10 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import is_close
-from app.i18n import TranslatableText, _, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
+from app.ui.labels import step_number
 from app.ui.leash import Worker, WorkerLeash, undisturbed
+from app.ui.print_contract import PrintTarget, print_target
 
 _log = get_logger(__name__)
 
@@ -327,6 +336,7 @@ class _EvaluationWorker(Worker):
     failedWith = Signal(object)
     cancelled = Signal()
     pictureWith = Signal(object)
+    checkWith = Signal(object)
 
     def __init__(
         self, session: Session, *, picture_first: bool = False, quality: Quality = "draft"
@@ -335,6 +345,7 @@ class _EvaluationWorker(Worker):
         self._session = session
         self._project_generation = session._project_generation
         self._picture_first = picture_first
+        self.target: PrintTarget | None = None
         self.quality: Quality = quality
         """In welcher Güte dieser Lauf rechnet — fest ab dem Start, damit das
         Ergebnis sagen kann, ob es für Export und Slicer taugt (RM-426)."""
@@ -343,6 +354,7 @@ class _EvaluationWorker(Worker):
         """Der ganze Lauf — beim Ladeweg mit dem Bild davor."""
         if not self._picture_first:
             return session.run_evaluation(self.quality)
+        batch_sources = tuple(getattr(session, "_batch_sources", ()))
         asked: dict[tuple[str, tuple[str, ...]], str | None] = {}
         session._pending.asked = asked
         try:
@@ -353,6 +365,24 @@ class _EvaluationWorker(Worker):
             # Schon der erste Schritt hielt an: Es gibt nichts zu erkennen, und
             # ein zweiter Lauf käme nur ein zweites Mal an derselben Stelle an.
             return picture
+        imported = {
+            output
+            for operation in session.project.document.ops
+            if operation.params.get("source") in batch_sources
+            for output in operation.outputs
+        }
+        counts = [
+            body.mesh.triangle_count
+            for key, body in picture.scene.objects.items()
+            if key in imported
+            and isinstance(body.mesh, MeshData)
+            and FEATURE_LIMIT_TRIANGLES
+            < body.mesh.triangle_count
+            <= CONFIRMED_FEATURE_LIMIT_TRIANGLES
+        ]
+        session._pending.batch_recognition = (
+            (len(counts), sum(counts), None) if len(counts) > 1 else None
+        )
         if _recognition_follows(picture):
             _warm_metrics(picture, session.cancel_signal)
             self.pictureWith.emit(_as_picture(picture))
@@ -361,6 +391,7 @@ class _EvaluationWorker(Worker):
             result = session.run_evaluation(self.quality)
         finally:
             session._pending.replay = None
+            session._pending.batch_recognition = None
         # Die Antworten des ersten Laufs trägt auch der zweite: Den Ladeschritt
         # findet er im Cache, und der Eintrag reist mit ihnen (§15.7).
         return result
@@ -426,6 +457,7 @@ class _EvaluationWorker(Worker):
                     session.projectChanged.emit()
             result = _with_findings(result, outside)
             _warm_metrics(result, session.cancel_signal)
+            self.target = print_target(session.displayed_document(), result)
         except OperationCancelled:
             self.cancelled.emit()
         except AppError as error:
@@ -612,6 +644,37 @@ class _ReadWorker(Worker):
             box.append(("ready", payload))
 
 
+class _BatchReadWorker(_ReadWorker):
+    """Liest und plant alle gewählten Dateien unter einem abbrechbaren Auftrag."""
+
+    def __init__(self, paths: Sequence[Path], taken: Sequence[str]) -> None:
+        super().__init__(paths[0])
+        self._paths = tuple(paths)
+        self._taken = tuple(taken)
+
+    def _read_into(self, box: list[tuple[str, object]]) -> None:
+        items: list[tuple[Path, bytes, ImportPlan]] = []
+        taken = list(self._taken)
+        try:
+            for index, path in enumerate(self._paths):
+                if self.cancel.is_cancelled:
+                    return
+                payload = read_local_payload(path)
+                plan = import_plan(
+                    f"batch_{index}", path.name, payload, first_model=None, taken=taken
+                )
+                taken.append(path.stem)
+                items.append((path, payload, plan))
+        except AppError as error:
+            box.append(("failed", error))
+        except OSError as problem:
+            box.append(("failed", unreadable_file(path, problem)))
+        except Exception:
+            box.append(("crashed", traceback.format_exc()))
+        else:
+            box.append(("ready", items))
+
+
 class _AutosaveWorker(Worker):
     """Schreibt die automatische Sicherung, ohne das Fenster anzuhalten (§38).
 
@@ -772,6 +835,8 @@ class _PreviewWorker(Worker):
     """
 
     done = Signal(int, object)
+    pictured = Signal(int, object)
+    """Schnelles Bild ohne Freigabe der anschließenden Druckfolgenprüfung."""
     #: Warum es keine Vorschau gibt — der Satz aus dem Kern, den der Dialog
     #: sonst erst beim Übernehmen zu sehen bekäme.
     explained = Signal(int, str)
@@ -874,6 +939,7 @@ class _Snapshot:
     document: Any
     before: Any
     profile: Profile
+    settings: PrintSettings | None = None
 
     @classmethod
     def of(cls, session: Session, change_op: OpId | None = None) -> _Snapshot:
@@ -893,6 +959,7 @@ class _Snapshot:
             document=copy.deepcopy(shown),
             before=result.scene if result is not None else None,
             profile=session.evaluation_profile,
+            settings=copy.deepcopy(session._current_effective_settings()),
         )
 
 
@@ -1584,6 +1651,7 @@ class Session(QObject):
     sceneChanged = Signal(object)
     """Eine Auswertung ist fertig — trägt ein ``EvaluationResult``."""
     progressChanged = Signal(float, str)
+    checksChanged = Signal()
     busyChanged = Signal(bool)
     askRequested = Signal(object)
     """Eine Frage an den Nutzer — trägt einen ``AskRequest``."""
@@ -1715,7 +1783,12 @@ class Session(QObject):
         """In welcher Güte :attr:`last_result` gerechnet wurde (RM-426)."""
         self.result_current = False
         """Ob die Szene bereits zum aktuellen Auswertungsauftrag gehört."""
+        self.check_states: dict[tuple[str, str | None], CheckState] = {}
+        self._review_target: tuple[EvaluationResult, PrintTarget] | None = None
         self._unconfirmed_import: tuple[str, frozenset[int], str] | None = None
+        self._batch_sources: tuple[str, ...] = ()
+        self._batch_unit: str | None = None
+        self._batch_dirty_before = False
         """Transaktion, Ladeschritte und Quelle des letzten Imports, bis seine
         Auswertung zeigt, ob die Datei ein Modell enthält (KUNDE-12)."""
         self.picture: EvaluationResult | None = None
@@ -2283,6 +2356,8 @@ class Session(QObject):
         self.picture = None
         self._unconfirmed_import = None
         self._import_in_revision = None
+        self._batch_sources = ()
+        self._batch_unit = None
         self._coarse_scene = None
         self._stop_coarse_preparation()
         if self._insert_before is not None:
@@ -2309,6 +2384,30 @@ class Session(QObject):
         self._keep_insertion_valid()
         self.projectChanged.emit()
         self.evaluate_async()
+
+    def commit_rebuild(self, application: Any, *, accept_losses: bool = False) -> bool:
+        """Den geprüften Nachbau über seinen Kernvertrag als eine Transaktion übernehmen."""
+        from app.core.scene.rebuild import commit
+
+        if self.busy or self._insert_before is not None:
+            raise UserError(
+                _("Der Nachbau braucht ein vollständig berechnetes Modell."),
+                _(
+                    "Beheben Sie zuerst den angehaltenen Schritt "
+                    "und starten Sie den Nachbau erneut."
+                ),
+                suggestions=(CANCEL,),
+            )
+        # Verknüpfte Dateien prüft der Kern gegen ihren Ort; ohne Quellen galt
+        # jede als geändert, und der Nachbau ließ sich nie übernehmen.
+        commit(
+            self.history,
+            application,
+            accept_losses=accept_losses,
+            sources=ProjectSources(self.project, base_dir=self.base_dir),
+        )
+        self._changed()
+        return True
 
     def apply(
         self,
@@ -2496,12 +2595,16 @@ class Session(QObject):
             _("Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet."),
             _(
                 "Angehalten ist Schritt {number} ({step}): {reason}",
-                number=op_id,
+                number=step_number(self.project.document, op_id),
                 step=title,
                 reason=halt.message,
             )
             if halt is not None
-            else _("Angehalten ist Schritt {number} ({step}).", number=op_id, step=title),
+            else _(
+                "Angehalten ist Schritt {number} ({step}).",
+                number=step_number(self.project.document, op_id),
+                step=title,
+            ),
             suggestions=(halt.suggestions if halt is not None else (SHOW_HISTORY, CANCEL))
             or (CANCEL,),
             values=values,
@@ -3292,6 +3395,75 @@ class Session(QObject):
             self._track_import(before, source_id)
         return accepted
 
+    def import_models_async(self, paths: Sequence[Path]) -> None:
+        """Mehrere Dateien als eine Baugruppe, mit ihrer gemeinsamen Dateilage."""
+        if not paths:
+            return
+        if len(paths) == 1:
+            self.import_model_async(paths[0])
+            return
+        # Der Start eines leeren Projekts wertet schon dessen leere Szene aus.
+        # Wie beim Einzelimport darf der Leser diese Auswertung ablösen.
+        if self._plan is not None or (self.busy and self.project.document.ops):
+            self.importFailed.emit(_evaluation_busy_error())
+            return
+        worker = _BatchReadWorker(paths, names_in_use(self.project.document))
+        self._plan = worker
+        stamp = self._project_generation
+        self.busyChanged.emit(True)
+        worker.finished.connect(partial(self._on_plan_done, worker))
+
+        def ready(items: Any) -> None:
+            if stamp != self._project_generation or worker.cancel.is_cancelled:
+                return
+            sources: list[str] = []
+            drafts: list[OperationDraft] = []
+            before = {entry.id for entry in self.project.document.ops}
+            try:
+                for path, payload, plan in items:
+                    source_id = self._embed_source("import", path.name, payload)
+                    sources.append(source_id)
+                    drafts.append(
+                        dataclasses.replace(
+                            plan.draft, params={**plan.draft.params, "source": source_id}
+                        )
+                    )
+                self._batch_dirty_before = self._dirty
+                self._batch_sources = tuple(sources)
+                self._batch_unit = None
+                accepted = self.apply(
+                    _("{count} Modelle einfügen", count=len(drafts)), drafts, raise_on_error=True
+                )
+            except AppError as error:
+                for source_id in sources:
+                    self._drop_source(source_id)
+                self._batch_sources = ()
+                self.importFailed.emit(error)
+                return
+            if accepted:
+                self._track_import(before, sources[0])
+            else:
+                for source_id in sources:
+                    self._drop_source(source_id)
+                self._batch_sources = ()
+            self.importFinished.emit(accepted)
+
+        def failed(error: Any) -> None:
+            if stamp == self._project_generation:
+                self.importFailed.emit(error)
+
+        def stopped() -> None:
+            if stamp == self._project_generation:
+                self._cancel_by_user = False
+                self.cancel_signal.reset()
+                self.importFinished.emit(False)
+
+        worker.readyWith.connect(ready)
+        worker.failedWith.connect(failed)
+        worker.stopped.connect(stopped)
+        worker.crashed.connect(lambda detail: failed(InternalError(detail=detail)))
+        self._leash.start(worker)
+
     def import_model_async(self, path: Path, unit: str = "auto") -> None:
         """Wie :meth:`import_model`, aber ohne den Hauptthread zu belegen.
 
@@ -3644,12 +3816,33 @@ class Session(QObject):
         if taken:
             self._announce_the_body_of(source_id)
         else:
-            self._drop_source(source_id)
+            for imported_source in self._batch_sources or (source_id,):
+                self._drop_source(imported_source)
+        self._batch_sources = ()
+        self._batch_unit = None
 
     @property
     def import_unconfirmed(self) -> bool:
         """Ob der zuletzt angenommene Import noch auf sein erstes Ergebnis wartet."""
         return self._unconfirmed_import is not None
+
+    def _withdraw_batch_import(self) -> bool:
+        """Ein abgebrochener Sammelimport hinterlässt weder Schritte noch Quellen."""
+        pending = self._unconfirmed_import
+        if not self._batch_sources or pending is None:
+            return False
+        if self.history.withdraw(pending[0]) is None:
+            return False
+        sources, self._batch_sources = self._batch_sources, ()
+        self._unconfirmed_import = None
+        self._batch_unit = None
+        for source in sources:
+            self._drop_source(source)
+        self._changed()
+        self._dirty = self._batch_dirty_before
+        self.projectChanged.emit()
+        self.importFinished.emit(False)
+        return True
 
     def _settle_import(self, result: EvaluationResult) -> bool:
         """Nach dem ersten Stand, der den Import enthält: behalten oder zurücknehmen.
@@ -3674,6 +3867,8 @@ class Session(QObject):
             return False
         self._unconfirmed_import = None
         transaction_id, op_ids, source_id = pending
+        batch_sources, self._batch_sources = self._batch_sources, ()
+        self._batch_unit = None
         if result.stopped_at not in op_ids:
             self.importConfirmed.emit()
             return False
@@ -3689,16 +3884,25 @@ class Session(QObject):
         )
         if halt is None:
             return False
-        source = self.project.document.sources.get(source_id)
+        failed_source = next(
+            (
+                entry.params.get("source", source_id)
+                for entry in self.project.document.ops
+                if entry.id == result.stopped_at
+            ),
+            source_id,
+        )
+        source = self.project.document.sources.get(str(failed_source))
         name = Path(source.path).name if source is not None else ""
         if self.history.withdraw(transaction_id) is None:
             return False
-        self._drop_source(source_id)
+        for imported_source in batch_sources or (source_id,):
+            self._drop_source(imported_source)
         fresh = self.path is None and not self.history.can_undo
         self._changed()
-        if fresh:
+        if fresh or batch_sources:
             # Ein neues Projekt, in dem nie etwas ankam, ist nicht geändert.
-            self._dirty = False
+            self._dirty = self._batch_dirty_before if batch_sources else False
             self.projectChanged.emit()
         self.importRejected.emit(
             UserError(
@@ -4026,6 +4230,8 @@ class Session(QObject):
         refused: Any = None,
         counted: Any = None,
         asked: Any = None,
+        pictured: Any = None,
+        review_settings: PrintSettings | None = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -4068,7 +4274,7 @@ class Session(QObject):
             # geschieht, geschieht im fremden Faden, und ein direkter Aufruf
             # ins Fenster hinein wäre genau der Fehler, den ``done`` und
             # ``explained`` vermeiden.
-            return self._preview_outcome(
+            quick = self._preview_outcome(
                 list(drafts or []),
                 change_op=change_op,
                 change_values=change_values,
@@ -4104,12 +4310,32 @@ class Session(QObject):
                 snapshot=snapshot,
                 unseen=worker.unseen,
             )
+            if pictured is None or quick[1] is None:
+                return quick
+            cancel.raise_if_cancelled()
+            worker.pictured.emit(generation, quick[1])
+            return self._preview_outcome(
+                list(drafts or []),
+                change_op=change_op,
+                change_values=change_values,
+                change_name=change_name,
+                changes=changes,
+                cancelled=cancel,
+                snapshot=snapshot,
+                progress=lambda fraction, text: worker.progressed.emit(generation, fraction, text),
+                review_print=True,
+                review_settings=review_settings,
+            )
 
         # Was jetzt noch rechnet, rechnet für eine Frage von gestern: die
         # Generation hätte sein Ergebnis ohnehin verworfen (``_preview_done``).
         self.cancel_previews()
         worker = _PreviewWorker(self, generation, compute, cancel)
         worker.done.connect(lambda stamp, difference: self._preview_done(stamp, difference, then))
+        if pictured is not None:
+            worker.pictured.connect(
+                lambda stamp, difference: self._preview_done(stamp, difference, pictured)
+            )
         if explained is not None:
             worker.explained.connect(
                 lambda stamp, reason: self._preview_done(stamp, reason, explained)
@@ -4486,9 +4712,12 @@ class Session(QObject):
         self._changed()
         return True
 
-    def redo(self) -> None:
-        if self.history.redo() is not None:
-            self._changed()
+    def redo(self) -> Transaction | None:
+        transaction = self.history.redo()
+        if transaction is None:
+            return None
+        self._changed()
+        return transaction
 
     # --- Umbau des Verlaufs (RM-188 P7) ------------------------------------------
 
@@ -4496,6 +4725,105 @@ class Session(QObject):
     def inserting(self) -> OpId | None:
         """Vor welchen Schritt neue Schritte gerade kommen — ``None`` heißt: ans Ende."""
         return self._insert_before
+
+    def history_preview_async(
+        self,
+        count: int,
+        then: Callable[[Any], None],
+        *,
+        explained: Callable[[str], None],
+        progressed: Callable[[tuple[float, str]], None],
+    ) -> None:
+        """Zeigt einen Transaktionsstand auf einer Kopie, ohne den Verlauf anzutasten.
+
+        Undo auf der Kopie nimmt auch Parameteränderungen und Umbauten zurück.
+        Ein Abschneiden der Op-Liste könnte diese Stände nicht wiederherstellen.
+        Rechnung und Differenz benutzen denselben abbrechbaren Arbeiter wie
+        Operationsvorschauen und denselben Auswertungscache.
+        """
+        document = copy.deepcopy(self.project.document)
+        count = max(0, min(count, len(document.transactions)))
+        project_generation = self._project_generation
+        transactions = tuple(entry.id for entry in document.transactions)
+        profile = self.evaluation_profile
+        profile_state = (
+            document.printer,
+            document.material,
+            copy.deepcopy(document.print_settings),
+        )
+
+        def historical_profile() -> Profile:
+            state = (document.printer, document.material, document.print_settings)
+            if state == profile_state:
+                return profile
+            return profiles.for_process(
+                profiles.scene_profile(
+                    document.printer or profiles.DEFAULT_PRINTER,
+                    document.material or profiles.DEFAULT_MATERIAL,
+                ),
+                document.print_settings,
+            )
+
+        sources = ProjectSources(self.project, base_dir=self.base_dir)
+        quality = self.quality
+        self.supersede_preview()
+        generation = self._preview_generation
+        cancel = CancelSignal()
+
+        def compute() -> tuple[Any, Any, str]:
+            history = History(document)
+            while len(document.transactions) > count:
+                if cancel.is_cancelled:
+                    raise OperationCancelled()
+                history.undo()
+            result = evaluate(
+                document,
+                historical_profile(),
+                quality=quality,
+                sources=sources,
+                cache=self.cache,
+                ask=_no_questions,
+                cancelled=cancel,
+                detect_features=False,
+                progress=lambda fraction, text: worker.progressed.emit(generation, fraction, text),
+            )
+            if result.stopped_at is not None:
+                return None, None, str(_("Die Kette hält an — siehe Prüfbericht."))
+            history.undo()
+            before = evaluate(
+                document,
+                historical_profile(),
+                quality=quality,
+                sources=sources,
+                cache=self.cache,
+                ask=_no_questions,
+                cancelled=cancel,
+                detect_features=False,
+            )
+            if cancel.is_cancelled:
+                raise OperationCancelled()
+            difference = compare_scenes(before.scene, result.scene)
+            return result.scene, (result, before, difference), ""
+
+        def deliver(stamp: int, value: Any, callback: Any) -> None:
+            if project_generation != self._project_generation:
+                return
+            if transactions != tuple(entry.id for entry in self.project.document.transactions):
+                return
+            self._preview_done(stamp, value, callback)
+
+        worker = _PreviewWorker(self, generation, compute, cancel)
+        worker.done.connect(lambda stamp, value: deliver(stamp, value, then))
+        worker.explained.connect(lambda stamp, value: deliver(stamp, value, explained))
+        worker.progressed.connect(
+            lambda stamp, fraction, text: deliver(stamp, (fraction, text), progressed)
+        )
+        worker.crashed.connect(
+            lambda detail: deliver(generation, _reason_of(InternalError(detail=detail)), explained)
+        )
+        worker.finished.connect(lambda done=worker: self._preview_finished(done))
+        self._previews.append(worker)
+        self._leash.start(worker)
 
     def displayed_document(self) -> Any:
         """Das Dokument, das die Oberfläche zeigt — bei einer Einfügemarke der Stand davor.
@@ -4638,6 +4966,12 @@ class Session(QObject):
             return self._start_revision(plan, baseline)
         return self._start_revision(planned, None)
 
+    def insert_before(
+        self, op_id: OpId, title: TranslatableText | str, drafts: list[OperationDraft]
+    ) -> bool:
+        """Einen Editorschritt gezielt davor einfügen, ohne die sichtbare Einfügemarke zu ändern."""
+        return self._insert(title, drafts, None, None, before=op_id)
+
     def _insert(
         self,
         title: TranslatableText | str,
@@ -4646,6 +4980,7 @@ class Session(QObject):
         changes: DocumentChange | None,
         *,
         raise_on_error: bool = False,
+        before: OpId | None = None,
     ) -> bool:
         """Die Schritte vor die Einfügemarke setzen (P7.1) — geplant sofort, gerechnet im Arbeiter.
 
@@ -4662,7 +4997,7 @@ class Session(QObject):
         hier trotzdem sofort, damit eine unmögliche Stelle ohne Wartezeit
         ihren Satz sagt.
         """
-        marker = self._insert_before
+        marker = before if before is not None else self._insert_before
         assert marker is not None
         if self._revision is not None:
             error = UserError(
@@ -4765,6 +5100,7 @@ class Session(QObject):
     def evaluate_async(self) -> None:
         """Ein Lauf je Dokument; eine neuere Anfrage ersetzt eine wartende (§15.6)."""
         self.result_current = False
+        self.check_states.clear()
         if self._worker is not None and self._worker.isRunning():
             self._rerun_pending = True
             self.cancel_signal.cancel()
@@ -4787,6 +5123,7 @@ class Session(QObject):
         # Startbildschirm ziehen legt zwei Läufe hintereinander: den leeren des
         # neuen Projekts und den des Imports.
         worker.finishedWith.connect(partial(self._on_finished, finished=worker))
+        worker.checkWith.connect(partial(self._on_check_state, finished=worker))
         worker.failedWith.connect(partial(self._on_failed, finished=worker))
         # **Und das Unerwartete.** Ohne diese Zeile blieb die Ladeanzeige des
         # Fensters für immer stehen: Ein ``run``, das eine Ausnahme durchlässt,
@@ -4802,6 +5139,20 @@ class Session(QObject):
         self._worker = worker
         self.busyChanged.emit(True)
         self._leash.start(worker)
+
+    def _on_check_state(self, state: CheckState, *, finished: _EvaluationWorker) -> None:
+        """Nur der aktuelle Auftrag darf den Nachweisstand im Fenster ändern."""
+        if finished is not self._worker or self._rerun_pending:
+            return
+        self.check_states[state.key, state.object_id] = state
+        self.checksChanged.emit()
+
+    def review_target(self) -> PrintTarget:
+        """Körperzuordnungen wurden im Arbeiter gelesen; kein Dreiecksscan im Fenster."""
+        cached = self._review_target
+        if self.result_current and cached is not None and cached[0] is self.last_result:
+            return cached[1]
+        return print_target(self.project.document, None)
 
     def picture_first(self) -> bool:
         """Ob der nächste Lauf das Modell vor seiner Erkennung zeigt (KUNDE-14).
@@ -4851,6 +5202,9 @@ class Session(QObject):
         # Bei einer Einfügemarke der Stand davor (P7.1) — die ganze Oberfläche
         # zeigt und löst gegen ihn auf, bis das Einfügen endet.
         document = self.displayed_document()
+        from app.ui.print_contract import missing_profile_basis
+
+        worker = getattr(self._pending, "worker", None)
         result = evaluate(
             document,
             self.evaluation_profile,
@@ -4863,6 +5217,8 @@ class Session(QObject):
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             detect_features=detect_features,
             on_recognition_answer=self._recognition_answered_in_worker,
+            missing_basis=missing_profile_basis(document),
+            check_status=worker.checkWith.emit if isinstance(worker, _EvaluationWorker) else None,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
@@ -4879,7 +5235,7 @@ class Session(QObject):
                     message=_(
                         "Zu sehen ist der Stand vor Schritt {number}. "
                         "Neue Schritte kommen hierhin.",
-                        number=self._insert_before,
+                        number=step_number(self.project.document, self._insert_before),
                     ),
                     op_id=self._insert_before,
                     suggestions=(STOP_INSERTING,),
@@ -5158,6 +5514,7 @@ class Session(QObject):
             ask=self.ask_from_worker,
             changes=agent_apply.changes_for(proposal, snapshot.document),
             snapshot=snapshot,
+            review_print=True,
         )
 
     def preview_scene(
@@ -5168,6 +5525,7 @@ class Session(QObject):
         ask: Any = None,
         changes: DocumentChange | None = None,
         snapshot: _Snapshot | None = None,
+        review_print: bool = False,
     ) -> tuple[Any, SceneDifference | None]:
         """Wonach die Szene aussähe — die Vorschau eines Agentenvorschlags.
 
@@ -5179,7 +5537,15 @@ class Session(QObject):
         :meth:`_preview_outcome`.
         """
         scene, difference, _reason = self._preview_outcome(
-            drafts, origin=origin, ask=ask, changes=changes, snapshot=snapshot
+            drafts,
+            origin=origin,
+            ask=ask,
+            changes=changes,
+            snapshot=snapshot,
+            review_print=review_print,
+            cancelled=self.agent_cancel if review_print else None,
+            progress=self.agentProgress.emit if review_print else None,
+            review_settings=snapshot.settings if snapshot is not None else None,
         )
         return scene, difference
 
@@ -5202,6 +5568,8 @@ class Session(QObject):
         refused: Any = None,
         counted: Any = None,
         unseen: CancelSignal | None = None,
+        review_print: bool = False,
+        review_settings: PrintSettings | None = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
 
@@ -5307,7 +5675,7 @@ class Session(QObject):
         if change_op is not None:
             history = History(working)
             if change_name is None:
-                history.change_params(change_op, dict(change_values or {}))
+                history.change_params(change_op, dict(change_values or {}), changes)
             else:
                 history.change_kernel(change_op, change_name, dict(change_values or {}))
             changed_index = next(
@@ -5389,10 +5757,12 @@ class Session(QObject):
                 ),
                 working.print_settings,
             )
+        from app.ui.print_contract import missing_profile_basis
+
         result = evaluate(
             working,
             preview_profile,
-            quality="draft",
+            quality="fine" if review_print else "draft",
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             ask=ask or _no_questions,
             # **Der Docstring versprach den Cache, der Aufruf reichte ihn nie
@@ -5406,6 +5776,7 @@ class Session(QObject):
             cancelled=cancelled or NeverCancelled(),
             detect_features=detect_features,
             progress=progress or _quiet_progress,
+            missing_basis=missing_profile_basis(working) if review_print else (),
         )
         if reduced and (result.stopped_at in reduced or _kernel_gave_up(result)):
             # **Das Verkleinern selbst hat angehalten — oder der Kern am groben
@@ -5511,6 +5882,72 @@ class Session(QObject):
         # Körper trotzdem um; der Befund dazu ist die Auskunft der Vorschau
         # und keine Absage. Als Grund gelesen stand der Satz zweimal im Band
         # (gemessen am 21.09.2026, ``test_ui``).
+        if difference is not None:
+            from app.ui.print_contract import explain_difference
+
+            goal = ", ".join(
+                dict.fromkeys(
+                    str(REGISTRY.get(step.op).title) for step in working.ops if step.id in previewed
+                )
+            )
+            affected = tuple(
+                object_id
+                for step in working.ops
+                if step.id in previewed
+                for object_id in (*step.inputs, *step.outputs)
+            )
+            difference = explain_difference(
+                difference, before, result.scene, goal, affected=affected
+            )
+            if review_print:
+                from app.ui.print_contract import review_difference
+
+                baseline = evaluate(
+                    snapshot.document,
+                    preview_profile,
+                    quality="fine",
+                    sources=ProjectSources(self.project, base_dir=self.base_dir),
+                    ask=ask or _no_questions,
+                    cache=self.cache,
+                    cancelled=cancelled or NeverCancelled(),
+                    detect_features=True,
+                    progress=progress or _quiet_progress,
+                    missing_basis=missing_profile_basis(working),
+                )
+                from app.core.slice.findings import print_findings
+
+                checked = []
+                reports = []
+                settings = (
+                    review_settings
+                    or working.print_settings
+                    or print_settings.resolve(preview_profile)
+                )
+                for evaluation in (baseline, result):
+                    states = {
+                        (state.key, state.object_id): state for state in evaluation.check_states
+                    }
+
+                    def remember(
+                        state: CheckState,
+                        target: dict[tuple[str, str | None], CheckState] = states,
+                    ) -> None:
+                        target[state.key, state.object_id] = state
+
+                    found = print_findings(
+                        evaluation.scene,
+                        preview_profile,
+                        settings,
+                        cancelled=cancelled or NeverCancelled(),
+                        check_status=remember,
+                        missing_basis=missing_profile_basis(working),
+                        progress=lambda fraction: (progress or _quiet_progress)(
+                            fraction, str(_("Druckfolgen prüfen"))
+                        ),
+                    )
+                    checked.append(tuple(states.values()))
+                    reports.append((*evaluation.scene.report.findings, *found))
+                difference = review_difference(difference, reports, checked)
         if difference is not None and not (
             difference.changed
             or difference.reshaped
@@ -5687,7 +6124,37 @@ class Session(QObject):
         counting.enough = enough and bool(bodies)
         return counting
 
-    def _scene_before_step(self, snapshot: _Snapshot, op_id: OpId, ask: Any, cancelled: Any) -> Any:
+    def scene_before_step_async(self, op_id: OpId, then: Any, *, explained: Any = None) -> None:
+        """Den Eingang eines Gestenschritts laden, ohne den Verlauf zu verändern.
+
+        Nutzt denselben abbrechbaren Arbeiter wie die Dialogvorschau. Eine
+        neuere Vorschau oder ein Projektwechsel entwertet seine Antwort.
+        """
+        self._preview_generation += 1
+        generation = self._preview_generation
+        snapshot = _Snapshot.of(self, op_id)
+        cancel = CancelSignal()
+        sources = ProjectSources(self.project, base_dir=self.base_dir)
+
+        def compute() -> tuple[Any, Any, str]:
+            scene = self._scene_before_step(snapshot, op_id, _no_questions, cancel, sources=sources)
+            return None, scene, ""
+
+        self.cancel_previews()
+        worker = _PreviewWorker(self, generation, compute, cancel)
+        worker.done.connect(lambda stamp, scene: self._preview_done(stamp, scene, then))
+        if explained is not None:
+            worker.explained.connect(
+                lambda stamp, reason: self._preview_done(stamp, reason, explained)
+            )
+        worker.crashed.connect(lambda detail: self._preview_done(generation, None, then))
+        worker.finished.connect(lambda done=worker: self._preview_finished(done))
+        self._previews.append(worker)
+        self._leash.start(worker)
+
+    def _scene_before_step(
+        self, snapshot: _Snapshot, op_id: OpId, ask: Any, cancelled: Any, *, sources: Any = None
+    ) -> Any:
         """Die Szene vor dem Schritt ``op_id`` — im Arbeiter, aus dem Cache; ``None`` bei Halt."""
         import copy
 
@@ -5702,7 +6169,7 @@ class Session(QObject):
             document,
             snapshot.profile,
             quality="draft",
-            sources=ProjectSources(self.project, base_dir=self.base_dir),
+            sources=sources or ProjectSources(self.project, base_dir=self.base_dir),
             ask=ask or _no_questions,
             cache=self.cache,
             cancelled=cancelled or NeverCancelled(),
@@ -5849,6 +6316,36 @@ class Session(QObject):
 
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
+        batch_unit = (
+            bool(getattr(self, "_batch_sources", ()))
+            and bool(choices)
+            and set(choices) <= {"mm", "cm", "m", "in"}
+        )
+        if batch_unit:
+            if getattr(self, "_batch_unit", None) in choices:
+                return str(self._batch_unit)
+            question += "\n\n" + str(
+                _("Diese Einheit gilt für alle gewählten Dateien ohne eindeutige Einheit.")
+            )
+        batch_recognition = getattr(self._pending, "batch_recognition", None)
+        recognition_choices = [tr("Sofort laden"), tr("Mit Merkmalserkennung laden")]
+        bundled_recognition = batch_recognition is not None and choices == recognition_choices
+        if bundled_recognition:
+            assert batch_recognition is not None
+            count, triangles, answer = batch_recognition
+            if answer in choices:
+                return str(answer)
+            minimum, maximum = recognition_minutes(
+                triangles, check_cancelled=self.cancel_signal.raise_if_cancelled
+            )
+            question += "\n\n" + tr(
+                "Diese Wahl gilt für alle {count} großen Modelle der Auswahl: insgesamt "
+                "geschätzt {minimum} bis {maximum} Minuten und etwa {memory} GB Arbeitsspeicher.",
+                count=count,
+                minimum=format_decimal(minimum, 0),
+                maximum=format_decimal(maximum, 0),
+                memory=format_decimal(recognition_gigabytes(triangles), 0),
+            )
         candidates = getattr(self._pending, "candidates", ())
         self._pending.candidates = ()
         asked_as = (question, tuple(choices))
@@ -5884,12 +6381,16 @@ class Session(QObject):
         asked = getattr(self._pending, "asked", None)
         if asked is not None:
             asked[asked_as] = request.answer
+        if bundled_recognition:
+            self._pending.batch_recognition = (count, triangles, request.answer or choices[0])
         if request.answer is None:
             # Ohne Wahl geschlossen, und die Frage gilt noch: ein Abbruch der
             # **Frage**, nicht der Rechnung. Die Auswertung macht daraus einen
             # Befund am Schritt; bis zum 23.09.2026 endete hier die ganze
             # Rechnung, und das Fenster sagte nichts (``QuestionDeclined``).
             raise QuestionDeclined
+        if batch_unit:
+            self._batch_unit = request.answer
         return request.answer
 
     # --- worker replies ---------------------------------------------------------
@@ -5945,6 +6446,8 @@ class Session(QObject):
         self.picture = None
         self.last_result = result
         self.last_quality = finished.quality if finished is not None else self.quality
+        if finished is not None and finished.target is not None:
+            self._review_target = (result, finished.target)
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
         # dieser Größe genau das, was die Stufe einsparen soll. Eine
@@ -6011,6 +6514,8 @@ class Session(QObject):
             self._backend = None
             self._backend_probed = False
             self.backendChanged.emit()
+        if finished is not None:
+            self._withdraw_batch_import()
         self.failed.emit(error)
 
     def _on_cancelled(self, finished: _EvaluationWorker | None = None) -> None:
@@ -6027,6 +6532,7 @@ class Session(QObject):
             return
         if self._cancel_by_user:
             self._cancel_by_user = False
+            self._withdraw_batch_import()
             self.evaluationCancelled.emit()
 
     def _on_proposal(self, preview: Any) -> None:

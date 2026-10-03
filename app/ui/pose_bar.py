@@ -15,9 +15,10 @@ zu einem Animationsprogramm.
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from app.i18n import tr
+from app.ui.analysis_bar import GestureAnalysis
 from app.ui.style import NORMAL, TIGHT, make_primary
 
 
@@ -75,16 +76,29 @@ class PoseBar(QWidget):
         self.done.clicked.connect(self.finished)
 
         self.hint = QLabel(tr("Erst das Gelenk anklicken, dann das Ende des Knochens."), self)
+        self.hint.setWordWrap(True)
 
-        layout = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        layout = QHBoxLayout()
+        outer.addLayout(layout)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
-        layout.addWidget(QLabel(tr("Knochen"), self))
+        self.caption = QLabel(tr("Knochen"), self)
+        layout.addWidget(self.caption)
         layout.addWidget(self.name)
         layout.addWidget(self.chain)
         layout.addWidget(self.remove)
         layout.addWidget(self.state)
         layout.addWidget(self.hint, stretch=1)
         layout.addWidget(self.done)
+        self.analysis = GestureAnalysis(self)
+        outer.addWidget(self.analysis)
+
+    def set_editing(self, editing: bool) -> None:
+        """Nach Fertig bleiben Druckbefund, Kartenwahl und der Rückweg sichtbar."""
+        for widget in (self.caption, self.name, self.chain, self.remove, self.state, self.hint):
+            widget.setVisible(editing)
+        self.done.setText(tr("Fertig") if editing else tr("Schließen"))
 
     def next_name(self) -> str:
         """Wie der nächste Knochen heißen soll — leer heißt durchnummeriert."""

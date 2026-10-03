@@ -15,6 +15,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
@@ -60,6 +61,7 @@ from app.ui.labels import (
     circle_measure,
     display_unit,
     explain_choices,
+    feature_label,
     limit_sentence,
     localised,
     set_circle_measure,
@@ -84,6 +86,7 @@ from app.ui.style import (
 )
 
 if TYPE_CHECKING:
+    from app.core.types import SceneObject
     from app.ui.placement_flow import PlacementFlow
     from app.ui.seal_flow import SealFlow
 
@@ -546,7 +549,9 @@ class ValueField(QWidget):
         """
         assert self._core is not None
         step = 10.0 ** -self.spin.decimals()
-        return abs(self._as_shown(self._core) - shown) < step / 2.0
+        # Auch exakt eine halbe Stelle ist unverändert; Qt rundet sie auf.
+        # ulp deckt nur die binäre Darstellung der Subtraktion ab.
+        return abs(self._as_shown(self._core) - shown) <= step / 2.0 + math.ulp(shown)
 
     # --- Umschalten -------------------------------------------------------------
 
@@ -1311,6 +1316,26 @@ def _angles_from(text: str) -> dict[str, tuple[float | str, ...]]:
     return pose_angles(text)
 
 
+class StrokeSummary(QLabel):
+    """Die gemalten Züge bleiben Daten; im Dialog steht ihre Anzahl."""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        from app.core.geom.sculpt import stroke_count, strokes_from_text
+
+        self._text = text
+        try:
+            count = stroke_count(strokes_from_text(text))
+            summary = tr("Ein Zug") if count == 1 else tr("{count} Züge").format(count=count)
+        except AppError:
+            summary = tr("Diese Pinselzüge lassen sich nicht lesen.")
+        super().__init__(summary, parent)
+        self.setAccessibleName(tr("Striche"))
+
+    def value(self) -> str:
+        """Den gespeicherten Text unverändert an die Operation geben."""
+        return self._text
+
+
 class ArmatureSummary(QLabel):
     """Was das Skelett ist, in einem Satz — und der Text reist unverändert mit.
 
@@ -1630,20 +1655,26 @@ def _promoted_fields(spec: OperationSpec, given: Mapping[str, Any]) -> frozenset
 
     entries = spec.params.spec()
     direction = direction_fields(spec)
+    placed = placement_fields(spec.params)
+    bound_distances = {
+        placed.get(name, name) for name in ("surface_distance_1", "surface_distance_2")
+    }
     promoted = {
         entry.name
         for entry in entries
         if entry.name in given
         and given[entry.name] != entry.default
         and entry.name not in direction
+        and entry.name not in bound_distances
+        and not entry.internal
     }
-    placed = placement_fields(spec.params)
     coordinates = {placed.get(axis, axis) for axis in ("x", "y", "z")}
     if coordinates <= {entry.name for entry in entries} and coordinates & promoted:
         front = {
             entry.name
             for entry in entries
-            if entry.placement == "front" or entry.kind == "armature" or entry.name in promoted
+            if not entry.internal
+            and (entry.placement == "front" or entry.kind == "armature" or entry.name in promoted)
         }
         # Die Fachparameter behalten ihren Platz. Reicht die Vorderseite nicht
         # für die ganze Position, bleiben auch deren entschiedene Werte hinten.
@@ -1684,6 +1715,9 @@ class OperationDialog(QDialog):
 
     surfaceRequested = Signal()
     """Die Werte bleiben im Dialog, die Position wird auf dem Modell gewählt."""
+
+    attachmentRequested = Signal(bool)
+    """Freie Lage oder die ausdrücklich angebotene Fläche wählen."""
 
     values_stand_elsewhere = False
     """Sie stehen hier — deshalb trägt die Platzierung ihre eigene Leiste.
@@ -1737,6 +1771,8 @@ class OperationDialog(QDialog):
         edges: Mapping[str, str] | None = None,
         offer_naming: bool = False,
         naming_default: bool = False,
+        centre_objects: Sequence[SceneObject] = (),
+        promote_values: bool = True,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1751,6 +1787,9 @@ class OperationDialog(QDialog):
         Vorlage ausmachen, nicht bei einer Bohrung, die ein Maß *am* Körper
         ist. ``naming_default`` ist sein Anfangszustand — das Fenster reicht
         die letzte Wahl des Kunden durch (RM-369).
+
+        ``promote_values=False`` behält beim Wiederöffnen die Schemaplätze:
+        gespeicherte Werte und Ausdrücke sind keine neue Vorbelegung.
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1768,6 +1807,7 @@ class OperationDialog(QDialog):
         durchreicht."""
         super().__init__(parent)
         self.spec = spec
+        self._promote_values = promote_values
         self._height = ContentHeight()
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
@@ -1778,6 +1818,10 @@ class OperationDialog(QDialog):
         self._feature_focus = ""
         self._first_focus_given = False
         self.source_objects = tuple(source_objects)
+        self._centre_objects = tuple(centre_objects)
+        self._centre_row: QWidget | None = None
+        self.centre_mode: QComboBox | None = None
+        self.centre_target: QComboBox | None = None
         self._target_features = dict(target_features or {})
         self._couplings: list[Callable[[], None]] = []
         self._variant_values: dict[str, dict[str, Any]] = {}
@@ -1859,7 +1903,7 @@ class OperationDialog(QDialog):
         self._advanced_form = advanced
         self._rows: dict[str, QFormLayout] = {}
         """Welches Formular das Feld trägt; ein Variantenwechsel ersetzt sein Schema."""
-        promoted = _promoted_fields(spec, given)
+        promoted = _promoted_fields(spec, given) if self._promote_values else frozenset()
         for entry in spec.params.spec():
             if spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
                 continue
@@ -1900,7 +1944,10 @@ class OperationDialog(QDialog):
             # eines Vektors tippt niemand von Hand, und ihre zwei Geschwister
             # blieben hinten. Richtung und Achse bleiben, wo das Schema sie
             # hinlegt; der Wert gilt trotzdem.
-            decided = entry.name in promoted
+            decided = entry.name in promoted and not (
+                spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                and entry.name in {"cx", "cy", "cz"}
+            )
             target = (
                 front
                 if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
@@ -2002,6 +2049,8 @@ class OperationDialog(QDialog):
         self._seat_note.setVisible(False)
         layout.addWidget(self._seat_note)
         self._seat_back: dict[str, Any] | None = None
+        self.attachment_mode: QComboBox | None = None
+        self.join_attachment: RowCheckBox | None = None
         self.to_the_bed = QPushButton(tr("Auf das Bett"), self)
         bed_note = tr("Nimmt die gewählte Fläche zurück — der Körper entsteht auf dem Bett.")
         self.to_the_bed.setToolTip(bed_note)
@@ -2015,6 +2064,7 @@ class OperationDialog(QDialog):
         bed_row.addWidget(self.to_the_bed)
         bed_row.addStretch(1)
         layout.addLayout(bed_row)
+        self._attachment_row = bed_row
         # **Wer im Bild zielen muss, erfährt es im Dialog** (Befund Robert,
         # 18.09.2026: „Bohrung setzen sollte doch über den Viewport gehen,
         # wenn das dialogfenster da ist, keine Info dass es über den Viewport
@@ -2209,6 +2259,7 @@ class OperationDialog(QDialog):
         outer.addWidget(buttons)
 
         self._blocked_reason: str | None = None
+        self._attachment_problem: str | None = None
         """Ein Sperrgrund von außen — siehe :meth:`block_apply`."""
         self._refit = QTimer(self)
         """Zieht die Höhe nach, wenn eine Zeile mit ihrer Bedingung kommt oder
@@ -2217,6 +2268,8 @@ class OperationDialog(QDialog):
         self._refit_intent: ContentFitIntent = "passive"
         self._refit.timeout.connect(self._run_queued_refit)
         self._couple_dependent_fields()
+        self._couple_surface_binding()
+        self._install_rotation_centre(given)
         self._link_sketch_planes()
         self._hide_legacy_feature_field()
         self._hide_internal_fields()
@@ -2313,7 +2366,7 @@ class OperationDialog(QDialog):
         # eine Handlung trägt („Erst reparieren, dann aushöhlen"), sperrt den
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
         # (:meth:`block_apply`, gerufen aus ``MainWindow._preview_explained``).
-        blocked = self._blocked_reason
+        blocked = self._attachment_problem or self._blocked_reason
         reason = (
             tr("Datei wird gelesen …")
             if source_pending
@@ -2427,6 +2480,8 @@ class OperationDialog(QDialog):
 
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
+        if self._attachment_problem is not None:
+            return False
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
             editor.interpretText()
         if any(field.pending for field in self._source_fields) or any(
@@ -2542,6 +2597,54 @@ class OperationDialog(QDialog):
         self._placement_hint.setVisible(bool(on))
         self.aim_again.setVisible(paused)
 
+    def offer_attachment(self, target: str) -> None:
+        """Die gewählte Fläche und freie Bettlage sind vorn erreichbar."""
+        if self.attachment_mode is not None:
+            return
+        choice = QComboBox(self)
+        choice.setAccessibleName(tr("Ansatzpunkt"))
+        choice.addItem(tr("Frei auf dem Bett"), False)
+        choice.addItem(tr("An {face} ansetzen", face=target), True)
+        choice.setCurrentIndex(1)
+        choice.setToolTip(tr("Setzt den neuen Körper bündig auf die Mitte der gewählten Fläche."))
+        join = RowCheckBox(self)
+        join.setText(tr("Verbinden"))
+        join.setChecked(True)
+        join.setToolTip(
+            tr("Fügt den neuen Körper und seinen Träger in einem rücknehmbaren Schritt zusammen.")
+        )
+        self.attachment_mode = choice
+        self.join_attachment = join
+        self._attachment_row.insertWidget(0, choice, 1)
+        self._attachment_row.insertWidget(1, join)
+        self.to_the_bed.hide()
+        choice.currentIndexChanged.connect(weak_slot(self, OperationDialog._attachment_changed))
+        join.toggled.connect(self.valuesChanged)
+
+    def _attachment_changed(self) -> None:
+        active = self.attached_to_surface()
+        if self.join_attachment is not None:
+            self.join_attachment.setVisible(active)
+        self.attachmentRequested.emit(active)
+        self.valuesChanged.emit()
+
+    def attached_to_surface(self) -> bool:
+        """Ob die vordere Auswahl gerade das Ansetzen verlangt."""
+        return self.attachment_mode is not None and bool(self.attachment_mode.currentData())
+
+    def block_attachment(self, reason: str | None) -> None:
+        """Eine ausstehende Flächenwahl überlebt die Freigabe einer älteren Vorschau."""
+        self._attachment_problem = reason
+        self._follow_source_pending()
+
+    def joins_attachment(self) -> bool:
+        """Die Vereinigung wird gemeinsam mit dem Erzeuger übernommen."""
+        return (
+            self.attached_to_surface()
+            and self.join_attachment is not None
+            and self.join_attachment.isChecked()
+        )
+
     def show_seat(self, sentence: str, back: Mapping[str, Any] | None) -> None:
         """Sagen, auf welche Fläche ein neuer Körper kommt (RM-390).
 
@@ -2553,7 +2656,7 @@ class OperationDialog(QDialog):
         self._seat_back = dict(back) if back is not None else None
         self._seat_note.setText(sentence)
         self._seat_note.setVisible(bool(sentence))
-        self.to_the_bed.setVisible(back is not None)
+        self.to_the_bed.setVisible(back is not None and self.attachment_mode is None)
 
     def seated(self) -> bool:
         """Ob der Körper gerade auf der gewählten Fläche steht."""
@@ -2582,14 +2685,13 @@ class OperationDialog(QDialog):
         problem: object | None,
         handlers: Mapping[str, Callable[[AppError], None]] | None = None,
     ) -> None:
-        """Die Absage der Vorschau mit den Knöpfen, die hier etwas bewirken — oder nichts.
+        """Die Absage steht bei den Eingaben, auch ohne örtlichen Zusatzknopf.
 
-        ``handlers`` nennt die Handlungen, die das Fenster in diesem offenen
-        Dialog einlöst; ohne eine davon bleibt die Zeile weg — der Satz steht
-        ohnehin im Band, und ein Knopf ohne Wirkung wäre schlechter als keiner
-        (§2.7). ``None`` nimmt sie wieder weg, mit jeder neuen Vorschau.
+        ``handlers`` nennt die Handlungen, die der offene Dialog einlöst.
+        Der Rat bleibt auch ohne solche Handlungen sichtbar (§2.7).
+        ``None`` nimmt ihn mit der nächsten Vorschau wieder weg.
         """
-        if problem is None or not handlers:
+        if problem is None:
             self._refusal.clear()
             self._refusal.hide()
             return
@@ -2697,6 +2799,169 @@ class OperationDialog(QDialog):
         for field in self._source_fields:
             field.cancel_pending()
         super().reject()
+
+    def _couple_surface_binding(self) -> None:
+        """Kantenabstände gehören zum Flächenbezug; eigene Weltwerte lösen ihn."""
+        from app.core.knowledge.parts.ops import placement_fields
+
+        fields = placement_fields(self.spec.params)
+        if fields.get("surface_anchor") not in self._editors:
+            return
+        for name in ("x", "y", "z", "nx", "ny", "nz"):
+            editor = self._editors.get(fields[name])
+            if isinstance(editor, ValueField):
+                editor.changed.connect(weak_slot(self, OperationDialog._release_surface_binding))
+
+        def follow() -> None:
+            active = bool(self.values().get(fields["surface_anchor"]))
+            for name in ("surface_distance_1", "surface_distance_2"):
+                editor = self._editors.get(fields[name])
+                if editor is not None:
+                    self._rows[fields[name]].setRowVisible(editor, active)
+                    editor.setEnabled(active)
+
+        self.valuesChanged.connect(follow)
+        self._couplings.append(follow)
+        follow()
+
+    def _install_rotation_centre(self, given: Mapping[str, Any]) -> None:
+        """Körper, Merkmal und Ursprung werden zu einem gespeicherten Punkt (RM-402)."""
+        from app.core.geom.transform import reference_point
+        from app.core.perceive.features import centre_of
+
+        if self._centre_row is not None:
+            self._front.removeRow(self._centre_row)
+            self._centre_row = None
+            self.centre_mode = None
+            self.centre_target = None
+        if self.spec.name not in {"pattern", "pattern_feature", "mirror_object"} or not all(
+            name in self._editors for name in ("cx", "cy", "cz")
+        ):
+            return
+        points: dict[str, list[tuple[str, str, tuple[float, float, float]]]] = {
+            "body": [],
+            "feature": [],
+        }
+        for body in self._centre_objects:
+            points["body"].append((body.id, str(body.name), reference_point([body], "centre")))
+            for key, feature in body.features.items():
+                if centre_of(feature) is not None:
+                    points["feature"].append(
+                        (
+                            f"{body.id}:{key}",
+                            f"{body.name} · {feature_label(key, feature)}",
+                            reference_point([body], "feature", key),
+                        )
+                    )
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        mode = QComboBox(row)
+        target = QComboBox(row)
+        self._centre_row, self.centre_mode, self.centre_target = row, mode, target
+        for title, key in (
+            (tr("Körper"), "body"),
+            (tr("Merkmal"), "feature"),
+            (tr("Punkt"), "point"),
+            (tr("Ursprung"), "origin"),
+        ):
+            if key not in points or points[key]:
+                mode.addItem(title, key)
+        if given.get("follow_anchor") and not any(
+            given.get(name) not in (None, "") for name in ("cx", "cy", "cz")
+        ):
+            anchor_label = choice_label(str(given.get("about", "centre")))
+            label = f"{tr('Bisheriger Bezugspunkt')} · {anchor_label}"
+            mode.addItem(label, userData="legacy")
+        mode.setAccessibleName(tr("Drehmitte"))
+        target.setAccessibleName(tr("Bezug der Drehmitte"))
+        note = tr("Die gewählte Mitte wird als fester Punkt gespeichert.")
+        for widget in (mode, target):
+            widget.setToolTip(note)
+            widget.setAccessibleDescription(note)
+            wheel_needs_focus(widget)
+        layout.addWidget(mode)
+        layout.addWidget(target, 1)
+        self._front.addRow(tr("Drehmitte"), row)
+        # Gespeicherte Ausdrücke und alte Spiegelanker bleiben beim Öffnen unangetastet.
+        stored = any(given.get(name) not in (None, "") for name in ("cx", "cy", "cz"))
+        default = "point" if stored else "legacy" if given.get("follow_anchor") else "body"
+        if default == "body" and not points["body"]:
+            default = "point"
+        mode.setCurrentIndex(mode.findData(default))
+
+        def follow() -> None:
+            active = self.spec.name == "mirror_object" or self.values().get("kind") != "linear"
+            self._front.setRowVisible(row, active)
+            for name in ("cx", "cy", "cz"):
+                editor = self._editors[name]
+                visible = active and mode.currentData() == "point"
+                self._rows[name].setRowVisible(editor, visible)
+                editor.setEnabled(visible)
+            target.setVisible(mode.currentData() in points)
+            # Der alte Anker steht lesbar in der Auswahl; sein internes Feld bleibt verborgen.
+            legacy = self._editors.get("about")
+            if legacy is not None:
+                self._rows["about"].setRowVisible(legacy, False)
+            self._queue_refit("passive")
+
+        def apply_choice() -> None:
+            point = (0.0, 0.0, 0.0) if mode.currentData() == "origin" else target.currentData()
+            if mode.currentData() in {"body", "feature", "origin"} and point is not None:
+                values = dict(zip(("cx", "cy", "cz"), point, strict=True))
+                if "follow_anchor" in self._editors:
+                    values["follow_anchor"] = False
+                self.take_placement(values)
+            elif mode.currentData() == "legacy":
+                self.take_placement(
+                    {
+                        "about": given.get("about", "centre"),
+                        "follow_anchor": True,
+                        "cx": None,
+                        "cy": None,
+                        "cz": None,
+                    }
+                )
+            elif mode.currentData() == "point" and "follow_anchor" in self._editors:
+                self.take_placement({"follow_anchor": False})
+            else:
+                self.valuesChanged.emit()
+
+        def choose() -> None:
+            with QSignalBlocker(target):
+                target.clear()
+                selected = False
+                for key, title, point in points.get(mode.currentData(), []):
+                    target.addItem(title, point)
+                    if (
+                        not selected
+                        and self.source_objects
+                        and key.split(":", 1)[0] == self.source_objects[0]
+                    ):
+                        target.setCurrentIndex(target.count() - 1)
+                        selected = True
+            apply_choice()
+            if mode.currentData() == "point" and not row.isHidden():
+                if hasattr(self, "advanced"):
+                    self.advanced.setChecked(True)
+                self.focus_field("cx")
+
+        mode.currentIndexChanged.connect(choose)
+        target.currentIndexChanged.connect(apply_choice)
+        self.valuesChanged.connect(follow)
+        self._couplings.append(follow)
+        choose()
+        follow()
+
+    def _release_surface_binding(self) -> None:
+        """Nur eine eigene Koordinateneingabe ersetzt den gespeicherten Bezug."""
+        if self.signalsBlocked():
+            return
+        from app.core.scene.placement import clear_surface_binding
+
+        cleared = clear_surface_binding(self.spec)
+        if any(self.values().get(name) for name in cleared):
+            self.take_placement(cleared)
 
     def _couple_dependent_fields(self) -> None:
         """Ein Feld ohne Wirkung steht nicht da (§2.4, §2.6).
@@ -3337,6 +3602,8 @@ class OperationDialog(QDialog):
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo
+        if entry.kind == "strokes":
+            return StrokeSummary(str(start or ""), self)
         if entry.kind == "armature":
             # Zwei Felder derselben Art und zwei verschiedene Aufgaben: Das
             # Skelett kommt aus dem Editor und wird nur gezeigt, die Stellung
@@ -3532,6 +3799,14 @@ class OperationDialog(QDialog):
         """
         from app.core.knowledge.parts.ops import placement_fields
 
+        if (
+            self.centre_mode is not None
+            and self.centre_mode.currentData() == "point"
+            and self._centre_row is not None
+            and not self._centre_row.isHidden()
+        ):
+            self.take_placement(dict(zip(("cx", "cy", "cz"), point, strict=True)))
+            return True
         fields = {entry.name for entry in self.spec.params.spec()}
         placed = placement_fields(self.spec.params)
         axes = tuple(placed.get(name, name) for name in ("x", "y", "z"))
@@ -3617,7 +3892,7 @@ class OperationDialog(QDialog):
             self._rows.clear()
             self.spec = spec
             self._feature_focus = ""
-            promoted = _promoted_fields(spec, given)
+            promoted = _promoted_fields(spec, given) if self._promote_values else frozenset()
             for entry in spec.params.spec():
                 if spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
                     continue
@@ -3628,7 +3903,10 @@ class OperationDialog(QDialog):
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
                     editor.installEventFilter(self)
-                decided = entry.name in promoted
+                decided = entry.name in promoted and not (
+                    spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                    and entry.name in {"cx", "cy", "cz"}
+                )
                 form = (
                     self._front
                     if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
@@ -3656,6 +3934,8 @@ class OperationDialog(QDialog):
             for field in self._source_fields:
                 field.pendingChanged.connect(self._follow_source_pending)
             self._couple_dependent_fields()
+            self._couple_surface_binding()
+            self._install_rotation_centre(given)
             self._link_sketch_planes()
         # Alte Komplettierer und ihre Felder leben bis nach dem Neuaufbau.
         # removeRow zerstörte sie synchron mitten im Variantenwechsel.
@@ -3897,7 +4177,9 @@ class OperationDialog(QDialog):
                 # hier aufzulösen hieße, die Bindung beim ersten Öffnen des
                 # Dialogs zu verlieren, ohne dass es jemand sähe.
                 collected[entry.name] = editor.value()
-            elif isinstance(editor, ImageSourceField | ArmatureField | ArmatureSummary):
+            elif isinstance(
+                editor, ImageSourceField | ArmatureField | ArmatureSummary | StrokeSummary
+            ):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, SketchField):
                 collected[entry.name] = editor.text()

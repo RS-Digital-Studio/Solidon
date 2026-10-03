@@ -2180,6 +2180,39 @@ def boolean(
     return Solid(shape, deflection=parts[0].deflection, face_slots=slots)
 
 
+def separated_solids(
+    solid: Solid, *, cancelled: CancelToken | None = None
+) -> tuple[tuple[Solid, dict[int, int]], ...]:
+    """Die Volumenkörper mit belegter Abbildung ihrer ursprünglichen Flächen.
+
+    Die Abbildung führt vom Index im Verbund zum Index in der privaten Kopie.
+    Materialfarben und Vernetzungsfeinheit bleiben erhalten; Kontakte und
+    Überschneidungen zu beurteilen bleibt Aufgabe des aufrufenden Werkzeugs.
+    """
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+
+    shapes = ShapeMap()
+    TopExp.MapShapes_s(solid.shape, TopAbs_SOLID, shapes)
+    pieces = []
+    for index in range(shapes.Extent()):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        shape = shapes.FindKey(index + 1)
+        faces = ShapeMap()
+        TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+        origins = tuple(solid.face_index(faces.FindKey(face + 1)) for face in range(faces.Extent()))
+        if any(origin < 0 for origin in origins):
+            raise InternalError(detail="a separated solid has a face outside its source")
+        slots = tuple(solid.face_slots[origin] for origin in origins) if solid.face_slots else ()
+        part = Solid(shape, deflection=solid.deflection, face_slots=slots)
+        pieces.append(
+            (part, {origin: part._copied_faces[local] for local, origin in enumerate(origins)})
+        )
+    return tuple(pieces)
+
+
 def fuse_solids(solid: Solid, *, cancelled: CancelToken | None = None) -> Solid:
     """Vereinigt die Volumenkörper einer Form, wenn sie sich berühren oder überlagern.
 

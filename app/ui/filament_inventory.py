@@ -821,7 +821,7 @@ class InventoryView(QWidget):
                 partial(self._run, partial(filaments.restore, identifier), self._saved),
             )
         else:
-            action = menu.addAction(icon("delete", self), tr("Filament löschen"))
+            action = menu.addAction(icon("delete", self), tr("Spule archivieren"))
             action.setToolTip(removal_hint())
             action.triggered.connect(partial(self._remove, identifier))
         try:
@@ -925,7 +925,7 @@ class InventoryView(QWidget):
             button.clicked.connect(action)
             information.addWidget(button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.delete_button = QPushButton(
-            tr("Wiederherstellen") if entry.archived else tr("Filament löschen"), overview
+            tr("Wiederherstellen") if entry.archived else tr("Spule archivieren"), overview
         )
         self.delete_button.setIcon(icon("undo" if entry.archived else "delete", self))
         hint = tr("Wiederherstellen") if entry.archived else removal_hint()

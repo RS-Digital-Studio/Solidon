@@ -9,6 +9,7 @@ from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.perceive.local import detect_local, local_error
 from app.core.perceive.matching import MatchResult, apply_mapping
+from app.core.perceive.patterns import without_pattern_cells
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, OpContext, OpResult
 from app.core.units import EPS_GEOM
@@ -74,8 +75,8 @@ class DetectRegionParams(BaseParams):
 
 @register_op(
     name="detect_region",
-    # Musterrahmen verwenden plattformgleiche Zylinderachsen (RM-225).
-    cache_version="1",
+    # Ein örtliches Muster ersetzt seine zuvor einzeln erkannten Zellflächen.
+    cache_version="2",
     title=_("Merkmale an dieser Stelle erkennen"),
     category="holes",
     params=DetectRegionParams,
@@ -126,13 +127,17 @@ def detect_region(ctx: OpContext) -> OpResult:
         raise local_error(result.reason or "no_feature")
     # Wiederholte Suche an denselben Originalflächen erzeugt keinen Zwilling.
     # Untersuchte andere Stellen reservieren alle bisherigen Kennungen weiter.
-    mapping = {}
+    mapping: dict[str, str] = {}
+    assigned: set[str] = set()
     for name, existing in source.features.items():
         for identifier, feature in result.features.items():
-            if existing.kind == feature.kind and set(existing.face_indices) == set(
-                feature.face_indices
+            if (
+                identifier not in assigned
+                and existing.kind == feature.kind
+                and set(existing.face_indices) == set(feature.face_indices)
             ):
                 mapping[name] = identifier
+                assigned.add(identifier)
                 break
     renamed = apply_mapping(
         result.features,
@@ -141,7 +146,22 @@ def detect_region(ctx: OpContext) -> OpResult:
         ),
         previous=source.features,
     )
-    features = {**renamed, **source.features}
+    # Bereits belegte Texturen behalten ihre Herkunft und ihren Feldumfang.
+    # Ein neuer, nur teilweise überlappender Fund darf sie nicht überdecken.
+    occupied = {
+        index
+        for feature in source.features.values()
+        if feature.kind == "pattern" and feature.recognised
+        for index in feature.face_indices
+    }
+    renamed = {
+        name: feature
+        for name, feature in renamed.items()
+        if name in source.features
+        or feature.kind != "pattern"
+        or occupied.isdisjoint(feature.face_indices)
+    }
+    features = without_pattern_cells({**renamed, **source.features})
     ctx.cancelled.raise_if_cancelled()
     ctx.progress(1.0, tr("Merkmale an dieser Stelle erkennen"))
     return OpResult(outputs=[replace(source, features=features)], answered=answered)

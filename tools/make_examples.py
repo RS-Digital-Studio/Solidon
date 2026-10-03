@@ -198,7 +198,9 @@ def way_four() -> Project:
             OperationDraft(
                 op="translate_object",
                 inputs=("obj_2",),
-                params={"dx": 0.0, "dy": 0.0, "dz": 26.0},
+                # Vier Millimeter Überlappung verbinden Kopf und Rumpf;
+                # der übrige Kopf bleibt als Kugel über den Schultern sichtbar.
+                params={"dx": 0.0, "dy": 0.0, "dz": 36.0},
             )
         ],
     )
@@ -749,10 +751,22 @@ def box_with_lid() -> Project:
     history.apply(
         _("Kabel und Befestigung"),
         [
+            # Durch die linke Wand, also mit ihrer Normalen nach außen. Ohne
+            # Richtung galt die Achse z, und die Bohrung lief senkrecht durch
+            # die Wandkrone über den Rand der Fläche (Randprüfung RM-421).
             OperationDraft(
                 op="insert_cable_gland",
                 inputs=("obj_1",),
-                params={"size": "cable-5", "wall": "=@wand", "x": -40.0, "y": 0.0, "z": 26.0},
+                params={
+                    "size": "cable-5",
+                    "wall": "=@wand",
+                    "x": -40.0,
+                    "y": 0.0,
+                    "z": 26.0,
+                    "nx": -1.0,
+                    "ny": 0.0,
+                    "nz": 0.0,
+                },
             ),
             # Auf den Boden, nicht auf die Oberkante. Sie stand auf
             # ``z = "=@hoehe"``, und dort war einmal ein Deckel — seit die

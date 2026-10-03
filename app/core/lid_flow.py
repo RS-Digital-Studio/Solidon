@@ -19,8 +19,9 @@ Ein Undo nimmt beides zusammen zurück.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.core.geom.lid import (
     CAP_THREAD_FEATURE,
@@ -30,19 +31,22 @@ from app.core.geom.lid import (
 )
 from app.core.log import get_logger
 from app.core.scene.fits import active_fits
-from app.core.scene.history import History, OperationDraft, change_for
+from app.core.scene.history import ChangeFn, History, OperationDraft, change_for
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
     Document,
+    DocumentChange,
     FeatureRef,
     Finding,
     Fit,
     ObjectId,
     Operation,
     Origin,
+    Parameter,
+    ParamSpec,
     TransactionId,
 )
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -164,4 +168,274 @@ def apply_lid(
     )
 
 
-__all__ = ["FIT_NAME", "LidApplied", "apply_lid", "fit_for_lid", "unique_name"]
+__all__ = [
+    "FIT_NAME",
+    "ContainerEdit",
+    "ContainerPlan",
+    "LidApplied",
+    "apply_lid",
+    "change_for_container_edit",
+    "fit_for_container",
+    "fit_for_lid",
+    "plan_container",
+    "plan_container_edit",
+    "unique_name",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ContainerPlan:
+    """Ein reiner Entwurf; erst History.apply veröffentlicht Maße, Körper und Passung."""
+
+    title: TranslatableText | str
+    drafts: tuple[OperationDraft, ...]
+    parameters: Mapping[str, Parameter]
+    changes: ChangeFn
+    document_change: DocumentChange
+
+
+@dataclass(frozen=True, slots=True)
+class ContainerEdit:
+    """Werte und Begleitänderung eines historischen Behälterschritts, gemeinsam übernehmen."""
+
+    values: Mapping[str, Any]
+    document_change: DocumentChange
+
+
+def _container_dimensions(values: Mapping[str, Any]) -> tuple[ParamSpec, ...]:
+    """Nur wirksame Hauptmaße werden automatisch zu Projektparametern."""
+    from app.core.geom.container_ops import ContainerParams
+    from app.core.registry.params import inactive_dependency
+
+    schema = ContainerParams.spec()
+    return tuple(
+        spec
+        for spec in schema
+        if spec.unit == "mm"
+        and spec.placement == "front"
+        and inactive_dependency(spec, schema, values) is None
+    )
+
+
+def plan_container(document: Document, values: Mapping[str, Any]) -> ContainerPlan:
+    """Den Behälter-Assistenten als eine Transaktion mit benannten Hauptmaßen planen.
+
+    Die Vorlage wird nicht verändert. Ausdrücke bleiben als Abhängigkeiten
+    der neuen Projektmaße erhalten. Neue Kennungen werden auf einer Kopie
+    geplant; eine inzwischen geänderte Szene lehnt History ausdrücklich ab.
+    """
+    import copy
+
+    from app.core import expressions
+    from app.core.brep.kernel import available
+    from app.core.geom.container_ops import (
+        ContainerInsertParams,
+        ContainerWizardParams,
+    )
+    from app.core.registry.params import validate
+
+    resolved = expressions.resolve_params(values, expressions.resolve(document.parameters))
+    params = validate(ContainerWizardParams, resolved)
+    raw = params.as_dict()
+    raw.update(
+        (name, value)
+        for name, value in values.items()
+        if name in raw and expressions.is_expression(value)
+    )
+    raw.pop("insert")
+    if raw["kernel"] == "auto":
+        raw["kernel"] = "brep" if available() else "mesh"
+    suffix = ""
+    number = 1
+    while any(name.startswith(f"container{suffix}_") for name in document.parameters):
+        number += 1
+        suffix = f"_{number}"
+    parameters: dict[str, Parameter] = {}
+    for spec in _container_dimensions(params.as_dict()):
+        name = f"container{suffix}_{spec.name}"
+        original = values.get(spec.name)
+        parameters[name] = Parameter(
+            name=name,
+            value=float(getattr(params, spec.name)),
+            title=spec.title,
+            minimum=spec.minimum,
+            maximum=spec.maximum,
+            expression=str(original) if expressions.is_expression(original) else None,
+        )
+        raw[spec.name] = f"=@{name}"
+    divisions = {name: raw[name] for name in ("rows", "columns")}
+    if params.insert:
+        raw.update(rows=1, columns=1)
+    scratch = copy.deepcopy(document)
+    history = History(scratch)
+    history.apply(
+        _("Behälter mit Deckel"),
+        [OperationDraft("create_container", params=raw)],
+        changes=change_for(scratch, parameters=parameters),
+    )
+    first = scratch.ops[-1]
+    drafts = [OperationDraft(first.op, params=raw, outputs=tuple(first.outputs), seed=first.seed)]
+    if params.insert:
+        inserted = {
+            spec.name: raw.get(spec.name, getattr(params, spec.name, spec.default))
+            for spec in ContainerInsertParams.spec()
+        }
+        inserted.update(divisions)
+        draft = OperationDraft("add_container_insert", inputs=tuple(first.outputs), params=inserted)
+        history.apply(_("Einsatz"), [draft])
+        drafts.append(
+            dataclasses.replace(
+                draft, outputs=tuple(scratch.ops[-1].outputs), seed=scratch.ops[-1].seed
+            )
+        )
+
+    def changes(operations: Sequence[Operation]) -> DocumentChange:
+        fit = fit_for_container(operations[0], document.fits)
+        return change_for(document, parameters=parameters, fits=[*document.fits, fit])
+
+    return ContainerPlan(
+        _("Behälter mit Deckel"),
+        tuple(drafts),
+        parameters,
+        changes,
+        changes(scratch.ops[-len(drafts) :]),
+    )
+
+
+def fit_for_container(operation: Operation, existing: Sequence[Fit]) -> Fit:
+    """Das Passungspaar der aktuellen Deckelart, aus den echten Ausgabekennungen."""
+    from app.core.geom.container_ops import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
+
+    pairs = {
+        "screw": (NECK_THREAD_FEATURE, CAP_THREAD_FEATURE),
+        "push": (CAVITY_FEATURE, COLLAR_FEATURE),
+        "hinged": (HINGE_PIN_FEATURE, HINGE_HOLE_FEATURE),
+    }
+    lid = str(operation.params.get("lid", "screw"))
+    left, right = pairs[lid]
+    old = next((fit for fit in existing if _belongs_to_container(fit, operation)), None)
+    return Fit(
+        name=old.name if old is not None else _unused_name(existing, FIT_NAME),
+        a=FeatureRef(operation.outputs[0], left),
+        b=FeatureRef(operation.outputs[1], right),
+        kind=old.kind if old is not None else "clearance",
+        tolerance=old.tolerance if old is not None else AUTO_TOLERANCE_PREFIX,
+        when_positive=(operation.id, "collar") if lid == "push" else None,
+    )
+
+
+def _belongs_to_container(fit: Fit, operation: Operation) -> bool:
+    from app.core.geom.container_ops import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
+
+    return (
+        len(operation.outputs) >= 2
+        and fit.a.object_id == operation.outputs[0]
+        and fit.b.object_id == operation.outputs[1]
+        and (fit.a.feature_id, fit.b.feature_id)
+        in (
+            (NECK_THREAD_FEATURE, CAP_THREAD_FEATURE),
+            (CAVITY_FEATURE, COLLAR_FEATURE),
+            (HINGE_PIN_FEATURE, HINGE_HOLE_FEATURE),
+        )
+    )
+
+
+def change_for_container_edit(
+    document: Document, operation: Operation, values: Mapping[str, Any]
+) -> DocumentChange:
+    """Den Wechsel der Deckelart mit seiner bestehenden Passung gemeinsam zurücknehmen.
+
+    Für `History.change_params(..., changes=...)` und denselben Vorschauweg.
+    Fremde Passungen bleiben unverändert; Namen und Kundentoleranzen des
+    Behälterpaars erhalten sich. Der Einsatz liest beide Körper als Eingänge
+    und folgt dadurch auch einer geänderten Kragentiefe.
+    """
+    proposed = dataclasses.replace(operation, params={**operation.params, **values})
+    fits = [
+        fit_for_container(proposed, (fit,)) if _belongs_to_container(fit, operation) else fit
+        for fit in document.fits
+    ]
+    if not any(_belongs_to_container(fit, operation) for fit in document.fits):
+        fits.append(fit_for_container(proposed, fits))
+    change = change_for(document, fits=fits)
+    old_inserts: dict[int, Operation] = {}
+    new_inserts: dict[int, Operation] = {}
+    shared = ("shape", "diameter", "width", "depth", "height", "wall", "floor", "radius")
+    for entry in document.ops:
+        if entry.op != "add_container_insert" or tuple(entry.inputs) != tuple(operation.outputs):
+            continue
+        # Nur weiterhin gekoppelte Werte folgen dem Behälter. Ein vom Kunden
+        # eigens überschriebenes Einsatzmaß bleibt seine eigene Entscheidung.
+        followed = {
+            name: proposed.params[name]
+            for name in shared
+            if name in proposed.params and entry.params.get(name) == operation.params.get(name)
+        }
+        updated = {**entry.params, **followed}
+        if updated != entry.params:
+            old_inserts[entry.id] = entry
+            new_inserts[entry.id] = dataclasses.replace(entry, params=updated)
+    return dataclasses.replace(
+        change,
+        before=dataclasses.replace(change.before, edited_ops=old_inserts or None),
+        after=dataclasses.replace(change.after, edited_ops=new_inserts or None),
+    )
+
+
+def plan_container_edit(
+    document: Document, operation: Operation, values: Mapping[str, Any]
+) -> ContainerEdit:
+    """Neu wirksame Hauptmaße samt Passung und Einsatz in einer Transaktion planen.
+
+    Bereits benannte Maße und manuelle Ausdrücke behalten ihre Bindung. Alte
+    Projektparameter werden weder gelöscht noch überschrieben; Namenskollisionen
+    bekommen einen freien Namen. Die geplanten ``values`` gehören zusammen mit
+    ``document_change`` in Vorschau und ``History.change_params``.
+    """
+    import re
+
+    from app.core import expressions
+    from app.core.geom.container_ops import ContainerParams
+    from app.core.registry.params import validate
+
+    known = expressions.resolve(document.parameters)
+    raw = {**operation.params, **values}
+    params = validate(ContainerParams, expressions.resolve_params(raw, known))
+    previous = validate(ContainerParams, expressions.resolve_params(operation.params, known))
+    raw = {**params.as_dict(), **raw}
+    earlier = {spec.name for spec in _container_dimensions(previous.as_dict())}
+    prefix = "container_"
+    for spec in _container_dimensions(previous.as_dict()):
+        found = re.fullmatch(
+            r"=@(container(?:_\d+)?_)" + re.escape(spec.name),
+            str(operation.params.get(spec.name, "")),
+        )
+        if found is not None:
+            prefix = found.group(1)
+            break
+    parameters: dict[str, Parameter] = {}
+    for spec in _container_dimensions(params.as_dict()):
+        if spec.name in earlier or expressions.is_expression(raw[spec.name]):
+            continue
+        base = f"{prefix}{spec.name}"
+        name, number = base, 1
+        while name in document.parameters or name in parameters:
+            number += 1
+            name = f"{base}_{number}"
+        parameters[name] = Parameter(
+            name=name,
+            value=float(getattr(params, spec.name)),
+            title=spec.title,
+            minimum=spec.minimum,
+            maximum=spec.maximum,
+        )
+        raw[spec.name] = f"=@{name}"
+    change = change_for_container_edit(document, operation, raw)
+    if parameters:
+        dimensions = change_for(document, parameters=parameters)
+        change = dataclasses.replace(
+            change,
+            before=dataclasses.replace(change.before, parameters=dimensions.before.parameters),
+            after=dataclasses.replace(change.after, parameters=dimensions.after.parameters),
+        )
+    return ContainerEdit(raw, change)

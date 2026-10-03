@@ -369,14 +369,7 @@ def grab(window: Any, rect: QRect | None = None) -> QImage:
     wenn ein Dialog höher ist als das Fenster (:func:`dialog_bounds`).
     """
     area = rect if rect is not None else window.rect()
-    # Eine andere Sitzung nimmt vielleicht gerade auf denselben Schirm auf —
-    # dann läge ihr Fenster im Bild (``figures.foreign_window_over``).
-    figures.wait_until_uncovered(window, area)
-    screen = window.screen() or QApplication.primaryScreen()
-    corner = window.geometry().topLeft() - screen.geometry().topLeft()
-    shot = screen.grabWindow(
-        0, corner.x() + area.x(), corner.y() + area.y(), area.width(), area.height()
-    ).toImage()
+    shot = figures.grab_uncovered(window, area).toImage()
     if shot.width() != area.width() or shot.height() != area.height():
         raise SystemExit(
             f"Die Aufnahme misst {shot.width()}x{shot.height()} statt "

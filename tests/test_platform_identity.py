@@ -764,8 +764,97 @@ def _support_columns() -> str:
     ) + repr((sorted(place.channels), place.island_on_model))
 
 
+def _bound_surface() -> str:
+    """Zwei gespeicherte Kantenabstände auf einem schrägen, vergrößerten Träger."""
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import composed, moved_object, rotation, translation
+    from app.core.registry import REGISTRY
+    from app.core.scene import placement
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import IDENTITY_FRAME, SceneObject
+
+    load_operations()
+    body = MeshData.of(trimesh.creation.box((40.0, 30.0, 10.0)))
+    source = SceneObject(id="obj_1", name="Träger", mesh=body, frame=IDENTITY_FRAME)
+    top = int(np.argmax(body.raw.face_normals[:, 2]))
+    hit = placement.at_point(placement.prepare_surface(body, top, {}), (-12.3, -6.7, 5.0))
+    spec = REGISTRY.get("create_box")
+    values = placement.bound_surface_values(spec, source, hit)
+    matrix = composed(translation((7.0, 11.0, 4.0)), rotation("x", 13.0), rotation("y", 17.0))
+    moved = moved_object(source, matrix, cancelled=NeverCancelled())
+    bound = placement.bind_surface(
+        spec,
+        values,
+        {source.id: moved},
+        {source.id: "moved"},
+        ask=lambda *_: pytest.fail("Eindeutiger Flächenbezug"),
+        announce=None,
+        cancelled=NeverCancelled(),
+    )
+    assert bound.placed is not None
+    return fingerprint(
+        [*bound.placed.point, *bound.placed.normal, *(edge.distance for edge in bound.placed.edges)]
+    )
+
+
+def _container(lid: str, shape: str = "round") -> str:
+    """Fächer, Streulöcher, Deckel und Scharnier werden gemeinsam erzeugt."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    load_operations()
+    spec = REGISTRY.get("create_container")
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(profile=profile),
+            inputs=[],
+            params=spec.params(
+                kernel="mesh", shape=shape, lid=lid, columns=2, holes=True, opening_angle=31.0
+            ),
+            profile=profile,
+            quality="fine",
+            seed=20261003,
+            progress=lambda *_: None,
+            ask=lambda *_: pytest.fail("Der vollständig bemaßte Behälter braucht keine Nachfrage"),
+            cancelled=NeverCancelled(),
+        )
+    )
+    return "|".join(_mesh_print(body.mesh) for body in result.outputs)
+
+
+def _rebuilt_box() -> str:
+    """Kandidatenmaße eines frei ausgerichteten Nachbaus bleiben plattformgleich."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.transform import composed, rotation, translation
+    from app.core.scene.rebuild import _boxed, _oriented_basis
+    from app.core.types import SceneObject
+
+    body = edit.transformed(
+        edit.box(40.0, 30.0, 20.0),
+        composed(translation((15.0, -9.0, 35.0)), rotation("x", 37.0), rotation("y", 13.0)),
+    )
+    source = SceneObject("obj_1", "Quelle", body, kind="brep", features=features_of(body))
+    basis = _oriented_basis(source)
+    assert basis is not None
+    drafts, explained = _boxed(source, 0.1, basis)
+    assert not explained
+    return fingerprint([drafts[0].params[key] for key in sorted(drafts[0].params)])
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
+    "bound_surface": _bound_surface,
+    "container_hinge": lambda: _container("hinged"),
+    "container_screw": lambda: _container("screw"),
+    "container_rectangular": lambda: _container("push", "rectangular"),
     "corner_chamfer": lambda: _worked_corner(False),
     "corner_fillet": lambda: _worked_corner(True),
     "curved_mouth": _curved_mouth,
@@ -782,6 +871,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "pose_armature": _posed_plate,
     "prusa_support_angle": _automatic_support_angle,
     "remesh_mesh": _refined_plate,
+    "rebuild_box": _rebuilt_box,
     "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,
     "rotate_object": _turned_plate,

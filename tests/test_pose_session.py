@@ -258,6 +258,7 @@ def test_accepting_the_dialog_writes_one_operation(window: MainWindow) -> None:
     assert dialog is not None
     dialog.accept()
 
+    assert window.session.wait_for_idle(30_000)
     ops = window.session.project.document.ops
     assert len(ops) == before + 1
     assert ops[-1].op == "pose_armature"
@@ -509,6 +510,7 @@ def test_reopening_the_editor_brings_the_bones_back(window: MainWindow) -> None:
     window.session.wait_for_idle()
 
     window.start_armature(koerper)
+    assert window.session.wait_for_idle()
 
     assert len(window._armature_bones) == 2, (
         f"das gesetzte Skelett muss im Editor stehen, dort stehen "
@@ -598,3 +600,77 @@ def test_bones_are_drawn_and_sit_inside_the_body(window: MainWindow) -> None:
 
     window.finish_armature()
     assert window.viewport.bones_shown == ()
+
+
+def test_pose_print_findings_remain_in_the_bar_after_finishing(window: MainWindow) -> None:
+    """RM-377: Nach dem Posieren bleibt der Befund am Ort der Handlung."""
+    from app.core.types import Finding, Report
+    from app.i18n import _
+
+    object_id = with_a_body(window)
+    window.start_armature(object_id)
+    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    window.finish_armature()
+    assert window._op_dialog is not None
+    window._op_dialog.accept()
+    assert window.session.wait_for_idle(30_000)
+    finding = Finding(
+        code="pose.pinched",
+        severity="warning",
+        object_id=object_id,
+        message=_(
+            "An den gebeugten Gelenken schnürt sich die Haut ein — für diese "
+            "Winkel ist das Netz dort zu grob."
+        ),
+    )
+    window.session.last_result.scene.report = Report((finding,))
+    window.pose_bar.analysis.choice.setCurrentIndex(2)
+    window._check_sculpted_walls()
+    assert window.wait_for_sculpt_check()
+    assert "schnürt" in window.pose_bar.analysis.note.text()
+    assert "Stützen" in window.pose_bar.analysis.note.text()
+    assert window.pose_bar.isVisibleTo(window)
+    assert window.pose_bar.done.text() == "Schließen"
+    window.pose_bar.done.click()
+    assert not window.pose_bar.isVisibleTo(window)
+    assert window.viewport.analysis_map is None
+
+
+def test_history_reopens_the_requested_armature_instead_of_the_latest(window: MainWindow) -> None:
+    """RM-375: Die gewählte Operationskennung bestimmt das Skelett."""
+    from app.core.geom.pose import armature_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Bone
+
+    target = with_a_body(window)
+    for name in ("first", "second"):
+        window.session.apply(
+            "Skelett",
+            [
+                OperationDraft(
+                    "pose_armature",
+                    inputs=(target,),
+                    params={
+                        "armature": armature_to_text(
+                            [Bone(name=name, head=(0, 0, 0), tail=(0, 0, 10))]
+                        ),
+                        "pose": "",
+                    },
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(30_000)
+    first = window.session.project.document.ops[-2].id
+    window.edit_operation(first)
+    assert window.session.wait_for_idle(30_000)
+    assert window.setting_armature()
+    assert window._armature_step == first
+    assert [entry.name for entry in window._armature_bones] == ["first"]
+    assert window.undo_bone()
+    window.finish_armature()
+    assert window.session.wait_for_idle(30_000)
+    assert window.session.history.operation(first).params["armature"] == ""
+    assert len(window.session.project.document.ops) == 3
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    assert len(armature_from_text(window.session.history.operation(first).params["armature"])) == 1

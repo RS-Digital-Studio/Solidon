@@ -119,6 +119,10 @@ def _run(
         lambda *_args: pytest.fail("unerwartete Zuordnungsfrage"),
         findings,
         previous_bounds=source.mesh.bounds,
+        source_mesh=source.mesh,
+        transform=result.transform,
+        touches_features=spec.touches_features,
+        continuations=result.feature_continuations[0] if result.feature_continuations else (),
     )
     return changed, findings, result
 
@@ -144,6 +148,68 @@ def _assert_volume(entry: SceneObject, expected: float, bore: float = 0.0) -> No
 
 def _codes(findings: Sequence[Finding]) -> list[str]:
     return [finding.code for finding in findings]
+
+
+@pytest.mark.parametrize("dense", [False, True])
+@pytest.mark.parametrize("angle", [0.0, 37.0])
+def test_a_countersunk_through_bore_is_measured_locally_with_its_entrance(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, dense: bool, angle: float
+) -> None:
+    """RM-296: Die lokale Wandmessung stimmt samt Mündungen mit der Vollerkennung überein."""
+    from app.core.geom import prepare_ops
+    from app.core.perceive.features import detect
+
+    source = bore_plate(
+        "mesh",
+        [(0, 0), (3, 0), (3, 8), (5, 10), (0, 10), (0, 0)],
+        box=(30.0, 24.0, 10.0),
+    )
+    if dense:
+        from pathlib import Path
+
+        from app.core.deferred import trimesh
+        from app.core.geom.mesh import MeshData, read_mesh
+        from app.core.ingest.loader import normalise
+
+        raw = read_mesh(
+            (Path(__file__).parent / "data/meshes/plate_countersunk.stl").read_bytes(), ".stl"
+        ).raw
+        for _ in range(5):
+            vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+            raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+        mesh = normalise(MeshData.of(raw), "mm").mesh
+        source = SceneObject(
+            id="plate", name="Platte", kind="mesh", mesh=mesh, features=detect(mesh)
+        )
+        assert mesh.triangle_count == 311296
+    if angle:
+        from app.core.deferred import trimesh
+        from app.core.geom.transform import moved_object
+
+        matrix = trimesh.transformations.rotation_matrix(math.radians(angle), (1, 2, 3))
+        matrix[:3, 3] = (11, -7, 4)
+        source = moved_object(source, matrix)
+    hole = _hole(source)
+    rims = prepare_ops._bore_end_rims(source.mesh, hole, source.features, grows=True)
+    assert len(rims) == 2 and all(rim.open for rim in rims)
+    whole_calls = []
+    original = prepare_ops._detect_resized_bores
+
+    def whole(*args, **kwargs):
+        whole_calls.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_detect_resized_bores", whole)
+    changed, _findings, _result = _run(source, profile, diameter=7.0)
+    assert not whole_calls, "Die vollständige örtliche Nachmessung reicht für diesen Durchgang."
+    observed = changed.features[hole.id]
+    fresh = next(
+        feature for feature in detect(as_mesh_data(changed.mesh)).values() if feature.kind == "hole"
+    )
+    assert observed.params["diameter"] == pytest.approx(7.0)
+    assert observed.params["depth"] == pytest.approx(fresh.params["depth"])
+    assert observed.params["through"] == fresh.params["through"]
+    assert set(observed.face_indices) == set(fresh.face_indices)
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

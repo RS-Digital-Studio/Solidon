@@ -162,7 +162,7 @@ def render(motif: str, output: Path) -> None:
     from app.core.bootstrap import load_operations
     from app.ui.render.api import CameraPose, SurfaceStyle
     from app.ui.render.factory import available, make_renderer
-    from tools.make_figures import settle
+    from tools.make_figures import grab_uncovered, settle
 
     load_operations()
     built = models(motif)
@@ -229,13 +229,12 @@ def render(motif: str, output: Path) -> None:
         renderer.dolly(1.13)
         renderer.render()
         settle(app, 15)
-        screen = renderer.widget.screen()
-        shot = screen.grabWindow(renderer.widget.winId()).toImage()
+        shot = grab_uncovered(renderer.widget).toImage()
         shot = shot.scaled(
             *SIZE, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation
         )
         path = output / f"feature-{motif}.webp"
-        if not shot.save(str(path), "WEBP", 90):
+        if not shot.save(str(path), b"WEBP", 90):
             raise RuntimeError(f"{path} ließ sich nicht speichern. Zielordner prüfen.")
         evidence["camera"] = {"direction": direction, "parallel": True}
         (output / f"feature-{motif}.json").write_text(

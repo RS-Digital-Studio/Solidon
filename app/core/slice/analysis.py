@@ -497,27 +497,80 @@ def _support_volume(
     first_layer_height: float | None = None,
     cancelled: CancelToken | None = None,
 ) -> float:
-    """Stützsäulen bis zum nächsten Material oder Bett, ohne Konturvereinfachung.
+    """Disjunkte Stützsäulen unabhängig bis zum Material oder Bett verfolgen.
 
-    Die gerichtete Säulenkontur wächst am Überhang und verliert an der
-    Schicht darunter. Jede Fläche wird einmal nach Clipper übertragen;
-    Zwischenkonturen bleiben dort. Summe und Schrittreihenfolge sind fest.
+    Ein neuer Überhang liegt im Material seiner Schicht; die älteren Säulen
+    wurden dort schon abgeschnitten. Jede Säule kann deshalb unabhängig
+    absteigen. Nur Schichten, die ihren ursprünglichen Umriss treffen,
+    schneiden sie; freie Höhenabschnitte tragen dieselbe Fläche weiter.
+    Clipper bleibt der einzige Differenzkern, ohne Konturvereinfachung.
     """
-    pending = manifold3d.CrossSection()
-    volume = 0.0
-    for index in range(len(sections) - 1, -1, -1):
+    starts = [
+        index
+        for index, metrics in reversed(list(enumerate(measured)))
+        if metrics is not None and metrics.overhang is not None and not metrics.overhang.is_empty
+    ]
+    if not starts:
+        return 0.0
+    floors: list[manifold3d.CrossSection] = []
+    outlines: list[ShapelyPolygon | None] = []
+    for section in sections[: starts[0]]:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        floor = _material_cross(section)
+        floors.append(floor)
+        outlines.append(_cross_shape(floor))
+    floor_shapes = np.asarray(outlines, dtype=object)
+    first = layer_height if first_layer_height is None else first_layer_height
+
+    def height_until(index: int) -> float:
+        if index < 0:
+            return 0.0
+        if index == 0:
+            return first / 2.0
+        return first + (index - 0.5) * layer_height
+
+    def volume_of(index: int) -> float:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         metrics = measured[index]
-        if metrics is not None and metrics.overhang is not None:
-            pending += _material_cross(metrics.overhang)
-        if pending.is_empty():
-            continue
-        below = sections[index - 1] if index else None
-        if below is not None and not below.is_empty:
-            pending -= _material_cross(below)
-        volume += float(pending.area()) * _layer_step(index, layer_height, first_layer_height)
-    return volume
+        assert metrics is not None
+        body = _material_cross(metrics.overhang)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        outline = _cross_shape(body)
+        if outline is None:
+            return 0.0
+        # Nur die Säule besitzt diesen vorbereiteten Index. Die übrigen
+        # Arbeiter lesen die unveränderten Schichtflächen.
+        shapely.prepare(outline)
+        hits = np.flatnonzero(shapely.intersects(outline, floor_shapes[:index]))[::-1]
+        area = float(body.area())
+        upper = index
+        volume = 0.0
+        for lower in hits.tolist():
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            volume += area * (height_until(upper) - height_until(lower + 1))
+            body = body - floors[lower]
+            area = float(body.area())
+            upper = lower + 1
+            if body.is_empty():
+                break
+        return volume + area * height_until(upper)
+
+    if len(sections) < PARALLEL_FROM or len(starts) < 2:
+        return math.fsum(volume_of(index) for index in starts)
+    from concurrent.futures import ThreadPoolExecutor
+
+    workers = _workers(SUPPORT_WORKERS)
+    volumes: list[float] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for start in range(0, len(starts), workers):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            volumes.extend(pool.map(volume_of, starts[start : start + workers]))
+    return math.fsum(volumes)
 
 
 def _layer_step(index: int, layer_height: float, first_layer_height: float | None) -> float:
@@ -547,8 +600,9 @@ def _same_layer(shape: ShapelyPolygon, previous: ShapelyPolygon) -> bool:
     der Ecken: Beide Konturen werden von Punkten befreit, die auf einer
     Geraden liegen (die Diagonale einer senkrechten Wand schneidet jede Ebene
     woanders, die Wand selbst nicht), kanonisch geordnet und Punkt für Punkt
-    verglichen. Kein Puffer, keine Boolesche Operation: Die Frage kostet einen
-    Bruchteil dessen, was sie spart.
+    verglichen. Wählt die Vereinfachung knapp an ihrer Toleranz andere Ecken,
+    belegt erst die gegenseitige Überdeckung innerhalb der Geometrietoleranz
+    die Gleichheit. Diese seltene Gegenprobe nimmt die ursprünglichen Konturen.
     """
     tolerance = SAME_LAYER_TOLERANCE
     if abs(float(shape.area) - float(previous.area)) > tolerance * max(1.0, float(shape.area)):
@@ -564,7 +618,12 @@ def _same_layer(shape: ShapelyPolygon, previous: ShapelyPolygon) -> bool:
         return False
     mine = shapely.normalize(shape.simplify(tolerance))
     theirs = shapely.normalize(previous.simplify(tolerance))
-    return bool(shapely.equals_exact(mine, theirs, tolerance=tolerance))
+    if shapely.equals_exact(mine, theirs, tolerance=tolerance):
+        return True
+    return bool(
+        shape.buffer(tolerance, quad_segs=1).covers(previous)
+        and previous.buffer(tolerance, quad_segs=1).covers(shape)
+    )
 
 
 def _repeated(source: LayerMetrics, shape: ShapelyPolygon) -> LayerMetrics:
@@ -894,6 +953,12 @@ def _solid_sections(
     """Direkte Schnitte als Felder; große Kernaufrufe laufen im Hilfsprozess."""
     if len(heights) <= DIRECT_SECTIONS_ABOVE:
         return None
+    # Ob der Volumenkern dieses Netz unverändert übernehmen darf, hängt
+    # nicht von den Schnitthöhen ab. Abgelehnte Schalen brauchen diese
+    # Umwandlung bis zur nächsten Netzänderung nicht erneut zu bezahlen.
+    rejected_key = "solidon_slice_solid_rejected"
+    if mesh.raw._cache[rejected_key] is True:
+        return None
     # Kontaktprüfungen reichen offene Dreiecksbänder herein. Sie tragen
     # gültige Schnitte, aber keinen Volumenkern; dessen nativer Aufbau kann
     # an solchen Ausschnitten bereits vor der Statusantwort abbrechen.
@@ -911,6 +976,7 @@ def _solid_sections(
         cancelled=cancelled,
     )
     if not values["usable"]:
+        mesh.raw._cache[rejected_key] = True
         return None
     rings = np.split(arrays["coordinates"], np.cumsum(arrays["sizes"])[:-1])
     result: list[list[np.ndarray]] = [[] for height in heights]
@@ -930,12 +996,28 @@ def _shape_from_rings(rings: list[np.ndarray]) -> ShapelyPolygon | None:
         return None
     if len(rings) == 1:
         return ShapelyPolygon(rings[0])
-    outlines = shapely.polygons(
-        shapely.linearrings(
-            np.concatenate(rings),
-            indices=np.repeat(np.arange(len(rings)), [len(ring) for ring in rings]),
+    coordinates = np.concatenate(rings)
+    ring_of = np.repeat(np.arange(len(rings)), [len(ring) for ring in rings])
+    if _chain is not None and hasattr(_chain, "ring_nesting"):
+        metadata = _chain.ring_nesting(
+            np.ascontiguousarray(coordinates, dtype=float),
+            np.ascontiguousarray(ring_of, dtype=np.int64),
         )
-    )
+        if metadata is not None:
+            _starts, _ends, areas, depths, parents = metadata
+            positive = areas > 0.0
+            if np.array_equal(positive, depths % 2 == 0):
+                parts = [
+                    ShapelyPolygon(
+                        rings[number],
+                        [rings[hole] for hole in np.flatnonzero(parents == number)],
+                    )
+                    for number in np.flatnonzero(positive)
+                ]
+                candidate = parts[0] if len(parts) == 1 else MultiPolygon(parts)
+                if candidate.is_valid:
+                    return cast(ShapelyPolygon, candidate)
+    outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
     positive = shapely.is_ccw(shapely.get_exterior_ring(outlines))
     shells = outlines[positive]
     holes = outlines[~positive]
@@ -954,7 +1036,13 @@ def _shape_from_rings(rings: list[np.ndarray]) -> ShapelyPolygon | None:
         _repaired(ShapelyPolygon(shell.exterior, inner))
         for shell, inner in zip(shells, assigned, strict=True)
     ]
-    return parts[0] if len(parts) == 1 else cast(ShapelyPolygon, unary_union(parts))
+    if len(parts) == 1:
+        return parts[0]
+    # Clipper hat diese Flächen bereits vereinigt. Nur eine Reparatur an
+    # einer Berührstelle kann ihre Trennung verändern; der gültige Regelfall
+    # braucht deshalb keine zweite Boolesche Rechnung in GEOS.
+    combined = MultiPolygon(shapely.get_parts(parts).tolist())
+    return cast(ShapelyPolygon, combined if combined.is_valid else unary_union(parts))
 
 
 def _plane_segments(
@@ -1318,22 +1406,24 @@ def _positive_rings(
     """
     starts = np.flatnonzero(np.r_[True, ring_of[1:] != ring_of[:-1]])
     rings = np.split(coordinates, starts[1:])
-    simple = shapely.is_simple(shapely.linearrings(coordinates, indices=ring_of))
+    linear_rings = shapely.linearrings(coordinates, indices=ring_of)
+    simple = shapely.is_simple(linear_rings)
     for number in np.flatnonzero(~simple):
         ring = [rings[number]]
         positive = manifold3d.CrossSection(ring, manifold3d.FillRule.Positive)
         negative = manifold3d.CrossSection(ring, manifold3d.FillRule.Negative)
         if not positive.is_empty() and not negative.is_empty():
             return None
-    outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
+    outlines = shapely.polygons(linear_rings)
     following = np.arange(1, len(coordinates) + 1)
     following[np.r_[starts[1:], len(coordinates)] - 1] = starts
     x, y = coordinates[:, 0], coordinates[:, 1]
     positive_direction = np.add.reduceat(x * y[following] - x[following] * y, starts) > 0.0
     negative_indices = np.flatnonzero(~positive_direction)
     if len(negative_indices):
-        positive_area = unary_union(
-            [_repaired(outline) for outline in outlines[positive_direction]]
+        positive_parts = [_repaired(outline) for outline in outlines[positive_direction]]
+        positive_area = (
+            positive_parts[0] if len(positive_parts) == 1 else unary_union(positive_parts)
         )
         free = [number for number in negative_indices if not positive_area.covers(outlines[number])]
         turn = np.zeros(len(rings), dtype=bool)
@@ -1381,6 +1471,9 @@ def _polygon_with_contours(
     if chained is not None:
         coordinates, ring_of, oriented, edges = chained
         if oriented:
+            nested = _nested(coordinates, ring_of, capture_contours=capture_contours, directed=True)
+            if nested is not None:
+                return nested
             section = _positive_rings(coordinates, ring_of, edges, shell_ids)
             if section is not None and not section.is_empty():
                 shape = _cross_shape(section)
@@ -1484,7 +1577,11 @@ def _polygon_with_contours(
 
 
 def _nested(
-    coordinates: np.ndarray, ring_of: np.ndarray, *, capture_contours: bool
+    coordinates: np.ndarray,
+    ring_of: np.ndarray,
+    *,
+    capture_contours: bool,
+    directed: bool = False,
 ) -> tuple[ShapelyPolygon, tuple[Polygon, ...] | None] | None:
     """Mehrere verkettete Ringe zu Flächen mit Löchern — ohne ``polygonize``.
 
@@ -1506,30 +1603,51 @@ def _nested(
     ``None``, wenn das Ergebnis nicht gültig ist — ein Ring, der einen anderen
     berührt, eine Ebene durch eine Ecke —, dann bleibt der allgemeine Weg.
     """
-    starts = np.flatnonzero(np.r_[True, ring_of[1:] != ring_of[:-1]])
-    ends = np.r_[starts[1:], len(ring_of)]
-    if np.any(ends - starts < 3):
-        return None
-    following = np.arange(1, len(ring_of) + 1)
-    following[ends - 1] = starts
-    x, y = coordinates[:, 0], coordinates[:, 1]
-    twice_area = np.add.reduceat(x * y[following] - x[following] * y, starts)
+    metadata = None
+    if _chain is not None and hasattr(_chain, "ring_nesting"):
+        metadata = _chain.ring_nesting(
+            np.ascontiguousarray(coordinates, dtype=float),
+            np.ascontiguousarray(ring_of, dtype=np.int64),
+        )
+    if metadata is None:
+        starts = np.flatnonzero(np.r_[True, ring_of[1:] != ring_of[:-1]])
+        ends = np.r_[starts[1:], len(ring_of)]
+        if np.any(ends - starts < 3):
+            return None
+        following = np.arange(1, len(ring_of) + 1)
+        following[ends - 1] = starts
+        x, y = coordinates[:, 0], coordinates[:, 1]
+        twice_area = np.add.reduceat(x * y[following] - x[following] * y, starts)
+        outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
+        held, holder = shapely.STRtree(outlines).query(
+            shapely.points(coordinates[starts]), predicate="within"
+        )
+        inner = held != holder
+        held, holder = held[inner], holder[inner]
+        depth = np.bincount(held, minlength=len(starts))
+        parent = np.full(len(starts), -1, dtype=np.int64)
+        for child, container in zip(held.tolist(), holder.tolist(), strict=True):
+            if depth[container] == depth[child] - 1:
+                parent[child] = container
+    else:
+        starts, ends, twice_area, depth, parent = metadata
     rings = [coordinates[first:last] for first, last in zip(starts, ends, strict=True)]
-    outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
-    held, holder = shapely.STRtree(outlines).query(
-        shapely.points(coordinates[starts]), predicate="within"
-    )
-    inner = held != holder
-    held, holder = held[inner], holder[inner]
-    depth = np.bincount(held, minlength=len(rings))
-    parent = np.full(len(rings), -1, dtype=np.int64)
-    for child, container in zip(held.tolist(), holder.tolist(), strict=True):
-        if depth[container] == depth[child] - 1:
-            parent[child] = container
+    # Bei gerichteten Ringen muss auch die Materialseite zu ihrer Tiefe
+    # passen. Zwei ineinanderliegende positive Hüllen sind kein Loch;
+    # freie inverse Schalen und widersprüchliche Ränder bleiben bei Clipper.
+    # Die abschließende Gültigkeitsprüfung belegt außerdem, dass die Ränder
+    # weder sich selbst noch fremde Hüllen oder Löcher kreuzen.
+    if directed and not np.array_equal(twice_area > 0.0, depth % 2 == 0):
+        return None
 
     def turned(ring: np.ndarray, clockwise: bool, area: float) -> np.ndarray:
         if (area > 0.0) == clockwise:
-            return np.concatenate((ring[:1], ring[:0:-1]))
+            ring = np.concatenate((ring[:1], ring[:0:-1]))
+        if directed:
+            # Beide Verkettungen wählen andere Startkanten. Auch der doppelte
+            # Schlusspunkt gehört zum Konturvertrag und muss derselbe sein.
+            start = int(np.lexsort((ring[:, 1], ring[:, 0]))[0])
+            ring = np.roll(ring, -start, axis=0)
         return ring
 
     shells = [number for number in range(len(rings)) if depth[number] % 2 == 0]
@@ -2341,6 +2459,18 @@ def _cuts_along(
     across_tail = tails @ normal
     along_head = heads @ direction
     along_tail = tails @ direction
+    if _chain is not None and hasattr(_chain, "cuts_along"):
+        result = _chain.cuts_along(
+            across_head,
+            across_tail,
+            along_head,
+            along_tail,
+            np.ascontiguousarray(positions),
+            np.ascontiguousarray(normal),
+            np.ascontiguousarray(direction),
+            EPS_GEOM,
+        )
+        return cast(tuple[np.ndarray, np.ndarray, np.ndarray] | None, result)
     # Kanten, die eine Lage kreuzen (echt, nicht berührend): je Lage eine Spalte.
     crossing = (across_head[:, None] - positions[None, :]) * (
         across_tail[:, None] - positions[None, :]
@@ -3004,18 +3134,16 @@ def model_support(
     Druckdialog stellte sie trotzdem bei jedem geänderten Feld und nach jeder
     nachgereichten Profilliste neu, an der Waschschüssel je 3,9 s. Gemerkt
     wird am Schichttupel selbst (Identität, nicht Gleichheit), für die letzten
-    :data:`_ANSWERS_KEPT` Messungen; eine Frage nach einzelnen Stücken
-    (``only``) läuft immer.
+    :data:`_ANSWERS_KEPT` Fragen. Die Stückauswahl (``only``) gehört zum
+    Schlüssel, damit auch der Prüfbericht seine Kanalfrage nur einmal stellt.
     """
-    if only is not None:
-        return _model_support(result, channel_width, only)
     with _ANSWERS_LOCK:
-        for layers, width, answer in _ANSWERS:
-            if layers is result.layers and is_close(width, channel_width):
+        for layers, width, selected, answer in _ANSWERS:
+            if layers is result.layers and is_close(width, channel_width) and selected == only:
                 return answer
-    answer = _model_support(result, channel_width, None)
+    answer = _model_support(result, channel_width, only)
     with _ANSWERS_LOCK:
-        _ANSWERS.append((result.layers, channel_width, answer))
+        _ANSWERS.append((result.layers, channel_width, only, answer))
         del _ANSWERS[:-_ANSWERS_KEPT]
     return answer
 
@@ -3024,7 +3152,9 @@ def model_support(
 #: jüngsten, meist die Körper des offenen Druckdialogs. Ihre Schichttupel
 #: bleiben dafür am Leben, und damit bleibt ihre Identität eindeutig.
 _ANSWERS_KEPT: Final = 4
-_ANSWERS: list[tuple[tuple[LayerInfo, ...], float, ModelSupport]] = []
+_ANSWERS: list[
+    tuple[tuple[LayerInfo, ...], float, frozenset[tuple[int, int]] | None, ModelSupport]
+] = []
 _ANSWERS_LOCK = threading.Lock()
 
 

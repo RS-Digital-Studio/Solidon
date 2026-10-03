@@ -3232,6 +3232,47 @@ def test_a_hollow_corner_is_a_throat_and_an_outer_one_is_not() -> None:
     assert not any(entry.params.get("radial") for entry in long_ones)
 
 
+@pytest.mark.parametrize("split", [False, True], ids=["one-face", "joined-faces"])
+def test_a_native_fillet_centre_is_the_axis_midpoint_like_the_mesh(split: bool) -> None:
+    """Nachbau und Folgeschritte lesen die Zylinderachse, nicht den Flächenschwerpunkt."""
+    from app.core.perceive.features import fit_cylinder
+
+    if split:
+        source = edit.boolean("union", [edit.box(40.0, 10.0, 10.0), edit.box(10.0, 10.0, 40.0)])
+        rounded = edit.fillet(source, 3.0, "all")
+        native = [
+            item
+            for item in features_of(rounded).values()
+            if item.kind == "fillet" and item.params["length"] == pytest.approx(34.0)
+        ]
+        expected = [(0.0, -2.0, 3.0), (0.0, 2.0, 3.0)]
+    else:
+        rounded = edit.fillet(block(), 3.0, "vertical")
+        native = [item for item in features_of(rounded).values() if item.kind == "fillet"]
+        expected = [(x, y, 10.0) for x in (-17.0, 17.0) for y in (-12.0, 12.0)]
+    assert len(native) == len(expected)
+    for item, centre in zip(
+        sorted(native, key=lambda f: f.params["centre"]), expected, strict=True
+    ):
+        assert item.params["centre"] == pytest.approx(centre, abs=1e-8)
+        assert not item.params["recess"]
+    for item in native:
+        fitted = fit_cylinder(rounded.raw, list(item.face_indices))
+        assert fitted is not None
+        assert fitted.centre == pytest.approx(item.params["centre"], abs=1e-6)
+    if not split:
+        fitted_features = [
+            item for item in detect(rounded.to_mesh()).values() if item.kind == "fillet"
+        ]
+        for item in native:
+            peer = min(
+                fitted_features,
+                key=lambda other: math.dist(item.params["centre"], other.params["centre"]),
+            )
+            assert peer.params["centre"] == pytest.approx(item.params["centre"], abs=1e-6)
+            assert peer.params["length"] == pytest.approx(item.params["length"], abs=1e-6)
+
+
 def test_the_planar_faces_come_with_their_area() -> None:
     found = features_of(block())
 
@@ -3971,6 +4012,37 @@ def test_the_corner_where_three_fillets_meet_is_one_too() -> None:
     corners = [entry for entry in fillets if entry.params["length"] == 0.0]
     assert len(corners) == 8
     assert {entry.params["radius"] for entry in corners} == {2.0}
+
+
+@pytest.mark.parametrize("turned", [False, True], ids=["original", "turned"])
+def test_a_spherical_fillet_centre_is_the_support_sphere_centre(turned: bool) -> None:
+    """Die Eckrundung trägt ihren Kugelmittelpunkt für Nachbau und Folgeschritte."""
+    import numpy as np
+
+    from app.core.perceive.features import fit_sphere
+
+    rounded = edit.fillet(block(), 3.0, "all")
+    expected = [(x, y, z) for x in (-17.0, 17.0) for y in (-12.0, 12.0) for z in (3.0, 17.0)]
+    if turned:
+        matrix = trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 2.0, 3.0))
+        matrix[:3, 3] = (15.0, -7.0, 9.0)
+        rounded = edit.transformed(rounded, matrix)
+        expected = [
+            tuple(point) for point in trimesh.transform_points(np.asarray(expected), matrix)
+        ]
+    corners = [
+        item
+        for item in features_of(rounded).values()
+        if item.kind == "fillet" and abs(item.params["length"]) < EPS_GEOM
+    ]
+    assert len(corners) == 8
+    for item in corners:
+        centre = min(expected, key=lambda point: math.dist(point, item.params["centre"]))
+        assert item.params["centre"] == pytest.approx(centre, abs=1e-8)
+        fitted = fit_sphere(rounded.raw, list(item.face_indices))
+        assert fitted is not None
+        assert fitted.centre == pytest.approx(centre, abs=1e-6)
+        assert fitted.radius == pytest.approx(3.0, abs=1e-6)
 
 
 def test_a_socket_is_a_sphere_and_not_a_corner() -> None:

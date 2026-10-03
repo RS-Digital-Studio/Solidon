@@ -806,7 +806,7 @@ def build(
         for piece in getattr(outline, "geoms", [outline])
     ]
     for plate in plates:
-        plate.apply_translation((0.0, 0.0, z))
+        transform.moved(plate, transform.translation((0.0, 0.0, z)))
 
     collars = []
     for footprint in footprints if collar > EPS_GEOM else []:
@@ -816,7 +816,7 @@ def build(
             continue
         for piece in getattr(shrunk, "geoms", [shrunk]):
             body = trimesh.creation.extrude_polygon(piece, height=collar)
-            body.apply_translation((0.0, 0.0, z - collar))
+            transform.moved(body, transform.translation((0.0, 0.0, z - collar)))
             collars.append(body)
     if housing is not None:
         top = _mesh_collar_collision(collars, housing, quality=quality, cancelled=cancelled)
@@ -929,7 +929,7 @@ class LidParams(BaseParams):
     # sind die schmale Seite in jeder Drehung (``_narrowest``), nicht die des
     # Hüllrechtecks, und am exakten Gehäuse entsteht der Deckel exakt (P2.8).
     # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
-    cache_version="4",
+    cache_version="5",
     title=_("Deckel erzeugen"),
     category="parts",
     params=LidParams,
@@ -1178,13 +1178,13 @@ def _pipe(
 ) -> MeshData:
     """Ein Materialring, stehend auf ``z``, ganz durchgehend offen."""
     shell = lathe.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
-    shell.apply_translation((0.0, 0.0, z + height / 2.0))
+    transform.moved(shell, transform.translation((0.0, 0.0, z + height / 2.0)))
     if inner <= EPS_GEOM:
         return MeshData.of(shell)
     bore = lathe.cylinder(
         radius=inner / 2.0, height=height + 2.0 * BOOLEAN_OVERLAP, sections=NECK_SECTIONS
     )
-    bore.apply_translation((0.0, 0.0, z + height / 2.0))
+    transform.moved(bore, transform.translation((0.0, 0.0, z + height / 2.0)))
     # Dieselbe Stufe wie die vier anderen Booleschen des Drehdeckels: fest auf
     # „fine" konnte dieser eine Schnitt beim Iterieren bis zur Voxelstufe laufen,
     # während der Rest in Entwurfsqualität nach Stufe 2 endet (§17.2, §31).
@@ -1198,7 +1198,7 @@ def _pipe(
 
 def _lifted(body: MeshData, z: float) -> MeshData:
     raised = body.raw.copy()
-    raised.apply_translation((0.0, 0.0, z))
+    transform.moved(raised, transform.translation((0.0, 0.0, z)))
     return body.replacing(raised)
 
 
@@ -1218,7 +1218,7 @@ class ScrewLidParams(BaseParams):
         unit="mm",
         minimum=1.0,
         maximum=10.0,
-        doc=_("Grob, damit der Drucker sie auflöst und eine halbe Drehung schließt."),
+        doc=_("Abstand benachbarter Gewindegänge entlang der Achse."),
     )
     thickness: float = param(
         title=_("Deckelstärke"),
@@ -1290,7 +1290,8 @@ class ScrewLidParams(BaseParams):
     # (P2.8).
     # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
     # 5: Das Kappengewinde nennt seinen gebauten Durchmesser (RM-393).
-    cache_version="5",
+    # 6: Hals und Kappe verwenden dieselben Winkelstationen des Netzes.
+    cache_version="6",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -1398,7 +1399,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
         bounded = boolean(
             "intersection",
             [
-                mesh_only(thread_body(major, params.pitch, params.height)),
+                mesh_only(thread_body(major, params.pitch, _thread_tool_height(params))),
                 _pipe(major * 2.0, 0.0, params.height, 0.0),
             ],
             quality=ctx.quality,
@@ -1542,7 +1543,7 @@ def _screw_cap(
     body = lathe.cylinder(
         radius=outer / 2.0, height=skirt + params.thickness, sections=NECK_SECTIONS
     )
-    body.apply_translation((0.0, 0.0, (skirt + params.thickness) / 2.0))
+    transform.moved(body, transform.translation((0.0, 0.0, (skirt + params.thickness) / 2.0)))
 
     # Die zwei Formen, mit denen ein Gewindeloch geschnitten wird: die Bohrung
     # auf Kerndurchmesser, und die Nut, die von ihr bis zum Außendurchmesser
@@ -1552,11 +1553,15 @@ def _screw_cap(
         height=skirt + BOOLEAN_OVERLAP,
         sections=NECK_SECTIONS,
     )
-    hollow.apply_translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
+    transform.moved(
+        hollow, transform.translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
+    )
     # Die Wendel wird vollständig aufgebaut und anschließend an der Decke
     # beschnitten. Eine kürzer aufgebaute Wendel ließe den letzten Nutumlauf
     # weg, obwohl das passende Außengewinde dort noch Material trägt.
-    groove = mesh_only(thread_body(inside, params.pitch, skirt, internal=True))
+    groove = mesh_only(
+        thread_body(inside, params.pitch, _thread_tool_height(params), internal=True)
+    )
 
     cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled)
     bounded = boolean(
@@ -1569,6 +1574,17 @@ def _screw_cap(
         "difference", [MeshData.of(body), bounded.mesh], quality=quality, cancelled=cancelled
     )
     return cut.mesh, deepest([cutter.solver, bounded.solver, cut.solver])
+
+
+def _thread_tool_height(params: ScrewLidParams) -> float:
+    """Beide Werkzeuge haben dieselben Winkelstationen, abgeschnitten wird danach.
+
+    Unterschiedliche Wendelspannen erzeugen andere Sehnen. An breiten
+    Halsgewinden verbrauchten diese Abweichungen das zugesagte Materialspiel.
+    Ganze Umdrehungen reichen über die Schürze; Hals und Kappe nehmen aus
+    diesem identischen Werkzeugraster ihre jeweils benötigte Höhe.
+    """
+    return math.ceil((params.height + SKIRT_RELIEF) / params.pitch) * params.pitch
 
 
 def _cap_sizes(

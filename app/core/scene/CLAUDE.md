@@ -21,6 +21,21 @@ Project ──> History (Stapel aus Transaktionen)
 beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 `OpResult.answered` in den Stapel (`_key_after_answers`).
 
+`History.change_params(..., changes=...)` übernimmt die vollständige
+`DocumentChange` zusammen mit den geänderten Schrittfassungen. Passungen und
+benannte Maße gehören beim Deckelwechsel zur selben Undo-/Redo-Geste.
+
+**Prüfungen haben einen eigenen Durchführungsstand.**
+`EvaluationResult.check_states` und `evaluate(check_status=...)` melden
+`CheckState` getrennt von Befunden. `completed` bedeutet vollständig
+ausgeführt, nicht fehlerfrei. Fehlende bestätigte Grundlagen übergibt der
+Aufrufer als `missing_basis`; die betroffenen Endprüfungen bleiben
+`not_started`. Körper-/Profilwechsel, Undo/Redo und Öffnen rechnen die
+Abschlussprüfungen neu. Der Operationscache und die Projektdatei speichern
+keine Fertigmarken. Vorschauen ohne erkannte Merkmale belegen keine allgemeine
+Wand- oder Formprüfung; diese beiden Prüfungen gelten nur ihren benannten
+Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
+
 ## Die Karte
 
 | Datei | Rolle |
@@ -32,6 +47,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `foreign.py` | Was eine fremde Projektdatei außer Geometrie mitbringt (§32) |
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan` |
 | `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
+| `rebuild.py` | Nachbau (§42): P4.0/Netzfits, Formvergleich, benannte Maße, atomare Übernahme |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
 | `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
@@ -49,6 +65,31 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 
 ### Auswertung
 
+- **Flächenbindungen** löst `placement.bind_surface` vor dem Verbrauchercache
+  aus dem aktuellen Träger, seinem gespeicherten Rahmen und den Bezugskanten
+  auf. `surface_at_feature` misst an gekrümmten exakten Flächen Punkt und
+  Normale über `brep.canonical.projected_surface_point`; die Auswahl bleibt
+  an den Originaldreiecken. Diese bewusste Abhängigkeit auf den optionalen
+  exakten Kern ist ausschließlich träge, ohne neuen eifrigen Importkreis.
+
+- **Örtlich erkannte Muster** ersetzen ihre vollständig enthaltenen
+  Einzelmerkmale auch nach dem Zusammenführen mit dem Vorgängerbestand.
+  Deren frühere Kennungen bleiben reserviert; ein späterer Bezug auf eine
+  Zelle wird nicht zum Bezug auf das ganze Muster.
+- **Erzeugte Texturen** werden in `_with_features` an ihre wirkliche
+  Oberfläche gebunden. `_textures_from_other_inputs` übernimmt belegte Reste
+  weiterer Eingänge bei Vereinigung und Schnitt sowie beim Zerlegen loser
+  Teile. Die Herkunft bleibt Teil der Kennung, damit das Entfernen einer
+  anderen Textur keinen gespeicherten Folgebezug verschiebt. Ausdrücklich
+  entfernte Texturen werden aus numerischen Restflächen nicht erneut gebunden.
+- **`SceneObject.frame`** trägt den dauerhaften Ausgangsrahmen als affine
+  Matrix. Ohne Eingang beginnt er mit `IDENTITY_FRAME`; eindeutige Vorfahren
+  und `dataclasses.replace` führen ihn fort, `moved_object` bildet ihn mit
+  derselben Matrix wie die Geometrie ab. Maßstab und Spiegelung bleiben darin
+  sichtbar; `None` bleibt unbekannt. Boolesche beziehen sich ausdrücklich auf
+  den ersten gespeicherten Eingang. Cache und `object_hash` tragen den Rahmen;
+  Altprojekte rekonstruieren ihn allein aus ihrem Operationsstack.
+
 - **`_with_features`** bindet nach jedem Ausgabeübergang, auch am Cachetreffer,
   die Merkmale ans neue Netz; ohne Erkennung bleibt die Ausgabe, ohne Zuordnung
   und Waisenbefund. Die Bewegung je Ausgabe sagt `_motion_of`: die gemeldete,
@@ -59,11 +100,12 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   `_needed_after`, `_checked_continuations`, `_unchanged_continuations`,
   `_unproven_native_references`, `blocked_references` →
   `orphans.check(blocked=)`; ausgestellt von `_preserved_exact_features` und
-  `prepare_ops._exact_features_after`. Ein Schritt, der Merkmale einführt,
+  `prepare_ops._exact_features_after`. Jeder neu bauende Schritt
   bewahrt eindeutig zugeordnete, geometrisch unveränderte Vorgänger unter ihrer
   bisherigen Kennung, wenn beide Merkmalsmengen höchstens
   `FEATURE_LIMIT_COUNT` Einträge enthalten — auch ohne bekannten Folgebezug;
-  sonst kann eine neu gelesene Bohrung eine bestehende Kennung übernehmen.
+  Unbelegte alte Namen bleiben reserviert, damit ein späterer Verbraucher
+  weder die Vergabe ändert noch ein neues Merkmal eine alte Kennung übernimmt.
   Eine von der Operation belegte `FeatureContinuation` wird nach dem allgemeinen
   Matcher erzwungen und hält auch absichtlich geänderte Merkmale unter ihrer
   Kennung. Beim Umbenennen unveränderter Nachbarn und nach einer ausdrücklichen
@@ -305,6 +347,11 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 
 ### Projektdatei
 
+- **Revisionsherkunft**: `Transaction.renumbered` hält die belegte Zuordnung
+  alter zu neuer Schrittkennung bei Einfügen und Verschieben. Sichtbare Titel
+  folgen dieser Herkunft; Positionsnummern bleiben reine Anzeige. Alte Dateien
+  ohne Zuordnung werden nicht durch Parametergleichheit nachträglich verbunden.
+
 - **Spulen** (`PrintSettings`): Filamentidentität und lokale Kennung, nie
   Pfade, Namensvorlagen übersetzbar und vor dem Lesen geprüft; die Migration
   rät keine Spule; `DocumentState.spool_bindings` (`None` unbeteiligt, leer
@@ -315,6 +362,11 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 - **Verknüpfte Quellen**: unerreichbar hindert weder Speichern noch Öffnen, der
   Abdruck bleibt; Rechnen verlangt die Prüfsumme; fremder Inhalt, Größe oder
   ein Pfad außerhalb des Projektordners werden abgewiesen.
+- **Nachbau**: Dokumentkopien prüfen Kandidaten aus Einzel-/Auftragskörpern,
+  gerundeten Stützebenen und gestuften Querschnitten am vollständigen Original.
+  Unbekannte begrenzte Flächen sperren die Übernahme. `commit` vergleicht den
+  geprüften Dokument-/Operationsstand und aktiv verknüpfte Quellen erneut
+  (`SourceAccess`); Maße, Attribute und Passungsfolgen bilden eine Transaktion.
 - **Mitreisende Profile** (Regel in `dateiformat.md`): `save` erneuert sie
   (`MAX_CARRIED_PROFILES`), `profiles.carry`, `scene_profile`,
   `carried_findings`; alle Wege fragen dieselbe Rückfallfunktion.

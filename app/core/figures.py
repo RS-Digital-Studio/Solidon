@@ -130,12 +130,12 @@ def _window(theme: Theme) -> str:
     canvas.caption(265, 158, str(_("das Modell, immer sichtbar")), size=10, anchor="middle")
 
     canvas.box(380, 46, 104, 202, fill=colours.fill, dashed=True)
-    canvas.label(432, 76, str(_("Prüfbericht")), anchor="middle", size=10, bold=True)
-    canvas.label(432, 94, str(_("oder")), anchor="middle", size=9, colour=colours.muted)
-    canvas.label(432, 112, str(_("Chat")), anchor="middle", size=10, bold=True)
+    canvas.wrapped(432, 68, str(_("Prüfbericht")), anchor="middle", width=14, size=10)
+    canvas.label(432, 104, str(_("oder")), anchor="middle", size=9, colour=colours.muted)
+    canvas.label(432, 122, str(_("Chat")), anchor="middle", size=10, bold=True)
     canvas.wrapped(
         432,
-        136,
+        146,
         str(_("Zwei Reiter, ganz ausblendbar")),
         width=14,
         anchor="middle",
@@ -426,7 +426,7 @@ def _wall(theme: Theme) -> str:
     canvas = Canvas(500, 224, theme)
     colours = canvas.colours
     canvas.background()
-    canvas.label(20, 26, str(_("Mindestwandstärke: zwei Bahnen nebeneinander")), size=11, bold=True)
+    canvas.label(20, 26, str(_("Startregel: zwei Bahnen nebeneinander")), size=11, bold=True)
 
     printer = profiles.printer("centauri-carbon-2")
     top, height = 74, 100
@@ -445,12 +445,7 @@ def _wall(theme: Theme) -> str:
     canvas.wrapped(
         236,
         84,
-        str(
-            _(
-                "Eine einzelne Bahn trägt nichts und reißt beim Entfernen der "
-                "Stützen. Zwei sind das Mindeste, das hält."
-            )
-        ),
+        str(_("Zwei Bahnbreiten sind die Startregel ohne passende Druckprobe.")),
         width=30,
         colour=colours.ink,
     )
@@ -736,7 +731,7 @@ def _sketch_editor(theme: Theme) -> str:
         [(178, 58), (188, 58), (183, 65)], fill=colours.muted, stroke=colours.muted, weight=0.6
     )
     canvas.caption(
-        210, 65, str(_("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus."))
+        210, 65, str(_("Bei dieser Lage liegen die Druckschichten parallel zur Zeichnung."))
     )
 
     # Die Zeichenfläche mit Raster.
@@ -981,7 +976,12 @@ def _layers(theme: Theme) -> str:
 
 
 def _part(
-    name: str, size: int = 190, *, around: float = -35.0, down: float = 25.0
+    name: str,
+    size: int = 190,
+    *,
+    around: float = -35.0,
+    down: float = 25.0,
+    settings: dict[str, object] | None = None,
 ) -> Callable[[Theme], str]:
     """Einen Baustein aus dem Register rendern — dieselbe Quelle wie der Katalog.
 
@@ -996,8 +996,15 @@ def _part(
         from app.core.knowledge.parts.registry import PARTS
 
         load_operations()
+        spec = PARTS.get(name)
         return preview.render(
-            PARTS.get(name), size=size, theme=theme, edges=True, around=around, down=down
+            spec,
+            params=spec.params(**settings) if settings is not None else None,
+            size=size,
+            theme=theme,
+            edges=True,
+            around=around,
+            down=down,
         ).svg
 
     return build
@@ -1257,8 +1264,8 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
     Figure(
         key="overhang",
         alt=_(
-            "Zwei Überhänge nebeneinander: 40 Grad druckt frei, 65 Grad braucht "
-            "Stützen. Gemessen wird gegen die Senkrechte."
+            "Zwei Überhänge als Beispiel für eine Grenze von 45 Grad: 40 Grad liegt darunter, "
+            "65 Grad darüber. Gemessen wird gegen die Senkrechte."
         ),
         build=_overhang,
     ),
@@ -1274,11 +1281,10 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
     Figure(
         key="wall",
         alt=_(
-            "Eine Wand im Querschnitt, aus zwei nebeneinanderliegenden "
-            "Extrusionsbahnen — die dünnste Wand, die trägt. Die Breite steht im "
-            "Druckerprofil."
+            "Eine Wand im Querschnitt aus zwei nebeneinanderliegenden Druckbahnen. Zwei "
+            "Bahnbreiten sind die Startregel ohne passende Druckprobe."
         ),
-        caption=_("Eine einzelne Bahn trägt nichts und reißt beim Entfernen der Stützen."),
+        caption=_("Die nötige Wandstärke hängt von Material, Druckeinstellungen und Belastung ab."),
         build=_wall,
     ),
     Figure(
@@ -1288,7 +1294,7 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "dasselbe Objekt in zwei Teile geschnitten, mit zwei Passstiften in der "
             "Schnittfläche."
         ),
-        caption=_("Die Passstifte sorgen dafür, dass die Hälften nur in einer Lage zusammengehen."),
+        caption=_("Die Passstifte helfen, die Hälften beim Zusammenfügen auszurichten."),
         build=_split,
     ),
     Figure(
@@ -1306,9 +1312,11 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "Eine Mutternfalle: die sechseckige Tasche, in die beim Drucken eine "
             "Sechskantmutter eingelegt wird."
         ),
-        caption=_("Ein Klick statt einer halben Stunde — und das Maß kommt aus der Tabelle."),
+        caption=_("Die Maße kommen aus der Normteiltabelle."),
         kind="rendered",
-        build=_part("nut_trap", around=55.0, down=25.0),
+        build=_part(
+            "nut_trap", around=-35.0, down=15.0, settings={"slide": 0.0, "screw_hole": False}
+        ),
     ),
     Figure(
         key="part-heatset",
@@ -1327,7 +1335,7 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "ausweicht und danach zurückschnappt."
         ),
         kind="rendered",
-        build=_part("snap_fit", around=-35.0, down=8.0),
+        build=_part("snap_fit", around=55.0, down=65.0),
     ),
     Figure(
         key="part-hinge",
@@ -1348,7 +1356,7 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "Von oben eingehängt, durch die Zunge gehalten — zum Lösen durch den Schlitz gedrückt."
         ),
         kind="rendered",
-        build=_part("pegboard_hook", around=-35.0, down=25.0),
+        build=_part("pegboard_hook", around=-35.0, down=65.0),
     ),
     Figure(
         key="part-gusset",
@@ -1366,7 +1374,7 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "Elefantenfuß der ersten Schicht ins Leere quetscht."
         ),
         kind="rendered",
-        build=_part("foot", around=-35.0, down=25.0),
+        build=_part("foot", around=-35.0, down=-25.0),
     ),
     Figure(
         key="part-cable-clip",
@@ -1384,7 +1392,7 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "geht — die Hälfte eines Gelenks, das sich dreht statt zu biegen."
         ),
         kind="rendered",
-        build=_part("hinge_eye", around=-35.0, down=25.0),
+        build=_part("hinge_eye", around=55.0, down=65.0),
     ),
     Figure(
         key="part-fit-ladder",
@@ -1392,7 +1400,10 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
             "Der Toleranz-Testkörper: mehrere Zapfen und Bohrungen mit gestaffeltem "
             "Spiel auf einer Platte."
         ),
-        caption=_("Einmal drucken, ausprobieren, Wert eintragen — danach stimmt jede Passung."),
+        caption=_(
+            "Prüfstück drucken, Passung ausprobieren und den gemessenen Wert ins "
+            "Materialprofil eintragen."
+        ),
         kind="rendered",
         build=_part("fit_ladder", size=220, around=-35.0, down=55.0),
     ),

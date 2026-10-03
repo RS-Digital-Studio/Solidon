@@ -755,6 +755,8 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
     window = SimpleNamespace(
         session=session,
         settings=UiSettings(),
+        # Dasselbe Projekt: Der Anschluss räumt keine Tour und keinen Download ab.
+        _tour_project=session.project,
         _close_requested=False,
         _foundation_pending=None,
         _foundation_cache=None,
@@ -771,7 +773,12 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         chat=SimpleNamespace(show_document=lambda _document: None),
         _refresh_applied_bar=lambda: None,
         setWindowTitle=titles.append,
-        header=SimpleNamespace(show_project=lambda *_args: None, show_profile=lambda *_args: None),
+        header=SimpleNamespace(
+            show_project=lambda *_args: None,
+            show_profile=lambda *_args: None,
+            show_target=lambda *_args: None,
+        ),
+        _update_review_status=lambda: None,
         _fit_toolbar=lambda: None,
         _update_actions=lambda: None,
         filaments=SimpleNamespace(show_scene=lambda *_args: None),
@@ -7651,6 +7658,30 @@ def test_the_head_offers_the_way_back(dialog: PrintSettingsDialog) -> None:
 
 
 # --- Vorschläge, die man auch annehmen kann ------------------------------------------
+
+
+def test_share_failure_stays_with_the_choice_and_a_successful_retry_clears_it(
+    dialog: PrintSettingsDialog, monkeypatch, tmp_path
+) -> None:
+    """Ein Speicherfehler überschreibt weder den Druckstatus noch spätere Erfolge."""
+    from app.ui import print_settings_dialog
+
+    dialog.state.setText("Druckdatei wird vorbereitet")
+    monkeypatch.setattr(print_settings_dialog, "save_settings", lambda _settings: None)
+    dialog.share_settings.setChecked(False)
+    assert not dialog.share_notice.isHidden()
+    assert "Schreibrechte" in dialog.share_notice.text()
+    assert dialog.share_notice.text() in dialog.share_settings.accessibleDescription()
+    assert dialog.state.text() == "Druckdatei wird vorbereitet"
+    layout = dialog.share_notice.parentWidget().layout()
+    assert layout.indexOf(dialog.share_notice) == layout.indexOf(dialog.share_settings) + 1
+    assert not dialog.ui_settings.print_settings_in_files
+
+    monkeypatch.setattr(print_settings_dialog, "save_settings", lambda _settings: tmp_path)
+    dialog.share_settings.setChecked(True)
+    assert dialog.share_notice.isHidden() and not dialog.share_notice.text()
+    assert dialog.share_settings.accessibleDescription() == dialog.share_settings.toolTip()
+    assert dialog.state.text() == "Druckdatei wird vorbereitet"
 
 
 def test_no_advice_proposes_a_value_the_dialog_cannot_show() -> None:

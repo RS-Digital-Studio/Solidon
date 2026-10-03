@@ -19,6 +19,15 @@ paths:
 
 # Regeln für Wartezeit und Nebenläufigkeit
 
+**Große Formsitzungen halten die inkrementelle Vorschau im Arbeiter.** Ab
+der gemeinsamen Sofortgrenze `placement_flow.AT_ONCE_BELOW` besitzt genau
+ein `_SculptPreviewWorker` die `SculptPreview`; Folgeklicks warten geordnet,
+während die letzte gültige Fläche sichtbar bleibt. Neues Werkzeug,
+Symmetrie, Abbruch und Projektwechsel entwerten die Antwort über Nummer und
+Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der bereits
+gezeigten Fläche und rechnet keine Gesten erneut. Prüfstände warten über
+`wait_for_sculpt_preview` auf die zugestellten Antworten.
+
 Was geschieht, während gerechnet wird (§2.8); die allgemeinen Regeln aus
 `oberflaeche.md` gelten zusätzlich. Messreihen, Anlässe und die Mechanik im
 Einzelnen stehen unter denselben Überschriften in
@@ -35,6 +44,10 @@ Einzelnen stehen unter denselben Überschriften in
 
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster; lange Rechnungen laufen nicht im Qt-Hauptthread.
+
+Die Wartezeit einer historischen Vorschau beginnt bereits beim Vorbereiten
+ihres Eingangszustands. Die folgende Änderung setzt weder Uhr noch Hinweis
+zurück; Abbruch und Fehler beenden beide Phasen gemeinsam.
 
 * **Verstrichene Zeit ist keine Restschätzung** (`loading.ProgressTiming`): Die
   Uhr taktet jede Sekunde, auch bei stehendem Anteil und ohne Animationen, bis
@@ -160,6 +173,11 @@ Registry oder Netz, nicht nur der bekannte.
   kein Knopf, der auf eine Vermutung wirkt. Eine Erhebung (ein `Status`-Typ),
   nicht drei.
 * **Ein nachgereichter Vorschlag überschreibt keine Wahl** (§2.4).
+* **Schichtansicht und Prüfbericht teilen den Netzmerker** (`findings.analysed`).
+  Der Schnittarbeiter erhält das wirksame Druckraster einschließlich erster
+  Schichthöhe und die Materialgrenzen. Neuer Körper, neues Raster oder neue
+  Grenzen entwerten die Antwort; Ablösen und Fensterschließen brechen den
+  alten Schnitt über sein `CancelSignal` ab.
 * **Dazu gehört eine Methode, auf die Erhebung zu warten** (`wait_for_survey`,
   `wait_for_look`), sonst prüft ein Test den leeren Zustand.
 * **Druckeinstellungen:** Nur der passende Auftrag des `_AdviceWorker`
@@ -267,192 +285,110 @@ wird genau gerechnet.
 
 ## Arbeiter und ihr Abbau
 
+Ausführliche Beispiele und Fehlersuche stehen unter denselben Überschriften
+in `konzepte/begruendungen/regel-wartezeit.md`.
+
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
 
-**Niemals direkt von `QThread`:** Ein `run`, das eine Ausnahme durchlässt,
-sendet sein Ergebnissignal nie.
-
-```
-class _Survey(Worker):
-    done = Signal(object)
-
-    def work(self) -> None:  # nicht run
-        self.done.emit(install.statuses())
-```
-
-* **Erwartete Fehler bleiben in `work`** und kommen als Ergebnis zurück; bei
-  `crashed` kommt nur das Unerwartete an.
-* **`crashed` wird verbunden:** mit Fehlerpfad als `InternalError` (§33.1),
-  sonst löst der Slot mindestens den Wartezustand — Balken weg, Knöpfe frei,
-  ein Satz, dass etwas schiefging. Beides prüft `tests/test_leash.py`.
-* Nach einem Absturz wird nicht neu erhoben — die Zusammenfassung überschriebe
-  die Meldung.
-* **Die Leine hält ihren Besitzer nicht:** Ein starker Rückverweis auf das
-  Fenster baut einen Zyklus um ein Qt-Objekt, den ein später Sammlerlauf im
-  falschen Thread abräumen kann. Die modulweite Menge hält nur Arbeiter,
-  Zeitgeber hängen am Keeper, Rückrufe auf Besitzer und Leine sind schwach.
+- Nie direkt `QThread.run` implementieren: Eine durchgelassene Ausnahme würde
+  das Ergebnissignal auslassen. Erwartete Fehler in `work` als Ergebnis liefern;
+  Unerwartetes kommt über `crashed`.
+- `crashed` mit dem Fehlerpfad als `InternalError` (§33.1) verbinden; mindestens
+  Wartezustand lösen, Knöpfe freigeben und Fehler erklären (`test_leash.py`).
+  Nach einem Absturz keine neue Erhebung, die den Fehlertext überschreibt.
+- Die Leine hält ihren Besitzer nicht stark. Modulweite Menge hält Arbeiter,
+  Timer hängen am Keeper; Rückrufe auf Besitzer/Leine sind schwach. Ein
+  Qt-Zyklus kann sonst beim Sammlerlauf im falschen Thread sterben.
 
 ### Wer einen Arbeiter startet, hält ihn fest
 
-Ein `QThread` hat keinen Qt-Elternteil; fällt seine letzte Python-Referenz,
-während er läuft, stirbt das C++-Objekt unter ihm.
-
-```
-worker.finished.connect(lambda: setattr(self, "_worker", None))  # falsch
-
-worker.finished.connect(lambda done=worker: self._worker_done(done))
-self._worker = worker
-self._leash.start(worker)  # hält ab diesem Moment, nicht ab dem Ende
-
-
-def _worker_done(self, worker: Any) -> None:
-    if self._worker is worker:
-        self._worker = None
-    self._hold_until_done(worker)
-```
-
-Die erste Zeile ist zweimal falsch: `finished` kommt, während Qt den Thread
-noch abräumt, und das Lambda trifft blind das Feld — auch den Nachfolger, wenn
-der Vorgänger später fertig wird.
-
-* **Gestartet wird über `WorkerLeash.start`, nie über `worker.start()`**;
-  `tests/test_leash.py` prüft das am Quelltext aller Dateien unter `app/ui/`.
-* Die gehaltene Menge ist modulweit (`leash._alive`), der Zeitgeber hängt an
-  `leash._keeper` — an Leine oder Widget stürben beide mit dem Dialog.
-* Losgelassen wird erst, wenn `isRunning()` nein sagt (`_hold_until_done` →
-  `WorkerLeash.hold_until_done`, ein ersetzter Arbeiter über `_retire` →
-  `WorkerLeash.retire`); `wait_for_workers` wartet am Ende auf alle, sonst
-  überlebt einer sein Fenster und reißt den Prozess mit.
+- Nur `WorkerLeash.start`, nie `worker.start` (`test_leash.py` prüft alle
+  UI-Quellen). `QThread` hat keinen Qt-Elternteil: Halten beginnt beim Start.
+- `finished` trifft ein, bevor Qt vollständig abgebaut hat. Der Abschluss
+  erhält den konkreten Arbeiter und leert das Besitzerfeld nur bei Identität;
+  ein verspäteter Vorgänger darf keinen Nachfolger entfernen.
+- Erst nach `isRunning()==False` loslassen: `_hold_until_done` ruft
+  `WorkerLeash.hold_until_done`, `_retire` ruft `retire`. Die Menge
+  `leash._alive` und der Timer an `leash._keeper` überleben den Dialog.
+  `wait_for_workers` wartet beim Ende auf alle Arbeiter.
 
 ### Wer eine `WorkerLeash` hält, hat ein `release()`
 
-Jede Klasse mit Leine trägt `release()`, geprüft per `ast` in
-`tests/test_widget_lifetime.py`; fachliche Namen wie `wait_for_survey` (gibt
-einen Wahrheitswert zurück) bleiben daneben. **Der Parameter von `release()`
-gilt der Leine** — die fachliche Methode wird ohne Argument gerufen.
-`WorkerLeash.start()` nimmt den Arbeiter sofort in den Bestand (`pending()`,
-`wait_all()`). `Worker.release_finished_references()` löst Rückverweise erst
-nach zugestelltem eigenem `finished` und `wait(0)`, und nur die von der Klasse
-deklarierten Ausgangssignale und Arbeitsfelder — nie `destroyed`, `started`
-oder fremde Verbindungen.
+Jede Klasse mit Leine besitzt `release` (`test_widget_lifetime.py`). Fachliche
+Methoden wie `wait_for_survey` bleiben daneben und werden ohne Argument
+aufgerufen; der Parameter von `release` gilt der Leine.
+`WorkerLeash.start` nimmt sofort in `pending`/`wait_all` auf.
+`Worker.release_finished_references` löst Rückverweise erst nach zugestelltem
+`finished` und `wait(0)`: nur klasseneigene Ausgangssignale/Arbeitsfelder, nie
+`destroyed`, `started` oder fremde Verbindungen.
 
 ### Loslassen allein räumt nicht auf
 
-Der Weg, den `MainWindow` beim Schließen geht, und der einzige, der im Test
-dasselbe misst:
-
-```
-release(widget)  # von der Klasse geholt, siehe unten
-leash.wait_for_all()
-application.processEvents()  # mehrfach: ein finished reiht selbst wieder ein
-widget.deleteLater()
-QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-application.processEvents()
-gc.collect()  # erst nach der zugestellten nativen Löschung
-```
-
-* Ein Test-Pin fällt erst nach `sendPostedEvents(DeferredDelete)` und dem
-  Ereignislauf — bis dahin bleiben die Hüllen der rekursiv gelöschten Kinder
-  stark gehalten; danach sammelt der Abbau sie im Hauptthread ein.
-* **Der `processEvents`-Schritt ist der, den man vergisst:** Ohne ihn hält
-  `leash._alive` über das `finished`-Lambda Leine und Dialog, und man liest ein
-  Leck, wo keines ist.
+Fenster und Tests benutzen dieselbe Reihenfolge: `release(widget)` über die
+Klasse holen, `leash.wait_for_all`, mehrfach `processEvents` (ein `finished`
+kann erneut einreihen), `deleteLater`, `sendPostedEvents(DeferredDelete)`,
+`processEvents`, erst dann `gc.collect`. Test-Pins halten die Python-Hüllen
+der rekursiv gelöschten Kinder bis zur nativen Löschung und Ereignisrunde;
+dann im Hauptthread freigeben. Ohne Ereignisrunde hält das `finished`-Lambda
+über `leash._alive` weiterhin Leine/Dialog und täuscht ein Leck vor.
 
 ### `undisturbed()` teilt den GC-Zustand im Prozess
 
-`gc.disable()` wirkt prozessweit, nicht nur im aufrufenden Faden. Überlappende
-oder verschachtelte Aufrufe zählen deshalb gemeinsam: Der erste merkt, ob der
-Sammler an war, und schaltet ihn aus; erst der letzte stellt diesen
-Ausgangszustand wieder her. Ein früher endender Kontext darf den Schutz des
-anderen nicht aufheben. `tests/test_leash.py` hält den Mehrfadenfall für beide
-Ausgangszustände fest.
+`gc.disable` gilt prozessweit. Verschachtelte/überlappende Kontexte zählen
+zusammen: Der erste merkt den Ausgangszustand, erst der letzte stellt ihn
+wieder her. Ein früher endender Kontext darf den anderen Schutz nicht
+aufheben; `test_leash.py` prüft beide Ausgangszustände mit mehreren Fäden.
 
 ### Ein Rückruf an ein eigenes Kind hält schwach
 
-Ein Rückruf, der `self` stark fängt, an einem Sender, der **Kind von `self`**
-ist, schließt einen Ring über die C++-Grenze, den der Speicherbereiniger nicht
-sieht — das Objekt lebt bis zum Prozessende.
+An einem Kind-Sender fängt kein Rückruf `self` stark: Lambda, geschachtelte
+Funktion, `partial` und Vorgabeargument schließen denselben unsichtbaren
+C++-Zyklus. Reihenfolge der Mittel: gebundene Qt-Methode, eigene Methode für
+feste Werte, `weak_slot(self, Editor._tool_chosen, name)` für Schleifenwerte.
+Bei gruppierten Knöpfen bevorzugt `QButtonGroup.buttonClicked` mit gebundener
+Methode (`ToolStrip._on_button`).
 
-```
-self.timer.timeout.connect(lambda: self.rebuild())  # Ring
-button = QToolButton(self)
-button.clicked.connect(lambda: self.apply())  # auch ein Ring
-```
-
-Qt hält eine gebundene Methode schwach; `functools.partial` und
-Vorgabeargumente halten `self` wie ein Lambda. In dieser Reihenfolge: die
-gebundene Methode (`connect(self.rebuild)`); feste Werte in eine eigene
-Methode; Werte aus einer Schleife über
-`weak_slot(self, Editor._tool_chosen, name)` (`app/ui/leash.py`). **Haben die
-Knöpfe eine Gruppe, schlägt sie `weak_slot`:** ein Empfänger an
-`QButtonGroup.buttonClicked` als gebundene Methode (`ToolStrip._on_button`).
-
-* **Entscheidend ist, wer den Rückruf aufbewahrt:** Frei ist die gebundene
-  Methode nur an einer Qt-Verbindung; in einem Python-Container
-  (`ToolStrip.add(…, self._end_split)`) hält sie wie ein Lambda.
-* Eine geschachtelte Funktion ist ein Lambda (`def unfold(open_now,
-  inner=inner)`), die Suche nach Lambdas findet sie nicht.
-* Eine gebundene Methode hält auch außerhalb von Signalen:
-  `QTimer.singleShot(0, self, self._render_pending)` (`PartCatalog`, sein
-  `release()` hält die Kette an); `release = getattr(widget, "release", None)`
-  in einer Schleife hält das letzte Objekt — richtig ist
-  `getattr(type(widget), "release", None)`, gerufen mit dem Widget.
-* **Ein Empfänger an der Sitzung, der keine Methode ist, geht in
-  `release()`** — `session.disconnect(self)` trennt nur gebundene Methoden, und
-  die Sitzung überlebt das Fenster. Der Vorschlagswächter ist ein `weak_slot`
-  (`_proposal_context_changed`); `release()` räumt `_clear_proposal()` und
-  `_op_dialog.reject()`, bevor es trennt.
-* Handgeschriebene `weakref.ref`-Blöcke nur, wo mehrere Rückrufe zusammen
-  entstehen (`viewport._weak_callbacks`).
-* **Kurzlebige Sender sind ausgenommen** (Arbeiter, Dialog, Animation): Ihr
-  Ring löst sich mit dem Sender, dort ist das Vorgabeargument richtig. Wer so
-  lange lebt wie `self`, hält `self` ewig.
-
-Einen Halter findet ein Test, der eine Annahme festnagelt, und
-`gc.get_referrers`, nicht die Suche nach Lambdas; überlebt reproduzierbar genau
-eines von zehn, ist das genau eine Referenz, keine Streuung.
-
-```
-for holder in gc.get_referrers(widget):
-    if type(holder).__name__ == "cell":  # eine Closure hält es
-        for user in gc.get_referrers(holder):
-            ...  # __qualname__ und __code__ nennen die Zeile
-```
-
-**Falle: Ein Fenster, das sterben kann, kann im falschen Thread sterben.**
-Fällt die letzte Referenz eines Widgets während eines Sammlerlaufs in einem
-Nebenthread, zerstört shiboken es dort — Stillstand bei 0,00 CPU zwischen GIL
-und Qt-Mutex, bei jedem Widget. Stapelabzüge und was nicht hilft
-(`gc.collect()`, `leash.undisturbed()`, `deleteLater`) stehen in
-`tests/conftest.py`; vor jedem neuen Anlauf dort lesen.
+- Die gebundene Methode ist nur in der Qt-Signalverbindung schwach; ein
+  Python-Container wie `ToolStrip.add(..., self._end_split)` hält sie stark.
+- Das gilt auch für `QTimer.singleShot(0, self, self._render_pending)`;
+  `PartCatalog.release` beendet dessen Kette. In Schleifen `release` über
+  `getattr(type(widget), "release", None)` holen und mit dem Widget aufrufen;
+  `getattr(widget, ...)` hält sonst das letzte Objekt fest.
+- Nichtmethodische Session-Empfänger in `release` ausdrücklich trennen:
+  `session.disconnect(self)` erfasst nur gebundene Methoden. Vorschlagswächter
+  nutzen `weak_slot(_proposal_context_changed)`; vor dem Trennen
+  `_clear_proposal` und `_op_dialog.reject` ausführen.
+- Handgeschriebene `weakref.ref`-Blöcke nur für gemeinsam erzeugte Rückrufe
+  (`viewport._weak_callbacks`). Kurzlebige Sender (Arbeiter, Dialog, Animation)
+  dürfen mit Vorgabeargumenten halten; ihr Ring endet mit dem Sender.
+- Halter mit reproduzierbarer Lebensdauerannahme und `gc.get_referrers`
+  nachweisen, nicht per Lambdasuche. Eine `cell` zeigt auf eine Closure;
+  `__qualname__`/`__code__` benennen die Zeile. Genau eines von zehn erhaltenen
+  Widgets spricht für eine Referenz, nicht Streuung.
+- Fällt die letzte Referenz beim GC im Nebenthread, kann Shiboken das Widget
+  dort zerstören und zwischen GIL/Qt-Mutex stehen bleiben. Vor erneuten
+  Versuchen Stapelabzüge und Grenzen von `gc.collect`, `leash.undisturbed`
+  und `deleteLater` in `tests/conftest.py` lesen.
 
 ### Ein Filter auf einem sterblichen Widget bestellt beim `Destroy` ab
 
-```
-def eventFilter(self, watched, event):
-    if stop_watching_the_dying(self, watched, event):
-        return False
-    ...
-```
-
-Nötig an jeder sterblichen Filterstelle, nicht auf der `QCoreApplication`
-(Begründung in `konzepte/begruendungen/regel-wartezeit.md`).
-`tests/test_widget_lifetime.py` findet neue Stellen am **Filterargument**,
-nicht an der Datei.
+Jeder solche `eventFilter` beginnt mit `stop_watching_the_dying(self, watched,
+event)` und gibt bei Erfolg `False` zurück. Nicht nötig an der
+`QCoreApplication`; Begründung im verlinkten Dokument.
+`test_widget_lifetime.py` prüft das Filterargument, nicht die Datei.
 
 ### `isValid` beantwortet nicht, was für ein Objekt das ist
 
-Ein recycelter Zeiger trägt ein lebendes Objekt **vom falschen Typ**
-(`QWidgetItem`), und `isValid` sagt ja. Wer über Nachbarn rechnet
-(`overlay.rows_height`, `shortcut_schemes.py`), prüft mit `isinstance` dort,
-wo der Wert angefasst wird, mit dem Rückfall wie für ein fehlendes Objekt —
-eine Prüfung am Eingang gewinnt keinen Wettlauf.
+Ein recycelter Zeiger kann ein lebendes Objekt falschen Typs (`QWidgetItem`)
+tragen. In `overlay.rows_height`/`shortcut_schemes` beim Zugriff `isinstance`
+prüfen und wie bei fehlendem Objekt zurückfallen; eine Eingangsprüfung
+gewinnt den Wettlauf nicht.
 
 ### `isVisible()` und `hasFocus()` lügen in einem nie gezeigten Fenster
 
-Offscreen melden beide falsch. Gefragt wird nach der Sache
-(`self.pending_measure() > 0.0`), geprüft die Wirkung (kommt die Ziffer an?);
-für echte Sichtbarkeit `isVisibleTo(eltern)`.
+Offscreen nach dem sachlichen Zustand fragen (`pending_measure()>0`) und
+Wirkung prüfen (kommt die Ziffer an?). Für tatsächliche Sichtbarkeit
+`isVisibleTo(eltern)` verwenden.
 
 ## Nebenläufig heißt: Der Hauptthread bleibt frei
 

@@ -90,8 +90,8 @@
         <li><b>Glisser un GLB ou un STL.</b> Même texturé — les couleurs
         survivent à l'import.</li>
         <li><b>Chaîne de réparation et rapport de contrôle.</b> Trous,
-        normales retournées, triangles dégénérés&nbsp;; ensuite, il est écrit
-        noir sur blanc ce qui tournera mal à l'impression.</li>
+        normales retournées, triangles dégénérés&nbsp;; le rapport indique ensuite
+        les risques détectés pour l'impression.</li>
         <li><b>Ramener les couleurs à vos filaments.</b> Au nombre réellement
         chargé dans la machine — pas à un maximum.</li>
         <li><b>Découper, goupiller, disposer.</b> Des goupilles avec le jeu
@@ -113,7 +113,7 @@
           <tr><td>Arêtes non manifold, faces dégénérées</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
           <tr><td>Volume</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
           <tr><td>Épaisseur de paroi contre la buse de cette imprimante</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
-          <tr><td>Angle de surplomb couche par couche</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Surface sans support par couche</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
           <tr><td>Îlots&nbsp;: de la matière sans lien vers le bas</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
           <tr><td>Portées de pont, passage le plus étroit</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
           <tr><td>Besoin de supports et meilleure orientation</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
@@ -138,12 +138,12 @@
       <p class="sub">Le modèle derrière est <b>TripoSG</b>. Son code source et
       sa fiche de modèle indiquent la <b>licence MIT</b> ; la chaîne complète
       de licences et de provenance des poids et des modèles intégrés est en
-      cours de vérification. Solidon3D ne met en place cette voie qu’à ta
-      demande et ne télécharge rien sans te le demander ; les fichiers GLB
+      cours de vérification. Solidon3D ne met en place cette voie qu’à votre
+      demande et ne télécharge rien sans vous le demander ; les fichiers GLB
       et STL externes restent entièrement utilisables dans tous les cas.</p>
 
       <h2>Chat local&nbsp;: quel modèle pour quelle carte</h2>
-      <p class="sub">Le chat fonctionne gratuitement avec Ollama sur votre propre ordinateur. Le modèle doit tenir entièrement dans la mémoire graphique — sinon le processeur s’en mêle et chaque réponse prend plusieurs fois plus de temps. Ces quatre modèles appellent les outils de Solidon de façon fiable et posent une question quand une demande n’est pas claire&nbsp;:</p>
+      <p class="sub">Le chat fonctionne gratuitement avec Ollama sur votre propre ordinateur. Le modèle doit tenir entièrement dans la mémoire graphique — sinon le processeur s’en mêle et chaque réponse prend plusieurs fois plus de temps. Ces quatre modèles ont été testés avec les outils de Solidon. Le tableau indique les taux de réussite, les temps de réponse et les limites&nbsp;:</p>
       <table class="compare">
         <thead>
           <tr><th>Modèle</th><th>Mémoire graphique</th><th>Test et suite</th></tr>

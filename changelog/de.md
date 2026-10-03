@@ -47,9 +47,14 @@ Nutzen da und sonst nichts.
 - Neu ist die Grundform *Rohr anlegen*: Außendurchmesser und Höhe, dazu wahlweise Wandstärke oder Innendurchmesser, in einem Schritt.
 - Neu ist der Baustein *Lasche mit Loch*: eine flache Lasche an jeder Fläche, Loch und Maße passend zur Schraube von M3 bis M8.
 - Neu ist die *Rohrschelle* für gängige Rohre von 15 bis 40 mm oder jedes eigene Maß bis 110 mm, mit Klemmschraube M3 bis M6 und dem Spiel aus Ihrem Material.
+- Neu ist der Assistent *Behälter mit Deckel*: rund oder eckig, mit Schraub-, Steck- oder Klappdeckel, auf Wunsch mit Fächern, Einsatz und Streulöchern. Alle Hauptmaße stehen als Parameter bereit.
 - Vier Halter entstehen in einem Schritt mit echten Flächen und Kanten: U-Form, rund, Gabel und Ablage, befestigt mit Schlüsselloch, Schraublöchern, Lochwand-Haken oder Klemme.
 - Eine leere Szene zeigt, wie Sie anfangen: Quader, Zylinder, Zeichnen, Bausteine oder eine Datei, die Sie hineinziehen.
-- Neue Körper entstehen auf dem Bett oder auf der gewählten ebenen Fläche, nicht mehr an der Stelle eines zuvor gewählten Körpers, und sind danach gewählt.
+- Neue Körper entstehen auf dem Bett statt an einem gewählten Körper und sind danach gewählt. An einer gewählten Fläche setzen sie am Klickpunkt oder mittig an, auf Wunsch gleich mit dem Teil verbunden.
+- Bausteine wie Magnettasche oder Schraubenloch sitzen dort, wo Sie auf die Fläche klicken. Ihr Abstand zu zwei Kanten bleibt, wenn sich das Teil später ändert.
+- Die *Nutfeder für Aluprofil* passt zu Motedis 20 × 20 B-Typ Nut 6 und 30 × 30 B-Typ Nut 8, ihr Kopf folgt der Form der Nut. Die drei bisherigen Größen bleiben als ältere Maße wählbar.
+- Im Prüfbericht baut *Modell nachbauen* ein eingelesenes Teil aus Grundformen, Bohrungen und Rundungen nach, vergleicht es in der gewählten Grenze mit dem Original und übernimmt es in einem Schritt.
+- Die *Profilklemme mit Einlagen* beginnt mit dem Material des Projekts in beiden Materialfeldern. Bisher waren beide leer.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -68,7 +73,7 @@ Nutzen da und sonst nichts.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.
 - Nach dem Slicen vergleicht Solidon auch Stützmaterial und Modellschichten je Druckplatte. Der Prüfbericht zeigt die interne Schätzung und die Werte aus der Druckdatei.
 - Die Material-Gegenprobe vergleicht nur das gedruckte Modell. Spülmaterial wird getrennt gezeigt; unvollständig lesbare Mengen werden kenntlich gemacht.
-- Die Analyse des benötigten Stützraums ist bei Hohlkörpern deutlich schneller und erhält feine Konturen.
+- Die Schichtanalyse rechnet an Hohlkörpern und Modellen mit vielen Decken mehrfach schneller und erhält feine Konturen. Die Ansicht der Schichten nutzt, was der Prüfbericht schon gerechnet hat.
 - Bei ineinandergesteckten Teilen zählt die Druckanalyse eingeschlossene Luft nicht mehr als Material. Das verbessert auch die Erkennung von Überhängen und nötigen Stützen.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
 - Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
@@ -83,7 +88,7 @@ Nutzen da und sonst nichts.
 - Hohe, schlanke Teile auf kleinem Fuß bekommen ruhigere Wände vorgeschlagen, mit 60 mm/s und weniger Beschleunigung. Solche Stangen rissen sonst am Centauri Carbon 2 ab.
 - Mit Cura nennt der Prüfbericht die Teile, die solche Werte nur mitbekommen, weil Cura sie bloß für die ganze Platte annimmt.
 - Solidon schlägt *Außenwand zuerst* nur noch für das Teil vor, das es braucht, und nie für eines mit Stützen.
-- Auch in der schnellen Suche prüft *Druckoptimal ausrichten*, ob ein Teil sicher steht.
+- Auch in der schnellen Suche prüft *Druckoptimal ausrichten*, ob ein Teil sicher steht. Steht eines nirgends sicher, richtet sie die übrigen trotzdem aus und nennt es im Prüfbericht.
 - Jedes Teil kommt mit *Auf dem Bett anordnen* auf die erste Platte, auf der es Platz hat. Der Minigolf-Satz braucht so vier statt sechs Platten.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
 - Kommt ein weiteres Modell hinzu, ob aus einer Datei, einem Download oder erzeugt, zeigt das Bild die Platte, auf der es liegt.
@@ -109,6 +114,9 @@ Nutzen da und sonst nichts.
 - Meldet PrusaSlicer oder SuperSlicer eine leere erste Schicht, nennt Solidon das Teil und bietet Aufsetzen aufs Bett sowie passende Druckeinstellungen an.
 - Warnungen von PrusaSlicer und SuperSlicer stehen auch nach gelungenem Slicen im Prüfbericht, eine leere Schicht als Fehler. Der Abstand zum Raft ist eigens einstellbar.
 - Teilt der Slicer eine Platte auf mehrere Druckdateien auf, meldet Solidon das und bietet Anordnen oder den Export an. Bisher übernahm es still nur eine der Dateien.
+- Oben im Prüfbericht steht, ob die Übergabe bereit ist, eine Entscheidung braucht oder nicht empfohlen wird, und was ungeprüft ist. Ohne Befunde gilt ein Teil nicht mehr von selbst als druckbereit.
+- Nach Export oder *Im Slicer öffnen …* steht im Prüfbericht ein Beleg: Dateien, Druckziel, Material und ob Druckwerte mitgingen. Er sagt auch, dass die Datei nicht neu eingelesen und verglichen wurde.
+- Auf der Kommandozeile als 3MF exportiert, behält ein einfarbiger Körper beim erneuten Öffnen sein Filament.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -129,6 +137,14 @@ Nutzen da und sonst nichts.
 - Lässt sich eine Bohrung an einem STEP-Körper nicht sauber schneiden, bohrt Solidon sie am Dreiecksmodell, statt einen kaputten Körper weiterzugeben.
 - Haben Sie beim Laden „Sofort laden“ gewählt, erkennen auch die Stücke von *Modell teilen* nicht minutenlang nach; „Alle Merkmale erkennen“ holt es nach.
 - Wählen Sie *Modell teilen* in einer Sammelzeile des Prüfberichts für mehrere Körper, teilt Solidon sie nacheinander. Bisher wurde nur der erste geteilt.
+- Deckt beim *Vereinigen* ein Körper eine Bohrung ganz oder teilweise zu, steht das mit Ort und verbliebenem Hohlraum im Prüfbericht.
+- Kreismuster und *Spiegeln* nehmen ihre *Drehmitte* von einem Körper, einem Merkmal, einem Punkt oder dem Ursprung. Die Mitte bleibt fest, auch wenn sich der Körper später bewegt.
+- Ein Zug in der Öffnung einer gewählten Senkbohrung lässt den Körper stehen, und die Statuszeile nennt den Weg zum Langloch. Bisher verschob er den ganzen Körper.
+- Wird die Maßkarte einer Bohrung hoch, bleiben die übrigen Maße neben dem Körper, und der Griff zum Verschieben sitzt an der Mündung statt mitten im Teil.
+- Wählen Sie eine Bohrung, die Sie in Solidon gesetzt haben, steht ihr Durchmesser nur noch in der Maßkarte im Bild. Bisher stand er rechts ein zweites Mal.
+- Eine Richtung, die Sie rechts für ein Langloch eintragen, übernimmt auch die Maßkarte im Bild, und *Übernehmen* bleibt frei. Bisher fiel sie dort auf 0° zurück.
+- Kegel, Rundungen und schmale Flächen erkennt Solidon an mehr Modellen gleich, ob das Modell verschoben, gedreht oder skaliert ist.
+- Rippen-, Waben- und Noppenfelder einer eingelesenen Datei erkennt Solidon je als ein Muster, und *Merkmale an dieser Stelle erkennen* fasst die Zellen eines Felds zusammen.
 
 ### Verrunden und Fasen
 
@@ -148,14 +164,18 @@ Nutzen da und sonst nichts.
 - In den übersetzten Fassungen heißt die Stärke des Formpinsels nicht mehr wie eine Wanddicke.
 - Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht und vor dem Export, mit *Stelle zeigen* und *Zug zurücknehmen*.
 - Im Fenster rechnet *Weich verschmelzen* jetzt fein, solange der Körper nicht sehr groß ist.
-- Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
+- Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, auch nur mit Senkung oder Fase, oder in eine Wand dahinter, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
 - SVG-Zeichnungen kommen richtig an: Drehungen, Scherungen, abgerundete Ecken, Ellipsen und elliptische Bögen stimmen, und ausgeblendete Ebenen bleiben draußen.
 - Das Ziel von *An Merkmal ausrichten* ist anfangs leer, und der erste Klick ins Bild füllt es. *Übernehmen* wartet bis dahin, statt den Körper still an die falsche Seite zu setzen.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 - Ein weiterer Zug in eine eben gegrabene Mulde gräbt tiefer, auch mit einem kleinen Pinsel. Bisher blieb er wirkungslos und galt als verfehlt.
-- Beim *Formen* zeigt das Fenster jeden Zug gleich schnell, auch nach vielen Zügen. Bisher wurde es mit jedem Zug langsamer.
+- Beim *Formen* zeigt das Fenster jeden Zug gleich schnell, auch nach vielen Zügen, und große Sitzungen rechnen ihre Vorschau im Hintergrund. Bisher wurde es mit jedem Zug langsamer.
 - Mit *Stand festschreiben* legt Solidon eine Formsitzung so fein ab, wie Export und Druck sie rechnen, und das Fenster bleibt bedienbar. Bisher wurde die gröbere Ansicht abgelegt.
+- Ein Doppelklick auf *Formen* im Verlauf öffnet die Sitzung mit ihren Zügen wieder. Strg+Z nimmt einen ganzen Zug zurück, und *Fertig* ändert denselben Schritt.
+- Der Eintrag *Aus Skizze erzeugen …* beginnt sofort zu zeichnen, die Zeichenebene zeigt ihren Nullpunkt, und ein Doppelklick im Verlauf öffnet eine Zeichnung wieder im Zeichenmodus.
+- Beim *Formen* und im Skeletteditor zeigt die Leiste Wandstärke oder Überhang als Karte mit Legende und meldet einen Zug über den Bauraum. Nach dem Beugen sagt sie, wie es sich druckt.
+- Eine aufgebrachte Textur wählen Sie als Ganzes. Im Auswahlfenster stehen dann *Textur ändern* und *Textur entfernen*.
 
 ### Erzeugen mit KI
 
@@ -200,6 +220,14 @@ Nutzen da und sonst nichts.
 - Die Differenzansicht schraffiert Hinzugekommenes und Entferntes in zwei Richtungen, sodass sich beides auch ohne Farbe unterscheiden lässt.
 - Fragt Solidon beim Öffnen nach der Einheit einer Datei, stehen die Maße in Ihrer Anzeigeeinheit und mit dem Dezimalzeichen Ihrer Sprache.
 - Ziehen Sie eine Datei herein, die Solidon nicht öffnet, etwa aus Blender, nennt es den Weg über 3MF, STEP oder STL. G-Code geht an *G-Code gegenprüfen*.
+- Mehrere Dateien öffnen Sie in einem Schritt. Sie behalten ihre Lage zueinander, ein Strg+Z nimmt alle zurück, und gleiche Importhinweise stehen gebündelt im Prüfbericht.
+- Über dem Verlauf zeigt *Vorher/Nachher* mit einem Regler jeden früheren Stand. *Hier weiterarbeiten* fügt dort neue Schritte ein, und Ihre Schrittnamen bleiben.
+- Mit *nach* setzt *Verschieben* die Mitte, die Bodenmitte, eine Ecke oder ein Merkmal auf eine feste Lage und *Drehen* den Körper in feste Winkel, auch bei mehreren Körpern.
+- Kopieren Sie den Link einer Modellseite, steht er in *Modell aus dem Netz* schon im Feld, und Solidon zeigt den Weg über den Browser.
+- Kann ein Dialog nicht übernehmen, steht der Grund auch unter seinen Feldern und nicht nur im Band über dem Bild.
+- Nach Strg+Y nennt die Statuszeile den Schritt, der wieder angewendet wurde, wie nach Strg+Z.
+- Vorschaubilder von Beispielen und Bausteinen zeigen die Höhe nach oben. Bisher wiesen hohe Teile darin nach unten.
+- Kann Solidon die Wahl *Werte mitgeben* nicht speichern, steht der Hinweis direkt am Schalter.
 
 ## 0.5.1
 
@@ -461,7 +489,7 @@ Nutzen da und sonst nichts.
 - Übernehmen wartet, bis die Vorschau das aktuelle Ergebnis zeigt. Ein Klick auf ein veraltetes Bild schreibt nichts Falsches.
 - Filamentfarben bleiben an exakten Körpern erhalten und folgen jeder neuen Vernetzung.
 - Volumen und Fläche eines exakten Körpers kommen in Millisekunden statt in Sekunden.
-- Ein Gewinde einzusetzen dauert unter einer halben Sekunde statt bis zu dreizehn; ein Gewindebolzen entsteht in einer Drittelsekunde statt in einer Minute.
+- Ein Gewinde einzusetzen dauerte im Messlauf 0,38 bis 0,41 Sekunden statt 8 bis 13 Sekunden. Ein Gewindebolzen M6 × 1 mit 12 mm Länge entstand als vollständige Operation in 0,55 Sekunden.
 - Vereinigen, Abziehen und Auf das Bett setzen fragen an exakten Körpern nicht mehr, ob umgewandelt werden soll. Sie bleiben exakt.
 - Wird eine Bohrung versetzt, bleiben an der alten Stelle keine überzähligen Dreiecke zurück, und eine verdeckte Senkung verliert nichts von ihrem Volumen.
 - Reparieren lässt ein sauberes Modell unverändert, auch am exakten Körper.
@@ -530,8 +558,8 @@ Nutzen da und sonst nichts.
 - Hält ein Schritt des Assistenten die Auswertung an, nimmt der Vorschlag ihn ganz zurück und zeigt den Stand davor.
 - Ein Modell mit 200 000 Dreiecken zu verschieben oder zu drehen antwortet in einer halben Sekunde statt in acht.
 - Rückgängig antwortet sofort statt nach zweieinhalb Sekunden.
-- Beim Tippen einer Zahl steht die Vorschau nach einer halben Sekunde, jede weitere nach einem Achtel davon.
-- Aushöhlen rechnet ein Fünftel schneller.
+- Beim Ändern des Bohrungsdurchmessers an der Lochplatte stand die erste Vorschau im Messlauf nach 0,57 Sekunden, jede weitere nach 0,13 Sekunden.
+- Aushöhlen rechnete an den drei gemessenen Modellen 7 bis 25 Prozent schneller.
 - Ein Menüpunkt und ein leiser Hinweis in der Ansicht führen zur freiwilligen Unterstützung von Solidon über PayPal oder GoFundMe.
 - Die Karte des Fragebogens zeigt jetzt auch im hellen Thema die richtigen Farben.
 

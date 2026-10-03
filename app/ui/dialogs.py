@@ -439,7 +439,7 @@ class CalibrationDialog(QDialog):
                 + f" {format_decimal(printer.nozzle_diameter)} mm · "
                 + tr("Schichthöhe")
                 + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Linienbreite")
+                + tr("Bahnbreite")
                 + f" {format_decimal(printer.extrusion_width)} mm"
             )
             process_note.setText(
@@ -1845,7 +1845,7 @@ class KeyDialog(QDialog):
             success = self._speed_success_text(speed)
             self._show_probe_result(
                 "ok",
-                success or tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar."),
+                success or tr("Das Modell hat die Werkzeugprobe bestanden."),
             )
             return
         self._show_probe_result(
@@ -1913,7 +1913,7 @@ class KeyDialog(QDialog):
         """
         if not isinstance(speed, llm.Speed) or speed.on_gpu is not True:
             return ""
-        return tr("Das Modell ruft Werkzeuge auf und ist brauchbar. Die Grafikkarte wird genutzt.")
+        return tr("Das Modell hat die Werkzeugprobe bestanden. Die Grafikkarte wird genutzt.")
 
     def _probe_finished(self) -> None:
         # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig
@@ -2976,7 +2976,7 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
             ),
             tr(
                 "{app} 1.0 ist für den {start} um 10:00 Uhr deutscher Zeit geplant; "
-                "den Tag davor bereiten wir die Verkaufsversion vor."
+                "am Tag davor bereite ich die Verkaufsversion vor."
             ).format(app=APP_NAME, start=calendar_date(PLANNED_SALE_START.date())),
             tr(
                 "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den "

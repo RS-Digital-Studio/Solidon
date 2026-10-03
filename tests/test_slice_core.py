@@ -55,6 +55,33 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.mark.parametrize("angle", [0.0, 0.37, 1.2])
+@pytest.mark.parametrize("positions", [[0.0, 1.0, -1.0, 0.5], [], [8.0], [0.5, 0.5]])
+def test_native_material_spans_equal_numpy_exactly(
+    monkeypatch: pytest.MonkeyPatch, angle: float, positions: list[float]
+) -> None:
+    """Löcher, Randkontakte, leere und doppelte Lagen behalten dieselben Paritätspaare."""
+    native = analysis._chain
+    if native is None or not hasattr(native, "cuts_along"):
+        pytest.skip("Der native Spannweitenkern ist noch nicht gebaut.")
+    outer = np.array([[-3.0, -2.0], [3.0, -2.0], [3.0, 2.0], [-3.0, 2.0]])
+    inner = np.array([[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]])
+    heads = np.vstack((outer, inner))
+    tails = np.vstack((np.roll(outer, -1, axis=0), np.roll(inner, -1, axis=0)))
+    direction = np.array([np.cos(angle), np.sin(angle)])
+    normal = np.array([-direction[1], direction[0]])
+    samples = np.array(positions)
+    actual = analysis._cuts_along(heads, tails, direction, normal, samples)
+    monkeypatch.setattr(analysis, "_chain", None)
+    expected = analysis._cuts_along(heads, tails, direction, normal, samples)
+    if expected is None:
+        assert actual is None
+    else:
+        assert actual is not None
+        for found, wanted in zip(actual, expected, strict=True):
+            np.testing.assert_array_equal(found, wanted)
+
+
 @pytest.fixture
 def without_compiled_core(monkeypatch: pytest.MonkeyPatch) -> None:
     """Derselbe Lauf, aber über GEOS — als wäre nie etwas übersetzt worden."""
@@ -486,3 +513,150 @@ def test_widths_and_tapers_do_not_depend_on_where_a_ring_starts() -> None:
         layer.min_width for layer in geos.layers
     ]
     assert any(layer.taper_length > 0.0 for layer in compiled.layers), "der Keil ist da"
+
+
+def test_native_ring_nesting_proves_the_containment_tree() -> None:
+    """Loch, Insel im Loch und zweite Hülle haben dieselbe eindeutige Elternschaft."""
+    rings = [
+        np.array([[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]]),
+        np.array([[2.0, 2.0], [2.0, 18.0], [18.0, 18.0], [18.0, 2.0]]),
+        np.array([[4.0, 4.0], [6.0, 4.0], [6.0, 6.0], [4.0, 6.0]]),
+        np.array([[30.0, 0.0], [40.0, 0.0], [40.0, 10.0], [30.0, 10.0]]),
+    ]
+    metadata = analysis._chain.ring_nesting(np.vstack(rings), np.repeat(np.arange(4), 4))
+    assert metadata is not None
+    starts, ends, areas, depths, parents = metadata
+    np.testing.assert_array_equal(starts, [0, 4, 8, 12])
+    np.testing.assert_array_equal(ends, [4, 8, 12, 16])
+    np.testing.assert_array_equal(areas > 0, [True, False, True, True])
+    np.testing.assert_array_equal(depths, [0, 1, 2, 0])
+    np.testing.assert_array_equal(parents, [-1, 0, 1, -1])
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e-14, -1e-14])
+def test_native_ring_nesting_leaves_uncertain_contacts_to_geos(offset: float) -> None:
+    """Auf oder numerisch direkt neben der Kante wird keine Elternschaft geraten."""
+    outer = np.array([[0.0, 0.0], [10.0, 10.0], [0.0, 20.0], [-10.0, 10.0]])
+    inner = np.array([[5.0 + offset, 5.0], [4.0, 6.0], [5.0, 7.0], [6.0, 6.0]])
+    assert (
+        analysis._chain.ring_nesting(np.vstack((outer, inner)), np.repeat(np.arange(2), 4)) is None
+    )
+
+
+@pytest.mark.parametrize("directed", [False, True])
+@pytest.mark.parametrize("capture", [False, True])
+def test_native_and_geos_nested_rings_keep_every_contour(
+    monkeypatch: pytest.MonkeyPatch, directed: bool, capture: bool
+) -> None:
+    """Verschachtelte, getrennte, berührende und kreuzende Ringe behalten ihren Rückweg."""
+    from shapely import affinity
+    from shapely.geometry import Polygon
+
+    outer = Polygon([(0, 0), (12, 0), (12, 10), (0, 10)])
+    sources = [
+        [outer, affinity.scale(outer, xfact=0.6, yfact=0.6)],
+        [outer, affinity.translate(outer, xoff=20)],
+        [outer, affinity.translate(outer, xoff=12)],
+        [outer, affinity.translate(outer, xoff=6)],
+        [
+            outer,
+            affinity.scale(outer, xfact=0.2, yfact=0.2),
+            affinity.scale(outer, xfact=0.6, yfact=0.6),
+        ],
+        [Polygon([(0, 0), (10, 10), (0, 10), (10, 0)]), outer],
+    ]
+    native = analysis._chain
+    for shapes in sources:
+        for shift in (0.0, 1e8):
+            rings = [np.asarray(shape.exterior.coords)[:-1] + shift for shape in shapes]
+            coordinates = np.vstack(rings)
+            ring_of = np.repeat(np.arange(len(rings)), [len(ring) for ring in rings])
+            monkeypatch.setattr(analysis, "_chain", native)
+            found = analysis._nested(
+                coordinates, ring_of, capture_contours=capture, directed=directed
+            )
+            monkeypatch.setattr(analysis, "_chain", None)
+            wanted = analysis._nested(
+                coordinates, ring_of, capture_contours=capture, directed=directed
+            )
+            if wanted is None:
+                assert found is None
+            else:
+                assert found is not None
+                assert found[0].wkb == wanted[0].wkb
+                assert found[1] == wanted[1]
+
+
+@pytest.mark.parametrize("case", ["empty", "many", "gap", "short", "negative", "nan", "overflow"])
+def test_native_ring_nesting_declines_unproved_input(case: str) -> None:
+    """Keine festen Hilfspuffer mit ungültigen Indizes oder ungesicherten Zahlen benutzen."""
+    coordinates = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
+    ring_of = np.zeros(4, dtype=np.int64)
+    if case == "empty":
+        coordinates, ring_of = coordinates[:0], ring_of[:0]
+    elif case == "many":
+        coordinates = np.tile(coordinates, (17, 1))
+        ring_of = np.repeat(np.arange(17), 4)
+    elif case == "gap":
+        ring_of[:] = 1
+    elif case == "short":
+        coordinates, ring_of = coordinates[:2], ring_of[:2]
+    elif case == "negative":
+        ring_of[:] = -1
+    elif case == "nan":
+        coordinates[0, 0] = np.nan
+    else:
+        coordinates *= 1e200
+    assert analysis._chain.ring_nesting(coordinates, ring_of) is None
+
+
+def test_native_ring_nesting_checks_dimensions_before_reading() -> None:
+    """Ein falsches Koordinatenfeld wird vor dem nativen Zugriff zurückgewiesen."""
+    with pytest.raises(ValueError, match="zweidimensionalen"):
+        analysis._chain.ring_nesting(np.zeros((4, 1)), np.zeros(4, dtype=np.int64))
+    with pytest.raises(ValueError, match="Ringkennung"):
+        analysis._chain.ring_nesting(np.zeros((4, 2)), np.zeros(3, dtype=np.int64))
+
+
+def test_unioned_clip_rings_use_the_proved_tree_without_a_second_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch die Stützsäule übernimmt die belegte Loch-/Inselhierarchie unmittelbar."""
+    import shapely
+
+    rings = [
+        np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]),
+        np.array([[1.0, 1.0], [1.0, 9.0], [9.0, 9.0], [9.0, 1.0]]),
+        np.array([[3.0, 3.0], [5.0, 3.0], [5.0, 5.0], [3.0, 5.0]]),
+    ]
+
+    def unexpected_index(*args: object, **kwargs: object) -> None:
+        pytest.fail("Die eindeutige Ringhierarchie wird erneut über einen Index gesucht.")
+
+    monkeypatch.setattr(shapely, "STRtree", unexpected_index)
+    shape = analysis._shape_from_rings(rings)
+    assert shape is not None and shape.is_valid
+    assert shape.area == pytest.approx(40.0)
+    assert len(shape.geoms) == 2
+    assert len(shape.geoms[0].interiors) == 1
+
+
+@pytest.mark.parametrize("shift", [0.0, 1e8])
+def test_unioned_clip_rings_keep_the_previous_exact_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+    shift: float,
+) -> None:
+    """Weder Lochzuordnung noch Anfang und Umlaufsinn bereits vereinigter Ringe ändern sich."""
+    from shapely.geometry import Polygon
+
+    native = analysis._chain
+    for hole in ([[(1, 1), (1, 9), (9, 9), (9, 1)]], []):
+        shape = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)], hole)
+        material = analysis._material_cross(shape)
+        rings = [np.asarray(ring) + shift for ring in material.to_polygons()]
+        monkeypatch.setattr(analysis, "_chain", native)
+        found = analysis._shape_from_rings(rings)
+        monkeypatch.setattr(analysis, "_chain", None)
+        wanted = analysis._shape_from_rings(rings)
+        assert wanted is not None and found is not None
+        assert wanted.wkb == found.wkb

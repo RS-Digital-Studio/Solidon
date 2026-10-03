@@ -248,7 +248,7 @@ _SIBLING_FIELDS: Final = frozenset({"y", "z", "ny", "nz"})
 #: ``tests/test_agent.py`` hält die Liste am Register — ein Satz, den kein
 #: Feld mehr trägt, stünde sonst als Hinweis auf nichts im Prompt.
 CONVENTION_SENTENCES: Final[dict[str, str]] = {
-    "play": "Null heißt: Wert aus dem kalibrierten Materialprofil.",
+    "play": "Null heißt: Wert aus dem gewählten Materialprofil.",
 }
 
 

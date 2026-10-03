@@ -54,6 +54,37 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     yield from shown_window(qt_app)
 
 
+def test_first_long_finding_fits_without_another_user_event(
+    qt_app: QApplication, window: MainWindow
+) -> None:
+    """Der erste Importbefund braucht seine Umbruchhöhe ohne späteren Menüklick."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Finding, Report, Scene
+    from tests.helpers import make_object
+
+    finding = Finding(
+        "geometry.deviation",
+        "warning",
+        "Die erkannte Form weicht an einer kleinen Stelle vom ursprünglichen Modell ab. "
+        "Prüfen Sie diese Stelle vor der weiteren Bearbeitung. Die größte Abweichung beträgt "
+        "0,03 mm.",
+        object_id="tray",
+    )
+    window.report.show_result(
+        EvaluationResult(
+            Scene(objects={"tray": make_object("tray")}, report=Report(findings=[finding]))
+        )
+    )
+    window.right.setCurrentWidget(window.report)
+    for _ in range(6):
+        qt_app.processEvents()
+    view = window.report.list
+    item = view.item(0)
+    rect = view.visualItemRect(item)
+    assert rect.height() > 2 * view.fontMetrics().height()
+    assert rect.bottom() < view.viewport().height(), (rect, view.viewport().size())
+
+
 def test_a_half_torn_down_child_is_stepped_over(qt_app: QApplication) -> None:
     """Die Python-Hülle überlebt die C++-Seite — und die erste Frage an sie
     ist der Absturz.
@@ -583,7 +614,9 @@ def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow) -> No
     )
     assert report.list.verticalScrollBar().maximum() == 0, (
         "acht Befunde passen in die Spalte — ein Rollbalken hier heißt, "
-        "die Karte hat ihren Platz nicht genommen"
+        f"die Karte hat ihren Platz nicht genommen: Karte {report.height()}, "
+        f"Liste {report.list.height()}, Zeilen {overlay.rows_height(report.list)}, "
+        f"Spalte {window.right_column.height()}, Fenster {window.height()}"
     )
 
 

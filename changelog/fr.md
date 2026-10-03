@@ -23,9 +23,14 @@ dans `website/version.json`.
 - Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
 - Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
 - Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
+- Nouvel assistant « Récipient avec couvercle » : rond ou rectangulaire, couvercle vissé, emboîté ou à charnière, en option compartiments, insert et trous saupoudreurs. Ses cotes sont des paramètres.
 - Quatre supports se créent en une étape avec de vraies faces et arêtes : en U, rond, à fourche et à tablette, fixés par trou de serrure, trous de vis, crochet de panneau ou pince.
 - Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
-- Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
+- Les nouveaux corps se posent sur le plateau, plus sur un corps sélectionné, et restent sélectionnés. Sur une face choisie, ils se placent au point cliqué ou au centre, au besoin réunis à la pièce.
+- Les blocs comme une poche à aimant ou un trou de vis se placent là où vous cliquez sur la face. Leur distance à deux arêtes reste la même si la pièce change ensuite.
+- La « Languette pour profilé aluminium » va aux Motedis 20 × 20 type B rainure 6 et 30 × 30 type B rainure 8, tête à la forme de la rainure. Les trois tailles précédentes restent comme anciennes cotes.
+- Dans le rapport, « Reconstruire le modèle » refait une pièce importée à partir de formes de base, perçages et congés, la compare à l'original dans la limite choisie et l'applique en une étape.
+- Le « Collier avec garnitures » démarre avec le matériau du projet dans les deux champs de matériau. Jusqu'ici, les deux étaient vides.
 
 ### Imprimer et transmettre au slicer
 
@@ -44,7 +49,7 @@ dans `website/version.json`.
 - Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.
 - Après le tranchage, Solidon compare aussi les supports et les couches du modèle par plateau. Le rapport présente l'estimation interne et les valeurs du fichier d'impression.
 - La comparaison de matière porte uniquement sur le modèle imprimé. La purge est affichée séparément, avec une indication si sa quantité ne peut pas être lue entièrement.
-- L'analyse de l'espace nécessaire aux supports est bien plus rapide sur les modèles creux et préserve les contours fins.
+- L'analyse des couches est plusieurs fois plus rapide sur les modèles creux ou à nombreux plafonds, et préserve les contours fins. La vue des couches reprend ce que le rapport a déjà calculé.
 - Pour les pièces qui se chevauchent, l'analyse d'impression ne compte plus l'air enfermé comme de la matière. La détection des surplombs et des supports nécessaires s'améliore aussi.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
 - Vous choisissez la buse dans les réglages d'impression parmi les tailles que connaît votre imprimante, et le slicer reçoit le profil correspondant.
@@ -54,12 +59,12 @@ dans `website/version.json`.
 - Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
 - Les imprimantes dont l'origine n'est pas dans le coin du plateau, comme delta, BIBO ou Dremel, reçoivent les pièces là où Solidon les pose. Avant, elles étaient au bord ou réorganisées.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
-- Si vous choisissez brim, skirt, raft ou *Automatique* dans les réglages d'impression, seules les cotes que reçoit votre slicer s'affichent, sans champs sans effet.
+- Si vous choisissez brim, skirt, raft ou « Automatique » dans les réglages d'impression, seules les cotes que reçoit votre slicer s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
 - Les pièces hautes et fines sur une petite base reçoivent des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
 - Avec Cura, le rapport de contrôle nomme les pièces qui reçoivent ces valeurs par ricochet, car Cura ne les prend que pour tout le plateau.
 - Solidon ne propose « Paroi extérieure d'abord » que pour la pièce qui en a besoin, et jamais pour une pièce avec supports.
-- Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
+- Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité. Si l'une ne tient nulle part, les autres sont quand même orientées et le rapport la cite.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
 - Quand un autre modèle arrive, depuis un fichier, un téléchargement ou généré, la vue montre le plateau où il se trouve.
@@ -75,7 +80,7 @@ dans `website/version.json`.
 - Après le découpage, Solidon signale les réglages rejetés par PrusaSlicer ou les slicers Orca, ainsi que les changements de bordure, d'ordre des parois et de support.
 - La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
-- Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent. Le corps reste exact.
+- Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, « Orienter pour l'impression », « Pivoter » et « Déplacer » fonctionnent. Le corps reste exact.
 - Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
 - PrusaSlicer et la famille Orca respectent la densité des supports choisie. Le champ commence à 1 %. Pour imprimer sans supports, choisissez « Aucun ».
 - Pour les impressions multicolores avec OrcaSlicer, ElegooSlicer, Bambu Studio et Creality Print, la tour de purge démarre à une position adaptée à la taille du plateau.
@@ -85,6 +90,9 @@ dans `website/version.json`.
 - Si PrusaSlicer ou SuperSlicer signale une première couche vide, Solidon nomme la pièce et propose de la poser sur le plateau ou d'ouvrir les réglages d'impression adaptés.
 - Les avertissements de PrusaSlicer et SuperSlicer figurent dans le rapport même si le slicer réussit, une couche vide comme erreur. La distance au radeau se règle à part.
 - Si le slicer répartit un plateau sur plusieurs fichiers d'impression, Solidon le signale et propose de disposer ou d'exporter. Avant, il n'en reprenait qu'un seul.
+- En haut du rapport, vous voyez si le transfert est prêt, demande une décision ou est déconseillé, et ce qui reste à vérifier. Sans constat, une pièce ne passe plus d'office pour prête à imprimer.
+- Après export ou « Ouvrir dans le slicer … », le rapport donne un compte rendu : fichiers, cible d'impression, matériau, réglages transmis ou non. Il précise que le fichier n'a été ni relu ni comparé.
+- Exporté en 3MF depuis la ligne de commande, un corps d'une seule couleur garde son filament à la réouverture.
 
 ### Perçages, trous oblongs et découpe
 
@@ -103,14 +111,22 @@ dans `website/version.json`.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 - Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.
-- Si vous avez choisi « Charger maintenant », les pièces de *Scinder le modèle* ne lancent plus non plus des minutes de reconnaissance ; « Reconnaître toutes les caractéristiques » la rattrape.
+- Si vous avez choisi « Charger maintenant », les pièces de « Scinder le modèle » ne lancent plus non plus des minutes de reconnaissance ; « Reconnaître toutes les caractéristiques » la rattrape.
 - Choisir « Scinder le modèle » sur une ligne récapitulative du rapport pour plusieurs corps les scinde l'un après l'autre. Avant, seul le premier l'était.
+- Si, lors de « Réunir », un corps recouvre un perçage en tout ou en partie, le rapport le signale avec l'endroit et le vide qui reste.
+- Les répétitions en cercle et « Mettre en miroir » prennent leur « Centre de rotation » sur un corps, une caractéristique, un point ou l'origine. Le centre reste fixe même si le corps bouge ensuite.
+- Un glissement dans l'ouverture d'un perçage fraisé sélectionné laisse le corps en place, et la ligne d'état indique le chemin vers le trou oblong. Jusqu'ici, il déplaçait tout le corps.
+- Quand la carte des cotes d'un perçage devient haute, les autres cotes restent à côté du corps, et la poignée de déplacement se place à l'entrée au lieu du milieu de la pièce.
+- Si vous sélectionnez un perçage fait dans Solidon, son diamètre n'apparaît plus que dans la carte des cotes de la vue. Jusqu'ici, il apparaissait une deuxième fois à droite.
+- Une direction saisie à droite pour un trou oblong passe aussi dans la carte des cotes de la vue, et « Appliquer » reste disponible. Jusqu'ici, elle y revenait à 0°.
+- Solidon reconnaît cônes, congés et faces étroites de la même façon sur davantage de modèles, que le modèle soit déplacé, pivoté ou mis à l'échelle.
+- Solidon reconnaît chaque champ de nervures, de nid d'abeille ou de picots d'un fichier importé comme un seul motif, et « Détecter les éléments ici » regroupe les cellules d'un champ.
 
 ### Congés et chanfreins
 
-- Arrondir un groupe d'arêtes d'un corps STEP arrondit désormais les arêtes possibles au lieu de tout refuser. *Montrer l'endroit* retrouve chaque arête omise.
+- Arrondir un groupe d'arêtes d'un corps STEP arrondit désormais les arêtes possibles au lieu de tout refuser. « Montrer l'endroit » retrouve chaque arête omise.
 - Les arêtes contre une paroi pas plus épaisse que le rayon restent vives, et le rapport indique le rayon qui y tient. Jusqu'ici, tout l'arrondi était refusé.
-- Si un corps STEP n'a pas d'arête propre à un endroit choisi, le rapport propose *Terminer la modification des faces et réessayer*. Sur le modèle en triangles, il est aussi arrondi.
+- Si un corps STEP n'a pas d'arête propre à un endroit choisi, le rapport propose « Terminer la modification des faces et réessayer ». Sur le modèle en triangles, il est aussi arrondi.
 - S'il ne reste plus de place pour l'échange avec le processus de calcul, Solidon calcule quand même l'étape et le signale dans le rapport. Avant, il s'arrêtait en conseillant un calcul plus grossier.
 
 ### Sculpter, texte et esquisse
@@ -124,14 +140,18 @@ dans `website/version.json`.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport et l'export le signalent, avec « Montrer l'endroit » et « Retirer le trait ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
-- Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
+- Si un bloc comme un trou de serrure déborde de sa face, ne serait-ce que par sa fraisure ou son chanfrein, ou entre dans une paroi derrière, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
 - Les dessins SVG arrivent correctement : rotations, cisaillements, coins arrondis, ellipses et arcs elliptiques sont justes, et les calques masqués restent dehors.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide, et le premier clic dans la vue la remplit. « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
-- Dans « Sculpter », la fenêtre affiche chaque trait aussi vite après de nombreux traits qu'au premier. Jusqu'ici, elle ralentissait à chaque trait.
+- Dans « Sculpter », la fenêtre affiche chaque trait aussi vite après de nombreux traits qu'au premier, et les grandes sessions calculent l'aperçu en arrière-plan. Avant, elle ralentissait.
 - Avec « Figer l'état », Solidon enregistre une session de sculpture aussi finement que l'export et l'impression la calculent, et la fenêtre reste utilisable. Avant, il figeait la vue plus grossière.
+- Un double-clic sur « Sculpter » dans l'historique rouvre la session avec ses traits. Ctrl+Z retire un trait entier, et « Terminé » modifie la même étape.
+- L'entrée « Créer à partir d'une esquisse … » commence tout de suite à dessiner, le plan de dessin montre son origine, et un double-clic dans l'historique rouvre un dessin en mode dessin.
+- Dans « Sculpter » et l'éditeur de squelette, la barre affiche épaisseur de paroi ou surplomb en carte légendée et signale un trait hors du volume d'impression. Après pliage, elle évalue l'impression.
+- Une texture appliquée se sélectionne en entier. Le panneau de sélection propose alors « Modifier la texture » et « Retirer la texture ».
 
 ### Générer avec l'IA
 
@@ -168,7 +188,7 @@ dans `website/version.json`.
 - Certains constats qui visent une étape l'ouvrent pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
-- Quand d'autres programmes occupent l'ordinateur, *Annuler* arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
+- Quand d'autres programmes occupent l'ordinateur, « Annuler » arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
 - Un modèle de langage local peut faire douze étapes au lieu de huit par demande dans le chat et résout ainsi plus de demandes en plusieurs parties.
 - Le panneau de sélection tient de nouveau dans sa colonne, et la colonne des cotes de l'arbre montre la cote entière, par exemple « Ø5,19 mm » au lieu de « … ».
 - Sur un perçage, « Modifier l'élément » ouvre directement « Modifier le trou » avec aperçu, au lieu d'y renvoyer seulement.
@@ -176,6 +196,14 @@ dans `website/version.json`.
 - La vue des différences hachure l'ajouté et le retiré dans deux directions, de sorte qu'on les distingue aussi sans couleur.
 - Quand Solidon demande l'unité d'un fichier à l'ouverture, les cotes s'affichent dans votre unité d'affichage et avec le séparateur décimal de votre langue.
 - Si vous déposez un fichier que Solidon n'ouvre pas, par exemple de Blender, il indique comment l'amener en 3MF, STEP ou STL. Le G-Code va à « Contrôler le G-Code ».
+- Vous ouvrez plusieurs fichiers en une étape. Ils gardent leur position les uns par rapport aux autres, un Ctrl+Z les annule tous, et les remarques d'import identiques sont regroupées dans le rapport.
+- Au-dessus de l'historique, « Avant/après » montre chaque état antérieur avec un curseur. « Continuer ici » insère de nouvelles étapes à cet endroit, et vos noms d'étapes restent.
+- Avec « à », « Déplacer » place le centre, le centre du dessous, un coin ou une caractéristique à une position fixe, et « Pivoter » tourne le corps selon des angles fixes, aussi pour plusieurs corps.
+- Si vous copiez le lien d'une page de modèle, il figure déjà dans le champ de « Modèle depuis le Web », et Solidon montre le chemin par le navigateur.
+- Quand une boîte de dialogue ne peut pas appliquer, la raison s'affiche aussi sous ses champs, pas seulement dans le bandeau au-dessus de la vue.
+- Après Ctrl+Y, la ligne d'état nomme l'étape rétablie, comme après Ctrl+Z.
+- Les vignettes des exemples et des blocs montrent la hauteur vers le haut. Jusqu'ici, les pièces hautes y pointaient vers le bas.
+- Si Solidon ne peut pas enregistrer le choix « Inclure les valeurs », la remarque s'affiche directement à côté de l'interrupteur.
 
 ## 0.5.1
 
@@ -437,7 +465,7 @@ dans `website/version.json`.
 - Appliquer attend que l'aperçu montre le résultat actuel. Un clic sur une image périmée n'écrit rien de faux.
 - Les couleurs de filament restent sur les corps exacts et suivent chaque nouveau maillage.
 - Le volume et l'aire d'un corps exact arrivent en millisecondes au lieu de secondes.
-- Insérer un filetage prend moins d'une demi-seconde au lieu de treize au plus ; une tige filetée se construit en un tiers de seconde au lieu d'une minute.
+- Insérer un filetage a pris de 0,38 à 0,41 seconde pendant la mesure, contre 8 à 13 secondes. L'opération complète a créé une tige filetée M6 × 1 de 12 mm de long en 0,55 seconde.
 - Unir, Soustraire et Poser sur le plateau ne demandent plus s'il faut convertir les corps exacts. Ils restent exacts.
 - Quand un perçage est déplacé, aucun triangle superflu ne reste à l'ancien endroit, et une fraisure cachée ne perd rien de son volume.
 - Réparer laisse un modèle propre inchangé, aussi sur le corps exact.
@@ -506,8 +534,8 @@ dans `website/version.json`.
 - Si une étape de l'assistant arrête l'évaluation, la proposition la retire entièrement et montre l'état précédent.
 - Déplacer ou faire pivoter un modèle de 200 000 triangles répond en une demi-seconde au lieu de huit.
 - Annuler répond immédiatement au lieu de deux secondes et demie.
-- Pendant que vous tapez un nombre, l'aperçu apparaît en une demi-seconde, chaque suivant en un huitième de ce temps.
-- L'évidement calcule un cinquième plus vite.
+- Lors du changement du diamètre du perçage sur la plaque perforée, le premier aperçu est apparu en 0,57 seconde pendant la mesure, puis chaque suivant en 0,13 seconde.
+- L'évidement a été de 7 à 25 pour cent plus rapide sur les trois modèles mesurés.
 - Une entrée de menu et une note discrète dans la vue mènent à un soutien volontaire de Solidon via PayPal ou GoFundMe.
 - La carte du questionnaire affiche désormais les bonnes couleurs dans le thème clair aussi.
 

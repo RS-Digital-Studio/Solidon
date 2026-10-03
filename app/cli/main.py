@@ -989,7 +989,7 @@ def _demo_is_over() -> bool:
             tr("Diese Demo war bis einschließlich {date} nutzbar.").format(date=last_day),
             tr(
                 "{app} 1.0 ist für den {start} um 10:00 Uhr deutscher Zeit geplant; "
-                "den Tag davor bereiten wir die Verkaufsversion vor."
+                "am Tag davor bereite ich die Verkaufsversion vor."
             ).format(app=APP_NAME, start=PLANNED_SALE_START.strftime("%d.%m.%Y")),
             tr(
                 "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den "

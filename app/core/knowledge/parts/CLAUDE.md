@@ -53,7 +53,19 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 
 ## Stolperfallen
 
+- `shapes.cylinder`, `box` und `moved` verschieben über `transform.moved`;
+  `rounded_box` und `thread_body` verwenden die exakten Winkelfunktionen.
+  Auch reine Verschiebungen über `trimesh` können BLAS aufrufen. Die
+  Sehnenzahl der Ecke wird am tatsächlichen Pfeilmaß geprüft.
+
 ### Merkmale und Maße
+
+- **Nutfedern** unterscheiden benannte Herstellerquerschnitte von älteren
+  unbestätigten Größen. `ProfileSlot.taper_to_slot` verjüngt den Kopf über die
+  volle Kammertiefe auf Halsbreite; eine kleinere Kopfhöhe schneidet dieselbe
+  Form kürzer. Alte Größen bleiben maßgleich, die Projektmigration ergänzt
+  ihre frühere Vorgabe bei fehlendem `size`. Passungsprüfungen verwenden
+  unabhängige Herstellermaße und zusätzlich den Montageweg am STEP-Modell.
 
 - **Vorgegebene Zahlen** tragen `build` ungerundet als `parameter`; gemessene
   Flächen und Mitten übergeben ihre Quelle (`face`), gemischt je Parameter;
@@ -165,7 +177,12 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   des Ziels.
 - **Randprüfung**: `ops._over_the_rim` nimmt in beiden Kernen
   `ctx.cancelled`; `ray_hits_batch` kann einen Teilstand liefern. Direkt
-  danach folgt `raise_if_cancelled`, bevor daraus ein Befund wird.
+  danach folgt `raise_if_cancelled`, bevor daraus ein Befund wird. Der
+  Werkzeugumriss enthält die Mündung samt Senkung und Fase, auch wenn nur
+  Werkzeugkanten die Mündungsebene schneiden. Bei einem gewählten ebenen
+  Träger zählt seine eigene Fläche; eine Wand hinter dem Rand deckt ihn nicht.
+  Ein Lagevorschlag kommt nur nach Prüfung des vollständigen Werkzeugumrisses
+  gegen das Flächenpolygon samt Aussparungen (`_rim_placement_suggestion`).
 - **Namensräume**: Trägt ein eigener Baustein `nx`, `ny` oder `nz` als Maß,
   verschiebt `build_params` alle drei nach `surface_` (`normal_fields`);
   Ortsfelder kollidierender Rezeptmaße bekommen `placement_`

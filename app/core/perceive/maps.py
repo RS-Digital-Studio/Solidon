@@ -767,11 +767,11 @@ def wall_thickness_map(
         highlighted=highlighted,
         threshold=minimum,
         note=_(
-            "Untergrenze sind zwei Extrusionsbreiten. Die Skala endet weit darüber; "
+            "Untergrenze sind zwei Bahnbreiten. Die Skala endet weit darüber; "
             "alles Dickere trägt dieselbe Farbe."
         )
         if minimum is not None and capped < top
-        else _("Untergrenze sind zwei Extrusionsbreiten.")
+        else _("Untergrenze sind zwei Bahnbreiten.")
         if minimum is not None
         else _("Auf einem Raster abgetastet."),
         resolution=field.pitch,

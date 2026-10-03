@@ -1,0 +1,22 @@
+{
+  "description": "Eigenständig gemessene lichte Breiten aus Hersteller-STEP, Querschnitt bei halber Länge. Tiefe ab äußerer Profilfläche; Zahlen in mm. Keine physische Passungsprobe.",
+  "drawing": "https://www.motedis.com/daten/PDF/Nuten.pdf",
+  "profiles": [
+    {
+      "size": "motedis-2020-b6",
+      "manufacturer": "Motedis, 20x20 B-Type slot 6",
+      "source": "https://www.motedis.com/shop/products_files/motedis-profile-20x20-b-type-slot-6.zip",
+      "lip": 1.5,
+      "depth": 4.0,
+      "sections": [[1.65, 11.710611027098647], [1.8, 11.91538262631491], [2.3, 12.00000137199936], [4.5, 8.87868140614987], [5.2, 7.478681269716714], [5.35, 7.178681240481039]]
+    },
+    {
+      "size": "motedis-3030-b8",
+      "manufacturer": "Motedis, 30x30 B-Type slot 8",
+      "source": "https://www.motedis.com/shop/products_files/30x30%20B-Type%20Slot%208.zip",
+      "lip": 2.2,
+      "depth": 6.8,
+      "sections": [[2.35, 16.21060943649777], [2.5, 16.415381582976266], [3.0, 16.500000654198743], [8.0, 10.406727396948609], [8.7, 9.008270889704023], [8.85, 8.70860163815161]]
+    }
+  ]
+}

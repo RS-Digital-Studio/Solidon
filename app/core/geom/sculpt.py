@@ -745,6 +745,21 @@ class SculptPreview:
 # der Unterschied zwischen ``p`` und ``point`` dort das Doppelte an Bytes ist.
 
 
+def stroke_count(strokes: Sequence[Stroke]) -> int:
+    """Zusammenhängende Mauszüge zählen; alte Einzelproben bleiben Einzelzüge."""
+    return sum(
+        index == 0 or not stroke.gesture or stroke.gesture != strokes[index - 1].gesture
+        for index, stroke in enumerate(strokes)
+    )
+
+
+def _gesture(value: object) -> int:
+    """Eine optionale Gestenkennung ist eine nichtnegative ganze Zahl."""
+    if type(value) is not int or value < 0:
+        raise ValueError(f"not a gesture: {value!r}")
+    return value
+
+
 def strokes_to_text(strokes: Sequence[Stroke]) -> str:
     """Die Strichliste als kompakter JSON-Text."""
     return json.dumps(
@@ -757,6 +772,7 @@ def strokes_to_text(strokes: Sequence[Stroke]) -> str:
                 "t": stroke.tool,
                 "y": stroke.symmetry,
                 "c": stroke.cut,
+                **({"g": stroke.gesture} if stroke.gesture else {}),
             }
             for stroke in strokes
         ],
@@ -785,6 +801,7 @@ def strokes_from_text(text: str) -> list[Stroke]:
                 tool=_tool(entry.get("t", "draw")),
                 symmetry=int(entry.get("y", 0)),
                 cut=bool(entry.get("c", False)),
+                gesture=_gesture(entry.get("g", 0)),
             )
             for entry in entries
         ]

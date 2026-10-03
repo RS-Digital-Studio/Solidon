@@ -539,3 +539,60 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
     finally:
         window.close()
         window.deleteLater()
+
+
+@pytest.mark.parametrize("away", [False, True])
+def test_step_number_never_covers_text_even_in_a_full_dialog(away):
+    """Ein völlig belegter Dialog zwingt die Nummer in den freien Bildrand."""
+    from PySide6.QtCore import QRectF
+
+    from tools.make_guides import BADGE, BORDER, _badge_centre
+
+    text = QRectF(BORDER, BORDER, 500, 320)
+    bounds = QRectF(0, 0, 500 + 2 * BORDER, 320 + 2 * BORDER)
+    frame = QRectF(220, 160, 80, 28)
+    taken = []
+    for _ in range(8):
+        point = _badge_centre(frame, [], bounds, taken, away=away, protected=[text])
+        disc = QRectF(
+            point.x() - BADGE - 3, point.y() - BADGE - 3, 2 * (BADGE + 3), 2 * (BADGE + 3)
+        )
+        assert bounds.contains(disc)
+        assert not text.intersects(disc)
+        assert all(
+            abs(point.x() - old.x()) > 2 * BADGE + 4 or abs(point.y() - old.y()) > 2 * BADGE + 4
+            for old in taken
+        )
+        taken.append(point)
+
+
+def test_capture_protects_visible_dialog_text_and_item_views(qt_app):
+    """Die Aufnahme übernimmt auch Text aus einem offenen Auswahldialog."""
+    from PySide6.QtWidgets import QDialog, QLabel, QListWidget, QVBoxLayout, QWidget
+
+    from tools.make_guides import _text_areas
+
+    window = QWidget()
+    window.resize(600, 400)
+    dialog = QDialog(window)
+    layout = QVBoxLayout(dialog)
+    label = QLabel("Text vor der Auswahl", dialog)
+    listing = QListWidget(dialog)
+    listing.addItem("Baustein mit einer langen Beschreibung")
+    layout.addWidget(label)
+    layout.addWidget(listing)
+    window.show()
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        from PySide6.QtCore import QPoint, QRect
+
+        areas = _text_areas(window)
+        origin = window.mapToGlobal(QPoint())
+        assert QRect(label.mapToGlobal(QPoint()) - origin, label.size()) in areas
+        assert QRect(listing.mapToGlobal(QPoint()) - origin, listing.size()) in areas
+        dialog.hide()
+        assert not _text_areas(window)
+    finally:
+        dialog.close()
+        window.close()

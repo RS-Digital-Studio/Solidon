@@ -496,6 +496,38 @@ def test_a_layer_that_looks_like_the_one_below_is_measured_once(
     assert quick.support_volume == pytest.approx(plain.support_volume, rel=1e-6)
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_same_layer_survives_a_rounding_change_at_the_simplification_limit(reverse) -> None:
+    """Rundung unter der Geometrietoleranz verschiebt keine Verjüngungsstichprobe."""
+    import shapely
+
+    shapes = [
+        shapely.from_wkt(line)
+        for line in (MESHES / "same_layer_rounding.wkt").read_text().splitlines()
+    ]
+    if reverse:
+        shapes.reverse()
+    assert len(shapes[0].simplify(analysis.SAME_LAYER_TOLERANCE).exterior.coords) != len(
+        shapes[1].simplify(analysis.SAME_LAYER_TOLERANCE).exterior.coords
+    )
+    assert analysis._same_layer(*shapes)
+
+
+def test_same_layer_rejects_a_moved_hole_despite_equal_area_perimeter_and_bounds() -> None:
+    """Gleiche Summen belegen keine gleiche Materialfläche innerhalb der Außenkante."""
+    from shapely.affinity import translate
+    from shapely.geometry import box
+
+    shell = box(0, 0, 10, 10)
+    hole = box(3, 3, 7, 7)
+    first = shell.difference(hole)
+    second = shell.difference(translate(hole, xoff=2 * analysis.SAME_LAYER_TOLERANCE))
+    assert first.area == pytest.approx(second.area)
+    assert first.length == pytest.approx(second.length)
+    assert first.bounds == second.bounds
+    assert not analysis._same_layer(first, second)
+
+
 def test_a_drafted_wall_is_not_the_same_layer_twice() -> None:
     """Eine Formschräge verschiebt die Wand je Schicht — das ist keine
     Wiederholung, auch wenn Fläche und Umfang sich kaum ändern."""
@@ -2300,3 +2332,94 @@ def test_clipper_columns_match_analytic_volume(
         [None, below, None, roof], measured, 1.0, first_layer_height=first_height
     )
     assert actual == pytest.approx(expected, abs=1e-9)
+
+
+@pytest.mark.parametrize("count", [24, 60])
+def test_separate_columns_equal_the_union_across_curved_hollow_layers(count: int) -> None:
+    """Mehrere gekrümmte Überhänge bleiben disjunkt, auch beim Auftreffen auf die Innenwand."""
+    import manifold3d
+    from shapely.geometry import Point
+
+    sections = [
+        Point(0.0, 0.0)
+        .buffer(20.0 + index / 2.0, quad_segs=32)
+        .difference(Point(0.0, 0.0).buffer(10.0 + abs(index - 12) / 3.0, quad_segs=32))
+        for index in range(count)
+    ]
+    measured = analysis._measure_all(sections, 0.2, "support")
+    # Unabhängiger Mengenweg: alle bis zur nächsten Schicht reichenden Säulen
+    # vereinigen. Der Produktionsweg muss ohne diese wachsende Vereinigung
+    # denselben Raum messen; eine doppelt gezählte Säule würde hier auffallen.
+    together = manifold3d.CrossSection()
+    expected = 0.0
+    for index in reversed(range(len(sections))):
+        metrics = measured[index]
+        assert metrics is not None
+        if metrics.overhang is not None:
+            together += analysis._material_cross(metrics.overhang)
+        if index:
+            together -= analysis._material_cross(sections[index - 1])
+        expected += together.area() * (0.1 if index == 0 else 0.2)
+    assert expected > 0.0
+    assert analysis._support_volume(sections, measured, 0.2) == pytest.approx(expected, abs=1e-9)
+
+
+def test_directed_disjoint_material_is_not_united_again(monkeypatch) -> None:
+    """Clipper hat Hüllen und Lochinsel schon vereinigt; GEOS liest nur die Konturen."""
+    import manifold3d
+
+    section = manifold3d.CrossSection(
+        [
+            [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0)],
+            [(5.0, 5.0), (5.0, 15.0), (15.0, 15.0), (15.0, 5.0)],
+            [(8.0, 8.0), (12.0, 8.0), (12.0, 12.0), (8.0, 12.0)],
+            [(30.0, 0.0), (34.0, 0.0), (34.0, 4.0), (30.0, 4.0)],
+        ],
+        manifold3d.FillRule.Positive,
+    )
+
+    def unwanted(*args):
+        raise AssertionError("Bereits vereinigte Konturen brauchen keine zweite Vereinigung")
+
+    monkeypatch.setattr(analysis, "unary_union", unwanted)
+    shape = analysis._cross_shape(section)
+    assert shape is not None and shape.is_valid
+    assert shape.area == pytest.approx(400.0 - 100.0 + 16.0 + 16.0)
+    assert len(shape.geoms) == 3
+
+
+def test_rejected_solid_sections_are_remembered_until_the_mesh_changes(monkeypatch) -> None:
+    """Die Hohlraumentscheidung gilt für das Netz, nicht nur die erste Höhenliste."""
+    from app.core.geom.mesh import MeshData
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    calls = []
+
+    def rejected(name, arrays, values, **kwargs):
+        calls.append(name)
+        return {}, {"usable": False}
+
+    monkeypatch.setattr(analysis.kernel_process, "run", rejected)
+    heights = np.linspace(-4.9, 4.9, analysis.DIRECT_SECTIONS_ABOVE + 1)
+    assert analysis._solid_sections(mesh, heights) is None
+    assert analysis._solid_sections(mesh, heights + 0.01) is None
+    assert calls == ["slice_sections"]
+    mesh.raw.apply_translation((0.0, 0.0, 1.0))
+    assert analysis._solid_sections(mesh, heights) is None
+    assert calls == ["slice_sections", "slice_sections"]
+
+
+def test_oriented_nested_rings_do_not_need_a_boolean_union(monkeypatch) -> None:
+    """Eine einfache Hülle mit Loch trägt ihren Materialbeweis schon in den Ringen."""
+    from app.core.geom.mesh import MeshData
+
+    mesh = MeshData.of(trimesh.creation.annulus(r_min=3.0, r_max=5.0, height=10.0, sections=48))
+
+    def unwanted(*args):
+        raise AssertionError("Eindeutige gerichtete Ringe brauchen keine Boolesche Vereinigung")
+
+    monkeypatch.setattr(analysis, "_positive_rings", unwanted)
+    section = analysis.cross_section(mesh, 0.0)
+    assert section is not None and section.is_valid
+    assert len(section.interiors) == 1
+    assert section.area == pytest.approx(mesh.volume / 10.0, abs=1e-5)

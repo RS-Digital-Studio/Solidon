@@ -1053,3 +1053,133 @@ def test_one_press_of_return_applies_once(qt_app: QApplication) -> None:
     QApplication.processEvents()
     QTest.keyClick(bar.dz.lineEdit(), Qt.Key.Key_Return)
     assert len(gerufen) == 2, "der nächste Tastendruck muss wieder anwenden"
+
+
+def test_absolute_position_bar_prefills_and_positions_the_selected_group(window):
+    """Nach zeigt die heutige Bodenmitte; Enter setzt beide Körper in einem Schritt."""
+    from app.core.geom.transform import reference_point
+    from app.core.scene import OperationDraft
+
+    window.session.history.apply(
+        "Zwei Körper", [OperationDraft(op="create_box"), OperationDraft(op="create_box")]
+    )
+    window.session.history.apply(
+        "Versetzt", [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50})]
+    )
+    window.session.evaluate_async()
+    window.session.wait_for_idle()
+    window.object_tree.select_objects(("obj_1", "obj_2"))
+    bar = window.transform_bar
+    bar.move_mode.setCurrentIndex(1)
+    window._update_transform_position()
+    assert bar.dx.value_mm() == pytest.approx(25)
+    bar.dx.set_value_mm(0)
+    bar.dy.set_value_mm(0)
+    bar.dz.set_value_mm(0)
+    before = len(window.session.history.transactions)
+    QTest.keyClick(bar.dx.lineEdit(), Qt.Key.Key_Return)
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert reference_point(list(result.scene.objects.values())) == pytest.approx((0, 0, 0))
+    assert len(window.session.history.transactions) == before + 1
+    assert window.session.history.operations[-1].params["mode"] == "absolute"
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert reference_point(list(window.session.last_result.scene.objects.values()))[
+        0
+    ] == pytest.approx(25)
+
+
+@pytest.mark.parametrize("role", ["move", "rotate", "scale"])
+def test_absolute_grip_keeps_its_reference_after_switching_tool_role(window, role, monkeypatch):
+    """Die gespeicherte Lageart gilt für den Griff, unabhängig von der Feldrolle."""
+    from types import SimpleNamespace
+
+    from app.core.geom.transform import reference_point
+    from app.core.scene import OperationDraft
+
+    window.session.history.apply("Körper", [OperationDraft(op="create_box")])
+    window.session.evaluate_async()
+    window.session.wait_for_idle()
+    window.object_tree.select_objects(("obj_1",))
+    window.transform_bar.move_mode.setCurrentIndex(1)
+    window.transform_bar.role_buttons[role].click()
+    monkeypatch.setattr(window.viewport, "dropped_on_plate", lambda *_: (12.0, 1))
+    window._on_transform_dragged(SimpleNamespace(moves=True, turns=False, offset=(300, 2, 3)))
+    window.session.wait_for_idle()
+    step = window.session.history.operations[-1]
+    assert step.op == "translate_object"
+    assert step.params["mode"] == "absolute"
+    assert step.params["plate"] == 2
+    assert reference_point(
+        list(window.session.last_result.scene.objects.values())
+    ) == pytest.approx((12, 2, 3))
+
+
+def test_absolute_rotation_bar_prefills_then_records_target_angles(window):
+    """Nach liest die gespeicherten Körperachsen und Enter speichert die Zielwinkel."""
+    from app.core.geom.transform import orientation_angles
+    from app.core.scene import OperationDraft
+
+    window.session.history.apply("Körper", [OperationDraft(op="create_box")])
+    window.session.history.apply(
+        "Drehen",
+        [OperationDraft(op="rotate_object", inputs=("obj_1",), params={"axis": "z", "angle": 35})],
+    )
+    window.session.evaluate_async()
+    window.session.wait_for_idle()
+    window.object_tree.select_objects(("obj_1",))
+    bar = window.transform_bar
+    bar.role_buttons["rotate"].click()
+    bar.rotate_mode.setCurrentIndex(1)
+    assert [spin.value() for spin in bar.target_angles] == pytest.approx((0, 0, 35))
+    for spin in bar.target_angles:
+        spin.setValue(0)
+    before = len(window.session.history.transactions)
+    QTest.keyClick(bar.target_angles[2].lineEdit(), Qt.Key.Key_Return)
+    window.session.wait_for_idle()
+    assert len(window.session.history.transactions) == before + 1
+    assert orientation_angles(window.session.last_result.scene.objects["obj_1"]) == pytest.approx(
+        (0, 0, 0)
+    )
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert orientation_angles(window.session.last_result.scene.objects["obj_1"]) == pytest.approx(
+        (0, 0, 35)
+    )
+
+
+def test_absolute_rotation_grip_and_commit_share_the_selected_corner(window):
+    """Die Drehmatrix trägt einen Versatz; dennoch bleibt der Ringzug eine Drehung."""
+    from app.core.geom.transform import (
+        decompose_transform,
+        orientation_angles,
+        reference_point,
+        rotation,
+    )
+    from app.core.scene import OperationDraft
+
+    window.session.history.apply(
+        "Körper", [OperationDraft(op="create_box", params={"width": 20, "depth": 30, "height": 10})]
+    )
+    window.session.evaluate_async()
+    assert window.session.wait_for_idle()
+    window.object_tree.select_objects(("obj_1",))
+    bar = window.transform_bar
+    bar.move_mode.setCurrentIndex(1)
+    bar.rotate_mode.setCurrentIndex(1)
+    bar.rotate_reference.setCurrentIndex(bar.rotate_reference.findData("corner_000"))
+    source = window.session.last_result.scene.objects["obj_1"]
+    pivot = reference_point([source], "corner_000")
+    assert window.viewport._transform_reference == pytest.approx(pivot)
+    before = len(window.session.history.operations)
+    steps = decompose_transform(rotation("z", 90, pivot))
+    assert steps.moves and steps.turns
+    window._on_transform_dragged(steps)
+    assert window.session.wait_for_idle()
+    assert len(window.session.history.operations) == before + 1
+    assert window.session.history.operations[-1].op == "rotate_object"
+    assert window.session.history.operations[-1].params["about"] == "corner_000"
+    assert orientation_angles(window.session.last_result.scene.objects["obj_1"]) == pytest.approx(
+        (0, 0, 90)
+    )

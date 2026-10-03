@@ -1263,6 +1263,72 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
 
 ## Viele gleiche Zellen sind ein Muster, und die Grenze zur Bohrung ist eine Entscheidung
 
+### Eigene Texturen und ihre Folgeschritte
+
+Eine selbst aufgebrachte Textur kennt ihren Erzeuger. `texture_ops._texture_feature`
+benennt ausschließlich am Ergebnis belegte Werkzeugflächen;
+`patterns.surface_triangles` prüft deren vollständige Flächenüberdeckung.
+Auch unterhalb der heuristischen Zellgrenze bleibt sie deshalb ein `pattern`.
+Die Auswertung bindet diese Textur nach Folgeschritten erneut, auch an beiden
+Schnitthälften, beim Zerlegen loser Teile und beim Wechsel der Körperart.
+Fehlende Oberfläche bekommt keine alte Dreiecksbelegung. Einzelne Zellmerkmale
+gehen darin auf; freie Trägerflächen und fremde Bohrungen bleiben erreichbar.
+
+Neue Texturkennungen tragen die erzeugende Schrittkennung. Nachzählen wäre
+falsch: Entfällt die erste von drei Texturen, dürfte ein Farbauftrag für die
+zweite nicht auf die dritte springen. Bei mehreren Eingängen bleibt zusätzlich
+die Körperherkunft in der Kennung; die Oberfläche zeigt eindeutige Nummern.
+
+Die ausgewählte Textur bietet ihre ursprünglichen Schrittwerte an, solange
+keine spätere Merkmalsänderung sie übersteuert. Danach zeigt das Merkmalpanel
+die aktuellen Maße und bietet den Erzeugerschritt separat an. Die Prüfung
+folgt der Körperabstammung einschließlich der Namensräume nach Vereinigung
+und Schnitt; ein gleichnamiges Merkmal eines anderen Körpers zählt nicht.
+Ändern und Entfernen stehen direkt im Texturpanel; Entfernen nutzt die
+bestehende Verlaufsänderung mit Abhängigkeitsprüfung und Undo. Ein historischer
+Texturschritt allein belegt keine aktuell vorhandene Textur.
+
+Eine reine Tiefenänderung verwendet die tatsächlichen Zellumrisse. Sie
+zeichnet weder ein neues Gitter noch eine neue Zufallsstreuung. Nach einem
+Schnitt werden Zellzahl, Tiefe und Durchgang erneut an der Restgeometrie
+bestimmt; frühere Werte sind kein Messbeleg. Beim geometrischen Entfernen
+schließen die tatsächlichen Zellwände auch schräge Böden. Unabhängige
+Bohrungen und Langlöcher behalten ihren tatsächlichen Wandquerschnitt;
+verlängert wird nur die Mündung bis zur wiederhergestellten Oberfläche,
+der Blindboden bleibt bestehen. Dieser Schutz gilt auch beim erneuten
+Aufbringen nach einer Tiefenänderung. Eine ausdrücklich als entfernt
+gemeldete Textur wird aus numerischen Restflächen nicht erneut gebunden.
+Lässt sich ein offener Außenrand nicht eindeutig schließen, hält dieser Weg mit
+Handlungsvorschlag an. Das Texturpanel kann den ursprünglichen Texturschritt
+weiterhin über den Verlauf entfernen.
+
+Am Zylinder kann eine unabhängige Bohrung einen Zellrand so schneiden, dass
+derselbe Randring sowohl zur Bohrungswand als auch zum Träger gehört. Diese
+gemischte Kontur lässt sich nach dem Schließen nicht eindeutig neu biegen.
+Die generische Merkmalsänderung verweist dann auf den ursprünglichen
+Texturschritt; das Entfernen kann weiterhin den belegten Träger herstellen.
+Spätere Bohrungen behalten dabei ihre absoluten Koordinaten. Wächst eine
+erhabene Textur über eine Sackbohrungsmündung, werden im Verlauf auch
+Bohrungsstart und Tiefe um denselben Betrag angepasst: Die Mündung liegt
+wieder außen und der Blindboden bleibt an seiner Stelle. Eine durchgehende
+Bohrung mit Tiefe null folgt weiterhin dem gesamten Körper.
+
+Beim vollständigen Umlauf vereinigt `texture_ops.wrapped` überlappende
+Werkzeugteile vor dem Aufbringen direkt. Insbesondere das nicht periodische
+Voronoi-Feld kann an seiner Naht überlappen; ungeklärte Überlagerungen dürfen
+keine fremden Mantelflächen außerhalb des Texturbandes erzeugen. Das
+Abbruchsignal läuft durch Werkzeugbau und Vereinigung.
+
+Für eigene Zylindertexturen begrenzt `prepare_ops._pattern_cleared` den
+Stopfen über `patterns.cylinder_envelope` am tatsächlich belegten
+facettierten Träger. Das Aufweiten importierter gefräster Taschen passt
+nicht zu radial gewickelten Texturzellen. Ein nicht belegbarer Träger hält
+mit Rückweg zum ursprünglichen Schritt an, statt einen ähnlichen Zylinder
+zu behaupten.
+
+Für importierte Muster ohne Erzeugerwissen gelten die geometrischen
+Erkennungsschwellen. Ein reines STL enthält diese Erzeugerzuordnung nicht.
+
 * **Viele gleiche Zellen sind ein Muster, und die Grenze zur Bohrung ist
   eine Entscheidung** (`perceive/patterns.py`, RM-207): Ein Gitter ab neun
   deckungsgleichen Zellen (Streifen ab sechs), eine Streuung gleich tiefer
@@ -1318,6 +1384,68 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   Teilfeld behält seine eine große Lücke. Der Anker (nächste Zelle zur Mitte)
   hat bei gerader Zellenzahl zwei gleich nahe; auch dort entscheidet die
   Richtung.
+
+## Importierte Texturen als getrennte Felder (RM-504)
+
+Zwei Rippenfelder auf derselben Platte gingen bei gleicher Richtung in einem
+Muster samt Leerraum auf; bei verschiedenen Richtungen fand die Erkennung
+keines. Gleiche Zellmaße belegen noch kein gemeinsames Feld. Die Erkennung
+trennt Streifenrichtungen und geometrische Nachbarschaften vor der unveränderten
+Gitterprüfung. Eine ausgelassene Zelle darf den Zusammenhang erhalten; eine
+einzelne entfernte Zelle darf keine Lücke zwischen Feldern überbrücken.
+Ein anisotropes Taschenraster bleibt ein Raster.
+
+Die örtliche Suche kann Einzelzellen kennen, bevor ein größerer Suchradius
+ihr ganzes Muster belegt. `without_pattern_cells` entfernt nur Merkmale,
+deren nichtleere Dreiecksauswahl vollständig innerhalb eines erkannten Musters
+liegt. Eine Überlappung oder die gemeinsame Fläche zweier Muster reicht nicht.
+Der Evaluator wendet dieselbe Regel nach dem Zusammenführen an. Die alten
+Namen bleiben reserviert. Ein Folgeschritt auf eine verschwundene Zellfläche
+hält mit Rückweg an, statt das ganze Muster zu bemalen.
+
+**Reproduzierbare Gegenproben im Repository:**
+
+- `test_pattern_features.py`: zwei Felder auf einer 90 × 60 × 6-mm-Platte,
+  Mitten bei X = ±23 mm, Feldmaß 30 × 20 mm, Teilung 4 mm, Tiefe 0,6 mm;
+  Rippe/Wabe/Noppe, erhaben/vertieft, relative Richtungen 0/45/90 Grad,
+  gemeinsame Drehung um 17 Grad und binärer STL-Umlauf. Beide Felder bleiben
+  getrennt. Entfernen und Ändern eines Feldes erhalten die belegte Oberfläche
+  des anderen und den freien Zwischenraum.
+- `test_local_detection.py`: zwölf durchgehende Waben, erst eine örtlich
+  erkannte Zellwand, dann das ganze Feld. Ergebnis: sechs Außenflächen und
+  ein Muster. Projektdatei, leerer Cache, Plattencache, Undo/Redo und der alte
+  Färbebezug werden durch die tatsächliche Auswertung geprüft.
+- Längliche dreieckige Durchbrüche sind kein Rippen-/Wellenbeleg. Der Fall
+  kam an abgeschnittenen Spitzen eines Sternornaments ans Licht; sechs und
+  zwölf unabhängige Dreiecksöffnungen bilden ihn nach. Dreieckige Randstücke
+  dürfen weiterhin zu einem bereits belegten Feld gehören.
+
+**Feldnachweis an neun lokalen Originaldateien:** Gewürzdeckel
+`deckel_basis.stl` mit 24 Rillen, neun Streulöchern und Innengewinde;
+`large-screwdriver-holder-with-honeycomb-pattern.stl` mit 196 Waben und vier
+Bohrungen; Magnetschaber und Schriftdekor als 3MF; `plate_holes.stl`,
+M6-STEP, rotationsförmiger Mini-Topfdeckel, Carcassonne-Gitter und
+`kumiko_elongated-hexagon_shell_w150.stl`. Acht Dateien bleiben einschließlich
+aller Merkmalsparameter unverändert. Die Kumiko-Schale gewinnt zwei
+`other`-Felder mit 632 beziehungsweise 414 geschlossenen Mündungen. Falsche
+Wellen entfallen. Entfernen erhöht das Volumen entsprechend den Mündungsprismen
+um 5 158,409439 beziehungsweise 3 354,208758 mm³; das Ergebnis bleibt einteilig
+und dicht, sämtliche ursprünglichen Dreiecke außerhalb des gewählten Felds
+sind auf der Ergebnisoberfläche belegt. Eine reine Tiefenänderung des fremden
+Stils bleibt mit Stilauswahl bzw. Entfernung als Rückweg abgewiesen.
+
+Die Modellquellen bleiben außerhalb des Repositorys; die unabhängigen
+Konstruktionen oben bilden den wiederholbaren Regressionsnachweis. Vier
+gespeicherte Projekte (Deckel, Wabenhalter, Magnetschaber und lokale Waben)
+wurden zusätzlich in einem frischen Prozess mit leerem Cache verglichen:
+Merkmalskennungen, Maße, Herkunft, Dreiecksauswahl und Volumen bleiben gleich.
+
+**Grenzen:** Kleine Felder unter der Mindestzahl sind ohne Erzeugerwissen
+mehrdeutig. Der native STEP-Leser bildet noch keine Muster; der sichtbare Weg
+über *Flächenbearbeitung beenden* führt in die Netzerkennung. Eine ausdrückliche
+Nutzerzuordnung und direkte STEP-Mustererkennung stehen als Rest in RM-504.
+Der Oberflächenanschluss ist am Code geprüft; die native Fensterabnahme bleibt
+dem Release vorbehalten.
 
 ## Gerichtete Schnitte und Dokumentationsbudget (RM-485)
 

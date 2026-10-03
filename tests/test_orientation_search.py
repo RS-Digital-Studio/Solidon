@@ -854,6 +854,30 @@ def test_the_search_stands_a_sleeve_on_its_wide_rim_despite_the_proxy(
     assert found.best.support_volume < found.baseline.support_volume  # type: ignore[union-attr]
 
 
+def test_auto_split_measures_support_on_the_proxy_but_stands_on_the_original(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die kleine Suche trägt denselben Randvertrag wie die große Suche."""
+    from app.core.slice import orientation
+
+    sleeve = _flared_sleeve()
+    rough = _with_a_rough_wide_rim(sleeve)
+    seen = []
+    original = orientation.judge
+
+    def record(mesh, *args, **kwargs):
+        seen.append((mesh, kwargs.get("footing_mesh")))
+        return original(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(orientation, "search_proxy", lambda _mesh: rough)
+    monkeypatch.setattr(orientation, "judge", record)
+    found = best_face_candidate(sleeve, count=3, profile=profile)
+    assert len(seen) == 3
+    assert all(mesh is rough and footing is sleeve for mesh, footing in seen)
+    assert found.first_layer_area > 300.0
+    assert found.stable
+
+
 def _umbrella() -> MeshData:
     """Das Schirmdach des Getränkehalters (RM-190), aus den Maßen seines Skripts.
 

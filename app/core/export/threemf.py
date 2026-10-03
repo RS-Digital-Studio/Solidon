@@ -102,6 +102,19 @@ def write(mesh: MeshData, slots: list[MaterialSlot] | None = None, name: str = "
         container.writestr("[Content_Types].xml", _content_types())
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
+        if slots and len(entries) == 1:
+            # Dieselbe Extruderzuordnung wie :func:`write_assembly`: Erst sie
+            # macht eine einzige Farbe zur Wahl. Ohne sie las der Import den
+            # einfarbigen Einzelexport als Vorgabe und verlor das Filament,
+            # das die Baugruppe desselben Körpers behielt. Mehrere Materialien
+            # sind schon über die Dreiecke eine Wahl; eine Objektangabe
+            # überstimmte dort die Bemalung.
+            part = AssemblyPart(mesh=mesh, name=name, slots=tuple(slots or ()))
+            materials = merge_slots([part])
+            container.writestr(SETTINGS_PATH, _settings_xml([part], materials, False))
+            container.writestr(
+                PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml([part], materials, False)
+            )
     _log.info("wrote 3MF with %d material(s)", len(entries))
     return buffer.getvalue()
 

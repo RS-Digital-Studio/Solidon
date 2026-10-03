@@ -22,35 +22,29 @@ Kürzel. `ctx.quality`: Entwurf zum Iterieren, Fein für Export und Prüfbericht
 
 ## Was die Operation verlangt, steht im Register
 
-- **Bauart `requires_kind="brep"`** nur, wo ein Netz die Sache nicht hergibt
-  (Formschräge auf benannter Fläche, Schalenkörper, STEP): Das Menü graut die Op
-  am Netz aus und nennt den Grund (Regel 19); der Satz im Kern bleibt als zweite
-  Hürde. Keine Aufzählung in der Oberfläche.
-- **Zustand `requires_body`** (`"open"`, `"parts"`, `"cavity"` = `void` oder von
-  *Aushöhlen* eingetragen): `labels.body_requirement` sagt am Eintrag den Satz,
-  den die Op wirft — einmal als Konstante (`mesh_ops.ALREADY_CLOSED`,
-  `prepare_ops.ONE_PIECE`, `lattice.NO_CAVITY`). `labels.body_facts` misst je
-  Körper und Auswertung; über `BODY_FACTS_LIMIT` Dreiecken ist der Zustand
-  unbekannt, und unbekannt sperrt nie.
-- **Hängt der Zustand an der Fläche, fragt das Fenster die Op**
-  (`lid.reason_against`, `MainWindow._lid_reason` für `LID_OPS`).
-- **Und die zweite Hürde muss es wirklich geben:** Chat und Kommandozeile gehen
-  am Menü vorbei. Eine Op, die ein erkanntes Merkmal annimmt, prüft seine Art
-  gegen den eigenen Registereintrag (`applies_to`), nie gegen eine Liste im
-  Modul; den Satz gibt `perceive.actions.reason_against`.
-- **`curved_face` ist eine eigene Art:** Wer eine Ebene braucht, nennt nur
-  `face`; wer nur Dreiecke braucht (`paint_slot`, `clear_filament`), beide.
+- `requires_kind="brep"` nur bei fachlicher Notwendigkeit (Formschräge auf
+  Fläche, Schalenkörper, STEP). Menü nennt den Sperrgrund am Netz; der Kern
+  prüft ebenfalls. Keine UI-Zweitliste (Regel 19).
+- `requires_body`: `open`, `parts`, `cavity` (`void` oder durch Aushöhlen).
+  `labels.body_requirement` verwendet dieselbe Konstante wie die Op
+  (`mesh_ops.ALREADY_CLOSED`, `prepare_ops.ONE_PIECE`, `lattice.NO_CAVITY`).
+  `labels.body_facts` misst je Körper/Auswertung; über `BODY_FACTS_LIMIT`
+  bleibt der Zustand unbekannt und sperrt nicht.
+- Flächenabhängige Voraussetzungen fragt das Fenster an der Op:
+  `lid.reason_against`, `MainWindow._lid_reason`, `LID_OPS`.
+- Ops prüfen Merkmalsarten über ihren `applies_to`-Registereintrag und
+  `perceive.actions.reason_against`, auch für Chat/CLI; keine Modulliste.
+- Ebene verlangt `face`; reine Dreiecksarbeit (`paint_slot`, `clear_filament`)
+  nimmt zusätzlich die eigene Art `curved_face`.
 
 ## Den Kern wählt der Körper, nicht der Kunde
 
-Ist nur der Rechenweg verschieden, fragt die Op `SceneObject.kind` und wählt den
-Kern selbst, wie `geom/edge_ops.py` (Entscheidung Robert: alles bleibt
-bearbeitbar) — kein Zwillingspaar (`MENU_TWINS`), kein Haken. Ebenso wählen die
-Zwillinge (`drill_brep_hole`, `shell_exact`; Netz-Zwilling der Grundkörper nur
-in der Befehlspalette) und die Erzeuger an einem Träger, samt neuem Teil.
-
-**Den Unterschied nennt der `caveat`** (Sehnenzug bis `units.MAX_FACET_SAG`) und
-sagt, wann man den anderen Weg braucht.
+`SceneObject.kind` wählt den Rechenweg (`geom/edge_ops.py`), kein `MENU_TWINS`-
+Paar oder Haken. Das gilt auch für `drill_brep_hole`/`shell_exact`, Erzeuger am
+Träger samt neuem Teil; Netz-Zwillinge der Grundkörper sind über das
+Kontextmenü ihres Verlaufsschritts erreichbar.
+Alles bleibt bearbeitbar (Robert). `caveat` erklärt Sehnenzug bis
+`units.MAX_FACET_SAG` und wann der andere Kern nötig ist.
 
 ## Ein Parameter sagt, was er bewirkt
 
@@ -490,7 +484,10 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   `resolve_params`.
 - **Bewegte und fein geteilte Kopien werden nicht neu untersucht:** Wer nur
   bewegt, nimmt `apply` (Vermerk `note_movement`), wer nur teilt, meldet die
-  Herkunft (`note_refinement`); übertragen wird unter Beleg, nie auf Zusage.
+  Herkunft (`note_refinement`); übertragen wird unter Beleg, nie auf Zusage. Ein
+  einzeln bewegter Körper meldet seine Matrix in `OpResult.transform`; bei
+  mehreren Körpern reist sie je Netz über `note_movement`. Alle Verbraucher
+  teilen den einmal gemessenen `moved_twin`-Beleg für Netzpaar und Matrix.
 - **Die Live-Vorschau erkennt nur, was jemand braucht**
   (`detect_features=False`); ihre Szene ist nie Dokumentstand, Merkmale liest
   der Agent über den genauen Weg.

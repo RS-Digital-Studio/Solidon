@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Mapping
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -2208,3 +2209,221 @@ def test_a_foreign_pattern_around_a_grip_is_replaced_by_an_own_style(style: str)
         # Zeichnen; die Geometrie darüber ist geprüft.
         assert after and after[0].params["carrier"] == "cylinder"
         assert after[0].params["style"] == "hexagon"
+
+
+def _imported_texture_fields(style: str, angle: float, mode: str, path: Path) -> SceneObject:
+    """Zwei Felder über STL einlesen, ohne die Herkunft ihrer Erzeugung."""
+    entry = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box(extents=(90.0, 60.0, 6.0))),
+    )
+    for x, turn in ((-23.0, 0.0), (23.0, angle)):
+        entry, _ = run_op(
+            "apply_texture",
+            entry,
+            pattern=style,
+            mode=mode,
+            pitch=4.0,
+            depth=0.6,
+            width=30.0,
+            height=20.0,
+            x=x,
+            z=3.0,
+            nz=1.0,
+            angle=turn,
+        )
+    mesh = as_mesh_data(entry.mesh).raw.copy()
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(math.radians(17.0), (0, 0, 1)))
+    mesh.export(path)
+    imported = MeshData.of(trimesh.load_mesh(path, process=True))
+    return dataclasses.replace(entry, mesh=imported, features=detect(imported))
+
+
+@pytest.mark.parametrize("style", ["rib", "hexagon", "dimple"])
+@pytest.mark.parametrize("angle", [0.0, 45.0, 90.0])
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+def test_separate_imported_texture_fields_remain_separate(
+    style: str, angle: float, mode: str, tmp_path: Path
+) -> None:
+    """Zwei getrennte Felder überstehen STL-Rundung und gemeinsame Drehung."""
+    found = _imported_texture_fields(style, angle, mode, tmp_path / "two_fields.stl").features
+    fields = [feature for feature in found.values() if feature.kind == "pattern"]
+    assert len(fields) == 2, kinds(found)
+    assert {feature.params["style"] for feature in fields} == {style}
+    assert all(float(feature.params["width"]) < 35.0 for feature in fields)
+    assert not set(fields[0].face_indices).intersection(fields[1].face_indices)
+    assert kinds(found) == {"face": 6, "pattern": 2}, kinds(found)
+
+
+@pytest.mark.parametrize("style", ["rib", "hexagon"])
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+@pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])
+def test_editing_one_imported_field_preserves_the_other(
+    style: str, mode: str, operation: str, tmp_path: Path
+) -> None:
+    """Entfernen und Ändern treffen weder das zweite Feld noch den Zwischenraum."""
+    entry = _imported_texture_fields(style, 45.0, mode, tmp_path / "two_fields.stl")
+    fields = sorted(
+        (feature for feature in entry.features.values() if feature.kind == "pattern"),
+        key=lambda feature: float(feature.params["centre"][0]),
+    )
+    assert len(fields) == 2
+    params = {"cell_depth": 0.9} if operation == "resize_feature" else {}
+    changed, _ = run_op(operation, entry, at_feature=fields[0].id, **params)
+    original_mesh, changed_mesh = as_mesh_data(entry.mesh), as_mesh_data(changed.mesh)
+    preserved = patterns.surface_triangles(
+        original_mesh, changed_mesh, candidates=fields[1].face_indices
+    )
+    assert set(preserved) == set(fields[1].face_indices)
+    after = [feature for feature in changed.features.values() if feature.kind == "pattern"]
+    assert len(after) == (2 if operation == "resize_feature" else 1)
+    right = max(after, key=lambda feature: float(feature.params["centre"][0]))
+    assert right.params["style"] == fields[1].params["style"]
+    assert right.params["cell_depth"] == pytest.approx(fields[1].params["cell_depth"])
+    unturned = changed_mesh.raw.copy()
+    unturned.apply_transform(
+        trimesh.transformations.rotation_matrix(math.radians(-17.0), (0, 0, 1))
+    )
+    middle = trimesh.intersections.mesh_plane(unturned, (1, 0, 0), (0, 0, 0))
+    assert len(middle)
+    assert np.max(np.abs(middle[:, :, 2])) <= 3.0 + EPS_GEOM
+    assert np.linalg.norm(middle[:, 1] - middle[:, 0], axis=1).sum() == pytest.approx(132.0)
+
+
+def test_pattern_cell_folding_requires_full_containment_in_one_pattern() -> None:
+    """Teilflächen, fremde Bohrungen und leere Belege bleiben unverändert."""
+
+    def feature(name: str, kind: str, faces: tuple[int, ...]) -> Feature:
+        return Feature(id=name, kind=kind, provenance="detected", params={}, face_indices=faces)
+
+    found = {
+        "p1": feature("p1", "pattern", (1, 2, 3)),
+        "p2": feature("p2", "pattern", (4, 5, 6)),
+        "cell": feature("cell", "face", (1, 2)),
+        "crossing": feature("crossing", "face", (3, 4)),
+        "carrier": feature("carrier", "face", (2, 7)),
+        "hole": feature("hole", "hole", (8, 9)),
+        "empty": feature("empty", "face", ()),
+        "unknown_pattern": dataclasses.replace(
+            feature("unknown_pattern", "pattern", (8, 9)), recognised=False
+        ),
+    }
+    folded = patterns.without_pattern_cells(found)
+    assert set(folded) == set(found) - {"cell"}
+    assert all(folded[name] is found[name] for name in folded)
+
+
+def test_a_short_separate_rib_field_stays_unclassified() -> None:
+    """Ein belegtes Feld macht drei entfernte Rippen nicht zur selben Textur."""
+    entry = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box(extents=(90.0, 60.0, 6.0))),
+    )
+    for x, width in ((-23.0, 30.0), (23.0, 12.0)):
+        entry, _ = run_op(
+            "apply_texture",
+            entry,
+            pattern="rib",
+            mode="raised",
+            pitch=4.0,
+            depth=0.6,
+            width=width,
+            height=20.0,
+            x=x,
+            z=3.0,
+            nz=1.0,
+        )
+    found = detect(as_mesh_data(entry.mesh))
+    field = only_pattern(found)
+    assert float(field.params["centre"][0]) < 0.0
+    assert float(field.params["width"]) < 35.0
+    assert any(
+        feature.kind == "face"
+        and float(feature.params["centre"][0]) > 20.0
+        and float(feature.params["centre"][2]) > 3.0
+        for feature in found.values()
+    )
+
+
+def test_close_irregular_ribs_do_not_become_a_pattern() -> None:
+    """Nahe Nachbarn belegen noch keine regelmäßige Teilung."""
+    body = plate()
+    ribs = []
+    for x in (-14.0, -9.8, -6.4, -2.0, 1.3, 6.0, 9.4, 14.0):
+        rib = trimesh.creation.box(extents=(2.0, 20.0, 1.2))
+        rib.apply_translation((x, 0.0, 3.0))
+        ribs.append(rib)
+    tool = MeshData.of(trimesh.util.concatenate(ribs))
+    out = boolean("union", [body, tool], quality="fine", cancelled=NeverCancelled())
+    assert "pattern" not in kinds(detect(out.mesh))
+
+
+def test_separate_rib_fields_can_have_different_pitch_with_the_same_cell_width() -> None:
+    """Gleiche Zellbreite bindet zwei getrennte Teilungen nicht an einen Median."""
+    body = MeshData.of(trimesh.creation.box(extents=(90.0, 40.0, 6.0)))
+    ribs = []
+    for start, pitch in ((-37.0, 4.0), (8.0, 5.0)):
+        for index in range(7):
+            rib = trimesh.creation.box(extents=(2.0, 20.0, 1.2))
+            rib.apply_translation((start + index * pitch, 0.0, 3.0))
+            ribs.append(rib)
+    out = boolean(
+        "union",
+        [body, MeshData.of(trimesh.util.concatenate(ribs))],
+        quality="fine",
+        cancelled=NeverCancelled(),
+    )
+    fields = [feature for feature in detect(out.mesh).values() if feature.kind == "pattern"]
+    assert len(fields) == 2
+    assert sorted(float(feature.params["pitch"]) for feature in fields) == pytest.approx([4.0, 5.0])
+
+
+def test_one_missing_rib_does_not_split_an_imported_field() -> None:
+    """Eine ausgelassene Zelle bleibt der erlaubte Ausreißer im Gitter."""
+    body = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 6.0)))
+    ribs = []
+    for index in range(13):
+        if index == 6:
+            continue
+        rib = trimesh.creation.box(extents=(2.0, 20.0, 1.2))
+        rib.apply_translation(((index - 6) * 4.0, 0.0, 3.0))
+        ribs.append(rib)
+    out = boolean(
+        "union",
+        [body, MeshData.of(trimesh.util.concatenate(ribs))],
+        quality="fine",
+        cancelled=NeverCancelled(),
+    )
+    field = only_pattern(detect(out.mesh))
+    assert field.params["count"] == 12
+    assert float(field.params["pitch"]) == pytest.approx(4.0)
+
+
+@pytest.mark.parametrize("count", [6, 12])
+def test_slender_triangular_openings_are_not_waves(count: int) -> None:
+    """Längliche Dreiecke im Ornament belegen keinen Rippen- oder Wellenquerschnitt."""
+    from shapely.geometry import Polygon
+
+    body = MeshData.of(trimesh.creation.box(extents=(count * 6.0 + 4.0, 12.0, 6.0)))
+    triangles = []
+    for index in range(count):
+        triangle = trimesh.creation.extrude_polygon(
+            Polygon(((0.0, 0.0), (1.0, 0.0), (0.0, 3.0))), height=8.0
+        )
+        triangle.apply_translation(((index - (count - 1) / 2.0) * 6.0, -1.5, -4.0))
+        triangles.append(triangle)
+    out = boolean(
+        "difference",
+        [body, MeshData.of(trimesh.util.concatenate(triangles))],
+        quality="fine",
+        cancelled=NeverCancelled(),
+    )
+    fields = [feature for feature in detect(out.mesh).values() if feature.kind == "pattern"]
+    if count < patterns.MIN_CELLS:
+        assert fields == []
+    else:
+        assert len(fields) == 1
+        assert fields[0].params["style"] == "other"
+        assert fields[0].params["count"] == count

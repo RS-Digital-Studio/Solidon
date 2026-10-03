@@ -161,6 +161,72 @@ def test_spool_form_columns_align_and_unknown_dates_have_one_label(qt_app) -> No
         dialog.deleteLater()
 
 
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_spool_validation_stays_reachable_above_the_buttons_when_short(qt_app, language) -> None:
+    """Ein Preisfehler bleibt auch bei einem weit gerollten Formular erklärt."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.i18n import get_language, set_language
+    from app.ui.settings import UiSettings
+    from app.ui.theme import apply_theme
+
+    before = get_language()
+    set_language(language)
+    apply_theme(qt_app, UiSettings().theme)
+    dialog = NewFilamentDialog(name="Werkstattrolle")
+
+    def settle() -> None:
+        for _ in range(12):
+            qt_app.processEvents()
+
+    try:
+        dialog.show()
+        settle()
+        natural_height = dialog.height()
+        dialog.resize(dialog.width(), max(dialog.minimumSizeHint().height(), natural_height // 2))
+        settle()
+        assert dialog.height() < natural_height
+        assert dialog.more.isHidden()
+        assert dialog.focus_field("currency")
+        settle()
+        position = dialog.currency.mapTo(dialog._scroll.viewport(), QPoint(0, 0))
+        assert (
+            dialog._scroll.viewport().rect().contains(dialog.currency.rect().translated(position))
+        )
+        dialog.price_known.setChecked(True)
+        settle()
+        buttons = dialog.findChild(QDialogButtonBox)
+        assert buttons is not None
+        assert dialog.validation.text()
+        assert not dialog._ok_button.isEnabled()
+        assert not dialog._scroll.isAncestorOf(dialog.validation)
+        assert dialog._scroll.verticalScrollBar().maximum() > 0
+        dialog._scroll.verticalScrollBar().setValue(0)
+        settle()
+        assert dialog.validation.isVisible()
+        assert dialog.validation.geometry().bottom() < buttons.geometry().top()
+        assert dialog.rect().contains(dialog.validation.geometry())
+        assert dialog.rect().contains(buttons.geometry())
+        assert dialog.focus_field("currency")
+        settle()
+        position = dialog.currency.mapTo(dialog._scroll.viewport(), QPoint(0, 0))
+        assert (
+            dialog._scroll.viewport().rect().contains(dialog.currency.rect().translated(position))
+        )
+        dialog.currency.setText("EUR")
+        settle()
+        assert not dialog.validation.text()
+        assert dialog._ok_button.isEnabled()
+        assert dialog.name.text() == "Werkstattrolle"
+        assert dialog.entry().currency == "EUR"
+    finally:
+        dialog.release()
+        dialog.close()
+        dialog.deleteLater()
+        set_language(before)
+
+
 def test_the_panel_offers_the_backup_and_setting_aside_as_buttons(qt_app, tmp_path, monkeypatch):
     """Zurückholen und Beiseitelegen sind auch im Filamentbereich Knöpfe, nicht nur im Lager."""
     from dataclasses import replace
@@ -786,7 +852,7 @@ def test_rack_context_delete_selects_the_clicked_row(qt_app, tmp_path, monkeypat
         def exec(self, _position):
             assert self.toolTipsVisible()
             next(
-                action for action in self.actions() if action.text() == "Filament löschen"
+                action for action in self.actions() if action.text() == "Spule archivieren"
             ).trigger()
 
     monkeypatch.setattr(filament_picker, "QMenu", ChoosingMenu)

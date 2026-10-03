@@ -422,9 +422,9 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="history",
                 text=_(
-                    "Doppelklick auf *Weich verschmelzen* und den Übergang auf 8 "
-                    "stellen: Der Hals wird dicker, ohne dass irgendetwas neu gebaut "
-                    "wird. Das ist der Unterschied zu einem Sculpting-Programm."
+                    "Doppelklick auf *Weich verschmelzen* und den Übergang auf 8 stellen: Der "
+                    "Hals wird dicker. Der geänderte Schritt und seine Folgeschritte werden neu "
+                    "berechnet."
                 ),
                 done=_op_number_changed("blend_union", "radius", 4.0),
             ),
@@ -465,9 +465,8 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="gehaeuse-mit-bausteinen",
         intro=_(
-            "Ein Gehäuseboden mit vier Bausteinen, die einzeln je eine halbe Stunde "
-            "Konstruktion wären: Mutternfalle, Heat-Set-Buchse, Schraubenloch, "
-            "Kabeldurchführung."
+            "Ein Gehäuseboden mit vier Bausteinen: Mutternfalle, Heat-Set-Buchse, Schraubenloch "
+            "und Kabeldurchführung."
         ),
         steps=(
             TourStep(
@@ -482,8 +481,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="viewport",
                 text=_(
                     "Das kleine Teil daneben ist ein Prüfstück: ein Ausschnitt um die "
-                    "Mutternfalle. Zwei Minuten Druck sagen, ob die Passung stimmt — "
-                    "statt zwei Stunden für das ganze Gehäuse."
+                    "Mutternfalle. Drucken Sie ihn zuerst, um die Passung zu prüfen, bevor Sie "
+                    "das ganze Gehäuse drucken."
                 ),
             ),
             TourStep(
@@ -650,8 +649,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Kalibrieren lohnt sich je Material einmal: PETG schrumpft anders als "
-            "PLA, und das Spiel wandert mit."
+            "Prüfen Sie Passungen mit dem verwendeten Material. Wiederholen Sie Druckproben, "
+            "wenn sich Drucker, Material oder Druckeinstellungen ändern."
         ),
     ),
     Tour(
@@ -671,9 +670,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 text=_(
-                    "In jeder Schnittfläche stecken zwei Stifte. Ihr Spiel kommt aus "
-                    "dem kalibrierten Materialprofil — nicht aus einer geratenen "
-                    "Zahl."
+                    "In jeder Schnittfläche stecken zwei Stifte. Ihr Spiel kommt aus dem "
+                    "gewählten Materialprofil."
                 )
             ),
             TourStep(

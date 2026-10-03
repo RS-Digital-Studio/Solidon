@@ -23,13 +23,14 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import replace
+from functools import partial
 from typing import Final, cast
 
 import manifold3d
 import numpy as np
 from shapely.geometry import Polygon as ShapelyPolygon
 
-from app.core.errors import ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED
+from app.core.errors import ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED, OperationCancelled
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles
 from app.core.slice import advise
@@ -42,6 +43,7 @@ from app.core.slice.analysis import (
 )
 from app.core.types import (
     CancelToken,
+    CheckState,
     Finding,
     ObjectId,
     PrintSettings,
@@ -89,6 +91,8 @@ def print_findings(
     cancelled: CancelToken | None = None,
     progress: Callable[[float], None] | None = None,
     fitted: bool | None = None,
+    check_status: Callable[[CheckState], None] | None = None,
+    missing_basis: tuple[str, ...] = (),
 ) -> list[Finding]:
     """Die Befunde der Schichtanalyse und der Druckeinstellungen für eine Szene.
 
@@ -104,16 +108,94 @@ def print_findings(
     ``fitted``: Trägt die Szene Passungen? Wer das Dokument kennt, fragt
     ``scene.fits.fit_kinds_for`` und zählt die gebauten mit; ohne Angabe gelten
     die eingetragenen der Szene.
+
+    ``missing_basis`` nennt fehlende bestätigte Grundlagen des Aufrufers,
+    insbesondere unbekannte Originalkennungen vor einer Ersatzprofilauflösung.
+    Davon abhängige Prüfungen bleiben offen. ``check_status`` belegt die
+    tatsächliche Ausführung; null Befunde sind keine solche Auskunft.
     """
-    findings = advise.warnings_for(
-        settings, profile, None, fitted=bool(scene.fits) if fitted is None else fitted
+    entries = list(scene.objects.values())
+
+    def planned(key: str, object_id: ObjectId | None, geometry: bool) -> CheckState:
+        required = (("geometry",) if geometry else ()) + ("printer", "material", "print_settings")
+        return CheckState(
+            key=key,
+            object_id=object_id,
+            applicable=True,
+            required_basis=required,
+            missing_basis=tuple(value for value in required if value in missing_basis),
+        )
+
+    settings_check = planned("slice.settings", None, False)
+    body_checks = [planned("slice.print_findings", entry.id, True) for entry in entries]
+
+    def publish(state: CheckState) -> None:
+        if check_status is not None:
+            check_status(state)
+
+    for state in (settings_check, *body_checks):
+        publish(state)
+    if not entries:
+        publish(
+            CheckState(
+                key="slice.print_findings",
+                applicable=False,
+                required_basis=("geometry", "printer", "material", "print_settings"),
+                state="not_applicable",
+            )
+        )
+
+    def checked(state: CheckState, work: Callable[[], list[Finding]]) -> list[Finding]:
+        if state.missing_basis:
+            return []
+        publish(replace(state, state="running"))
+        try:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            result = work()
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+        except OperationCancelled:
+            publish(replace(state, state="cancelled"))
+            raise
+        except Exception:
+            publish(replace(state, state="failed"))
+            raise
+        publish(replace(state, state="completed"))
+        return result
+
+    findings = checked(
+        settings_check,
+        lambda: advise.warnings_for(
+            settings, profile, None, fitted=bool(scene.fits) if fitted is None else fitted
+        ),
     )
-    bodies = [entry for entry in scene.objects.values() if as_mesh_data(entry.mesh).triangle_count]
+    bodies: list[tuple[SceneObject, CheckState]] = []
+    for entry, state in zip(entries, body_checks, strict=True):
+        if state.missing_basis:
+            # Auch das Bereitstellen eines exakten Körpers als Netz gehört
+            # zur abhängigen Prüfung und beginnt ohne Grundlage nicht.
+            continue
+        try:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            usable = bool(as_mesh_data(entry.mesh).triangle_count)
+        except OperationCancelled:
+            publish(replace(state, state="cancelled"))
+            raise
+        except Exception:
+            publish(replace(state, state="failed"))
+            raise
+        if usable:
+            bodies.append((entry, state))
+        else:
+            publish(replace(state, applicable=False, state="not_applicable"))
     search = len(bodies) <= ORIENT_SEARCH_BODIES and not profile.printer.is_resin
-    for number, entry in enumerate(bodies):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        findings += body_findings(entry, profile, settings, cancelled=cancelled, search=search)
+    for number, (entry, state) in enumerate(bodies):
+        findings += checked(
+            state,
+            partial(body_findings, entry, profile, settings, cancelled=cancelled, search=search),
+        )
         if progress is not None:
             progress((number + 1) / len(bodies))
     return findings

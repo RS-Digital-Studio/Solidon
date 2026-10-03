@@ -515,18 +515,23 @@ def best_face_candidate(
     )[: max(1, count)]
     if not coarse:
         raise NoFittingOrientationError()
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    proxy = search_proxy(mesh)
+    footing_on: dict[str, Any] = {} if proxy is mesh else {"footing_mesh": mesh}
     field: list[Candidate] = []
     for orientation in coarse:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         field.append(
             judge(
-                mesh,
+                proxy,
                 orientation.direction,
                 layer_height,
                 footing,
                 overhang_angle=profile.overhang_limit_degrees,
                 line_width=profile.printer.extrusion_width,
+                **footing_on,
             )
         )
         if cancelled is not None:

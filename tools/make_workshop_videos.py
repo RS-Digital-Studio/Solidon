@@ -2156,7 +2156,7 @@ class Tutorial:
         self.add(
             title_de, title_en, detail_de, detail_en, 11.0, dialog=dialog, target=lf._button(dialog)
         )
-        raw = dialog.screen().grabWindow(dialog.winId())
+        raw = lf.grab_uncovered(dialog)
         path = self.folder / "shots" / f"dialog-{len(self.checks):02d}.png"
         if not raw.save(str(path)):
             raise RuntimeError("Der geöffnete Werte-Dialog ließ sich nicht aufnehmen.")
@@ -2591,7 +2591,7 @@ class Tutorial:
                 viewport.settle_camera()
                 renderer.render_now()
                 self.settle(18)
-            captured = self.window.screen().grabWindow(self.window.winId()).toImage()
+            captured = lf.grab_uncovered(self.window).toImage()
             origin = viewport.mapTo(self.window, QPoint(0, 0))
             scale_factor = captured.width() / self.window.width()
             image = captured.copy(
@@ -3963,10 +3963,17 @@ def main() -> int:
         except BaseException:
             import traceback
 
-            tutorial.window.screen().grabWindow(tutorial.window.winId()).save(
-                str(folder / "failed-state.png")
-            )
-            (folder / "failed-run.txt").write_text(traceback.format_exc(), encoding="utf-8")
+            failure = traceback.format_exc()
+            (folder / "failed-run.txt").write_text(failure, encoding="utf-8")
+            # Ein verdecktes Fehlerbild darf weder gespeichert werden noch den
+            # ursprünglichen Fehler durch einen zweiten Aufnahmefehler ersetzen.
+            try:
+                lf.grab_uncovered(tutorial.window, seconds=0.0).save(
+                    str(folder / "failed-state.png")
+                )
+            except (Exception, SystemExit) as capture_error:
+                with (folder / "failed-run.txt").open("a", encoding="utf-8") as log:
+                    log.write(f"\nFehlerbild nicht aufgenommen: {capture_error}\n")
             raise
         finally:
             lf._finish_video(tutorial.session, tutorial.window)

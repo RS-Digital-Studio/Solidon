@@ -597,3 +597,25 @@ def test_a_click_without_camera_motion_does_not_end_a_gesture(
     navigator.handle(move(230, 150, "right"))
     navigator.handle(release(230, 150, "right"))
     assert log.kinds().count("end") == 1, "eine Drehung endet weiter mit ihrer Meldung"
+
+
+def test_paint_release_outside_and_editor_change_close_the_gesture(scene):
+    """Loslassen im Leeren endet den Zug; ein Werkzeugwechsel lässt keinen Pinsel hängen."""
+    renderer, log = scene
+    log.sculpting = True
+    ended = []
+    calls = log.callbacks()._replace(on_paint_end=lambda: ended.append(True))
+    navigator = Navigator(renderer, "solidon", calls)
+    navigator.handle(press(100, 100))
+    navigator.handle(move(800, 900))
+    navigator.handle(release(800, 900))
+    assert len(ended) == 1
+    navigator.handle(move(90, 90))
+    assert len([c for c in log.calls if c[0] == "paint"]) == 2
+    navigator.handle(press(100, 100))
+    navigator.stop_painting()
+    assert len(ended) == 2
+    navigator.handle(move(90, 90))
+    navigator.handle(release(90, 90))
+    assert len([c for c in log.calls if c[0] == "paint"]) == 3
+    assert not [c for c in log.calls if c[0] == "pick"]

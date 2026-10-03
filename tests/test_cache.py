@@ -3000,3 +3000,234 @@ def test_whether_a_step_asked_for_the_quality_survives_the_disk(tmp_path: Path) 
 
     assert without is not None and without.reads_quality is False
     assert asked is not None and asked.reads_quality is True
+
+
+@pytest.mark.parametrize("creator", ["create_box", "create_brep_box"])
+def test_object_frame_survives_symmetric_body_edit_copy_undo_and_reopening(
+    profile: Profile, tmp_path: Path, creator: str
+) -> None:
+    """Die Achsen stammen vom Verlauf, auch am symmetrischen Würfel (RM-401)."""
+    import numpy as np
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.geom.transform import rotation, translation
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from app.core.types import IDENTITY_FRAME
+    from tests.helpers import exact_kernel
+
+    if creator == "create_brep_box":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Würfel",
+        [
+            OperationDraft(
+                op=creator,
+                params={
+                    "width": 10.0,
+                    "depth": 10.0,
+                    "height": 10.0,
+                },
+            )
+        ],
+    )
+    directory = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+
+    def run(current=project, active_cache=cache):
+        result = evaluate(
+            current.document, profile, sources=ProjectSources(current), cache=active_cache
+        )
+        assert result.complete, result.scene.report.findings
+        return result.scene.objects
+
+    assert run()["obj_1"].frame == IDENTITY_FRAME
+    for axis, angle in (("z", 90.0), ("x", 37.0)):
+        history.apply(
+            "Drehen",
+            [
+                OperationDraft(
+                    op="rotate_object",
+                    inputs=("obj_1",),
+                    params={"axis": axis, "angle": angle, "about": "origin"},
+                )
+            ],
+        )
+    expected = rotation("x", 37.0) @ rotation("z", 90.0)
+    turned = run()["obj_1"]
+    assert np.asarray(turned.frame) == pytest.approx(expected)
+    # Ein Geometrieumbau behält die Ausgangsachsen.
+    history.apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object", inputs=("obj_1",), params={"wall": 1.0, "open_top": False}
+            )
+        ],
+    )
+    assert np.asarray(run()["obj_1"].frame) == pytest.approx(expected)
+    history.apply(
+        "Kopien",
+        [
+            OperationDraft(
+                op="pattern",
+                inputs=("obj_1",),
+                params={"kind": "linear", "count": 2, "spacing": 30.0},
+            )
+        ],
+    )
+    frames = {key: np.asarray(body.frame) for key, body in run().items()}
+    assert frames["obj_1"] == pytest.approx(expected)
+    assert frames["obj_2"] == pytest.approx(translation((30.0, 0.0, 0.0)) @ expected)
+    assert history.undo() is not None
+    assert tuple(run()) == ("obj_1",)
+    assert np.asarray(run()["obj_1"].frame) == pytest.approx(expected)
+    assert history.redo() is not None
+    assert np.asarray(run()["obj_2"].frame) == pytest.approx(frames["obj_2"])
+    reopened = load(save(project, tmp_path / "bezugsrahmen.p3d"))
+    for active_cache in (
+        ResultCache(),
+        ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory)),
+    ):
+        reopened_objects = run(reopened, active_cache)
+        for key, frame in frames.items():
+            assert np.asarray(reopened_objects[key].frame) == pytest.approx(frame)
+
+
+def test_object_frame_is_part_of_the_following_hash_and_disk_record(tmp_path: Path) -> None:
+    """Gleiche Geometrie mit verschiedenen Ausgangsachsen hat verschiedene Folgeeingaben."""
+    from app.core.types import IDENTITY_FRAME
+
+    body = dataclasses.replace(make_object("obj_1"), frame=IDENTITY_FRAME)
+    moved = (
+        (0.0, -1.0, 0.0, 12.0),
+        (1.0, 0.0, 0.0, 3.0),
+        (0.0, 0.0, 1.0, -2.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    assert object_hash("same", 0, frame=body.frame) != object_hash("same", 0, frame=moved)
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("frame", CachedResult(objects=(dataclasses.replace(body, frame=moved),)))
+    restored = disk.get("frame")
+    assert restored is not None and restored.objects[0].frame == moved
+
+
+@pytest.mark.parametrize("filename", ["drilled_v6.p3d", "circle_v18.p3d", "cut_away_face_v41.p3d"])
+def test_old_projects_reconstruct_the_starting_frame(profile: Profile, filename: str) -> None:
+    """Bestehende Projekte brauchen keine geratenen Formachsen oder neuen gespeicherten Werte."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load
+    from app.core.types import IDENTITY_FRAME
+
+    load_operations()
+    project = load(Path(__file__).parent / "data" / "projects" / filename)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, result.scene.report.findings
+    assert result.scene.objects
+    assert all(body.frame == IDENTITY_FRAME for body in result.scene.objects.values())
+
+
+@pytest.mark.parametrize("creator", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_union_uses_the_frame_of_the_first_stored_input(
+    profile: Profile, creator: str, reverse: bool
+) -> None:
+    """Vereinigung bindet ihren Rahmen an die gespeicherte Auswahlfolge, nie an Form oder dict."""
+    import numpy as np
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.transform import rotation
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import IDENTITY_FRAME
+    from tests.helpers import exact_kernel
+
+    if creator == "create_brep_box":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    for title in ("Erster Würfel", "Zweiter Würfel"):
+        history.apply(
+            title,
+            [
+                OperationDraft(
+                    op=creator,
+                    params={
+                        "width": 10.0,
+                        "depth": 10.0,
+                        "height": 10.0,
+                    },
+                )
+            ],
+        )
+    history.apply(
+        "Drehen",
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_2",),
+                params={"axis": "z", "angle": 90.0, "about": "origin"},
+            )
+        ],
+    )
+    selected = ("obj_2", "obj_1") if reverse else ("obj_1", "obj_2")
+    history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=selected)])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, result.scene.report.findings
+    (combined,) = result.scene.objects.values()
+    assert combined.mesh.volume == pytest.approx(1000.0)
+    expected = rotation("z", 90.0) if reverse else IDENTITY_FRAME
+    assert np.asarray(combined.frame) == pytest.approx(np.asarray(expected))
+
+
+@pytest.mark.parametrize("exact", [False, True])
+def test_affine_frame_keeps_scaling_reflection_and_an_unknown_origin(exact: bool) -> None:
+    """Eine Spiegelung bleibt am Rahmen eine Spiegelung; unbekannt bleibt unbekannt."""
+    import numpy as np
+    import trimesh
+
+    from app.core.brep import edit
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import moved_object, rotation, scaling
+    from app.core.types import IDENTITY_FRAME
+    from tests.helpers import exact_kernel
+
+    if exact:
+        exact_kernel()
+    mesh = edit.box(10.0, 10.0, 10.0) if exact else MeshData.of(trimesh.creation.box((10, 10, 10)))
+    body = SceneObject(id="obj_1", name="Würfel", mesh=mesh, frame=IDENTITY_FRAME)
+    matrix = rotation("z", 37.0) @ scaling((-2.0, 2.0, 2.0))
+    moved = moved_object(body, matrix)
+    assert np.asarray(moved.frame) == pytest.approx(matrix)
+    assert np.linalg.det(np.asarray(moved.frame)[:3, :3]) == pytest.approx(-8.0)
+    assert moved_object(dataclasses.replace(body, frame=None), matrix).frame is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [],
+        [[1.0] * 4] * 4,
+        [
+            [1.0, 0.0, 0.0, float("nan")],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    ],
+)
+def test_damaged_object_frame_is_never_used_from_disk(tmp_path: Path, value) -> None:
+    """Ein beschädigter Rahmen erzwingt Neuberechnung statt geratener Winkel."""
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("frame", CachedResult(objects=(make_object("obj_1"),)))
+    path = next(tmp_path.rglob("objects.json"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["objects"][0]["frame"] = value
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert disk.get("frame") is None

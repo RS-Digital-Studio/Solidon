@@ -22,9 +22,14 @@ it into `website/version.json`.
 - New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.
 - New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.
 - New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
+- New is the *Container with lid* assistant: round or rectangular, with a screw, push-on or hinged lid, plus compartments, an insert and shaker holes if you like. All main dimensions are parameters.
 - Four holders are made in one step with true faces and edges: U-shaped, round, fork and shelf, fixed with a keyhole, screw holes, a pegboard hook or a clamp.
 - An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
-- New bodies appear on the bed or on the chosen flat face, no longer where a previously selected body was, and are selected afterwards.
+- New bodies appear on the bed instead of at a selected body, and are selected afterwards. On a selected face they attach at the clicked point or centred, and can join the part in the same step.
+- Catalogue parts such as a magnet pocket or a screw hole sit where you click on the face. Their distance to two edges stays when the model changes later.
+- The *T-slot tongue for extrusion* fits Motedis 20 × 20 B-type slot 6 and 30 × 30 B-type slot 8, with a head shaped like the slot. The three previous sizes remain available as older dimensions.
+- In the report, *Rebuild model* rebuilds an imported part from basic shapes, holes and fillets, compares it with the original within the limit you set and applies it in one step.
+- The *Profile clamp with liners* starts with the project material in both material fields. Until now both were empty.
 
 ### Printing and slicer handover
 
@@ -43,7 +48,7 @@ it into `website/version.json`.
 - Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
 - After slicing, Solidon also compares support material and model layers for each plate. The report shows the internal estimate alongside values from the print file.
 - The material cross-check compares only the printed model. Purge material is shown separately, with a note when the amount cannot be read in full.
-- Analysing the space needed for supports is much faster for hollow models and preserves fine contours.
+- Layer analysis is several times faster on hollow models and on models with many ceilings, and preserves fine contours. The layer view reuses what the report has already calculated.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
@@ -58,7 +63,7 @@ it into `website/version.json`.
 - Tall, slender parts on a small footprint get calmer walls suggested, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
 - With Cura, the report names the parts that only get such values along, because Cura takes them for the whole plate only.
 - Solidon now suggests *Outer wall first* only for the part that needs it, and never for one with supports.
-- In the quick search too, *Orient for printing* checks whether a part stands securely.
+- In the quick search too, *Orient for printing* checks whether a part stands securely. If one cannot stand securely anywhere, the others are still oriented and the report names it.
 - Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
 - When another model joins, whether from a file, a download or generated, the view shows the plate it lies on.
@@ -84,6 +89,9 @@ it into `website/version.json`.
 - When PrusaSlicer or SuperSlicer reports an empty first layer, Solidon names the part and offers to place it on the bed or open the relevant print settings.
 - Warnings from PrusaSlicer and SuperSlicer appear in the report even after successful slicing, an empty layer as an error. The raft gap can be set on its own.
 - If the slicer splits one plate into several print files, Solidon now says so and offers to rearrange or export. Until now it quietly took only one of the files.
+- The top of the report says whether the handoff is ready, needs a decision or is not recommended, and what is still unchecked. A part without findings no longer counts as ready to print by itself.
+- After an export or *Open in slicer …*, the report holds a record: files, print target, material and whether print settings went along. It also says that the file was not read back and compared.
+- Exported as 3MF from the command line, a single-colour body keeps its filament when the file is opened again.
 
 ### Holes, slots and splitting
 
@@ -104,6 +112,14 @@ it into `website/version.json`.
 - If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
 - If you chose “Load now”, the pieces from *Split the model* no longer start minutes of recognition either; “Recognise all features” catches up on it.
 - Choosing *Split the model* on a summary row of the report for several bodies splits them one after another. Until now only the first was split.
+- If a body covers a hole completely or in part during *Unite*, the report says so, with the location and the remaining cavity.
+- Circular patterns and *Mirror* take their *Rotation centre* from a body, a feature, a point or the origin. The centre stays fixed even if the body moves later.
+- A drag inside the opening of a selected countersunk bore leaves the body where it is, and the status line shows the way to a slot. Until now it moved the whole body.
+- When the dimension card of a hole grows tall, the other dimensions stay beside the body, and the handle for moving sits at the mouth instead of deep inside the part.
+- When you select a hole you made in Solidon, its diameter appears only in the dimension card in the view. Until now it appeared a second time on the right.
+- A direction you enter on the right for a slot also reaches the dimension card in the view, and *Apply* stays available. Until now it fell back to 0° there.
+- Solidon recognises cones, fillets and narrow faces the same way on more models, whether the model is moved, rotated or scaled.
+- Solidon recognises each rib, honeycomb or dimple field in an imported file as one pattern, and *Detect features here* combines the cells of a field.
 
 ### Fillets and chamfers
 
@@ -123,14 +139,18 @@ it into `website/version.json`.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
 - If a sculpting stroke pierces the wall or makes it too thin, the report and the export say so, with *Show the place* and *Take back the stroke*.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
-- If a building block such as a keyhole reaches over the edge of its face, the report says so.
+- If a building block such as a keyhole reaches over the edge of its face, even with just its countersink or chamfer, or into a wall behind it, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
 - SVG drawings arrive correctly: rotations, shears, rounded corners, ellipses and elliptical arcs are right, and hidden layers stay out.
 - The target of *Align to feature* starts out empty, and the first click in the view fills it. *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
-- In *Sculpt*, the window shows every stroke just as quickly after many strokes as after the first. Until now it got slower with each stroke.
+- In *Sculpt*, the window shows every stroke just as quickly after many strokes as after the first, and large sessions compute their preview in the background. Until now it got slower with each stroke.
 - With *Fix the state*, Solidon stores a sculpting session as finely as export and printing compute it, and the window stays usable. Until now it stored the coarser view.
+- Double-clicking *Sculpt* in the history reopens the session with its strokes. Ctrl+Z takes back a whole stroke, and *Done* changes the same step.
+- The menu entry *Create from sketch …* starts drawing straight away, the drawing plane shows its origin, and a double-click in the history reopens a sketch in drawing mode.
+- In *Sculpt* and in the skeleton editor, the bar shows wall thickness or overhang as a map with a legend and reports a stroke beyond the build volume. After bending, it says how it will print.
+- An applied texture is selected as a whole. The selection panel then offers *Edit texture* and *Remove texture*.
 
 ### Generating with AI
 
@@ -175,6 +195,14 @@ it into `website/version.json`.
 - The difference view hatches what was added and what was removed in two directions, so the two can be told apart without colour.
 - When Solidon asks for the unit of a file on opening, the sizes are shown in your display unit and with your language's decimal separator.
 - Drop a file Solidon cannot open, say from Blender, and it tells you how to bring it in as 3MF, STEP or STL. G-code goes to *Cross-check G-code*.
+- You can open several files in one step. They keep their positions relative to each other, one Ctrl+Z takes them all back, and identical import notes are grouped in the report.
+- Above the history, *Before/after* shows every earlier state with a slider. *Continue here* inserts new steps at that point, and your step names stay.
+- With *to*, *Move* puts the centre, the bottom centre, a corner or a feature at a fixed position, and *Rotate* turns the body to fixed angles, for several bodies too.
+- If you copy the link of a model page, it is already in the field of *Model from the web*, and Solidon shows the way through the browser.
+- When a dialog cannot apply, the reason also appears below its fields, not only in the bar above the view.
+- After Ctrl+Y, the status line names the step that was redone, as it does after Ctrl+Z.
+- Preview images of examples and catalogue parts show height pointing up. Until now tall parts pointed downwards in them.
+- If Solidon cannot save the *Include values* choice, the note appears right at the switch.
 
 ## 0.5.1
 
@@ -436,7 +464,7 @@ it into `website/version.json`.
 - Apply waits until the preview shows the current result. A click on an outdated picture writes nothing wrong.
 - Filament colours stay on exact bodies and follow every new meshing.
 - Volume and area of an exact body come in milliseconds instead of seconds.
-- Inserting a thread takes under half a second instead of up to thirteen; a threaded rod is built in a third of a second instead of a minute.
+- Inserting a thread took 0.38 to 0.41 seconds in the measured run instead of 8 to 13 seconds. A complete operation created an M6 × 1 threaded rod, 12 mm long, in 0.55 seconds.
 - Unite, Subtract and Place on the bed no longer ask whether to convert exact bodies. They stay exact.
 - When a bore is moved, no surplus triangles remain at the old place, and a hidden countersink loses none of its volume.
 - Repair leaves a clean model unchanged, also on an exact body.
@@ -505,8 +533,8 @@ it into `website/version.json`.
 - If a step of the assistant halts the evaluation, the proposal takes it back entirely and shows the state before.
 - Moving or rotating a model with 200,000 triangles answers in half a second instead of eight.
 - Undo answers immediately instead of after two and a half seconds.
-- While you type a number the preview appears after half a second, each further one after an eighth of that.
-- Hollowing out computes a fifth faster.
+- When changing the bore diameter on the perforated plate, the first preview appeared after 0.57 seconds in the measured run, each further one after 0.13 seconds.
+- Hollowing out was 7 to 25 percent faster on the three measured models.
 - A menu entry and a quiet note in the view lead to voluntarily supporting Solidon via PayPal or GoFundMe.
 - The survey card now shows the right colours in the light theme too.
 

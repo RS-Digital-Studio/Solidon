@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QScrollArea,
+    QTabWidget,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -543,6 +544,26 @@ def natural_height(zone: QWidget) -> int:
     ohne ihre Listen bräuchte, plus das, was die Listen wirklich brauchen.
     """
     wanted = zone.sizeHint().height()
+    # Ein direkt gemessener Reiter reserviert den größten Seitenwunsch.
+    # Elternlayouts berücksichtigen schon die aktuelle Seite über ihre
+    # Breitenhöhe; dort darf dieselbe Differenz nicht noch einmal abgezogen werden.
+    tabs = [zone] if isinstance(zone, QTabWidget) else []
+    for tab in tabs:
+        current = tab.currentWidget()
+        if current is None or not tab.isVisibleTo(zone):
+            continue
+        tallest = max(
+            (
+                page.sizeHint().height()
+                for index in range(tab.count())
+                if (page := tab.widget(index)) is not None
+            ),
+            default=0,
+        )
+        current_height = current.sizeHint().height()
+        if current.hasHeightForWidth():
+            current_height = max(current_height, current.heightForWidth(current.width()))
+        wanted += current_height - tallest
     for view in living(zone, QAbstractItemView):
         if not view.isVisibleTo(zone):
             continue
@@ -575,7 +596,7 @@ def natural_height(zone: QWidget) -> int:
         # blieben. Gefragt wird deshalb das Widget darin, und zwar nach seiner
         # tatsächlichen Höhe: bei umbrechendem Text steht die im Layout, nicht
         # im ``sizeHint``.
-        needs = max(inner.height(), inner.sizeHint().height())
+        needs = min(max(inner.height(), inner.sizeHint().height()), area.maximumHeight())
         wanted += max(needs - viewport.height(), 0)
     return max(wanted, 0)
 

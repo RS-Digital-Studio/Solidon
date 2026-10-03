@@ -60,7 +60,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | Werkzeug | Tut |
 |---|---|
 | `make_manual.py` · `site_nav.py` | Handbuch als Seite und PDF, gegliedert nach den Teilen aus `Page.part` · Wege aus einem sprachneutralen Pfadschema. Sichtbare Texte und PDF-Rahmen kommen aus dem Katalog — eine neue Sprache verlangt keine Tabellenzeile. Gedruckt wird eine Kopie der Seite, mit den Bildschirmfotos als JPEG, wo das leichter ist; trägt das PDF nicht jedes, hält der Lauf an |
-| `make_figures.py` · `make_web_images.py` | Handbuchbilder · Website-Bilder aus dem maximierten Hauptfenster |
+| `make_figures.py` · `make_web_images.py` | Handbuch-/Website-Bilder; `grab_uncovered` teilt die Windows-Fensterwache mit Galerie, Funktionsbildern und Videos: Vor-/Nachprüfung, höchstens zehn Griffe innerhalb einer gemeinsamen 30-s-Frist, erst danach speichern. Ausschnitte in Widgetkoordinaten; eigene Dialoge bleiben erlaubt. Fehlerbilder verwenden Frist null und ersetzen niemals den ursprünglichen Fehler. |
 | `make_guides.py` | Die Bildanleitungen des Handbuchs: je Anleitung eine Geschichte durch die echte Oberfläche, Rahmen, Nummern und Pfeile an den Zielen aus `app/ui/guide_targets.py`, WebP je Schritt, ein Kindprozess je Sprache. Namen der Aufnahmeobjekte wie Spulen kommen aus dem aktiven Übersetzungskatalog. Menüeinträge mit aufgeklapptem Menü, modale Dialoge wie der Bausteinkatalog über `make_web_images.while_open`. Läuft vor `make_manual.py`; ein fehlendes Ziel hält den Lauf an |
 | `make_guide_video.py` | Filme aus den Bildanleitungen: je Sprache *Vom Start bis zum Druck* und *Einzelne Aufgaben* mit Kapitelmarken, `--nur` je Anleitung einer. Nimmt die Bilder von `make_guides.py` und bricht ab, wenn deren Stempel nicht zu Anleitung und Version passt; Musik aus `make_longform_video`, Ausgabe unter `marketing/video/guides/` |
 | `make_feature_images.py` | Textfreie Funktionsbilder aus registrierten Operationen: ein Motiv je nativem Prozess, eigene Konfigurationsverzeichnisse, der pygfx-Renderer des Viewports. `--output` nennt einen Prüfungsordner, WebP und JSON-Geometriebeleg entstehen gemeinsam; erst nach Sichtprüfung nach `website/bilder/feature-*.webp`, der Beleg bleibt intern |
@@ -96,6 +96,11 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 
 ## Fallen, die man einmal falsch macht
 
+- **Schrittnummern verdecken keinen Text.** `make_guides._text_areas`
+  übernimmt sichtbare Textträger und Listen aus Hauptfenster, Menüs und
+  Dialogen. Ihre Rechtecke sperren die Nummernplatzierung. Findet sich im
+  Bild kein freier Platz, steht die Nummer mit Verbindung im zusätzlichen
+  Bildrand; Bildunruhe allein ist kein Nachweis für freien Textplatz.
 - **Rohaufnahme und Schnitt sind getrennt.** Ein vollständiger `capture.json`
   ist Voraussetzung für Sprache und Export. Szenen verweisen auf echte
   Bildbereiche und Bildindizes; kurze Fassungen dürfen eigene Ausschnitte

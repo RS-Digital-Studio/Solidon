@@ -171,6 +171,14 @@ Transform = tuple[
 """Eine 4x4-Matrix als nackte Zahlen, Zeile für Zeile. Als Tupel statt als
 Array gehalten, damit sie unverändert durch Cache und Projektdatei reist."""
 
+IDENTITY_FRAME: Transform = (
+    (1.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0, 0.0),
+    (0.0, 0.0, 0.0, 1.0),
+)
+"""Ausgangsrahmen eines neu eingelesenen oder erzeugten Körpers."""
+
 
 @dataclass(frozen=True, slots=True)
 class BoundingBox:
@@ -623,6 +631,17 @@ class SceneObject:
 
     Die Auswertung rekonstruiert sie aus dem Verlauf; der Ergebniscache trägt
     sie mit, damit ein alter Verweis nie ein späteres anderes Merkmal trifft.
+    """
+    frame: Transform | None = None
+    """Dauerhafter Ausgangsrahmen in Weltkoordinaten (RM-401).
+
+    Die ersten drei Spalten sind die mitbewegten Ausgangsachsen, die vierte
+    ihr Ursprung. Die vollständige affine Abbildung erhält Maßstab, Spiegelung
+    und Scherung; sie ist nicht notwendig eine reine Drehung. ``None`` ist ein
+    noch nicht zugeordneter Rahmen einer rohen Operationsausgabe. Die Auswertung
+    setzt bei Import/Erzeugung die Identität, bei einem eindeutigen Vorfahren
+    dessen Rahmen. Ein neuer Mehrkörperausgang ohne Bezug bleibt unbekannt.
+    Der Rahmen wird aus dem Stapel rekonstruiert, nie aus Hauptachsen geschätzt.
     """
 
 
@@ -1618,6 +1637,28 @@ class Finding:
 
 
 @dataclass(frozen=True, slots=True)
+class CheckState:
+    """Durchführung einer Prüfung auf der Grundlage ihres aktuellen Auftrags.
+
+    ``completed`` belegt die vollständige Durchführung; Warnungen und Fehler
+    stehen getrennt als Befunde. Fehlende Grundlagen bleiben ``not_started``.
+    ``not_applicable`` setzt eine fachlich belegte Unzuständigkeit voraus.
+    Der Aufrufer bindet die Werte an Dokumentrevision, Geometrie und Profile;
+    sie sind keine gespeicherten Fertigmarken einer Projektdatei.
+    """
+
+    key: str
+    object_id: ObjectId | None = None
+    applicable: bool | None = None
+    required_basis: tuple[str, ...] = ()
+    missing_basis: tuple[str, ...] = ()
+    state: Literal[
+        "not_started", "running", "completed", "cancelled", "failed", "not_applicable"
+    ] = "not_started"
+    source: MetricSource = "internal"
+
+
+@dataclass(frozen=True, slots=True)
 class Report:
     """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
@@ -2294,6 +2335,12 @@ class Transaction:
     verschobenen Folge an ihrer neuen Stelle und blendet ihre alten Zeilen
     aus — anders als beim Löschen, wo die alte Zeile durchgestrichen als
     Geschichte stehen bleibt (§15.4)."""
+    renumbered: Mapping[OpId, OpId] = field(default_factory=dict)
+    """Belegte alte zu neuer Schrittkennung bei Einfügen/Verschieben (Format 45).
+
+    Die Herkunft erhält sichtbare Benutzertitel über wiederholte Umbauten.
+    Geometrie und Undo benutzen weiterhin die unveränderten stabilen Kennungen.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -2737,6 +2784,9 @@ class Stroke:
     Reihenfolge braucht, kauft sie sich hier stückweise: Ein gesetzter Schnitt
     kostet einen zusätzlichen Durchgang und gilt nur für diese Stelle, statt
     die ganze Sitzung zu verlangsamen."""
+    gesture: int = 0
+    """Gemeinsame Kennung aller Proben eines Mauszuges. Null bezeichnet
+    einen einzeln rücknehmbaren Altzug; die Kennung verändert keine Geometrie."""
 
 
 @dataclass(frozen=True, slots=True)

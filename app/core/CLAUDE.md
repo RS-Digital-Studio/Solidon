@@ -129,8 +129,10 @@ Handbuchteil steht nur in `manual.OUTLINE`;
 aufgenommen beim Release in der echten Oberfläche,
 Konzept `konzepte/konzept-handbuch-2026-09.md`) · `figures.py`
 (Abbildungskatalog, dazu je Anleitungsschritt ein Bildschirmfoto) ·
-`drawing.py` (SVG; lange Beschriftungen umbricht `Canvas.wrapped`, der Text
-bleibt vollständig im SVG) · `markup.py` (Markdown → HTML, nur die selbst
+`drawing.py` (SVG; die Körperkamera zeigt Welt-Z nach oben und positive
+Neigung von oben auf das Modell; erst die Ausgabe kehrt die Bild-Y-Achse um.
+Lange Beschriftungen umbricht `Canvas.wrapped`, der Text bleibt vollständig
+im SVG) · `markup.py` (Markdown → HTML, nur die selbst
 erzeugte Teilmenge) · `examples.py` · `tour.py` (Beispielprojekte und Touren).
 
 **Kundenkontakt — der Weg hinaus** — `updates.py` (fragen, holen, prüfen,

@@ -501,12 +501,9 @@ def test_aligning_names_a_feature_too_and_says_so() -> None:
     einundzwanzig Operationen die Frage aus §21.3 und für diese einen Fehler
     eine Operation später.
 
-    **Das zweite Feld fehlt hier absichtlich.** ``target`` benennt ein Merkmal
-    eines *anderen* Objekts (``obj_2:hole_1``), und ``references`` baut jeden
-    Verweis mit ``operation.inputs[0]`` — für ``target`` käme dabei
-    ``obj_1:"obj_2:hole_1"`` heraus. Es braucht eine eigene Art, nicht diese;
-    ein ``kind="feature"`` daran wäre kein Fortschritt, sondern ein falscher
-    Verweis.
+    Der zweite Bezug benennt seinen Körper ausdrücklich. Er muss als
+    qualifizierter Zielverweis erhalten bleiben, auch wenn dieser Körper
+    kein Eingang der Operation ist.
     """
     document = Document(format_version=1, app_version="0.0.1")
     document.ops.append(
@@ -521,8 +518,10 @@ def test_aligning_names_a_feature_too_and_says_so() -> None:
 
     found = orphans.references(document)
 
-    assert [entry.where for entry in found] == ["op:1:feature"]
+    assert [entry.where for entry in found] == ["op:1:feature", "op:1:target"]
     assert found[0].ref == FeatureRef("obj_1", "hole_1")
+    assert found[1].ref == FeatureRef("obj_2", "hole_3")
+    assert found[1].qualified and not found[1].removable
 
 
 def test_an_operation_the_registry_does_not_know_is_skipped() -> None:

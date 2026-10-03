@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QLocale, QPointF, QThread
+from PySide6.QtCore import QCoreApplication, QEvent, QLocale, QPointF, QThread
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.geom.mesh import MeshData
@@ -71,6 +71,7 @@ def test_mixed_part_preview_shows_and_removes_both_bodies(flow: Any, monkeypatch
         controller.dispose()
         assert session.wait_for_idle(30_000)
         dialog.close()
+        dialog.deleteLater()
 
 
 @pytest.fixture
@@ -109,7 +110,10 @@ def flow(qt_app: QApplication) -> Any:
         session.release(30_000)
         if dialog is not None:
             dialog.close()
+            dialog.deleteLater()
         viewport.close()
+        viewport.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         qt_app.processEvents()
 
 
@@ -1691,11 +1695,11 @@ def _window_with_a_renderer():
     return window
 
 
-def _a_selected_hole(window):
+def _a_selected_hole(window, filename="plate_holes.stl"):
     """Öffnet die Platte, wählt ihre erste Bohrung und wartet die Fläche ab."""
     from PySide6.QtWidgets import QApplication
 
-    window.open_path(MESHES / "plate_holes.stl")
+    window.open_path(MESHES / filename)
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
@@ -1804,6 +1808,93 @@ def _choose_measure_action(window, op):
     panel._arm(key)
     panel.request_in_view()
     return _measures_in_the_view(window)
+
+
+@pytest.mark.parametrize("angle", [45.0, -30.0])
+@pytest.mark.parametrize("handoff_focus", [False, True])
+@pytest.mark.parametrize("filename", ["plate_holes.stl", "lower_blind.stl"])
+def test_panel_slot_values_survive_the_first_measure_card(
+    qt_app: QApplication,
+    monkeypatch: Any,
+    tmp_path: Path,
+    angle: float,
+    handoff_focus: bool,
+    filename: str,
+) -> None:
+    """Eine Richtung aus der rechten Spalte steht sofort auch in der Maßkarte."""
+    from app.ui.panels import FIELD_PROPERTY, feature_field_values
+
+    window = _window_with_a_renderer()
+    try:
+        source = MESHES / filename
+        if filename == "lower_blind.stl":
+            from app.core.knowledge import profiles
+            from app.core.scene import History, evaluate
+            from app.core.scene.project import new_project
+
+            project = new_project()
+            history = History(project.document)
+            history.apply(
+                "Platte",
+                [OperationDraft("create_box", params={"width": 40, "depth": 30, "height": 12})],
+            )
+            history.apply(
+                "Sackbohrung von unten",
+                [
+                    OperationDraft(
+                        "drill_hole",
+                        inputs=("obj_1",),
+                        params={"diameter": 5, "depth": 6, "nz": -1},
+                    )
+                ],
+            )
+            result = evaluate(project.document, profiles.make_profile())
+            assert result.complete
+            source = tmp_path / filename
+            result.scene.objects["obj_1"].mesh.raw.export(source)
+        _object_id, hole = _a_selected_hole(window, source)
+        panel = window.feature_panel
+        key = next(key for key, run in panel._runs.items() if run.op == "slot_hole")
+        row = panel._blocks[key][1]
+        editor = next(
+            widget
+            for widget in row.findChildren(QWidget)
+            if widget.property(FIELD_PROPERTY) == "slot_angle"
+        )
+        if handoff_focus:
+            panel._arm(key)
+            flow = _measures_in_the_view(window)
+            target = next(
+                widget
+                for widget in flow.measure_group.findChildren(QWidget)
+                if widget.property(FIELD_PROPERTY) == "slot_angle"
+            )
+            assert not target.lineEdit().isModified()
+            monkeypatch.setattr(QApplication, "focusWidget", lambda: target.lineEdit())
+        editor.setValue(angle)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.dialog.values()["slot_angle"] == pytest.approx(angle)
+        assert flow.dialog.begun
+        action = next(run.action for run in panel._runs.values() if run.op == "slot_hole")
+        editors = {
+            widget.property(FIELD_PROPERTY): widget
+            for widget in flow.measure_group.findChildren(QWidget)
+            if widget.property(FIELD_PROPERTY) is not None
+        }
+        values = feature_field_values(action.fields, editors, feature_id=hole)
+        assert values["slot_angle"] == pytest.approx(angle)
+        assert values["slot_length"] == pytest.approx(flow.dialog.values()["slot_length"])
+        _display_measure_preview(window, flow)
+        assert flow._accept.isEnabled()
+        before = len(window.session.project.document.ops)
+        flow.accept()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.project.document.ops) == before + 1
+        assert window.session.project.document.ops[-1].params["slot_angle"] == pytest.approx(angle)
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
 
 
 def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
@@ -3589,6 +3680,36 @@ def test_a_redraw_during_a_grip_drag_keeps_the_grip_and_the_drag(qt_app: QApplic
         window.release()
 
 
+def test_the_placement_grip_stays_at_the_mouth_of_a_long_drill(qt_app: QApplication) -> None:
+    """Der Griff gehört zur gewählten Stelle, nicht zur Mitte des langen Bohrwerkzeugs."""
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active and flow._surface is not None
+        tool = flow._tool
+        grip = window.viewport._placement_grip
+        assert tool is not None and grip is not None
+        mouth = window.viewport.view_point_of(flow._surface.point, flow._object_id)
+        assert np.allclose(grip.origin, mouth), "die Pfeile beginnen an der sichtbaren Mündung"
+        assert not np.allclose(tool.centre(), mouth), "der Fall enthält ein langes Werkzeug"
+        before = tool.matrix().copy()
+        flow.redraw()
+        assert window.viewport._placement_grip is grip
+        assert np.allclose(tool.matrix(), before), "der Griff ändert die Werkzeuglage nicht"
+        moved = before.copy()
+        moved[:3, 3] += (7.0, -4.0, 2.0)
+        tool.set_matrix(moved)
+        window.viewport.grip_placement(tool, rotation=False)
+        after = window.viewport._placement_grip
+        assert after is not None and after is not grip
+        assert np.allclose(after.origin, moved[:3, 3]), "auch nach dem Zug gilt der Ansatzpunkt"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_a_grip_that_still_fits_is_kept_across_a_redraw(qt_app: QApplication) -> None:
     """Ein Griff, der schon passt, wird nicht abgebaut und neu gebaut.
 
@@ -4649,3 +4770,199 @@ def test_label_text_starts_with_the_sentence_of_the_empty_field(
         controller.dispose()
         assert session.wait_for_idle(30_000)
         dialog.close()
+
+
+@pytest.mark.parametrize(
+    "operation", ("insert_magnet_pocket", "insert_screw_hole", "insert_heatset_m4")
+)
+def test_part_placement_keeps_the_surface_and_edge_distances(
+    flow: Any, operation: str, tmp_path: Path
+) -> None:
+    """Der sichtbare Klickweg speichert seinen Flächenbezug bis zur Projektdatei."""
+    import json
+
+    original, session, viewport, _original_dialog = flow
+    original.dispose()
+    object_id = original.inputs_of()[0]
+    spec = REGISTRY.get(operation)
+    dialog = OperationDialog(spec, {object_id: "Würfel"})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+    try:
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        _point(controller, session, confirm=True)
+        surface = controller._surface
+        assert surface is not None and len(surface.edges) == 2
+        values = dialog.values()
+        record = json.loads(values["surface_anchor"])
+        assert record["object"] == object_id
+        assert values["surface_distance_1"] == pytest.approx(surface.edges[0].distance)
+        assert values["surface_distance_2"] == pytest.approx(surface.edges[1].distance)
+        assert len(record["edges"]) == 2
+        expression = f"={surface.edges[0].distance}"
+        dialog._editors["surface_distance_1"].start_expression(expression)
+        assert session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert controller._set_values()
+        assert dialog.values()["surface_distance_1"] == expression
+        values = dialog.values()
+        controller.back()
+        session.apply(
+            spec.title, [OperationDraft(op=operation, inputs=(object_id,), params=values)]
+        )
+        assert session.wait_for_idle(30_000)
+        assert session.last_result is not None and session.last_result.complete
+        stored = session.project.document.ops[-1]
+        assert stored.params["surface_anchor"] == values["surface_anchor"]
+        path = tmp_path / "surface.p3d"
+        save(session.project, path)
+        reopened = load(path)
+        assert reopened.document.ops[-1].params == stored.params
+        assert session.undo()
+        assert session.wait_for_idle(30_000)
+        session.redo()
+        assert session.wait_for_idle(30_000)
+        assert session.project.document.ops[-1].params == stored.params
+        controller.dispose()
+        dialog.close()
+        dialog.deleteLater()
+        dialog = OperationDialog(spec, {object_id: "Würfel"}, values=stored.params)
+        controller = PlacementFlow(
+            dialog, window, lambda: spec, lambda: (object_id,), change_op=stored.id
+        )
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert controller._surface is not None
+        assert controller.target == object_id
+        assert controller._surface.edges == surface.edges
+        assert dialog.values()["surface_distance_1"] == expression
+        assert controller._set_values()
+        assert dialog.values()["surface_distance_1"] == expression
+        dialog._editors["surface_distance_1"].start_expression("=4")
+        assert session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert controller._surface is not None
+        assert controller._surface.edges[0].distance == pytest.approx(4)
+        assert dialog.values()["surface_distance_1"] == "=4"
+        dialog._editors["x"].set_value(9)
+        assert not dialog.values()["surface_anchor"]
+        assert not controller.active
+    finally:
+        controller.dispose()
+        assert session.wait_for_idle(30_000)
+        dialog.close()
+
+
+@pytest.mark.parametrize("exact", (False, True))
+@pytest.mark.parametrize("painted", (False, True))
+def test_surface_worker_snapshot_preserves_the_shown_triangles(profile, exact, painted):
+    """Der UI-Anschluss kopiert den Träger vor dem Arbeiter samt nativer Flächennormale."""
+    from dataclasses import replace
+
+    import numpy as np
+
+    from app.core.brep.kernel import Solid
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import History, evaluate
+    from app.core.scene.placement import surface_at_feature
+    from app.core.scene.project import new_project
+    from app.ui.placement_flow import on_the_copy, surface_object_for_worker
+
+    project = new_project("centauri-carbon-2", "petg")
+    operation = "create_brep_cylinder" if exact else "create_cylinder"
+    History(project.document).apply(
+        "Träger", [OperationDraft(op=operation, params={"diameter": 20, "height": 20})]
+    )
+    source = evaluate(project.document, profile).scene.objects["obj_1"]
+    body = source.mesh
+    if painted:
+        if isinstance(body, Solid):
+            slots = tuple(int(index) % 2 for index in body.raw.face_attributes["solidon_brep_face"])
+            body = body.with_triangle_slots(slots)
+        else:
+            body = replace(body, slots=tuple(1 for _ in range(body.triangle_count)))
+        source = replace(source, mesh=body)
+    snapshot = surface_object_for_worker(source)
+    assert snapshot is not source and snapshot.mesh is not body
+    assert isinstance(snapshot.mesh, Solid) is exact
+    assert snapshot.features is source.features and snapshot.frame is source.frame
+    original, copied = as_mesh_data(body), as_mesh_data(snapshot.mesh)
+    assert copied.raw._cache is not original.raw._cache
+    assert np.array_equal(copied.raw.vertices, original.raw.vertices)
+    assert np.array_equal(copied.raw.faces, original.raw.faces)
+    assert copied.slot_indices == original.slot_indices
+    if exact:
+        assert not snapshot.mesh.shape.IsPartner(body.shape)
+        feature = next(entry for entry in source.features.values() if entry.kind == "pin")
+        hit = surface_at_feature(snapshot, feature, point=(6.0, 8.0, 10.0))
+        assert hit.normal == pytest.approx((0.6, 0.8, 0.0), abs=1e-6)
+    keys = set(original.raw._cache.cache)
+    on_the_copy(snapshot.mesh, lambda: copied.raw.vertex_faces)()
+    assert set(original.raw._cache.cache) == keys
+
+
+def test_bound_surface_worker_keeps_locks_after_copy_cache_eviction(flow, monkeypatch):
+    """Ein großer Szenenstand verliert beim Kopieren keine Sperre eines auslaufenden Arbeiters."""
+    from dataclasses import replace
+
+    from app.ui import placement_flow as module
+
+    original, session, viewport, _original_dialog = flow
+    original.dispose()
+    object_id = original.inputs_of()[0]
+    spec = REGISTRY.get("insert_magnet_pocket")
+    dialog = OperationDialog(spec, {object_id: "Würfel"})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+    try:
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        _point(controller, session, confirm=True)
+        assert dialog.values()["surface_anchor"]
+        result = controller._result
+        assert result is not None
+        source = result.scene.objects[object_id]
+        objects = dict(result.scene.objects)
+        for number in range(4):
+            extra = replace(
+                source,
+                id=f"extra_{number}",
+                mesh=source.mesh.replacing(source.mesh.raw.copy()),
+            )
+            objects[extra.id] = extra
+        controller._result = replace(result, scene=replace(result.scene, objects=objects))
+        monkeypatch.setattr(module, "WORKER_COPIES_KEPT", 2)
+        scheduled, locks = [], []
+        original_guard = module.on_the_copy
+
+        def guard(mesh, compute):
+            lock = next(held[2] for held in module._worker_copies.values() if held[1] is mesh)
+            locks.append(lock)
+            return original_guard(mesh, compute)
+
+        def bind(*args, **kwargs):
+            assert len(locks) == 5
+            assert all(lock.locked() for lock in locks)
+            assert len(module._worker_copies) == 2
+            return None
+
+        monkeypatch.setattr(module, "on_the_copy", guard)
+        monkeypatch.setattr(module.placement, "bind_surface", bind)
+        monkeypatch.setattr(
+            session, "placement_async", lambda compute, *callbacks: scheduled.append(compute)
+        )
+        assert controller._begin_bound_surface()
+        assert not any(lock.locked() for lock in locks)
+        scheduled[0]()
+        assert not any(lock.locked() for lock in locks)
+    finally:
+        controller.dispose()
+        assert session.wait_for_idle(30_000)
+        dialog.close()
+        dialog.deleteLater()

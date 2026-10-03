@@ -1,10 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 190" width="190" height="190">
-<polygon points="47.8,173.9 129.4,8.0 47.8,113.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<line x1="47.8" y1="113.7" x2="129.4" y2="8.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="47.8,173.9 142.2,16.1 129.4,8.0" fill="#88919b" stroke="#88919b" stroke-width="0.6" />
-<line x1="129.4" y1="8.0" x2="47.8" y2="173.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="129.4" y1="8.0" x2="142.2" y2="16.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="60.6,182.0 142.2,16.1 47.8,173.9" fill="#88919b" stroke="#88919b" stroke-width="0.6" />
-<line x1="47.8" y1="173.9" x2="60.6" y2="182.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="142.2" y1="16.1" x2="60.6" y2="182.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="22.8,77.6 167.2,20.4 147.6,8.0" fill="#7b848c" stroke="#7b848c" stroke-width="0.6" />
+<line x1="147.6" y1="8.0" x2="167.2" y2="20.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="42.4,182.0 167.2,20.4 42.4,90.0" fill="#7c858d" stroke="#7c858d" stroke-width="0.6" />
+<line x1="42.4" y1="182.0" x2="167.2" y2="20.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="42.4,182.0 42.4,90.0 22.8,169.6" fill="#b1bdca" stroke="#b1bdca" stroke-width="0.6" />
+<line x1="22.8" y1="169.6" x2="42.4" y2="182.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="42.4" y1="182.0" x2="42.4" y2="90.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="42.4,90.0 167.2,20.4 22.8,77.6" fill="#7b848c" stroke="#7b848c" stroke-width="0.6" />
+<line x1="167.2" y1="20.4" x2="42.4" y2="90.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="22.8,169.6 42.4,90.0 22.8,77.6" fill="#b1bdca" stroke="#b1bdca" stroke-width="0.6" />
+<line x1="22.8" y1="169.6" x2="22.8" y2="77.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="22.8" y1="77.6" x2="42.4" y2="90.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 </svg>

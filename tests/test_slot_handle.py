@@ -1027,6 +1027,8 @@ def test_escape_at_the_measures_discards_and_deselects_like_cancel() -> None:
 
     chosen: list[object] = []
     window = SimpleNamespace(
+        # Kein Vorher/Nachher-Vergleich offen: Escape geht an die Maße.
+        history_panel=SimpleNamespace(compare=SimpleNamespace(isChecked=lambda: False)),
         _local_features=None,
         _disarm_plane_points=lambda: False,
         session=SimpleNamespace(split_running=False, inserting=None),

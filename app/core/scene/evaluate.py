@@ -26,7 +26,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
 from pathlib import PurePath
-from typing import Any, Final, cast
+from typing import Any, Final, Literal, cast
 
 from app.core import expressions
 from app.core.errors import (
@@ -58,7 +58,6 @@ from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
-    PARALLEL_FACE_COSINE,
     _mesh_key,
     carry_detection,
     carry_refined_detection,
@@ -100,12 +99,16 @@ from app.core.perceive.match_records import (
 from app.core.perceive.matching import (
     FeatureTransform,
     MatchResult,
+    PlanarFaces,
     apply_mapping,
     declared_partners,
     inherit_originators,
     match,
     moved_features,
     on_their_partners,
+    pieces_in_place,
+    planar_faces,
+    planar_source,
     question_for,
     resolve,
     settled_by_surface,
@@ -125,11 +128,13 @@ from app.core.scene.orphans import references as feature_references
 from app.core.scene.parameter_usage import ParameterUse, parameter_uses
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
+    IDENTITY_FRAME,
     AskFn,
     BaseParams,
     BoundingBox,
     BRepBody,
     CancelToken,
+    CheckState,
     Document,
     Feature,
     FeatureContinuation,
@@ -160,7 +165,6 @@ from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
     MAX_FACET_SAG,
-    exact_mean,
     is_close,
     match_tolerance,
 )
@@ -293,6 +297,9 @@ class EvaluationResult:
     bereits aus dem Auswertungsarbeiter vor. Die Vorschau zeigt damit alte und
     mögliche neue Fläche gleichzeitig (§21.3, RM-217)."""
 
+    check_states: tuple[CheckState, ...] = ()
+    """Tatsächlich ausgeführte Endprüfungen, getrennt von ihren Befunden."""
+
     @property
     def complete(self) -> bool:
         return self.stopped_at is None
@@ -314,6 +321,84 @@ type RecognitionAnswered = Callable[[OpId, str, Mapping[str, Any]], None]
 
 def _silent_progress(fraction: float, text: str) -> None:
     return None
+
+
+class _EvaluationChecks:
+    """Meldet die Endprüfungen dort, wo sie tatsächlich ausgeführt werden."""
+
+    _BASIS: Final[dict[str, tuple[str, ...]]] = {
+        "evaluation": (),
+        "scene.fits": ("geometry", "printer", "material"),
+        "scene.placement": ("geometry", "printer"),
+        "scene.coincident_bodies": ("geometry",),
+        "scene.thin_walls": ("geometry", "printer", "material"),
+        "scene.form_deviation": ("geometry",),
+    }
+
+    def __init__(
+        self,
+        callback: Callable[[CheckState], None] | None,
+        missing_basis: tuple[str, ...],
+        cancelled: CancelToken,
+    ) -> None:
+        self.callback = callback
+        self.missing_basis = missing_basis
+        self.cancelled = cancelled
+        self.states: dict[str, CheckState] = {}
+
+    def publish(self, status: CheckState) -> None:
+        self.states[status.key] = status
+        if self.callback is not None:
+            self.callback(status)
+
+    def start(self) -> None:
+        for key, basis in self._BASIS.items():
+            self.publish(
+                CheckState(
+                    key=key,
+                    required_basis=basis,
+                    missing_basis=tuple(value for value in basis if value in self.missing_basis),
+                )
+            )
+        self.publish(
+            dataclasses.replace(self.states["evaluation"], applicable=True, state="running")
+        )
+
+    def finish(self, state: Literal["completed", "cancelled", "failed"]) -> None:
+        self.publish(
+            dataclasses.replace(
+                self.states["evaluation"],
+                state=state,
+            )
+        )
+
+    def run(
+        self,
+        key: str,
+        compute: Callable[[], list[Finding]],
+        *,
+        applicable: bool | None,
+    ) -> list[Finding]:
+        status = dataclasses.replace(self.states[key], applicable=applicable)
+        if status.missing_basis or applicable is None:
+            self.publish(status)
+            return []
+        if not applicable:
+            self.publish(dataclasses.replace(status, state="not_applicable"))
+            return []
+        self.publish(dataclasses.replace(status, state="running"))
+        try:
+            self.cancelled.raise_if_cancelled()
+            findings = compute()
+            self.cancelled.raise_if_cancelled()
+        except OperationCancelled:
+            self.publish(dataclasses.replace(status, state="cancelled"))
+            raise
+        except Exception:
+            self.publish(dataclasses.replace(status, state="failed"))
+            raise
+        self.publish(dataclasses.replace(status, state="completed"))
+        return findings
 
 
 class _StepProgress:
@@ -370,6 +455,8 @@ def evaluate(
     question_context: QuestionContext | None = None,
     detect_features: bool = True,
     on_recognition_answer: RecognitionAnswered | None = None,
+    check_status: Callable[[CheckState], None] | None = None,
+    missing_basis: tuple[str, ...] = (),
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt.
 
@@ -382,21 +469,38 @@ def evaluate(
     ``on_recognition_answer`` erfährt die Antwort auf die Frage vor der langen
     Vollerkennung sofort, nicht erst mit dem Ergebnis (§21.1): Wer sie gleich
     festhält, fragt nach einer Unterbrechung nicht noch einmal.
+
+    ``check_status`` meldet die tatsächliche Durchführung jeder Endprüfung,
+    auch bei Abbruch ohne Ergebnis. ``missing_basis`` nennt vom Aufrufer
+    nicht bestätigte Grundlagen; etwa ein ersetztes Druckerprofil bestätigt
+    keine Druckerwahl. Davon abhängige Prüfungen bleiben ``not_started``.
     """
-    result = _evaluate(
-        document,
-        profile,
-        quality=quality,
-        progress=progress,
-        ask=ask,
-        cancelled=cancelled,
-        cache=cache,
-        registry=registry,
-        sources=sources,
-        question_context=question_context,
-        detect_features=detect_features,
-        on_recognition_answer=on_recognition_answer,
-    )
+    checks = _EvaluationChecks(check_status, missing_basis, cancelled or NeverCancelled())
+    checks.start()
+    try:
+        result = _evaluate(
+            document,
+            profile,
+            quality=quality,
+            progress=progress,
+            ask=ask,
+            cancelled=cancelled,
+            cache=cache,
+            registry=registry,
+            sources=sources,
+            question_context=question_context,
+            detect_features=detect_features,
+            on_recognition_answer=on_recognition_answer,
+            checks=checks,
+        )
+    except OperationCancelled:
+        checks.finish("cancelled")
+        raise
+    except Exception:
+        checks.finish("failed")
+        raise
+    checks.finish("completed" if result.complete else "failed")
+    result = dataclasses.replace(result, check_states=tuple(checks.states.values()))
     try:
         usage = parameter_uses(document, registry) if document.parameters else {}
     except AppError as error:
@@ -505,8 +609,12 @@ def _evaluate(
     question_context: QuestionContext | None,
     detect_features: bool = True,
     on_recognition_answer: RecognitionAnswered | None = None,
+    checks: _EvaluationChecks | None = None,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
+    if checks is None:
+        checks = _EvaluationChecks(None, (), cancelled or NeverCancelled())
+        checks.start()
     profile = for_process(profile, document.print_settings)
     source = registry or REGISTRY
     token = cancelled or NeverCancelled()
@@ -780,6 +888,19 @@ def _evaluate(
         # Dazu der Hüllquader, in dem sie gemessen wurden — siehe _with_features.
         previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
         try:
+            from app.core.scene.placement import bind_surface
+
+            surface_binding = bind_surface(
+                spec,
+                for_run,
+                objects,
+                hashes,
+                ask=watched,
+                announce=announce_edges,
+                cancelled=token,
+            )
+            if surface_binding.context:
+                params = validate(spec.params, surface_binding.values)
             # Der Schlüssel liest die Quelle, und eine Quelle, die es nicht
             # gibt, ist ein Bedienfehler und kein Programmfehler: Die Kette
             # hält an und meldet ihn (§15.3), sie fliegt nicht auf. Vor dem
@@ -820,8 +941,9 @@ def _evaluate(
                 hashes,
                 reads_other_bodies=spec.reads_other_bodies,
             )
-            if binding.context:
-                hashed_params = {**hashed_params, **binding.context}
+            binding_context = {**binding.context, **surface_binding.context}
+            if binding_context:
+                hashed_params = {**hashed_params, **binding_context}
             key = operation_hash(
                 operation,
                 hashed_params,
@@ -842,15 +964,19 @@ def _evaluate(
             # Unverändert weiterreichen: der Umbau hier warf ohne Not den
             # Solver weg, und nach einem Cache-Treffer fehlte die Stufe in
             # der Solver-Übersicht des Berichts.
-            result = cached
+            result = (
+                dataclasses.replace(cached, answered={**cached.answered, **surface_binding.answers})
+                if surface_binding.answers
+                else cached
+            )
             reads_quality = reads_quality or cached.reads_quality
             # §15.7: Die Antwort reist mit dem Ergebnis. Die Sitzung schreibt
             # sie nur zu einem angenommenen Lauf; kam der Schritt danach aus
             # dem Cache — nach Strg+Z vor dem ersten Ergebnis, im nächsten
             # Projekt, nach einem Neustart von der Platte —, bliebe er sonst
             # für immer unbeantwortet.
-            if cached.answered:
-                answers[operation.id] = dict(cached.answered)
+            if result.answered:
+                answers[operation.id] = dict(result.answered)
         else:
             asked_quality = _WatchedQuality(quality)
             context = OpContext(
@@ -942,6 +1068,11 @@ def _evaluate(
             # die Operation zurückgegeben hat, wird gleich in ein
             # ``CachedResult`` umgewandelt; weiter unten ist beides dasselbe
             # Objekt, ob frisch oder aus dem Cache.
+            if surface_binding.answers:
+                produced = dataclasses.replace(
+                    produced,
+                    answered={**produced.answered, **surface_binding.answers},
+                )
             answered_key: str | None = None
             if produced.answered:
                 answers[operation.id] = dict(produced.answered)
@@ -968,7 +1099,7 @@ def _evaluate(
                     sources,
                     objects,
                     hashes,
-                    binding.context,
+                    binding_context,
                     profile,
                     quality,
                     material_profiles,
@@ -1115,6 +1246,17 @@ def _evaluate(
                 id=object_id,
                 created_by=operation.id,
                 kind=kind_after,
+                frame=(
+                    produced_object.frame
+                    if produced_object.frame is not None
+                    else objects[object_id].frame
+                    if object_id in objects and object_id in operation.inputs
+                    else inputs[0].frame
+                    if len(inputs) == 1
+                    else IDENTITY_FRAME
+                    if not inputs
+                    else None
+                ),
             )
             produced_name = str(placed.name)
             produced_by_name[produced_name] = (
@@ -1169,6 +1311,13 @@ def _evaluate(
                     # einzigen Eingang aus ihm — auch die der zweiten Hälfte
                     # nach *Teilen* (RM-217).
                     origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
+                    texture_sources=(
+                        inputs[1:]
+                        if operation.op in {"union_objects", "intersect_objects"}
+                        else inputs
+                        if operation.op == "split_bodies"
+                        else ()
+                    ),
                     detect_features=detect_features,
                     recognition_of=recognition_of,
                     on_recognition_answer=on_recognition_answer,
@@ -1249,6 +1398,7 @@ def _evaluate(
                 prepared_objects[object_id].reserved_feature_ids,
                 getattr(prepared_objects[object_id].mesh, "cavity", None),
                 features=prepared_objects[object_id].features,
+                frame=prepared_objects[object_id].frame,
                 check_cancelled=token.raise_if_cancelled,
                 memo=feature_memo,
             )
@@ -1365,16 +1515,24 @@ def _evaluate(
         else ()
     )
     # §14: Passungen werden bei jeder Auswertung geprüft, nie nur auf Nachfrage.
-    if stopped_at is None and scene.fits:
-        findings.extend(check_fits(scene, profile, document=document, cancelled=token))
+    if stopped_at is None:
+        findings.extend(
+            checks.run(
+                "scene.fits",
+                lambda: check_fits(scene, profile, document=document, cancelled=token),
+                applicable=bool(scene.fits),
+            )
+        )
         scene = dataclasses.replace(scene, report=Report(tuple(findings)))
         token.raise_if_cancelled()
     # Und aus demselben Grund die Lage zum Bauraum: ein Körper, der halb unter
     # der Bauplatte steckt, ist nicht druckbar, und die Schichtanalyse rechnet
     # ihn trotzdem klaglos durch — bis dahin sagte das erst, wer „Kollisionen
     # prüfen" von Hand aufrief.
-    if stopped_at is None and objects:
-        placement = check_placement(scene)
+    if stopped_at is None:
+        placement = checks.run(
+            "scene.placement", lambda: check_placement(scene), applicable=bool(objects)
+        )
         token.raise_if_cancelled()
         if placement:
             findings.extend(placement)
@@ -1384,8 +1542,12 @@ def _evaluate(
     # Operationen, weil erst der Endstand die Frage beantwortet — wer nach dem
     # Duplizieren anordnet, hat sie längst getrennt, und ein Hinweis aus dem
     # Duplizieren stünde dann als überholter Satz da (§17.3).
-    if stopped_at is None and len(objects) > 1:
-        stacked = check_bodies_in_one_place(scene)
+    if stopped_at is None:
+        stacked = checks.run(
+            "scene.coincident_bodies",
+            lambda: check_bodies_in_one_place(scene),
+            applicable=len(objects) > 1,
+        )
         token.raise_if_cancelled()
         if stacked:
             findings.extend(stacked)
@@ -1394,8 +1556,20 @@ def _evaluate(
     # Wand übrig? Sie steht in keinem Merkmal, sondern im Verhältnis zweier,
     # und wer die Bohrung aufbohrt und danach außen wächst, hat am Ende eine
     # gute (§17.3, RM-127).
-    if stopped_at is None and objects:
-        walls = check_thin_walls(scene)
+    if stopped_at is None:
+        # Diese Prüfung kennt ausschließlich Wände an belegten Bohrungen.
+        # Fehlende Merkmale in einer Vorschau sind kein Nachweis, dass es
+        # am vollständigen Endstand nichts zu prüfen gäbe.
+        known_walls = any(thinnest_sleeve(entry.features) is not None for entry in objects.values())
+        walls = checks.run(
+            "scene.thin_walls",
+            lambda: check_thin_walls(scene),
+            applicable=True
+            if known_walls
+            else None
+            if recognition_left_out & objects.keys()
+            else False,
+        )
         token.raise_if_cancelled()
         if walls:
             findings.extend(walls)
@@ -1407,8 +1581,24 @@ def _evaluate(
     # druckbereit." Ein Befund ist, was zu berichten ist (§18.4: der Klick
     # führt von „es gibt ein Problem" zu „hier ist es"); die Karte selbst
     # steht in der Analyseleiste für jeden.
-    if stopped_at is None and objects:
-        deviations = check_form_deviation(scene)
+    if stopped_at is None:
+        known_deviations = any(
+            feature.surface_patches
+            and not isinstance(fit_error := feature.params.get("fit_error"), bool)
+            and isinstance(fit_error, int | float)
+            and math.isfinite(fit_error)
+            for entry in objects.values()
+            for feature in entry.features.values()
+        )
+        deviations = checks.run(
+            "scene.form_deviation",
+            lambda: check_form_deviation(scene),
+            applicable=True
+            if known_deviations
+            else None
+            if recognition_left_out & objects.keys()
+            else False,
+        )
         token.raise_if_cancelled()
         if deviations:
             findings.extend(deviations)
@@ -1425,7 +1615,7 @@ def _evaluate(
             _without_undone_placements(
                 _without_outdated(_without_settled(findings), scene, cancelled=token),
                 scene,
-                placed=stopped_at is None and bool(objects),
+                placed=checks.states["scene.placement"].state == "completed",
             )
         ),
         scene,
@@ -2215,156 +2405,16 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
     )
 
 
-def _divided_in_place(feature: Feature | None, faces_now: _FacesNow, source: Mesh | None) -> bool:
+def _divided_in_place(feature: Feature | None, faces_now: PlanarFaces, source: Mesh | None) -> bool:
     """Ob eine alte ebene Fläche nach dem Schritt geteilt oder beschnitten weiterbesteht.
 
     Weiterbestehend heißt: Eine erkannte Fläche liegt in ihrer Ebene, gleich
     gerichtet, und ihre Mitte im Hüllquader der alten Fläche — gemessen an
-    deren Dreiecken im Eingangsnetz (:func:`_pieces_in_place`). Eine Fläche,
+    deren Dreiecken im Eingangsnetz (:func:`pieces_in_place`). Eine Fläche,
     die eine formende Operation wirklich nimmt (ein Pinselzug, der ihr die
     Ebene nimmt), hat keine solche Nachfolgerin und bleibt ein Verlust.
     """
-    return bool(_pieces_in_place(feature, faces_now, source))
-
-
-@dataclass(frozen=True, slots=True)
-class _FacesNow:
-    """Die ebenen Flächen nach dem Schritt als Felder — einmal gebaut, je alte Fläche gefragt.
-
-    Die Frage nach den Stücken einer alten Fläche läuft über jede erkannte
-    Fläche; als Schleife je alter Fläche wäre das Waisen mal Flächen in
-    Python, an der Kumiko-Schale mit 7 295 Flächen Sekunden.
-    """
-
-    names: tuple[FeatureId, ...]
-    normals: Any
-    centres: Any
-    areas: Any
-
-
-def _faces_now(detected: Mapping[FeatureId, Feature]) -> _FacesNow:
-    """Die ebenen Flächen aus ``detected`` mit Normale, Mitte und Fläche."""
-    import numpy as np
-
-    names: list[FeatureId] = []
-    normals: list[tuple[float, float, float]] = []
-    centres: list[tuple[float, float, float]] = []
-    areas: list[float] = []
-    for name, candidate in detected.items():
-        if candidate.kind != "face":
-            continue
-        there = candidate.params.get("centre")
-        direction = candidate.params.get("normal")
-        if not isinstance(there, tuple | list) or not isinstance(direction, tuple | list):
-            continue
-        if len(there) != 3 or len(direction) != 3:
-            continue
-        names.append(name)
-        normals.append((float(direction[0]), float(direction[1]), float(direction[2])))
-        centres.append((float(there[0]), float(there[1]), float(there[2])))
-        areas.append(float(candidate.params.get("area", 0.0) or 0.0))
-    return _FacesNow(
-        tuple(names),
-        np.asarray(normals, dtype=float).reshape(-1, 3),
-        np.asarray(centres, dtype=float).reshape(-1, 3),
-        np.asarray(areas, dtype=float),
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class _OldFace:
-    """Eine alte ebene Fläche, gemessen an ihren Dreiecken im Eingangsnetz.
-
-    ``direction`` ist ihre Normale als Einheitsvektor, ``middle`` ihre Mitte,
-    ``tolerance`` die Zuordnungstoleranz des Eingangsnetzes.
-    """
-
-    corners: Any
-    direction: Any
-    middle: Any
-    tolerance: float
-
-
-def _old_face(feature: Feature | None, source: Mesh | None) -> _OldFace | None:
-    """Die Dreiecke einer alten ebenen Fläche im Eingangsnetz — wenn sie diese Fläche sind.
-
-    ``None`` heißt: kein Netz, keine gültigen Nummern, oder die Dreiecke unter
-    diesen Nummern sind eine andere Fläche — ihre flächengewichtete Normale
-    weicht ab, oder ihre Mitte liegt nicht in der Ebene des Merkmals. So
-    sehen Nummern aus, die eine Operation an ihrem eigenen Ergebnis vergeben
-    hat: Am Eingang bezeichnen sie fremde Dreiecke, und aus deren Hüllquader
-    bekäme ein falsches Stück den Namen. Summiert wird exakt (``math.fsum``,
-    RM-187), denn an der Antwort hängt, welches Stück welchen Namen trägt.
-    """
-    import numpy as np
-
-    if feature is None or feature.kind != "face" or not feature.face_indices:
-        return None
-    if source is not None and not isinstance(source, MeshData):
-        # Ein exakter Körper: Die Dreiecksnummern seiner Merkmale zeigen auf
-        # seine Tessellierung (beide Kerne gleich, R4).
-        converted = getattr(source, "to_mesh", None)
-        source = converted() if callable(converted) else None
-    if not isinstance(source, MeshData):
-        return None
-    normal = feature.params.get("normal")
-    centre = feature.params.get("centre")
-    if not isinstance(normal, tuple | list) or not isinstance(centre, tuple | list):
-        return None
-    if len(normal) != 3 or len(centre) != 3:
-        return None
-    faces = np.asarray(feature.face_indices, dtype=np.int64)
-    if int(faces.max()) >= source.triangle_count or int(faces.min()) < 0:
-        return None
-    direction = np.asarray([float(value) for value in normal], dtype=float)
-    middle = np.asarray([float(value) for value in centre], dtype=float)
-    weights = np.asarray(source.raw.area_faces, dtype=float)[faces]
-    normals = np.asarray(source.raw.face_normals, dtype=float)[faces] * weights[:, None]
-    summed = [math.fsum(normals[:, axis].tolist()) for axis in range(3)]
-    length = math.sqrt(math.fsum(value * value for value in summed))
-    own = math.sqrt(math.fsum(float(value) * float(value) for value in direction))
-    if length <= 0.0 or own <= 0.0:
-        return None
-    facing = math.fsum(float(a) * float(b) for a, b in zip(summed, direction, strict=True))
-    if facing < PARALLEL_FACE_COSINE * length * own:
-        return None
-    corners = np.asarray(source.raw.vertices, dtype=float)[
-        np.asarray(source.raw.faces, dtype=np.int64)[faces].ravel()
-    ]
-    tolerance = match_tolerance(source.bounds.diagonal)
-    unit = direction / own
-    offsets = ((corners - middle) * unit).sum(axis=1)
-    if abs(exact_mean(offsets.tolist())) > tolerance:
-        return None
-    return _OldFace(corners, unit, middle, tolerance)
-
-
-def _pieces_in_place(
-    feature: Feature | None, faces_now: _FacesNow, source: Mesh | None
-) -> tuple[FeatureId, ...]:
-    """Die erkannten Flächen, die Stücke einer alten ebenen Fläche sind.
-
-    Ein Stück liegt in der Ebene der alten Fläche, gleich gerichtet, und seine
-    Mitte im Hüllquader ihrer Dreiecke im Eingangsnetz (:func:`_old_face`).
-    Dieselbe Messung für zwei Fragen: ob die alte Fläche fort ist
-    (:func:`_divided_in_place`) und welches Stück ihren Namen trägt
-    (:func:`_divided_partners`). Gerechnet mit Grundrechenarten (RM-187): An
-    der Antwort hängt, welches Stück welchen Namen trägt.
-    """
-    import numpy as np
-
-    if not faces_now.names:
-        return ()
-    old = _old_face(feature, source)
-    if old is None:
-        return ()
-    low = old.corners.min(axis=0) - old.tolerance
-    high = old.corners.max(axis=0) + old.tolerance
-    facing = (faces_now.normals * old.direction).sum(axis=1) >= PARALLEL_FACE_COSINE
-    apart = np.abs(((faces_now.centres - old.middle) * old.direction).sum(axis=1))
-    inside = ((faces_now.centres >= low) & (faces_now.centres <= high)).all(axis=1)
-    chosen = facing & (apart <= old.tolerance) & inside
-    return tuple(faces_now.names[index] for index in np.flatnonzero(chosen))
+    return bool(pieces_in_place(feature, faces_now, source))
 
 
 def _cut_by_the_step(feature: Feature, source: Mesh | None, bounds: BoundingBox) -> bool:
@@ -2372,12 +2422,12 @@ def _cut_by_the_step(feature: Feature, source: Mesh | None, bounds: BoundingBox)
 
     Nach *Teilen* reicht die Deckfläche in die andere Hälfte; nach *Abschneiden*
     über die Schnittebene. Gemessen an ihren Dreiecken im Eingangsnetz
-    (:func:`_old_face`) gegen den Hüllquader der Ausgabe, mit der
+    (:func:`planar_source`) gegen den Hüllquader der Ausgabe, mit der
     Zuordnungstoleranz des Eingangs.
     """
     import numpy as np
 
-    old = _old_face(feature, source)
+    old = planar_source(feature, source)
     if old is None:
         return False
     low = np.asarray(bounds.minimum, dtype=float) - old.tolerance
@@ -2397,7 +2447,7 @@ def _with_triangles_before(
     stand nach *Abschneiden* die Deckfläche ohne Dreiecke und mit ihrem alten
     Maß im Baum, und das Stück daneben hieß jedes Mal anders (R4). Die Nummern
     kommen dann vom Eingang desselben Körpers (``before``); ob sie diese
-    Fläche bezeichnen, prüft :func:`_old_face`.
+    Fläche bezeichnen, prüft :func:`planar_source`.
     """
     if feature.face_indices or feature.kind != "face":
         return feature
@@ -2456,7 +2506,7 @@ def _divided_partners(
     Passung an der Deckfläche war nicht mehr messbar (Durchsicht 0.5.1, R4).
 
     Gefragt wird nur für alte Flächen ohne Partner (``seen.orphaned``): Liegen
-    Stücke von ihr in dieser Ausgabe (:func:`_pieces_in_place`) und ist eines
+    Stücke von ihr in dieser Ausgabe (:func:`pieces_in_place`) und ist eines
     davon das größte, trägt es den Namen — samt Dreiecken und neu gemessener
     Fläche, wie jeder zugeordnete Partner. Sind die größten gleich groß,
     entscheidet die Lage nicht (Regel 21): Das Paar geht als offene Frage an
@@ -2468,7 +2518,7 @@ def _divided_partners(
     """
     if not seen.orphaned:
         return seen, ()
-    faces_now = _faces_now(detected)
+    faces_now = planar_faces(detected)
     area_of = dict(zip(faces_now.names, faces_now.areas.tolist(), strict=True))
     # Ein Stück, das schon ein Name trägt oder um das eine offene Frage geht,
     # ist nicht frei.
@@ -2488,7 +2538,7 @@ def _divided_partners(
         measured = _with_triangles_before(name, feature, before)
         pieces = [
             piece
-            for piece in _pieces_in_place(measured, faces_now, source)
+            for piece in pieces_in_place(measured, faces_now, source)
             if piece not in taken and piece not in contested
         ]
         if not pieces:
@@ -2991,12 +3041,13 @@ def _unchanged_continuations(
     dieselbe Geometrie (:func:`_unchanged`), ist das ein Beleg — strenger als
     die Zuordnung, die §21.2 für „ID bleibt“ genügt. Der Partner wird wie bei
     der Neuwahl unter dem alten Namen veröffentlicht (``apply_mapping``).
-    ``considered`` umfasst bei einem Schritt, der Merkmale einführt, alle
-    bisherigen Merkmale; sonst nur die noch gebrauchten Bezüge.
+    ``considered`` umfasst alle bisherigen Merkmale, unabhängig davon, ob
+    bereits ein Folgeschritt auf eines zeigt. Nicht belegte alte Kennungen
+    bleiben reserviert, damit ein späterer Klick die Vergabe nicht verändert.
 
     Die Zuordnung danach führt diese Namen auf sich selbst; was auf einen
-    umbenannten Partner zeigte, fällt heraus und bleibt damit unbelegt — gefragt
-    wird dann wie bisher, nie still angenommen.
+    umbenannten Partner zeigte, folgt dessen neuer Kennung und bleibt damit
+    unbelegt — gefragt wird dann wie bisher, nie still angenommen.
     """
     unchanged = {
         name: found
@@ -3008,23 +3059,24 @@ def _unchanged_continuations(
         and found in current.features
         and _unchanged(reference[name], current.features[found])
     }
-    if not unchanged:
-        return current, matched
     aliased = apply_mapping(
         dict(current.features),
         _native_alias_mapping(matched, unchanged),
         previous=reference,
+        reserved=reference,
     )
-    renamed = set(unchanged.values()) | set(unchanged) | set(matched.orphaned)
-    renamed |= set(matched.ambiguous)
-    mapping = {
-        old: new
-        for old, new in matched.mapping.items()
-        if old not in unchanged and new not in renamed
-    }
-    mapping.update({name: name for name in unchanged})
+    # Die Reihenfolge bleibt in apply_mapping erhalten. Auch unbewiesene
+    # Kandidaten bekommen reservierungsfreie Namen; die spätere Rückfrage
+    # zeigt genau diese Namen. Ein neuer Klick darf nie rückwirkend einen
+    # alten Bezug auf eine andere Fläche erzeugen.
+    renamed = dict(zip(current.features, aliased, strict=True))
     return dataclasses.replace(current, features=aliased), dataclasses.replace(
-        matched, mapping=mapping
+        matched,
+        mapping={old: renamed[new] for old, new in matched.mapping.items()},
+        ambiguous={
+            old: tuple(renamed[new] for new in names) for old, names in matched.ambiguous.items()
+        },
+        fresh=tuple(renamed[name] for name in matched.fresh),
     )
 
 
@@ -3747,6 +3799,42 @@ def _motion_of(
     return cast(Transform, matrix), moved_source
 
 
+def _textures_from_other_inputs(
+    mesh: MeshData,
+    kept: Mapping[FeatureId, Feature],
+    inputs: Sequence[SceneObject],
+    watch: CancelToken,
+) -> dict[FeatureId, Feature]:
+    """Bewahrt belegte Texturreste weiterer vereinigter oder geschnittener Körper."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.patterns import bound_texture, rebound_textures
+
+    textures = dict(kept)
+    owned = {index for feature in textures.values() for index in feature.face_indices}
+    for source in inputs:
+        watch.raise_if_cancelled()
+        if not any(
+            f.kind == "pattern" and f.params.get("texture") for f in source.features.values()
+        ):
+            continue
+        found = rebound_textures(
+            mesh,
+            source.features,
+            as_mesh_data(source.mesh),
+            check_cancelled=watch.raise_if_cancelled,
+        )
+        for name, feature in found.items():
+            indices = tuple(index for index in feature.face_indices if index not in owned)
+            if not indices:
+                continue
+            # Die Herkunft hält den Bezug auch dann stabil, wenn eine andere
+            # Textur durch eine frühere Verlaufsänderung wegfällt.
+            target = f"{source.id}.{name}"
+            textures[target] = dataclasses.replace(bound_texture(mesh, feature, indices), id=target)
+            owned.update(indices)
+    return textures
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -3768,6 +3856,7 @@ def _with_features(
     scope: str | None = None,
     source_mesh: Mesh | None = None,
     origin_mesh: Mesh | None = None,
+    texture_sources: Sequence[SceneObject] = (),
     detect_features: bool = True,
     recognition_of: dict[ObjectId, _BodyRecognition] | None = None,
     on_recognition_answer: RecognitionAnswered | None = None,
@@ -3789,7 +3878,8 @@ def _with_features(
 
     ``announced_gone`` nennt die Merkmale, deren Entfernen die Operation selbst
     meldet (:data:`REMOVAL_CODES`): Ihr Verlust ohne Verweis steht nicht noch
-    einmal als ``perceive.orphaned`` im Bericht (RM-217).
+    einmal als ``perceive.orphaned`` im Bericht (RM-217). Eine ausdrücklich
+    entfernte Textur wird auch aus numerischen Restflächen nicht neu gebunden.
 
     ``source_mesh`` ist das Netz des Eingangs, aus dem diese Ausgabe entstand —
     bei einer gemeldeten Bewegung der Beleg dafür, dass nicht neu erkannt
@@ -3866,6 +3956,48 @@ def _with_features(
         # Zuordnung auf denselben Namen.
         passed_through = frozenset(_inherited_features(entry.features, previous))
         exact_entry = _carried_along(entry, previous, transform, previous_bounds, cancelled=watch)
+        # Die Herkunft einer Textur bleibt beim Darstellungswechsel erhalten.
+        # Auch am exakten Körper zählt die belegte Oberfläche; die native
+        # Flächenerkennung allein kennt den erzeugenden Texturschritt nicht.
+        native_textures: dict[FeatureId, Feature] = {}
+        if texture_sources or any(
+            f.kind == "pattern" and f.params.get("texture") for f in previous.values()
+        ):
+            from app.core.geom.mesh import as_mesh_data
+            from app.core.perceive.patterns import rebound_textures, without_texture_cells
+
+            texture_source = source_mesh or origin_mesh
+            texture_before = (
+                transformed_features(
+                    previous, transform, check_cancelled=watch.raise_if_cancelled
+                ).candidates
+                if transform is not None
+                else previous
+            )
+            texture_before = {
+                name: feature
+                for name, feature in texture_before.items()
+                if name not in announced_gone
+            }
+            native_textures = rebound_textures(
+                as_mesh_data(exact_entry.mesh),
+                texture_before,
+                as_mesh_data(texture_source) if texture_source is not None else None,
+                movement=transform,
+                check_cancelled=watch.raise_if_cancelled,
+            )
+            native_textures = _textures_from_other_inputs(
+                as_mesh_data(exact_entry.mesh), native_textures, texture_sources, watch
+            )
+            exact_entry = dataclasses.replace(
+                exact_entry,
+                features={
+                    **without_texture_cells(
+                        exact_entry.features, native_textures, mesh=as_mesh_data(exact_entry.mesh)
+                    ),
+                    **native_textures,
+                },
+            )
         wanted: Mapping[FeatureId, tuple[str, ...]] = (
             dict.fromkeys(referenced, ()) if needed is None else needed
         )
@@ -3876,13 +4008,13 @@ def _with_features(
             if entry_.source.object_id == entry.id
             and entry_.target == entry_.source.feature_id
             and entry_.target in exact_entry.features
-        )
+        ) | frozenset(native_textures)
         unproven = set(wanted) - passed_through - continued
         matched: MatchResult | None = None
         reference_features: dict[FeatureId, Feature] = previous
         if (
             previous
-            and (touches_features or unproven)
+            and (touches_features or set(previous) - passed_through - continued)
             and max(len(previous), len(exact_entry.features)) <= FEATURE_LIMIT_COUNT
         ):
             # Die native Erkennung benennt frisch. Gleiche Namen beweisen
@@ -3928,19 +4060,18 @@ def _with_features(
                         True,
                     ),
                 )
-        if matched is not None and (touches_features or unproven):
+        if matched is not None:
             # **Ein neuer Name darf kein altes Merkmal übernehmen.** Der exakte
             # Leser nummeriert Bohrungen räumlich: Kommt eine Bohrung links von
             # einer bestehenden hinzu, wechselt deren rohe Kennung. Ohne
             # Folgebezug wurde die eindeutige Geometrie bisher nicht unter dem
             # alten Namen veröffentlicht; beim späteren Umsortieren geriet die
             # Verlaufsprüfung dann in wechselnde Zuordnungen (RM-218). Schritte,
-            # die Merkmale einführen, bewahren deshalb alle eindeutig
-            # geometrisch unveränderten Vorgänger innerhalb der EPS_GEOM-
-            # Toleranz. Bei anderen Umbauten genügt die Menge der noch
-            # gebrauchten Bezüge. Veränderte Geometrie bleibt unbelegt und
+            # bewahren deshalb alle eindeutig geometrisch unveränderten
+            # Vorgänger innerhalb der EPS_GEOM-Toleranz, unabhängig von einem
+            # späteren Verbraucher. Veränderte Geometrie bleibt unbelegt und
             # läuft weiter durch die Frage nach §21.3.
-            considered = reference_features if touches_features else unproven
+            considered = reference_features
             exact_entry, matched = _unchanged_continuations(
                 exact_entry, reference_features, considered, matched
             )
@@ -4173,6 +4304,10 @@ def _with_features(
     # trägt die Bewegung selbst (``rigid_orphans`` weiter unten). Vorher hielt
     # ein einziges großes, nicht nachmessbares Merkmal jeden Schritt an.
     required = set(needed) if needed is not None else set(referenced)
+    # Die globale Referenzliste enthält auch den Bezug dieses Schritts.
+    # Der bereits aufgelöste Folgebedarf entscheidet, ob seine Ausgabe erneut
+    # erkannt werden muss; ein leeres needed ist ausdrücklich kein unbekannter Bedarf.
+    requires_recognition = bool(required)
     if operation.op == "arrange_bed" and feature_movement is not None:
         required.clear()
     elif transform is not None:
@@ -4220,14 +4355,14 @@ def _with_features(
         if (
             transform is not None
             and isinstance(source_mesh, MeshData)
-            and (detect_features or referenced or needed)
+            and (detect_features or requires_recognition)
         ):
             carry_detection(source_mesh, mesh, transform, check_cancelled=watch.raise_if_cancelled)
         if refinement is not None and isinstance(source_mesh, MeshData):
             carry_refined_detection(
                 source_mesh, mesh, refinement, check_cancelled=watch.raise_if_cancelled
             )
-        if not detect_features and not referenced and not needed:
+        if not detect_features and not requires_recognition:
             # **Die Vorschau rechnet keine Erkennung, die niemand liest.**
             # Der Dialog zeigt Geometrie und Differenz; die Erkennung am
             # geänderten Körper kostete je getippter Zahl an 204 000
@@ -4425,6 +4560,66 @@ def _with_features(
     # andere Ergebnis — nicht die Hälfte ohne Zuordnung, die jede Auswertung neu
     # benennte (§21.2). Wer an der Grenze wechselt, verwaist wie jedes
     # verschwundene Merkmal, mit Befund, wo ein Verweis daran hängt.
+    # Eine selbst aufgebrachte Textur ist auch unterhalb der heuristischen
+    # Zellgrenze ein Muster. Ihr Beleg ist die tatsächliche Oberfläche.
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.patterns import (
+        rebound_textures,
+        without_pattern_cells,
+        without_texture_cells,
+    )
+
+    texture_source = source_mesh or origin_mesh
+    # Ein Schritt darf alte Dreiecksnummern ausdrücklich leeren. Zum
+    # Nachbinden zählt dann die Oberfläche des Vorgängers, nie die leere
+    # Ausgabe als Beleg für eine frisch erzeugte Textur.
+    texture_known = {
+        name: dataclasses.replace(feature, face_indices=previous[name].face_indices)
+        if feature.kind == "pattern"
+        and feature.params.get("texture")
+        and not feature.face_indices
+        and name in previous
+        else feature
+        for name, feature in known.items()
+        if name not in announced_gone
+    }
+    textures = rebound_textures(
+        mesh,
+        texture_known,
+        as_mesh_data(texture_source) if texture_source is not None else None,
+        proven=frozenset(
+            name
+            for name, feature in known.items()
+            if (
+                name in output_features
+                and feature.face_indices
+                and (feature.created_by is None or (name in previous and name not in inherited))
+            )
+            or unchanged
+            or (transform is not None and name in transformed.exact)
+        ),
+        movement=feature_movement,
+        check_cancelled=watch.raise_if_cancelled,
+    )
+    textures = _textures_from_other_inputs(mesh, textures, texture_sources, watch)
+    declared = {
+        name: feature for name, feature in declared.items() if not feature.params.get("texture")
+    }
+    for name, feature in tuple(textures.items()):
+        if feature.created_by is None:
+            # Die Schrittkennung bleibt auch dann gleich, wenn eine frühere
+            # Textur wegfällt. Nachzählende Namen würden Folgebezüge verschieben.
+            target = f"texture_{operation.id}"
+            del textures[name]
+            textures[target] = dataclasses.replace(feature, id=target, created_by=operation.id)
+    if textures:
+        detected = {**without_texture_cells(detected, textures, mesh=mesh), **textures}
+        declared.update(textures)
+
+    # Die örtliche Suche kann ein zuvor einzeln gemessenes Zellfeld als Muster
+    # erkennen. Mitgereiste Zellflächen dürfen daneben nicht wieder auftauchen.
+    detected = without_pattern_cells(detected)
+
     if len(detected) > FEATURE_LIMIT_COUNT:
         findings.append(
             Finding(
@@ -4447,7 +4642,15 @@ def _with_features(
             if transform is not None or unchanged
             else set()
         )
-        detected = _heaviest(detected, mesh, FEATURE_LIMIT_COUNT, before)
+        detected = {
+            **_heaviest(
+                {name: feature for name, feature in detected.items() if name not in textures},
+                mesh,
+                max(0, FEATURE_LIMIT_COUNT - len(textures)),
+                before,
+            ),
+            **textures,
+        }
 
     # **Was die Erkennung hier nicht sieht, wird später nicht an ihr gemessen.**
     # Ein Baustein benennt seine Bohrungen beim Bauen; ``detect`` findet sie
@@ -4749,7 +4952,7 @@ def _with_features(
     quiet: dict[bool, list[str]] = {False: [], True: []}
     # Die Flächen nach dem Schritt einmal als Felder, nicht je Waise eine
     # Schleife über alle (:func:`_divided_in_place`).
-    faces_now = _faces_now(detected)
+    faces_now = planar_faces(detected)
     for old_id in matched.orphaned:
         old_feature = previous.get(old_id)
         if (

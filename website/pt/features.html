@@ -111,8 +111,7 @@
           <p>Ao abrir, o Solidon3D procura na malha de triângulos aquilo que um
           dia foi projeto: furos, pinos, escareados, cúpulas e sedes,
           arredondamentos, golas, roscas, faces planas e arestas abertas. Cada
-          característica encontrada recebe uma identidade que sobrevive aos
-          passos seguintes — e um clique mostra os seus valores <b>medidos</b>, como cotas na vista e, à direita, no painel Seleção: posição, diâmetro, profundidade,
+          característica encontrada recebe uma identidade usada como referência nos passos seguintes — e um clique mostra os seus valores <b>medidos</b>, como cotas na vista e, à direita, no painel Seleção: posição, diâmetro, profundidade,
           eixo.</p>
           <p class="note">Alterar um número é a operação.
           <b>Sem modo e sem um segundo diálogo</b> — e a pré-visualização na
@@ -121,8 +120,7 @@
           aplicam-se diretamente ao elemento reconhecido. Até agora, deslocar
           um furo três milímetros significava tapá-lo e furar outro em
           coordenadas novas — dois passos, seis números à mão, e a identidade
-          perdia-se. Agora é um passo, e cada ajuste que aponta para esse furo
-          mantém a sua referência.</p>
+          perdia-se. Agora é um passo, e os ajustes continuam a referenciar esse furo. As referências que já não possam ser resolvidas são assinaladas.</p>
           <p>O próprio furo diz que parafuso lhe pertence («Provavelmente corresponde a M5 (Furo de passagem fino)»), e onde nenhum serve, também o diz. Seis
           furos iguais passam à mesma medida de uma só vez, como uma única ação
           que um desfazer retira em conjunto. Duas características marcadas
@@ -130,15 +128,13 @@
           medição.</p>
           <p class="note" data-kinds="hole,pin,cone,sphere">Nem todos os tipos suportam todas as ações. Mover, duplicar e remover valem para
           furos, pinos, escareados, cúpulas e sedes; rodar, para todos menos a
-          superfície esférica — não tem uma orientação que se possa rodar. Nos
-          arredondamentos compatíveis é possível alterar o raio ou remover o
-          arredondamento nos arredondamentos e golas que substituem visivelmente uma aresta; uma transição que se funde suavemente com as faces vizinhas, não. <b>O
+          superfície esférica — não tem uma orientação que se possa rodar. Nos arredondamentos e golas que substituem visivelmente uma aresta, pode alterar o raio ou remover o elemento; uma transição que se funde suavemente com as faces vizinhas, não. <b>O
           Solidon3D explica quais as ações disponíveis no ponto escolhido e
           porquê.</b></p>
-          <p>Podes repetir furos reconhecidos e outros elementos compatíveis
+          <p>Pode repetir furos reconhecidos e outros elementos compatíveis
           em fila, à volta de um círculo ou com cópias espelhadas. Assim, um
           único furo dá origem a um conjunto de furos com espaçamento regular.
-          Se alterares a medida do original num passo anterior do histórico,
+          Se alterar a medida do original num passo anterior do histórico,
           as cópias acompanham a alteração.</p>
         </div>
         <figure class="shot">
@@ -161,8 +157,7 @@
           <p class="note">O arrasto torna-se um passo no histórico.
           <b>O que foi empurrado na imagem fica depois como número nesse
           passo</b> — e continua alterável dez passos mais tarde.</p>
-          <p>Se levantar uma peça, a sombra foge para o lado: a única
-          informação sobre a altura que a imagem dá por si. A seleção
+          <p>Se levantar uma peça, a sombra foge para o lado: uma ajuda visual para avaliar a altura. A seleção
           esbate-se em vez de saltar.</p>
           <p>E numa face, a barra de movimento só oferece o que ali é possível:
           rodar e escalar ficam a cinzento, com o motivo na dica em vez de uma
@@ -218,7 +213,7 @@
           o contorno vai ser, decide-se só depois: extrudir, cortar como bolsa, gerar
           por revolução, conduzir ao longo de um arco ou estender entre dois
           contornos.</p>
-          <p class="note">O contorno mantém-se uma curva exata.
+          <p class="note">Num sólido exato, o contorno mantém a sua curva.
           <b>Um círculo desenhado torna-se um cilindro redondo, não um
           polígono com muitos cantos.</b></p>
           <p>A grelha mostra a que é que o imantado se agarra, e o seu passo
@@ -226,12 +221,11 @@
           baixo diz a face em que se está a desenhar. Uma linha auxiliar
           continua auxiliar — mesmo depois de aparar, prolongar, deslocar e
           espelhar.</p>
-          <p>Podes extrudir um contorno e uni-lo diretamente ao sólido
-          selecionado. Para retirar material, roda uma secção em torno de um
+          <p>Pode extrudir um contorno e uni-lo diretamente ao sólido
+          selecionado. Para retirar material, rode uma secção em torno de um
           eixo, por exemplo para criar uma ranhura anular. Uma transição entre
           dois contornos recorta um funil ou um canal de secção quadrada para
-          circular. Ao longo de um arco ou de um percurso desenhado, podes
-          cortar um canal guiado que também pode sair pela lateral.</p>
+          circular. Ao longo de um arco ou de um percurso desenhado, pode cortar um canal guiado que também pode sair pela lateral.</p>
         </div>
         <figure class="shot">
           <div class="stage">
@@ -249,7 +243,7 @@
           <p>O histórico é não destrutivo: cada passo continua alterável,
           cada número pode ser mexido mais tarde. Espessura de parede de 2,40
           para 3,60? O esvaziamento, a tampa, os furos e os ajustes
-          recalculam-se — pela mesma ordem, com o mesmo resultado.</p>
+          recalculam-se — pela mesma ordem, com os novos valores.</p>
           <p class="note">Parâmetros de projeto com nome em vez de números
           espalhados: <b>uma alteração num sítio, não em sete.</b></p>
           <p>Os limites podem ser alterados mais tarde, mesmo depois de o
@@ -291,7 +285,7 @@
       <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocos</span>
-          <h3>Um alojamento de porca em quatro cliques, não em quatro meias horas</h3>
+          <h3>Um alojamento de porca pronto a dimensionar</h3>
           <p>A face em que clica é que conta: um bloco aparece onde apontou
           no modelo — antes, cada operação numa face custava dois cliques. O catálogo à direita conhece agora também suporte de
           parede, nervura, lingueta e ranhura, lingueta de encaixe, ligação
@@ -303,13 +297,10 @@
           parede, gancho para painel perfurado, clip de cabo, esquadro e pé.
           As medidas vêm de uma tabela de peças normalizadas, não do
           palpite.</p>
-          <p class="note">Cada bloco é testado em todo o seu intervalo de
-          parâmetros: <b>estanque, espessura mínima de parede, sem
-          autointerseções.</b></p>
+          <p class="note">Cada bloco é verificado nas combinações dos seus valores limite: <b>malha fechada, espessura mínima de parede e ausência de autointerseções.</b></p>
           <p>Quem escolher um bloco antes de apontar um sítio é interrogado
           pelo Solidon3D, em vez de o ver colocado na origem. O catálogo
-          também se abre sem nenhum modelo carregado — colocar um bloco
-          fica então bloqueado, com o motivo indicado.</p>
+          também se abre sem nenhum modelo carregado — para inserir um bloco, crie primeiro um sólido ou importe um modelo com os botões do catálogo.</p>
           <p>A árvore de objetos mostra o que um bloco traz consigo: as suas
           características aparecem como entradas próprias por baixo dele, e
           o nó propõe alterar exatamente esse passo.</p>
@@ -347,18 +338,17 @@
             <a href="../bilder/beleg-eigener-baustein-pt.webp?v=918f09ac"><img src="../bilder/beleg-eigener-baustein-pt.webp?v=918f09ac" width="479" height="1347" loading="lazy" decoding="async"
                  alt="O diálogo «Guardar a seleção como bloco», aberto a partir do catálogo: em cima nome, grupo, descrição, licença e autor, depois para cada cota — aqui largura e profundidade — rótulo, unidade, valor mínimo e máximo, valor predefinido e lugar no diálogo, depois os pontos em que se poderá clicar, com o seu nome na receita; em baixo «Teste do intervalo: 8 combinações» e o botão Criar bloco."></a>
           </div>
-          <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula todo o intervalo antes de guardar.</figcaption>
+          <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula as combinações dos valores limite antes de guardar.</figcaption>
         </figure>
       </div>
 
       <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Superfícies</span>
-          <h3>Oito padrões, todos verificados quanto à imprimibilidade</h3>
+          <h3>Oito padrões verificados segundo o perfil de impressão</h3>
           <p>Nervura, onda, moletado reto e cruzado, favo de mel, covinhas,
           Voronoi e ruído — como <b>geometria real</b> e como grelha exata,
-          não como campo de alturas amostrado. De outro modo, um moletado
-          imprime papa arredondada em vez de losangos nítidos.</p>
+          não como campo de alturas amostrado. O detalhe impresso depende também do bico, do material e das definições do slicer.</p>
           <p class="note">Antes de calcular, a pergunta: será que o padrão
           sequer nasce nesta máquina? <b>Barras mais estreitas do que o bico
           e relevos mais rasos do que uma camada são recusados</b>, não
@@ -382,11 +372,11 @@
       <div class="showcase" id="inspection-report">
         <div>
           <span class="kicker">Relatório de verificação</span>
-          <h3>Fica a saber antes da impressão o que vai correr mal</h3>
-          <p>Cada ficheiro aberto recebe um relatório: zonas abertas,
+          <h3>Detete riscos de impressão e corrija-os antes do corte</h3>
+          <p>Cada modelo aberto recebe um relatório: zonas abertas,
           triângulos mal orientados, paredes abaixo de duas larguras de
           extrusão, unidades em falta. Ordenado por erros, avisos e notas —
-          e cada entrada salta no modelo para o sítio de que fala.</p>
+          e as entradas com localização indicam o sítio em causa no modelo.</p>
           <p class="note">Cada achado traz uma sugestão de ação.
           <b>Aqui, um erro nunca acaba em «falhou».</b></p>
         </div>
@@ -404,16 +394,16 @@
           <span class="kicker">Análise de camadas</span>
           <h3>Ver o que a impressora vai ver</h3>
           <p>O Solidon3D corta o modelo em camadas e mede o que daí decorre:
-          ângulos de saliência, ilhas a pairar, paredes abaixo de dois
+          áreas sem suporte, ilhas a pairar, paredes abaixo de dois
           cordões, vãos de ponte e o volume de suporte. A procura de
-          orientação propõe a posição que menos disso gera.</p>
+          orientação procura uma posição que exija menos suportes entre as orientações avaliadas.</p>
           <p class="note">Nenhum slicer próprio — e nenhum número misturado:
           <b>o que vem da análise e o que vem do G-Code está sempre
           indicado.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Um desenho: uma linha de análise sobe da mesa de impressão através de uma peça; um após outro aparecem três achados — saliência de 78 graus, ilha a pairar e uma parede abaixo de dois cordões.">
+               aria-label="Um desenho: uma linha de análise sobe da mesa de impressão através de uma peça; um após outro aparecem três achados — saliência de 90 graus, ilha a pairar e uma parede abaixo de dois cordões.">
             <text class="ink" x="24" y="30" font-weight="600">Análise de camadas</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -441,7 +431,7 @@
               <text class="ink" x="386" y="183" font-size="12">Parede &lt; 2 cordões</text>
             </g>
           </svg>
-          <figcaption>Três achados que o slicer só conhece depois do slicing.</figcaption>
+          <figcaption>Três constatações que pode examinar antes de fatiar.</figcaption>
         </figure>
       </div>
 
@@ -451,7 +441,7 @@
           <h3>Passar ao slicer, com valores à medida da peça</h3>
           <p>O Solidon3D não escreve G-code: isso é com o seu slicer. As definições de impressão dizem antes o que esta peça exige: da geometria saem sugestões como um brim quando a base é pequena ou mais tempo por camada quando sobra pouca área em cima — cada uma com o seu motivo, e cada uma pode ser desmarcada.</p>
           <p><b>Abrir no slicer</b> passa a peça, se quiser com os valores, ao PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer ou Cura. <b>Fatiar</b> deixa o seu slicer calcular em segundo plano; o que ele mede aparece depois no relatório de verificação.</p>
-          <p class="note">O medido e o estimado nunca se misturam: <b>o que vem do G-code fica marcado como medido</b> e aparece ao lado da estimativa do Solidon, não no seu lugar.</p>
+          <p class="note">Os valores do G-code descrevem a impressão planeada. <b>A sua origem aparece ao lado da estimativa do Solidon.</b> O tempo e o consumo reais podem ser diferentes.</p>
         </div>
         <figure class="shot">
           <div class="stage">
@@ -473,18 +463,15 @@
           <p>As metades ficam logo preparadas para encaixar: pinos numa, os
           furos correspondentes na outra. Redondo, hexagonal, cauda de
           andorinha ou encaixe — os angulosos seguram contra a torção, a
-          cauda de andorinha também contra o puxão, e o encaixe engata e
-          aguenta sem cola. A folga entre eles vem do perfil de material:
-          nada de limar, nada de segunda tentativa. O ajuste fica no projeto
+          cauda de andorinha também contra o puxão, e o encaixe foi concebido para reter as partes. Verifique a retenção na peça impressa. A folga entre eles vem do perfil de material. O ajuste fica no projeto
           como relação e é verificado de novo em cada alteração
           posterior.</p>
           <p>E quem só precisa de um lado usa <b>Cortar fora</b>: um plano,
           um lado fica, a face de corte é fechada. Assim um suporte importado
           ganha uma parede traseira lisa, e um tabuleiro vira um copo cujas
           paredes chegam todas à mesma altura.</p>
-          <p>Quem nem sequer quiser olhar usa <b>Dividir
-          automaticamente</b>: o Solidon3D procura sozinho o plano de corte
-          e corta até cada pedaço caber.</p>
+          <p>Para procurar automaticamente os planos de corte, use <b>Dividir
+          automaticamente</b>: o Solidon3D procura cortes que permitam colocar as partes no volume de impressão e assinala quando não encontra uma solução adequada.</p>
           <p class="note">O volume de impressão vem do perfil de impressora.
           <b>Vinte vêm de fábrica</b>, dois deles para resina, e podem criar-se perfis
           próprios.</p>
@@ -543,14 +530,13 @@
           filamentos configurados no slicer, importa-os de lá — de forma
           deliberada, não automática.</p>
           <p>No projeto atribui uma bobina a corpos inteiros ou a faces
-          concretas; o painel de filamentos à esquerda conta que corpo leva
-          que bobina.
+          concretas; o painel de filamentos à esquerda mostra a bobina atribuída a cada corpo.
           Após a entrega ao slicer, o Solidon3D propõe descontar o consumo —
           como estimativa ou como planeado no G-code, cada quantidade com a
           sua origem. Se pergunta, se nunca desconta ou se o faz sem perguntar,
           define-o no inventário.</p>
           <p class="note">O histórico de lançamentos mostra cada impressão e
-          retira-a quando pedir. <b>Apagar aqui significa arquivar</b> — com
+          retira-a quando pedir. <b>As bobinas podem ser arquivadas e restauradas</b> — com
           «Mostrar bobinas arquivadas» uma bobina regressa com o seu
           identificador e o seu histórico.</p>
         </div>
@@ -597,8 +583,7 @@
           de o fazer, e é aplicada como um todo: exatamente uma transação,
           que um único Desfazer retira por completo.</p>
           <p class="note">A geometria é calculada por código, nunca pelo
-          modelo de linguagem. <b>Cada cota na proposta é exata — nada é
-          «gerado por alto».</b></p>
+          modelo de linguagem. <b>A proposta usa cotas e parâmetros explícitos; pode examinar o resultado antes de o aplicar.</b></p>
           <p class="note">E isso é medido, não prometido: uma suite de
           <b>39 pedidos de referência</b> corre antes e depois de cada
           alteração ao conjunto de regras do agente. À data de 22/09/2026,
@@ -750,11 +735,10 @@
         <details class="tool-card" id="profilklemmen" data-operations="create_profile_clamp_liner create_profile_clamp_set create_profile_clamp_shell insert_profile_clamp_liner insert_profile_clamp_shell replace_profile_liners">
           <summary>Fixar peças a tubos e perfis</summary>
           <div class="tool-content">
-          <p>Adapta um suporte a um perfil redondo, oval ou desenhado por ti. Uma secção transversal
-          dá origem a duas metades aparafusadas e a dois insertos separados. Escolhe
-          materiais distintos para as metades e os insertos; os alojamentos dos
+          <p>Adapte um suporte a um perfil redondo, oval ou desenhado por si. Uma secção transversal
+          dá origem a duas metades aparafusadas e a dois insertos separados. Escolha materiais distintos para as metades e os insertos; os alojamentos dos
           parafusos e das porcas correspondem à medida normalizada escolhida.</p>
-          <p>Se mais tarde a braçadeira tiver de servir noutro perfil, substitui os insertos. O
+          <p>Se mais tarde a braçadeira tiver de servir noutro perfil, substitua os insertos. O
           Solidon verifica se cabem nas metades existentes. As metades e os insertos
           também estão disponíveis como blocos individuais, para criar separadamente ou
           inserir num modelo.</p>
@@ -763,14 +747,14 @@
         <details class="tool-card" id="dichtungen" data-operations="create_seal create_seal_gasket insert_seal_gasket insert_seal_groove">
           <summary>Criar uma ranhura e a respetiva junta</summary>
           <div class="tool-content">
-          <p>Desenha um percurso fechado para a junta ou escolhe uma abertura numa face plana. O
+          <p>Desenhe um percurso fechado para a junta ou escolha uma abertura numa face plana. O
           Solidon corta a ranhura e cria uma junta separada com o seu próprio material.
-          Ajusta a largura e a profundidade da ranhura e a saliência da junta; a secção
+          Ajuste a largura e a profundidade da ranhura e a saliência da junta; a secção
           pode ser retangular ou redonda.</p>
           <p>A espessura de parede restante por baixo e ao lado da ranhura é verificada no corpo. A
           ranhura e a junta também estão disponíveis como blocos individuais, para
           inserir num modelo ou criar uma junta independente.</p>
-          <p class="note">O modelo representa a junta sem deformação. Verifica a estanquidade da união na peça
+          <p class="note">O modelo representa a junta sem deformação. Verifique a estanquidade da união na peça
           impressa.</p>
           </div>
         </details>
@@ -842,8 +826,7 @@
           <summary>Comandável à distância por MCP — também a partir do Claude
         Code</summary>
           <div class="tool-content"><p>Um segundo programa chama as mesmas operações que os menus:
-        desligado por predefinição, só no próprio computador, e cada chamada
-        remota é uma transação que um Desfazer retira.
+        desligado por predefinição, só no próprio computador, e cada chamada remota que altera o projeto é uma transação que um Desfazer retira.
         <a href="#mcp">O que a interface pode fazer e o que não</a>.</p></div>
         </details>
       </div>

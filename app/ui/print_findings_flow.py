@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -23,7 +24,7 @@ from app.core.errors import OperationCancelled
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
 from app.core.slice.findings import print_findings
-from app.core.types import Finding, PrintSettings, Profile
+from app.core.types import CheckState, Finding, PrintSettings, Profile
 from app.ui.leash import Worker, WorkerLeash
 
 _log = get_logger(__name__)
@@ -33,14 +34,23 @@ class _PrintFindingsWorker(Worker):
     """Rechnet die Befunde einer Szene; abbrechbar über ``cancel``."""
 
     done = Signal(object)
+    checked = Signal(object)
 
-    def __init__(self, scene: Any, profile: Profile, settings: PrintSettings, fitted: bool) -> None:
+    def __init__(
+        self,
+        scene: Any,
+        profile: Profile,
+        settings: PrintSettings,
+        fitted: bool,
+        missing_basis: tuple[str, ...] = (),
+    ) -> None:
         super().__init__()
         self._scene = scene
         self._profile = profile
         self._settings = settings
         self._fitted = fitted
         self.cancel = CancelSignal()
+        self._missing_basis = missing_basis
 
     def work(self) -> None:
         try:
@@ -50,6 +60,8 @@ class _PrintFindingsWorker(Worker):
                 self._settings,
                 cancelled=self.cancel,
                 fitted=self._fitted,
+                check_status=self.checked.emit,
+                missing_basis=self._missing_basis,
             )
         except OperationCancelled:
             return
@@ -62,6 +74,7 @@ class PrintFindingsFlow(QObject):
 
     found = Signal(object)
     """Die Befunde des aktuellen Stands, als ``list[Finding]``."""
+    checksChanged = Signal()
 
     def __init__(self, parent: QObject, leash: WorkerLeash, is_current: Callable[[Any], bool]):
         super().__init__(parent)
@@ -71,6 +84,8 @@ class PrintFindingsFlow(QObject):
         # Python-Umschlag, den erst ein GC-Lauf irgendwann auflöst.
         self._is_current = weakref.WeakMethod(is_current)
         self._worker: _PrintFindingsWorker | None = None
+        self.check_states: dict[tuple[str, str | None], CheckState] = {}
+        self.result: Any = None
 
     @property
     def worker(self) -> Worker | None:
@@ -78,7 +93,13 @@ class PrintFindingsFlow(QObject):
         return self._worker
 
     def start(
-        self, result: Any, profile: Profile, settings: PrintSettings, *, fitted: bool
+        self,
+        result: Any,
+        profile: Profile,
+        settings: PrintSettings,
+        *,
+        fitted: bool,
+        missing_basis: tuple[str, ...] = (),
     ) -> None:
         """Die Befunde für diesen Auswertungsstand rechnen lassen.
 
@@ -86,9 +107,14 @@ class PrintFindingsFlow(QObject):
         Szene Passungen, eingetragene oder gebaute?
         """
         self.cancel()
+        self.check_states.clear()
+        self.result = result
         if result is None or not result.scene.objects:
             return
-        worker = _PrintFindingsWorker(result.scene, profile, settings, fitted)
+        worker = _PrintFindingsWorker(result.scene, profile, settings, fitted, missing_basis)
+        worker.checked.connect(
+            lambda state, result=result, worker=worker: self._checked(state, result, worker)
+        )
         worker.done.connect(
             lambda found, result=result, worker=worker: self._arrived(found, result, worker)
         )
@@ -100,12 +126,23 @@ class PrintFindingsFlow(QObject):
         self._worker = worker
         self._leash.start(worker)
 
+    def _checked(self, state: CheckState, result: Any, worker: Any) -> None:
+        asks = self._is_current()
+        if worker is self._worker and asks is not None and asks(result):
+            self.check_states[state.key, state.object_id] = state
+            self.checksChanged.emit()
+
     def cancel(self) -> None:
         """Den laufenden Arbeiter anhalten; sein Ergebnis kommt nicht mehr an."""
         if self._worker is not None:
             self._worker.cancel.cancel()
             self._leash.retire(self._worker)
             self._worker = None
+            self.check_states = {
+                key: replace(state, state="cancelled") if state.state == "running" else state
+                for key, state in self.check_states.items()
+            }
+            self.checksChanged.emit()
 
     def _arrived(self, found: list[Finding], result: Any, worker: Any) -> None:
         asks = self._is_current()

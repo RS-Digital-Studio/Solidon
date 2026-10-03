@@ -31,6 +31,7 @@ from app.core.errors import (
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
+    SPLIT_BODIES,
     SPLIT_MODEL,
     AppError,
     BooleanFailedError,
@@ -57,6 +58,7 @@ from app.core.geom.ops import as_transform
 from app.core.geom.orient import (
     NoFittingOrientationError,
     NoStandingOrientationError,
+    fitting_transform,
     orient_for_print,
     ranked_orientations,
 )
@@ -105,6 +107,7 @@ from app.core.geom.prepare import (
     sink_placement,
     slot_angle_from_measured_frame,
     slot_bore,
+    slot_ends,
     slot_frame,
     slot_travel,
     split_at_plane,
@@ -467,8 +470,8 @@ class DrillParams(BaseParams):
         default=False,
         placement="front",
         doc=_(
-            "Zieht die Bohrung zu einem Langloch auseinander — für Schrauben, "
-            "die sich nach dem Festziehen noch ausrichten lassen sollen."
+            "Zieht die Bohrung zu einem Langloch auseinander, damit sich die Schraubenposition "
+            "vor dem Festziehen einstellen lässt."
         ),
     )
     slot_length: float = param(
@@ -495,7 +498,7 @@ class DrillParams(BaseParams):
         unit=DEGREE_UNIT,
         placement="front",
         depends_on=("slotted", (True,)),
-        doc=_("Dreht das Langloch in der angeklickten Fläche. Die Vorschau zeigt die Lage mit."),
+        doc=_("Dreht die Längsrichtung um die Bohrachse. Die Vorschau zeigt die Richtung."),
     )
     # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
     # Der Winkel bleibt ein Ausdruck und wird mit der jeweils ausgewerteten
@@ -1095,6 +1098,7 @@ def _body_from_faces(
     face_indices: Sequence[int],
     *,
     allowed_rings: tuple[int, ...],
+    triangulated_rims: bool = False,
     curved_rims: bool = False,
     past_curved: tuple[NDArray[np.float64], float] | None = None,
 ) -> MeshData | None:
@@ -1105,6 +1109,9 @@ def _body_from_faces(
     andere Mündung beziehungsweise den Boden der Bohrung. Die Zahl kommt vom
     Aufrufer, damit ein zweiter Ring nie wieder still dieselbe Bedeutung für
     zwei verschiedene Geometrien bekommt.
+
+    ``triangulated_rims`` schließt auch konkave Zellmündungen mit dem
+    vorhandenen Netzkern; ein Mittelpunktfächer könnte außerhalb liegen.
 
     ``curved_rims`` nimmt auch einen Ring, der nur fast eben ist — bis
     :data:`CURVED_RIM` seines Durchmessers neben seiner Ausgleichsebene, im
@@ -1176,12 +1183,45 @@ def _body_from_faces(
             # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
             # einer Seitenwand hat ihren Ring in der YZ-Ebene.
             spread = ring - hub
-            flatness = float(np.linalg.svd(spread, compute_uv=False)[-1])
+            flatness = (
+                units.plane_fit(ring.tolist())[2]
+                if triangulated_rims
+                else float(np.linalg.svd(spread, compute_uv=False)[-1])
+            )
             flat = flatness <= FLAT_RIM * len(ring) ** 0.5
             # Der Deckel läuft gegen die Randkanten des Ausschnitts: Jede
             # Kante wird von der anderen Seite geschlossen, und der Körper ist
             # von Anfang an gleichsinnig gewickelt (siehe unten).
             directed = rim_directed[belongs]
+            if flat and triangulated_rims:
+                from shapely.geometry import Polygon
+
+                loop = _rim_loop(directed)
+                if loop is None:
+                    return None
+                ordered = points[np.asarray(loop, dtype=np.int64)]
+                fitted = units.plane_fit(ordered.tolist())
+                axes = units.plane_axes(fitted[1])
+                if axes is None:
+                    return None
+                relative = ordered - ordered[0]
+                flat_points = np.column_stack(
+                    (transform.along(relative, axes[0]), transform.along(relative, axes[1]))
+                )
+                polygon = Polygon(flat_points)
+                if not polygon.is_valid or polygon.area <= EPS_GEOM:
+                    return None
+                planar_points, capped = trimesh.creation.triangulate_polygon(
+                    polygon, engine="manifold", force_vertices=True
+                )
+                # Der Netzkern verwendet nur vorhandene Randecken. Die Zuordnung
+                # erhält deren gemeinsame Nummern mit der bestehenden Wand.
+                distance = np.max(np.abs(planar_points[:, None] - flat_points[None]), axis=2)
+                mapped = np.argmin(distance, axis=1)
+                if np.any(distance[np.arange(len(mapped)), mapped] > EPS_GEOM):
+                    return None
+                faces.append(np.asarray(loop, dtype=np.int64)[mapped[capped]])
+                continue
             if not flat:
                 reach = float(np.max(np.linalg.norm(spread, axis=1)))
                 limit = max(FLAT_RIM, CURVED_RIM * 2.0 * reach)
@@ -1221,12 +1261,17 @@ def _body_from_faces(
     # mit gegenläufigen Deckeln ist schon gleichsinnig; dann genügt es, ihn
     # umzudrehen, wenn er nach innen zeigt. Nur ein Netz, das schon vorher
     # durcheinander gewickelt war, geht den langen Weg.
+    volume = signed_volume(closed)
+    if triangulated_rims and abs(volume) <= EPS_GEOM:
+        return None
     if closed.is_winding_consistent:
-        if closed.volume < 0.0:
+        if volume < 0.0:
             closed.invert()
+            volume = -volume
     else:
         trimesh.repair.fix_normals(closed)  # type: ignore[no-untyped-call]
-    if not closed.is_watertight or closed.volume <= EPS_GEOM:
+        volume = signed_volume(closed)
+    if not closed.is_watertight or volume <= EPS_GEOM:
         return None
     return MeshData.of(closed)
 
@@ -2402,7 +2447,7 @@ def _cut_at_the_rims(tool: MeshData, planes: Sequence[SectionPlane]) -> MeshData
     return body
 
 
-def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
+def _without_scars(outcome: BooleanOutcome, *, tolerance: float = EPS_GEOM) -> BooleanOutcome:
     """Die koplanaren Narben eines Stopfens entfernen — nur, wenn das Netz es hält.
 
     Ein Stopfen, der eine Bohrung schließt, endet an der Hülle des Teils in
@@ -2419,6 +2464,9 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
     ebene Flächen neu, und wo es eine Haut stehen ließe, sagt das Volumen es.
     Die Slots gehen danach wie nach jeder Booleschen von der nächsten
     Eingangsfläche auf die neuen Dreiecke über.
+
+    ``tolerance=0`` legt nur exakt gleiche Flächen zusammen. Beim Füllen
+    erzeugter Texturen erhält das die Facetten einer späteren Bohrung.
     """
     from app.core.geom.attributes import in_source_layout, transfer
 
@@ -2433,7 +2481,7 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
         arrays, reported = kernel_process.run(
             "simplify_closed",
             {"vertices": np.asarray(raw.vertices), "faces": np.asarray(raw.faces)},
-            {"tolerance": EPS_GEOM},
+            {"tolerance": tolerance},
             weight=len(raw.faces),
         )
     except kernel_process.NOT_A_KERNEL_FAILURE:
@@ -3882,6 +3930,237 @@ def _slot_has_multiple_bodies(mesh: MeshData, cancelled: CancelToken) -> bool:
     return False
 
 
+def _slot_in_separate_carrier(
+    ctx: OpContext, feature: Feature, *, centre: Vec3, diameter: float, length: float, angle: float
+) -> OpResult | None:
+    """Zieht nur den Träger durch; fremdes Material endet an der alten Bohrung.
+
+    Ein Stopfen darf getrennte Teile nicht verbinden. Die unveränderte
+    Eingabe belegt deshalb zuerst geschlossene, kontaktfreie Materialteile
+    samt Innenhäuten. Berührende Körper bleiben beim gemeinsamen Pfad.
+    """
+    from app.core.geom.repair import (
+        CROSSING_SEARCH_INCOMPLETE_DETAIL,
+        material_part_families,
+        parts_that_cross,
+    )
+    from app.core.perceive.features import detect
+
+    source = ctx.inputs[0]
+    body = as_mesh_data(source.mesh)
+    if not _slot_has_multiple_bodies(body, ctx.cancelled):
+        return None
+    raw = _welded(body)
+    if not raw.is_watertight or not raw.is_winding_consistent:
+        return None
+    try:
+        contact = parts_that_cross(
+            raw,
+            cancelled=ctx.cancelled,
+            max_pairs=None,
+            include_face_contacts=True,
+            require_complete=True,
+        )
+    except GeometryError as error:
+        if error.detail != CROSSING_SEARCH_INCOMPLETE_DETAIL:
+            raise
+        return None
+    if contact is not None:
+        return None
+    families = material_part_families(raw, cancelled=ctx.cancelled)
+    if families is None or len(families) < 2:
+        return None
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    owners = [index for index, family in enumerate(families) if np.isin(chosen, family).all()]
+    if chosen.size == 0 or len(owners) != 1:
+        return None
+    has_contents = feature.kind == "hole" and hole_has_separate_contents(
+        body, feature, cancelled=ctx.cancelled
+    )
+    if has_contents:
+        axis = _bore_vector(feature, "axis")
+        first, second = slot_ends(
+            centre, slot_frame(axis, centre), slot_travel(diameter=diameter, length=length), angle
+        )
+        start, end = np.asarray(first), np.asarray(second)
+        travel = end - start
+        offset = np.asarray(_bore_vector(feature, "centre")) - start
+        squared = float(travel @ travel)
+        fraction = (
+            float(np.clip(offset @ travel / squared, 0.0, 1.0)) if squared > EPS_GEOM**2 else 0.0
+        )
+        radial = offset - fraction * travel
+        unit = np.asarray(axis, dtype=float)
+        unit /= np.linalg.norm(unit)
+        radial -= (radial @ unit) * unit
+        if (
+            float(np.linalg.norm(radial)) + _bore_number(feature, "diameter") / 2.0
+            > diameter / 2.0 + EPS_GEOM
+        ):
+            raise ValidationError(
+                field="at_feature",
+                constraint="separate_bore_contents",
+                detail=_(
+                    "In dieser Bohrung liegt ein getrenntes Teil. Die neue Öffnung muss die "
+                    "alte vollständig umfassen. Zerlegen Sie den Körper in Einzelteile, "
+                    "um nur die Bohrung zu verschieben oder schmaler zu machen."
+                ),
+                suggestions=(SPLIT_BODIES, CORRECT_INPUT, CANCEL),
+            )
+
+    def mapped_features(
+        remap: Callable[[Sequence[int]], tuple[int, ...] | None],
+    ) -> dict[str, Feature]:
+        mapped = {}
+        for name, entry in source.features.items():
+            indices = remap(entry.face_indices)
+            if not indices:
+                continue
+            patches = tuple(
+                dataclasses.replace(patch, face_indices=faces)
+                for patch in entry.surface_patches
+                if (faces := remap(patch.face_indices))
+            )
+            mapped[name] = dataclasses.replace(entry, face_indices=indices, surface_patches=patches)
+        return mapped
+
+    parts: list[Mesh] = []
+    carrier = -1
+    if source.kind == "brep":
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+        from app.core.brep.kernel import Solid
+
+        if not isinstance(source.mesh, Solid):
+            raise InternalError(detail="a scene object marked as brep does not carry a Solid")
+        original = source.mesh
+        for solid_part, mapping in edit.separated_solids(original, cancelled=ctx.cancelled):
+
+            def remap_exact(
+                indices: Sequence[int],
+                mapping: dict[int, int] = mapping,
+                solid_part: Solid = solid_part,
+            ) -> tuple[int, ...] | None:
+                faces = original.faces_of_triangles(indices)
+                if not faces or any(face not in mapping for face in faces):
+                    return None
+                if set(indices) != {
+                    index for face in faces for index in original.triangles_of_face(face)
+                }:
+                    return None
+                return tuple(
+                    index for face in faces for index in solid_part.triangles_of_face(mapping[face])
+                )
+
+            features = mapped_features(remap_exact)
+            if feature.id in features:
+                carrier = len(parts)
+                own = dataclasses.replace(source, mesh=solid_part, features=features)
+            parts.append(solid_part)
+    else:
+        for index, family in enumerate(families):
+            indices = np.sort(family)
+
+            def remap_mesh(
+                faces: Sequence[int], indices: NDArray[np.int64] = indices
+            ) -> tuple[int, ...] | None:
+                if not faces or not np.isin(faces, indices).all():
+                    return None
+                return tuple(int(value) for value in np.searchsorted(indices, faces))
+
+            slots = tuple(body.slots[int(face)] for face in indices) if body.slots else ()
+            mesh_part = MeshData.of(
+                trimesh.Trimesh(
+                    vertices=np.asarray(raw.vertices),
+                    faces=np.asarray(raw.faces)[indices],
+                    process=False,
+                ),
+                slots,
+            )
+            if index == owners[0]:
+                carrier = len(parts)
+                own = dataclasses.replace(
+                    source, mesh=mesh_part, features=mapped_features(remap_mesh)
+                )
+            parts.append(mesh_part)
+    if carrier < 0:
+        return None
+    child = dataclasses.replace(
+        ctx,
+        inputs=[own],
+        scene=dataclasses.replace(ctx.scene, objects={**ctx.scene.objects, source.id: own}),
+    )
+    changed = slot_hole(child)
+    parts[carrier] = changed.outputs[0].mesh
+    findings = [entry for entry in changed.findings if entry.code != "bore.splits_the_body"]
+    solver = changed.solver
+    if has_contents:
+        if source.kind == "brep":
+            axis = _bore_vector(feature, "axis")
+            tool = edit._centred_bore(
+                _bore_vector(feature, "centre"),
+                axis,
+                _bore_number(feature, "diameter"),
+                _bore_number(_longer(feature), "depth"),
+                0.0,
+            )
+            planes = _rim_planes(source.mesh, feature)
+            if planes:
+                tool = edit.clipped_bore_tool(tool, planes)
+            else:
+                tool = edit._centred_bore(
+                    _bore_vector(feature, "centre"),
+                    axis,
+                    _bore_number(feature, "diameter"),
+                    _bore_number(feature, "depth"),
+                    0.0,
+                )
+            for index, part in enumerate(parts):
+                if index != carrier:
+                    ctx.cancelled.raise_if_cancelled()
+                    parts[index] = edit.boolean("difference", [cast(Solid, part), tool])
+        else:
+            tool_mesh = _body_from_faces(body, feature.face_indices, allowed_rings=(2,))
+            if tool_mesh is None:
+                raise GeometryError(detail=HOLE_IS_NOT_EMPTY, suggestions=(SPLIT_BODIES, CANCEL))
+            for index, part in enumerate(parts):
+                if index != carrier:
+                    cut_part = boolean(
+                        "difference",
+                        [as_mesh_data(part), tool_mesh],
+                        quality=ctx.quality,
+                        seed=ctx.seed,
+                        cancelled=ctx.cancelled,
+                        allow_empty=True,
+                        object_ids=(source.id, None),
+                    )
+                    parts[index] = cut_part.mesh
+                    solver = deepest((solver, cut_part.solver))
+                    findings.extend(cut_part.findings)
+    if source.kind == "brep":
+        from app.core.knowledge.parts.exact import compound
+
+        kept = [cast(Solid, part) for part in parts if cast(Solid, part).face_count]
+        assembled_solid = compound(*kept)
+        assembled: Mesh = assembled_solid
+        result_features = features_of(assembled_solid, cancelled=ctx.cancelled)
+    else:
+        meshes = [as_mesh_data(part) for part in parts if as_mesh_data(part).triangle_count]
+        slots = tuple(
+            slot for part in meshes for slot in (part.slots or (0,) * part.triangle_count)
+        )
+        assembled = MeshData.of(
+            cast(Any, trimesh.util.concatenate([part.raw for part in meshes])), slots
+        )
+        result_features = detect(assembled, check_cancelled=ctx.cancelled.raise_if_cancelled)
+    findings.extend(split_findings(source.mesh, assembled))
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=assembled, features=result_features)],
+        findings=findings,
+        solver=solver,
+    )
+
+
 def _inside_the_bore(
     mesh: MeshData, feature: Feature, radius: float, depth: float
 ) -> NDArray[np.float64]:
@@ -4749,36 +5028,9 @@ class PatternFeatureParams(BaseParams):
         placement="advanced",
         doc=_("Dritte Achse der Richtung — siehe Richtung X."),
     )
-    cx: float = param(
-        title=_("Punkt X"),
-        default=0.0,
-        unit="mm",
-        minimum=-FEATURE_REACH,
-        maximum=FEATURE_REACH,
-        placement="advanced",
-        depends_on=("kind", ("circular", "mirror")),
-        doc=_("Ein Punkt auf der Achse des Kreises oder in der Spiegelebene."),
-    )
-    cy: float = param(
-        title=_("Punkt Y"),
-        default=0.0,
-        unit="mm",
-        minimum=-FEATURE_REACH,
-        maximum=FEATURE_REACH,
-        placement="advanced",
-        depends_on=("kind", ("circular", "mirror")),
-        doc=_("Zweite Koordinate des Punkts — siehe Punkt X."),
-    )
-    cz: float = param(
-        title=_("Punkt Z"),
-        default=0.0,
-        unit="mm",
-        minimum=-FEATURE_REACH,
-        maximum=FEATURE_REACH,
-        placement="advanced",
-        depends_on=("kind", ("circular", "mirror")),
-        doc=_("Dritte Koordinate des Punkts — siehe Punkt X."),
-    )
+    cx: float | None = transform.pattern_centre_param("x", ("kind", ("circular", "mirror")))
+    cy: float | None = transform.pattern_centre_param("y", ("kind", ("circular", "mirror")))
+    cz: float | None = transform.pattern_centre_param("z", ("kind", ("circular", "mirror")))
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -4812,7 +5064,7 @@ class _PatternPlace:
     # 3: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 4: jede Instanz einer Kette trägt ihre gerundete Mündungskante (RM-259).
-    cache_version="4",
+    cache_version="5",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -4851,7 +5103,11 @@ def pattern_feature(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     body = as_mesh_data(source.mesh)
     units = _pattern_units(source, params.at_features, body)
-    places, left_out = _pattern_places(params, _pattern_default_axis(params))
+    centre: Vec3 = (0.0, 0.0, 0.0)
+    answered: dict[str, float] = {}
+    if params.kind != "linear":
+        centre, answered = transform.pattern_centre(source, params.cx, params.cy, params.cz)
+    places, left_out = _pattern_places(params, _pattern_default_axis(params), centre)
     ctx.progress(0.1, str(_("Die Plätze des Musters werden geprüft …")))
     probes = {unit.feature.id: _pattern_probe(ctx, body, source, unit) for unit in units}
     candidates: list[_PatternPlace] = []
@@ -4883,12 +5139,15 @@ def pattern_feature(ctx: OpContext) -> OpResult:
     if not kept:
         return OpResult(
             outputs=[source],
+            answered=answered,
             findings=[dataclasses.replace(entry, object_id=source.id) for entry in findings],
         )
     ctx.progress(0.4, str(_("Die Merkmale werden an ihren Plätzen angelegt …")))
     if source.kind == "brep":
-        return _exact_pattern_result(ctx, source, kept, findings)
-    return _mesh_pattern_result(ctx, source, body, kept, findings, seed=ctx.seed)
+        result = _exact_pattern_result(ctx, source, kept, findings)
+    else:
+        result = _mesh_pattern_result(ctx, source, body, kept, findings, seed=ctx.seed)
+    return dataclasses.replace(result, answered={**result.answered, **answered})
 
 
 def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) -> list[_PatternUnit]:
@@ -4981,7 +5240,7 @@ def _pattern_default_axis(params: PatternFeatureParams) -> NDArray[np.float64]:
 
 
 def _pattern_places(
-    params: PatternFeatureParams, direction: NDArray[np.float64]
+    params: PatternFeatureParams, direction: NDArray[np.float64], centre: Vec3
 ) -> tuple[list[tuple[int, NDArray[np.float64]]], int]:
     """Die Plätze außer der Quelle, je mit Nummer und Bewegung — und wie viele ausgelassen.
 
@@ -4993,7 +5252,7 @@ def _pattern_places(
     Senkrechte; eine Spiegelung ist eine Bewegung mit Determinante -1, und
     Werkzeug wie Merkmal drehen dabei ihren Umlaufsinn mit.
     """
-    point = np.asarray((params.cx, params.cy, params.cz), dtype=np.float64)
+    point = np.asarray(centre, dtype=np.float64)
     if params.kind == "mirror":
         # Elementweise, nicht über BLAS (RM-187): An einer Achsnormalen stehen
         # dann exakt null und eins in der Matrix, und die Kopie liegt auf jeder
@@ -8417,7 +8676,7 @@ class SlotHoleParams(BaseParams):
         maximum=180.0,
         unit=DEGREE_UNIT,
         placement="front",
-        doc=_("Dreht das Langloch um die Achse der Bohrung. Die Bohrung bleibt seine Mitte."),
+        doc=_("Dreht die Längsrichtung um die Bohrachse. Die Vorschau zeigt die Richtung."),
     )
     at_feature: str = param(
         title=_("Bohrung"),
@@ -8545,7 +8804,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 13: die alte Winkelbedeutung bleibt an Projektparametern gebunden (RM-323).
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 15: Baugruppen enden an der Bohrung; getrennte Stifte sind auch beidseitig schneidbar.
-    cache_version="15",
+    # 16: Der Langlochzug schneidet die Trägerhülle und fremde Teile getrennt.
+    cache_version="16",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -8747,6 +9007,11 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Die Länge, mit der geschnitten wird. Rund heißt: genau der geschnittene
     # Durchmesser — :func:`prepare.slot_bore` schneidet dann einen Zylinder.
     cut_length = diameter if rounded else params.slot_length
+    separated = _slot_in_separate_carrier(
+        ctx, feature, centre=centre, diameter=diameter, length=cut_length, angle=angle
+    )
+    if separated is not None:
+        return separated
     # **Ohne Zugabe, an jedem Zug.** An einem Langloch, das schon eines ist,
     # liegen die Flanken des Werkzeugs auf denen des Lochs, und das rechnen
     # beide Kerne robust; mit Zugabe wuchs es bei **jedem** Zug (gemessen
@@ -10498,6 +10763,7 @@ def _resize_bore_entrance(
         for name, entry in _without_old_triangles(source.features).items()
         if entry.provenance == "generated" and name not in changed_ids
     }
+    continued_floors: set[FeatureId] = set()
     for target in targets.values():
         expected = float(target.params["diameter"])
         recognised = _recognised_resized_feature(
@@ -10513,17 +10779,17 @@ def _resize_bore_entrance(
             if solver is None or solver.strategy in ("direct", "welded"):
                 recognised = _with_nominal_bore(as_mesh_data(changed), recognised, target, expected)
             preserved[target.id] = dataclasses.replace(recognised, id=target.id)
-            preserved.update(
-                _resized_bore_floor(
-                    original,
-                    source.features[target.id],
-                    source.features,
-                    as_mesh_data(changed),
-                    recognised,
-                    found,
-                    check_cancelled=ctx.cancelled.raise_if_cancelled,
-                )
+            floors = _resized_bore_floor(
+                original,
+                source.features[target.id],
+                source.features,
+                as_mesh_data(changed),
+                recognised,
+                found,
+                check_cancelled=ctx.cancelled.raise_if_cancelled,
             )
+            preserved.update(floors)
+            continued_floors.update(floors)
         elif target.id == feature.id:
             findings.append(_bore_no_longer_a_feature(feature, diameter))
     findings.extend(_neighbour_bore_findings(source, feature, tool, ctx))
@@ -10545,7 +10811,7 @@ def _resize_bore_entrance(
     continued = (
         tuple(
             FeatureContinuation(FeatureRef(source.id, name), name)
-            for name in targets
+            for name in sorted(set(targets) | continued_floors)
             if name in preserved and name in source.features
         )
         if source.kind == "brep"
@@ -10976,19 +11242,238 @@ def _bore_end_rims(
             normal, along = (-normal[0], -normal[1], -normal[2]), -along
         if abs(along) <= EPS_GEOM:
             return ()
-        opened = grows and _mouth_is_open(mesh, edge, np.asarray(normal))
-        overlap = FEATURE_OVERLAP if opened else 0.0
         found.append(
             _Rim(
                 SectionPlane(
                     normal=(normal[0] + 0.0, normal[1] + 0.0, normal[2] + 0.0),
-                    position=units.dot3(hub, normal) + overlap,
+                    position=units.dot3(hub, normal),
                 ),
-                opened,
+                False,
                 edge,
             )
         )
-    return tuple(found)
+    if not grows:
+        return tuple(found)
+    # Dieselben Randproben in einer Oberflächenabfrage; ein Sacklochboden
+    # bleibt geschlossen und bekommt weiterhin keine Werkzeugzugabe.
+    shares = _shares_in_material(
+        mesh, [(rim.points, np.asarray(rim.plane.normal)) for rim in found]
+    )
+    return tuple(
+        dataclasses.replace(
+            rim,
+            open=share <= 0.0,
+            plane=dataclasses.replace(
+                rim.plane,
+                position=rim.plane.position + (FEATURE_OVERLAP if share <= 0.0 else 0.0),
+            ),
+        )
+        for rim, share in zip(found, shares, strict=True)
+    )
+
+
+def _material_in_bore_plane(mesh: MeshData, plane: SectionPlane) -> Any:
+    """Voller Materialquerschnitt einschließlich einer bündig endenden Deckfläche.
+
+    Der gerichtete Schichtschnitt allein kann eine außen liegende Endebene
+    leer melden. Ihre echten koplanaren Dreiecke gehören daher zusätzlich
+    hinein; ein Körper mit Abstand zur Mündung bleibt außerhalb.
+    """
+    import shapely
+    from shapely.geometry import Polygon
+
+    from app.core.geom.autosplit import sections_across, upright_normal
+
+    section = sections_across(mesh, plane.normal, np.array([plane.position]))[0]
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    distances = transform.along(triangles, plane.normal) - plane.position
+    tolerance = units.weld_tolerance(mesh.bounds.diagonal)
+    flat = triangles[np.all(np.abs(distances) <= tolerance, axis=1)]
+    turn = upright_normal(plane.normal)
+    if not len(flat):
+        return section if section is not None else Polygon()
+    projected = np.stack(
+        (transform.along(flat, turn[0, :3]), transform.along(flat, turn[1, :3])), axis=-1
+    )
+    caps = shapely.union_all(shapely.polygons(projected))
+    return caps if section is None else shapely.union(section, caps)
+
+
+def _union_bore_space(
+    source: SceneObject, after: Mesh, chain: Sequence[Feature], ctx: OpContext
+) -> tuple[float, float, float] | None:
+    """Alter Luftraum, verbleibender Luftraum und numerische Volumengrenze.
+
+    Der Hohlraum kommt aus den wirklichen Mantelflächen. Eine angenäherte
+    Zylinderhülle wäre kein Beweis für vollständiges Füllen. Messschnitte
+    dürfen deshalb auch weder stören noch auf ein Voxelraster zurückfallen.
+    """
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+    from app.core.perceive.relations import cavity_surface_indices
+
+    mesh = as_mesh_data(source.mesh)
+    indices = cavity_surface_indices(mesh, chain, mouth_blends=True)
+    ctx.cancelled.raise_if_cancelled()
+    if isinstance(source.mesh, Solid) and isinstance(after, Solid):
+        native = source.mesh.faces_of_triangles(indices)
+        cavity = edit.solid_from_faces(source.mesh, native, cancelled=ctx.cancelled)
+        if cavity is None:
+            return None
+        air = edit.boolean("difference", [cavity, source.mesh])
+        ctx.cancelled.raise_if_cancelled()
+        remaining = edit.boolean("difference", [air, after])
+        ctx.cancelled.raise_if_cancelled()
+        return air.volume, remaining.volume, air.area * units.weld_tolerance(mesh.bounds.diagonal)
+    void = _body_from_faces(mesh, indices, allowed_rings=(1, 2), triangulated_rims=True)
+    if void is None:
+        return None
+    air_mesh = boolean(
+        "difference", [void, mesh], stages=DRAFT_CHAIN, allow_empty=True, cancelled=ctx.cancelled
+    ).mesh
+    remaining_mesh = boolean(
+        "difference",
+        [air_mesh, as_mesh_data(after)],
+        stages=DRAFT_CHAIN,
+        allow_empty=True,
+        cancelled=ctx.cancelled,
+    ).mesh
+    return (
+        air_mesh.volume,
+        remaining_mesh.volume,
+        air_mesh.area * units.weld_tolerance(mesh.bounds.diagonal),
+    )
+
+
+def union_bore_findings(ctx: OpContext, after: Mesh) -> list[Finding]:
+    """Prüft die Bohrungen aller Eingänge an der wirklich vereinigten Geometrie.
+
+    Fehlende Erkennungsnamen beweisen keine zugedeckte Öffnung. Vollständig
+    gefüllt heißt: Vom alten Luftraum bleibt kein Volumen. Eine Sackbohrung
+    behält Luft und genau eine ihrer vorher offenen Mündungen. Teilabdeckungen
+    werden über die vollständige Mündungsfläche und den Luftraum gemessen.
+    """
+    from app.core.geom.autosplit import upright_normal
+    from app.core.perceive.relations import cavity_chain_at
+
+    findings: list[Finding] = []
+    after_mesh: MeshData | None = None
+    for source in ctx.inputs:
+        bores = [entry for entry in source.features.values() if entry.kind in ("hole", "slot")]
+        if not bores:
+            continue
+        mesh = as_mesh_data(source.mesh)
+        checked: set[str] = set()
+        for bore in bores:
+            ctx.cancelled.raise_if_cancelled()
+            if bore.id in checked or not bore.face_indices:
+                continue
+            chain = cavity_chain_at(bore, source.features, mesh) or (bore,)
+            checked.update(entry.id for entry in chain)
+            indices = sorted({index for entry in chain for index in entry.face_indices})
+            points = np.asarray(mesh.raw.triangles)[indices].reshape(-1, 3)
+            low, high = points.min(axis=0), points.max(axis=0)
+            if not any(
+                other.id != source.id
+                and all(
+                    other.mesh.bounds.minimum[axis] <= high[axis] + EPS_GEOM
+                    and other.mesh.bounds.maximum[axis] >= low[axis] - EPS_GEOM
+                    for axis in range(3)
+                )
+                for other in ctx.inputs
+            ):
+                continue
+            centre = _bore_vector(bore, "centre")
+            values: dict[str, float | str | TranslatableText] = {
+                "source_object": source.id,
+                "source_feature": bore.id,
+                "name": source.name,
+            }
+            try:
+                space = _union_bore_space(source, after, chain, ctx)
+                rims = _bore_end_rims(
+                    mesh, chain[0], source.features, grows=True, mouth_blends=True
+                )
+                if space is None or not rims:
+                    raise GeometryError(
+                        _("Der ursprüngliche Bohrungsraum ist nicht eindeutig begrenzt."),
+                        suggestions=(SHOW_LOCATION,),
+                    )
+                old_volume, remaining, volume_error = space
+                values["remaining_volume_mm3"] = remaining
+                opened, closed = 0, 0
+                partly = old_volume - remaining > volume_error
+                if after_mesh is None:
+                    after_mesh = as_mesh_data(after)
+                for rim in rims:
+                    ctx.cancelled.raise_if_cancelled()
+                    from shapely.geometry import MultiPoint
+
+                    plane = dataclasses.replace(
+                        rim.plane, position=units.dot3(rim.points[0], rim.plane.normal)
+                    )
+                    turn = upright_normal(plane.normal)
+                    ring = np.column_stack(
+                        (
+                            transform.along(rim.points, turn[0, :3]),
+                            transform.along(rim.points, turn[1, :3]),
+                        )
+                    )
+                    opening = MultiPoint(ring).convex_hull.difference(
+                        _material_in_bore_plane(mesh, plane)
+                    )
+                    area_error = opening.length * units.weld_tolerance(mesh.bounds.diagonal)
+                    if opening.area <= area_error:
+                        continue
+                    opened += 1
+                    free = opening.difference(_material_in_bore_plane(after_mesh, plane))
+                    closed += int(free.area <= area_error)
+                    partly |= opening.area - free.area > area_error
+                ctx.cancelled.raise_if_cancelled()
+                if remaining <= volume_error and old_volume > volume_error:
+                    code = "union.bore_filled"
+                    message = _(
+                        "Die Vereinigung hat die Bohrung in „{name}“ vollständig "
+                        "mit Material gefüllt."
+                    )
+                elif closed and closed == opened:
+                    code = "union.bore_enclosed"
+                    message = _(
+                        "Die Vereinigung hat die offenen Mündungen der Bohrung in „{name}“ "
+                        "zugedeckt. Im Inneren bleibt ein Hohlraum."
+                    )
+                elif closed and opened == 2:
+                    code = "union.bore_blind"
+                    message = _(
+                        "Die Vereinigung hat eine Mündung der Bohrung in „{name}“ zugedeckt. "
+                        "Die Bohrung ist jetzt ein Sackloch."
+                    )
+                elif partly:
+                    code = "union.bore_partial"
+                    message = _(
+                        "Durch die Vereinigung ragt Material in die Bohrung oder ihre Mündung "
+                        "in „{name}“. Der freie Querschnitt ist kleiner geworden."
+                    )
+                else:
+                    continue
+            except GeometryError:
+                code = "union.bore_unchecked"
+                message = _(
+                    "Ob die Vereinigung die Bohrung in „{name}“ verdeckt, ließ sich nicht sicher "
+                    "messen. Prüfen Sie die markierte Stelle."
+                )
+            findings.append(
+                Finding(
+                    code=code,
+                    severity="warning",
+                    message=message,
+                    object_id=ctx.inputs[0].id,
+                    location=centre,
+                    values=values,
+                    suggestions=(CHANGE_SELECTION, SHOW_LOCATION),
+                )
+            )
+    return findings
 
 
 def _mouth_covered(
@@ -14844,9 +15329,83 @@ def _facets_refused(source: SceneObject) -> Finding:
     )
 
 
-def _pattern_plug(source: SceneObject, feature: Feature) -> MeshData:
+def _pattern_plug(
+    source: SceneObject, feature: Feature, *, cancelled: CancelToken | None = None
+) -> MeshData:
     """Der Körper, der die Zellen eines Musters füllt oder abträgt — oder der Satz dazu."""
     from app.core.perceive.patterns import plug_for
+
+    if (
+        feature.params.get("texture")
+        and feature.params.get("carrier") == "plane"
+        and feature.params.get("mode") == "engraved"
+    ):
+        from app.core.geom.mesh import concatenated, stable_normals
+        from app.core.perceive.features import _one_body
+        from app.core.perceive.patterns import _components
+
+        mesh = as_mesh_data(source.mesh)
+        indices = np.asarray(feature.face_indices, dtype=np.int64)
+        body = _one_body(mesh).raw
+        plugs = []
+        for component in _components(body, indices):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            plugs.append(
+                _body_from_faces(
+                    mesh,
+                    indices[component].tolist(),
+                    allowed_rings=(1, 2),
+                    triangulated_rims=True,
+                )
+            )
+        if plugs and all(plug is not None for plug in plugs):
+            return MeshData.of(concatenated([plug.raw for plug in plugs if plug is not None]))
+        # Seitlich angeschnittene Blindzellen lassen sich als Prisma füllen.
+        # Öffnet der Ausschnitt dagegen eine Rückseite, muss deren wirkliche
+        # Kontur den Stopfen begrenzen. Ohne geschlossene Ringe wäre die
+        # Fortsetzung geraten und könnte über die heutige Außenhaut wachsen.
+        adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
+        belongs = np.isin(adjacency, indices)
+        border = adjacency[belongs.sum(axis=1) == 1]
+        outside = np.unique(border[~np.isin(border, indices)])
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        tolerance = units.weld_tolerance(mesh.bounds.diagonal)
+        if len(outside):
+            lower = (
+                transform.along(body.triangles[outside] - centre, normal).min(axis=1) < -tolerance
+            )
+            other_normal = np.abs(transform.along(stable_normals(body)[0][outside], normal))
+            if np.any(lower & (other_normal > EPS_GEOM)):
+                from app.core.errors import SHOW_HISTORY
+
+                raise ValidationError(
+                    field="at_feature",
+                    detail=_(
+                        "Der angeschnittene Texturrand lässt sich nicht eindeutig schließen. "
+                        "Ändern oder entfernen Sie den ursprünglichen Texturschritt im Verlauf."
+                    ),
+                    values={"feature": feature.id},
+                    constraint="pattern_open_back",
+                    suggestions=(SHOW_HISTORY, CANCEL),
+                )
+
+    if (
+        feature.params.get("texture")
+        and feature.params.get("carrier") == "cylinder"
+        and "carrier_diameter" not in feature.measure_sources
+    ):
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Für diesen Wert ist nicht belegt, wie er bestimmt wurde. "
+                "Er wird deshalb nicht als exaktes Maß ausgegeben."
+            ),
+            values={"feature": feature.id},
+            constraint="pattern_carrier",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
 
     plug = plug_for(as_mesh_data(source.mesh), feature, source.features)
     if plug is None:
@@ -14862,7 +15421,170 @@ def _pattern_plug(source: SceneObject, feature: Feature) -> MeshData:
     return plug
 
 
-def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> BooleanOutcome:
+def _texture_plug_without_bores(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    plug: MeshData,
+    *,
+    redraw: bool = False,
+) -> tuple[MeshData, list[MeshData]]:
+    """Unabhängige Bohrungen bis zur wiederhergestellten Texturfläche offen halten.
+
+    Die vorhandene Wand belegt ihren facettierten Querschnitt. Nur die
+    Mündung wird durch das Füllvolumen verlängert; der Boden eines Sacklochs
+    bleibt an seiner gemessenen Stelle. Eine benachbarte Bohrung ohne
+    gemeinsamen Rand mit der Textur gehört nicht zu diesem Eingriff.
+    Die mitgegebenen Schneider halten auch die neue Bohrungswand aus dem
+    Oberflächenbeleg einer anschließend erhöhten Textur heraus.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.errors import SHOW_HISTORY
+    from app.core.perceive.patterns import _convex_hull, _extruded, _plane_axes, frame_for
+    from app.core.perceive.relations import boundary_rings
+
+    mesh = as_mesh_data(source.mesh)
+    body = mesh.raw
+    adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
+    touching = np.isin(adjacency, feature.face_indices)
+    border = adjacency[touching.sum(axis=1) == 1]
+    neighbours = {int(index) for index in border.ravel()} - set(feature.face_indices)
+    owned_bores = {
+        index
+        for other in source.features.values()
+        if other.kind in ("hole", "slot") and other.id != feature.id
+        for index in other.face_indices
+    }
+    border_edges = np.asarray(body.face_adjacency_edges)[touching.sum(axis=1) == 1]
+    outer = {
+        tuple(sorted(int(index) for index in edge)): next(
+            int(index) for index in pair if int(index) in neighbours
+        )
+        for edge, pair in zip(border_edges, border, strict=True)
+    }
+    frame = frame_for(feature, mesh, source.features)
+    lift = float(frame.developed(np.asarray(feature.params["centre"]))[1][0])
+    for ring in boundary_rings(body, feature) or ():
+        ctx.cancelled.raise_if_cancelled()
+        rows = sorted({index for edge in ring for index in edge})
+        points = np.asarray(body.vertices)[rows]
+        _flat, heights = frame.developed(points)
+        # Der reguläre Mund liegt am Träger. Ein zweiter Rand im Zellboden
+        # oder in der Krone kann eine spätere fremde Öffnung sein.
+        outside = {outer[tuple(sorted(edge))] for edge in ring if tuple(sorted(edge)) in outer}
+        # Nach einer Randbohrung gehört derselbe Ring zum Mantel und zur
+        # Bohrungswand. Seine neue Abwicklung belegt die ursprüngliche
+        # Zellkontur nicht mehr; beim erneuten Biegen gingen neben der
+        # Bohrung etwa 0,01 mm³ verloren. Entfernen braucht diese Kontur
+        # nicht neu zu zeichnen und bleibt mit dem geschützten Stopfen möglich.
+        mixed = (
+            redraw
+            and frame.kind == "cylinder"
+            and bool(outside & owned_bores)
+            and bool(outside - owned_bores)
+        )
+        away = heights - lift
+        if not mixed and not (
+            np.all(away < -frame.clearance - EPS_GEOM) or np.all(away > frame.clearance + EPS_GEOM)
+        ):
+            continue
+        if outside and outside <= owned_bores:
+            continue
+        _hub, normal, spread = units.plane_fit(points.tolist())
+        normals = np.asarray(body.face_normals)[sorted(outside)]
+        # Ein Schnitt durch die Zelle endet in seiner belegten Rückfläche.
+        # Senkrechte fremde Wände sind dagegen kein Deckel dieser Textur.
+        if (
+            not mixed
+            and outside
+            and spread <= units.weld_tolerance(mesh.bounds.diagonal)
+            and np.all(np.abs(transform.along(normals, np.asarray(normal))) > 1.0 - EPS_GEOM)
+        ):
+            continue
+        raise ValidationError(
+            field="at_feature",
+            detail=(
+                _(
+                    "Der angeschnittene Zellrand lässt sich an dieser Öffnung nicht eindeutig "
+                    "ändern. Ändern Sie den Texturschritt im Verlauf. Wächst die Textur über "
+                    "die Mündung, passen Sie dort auch Position und Tiefe der Öffnung an."
+                )
+                if mixed
+                else _(
+                    "Der angeschnittene Texturrand lässt sich nicht eindeutig schließen. "
+                    "Ändern oder entfernen Sie den ursprünglichen Texturschritt im Verlauf."
+                )
+            ),
+            values={"feature": feature.id},
+            constraint="pattern_open_back",
+            suggestions=(SHOW_HISTORY, CANCEL),
+        )
+    protected: list[MeshData] = []
+    for other in source.features.values():
+        if (
+            other.id == feature.id
+            or other.kind not in ("hole", "slot")
+            or not neighbours.intersection(other.face_indices)
+        ):
+            continue
+        ctx.cancelled.raise_if_cancelled()
+        axis = np.asarray(_feature_direction(other), dtype=float)
+        centre = np.asarray(_bore_vector(other, "centre"), dtype=float)
+        first, second = _plane_axes(axis)
+        corners = np.asarray(body.triangles)[list(other.face_indices)].reshape((-1, 3)) - centre
+        flat = np.column_stack((transform.along(corners, first), transform.along(corners, second)))
+        hull = _convex_hull(flat)
+        outward = None if other.params.get("through") else _toward_the_air(mesh, other)
+        if hull is None or (not other.params.get("through") and outward is None):
+            raise ValidationError(
+                field="at_feature",
+                detail=_(
+                    "Der angeschnittene Texturrand lässt sich nicht eindeutig schließen. "
+                    "Ändern oder entfernen Sie den ursprünglichen Texturschritt im Verlauf."
+                ),
+                values={"feature": feature.id},
+                constraint="pattern_open_back",
+                suggestions=(SHOW_HISTORY, CANCEL),
+            )
+        levels = transform.along(corners, axis)
+        extent = transform.along(np.asarray(plug.raw.vertices) - centre, axis)
+        low, high = float(levels.min()), float(levels.max())
+        if outward is None or units.dot3(outward, axis) < 0.0:
+            low = min(low, float(extent.min()) - FEATURE_OVERLAP)
+        if outward is None or units.dot3(outward, axis) > 0.0:
+            high = max(high, float(extent.max()) + FEATURE_OVERLAP)
+        cutter = _extruded(Polygon(hull), high - low)
+        if cutter is None:
+            raise ValidationError(
+                field="at_feature",
+                detail=NO_OWN_BODY,
+                values={"feature": other.id},
+                constraint="pattern_open_back",
+                suggestions=(SHOW_HISTORY, CANCEL),
+            )
+        local = np.asarray(cutter.vertices, dtype=float)
+        cutter.vertices = (
+            centre
+            + local[:, 0, None] * first
+            + local[:, 1, None] * second
+            + (local[:, 2] + low)[:, None] * axis
+        )
+        cutting = MeshData.of(cutter)
+        protected.append(cutting)
+        plug = boolean(
+            "difference",
+            [plug, cutting],
+            stages=("direct",),
+            cancelled=ctx.cancelled,
+            object_ids=(None, None),
+        ).mesh
+    return plug, protected
+
+
+def _pattern_cleared(
+    ctx: OpContext, source: SceneObject, feature: Feature, *, redraw: bool = False
+) -> BooleanOutcome:
     """Der Körper ohne sein Muster: vertiefte Zellen gefüllt, erhabene abgetragen.
 
     Am Netz, auch an einem exakten Körper — wie ``apply_texture`` selbst, das
@@ -14882,16 +15604,44 @@ def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> B
     # rohe Zylinder hatte 384. Das ist nicht nur eine Zahl: An 66 522
     # Dreiecken zerlegte die Merkmalserkennung denselben Mantel auf Linux in
     # 46 Flecken und auf Windows in einen Zapfen (CI seit `2061def3`).
+    plug = _pattern_plug(source, feature, cancelled=ctx.cancelled)
+    if feature.params.get("texture") and feature.params.get("carrier") == "cylinder":
+        from app.core.perceive.patterns import cylinder_envelope
+
+        envelope = cylinder_envelope(as_mesh_data(source.mesh), feature, source.features)
+        if envelope is None:
+            from app.core.errors import SHOW_HISTORY
+
+            raise ValidationError(
+                field="at_feature",
+                detail=_(
+                    "Für diesen Wert ist nicht belegt, wie er bestimmt wurde. "
+                    "Er wird deshalb nicht als exaktes Maß ausgegeben."
+                ),
+                values={"feature": feature.id},
+                constraint="pattern_carrier",
+                suggestions=(SHOW_HISTORY, CANCEL),
+            )
+        plug = boolean(
+            "intersection" if engraved else "difference",
+            [plug, envelope],
+            stages=("direct",),
+            cancelled=ctx.cancelled,
+            object_ids=(None, None),
+        ).mesh
+    if engraved and feature.params.get("texture"):
+        plug, _protected = _texture_plug_without_bores(ctx, source, feature, plug, redraw=redraw)
     return _without_scars(
         boolean(
             "union" if engraved else "difference",
-            [as_mesh_data(source.mesh), _pattern_plug(source, feature)],
+            [as_mesh_data(source.mesh), plug],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
             object_ids=(source.id, None),
             merge_face_contacts=engraved,
-        )
+        ),
+        tolerance=0.0 if feature.params.get("texture") else EPS_GEOM,
     )
 
 
@@ -14990,6 +15740,17 @@ def _resize_pattern(
         )
     restyled = wanted_style != read_style
     measured_pitch = float(feature.params.get("pitch", 0.0))
+    if feature.params.get("texture") and "pitch" not in feature.measure_sources:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Für diesen Wert ist nicht belegt, wie er bestimmt wurde. "
+                "Er wird deshalb nicht als exaktes Maß ausgegeben."
+            ),
+            values={"feature": feature.id},
+            constraint="pattern_deformed",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     measured_width = float(feature.params.get("cell_width", 0.0))
     measured_depth = float(feature.params.get("cell_depth", 0.0))
     new_pitch = pitch if pitch > 0.0 else measured_pitch
@@ -15052,7 +15813,7 @@ def _resize_pattern(
     check_printable(generator, new_pitch, new_depth, ctx.profile.printer, cell=drawn_width)
 
     source, refused = _aligned_facets(source, feature, cancelled=ctx.cancelled)
-    cleared = _pattern_cleared(ctx, source, feature)
+    cleared = _pattern_cleared(ctx, source, feature, redraw=True)
     if refused:
         cleared = dataclasses.replace(
             cleared, findings=[*cleared.findings, _facets_refused(source)]
@@ -15071,39 +15832,61 @@ def _resize_pattern(
     # des Körpers. Wer an einem durchgehenden Muster eine Tiefe setzt, macht
     # es blind, und das Merkmal sagt das danach auch.
     still_through = through and cell_depth <= 0.0
-    flat = flat_tool(
-        field.outline,
-        pattern=generator,
-        pitch=new_pitch,
-        # Eine durchgehende Zelle wird durch die Rückseite hindurch
-        # geschnitten: Ein Werkzeug, das bündig mit ihr endet, ließe dort eine
-        # Haut stehen, sobald die Rechnung nicht mehr exakt ist. Anders als der
-        # Stopfen darf das Schneidwerkzeug über den Körper hinausreichen.
-        depth=new_depth + BOOLEAN_OVERLAP if still_through else new_depth,
-        mode="engraved" if engraved else "raised",
-        seed=ctx.seed or 0,
-        # Die gezeichnete Breite, nicht die verlangte: Aus ihr rechnet
-        # ``tool_in_outline`` die Wand, um die ganze Zellen vom Rand
-        # wegbleiben — mit 9 mm verlangt bei 6 mm Teilung wäre die Wand
-        # negativ, also keine, und die Zellen schnitten die Seitenwand an.
-        cell=drawn_width,
-        wall=detail,
-        # Ganze Zellen, wo das Muster nur ganze hatte — und immer, wo es
-        # durchgeht: Eine angeschnittene wäre dort eine Kerbe (Review,
-        # 22.09.2026: ein blindes Feld nahe der Kante kerbte beim Neuzeichnen
-        # mit weiterer Teilung die Seitenwände). Nicht bei Streifen: Ihre
-        # Länge ist die des Feldes, und ein Steg, der am Feldrand endet, ist
-        # ganz — als ganze Zelle im Umriss gefordert, entstünde keiner.
-        whole_cells=generator not in STRIP_PATTERNS
-        and (through or int(feature.params.get("partial", 0)) == 0),
-        anchor=anchor,
-        clearance=field.frame.clearance,
-        around=field.around,
+    depth_only = (
+        feature.params.get("texture")
+        and not restyled
+        and is_close(new_pitch, measured_pitch)
+        and is_close(new_width or 0.0, measured_width)
     )
-    # Wo das Feld bis an eine Stirnfläche des Stifts reicht, schneidet ein
-    # vertieftes Muster über sie hinaus — aus demselben Grund wie die
-    # durchgehende Zelle oben (``Field.placed``).
-    tool = field.placed(flat, beyond=BOOLEAN_OVERLAP if engraved else 0.0)
+    if depth_only:
+        from app.core.geom.texture_ops import texture_depth_tool
+
+        tool = texture_depth_tool(source, feature, new_depth)
+        if tool is None:
+            raise ValidationError(
+                field="at_feature",
+                detail=PATTERN_NOT_DRAWABLE,
+                constraint="pattern_surface",
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+    else:
+        flat = flat_tool(
+            field.outline,
+            pattern=generator,
+            pitch=new_pitch,
+            # Eine durchgehende Zelle wird durch die Rückseite hindurch
+            # geschnitten: Ein Werkzeug, das bündig mit ihr endet, ließe dort eine
+            # Haut stehen, sobald die Rechnung nicht mehr exakt ist. Anders als der
+            # Stopfen darf das Schneidwerkzeug über den Körper hinausreichen.
+            depth=new_depth + BOOLEAN_OVERLAP if still_through else new_depth,
+            mode="engraved" if engraved else "raised",
+            seed=ctx.seed or 0,
+            # Die gezeichnete Breite, nicht die verlangte: Aus ihr rechnet
+            # ``tool_in_outline`` die Wand, um die ganze Zellen vom Rand
+            # wegbleiben — mit 9 mm verlangt bei 6 mm Teilung wäre die Wand
+            # negativ, also keine, und die Zellen schnitten die Seitenwand an.
+            cell=drawn_width,
+            wall=detail,
+            # Ganze Zellen, wo das Muster nur ganze hatte — und immer, wo es
+            # durchgeht: Eine angeschnittene wäre dort eine Kerbe (Review,
+            # 22.09.2026: ein blindes Feld nahe der Kante kerbte beim Neuzeichnen
+            # mit weiterer Teilung die Seitenwände). Nicht bei Streifen: Ihre
+            # Länge ist die des Feldes, und ein Steg, der am Feldrand endet, ist
+            # ganz — als ganze Zelle im Umriss gefordert, entstünde keiner.
+            whole_cells=not feature.params.get("texture", False)
+            and generator not in STRIP_PATTERNS
+            and (through or int(feature.params.get("partial", 0)) == 0),
+            anchor=anchor,
+            clearance=field.frame.clearance,
+            around=field.around,
+        )
+        # Wo das Feld bis an eine Stirnfläche des Stifts reicht, schneidet ein
+        # vertieftes Muster über sie hinaus — aus demselben Grund wie die
+        # durchgehende Zelle oben (``Field.placed``).
+        tool = field.placed(flat, beyond=BOOLEAN_OVERLAP if engraved else 0.0)
+    protected: list[MeshData] = []
+    if feature.params.get("texture") and not engraved:
+        tool, protected = _texture_plug_without_bores(ctx, source, feature, tool, redraw=True)
     placed = boolean(
         "difference" if engraved else "union",
         [cleared.mesh, tool],
@@ -15135,6 +15918,30 @@ def _resize_pattern(
         face_indices=(),
         surface_patches=(),
     )
+    if feature.params.get("texture"):
+        from app.core.perceive.patterns import bound_texture, surface_triangles
+
+        indices = set(
+            surface_triangles(placed.mesh, tool, check_cancelled=ctx.cancelled.raise_if_cancelled)
+        )
+        indices.difference_update(
+            surface_triangles(
+                placed.mesh,
+                cleared.mesh,
+                candidates=sorted(indices),
+                check_cancelled=ctx.cancelled.raise_if_cancelled,
+            )
+        )
+        for bore in protected:
+            indices.difference_update(
+                surface_triangles(
+                    placed.mesh,
+                    bore,
+                    candidates=sorted(indices),
+                    check_cancelled=ctx.cancelled.raise_if_cancelled,
+                )
+            )
+        changed = bound_texture(placed.mesh, changed, sorted(indices))
     findings = [
         *cleared.findings,
         *placed.findings,
@@ -15928,8 +16735,8 @@ class PlugParams(BaseParams):
         kind="feature",
         placement="front",
         doc=_(
-            "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie "
-            "ein; ohne sie gelten die Werte unter „Mehr“."
+            "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie ein; ohne "
+            "sie gelten die Werte unter „Weitere Einstellungen“."
         ),
     )
     diameter: float = param(
@@ -15938,7 +16745,7 @@ class PlugParams(BaseParams):
         unit="mm",
         minimum=0.2,
         maximum=200.0,
-        doc=_("Durchmesser der Bohrung, die zugemacht wird — etwas mehr schadet nicht."),
+        doc=_("Durchmesser des Stopfens, der die Bohrung füllt."),
     )
     x: float = param(
         title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X, placement="advanced"
@@ -16211,7 +17018,10 @@ class HollowParams(BaseParams):
         # Zahl wie beim exakten Zwilling.
         minimum=0.2,
         maximum=50.0,
-        doc=_("Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum."),
+        doc=_(
+            "Dicke der verbleibenden Wand. Die Druckprüfung vergleicht sie mit der geltenden "
+            "Profilgrenze."
+        ),
     )
     open_top: bool = param(
         title=_("Oben öffnen"),
@@ -16266,8 +17076,8 @@ class HollowParams(BaseParams):
         minimum=0,
         maximum=6,
         doc=_(
-            "Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die "
-            "Decke hoch. Eine offene Dose braucht keine."
+            "Null lässt den Hohlraum geschlossen. Eine offene Dose braucht keine zusätzlichen "
+            "Entlüftungen."
         ),
     )
     vent_diameter: float = param(
@@ -16849,7 +17659,10 @@ class TestPieceParams(BaseParams):
     on_bed: bool = param(
         title=_("Auf das Bett setzen"),
         default=True,
-        doc=_("Legt das Prüfstück flach hin, damit es ohne Stützen druckt."),
+        doc=_(
+            "Legt das Prüfstück auf das Druckbett. Prüfen Sie den Stützbedarf in der "
+            "Druckvorbereitung."
+        ),
     )
 
 
@@ -16866,8 +17679,8 @@ class TestPieceParams(BaseParams):
     produces=1,
     applies_to=["hole", "pin", "face"],
     doc=_(
-        "Schneidet einen Würfel um eine Stelle heraus, um sie zu drucken und "
-        "auszuprobieren — zwei Minuten statt zwei Stunden."
+        "Schneidet einen Würfel um eine Stelle heraus, um die Passung vor dem ganzen Teil "
+        "auszuprobieren."
     ),
 )
 def test_piece(ctx: OpContext) -> OpResult:
@@ -17514,7 +18327,10 @@ def _features_after_split(
     second: dict[str, Feature] = {}
     for feature_id, feature in features.items():
         connector = feature_id.startswith(("pin_", "bore_"))
-        if not connector and feature.kind == "face" and _crosses(feature, plane, mesh):
+        shared_surface = feature.kind == "face" or (
+            feature.kind == "pattern" and feature.params.get("texture")
+        )
+        if not connector and shared_surface and _crosses(feature, plane, mesh):
             # **Eine Fläche, durch die die Ebene geht, reist mit beiden Hälften**
             # (R4): Jede Hälfte trägt ein Stück von ihr, und die Auswertung gibt
             # den Namen dort dem größten Stück in ihrer Ebene
@@ -17523,6 +18339,8 @@ def _features_after_split(
             # unerkannter Eintrag mit ihrem alten Maß da; eine Passung an der
             # Deckfläche war nicht mehr messbar, und schob man die Ebene über die
             # Mitte, wechselte der Name die Hälfte (Durchsicht 0.5.1).
+            # Eine erzeugte Textur bindet ihre vorhandenen Zellflächen ebenso
+            # an beide Ausgaben; ihre Mitte entscheidet nicht über die Zugehörigkeit.
             first[feature_id] = feature
             second[feature_id] = feature
             continue
@@ -18160,7 +18978,7 @@ def _cut_away_exact(
     features, continued, _lost = _exact_features_after(
         dataclasses.replace(source, features=kept), checked, expected=None, cancelled=ctx.cancelled
     )
-    features, continued = _cut_faces_continued(kept, features, continued)
+    features, continued = _cut_faces_continued(kept, features, continued, source.mesh)
     return OpResult(
         outputs=[dataclasses.replace(exact, mesh=checked, kind="brep", features=features)],
         feature_continuations=(
@@ -18176,41 +18994,34 @@ def _cut_faces_continued(
     kept: Mapping[str, Feature],
     features: dict[str, Feature],
     continued: tuple[tuple[str, str], ...],
+    source: Mesh,
 ) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...]]:
-    """Eine ebene Fläche heißt am verbliebenen Stück in ihrer Ebene weiter.
+    """Ein eindeutig größtes Stück führt seine alte Fläche fort (R4).
 
-    Dieselbe Zusage wie am Netz (R4, ``evaluate._divided_partners``): Quert
-    die Schnittebene eine Fläche, behält das größte Stück in derselben Ebene
-    ihren Namen. Am exakten Kern fand die allgemeine Zuordnung die beschnittene
-    Deckfläche nicht wieder — Fläche und Mitte hatten sich geändert —, und eine
-    bündige Passung an ihr hielt die Kette mit „Welches Merkmal entspricht
-    face_6?“ an. Belegt wird jede Fortführung, damit die Auswertung den Bezug
-    als getragen sieht.
+    Die gemeinsame räumliche Prüfung der Zuordnung schließt fremde koplanare
+    Flächen aus. Bei gleich großen Stücken bleibt die Fortführung unbelegt;
+    ein späterer Bezug muss die normale native Rückfrage durchlaufen.
     """
+    from app.core.perceive.matching import pieces_in_place, planar_faces
+    from app.core.units import match_tolerance
+
     result = dict(features)
     pairs = list(continued)
+    same = match_tolerance(source.bounds.diagonal) ** 2
     for name, old in kept.items():
-        normal = vec3_or_none(old.params.get("normal")) if old.kind == "face" else None
-        centre = vec3_or_none(old.params.get("centre")) if old.kind == "face" else None
-        if normal is None or centre is None or name in result:
+        if old.kind != "face" or name in result:
             continue
-        offset = units.dot3(normal, centre)
-        best: tuple[str, float] | None = None
-        for key, candidate in result.items():
-            if candidate.kind != "face" or key in kept:
-                continue
-            other = vec3_or_none(candidate.params.get("normal"))
-            middle = vec3_or_none(candidate.params.get("centre"))
-            if other is None or middle is None or units.dot3(normal, other) < 1.0 - EPS_GEOM:
-                continue
-            if abs(units.dot3(normal, middle) - offset) > EPS_DISPLAY:
-                continue
-            area = float(candidate.params.get("area", 0.0) or 0.0)
-            if best is None or area > best[1]:
-                best = (key, area)
-        if best is None:
+        candidates = {key: feature for key, feature in result.items() if key not in kept}
+        here = planar_faces(candidates)
+        pieces = pieces_in_place(old, here, source)
+        if not pieces:
             continue
-        key = best[0]
+        area = dict(zip(here.names, here.areas.tolist(), strict=True))
+        largest = max(area[key] for key in pieces)
+        tied = [key for key in pieces if is_close(area[key], largest, same)]
+        if len(tied) != 1:
+            continue
+        key = tied[0]
         result[name] = dataclasses.replace(result.pop(key), id=name)
         pairs = [(old_id, name if new_id == key else new_id) for old_id, new_id in pairs]
         if (name, name) not in pairs:
@@ -18665,7 +19476,10 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
     # Minigolf-Satz sechzehnmal für drei Formen. Der Schlüssel ist die Form in
     # ihrer Lage samt Überhanggrenze; eine gekippte Kopie sucht selbst.
     searched: dict[tuple[bytes, float], Any] = {}
+    fast_searched: dict[tuple[bytes, float], Any] = {}
     for number, entry in enumerate(ctx.inputs):
+        ctx.cancelled.raise_if_cancelled()
+        ctx.progress(number / len(ctx.inputs), str(_("Ausrichtung suchen")))
         mesh = as_mesh_data(entry.mesh)
         try:
             if params.thorough:
@@ -18693,19 +19507,33 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                 matrix = found.transform
                 findings.extend(found.findings)
             else:
-                result = orient_for_print(
-                    mesh,
-                    printer=ctx.profile.printer,
-                    cancelled=ctx.cancelled,
-                    overhang_limit=analysis_limits(ctx.profile, entry)[1],
-                    standing=(
-                        None
-                        if ctx.profile.printer.is_resin
-                        else standing_check(mesh, ctx.profile, cancelled=ctx.cancelled)
-                    ),
+                angle = analysis_limits(ctx.profile, entry)[1]
+                key = (shape_key(mesh), angle)
+                earlier_fast = fast_searched.get(key)
+                reused_matrix = (
+                    fitting_transform(mesh, earlier_fast.chosen.direction, ctx.profile.printer)
+                    if earlier_fast is not None
+                    else None
                 )
-                matrix = result.transform
-                findings.extend(result.findings)
+                if earlier_fast is not None and reused_matrix is not None:
+                    matrix = reused_matrix
+                    notices = earlier_fast.findings
+                else:
+                    result = orient_for_print(
+                        mesh,
+                        printer=ctx.profile.printer,
+                        cancelled=ctx.cancelled,
+                        overhang_limit=angle,
+                        standing=(
+                            None
+                            if ctx.profile.printer.is_resin
+                            else standing_check(mesh, ctx.profile, cancelled=ctx.cancelled)
+                        ),
+                    )
+                    fast_searched[key] = result
+                    matrix = result.transform
+                    notices = result.findings
+                findings.extend(dataclasses.replace(item, object_id=entry.id) for item in notices)
         except NoFittingOrientationError as refusal:
             raise _the_way_out_of(refusal, mesh, entry, ctx) from None
         except NoStandingOrientationError as refusal:
@@ -18733,6 +19561,14 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=outputs,
         findings=findings,
+        feature_continuations=tuple(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, name), name)
+                for name in source.features
+                if name in output.features
+            )
+            for source, output in zip(ctx.inputs, outputs, strict=True)
+        ),
         transform=as_transform(last_matrix) if len(outputs) == 1 else None,
     )
 
@@ -19003,30 +19839,39 @@ def arrange_bed(ctx: OpContext) -> OpResult:
             )
         )
 
-    return OpResult(
-        outputs=[
-            # **Der Versatz statt des Netzes.** ``arrange_on_bed`` rechnet auf
-            # Dreiecken und gibt verschobene Netze zurück; ein exakter Körper
-            # käme so als Netz heraus, und danach ist kein Verrunden mehr
-            # möglich. Das Anordnen verschiebt nur — der Versatz steht in den
-            # Hüllquadern; ``moved_object`` führt Körper und Merkmale gemeinsam nach.
-            dataclasses.replace(
-                moved_object(
-                    entry,
-                    translation(
-                        (
-                            mesh.bounds.minimum[0] - entry.mesh.bounds.minimum[0],
-                            mesh.bounds.minimum[1] - entry.mesh.bounds.minimum[1],
-                            mesh.bounds.minimum[2] - entry.mesh.bounds.minimum[2],
-                        )
-                    ),
-                    cancelled=ctx.cancelled,
+    outputs = [
+        # **Der Versatz statt des Netzes.** ``arrange_on_bed`` rechnet auf
+        # Dreiecken und gibt verschobene Netze zurück; ein exakter Körper
+        # käme so als Netz heraus, und danach ist kein Verrunden mehr
+        # möglich. Das Anordnen verschiebt nur — der Versatz steht in den
+        # Hüllquadern; ``moved_object`` führt Körper und Merkmale gemeinsam nach.
+        dataclasses.replace(
+            moved_object(
+                entry,
+                translation(
+                    (
+                        mesh.bounds.minimum[0] - entry.mesh.bounds.minimum[0],
+                        mesh.bounds.minimum[1] - entry.mesh.bounds.minimum[1],
+                        mesh.bounds.minimum[2] - entry.mesh.bounds.minimum[2],
+                    )
                 ),
-                plate=plate,
-            )
-            for entry, mesh, plate in zip(ctx.inputs, result.meshes, result.plates, strict=True)
-        ],
+                cancelled=ctx.cancelled,
+            ),
+            plate=plate,
+        )
+        for entry, mesh, plate in zip(ctx.inputs, result.meshes, result.plates, strict=True)
+    ]
+    return OpResult(
+        outputs=outputs,
         findings=findings,
+        feature_continuations=tuple(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, name), name)
+                for name in source.features
+                if name in output.features
+            )
+            for source, output in zip(ctx.inputs, outputs, strict=True)
+        ),
     )
 
 

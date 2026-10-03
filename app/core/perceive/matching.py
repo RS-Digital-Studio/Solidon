@@ -34,8 +34,8 @@ from app.core.errors import AmbiguityError, InternalError
 from app.core.log import get_logger
 from app.core.perceive.match_records import valid_fingerprint
 from app.core.perceive.surfaces import radial_scales, transformed_patches
-from app.core.types import Feature, FeatureId, Transform, Vec3
-from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from app.core.types import Feature, FeatureId, Mesh, Transform, Vec3
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, exact_mean, match_tolerance
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -1492,3 +1492,145 @@ def transformed_features(
         if valid:
             exact.add(name)
     return FeatureTransform(result, frozenset(exact))
+
+
+@dataclass(frozen=True, slots=True)
+class PlanarFaces:
+    """Die ebenen Flächen nach dem Schritt als Felder — einmal gebaut, je alte Fläche gefragt.
+
+    Die Frage nach den Stücken einer alten Fläche läuft über jede erkannte
+    Fläche; als Schleife je alter Fläche wäre das Waisen mal Flächen in
+    Python, an der Kumiko-Schale mit 7 295 Flächen Sekunden.
+    """
+
+    names: tuple[FeatureId, ...]
+    normals: Any
+    centres: Any
+    areas: Any
+
+
+def planar_faces(detected: Mapping[FeatureId, Feature]) -> PlanarFaces:
+    """Die ebenen Flächen aus ``detected`` mit Normale, Mitte und Fläche."""
+
+    names: list[FeatureId] = []
+    normals: list[tuple[float, float, float]] = []
+    centres: list[tuple[float, float, float]] = []
+    areas: list[float] = []
+    for name, candidate in detected.items():
+        if candidate.kind != "face":
+            continue
+        there = candidate.params.get("centre")
+        direction = candidate.params.get("normal")
+        if not isinstance(there, tuple | list) or not isinstance(direction, tuple | list):
+            continue
+        if len(there) != 3 or len(direction) != 3:
+            continue
+        names.append(name)
+        normals.append((float(direction[0]), float(direction[1]), float(direction[2])))
+        centres.append((float(there[0]), float(there[1]), float(there[2])))
+        areas.append(float(candidate.params.get("area", 0.0) or 0.0))
+    return PlanarFaces(
+        tuple(names),
+        np.asarray(normals, dtype=float).reshape(-1, 3),
+        np.asarray(centres, dtype=float).reshape(-1, 3),
+        np.asarray(areas, dtype=float),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PlanarSource:
+    """Eine alte ebene Fläche, gemessen an ihren Dreiecken im Eingangsnetz.
+
+    ``direction`` ist ihre Normale als Einheitsvektor, ``middle`` ihre Mitte,
+    ``tolerance`` die Zuordnungstoleranz des Eingangsnetzes.
+    """
+
+    corners: Any
+    direction: Any
+    middle: Any
+    tolerance: float
+
+
+def planar_source(feature: Feature | None, source: Mesh | None) -> PlanarSource | None:
+    """Die Dreiecke einer alten ebenen Fläche im Eingangsnetz — wenn sie diese Fläche sind.
+
+    ``None`` heißt: kein Netz, keine gültigen Nummern, oder die Dreiecke unter
+    diesen Nummern sind eine andere Fläche — ihre flächengewichtete Normale
+    weicht ab, oder ihre Mitte liegt nicht in der Ebene des Merkmals. So
+    sehen Nummern aus, die eine Operation an ihrem eigenen Ergebnis vergeben
+    hat: Am Eingang bezeichnen sie fremde Dreiecke, und aus deren Hüllquader
+    bekäme ein falsches Stück den Namen. Summiert wird exakt (``math.fsum``,
+    RM-187), denn an der Antwort hängt, welches Stück welchen Namen trägt.
+    """
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import PARALLEL_FACE_COSINE
+
+    if feature is None or feature.kind != "face" or not feature.face_indices:
+        return None
+    if source is not None and not isinstance(source, MeshData):
+        # Ein exakter Körper: Die Dreiecksnummern seiner Merkmale zeigen auf
+        # seine Tessellierung (beide Kerne gleich, R4).
+        converted = getattr(source, "to_mesh", None)
+        source = converted() if callable(converted) else None
+    if not isinstance(source, MeshData):
+        return None
+    normal = feature.params.get("normal")
+    centre = feature.params.get("centre")
+    if not isinstance(normal, tuple | list) or not isinstance(centre, tuple | list):
+        return None
+    if len(normal) != 3 or len(centre) != 3:
+        return None
+    faces = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(faces.max()) >= source.triangle_count or int(faces.min()) < 0:
+        return None
+    direction = np.asarray([float(value) for value in normal], dtype=float)
+    middle = np.asarray([float(value) for value in centre], dtype=float)
+    weights = np.asarray(source.raw.area_faces, dtype=float)[faces]
+    normals = np.asarray(source.raw.face_normals, dtype=float)[faces] * weights[:, None]
+    summed = [math.fsum(normals[:, axis].tolist()) for axis in range(3)]
+    length = math.sqrt(math.fsum(value * value for value in summed))
+    own = math.sqrt(math.fsum(float(value) * float(value) for value in direction))
+    if length <= 0.0 or own <= 0.0:
+        return None
+    facing = math.fsum(float(a) * float(b) for a, b in zip(summed, direction, strict=True))
+    if facing < PARALLEL_FACE_COSINE * length * own:
+        return None
+    corners = np.asarray(source.raw.vertices, dtype=float)[
+        np.asarray(source.raw.faces, dtype=np.int64)[faces].ravel()
+    ]
+    tolerance = match_tolerance(source.bounds.diagonal)
+    unit = direction / own
+    offsets = ((corners - middle) * unit).sum(axis=1)
+    if abs(exact_mean(offsets.tolist())) > tolerance:
+        return None
+    return PlanarSource(corners, unit, middle, tolerance)
+
+
+def pieces_in_place(
+    feature: Feature | None, faces_now: PlanarFaces, source: Mesh | None
+) -> tuple[FeatureId, ...]:
+    """Die erkannten Flächen, die Stücke einer alten ebenen Fläche sind.
+
+    Ein Stück liegt in der Ebene der alten Fläche, gleich gerichtet, und seine
+    Mitte im Hüllquader ihrer Dreiecke im Eingangsnetz (:func:`planar_source`).
+    Dieselbe Messung für zwei Fragen: ob die alte Fläche fort ist
+    (:func:`_divided_in_place`) und welches Stück ihren Namen trägt
+    (:func:`_divided_partners`). Gerechnet mit Grundrechenarten (RM-187): An
+    der Antwort hängt, welches Stück welchen Namen trägt.
+    """
+
+    from app.core.perceive.features import PARALLEL_FACE_COSINE
+
+    if not faces_now.names:
+        return ()
+    old = planar_source(feature, source)
+    if old is None:
+        return ()
+    low = old.corners.min(axis=0) - old.tolerance
+    high = old.corners.max(axis=0) + old.tolerance
+    facing = (faces_now.normals * old.direction).sum(axis=1) >= PARALLEL_FACE_COSINE
+    apart = np.abs(((faces_now.centres - old.middle) * old.direction).sum(axis=1))
+    inside = ((faces_now.centres >= low) & (faces_now.centres <= high)).all(axis=1)
+    chosen = facing & (apart <= old.tolerance) & inside
+    return tuple(faces_now.names[index] for index in np.flatnonzero(chosen))

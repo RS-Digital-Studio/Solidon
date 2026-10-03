@@ -187,6 +187,9 @@ def test_document_history_waits_only_for_a_begun_measure_draft(command: str, beg
         restore_discarded_sketch=lambda: False,
         undo_sculpt_stroke=lambda: False,
         undo_bone=lambda: False,
+        sculpting=lambda: False,
+        setting_armature=lambda: False,
+        _sketch_panel=None,
         session=SimpleNamespace(
             undo=lambda: calls.append("undo"), redo=lambda: calls.append("redo")
         ),
@@ -3047,8 +3050,8 @@ def test_importing_from_the_start_screen_shows_the_workspace(
     assert window.stack.currentWidget() is window.start_screen
     monkeypatch.setattr(
         QFileDialog,
-        "getOpenFileName",
-        staticmethod(lambda *args, **kwargs: (str(MESHES / "cube_clean.stl"), "")),
+        "getOpenFileNames",
+        staticmethod(lambda *args, **kwargs: ([str(MESHES / "cube_clean.stl")], "")),
     )
 
     assert not window.toolbar.isVisibleTo(window)
@@ -12966,7 +12969,7 @@ def test_the_export_offers_its_folder(
     )
     from types import SimpleNamespace
 
-    worker = SimpleNamespace(_objects=("obj_1",), _all_objects=("obj_1",))
+    worker = SimpleNamespace(_objects=("obj_1",), _all_objects=("obj_1",), receipt=None)
     window._export_worker = worker
     try:
         window._export_done(worker, [tmp_path / "dose.3mf"], [])
@@ -14255,6 +14258,50 @@ def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> Non
         )
 
 
+def test_parameter_tab_keeps_titles_and_details_inside_the_scroll_area(
+    qt_app: QApplication,
+) -> None:
+    """Tab zum rechten Änderungsweg darf nicht sämtliche Maßnamen wegschieben."""
+    from PySide6.QtTest import QTest
+
+    from app.core.types import Document
+    from app.ui.panels import ParameterPanel
+
+    document = Document(format_version=1, app_version="0.0.1")
+    for index in range(12):
+        name = f"wall_{index}"
+        document.parameters[name] = Parameter(name=name, title="Wandstärke", value=3.0, unit="mm")
+    panel = ParameterPanel()
+    panel.resize(260, 220)
+    panel.show_document(document)
+    panel.set_room(220)
+    panel.show()
+    for _ in range(4):
+        QApplication.processEvents()
+    assert panel.focus_parameter("wall_11")
+    QApplication.processEvents()
+    editor = panel._editors["wall_11"]
+    editor.setValue(40.0)
+    editor.setValue(3.0)
+    editor.setFocus()
+    for _ in range(3):
+        QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Tab)
+        QApplication.processEvents()
+        if panel._detail_buttons["wall_11"].hasFocus():
+            break
+    assert panel._detail_buttons["wall_11"].hasFocus()
+    viewport = panel._scroll.viewport()
+    for widget in (panel._titles["wall_11"], panel._detail_buttons["wall_11"], editor):
+        position = widget.mapTo(viewport, QPoint())
+        assert position.x() >= 0, (widget, position)
+        assert position.x() + widget.width() <= viewport.width(), (widget, position)
+        assert position.y() >= 0
+        assert position.y() + widget.height() <= viewport.height()
+    assert panel._scroll.horizontalScrollBar().value() == 0
+    assert panel._scroll.verticalScrollBar().value() > 0
+    panel.close()
+
+
 def test_a_very_long_list_stops_growing(qt_app: QApplication) -> None:
     """Sonst schöbe ein Baum mit fünfzig Teilen den Verlauf aus dem Fenster."""
     from PySide6.QtWidgets import QTreeWidgetItem
@@ -14965,8 +15012,8 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
     monkeypatch.setattr(window.session, "import_model_async", watched)
     monkeypatch.setattr(
         QFileDialog,
-        "getOpenFileName",
-        staticmethod(lambda *args, **kwargs: (str(MESHES / "cube_clean.stl"), "")),
+        "getOpenFileNames",
+        staticmethod(lambda *args, **kwargs: ([str(MESHES / "cube_clean.stl")], "")),
     )
 
     window.action_import()
@@ -15376,20 +15423,33 @@ def test_a_dropped_link_is_taken_like_a_dropped_file(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("on_start", [True, False])
 def test_a_dropped_model_page_says_where_the_file_is(
-    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, on_start: bool
 ) -> None:
     """Der Satz statt des Verbotszeichens — und ohne Anfrage ins Netz."""
     shown: list[errors.AppError] = []
     monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: shown.append(error))
-    drop = _drag(["https://www.thingiverse.com/thing:763622"])
+    window._show_start_screen(on_start)
+    project = window.session.project
+    url = "https://www.printables.com/model/3161-3d-benchy"
+    drop = _drag([url])
 
-    window.dropEvent(drop)  # type: ignore[arg-type]
+    target = window.start_screen.drop_area if on_start else window
+    target.dropEvent(drop)  # type: ignore[arg-type]
 
     assert drop.accepted
     assert window._download_worker is None, "keine Anfrage an eine Seite hinter einer Bot-Prüfung"
     assert shown and shown[0].values["constraint"] == "web_page"
     assert "Herunterladen" in str(shown[0].detail)
+    assert window.session.project is project
+    opened: list[str] = []
+    monkeypatch.setattr(
+        "app.ui.dialogs.QDesktopServices.openUrl",
+        lambda address: opened.append(address.toString()) or True,
+    )
+    window.error_handlers()["open_in_browser"](shown[0])
+    assert opened == [url], "der angebotene Knopf öffnet genau die Modellseite"
 
 
 def test_a_zip_with_several_models_asks_and_imports_the_chosen_one(
@@ -17825,7 +17885,8 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
     QApplication.processEvents()
 
     assert report.to_slicer.isVisibleTo(report)
-    assert report.summary.text() == "Keine Befunde. Das Teil ist druckbereit."
+    assert "druckbereit" not in report.summary.text().casefold()
+    assert report.summary.text().startswith(("Bewertung unvollständig", "Bereit zur Übergabe"))
     assert report.list.count() == 0
     opened: list[str] = []
     window.action_print_settings = lambda: opened.append("dialog")  # type: ignore[method-assign]
@@ -19551,6 +19612,20 @@ class _DialogWithoutHook:
     """Und eines ohne ihn: Die Sperre darf daran nicht scheitern."""
 
 
+def test_successful_unchanged_preview_replaces_an_earlier_information_reason(window: MainWindow):
+    """Ein erfolgreicher leerer Vergleich darf nicht als Absage im Band bleiben."""
+    from app.core.geom.difference import SceneDifference
+    from app.core.types import Finding
+
+    reason = "Gewindehals und Deckel erzeugt — beide mit derselben Steigung."
+    window._preview_explained(reason)
+    difference = SceneDifference(findings=(Finding("container.created", "info", reason),))
+    window._show_preview(difference)
+    assert "Keine Vorschau" not in window.viewport.banner.note.text()
+    assert "ändert sich nichts" in window.viewport.banner.note.text()
+    assert not window._preview_reason
+
+
 def test_a_reason_that_asks_for_a_repair_first_greys_out_apply(window: MainWindow) -> None:
     """Das Band sagte „Erst reparieren, dann aushöhlen" — und *Übernehmen*
     blieb anklickbar.
@@ -20595,13 +20670,7 @@ def test_a_missing_selection_is_said_not_put_in_a_box(
 
 
 def test_several_dropped_files_do_not_vanish_silently(window: MainWindow) -> None:
-    """Von mehreren gezogenen Dateien kam eine — und kein Wort zu den übrigen.
-
-    Mehrfachimport ist zurückgestellt (RM-131); die Abnahme dort verlangt aber
-    „ohne still verworfene Dateien", und bis dahin fielen sie genau so weg
-    (Review Fenster 0.5.0, 22.09.2026). Geprüft an beiden Ablageorten: am
-    Fenster und an der Fläche des Startbildschirms.
-    """
+    """Beide Ablageorte übernehmen jede gewählte Datei im selben Auftrag."""
     from PySide6.QtCore import QMimeData, QUrl
 
     class _Drop:
@@ -20622,13 +20691,17 @@ def test_several_dropped_files_do_not_vanish_silently(window: MainWindow) -> Non
             QUrl.fromLocalFile(str(MESHES / "plate_countersunk.stl")),
         ]
     )
-    opened: list[Path] = []
-    window.open_path = opened.append  # type: ignore[method-assign,assignment]
+    opened: list[list[Path]] = []
+    window.session.import_models_async = lambda paths: opened.append(list(paths))  # type: ignore[method-assign]
 
     window.dropEvent(_Drop(data))  # type: ignore[arg-type]
 
-    assert opened == [MESHES / "cube_clean.stl"]
-    assert window.status_message.text().startswith("2 weitere Dateien nicht geöffnet")
+    expected = [
+        MESHES / "cube_clean.stl",
+        MESHES / "plate_holes.stl",
+        MESHES / "plate_countersunk.stl",
+    ]
+    assert opened == [expected]
 
     window.status_message.setText("")
     from app.ui.start_screen import DropArea
@@ -20636,7 +20709,7 @@ def test_several_dropped_files_do_not_vanish_silently(window: MainWindow) -> Non
     area = window.start_screen.findChild(DropArea)
     assert area is not None
     area.dropEvent(_Drop(data))  # type: ignore[arg-type]
-    assert window.status_message.text().startswith("2 weitere Dateien nicht geöffnet")
+    assert opened == [expected, expected]
 
 
 def test_a_link_without_a_browser_lands_on_the_clipboard(
@@ -21201,7 +21274,9 @@ def test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid(window: MainWi
     assert hidden in window.viewport._hidden
     assert window.header.plate == 1, "die gewählte Platte bleibt"
     assert window.viewport._plate == 1
-    assert not window.viewport.invitation.isVisible(), "kein „Womit fangen Sie an?“ über Körpern"
+    assert window.viewport.invitation.isVisible(), "das erhaltene Bild wird als solches erklärt"
+    assert "Womit" not in window.viewport.invitation.title.text()
+    assert "letzte gültige Stand" in window.viewport.invitation.reason.text()
 
     document.parameters["breite"] = dataclasses.replace(document.parameters["breite"], value=200.0)
     window._on_scene(window.session.evaluate_now())
@@ -21212,6 +21287,68 @@ def test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid(window: MainWi
     QApplication.processEvents()
     assert hidden not in window._hidden, "eine echte Löschung räumt die Ausblendung weg"
     assert hidden not in window.viewport._hidden
+
+
+def test_invalid_container_wall_marks_retained_picture_and_names_the_visible_parameter(
+    window: MainWindow,
+) -> None:
+    """3→40 mm hält den Behälter an; altes Bild, Rückweg und Undo sagen denselben Stand."""
+    from app.i18n import _
+
+    window.show()
+    session = window.session
+    assert session.add_parameter(
+        Parameter(name="container_wall", value=3.0, unit="mm", title=_("Wandstärke"))
+    )
+    session.apply(
+        "Klappbehälter",
+        [
+            OperationDraft(
+                op="create_container",
+                params={
+                    "shape": "rectangular",
+                    "lid": "hinged",
+                    "width": 80.0,
+                    "depth": 60.0,
+                    "height": 40.0,
+                    "wall": "=@container_wall",
+                },
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    valid = session.last_result
+    assert valid is not None and valid.complete and len(valid.scene.objects) == 2
+    assert session.change_parameter("container_wall", 40.0)
+    assert session.wait_for_idle(30_000)
+    for _round in range(4):
+        QApplication.processEvents()
+    halted = session.last_result
+    assert halted is not None and halted.stopped_at is not None
+    assert not halted.scene.objects
+    assert window.viewport._requested_result is valid
+    card = window.viewport.invitation
+    assert card.isVisible() and "letzte gültige Stand" in card.reason.text()
+    assert "letzte gültige Stand" in window.object_tree._empty.text()
+    assert "Noch keine Objekte" not in window.object_tree._empty.text()
+    card.halt_buttons["correct_step"].click()
+    assert "Wandstärke" in window._announcement
+    assert "container_wall" not in window._announcement
+    assert window._op_dialog is None
+    assert session.project.document.ops[0].params["wall"] == "=@container_wall"
+    window.action_undo()
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert session.last_result.complete and len(session.last_result.scene.objects) == 2
+    assert card.isHidden() and not window._halted
+    window.action_redo()
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert card.isVisible() and "letzte gültige Stand" in card.reason.text()
+    assert session.change_parameter("container_wall", 3.0)
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert card.isHidden() and session.last_result.complete
 
 
 def test_a_project_halting_at_its_first_step_says_so_instead_of_inviting(
@@ -21485,7 +21622,9 @@ def _fine_triangles(window: MainWindow) -> int:
     return sum(as_mesh_data(entry.mesh).triangle_count for entry in fine.scene.objects.values())
 
 
-def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Path) -> None:
+def test_the_export_writes_the_fine_calculation(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Die Datei trägt die feine Rechnung, nicht den Entwurf des Fensters (RM-426).
 
     Das Fenster rechnet im Entwurf (§31). Geschrieben wurde dieser Entwurf —
@@ -21496,6 +21635,10 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
     import trimesh
 
     from app.core.geom.mesh import as_mesh_data
+
+    # Dieser Fall prüft die exportierte Güte. Die eigenständig geprüfte
+    # Befundrückfrage wird wie ein bewusster Klick auf Trotzdem exportieren beantwortet.
+    monkeypatch.setattr("app.ui.main_window.confirm_export", lambda _findings, _parent: True)
 
     _a_blend_in_draft(window)
     result = window.session.last_result
@@ -21903,3 +22046,375 @@ def test_known_plate_comparison_replaces_previous_unknown_report(missing: str) -
             assert len(comparisons) == 2
             assert all(entry.values["estimated_source"] == "internal" for entry in comparisons)
             assert all(entry.values["measured_source"] == "gcode" for entry in comparisons)
+
+
+def test_batch_import_keeps_file_coordinates_and_undoes_together(session, tmp_path):
+    """Mehrere Dateien bleiben in ihrer Baugruppenlage und sind eine Transaktion."""
+    import trimesh
+
+    paths = []
+    for index, centre in enumerate(((15, 25, 35), (65, 25, 55), (-10, 45, 20))):
+        mesh = trimesh.creation.box((20, 20, 20))
+        mesh.apply_translation(centre)
+        path = tmp_path / f"teil-{index}.stl"
+        path.write_bytes(mesh.export(file_type="stl"))
+        paths.append(path)
+    failures = []
+    session.importFailed.connect(failures.append)
+    session.import_models_async(paths)
+    assert session.wait_for_idle(30000)
+    assert not failures
+    assert len(session.project.document.transactions) == 1
+    assert len(session.last_result.scene.objects) == 3
+    for body, centre in zip(
+        session.last_result.scene.objects.values(),
+        ((15, 25, 35), (65, 25, 55), (-10, 45, 20)),
+        strict=True,
+    ):
+        assert body.mesh.bounds.centre == pytest.approx(centre)
+    session.undo()
+    assert session.wait_for_idle()
+    assert not session.last_result.scene.objects
+    session.redo()
+    assert session.wait_for_idle()
+    assert len(session.last_result.scene.objects) == 3
+
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load, save
+
+    restored = load(save(session.project, tmp_path / "assembly.p3d"))
+    result = evaluate(
+        restored.document, session.profile, sources=ProjectSources(restored), detect_features=False
+    )
+    assert result.stopped_at is None
+    for body, centre in zip(
+        result.scene.objects.values(), ((15, 25, 35), (65, 25, 55), (-10, 45, 20)), strict=True
+    ):
+        assert body.mesh.bounds.centre == pytest.approx(centre)
+
+
+def test_batch_import_read_error_leaves_no_partial_import(session, tmp_path):
+    """Eine fehlende zweite Datei lässt auch die erste nicht heimlich im Projekt."""
+    before = list(session.project.document.ops)
+    errors = []
+    session.importFailed.connect(errors.append)
+    session.import_models_async([MESHES / "cube_clean.stl", tmp_path / "fehlt.stl"])
+    assert session.wait_for_idle()
+    assert len(errors) == 1
+    assert session.project.document.ops == before
+    assert not session.project.document.sources
+    assert not session.project.sources
+
+
+def test_batch_import_invalid_geometry_rolls_back_all_sources(session, tmp_path):
+    """Ein kaputter Ladeschritt nimmt den vollständigen Auftrag samt Quellen zurück."""
+    path = tmp_path / "kaputt.stl"
+    path.write_text("solid broken\nendsolid broken\n", encoding="ascii")
+    errors = []
+    session.importRejected.connect(errors.append)
+    session.importFailed.connect(errors.append)
+    session.import_models_async([MESHES / "cube_clean.stl", path])
+    assert session.wait_for_idle(30000)
+    assert len(errors) == 1
+    assert not session.project.document.ops
+    assert not session.project.document.sources
+    assert not session.project.sources
+
+
+@pytest.mark.parametrize("interruption", ["cancel", "project"])
+def test_batch_import_discards_late_reads(session, qt_app, monkeypatch, interruption):
+    """Abbruch und Projektwechsel lassen einen verspäteten Sammelauftrag verfallen."""
+    import threading
+
+    from app.ui import session as session_module
+
+    entered, released = threading.Event(), threading.Event()
+    original = session_module.read_local_payload
+
+    def delayed(path):
+        entered.set()
+        released.wait(5)
+        return original(path)
+
+    monkeypatch.setattr(session_module, "read_local_payload", delayed)
+    session.import_models_async([MESHES / "cube_clean.stl", MESHES / "plate_holes.stl"])
+    wait_until(qt_app, entered.is_set)
+    if interruption == "cancel":
+        session.cancel_evaluation()
+    else:
+        session.start_new()
+    released.set()
+    assert session.wait_for_idle(30000)
+    assert not session.project.document.ops
+    assert not session.project.document.sources
+    assert not session.project.sources
+
+
+def test_batch_import_asks_once_for_the_shared_unit(session):
+    """Die Einheit gilt ausdrücklich dem Auftrag, auch wenn die Dateimaße verschieden sind."""
+    session._batch_sources = ("src_1", "src_2")
+    requests = []
+
+    def answer(request):
+        requests.append(request)
+        request.reply("mm")
+
+    session.askRequested.connect(answer)
+    assert session.ask_from_worker("10 × 20 × 30", ["mm", "cm", "in"]) == "mm"
+    assert session.ask_from_worker("5 × 8 × 12", ["cm", "mm", "in"]) == "mm"
+    assert len(requests) == 1
+    assert "alle gewählten Dateien" in requests[0].question
+
+
+def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transaction(
+    session, qt_app, monkeypatch
+):
+    """Abbruch nach dem Lesen räumt Schritte und Quellen; der Folgelauf bleibt möglich."""
+    import threading
+
+    from app.core.errors import OperationCancelled
+    from app.ui import session as session_module
+
+    entered, released = threading.Event(), threading.Event()
+    original = session_module.evaluate
+    first = True
+
+    def delayed(*args, **kwargs):
+        nonlocal first
+        if first:
+            first = False
+            entered.set()
+            released.wait(5)
+            raise OperationCancelled()
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(session_module, "evaluate", delayed)
+    session.import_models_async([MESHES / "cube_clean.stl", MESHES / "plate_holes.stl"])
+    wait_until(qt_app, entered.is_set)
+    assert session.project.document.ops
+    session.cancel_evaluation()
+    released.set()
+    assert session.wait_for_idle(30000)
+    assert not session.project.document.ops
+    assert not session.project.document.sources
+    assert not session.project.sources
+    assert not session.modified
+    session.import_models_async([MESHES / "cube_clean.stl", MESHES / "cube_clean.stl"])
+    assert session.wait_for_idle(30000)
+    assert len(session.last_result.scene.objects) == 2
+
+
+def test_batch_import_groups_recognition_permission_with_total_estimate(session, monkeypatch):
+    """Zwei große Dateien stellen eine Frage mit gemeinsamer Zeitschätzung."""
+    import importlib
+
+    from app.ui import session as session_module
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(session_module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(session_module, "recognition_minutes", lambda *_a, **_kw: (4, 9))
+    monkeypatch.setattr(session_module, "recognition_gigabytes", lambda *_: 3)
+    asked = []
+
+    def answer(request):
+        asked.append(request)
+        request.reply(request.choices[0])
+
+    session.askRequested.connect(answer)
+    session.import_models_async([MESHES / "cube_clean.stl", MESHES / "cube_clean.stl"])
+    assert session.wait_for_idle(30000)
+    assert len(asked) == 1
+    assert "alle 2 großen Modelle" in asked[0].question
+    assert "4 bis 9 Minuten" in asked[0].question
+    assert "3 GB" in asked[0].question
+    assert len(session.last_result.scene.objects) == 2
+    assert all(
+        any(
+            record.get("allowed") is False
+            for record in op.matches.values()
+            if isinstance(record, dict)
+        )
+        for op in session.project.document.ops
+    )
+
+
+@pytest.mark.parametrize("entry", ["open", "batch"])
+def test_new_model_clears_previous_tour_only_after_confirmed_project_change(
+    window, monkeypatch, entry
+):
+    """Neu/Abbrechen behalten die Tour, tatsächlicher Einzel-/Mehrfachimport räumt sie ab."""
+    import app.ui.main_window as module
+    from app.core import examples
+    from app.core.tour import tour_for
+
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    window.session.apply("Quader", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle()
+    example = next(item for item in examples.EXAMPLES if tour_for(item.id))
+    window.tour.start(example, tour_for(example.id))
+    window.right.setTabVisible(window.right.indexOf(window.tour), True)
+    project = window.session.project
+    window.feature_dock.forget_dismissal()
+    window.feature_dock.reveal()
+    assert not window.feature_dock.isHidden()
+    window.action_new()
+    assert window.tour.active
+    assert window.feature_dock.isHidden()
+    window.feature_dock.reveal()
+    assert window.feature_dock.isHidden(), "Ein spätes Auswahlsignal holt das Dock nicht zurück"
+    monkeypatch.setattr(module, "confirm_unsaved", lambda *_: "cancel")
+    paths = [MESHES / "cube_clean.stl", MESHES / "cube_clean.stl"]
+    load = (
+        (lambda: window.open_path(paths[0]))
+        if entry == "open"
+        else (lambda: window.import_paths(paths))
+    )
+    load()
+    assert window.session.project is project
+    assert window.tour.active
+    window._show_start_screen(False)
+    assert not window.feature_dock.isHidden(), "Rückkehr ohne Wechsel stellt die Auswahl wieder her"
+    window.action_new()
+    monkeypatch.setattr(module, "confirm_unsaved", lambda *_: "discard")
+    load()
+    assert window.session.wait_for_idle()
+    assert window.session.project is not project
+    assert not window.tour.active
+    assert not window.right.isTabVisible(window.right.indexOf(window.tour))
+    assert all(step.op == "load" for step in window.session.project.document.ops)
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+def test_model_page_clipboard_survives_url_dialog(window, monkeypatch, accepted):
+    """Der Menüweg übernimmt die Modellseite; Abbrechen verändert das Projekt nicht."""
+    url = "https://www.printables.com/model/3161-3d-benchy"
+    clipboard = QApplication.clipboard()
+    before = clipboard.text()
+    clipboard.setText(url)
+    offered = []
+    shown = []
+    project = window.session.project
+
+    def answer(*args, **kwargs):
+        offered.append(kwargs["text"])
+        return url, accepted
+
+    monkeypatch.setattr("app.ui.main_window.QInputDialog.getText", answer)
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
+    try:
+        window.action_import_url()
+    finally:
+        clipboard.setText(before)
+    assert offered == [url]
+    assert len(shown) == int(accepted)
+    assert window._download_worker is None
+    assert window.session.project is project
+
+
+@pytest.mark.parametrize("ending", ["cancel", "project", "replacement", "gesture", "close"])
+@pytest.mark.parametrize("reply", ["done", "failed"])
+def test_download_late_reply_cannot_change_a_new_context(
+    window, monkeypatch, request, ending, reply
+):
+    """Späte Nutzlast, Fehler und Fortschritt bleiben bei ihrem ursprünglichen Download."""
+    from app.core.ingest.fetch import FetchedModel
+
+    started = []
+    imported = []
+    shown = []
+    monkeypatch.setattr(window._leash, "start", started.append)
+    monkeypatch.setattr(window.session, "import_payload_async", lambda *a, **kw: imported.append(a))
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
+    window.download_model("https://example.invalid/first.stl")
+    old = started[-1]
+    request.addfinalizer(lambda: _release_unstarted_worker(window, "_download_worker", old))
+    if ending == "cancel":
+        window._cancel_download()
+    elif ending == "project":
+        window.session.start_new(window.settings.printer, window.settings.material)
+        assert window.session.wait_for_idle(30000)
+    elif ending == "replacement":
+        window.download_model("https://example.invalid/second.stl")
+        new = started[-1]
+        request.addfinalizer(lambda: _release_unstarted_worker(window, "_download_worker", new))
+        assert old.cancel.is_cancelled
+    elif ending == "gesture":
+        monkeypatch.setattr(window, "_gesture_allows_import", lambda: False)
+    else:
+        window._close_requested = True
+    project = window.session.project
+    old.step.emit(0.75, "alter Download")
+    if reply == "done":
+        old.done.emit(
+            FetchedModel("first.stl", b"data", "https://example.invalid/first.stl", "2026-10-03")
+        )
+    else:
+        old.failed.emit(errors.UserError(detail="alte Antwort"))
+    assert not imported
+    assert window.session.project is project
+    assert len(shown) == int(ending == "gesture" and reply == "failed")
+    if ending == "replacement":
+        assert window._downloading and window._download_worker is new
+        new.stopped.emit()
+    window._close_requested = False
+    window._end_download()
+
+
+@pytest.mark.parametrize("on_start", [True, False])
+def test_cancelled_archive_choice_keeps_the_current_project(window, qt_app, monkeypatch, on_start):
+    """Mehrere Downloadangebote fragen einmal; Abbruch fügt keine Quelle und keinen Schritt ein."""
+    import io
+    import zipfile
+
+    from app.core.errors import QuestionDeclined
+    from app.core.ingest.fetch import FetchedModel
+
+    if not on_start:
+        window.session.apply("Quader", [OperationDraft(op="create_box", params={"width": 20.0})])
+        assert window.session.wait_for_idle(30000)
+    window._show_start_screen(on_start)
+    previous = list(window.session.project.document.ops)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name in ("one.stl", "two.stl"):
+            archive.writestr(name, (MESHES / "cube_clean.stl").read_bytes())
+    asked = []
+
+    def cancel(question, choices):
+        asked.append(choices)
+        raise QuestionDeclined()
+
+    monkeypatch.setattr(window.session, "ask_from_worker", cancel)
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda *args, **kwargs: None)
+    window._downloaded(
+        FetchedModel(
+            "models.zip", buffer.getvalue(), "https://example.invalid/models.zip", "2026-10-03"
+        )
+    )
+    plan = window.session._plan
+    if plan is not None:
+        assert plan.wait(10000)
+    qt_app.processEvents()
+    assert window.session.wait_for_idle(30000)
+    assert asked == [["one.stl", "two.stl"]]
+    assert not window.session.project.document.sources
+    assert window.session.project.document.ops == previous
+
+
+def test_redo_replaces_undo_announcement_after_completed_evaluation(window):
+    """Strg+Y darf nach neuer Geometrie nicht weiter die Rücknahme behaupten."""
+    assert window.session.apply("Formen", [OperationDraft(op="create_box", params={})])
+    assert window.session.wait_for_idle(30000)
+    window.action_undo()
+    assert window.session.wait_for_idle(30000)
+    assert window._announcement == tr("{name} zurückgenommen.").format(name="Formen")
+    window.action_redo()
+    assert window.session.wait_for_idle(30000)
+    expected = tr("{name} wieder angewendet.").format(name="Formen")
+    assert window._announcement == expected
+    assert window.status_message.text() == expected
+    assert len(window.session.last_result.scene.objects) == 1
+    window.action_redo()
+    assert window._announcement == expected, "ein leeres Redo behauptet keine weitere Handlung"

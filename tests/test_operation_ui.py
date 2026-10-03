@@ -112,6 +112,140 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 empty_window = ui_helpers.window
 
 
+def test_a_preview_refusal_stays_in_the_dialog_without_a_local_action(
+    qt_app: QApplication,
+) -> None:
+    """RM-395: Auch ohne ausführbaren Zusatzknopf bleibt der Sperrgrund sichtbar."""
+    bootstrap.load_operations()
+    dialog = OperationDialog(REGISTRY.get("screw_lid"), {})
+    problem = ValidationError(
+        field="at_feature", constraint="hollow", detail="Wählen Sie eine offene Dose."
+    )
+    try:
+        dialog.show_refusal(problem, {})
+        assert not dialog._refusal.isHidden()
+        assert "Wählen Sie eine offene Dose." in dialog._refusal.text()
+        dialog.show_refusal(None)
+        assert dialog._refusal.isHidden()
+        assert not dialog._refusal.text()
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_sketch_menu_starts_drawing(
+    empty_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-395: Der Sammeleintrag führt wie die Palette direkt in die Zeichnung."""
+    drawn: list[str] = []
+    monkeypatch.setattr(empty_window, "start_sketch", drawn.append)
+    empty_window._variant_actions["sketch_extrude"].trigger()
+    assert drawn == ["sketch_extrude"]
+    assert empty_window._op_dialog is None
+
+
+def test_new_material_roles_start_with_the_project_material(
+    empty_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-395: Die Profilklemme öffnet mit Material; eine ausdrückliche Wahl bleibt."""
+    monkeypatch.setattr(empty_window.session, "preview_async", lambda *args, **kwargs: None)
+    material = empty_window.session.project.document.material
+    empty_window.run_operation(REGISTRY.get("create_profile_clamp_set"))
+    dialog = empty_window._op_dialog
+    assert dialog is not None
+    assert dialog.values()["clamp_material"] == material
+    assert dialog.values()["liner_material"] == material
+    dialog.reject()
+    empty_window.run_operation(REGISTRY.get("create_profile_clamp_set"), {"liner_material": "petg"})
+    dialog = empty_window._op_dialog
+    assert dialog is not None
+    assert dialog.values()["liner_material"] == "petg"
+    dialog.reject()
+
+
+@pytest.mark.parametrize("shape", ["rectangle", "circle", "slot"])
+def test_reopening_a_drawing_changes_one_step_and_keeps_undo_and_saved_state(
+    empty_window: MainWindow, tmp_path: Path, shape: str
+) -> None:
+    """RM-375: Zeichnung bearbeiten, verwerfen, übernehmen und erneut öffnen."""
+    from PySide6.QtTest import QTest
+
+    sketch = shapes.circle(20.0) if shape == "circle" else getattr(shapes, shape)(20.0, 10.0)
+    original = sketch_to_text(sketch)
+    session = empty_window.session
+    session.apply("Zeichnung", [OperationDraft(op="sketch_extrude", params={"sketch": original})])
+    assert session.wait_for_idle()
+    step = session.history.operations[-1].id
+
+    empty_window.edit_operation(step)
+    panel = empty_window._sketch_panel
+    assert panel is not None, "der Verlauf öffnet direkt die Zeichensitzung"
+    assert empty_window._op_dialog is None
+    assert empty_window._sketch_step == step
+    dimension = next(
+        index for index, item in enumerate(sketch.constraints) if item.kind == "distance"
+    )
+    panel.canvas.change_constraint(dimension, "15")
+    changed = sketch_to_text(panel.canvas.sketch)
+    assert changed != original
+    panel.canvas.undo()
+    assert panel.canvas.sketch.constraints[dimension].value == sketch.constraints[dimension].value
+    panel.canvas.redo()
+    assert panel.canvas.sketch.constraints[dimension].value == "15"
+    empty_window.finish_sketch(keep=False)
+    assert session.history.operation(step).params["sketch"] == original
+
+    empty_window.action_undo()
+    assert empty_window._sketch_step == step, "Zurückholen bearbeitet weiter denselben Schritt"
+    assert empty_window._sketch_panel is not None
+    assert empty_window._sketch_panel.canvas.sketch.constraints[dimension].value == "15"
+    empty_window.finish_sketch(keep=False)
+
+    empty_window.edit_operation(step)
+    panel = empty_window._sketch_panel
+    assert panel is not None
+    panel.canvas.change_constraint(dimension, "15")
+    empty_window.finish_sketch()
+    dialog = empty_window._op_dialog
+    assert dialog is not None, "die Erzeugungsmaße bleiben vor dem Übernehmen prüfbar"
+    QTest.qWait(350)
+    assert session.wait_for_idle()
+    dialog.accept()
+    assert session.wait_for_idle()
+    assert len(session.history.operations) == 1
+    committed = session.history.operation(step).params["sketch"]
+    assert committed != original
+    session.undo()
+    assert session.wait_for_idle()
+    assert session.history.operation(step).params["sketch"] == original
+    session.redo()
+    assert session.wait_for_idle()
+    assert session.history.operation(step).params["sketch"] == committed
+
+    path = tmp_path / "zeichnung.p3d"
+    session.save_project(path)
+    session.open_project(path)
+    assert session.wait_for_idle()
+    empty_window.edit_operation(step)
+    assert empty_window._sketch_panel is not None
+    assert empty_window._sketch_panel.canvas.sketch.constraints[dimension].value == "15"
+    empty_window.finish_sketch(keep=False)
+
+
+def test_a_discarded_drawing_cannot_enter_another_project(empty_window: MainWindow) -> None:
+    """Gleiche Schrittanzahl macht ein anderes Projekt nicht zum alten."""
+    session = empty_window.session
+    session.apply("Quader", [OperationDraft(op="create_box")])
+    assert session.wait_for_idle()
+    empty_window.start_sketch("sketch_extrude", text=sketch_to_text(shapes.rectangle(20.0, 10.0)))
+    empty_window.finish_sketch(keep=False)
+    assert empty_window._discarded_sketch is not None
+    session.start_new()
+    session.apply("Zylinder", [OperationDraft(op="create_cylinder")])
+    assert session.wait_for_idle()
+    assert not empty_window.restore_discarded_sketch()
+    assert empty_window._sketch_panel is None
+
+
 @pytest.mark.parametrize(
     "name, field, reference",
     [("insert_wall_mount", "holes", "@holes"), ("insert_pegboard_hook", "count", "@hooks")],
@@ -583,6 +717,51 @@ def test_without_a_feature_the_body_offers_its_top(window: MainWindow) -> None:
     assert "at_feature" not in values, "geraten ist nicht gezeigt"
 
 
+def test_a_feature_pick_updates_transform_roles_once(window: MainWindow, monkeypatch) -> None:
+    """Der Baum liefert bereits die vollständige Auswahl einschließlich Merkmal."""
+    select(window)
+    original = window._update_transform_roles
+    selected = []
+
+    def update():
+        selected.append(window.object_tree.selected_feature())
+        original()
+
+    monkeypatch.setattr(window, "_update_transform_roles", update)
+    window._on_feature_picked("hole_1")
+    assert selected == ["hole_1"]
+    selected.clear()
+    window._on_feature_picked("hole_2")
+    assert selected == ["hole_2"]
+
+
+def test_a_ready_measure_group_joins_the_selection_frame(window: MainWindow, monkeypatch) -> None:
+    """Fertige warme Maße bestellen kein identisches zweites Bild im nächsten Qt-Takt."""
+    from app.ui.placement_flow import PlacementFlow
+    from tests.render_fakes import RecordingRenderer
+
+    window.viewport.renderer = RecordingRenderer()
+    select(window)
+    window._on_feature_picked("hole_1")
+    window._on_feature_picked("hole_2")
+    pending = []
+    original = PlacementFlow.flush_frame
+
+    def flush(flow):
+        pending.append(flow._frame.isActive())
+        original(flow)
+
+    monkeypatch.setattr(PlacementFlow, "flush_frame", flush)
+    window._on_feature_picked("hole_1")
+    flow = window._quiet_placement
+    assert flow is not None and flow._surface is not None
+    assert pending == [True]
+    assert not flow._frame.isActive()
+    # Spätere echte Änderungen bestellen weiterhin ihr eigenes Bild.
+    flow.redraw()
+    assert flow._frame.isActive()
+
+
 def test_a_selected_bore_fills_in_where_it_is(window: MainWindow) -> None:
     """Die Verbindung, die §25 verlangt: die Operation beginnt dort, wo das
     Merkmal ist.
@@ -648,13 +827,7 @@ def test_a_new_body_stays_on_the_bed_when_only_a_body_is_chosen(
 def test_a_new_body_on_a_chosen_side_face_says_so_and_offers_the_bed(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-390: Mit gewählter Fläche sagt der Dialog vorn, wohin der Körper kommt.
-
-    „Wird auf ‹Fläche› von ‹Körper› gesetzt“, und *Auf das Bett* nimmt die
-    Vorbelegung zurück. Der Körper steht auf der Seitenfläche und nicht halb
-    unter dem Bett — gemessen an dem Körper, den die Operation mit genau den
-    Werten des Dialogs baut.
-    """
+    """RM-396: Bündig auf der Flächenmitte, ausdrücklich verbunden oder frei auf dem Bett."""
     from app.core.registry import kernel_twin_of
     from app.core.units import EPS_DISPLAY
     from app.ui.labels import feature_name
@@ -674,12 +847,16 @@ def test_a_new_body_on_a_chosen_side_face_says_so_and_offers_the_bed(
     dialog = window._op_dialog
     assert dialog is not None
     try:
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
         assert dialog.seated()
         sentence = dialog._seat_note.text()
         assert dialog._seat_note.isVisibleTo(dialog)
         assert feature_name(side, feature) in sentence
         assert window._object_names()[object_id] in sentence
-        assert dialog.to_the_bed.isVisibleTo(dialog)
+        assert dialog.attachment_mode is not None
+        assert dialog.attached_to_surface()
+        assert dialog.joins_attachment()
 
         values = dialog.values()
         normal = tuple(float(value) for value in feature.params["normal"])
@@ -696,11 +873,13 @@ def test_a_new_body_on_a_chosen_side_face_says_so_and_offers_the_bed(
             window.session.profile,
         ).outputs[0]
         vertices = built.mesh.raw.vertices
-        assert float(vertices[:, 2].min()) >= -EPS_DISPLAY, "nicht unter dem Bett"
+        assert (values["x"], values["y"], values["z"]) == pytest.approx(centre)
+        assert values["surface_anchor"]
+        assert values["surface_seat"] == "centred"
         along = (vertices - centre) @ normal
         assert float(along.min()) == pytest.approx(0.0, abs=EPS_DISPLAY), "auf der Fläche"
 
-        dialog.to_the_bed.click()
+        dialog.attachment_mode.setCurrentIndex(0)
 
         back = dialog.values()
         assert [back[name] for name in ("x", "y", "z", "nx", "ny", "nz")] == [0.0] * 6
@@ -2051,6 +2230,7 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     """Texturierte Oberseite führt rechts zum vorhandenen Muster und seinem Schritt."""
     import numpy as np
 
+    from app.core.perceive.relations import cell_owner_table
     from app.core.scene.placement import top_face
     from app.ui.op_dialog import ValueField
 
@@ -2068,11 +2248,17 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     assert window.session.wait_for_idle()
     operation = window.session.project.document.ops[-1]
     count = len(window.session.project.document.ops)
-    created = next(
+    body = window.session.last_result.scene.objects[object_id]
+    patterns = [
         feature
-        for feature in window.session.last_result.scene.objects[object_id].features.values()
-        if feature.created_by == operation.id and feature.kind == "face"
-    )
+        for feature in body.features.values()
+        if feature.created_by == operation.id and feature.kind == "pattern"
+    ]
+    assert len(patterns) == 1
+    created = patterns[0]
+    assert created.face_indices
+    names, owners = cell_owner_table(body.features, body.mesh.triangle_count)
+    assert np.all(owners[np.asarray(created.face_indices)] == names.index(created.id))
     window._on_feature_picked(created.id)
     panel = window.feature_panel
     assert panel.shown_part_step() == operation.id
@@ -2929,6 +3115,62 @@ def _hands_on_the_whole_set(branches: Iterable[ast.AST], holder: str) -> bool:
     return False
 
 
+def _unguarded_parameter_reads(
+    function: Any,
+    holder: str,
+    allowed: set[str],
+    seen: set[tuple[Any, str]] | None = None,
+) -> set[str]:
+    """Unbedingte Lesestellen einschließlich lokaler Helfer mit demselben Parametersatz."""
+    visited = set() if seen is None else seen
+    marker = (function, holder)
+    if marker in visited:
+        return set()
+    visited.add(marker)
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(function)))
+    except OSError, TypeError:
+        return set()
+    found: set[str] = set()
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, ast.If | ast.IfExp):
+            visit(node.test)
+            return
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == holder
+            and node.attr in allowed
+        ):
+            found.add(node.attr)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            helper = function.__globals__.get(node.func.id)
+            if inspect.isfunction(helper) and helper.__module__ == function.__module__:
+                parameters = tuple(inspect.signature(helper).parameters)
+                passed = [
+                    parameters[index]
+                    for index, argument in enumerate(node.args)
+                    if index < len(parameters)
+                    and isinstance(argument, ast.Name)
+                    and argument.id == holder
+                ]
+                passed.extend(
+                    keyword.arg
+                    for keyword in node.keywords
+                    if keyword.arg is not None
+                    and isinstance(keyword.value, ast.Name)
+                    and keyword.value.id == holder
+                )
+                for name in passed:
+                    found.update(_unguarded_parameter_reads(helper, name, allowed, visited))
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    visit(tree)
+    return found
+
+
 def conditional_fields(spec: Any) -> dict[str, set[str]]:
     """Parameter, die nur unter einer Wahl im selben Dialog etwas bewirken.
 
@@ -2954,6 +3196,7 @@ def conditional_fields(spec: Any) -> dict[str, set[str]]:
             total[node.attr] += 1
 
     found: dict[str, set[str]] = {}
+    unguarded = _unguarded_parameter_reads(spec.fn, "params", names)
     for node in ast.walk(tree):
         if not isinstance(node, ast.If):
             continue
@@ -2961,13 +3204,39 @@ def conditional_fields(spec: Any) -> dict[str, set[str]]:
         if not governing or _hands_on_the_whole_set((*node.body, *node.orelse), "params"):
             continue
         one_branch = (_read_names(node.body, names) ^ _read_names(node.orelse, names)) - governing
-        for name in one_branch:
+        for name in one_branch - unguarded:
             inside = sum(
                 1 for sub in ast.walk(node) if isinstance(sub, ast.Attribute) and sub.attr == name
             )
             if inside >= total[name]:
                 found.setdefault(name, set()).update(governing)
     return found
+
+
+def _dependency_demo_helper(measures: Any) -> float:
+    return float(measures.height)
+
+
+def _dependency_demo_operation(ctx: Any) -> float:
+    params = ctx.params
+    height = _dependency_demo_helper(params)
+    if params.enabled:
+        return height + params.height + params.length
+    return height
+
+
+def test_conditional_fields_follow_unguarded_helpers_without_hiding_true_dependencies() -> None:
+    """Höhe wirkt im gemeinsamen Körper; Länge nur im gewählten Zweig."""
+    from types import SimpleNamespace
+
+    fields = [
+        SimpleNamespace(name=name, choices=None, kind="bool" if name == "enabled" else "float")
+        for name in ("height", "length", "enabled")
+    ]
+    spec = SimpleNamespace(
+        fn=_dependency_demo_operation, params=SimpleNamespace(spec=lambda: fields)
+    )
+    assert conditional_fields(spec) == {"length": {"enabled"}}
 
 
 def test_a_field_without_effect_says_so() -> None:
@@ -5172,6 +5441,74 @@ def test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise(
     assert len(applied) == 1, "kein Warten auf eine grobe oder geschätzte Vorschau"
 
 
+@pytest.mark.parametrize("early_click", [False, True])
+@pytest.mark.parametrize("failure", ["none", "worker", "refusal", "incomplete"])
+def test_failed_mesh_preview_blocks_apply_and_recovers_with_new_values(
+    deferred_mesh_preview, failure, early_click
+):
+    """Auch ohne Bildpflicht schreibt eine Absage keinen defekten Verlaufsschritt."""
+    from app.core.types import Finding
+
+    window, requests, applied = deferred_mesh_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 1.0})
+    dialog = window._op_dialog
+    approval = window._preview_approval
+    assert dialog is not None and approval is not None and approval.required is False
+    if early_click:
+        dialog._accept_button.click()
+        assert approval.pending_click is not None
+    then, _drafts, callbacks = requests[-1]
+    if failure == "worker":
+        callbacks["failed"]("Fehler")
+    elif failure == "incomplete":
+        difference = _exact_difference(window)
+        entry = next(iter(difference.entries.values()))
+        entry.result = None
+        entry.findings.append(
+            Finding(code="difference.incomplete", severity="error", message="Unvollständig")
+        )
+        then(difference)
+    else:
+        if failure == "refusal":
+            callbacks["explained"]("Die Wand ist zu dick. Verringern Sie die Wandstärke.")
+        then(None)
+    assert not dialog.can_accept() and dialog._accept_button.toolTip()
+    dialog.accept()
+    assert not applied and window._op_dialog is dialog
+    assert approval.pending_click is None
+    if failure == "refusal":
+        assert "Verringern Sie" in dialog._accept_button.toolTip()
+
+    dialog.take_placement({"dx": 2.0})
+    requests[-1][0](_exact_difference(window))
+    assert dialog.can_accept(), dialog._blocked_reason
+    assert not applied, "Eine Korrektur bestätigt nicht den zuvor abgesagten Klick."
+    dialog._accept_button.click()
+    assert len(applied) == 1 and window._op_dialog is None
+
+
+@pytest.mark.parametrize("answer", ["question", "information", "computed_without_picture"])
+def test_mesh_preview_keeps_valid_nonvisual_answers_applicable(deferred_mesh_preview, answer):
+    """Rückfrage, bloßer Hinweis und erfolgreich ausgelassenes Bild bleiben nutzbar."""
+    from app.core.geom.difference import SceneDifference
+
+    window, requests, applied = deferred_mesh_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 1.0})
+    dialog = window._op_dialog
+    dialog._accept_button.click()
+    then, _drafts, callbacks = requests[-1]
+    if answer == "question":
+        callbacks["asked"](None)
+        callbacks["explained"]("Eine Rückfrage steht an — sie kommt beim Übernehmen.")
+        then(None)
+    elif answer == "information":
+        callbacks["explained"]("Der Körper wurde für die Vorschau vorbereitet.")
+        then(_exact_difference(window))
+    else:
+        then(SceneDifference())
+    assert len(applied) == 1 and window._op_dialog is None
+
+
 def test_changed_values_revoke_exact_approval_before_the_timer(deferred_exact_preview):
     """Alte Rechnung und altes Bild dürfen neuere Zahlen nicht freigeben."""
     window, requests, shown = deferred_exact_preview
@@ -6774,3 +7111,460 @@ def test_a_preview_waiting_for_a_question_leaves_apply_free_and_asks_on_apply(
 
     assert asked, "der Klick stellt die Frage"
     assert len(window.session.project.document.ops) == count + 1, "danach steht der Schritt"
+
+
+@pytest.mark.parametrize("operation", ("create_box", "create_brep_cylinder", "insert_keyhole"))
+@pytest.mark.parametrize("coordinate", ("x", "y", "z", "nx", "ny", "nz"))
+def test_free_coordinates_release_only_the_surface_binding(
+    qt_app: QApplication, operation: str, coordinate: str
+) -> None:
+    """Eine eigene Weltkoordinate löst den Bezug; bloßes Übertragen hält ihn."""
+    from app.core.knowledge.parts.ops import placement_fields
+
+    bootstrap.load_operations()
+    spec = REGISTRY.get(operation)
+    fields = placement_fields(spec.params)
+    anchor = fields["surface_anchor"]
+    distance = fields["surface_distance_1"]
+    values = {
+        anchor: "stored-anchor",
+        fields["surface_target"]: "obj_1:face_1",
+        distance: "=@breite/2",
+    }
+    dialog = OperationDialog(spec, {}, values=values, parameter_values={"breite": 20.0})
+    try:
+        assert dialog.values()[anchor] == "stored-anchor"
+        assert not dialog._editors[distance].isHidden()
+        dialog.take_placement({fields[coordinate]: 5.0})
+        assert dialog.values()[anchor] == "stored-anchor"
+        assert dialog.values()[distance] == "=@breite/2"
+        editor = dialog._editors[fields[coordinate]]
+        assert isinstance(editor, ValueField)
+        editor.set_value(7.0)
+        assert dialog.values()[anchor] == ""
+        assert dialog.values()[fields["surface_target"]] == ""
+        assert dialog.values()[fields[coordinate]] == pytest.approx(7.0)
+        assert dialog.values()[distance] == "=@breite/2"
+        assert dialog._editors[distance].isHidden()
+    finally:
+        dialog.close()
+
+
+@pytest.mark.parametrize("name", ["pattern", "pattern_feature", "mirror_object"])
+def test_rotation_centre_uses_chosen_body_feature_origin_and_explicit_point(qt_app, name):
+    """Alle drei Dialogwege speichern denselben bewusst gewählten Mittelpunkt."""
+    from app.core.geom.transform import reference_point
+    from app.core.types import Feature, SceneObject
+    from tests.helpers import FakeMesh
+
+    bootstrap.load_operations()
+    bodies = [
+        SceneObject(
+            id=key,
+            name=key,
+            mesh=FakeMesh(size=(10.0, 20.0, height)),
+            features={
+                "face_top": Feature(
+                    id="face_top",
+                    kind="face",
+                    provenance="generated",
+                    params={"centre": (5.0, 10.0, height), "normal": (0, 0, 1), "area": 200.0},
+                )
+            },
+        )
+        for key, height in (("obj_1", 30.0), ("obj_2", 60.0))
+    ]
+    dialog = OperationDialog(
+        REGISTRY.get(name),
+        {body.id: body.name for body in bodies},
+        values={} if name == "mirror_object" else {"kind": "circular"},
+        source_objects=("obj_2",),
+        centre_objects=bodies,
+    )
+    try:
+        mode, target = dialog.centre_mode, dialog.centre_target
+        assert mode is not None and target is not None
+
+        def point():
+            return tuple(dialog.values()[axis] for axis in ("cx", "cy", "cz"))
+
+        assert mode.currentData() == "body"
+        assert target.currentText() == "obj_2"
+        assert point() == pytest.approx(reference_point([bodies[1]], "centre"))
+        target.setCurrentIndex(0)
+        assert point() == pytest.approx(reference_point([bodies[0]], "centre"))
+        mode.setCurrentIndex(mode.findData("feature"))
+        assert point() == pytest.approx((5, 10, 60))
+        target.setCurrentIndex(0)
+        assert point() == pytest.approx((5, 10, 30))
+        mode.setCurrentIndex(mode.findData("origin"))
+        assert point() == pytest.approx((0, 0, 0))
+        assert not dialog.take_point((1, 2, 3)), "Nur ausdrücklich gewählter Punkt nimmt Bildklicks"
+        mode.setCurrentIndex(mode.findData("point"))
+        assert dialog.take_point((1.125, -2.25, 3.5))
+        assert point() == pytest.approx((1.125, -2.25, 3.5))
+        assert all(not dialog._editors[axis].isHidden() for axis in ("cx", "cy", "cz"))
+        if name != "mirror_object":
+            kind = dialog._editors["kind"]
+            kind.setCurrentIndex(kind.findData("linear"))
+            assert dialog._centre_row.isHidden()
+            assert not dialog.take_point((99, 99, 99))
+            kind.setCurrentIndex(kind.findData("circular"))
+            assert point() == pytest.approx((1.125, -2.25, 3.5))
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("name", ["pattern", "pattern_feature", "mirror_object"])
+def test_rotation_centre_reopens_saved_expressions_without_replacing_them(qt_app, name):
+    """Ein früher gewählter Mittelpunkt folgt beim Wiederöffnen keinem anderen Körper."""
+    from app.core.types import SceneObject
+    from tests.helpers import FakeMesh
+
+    bootstrap.load_operations()
+    body = SceneObject(id="obj_1", name="Körper", mesh=FakeMesh(size=(20, 20, 20)))
+    values = {"cx": "=@breite/2", "cy": -4.25, "cz": 9.125}
+    if name != "mirror_object":
+        values["kind"] = "circular"
+    dialog = OperationDialog(
+        REGISTRY.get(name),
+        {body.id: body.name},
+        values=values,
+        parameter_values={"breite": 20},
+        source_objects=(body.id,),
+        centre_objects=[body],
+    )
+    try:
+        assert dialog.centre_mode.currentData() == "point"
+        assert all(dialog._rows[axis] is dialog._advanced_form for axis in ("cx", "cy", "cz"))
+        assert {key: dialog.values()[key] for key in ("cx", "cy", "cz")} == {
+            key: values[key] for key in ("cx", "cy", "cz")
+        }
+        dialog.reject()
+        assert body.mesh.bounds.size == pytest.approx((20, 20, 20))
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("value", [9.125, -9.125, 1.125, -1.125])
+def test_half_display_step_keeps_exact_value_until_user_changes_it(qt_app, value):
+    """Eine halbe letzte Anzeigestelle wird erst durch tatsächliche Eingabe gerundet."""
+    from app.ui.labels import set_display_unit
+
+    bootstrap.load_operations()
+    set_display_unit("mm")
+    entry = next(
+        field for field in REGISTRY.get("pattern_feature").params.spec() if field.name == "cx"
+    )
+    editor = ValueField(entry, value)
+    try:
+        assert editor.value() == pytest.approx(value, abs=1e-12)
+        editor.spin.stepUp()
+        assert editor.value() == pytest.approx(editor.spin.value(), abs=1e-12)
+        assert abs(editor.value() - value) > 0.004
+    finally:
+        editor.deleteLater()
+
+
+def test_old_mirror_keeps_its_anchor_until_an_explicit_new_centre_is_chosen(qt_app):
+    """Migrierte Spiegel folgen weiter ihrem alten Anker bis zur bewussten Neuwahl."""
+    from app.core.types import SceneObject
+    from tests.helpers import FakeMesh
+
+    bootstrap.load_operations()
+    body = SceneObject(id="obj_1", name="Körper", mesh=FakeMesh(size=(20, 30, 40)))
+    dialog = OperationDialog(
+        REGISTRY.get("mirror_object"),
+        {body.id: body.name},
+        values={"about": "bed", "follow_anchor": True, "cx": None, "cy": None, "cz": None},
+        source_objects=(body.id,),
+        centre_objects=[body],
+    )
+    try:
+        assert dialog.centre_mode.currentData() == "legacy"
+        assert dialog.values()["follow_anchor"]
+        assert all(dialog.values()[axis] is None for axis in ("cx", "cy", "cz"))
+        assert dialog._editors["about"].isHidden()
+        dialog.centre_mode.setCurrentIndex(dialog.centre_mode.findData("origin"))
+        assert not dialog.values()["follow_anchor"]
+        assert tuple(dialog.values()[axis] for axis in ("cx", "cy", "cz")) == pytest.approx(
+            (0, 0, 0)
+        )
+        dialog.centre_mode.setCurrentIndex(dialog.centre_mode.findData("legacy"))
+        assert dialog.values()["follow_anchor"]
+        assert dialog.values()["about"] == "bed"
+        assert all(dialog.values()[axis] is None for axis in ("cx", "cy", "cz"))
+        dialog.centre_mode.setCurrentIndex(dialog.centre_mode.findData("point"))
+        assert not dialog.values()["follow_anchor"]
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("name", ["pattern", "pattern_feature", "mirror_object"])
+def test_rotation_centre_menu_dialog_preview_and_apply_use_the_same_point(
+    window, monkeypatch, name
+):
+    """Menü-/Auswahlhandlung gibt denselben festen Punkt an Vorschau und Übernahme weiter."""
+    selected = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(selected)
+    captured = {}
+    drafts = []
+    monkeypatch.setattr(
+        window, "_wire_preview", lambda dialog, make, **kwargs: captured.update(make=make)
+    )
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, proposed, **kwargs: drafts.extend(proposed)
+    )
+    if name == "pattern_feature":
+        # Das Signal ist der bestehende Einstieg der Handlungen im Auswahlfenster.
+        window.object_tree.operationRequested.emit(REGISTRY.get(name))
+    else:
+        window._op_actions[name].trigger()
+    dialog = window._op_dialog
+    assert dialog is not None
+    if name != "mirror_object":
+        kind = dialog._editors["kind"]
+        kind.setCurrentIndex(kind.findData("circular"))
+    if name == "pattern_feature":
+        feature = next(
+            key
+            for key, item in window.session.last_result.scene.objects[selected].features.items()
+            if item.kind == "hole"
+        )
+        dialog.take_feature(feature, feature, selected)
+    dialog.centre_mode.setCurrentIndex(dialog.centre_mode.findData("point"))
+    dialog.take_point((10.125, -12.25, 4.375))
+    preview = captured["make"](dialog.values())[0]
+    dialog.accept()
+    assert drafts
+    assert drafts[-1].inputs == preview.inputs == (selected,)
+    assert {axis: drafts[-1].params[axis] for axis in ("cx", "cy", "cz")} == {
+        axis: preview.params[axis] for axis in ("cx", "cy", "cz")
+    }
+    assert tuple(drafts[-1].params[axis] for axis in ("cx", "cy", "cz")) == pytest.approx(
+        (10.125, -12.25, 4.375)
+    )
+
+
+@pytest.mark.parametrize("joined", [True, False])
+def test_attachment_preview_and_commit_share_one_transaction(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, joined: bool
+) -> None:
+    """Ansetzen und Verbinden verwenden dieselben Werte und einen gemeinsamen Rückweg."""
+    from app.core.scene.project import load, save
+
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(
+        window,
+        "_wire_preview",
+        lambda dialog, make, **kwargs: captured.update(make=make, order=kwargs["order_of"]),
+    )
+    object_id = select(window)
+    body = window.session.last_result.scene.objects[object_id]
+    side = next(
+        key
+        for key, feature in body.features.items()
+        if feature.kind == "face" and abs(float(feature.params["normal"][0])) > 0.9
+    )
+    window.object_tree.select_feature(object_id, side)
+    before = len(window.session.project.document.ops)
+    window.run_operation(REGISTRY.get("create_cylinder"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert window.session.wait_for_idle(30_000)
+        assert dialog.joins_attachment()
+        assert dialog.join_attachment is not None
+        dialog.join_attachment.setChecked(joined)
+        order = captured["order"](dialog.values())
+        assert list(order.drafts) == captured["make"](dialog.values())
+        assert len(order.drafts) == (2 if joined else 1)
+        if joined:
+            assert order.drafts[1].op == "union_objects"
+            assert order.drafts[1].inputs == (object_id, order.drafts[0].outputs[0])
+        dialog.reject()
+        assert window._commit_preview_order(order)
+        assert window.session.wait_for_idle(30_000)
+        result = window.session.last_result
+        assert result is not None and result.complete
+        assert len(result.scene.objects) == (1 if joined else 2)
+        path = tmp_path / "attachment.p3d"
+        save(window.session.project, path)
+        assert len(load(path).document.ops) == before + (2 if joined else 1)
+        assert window.session.undo()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.project.document.ops) == before
+        assert len(window.session.last_result.scene.objects) == 1
+        window.session.redo()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.last_result.scene.objects) == (1 if joined else 2)
+    finally:
+        from shiboken6 import isValid
+
+        if isValid(dialog):
+            dialog.reject()
+
+
+@pytest.mark.parametrize("end", ["free", "reject", "project", "newer", "error"])
+def test_attachment_wait_ignores_late_answers_and_allows_recovery(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, end: str
+) -> None:
+    """Abbruch, freie Lage und Projektwechsel können keine verspätete Fläche übernehmen."""
+    import copy
+
+    calls: list[tuple[Any, Any, Any]] = []
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        window.session,
+        "placement_async",
+        lambda compute, then, failed, refused=None: calls.append((compute, then, failed)),
+    )
+    object_id = select(window)
+    body = window.session.last_result.scene.objects[object_id]
+    from app.ui import main_window as module
+
+    original_hit = module.surface_at_feature
+    seen_sources = []
+
+    def copied_hit(source, feature, **kwargs):
+        assert source is not body and source.mesh is not body.mesh
+        assert source.features is body.features
+        seen_sources.append(source)
+        return original_hit(source, feature, **kwargs)
+
+    monkeypatch.setattr(module, "surface_at_feature", copied_hit)
+    face = next(key for key, feature in body.features.items() if feature.kind == "face")
+    window.object_tree.select_feature(object_id, face)
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.attachment_mode is not None
+    try:
+        assert not dialog.can_accept()
+        assert not dialog._accept_button.isEnabled()
+        assert not seen_sources, "Vor dem Arbeiter wird nur kopiert, keine Fläche berechnet"
+        values = calls[0][0]()
+        assert seen_sources
+        if end == "error":
+            calls[0][2](None)
+            calls[0][1](None)
+            assert not dialog.can_accept()
+            assert "Andere Fläche" in dialog._accept_button.toolTip()
+            dialog.attachment_mode.setCurrentIndex(0)
+            assert dialog.can_accept()
+            return
+        if end in {"free", "newer"}:
+            dialog.attachment_mode.setCurrentIndex(0)
+        elif end == "reject":
+            dialog.reject()
+        else:
+            monkeypatch.setattr(window.session, "project", copy.deepcopy(window.session.project))
+        if end == "newer":
+            dialog.attachment_mode.setCurrentIndex(1)
+        calls[0][1](values)
+        assert not dialog.values()["surface_anchor"]
+        if end == "newer":
+            assert not dialog.can_accept()
+            calls[1][1](calls[1][0]())
+            assert dialog.values()["surface_anchor"]
+            assert dialog.can_accept()
+    finally:
+        dialog.reject()
+
+
+@pytest.mark.parametrize("ending", ["cancel", "failure", "result"])
+def test_a_historical_preview_reports_waiting_before_its_input_is_ready(
+    window, monkeypatch, ending
+):
+    """Die Vorbereitung des alten Eingangszustands gehört zur sichtbaren Wartezeit."""
+    from PySide6.QtTest import QTest
+
+    from app.ui.main_window import _PreviewOrder
+
+    select(window)
+    step = window.session.project.document.ops[-1]
+    before = window.session.last_result
+    pending, previews, notes = [], [], []
+    monkeypatch.setattr(
+        window.session, "placement_before", lambda op, then, failed: pending.append((then, failed))
+    )
+    monkeypatch.setattr(
+        window.session, "preview_async", lambda then, drafts=None, **kwargs: previews.append(then)
+    )
+    monkeypatch.setattr(
+        window.viewport, "mark_preview", lambda note, *args, **kwargs: notes.append(note)
+    )
+    approval = window._set_preview_order(
+        window.feature_panel, _PreviewOrder(change_op=step.id, change_values=dict(step.params))
+    )
+    window._request_order_preview(approval)
+    assert pending and not previews
+    assert window._progress_states["preview"].active
+    QTest.qWait(250)
+    assert notes[-1] == tr("Vorschau wird gerechnet …")
+    if ending == "cancel":
+        window._cancel_preview_run()
+        pending[-1][0](before)
+        assert not previews
+        assert not window._progress_states["preview"].active
+        assert "abgebrochen" in notes[-1]
+    elif ending == "failure":
+        pending[-1][1]("Eingang nicht verfügbar")
+        assert not previews
+        assert not window._progress_states["preview"].active
+        assert "Eingangszustand" in notes[-1]
+    else:
+        pending[-1][0](before)
+        assert len(previews) == 1
+        assert window._progress_states["preview"].active
+        assert not window._preview_busy.isActive(), "der erste Wartehinweis beginnt nicht erneut"
+    window._clear_preview()
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_rotation_centre_with_a_long_body_name_stays_reachable_on_a_small_screen(
+    qt_app, monkeypatch, language
+):
+    """Die neue Bezugswahl und ihre Punktfelder bleiben in allen Sprachen erreichbar."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.types import SceneObject
+    from app.i18n import get_language, set_language
+    from tests.helpers import FakeMesh
+
+    bootstrap.load_operations()
+    previous = get_language()
+    set_language(language)
+    body = SceneObject(id="obj_1", name="Schiff mit Segeln — " + "Bauteil " * 30, mesh=FakeMesh())
+    dialog = OperationDialog(
+        REGISTRY.get("pattern_feature"),
+        {body.id: body.name},
+        values={"kind": "circular"},
+        source_objects=(body.id,),
+        centre_objects=[body],
+    )
+    room = QRect(0, 0, 900, 640)
+    monkeypatch.setattr(dialog, "screen", lambda: SimpleNamespace(availableGeometry=lambda: room))
+    try:
+        dialog.show()
+        for _ in range(3):
+            qt_app.processEvents()
+        assert room.contains(dialog.frameGeometry())
+        assert dialog.centre_mode.isVisibleTo(dialog)
+        dialog.centre_mode.setCurrentIndex(dialog.centre_mode.findData("point"))
+        for _ in range(3):
+            qt_app.processEvents()
+        assert dialog.focus_field("cz")
+        qt_app.processEvents()
+        field = dialog._editors["cz"]
+        viewport = dialog._scroll.viewport()
+        assert viewport.rect().contains(field.mapTo(viewport, field.rect().center()))
+        footer = dialog.findChild(QDialogButtonBox)
+        assert dialog.rect().contains(footer.geometry())
+        assert room.contains(dialog.frameGeometry())
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        set_language(previous)

@@ -156,7 +156,7 @@ def crop_box(window: Any, view: Any) -> tuple[int, int, int]:
 
 def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
     """Ein geladenes Teil aufnehmen und unter ``galerie-<stem>.webp`` ablegen."""
-    from tools.make_figures import settle
+    from tools.make_figures import grab_uncovered, settle
 
     view = window.viewport
     # **Das Achsenkreuz gehört nicht ins Galeriebild.** In der Anwendung sagt
@@ -188,8 +188,7 @@ def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
     view.zoom(ZOOMS.get(stem, ZOOM))
     settle(app, 30)
 
-    screen = view.screen() or QApplication.primaryScreen()
-    shot = screen.grabWindow(view.winId())
+    shot = grab_uncovered(view)
     left, right, bottom = crop_box(window, view)
 
     x0 = max(0, min(left + MARGIN, shot.width() - 100))

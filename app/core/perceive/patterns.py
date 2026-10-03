@@ -126,6 +126,11 @@ MIN_NOISE: Final = 40
 #: Gitter eine Bohrung ausspart und die Zelle dahinter weiter weg liegt.
 REGULAR_SHARE: Final = 0.9
 
+#: Eine fehlende Zelle darf den Nachbarschaftsverbund nicht zerreißen.
+#: Bis zur übernächsten Zelle bleiben Raster verbunden; erst größere Lücken
+#: trennen Felder. Die anschließende Gitterprüfung behält ihre volle Strenge.
+FIELD_NEIGHBOUR_STEPS: Final = 2
+
 #: Wie weit ein Nachbarabstand von der Teilung abweichen darf — und zwei
 #: Zellen in Tiefe, Breite und Mündungsfläche voneinander, um dieselbe zu
 #: sein. Ein Zwanzigstel: Ein Netz aus einem Slicer-Export rundet auf
@@ -384,6 +389,229 @@ def patterns_instead_of_cells(
     for number, pattern in enumerate(patterns, start=1):
         name = f"pattern_{number}"
         kept[name] = _feature_of(name, pattern)
+    return kept
+
+
+def without_pattern_cells(found: Mapping[FeatureId, Feature]) -> dict[FeatureId, Feature]:
+    """Faltet nur vollständig belegte Einzelmerkmale eines vorhandenen Musters.
+
+    Ein Merkmal zwischen zwei Mustern oder mit einem Rest außerhalb bleibt
+    unverändert: Seine Maße gelten dem ganzen Merkmal, nicht einem Ausschnitt.
+    """
+    patches = [
+        set(feature.face_indices)
+        for feature in found.values()
+        if feature.kind == "pattern" and feature.recognised
+    ]
+    return {
+        name: feature
+        for name, feature in found.items()
+        if feature.kind == "pattern"
+        or not feature.face_indices
+        or not any(set(feature.face_indices) <= patch for patch in patches)
+    }
+
+
+def surface_triangles(
+    mesh: MeshData,
+    surface: MeshData,
+    indices: Sequence[int] | None = None,
+    *,
+    candidates: Sequence[int] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[int, ...]:
+    """Bindet ausschließlich vollständig belegte Dreiecke an die alte Oberfläche.
+
+    Zwei Hüllquaderbäume begrenzen die Suche auf überdeckende Dreiecke. In der
+    Dreiecksebene muss deren Vereinigung die gesamte neue Fläche abdecken;
+    einzelne Proben könnten ein Loch zwischen ihren Punkten übersehen.
+    """
+    from collections import defaultdict
+
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+
+    from app.core.geom.box_pairs import BoxTree, box_pairs_between
+    from app.core.geom.mesh import stable_normals
+    from app.core.geom.transform import along
+
+    old = np.asarray(surface.raw.triangles, dtype=float)
+    triangles = np.asarray(mesh.raw.triangles, dtype=float)
+    selected = np.arange(len(old)) if indices is None else np.asarray(indices, dtype=np.int64)
+    selected = selected[(selected >= 0) & (selected < len(old))]
+    chosen = (
+        np.arange(len(triangles)) if candidates is None else np.asarray(candidates, dtype=np.int64)
+    )
+    if not len(selected) or not len(chosen):
+        return ()
+    tolerance = units.weld_tolerance(max(mesh.bounds.diagonal, surface.bounds.diagonal))
+    old_low, old_high = old.min(axis=1), old.max(axis=1)
+    low, high = triangles.min(axis=1), triangles.max(axis=1)
+    within = (low[chosen] <= old_high[selected].max(axis=0) + tolerance).all(axis=1)
+    within &= (high[chosen] >= old_low[selected].min(axis=0) - tolerance).all(axis=1)
+    chosen = chosen[within]
+    if not len(chosen):
+        return ()
+    first = BoxTree(chosen, low - tolerance, high + tolerance)
+    second = BoxTree(selected, old_low, old_high)
+    normals = stable_normals(mesh.raw)[0]
+    proven: set[int] = set()
+    partners: dict[int, list[int]] = defaultdict(list)
+    for current, previous in box_pairs_between(first, second):
+        if check_cancelled is not None:
+            check_cancelled()
+        here, there = triangles[current], old[previous]
+        offset = there - here[:, :1]
+        axes = normals[current]
+        distances = (
+            offset[:, :, 0] * axes[:, None, 0]
+            + offset[:, :, 1] * axes[:, None, 1]
+            + offset[:, :, 2] * axes[:, None, 2]
+        )
+        coplanar = (np.abs(distances) <= tolerance).all(axis=1)
+        current, previous = current[coplanar], previous[coplanar]
+        here, there = here[coplanar], there[coplanar]
+        edge_normal = np.cross(there[:, 1] - there[:, 0], there[:, 2] - there[:, 0])
+        normal_length = np.sqrt((edge_normal * edge_normal).sum(axis=1))
+        inside = normal_length > EPS_GEOM
+        for corner in range(3):
+            edge = there[:, (corner + 1) % 3] - there[:, corner]
+            side = np.cross(edge[:, None], here - there[:, corner, None])
+            signed = (
+                side[:, :, 0] * edge_normal[:, None, 0]
+                + side[:, :, 1] * edge_normal[:, None, 1]
+                + side[:, :, 2] * edge_normal[:, None, 2]
+            )
+            margin = tolerance * normal_length * np.sqrt((edge * edge).sum(axis=1))
+            inside &= (signed >= -margin[:, None]).all(axis=1)
+        proven.update(int(index) for index in current[inside])
+        for index, partner in zip(current, previous, strict=True):
+            partners[int(index)].append(int(partner))
+    found = list(proven)
+    for number, (index, nearby) in enumerate(sorted(partners.items())):
+        if check_cancelled is not None and number % 128 == 0:
+            check_cancelled()
+        if index in proven:
+            continue
+        normal = normals[index]
+        corners = old[nearby]
+        distances = along(corners - triangles[index, 0], normal)
+        coplanar = corners[(np.abs(distances) <= tolerance).all(axis=1)]
+        if not len(coplanar):
+            continue
+        axes = np.arange(3) != int(np.argmax(np.abs(normal)))
+        area = Polygon(triangles[index][:, axes])
+        cover = unary_union([Polygon(piece[:, axes]) for piece in coplanar])
+        if cover.buffer(tolerance, join_style=2).covers(area):
+            found.append(index)
+    return tuple(sorted(found))
+
+
+def bound_texture(mesh: MeshData, feature: Feature, indices: Sequence[int]) -> Feature:
+    """Erneuert Zellzahl und Oberflächenbeleg einer ausdrücklich erzeugten Textur."""
+    from app.core.perceive.features import _one_body
+
+    body = _one_body(mesh).raw
+    selected = np.asarray(indices, dtype=np.int64)
+    count = len(_components(body, selected)) if len(selected) else 0
+    params = {**feature.params, "count": count}
+    sources = {**feature.measure_sources, "count": "facets"}
+    if len(selected) and (params.get("carrier") != "cylinder" or "carrier_diameter" in sources):
+        frame = frame_for(feature)
+        points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[selected])]
+        _flat, heights = frame.developed(points)
+        level = float(frame.developed(np.asarray(params["centre"]))[1][0])
+        params["cell_depth"] = float(
+            heights.max() - level if params.get("mode") == "raised" else level - heights.min()
+        )
+        sources["cell_depth"] = "facets"
+        if frame.kind == "plane" and params.get("mode") == "engraved":
+            from app.core.geom.mesh import stable_normals
+            from app.core.geom.transform import along
+
+            normals = stable_normals(body)[0][selected]
+            params["through"] = not bool(np.any(along(normals, frame.normal) > 1.0 - EPS_GEOM))
+    return dataclasses.replace(
+        feature,
+        face_indices=tuple(int(index) for index in selected),
+        recognised=True,
+        params=params,
+        measure_sources=sources,
+        surface_patches=(),
+    )
+
+
+def rebound_textures(
+    mesh: MeshData,
+    known: Mapping[FeatureId, Feature],
+    source: MeshData | None,
+    *,
+    proven: frozenset[FeatureId] = frozenset(),
+    movement: Any = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Bindet erzeugte Texturen beider Körperarten an ihre verbliebene Oberfläche.
+
+    ``proven`` nennt ausschließlich bereits am Ergebnis belegte Indizes. Alle
+    übrigen benötigen ihre Dreiecke im Eingangsnetz, gegebenenfalls bewegt.
+    """
+    if source is not None and movement is not None:
+        from app.core.geom.transform import apply
+
+        source = apply(source, movement)
+    result = {}
+    for name, feature in known.items():
+        if feature.kind != "pattern" or not feature.params.get("texture"):
+            continue
+        if name in proven:
+            indices = feature.face_indices
+        elif source is not None:
+            indices = surface_triangles(
+                mesh, source, feature.face_indices, check_cancelled=check_cancelled
+            )
+        else:
+            indices = ()
+        if indices:
+            result[name] = bound_texture(mesh, feature, indices)
+    return result
+
+
+def without_texture_cells(
+    found: Mapping[FeatureId, Feature],
+    textures: Mapping[FeatureId, Feature],
+    *,
+    mesh: MeshData | None = None,
+) -> dict[FeatureId, Feature]:
+    """Texturdreiecke haben einen Eigentümer; übrige Trägerdreiecke bleiben erhalten."""
+    owned = {index for feature in textures.values() for index in feature.face_indices}
+    kept: dict[FeatureId, Feature] = {}
+    for name, feature in found.items():
+        remaining = tuple(index for index in feature.face_indices if index not in owned)
+        if len(remaining) == len(feature.face_indices):
+            kept[name] = feature
+        elif remaining:
+            from app.core.perceive.surfaces import clipped_patches
+
+            rest = dataclasses.replace(
+                feature,
+                face_indices=remaining,
+                surface_patches=clipped_patches(feature.surface_patches, remaining),
+            )
+            if mesh is not None and feature.kind == "face":
+                from app.core.geom.mesh import stable_areas
+                from app.core.perceive.features import _facet_centre
+
+                selected = np.asarray(remaining, dtype=np.int64)
+                area = float(stable_areas(mesh.raw, selected).sum())
+                centre = _vec(_facet_centre(mesh.raw, selected))
+                rest = dataclasses.replace(
+                    rest,
+                    params={**rest.params, "area": area, "centre": centre},
+                    measure_sources={**rest.measure_sources, "area": "facets", "centre": "facets"},
+                )
+            elif mesh is not None and feature.kind == "pattern":
+                rest = bound_texture(mesh, rest, remaining)
+            kept[name] = rest
     return kept
 
 
@@ -2328,7 +2556,10 @@ def _style_of(
     """
     if is_round:
         return "dimple"
-    if length >= RIB_ASPECT * width:
+    # Ein Dreieck hat kein Paar gegenüberliegender Streifenflanken. Als
+    # angeschnittener Rand darf es zu einem belegten Feld gehören, aber
+    # allein seine Länge belegt keine Welle (etwa in einem Sternornament).
+    if corners >= 4 and length >= RIB_ASPECT * width:
         return "rib" if straight >= STRAIGHT_SHARE else "wave"
     sides = outline.sides()
     if corners == 6 and len(sides) == 6 and _all_alike(sides):
@@ -2366,6 +2597,10 @@ def _same_cell(one: Cell, two: Cell) -> bool:
     # als seine langen Nachbarn, und die Reihe zerfiele in zwei.
     if (two.style in _STRIPS) != strips or (not strips and one.style != two.style):
         return False
+    if strips:
+        alignment = abs(float(one.axis[0] * two.axis[0] + one.axis[1] * two.axis[1]))
+        if alignment < units.exact_cos_degrees(SAME_DIRECTION_DEGREES):
+            return False
     measures = [(one.depth, two.depth), (one.width, two.width)]
     if not strips:
         # Die Länge eines Streifens ist die des Feldes, nicht seine eigene —
@@ -2386,9 +2621,61 @@ def _congruent_groups(cells: Sequence[Cell]) -> list[list[Cell]]:
                 break
         else:
             groups.append([cell])
-    large = [group for group in groups if len(group) >= _least_cells(group[0])]
+    large = [
+        nearby
+        for group in groups
+        if len(group) >= _least_cells(group[0])
+        for nearby in _nearby_groups(group)
+        if len(nearby) >= _least_cells(nearby[0])
+    ]
     large.sort(key=len, reverse=True)
     return large
+
+
+def _nearby_groups(group: Sequence[Cell]) -> list[list[Cell]]:
+    """Trennt gleichartige Felder außerhalb ihrer örtlichen Nachbarschaft.
+
+    Bei Streifen gilt der Abstand der Mündungsränder: Ihre Mitten wandern
+    beim schrägen Anschnitt. Sonst gilt der Mittelpunktabstand, damit ein
+    Raster länglicher Taschen nicht allein wegen ihrer Form in Reihen
+    zerfällt. Erst danach wird jede Gruppe als Gitter geprüft.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    from shapely import STRtree
+    from shapely.geometry import Point, Polygon
+
+    outlines = [
+        Polygon(cell.outline) if cell.style in _STRIPS else Point(cell.flat_centre)
+        for cell in group
+    ]
+    tree = STRtree(outlines)
+    nearest, distances = tree.query_nearest(outlines, exclusive=True, return_distance=True)
+    if not len(distances):
+        return [list(group)]
+    gaps = np.full(len(group), np.inf)
+    np.minimum.at(gaps, nearest[0], distances)
+    widths = np.asarray([cell.width if cell.style in _STRIPS else 0.0 for cell in group])
+    reach = np.maximum(
+        EPS_GEOM,
+        (gaps * FIELD_NEIGHBOUR_STEPS + widths * (FIELD_NEIGHBOUR_STEPS - 1))
+        * (1.0 + SAME_MEASURE),
+    )
+    pairs = tree.query(outlines, predicate="dwithin", distance=reach)
+    # Nachbarn müssen sich gegenseitig erreichen: Eine vereinzelte Zelle
+    # überbrückt mit ihrem großen Abstand keine Lücke zum belegten Feld.
+    links = set(zip(pairs[0].tolist(), pairs[1].tolist(), strict=True))
+    mutual = [(one, two) for one, two in sorted(links) if (two, one) in links]
+    first, second = zip(*mutual, strict=True)
+    graph = coo_matrix(
+        (np.ones(len(mutual), dtype=np.int8), (first, second)),
+        shape=(len(group), len(group)),
+    )
+    count, labels = connected_components(graph, directed=False)
+    groups: list[list[Cell]] = [[] for _ in range(count)]
+    for cell, label in zip(group, labels, strict=True):
+        groups[int(label)].append(cell)
+    return groups
 
 
 def _lattice_of(group: Sequence[Cell]) -> Pattern | Literal["bores"] | None:
@@ -2783,6 +3070,7 @@ def mouths_of(
     finden, und am Zylinder dessen Facettenabweichung (:func:`frame_for`).
     """
     from shapely.geometry import Polygon
+    from shapely.ops import unary_union
     from shapely.validation import make_valid
 
     # Dasselbe geschweißte Netz wie die Erkennung — eine STL kennt keine
@@ -2815,6 +3103,26 @@ def mouths_of(
         # Je Zelle abgewickelt — am Zylinder bleibt so eine Zelle über der
         # Naht ein Stück (:meth:`Frame.developed`).
         flat, span = frame.developed(points[corners])
+        if feature.params.get("texture") and frame.kind == "plane":
+            # Am Rand endet eine Zelle offen; ihre Wände haben dort keinen
+            # geschlossenen Mündungsring. Der Boden beziehungsweise die Krone
+            # belegt trotzdem den vollständigen, auch konkaven Fußabdruck.
+            local = np.searchsorted(corners, chosen)
+            footprints = [Polygon(piece) for piece in flat[local]]
+            rim_rows = np.searchsorted(corners, _rim_edges(chosen))
+            on_mouth = np.abs(span[rim_rows] - lift) <= units.weld_tolerance(mesh.bounds.diagonal)
+            mouth_loops = _loops(rim_rows[on_mouth.all(axis=1)])
+            if mouth_loops:
+                # Ein schräger Schnitt kann einen Zellboden halb entfernen.
+                # Der geschlossene obere Rand belegt trotzdem die ganze Zelle.
+                footprints = [Polygon(flat[loop]) for loop in mouth_loops]
+            footprint = unary_union([piece for piece in footprints if piece.area > EPS_GEOM])
+            depth = float(span.max() - lift if raised else lift - span.min())
+            if depth > units.weld_tolerance(mesh.bounds.diagonal) and not footprint.is_empty:
+                for piece in getattr(footprint, "geoms", [footprint]):
+                    if piece.geom_type == "Polygon" and piece.area > EPS_GEOM:
+                        mouths.append(Mouth(polygon=piece, depth=depth))
+                continue
         depth = float(span.max() - span.min())
         if depth <= EPS_GEOM:
             continue
@@ -2902,13 +3210,54 @@ def plug_for(
             prism = _extruded(piece, height)
             if prism is None:
                 continue
-            if frame.kind == "cylinder" and not raised and not through:
+            if (
+                frame.kind == "cylinder"
+                and not raised
+                and not through
+                and not feature.params.get("texture")
+            ):
                 _widened_towards_the_axis(prism, middle, height, frame.radius)
-            prism.apply_translation((0.0, 0.0, lift if raised else lift - height))
+            if feature.params.get("texture") and frame.kind == "cylinder":
+                # Der gemessene Mantel begrenzt diesen Stopfen anschließend
+                # exakt. Der zusätzliche Hub deckt die Sehne seiner gebogenen
+                # Dreiecke auf beiden Seiten der Trägerfacette.
+                prism.apply_scale((1.0, 1.0, (height + frame.clearance) / height))
+                bottom = lift - frame.clearance if raised else lift - height
+            else:
+                bottom = lift if raised else lift - height
+            prism.apply_translation((0.0, 0.0, bottom))
             parts.append(prism)
     if not parts:
         return None
     return MeshData.of(frame.placed(concatenated(parts), faceted=True))
+
+
+def cylinder_envelope(
+    mesh: MeshData, feature: Feature, features: Mapping[FeatureId, Feature]
+) -> MeshData | None:
+    """Der belegte facettierte Träger als Grenze eines erzeugten Texturstopfens."""
+    from shapely.geometry import Polygon
+
+    frame = frame_for(feature, mesh, features)
+    if frame.facets is None or frame.span is None:
+        return None
+    angles, _offsets, corners = frame.facets
+    theta = angles + corners
+    radius = frame._facet_radius(theta)
+    polygon = Polygon(np.column_stack((np.cos(theta) * radius, np.sin(theta) * radius)))
+    body = _extruded(polygon, frame.span[1] - frame.span[0])
+    if body is None:
+        return None
+    local = np.asarray(body.vertices, dtype=float)
+    levels = local[:, 2] + frame.span[0]
+    points = (
+        frame.origin
+        + local[:, 0, None] * frame.x_axis
+        + local[:, 1, None] * frame.y_axis
+        + levels[:, None] * frame.normal
+    )
+    body.vertices = frame._onto_the_ends(points, levels)
+    return MeshData.of(body)
 
 
 def carrier_of(feature: Feature, features: Mapping[FeatureId, Feature]) -> Feature | None:

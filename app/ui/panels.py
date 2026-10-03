@@ -73,6 +73,7 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionComboBox,
     QStylePainter,
+    QTextBrowser,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -171,6 +172,7 @@ from app.ui.labels import (
     limit_sentence,
     localised,
     spoiled_the_exact_body,
+    step_number,
     unit_of,
     value_line,
     value_text,
@@ -379,12 +381,30 @@ def _bundled(
     groups: dict[tuple[Any, ...], list[Finding]] = {}
     order: list[tuple[Any, ...]] = []
     for finding in findings:
+        step_key: Any = finding.op_id
+        if document is not None and finding.code in {
+            "repair.holes_filled",
+            "repair.branching_resolved",
+            "repair.t_junctions",
+            "repair.part_inside",
+            "repair.empty_faces",
+            "repair.duplicate_faces",
+            "ingest.multiple_components",
+            "ingest.small_components",
+        }:
+            operation = next((op for op in document.ops if op.id == finding.op_id), None)
+            if operation is not None and operation.op == "load":
+                transaction = next(
+                    (entry for entry in document.transactions if operation.id in entry.ops), None
+                )
+                if transaction is not None:
+                    step_key = ("import", transaction.id)
         key = (
             finding.code,
             finding.severity,
             str(finding.message),
             finding.source,
-            finding.op_id,
+            step_key,
             tuple((action.id, str(action.label), action.primary) for action in finding.suggestions),
             _import_group_for(finding, document, live_objects),
         )
@@ -1264,8 +1284,8 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
     Wandstärke stimmt im Rahmen des Rasters." als zwei Zeilen, die aussahen wie
     ein Fehler in der Anwendung.
 
-    ``names`` löst die Kennung zum Namen auf. Ohne die Zuordnung bleibt die
-    Kennung stehen: „obj_2" ist weniger als „Klotz B", aber mehr als nichts.
+    ``names`` löst die Kennung zum Namen auf. Eine verbrauchte Kennung ohne
+    belegten Namen bleibt in den Befunddaten statt als Zusatz am Kundensatz.
     """
     extra: list[str] = []
     if finding.code in _LOCATED_REPAIR_FINDINGS and "open_edges" in finding.values:
@@ -1304,7 +1324,9 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
         extra.append(_setting_line(finding))
     if finding.object_id and "object" not in finding.values:
         identifier = str(finding.object_id)
-        extra.insert(0, (names or {}).get(identifier, identifier))
+        name = (names or {}).get(identifier, "")
+        if name and name != identifier and name not in str(finding.message):
+            extra.insert(0, name)
     if not extra:
         return str(finding.message)
     return f"{finding.message} — {' · '.join(extra)}"
@@ -1360,7 +1382,7 @@ def _origin_text(created_by: int | None, document: Document | None) -> str:
     """
     if created_by is None:
         return ""
-    text = f"{tr('aus Operation')} {created_by}"
+    text = f"{tr('aus Operation')} {step_number(document, created_by)}"
     if document is None:
         return text
     for transaction in document.transactions:
@@ -1491,32 +1513,82 @@ def texture_steps_of(
     completed: Collection[int] | None = None,
 ) -> tuple[list[Any], bool]:
     """Texturschritte nach belegter Herkunft; sonst ausdrücklich am Körper wählbar."""
+    from app.core.types import FeatureRef
+
     # Rückwärts am jeweiligen Dokumentstand: Eine spätere Textur auf dem
     # zurückgebliebenen Original gehört nicht zu seinem früher abgetrennten Teil.
     wanted = {object_id}
+    names = {object_id: {feature.id}}
     candidates = []
+    later_change = False
+    source_overridden = False
     for operation in reversed(document.ops):
+        if operation.suppressed is not None:
+            continue
         if completed is not None and operation.id not in completed:
             continue
         if not wanted.intersection(operation.outputs):
             continue
+        inherited = {name for output in operation.outputs for name in names.pop(output, set())}
+        if operation.op == "resize_feature" and operation.inputs:
+            named = str(operation.params.get("at_feature") or "")
+            try:
+                reference = (
+                    FeatureRef.parse(named)
+                    if ":" in named
+                    else FeatureRef(operation.inputs[0], named)
+                )
+            except ValueError:
+                reference = None
+            if (
+                reference is not None
+                and reference.object_id in operation.inputs
+                and reference.feature_id in inherited
+            ):
+                later_change = True
         if operation.op == "apply_texture":
             candidates.append(operation)
+            if operation.id == feature.created_by:
+                source_overridden = later_change
         wanted.difference_update(operation.outputs)
         wanted.update(operation.inputs)
+        # Zusätzliche Eingänge erhalten beim Vereinigen einen Namensraum.
+        # Rückwärts darf der alte Name nur auf seinen wirklichen Körper führen.
+        scoped = (
+            operation.inputs[1:]
+            if operation.op in {"union_objects", "intersect_objects"}
+            else operation.inputs
+            if operation.op == "split_bodies"
+            else ()
+        )
+        for name in inherited:
+            source = next((item for item in scoped if name.startswith(f"{item}.")), None)
+            if source is not None:
+                names.setdefault(source, set()).add(name[len(source) + 1 :])
+            else:
+                unscoped = (
+                    operation.inputs[:1]
+                    if operation.op in {"union_objects", "intersect_objects"}
+                    else operation.inputs
+                )
+                for source in unscoped:
+                    names.setdefault(source, set()).add(name)
     candidates.reverse()
     proven = [operation for operation in candidates if operation.id == feature.created_by]
     if proven:
-        return proven, True
-    matched = [
-        operation
-        for operation in candidates
-        if operation.params.get("coverage") == "whole_face"
-        and operation.params.get("face") == feature.id
-    ]
-    if matched:
-        return matched, True
-    return (candidates, False) if feature.kind == "face" else ([], False)
+        # Ein alter Texturschritt kann auch einzelne Zell- oder Restflächen
+        # tragen. Erst ein belegtes Muster meint unmittelbar die Textur.
+        # Nach einer späteren Merkmalsänderung zeigt das normale Panel die
+        # heutigen Maße; der Erzeugerschritt bleibt separat erreichbar.
+        return proven, (
+            feature.kind == "pattern"
+            and feature.recognised
+            and bool(feature.face_indices)
+            and not source_overridden
+        )
+    # Die gewählte Fläche belegt keine Wirkung des historischen Schritts.
+    # Er bleibt ausdrücklich wählbar, auch wenn sein Muster nicht mehr besteht.
+    return (candidates, False) if feature.kind in {"face", "pattern"} else ([], False)
 
 
 def _part_group(created_by: int | None, document: Document | None) -> tuple[str, int] | None:
@@ -3217,10 +3289,9 @@ class ParameterPanel(QWidget):
         # der einzige Weg zu einem neuen Maß und darf nicht wegrollen, aus
         # demselben Grund, aus dem die Filamentkarte ihre Knöpfe außerhalb
         # ihrer Liste führt.
-        self._scroll = QScrollArea(self)
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Die Mindestbreite aller Zeilen muss bis zur Karte reisen. Ein bloß
+        # versteckter Querbalken lässt Qt beim Tab-Fokus die Maßnamen wegrollen.
+        self._scroll = ColumnScroller(self)
         self._sheet = QWidget(self._scroll)
         self._scroll.setWidget(self._sheet)
         self._form = QFormLayout(self._sheet)
@@ -3654,7 +3725,9 @@ class ParameterPanel(QWidget):
             field = next(entry for entry in spec.params.spec() if entry.name == use.field)
             lines.append(
                 tr("Operation {number}: {operation} — {field}").format(
-                    number=use.op_id, operation=spec.title, field=field.title
+                    number=step_number(self._document, use.op_id),
+                    operation=spec.title,
+                    field=field.title,
                 )
             )
         if len(uses) > 8:
@@ -4011,6 +4084,27 @@ SLIDER_SPAN: Final = 20.0
 MARKER_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 
 
+def history_step_titles(document: Document) -> dict[int, str]:
+    """Benutzertitel folgen ausschließlich gespeicherter Herkunft durch jeden Umbau."""
+    titles = {entry.id: _op_title(entry.op) for entry in document.ops}
+    for transaction in document.transactions:
+        if transaction.changes is not None:
+            for op_id, previous in (transaction.changes.before.edited_ops or {}).items():
+                if previous is not None:
+                    titles.setdefault(op_id, _op_title(previous.op))
+        if transaction.revision is None and len(transaction.ops) == 1:
+            titles[transaction.ops[0]] = str(transaction.title)
+        elif transaction.revision == "insert" and isinstance(transaction.title, TranslatableText):
+            born = set(transaction.ops) - set(transaction.renumbered.values())
+            inserted_title = (transaction.title.values or {}).get("step")
+            if len(born) == 1 and inserted_title is not None:
+                titles[next(iter(born))] = str(inserted_title)
+        for old, new in transaction.renumbered.items():
+            if old in titles:
+                titles[new] = titles[old]
+    return titles
+
+
 def replanned_steps(document: Document) -> frozenset[int]:
     """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
 
@@ -4037,10 +4131,10 @@ def step_state(document: Document, op_id: int) -> str:
     return tr("aus") if entry.suppressed.chosen else tr("ruht")
 
 
-def needs_tip(op_id: int, needs: Sequence[StepNeed]) -> str:
+def needs_tip(op_id: int, needs: Sequence[StepNeed], document: Document | None = None) -> str:
     """Was ein Schritt braucht und wer ihn braucht — die abhängige Folge in Worten (P7.2)."""
-    wanted = sorted({need.on for need in needs if need.step == op_id})
-    users = sorted({need.step for need in needs if need.on == op_id})
+    wanted = sorted({step_number(document, need.on) for need in needs if need.step == op_id})
+    users = sorted({step_number(document, need.step) for need in needs if need.on == op_id})
     lines: list[str] = []
     if wanted:
         lines.append(tr("Braucht Schritt {numbers}.").format(numbers=", ".join(map(str, wanted))))
@@ -4182,6 +4276,9 @@ class HistoryPanel(QWidget):
 
     operationActivated = Signal(int)
     """Eine Operation wurde doppelt angeklickt — trägt ihre ID, zum Ändern (§15.4)."""
+    previewRequested = Signal(int)
+    previewClosed = Signal()
+    previewInsertRequested = Signal(object)
     noteRequested = Signal(str)
     """Was der Verlauf dem Nutzer zu sagen hat — das Fenster zeigt es an.
 
@@ -4303,14 +4400,90 @@ class HistoryPanel(QWidget):
         self._empty.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         fit_wrapped(self._empty)
 
+        self.compare = QToolButton(self)
+        self.compare.setText(tr("Vorher/Nachher"))
+        self.compare.setCheckable(True)
+        self.compare.setAccessibleName(self.compare.text())
+        self.preview_allowed: Callable[[], bool] | None = None
+        self.timeline = QWidget(self)
+        timeline_layout = QVBoxLayout(self.timeline)
+        timeline_layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
+        self.timeline_slider = QSlider(Qt.Orientation.Horizontal, self.timeline)
+        self.timeline_slider.setAccessibleName(tr("Stand im Verlauf"))
+        self.timeline_slider.setSingleStep(1)
+        self.timeline_slider.setPageStep(1)
+        self.timeline_slider.setTickInterval(1)
+        self.timeline_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.timeline_label = QLabel(self.timeline)
+        self.timeline_label.setWordWrap(True)
+        self.timeline_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.timeline_insert = QPushButton(tr("Hier weiterarbeiten"), self.timeline)
+        self.timeline_end = QPushButton(tr("Aktueller Stand"), self.timeline)
+        self._timeline_titles: list[str] = []
+        self._timeline_targets: list[int | None] = []
+        timeline_layout.addWidget(self.timeline_slider)
+        timeline_layout.addWidget(self.timeline_label)
+        timeline_layout.addWidget(self.timeline_insert)
+        timeline_layout.addWidget(self.timeline_end)
+        self.timeline.setVisible(False)
+        self.compare.toggled.connect(self._toggle_timeline)
+        self.timeline_slider.valueChanged.connect(self._timeline_changed)
+        self.timeline_end.clicked.connect(lambda: self.compare.setChecked(False))
+        self.timeline_insert.clicked.connect(self._insert_at_preview)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.compare)
+        layout.addWidget(self.timeline)
         layout.addWidget(self._empty)
         layout.addWidget(self.list)
 
+    def _toggle_timeline(self, checked: bool) -> None:
+        if checked and self.preview_allowed is not None and not self.preview_allowed():
+            with QSignalBlocker(self.compare):
+                self.compare.setChecked(False)
+            return
+        self.timeline.setVisible(checked)
+        if checked:
+            self._timeline_changed(self.timeline_slider.value())
+            self.timeline_slider.setFocus()
+        else:
+            self.previewClosed.emit()
+        self._fit()
+
+    def _timeline_changed(self, count: int) -> None:
+        if not self.compare.isChecked() or not 1 <= count <= len(self._timeline_titles):
+            return
+        self.timeline_label.setText(
+            tr("Stand {number} von {count}: {title}").format(
+                number=count,
+                count=len(self._timeline_titles),
+                title=self._timeline_titles[count - 1],
+            )
+        )
+        self.previewRequested.emit(count)
+
+    def _insert_at_preview(self) -> None:
+        count = self.timeline_slider.value()
+        if 1 <= count <= len(self._timeline_targets):
+            target = self._timeline_targets[count - 1]
+            self.compare.setChecked(False)
+            self.previewInsertRequested.emit(target)
+
+    def _timeline_height(self) -> int:
+        if self.compare.isHidden():
+            return 0
+        return self.compare.sizeHint().height() + (
+            self.timeline.sizeHint().height() if self.compare.isChecked() else 0
+        )
+
     def wanted_height(self) -> int:
         """Die Höhe, bei der jeder Schritt zu sehen wäre."""
-        return view_chrome(self.list) + self.list.count() * row_height_of(self.list)
+        return (
+            self._timeline_height()
+            + view_chrome(self.list)
+            + self.list.count() * row_height_of(self.list)
+        )
 
     def least_height(self) -> int:
         """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``).
@@ -4321,7 +4494,7 @@ class HistoryPanel(QWidget):
         """
         if self.list.count() == 0:
             return least_empty_height(self._empty)
-        return least_height_of(self.list)
+        return self._timeline_height() + least_height_of(self.list)
 
     def set_room(self, pixels: int) -> None:
         """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
@@ -4335,7 +4508,8 @@ class HistoryPanel(QWidget):
         empty = self.list.count() == 0
         self._empty.setVisible(empty)
         self.list.setVisible(not empty)
-        fit_to_rows(self.list, self.list.count(), room=self._room)
+        room = None if self._room is None else max(0, self._room - self._timeline_height())
+        fit_to_rows(self.list, self.list.count(), room=room)
         # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
         # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
         # gedrückt.
@@ -4356,7 +4530,27 @@ class HistoryPanel(QWidget):
         durchgestrichen und ausgegraut — wie ein verworfener Chatbeitrag, und
         aus demselben Grund: es ist passiert, es gilt nur gerade nicht (§26.3).
         """
+        self.compare.setChecked(False)
         self.list.clear()
+        self._timeline_titles = [str(entry.title) for entry in document.transactions]
+        existing = {entry.id for entry in document.ops}
+        self._timeline_targets = [
+            next(
+                (
+                    op
+                    for later in document.transactions[index + 1 :]
+                    for op in later.ops
+                    if op in existing
+                ),
+                None,
+            )
+            for index in range(len(document.transactions))
+        ]
+        with QSignalBlocker(self.timeline_slider):
+            self.timeline_slider.setRange(1, max(1, len(document.transactions)))
+            self.timeline_slider.setValue(max(1, len(document.transactions)))
+        self.compare.setEnabled(bool(document.transactions))
+        self.compare.setVisible(bool(document.transactions))
         inserting, needs = (
             self.revision_context() if self.revision_context is not None else (None, ())
         )
@@ -4368,7 +4562,8 @@ class HistoryPanel(QWidget):
             if entry.suppressed is not None
         }
         self.stop_insert_action.setEnabled(inserting is not None)
-        titles = {entry.id: _op_title(entry.op) for entry in document.ops}
+        titles = history_step_titles(document)
+        self._positions = {entry.id: index for index, entry in enumerate(document.ops, start=1)}
         replanned = replanned_steps(document)
         deleted: set[int] = set()
         for transaction in document.transactions:
@@ -4428,7 +4623,7 @@ class HistoryPanel(QWidget):
             # Eine Transaktion aus mehreren Schritten bekommt keine: Sie
             # *vertritt* keinen einzelnen, und ihre Kinder tragen ihre eigenen.
             single = transaction.ops[0] if len(transaction.ops) == 1 else None
-            number = f"{single}  " if single is not None else ""
+            number = f"{self._positions.get(single, single)}  " if single is not None else ""
             item = QListWidgetItem(f"{number}{transaction.title}{by}")
             halted = stopped_at is not None and stopped_at in transaction.ops
             if halted:
@@ -4439,10 +4634,12 @@ class HistoryPanel(QWidget):
             # nicht (22.09.2026). Die Kennung bleibt vorn: Mit ihr nennt die
             # Übernommen-Leiste des Chats denselben Schritt.
             steps = (
-                tr("Schritt {number}").format(number=transaction.ops[0])
+                tr("Schritt {number}").format(number=step_number(document, transaction.ops[0]))
                 if len(transaction.ops) == 1
                 else tr("Schritte {numbers}").format(
-                    numbers=", ".join(str(entry) for entry in transaction.ops)
+                    numbers=", ".join(
+                        str(step_number(document, entry)) for entry in transaction.ops
+                    )
                 )
                 if transaction.ops
                 # **Eine Änderung am Projekt vertritt keinen Schritt** — dort
@@ -4509,7 +4706,9 @@ class HistoryPanel(QWidget):
                 for op_id in transaction.ops:
                     if op_id in replanned:
                         continue
-                    child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
+                    child = QListWidgetItem(
+                        f"    {self._positions.get(op_id, op_id)}  {titles.get(op_id, '')}"
+                    )
                     child.setData(GROUP_ROLE, transaction.id)
                     child_symbol = _op_icon_name(
                         next((entry.op for entry in document.ops if entry.id == op_id), "")
@@ -4590,7 +4789,8 @@ class HistoryPanel(QWidget):
         for op_id in transaction.ops:
             if op_id in replanned:
                 continue
-            row = QListWidgetItem(f"{op_id}  {titles.get(op_id, '')}")
+            position = self._positions.get(op_id, op_id)
+            row = QListWidgetItem(f"{position}  {titles.get(op_id, '')}")
             symbol = _op_icon_name(
                 next((entry.op for entry in document.ops if entry.id == op_id), "")
             )
@@ -4598,7 +4798,11 @@ class HistoryPanel(QWidget):
                 row.setIcon(icon(symbol, self.list))
             row.setData(Qt.ItemDataRole.UserRole, op_id)
             row.setData(OPS_ROLE, (op_id,))
-            row.setToolTip(tr("Schritt {number}").format(number=op_id))
+            row.setToolTip(
+                tr("Position {position} · Schrittkennung {identifier}").format(
+                    position=position, identifier=op_id
+                )
+            )
             self._mark_state(row, document, op_id, needs)
             self.list.addItem(row)
 
@@ -4619,7 +4823,7 @@ class HistoryPanel(QWidget):
                 if self._resting.get(op_id)
                 else tr("Ruht, weil er einen ausgeschalteten Schritt braucht.")
             )
-        dependency = needs_tip(op_id, needs)
+        dependency = needs_tip(op_id, needs, document)
         if dependency:
             tips.append(dependency)
         if tips:
@@ -5153,6 +5357,7 @@ class ReportPanel(QWidget):
     ausdrücklich vorsieht.
     """
 
+    rebuildRequested = Signal(str)
     slicerRequested = Signal()
     """Der Kunde will das geprüfte Teil zum Slicer bringen.
 
@@ -5174,8 +5379,11 @@ class ReportPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._names: Mapping[str, str] = {}
-        """Kennung zu Namen — aus der gezeigten Szene und aus allen Namen, die
-        die Auswertung je vergeben hat. Siehe :meth:`show_result`."""
+        """Kennung zu Namen aus der gezeigten Szene und der Auswertung."""
+        self._review_basis = ""
+        self._review_missing: tuple[str, ...] = (
+            tr("Die unterstützten Prüfungen sind noch nicht vollständig nachgewiesen."),
+        )
         self._document: Document | None = None
         """Für Herkunft, Zielableitung und ausführbare Berichtshandlungen."""
         self._stopped_at: OpId | None = None
@@ -5211,6 +5419,27 @@ class ReportPanel(QWidget):
         self.list.customContextMenuRequested.connect(self._on_menu)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
+        self.review_symbol = QLabel(self)
+        self.review_symbol.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.review_toggle = QToolButton(self)
+        self.review_toggle.setText(tr("Prüfumfang"))
+        self.review_toggle.setCheckable(True)
+        self.review_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.review_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.review_toggle.toggled.connect(self._toggle_review_scope)
+        self.review_scope = QLabel("", self)
+        self.review_scope.setWordWrap(True)
+        self.review_scope.setTextFormat(Qt.TextFormat.PlainText)
+        self.review_scope.setAccessibleName(tr("Grundlage des Übergabestatus"))
+        self.review_scroll = QScrollArea(self)
+        self.review_scroll.setWidgetResizable(True)
+        self.review_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.review_scroll.setWidget(self.review_scope)
+        self.review_scroll.setMaximumHeight(4 * TARGET_SIZE)
+        self.review_scroll.setMinimumHeight(2 * TARGET_SIZE)
+        self.review_scroll.setAccessibleName(tr("Prüfumfang"))
+        self.review_scroll.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.review_scroll.hide()
         # Der letzte Meter: Ist nichts zu beanstanden und liegt ein Körper da,
         # steht der nächste Klick genau hier — nicht drei Menüs weiter.
         self.to_slicer = make_large_target(QPushButton(tr("An den Slicer übergeben …"), self))
@@ -5219,10 +5448,18 @@ class ReportPanel(QWidget):
             tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
         )
         self.to_slicer.setStatusTip(self.to_slicer.toolTip())
-        # Kein Hauptknopf: Im Ruhezustand trägt *Bausteine* den Akzent
-        # (`tests/test_resting_state.py`).
+        # Bei einem Körper ist dies die nächste Handlung, solange kein
+        # gewählter Befund eine passendere Hauptaktion anbietet.
         self.to_slicer.setVisible(False)
         self.to_slicer.clicked.connect(self.slicerRequested)
+        self._rebuild_selection: tuple[str, ...] = ()
+        self.rebuild = make_large_target(QPushButton(tr("Modell nachbauen"), self))
+        self.rebuild.clicked.connect(self._request_rebuild)
+        self.rebuild.hide()
+        self.rebuild_note = QLabel("", self)
+        self.rebuild_note.setWordWrap(True)
+        self.rebuild_note.setTextFormat(Qt.TextFormat.PlainText)
+        self.rebuild_note.hide()
         # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als
         # Zahlen zum Vergleichen und Weitergeben.
         self.facts = QLabel("", self)
@@ -5258,8 +5495,15 @@ class ReportPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        layout.addWidget(self.summary)
+        summary_row = QHBoxLayout()
+        summary_row.addWidget(self.review_symbol)
+        summary_row.addWidget(self.summary, 1)
+        layout.addLayout(summary_row)
+        layout.addWidget(self.review_toggle)
+        layout.addWidget(self.review_scroll)
         layout.addWidget(self.to_slicer)
+        layout.addWidget(self.rebuild)
+        layout.addWidget(self.rebuild_note)
         # Wenn der Filter alles wegnimmt, steht sonst ein leerer Rahmen da und
         # sagt nicht, ob nichts passt oder ob der Bericht leer ist. Ein Label
         # und kein Listeneintrag: gefiltert wird über ``setHidden``, die Liste
@@ -5290,8 +5534,92 @@ class ReportPanel(QWidget):
         layout.addWidget(self.facts)
         layout.addLayout(filter_row)
         layout.addWidget(self._nothing)
-        layout.addWidget(self.list)
+        layout.addWidget(self.list, 1)
+        self.finding_context = QLabel("", self)
+        self.finding_context.setWordWrap(True)
+        self.finding_context.setTextFormat(Qt.TextFormat.PlainText)
+        self.finding_context.hide()
+        self.finding_place = QPushButton(tr("Betroffene Stelle zeigen"), self)
+        self.finding_place.clicked.connect(self._show_selected_place)
+        self.finding_place.hide()
+        self.finding_details_toggle = QToolButton(self)
+        self.finding_details_toggle.setText(tr("Einzelheiten"))
+        self.finding_details_toggle.setCheckable(True)
+        self.finding_details_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.finding_details_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.finding_details_toggle.setAccessibleName(tr("Einzelheiten zum Befund"))
+        self.finding_details_toggle.toggled.connect(self._toggle_finding_details)
+        self.finding_details_toggle.hide()
+        self.finding_details = QTextBrowser(self)
+        self.finding_details.setAccessibleName(tr("Einzelheiten zum Befund"))
+        self.finding_details.setMaximumHeight(4 * TARGET_SIZE)
+        self.finding_details.setOpenExternalLinks(False)
+        self.finding_details.hide()
+        layout.addWidget(self.finding_context)
+        layout.addWidget(self.finding_place)
+        layout.addWidget(self.finding_details_toggle)
+        layout.addWidget(self.finding_details)
         layout.addWidget(self._offers)
+        layout.addStretch(1)
+        # Leere Berichte bleiben oben kompakt. Bei Befunden gehört der freie
+        # Platz der rollbaren Liste, nicht den Abständen zwischen Textzeilen.
+
+    def _toggle_finding_details(self, opened: bool) -> None:
+        self.finding_details_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow
+        )
+        self.finding_details.setVisible(opened and bool(self.list.selectedItems()))
+
+    def _show_selected_place(self) -> None:
+        items = self.list.selectedItems()
+        if len(items) == 1:
+            self._on_activated(items[0])
+
+    def _show_finding_context(self, item: QListWidgetItem | None) -> None:
+        """Grundlage und Ort bleiben sichtbar; dieselben technischen Werte sind aufklappbar."""
+        with QSignalBlocker(self.finding_details_toggle):
+            self.finding_details_toggle.setChecked(False)
+        self._toggle_finding_details(False)
+        self.finding_context.setVisible(item is not None)
+        self.finding_details_toggle.setVisible(item is not None)
+        self.finding_place.hide()
+        self.finding_details.clear()
+        if item is None:
+            self.finding_context.clear()
+            return
+        finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+        bodies = tuple(key for key in (item.data(_BODIES_ROLE) or ()) if key in self._live_objects)
+        body = self._live_objects.get(finding.object_id) if finding.object_id else None
+        located = body is not None and (
+            finding.location is not None or bool(finding.feature_ids) or bool(finding.outline)
+        )
+        if len(bodies) > 1:
+            place = tr("Betroffene Körper: {names}").format(
+                names=", ".join(self._names.get(key, key) for key in bodies)
+            )
+            self.finding_place.setText(tr("Betroffene Körper zeigen"))
+            self.finding_place.show()
+        elif located and body is not None:
+            place = tr("Am Körper „{name}“.").format(name=str(body.name))
+            self.finding_place.show()
+        elif body is not None:
+            place = tr("Körper „{name}“; keine genaue Stelle angegeben.").format(
+                name=str(body.name)
+            )
+            self.finding_place.setText(tr("Betroffenen Körper zeigen"))
+            self.finding_place.show()
+        elif finding.object_id is not None:
+            place = tr("Der betroffene Körper ist in diesem Stand nicht mehr vorhanden.")
+        else:
+            place = tr("Keine räumliche Stelle angegeben.")
+        if located and len(bodies) <= 1:
+            self.finding_place.setText(tr("Betroffene Stelle zeigen"))
+        self.finding_context.setText(
+            "\n".join(
+                (place, tr("Grundlage: {source}").format(source=origin_label(finding.source)))
+            )
+        )
+        self.finding_details.setPlainText(item.toolTip().replace(" · ", "\n"))
 
     def _show_offers(self) -> None:
         """Die Handlungen zum gewählten Befund als Knöpfe (§2.7).
@@ -5332,6 +5660,7 @@ class ReportPanel(QWidget):
         finding: Finding | None = (
             items[0].data(Qt.ItemDataRole.UserRole) if len(items) == 1 else None
         )
+        self._show_finding_context(items[0] if finding is not None else None)
         handlers = handlers_of(self)
         offered = (
             handled_actions(
@@ -5345,6 +5674,9 @@ class ReportPanel(QWidget):
             if finding is not None
             else []
         )
+        primary = next(
+            (action for action in offered if action.primary), offered[0] if offered else None
+        )
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
             button.setToolTip(str(finding.message) if finding is not None else "")
@@ -5354,7 +5686,7 @@ class ReportPanel(QWidget):
                 advice = unhandled_advice(as_error(finding, self._document), handlers)
                 if advice:
                     button.setToolTip("\n".join([str(finding.message), *advice]))
-            if action.primary:
+            if action is primary:
                 make_primary(button)
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
             # Methoden des Fensters, und ein Lambda, das es fängt, schließt
@@ -5379,6 +5711,16 @@ class ReportPanel(QWidget):
                 button.clicked.connect(weak_slot(self, ReportPanel._run_action, action.id))
             row.addWidget(button)
         self._offers.setVisible(bool(offered))
+        self._set_slicer_primary(bool(self._live_objects) and not offered)
+
+    def _set_slicer_primary(self, primary: bool) -> None:
+        if primary:
+            make_primary(self.to_slicer)
+        else:
+            self.to_slicer.setDefault(False)
+            font = self.to_slicer.font()
+            font.setBold(False)
+            self.to_slicer.setFont(font)
 
     def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
         """Der angezeigte Importumfang bleibt gebunden, der Handler prüft seine Gültigkeit."""
@@ -5507,6 +5849,8 @@ class ReportPanel(QWidget):
         """
         count = self.list.count()
         self.list.setVisible(bool(count))
+        layout = cast(QVBoxLayout, self.layout())
+        layout.setStretch(layout.count() - 1, 0 if count else 1)
         for widget in (self.search, self.severity):
             widget.setVisible(count >= FILTER_FROM)
         if count < FILTER_FROM and (self.search.text() or self.severity.currentIndex()):
@@ -5548,6 +5892,34 @@ class ReportPanel(QWidget):
         self._nothing.setText(str(sentence).format(term=term, severity=level))
         self._nothing.setVisible(True)
 
+    def set_rebuild_selection(self, objects: Sequence[str]) -> None:
+        """Der Bericht bietet den Nachbau für genau den gewählten Körper an."""
+        self._rebuild_selection = tuple(objects)
+        self._update_rebuild_action()
+
+    def _update_rebuild_action(self) -> None:
+        chosen = self._rebuild_selection
+        body = self._live_objects.get(chosen[0]) if len(chosen) == 1 else None
+        note = (
+            tr("Nachbau prüfen für {name}. Die Maße werden anschließend änderbar.").format(
+                name=str(body.name)
+            )
+            if body is not None
+            else tr("Wählen Sie genau ein Modell im Objektbaum oder in der Ansicht.")
+        )
+        if self._stopped_at is not None:
+            note = tr("Der Nachbau braucht ein vollständig berechnetes Modell.")
+        self.rebuild.setVisible(bool(self._live_objects))
+        self.rebuild_note.setVisible(bool(self._live_objects))
+        self.rebuild.setEnabled(body is not None and self._stopped_at is None)
+        self.rebuild.setToolTip(note)
+        self.rebuild.setAccessibleDescription(note)
+        self.rebuild_note.setText(note)
+
+    def _request_rebuild(self) -> None:
+        if self.rebuild.isEnabled() and len(self._rebuild_selection) == 1:
+            self.rebuildRequested.emit(self._rebuild_selection[0])
+
     def show_result(
         self, result: EvaluationResult | None, document: Document | None = None
     ) -> None:
@@ -5561,6 +5933,7 @@ class ReportPanel(QWidget):
         self._document = document
         self._stopped_at = result.stopped_at if result is not None else None
         self._live_objects = dict(result.scene.objects) if result is not None else {}
+        self._update_rebuild_action()
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
         # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
         # wäre die zweitbeste Antwort auf „welcher denn".
@@ -5814,16 +6187,18 @@ class ReportPanel(QWidget):
             bodies = tuple(
                 dict.fromkeys(str(one.object_id) for one in members if one.object_id is not None)
             )
-            if len(bodies) == 1:
-                context.append(self._names.get(bodies[0], bodies[0]))
+            if len(bodies) == 1 and bodies[0] in self._names:
+                name = self._names[bodies[0]]
+                if name != bodies[0] and name not in message:
+                    context.append(name)
             # Eine Einstellung je Teil nennt Feld und Wert in der Zeile, wenn
             # alle Mitglieder denselben tragen; die Teile stehen im Tooltip.
             if finding.code in PART_SETTING_CODES:
                 shared = {_setting_line(one) for one in members if "setting" in one.values}
                 if len(shared) == 1:
                     context.append(shared.pop())
-            if finding.op_id is not None:
-                step = f"{tr('Schritt')} {finding.op_id}"
+            if finding.op_id is not None and all(one.op_id == finding.op_id for one in members):
+                step = f"{tr('Schritt')} {step_number(self._document, finding.op_id)}"
                 if self._document is not None:
                     transaction = next(
                         (
@@ -5891,6 +6266,7 @@ class ReportPanel(QWidget):
             }
             finding = dataclasses.replace(
                 finding,
+                op_id=finding.op_id if all(one.op_id == finding.op_id for one in members) else None,
                 message=message,
                 feature_ids=feature_ids,
                 values=values,
@@ -5959,6 +6335,20 @@ class ReportPanel(QWidget):
         if step:
             details.append(step)
         details.extend(_value_lines(finding))
+        if members:
+            details.extend(
+                " · ".join(
+                    filter(
+                        None,
+                        (
+                            self._member_label(one),
+                            _origin_text(one.op_id, self._document),
+                            str(one.message),
+                        ),
+                    )
+                )
+                for one in members
+            )
         detail_text = " · ".join(details)
         item.setToolTip(detail_text)
         # Tastatur und Bildschirmleser bekommen dieselbe Diagnose wie die
@@ -5989,30 +6379,41 @@ class ReportPanel(QWidget):
         # Der Knopf zum Slicer steht, sobald kein Fehler mehr im Weg ist und
         # ein Körper da ist — auch neben Warnungen und Hinweisen, die den
         # Druck nicht verhindern. Ohne Körper gibt es nichts zu übergeben.
-        self.to_slicer.setVisible(counts["error"] == 0 and bool(self._live_objects))
-        if not any(counts.values()):
-            self.summary.setText(
-                tr("Keine Befunde. Das Teil ist druckbereit.")
-                if self._live_objects
-                else tr("Keine Befunde.")
-            )
+        self.to_slicer.setVisible(bool(self._live_objects))
+        self._set_slicer_primary(bool(self._live_objects) and self._offers.isHidden())
+        if not self._live_objects and not any(counts.values()):
+            self.summary.setText(tr("Keine Befunde."))
             return
-        if self._live_objects and not alerts:
-            # **Das Urteil zuerst, auch neben Hinweisen** (KUNDE-06). Ein
-            # Hinweis ist eine Auskunft und keine Aufforderung (``alerts``) —
-            # und „Die Toleranzen dieses Materials sind Startwerte“ steht bei
-            # jeder frischen Installation an jedem Teil. Der Satz „druckbereit“
-            # stand deshalb praktisch nie da; der Kunde las nur die Zählung
-            # (null Fehler, null Warnungen, ein Hinweis) und musste selbst
-            # schließen. Die Zahl bleibt in der Schreibweise der Zählung
-            # darunter, weil der Katalog keine Mehrzahl kennt.
-            self.summary.setText(f"{tr('Druckbereit')} · {counts['info']} × {tr('Hinweis')}")
-            return
+        from app.ui.print_contract import handoff_state
+
+        status = handoff_state(self._findings, self._review_missing)
+        severity = (
+            "error"
+            if counts["error"]
+            else ("warning" if self._review_missing or counts["warning"] else "info")
+        )
+        symbol = f"severity-{severity}" if severity != "info" else "done"
+        self.review_symbol.setPixmap(icon(symbol, self).pixmap(TARGET_SIZE // 2))
+        self.review_symbol.setAccessibleName(status)
         self.summary.setText(
-            f"{counts['error']} × {tr('Fehler')} · "
+            f"{status}\n{counts['error']} × {tr('Fehler')} · "
             f"{counts['warning']} × {tr('Warnung')} · "
             f"{counts['info']} × {tr('Hinweis')}"
         )
+
+    def set_review_context(self, basis: str, missing: Sequence[str]) -> None:
+        """Der Status beschreibt dieselbe Grundlage wie der Druckerknopf."""
+        self._review_basis = basis
+        self._review_missing = tuple(missing)
+        self.review_scope.setText("\n".join(dict.fromkeys((*basis.splitlines(), *missing))))
+        self._count_up()
+
+    def _toggle_review_scope(self, shown: bool) -> None:
+        self.review_scroll.setVisible(shown)
+        self.review_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow
+        )
+        self.contentGrew.emit()
 
     def alerts(self) -> int:
         """Wie viele Befunde nach Aufmerksamkeit verlangen — Fehler und
@@ -6626,6 +7027,8 @@ def refused_feature_field(widgets: Mapping[str, QWidget]) -> tuple[str, QWidget]
     from app.ui.op_dialog import ValueField
 
     for editor in widgets.values():
+        if editor.isHidden():
+            continue
         if isinstance(editor, ValueField):
             refusal = editor.refusal()
             if refusal:
@@ -6666,10 +7069,15 @@ def refresh_feature_fields(
         # nicht auf dem Drehfeld selbst. Die tragende Sperre steht beim
         # Aufrufer (``MainWindow._place_from_feature_panel``, ``reading``):
         # Offscreen gibt es keinen Fokus — der Aufrufer weiß, dass er liest.
-        # ``isModified`` taugt hier nicht: Qt setzt es nach dem Tippen nie von
-        # selbst zurück, und ein Zug am Griff käme danach nicht mehr ins Feld.
+        # Fokus allein ist keine Eingabe: Beim Wechsel aus der rechten Zeile
+        # landet er schon in der neuen Maßkarte, bevor deren Werte folgen.
+        # Nach Verlassen des Feldes darf auch ein Griff die Zahl neu setzen.
         focused = QApplication.focusWidget()
-        if focused is not None and (focused is editor or editor.isAncestorOf(focused)):
+        if (
+            focused is not None
+            and (focused is editor or editor.isAncestorOf(focused))
+            and any(line.isModified() for line in editor.findChildren(QLineEdit))
+        ):
             continue
         with QSignalBlocker(editor):
             if isinstance(editor, ValueField):
@@ -6684,6 +7092,12 @@ def refresh_feature_fields(
                 editor.setValue(int(value))
             elif isinstance(editor, QDoubleSpinBox):
                 editor.setValue(float(value))
+    # Die Eingaben melden absichtlich nichts nach außen; ihre Bedingungen
+    # müssen dennoch den neuen Werten folgen, auch bei gekoppelten Feldern.
+    owners = {editor.parentWidget() for editor in widgets.values()}
+    for owner in owners:
+        if isinstance(owner, _MeasureBox):
+            owner.conditionsChanged.emit()
 
 
 #: Der Operationsname einer Handlung **ohne** Operation — *Maße ändern* und
@@ -6835,6 +7249,12 @@ class _ActionRow:
 SPARE_MEASURE_GROUPS: Final = 4
 
 
+class _MeasureBox(QWidget):
+    """Die Maßgruppe erneuert ihre Bedingungen auch nach stiller Wertübernahme."""
+
+    conditionsChanged = Signal()
+
+
 @dataclasses.dataclass(slots=True)
 class _MeasureGroup:
     """Eine gebaute Maßgruppe und ihre Teile — die Widgets bleiben, Texte und Werte wechseln.
@@ -6856,6 +7276,8 @@ class _MeasureGroup:
     widgets: dict[str, QWidget]
     labels: dict[str, QLabel]
     refusals: dict[str, QLabel]
+    fields: tuple[Any, ...] = ()
+    fixed: tuple[tuple[str, Any], ...] = ()
     released: list[Callable[[], None]] = dataclasses.field(default_factory=list)
 
 
@@ -7849,12 +8271,18 @@ class FeaturePanel(QWidget):
         return getattr(entry.action, "step", None) if entry is not None else None
 
     def offer_texture_steps(
-        self, operations: Sequence[Any], parameter_values: Mapping[str, float]
+        self,
+        operations: Sequence[Any],
+        parameter_values: Mapping[str, float],
+        *,
+        document: Document | None = None,
     ) -> None:
         """Ungewisse Texturzuordnungen ergänzen die normalen Flächenhandlungen."""
         button = QPushButton(tr("Textur am Körper wählen …"), self)
         button.clicked.connect(
-            lambda: self.show_texture(operations, certain=False, parameter_values=parameter_values)
+            lambda: self.show_texture(
+                operations, certain=False, parameter_values=parameter_values, document=document
+            )
         )
         self._rows.insertWidget(self._rows.count() - 1, button)
         self._built.append(button)
@@ -7866,6 +8294,7 @@ class FeaturePanel(QWidget):
         selected: int | None = None,
         certain: bool = True,
         parameter_values: Mapping[str, float] | None = None,
+        document: Document | None = None,
     ) -> None:
         """Texturparameter bearbeiten den vorhandenen Schritt mit derselben Vorschau."""
         from app.core.perceive.actions import texture_actions
@@ -7884,7 +8313,9 @@ class FeaturePanel(QWidget):
             choice.addItem(tr("Textur am Körper wählen …"), userData=None)
             for operation in operations:
                 choice.addItem(
-                    tr("Textur aus Operation {number}").format(number=operation.id),
+                    tr("Textur aus Operation {number}").format(
+                        number=step_number(document, operation.id)
+                    ),
                     userData=int(operation.id),
                 )
             choice.setCurrentIndex(max(0, choice.findData(selected)))
@@ -7894,6 +8325,7 @@ class FeaturePanel(QWidget):
                     selected=choice.currentData(),
                     certain=certain,
                     parameter_values=parameter_values,
+                    document=document,
                 )
             )
             self._rows.insertWidget(self._rows.count() - 1, choice)
@@ -9076,7 +9508,7 @@ class FeaturePanel(QWidget):
             # eine Handlung mit Gruppe anfasst.
             with QSignalBlocker(self._every):
                 self._every.setChecked(False)
-        _set_shown(self._every, applies_to_all)
+        _set_shown(self._every, applies_to_all and not self._measuring)
         self._settle_apply_block()
         if changed and entry.op != NO_OPERATION and not self._active_field_refusal():
             self.handlingArmed.emit(entry.op, entry.values())
@@ -9155,7 +9587,7 @@ class FeaturePanel(QWidget):
         )
         self._in_view_key = found[0] if found is not None else None
         self._into_view = found[1].in_view if found is not None else None
-        _set_shown(self._in_view, self._into_view is not None)
+        _set_shown(self._in_view, self._into_view is not None and not self._measuring)
         if self._into_view is None:
             return
         promise = str(tr("Maßlinien zu Kanten und Mitten in der Szene — dort einstellen."))
@@ -9227,7 +9659,7 @@ class FeaturePanel(QWidget):
         """Baut die Widgets einer Maßgruppe — Texte schreibt :meth:`_fill_measure_group`."""
         from app.ui.op_dialog import ValueField
 
-        box = QWidget(parent)
+        box = _MeasureBox(parent)
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(TIGHT)
@@ -9275,7 +9707,21 @@ class FeaturePanel(QWidget):
                 )
             widgets[str(field.name)] = editor
             labels[str(field.name)] = label
-        return _MeasureGroup(box, signature, title, current, note, widgets, labels, refusals)
+            if isinstance(editor, ValueField):
+                editor.changed.connect(box.conditionsChanged)
+            elif isinstance(editor, LengthSpin):
+                editor.valueChangedMm.connect(box.conditionsChanged)
+            elif isinstance(editor, QCheckBox):
+                editor.toggled.connect(box.conditionsChanged)
+            elif isinstance(editor, QComboBox):
+                editor.currentIndexChanged.connect(box.conditionsChanged)
+            elif isinstance(editor, QSpinBox | QDoubleSpinBox):
+                editor.valueChanged.connect(box.conditionsChanged)
+        group = _MeasureGroup(box, signature, title, current, note, widgets, labels, refusals)
+        box.conditionsChanged.connect(
+            weak_slot(self, FeaturePanel._follow_measure_conditions, group)
+        )
+        return group
 
     def _fill_measure_group(
         self, group: _MeasureGroup, action: Any, feature: Feature | None
@@ -9285,6 +9731,8 @@ class FeaturePanel(QWidget):
         Die Werte der Felder stehen dann schon (:func:`configure_feature_field`);
         Beschriftung, Kurzhilfe und zugänglicher Name folgen ihnen.
         """
+        group.fields = tuple(action.fields)
+        group.fixed = tuple(getattr(action, "fixed", ()))
         group.title.setText(str(action.title))
         if group.current is not None and feature is not None:
             caption = (
@@ -9315,6 +9763,21 @@ class FeaturePanel(QWidget):
                 refusal = group.refusals.get(name)
                 if refusal is not None:
                     self._set_refusal_label(editor, refusal)
+        self._follow_measure_conditions(group)
+
+    def _follow_measure_conditions(self, group: _MeasureGroup) -> None:
+        """Feld, Titel und Absagesatz folgen derselben Bedingung wie rechts."""
+        from app.core.registry.params import inactive_dependency
+
+        values = feature_field_values(group.fields, group.widgets, group.fixed)
+        for field in group.fields:
+            name = str(field.name)
+            active = inactive_dependency(field, group.fields, values) is None
+            _set_shown(group.widgets[name], active)
+            _set_shown(group.labels[name], active)
+            refusal = group.refusals.get(name)
+            if refusal is not None:
+                _set_shown(refusal, active and bool(refusal.text()))
 
     def bind_measure_group(self, box: QWidget, release: Callable[[], None]) -> None:
         """Hängt an eine ausgegebene Maßgruppe, was ihr Empfänger beim Zurückgeben löst."""
@@ -9399,7 +9862,20 @@ class FeaturePanel(QWidget):
         # bleiben, wo sie waren.
         for key, (line, row) in self._blocks.items():
             entry = self._runs.get(key)
-            twin = self._measuring and entry is not None and entry.op == self._measure_op
+            twin = (
+                self._measuring
+                and entry is not None
+                and (
+                    entry.op == self._measure_op
+                    or (
+                        self._measure_op in {"drill_hole", "drill_brep_hole"}
+                        and entry.op in LEADS_INTO_THE_VIEW
+                    )
+                )
+            )
+            # Beim ursprünglichen Bohrschritt gehören auch Länge und Richtung
+            # zu dessen Maßgruppe. Die gemessenen Folgehandlungen erscheinen
+            # nach deren Ende wieder, mit ihren eigenen aktuellen Werten.
             _set_shown(row, not twin)
             if line is not None:
                 _set_shown(line, not twin)

@@ -19,12 +19,194 @@ from app.core.types import Profile, Scene, SceneObject
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize("offset", (0.0, 0.005, 0.2))
+def test_surface_bound_encloses_the_known_distance_between_shifted_boxes(offset: float) -> None:
+    from app.core.geom.difference import surface_distance_bound
+
+    before = cube()
+    after = apply(before, translation((offset, 0.0, 0.0)))
+    bound = surface_distance_bound(before, after, permitted_mm=0.01)
+    assert bound.lower_mm <= offset + 1e-6
+    assert bound.upper_mm >= offset - 1e-6
+    assert bound.within_limit is (offset <= 0.01)
+
+
+def test_equal_volumes_do_not_hide_a_displaced_hole(profile: Profile) -> None:
+    from app.core.geom.difference import surface_distance_bound
+    from app.core.geom.prepare import drill
+
+    bodies = [
+        drill(
+            cube(),
+            position=(x, 0.0, 10.0),
+            axis="z",
+            diameter=4.0,
+            profile=profile,
+            compensate=False,
+        ).mesh
+        for x in (-3.0, 3.0)
+    ]
+    assert bodies[0].volume == pytest.approx(bodies[1].volume)
+    result = surface_distance_bound(*bodies, permitted_mm=0.05)
+    assert not result.within_limit
+    assert result.lower_mm > 1.0
+
+
+def test_surface_bound_checks_the_interiors_of_faces() -> None:
+    from app.core.geom.boolean import boolean
+    from app.core.geom.difference import surface_distance_bound
+
+    before = cube()
+    peg = MeshData.of(trimesh.creation.box(extents=(1.0, 1.0, 2.0)))
+    peg = apply(peg, translation((0.0, 0.0, 10.0)))
+    after = boolean("union", [before, peg]).mesh
+    for first, second in ((before, after), (after, before)):
+        result = surface_distance_bound(first, second, permitted_mm=0.01)
+        assert not result.within_limit
+        assert result.lower_mm >= 0.5 - 1e-6
+
+
+def test_surface_bound_accepts_different_triangle_partitions_without_moving_the_source() -> None:
+    from app.core.geom.difference import surface_distance_bound
+
+    before = cube()
+    vertices, faces = trimesh.remesh.subdivide(before.raw.vertices, before.raw.faces)
+    after = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+    original = before.raw.vertices.copy()
+    result = surface_distance_bound(before, after, permitted_mm=0.01)
+    assert result.within_limit
+    assert result.samples <= 4 * (before.triangle_count + after.triangle_count)
+    assert result.upper_mm <= 0.01
+    np.testing.assert_array_equal(before.raw.vertices, original)
+
+
+def test_an_exhausted_surface_check_never_certifies_the_shape() -> None:
+    from app.core.geom.difference import surface_distance_bound
+
+    before = cube()
+    after = MeshData.of(trimesh.creation.icosphere(subdivisions=1, radius=10.0))
+    result = surface_distance_bound(before, after, permitted_mm=0.01, max_cells=0)
+    assert not result.within_limit
+    assert not result.complete
+
+
+def test_surface_check_obeys_cancellation() -> None:
+    from app.core.errors import OperationCancelled
+    from app.core.geom.difference import surface_distance_bound
+    from app.core.scene.cancel import CancelSignal
+
+    cancelled = CancelSignal()
+    cancelled.cancel()
+    with pytest.raises(OperationCancelled):
+        surface_distance_bound(cube(), cube(), permitted_mm=0.01, cancelled=cancelled)
+
+
 def cube(size: float = 20.0) -> MeshData:
     return MeshData.of(trimesh.creation.box(extents=(size, size, size)))
 
 
 def plate() -> MeshData:
     return normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+@pytest.mark.parametrize("reverse", (False, True))
+def test_redundant_faces_do_not_reach_the_comparison_solver(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, reverse: bool
+) -> None:
+    """RM296: Die feine Platte bleibt genau, der Vergleich braucht ihre Teilung nicht."""
+    import math
+    from importlib import import_module
+
+    from app.core.geom.prepare import drill
+
+    module = import_module("app.core.geom.difference")
+    monkeypatch.setattr(module, "COMPARISON_FLATTEN_FROM", 100, raising=False)
+    raw = cube(20.0).raw
+    for _ in range(4):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    body = MeshData.of(raw)
+    before, after = [
+        drill(
+            body,
+            position=(0.0, 0.0, 10.0),
+            axis="z",
+            diameter=diameter,
+            profile=profile,
+            compensate=False,
+        ).mesh
+        for diameter in (4.0, 5.0)
+    ]
+    originals = [(mesh.raw.vertices.copy(), mesh.raw.faces.copy()) for mesh in (before, after)]
+    if reverse:
+        before, after = after, before
+    largest = []
+    original_boolean = module.boolean
+
+    def counted(kind, meshes, **kwargs):
+        largest.append(max(mesh.triangle_count for mesh in meshes))
+        return original_boolean(kind, meshes, **kwargs)
+
+    monkeypatch.setattr(module, "boolean", counted)
+    result = compare(before, after, profile=profile)
+
+    assert result.removed_volume == pytest.approx(0.0 if reverse else math.pi * 45.0, rel=0.01)
+    assert result.added_volume == pytest.approx(math.pi * 45.0 if reverse else 0.0, rel=0.01)
+    assert not result.findings
+    assert largest and max(largest) < 1000, (
+        "Redundante Deckdreiecke dürfen den Löser nicht belasten."
+    )
+    for mesh, (vertices, faces) in zip(
+        (after, before) if reverse else (before, after), originals, strict=True
+    ):
+        np.testing.assert_array_equal(mesh.raw.vertices, vertices)
+        np.testing.assert_array_equal(mesh.raw.faces, faces)
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+)
+def test_comparison_flattening_propagates_kernel_lifecycle_errors(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM296: Ein verlorener Helfer darf keinen zweiten Rechenweg anfangen."""
+    from importlib import import_module
+
+    from app.core.geom import mesh_ops
+
+    module = import_module("app.core.geom.difference")
+    monkeypatch.setattr(module, "COMPARISON_FLATTEN_FROM", 0)
+    error = failure_type()
+
+    def failed(*_args):
+        raise error
+
+    monkeypatch.setattr(mesh_ops, "_exactly_flattened", failed)
+    with pytest.raises(failure_type) as raised:
+        compare(cube(20.0), cube(24.0))
+    assert raised.value is error
+
+
+def test_comparison_flattening_failure_keeps_the_full_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine geometrische Absage der Entlastung verändert die Differenz nicht."""
+    from importlib import import_module
+
+    from app.core.geom import mesh_ops
+
+    module = import_module("app.core.geom.difference")
+    monkeypatch.setattr(module, "COMPARISON_FLATTEN_FROM", 0)
+
+    def failed(*_args):
+        raise ValueError("Kern nimmt das Netz nicht")
+
+    monkeypatch.setattr(mesh_ops, "_exactly_flattened", failed)
+    result = compare(cube(20.0), cube(24.0))
+    assert result.added_volume == pytest.approx(24.0**3 - 20.0**3)
+    assert result.removed_volume == pytest.approx(0.0)
+    assert not result.findings
 
 
 def _fail_rm298_difference_kernel(monkeypatch, failure_type, target_kind):

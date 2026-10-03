@@ -280,7 +280,12 @@ def test_native_carriers_cover_original_facets_without_using_selection_centres(
     assert covered == set(range(source.triangle_count))
     if kind == "rounded":
         assert seen_kinds == {"plane", "cylinder", "sphere"}
-        assert differing_centres == {"cylinder", "sphere"}
+        # Seit RM-226 nennt eine kugelige Rundungsecke ihren Kugelmittelpunkt —
+        # denselben Punkt wie ihr Träger. Dass der Träger aus der Originalform
+        # stammt, belegt dort der Radius jedes Eckpunkts oben. Die Zylinder
+        # nennen einen Achspunkt mitten über ihrer Fläche, ihr Träger einen
+        # anderen Punkt derselben Achse.
+        assert differing_centres == {"cylinder"}
     else:
         assert kind in seen_kinds
     assert brep_bytes(source.shape) == before

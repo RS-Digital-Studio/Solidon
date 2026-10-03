@@ -109,8 +109,7 @@
           <p>Al abrir un archivo, Solidon3D busca en la malla de triángulos lo
           que un día fue diseño: taladros, espigas, avellanados, cúpulas y
           cuencas, redondeos, gargantas, roscas, caras planas y aristas
-          abiertas. Cada característica encontrada recibe una identidad que
-          sobrevive a los pasos siguientes, y un clic muestra sus valores <b>medidos</b>, como cotas en la vista y a la derecha en el panel Selección: posición, diámetro,
+          abiertas. Cada característica encontrada recibe una identidad utilizada como referencia en los pasos siguientes, y un clic muestra sus valores <b>medidos</b>, como cotas en la vista y a la derecha en el panel Selección: posición, diámetro,
           profundidad, eje.</p>
           <p class="note">Cambiar un número es la operación.
           <b>Sin modo y sin un segundo diálogo</b>: la vista previa en la
@@ -119,11 +118,10 @@
           se aplican directamente al elemento reconocido. Hasta ahora, correr
           un taladro tres milímetros significaba taparlo y perforar otro en
           coordenadas nuevas — dos pasos, seis números a mano, y la identidad
-          se perdía. Ahora es un paso, y cada ajuste que apunta a ese taladro
-          conserva su referencia.</p>
+          se perdía. Ahora es un paso, y los ajustes siguen referenciando ese taladro. Las referencias que ya no puedan resolverse se señalan.</p>
           <p>El propio taladro dice qué tornillo le corresponde («Probablemente corresponde a M5 (Agujero pasante fino)»), y donde no encaja ninguno,
           también lo dice. Seis taladros iguales pasan a la misma medida de una
-          vez, como una sola acción que un deshacer retira junta. Dos
+          vez, como una sola acción que Deshacer revierte por completo. Dos
           características marcadas indican su distancia — en el espacio y por
           eje, sin herramienta de medición.</p>
           <p class="note" data-kinds="hole,pin,cone,sphere">No todos los tipos admiten todas las acciones. Mover, duplicar y quitar valen para
@@ -159,8 +157,7 @@
           <p class="note">El arrastre se convierte en un paso del historial.
           <b>Lo que has empujado en la imagen queda después como número en ese
           paso</b>, y sigue siendo editable diez pasos más tarde.</p>
-          <p>Si levantas una pieza, la sombra se escapa hacia un lado: la única
-          información sobre la altura que la imagen da por sí sola. La
+          <p>Si levantas una pieza, la sombra se escapa hacia un lado: una ayuda visual para apreciar su altura. La
           selección se funde en lugar de saltar.</p>
           <p>Y en una cara, la barra de movimiento solo ofrece lo que allí es
           posible: girar y escalar quedan en gris, con el motivo en la
@@ -217,7 +214,7 @@
           libre. Qué sale del contorno lo decides después: extruirlo, cortarlo como
           bolsillo, revolucionarlo, barrerlo a lo largo de un arco o tenderlo entre
           dos contornos.</p>
-          <p class="note">El contorno sigue siendo una curva exacta. <b>Un círculo dibujado se convierte en un cilindro
+          <p class="note">En un cuerpo exacto, el contorno conserva su curva. <b>Un círculo dibujado se convierte en un cilindro
           redondo, no en un polígono de muchos vértices.</b></p>
           <p>La cuadrícula muestra a qué se ajusta el imán, y su paso se
           puede escribir. La cota aparece junto al puntero, y la barra de
@@ -247,7 +244,7 @@
           <p>El historial es no destructivo: cada paso sigue siendo
           modificable, cada número se puede mover después. ¿Espesor de pared
           de 2,40 a 3,60? El vaciado, la tapa, los taladros y los ajustes se
-          recalculan — en el mismo orden, con el mismo resultado.</p>
+          recalculan — en el mismo orden, con los nuevos valores.</p>
           <p class="note">Parámetros de proyecto con nombre en lugar de
           números sueltos: <b>un cambio en un sitio, no en siete.</b></p>
           <p>Los límites de una cota se pueden cambiar después, incluso una
@@ -289,7 +286,7 @@
       <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Bloques</span>
-          <h3>Un alojamiento de tuerca en cuatro clics, no en cuatro medias horas</h3>
+          <h3>Un alojamiento de tuerca listo para ajustar sus medidas</h3>
           <p>La cara en la que haces clic es la que cuenta: un bloque
           aparece donde has señalado en el modelo — antes, cada operación
           sobre una cara costaba dos clics. El catálogo de la derecha conoce ahora también soporte de pared, nervadura, lengüeta y
@@ -301,13 +298,10 @@
           bolsillo para imán, además de soporte de pared, gancho para panel
           perforado, clip de cable, escuadra y pie. Las medidas salen de una
           tabla de piezas normalizadas, no de la intuición.</p>
-          <p class="note">Cada bloque está probado en todo su rango de
-          parámetros: <b>estanco, espesor de pared mínimo, sin
-          autointersecciones.</b></p>
+          <p class="note">Cada bloque se prueba en las combinaciones de sus valores límite: <b>malla cerrada, espesor de pared mínimo y ausencia de autointersecciones.</b></p>
           <p>Si eliges un bloque antes de señalar un punto, Solidon3D
           pregunta, en vez de colocarlo en el origen. El catálogo también se
-          puede ver sin ningún modelo abierto — colocar un bloque queda
-          entonces bloqueado, con el motivo indicado.</p>
+          puede ver sin ningún modelo abierto — para insertar, primero crea un cuerpo o importa un modelo con los botones del catálogo.</p>
           <p>El árbol de objetos muestra qué trae consigo un bloque: sus
           características aparecen como entradas propias debajo, y el nodo
           ofrece cambiar exactamente ese paso.</p>
@@ -345,18 +339,17 @@
             <a href="../bilder/beleg-eigener-baustein-es.webp?v=01e85189"><img src="../bilder/beleg-eigener-baustein-es.webp?v=01e85189" width="504" height="1347" loading="lazy" decoding="async"
                  alt="El diálogo «Guardar la selección como bloque», abierto desde el catálogo: arriba nombre, grupo, descripción, licencia y autor, debajo para cada cota — aquí ancho y fondo — rótulo, unidad, valor mínimo y máximo, valor por defecto y lugar en el diálogo, después los puntos en los que se podrá hacer clic con su nombre en la receta; abajo «Prueba del rango: 8 combinaciones» y el botón Crear bloque."></a>
           </div>
-          <figcaption>El diálogo pregunta cinco cosas — y calcula todo el rango antes de guardar.</figcaption>
+          <figcaption>El diálogo pregunta cinco cosas — y calcula las combinaciones de valores límite antes de guardar.</figcaption>
         </figure>
       </div>
 
       <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Superficies</span>
-          <h3>Ocho patrones, y todos comprobados para imprimir</h3>
+          <h3>Ocho patrones con comprobaciones según el perfil de impresión</h3>
           <p>Nervadura, onda, moleteado recto y cruzado, panal, hoyuelos,
           Voronoi y ruido — como <b>geometría real</b> y como retícula
-          exacta, no como campo de alturas muestreado. Si no, un moleteado
-          imprime papilla redondeada en lugar de rombos afilados.</p>
+          exacta, no como campo de alturas muestreado. El detalle que se imprime depende también de la boquilla, el material y los ajustes del slicer.</p>
           <p class="note">Antes de calcular, la pregunta de si el patrón
           puede llegar a existir en esta máquina: <b>los nervios más
           estrechos que la boquilla y los relieves menos profundos que una
@@ -381,12 +374,11 @@
       <div class="showcase" id="inspection-report">
         <div>
           <span class="kicker">Informe de comprobación</span>
-          <h3>Antes de imprimir ya sabes qué va a salir mal</h3>
-          <p>Cada archivo abierto recibe un informe: zonas abiertas,
+          <h3>Detecta riesgos de impresión y corrígelos antes de laminar</h3>
+          <p>Cada modelo abierto recibe un informe: zonas abiertas,
           triángulos mal orientados, paredes por debajo de dos cordones de
           extrusión, unidades ausentes. Ordenado en errores, advertencias y
-          avisos — y cada entrada salta en el modelo al lugar al que se
-          refiere.</p>
+          avisos — y las entradas con una ubicación señalan ese lugar en el modelo.</p>
           <p class="note">Cada hallazgo lleva una propuesta de acción.
           <b>Aquí un error nunca termina en «falló».</b></p>
         </div>
@@ -404,17 +396,16 @@
           <span class="kicker">Análisis de capas</span>
           <h3>Ver lo que verá la impresora</h3>
           <p>Solidon3D corta el modelo en capas y mide lo que se sigue de
-          ello: ángulos de voladizo, islas en el aire, paredes por debajo de
+          ello: áreas sin soporte, islas en el aire, paredes por debajo de
           dos cordones, luces de puente y el volumen de soportes. La
-          búsqueda de orientación propone la posición que menos genera de
-          todo ello.</p>
+          búsqueda de orientación busca una posición con menor necesidad de soportes entre las orientaciones evaluadas.</p>
           <p class="note">Sin slicer propio — y sin números mezclados:
           <b>lo que viene del análisis y lo que viene del G-code, siempre
           indicado.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Un dibujo: una línea de análisis sube desde la placa de impresión atravesando una pieza; uno tras otro aparecen tres hallazgos — voladizo de 78 grados, isla en el aire y una pared por debajo de dos cordones.">
+               aria-label="Un dibujo: una línea de análisis sube desde la placa de impresión atravesando una pieza; uno tras otro aparecen tres hallazgos — voladizo de 90 grados, isla en el aire y una pared por debajo de dos cordones.">
             <text class="ink" x="24" y="30" font-weight="600">Análisis de capas</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -442,7 +433,7 @@
               <text class="ink" x="386" y="183" font-size="12">Pared &lt; 2 cordones</text>
             </g>
           </svg>
-          <figcaption>Tres hallazgos que el slicer solo conoce después de laminar.</figcaption>
+          <figcaption>Tres hallazgos que puedes revisar antes de laminar.</figcaption>
         </figure>
       </div>
 
@@ -452,7 +443,7 @@
           <h3>Pasarlo al slicer, con valores que encajan con la pieza</h3>
           <p>Solidon3D no escribe G-code; eso lo hace tu slicer. Los ajustes de impresión dicen antes qué pide esta pieza: de la geometría salen propuestas como un brim cuando la base es pequeña o más tiempo por capa cuando arriba queda poca superficie — cada una con su motivo y cada una se puede desmarcar.</p>
           <p><b>Abrir en el slicer</b> pasa la pieza, con los valores si quieres, a PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer o Cura. <b>Laminar</b> deja que tu slicer calcule en segundo plano; lo que mide aparece después en el informe de comprobación.</p>
-          <p class="note">Lo medido y lo estimado nunca se mezclan: <b>lo que viene del G-code se marca como medido</b> y aparece junto a la estimación de Solidon, no en su lugar.</p>
+          <p class="note">Los valores del G-code describen la impresión prevista. <b>Su origen aparece junto a la estimación de Solidon.</b> El tiempo y el consumo reales pueden ser distintos.</p>
         </div>
         <figure class="shot">
           <div class="stage">
@@ -465,7 +456,7 @@
 
       <div class="showcase" id="auto-split" data-operations="split_bodies split_line split_pinned cut_away">
         <div>
-          <span class="kicker">Dividir y división automática</span>
+          <span class="kicker">Dividir manual o automáticamente</span>
           <h3>Demasiado grande para la cama ya no es motivo para dejarlo</h3>
           <p><b>Señalar en vez de calcular:</b> dos clics sobre la pieza
           trazan una línea, y el corte pasa entre ellos — recto hacia dentro
@@ -474,18 +465,16 @@
           <p>Las mitades quedan a la vez preparadas para encajarse:
           pasadores en una, los agujeros a juego en la otra. Redondo,
           hexagonal, cola de milano o clip — los angulosos aseguran contra
-          el giro, la cola de milano también contra la separación, y el clip
-          encaja y aguanta sin pegamento. La holgura entre ellos sale del
-          perfil de material: nada de limar ni segundo intento. El ajuste
+          el giro, la cola de milano también contra la separación, y el clip está diseñado para una unión de encaje. Comprueba la retención en la pieza impresa. La holgura entre ellos sale del
+          perfil de material. El ajuste
           queda como relación en el proyecto y se vuelve a comprobar en cada
           cambio posterior.</p>
           <p>Y quien solo necesite un lado usa <b>Recortar</b>: un plano, un
           lado se conserva y la cara de corte se cierra. Así un soporte
           importado recibe una pared trasera lisa, y una bandeja se convierte
           en un vaso cuyas paredes llegan a la misma altura.</p>
-          <p>Quien no quiera ni mirar usa <b>Dividir automáticamente</b>:
-          Solidon3D busca por sí solo el plano de corte y corta hasta que
-          cada trozo cabe.</p>
+          <p>Para buscar automáticamente planos de corte, usa <b>Dividir automáticamente</b>:
+          Solidon3D busca cortes que permitan encajar las partes en el volumen de impresión y señala cuando no encuentra una solución adecuada.</p>
           <p class="note">El volumen de impresión sale del perfil de
           impresora. <b>Veinte vienen de fábrica</b>, dos de ellos para resina, y se pueden crear
           propios.</p>
@@ -551,7 +540,7 @@
           con su origen. Si pregunta, si no descuenta nunca o si lo hace sin
           preguntar lo decides en el inventario.</p>
           <p class="note">El historial de apuntes muestra cada impresión y la
-          retira si lo pides. <b>Borrar aquí significa archivar</b> — con
+          retira si lo pides. <b>Las bobinas se pueden archivar y restaurar</b> — con
           «Mostrar bobinas archivadas» una bobina vuelve con su identificador y
           su historial.</p>
         </div>
@@ -599,8 +588,7 @@
           hacer antes de hacerlo y se aplica como un todo: exactamente una
           transacción, que un solo deshacer retira por completo.</p>
           <p class="note">La geometría la calcula el código, nunca el modelo
-          de lenguaje. <b>Cada cota de la propuesta es exacta — nada está
-          «generado aproximadamente».</b></p>
+          de lenguaje. <b>La propuesta usa cotas y parámetros explícitos; puedes revisar el resultado antes de aplicarlo.</b></p>
           <p class="note">Y eso está medido, no prometido: una batería de
           <b>39 peticiones de referencia</b> se ejecuta antes y después de
           cada cambio en el conjunto de reglas del agente. A fecha de
@@ -845,8 +833,7 @@
         <details class="tool-card">
           <summary>Manejable a distancia por MCP — también desde Claude Code</summary>
           <div class="tool-content"><p>Un segundo programa llama a las mismas operaciones que los menús:
-        desactivado de serie, solo en el propio ordenador, y cada llamada
-        remota es una transacción que un deshacer retira.
+        desactivado de serie, solo en el propio ordenador, y cada llamada remota que modifica el proyecto es una transacción que un deshacer retira.
         <a href="#mcp">Qué puede hacer la interfaz y qué no</a>.</p></div>
         </details>
       </div>

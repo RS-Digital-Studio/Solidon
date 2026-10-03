@@ -202,10 +202,15 @@ def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
     panel.limitsRequested.connect(gerufen.append)
     details = panel._detail_buttons["halb"]
     assert details.text() == "…"
-    assert details.accessibleName() == "Parameter ändern"
+    assert details.accessibleName() == "halb ändern", "Bildschirmleser nennt Parameter und Handlung"
+    width_details = panel._detail_buttons["breite"]
+    assert width_details.accessibleName() == "breite ändern"
+    assert width_details.accessibleName() != details.accessibleName()
     assert details.toolTip(), "der kompakte Knopf erklärt seinen Umfang"
     details.click()
     assert gerufen == ["halb"], "der sichtbare Knopf nennt seine Zeile"
+    width_details.click()
+    assert gerufen == ["halb", "breite"], "jede benannte Handlung erreicht ihren Parameter"
 
 
 def _most_front_fields_shown_at_once(spec: object) -> int:

@@ -150,6 +150,7 @@ from app.core.geom.sculpt import (
     median_edge,
     stages,
     stroke_at,
+    stroke_count,
     strokes_from_text,
     strokes_to_text,
 )
@@ -202,7 +203,7 @@ from app.core.scene.history import change_for, repair_is_available
 from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
-from app.core.scene.placement import seat_on_face, seats_on
+from app.core.scene.placement import bound_surface_values, seats_on, surface_at_feature
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
 from app.core.sketch.planes import (
     feature_plane,
@@ -215,9 +216,9 @@ from app.core.sketch.planes import (
 from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.slice import gcode
-from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import plates_findings, support_material
 from app.core.slice.estimate import total as estimate_total
+from app.core.slice.findings import analysed
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
 from app.core.types import (
@@ -314,6 +315,7 @@ from app.ui.labels import (
     sale_notice,
     set_circle_measure,
     spoiled_the_exact_body,
+    step_number,
     trial_days,
 )
 from app.ui.labels import area as area_label
@@ -345,6 +347,11 @@ from app.ui.panels import (
     texture_steps_of,
 )
 from app.ui.pose_bar import PoseBar
+from app.ui.print_contract import (
+    check_summary,
+    handoff_receipt,
+    missing_profile_basis,
+)
 from app.ui.print_disclosure import ensure_print_disclosure
 from app.ui.print_findings_flow import PrintFindingsFlow
 from app.ui.print_settings_dialog import (
@@ -767,6 +774,8 @@ class _FeatureDock(QDockWidget):
     # dann stünden die Felder noch nicht.
     dismissed = False
     _watching = False
+    _workspace_visible = True
+    _workspace_was_open = False
 
     def __init__(self, title: str, parent: QWidget | None = None) -> None:
         super().__init__(title, parent)
@@ -781,9 +790,18 @@ class _FeatureDock(QDockWidget):
         Gefragt wird ``isHidden()`` und nicht ``isVisible()``: Das eine ist der
         gesetzte Zustand, das andere hängt am Hauptfenster.
         """
-        if self.dismissed or not self.isHidden():
+        if not self._workspace_visible or self.dismissed or not self.isHidden():
             return
         self.show()
+
+    def set_workspace_visible(self, visible: bool) -> None:
+        """Die Startansicht verbirgt das Dock ohne eine Schließentscheidung vorzutäuschen."""
+        if visible == self._workspace_visible:
+            return
+        if not visible:
+            self._workspace_was_open = not self.isHidden()
+        self._workspace_visible = visible
+        super().setVisible(visible and self._workspace_was_open and not self.dismissed)
 
     def forget_dismissal(self) -> None:
         """Ein neues Merkmal ist gewählt — das Zumachen von vorhin gilt nicht mehr.
@@ -809,6 +827,8 @@ class _FeatureDock(QDockWidget):
         Zumachen heißt „nicht jetzt", Aufmachen heißt das Gegenteil. Deshalb
         setzt dieselbe Zeile den Merker in beide Richtungen.
         """
+        if visible and not self._workspace_visible:
+            return
         if self._watching:
             self.dismissed = not visible
         super().setVisible(visible)
@@ -924,6 +944,70 @@ class _MapRequest:
     key: tuple[Any, ...]
 
 
+class _SculptPreviewWorker(Worker):
+    """Berechnet einen Pinselzug oder eine neue Symmetrie am eigenen Vorschaunetz."""
+
+    done = Signal(int, object, object, float)
+
+    def __init__(
+        self,
+        number: int,
+        mesh: MeshData,
+        preview: SculptPreview | None,
+        strokes: list[Stroke],
+        point: Any,
+        plane: int,
+        params: dict[str, Any],
+    ) -> None:
+        super().__init__()
+        self.number = number
+        self.mesh = MeshData(mesh.raw.copy()) if preview is None else preview.mesh
+        self.preview = preview
+        self.strokes = list(strokes)
+        self.point = point
+        self.plane = plane
+        self.params = params
+        self.cancel = CancelSignal()
+
+    def work(self) -> None:
+        preview = self.preview or SculptPreview(
+            self.mesh,
+            centre=None if self.params.get("mirror_at_body", True) else (0.0, 0.0, 0.0),
+            front_only=bool(self.params.get("front_only", True)),
+            mirror_once=bool(self.params.get("mirror_once", True)),
+        )
+        shown = [replace(s, symmetry=s.symmetry | self.plane) for s in self.strokes]
+        # Beim Wiederöffnen und Symmetriewechsel bleibt jede Etappe abbrechbar.
+        if tuple(shown) != preview.strokes:
+            for count in range(1, len(shown) + 1):
+                if self.cancel.is_cancelled:
+                    return
+                preview.show(shown[:count])
+            if not shown:
+                preview.show([])
+        if self.cancel.is_cancelled:
+            return
+        if self.point is not None:
+            point, values = self.point
+            values = dict(values)
+            gesture = values.pop("gesture", 0)
+            stroke = stroke_at(
+                self.mesh, point, **values, before=shown, mirrored=self.plane, preview=preview
+            )
+            stroke = replace(stroke, gesture=gesture)
+            self.strokes.append(stroke)
+            shown.append(replace(stroke, symmetry=stroke.symmetry | self.plane))
+            preview.show(shown)
+        edge = median_edge(self.mesh)
+        if not self.cancel.is_cancelled:
+            self.done.emit(self.number, preview, self.strokes, edge)
+
+    def release_finished_references(self) -> None:
+        """Nur die Sitzung hält die übernommene Vorschau nach zugestelltem Ende weiter."""
+        del self.mesh, self.preview, self.strokes, self.point, self.params
+        super().release_finished_references()
+
+
 class _SculptWallWorker(Worker):
     """Die Wandprüfung der Formsitzung, abseits des Oberflächen-Threads
     (Entscheidung L, §2.8).
@@ -946,12 +1030,25 @@ class _SculptWallWorker(Worker):
     """
 
     done = Signal(int, object)
+    analysed = Signal(int, object, object)
 
-    def __init__(self, number: int, mesh: MeshData, minimum: float) -> None:
+    def __init__(
+        self,
+        number: int,
+        mesh: MeshData,
+        minimum: float,
+        *,
+        kind: str = "wall",
+        profile: Profile | None = None,
+        angle: float | None = None,
+    ) -> None:
         super().__init__()
         self._number = number
         self._mesh: MeshData | None = mesh
         self._minimum = minimum
+        self._kind = kind
+        self._profile = profile
+        self._angle = angle
         self.cancelled = CancelSignal()
         """Der nächste Zug macht diese Prüfung wertlos — und das Schließen
         des Fensters ebenso, das sonst Sekunden auf sie wartete."""
@@ -963,12 +1060,25 @@ class _SculptWallWorker(Worker):
         sculpted = self._mesh
         if sculpted is None:
             return
+        from app.core.geom.prepare import check_build_volume
+
+        findings = (
+            check_build_volume([sculpted], self._profile) if self._profile is not None else []
+        )
         try:
-            card = wall_thickness_map(
-                sculpted,
-                minimum=self._minimum,
-                pitch=self._minimum * WALL_GRID_SHARE,
-                cancelled=self.cancelled,
+            card = (
+                (
+                    maps.overhang_map(sculpted, self._angle)
+                    if self._angle is not None
+                    else maps.overhang_map(sculpted)
+                )
+                if self._kind == "overhang"
+                else wall_thickness_map(
+                    sculpted,
+                    minimum=self._minimum,
+                    pitch=self._minimum * WALL_GRID_SHARE,
+                    cancelled=self.cancelled,
+                )
             )
         except OperationCancelled:
             return
@@ -976,8 +1086,12 @@ class _SculptWallWorker(Worker):
             # Ein zu großes Netz ist kein Grund, die Sitzung zu stören. Der
             # Prüfbericht sagt dasselbe später und gründlicher.
             self.done.emit(self._number, None)
+            self.analysed.emit(self._number, None, findings)
+            return
+        if self.cancelled.is_cancelled:
             return
         self.done.emit(self._number, len(card.highlighted))
+        self.analysed.emit(self._number, card, findings)
 
     def release_finished_references(self) -> None:
         """Das Netz loslassen, sobald die Antwort zugestellt ist."""
@@ -1259,6 +1373,7 @@ class _ExportWorker(Worker):
         self.cancelled = CancelSignal()
         self._phase_lock = Lock()
         self._writing = False
+        self.receipt: Finding | None = None
 
     def cancel(self) -> bool:
         """Nimmt einen Abbruch nur vor dem gemeinsam geschützten Schreibbeginn an."""
@@ -1337,6 +1452,17 @@ class _ExportWorker(Worker):
         except AppError as error:
             self.failed.emit(error)
             return
+        if written:
+            self.receipt = handoff_receipt(
+                document=self._document,
+                profile=self._profile,
+                objects=self._objects,
+                written=written,
+                findings=(*self._evaluated, *(self._checked or ()), *findings),
+                with_settings=self._format == "3mf" and self._settings is not None,
+                status=tr("Dateien exportiert. Es wurde kein Slicer gestartet."),
+                total_objects=len(self._all_objects),
+            )
         self.done.emit(written, findings)
         if written:
             for request in usage:
@@ -1617,26 +1743,32 @@ class _SliceWorker(Worker):
     def __init__(
         self,
         entry: Any,
-        layer_height: float,
+        settings: PrintSettings,
         *,
-        overhang_angle: float | None = None,
-        bridge_from: float | None = None,
+        overhang_angle: float,
+        bridge_from: float,
     ) -> None:
         super().__init__()
         self._entry = entry
-        self._layer_height = layer_height
+        self._settings = settings
         self._overhang_angle = overhang_angle
         self._bridge_from = bridge_from
+        self.cancel = CancelSignal()
 
     def work(self) -> None:
-        self.done.emit(
-            slice_body(
+        try:
+            self.cancel.raise_if_cancelled()
+            result = analysed(
                 as_mesh_data(self._entry.mesh),
-                self._layer_height,
-                overhang_angle=self._overhang_angle,
-                bridge_from=self._bridge_from,
+                self._settings,
+                self._overhang_angle,
+                self._bridge_from,
+                cancelled=self.cancel,
             )
-        )
+        except OperationCancelled:
+            return
+        if not self.cancel.is_cancelled:
+            self.done.emit(result)
 
 
 class _GcodeWorker(Worker):
@@ -2114,6 +2246,9 @@ class _DiscardedSketch:
     text: str
     plane: str
     steps: int
+    project: object
+    step: int | None = None
+    field_name: str = ""
     body: str = ""
     """Für welchen Körper gezeichnet wurde — leer bei einer neuen Zeichnung."""
 
@@ -2134,9 +2269,9 @@ class _PreviewOrder:
 class _Seat:
     """Wohin ein neuer Körper auf einer gewählten Fläche kommt (RM-390)."""
 
+    source: SceneObject
     feature: Feature
-    values: dict[str, float] | None
-    """Position und Richtung auf der Fläche — ``None``, wenn er dort unter das Bett reichte."""
+    title: str
     sentence: str
     """Der Satz vorn im Dialog: wohin er kommt, oder warum doch auf das Bett."""
 
@@ -2171,6 +2306,8 @@ class _PreviewApproval:
     Antwort, und *Übernehmen* stellt sie (RM-389)."""
     computing: bool = False
     """Die angeforderte Vorschau rechnet noch — bis ihre Antwort da ist."""
+    reviewing: bool = False
+    """Die genaue Druckfolgenprüfung besitzt die Freigabe auch nach dem ersten Bild."""
     is_the_evaluation: bool = False
     """Die Vorschau rechnet, was die Auswertung nach dem Übernehmen rechnete
     (``Session.preview_is_the_evaluation``): Ein Klick wartet auf sie, auch
@@ -2191,8 +2328,8 @@ def _edge_labels(candidates: Sequence[tuple[str, str] | EdgeTarget]) -> dict[str
     return {entry.token: edge_label(entry) for entry in candidates if isinstance(entry, EdgeTarget)}
 
 
-def _undone_text(transaction: Any) -> str:
-    """Was die Statuszeile nach Strg+Z sagt — bei einer Änderung am Schritt die Änderung.
+def _history_feedback(transaction: Any, *, undone: bool) -> str:
+    """Was die Statuszeile nach Undo und Redo sagt — bei einer Änderung die Änderung.
 
     Eine geänderte Fassung trägt als Titel den Titel des Schritts
     (``History._swap_operation``). Nach *Offen lassen* hieß es deshalb
@@ -2208,8 +2345,14 @@ def _undone_text(transaction: Any) -> str:
         and edited
         and all(entry is not None for entry in edited.values())
     ):
-        return tr("Änderung an „{name}“ zurückgenommen.").format(name=str(transaction.title))
-    return tr("{name} zurückgenommen.").format(name=str(transaction.title))
+        text = (
+            tr("Änderung an „{name}“ zurückgenommen.")
+            if undone
+            else tr("Änderung an „{name}“ wieder angewendet.")
+        )
+    else:
+        text = tr("{name} zurückgenommen.") if undone else tr("{name} wieder angewendet.")
+    return text.format(name=str(transaction.title))
 
 
 #: Wie lang eine Antwort als Knopf höchstens sein darf — länger ist sie ein
@@ -2394,6 +2537,7 @@ class MainWindow(QMainWindow):
         """Was die Schichtanalyse dem Prüfbericht nach jeder Auswertung
         hinzufügt (§22.2) — im Arbeiter, damit die Auswertung nicht länger wird."""
         self._print_findings.found.connect(self._add_print_findings)
+        self._print_findings.checksChanged.connect(self._update_review_status)
         self._close_requested = False
         self._close_retry = QTimer(self)
         """Hält das Fenster offen, bis jeder angehaltene Arbeiter ausgelaufen ist."""
@@ -2413,6 +2557,7 @@ class MainWindow(QMainWindow):
         modales Fenster darüber zu stellen — siehe :meth:`report_error`.
         """
         self._op_dialog: OperationDialog | None = None
+        self._rebuild_dialog: QDialog | None = None
         """Der offene Operationsdialog. Er sperrt das Fenster nicht mehr, also
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
         verschwindet mit dem Verlassen der Funktion."""
@@ -2841,6 +2986,8 @@ class MainWindow(QMainWindow):
         self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
         self.measure_bar.undoRequested.connect(self.viewport.undo_measurement)
         self.transform_bar = TransformBar(self)
+        self.transform_bar.referenceChanged.connect(self._update_transform_position)
+        self.transform_bar.roleChanged.connect(self._update_transform_position)
         self.transform_bar.applyRequested.connect(self._apply_from_transform_bar)
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
@@ -3156,6 +3303,7 @@ class MainWindow(QMainWindow):
         self.sculpt_bar.radius.valueChangedMm.connect(self.viewport.set_brush_radius)
         self.sculpt_bar.radius.valueChangedMm.connect(self._refresh_sculpt_refinement)
         self.sculpt_bar.symmetry.currentIndexChanged.connect(self._refresh_sculpt_preview)
+        self.sculpt_bar.analysis.changed.connect(self._gesture_analysis_changed)
 
         # Der Skeletteditor, dieselbe Bauart: eine Leiste neben der
         # Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende.
@@ -3163,10 +3311,12 @@ class MainWindow(QMainWindow):
         self.pose_bar.finished.connect(self.finish_armature)
         self.pose_bar.chainBroken.connect(self.break_armature_chain)
         self.pose_bar.lastRemoved.connect(self.undo_bone)
+        self.pose_bar.analysis.changed.connect(self._gesture_analysis_changed)
         self.pose_bar.setVisible(False)
         self.viewport.boneRequested.connect(self._on_bone_point)
         self._armature_target: str | None = None
         self._armature_step: int | None = None
+        self._pose_report_target: str | None = None
         #: Der Verlaufsschritt, den der Zeichenmodus gerade ändert (Z9).
         #:
         #: Gesetzt, wenn jemand aus dem Dialog eines vorhandenen Schritts „Im
@@ -3184,7 +3334,21 @@ class MainWindow(QMainWindow):
         """Woran der nächste Knochen hängt. Leer nach *Neue Kette*."""
         self.sculpt_bar.setVisible(False)
         self.viewport.sculptRequested.connect(self._on_sculpt)
+        self.viewport.sculptGestureStarted.connect(self._begin_sculpt_gesture)
+        self.viewport.sculptGestureFinished.connect(self._end_sculpt_gesture)
         self._sculpt_target: str | None = None
+        self._sculpt_step: int | None = None
+        self._sculpt_source: MeshData | None = None
+        self._gesture_scene: Any = None
+        self._gesture_document = self.session.project.document
+        self._gesture_open_number = 0
+        self._sculpt_refine_reopen: tuple[Any, int] | None = None
+        self._sculpt_refine_pending = False
+        self.session.revisionDone.connect(self._sculpt_refinement_inserted)
+        self.session.revisionCancelled.connect(self._sculpt_refinement_failed)
+        self.session.failed.connect(self._sculpt_refinement_failed)
+        self._gesture_save_dialog: Any = None
+        self._sculpt_params: dict[str, Any] = {}
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
         läuft."""
         self._sculpt_check = QTimer(self)
@@ -3228,10 +3392,19 @@ class MainWindow(QMainWindow):
         Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
         nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
+        self._sculpt_gesture: int | None = None
+        self._sculpt_gesture_number = 0
+        self._sculpt_redo: list[tuple[list[Stroke], list[Any]]] = []
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
         self._sculpt_preview: SculptPreview | None = None
+        self._sculpt_preview_base: MeshData | None = None
+        self._sculpt_preview_worker: _SculptPreviewWorker | None = None
+        self._sculpt_preview_number = 0
+        self._sculpt_pending: list[Any] = []
+        self._sculpt_finish_pending = False
+        self._sculpt_edge: float | None = None
         """Die Vorschau der laufenden Formsitzung, Zug für Zug (RM-366)."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
@@ -3320,6 +3493,8 @@ class MainWindow(QMainWindow):
         self.report.bundleActivated.connect(self._on_bundle_activated)
         self.report.actionOnBodies.connect(self._run_on_chosen_bodies)
         self.report.slicerRequested.connect(self.action_print_settings)
+        self.report.rebuildRequested.connect(self.action_rebuild)
+        self.object_tree.selectionChanged.connect(self._update_rebuild_selection)
         self.chat = ChatPanel(self)
         self.chat.requestSent.connect(self._on_request_sent)
         self.chat.accepted.connect(self._on_proposal_accepted)
@@ -3420,6 +3595,7 @@ class MainWindow(QMainWindow):
                 notice.keep_clear_of(zone)
         self._action_notice = _ActionNotice(self.overlay)
         self._announcement_document = self.session.project.document
+        self._tour_project = self.session.project
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
         # endgültige Höhe kennt Qt einen Ereignisschritt später; dann muss die
         # frei gesetzte linke Karte ausdrücklich neu verteilt werden. Ohne
@@ -3495,7 +3671,7 @@ class MainWindow(QMainWindow):
         self.start_screen.importRequested.connect(self.action_import)
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
-        self.start_screen.leftOut.connect(self._say_files_left_out)
+        self.start_screen.filesDropped.connect(self.import_paths)
         self.start_screen.urlDropped.connect(self.download_model)
         self.start_screen.forgetRequested.connect(self._forget_recent)
         # Mit Kapitel: Der Knopf nennt es, also schlägt er es auf.
@@ -3662,7 +3838,7 @@ class MainWindow(QMainWindow):
             ),
             "gcode": _ProgressState(
                 False,
-                tr("G-Code wird gegenprüft …"),
+                tr("G-Code wird gegengeprüft …"),
                 0,
                 0,
                 0,
@@ -4922,9 +5098,8 @@ class MainWindow(QMainWindow):
         Zusammenlegen hat es keinen eigenen Eintrag mehr, an dem eine
         ``QAction`` hinge. Anders als bei ``shell_exact`` (dort ist es
         entfallen) bleibt es hier erhalten und sitzt am Sammeleintrag: Der
-        öffnet ohnehin mit der ersten Variante, also mit Extrudieren. Wer „E"
-        gewohnt ist, bekommt denselben Dialog wie vorher — nur mit einer Wahl
-        darin.
+        beginnt mit der ersten Variante. Eine Zeichnung beginnt über denselben
+        Einstieg wie die Palette direkt im Zeichenmodus.
         """
         for group in VARIANT_GROUPS:
             first = REGISTRY.get(group.members[0])
@@ -4936,7 +5111,7 @@ class MainWindow(QMainWindow):
                 place,
                 str(group.title),
                 key or None,
-                weak_slot(self, MainWindow.run_operation, first),
+                weak_slot(self, MainWindow.launch_operation, first),
                 str(group.doc),
                 # Die Gruppe hat kein eigenes Zeichen, ihre Mitglieder schon —
                 # und der Dialog öffnet mit dem ersten. Ohne das stand sie als
@@ -5132,9 +5307,20 @@ class MainWindow(QMainWindow):
         # leer, und die Aktion blieb grau — der Rückweg war da und nicht zu
         # erreichen (Gesamtreview 05.09.2026, UI-10).
         self.undo_action.setEnabled(
-            (self.session.history.can_undo or self._discarded_sketch is not None) and not gesturing
+            (
+                (self.session.history.can_undo or self._discarded_sketch is not None)
+                and not gesturing
+            )
+            or (self.sculpting() and bool(self._sculpt_strokes or self._sculpt_pending))
+            or (
+                self.setting_armature()
+                and bool(self._armature_bones or self._armature_head is not None)
+            )
         )
-        self.redo_action.setEnabled(self.session.history.can_redo and not gesturing)
+        self.redo_action.setEnabled(
+            (self.session.history.can_redo and not gesturing)
+            or (self.sculpting() and bool(self._sculpt_redo))
+        )
         # Und die Darstellung. **Von den zwei Gründen dafür gilt seit dem
         # Schnitt (§30.1, P4) nur noch einer.** Der erste — „im Skizzenmodus
         # liegt der Viewport nicht im Stapel, sie ändern also etwas, das
@@ -5619,7 +5805,7 @@ class MainWindow(QMainWindow):
         return tr(
             "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
             "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
-            number=number,
+            number=step_number(self.session.project.document, number),
             step=title,
         )
 
@@ -5649,6 +5835,11 @@ class MainWindow(QMainWindow):
         auf ``self`` — derselbe Grund wie bei den übrigen Signalen hier.
         """
         panel = self.history_panel
+        panel.preview_allowed = self._history_preview_allowed
+        panel.previewRequested.connect(self._preview_history)
+        panel.previewClosed.connect(self._leave_history_preview)
+        panel.previewInsertRequested.connect(self._insert_at_history_preview)
+        self.session.projectChanged.connect(self._close_history_preview)
         panel.insertRequested.connect(self._start_inserting)
         panel.stopInsertRequested.connect(self.session.stop_inserting)
         panel.moveRequested.connect(self._move_history_steps)
@@ -5659,6 +5850,70 @@ class MainWindow(QMainWindow):
         self.session.revisionDone.connect(self._on_revision_done)
         self.session.revisionCancelled.connect(self._on_revision_cancelled)
         self.session.insertionChanged.connect(self._on_insertion_changed)
+
+    def _history_preview_allowed(self) -> bool:
+        """Ein Vergleich darf keinen noch offenen Gesten- oder Maßentwurf verdrängen."""
+        host = self._quiet_host
+        if (
+            self.sculpting()
+            or self.setting_armature()
+            or self._sketch_panel is not None
+            or (host is not None and host.begun and not host.committing)
+        ):
+            self.announce(_the_change_comes_first())
+            return False
+        return not self.session.busy
+
+    def _preview_history(self, count: int) -> None:
+        """Ein Transaktionsstand als Bild; das Dokument bleibt am aktuellen Ende."""
+        host = self._quiet_host
+        if (host is not None and host.begun and not host.committing) or self.session.busy:
+            self.history_panel.compare.setChecked(False)
+            return
+        self._preview_busy.start()
+        self._start_preview_progress()
+        self.session.history_preview_async(
+            count,
+            self._history_preview_ready,
+            explained=self._history_preview_reason,
+            progressed=self._preview_progressed,
+        )
+
+    def _history_preview_ready(self, value: Any) -> None:
+        self._preview_busy.stop()
+        self._finish_preview_progress()
+        if value is None or not self.history_panel.compare.isChecked():
+            return
+        _result, before, difference = value
+        self.viewport.show_scene(before, preserve_camera=True)
+        self.viewport.select(None)
+        self._show_difference(difference)
+        self.viewport.mark_preview(self.history_panel.timeline_label.text(), "")
+
+    def _history_preview_reason(self, reason: str) -> None:
+        self._preview_busy.stop()
+        self._finish_preview_progress()
+        self.announce(reason, receipt=False)
+
+    def _close_history_preview(self) -> None:
+        self.history_panel.compare.setChecked(False)
+
+    def _leave_history_preview(self) -> None:
+        self.session.cancel_preview()
+        self._preview_busy.stop()
+        self._finish_preview_progress()
+        self._show_difference(None)
+        self.viewport.show_scene(self.session.last_result, preserve_camera=True)
+        chosen = self.object_tree.selected_objects()
+        self.viewport.select(chosen[0] if chosen else None, more=chosen[1:])
+        self.viewport.select_feature_refs(self.object_tree.selected_features())
+        self.viewport.mark_preview("", "")
+
+    def _insert_at_history_preview(self, before: int | None) -> None:
+        if before is None:
+            self.session.stop_inserting()
+        else:
+            self._start_inserting(before)
 
     def _revision_context(self) -> tuple[int | None, tuple[Any, ...]]:
         """Einfügemarke und abhängige Folge für den Verlauf (P7)."""
@@ -5776,7 +6031,9 @@ class MainWindow(QMainWindow):
             self.announce(tr("Einfügen beendet — zu sehen ist wieder der ganze Verlauf."))
             return
         self.announce(
-            tr("Neue Schritte kommen jetzt vor Schritt {number}.").replace("{number}", str(marker))
+            tr("Neue Schritte kommen jetzt vor Schritt {number}.").format(
+                number=step_number(self.session.project.document, marker)
+            )
         )
 
     def _end_inserting_for_output(self) -> None:
@@ -6089,6 +6346,7 @@ class MainWindow(QMainWindow):
         #: zeigt, sobald ein Ergebnis ihn trägt (``_show_the_plate_of_the_import``).
         self._plate_of_import: ObjectId | None = None
         self.session.sceneChanged.connect(self._on_scene)
+        self.session.checksChanged.connect(self._update_review_status)
         self.session.pictureChanged.connect(self._on_picture)
         self.session.projectChanged.connect(self._on_project)
         # Ein Projektwechsel während einer Erzeugung steht über *Übernehmen* (RM-371).
@@ -6285,9 +6543,10 @@ class MainWindow(QMainWindow):
         sonst böte der nächste Start die Wiederherstellung eines Modells an,
         das niemand vermisst.
         """
-        if not self.session.modified:
+        gestures = self._has_unsaved_gestures()
+        if not self.session.modified and not gestures:
             return True
-        if self.session.only_imported:
+        if self.session.only_imported and not gestures:
             self.session.forget_autosave()
             return True
         answer = confirm_unsaved(self.session.title, self)
@@ -6297,13 +6556,117 @@ class MainWindow(QMainWindow):
             self.action_save()
             # Wer den Dateidialog abbricht, hat nicht gespeichert — und will
             # dann ganz sicher nicht, dass die Arbeit trotzdem verschwindet.
-            return not self.session.modified
+            return not self.session.modified and not self._has_unsaved_gestures()
         # Verworfen heißt verworfen. Die automatische Sicherung ist für den
         # Absturz da (§38) — nicht dafür, eine Entscheidung des Nutzers zu
         # überstimmen. Bleibt sie liegen, bietet das nächste Öffnen genau den
         # Stand wieder an, den er hier gerade weggeworfen hat.
+        self._discard_gestures()
         self.session.forget_autosave()
         return True
+
+    def _has_unsaved_gestures(self) -> bool:
+        """Lokale Entwürfe sind Arbeit, auch solange noch keine Operation existiert."""
+        if self._gesture_save_dialog is not None and self._gesture_save_dialog is self._op_dialog:
+            return True
+        if self._sculpt_target is not None:
+            original = strokes_from_text(str(self._sculpt_params.get("strokes", "")))
+            return (
+                bool(self._sculpt_pending)
+                or self._sculpt_strokes != original
+                or (
+                    bool(self._sculpt_strokes)
+                    and self.sculpt_bar.plane() != self._sculpt_params.get("symmetry", "none")
+                )
+            )
+        if self._armature_target is not None:
+            from app.core.geom.pose import armature_from_text
+
+            bones = []
+            if self._armature_step is not None:
+                entry = self.session.history.operation(self._armature_step)
+                bones = armature_from_text(str(entry.params.get("armature", "")))
+            return self._armature_head is not None or self._armature_bones != bones
+        if self._sketch_panel is not None:
+            original_text = ""
+            if self._sketch_step is not None:
+                entry = self.session.history.operation(self._sketch_step)
+                original_text = str(entry.params.get(self._sketch_parameter or "sketch", ""))
+            return self._sketch_panel.sketch_text() != original_text
+        return False
+
+    def _finish_gestures_for_save(self) -> bool:
+        """Speichern darf nur bereits übernommene Gesten als gesichert behandeln."""
+        if not self._has_unsaved_gestures():
+            return True
+        if self._sculpt_target is not None:
+            self.finish_sculpt()
+        elif self._armature_target is not None:
+            if self._armature_head is not None:
+                self.announce(tr("Ende des Knochens setzen …"))
+                return False
+            self.finish_armature()
+        elif self._sketch_panel is not None:
+            self.finish_sketch()
+        if self._op_dialog is not None:
+            self._gesture_save_dialog = self._op_dialog
+        if self._has_unsaved_gestures():
+            self.announce(
+                tr("Übernehmen Sie zuerst die Bearbeitung und speichern Sie danach das Projekt.")
+            )
+            return False
+        return True
+
+    def _discard_gestures(self) -> None:
+        """Einen verlassenen Entwurf vollständig vom folgenden Projekt lösen."""
+        self._gesture_open_number += 1
+        self._discarded_sketch = None
+        if not (
+            self.sculpting()
+            or self.setting_armature()
+            or self._sketch_panel is not None
+            or self._gesture_save_dialog is not None
+            or self._pose_report_target is not None
+        ):
+            return
+        self._sculpt_refine_reopen = None
+        self._sculpt_refine_pending = False
+        self._cancel_sculpt_preview()
+        self._sculpt_check.stop()
+        self._sculpt_wall_number += 1
+        self._cancel_sculpt_check()
+        self.session.cancel_preview()
+        if self._sketch_panel is not None:
+            self.finish_sketch(keep=False)
+        self._discarded_sketch = None
+        if self._gesture_save_dialog is self._op_dialog and self._op_dialog is not None:
+            self._op_dialog.reject()
+        self._gesture_save_dialog = None
+        self._sculpt_target = None
+        self._sculpt_step = None
+        self._sculpt_source = None
+        self._sculpt_params = {}
+        self._sculpt_strokes = []
+        self._sculpt_gesture = None
+        self._sculpt_redo.clear()
+        self._sculpt_preview = None
+        self._sculpt_preview_base = None
+        self._gesture_scene = None
+        self._armature_target = None
+        self._armature_step = None
+        self._armature_bones = []
+        self._armature_head = None
+        self._armature_parent = ""
+        self._pose_report_target = None
+        self.viewport.set_sculpting(False)
+        self.viewport.set_boning(False)
+        self.viewport.clear_bones()
+        self.viewport.clear_preview_mesh()
+        self.viewport.set_analysis_map(None, None)
+        self.analysis_bar.show_legend(None)
+        self.sculpt_bar.hide()
+        self.pose_bar.hide()
+        self.tools.setVisible(True)
 
     def open_path(self, path: Path) -> None:
         """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop.
@@ -6321,6 +6684,8 @@ class MainWindow(QMainWindow):
         Relief, alles andere bekommt den Satz, wie das Modell hereinkommt.
         """
         suffix = path.suffix.lower()
+        if suffix != PROJECT_SUFFIX and not self._gesture_allows_import():
+            return
         if suffix in GCODE_SUFFIXES:
             if self._begin_from_the_start_screen():
                 self.check_gcode(path)
@@ -6525,12 +6890,16 @@ class MainWindow(QMainWindow):
         dialog.open()
 
     def action_save(self) -> None:
+        if not self._finish_gestures_for_save():
+            return
         if self.session.path is None:
             self.action_save_as()
             return
         self._save_to(self.session.path)
 
     def action_save_as(self) -> None:
+        if not self._finish_gestures_for_save():
+            return
         name, _filter = QFileDialog.getSaveFileName(
             self, tr("Projekt speichern"), "", PROJECT_FILTER
         )
@@ -6582,47 +6951,68 @@ class MainWindow(QMainWindow):
         self.announce(tr("Gespeichert"))
 
     def action_import(self) -> None:
-        """Eine Modelldatei in die laufende Szene (§17.1).
-
-        Mit Wartezeiger und ohne Arbeiter: Gelesen wird die Datei am Stück
-        (``read_bytes``), gerechnet wird an ihr erst in der Auswertung — und
-        die läuft längst im Arbeiter, mit Balken und Abbrechen. Ein zweiter
-        Arbeiter allein für das Lesen brächte eine Halteleine, einen
-        Fehlerpfad und einen zweiten Weg in ``import_payload`` — für die paar
-        Zehntel, die eine Platte für dreißig Megabyte braucht (§2.8).
-        """
-        name, _filter = QFileDialog.getOpenFileName(
-            self, tr("Modell einfügen"), "", import_filter()
+        """Eine oder mehrere Modelldateien in einem Auftrag einfügen."""
+        names, _filter = QFileDialog.getOpenFileNames(
+            self,
+            tr("Modell öffnen")
+            if self.stack.currentWidget() is self.start_screen
+            else tr("Modell einfügen"),
+            "",
+            import_filter(),
         )
-        if not name:
+        if names:
+            self.import_paths([Path(name) for name in names])
+
+    def _gesture_allows_import(self) -> bool:
+        """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors."""
+        if (
+            self.sculpting()
+            or self.setting_armature()
+            or self._sketch_panel is not None
+            or (
+                self._gesture_save_dialog is not None
+                and self._gesture_save_dialog is self._op_dialog
+            )
+        ):
+            self._say_the_change_comes_first()
+            return False
+        return True
+
+    def import_paths(self, paths: Sequence[Path]) -> None:
+        """Mehrfachauswahl erhält ihre Baugruppenlage und wird ein Undo-Schritt."""
+        if not paths or not self._quiet_command_allowed():
+            return
+        if any(path.suffix.lower() == ".p3d" for path in paths):
+            if len(paths) == 1:
+                self.open_path(paths[0])
+            else:
+                show_error(
+                    UserError(
+                        title=tr("Projektdateien bitte einzeln öffnen."),
+                        detail=tr("Für eine Baugruppe gemeinsam die Modelldateien auswählen."),
+                    ),
+                    self,
+                )
+            return
+        if not self._gesture_allows_import():
             return
         starting_fresh = self.stack.currentWidget() is self.start_screen
-        # Der Anfang ersetzt das offene Projekt — dieselbe Frage wie in
-        # ``open_path``, und aus demselben Grund vor dem Wartezeiger: Ohne
-        # sie verschwanden Dokument und Verlauf wortlos, und Undo holte
-        # nichts zurück (Gesamtreview-b, Bericht 08, Fund 1).
         if starting_fresh and not self._may_discard():
             return
-        self.status_message.setText(tr("Modell einfügen …"))
-        self.status_message.repaint()
         if starting_fresh:
-            # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
-            # Nachtrag: ein frisches Projekt mit Drucker und Material
-            # aus den Einstellungen, wie es open_path beim Ablegen
-            # einer Datei auch anlegt.
             self.session.start_new(self.settings.printer, self.settings.material)
-            # ``start_new`` zeichnet den gemeinsamen Fortschrittsbereich neu.
-            # Der vorübergehende Lesehinweis wird danach erneut gesetzt, ohne
-            # ihn anzukündigen.
-            self.status_message.setText(tr("Modell einfügen …"))
-            self.status_message.repaint()
-        # Derselbe Weg wie in ``open_path``, aus demselben Grund: Das Zählen
-        # der Körper einer Baugruppe dauert bei 63 MB vierzehn Sekunden, und
-        # die gehören nicht in den Hauptthread — das Lesen der Datei auch
-        # nicht (RM-224). Der Fehler kommt über ``importFailed``.
-        self._pending_import = Path(name)
+        self.status_message.setText(tr("Modell einfügen …"))
+        self._pending_import = paths[0]
+        self._recent_batch = tuple(paths) if len(paths) > 1 else ()
         self._loading_model = True
-        self.session.import_model_async(Path(name))
+        if len(paths) > 1:
+            self.announce(
+                tr(
+                    "{count} Dateien werden gemeinsam eingefügt. "
+                    "Ihre Lage zueinander bleibt erhalten."
+                ).format(count=len(paths))
+            )
+        self.session.import_models_async(paths)
 
     def action_import_url(self) -> None:
         """Weg 1 (§2.2), wenn die Datei noch nicht auf dem Bett liegt.
@@ -6635,13 +7025,13 @@ class MainWindow(QMainWindow):
         pasted = clipboard.text().strip() if clipboard is not None else ""
         try:
             suggestion = check_url(pasted)
-        except AppError:
-            suggestion = ""
+        except AppError as error:
+            suggestion = pasted if error.values.get("constraint") == "web_page" else ""
 
         url, accepted = QInputDialog.getText(
             self,
             tr("Modell aus dem Netz"),
-            tr("Direkte Adresse der Modelldatei:"),
+            tr("Adresse der Modelldatei oder Modellseite:"),
             text=suggestion,
         )
         if accepted and url.strip():
@@ -6654,6 +7044,8 @@ class MainWindow(QMainWindow):
         ``file:``-Adresse aus der Zwischenablage soll gar nicht erst in einen
         Thread wandern (§32), und ein Tippfehler soll sofort etwas sagen.
         """
+        if not self._gesture_allows_import():
+            return
         try:
             address = check_url(url)
         except AppError as error:
@@ -6661,14 +7053,27 @@ class MainWindow(QMainWindow):
             return
 
         worker = _DownloadWorker(address)
+        self._cancel_download()
         self._retire(self._download_worker)
         self._download_worker = worker
-        worker.step.connect(self._on_download_progress)
-        worker.done.connect(self._downloaded)
-        worker.failed.connect(self._download_failed)
-        worker.stopped.connect(self._download_stopped)
-        worker.crashed.connect(lambda detail: self._download_failed(InternalError(detail=detail)))
-        worker.finished.connect(lambda done=worker: self._download_worker_done(done))
+        generation = self.session.project_generation
+        for signal, event in (
+            (worker.step, "progress"),
+            (worker.done, "done"),
+            (worker.failed, "failed"),
+            (worker.stopped, "stopped"),
+        ):
+            signal.connect(
+                weak_slot(
+                    self, MainWindow._receive_download, worker, generation, event, forward=True
+                )
+            )
+        worker.crashed.connect(
+            weak_slot(
+                self, MainWindow._receive_download, worker, generation, "crashed", forward=True
+            )
+        )
+        worker.finished.connect(weak_slot(self, MainWindow._download_worker_done, worker))
         self._downloading = True
         text = tr("Modell herunterladen …")
         self._set_progress_state(
@@ -6682,6 +7087,32 @@ class MainWindow(QMainWindow):
             cancel_enabled=True,
         )
         self._leash.start(worker)
+
+    def _receive_download(
+        self, worker: _DownloadWorker, generation: int, event: str, *values: Any
+    ) -> None:
+        """Nur der aktuelle Download darf sein Projekt und seinen Fortschritt ändern."""
+        if (
+            self._close_requested
+            or self._download_worker is not worker
+            or self.session.project_generation != generation
+            or not self._downloading
+        ):
+            return
+        if worker.cancel.is_cancelled:
+            if event != "progress":
+                self._download_stopped()
+            return
+        if event == "progress":
+            self._on_download_progress(*values)
+        elif event == "done":
+            self._downloaded(*values)
+        elif event == "failed":
+            self._download_failed(*values)
+        elif event == "crashed":
+            self._download_failed(InternalError(detail=values[0]))
+        else:
+            self._download_stopped()
 
     def _on_download_progress(self, share: float, label: str) -> None:
         """Wie weit die Datei ist. Ein Server ohne Längenangabe liefert
@@ -6719,6 +7150,8 @@ class MainWindow(QMainWindow):
         Bild.
         """
         self._end_download()
+        if not self._gesture_allows_import():
+            return
         if self.stack.currentWidget() is self.start_screen:
             # Dieselbe Frage wie in ``open_path`` und ``action_import``: Der
             # Anfang ersetzt das offene Projekt. Hier NACH dem Download —
@@ -7120,6 +7553,98 @@ class MainWindow(QMainWindow):
         )
         show_error(error, parent, {**self.error_handlers(), STOP_INSERTING.id: stop_inserting_then})
 
+    def _update_rebuild_selection(self, *_args: Any) -> None:
+        self.report.set_rebuild_selection(self.object_tree.selected_objects())
+
+    def action_rebuild(self, object_id: str) -> None:
+        """Bericht → geprüfter Kandidat → sichtbarer Vergleich → eine Transaktion."""
+        from app.ui.rebuild_dialog import RebuildDialog
+
+        previous = getattr(self, "_rebuild_dialog", None)
+        if previous is not None:
+            previous.raise_()
+            previous.activateWindow()
+            return
+        if not self._quiet_command_allowed():
+            return
+        if self.sculpting() or self.setting_armature() or self._sketch_panel is not None:
+            self.announce(
+                tr("Übernehmen Sie zuerst die Bearbeitung und speichern Sie danach das Projekt.")
+            )
+            return
+        result = self.session.last_result
+        if (
+            self.session.busy
+            or not self.session.result_current
+            or result is None
+            or not result.complete
+            or object_id not in result.scene.objects
+            or self.session.inserting is not None
+        ):
+            self.announce(tr("Der Nachbau braucht ein vollständig berechnetes Modell."))
+            return
+        project = self.session.project
+        dialog = RebuildDialog(self.session, object_id, self)
+        expected: Any = None
+
+        def current() -> bool:
+            return (
+                not self._close_requested
+                and self.session.project is project
+                and self.session.last_result is result
+            )
+
+        def scene_ready() -> None:
+            if current() and expected is not None and self.viewport.is_scene_applied(expected):
+                dialog.preview_ready()
+
+        def show_candidate(body: Any) -> None:
+            nonlocal expected
+            if not current():
+                dialog.reject()
+                return
+            if body is None:
+                expected = None
+                self.viewport.show_scene(result, preserve_camera=True)
+                self.viewport.mark_preview(tr("Ursprüngliches Modell"), "", changes=False)
+                return
+            objects = dict(result.scene.objects)
+            objects.pop(object_id)
+            objects[body.id] = body
+            expected = replace(result, scene=replace(result.scene, objects=objects))
+            self.viewport.show_scene(expected, preserve_camera=True)
+            self.viewport.mark_preview(tr("Nachbau — noch nicht übernommen"), "", changes=False)
+            scene_ready()
+
+        def scene_failed(detail: str) -> None:
+            dialog.preview_failed(detail)
+
+        dialog.previewRequested.connect(show_candidate)
+        self.viewport.sceneApplied.connect(scene_ready)
+        self.viewport.sceneFailed.connect(scene_failed)
+
+        def finished(accepted: bool) -> None:
+            application = dialog.application
+            take_losses = dialog.accept_losses.isChecked()
+            applies = accepted and current() and application is not None
+            self._rebuild_dialog = None
+            self.viewport.sceneApplied.disconnect(scene_ready)
+            self.viewport.sceneFailed.disconnect(scene_failed)
+            dialog.release()
+            if current():
+                self.viewport.show_scene(result, preserve_camera=True)
+                self.viewport.mark_preview("", "", changes=False)
+            dialog.deleteLater()
+            if applies:
+                try:
+                    self.session.commit_rebuild(application, accept_losses=take_losses)
+                except AppError as error:
+                    show_error(error, self)
+
+        self._open_for_project(dialog, finished)
+        self._rebuild_dialog = dialog
+        dialog.show()
+
     def action_auto_split(self, object_id: ObjectId | None = None) -> None:
         """§25: das gewählte Teil teilen, bis es passt, und die Nähte
         verstiften (§14).
@@ -7452,16 +7977,23 @@ class MainWindow(QMainWindow):
         # bekommt die Sitzung als eine Transaktion (Regel 16).
         if self.restore_discarded_sketch() or self.undo_sculpt_stroke() or self.undo_bone():
             return
+        if self.sculpting() or self.setting_armature() or self._sketch_panel is not None:
+            return
         if not self._quiet_command_allowed():
             return
         transaction = self.session.undo()
         if transaction is not None:
-            self.announce(_undone_text(transaction))
+            self.announce(_history_feedback(transaction, undone=True))
 
     def action_redo(self) -> None:
+        if self.sculpting():
+            self.redo_sculpt_stroke()
+            return
         if not self._quiet_command_allowed():
             return
-        self.session.redo()
+        transaction = self.session.redo()
+        if transaction is not None:
+            self.announce(_history_feedback(transaction, undone=False))
 
     def action_toggle_bed(self) -> None:
         """Druckplatte, Bauraum und Maßstab aus- oder wieder einblenden.
@@ -8128,7 +8660,7 @@ class MainWindow(QMainWindow):
         mehrere Sekunden, und in dieser Zeit bleibt die Oberfläche bedienbar.
         """
         if self._gcode_worker is not None:
-            self.announce(tr("Eine G-Code-Datei wird bereits gegenprüft."))
+            self.announce(tr("Eine G-Code-Datei wird bereits gegengeprüft."))
             return
         name, _filter = QFileDialog.getOpenFileName(
             self, tr("G-Code gegenprüfen"), "", gcode_filter()
@@ -8145,7 +8677,7 @@ class MainWindow(QMainWindow):
         (RM-358 W1-6).
         """
         if self._gcode_worker is not None:
-            self.announce(tr("Eine G-Code-Datei wird bereits gegenprüft."))
+            self.announce(tr("Eine G-Code-Datei wird bereits gegengeprüft."))
             return
         target = self.object_tree.selected()
         worker = _GcodeWorker(path)
@@ -8166,7 +8698,7 @@ class MainWindow(QMainWindow):
         worker.finished.connect(
             weak_slot(self, lambda view, done: view._gcode_worker_done(done), worker)
         )
-        text = tr("G-Code wird gegenprüft …")
+        text = tr("G-Code wird gegengeprüft …")
         self._set_progress_state(
             "gcode",
             active=True,
@@ -8755,6 +9287,9 @@ class MainWindow(QMainWindow):
             self._focus_report()
         if not written:
             return
+        if worker.receipt is not None:
+            self.report.add_findings([worker.receipt])
+            self._focus_report()
         self._announce_written(
             written, scope=export_scope(len(worker._objects), len(worker._all_objects))
         )
@@ -10558,6 +11093,9 @@ class MainWindow(QMainWindow):
         Auswahl, und wer dort arbeitet, meint mit Escape die aktuelle Handlung
         statt einer Ebene darunter. Verworfen wird dabei nichts Gerechnetes.
         """
+        if self.history_panel.compare.isChecked():
+            self.history_panel.compare.setChecked(False)
+            return
         if self._local_features is not None and self._local_features.active:
             self._local_features.invalidate()
             return
@@ -10852,8 +11390,14 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed():
             return
-        if self._sketch_panel is not None or not self._begin_from_the_start_screen():
+        if (
+            self._sketch_panel is not None
+            or self._sculpt_target is not None
+            or self._armature_target is not None
+            or not self._begin_from_the_start_screen()
+        ):
             return
+        self._gesture_open_number += 1
         if self._quiet_host is not None:
             self.end_quiet_placement()
         # **Die Ebenen, die das Feld annimmt** (``ParamSpec.sketch_planes``,
@@ -12148,7 +12692,9 @@ class MainWindow(QMainWindow):
 
     # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
 
-    def start_sculpt(self, object_id: str = "") -> None:
+    def start_sculpt(
+        self, object_id: str = "", *, step: int | None = None, source: MeshData | None = None
+    ) -> None:
         """Die Formsitzung öffnen: Klicks werden von jetzt an Pinselzüge.
 
         Ein **Werkzeugmodus**, kein Betriebsmodus (Entscheidung J): Er gilt für
@@ -12157,27 +12703,50 @@ class MainWindow(QMainWindow):
         Ansicht bleibt, was sie ist — geformt wird am Körper, nicht auf einer
         Zeichenfläche.
         """
-        if not self._quiet_command_allowed() or self._sculpt_target is not None:
+        if (
+            not self._quiet_command_allowed()
+            or self._sculpt_target is not None
+            or self._armature_target is not None
+            or self._sketch_panel is not None
+        ):
             return
         target = object_id or self.object_tree.selected()
         if not target:
             self.announce(str(_NEEDS_SELECTION))
             return
-        mesh = self._sculpt_mesh(target)
+        mesh = source if source is not None else self._sculpt_mesh(target)
         if mesh is None:
             self.announce(tr("Dieses Objekt hat kein Netz zum Formen."))
             return
 
         if self._quiet_host is not None:
             self.end_quiet_placement()
+        self._gesture_open_number += 1
+        self._finish_preview_progress()
         self._sculpt_target = target
+        self._pose_report_target = None
+        self.pose_bar.setVisible(False)
+        self._sculpt_step = step
+        self._sculpt_source = source
+        self._sculpt_params = (
+            dict(self.session.history.operation(step).params) if step is not None else {}
+        )
         # **Auch der erste Zug ist einer.** Der Schalter wird nach jedem Zug
         # zurückgenommen (der Grund steht dort), beim Betreten aber nicht: Wer
         # ihn in der vorigen Sitzung zuletzt setzte, fand ihn hier wieder und
         # bekam eine eigene Etappe, ohne sie verlangt zu haben.
         self.sculpt_bar.cut.setChecked(False)
-        self._sculpt_strokes = []
+        self._sculpt_strokes = strokes_from_text(str(self._sculpt_params.get("strokes", "")))
+        self._sculpt_gesture = None
+        self._sculpt_gesture_number = max((s.gesture for s in self._sculpt_strokes), default=0)
+        self._sculpt_redo.clear()
+        with QSignalBlocker(self.sculpt_bar.symmetry):
+            self.sculpt_bar.symmetry.setCurrentIndex(
+                self.sculpt_bar.symmetry.findData(self._sculpt_params.get("symmetry", "none"))
+            )
         self._sculpt_preview = None
+        self._sculpt_preview_base = None
+        self._sculpt_edge = None
         self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
         self.tools.setVisible(False)
@@ -12185,9 +12754,60 @@ class MainWindow(QMainWindow):
         self.sculpt_bar.show_count(0, 0)
         self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
         self._update_actions()
+        if step is not None or self._sculpt_needs_worker(mesh):
+            self._show_sculpt_preview(mesh)
         self.statusBar().showMessage(
             tr("Mit dem Pinsel über den Körper ziehen — Escape beendet die Sitzung.")
         )
+
+    def reopen_gesture(self, op_id: int) -> None:
+        """Formen oder Skelett auf dem ursprünglichen Eingang des Schritts öffnen."""
+        if (
+            not self._quiet_command_allowed()
+            or self.sculpting()
+            or self.setting_armature()
+            or self._sketch_panel is not None
+        ):
+            return
+        entry = self.session.history.operation(op_id)
+        if not entry.inputs:
+            return
+        document = self.session.project.document
+        saved = deepcopy(document)
+        self._gesture_open_number += 1
+        number = self._gesture_open_number
+        self._start_preview_progress()
+
+        def ready(scene: Any) -> None:
+            if number != self._gesture_open_number:
+                return
+            self._finish_preview_progress()
+            if (
+                self._close_requested
+                or self.session.project.document is not document
+                or document != saved
+            ):
+                return
+            body = scene.objects.get(entry.inputs[0]) if scene is not None else None
+            if body is None:
+                self.announce(
+                    tr(
+                        "Der Schritt lässt sich noch nicht öffnen. "
+                        "Prüfen Sie den vorherigen Schritt."
+                    )
+                )
+                return
+            self.object_tree.select_object(entry.inputs[0])
+            self._gesture_scene = scene
+            current = self.session.last_result
+            if current is not None:
+                self.viewport.show_scene(replace(current, scene=scene))
+            if entry.op == "pose_armature":
+                self.start_armature(entry.inputs[0], step=op_id)
+            else:
+                self.start_sculpt(entry.inputs[0], step=op_id, source=as_mesh_data(body.mesh))
+
+        self.session.scene_before_step_async(op_id, ready, explained=self.announce)
 
     def sculpting(self) -> bool:
         """Ob gerade geformt wird statt betrachtet."""
@@ -12195,8 +12815,11 @@ class MainWindow(QMainWindow):
 
     def _sculpt_mesh(self, object_id: str) -> MeshData | None:
         """Das Netz, auf dem geformt wird — aus der letzten Auswertung."""
+        if object_id == self._sculpt_target and self._sculpt_source is not None:
+            return self._sculpt_source
         result = self.session.last_result
-        entry = result.scene.objects.get(object_id) if result else None
+        scene = self._gesture_scene or (result.scene if result else None)
+        entry = scene.objects.get(object_id) if scene else None
         if entry is None:
             return None
         try:
@@ -12212,7 +12835,12 @@ class MainWindow(QMainWindow):
         Netz zieht, bekommt keine Falte, sondern eine verzogene Facette — und
         das erkennt man am Ergebnis nicht, sondern nur an dieser Zeile.
         """
-        edge = median_edge(mesh)
+        if self._sculpt_needs_worker(mesh):
+            if self._sculpt_edge is None:
+                return ""
+            edge = self._sculpt_edge
+        else:
+            edge = median_edge(mesh)
         radius = self.sculpt_bar.radius.value_mm()
         if radius >= edge * BRUSH_TO_EDGE:
             return ""
@@ -12268,11 +12896,23 @@ class MainWindow(QMainWindow):
         """
         if self._sculpt_target is None:
             return
+        if self._sculpt_preview_worker is not None or self._sculpt_pending:
+            self._sculpt_refine_pending = True
+            return
         # Der feinste Wert, den die Operation annimmt, steht in ihrem Schema
         # und nicht hier: der kleinste Pinsel (0,1 mm) rechnet sich sonst auf
         # eine Kante, die sie ablehnt — eine Sackgasse hinter einem Knopf, der
         # aus einer Sackgasse herausführen soll.
         order = self._sculpt_refinement_order()
+        if self._sculpt_step is not None:
+            if self._sculpt_refine_reopen is not None:
+                return
+            self._sculpt_refine_reopen = (self.session.project.document, self._sculpt_step)
+            if not self.session.insert_before(
+                self._sculpt_step, tr("Dreiecke angleichen"), list(order.drafts)
+            ):
+                self._sculpt_refine_reopen = None
+            return
         # Der Klick vor dem Bild wartet auf die Vorschau, wie am Dialog
         # (:meth:`_apply_when_previewed`): Der Knopf ist seit „Warten ist
         # keine Sperre" frei, und ein stiller Rücksprung wäre ein Knopf, der
@@ -12283,6 +12923,60 @@ class MainWindow(QMainWindow):
             return
         self._clear_preview()
         self.session.apply(tr("Dreiecke angleichen"), list(order.drafts))
+
+    def _sculpt_refinement_inserted(self, revision: Any) -> None:
+        """Die weiterhin offenen Züge bekommen den verfeinerten Eingang ihres Schritts."""
+        pending, self._sculpt_refine_reopen = self._sculpt_refine_reopen, None
+        if pending is None or pending[0] is not self.session.project.document:
+            return
+        if self._sculpt_target is None or revision.plan.kind != "insert":
+            return
+        self._sculpt_step = revision.plan.new_id(pending[1])
+        self._sculpt_params = dict(self.session.history.operation(self._sculpt_step).params)
+        finish_pending = self._sculpt_finish_pending
+        self._cancel_sculpt_preview()
+        self._gesture_open_number += 1
+        number = self._gesture_open_number
+        target = self._sculpt_target
+        self._start_preview_progress()
+
+        def ready(scene: Any) -> None:
+            if number != self._gesture_open_number or target != self._sculpt_target:
+                return
+            self._finish_preview_progress()
+            body = scene.objects.get(target) if scene is not None else None
+            if body is None:
+                self.announce(
+                    tr(
+                        "Der Schritt lässt sich noch nicht öffnen. "
+                        "Prüfen Sie den vorherigen Schritt."
+                    )
+                )
+                return
+            self._gesture_scene = scene
+            self._sculpt_source = as_mesh_data(body.mesh)
+            self._sculpt_preview = None
+            self._sculpt_preview_base = None
+            self._sculpt_edge = None
+            self._show_sculpt_preview(self._sculpt_source)
+            self._gesture_analysis_changed()
+            if finish_pending:
+                self.finish_sculpt()
+
+        self.session.scene_before_step_async(self._sculpt_step, ready, explained=self.announce)
+
+    def _sculpt_refinement_failed(self, _error: Any = None) -> None:
+        """Ein abgewiesener Umbau lässt die Gesten stehen und erlaubt einen neuen Versuch."""
+        self._sculpt_refine_reopen = None
+
+    def _begin_sculpt_gesture(self) -> None:
+        """Ein Mauszug beginnt, auch wenn sein erster Punkt neben dem Körper liegt."""
+        self._sculpt_gesture_number += 1
+        self._sculpt_gesture = self._sculpt_gesture_number
+
+    def _end_sculpt_gesture(self) -> None:
+        """Loslassen beendet die Gruppe unabhängig von der Fläche darunter."""
+        self._sculpt_gesture = None
 
     def _on_sculpt(self, point: Any) -> None:
         """Ein Klick im Viewport wird ein Zug.
@@ -12297,6 +12991,24 @@ class MainWindow(QMainWindow):
         if mesh is None:
             return
         bar = self.sculpt_bar
+        self._sculpt_redo.clear()
+        self.redo_action.setEnabled(False)
+        gesture = self._sculpt_gesture
+        if gesture is None:
+            self._sculpt_gesture_number += 1
+            gesture = self._sculpt_gesture_number
+        if self._sculpt_needs_worker(mesh):
+            self._sculpt_pending.append(
+                (tuple(float(v) for v in point), {**bar.values(), "gesture": gesture})
+            )
+            self.undo_action.setEnabled(True)
+            self._sculpt_finish_pending = False
+            bar.cut.setChecked(False)
+            self._sculpt_wall_number += 1
+            self._sculpt_check.stop()
+            self._cancel_sculpt_check()
+            self._start_sculpt_preview(mesh)
+            return
         self._sculpt_strokes.append(
             stroke_at(
                 mesh,
@@ -12316,26 +13028,38 @@ class MainWindow(QMainWindow):
                 preview=self._sculpt_preview_for(mesh),
             )
         )
+        self._sculpt_strokes[-1] = replace(self._sculpt_strokes[-1], gesture=gesture)
         # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
         # jeder weitere Zug eine eigene Etappe bekommt — und damit einen
         # eigenen Durchgang, ohne dass jemand das verlangt hätte.
         self.sculpt_bar.cut.setChecked(False)
+        self.undo_action.setEnabled(True)
         self._show_sculpt_preview(mesh)
-        self._sculpt_check.start()
+        self._gesture_analysis_changed()
 
     def _sculpt_order(self) -> _PreviewOrder:
         """Gesammelte Gesten und aktuelle Symmetrie bilden den gemeinsamen Auftrag."""
-        if self._sculpt_target is None or not self._sculpt_strokes:
+        if self._sculpt_target is None:
+            return _PreviewOrder()
+        values = {
+            **self._sculpt_params,
+            "strokes": strokes_to_text(self._sculpt_strokes),
+            "symmetry": self.sculpt_bar.plane(),
+        }
+        if self._sculpt_step is not None:
+            if self._sculpt_strokes != strokes_from_text(
+                str(self._sculpt_params.get("strokes", ""))
+            ) or values["symmetry"] != self._sculpt_params.get("symmetry", "none"):
+                values["baked"] = ""
+            return _PreviewOrder(change_op=self._sculpt_step, change_values=values)
+        if not self._sculpt_strokes:
             return _PreviewOrder()
         return _PreviewOrder(
             drafts=(
                 OperationDraft(
                     op="sculpt_strokes",
                     inputs=(self._sculpt_target,),
-                    params={
-                        "strokes": strokes_to_text(self._sculpt_strokes),
-                        "symmetry": self.sculpt_bar.plane(),
-                    },
+                    params=values,
                 ),
             )
         )
@@ -12346,6 +13070,7 @@ class MainWindow(QMainWindow):
             mesh = self._sculpt_mesh(self._sculpt_target)
             if mesh is not None:
                 self._show_sculpt_preview(mesh)
+                self._gesture_analysis_changed()
 
     def _show_sculpt_preview(self, mesh: MeshData) -> None:
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
@@ -12359,9 +13084,13 @@ class MainWindow(QMainWindow):
         Transaktion.
         """
         strokes = self._sculpt_strokes
-        self.sculpt_bar.show_count(len(strokes), len(stages(strokes)))
+        self.sculpt_bar.show_count(stroke_count(strokes), len(stages(strokes)))
         self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
         if self._sculpt_target is None:
+            return
+        if self._sculpt_needs_worker(mesh):
+            self._cancel_sculpt_preview(keep_points=True)
+            self._start_sculpt_preview(mesh)
             return
         order = self._sculpt_order()
         if order.drafts and self._order_has_exact_inputs(order, self.session.last_result):
@@ -12381,10 +13110,125 @@ class MainWindow(QMainWindow):
         """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
         anderes ist (*Jetzt vernetzen* mitten in der Sitzung)."""
         preview = self._sculpt_preview
-        if preview is None or preview.mesh is not mesh:
-            preview = SculptPreview(mesh)
+        if preview is None or self._sculpt_preview_base is not mesh:
+            preview = SculptPreview(
+                mesh,
+                centre=None if self._sculpt_params.get("mirror_at_body", True) else (0.0, 0.0, 0.0),
+                front_only=bool(self._sculpt_params.get("front_only", True)),
+                mirror_once=bool(self._sculpt_params.get("mirror_once", True)),
+            )
             self._sculpt_preview = preview
+            self._sculpt_preview_base = mesh
         return preview
+
+    @staticmethod
+    def _sculpt_needs_worker(mesh: MeshData) -> bool:
+        """Dieselbe bewährte Sofortgrenze wie die räumliche Platzierungsfrage."""
+        from app.ui.placement_flow import AT_ONCE_BELOW
+
+        return mesh.triangle_count >= AT_ONCE_BELOW
+
+    def _start_sculpt_preview(self, mesh: MeshData) -> None:
+        """Züge bleiben in Reihenfolge; höchstens ein Arbeiter besitzt die Vorschau."""
+        if self._sculpt_preview_worker is not None or self._sculpt_target is None:
+            return
+        preview = self._sculpt_preview if self._sculpt_preview_base is mesh else None
+        worker = _SculptPreviewWorker(
+            self._sculpt_preview_number,
+            mesh,
+            preview,
+            self._sculpt_strokes,
+            self._sculpt_pending[0] if self._sculpt_pending else None,
+            SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0),
+            self._sculpt_params,
+        )
+        self._sculpt_preview_base = mesh
+        self._sculpt_preview_worker = worker
+        worker.done.connect(
+            weak_slot(self, MainWindow._sculpt_preview_received, worker, forward=True)
+        )
+        worker.crashed.connect(
+            weak_slot(self, MainWindow._sculpt_preview_crashed, worker, forward=True)
+        )
+        worker.finished.connect(weak_slot(self, MainWindow._sculpt_preview_finished, worker))
+        self._start_preview_progress()
+        self._leash.start(worker)
+
+    def _sculpt_preview_received(
+        self, worker: _SculptPreviewWorker, number: int, preview: Any, strokes: Any, edge: float
+    ) -> None:
+        """Nur die aktuelle Sitzung übernimmt Antwort, Zählung und nächste Geste."""
+        if worker is not self._sculpt_preview_worker or number != self._sculpt_preview_number:
+            return
+        self._sculpt_preview_worker = None
+        self._sculpt_preview = preview
+        self._sculpt_strokes = strokes
+        self.undo_action.setEnabled(bool(strokes or self._sculpt_pending))
+        self._sculpt_edge = edge
+        if worker.point is not None and self._sculpt_pending:
+            self._sculpt_pending.pop(0)
+        target = self._sculpt_target
+        if target is None:
+            return
+        self.viewport.show_preview_mesh(target, preview.shown)
+        self.sculpt_bar.show_count(stroke_count(strokes), len(stages(strokes)))
+        mesh = self._sculpt_mesh(target)
+        if mesh is not None:
+            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
+        if self._sculpt_pending and mesh is not None:
+            self._start_sculpt_preview(mesh)
+            return
+        self._finish_preview_progress()
+        self._gesture_analysis_changed()
+        if self._sculpt_refine_pending:
+            self._sculpt_refine_pending = False
+            self.refine_for_sculpt()
+            return
+        if self._sculpt_finish_pending:
+            self._sculpt_finish_pending = False
+            self.finish_sculpt()
+
+    def _sculpt_preview_crashed(self, worker: Any, detail: str) -> None:
+        """Ein ausgefallener Zug erhält die letzte gültige Sitzung und nennt den Ausweg."""
+        if worker is self._sculpt_preview_worker:
+            self._cancel_sculpt_preview()
+            self._on_error(InternalError(detail=detail))
+
+    def _sculpt_preview_finished(self, worker: Any) -> None:
+        if worker is self._sculpt_preview_worker:
+            self._sculpt_preview_worker = None
+            self._finish_preview_progress()
+        self._hold_until_done(worker)
+
+    def wait_for_sculpt_preview(self, timeout_ms: int = 30_000) -> bool:
+        """Prüfstände warten auf alle geordneten Antworten; die Oberfläche wartet nie."""
+        from time import monotonic
+
+        deadline = monotonic() + timeout_ms / 1000
+        while self._sculpt_preview_worker is not None:
+            remaining = max(0, int((deadline - monotonic()) * 1000))
+            worker = self._sculpt_preview_worker
+            if remaining == 0 or (worker.isRunning() and not worker.wait(remaining)):
+                return False
+            QApplication.sendPostedEvents()
+            QApplication.processEvents()
+        return not self._sculpt_pending
+
+    def _cancel_sculpt_preview(self, *, keep_points: bool = False) -> None:
+        """Die alte Rechnung gehört nach Symmetrie-, Projektwechsel oder Abbruch niemandem."""
+        self._sculpt_preview_number += 1
+        worker, self._sculpt_preview_worker = self._sculpt_preview_worker, None
+        if worker is not None:
+            worker.cancel.cancel()
+            self._retire(worker)
+            self._sculpt_preview = None
+        if not keep_points:
+            self._sculpt_pending.clear()
+        if self._sculpt_target is not None:
+            self.undo_action.setEnabled(bool(self._sculpt_strokes or self._sculpt_pending))
+        self._sculpt_finish_pending = False
+        self._sculpt_refine_pending = False
+        self._finish_preview_progress()
 
     def _sculpt_shown(self) -> list[Stroke]:
         """Die Züge der Sitzung mit der gewählten Symmetrie — wie die Vorschau
@@ -12410,27 +13254,113 @@ class MainWindow(QMainWindow):
         einem echten Modell, und währenddessen formt man weiter. Ein neuer
         Zug stößt eine neue Prüfung an; die Antwort einer älteren verfällt.
         """
-        if self._sculpt_target is None or not self._sculpt_strokes:
+        if self._sculpt_preview_worker is not None:
             return
-        mesh = self._sculpt_mesh(self._sculpt_target)
+        target = self._sculpt_target or self._armature_target or self._pose_report_target
+        if target is None:
+            return
+        mesh = self._sculpt_mesh(target)
         if mesh is None:
             return
+        bar = self.sculpt_bar if self._sculpt_target is not None else self.pose_bar
+        kind = bar.analysis.chosen()
         self._sculpt_wall_number += 1
-        shown = self._sculpt_preview_for(mesh).show(self._sculpt_shown())
+        shown = self._sculpt_preview_for(mesh).shown if self._sculpt_target is not None else mesh
+        result = self.session.last_result
+        scene = self._gesture_scene or (result.scene if result is not None else None)
+        entry = scene.objects.get(target) if scene is not None else None
+        profile = self.session.evaluation_profile
+        if entry is None:
+            return
+        minimum, angle = profiles.analysis_limits(profile, entry)
         worker = _SculptWallWorker(
             self._sculpt_wall_number,
-            shown,
-            self.session.profile.minimum_wall_thickness,
+            MeshData(shown.raw.copy()),
+            minimum,
+            kind=kind or "wall",
+            profile=profile,
+            angle=angle,
         )
-        worker.done.connect(self._sculpt_walls_checked)
+        if kind != "overhang":
+            worker.done.connect(self._sculpt_walls_checked)
+        worker.analysed.connect(self._gesture_analysis_ready)
         worker.crashed.connect(self._sculpt_walls_crashed)
         self._cancel_sculpt_check()
         self._retire(self._sculpt_wall_worker)
         self._sculpt_wall_worker = worker
         worker.finished.connect(weak_slot(self, MainWindow._sculpt_wall_worker_done, worker))
-        if not self.sculpt_bar.warning.text():
+        self._set_progress_state(
+            "map",
+            active=True,
+            text=tr("Die Analysekarte wird berechnet …"),
+            minimum=0,
+            maximum=0,
+            value=0,
+            cancel_enabled=True,
+        )
+        self._update_waiting_state()
+        bar.analysis.show_note(tr("Die Analysekarte wird berechnet …"))
+        if kind != "overhang" and not self.sculpt_bar.warning.text():
             self.sculpt_bar.show_warning(tr("Wandstärke wird geprüft …"))
         self._leash.start(worker)
+
+    def _gesture_analysis_changed(self) -> None:
+        """Kartenwechsel und neue Gesten entwerten alte Antworten sofort."""
+        self._sculpt_wall_number += 1
+        self._cancel_sculpt_check()
+        self.viewport.set_analysis_map(None, None)
+        self.analysis_bar.show_legend(None)
+        self.sculpt_bar.analysis.show_map(None)
+        self.pose_bar.analysis.show_map(None)
+        self._drop_wall_check_note()
+        if self._sculpt_target is not None and self.sculpt_bar.analysis.chosen() == "overhang":
+            mesh = self._sculpt_mesh(self._sculpt_target)
+            self.sculpt_bar.show_warning(
+                self._sculpt_resolution_hint(mesh) if mesh is not None else "", refinable=True
+            )
+        if self._sculpt_target is not None and self._sculpt_preview is not None:
+            self.viewport.show_preview_mesh(self._sculpt_target, self._sculpt_preview.shown)
+        self._sculpt_check.start()
+
+    def _gesture_analysis_ready(self, number: int, card: Any, findings: Any) -> None:
+        """Karte, Bauraum und Text gehören gemeinsam zum jüngsten Gestenstand."""
+        if number != self._sculpt_wall_number or self._close_requested:
+            return
+        self._finish_map_progress()
+        target = self._sculpt_target or self._armature_target or self._pose_report_target
+        if target is None:
+            return
+        bar = self.sculpt_bar if self._sculpt_target is not None else self.pose_bar
+        notes = [str(finding.message) for finding in findings]
+        self._drop_wall_check_note()
+        if card is None:
+            notes.append(tr("Die Analysekarte ließ sich nicht berechnen."))
+        elif card.kind == "wall":
+            notes.append(
+                tr("{count} Stellen dünner als {minimum}").format(
+                    count=len(card.highlighted), minimum=length(card.threshold)
+                )
+            )
+        if card is not None and card.kind == "overhang":
+            notes.append(
+                tr("{count} Flächen brauchen möglicherweise Stützen.").format(
+                    count=len(card.highlighted)
+                )
+            )
+        if self._sculpt_target is None:
+            result = self.session.last_result
+            if result is not None:
+                notes.extend(
+                    str(f.message)
+                    for f in result.scene.report.findings
+                    if f.code == "pose.pinched" and f.object_id == target
+                )
+        bar.analysis.show_note(" · ".join(notes))
+        if bar.analysis.chosen() and card is not None:
+            self.viewport.set_analysis_map(card, target)
+            bar.analysis.show_map(card)
+            if self._sculpt_target is not None and self._sculpt_preview is not None:
+                self.viewport.show_preview_mesh(target, self._sculpt_preview.shown)
 
     def _sculpt_walls_checked(self, number: int, thin: Any) -> None:
         """Die Antwort der Wandprüfung — nur die der jüngsten zählt."""
@@ -12442,7 +13372,14 @@ class MainWindow(QMainWindow):
         if thin is None:
             self._drop_wall_check_note()
             return
-        minimum = self.session.profile.minimum_wall_thickness
+        result = self.session.last_result
+        scene = self._gesture_scene or (result.scene if result is not None else None)
+        entry = scene.objects.get(target) if scene is not None else None
+        minimum = (
+            profiles.analysis_limits(self.session.evaluation_profile, entry)[0]
+            if entry is not None
+            else self.session.evaluation_profile.minimum_wall_thickness
+        )
         if not thin:
             mesh = self._sculpt_mesh(target)
             hint = self._sculpt_resolution_hint(mesh) if mesh is not None else ""
@@ -12473,10 +13410,12 @@ class MainWindow(QMainWindow):
         worker = self._sculpt_wall_worker
         if worker is not None:
             worker.cancel()
+            self._finish_map_progress()
 
     def _sculpt_wall_worker_done(self, worker: Any) -> None:
         if self._sculpt_wall_worker is worker:
             self._sculpt_wall_worker = None
+            self._finish_map_progress()
         self._hold_until_done(worker)
 
     def wait_for_sculpt_check(self, timeout_ms: int = 30_000) -> bool:
@@ -12515,6 +13454,9 @@ class MainWindow(QMainWindow):
             text=text,
             plane=plane,
             steps=len(self.session.history.operations),
+            project=self.session.project,
+            step=self._sketch_step,
+            field_name=self._sketch_parameter,
             body=self._sketch_body or "",
         )
         self.announce(tr("Zeichnung verworfen — Strg+Z holt sie zurück."))
@@ -12536,12 +13478,20 @@ class MainWindow(QMainWindow):
             # start_sketch würde sonst erst nach ihrem Vergessen absagen.
             return True
         self._discarded_sketch = None
-        if len(self.session.history.operations) != discarded.steps:
+        if (
+            self.session.project is not discarded.project
+            or len(self.session.history.operations) != discarded.steps
+        ):
             # Der Verlauf ist weitergegangen — das Angebot ist verfallen, und
             # dieser Griff gehört dem Verlauf.
             return False
         self.start_sketch(
-            discarded.op_name, text=discarded.text, plane=discarded.plane, body=discarded.body
+            discarded.op_name,
+            text=discarded.text,
+            plane=discarded.plane,
+            body=discarded.body,
+            step=discarded.step,
+            field_name=discarded.field_name,
         )
         self.announce(tr("Zeichnung zurückgeholt."))
         return True
@@ -12553,9 +13503,32 @@ class MainWindow(QMainWindow):
         Sitzung als **eine** Transaktion (Regel 16); solange sie offen ist,
         wäre ein Schritt darin im Verlauf ein Eintrag, den niemand haben will.
         """
-        if self._sculpt_target is None or not self._sculpt_strokes:
+        if self._sculpt_target is None or not (self._sculpt_strokes or self._sculpt_pending):
             return False
-        self._sculpt_strokes.pop()
+        self._cancel_sculpt_preview(keep_points=True)
+        self.viewport.stop_sculpt_gesture()
+        gesture = (
+            self._sculpt_pending[-1][1].get("gesture", 0)
+            if self._sculpt_pending
+            else self._sculpt_strokes[-1].gesture
+        )
+        points: list[Any] = []
+        strokes: list[Stroke] = []
+        while self._sculpt_pending:
+            if points and not gesture:
+                break
+            if self._sculpt_pending[-1][1].get("gesture", 0) != gesture:
+                break
+            points.insert(0, self._sculpt_pending.pop())
+        while self._sculpt_strokes:
+            if (points or strokes) and not gesture:
+                break
+            if self._sculpt_strokes[-1].gesture != gesture:
+                break
+            strokes.insert(0, self._sculpt_strokes.pop())
+        self._sculpt_redo.append((strokes, points))
+        self.undo_action.setEnabled(bool(self._sculpt_strokes or self._sculpt_pending))
+        self.redo_action.setEnabled(True)
         mesh = self._sculpt_mesh(self._sculpt_target)
         if mesh is not None:
             self._show_sculpt_preview(mesh)
@@ -12571,14 +13544,43 @@ class MainWindow(QMainWindow):
             self._sculpt_check.stop()
         return True
 
+    def redo_sculpt_stroke(self) -> bool:
+        """Einen vollständigen Mauszug samt noch nicht berechneten Proben zurückholen."""
+        if self._sculpt_target is None or not self._sculpt_redo:
+            return False
+        self._cancel_sculpt_preview(keep_points=True)
+        self.viewport.stop_sculpt_gesture()
+        strokes, points = self._sculpt_redo.pop()
+        self._sculpt_strokes.extend(strokes)
+        self._sculpt_pending.extend(points)
+        mesh = self._sculpt_mesh(self._sculpt_target)
+        if mesh is not None:
+            self._show_sculpt_preview(mesh)
+        self.undo_action.setEnabled(True)
+        self.redo_action.setEnabled(bool(self._sculpt_redo))
+        self._gesture_analysis_changed()
+        return True
+
     def finish_sculpt(self) -> None:
         """Die Sitzung schließen — und aus ihr genau eine Operation machen."""
         target = self._sculpt_target
         strokes = self._sculpt_strokes
         if target is None:
             return
+        if (
+            self._sculpt_preview_worker is not None
+            or self._sculpt_pending
+            or self._sculpt_refine_reopen is not None
+        ):
+            self._sculpt_finish_pending = True
+            return
+        unchanged = self._sculpt_step is not None and (
+            strokes == strokes_from_text(str(self._sculpt_params.get("strokes", "")))
+            and self.sculpt_bar.plane() == self._sculpt_params.get("symmetry", "none")
+        )
         result = self.session.last_result
-        if strokes and (result is None or target not in result.scene.objects):
+        historical = self._sculpt_step is not None and self._gesture_scene is not None
+        if strokes and not historical and (result is None or target not in result.scene.objects):
             # Das Ziel ist fort — nur noch über einen Fern- oder Agentenzug
             # möglich, denn die Menüs sind während der Sitzung gesperrt.
             # Die Züge nicht verwerfen: die Sitzung bleibt offen, und der
@@ -12595,19 +13597,34 @@ class MainWindow(QMainWindow):
         ):
             return
         self._clear_preview()
+        self._cancel_sculpt_preview()
         self._sculpt_target = None
+        self._sculpt_step = None
+        self._sculpt_source = None
+        self._gesture_scene = None
+        self._sculpt_params = {}
         self._sculpt_strokes = []
+        self._sculpt_gesture = None
+        self._sculpt_redo.clear()
         self._sculpt_preview = None
+        self._sculpt_preview_base = None
         self._sculpt_check.stop()
         # Eine Antwort, die nach dem Verlassen ankommt, gehört niemandem mehr.
         self._sculpt_wall_number += 1
         self._cancel_sculpt_check()
         self.viewport.set_sculpting(False)
         self.viewport.clear_preview_mesh()
+        self.viewport.show_scene(self.session.last_result)
         self.sculpt_bar.setVisible(False)
+        self.viewport.set_analysis_map(None, None)
+        self.analysis_bar.show_legend(None)
         self.tools.setVisible(True)
         self.statusBar().clearMessage()
         self._update_actions()
+        if order.change_op is not None:
+            if not unchanged:
+                self._commit_preview_order(order)
+            return
         if not strokes:
             # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
             # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
@@ -12616,7 +13633,7 @@ class MainWindow(QMainWindow):
 
     # --- Skelettsitzung (§25, Konzept P16 §7.5) ---------------------------------
 
-    def start_armature(self, object_id: str = "") -> None:
+    def start_armature(self, object_id: str = "", *, step: int | None = None) -> None:
         """Den Skeletteditor öffnen: Klicks setzen von jetzt an Knochenpunkte.
 
         Zwei Klicks je Knochen — erst das Gelenk, dann das Ende. Der nächste
@@ -12626,15 +13643,26 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed():
             return
-        if self._armature_target is not None or self._sculpt_target is not None:
+        if (
+            self._armature_target is not None
+            or self._sculpt_target is not None
+            or self._sketch_panel is not None
+        ):
             return
         target = object_id or self.object_tree.selected()
         if not target:
             self.announce(str(_NEEDS_SELECTION))
             return
 
+        if step is None:
+            existing_step, _bones = self._armature_of(target)
+            if existing_step is not None:
+                self.reopen_gesture(existing_step)
+                return
         if self._quiet_host is not None:
             self.end_quiet_placement()
+        self._gesture_open_number += 1
+        self._finish_preview_progress()
         self._armature_target = target
         # **Ein vorhandenes Skelett kommt mit.** Wer den Editor auf einem
         # Körper öffnet, der schon eines trägt, erwartet seine Knochen zu
@@ -12643,12 +13671,22 @@ class MainWindow(QMainWindow):
         # „Fertig" entstand eine **zweite** Operation, die ein zweites Mal
         # beugt.
         self._armature_step, self._armature_bones = self._armature_of(target)
+        if step is not None:
+            from app.core.geom.pose import armature_from_text
+
+            self._armature_step = step
+            self._armature_bones = armature_from_text(
+                str(self.session.history.operation(step).params.get("armature", ""))
+            )
         self._armature_head = None
         self._armature_parent = ""
         self.viewport.set_boning(True)
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.pose_bar.setVisible(True)
+        self.pose_bar.set_editing(True)
+        self._pose_report_target = None
+        self._gesture_analysis_changed()
         # **Der Zustand wird abgeleitet, nicht behauptet.** Sieben Zeilen
         # darüber lädt ``_armature_of`` die Knochen des vorhandenen Schritts;
         # eine feste Null daneben ist eine zweite Quelle für etwas, das schon
@@ -12711,6 +13749,7 @@ class MainWindow(QMainWindow):
         if self._armature_target is None:
             return
         place = self._joint_inside((float(point[0]), float(point[1]), float(point[2])))
+        self.undo_action.setEnabled(True)
         if self._armature_head is None:
             self._armature_head = place
             self.pose_bar.show_state(
@@ -12740,13 +13779,12 @@ class MainWindow(QMainWindow):
         """Der Klick auf die Haut wird ein Punkt auf der Achse darunter (RM-367, W4-7)."""
         from app.core.geom.pose import inside_the_body
 
-        result = self.session.last_result
         target = self._armature_target
-        entry = result.scene.objects.get(target) if result is not None and target else None
-        if entry is None:
+        mesh = self._sculpt_mesh(target) if target else None
+        if mesh is None:
             return place
         try:
-            return inside_the_body(as_mesh_data(entry.mesh), place, self.viewport.ray_toward(place))
+            return inside_the_body(mesh, place, self.viewport.ray_toward(place))
         except AppError:
             return place
 
@@ -12762,6 +13800,7 @@ class MainWindow(QMainWindow):
         """Der nächste Knochen hängt an nichts — für den zweiten Arm."""
         self._armature_parent = ""
         self._armature_head = None
+        self.undo_action.setEnabled(bool(self._armature_bones))
         self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=False)
         self._show_bones()
 
@@ -12790,6 +13829,7 @@ class MainWindow(QMainWindow):
             chain=bool(self._armature_parent),
         )
         self._show_bones()
+        self.undo_action.setEnabled(bool(self._armature_bones or self._armature_head is not None))
         return True
 
     def finish_armature(self) -> None:
@@ -12797,9 +13837,16 @@ class MainWindow(QMainWindow):
         target = self._armature_target
         bones = self._armature_bones
         if target is None:
+            self._pose_report_target = None
+            self.pose_bar.setVisible(False)
+            self._sculpt_wall_number += 1
+            self._cancel_sculpt_check()
+            self.viewport.set_analysis_map(None, None)
+            self.analysis_bar.show_legend(None)
             return
         result = self.session.last_result
-        if bones and (result is None or target not in result.scene.objects):
+        historical = self._armature_step is not None and self._gesture_scene is not None
+        if bones and not historical and (result is None or target not in result.scene.objects):
             # Wie beim Formen: das Ziel ist fort, die Knochen bleiben — die
             # Sitzung schließt nicht über einem Körper, den es nicht mehr
             # gibt (§2.7).
@@ -12809,16 +13856,27 @@ class MainWindow(QMainWindow):
             return
         step = self._armature_step
         self._armature_target = None
+        self._pose_report_target = target
+        self._gesture_scene = None
+        self.viewport.show_scene(self.session.last_result)
+        self._sculpt_check.stop()
         self._armature_bones = []
         self._armature_step = None
         self._armature_head = None
         self.viewport.set_boning(False)
         self.viewport.clear_bones()
-        self.pose_bar.setVisible(False)
+        self._sculpt_wall_number += 1
+        self._cancel_sculpt_check()
+        self.pose_bar.setVisible(True)
+        self.pose_bar.set_editing(False)
         self.tools.setVisible(True)
         self.statusBar().clearMessage()
         self._update_actions()
         if not bones:
+            if step is not None:
+                self.session.change_params(step, {"armature": "", "pose": ""})
+            self._pose_report_target = None
+            self.pose_bar.setVisible(False)
             return
         # Der Editor setzt das Skelett, die Winkel sind Zahlen und gehören in
         # den Dialog — dort darf auch ein Projektparameter stehen. Also öffnet
@@ -14188,6 +15246,62 @@ class MainWindow(QMainWindow):
         """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
         (§18.11, §15.5).
         """
+        if (
+            steps.moves
+            and not steps.turns
+            and self.transform_bar.move_mode.currentData() == "absolute"
+        ):
+            from app.core.geom.transform import reference_point
+
+            chosen = self.inputs_for_transform()
+            result = self.session.last_result
+            if chosen and result is not None:
+                params = {
+                    "mode": "absolute",
+                    "reference": self.transform_bar.move_reference.currentData(),
+                    "reference_feature": self.transform_bar.move_feature.currentData() or "",
+                }
+                point = reference_point(
+                    [result.scene.objects[key] for key in chosen],
+                    str(params["reference"]),
+                    str(params["reference_feature"]),
+                )
+                dragged = self._drag_params(chosen[0], steps.offset)
+                params.update(
+                    {
+                        axis: point[index] + float(dragged[delta])
+                        for index, (axis, delta) in enumerate(
+                            zip(("x", "y", "z"), ("dx", "dy", "dz"), strict=True)
+                        )
+                    }
+                )
+                if "plate" in dragged:
+                    params["plate"] = dragged["plate"]
+                self._apply_from_transform_bar("translate_object", params)
+            return
+        if steps.turns and self.transform_bar.rotate_mode.currentData() == "absolute":
+            from app.core.geom.transform import angles_after_turn
+
+            chosen = self.inputs_for_transform()
+            result = self.session.last_result
+            if chosen and result is not None:
+                try:
+                    angles = angles_after_turn(
+                        result.scene.objects[chosen[0]], steps.axis, float(steps.angle)
+                    )
+                except AppError as error:
+                    self.announce(str(error.detail or error.title), receipt=False)
+                    return
+                self._apply_from_transform_bar(
+                    "rotate_object",
+                    {
+                        "mode": "absolute",
+                        "about": self.transform_bar.rotate_reference.currentData(),
+                        "reference_feature": self.transform_bar.rotate_feature.currentData() or "",
+                        **dict(zip(("angle_x", "angle_y", "angle_z"), angles, strict=True)),
+                    },
+                )
+            return
         # **Erst der Baustein.** Ein Merkmal, das aus einem Baustein kam, meint
         # den Baustein — der Zug geht in dessen Schritt, nicht in ein
         # ``move_feature`` auf eine seiner Hälften.
@@ -14486,6 +15600,18 @@ class MainWindow(QMainWindow):
         #10). *Erneut berechnen* nimmt den Abbruch zurück und startet
         dieselbe Karte am selben Körper.
         """
+        if self._sculpt_wall_worker is not None:
+            self._sculpt_wall_number += 1
+            self._sculpt_check.stop()
+            self._cancel_sculpt_check()
+            bar = self.sculpt_bar if self._sculpt_target is not None else self.pose_bar
+            bar.analysis.show_note(tr("Die Berechnung der Analysekarte wurde abgebrochen."))
+            self.analysis_bar.show_problem(
+                tr("Die Berechnung der Analysekarte wurde abgebrochen."),
+                tr("Erneut berechnen"),
+                weak_slot(self, MainWindow._check_sculpted_walls),
+            )
+            return
         self._map_cancelled_for = (self.object_tree.selected(), self.analysis_bar.chosen())
         self._cancel_map_worker()
         self.viewport.set_analysis_map(None, None)
@@ -14846,7 +15972,8 @@ class MainWindow(QMainWindow):
         if entry is None:
             return None
 
-        key = self._analysis_cache_key(entry)
+        settings = self.effective_print_settings()
+        key = self._slice_cache_key(entry, settings)
         if key == self._slice_key:
             if then is not None:
                 then(self._slice_cache)
@@ -14867,10 +15994,10 @@ class MainWindow(QMainWindow):
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
         # Die Mindestwand ist zugleich die Brückenbreite — zwei
         # Extrusionsbahnen, aus dem Material und nicht aus dem Code (Regel 7).
-        wall, angle = profiles.analysis_limits(self.session.evaluation_profile, entry)
+        wall, angle = profiles.analysis_limits(self._print_profile(settings), entry)
         worker = _SliceWorker(
             entry,
-            self.session.evaluation_profile.printer.layer_height,
+            settings,
             overhang_angle=angle,
             bridge_from=wall,
         )
@@ -14893,11 +16020,26 @@ class MainWindow(QMainWindow):
         # Schichten schiebt, startet einen zweiten, während der erste noch
         # läuft — und dessen ``finished`` löschte dann die Referenz auf den
         # laufenden zweiten. Ein QThread ohne Referenz wird eingesammelt.
+        if self._slice_worker is not None:
+            self._slice_worker.cancel.cancel()
         self._retire(self._slice_worker)
         self._slice_worker = worker
         worker.finished.connect(lambda done=worker: self._slice_worker_done(done))
         self._leash.start(worker)
         return None
+
+    def _slice_cache_key(
+        self, entry: Any, settings: PrintSettings | None = None
+    ) -> tuple[Any, ...]:
+        """Schichten gehören zu diesem Körper und dem vollständigen Druckraster."""
+        current = settings if settings is not None else self.effective_print_settings()
+        return (
+            entry.id,
+            id(entry.mesh),
+            current.layers.layer_height,
+            current.layers.first_layer_height,
+            profiles.analysis_limits(self._print_profile(current), entry),
+        )
 
     def _slice_is_current(self, key: tuple[Any, ...], worker: Any) -> bool:
         """Ein verspäteter Schnitt darf weder neue Messwerte noch neue Anfragen ersetzen."""
@@ -14906,7 +16048,7 @@ class MainWindow(QMainWindow):
         return (
             worker is self._slice_worker
             and entry is not None
-            and key == self._analysis_cache_key(entry)
+            and key == self._slice_cache_key(entry)
         )
 
     def _slice_crashed(self, detail: str) -> None:
@@ -15445,6 +16587,11 @@ class MainWindow(QMainWindow):
                     self._conversion_preview_note(
                         tr("Vorschlag — noch nicht übernommen"),
                         getattr(difference, "findings", ()),
+                    )
+                    + (
+                        "\n" + difference.explanation
+                        if getattr(difference, "explanation", "")
+                        else ""
                     ),
                     tr("Leertaste halten: vorher"),
                 )
@@ -15460,6 +16607,11 @@ class MainWindow(QMainWindow):
             self.viewport.mark_preview(
                 self._conversion_preview_note(
                     tr("Vorschlag — noch nicht übernommen"), preview.proposal.findings
+                )
+                + (
+                    "\n" + preview.difference.explanation
+                    if getattr(preview.difference, "explanation", "")
+                    else ""
                 ),
                 tr("Leertaste halten: vorher"),
             )
@@ -15844,10 +16996,9 @@ class MainWindow(QMainWindow):
             dialog.take_feature(
                 feature_id, self._feature_names().get(feature_id, feature_id), object_id
             )
-        # **Auch hier**, und nicht nur bei der Objektauswahl: Ein Klick auf ein
-        # Merkmal ändert, was die Leiste anbieten darf, und `_on_selection`
-        # läuft dabei nicht — der gewählte Körper bleibt ja derselbe.
-        self._update_transform_roles()
+        # Die synchrone Auswahlrunde des Baums stellt über `_on_selection`
+        # bereits die Rollen samt Bezugspunkt. Ein zweiter Lauf baut dieselben
+        # Merkmalslisten und Griffbezüge erneut auf (RM-232).
 
     def _update_transform_roles(self) -> None:
         """Sagt der Bewegen-Leiste, welche Rollen die Auswahl zulässt.
@@ -15893,6 +17044,79 @@ class MainWindow(QMainWindow):
             spoken = reason_against(twin, feature.kind) if twin else None
             reasons[key] = str(spoken or _("Das geht an einem gewählten Merkmal nicht."))
         self.transform_bar.limit_roles(reasons)
+        self._update_transform_position()
+
+    def _update_transform_position(self) -> None:
+        """Die Zielwerte stammen aus demselben Bezug wie die gespeicherte Operation."""
+        from app.core.geom.transform import reference_point
+        from app.core.perceive.features import centre_of
+        from app.ui.labels import feature_name
+
+        bar = self.transform_bar
+        result = self.session.last_result
+        bodies = (
+            [
+                result.scene.objects[key]
+                for key in self.inputs_for_transform()
+                if key in result.scene.objects
+            ]
+            if result is not None
+            else []
+        )
+        if not bodies:
+            bar.unavailable_position(_needs_objects(1))
+            bar.unavailable_orientation(_needs_objects(1))
+        if bodies and bar.rotate_mode.currentData() == "absolute":
+            from app.core.geom.transform import orientation_angles
+
+            try:
+                bar.show_orientation(orientation_angles(bodies[0]))
+                bar.rotate_mode.setToolTip(tr("Drehbezug: {name}", name=bodies[0].name))
+            except AppError as error:
+                bar.unavailable_orientation(str(error.detail or error.title))
+                bar.rotate_mode.setToolTip(str(error.detail or error.title))
+                self.announce(str(error.detail or error.title), receipt=False)
+        for chooser in (bar.move_feature, bar.rotate_feature):
+            current_feature = chooser.currentData()
+            with QSignalBlocker(chooser):
+                chooser.clear()
+                if bodies:
+                    for key, feature in bodies[0].features.items():
+                        if centre_of(feature) is not None:
+                            chooser.addItem(feature_name(key, feature), key)
+                    index = chooser.findData(current_feature)
+                    chooser.setCurrentIndex(max(0, index))
+        if bodies and bar.move_mode.currentData() == "absolute":
+            try:
+                point = reference_point(
+                    bodies, bar.move_reference.currentData(), bar.move_feature.currentData() or ""
+                )
+            except AppError as error:
+                bar.unavailable_position(str(error.detail or error.title))
+                bar.move_feature.setToolTip(str(error.detail or error.title))
+                self.viewport.set_transform_reference(None)
+                return
+            bar.show_position(point)
+
+        reference = None
+        if bodies:
+            try:
+                if bar.rotate_mode.currentData() == "absolute":
+                    anchor = bar.rotate_reference.currentData()
+                    reference = (
+                        (0.0, 0.0, 0.0)
+                        if anchor == "origin"
+                        else reference_point(bodies, anchor, bar.rotate_feature.currentData() or "")
+                    )
+                elif bar.move_mode.currentData() == "absolute":
+                    reference = reference_point(
+                        bodies,
+                        bar.move_reference.currentData(),
+                        bar.move_feature.currentData() or "",
+                    )
+            except AppError:
+                pass
+        self.viewport.set_transform_reference(reference)
 
     def _on_point_picked(self, point: Any) -> None:
         """Ein Klick auf eine Stelle füllt die Positionsfelder eines offenen
@@ -16215,7 +17439,10 @@ class MainWindow(QMainWindow):
         )
         if textures and certain:
             self.feature_panel.show_texture(
-                textures, certain=certain, parameter_values=self._parameter_values()
+                textures,
+                certain=certain,
+                parameter_values=self._parameter_values(),
+                document=self.session.project.document,
             )
             self.feature_dock.reveal()
             self._start_feature_preview()
@@ -16229,7 +17456,9 @@ class MainWindow(QMainWindow):
         if part is not None:
             self.feature_panel.show_part(*part, parameter_values=self._parameter_values())
             if textures:
-                self.feature_panel.offer_texture_steps(textures, self._parameter_values())
+                self.feature_panel.offer_texture_steps(
+                    textures, self._parameter_values(), document=self.session.project.document
+                )
             self.feature_dock.reveal()
             self._start_feature_preview()
             self._lay_out_now()
@@ -16252,7 +17481,9 @@ class MainWindow(QMainWindow):
             protected=feature_id in self.session.protected_features(entry.id),
         )
         if textures:
-            self.feature_panel.offer_texture_steps(textures, self._parameter_values())
+            self.feature_panel.offer_texture_steps(
+                textures, self._parameter_values(), document=self.session.project.document
+            )
         # Ein anderes Merkmal bringt das Fenster zurück (Konzept D) — die Zeile
         # fiel am 20.09.2026 mit dem Umbau der Bohrungsmaße heraus, während
         # Textur und Baustein darüber sie behielten (gemessen am 21.09.2026).
@@ -16283,6 +17514,10 @@ class MainWindow(QMainWindow):
         if self._quiet_placement is None:
             self._start_feature_preview()
         self._lay_out_now()
+        if self._quiet_placement is not None:
+            # Der Renderer bündelt bereits die Auswahl. Ein späterer Nulltimer
+            # der fertigen Maßgruppe bestellte danach ein zweites Bild (RM-232).
+            self._quiet_placement.flush_frame()
 
     def _lay_out_now(self) -> None:
         """Die Layouts, die ein Aufbau angestoßen hat, sofort legen (RM-232).
@@ -17148,6 +18383,9 @@ class MainWindow(QMainWindow):
                 # gilt die normale Vorschau mit den eingegebenen Werten.
                 self.end_quiet_placement()
             else:
+                # Die Eingabe kam aus der rechten Zeile, bevor der Fokus in
+                # die Maßkarte wechselte; auch sie beginnt deren Entwurf.
+                host.begin_edit()
                 host.take_placement(params)
                 return
         self._feature_pending = (op, dict(params))
@@ -17362,15 +18600,28 @@ class MainWindow(QMainWindow):
 
     def _quiet_selection_allowed(self) -> bool:
         """Nur die erste Eingabe bindet die Auswahl bis zum gemeinsamen Abschluss."""
+        panel = getattr(self, "history_panel", None)
+        compare = getattr(panel, "compare", None)
+        if compare is not None and compare.isChecked():
+            return False
         host = self._quiet_host
         return host is None or not host.begun or host.committing
 
     def _quiet_command_allowed(self) -> bool:
         """Fremde Befehle warten auf den Abschluss und werden nicht vorgemerkt."""
-        if self._quiet_selection_allowed():
-            return True
-        self._say_the_change_comes_first()
-        return False
+        if getattr(self, "_rebuild_dialog", None) is not None:
+            self._say_the_change_comes_first()
+            return False
+        host = self._quiet_host
+        if host is not None and host.begun and not host.committing:
+            self._say_the_change_comes_first()
+            return False
+        panel = getattr(self, "history_panel", None)
+        compare = getattr(panel, "compare", None)
+        if compare is not None and compare.isChecked():
+            self._say_the_change_comes_first()
+            return False
+        return True
 
     def _say_the_change_comes_first(self) -> None:
         """Der eine Satz, wo eine begonnene Änderung Auswahl oder Befehl hält.
@@ -17379,7 +18630,12 @@ class MainWindow(QMainWindow):
         und im Bild (``Viewport.selection_refused``) — vorher schwiegen Baum und
         Bild und verschluckten den Klick (Review Fenster #6, 21.09.2026).
         """
-        self.announce(_the_change_comes_first())
+        panel = getattr(self, "history_panel", None)
+        compare = getattr(panel, "compare", None)
+        if compare is not None and compare.isChecked():
+            self.announce(tr("Zum Bearbeiten zuerst „Aktueller Stand“ wählen."))
+        else:
+            self.announce(_the_change_comes_first())
 
     def _apply_placed_feature_later(self, op: str, params: Mapping[str, Any]) -> None:
         """Der wartende Klick, sobald das Bild steht (``_apply_when_previewed``)."""
@@ -17834,12 +19090,10 @@ class MainWindow(QMainWindow):
         def refresh(values: Mapping[str, Any]) -> None:
             if reading["fields"]:
                 return
-            focused = QApplication.focusWidget()
             untouched = {
                 name: editor
                 for name, editor in current_editors().items()
-                if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
-                and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+                if not any(line.isModified() for line in editor.findChildren(QLineEdit))
                 and refused_feature_field({name: editor}) is None
             }
             refresh_feature_fields(action.fields, untouched, values)
@@ -18168,6 +19422,10 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
+        if spec.name == "create_container":
+            from app.core.geom.container_ops import ContainerWizardParams
+
+            spec = replace(spec, params=ContainerWizardParams)
         # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026: „wenn wir
         # ein Merkmal auswählen und auf der Tastatur Entf drücken löschen wir
         # den ganzen Körper statt das Merkmal"). Der Weg gilt für jeden
@@ -18250,11 +19508,27 @@ class MainWindow(QMainWindow):
             if _carries_a_drawing(spec, given) or set(POSITION_FIELDS) & set(given or {})
             else self._seat_for(spec, chosen[0] if chosen else None, {**values, **(given or {})})
         )
-        if seat is not None and seat.values is not None:
-            values.update(seat.values)
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
+        if spec.name == "translate_object" and chosen and self.session.last_result is not None:
+            from app.core.geom.transform import reference_point
+
+            point = reference_point([self.session.last_result.scene.objects[key] for key in chosen])
+            values.update(dict(zip(("x", "y", "z"), point, strict=True)))
+        if spec.name == "rotate_object" and chosen and self.session.last_result is not None:
+            from app.core.geom.transform import orientation_angles
+
+            try:
+                angles = orientation_angles(self.session.last_result.scene.objects[chosen[0]])
+                values.update(dict(zip(("angle_x", "angle_y", "angle_z"), angles, strict=True)))
+            except AppError:
+                pass  # Der relative Weg bleibt offen; „nach“ erklärt seinen fehlenden Bezug.
+        # Leere Materialrollen übernehmen die Projektvorgabe. Ausdrücklich
+        # mitgebrachte Werte folgen danach und behalten damit Vorrang.
+        for parameter in spec.params.spec():
+            if parameter.kind == "material" and not parameter.default:
+                values.setdefault(parameter.name, self.session.project.document.material)
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
         # Was der Dialog über seinen Bezug sagt — leer, solange genau so viel
@@ -18313,7 +19587,7 @@ class MainWindow(QMainWindow):
         # denselben Startwert. Der Verlauf speichert ihn mit der Operation.
         from secrets import randbelow
 
-        dialog_seed = randbelow(2**31) if spec.requires_seed else None
+        dialog_seed = randbelow(2**31) if spec.requires_seed or seat is not None else None
 
         def remember_spool(entry: filaments.CatalogueFilament | None) -> None:
             nonlocal chosen_spool
@@ -18477,6 +19751,12 @@ class MainWindow(QMainWindow):
                     result, except_for=chosen[0] if chosen and _wants_a_target(spec) else None
                 ),
                 source_objects=inputs,
+                centre_objects=(
+                    tuple(result.scene.objects.values())
+                    if result is not None
+                    and spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                    else ()
+                ),
                 extra=variant,
                 extra_label=str(group.choice) if group is not None else "",
                 surroundings=self._sketch_surroundings(),
@@ -18487,12 +19767,19 @@ class MainWindow(QMainWindow):
                 # Die einzeln wählbaren Kanten des gewählten exakten Körpers
                 # (E4). Leer an einem Netz — dort gibt es keine.
                 edges=self._edge_names(),
-                note=note,
+                note=(
+                    tr(
+                        "Die Maße werden als Projektparameter angelegt. Behälter, Deckel, "
+                        "Einsatz und Passung gehören zu einem rücknehmbaren Schritt."
+                    )
+                    if spec.name == "create_container"
+                    else note
+                ),
                 # **Die Grundkörper benennen ihre Maße** (§13, Entscheidung
                 # Robert, 14.09.2026): Der Haken legt Breite, Tiefe und Höhe als
                 # Projektparameter an — `_named_dimensions` baut sie beim
                 # Übernehmen, in derselben Transaktion wie den Schritt.
-                offer_naming=offers_naming(spec),
+                offer_naming=offers_naming(spec) and spec.name != "create_container",
                 # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
                 naming_default=self.settings.name_dimensions,
             )
@@ -18515,6 +19802,14 @@ class MainWindow(QMainWindow):
             def prepare_menu(entered: Mapping[str, Any]) -> _PreviewOrder:
                 """Namen, Gruppe, Platzierungsziel und Lagerbindung gehören zur Vorschau."""
                 picked = chosen_spec()
+                if picked.name == "create_container":
+                    from app.core.lid_flow import plan_container
+
+                    plan = plan_container(self.session.project.document, entered)
+                    return _PreviewOrder(
+                        drafts=tuple(replace(draft, seed=dialog_seed) for draft in plan.drafts),
+                        changes=plan.document_change,
+                    )
                 flow = dialog.placement_flow
                 params, changes = self._named_dimensions(
                     picked, fitted(entered), dialog.names_dimensions()
@@ -18532,6 +19827,27 @@ class MainWindow(QMainWindow):
                     and matches_spool(params)
                 ):
                     changes = self._spool_change(chosen_spool, prepare=True)
+                if seat is not None and dialog.joins_attachment():
+                    created = self.session.history.next_object_id()
+                    carrier = flow.target if flow is not None and flow.target else seat.source.id
+                    return _PreviewOrder(
+                        drafts=(
+                            OperationDraft(
+                                op=picked.name,
+                                inputs=(),
+                                params=params,
+                                outputs=(created,),
+                                seed=dialog_seed,
+                            ),
+                            OperationDraft(
+                                op="union_objects",
+                                inputs=(carrier, created),
+                                params={},
+                                seed=dialog_seed,
+                            ),
+                        ),
+                        changes=changes,
+                    )
                 return _PreviewOrder(
                     drafts=tuple(
                         OperationDraft(
@@ -18906,6 +20222,20 @@ class MainWindow(QMainWindow):
         # Rechenkern steht am Schritt im Verlauf (:meth:`switch_kernel`), und
         # der Dialog zeigt genau das Schema des gespeicherten Schritts.
 
+        if entry.op == "sculpt_strokes" and given is None:
+            self.reopen_gesture(op_id)
+            return
+        if entry.op == "pose_armature" and given is None and field != "pose":
+            self.reopen_gesture(op_id)
+            return
+        if given is None and _has_sketch_param(spec):
+            sketch_fields = {item.name for item in spec.params.spec() if item.kind == "sketch"}
+            drawing = field or _sketch_param(entry.op)
+            text = str(entry.params.get(drawing, "") or "")
+            if drawing in sketch_fields and text.strip():
+                self.start_sketch(entry.op, text=text, step=op_id, field_name=drawing)
+                return
+
         def chosen_spec() -> OperationSpec:
             return spec
 
@@ -18920,6 +20250,7 @@ class MainWindow(QMainWindow):
             self._object_names(),
             self,
             values={**entry.params, **(given or {})},
+            promote_values=False,
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
             # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
@@ -18931,6 +20262,12 @@ class MainWindow(QMainWindow):
                 except_for=entry.inputs[0] if entry.inputs and _wants_a_target(spec) else None,
             ),
             source_objects=entry.inputs,
+            centre_objects=(
+                tuple(self.session.last_result.scene.objects.values())
+                if self.session.last_result is not None
+                and spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                else ()
+            ),
             extra=None,
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
@@ -18941,10 +20278,11 @@ class MainWindow(QMainWindow):
             # Auch beim Ändern eines Grundkörpers (RM-359 F6, ``grenzen.md``):
             # Wer seine Maße erst später benennen will, fand den Haken nur
             # beim Anlegen.
-            offer_naming=offers_naming(spec),
+            offer_naming=offers_naming(spec) and spec.name != "create_container",
             naming_default=self.settings.name_dimensions,
         )
-        dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
+        number = step_number(self.session.project.document, op_id)
+        dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {number}")
 
         # **Der Weg in den Raum, und nur von hier aus** (Z9): Wer eine Skizze
         # aus dem Verlauf korrigiert, saß bisher vor einem weißen Blatt ohne
@@ -18971,15 +20309,39 @@ class MainWindow(QMainWindow):
 
         connect_sketch_editors()
         dialog.schemaChanged.connect(connect_sketch_editors)
+
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
-        self._wire_preview(dialog, None, change_op=op_id, spec_of=chosen_spec, values_of=fitted)
+        def container_edit(entered: Mapping[str, Any]) -> _PreviewOrder:
+            """Neue Hauptmaße, Deckelpassung und Einsatz werden gemeinsam geplant."""
+            from app.core.lid_flow import plan_container_edit
+
+            edit = plan_container_edit(self.session.project.document, entry, fitted(entered))
+            return _PreviewOrder(
+                change_op=op_id,
+                change_values=edit.values,
+                changes=edit.document_change,
+            )
+
+        self._wire_preview(
+            dialog,
+            None,
+            change_op=op_id,
+            spec_of=chosen_spec,
+            values_of=fitted,
+            order_of=container_edit if spec.name == "create_container" else None,
+        )
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
             params, changes = self._named_dimensions(
                 spec, fitted(dialog.values()), dialog.names_dimensions()
             )
+            if spec.name == "create_container":
+                order = container_edit(params)
+                assert order.change_values is not None
+                params = dict(order.change_values)
+                changes = order.changes
             changed = self.session.change_params(op_id, params, changes)
             if (
                 changed
@@ -19481,6 +20843,10 @@ class MainWindow(QMainWindow):
         approval = self._set_preview_order(owner, order)
         if not self._preview_is_current(approval):
             return False
+        if approval.computing and approval.reviewing:
+            if then is not None:
+                self._apply_when_previewed(approval, then)
+            return False
         if approval.required is False:
             if (
                 approval.computing
@@ -19519,6 +20885,12 @@ class MainWindow(QMainWindow):
         """Ein gemeinsamer Antwortpfad für Dialog, Merkmalkarte und stille Platzierung."""
         if not self._preview_is_current(approval):
             return
+        # Auch der Eingang eines historischen Schritts wird im Arbeiter
+        # vorbereitet. Seine Wartezeit gehört zur selben Vorschau; der
+        # anschließende Rechenschritt startet Uhr und Hinweis nicht neu.
+        if not self._progress_states["preview"].active:
+            self._preview_busy.start()
+            self._start_preview_progress()
         approval.requested = True
         order = approval.order
         if order.change_op is not None and approval.required is None:
@@ -19558,9 +20930,8 @@ class MainWindow(QMainWindow):
 
             self.session.placement_before(key[2], before_ready, lambda _detail: before_ready(False))
             return
-        self._preview_busy.start()
-        self._start_preview_progress()
         approval.computing = True
+        approval.reviewing = True
         approval.is_the_evaluation = order.change_name is None and (
             self.session.preview_is_the_evaluation(
                 order.drafts,
@@ -19599,12 +20970,17 @@ class MainWindow(QMainWindow):
             click, approval.pending_click = approval.pending_click, None
             if click is None:
                 return
-            if self._preview_block_reason:
-                self.announce(self._preview_block_reason)
+            reason = approval.problem or self._preview_block_reason
+            if reason:
+                self.announce(reason)
                 return
             click()
 
         told: list[str] = []
+
+        def pictured(difference: Any) -> None:
+            """Das erste Bild gibt weder Auftrag noch wartenden Übernehmen-Klick frei."""
+            self._show_preview(difference, pending=True)
 
         def failed(_detail: Any) -> None:
             """Ein fehlendes Ergebnis bleibt gesperrt und nennt den nächsten Handgriff.
@@ -19625,15 +21001,11 @@ class MainWindow(QMainWindow):
                 )
             )
             approval.computing = False
-            if approval.required is not False:
-                approval.problem = reason
+            approval.reviewing = False
+            approval.problem = reason
             self._preview_explained(reason)
             waiting_click_hears(reason)
             self._refresh_preview_block()
-            if approval.required is False:
-                # Ohne Bildpflicht galt der Klick der Rechnung, und die ist
-                # vorbei; die Auswertung sagt selbst, woran es liegt.
-                computed_click_runs()
 
         def explained(reason: str) -> None:
             """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
@@ -19649,16 +21021,17 @@ class MainWindow(QMainWindow):
             # Gerechnet ist; was jetzt noch fehlt, ist das Bild, und das hält
             # niemand mehr mit *Abbrechen* an.
             approval.computing = False
+            approval.reviewing = False
             self._finish_preview_progress()
             if difference is None:
-                if approval.required is not False:
+                if not approval.questioned:
                     failed(None)
                 else:
                     self._show_preview(None)
                     # Ein Klick, der vor der Antwort kam und auf ein Bild
                     # wartete, das es nicht geben kann (:func:`asked`), läuft
-                    # jetzt — er stellt die Rückfrage. Ebenso einer, der nur
-                    # auf die Rechnung wartete (RM-493).
+                    # jetzt — er stellt die Rückfrage. Eine erfolgreiche
+                    # Rechnung ohne Bild liefert eine leere SceneDifference.
                     computed_click_runs()
                 return
             # **Ein Satz zu einem Ergebnis ist kein Problem.** Der Arbeiter meldet
@@ -19697,7 +21070,7 @@ class MainWindow(QMainWindow):
                 )
                 for identifier, entry in getattr(difference, "entries", {}).items()
             )
-            if (incomplete or missing_result) and approval.required is not False:
+            if incomplete or missing_result:
                 approval.problem = tr(
                     "Die Vorschau ist unvollständig. Ändern Sie die Werte "
                     "oder öffnen Sie die Bearbeitung erneut."
@@ -19735,6 +21108,8 @@ class MainWindow(QMainWindow):
         if clear_refusal is not None:
             clear_refusal(None)
         kwargs: dict[str, Any] = {
+            "pictured": still(pictured),
+            "review_settings": self.effective_print_settings(),
             "explained": still(explained),
             "coarse": still(self._preview_coarse),
             "advised": still(self._preview_advised),
@@ -19969,7 +21344,7 @@ class MainWindow(QMainWindow):
         )
         request()
 
-    def _show_preview(self, difference: Any) -> None:
+    def _show_preview(self, difference: Any, *, pending: bool = False) -> None:
         """Die Live-Vorschau ins Bild — und dazu, ob sie vollständig ist.
 
         **Eine Vorschau, die stumm nichts zeigt, ist eine Rückmeldung, die
@@ -19991,24 +21366,18 @@ class MainWindow(QMainWindow):
         # Ab hier hat dieses Fenster etwas im Bild, das ihm gehört — auch
         # wenn ``difference`` leer ist: Das Band unten setzt es trotzdem.
         self._preview_shown = True
-        self._preview_busy.stop()
-        self._finish_preview_progress()
+        if not pending:
+            self._preview_busy.stop()
+            self._finish_preview_progress()
         self._preview_action = ""
         has_result = any(
             getattr(entry, "result", None) is not None
             for entry in getattr(difference, "entries", {}).values()
         )
-        nothing_to_show = difference is None or not (
-            getattr(difference, "changed", True)
-            or getattr(difference, "reshaped", False)
-            or getattr(difference, "recoloured", False)
-            or has_result
-        )
-        if nothing_to_show and self._preview_reason:
-            # Der Grund kam schon an (``_preview_explained``) und steht im
-            # Band; was dahinter kommt — ``None`` oder eine leere Differenz —
-            # sagt nichts, was das Band nicht sagt. Eine Sperre, die er
-            # gesetzt hat, bleibt deshalb auch stehen.
+        if difference is None and self._preview_reason:
+            # Ohne Ergebnis bleibt die Absage stehen. Eine vorhandene leere
+            # Differenz ist dagegen eine erfolgreiche unveränderte Vorschau;
+            # vorausgeschickte Informationsbefunde sind keine Absage.
             self._preview_reason = ""
             self._preview_effect = ""
             self._show_difference(difference)
@@ -20082,6 +21451,9 @@ class MainWindow(QMainWindow):
         if warnings:
             note = "\n".join((note, *warnings))
         note = self._conversion_preview_note(note, getattr(difference, "findings", ()))
+        explanation = getattr(difference, "explanation", "")
+        if explanation:
+            note = "\n".join((note, explanation))
         self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
 
     def _conversion_preview_note(self, title: str, findings: Sequence[Finding]) -> str:
@@ -20327,7 +21699,15 @@ class MainWindow(QMainWindow):
         (:meth:`_preview_can_apply`). Ein Klick, der auf die Vorschau wartete,
         verfällt — er galt einem Bild, das jetzt nicht kommt.
         """
+        self._gesture_open_number += 1
+        if self._sculpt_preview_worker is not None:
+            self._cancel_sculpt_preview()
+            self.announce(
+                tr("Die Vorschau wurde abgebrochen. Die bisherigen Züge bleiben erhalten.")
+            )
+            return
         approval = self._preview_approval
+        reviewing = approval is not None and approval.reviewing
         self.session.cancel_preview()
         self._preview_busy.stop()
         self._finish_preview_progress()
@@ -20340,6 +21720,7 @@ class MainWindow(QMainWindow):
         if approval is not None:
             approval.requested = False
             approval.computing = False
+            approval.reviewing = False
             approval.pending_click = None
         self._show_difference(None)
         note = tr(
@@ -20347,6 +21728,8 @@ class MainWindow(QMainWindow):
             "Ein geänderter Wert rechnet sie neu."
         )
         self.viewport.mark_preview(note, "", changes=False)
+        if approval is not None and reviewing:
+            approval.problem = note
         self.announce(note, receipt=False)
         self._refresh_preview_block()
 
@@ -20942,76 +22325,136 @@ class MainWindow(QMainWindow):
     def _seat_for(
         self, spec: OperationSpec, selected: ObjectId | None, entered: Mapping[str, Any]
     ) -> _Seat | None:
-        """Ein Erzeuger auf der ausdrücklich gewählten Fläche — oder ``None`` (RM-390).
-
-        Nur eine gewählte ebene Fläche setzt einen neuen Körper; ein gewählter
-        Körper, eine Bohrung oder eine Kante lassen ihn auf dem Bett. Wohin er
-        kommt, rechnet der Kern (``placement.seat_on_face``) mit den Maßen,
-        mit denen der Dialog aufgeht; der Satz nennt Fläche und Körper so, wie
-        Baum und Bild sie nennen.
-        """
+        """Den ausdrücklich gewählten Träger benennen; seine Fläche rechnet ein Arbeiter."""
         result = self.session.last_result
         feature_id = self.object_tree.selected_feature()
-        entry = result.scene.objects.get(selected) if result is not None and selected else None
-        feature = entry.features.get(feature_id) if entry is not None and feature_id else None
-        if selected is None or feature is None or feature_id is None:
-            return None
-        if not seats_on(spec, feature):
+        source = result.scene.objects.get(selected) if result is not None and selected else None
+        feature = source.features.get(feature_id) if source is not None and feature_id else None
+        if source is None or feature is None or feature_id is None or not seats_on(spec, feature):
             return None
         face = feature_name(feature_id, feature)
-        body = self._object_names().get(selected, selected)
-        values = seat_on_face(spec, feature, entered, self.session.profile)
-        if values is None:
-            return _Seat(
-                feature,
-                None,
-                tr(
-                    "Auf „{face}“ von „{body}“ reichte der Körper unter das Bett. "
-                    "Er entsteht deshalb auf dem Bett.",
-                    face=face,
-                    body=body,
-                ),
-            )
+        body = self._object_names().get(source.id, source.id)
         return _Seat(
-            feature, values, tr("Wird auf „{face}“ von „{body}“ gesetzt.", face=face, body=body)
+            source,
+            feature,
+            face,
+            tr("Wird auf „{face}“ von „{body}“ gesetzt.", face=face, body=body),
         )
 
     def _show_seat(self, dialog: OperationDialog, seat: _Seat) -> None:
-        """Den Satz vorn zeigen und den Körper auf seiner Fläche halten (RM-390).
+        """Flächenwahl, freies Setzen und Vereinigung teilen Vorschau und Übernahme."""
+        from app.core.knowledge.parts.ops import placement_fields
+        from app.core.scene.placement import clear_surface_binding
+        from app.ui.placement_flow import (
+            on_the_copy,
+            refusal_sentence,
+            surface_object_for_worker,
+        )
 
-        Ändert jemand ein Maß, das quer zur Fläche liegt — die Breite eines
-        Quaders auf einer Seitenfläche —, rechnet der Sitz neu, damit er nicht
-        doch unter das Bett reicht. Wer Position oder Richtung selbst ändert,
-        hat die Stelle übernommen: Satz und Knopf gehen, die Werte bleiben.
-        *Auf das Bett* schreibt die Vorgaben der belegten Felder zurück.
-        """
-        if seat.values is None:
-            dialog.show_seat(seat.sentence, None)
-            return
+        source = surface_object_for_worker(seat.source)
+        dialog.offer_attachment(seat.title)
+        project = self.session.project
+        cancelled = CancelSignal()
+        serial = 0
+        closed = False
+        updating = False
+        fields = placement_fields(dialog.spec.params)
         defaults = {entry.name: entry.default for entry in dialog.spec.params.spec()}
-        dialog.show_seat(seat.sentence, {name: defaults[name] for name in seat.values})
-        placed = dict(seat.values)
-        profile = self.session.profile
+        free = {
+            fields.get(name, name): defaults[fields.get(name, name)]
+            for name in (*POSITION_FIELDS, *NORMAL_FIELDS)
+            if fields.get(name, name) in defaults
+        }
+        free.update(clear_surface_binding(dialog.spec))
+
+        def current(stamp: int) -> bool:
+            return (
+                isValid(dialog)
+                and not closed
+                and serial == stamp
+                and self.session.project is project
+                and dialog.attached_to_surface()
+            )
+
+        def choose(attached: bool) -> None:
+            nonlocal serial, cancelled, updating
+            serial += 1
+            cancelled.cancel()
+            cancelled = CancelSignal()
+            stamp, token = serial, cancelled
+            if not attached:
+                flow = dialog.placement_flow
+                if flow is not None and flow.active:
+                    flow.back()
+                dialog.release_seat()
+                dialog.block_attachment(None)
+                updating = True
+                try:
+                    dialog.take_placement(free)
+                finally:
+                    updating = False
+                return
+            dialog.block_attachment(tr("Die Oberfläche wird vorbereitet …"))
+            spec = dialog.spec
+            refusal: list[str] = []
+
+            def compute() -> Mapping[str, Any]:
+                hit = surface_at_feature(source, seat.feature, cancelled=token)
+                values = bound_surface_values(spec, source, hit)
+                if "surface_seat" in defaults:
+                    values["surface_seat"] = "centred"
+                return values
+
+            def ready(values: Mapping[str, Any] | None) -> None:
+                nonlocal updating
+                if not current(stamp):
+                    return
+                if values is None:
+                    failed(None)
+                    return
+                updating = True
+                try:
+                    dialog.show_seat(seat.sentence, free)
+                    dialog.take_placement(values)
+                    dialog.block_attachment(None)
+                finally:
+                    updating = False
+
+            def failed(detail: Any) -> None:
+                if current(stamp):
+                    if isinstance(detail, AppError):
+                        refusal[:] = [refusal_sentence(detail)]
+                    reason = " ".join(
+                        [*refusal, str(tr("Andere Fläche wählen oder die Werte bearbeiten."))]
+                    )
+                    dialog.block_attachment(reason)
+                    dialog.show_seat(reason, None)
+
+            self.session.placement_async(on_the_copy(source.mesh, compute), ready, failed, failed)
 
         def follow() -> None:
-            """Ein geändertes Maß hält den Körper auf der Fläche und über dem Bett."""
-            if not isValid(dialog) or not dialog.seated():
+            if updating or not isValid(dialog) or not dialog.attached_to_surface():
                 return
-            entered = dialog.values()
-            if any(
-                not isinstance(entered.get(name), int | float)
-                or abs(float(entered[name]) - value) > EPS_DISPLAY
-                for name, value in placed.items()
-            ):
+            if dialog.seated() and not dialog.values().get(fields["surface_anchor"]):
+                # Eine freie Koordinate beendet nur den Bezug; ihre neue Lage bleibt erhalten.
+                choice = dialog.attachment_mode
+                assert choice is not None
+                with QSignalBlocker(choice):
+                    choice.setCurrentIndex(0)
+                if dialog.join_attachment is not None:
+                    dialog.join_attachment.hide()
                 dialog.release_seat()
-                return
-            again = seat_on_face(dialog.spec, seat.feature, entered, profile)
-            if again is None or all(abs(again[name] - placed[name]) <= EPS_GEOM for name in again):
-                return
-            placed.update(again)
-            dialog.take_placement(again)
+                dialog.block_attachment(None)
 
+        def finish(_result: int) -> None:
+            nonlocal closed
+            closed = True
+            cancelled.cancel()
+
+        dialog.attachmentRequested.connect(choose)
         dialog.valuesChanged.connect(follow)
+        dialog.finished.connect(finish)
+        choose(True)
 
     # --- session replies --------------------------------------------------------
 
@@ -21069,8 +22512,9 @@ class MainWindow(QMainWindow):
         von selbst, die Auswertung liefert den Stand davor. Am ersten Schritt
         ist dieser Stand leer — *Breite* 5000 am Beispiel Weg 2 ließ die
         Ansicht leer stehen (RM-354). Dann bleibt das letzte durchgerechnete
-        Ergebnis desselben Projekts im Bild; Baum, Verlauf und Bericht zeigen
-        den angehaltenen Stand und sagen, warum.
+        Ergebnis desselben Projekts im Bild. Haltkarte und Objektbaum nennen
+        es ausdrücklich den letzten gültigen Stand; Bericht und Verlauf zeigen
+        den tatsächlichen Halt und seinen Korrekturweg.
         """
         project = self.session.project
         if result.stopped_at is None:
@@ -21109,16 +22553,28 @@ class MainWindow(QMainWindow):
         invitation.set_chat_available(
             self.session.backend_known and self.session.agent_backend is not None
         )
-        halted = self._halted_before_a_body(result) if empty else None
+        halted = self._halted_before_a_body(result) if not self.session.busy else None
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
             number, step = halted
+            retained = result is not None and self._picture_for(result) is not result
+            reason = (
+                tr(
+                    "Im Bild bleibt der letzte gültige Stand sichtbar. Der aktuelle Stand "
+                    "hat noch keinen gerechneten Körper. Korrigieren Sie den Schritt "
+                    "oder gehen Sie mit Strg+Z zurück."
+                )
+                if retained
+                else tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht.")
+            )
             invitation.show_halted(
                 tr("Das Projekt hält an Schritt {number}: {step}").format(number=number, step=step),
-                tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht."),
+                reason,
             )
             self.object_tree.say_why_empty(
-                tr(
+                reason
+                if retained
+                else tr(
                     "Noch kein Körper: Das Projekt hält an Schritt {number}. "
                     "Ein Doppelklick im Verlauf öffnet ihn."
                 ).format(number=number)
@@ -21128,14 +22584,13 @@ class MainWindow(QMainWindow):
         invitation.show_for(empty and not self._on_start_screen)
 
     def _halted_before_a_body(self, result: EvaluationResult | None) -> tuple[int, str] | None:
-        """Nummer und Titel des Schritts, an dem die Kette hält, wenn noch nichts im Bild ist.
+        """Position und Titel eines Halts ohne aktuell berechneten Körper.
 
-        ``None``, wenn nichts hält — oder wenn die Ansicht ohnehin den letzten
-        vollständigen Stand zeigt (§15.3, RM-354); dann ist die Szene nicht leer.
+        Das gilt auch dann, wenn im Bild noch der letzte gültige Stand steht.
         """
         if result is None or result.stopped_at is None:
             return None
-        if self._picture_for(result).scene.objects:
+        if result.scene.objects:
             return None
         try:
             entry = self.session.history.operation(result.stopped_at)
@@ -21145,14 +22600,25 @@ class MainWindow(QMainWindow):
             step = str(REGISTRY.get(entry.op).title)
         except AppError:
             step = entry.op
-        return int(result.stopped_at), step
+        return step_number(self.session.project.document, result.stopped_at), step
 
     def _on_invitation(self, chosen: str) -> None:
         """Ein Einstieg aus der leeren Szene — derselbe Weg wie Menü und Werkzeugzeile."""
         result = self.session.last_result
         if chosen == "correct_step":
             if result is not None and result.stopped_at is not None:
-                self.edit_operation(result.stopped_at)
+                refusal = next(
+                    (
+                        finding
+                        for finding in result.scene.report.findings
+                        if finding.severity == "error" and finding.op_id == result.stopped_at
+                    ),
+                    None,
+                )
+                if refusal is not None:
+                    self._correct_after_error(as_error(refusal, self.session.project.document))
+                else:
+                    self.edit_operation(result.stopped_at)
             return
         if chosen == "report":
             self._focus_report(force=True)
@@ -21224,6 +22690,7 @@ class MainWindow(QMainWindow):
         self._slice_pending = None
         self._slice_waiters = []
         if self._slice_worker is not None:
+            self._slice_worker.cancel.cancel()
             self._retire(self._slice_worker)
             self._slice_worker = None
         self.layer_bar.show_result(None)
@@ -21283,6 +22750,12 @@ class MainWindow(QMainWindow):
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
+        if self._pose_report_target is not None:
+            if self._pose_report_target in result.scene.objects:
+                self._gesture_analysis_changed()
+            else:
+                self._pose_report_target = None
+                self.pose_bar.setVisible(False)
         if result is self.session.picture:
             # Die Schichtanalyse wartet auf das Ergebnis: Neben der Erkennung
             # nähme sie ihr den Rechner, und das Ergebnis danach rechnete sie
@@ -21303,7 +22776,16 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self._frame_after_resizing()
-        self.viewport.show_scene(picture)
+        gesture = self.sculpting() or self.setting_armature()
+        self.viewport.show_scene(
+            replace(picture, scene=self._gesture_scene)
+            if gesture and self._gesture_scene is not None
+            else picture
+        )
+        if self._sculpt_target is not None and self._sculpt_preview is not None:
+            self.viewport.show_preview_mesh(self._sculpt_target, self._sculpt_preview.shown)
+        if gesture:
+            self._gesture_analysis_changed()
         self._show_invitation()
         self._reveal_split_result(result)
         self.history_panel.show_document(
@@ -21361,6 +22843,7 @@ class MainWindow(QMainWindow):
         # Datei danach meldete „Geladen:" mit dem Namen des gescheiterten
         # Downloads (``_on_import_finished``).
         self._pending_import = None
+        self._recent_batch = ()
         self._pending_download = ""
         self.status_message.setText(self._announcement)
         # „Zuletzt geöffnet“ prüft die Einträge nur beim Aufbau; eine Datei,
@@ -21399,6 +22882,7 @@ class MainWindow(QMainWindow):
             if downloaded:
                 self.announce(tr("Geladen: {name}", name=downloaded))
         else:
+            self._recent_batch = ()
             self.status_message.setText(self._announcement)
 
     def _on_model_placed(self, body: str) -> None:
@@ -21417,7 +22901,10 @@ class MainWindow(QMainWindow):
         imported, self._recent_candidate = self._recent_candidate, None
         if imported is None:
             return
-        self.settings.remember(imported)
+        batch = getattr(self, "_recent_batch", ())
+        self._recent_batch = ()
+        for path in batch or (imported,):
+            self.settings.remember(path)
         self._store_settings()
         self._show_recent()
 
@@ -21431,6 +22918,7 @@ class MainWindow(QMainWindow):
         Kette hält an“ abgewiesen.
         """
         self._recent_candidate = None
+        self._recent_batch = ()
         self._plate_of_import = None
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
@@ -21438,6 +22926,16 @@ class MainWindow(QMainWindow):
         show_error(error, self)
 
     def _on_project(self) -> None:
+        if self._tour_project is not self.session.project:
+            self._tour_project = self.session.project
+            self._remove_tour()
+            if self._downloading:
+                self._cancel_download()
+                self._end_download()
+        document = self.session.project.document
+        if getattr(self, "_gesture_document", document) is not document:
+            self._discard_gestures()
+            self._gesture_document = document
         request = self._map_request
         if request is not None and not self._map_is_current(request):
             self._cancel_map_worker()
@@ -21550,16 +23048,44 @@ class MainWindow(QMainWindow):
         # Baum der Name des Modells (Durchsicht 0.5.1).
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
         self.header.show_profile(self.session.profile, self.session.last_result)
-        # Die Projektangaben wachsen erst mit dem ersten Ergebnis. Dann muss
-        # die Werkzeugleiste ihren Text/Icon-Umschalter erneut bewerten;
-        # andernfalls behielten sieben ausgeschriebene Knöpfe den Platz und
-        # ließen vom Projektnamen auf 1024 Pixeln nur „c…)“ stehen.
+        target = self.session.review_target()
+        self.header.show_target(target.title, target.details)
+        self._update_review_status()
+        # Die Projektangaben wachsen erst mit dem ersten Ergebnis.
         self._fit_toolbar()
         self._update_facts()
 
+    def _update_review_status(self) -> None:
+        """Bindet Prüfzustände an denselben Dokumentstand wie den Bericht."""
+        target = self.session.review_target()
+        reasons = list(target.missing)
+        if self.session.busy:
+            reasons.append(tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar."))
+        elif not self.session.result_current:
+            reasons.append(
+                tr("Für den aktuellen Stand liegt noch keine abgeschlossene Bewertung vor.")
+            )
+        states = tuple(self.session.check_states.values())
+        if not states and self.session.result_current and self.session.last_result is not None:
+            states = self.session.last_result.check_states
+        result = self.session.last_result
+        names = (
+            {key: str(body.name) for key, body in result.scene.objects.items()} if result else {}
+        )
+        checks, unfinished = check_summary(states, names)
+        reasons.extend(unfinished)
+        if self._print_findings.result is self.session.last_result:
+            layers, unfinished = check_summary(self._print_findings.check_states.values(), names)
+        else:
+            layers, unfinished = check_summary(())
+        reasons.extend(unfinished)
+        scope = tr("Bewertung der gesamten aktuellen Szene. G-Code wurde hier nicht geprüft.")
+        basis = "\n".join(filter(None, (target.details, scope, checks, layers)))
+        self.report.set_review_context(basis, reasons)
+
     def _is_current_result(self, result: Any) -> bool:
         """Ob ein Ergebnis noch der Stand ist, den das Fenster zeigt."""
-        return result is self.session.last_result
+        return result is self.session.last_result and self.session.result_current
 
     def _add_print_findings(self, found: list[Finding]) -> None:
         """Die Befunde der Schichtanalyse in den Bericht (§22.2).
@@ -21568,6 +23094,17 @@ class MainWindow(QMainWindow):
         beim nächsten Stand wieder ab, und der Ablauf liefert die neuen nach.
         """
         self.report.add_findings(list(found))
+        if self._pose_report_target is not None:
+            relevant = [
+                str(finding.message)
+                for finding in found
+                if finding.object_id == self._pose_report_target
+            ]
+            if relevant:
+                previous = self.pose_bar.analysis.note.text()
+                notes = [previous] if previous else []
+                notes.extend(note for note in relevant if note not in previous)
+                self.pose_bar.analysis.show_note(" · ".join(notes))
 
     def effective_print_settings(self) -> PrintSettings:
         """Die Druckeinstellungen, die für dieses Projekt wirklich gelten.
@@ -21688,7 +23225,14 @@ class MainWindow(QMainWindow):
         mit den gebauten: Nur dann gehört der Hinweis zur Kalibrierung dazu.
         """
         fitted = bool(fit_checks.fit_kinds_for(self.session.project.document, result.scene.objects))
-        self._print_findings.start(result, self._print_profile(settings), settings, fitted=fitted)
+        self._print_findings.start(
+            result,
+            self._print_profile(settings),
+            settings,
+            fitted=fitted,
+            missing_basis=missing_profile_basis(self.session.project.document),
+        )
+        self._update_review_status()
 
     def _print_profile(self, settings: PrintSettings) -> Profile:
         """Das Profil der Druckbefunde: das des Projekts mit dem Raster und der
@@ -21916,6 +23460,7 @@ class MainWindow(QMainWindow):
             self._waiting = False
 
     def _on_busy(self, busy: bool) -> None:
+        self._update_review_status()
         if busy:
             self._run_timing.begin()
         else:
@@ -22707,6 +24252,15 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed():
             return
+        if op in {"translate_object", "rotate_object"} and params.get("mode") == "absolute":
+            chosen = self.inputs_for_transform()
+            if chosen:
+                self.session.apply(
+                    REGISTRY.get(op).title, [OperationDraft(op=op, inputs=chosen, params=params)]
+                )
+            else:
+                self.announce(_needs_objects(0))
+            return
         # **Erst der Baustein, dann das Merkmal, dann der Körper.** Ein Wert
         # an einem Bausteinmerkmal geht in den Schritt des Bausteins
         # (:meth:`_move_the_part`) — derselbe Weg wie beim Zug am Griff.
@@ -23175,10 +24729,12 @@ class MainWindow(QMainWindow):
             raw = None
         name = expressions.bound_name(raw)
         if name is not None and self.parameters.focus_parameter(name):
+            parameter = self.session.project.document.parameters.get(name)
+            title = str(parameter.title or parameter.name) if parameter is not None else name
             self.announce(
                 tr(
                     "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
-                ).format(name=name)
+                ).format(name=title)
             )
             return
         self.edit_operation(error.op_id, field)
@@ -24011,6 +25567,7 @@ class MainWindow(QMainWindow):
         # Arbeitsbereich. Auf der Startfläche stehen Neu, Öffnen und Import
         # bereits als beschriftete Einstiege bereit.
         self.toolbar.setVisible(not show)
+        self.feature_dock.set_workspace_visible(not show)
         # Die Menüleiste folgt dem Schnitt: was eine offene Szene voraussetzt,
         # steht auf dem Startbildschirm nicht herum. Die Kürzel der Einträge
         # bleiben gültig — Qt registriert sie am Fenster, nicht an der
@@ -24272,6 +25829,11 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
+        paths = accepted_paths(event)
+        if len(paths) > 1:
+            self.import_paths(paths)
+            event.acceptProposedAction()
+            return
         image = _image_path(event)
         if image is not None:
             self._drop_image(image)
@@ -24279,8 +25841,10 @@ class MainWindow(QMainWindow):
             return
         paths = accepted_paths(event)
         if paths:
-            self.open_path(paths[0])
-            self._say_files_left_out(len(paths) - 1)
+            if len(paths) > 1:
+                self.import_paths(paths)
+            else:
+                self.open_path(paths[0])
             event.acceptProposedAction()
             return
         # Ein Verweis aus dem Browser ist dieselbe Handlung wie eine Datei,
@@ -24294,24 +25858,6 @@ class MainWindow(QMainWindow):
         if other is not None:
             self.open_path(other)
             event.acceptProposedAction()
-
-    def _say_files_left_out(self, count: int) -> None:
-        """Sagen, dass von mehreren gezogenen Dateien nur die erste kam.
-
-        Mehrere auf einmal zu übernehmen ist zurückgestellt (RM-131). Bis
-        dahin fielen die übrigen **still** weg: Wer die Teile eines Modells
-        zusammen zog, bekam eines und keinen Satz dazu — und suchte die
-        anderen im Objektbaum (Review Fenster 0.5.0, 22.09.2026).
-        """
-        if count <= 0:
-            return
-        self.announce(
-            tr("Eine weitere Datei nicht geöffnet — bitte einzeln einfügen.")
-            if count == 1
-            else tr("{count} weitere Dateien nicht geöffnet — bitte einzeln einfügen.").format(
-                count=count
-            )
-        )
 
     def _drop_image(self, path: Path) -> None:
         """Ein Bild auf dem Fenster ist ein Relief-Wunsch (§25).
@@ -24391,6 +25937,8 @@ class MainWindow(QMainWindow):
         self._cancel_gcode()
         self._cancel_export()
         self._cancel_sculpt_check()
+        if self._slice_worker is not None:
+            self._slice_worker.cancel.cancel()
         # Der Erzeugen-Dialog ist nichtmodal und kann neben dem Fenster einen
         # Wurf laufen haben; dessen Arbeiter hält die Leine des Dialogs, und
         # ``wait_for_all`` unten wartet auf ihn — angehalten wird er hier.
@@ -24494,6 +26042,9 @@ class MainWindow(QMainWindow):
         ausdrücklich gekappt, bevor Qt die Widgets zerstört.
         """
         self._close_requested = True
+        self._cancel_sculpt_preview()
+        if self._rebuild_dialog is not None:
+            self._rebuild_dialog.reject()
         self._cancel_pending_question()
         # **Was an der Sitzung hängt und keine Methode ist, geht hier.** Der
         # Vorschlag und der offene Operationsdialog halten je einen Empfänger
@@ -24607,6 +26158,8 @@ class MainWindow(QMainWindow):
         # ausläuft, dürfte eine neue Eingabe den bereits geprüften
         # Dokumentstand verändern und ohne zweite Verwerfentscheidung
         # verschwinden.
+        if self._rebuild_dialog is not None:
+            self._rebuild_dialog.reject()
         self._cancel_pending_question()
         self.setEnabled(False)
         if self.wait_for_workers(0) is False:

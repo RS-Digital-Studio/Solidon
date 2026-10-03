@@ -181,6 +181,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
 
     class _ExitWindow:
         _remote = None
+        _rebuild_dialog = None
         session = _Session()
         settings = type("Settings", (), {"window_geometry": ""})()
         _usage = _Usage()

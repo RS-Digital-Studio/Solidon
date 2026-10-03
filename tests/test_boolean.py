@@ -453,6 +453,231 @@ def test_union_of_two_overlapping_cubes() -> None:
     assert not result.findings, "the plain case has nothing to report"
 
 
+def _union_bore_case(kernel, obstruction, quality, hole_first, token=None, turned=False):
+    """Die Ø9-Bohrung liegt im ersten oder dritten von drei echten Eingängen."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.prepare import drill
+    from app.core.perceive.features import detect
+    from tests.helpers import exact_kernel
+
+    def make_box(width, depth, height, position):
+        if kernel == "brep":
+            return edit.moved(edit.box(width, depth, height), position)
+        body = trimesh.creation.box(extents=(width, depth, height))
+        body.apply_translation((position[0], position[1], position[2] + height / 2.0))
+        return MeshData.of(body)
+
+    if kernel == "brep":
+        exact_kernel()
+        source = edit.boolean(
+            "difference",
+            [make_box(30.0, 30.0, 10.0, (0, 0, 0)), edit.moved(edit.cylinder(9, 12), (0, 0, -1))],
+        )
+        features = features_of(source)
+    else:
+        source = drill(
+            make_box(30.0, 30.0, 10.0, (0, 0, 0)),
+            position=(0, 0, 10),
+            axis="z",
+            diameter=9.0,
+            depth=0.0,
+            profile=profiles.make_profile(),
+            compensate=False,
+        ).mesh
+        features = detect(source)
+    hole = next(item for item in features.values() if item.kind == "hole")
+    assert hole.params["through"]
+    tools = {
+        "partial": (10.0, 12.0, 10.0, (5.0, 0.0, 0.0)),
+        "filled": (12.0, 12.0, 10.0, (0.0, 0.0, 0.0)),
+        "blind": (12.0, 12.0, 2.0, (0.0, 0.0, 10.0)),
+        "unrelated": (3.0, 3.0, 10.0, (11.0, 0.0, 0.0)),
+        "gap": (12.0, 12.0, 2.0, (0.0, 0.0, 10.1)),
+    }
+    if obstruction == "enclosed":
+        caps = [make_box(12, 12, 2, (0, 0, z)) for z in (-2, 10)]
+        tool = edit.boolean("union", caps) if kernel == "brep" else boolean("union", caps).mesh
+    else:
+        tool = make_box(*tools[obstruction])
+    far = make_box(2.0, 2.0, 2.0, (40.0, 0.0, 0.0))
+    entries = [
+        SceneObject("obj_hole", "Bohrplatte", source, features=features),
+        SceneObject("obj_tool", "Steg", tool),
+        SceneObject("obj_far", "Anderer Körper", far),
+    ]
+    if turned:
+        from app.core.geom.transform import moved_object, rotation
+
+        matrix = rotation("y", 37.0)
+        entries = [moved_object(item, matrix) for item in entries]
+    if not hole_first:
+        entries.reverse()
+    load_operations()
+    spec = REGISTRY.get("union_objects")
+    ctx = OpContext(
+        scene=Scene(objects={item.id: item for item in entries}),
+        inputs=entries,
+        params=spec.params(),
+        profile=profiles.make_profile(),
+        quality=quality,
+        seed=17,
+        progress=lambda *_: None,
+        ask=lambda _q, choices: choices[0],
+        cancelled=token or NeverCancelled(),
+    )
+    return spec.fn(ctx), hole, entries
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("hole_first", [False, True])
+@pytest.mark.parametrize(
+    "obstruction", ["partial", "filled", "blind", "enclosed", "unrelated", "gap"]
+)
+def test_union_reports_the_measured_change_of_every_input_bore(
+    kernel, quality, hole_first, obstruction
+):
+    """Erkennungsverlust beweist kein Verschließen; Volumen und echte Mündungsfläche schon."""
+    result, hole, inputs = _union_bore_case(kernel, obstruction, quality, hole_first)
+    assert result.outputs[0].mesh.is_watertight
+    findings = [item for item in result.findings if item.code.startswith("union.bore_")]
+    if obstruction in ("unrelated", "gap"):
+        assert not findings
+        return
+    assert [item.code for item in findings] == [f"union.bore_{obstruction}"]
+    finding = findings[0]
+    assert finding.severity == "warning"
+    assert finding.object_id == inputs[0].id
+    assert finding.values["source_object"] == "obj_hole"
+    assert finding.values["source_feature"] == hole.id
+    assert finding.location == pytest.approx((0, 0, 5), abs=1e-6)
+    assert {item.id for item in finding.suggestions} >= {"show_location", "change_selection"}
+    assert finding.values["remaining_volume_mm3"] >= 0.0
+    if obstruction == "filled":
+        assert finding.values["remaining_volume_mm3"] == pytest.approx(0, abs=1e-6)
+    elif obstruction in ("blind", "enclosed"):
+        assert finding.values["remaining_volume_mm3"] == pytest.approx(
+            math.pi * 4.5**2 * 10, rel=0.01
+        )
+    else:
+        assert finding.values["remaining_volume_mm3"] == pytest.approx(
+            math.pi * 4.5**2 * 5, rel=0.01
+        )
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("obstruction", ["partial", "filled", "blind", "enclosed", "gap"])
+def test_union_bore_measurements_follow_a_freely_tilted_source(kernel, obstruction):
+    """Die ganze Mündungsfläche wird in ihrer eigenen Ebene geprüft."""
+    result, _, _ = _union_bore_case(kernel, obstruction, "fine", False, turned=True)
+    found = [item.code for item in result.findings if item.code.startswith("union.bore_")]
+    assert found == ([] if obstruction == "gap" else [f"union.bore_{obstruction}"])
+
+
+def test_an_unmeasurable_union_bore_is_not_claimed_as_closed(monkeypatch):
+    from app.core.geom import prepare_ops
+
+    monkeypatch.setattr(prepare_ops, "_union_bore_space", lambda *_: None)
+    result, _, _ = _union_bore_case("mesh", "partial", "fine", True)
+    found = [item for item in result.findings if item.code.startswith("union.bore_")]
+    assert [item.code for item in found] == ["union.bore_unchecked"]
+    assert found[0].suggestions and found[0].location is not None
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_cancelling_a_union_bore_measurement_does_not_publish_a_partial_answer(kernel, monkeypatch):
+    from app.core.geom import prepare_ops
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+    original = prepare_ops._union_bore_space
+
+    def cancelled(*args):
+        answer = original(*args)
+        token.cancel()
+        return answer
+
+    monkeypatch.setattr(prepare_ops, "_union_bore_space", cancelled)
+    with pytest.raises(OperationCancelled):
+        _union_bore_case(kernel, "filled", "fine", True, token=token)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_union_bore_warning_survives_history_disk_cache_and_project(kernel, quality, tmp_path):
+    """Der Befund folgt demselben Stack wie Volumen, Rückgängig und spätere Lageänderung."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from tests.helpers import exact_kernel
+
+    if kernel == "brep":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    create = "create_brep_box" if kernel == "brep" else "create_box"
+    history.apply(
+        "Platte", [OperationDraft(create, params={"width": 30, "depth": 30, "height": 10})]
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                "drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 9, "z": 10, "compensate": False},
+                seed=7,
+            )
+        ],
+    )
+    history.apply(
+        "Deckplatte",
+        [OperationDraft(create, params={"width": 12, "depth": 12, "height": 2, "z": 10})],
+    )
+    disk = DiskCache(directory=tmp_path / "cache", codec=MeshCodec())
+    cache = ResultCache(disk=disk)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    before = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert before.complete
+    history.apply(
+        "Vereinigen", [OperationDraft("union_objects", inputs=("obj_1", "obj_2"), seed=7)]
+    )
+    for active_cache in (cache, cache, ResultCache(disk=disk)):
+        after = evaluate(project.document, profile, quality=quality, cache=active_cache)
+        assert after.complete, after.scene.report.findings
+        finding = next(
+            item for item in after.scene.report.findings if item.code == "union.bore_blind"
+        )
+        assert finding.op_id == project.document.ops[-1].id
+    history.undo()
+    restored = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert restored.complete and len(restored.scene.objects) == 2
+    assert not [
+        item for item in restored.scene.report.findings if item.code.startswith("union.bore_")
+    ]
+    history.redo()
+    history.apply(
+        "Danach versetzen",
+        [OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 10})],
+    )
+    shifted = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert shifted.complete
+    path = tmp_path / "union-bore.p3d"
+    save(project, path)
+    reopened = load(path)
+    repeated = evaluate(
+        reopened.document, profile, quality=quality, sources=ProjectSources(reopened)
+    )
+    assert repeated.complete
+    assert repeated.scene.objects["obj_1"].mesh.volume == pytest.approx(
+        after.scene.objects["obj_1"].mesh.volume, abs=1e-6
+    )
+    assert "union.bore_blind" in [item.code for item in repeated.scene.report.findings]
+
+
 @pytest.mark.parametrize(
     ("kind", "tool", "volume"),
     [

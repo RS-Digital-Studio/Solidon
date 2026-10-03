@@ -459,6 +459,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "torus_tube",
         # Die Gangtiefe einer Steigung muss unter dem Radius bleiben (P2.6).
         "thread_pitch",
+        # Boden, Radius und Einsatz eines Behälters an seinen Außenmaßen.
+        "container_dimensions",
         # Ein Winkelmaß der Skizze: „zwischen null und 180 Grad" nennt beide
         # Grenzen wörtlich, und über dem Satz stünde sonst der vage Titel.
         "angle_range",

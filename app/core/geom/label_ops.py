@@ -742,6 +742,21 @@ def opposite_side(mesh: MeshData, position: Vec3, normal: Vec3) -> Vec3 | None:
     # an einem hohlen Quader 5 mm hinter der Vorderseite, und die Rückseite
     # der Schrift stand im Hohlraum statt außen.
     leaving &= ~_cavity_faces(mesh)[hit]
+    # Eine Entlüftung verbindet Innen- und Außenhaut zu derselben Schale.
+    # Der beim Aushöhlen belegte Innenraum bleibt trotzdem bekannt: Treffen
+    # auf dessen Haut sind keine äußere Rückseite (RM-422).
+    if mesh.cavity is not None:
+        from app.core.units import weld_tolerance
+
+        cavity = mesh.cavity.raw
+        inside_travel, _inside_hit = ray_hits_along(
+            np.asarray(cavity.vertices, dtype=float)[np.asarray(cavity.faces, dtype=np.int64)],
+            position,
+            way,
+        )
+        tolerance = weld_tolerance(mesh.bounds.diagonal)
+        for inside_distance in inside_travel:
+            leaving &= np.abs(travel - inside_distance) > tolerance
     if not np.any(leaving):
         return None
     distance = float(np.min(travel[leaving]))
@@ -924,7 +939,8 @@ class _Letters:
     # nach der Umlaufzahl (``nonzero_fill``) — überlappende Striche einer
     # variablen Schrift bleiben voll —, vertieft trägt die Schrift ihren Slot in
     # den Rillen, und am exakten Körper bleibt der Körper exakt (P2.8).
-    cache_version="3",
+    # 4: Die Rückseite überspringt belegte Innenhaut auch bei einer Entlüftung.
+    cache_version="4",
     title=_("Text aufbringen"),
     category="label",
     params=LabelParams,

@@ -433,13 +433,15 @@ def _n(value: float) -> str:
 def camera(around_degrees: float = -35.0, down_degrees: float = 25.0) -> np.ndarray:
     """Die Blickrichtung: gedreht und geneigt, wie eine Isometrie.
 
-    Als ``object`` deklariert, weil ``numpy`` erst hier importiert wird — der
-    Kern soll auch ohne die Geometrie-Zusatzpakete importierbar bleiben.
+    Positive Neigung schaut von oben und vorn auf das Modell. Die Weltachse
+    Z zeigt im Kamerabild nach oben; erst die SVG-Ausgabe kehrt dessen Y um.
+    ``numpy`` wird erst hier importiert, damit der Kern auch ohne die
+    Geometrie-Zusatzpakete importierbar bleibt.
     """
     import numpy as np
 
     around = math.radians(around_degrees)
-    down = math.radians(down_degrees)
+    down = math.radians(-down_degrees)
     turn = np.array(
         [
             [math.cos(around), -math.sin(around), 0.0],

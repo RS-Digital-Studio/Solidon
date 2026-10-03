@@ -835,6 +835,37 @@ def test_splitting_a_plate_with_holes_stays_closed() -> None:
 # --- arranging ------------------------------------------------------------------
 
 
+def test_slender_poles_are_placed_near_the_middle_without_moving_neighbours(
+    profile: Profile,
+) -> None:
+    """RM-318: Vier Fahnenstangen Ø7,7 × 122 mm rücken näher zur Bettmitte.
+
+    Die Platte daneben bleibt, wo die gewöhnliche Anordnung sie hinlegt; jede
+    Stange liegt höchstens so weit von der Mitte wie ohne Mittellage, und
+    dieselbe Eingabe ergibt dieselbe Lage.
+    """
+    from app.core.geom.prepare import arrange_on_bed, check_collisions
+
+    plate = MeshData.of(trimesh.creation.box(extents=(180.0, 80.0, 3.0)))
+    pole = MeshData.of(trimesh.creation.cylinder(radius=7.7 / 2.0, height=122.0))
+    bodies = [plate, pole, pole, pole, pole]
+    plain = arrange_on_bed(bodies, profile, spacing=5.0, plates=2)
+    result = arrange_on_bed(bodies, profile, spacing=5.0, plates=2, centre_slender=True)
+    assert result.plate_count == 1
+    assert not check_collisions(result.meshes)
+    assert result.meshes[0].bounds == plain.meshes[0].bounds, "die Platte bleibt liegen"
+
+    def distance(mesh: MeshData) -> float:
+        return math.hypot(mesh.bounds.centre[0], mesh.bounds.centre[1])
+
+    for moved, before in zip(result.meshes[1:], plain.meshes[1:], strict=True):
+        assert distance(moved) <= distance(before) + EPS_GEOM
+        assert moved.bounds.size[2] == pytest.approx(122.0)
+    assert sum(map(distance, result.meshes[1:])) < sum(map(distance, plain.meshes[1:]))
+    again = arrange_on_bed(bodies, profile, spacing=5.0, plates=2, centre_slender=True)
+    assert [mesh.bounds for mesh in again.meshes] == [mesh.bounds for mesh in result.meshes]
+
+
 def test_arranging_puts_the_bodies_on_the_plate(profile: Profile) -> None:
     bodies = [cube_mesh(), apply(cube_mesh(), translation((200.0, 200.0, 50.0)))]
     result = arrange_on_bed(bodies, profile, spacing=5.0)
@@ -7810,6 +7841,69 @@ def test_a_clean_cavity_is_closed_without_the_slow_winding_repair(monkeypatch) -
     assert len(body.raw.faces) == len(reference.raw.faces)
     indices = cavity_surface_indices(mesh, (hole, *chain))
     assert len(indices) > 0
+
+
+@pytest.mark.parametrize("reversed_winding", (False, True))
+@pytest.mark.parametrize("offset", (0.0, 100_000_000.0))
+def test_cavity_orientation_does_not_compute_unused_mass_moments(
+    monkeypatch: pytest.MonkeyPatch, reversed_winding: bool, offset: float
+) -> None:
+    """RM296: Vorzeichen und Volumen brauchen weder Schwerpunkt noch Trägheit."""
+    from app.core.geom import prepare_ops
+    from app.core.geom.mesh import signed_volume
+
+    raw = trimesh.creation.box(extents=(2.0, 3.0, 4.0))
+    raw.apply_translation((offset, offset, offset))
+    if reversed_winding:
+        raw.invert()
+    source = MeshData.of(raw)
+    faces = np.asarray(raw.faces).copy()
+
+    def refused(*args, **kwargs):
+        raise AssertionError("Der Hohlraum braucht nur sein körpernahes Volumenintegral.")
+
+    monkeypatch.setattr(trimesh.triangles, "mass_properties", refused)
+    result = prepare_ops._body_from_faces(source, tuple(range(12)), allowed_rings=(0,))
+
+    assert result is not None
+    assert result.is_watertight and result.raw.is_winding_consistent
+    assert signed_volume(result.raw) == pytest.approx(24.0)
+    np.testing.assert_array_equal(raw.faces, faces)
+
+
+@pytest.mark.parametrize("through", (False, True))
+@pytest.mark.parametrize("grows", (False, True))
+def test_bore_rims_share_one_surface_query(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, through: bool, grows: bool
+) -> None:
+    """RM296: Beide Enden gemeinsam prüfen; ein Sacklochboden bleibt geschlossen."""
+    from app.core.geom import prepare_ops
+
+    source = MeshData.of(trimesh.creation.box(extents=(30.0, 30.0, 10.0)))
+    drilled = drill(
+        source,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=4.0,
+        depth=0.0 if through else 4.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    features = detect(drilled)
+    hole = next(feature for feature in features.values() if feature.kind == "hole")
+    calls: list[int] = []
+    original = prepare_ops._shares_in_material
+
+    def recorded(mesh, rims):
+        calls.append(len(rims))
+        return original(mesh, rims)
+
+    monkeypatch.setattr(prepare_ops, "_shares_in_material", recorded)
+    rims = prepare_ops._bore_end_rims(drilled, hole, features, grows=grows)
+
+    assert len(rims) == 2
+    assert sum(rim.open for rim in rims) == (2 if through else 1) * int(grows)
+    assert calls == ([2] if grows else [])
 
 
 def test_a_ray_along_a_large_mesh_hits_what_the_full_comparison_hits() -> None:

@@ -16,8 +16,426 @@ from app.core.types import Feature
 from tests.helpers import exact_kernel
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("consumer", ["primitive", "centred", "part"])
+def test_a_saved_surface_placement_keeps_its_edge_distances(
+    profile, kind, quality, consumer, tmp_path
+):
+    """Eine geänderte Trägerbreite bewegt den Ansatz, seine zwei Randabstände bleiben."""
+    from app.core.geom.mesh import MeshCodec, as_mesh_data
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import load, new_project, save
+    from app.core.types import Parameter
+    from tests.helpers import inside
+
+    if kind == "brep":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    cache_directory = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=cache_directory))
+    create = "create_box" if kind == "mesh" else "create_brep_box"
+    history.apply(
+        "Träger",
+        [OperationDraft(op=create, params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    prefix = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert prefix.complete
+    source = prefix.scene.objects["obj_1"]
+    mesh = as_mesh_data(source.mesh)
+    surface = placement.prepare_surface(mesh, _top(mesh), source.features)
+    hit = placement.at_point(surface, (-12.0, -6.0, 10.0))
+    assert sorted(edge.distance for edge in hit.edges) == pytest.approx([8.0, 9.0])
+    name = create if consumer != "part" else "insert_magnet_pocket"
+    values = placement.bound_surface_values(REGISTRY.get(name), source, hit)
+    project.document.parameters["edge_distance"] = Parameter("edge_distance", hit.edges[0].distance)
+    values["surface_distance_1"] = "=@edge_distance"
+    if consumer != "part":
+        values.update(width=4.0, depth=6.0, height=8.0)
+        if consumer == "centred":
+            values["surface_seat"] = "centred"
+    history.apply(
+        "Auf die Fläche",
+        [OperationDraft(op=name, inputs=() if consumer != "part" else (source.id,), params=values)],
+    )
+    before = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert before.complete, before.scene.report.findings
+    history.change_params(
+        project.document.ops[0].id, {"width": 60.0, "depth": 50.0, "height": 12.0}
+    )
+    changed = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert changed.complete, changed.scene.report.findings
+    made = changed.scene.objects["obj_2" if consumer != "part" else "obj_1"]
+    if consumer != "part":
+        low = (-2.0, -3.0, 12.0) if consumer == "centred" else (-24.0, -19.0, 12.0)
+        high = (2.0, 3.0, 20.0) if consumer == "centred" else (-20.0, -13.0, 20.0)
+        assert made.mesh.bounds.minimum == pytest.approx(low)
+        assert made.mesh.bounds.maximum == pytest.approx(high)
+    else:
+        body = as_mesh_data(made.mesh)
+        assert inside(body, [(-22.0, -16.0, 11.0), (-12.0, -6.0, 11.0)]).tolist() == [False, True]
+    assert made.mesh.is_watertight
+    hits = cache.statistics.hits
+    cached = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert cached.complete and cache.statistics.hits > hits
+    history.undo()
+    undone = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert undone.complete
+    original = before.scene.objects[made.id]
+    assert undone.scene.objects[made.id].mesh.volume == pytest.approx(
+        original.mesh.volume, abs=1e-6
+    )
+    history.redo()
+    redone = evaluate(project.document, profile, quality=quality, cache=cache)
+    assert redone.complete
+    assert redone.scene.objects[made.id].mesh.bounds.minimum == pytest.approx(
+        made.mesh.bounds.minimum
+    )
+    saved = save(project, tmp_path / "surface.p3d")
+    loaded = load(saved)
+    assert loaded.document.ops[-1].params["surface_distance_1"] == "=@edge_distance"
+    reopened = evaluate(
+        loaded.document,
+        profile,
+        quality=quality,
+        cache=ResultCache(disk=DiskCache(codec=MeshCodec(), directory=cache_directory)),
+    )
+    assert reopened.complete
+    assert reopened.scene.objects[made.id].mesh.volume == pytest.approx(made.mesh.volume, abs=1e-6)
+    assert reopened.scene.objects[made.id].mesh.bounds.minimum == pytest.approx(
+        made.mesh.bounds.minimum
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_surface_binding_without_detected_features_keeps_the_carrier_and_its_frame(profile, kind):
+    """Auch eine unbenannte Fläche liefert den Träger und lebt in dessen gespeicherter Lage."""
+    from dataclasses import replace
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import moved_object
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.project import new_project
+
+    if kind == "brep":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    create = "create_box" if kind == "mesh" else "create_brep_box"
+    History(project.document).apply(
+        "Träger", [OperationDraft(op=create, params={"width": 40.0, "depth": 30.0, "height": 10.0})]
+    )
+    result = evaluate(project.document, profile)
+    source = replace(result.scene.objects["obj_1"], features={})
+    mesh = as_mesh_data(source.mesh)
+    prepared = placement.prepare_surface(mesh, _top(mesh), source.features)
+    hit = placement.at_point(prepared, (-12.0, -6.0, 10.0))
+    spec = REGISTRY.get(create)
+    values = placement.bound_surface_values(spec, source, hit)
+    assert not values["surface_target"]
+    matrix = np.array(
+        ((0.0, -1.0, 0.0, 7.0), (1.0, 0.0, 0.0, 11.0), (0.0, 0.0, 1.0, 4.0), (0.0, 0.0, 0.0, 1.0))
+    )
+    moved = moved_object(source, matrix, cancelled=NeverCancelled())
+    binding = placement.bind_surface(
+        spec,
+        values,
+        {moved.id: moved},
+        {moved.id: "moved"},
+        ask=lambda *_: pytest.fail("Eindeutiger Bezug fragt nicht"),
+        announce=None,
+        cancelled=NeverCancelled(),
+    )
+    assert binding.source_id == moved.id
+    assert binding.prepared is not None and binding.placed is not None
+    assert binding.placed.point == pytest.approx((13.0, -1.0, 14.0))
+    assert [edge.distance for edge in binding.placed.edges] == pytest.approx(
+        [edge.distance for edge in hit.edges]
+    )
+    assert values["x"] == pytest.approx(-12.0), "Die gespeicherten Parameter bleiben unverändert."
+    assert not binding.answers
+
+
 def _top(mesh):
     return int(np.argmax(np.asarray(mesh.raw.face_normals)[:, 2]))
+
+
+@pytest.mark.parametrize("painted", [False, True])
+def test_native_surface_snapshot_keeps_exact_normals_and_owns_its_caches(profile, painted):
+    """Die vorhandene Attributkopie hält Topologie, Merkmalsdreiecke und Arbeitercache getrennt."""
+    from dataclasses import replace
+
+    from app.core.brep.kernel import Solid
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.project import new_project
+
+    exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Träger",
+        [OperationDraft(op="create_brep_cylinder", params={"diameter": 20.0, "height": 20.0})],
+    )
+    source = evaluate(project.document, profile).scene.objects["obj_1"]
+    body = source.mesh
+    assert isinstance(body, Solid)
+    if painted:
+        body = body.with_triangle_slots(
+            tuple(int(index) % 2 for index in body.raw.face_attributes["solidon_brep_face"])
+        )
+        source = replace(source, mesh=body)
+    snapshot = replace(source, mesh=body.with_triangle_slots(tuple(body.slot_indices)))
+    assert isinstance(snapshot.mesh, Solid)
+    assert snapshot.mesh._cache is not body._cache
+    assert snapshot.mesh.raw._cache is not body.raw._cache
+    assert not snapshot.mesh.shape.IsPartner(body.shape)
+    assert np.array_equal(snapshot.mesh.raw.vertices, body.raw.vertices)
+    assert np.array_equal(snapshot.mesh.raw.faces, body.raw.faces)
+    assert snapshot.mesh.slot_indices == body.slot_indices
+    keys = set(body._cache)
+    original_normals = np.asarray(body.raw.face_normals).copy()
+    feature = next(entry for entry in source.features.values() if entry.kind == "pin")
+    point = placement.surface_at_feature(
+        snapshot, feature, point=(6.0, 8.0, 10.0), cancelled=NeverCancelled()
+    )
+    assert point.point == pytest.approx((6.0, 8.0, 10.0), abs=1e-6)
+    assert point.normal == pytest.approx((0.6, 0.8, 0.0), abs=1e-6)
+    assert set(body._cache) == keys
+    assert np.array_equal(body.raw.face_normals, original_normals)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("shape", ["cylinder", "sphere"])
+def test_curved_surface_binding_keeps_its_point_after_scaling_and_turning(profile, kind, shape):
+    """Ein gemeinsamer Maßstab darf den gespeicherten Radius nicht zweimal anwenden."""
+    from app.core.geom.transform import (
+        composed,
+        moved_object,
+        moved_points,
+        scaling,
+        translation,
+        turned,
+    )
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.project import new_project
+
+    if kind == "brep":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    creator = f"create_{'brep_' if kind == 'brep' else ''}{shape}"
+    params = {"diameter": 20.0, **({"height": 20.0} if shape == "cylinder" else {})}
+    History(project.document).apply("Träger", [OperationDraft(op=creator, params=params)])
+    source = evaluate(project.document, profile).scene.objects["obj_1"]
+    feature = max(
+        (f for f in source.features.values() if f.kind != "face"), key=lambda f: len(f.face_indices)
+    )
+    point = (6.0, 8.0, 10.0)
+    if kind == "mesh" and shape == "sphere":
+        index = max(
+            feature.face_indices,
+            key=lambda i: float(source.mesh.raw.face_normals[i] @ (0.6, 0.8, 0.0)),
+        )
+        point = tuple(source.mesh.raw.triangles[index].mean(axis=0))
+    hit = placement.surface_at_feature(source, feature, point=point)
+    spec = REGISTRY.get("create_box")
+    values = placement.bound_surface_values(spec, source, hit)
+    matrix = composed(translation((7.0, 11.0, 4.0)), rotation("y", 17.0), scaling((2.0, 2.0, 2.0)))
+    moved = moved_object(source, matrix, cancelled=NeverCancelled())
+    result = placement.bind_surface(
+        spec,
+        values,
+        {moved.id: moved},
+        {moved.id: "scaled"},
+        ask=lambda *_: pytest.fail("Eindeutiger Bezug fragt nicht"),
+        announce=None,
+        cancelled=NeverCancelled(),
+    )
+    assert result.placed is not None
+    expected = moved_points(np.asarray([hit.point]), matrix)[0]
+    normal = turned(np.asarray(hit.normal), matrix) / 2.0
+    assert result.placed.point == pytest.approx(expected, abs=1e-6)
+    assert result.placed.normal == pytest.approx(normal, abs=1e-6)
+
+
+def _unrecognised_bound_box():
+    """Analytischer Quader, dessen Fläche absichtlich keinen Merkmalsnamen trägt."""
+    from app.core.types import IDENTITY_FRAME, SceneObject
+
+    load_operations()
+    mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 10.0)))
+    source = SceneObject(id="obj_1", name="Träger", mesh=mesh, frame=IDENTITY_FRAME)
+    hit = placement.at_point(placement.prepare_surface(mesh, _top(mesh), {}), (-12.0, -6.0, 5.0))
+    spec = REGISTRY.get("create_box")
+    return source, spec, placement.bound_surface_values(spec, source, hit)
+
+
+def test_surface_binding_saves_an_explicit_new_face_and_asks_only_once():
+    """Zwei neue parallele Flächen verlangen eine Wahl; der gewählte Träger bleibt gespeichert."""
+    from dataclasses import replace
+
+    from app.core.scene.cancel import NeverCancelled
+
+    source, spec, values = _unrecognised_bound_box()
+    first, second = source.mesh.raw.copy(), source.mesh.raw.copy()
+    first.vertices[:, 2] += 2.0
+    second.vertices[:, 2] += 22.0
+    changed = replace(source, mesh=MeshData.of(trimesh.util.concatenate((first, second))))
+    asked, announced = [], []
+
+    def choose(question, choices):
+        asked.append((question, choices))
+        return choices[-1]
+
+    result = placement.bind_surface(
+        spec,
+        values,
+        {source.id: changed},
+        {source.id: "two"},
+        ask=choose,
+        announce=announced.append,
+        cancelled=NeverCancelled(),
+    )
+    assert len(asked) == 1 and announced[0] and announced[-1] == ()
+    assert result.answers and result.placed is not None
+    repeated = placement.bind_surface(
+        spec,
+        {**values, **result.answers},
+        {source.id: changed},
+        {source.id: "two"},
+        ask=lambda *_: pytest.fail("Die ausdrückliche Wahl gilt weiter"),
+        announce=None,
+        cancelled=NeverCancelled(),
+    )
+    assert repeated.placed is not None
+    assert repeated.placed.point == pytest.approx(result.placed.point)
+    assert not repeated.answers
+
+
+@pytest.mark.parametrize("fault", ["normal", "edge", "inward", "frame", "radius", "version"])
+def test_surface_binding_rejects_invalid_saved_geometry_with_a_suggestion(fault):
+    """Beschädigte Projektdaten erzeugen weder NaN-Geometrie noch eine stille Ersatzwahl."""
+    import json
+
+    from app.core.scene.cancel import NeverCancelled
+
+    source, spec, values = _unrecognised_bound_box()
+    record = json.loads(values["surface_anchor"])
+    if fault == "normal":
+        record["normal"] = [0.0, 0.0, 0.0]
+    elif fault == "edge":
+        record["edges"][0]["end"] = record["edges"][0]["start"]
+    elif fault == "inward":
+        record["edges"][0]["inward"] = [0.0, 0.0, 0.0]
+    elif fault == "frame":
+        record["frame"][0] = record["frame"][1]
+    elif fault == "radius":
+        record["radius"] = float("nan")
+    else:
+        record["version"] = True
+    values["surface_anchor"] = json.dumps(record)
+    with pytest.raises(ValidationError) as failed:
+        placement.bind_surface(
+            spec,
+            values,
+            {source.id: source},
+            {source.id: "old"},
+            ask=lambda *_: pytest.fail("Ungültige Beschreibung fragt nicht"),
+            announce=None,
+            cancelled=NeverCancelled(),
+        )
+    assert failed.value.suggestions
+
+
+def test_surface_binding_cancelled_during_reselection_publishes_nothing():
+    """Abbruch bei der Frage räumt die Markierung auf und ändert keine Parameter."""
+    from copy import deepcopy
+    from dataclasses import replace
+
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    source, spec, values = _unrecognised_bound_box()
+    first, second = source.mesh.raw.copy(), source.mesh.raw.copy()
+    first.vertices[:, 2] += 2.0
+    second.vertices[:, 2] += 22.0
+    changed = replace(source, mesh=MeshData.of(trimesh.util.concatenate((first, second))))
+    token, announced = CancelSignal(), []
+    before = deepcopy(values)
+
+    def cancel(_question, choices):
+        token.cancel()
+        return choices[0]
+
+    with pytest.raises(OperationCancelled):
+        placement.bind_surface(
+            spec,
+            values,
+            {source.id: changed},
+            {source.id: "two"},
+            ask=cancel,
+            announce=announced.append,
+            cancelled=token,
+        )
+    assert announced[0] and announced[-1] == ()
+    assert values == before
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("shape", ["cylinder", "sphere"])
+def test_surface_binding_follows_a_curved_carrier(profile, kind, quality, shape):
+    """Ein veränderter Radius trägt den Ansatz weiter auf der echten gekrümmten Haut."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    if kind == "brep":
+        exact_kernel()
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    creator = f"create_{'brep_' if kind == 'brep' else ''}{shape}"
+    values = {"diameter": 20.0}
+    if shape == "cylinder":
+        values["height"] = 20.0
+    history.apply("Runder Träger", [OperationDraft(op=creator, params=values)])
+    before = evaluate(project.document, profile, quality=quality)
+    assert before.complete
+    source = before.scene.objects["obj_1"]
+    feature = max(
+        (entry for entry in source.features.values() if entry.kind != "face"),
+        key=lambda entry: len(entry.face_indices),
+    )
+    hit = placement.surface_at_feature(source, feature, point=(10.0, 0.0, 10.0))
+    assert not hit.planar
+    box_name = "create_brep_box" if kind == "brep" else "create_box"
+    assert placement.seats_on(REGISTRY.get(box_name), feature)
+    bound = placement.bound_surface_values(REGISTRY.get(box_name), source, hit)
+    bound.update(width=4.0, depth=4.0, height=4.0)
+    history.apply("Aufsetzen", [OperationDraft(op=box_name, params=bound)])
+    history.change_params(project.document.ops[0].id, {"diameter": 40.0})
+    after = evaluate(project.document, profile, quality=quality)
+    assert after.complete, after.scene.report.findings
+    made = as_mesh_data(after.scene.objects["obj_2"].mesh)
+    centre = np.asarray(made.raw.center_mass)
+    carrier_centre = np.array((0.0, 0.0, 20.0 if shape == "sphere" else 10.0))
+    expected = (
+        carrier_centre
+        + 2.0 * (np.asarray(hit.point) - (0.0, 0.0, 10.0))
+        + 2.0 * np.asarray(hit.normal)
+    )
+    assert centre == pytest.approx(expected, abs=1e-6)
+    if kind == "brep":
+        assert float(np.linalg.norm(centre - carrier_centre)) == pytest.approx(22.0, abs=1e-6)
+    assert made.is_watertight
+    assert made.volume == pytest.approx(64.0, abs=1e-6)
 
 
 @pytest.mark.parametrize("cache_kind", ["missing", "malformed", "read_only"])

@@ -486,7 +486,7 @@ def with_dependencies(part: Recipe, parts: PartRegistry | None = None) -> Recipe
             field="dependencies",
             detail=_(
                 "Die verwendeten Rezepte lassen sich nicht gemeinsam speichern. "
-                "Zirkel entfernen, unterschiedliche Fassungen eindeutig benennen "
+                "Zirkel entfernen, unterschiedliche Versionen eindeutig benennen "
                 "oder den Ausschnitt verkleinern."
             ),
             constraint="recipe_dependencies",

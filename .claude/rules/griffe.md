@@ -64,6 +64,11 @@ sichtbar und tot.
   frischer Griff dasselbe ergäbe: im Zug (`grip.pressing` — neu gebaut würde der
   Zug ein Kameraschwenk) und wenn er passt (`Gizmo.fits`: gleiches Ziel, gleiche
   Ringe, Maßstab auf `SCALE_TOLERANCE`, Matrix per `np.array_equal`).
+* **Ein Platzierungsgriff sitzt am Ansatzpunkt des Werkzeugs:** Ursprung und
+  Größenmessung lesen die Verschiebung seiner Platzierungsmatrix. Die Mitte
+  eines Bohrwerkzeugs kann weit unter der gewählten Fläche liegen; dort wäre
+  der Griff von der bearbeiteten Stelle getrennt. Die Werkzeuggeometrie und
+  ihre Matrix bleiben dabei unverändert.
 * **Ein Zug am Griff lässt die Navigation in Ruhe**: Der Griff sieht die
   Zeigerereignisse vor dem Navigator und gibt frei, was er nicht braucht; kein
   Zugende baut den Navigator neu

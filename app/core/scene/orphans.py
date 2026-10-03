@@ -54,6 +54,8 @@ class Reference:
     """Bei einer Merkmalliste die Position, die eine Antwort gezielt ersetzt."""
     removable: bool = True
     """Eine leere Flächenauswahl darf niemals versehentlich den ganzen Körper betreffen."""
+    qualified: bool = False
+    """Der Parameter speichert Körper und Merkmal gemeinsam, auch ohne eigenen Eingang."""
 
     @property
     def kind(self) -> str:
@@ -140,14 +142,25 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
             continue
         for field_name in _feature_fields(source, operation.op, operation.params):
             named = str(operation.params.get(field_name) or "")
-            if not named or not operation.inputs:
+            if not named:
+                continue
+            qualified = ":" in named
+            if qualified:
+                try:
+                    target = FeatureRef.parse(named)
+                except ValueError:
+                    continue
+            elif operation.inputs:
+                target = FeatureRef(operation.inputs[0], named)
+            else:
                 continue
             # Das Merkmal gehört zu dem Objekt, auf dem die Operation arbeitet.
             found.append(
                 Reference(
                     f"op:{operation.id}:{field_name}",
-                    FeatureRef(operation.inputs[0], named),
-                    removable=operation.op != "clear_filament",
+                    target,
+                    removable=operation.op != "clear_filament" and not qualified,
+                    qualified=qualified,
                 )
             )
         for field_name in _feature_fields(source, operation.op, operation.params, multiple=True):
@@ -305,7 +318,10 @@ def _feature_fields(
     return tuple(
         entry.name
         for entry in schema
-        if entry.kind == ("features" if multiple else "feature")
+        if (
+            entry.kind == ("features" if multiple else "feature")
+            or (not multiple and entry.targets_feature)
+        )
         and inactive_dependency(entry, schema, current) is None
     )
 
@@ -462,7 +478,7 @@ def _candidates(
         return _plausible(scene, reference.ref, list(scene.objects))
     bodies = (
         [reference.ref.object_id]
-        if reference.kind == "op"
+        if reference.kind == "op" and not reference.qualified
         else _heirs(scene, reference.ref.object_id, family)
     )
     return _plausible(scene, reference.ref, bodies)
@@ -619,7 +635,9 @@ def _rewrite(document: Document, reference: Reference, chosen: tuple[ObjectId, F
             return
         return
     if reference.kind == "op":
-        _set_param(document, reference, feature_id)
+        _set_param(
+            document, reference, f"{object_id}:{feature_id}" if reference.qualified else feature_id
+        )
         return
     for index, fit in enumerate(document.fits):
         if fit.name != reference.fit_name:
@@ -737,7 +755,10 @@ def with_reference(
         names[int(position)] = feature_id
         params[field_name] = tuple(names)
     else:
-        params[field_name] = feature_id
+        previous = str(params.get(field_name) or "")
+        params[field_name] = (
+            f"{previous.split(':', 1)[0]}:{feature_id}" if ":" in previous else feature_id
+        )
     return dataclasses.replace(operation, params=params)
 
 

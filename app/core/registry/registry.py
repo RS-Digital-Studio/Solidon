@@ -326,14 +326,15 @@ def exact_names() -> frozenset[str]:
 #: **Die Haken sind gefallen** (P2.8, Konzept §10.1). Bis dahin stand im
 #: Dialog des sichtbaren Zwillings ein Umschalter „Flächen und Kanten später
 #: bearbeiten“ mit einer Erklärung je Paar (``TWIN_TOGGLES``). Ein Erzeuger
-#: entsteht heute exakt, wo der Kern da ist; sein Netz-Zwilling steht in der
-#: Befehlspalette. Eine Bearbeitung fragt die Körperart ihres Eingangs; ihr
+#: entsteht heute exakt, wo der Kern da ist; sein Netz-Zwilling wird über das
+#: Kontextmenü des Verlaufsschritts gewählt. Eine Bearbeitung fragt die
+#: Körperart ihres Eingangs; ihr
 #: Zwilling ist über denselben Dialog erreichbar, weil der Körper entscheidet.
 #: Und im Verlauf stellt ``History.change_kernel`` einen Schritt weiterhin auf
 #: seinen Zwilling um — über das Kontextmenü des Schritts, nicht über einen
 #: Haken im Dialog.
 TWIN_WAYS: Final[dict[str, TranslatableText]] = {
-    "primitive": _("über die Befehlspalette"),
+    "primitive": _("über das Kontextmenü des Verlaufsschritts"),
     "edit": _("im selben Dialog — der Körper entscheidet"),
 }
 

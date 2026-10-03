@@ -56,6 +56,27 @@ def outward_normal(face: Any, point: Vec3) -> Vec3 | None:
     return (sign * normal.X(), sign * normal.Y(), sign * normal.Z())
 
 
+def projected_surface_point(face: Any, point: Vec3) -> tuple[Vec3, Vec3] | None:
+    """Punkt und Normale auf dem echten beschnittenen Träger statt auf seiner Sehne."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+    from OCP.TopoDS import TopoDS
+
+    typed = TopoDS.Face(face)
+    projection = GeomAPI_ProjectPointOnSurf(gp_Pnt(*point), BRep_Tool.Surface_s(typed))
+    if projection.NbPoints() < 1:
+        return None
+    nearest = projection.NearestPoint()
+    if BRepClass_FaceClassifier(typed, nearest, EPS_GEOM).State() not in (TopAbs_IN, TopAbs_ON):
+        return None
+    located: Vec3 = (nearest.X(), nearest.Y(), nearest.Z())
+    normal = outward_normal(typed, located)
+    return (located, normal) if normal is not None else None
+
+
 @dataclass(frozen=True, slots=True)
 class PlaneSurface:
     """Ebene mit der wirklichen, nach außen gerichteten Flächennormale."""

@@ -444,6 +444,11 @@ def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
             # Nur bei einem Umbau des Verlaufs (P7, seit v31): Der Verlauf zeigt
             # die neu geplante Folge dann an ihrer neuen Stelle.
             "revision": transaction.revision,
+            "renumbered": (
+                {str(old): new for old, new in transaction.renumbered.items()}
+                if transaction.renumbered
+                else None
+            ),
         }
     )
 
@@ -464,6 +469,7 @@ def transaction_from_data(data: dict[str, Any]) -> Transaction:
         origin=origin_from_data(data.get("origin")),
         changes=None if changes is None else change_from_data(changes),
         revision=data.get("revision"),
+        renumbered={int(old): int(new) for old, new in data.get("renumbered", {}).items()},
     )
 
 

@@ -146,6 +146,7 @@ from app.ui.labels import slicer_title as _slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible, even_fields
+from app.ui.print_contract import handoff_receipt
 from app.ui.session import Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.style import (
@@ -368,7 +369,7 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "layers.line_width",
-        _("Linienbreite"),
+        _("Bahnbreite"),
         "layers",
         unit="mm",
         minimum=0.1,
@@ -382,7 +383,7 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "layers.first_layer_line_width",
-        _("Linienbreite erste Schicht"),
+        _("Bahnbreite erste Schicht"),
         "layers",
         unit="mm",
         minimum=0.1,
@@ -413,8 +414,8 @@ FIELDS: tuple[Field, ...] = (
         minimum=0,
         maximum=50,
         note=_(
-            "Volle Schichten oben, damit die Füllung nicht durchscheint. Unter drei bleiben "
-            "Löcher über den Zellen."
+            "Volle Schichten oben schließen die Füllung ab. Wie viele nötig sind, "
+            "hängt von Schichthöhe und Füllmuster ab."
         ),
     ),
     Field(
@@ -453,8 +454,9 @@ FIELDS: tuple[Field, ...] = (
         "shell",
         kind="bool",
         note=_(
-            "Setzt Anfang und Ende der Außenwand schräg übereinander statt an eine Stelle. "
-            "Runde Teile zeigen dann keine Nahtlinie; es kostet etwas Druckzeit."
+            "Setzt Anfang und Ende der Außenwand schräg übereinander. Das kann die "
+            "Naht an runden Teilen weniger sichtbar machen und kostet etwas "
+            "Druckzeit."
         ),
     ),
     Field(
@@ -568,8 +570,8 @@ FIELDS: tuple[Field, ...] = (
         maximum=150,
         front=True,
         note=_(
-            "Wie warm das Bett ist. Es hält das Teil unten fest und verhindert, dass es sich "
-            "an den Ecken hochzieht."
+            "Wie warm das Bett ist. Die passende Temperatur hilft der Haftung und "
+            "kann das Hochziehen der Ecken verringern."
         ),
     ),
     Field(
@@ -591,8 +593,9 @@ FIELDS: tuple[Field, ...] = (
         minimum=0,
         maximum=90,
         note=_(
-            "Temperatur im geschlossenen Bauraum — nur bei Druckern, die einen haben. ABS und ASA "
-            "brauchen sie, PLA nicht."
+            "Temperatur im beheizten Bauraum, sofern der Drucker sie regeln kann. "
+            "Die Vorgabe kommt vom Materialprofil; ein geschlossenes Gehäuse "
+            "allein heizt nicht aktiv."
         ),
     ),
     # --- Kühlung ---
@@ -2752,11 +2755,37 @@ class _OpenInSlicerWorker(Worker):
     done = Signal(object, int, int)
     usageReady = Signal(object)
     failed = Signal(object)
+    receipt = Signal(object)
 
     def __init__(self, job: _PlateJob) -> None:
         super().__init__()
         self.cancelled = CancelSignal()
         self._job = replace(job, cancelled=self.cancelled, for_window=True)
+        self._written: list[Path] = []
+        self._opened: list[Path] = []
+        self._written_plates: set[int] = set()
+        self._receipt_findings: list[Finding] = []
+
+    def _report_receipt(self, findings: Sequence[Finding], status: str) -> None:
+        """Auch Teilübergaben nennen nur tatsächlich geschriebene und geöffnete Dateien."""
+        if not self._written:
+            return
+        self.receipt.emit(
+            handoff_receipt(
+                document=self._job.document,
+                profile=self._job.profile,
+                objects=tuple(
+                    body for body in self._job.objects if body.plate in self._written_plates
+                ),
+                written=self._written,
+                opened=self._opened,
+                findings=findings,
+                with_settings=self._job.with_settings,
+                status=status,
+                slicer=_slicer_title(self._job.setup.executable),
+                total_objects=len(self._job.objects),
+            )
+        )
 
     def cancel(self) -> None:
         """Weitere Platten und das Öffnen nach dem aktuellen Schreiben verwerfen."""
@@ -2767,16 +2796,34 @@ class _OpenInSlicerWorker(Worker):
         return self.cancelled.is_cancelled
 
     def work(self) -> None:
+        try:
+            self._open_all()
+        except Exception:
+            # Der allgemeine Arbeiter meldet die Ausnahme. Schon geschriebene
+            # Dateien gehören trotzdem in den Beleg, auch beim Prozessfehler.
+            self._report_receipt(
+                self._receipt_findings, tr("Übergabe nicht vollständig abgeschlossen.")
+            )
+            raise
+
+    def _open_all(self) -> None:
         if knows_plates(self._job.setup.flavour) and len(self._job.plates) > 1:
             self._open_as_one_project()
             return
-        findings: list[Finding] = []
+        findings = self._receipt_findings
         opened = 0
         for plate in self._job.plates:
             if self._was_cancelled():
+                self._report_receipt(
+                    findings,
+                    tr("Übergabe abgebrochen; bereits geschriebene Dateien bleiben erhalten."),
+                )
                 return
             try:
                 run = _prepare_plate(self._job, plate)
+                self._written.append(run.model)
+                self._written_plates.add(plate)
+                findings.extend(run.findings)
                 usage = prepare_usage(
                     [entry for entry in self._job.objects if entry.plate == plate],
                     self._job.settings,
@@ -2785,6 +2832,10 @@ class _OpenInSlicerWorker(Worker):
                     slots_by_plate={plate: run.slots},
                 )
                 if self._was_cancelled():
+                    self._report_receipt(
+                        findings,
+                        tr("Übergabe abgebrochen; bereits geschriebene Dateien bleiben erhalten."),
+                    )
                     return
                 # Cura übernimmt Einstellungen nur als Profil neben dem Modell
                 # (``handover.cura_profile_beside``); jeder andere Slicer gibt
@@ -2802,17 +2853,26 @@ class _OpenInSlicerWorker(Worker):
                     else None
                 )
                 handover.open_in_slicer(run.model, self._job.setup)
+                self._opened.append(run.model)
             except OperationCancelled:
+                self._report_receipt(
+                    findings,
+                    tr("Übergabe abgebrochen; bereits geschriebene Dateien bleiben erhalten."),
+                )
                 return
             except AppError as problem:
+                self._report_receipt(findings, tr("Übergabe nicht vollständig abgeschlossen."))
                 self.failed.emit(problem)
                 return
-            findings.extend(run.findings)
             if beside is not None:
                 findings.append(beside)
             opened += 1
             for request in usage:
                 self.usageReady.emit(request)
+        self._report_receipt(
+            findings,
+            tr("Dateien geschrieben und im Slicer geöffnet. G-Code wurde noch nicht erzeugt."),
+        )
         self.done.emit(findings, opened, opened)
 
     def _open_as_one_project(self) -> None:
@@ -2826,6 +2886,9 @@ class _OpenInSlicerWorker(Worker):
         """
         try:
             run = _prepare_plates(self._job)
+            self._written.append(run.model)
+            self._written_plates.update(self._job.plates)
+            self._receipt_findings.extend(run.findings)
             usage = prepare_usage(
                 [entry for entry in self._job.objects if entry.plate in self._job.plates],
                 self._job.settings,
@@ -2834,15 +2897,31 @@ class _OpenInSlicerWorker(Worker):
                 slots_by_plate=run.slots_by_plate,
             )
             if self._was_cancelled():
+                self._report_receipt(
+                    run.findings,
+                    tr("Übergabe abgebrochen; bereits geschriebene Dateien bleiben erhalten."),
+                )
                 return
             handover.open_in_slicer(run.model, self._job.setup)
+            self._opened.append(run.model)
         except OperationCancelled:
+            self._report_receipt(
+                self._receipt_findings,
+                tr("Übergabe abgebrochen; bereits geschriebene Dateien bleiben erhalten."),
+            )
             return
         except AppError as problem:
+            self._report_receipt(
+                self._receipt_findings, tr("Übergabe nicht vollständig abgeschlossen.")
+            )
             self.failed.emit(problem)
             return
         for request in usage:
             self.usageReady.emit(request)
+        self._report_receipt(
+            run.findings,
+            tr("Dateien geschrieben und im Slicer geöffnet. G-Code wurde noch nicht erzeugt."),
+        )
         self.done.emit(list(run.findings), len(self._job.plates), 1)
 
 
@@ -3756,13 +3835,20 @@ class PrintSettingsDialog(QDialog):
         Dialog nicht mehr regulär endet.
         """
         self.ui_settings.print_settings_in_files = on
-        if save_settings(self.ui_settings) is None:
-            self.state.setText(
-                tr(
-                    "Die Einstellungen ließen sich nicht speichern — prüfen Sie den freien "
-                    "Speicherplatz und die Schreibrechte."
-                )
+        saved = save_settings(self.ui_settings) is not None
+        note = (
+            ""
+            if saved
+            else tr(
+                "Die Einstellungen ließen sich nicht speichern — prüfen Sie den freien "
+                "Speicherplatz und die Schreibrechte."
             )
+        )
+        self.share_notice.setText(note)
+        self.share_notice.setVisible(bool(note))
+        self.share_settings.setAccessibleDescription(
+            "\n".join(part for part in (self.share_settings.toolTip(), note) if part)
+        )
 
     def show_materials(self, materials: Sequence[str]) -> None:
         """Woraus sich das Material ergibt — die Liste, sonst die Vorgabe
@@ -6600,6 +6686,12 @@ class PrintSettingsDialog(QDialog):
         # was eine gespeicherte 3MF und *Im Slicer öffnen* mitnehmen — er
         # stand neben „Qualität“, mit der er nichts zu tun hat.
         row.addWidget(self.share_settings)
+        self.share_notice = QLabel("", holder)
+        self.share_notice.setWordWrap(True)
+        self.share_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.share_notice.setAccessibleName(self.share_settings.text())
+        self.share_notice.hide()
+        row.addWidget(self.share_notice)
         QWidget.setTabOrder(self.cancel_slice, self.share_settings)
         return holder
 
@@ -8564,6 +8656,9 @@ class PrintSettingsDialog(QDialog):
             return
         self._show_handover_progress(len(plates), tr("Die Slicer-Dateien werden vorbereitet …"))
         worker = _OpenInSlicerWorker(job)
+        worker.receipt.connect(
+            weak_slot(self, PrintSettingsDialog._handover_receipt, worker, forward=True)
+        )
         worker.usageReady.connect(self.usage_notice.offer)
         worker.done.connect(
             weak_slot(
@@ -8810,6 +8905,11 @@ class PrintSettingsDialog(QDialog):
                 },
             )
         return _prepare_plate(job, plate)
+
+    def _handover_receipt(self, worker: _OpenInSlicerWorker, receipt: Finding) -> None:
+        """Ein verspäteter Beleg darf keinen neuen Dialogauftrag überschreiben."""
+        if not self._settling and self._worker is worker:
+            self.reported.emit([receipt])
 
     def _opened_in_slicer(
         self, executable: Path, findings: Sequence[Finding], count: int, files: int

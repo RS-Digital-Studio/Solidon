@@ -256,10 +256,10 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "brauchen sie als Unterlage."
     ),
     "curved_face": _(
-        "Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — "
-        "der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen "
-        "brauchen eine Ebene; was an ihr geht, ist das Filament: „Filament auf "
-        "eine Fläche“ färbt sie, „Filament entfernen“ nimmt es wieder."
+        "Eine gerundete Seite gehört zur Oberfläche des Körpers. Bohren sowie "
+        "das Platzieren von Grundkörpern und Bausteinen setzen dort am Körper "
+        "an. Ein eigenes Filament lässt sich zuweisen. Zum Zeichnen wählen Sie "
+        "eine ebene Fläche oder eine Skizzenebene."
     ),
     "pattern": _(
         "Ein Muster liegt auf seiner Fläche und hat dort seinen Platz; versetzt, "
@@ -1331,7 +1331,8 @@ def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
             note=_("Ändert den Schritt, der diese Textur aufgebracht hat."),
             fields=tuple(fields),
             fixed=tuple((name, value) for name, value in saved.items() if name not in shown),
-        )
+        ),
+        FeatureAction(title=_("Textur entfernen"), op=None, step=operation.id),
     ]
 
 
@@ -1352,6 +1353,7 @@ def _saved_fields(
             measurement=MeasureStatus("exact", "parameter", available=True)
             if _kind_of(entry) in {"length", "angle"}
             else None,
+            depends_on=entry.depends_on,
         )
         for name in names
         if (entry := schema.get(name)) is not None

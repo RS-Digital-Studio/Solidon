@@ -23,9 +23,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.
 - Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.
 - Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.
+- Nuevo asistente «Recipiente con tapa»: redondo o rectangular, tapa de rosca, a presión o abatible, y si quiere compartimentos, inserto y agujeros de espolvoreo. Sus cotas principales son parámetros.
 - Cuatro soportes se crean en un paso con caras y aristas reales: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, agujeros para tornillos, gancho de panel o pinza.
 - Una escena vacía muestra cómo empezar: caja, cilindro, dibujo, bloques o un archivo que arrastre dentro.
-- Los cuerpos nuevos aparecen sobre la cama o sobre la cara plana elegida, ya no donde estaba un cuerpo seleccionado antes, y quedan seleccionados.
+- Los cuerpos nuevos aparecen sobre la cama, no en un cuerpo seleccionado, y quedan seleccionados. En una cara seleccionada se colocan donde hace clic o centrados y, si quiere, ya unidos a la pieza.
+- Bloques como un bolsillo para imán o un orificio para tornillo quedan donde hace clic en la cara. Su distancia a dos aristas se mantiene si la pieza cambia después.
+- La «Lengüeta para perfil de aluminio» encaja en Motedis 20 × 20 tipo B ranura 6 y 30 × 30 tipo B ranura 8, con cabeza a la forma de la ranura. Los tres tamaños previos quedan como medidas antiguas.
+- En el informe, «Reconstruir modelo» rehace una pieza importada con formas básicas, taladros y redondeos, la compara con el original dentro del límite elegido y la aplica en un solo paso.
+- La «Abrazadera con revestimientos» empieza con el material del proyecto en los dos campos de material. Hasta ahora ambos estaban vacíos.
 
 ### Imprimir y entregar al slicer
 
@@ -44,7 +49,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Corregido un cierre inesperado de ElegooSlicer y OrcaSlicer al laminar modelos multicolor con soportes de rejilla.
 - Tras laminar, Solidon también compara el material de soporte y las capas del modelo por placa. El informe muestra la estimación interna y los valores del archivo de impresión.
 - La comparación de material considera solo el modelo impreso. La purga se muestra por separado y se indica si su cantidad no puede leerse por completo.
-- El análisis del espacio necesario para soportes es mucho más rápido en modelos huecos y conserva los contornos finos.
+- El análisis de capas es varias veces más rápido en modelos huecos y en modelos con muchos techos, y conserva los contornos finos. La vista de capas aprovecha lo que el informe ya calculó.
 - En piezas superpuestas, el análisis de impresión ya no cuenta el aire encerrado como material. También mejora la detección de voladizos y soportes necesarios.
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
 - La boquilla se elige en los ajustes de impresión entre los tamaños que conoce su impresora, y el slicer recibe el perfil que le corresponde.
@@ -54,12 +59,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cura lamina ahora con la boquilla que usted eligió, también en impresoras de la lista de Cura, y las impresoras con el origen en el centro de la cama lo conservan.
 - Las impresoras con el origen fuera de la esquina de la cama, como delta, BIBO o Dremel, reciben las piezas donde Solidon las pone. Antes quedaban en el borde o el laminador las reorganizaba.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
-- Si elige brim, skirt, raft o *Automático* en los ajustes de impresión, solo aparecen las medidas que recibe su slicer, sin campos que no harían nada.
+- Si elige brim, skirt, raft o «Automático» en los ajustes de impresión, solo aparecen las medidas que recibe su slicer, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
 - Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
 - Con Cura, el informe de comprobación nombra las piezas que solo reciben esos valores de rebote, porque Cura los acepta solo para toda la placa.
 - Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
-- También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad.
+- También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad. Si una no se sostiene en ninguna parte, orienta igual las demás y el informe la nombra.
 - Con «Organizar sobre la cama», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
 - Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
 - Cuando llega otro modelo, desde un archivo, una descarga o generado, la vista muestra la placa en la que está.
@@ -75,7 +80,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras cortar, Solidon avisa de ajustes descartados por PrusaSlicer o los slicers de Orca. También detecta cambios en el borde, el orden de paredes y el tipo de soporte.
 - La preselección de filamento toma Generic o la marca de su impresora en lugar de un filamento especial ajeno, por ejemplo Generic PETG en vez de BETA PETG en la Bambu A1.
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
-- También con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte funcionan *Orientar para imprimir*, *Girar* y *Trasladar*. El cuerpo sigue exacto.
+- También con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte funcionan «Orientar para imprimir», «Girar» y «Trasladar». El cuerpo sigue exacto.
 - Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
 - PrusaSlicer y la familia Orca respetan la densidad de soporte elegida. El campo empieza en 1 %. Para imprimir sin soportes, elija «Ninguno».
 - En impresiones multicolor con OrcaSlicer, ElegooSlicer, Bambu Studio y Creality Print, la torre de purga recibe una posición inicial adaptada al tamaño de la cama.
@@ -85,6 +90,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si PrusaSlicer o SuperSlicer indica que la primera capa está vacía, Solidon identifica la pieza y permite colocarla en la cama o abrir los ajustes de impresión correspondientes.
 - Las advertencias de PrusaSlicer y SuperSlicer aparecen en el informe aunque el slicer termine bien, una capa vacía como error. La separación del raft se ajusta aparte.
 - Si el slicer reparte una placa en varios archivos de impresión, Solidon lo indica y ofrece reorganizar o exportar. Antes tomaba en silencio solo uno de ellos.
+- Arriba en el informe se ve si la transferencia está lista, requiere una decisión o no se recomienda, y qué falta por comprobar. Sin avisos, una pieza ya no cuenta por sí sola como lista para imprimir.
+- Tras exportar o «Abrir en el slicer …», el informe muestra un registro: archivos, destino de impresión, material y si se incluyeron los ajustes. También dice que el archivo no se releyó ni comparó.
+- Exportado como 3MF desde la línea de comandos, un cuerpo de un solo color conserva su filamento al volver a abrirlo.
 
 ### Taladros, ranuras y división
 
@@ -103,14 +111,22 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 - Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.
-- Si eligió «Cargar ahora», las piezas de *Dividir el modelo* tampoco inician un reconocimiento de minutos; «Reconocer todas las características» lo recupera.
+- Si eligió «Cargar ahora», las piezas de «Dividir el modelo» tampoco inician un reconocimiento de minutos; «Reconocer todas las características» lo recupera.
 - Si elige «Dividir el modelo» en una línea de resumen del informe para varios cuerpos, Solidon los divide uno tras otro. Antes solo se dividía el primero.
+- Si al «Unir» un cuerpo tapa un taladro del todo o en parte, el informe lo indica con el lugar y el hueco que queda.
+- Los patrones circulares y «Reflejar» toman su «Centro de giro» de un cuerpo, una característica, un punto o el origen. El centro queda fijo aunque el cuerpo se mueva después.
+- Un arrastre dentro de la abertura de un taladro avellanado seleccionado deja el cuerpo en su sitio, y la línea de estado indica el camino hacia la ranura. Hasta ahora movía el cuerpo entero.
+- Si la tarjeta de cotas de un taladro crece en altura, las demás cotas siguen junto al cuerpo, y el tirador para desplazar queda en la boca en vez de dentro de la pieza.
+- Si selecciona un taladro hecho en Solidon, su diámetro aparece solo en la tarjeta de cotas de la vista. Hasta ahora aparecía una segunda vez a la derecha.
+- Una dirección que introduce a la derecha para una ranura pasa también a la tarjeta de cotas de la vista, y «Aplicar» sigue disponible. Hasta ahora allí volvía a 0°.
+- Solidon reconoce conos, redondeos y caras estrechas de la misma forma en más modelos, da igual si el modelo está desplazado, girado o escalado.
+- Solidon reconoce cada campo de nervios, panal u hoyuelos de un archivo importado como un solo patrón, y «Detectar detalles aquí» agrupa las celdas de un campo.
 
 ### Redondear y achaflanar
 
-- Redondear un grupo de aristas en un cuerpo STEP redondea ahora las aristas posibles en lugar de rechazar todo. *Mostrar el punto* encuentra cada arista omitida.
+- Redondear un grupo de aristas en un cuerpo STEP redondea ahora las aristas posibles en lugar de rechazar todo. «Mostrar el punto» encuentra cada arista omitida.
 - Las aristas junto a una pared no más gruesa que el radio quedan vivas, y el informe indica el radio que cabe allí. Antes se rechazaba todo el redondeo.
-- Si un cuerpo STEP no tiene arista propia en una zona elegida, el informe ofrece *Finalizar la edición de caras y volver a intentarlo*. En el modelo de triángulos se redondea también.
+- Si un cuerpo STEP no tiene arista propia en una zona elegida, el informe ofrece «Finalizar la edición de caras y volver a intentarlo». En el modelo de triángulos se redondea también.
 - Si no queda espacio para el intercambio con el proceso de cálculo, Solidon calcula el paso igualmente y lo indica en el informe. Antes se detenía aconsejando calcular más grueso.
 
 ### Modelar, texto y dibujo
@@ -124,14 +140,18 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe y antes de exportar, con «Mostrar el punto» y «Deshacer el trazo».
 - En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
-- Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
+- Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aunque sea solo con el avellanado o el chaflán, o entra en una pared detrás, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
 - Los dibujos SVG llegan bien: giros, cizallas, esquinas redondeadas, elipses y arcos elípticos son correctos, y las capas ocultas quedan fuera.
 - El destino de «Alinear a la característica» empieza vacío, y el primer clic en la vista lo rellena. «Aplicar» espera hasta entonces en vez de poner el cuerpo en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 - Otro trazo en una cavidad recién excavada la hace más profunda, también con un pincel pequeño. Hasta ahora no surtía efecto y contaba como fallido.
-- Al «Modelar», la ventana muestra cada trazo igual de rápido, también tras muchos trazos. Hasta ahora se volvía más lenta con cada uno.
+- Al «Modelar», la ventana muestra cada trazo igual de rápido, también tras muchos trazos, y las sesiones grandes calculan su vista previa en segundo plano. Hasta ahora se volvía más lenta con cada uno.
 - Con «Fijar el estado», Solidon guarda la sesión de modelado tan fina como la calculan la exportación y la impresión, y la ventana sigue utilizable. Antes guardaba la vista más basta.
+- Un doble clic en «Modelar» en el historial vuelve a abrir la sesión con sus trazos. Ctrl+Z deshace un trazo entero, y «Terminado» cambia el mismo paso.
+- La entrada «Crear a partir de un boceto …» empieza a dibujar enseguida, el plano de dibujo muestra su origen, y un doble clic en el historial reabre un dibujo en modo de dibujo.
+- Al «Modelar» y en el editor de esqueleto, la barra muestra espesor de pared o voladizo como mapa con leyenda y avisa de un trazo fuera del volumen de impresión. Tras doblar, dice cómo se imprimirá.
+- Una textura aplicada se selecciona entera. El panel de selección ofrece entonces «Modificar textura» y «Quitar textura».
 
 ### Generar con IA
 
@@ -168,7 +188,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Algunos avisos que se refieren a un paso lo abren para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
 - La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
-- Si otros programas tienen el ordenador ocupado, *Cancelar* detiene un cálculo largo en menos de un segundo en lugar de pedir un reinicio tras varios segundos.
+- Si otros programas tienen el ordenador ocupado, «Cancelar» detiene un cálculo largo en menos de un segundo en lugar de pedir un reinicio tras varios segundos.
 - Un modelo de lenguaje local puede dar doce pasos en lugar de ocho por encargo en el chat y resuelve así más encargos de varias partes.
 - El panel de selección vuelve a caber en su columna, y la columna de medidas del árbol muestra la medida entera, como «Ø5,19 mm» en vez de «…».
 - En un taladro, «Cambiar elemento» abre directamente «Cambiar orificio» con vista previa, en vez de solo remitir a él.
@@ -176,6 +196,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La vista de diferencias muestra lo añadido y lo eliminado con un rayado en dos direcciones, de modo que se distinguen también sin color.
 - Cuando Solidon pregunta la unidad de un archivo al abrirlo, las medidas aparecen en su unidad de visualización y con el separador decimal de su idioma.
 - Si arrastra un archivo que Solidon no abre, por ejemplo de Blender, le indica cómo traerlo como 3MF, STEP o STL. El G-Code va a «Contrastar con el G-Code».
+- Puede abrir varios archivos en un solo paso. Conservan su posición relativa, un Ctrl+Z los deshace todos, y los avisos de importación iguales aparecen agrupados en el informe.
+- Sobre el historial, «Antes/después» muestra con un deslizador cada estado anterior. «Continuar aquí» inserta allí pasos nuevos, y los nombres de sus pasos se mantienen.
+- Con «a», «Trasladar» lleva el centro, el centro de la base, una esquina o una característica a una posición fija, y «Girar» lleva el cuerpo a ángulos fijos, también con varios cuerpos.
+- Si copia el enlace de la página de un modelo, ya aparece en el campo de «Modelo desde internet», y Solidon muestra el camino a través del navegador.
+- Si un diálogo no puede aplicar, el motivo aparece también bajo sus campos, no solo en la franja sobre la vista.
+- Tras Ctrl+Y, la línea de estado nombra el paso que se ha rehecho, igual que tras Ctrl+Z.
+- Las miniaturas de ejemplos y bloques muestran la altura hacia arriba. Hasta ahora las piezas altas apuntaban hacia abajo en ellas.
+- Si Solidon no puede guardar la opción «Incluir valores», el aviso aparece junto al interruptor.
 
 ## 0.5.1
 
@@ -437,7 +465,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Aplicar espera hasta que la vista previa muestra el resultado actual. Un clic sobre una imagen caducada no escribe nada erróneo.
 - Los colores de filamento se conservan en los cuerpos exactos y siguen cada nuevo mallado.
 - El volumen y el área de un cuerpo exacto llegan en milisegundos en lugar de segundos.
-- Insertar una rosca tarda menos de medio segundo en lugar de hasta trece; un perno roscado se construye en un tercio de segundo en lugar de un minuto.
+- Insertar una rosca tardó entre 0,38 y 0,41 segundos durante la medición, frente a entre 8 y 13 segundos. La operación completa creó un perno roscado M6 × 1 de 12 mm de longitud en 0,55 segundos.
 - Unir, Restar y Colocar sobre la cama ya no preguntan si convertir los cuerpos exactos. Siguen siendo exactos.
 - Al desplazar un taladro no quedan triángulos sobrantes en el sitio antiguo, y un avellanado oculto no pierde nada de su volumen.
 - Reparar deja intacto un modelo limpio, también en el cuerpo exacto.
@@ -506,8 +534,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un paso del asistente detiene la evaluación, la propuesta lo retira por completo y muestra el estado anterior.
 - Mover o girar un modelo de 200 000 triángulos responde en medio segundo en lugar de ocho.
 - Deshacer responde al instante en lugar de tras dos segundos y medio.
-- Al teclear un número la vista previa aparece en medio segundo, y cada siguiente en un octavo de ese tiempo.
-- Vaciar calcula una quinta parte más rápido.
+- Al cambiar el diámetro del taladro en la placa perforada, la primera vista previa apareció en 0,57 segundos durante la medición, y cada siguiente en 0,13 segundos.
+- El vaciado fue entre un 7 y un 25 por ciento más rápido en los tres modelos medidos.
 - Una entrada del menú y un aviso discreto en la vista llevan a apoyar Solidon voluntariamente por PayPal o GoFundMe.
 - La tarjeta de la encuesta muestra ahora los colores correctos también en el tema claro.
 

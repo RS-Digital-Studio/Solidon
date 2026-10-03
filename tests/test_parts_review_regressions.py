@@ -767,6 +767,188 @@ def test_a_cutting_part_within_its_face_stays_quiet(profile, box_op: str, top: s
 
 
 @pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
+def test_a_keyhole_over_the_rim_has_a_verified_placement_suggestion(profile, box_op):
+    """Bei genügend Platz nennt der Befund eine tatsächlich vollständig passende Lage."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op=box_op,
+                params={"width": 40.0, "depth": 30.0, "height": 20.0},
+            )
+        ],
+    )
+    history.apply(
+        "Schlüsselloch",
+        [
+            OperationDraft(
+                op="insert_keyhole",
+                inputs=("obj_1",),
+                params={"at_feature": "face_3"},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile)
+    assert result.complete
+    warning = next(f for f in result.scene.report.findings if f.code == "part.over_the_edge")
+    assert "suggestion" in warning.values
+    assert "-4" in str(warning.values["suggestion"]).replace("−", "-")
+    history.undo()
+    history.apply(
+        "Schlüsselloch in die Fläche",
+        [
+            OperationDraft(
+                op="insert_keyhole",
+                inputs=("obj_1",),
+                params={"at_feature": "face_3", "z": -4.0},
+            )
+        ],
+    )
+    corrected = evaluate(project.document, profile)
+    assert corrected.complete
+    assert not any(f.code == "part.over_the_edge" for f in corrected.scene.report.findings)
+
+
+@pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_the_rim_warning_survives_cache_save_and_history(profile, tmp_path, box_op, quality):
+    """Der am Mündungsrand belegte Befund bleibt an seinem Schritt und Ort gebunden."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import load, save
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op=box_op,
+                params={"width": 40.0, "depth": 30.0, "height": 5.5},
+            )
+        ],
+    )
+    history.apply(
+        "Schraubloch",
+        [
+            OperationDraft(
+                op="insert_screw_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "face_3"},
+            )
+        ],
+    )
+    directory = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+
+    def evaluated():
+        result = evaluate(project.document, profile, quality=quality, cache=cache)
+        assert result.complete
+        warnings = [f for f in result.scene.report.findings if f.code == "part.over_the_edge"]
+        return result.scene.objects["obj_1"], warnings
+
+    entry, warnings = evaluated()
+    assert len(warnings) == 1 and warnings[0].location is not None
+    assert warnings[0].op_id == 2 and warnings[0].object_id == "obj_1"
+    assert evaluated()[1] == warnings
+    assert cache.statistics.hits >= 2
+    history.undo()
+    assert evaluated()[1] == []
+    history.redo()
+    assert evaluated()[1] == warnings
+    project = load(save(project, tmp_path / "rim.p3d"))
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    fresh, findings = evaluated()
+    assert findings == warnings
+    assert fresh.mesh.volume == pytest.approx(entry.mesh.volume, abs=1e-6)
+
+
+@pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(
+    ("part", "height", "overhang"),
+    [
+        ("screw_hole", 5.0, True),
+        ("screw_hole", 5.5, True),
+        ("heatset_m4", 4.5, True),
+        ("screw_hole", 40.0, False),
+        ("heatset_m4", 40.0, False),
+    ],
+)
+def test_a_cutting_parts_whole_mouth_counts_at_the_rim(
+    profile, box_op: str, quality: str, part: str, height: float, overhang: bool
+) -> None:
+    """Senkung Ø6 und Einführfase Ø5 brauchen ihre ganze Mündungsweite (RM-421)."""
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Senkung an Seitenfläche",
+        [
+            OperationDraft(op=box_op, params={"width": 40, "depth": 30, "height": height}),
+            OperationDraft(op=f"insert_{part}", inputs=("obj_1",), params={"at_feature": "face_3"}),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project), quality=quality)
+    assert result.complete
+    warnings = [f for f in result.scene.report.findings if f.code == "part.over_the_edge"]
+    assert bool(warnings) is overhang
+    if overhang:
+        assert len(warnings) == 1 and warnings[0].location is not None
+
+
+@pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("width", [6.0, 40.0])
+@pytest.mark.parametrize("placement", ["feature", "point"])
+def test_a_pocket_must_not_silently_cut_the_walls_beside_its_floor(
+    profile, box_op: str, quality: str, width: float, placement: str
+) -> None:
+    """Material hinter dem Rand ist keine Fortsetzung des gewählten Rinnenbodens."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Rinne",
+        [
+            OperationDraft(op=box_op, params={"width": 60, "depth": width + 24, "height": 6}),
+            OperationDraft(
+                op=box_op,
+                params={"width": 60, "depth": 12, "height": 10, "y": -width / 2 - 6, "z": 6},
+            ),
+            OperationDraft(
+                op=box_op,
+                params={"width": 60, "depth": 12, "height": 10, "y": width / 2 + 6, "z": 6},
+            ),
+            OperationDraft(op="union_objects", inputs=("obj_1", "obj_2", "obj_3")),
+        ],
+    )
+    before = evaluate(project.document, profile, sources=ProjectSources(project), quality=quality)
+    assert before.complete
+    entry = next(iter(before.scene.objects.values()))
+    floor = next(
+        feature.id
+        for feature in entry.features.values()
+        if feature.kind == "face"
+        and feature.params.get("normal", (0, 0, 0))[2] > 0.99
+        and abs(feature.params["centre"][2] - 6.0) < 1e-6
+    )
+    history.apply(
+        "Magnettasche",
+        [
+            OperationDraft(
+                op="insert_magnet_pocket",
+                inputs=(entry.id,),
+                params={"at_feature": floor} if placement == "feature" else {"z": 6.0, "nz": 1.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project), quality=quality)
+    assert result.complete
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert ("part.over_the_edge" in codes) is (width < 8.2)
+
+
+@pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
 @pytest.mark.parametrize("quality", ["draft", "fine"])
 @pytest.mark.parametrize("cancel_during_rays", [False, True], ids=["complete", "cancelled"])
 def test_a_cutting_parts_rim_check_obeys_its_context_cancellation(

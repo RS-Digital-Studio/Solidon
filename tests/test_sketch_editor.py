@@ -6450,7 +6450,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
         QApplication.processEvents()
 
         step = window.session.history.operations[-1].id
-        window.edit_operation(step)
+        window.edit_operation(step, field="length")
         QApplication.processEvents()
 
         dialog = window._op_dialog
@@ -8152,7 +8152,7 @@ def test_a_tilted_and_a_three_point_plane_are_written_as_the_contract_says(
         assert tilt_height != offset_height, "die Fensterhöhe folgt den sichtbaren Feldern"
         dialog.angle.set_value(30.0)
         assert dialog.plane() == "tilt:plane:xy:x:30"
-        assert panel.canvas.layer_note().startswith("Diese Ebene ist geneigt")
+        assert "schräg zu den Druckschichten" in panel.canvas.layer_note()
         assert panel.canvas.axis_names() == ("", ""), "gekippt stimmen X und Y nicht mehr"
 
         dialog.choose_kind("through")

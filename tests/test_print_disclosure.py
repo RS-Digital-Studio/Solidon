@@ -130,7 +130,7 @@ def test_both_notices_ask_the_same_source_what_a_utc_timestamp_is() -> None:
 def test_the_notice_says_what_leaves_the_programme(qt_app: QApplication) -> None:
     """Der Text nennt die drei Dinge, für die er da ist.
 
-    Erstens, dass es Erfahrungswerte sind; zweitens, dass sie mit der Datei
+    Erstens, woher die Werte kommen; zweitens, dass sie mit der Datei
     reisen; drittens, was der Kunde deshalb tun soll.
 
     **Der dritte Punkt ist ein Rat und kein Paragrafenverweis** (Entscheidung
@@ -146,9 +146,10 @@ def test_the_notice_says_what_leaves_the_programme(qt_app: QApplication) -> None
         + [label.text() for label in dialog.findChildren(QLabel)]
     )
 
-    assert "Erfahrungswerte" in whole
+    assert "Herstellerprofil" in whole and "Solidons Tabellen" in whole
     assert "3MF" in whole and "Slicer" in whole
-    assert "bevor Sie drucken" in whole, "der Rat ist die eigentliche Schutzwirkung"
+    assert "Prüfen Sie die wirksamen Werte vor dem Druck" in whole
+    assert "Filamentzuordnung" in whole
     assert "Lizenzvertrag" not in whole, (
         "kein Paragrafenverweis mitten im Arbeitsschritt — er liest sich als "
         "Kleingedrucktes und leistet rechtlich nichts"

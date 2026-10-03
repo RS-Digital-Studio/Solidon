@@ -14,19 +14,30 @@ sich nicht rechnen ließ, sagt das, statt eine leere Ansicht zu zeigen, die wie
 from __future__ import annotations
 
 import math
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from typing import cast
 
 import numpy as np
+from shapely.geometry.base import BaseGeometry
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError
 from app.core.geom import kernel_process
 from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components, signed_volume
+from app.core.geom.mesh import (
+    MeshData,
+    as_mesh_data,
+    face_components,
+    on_surface,
+    signed_volume,
+    surface_index,
+)
+from app.core.geom.transform import turned
 from app.core.log import get_logger
+from app.core.scene.cancel import NeverCancelled
 from app.core.types import (
+    CancelToken,
     Finding,
     ObjectId,
     Profile,
@@ -68,6 +79,226 @@ CHANGED_REGION_SHARE = 0.5
 #: die genau auf einer Deckfläche des Körpers liegt, wäre genau das. Fünf
 #: Prozent schieben sie ins Freie, ohne den Beschnitt spürbar zu vergrößern.
 CHANGED_REGION_MARGIN = 0.05
+
+#: Ab dieser Dreieckszahl lohnt vor dem Vergleich die vorhandene Entlastung
+#: koplanarer Flächen. Das ist eine Rechengrenze, keine Formtoleranz.
+COMPARISON_FLATTEN_FROM = 50_000
+
+
+@dataclass(frozen=True, slots=True)
+class SurfaceDistanceBound:
+    """Beidseitiger Oberflächenabstand zweier Netze, einschließlich ungeprüfter Flächen.
+
+    ``lower_mm`` ist ein gemessener Abstand abzüglich Numerik. ``upper_mm``
+    schließt jedes Dreiecksinnere ein; bei vorzeitigem Ende bleibt es unendlich.
+    Die Aussage gilt den übergebenen Netzen. Ein exakter Körper muss seine
+    zusätzliche Tessellationsabweichung im aufrufenden Formbudget ausweisen.
+    """
+
+    lower_mm: float
+    upper_mm: float
+    permitted_mm: float
+    samples: int
+    complete: bool
+
+    @property
+    def within_limit(self) -> bool:
+        return self.complete and self.upper_mm <= self.permitted_mm
+
+
+@dataclass(frozen=True, slots=True)
+class _FacetProjection:
+    origin: np.ndarray
+    frame: np.ndarray
+    polygon: BaseGeometry
+    low: float
+    high: float
+
+
+class _FacetCover:
+    """Eine ganze Dreiecksfläche durch die begrenzte Gegenfläche einschließen.
+
+    Facetten sind nur Suchgruppen. Die Schranke nutzt die gemessenen Höhen
+    aller beteiligten Ecken und die vollständige Vereinigung ihrer Projektionen.
+    Damit bleiben Löcher erhalten, auch wenn alle Prüfpunkte am Rand liegen.
+    """
+
+    def __init__(self, body: trimesh.Trimesh) -> None:
+        self.triangles = np.asarray(body.triangles)
+        self.groups = tuple(np.asarray(faces) for faces in body.facets)
+        self.group_of = np.full(len(self.triangles), -1, dtype=np.int64)
+        for identifier, faces in enumerate(self.groups):
+            self.group_of[faces] = identifier
+        self.projected: dict[int, _FacetProjection | None] = {}
+
+    def projection(self, identifier: int) -> _FacetProjection | None:
+        import shapely
+
+        if identifier not in self.projected:
+            triangles = self.triangles[self.groups[identifier]]
+            origin = triangles[0, 0]
+            x = triangles[0, 1] - origin
+            normal = np.cross(x, triangles[0, 2] - origin)
+            length = math.hypot(*normal)
+            if length <= EPS_GEOM * EPS_GEOM:
+                self.projected[identifier] = None
+                return None
+            x = x / math.hypot(*x)
+            normal /= length
+            frame = np.stack((x, np.cross(normal, x), normal))
+            points = turned(triangles - origin, frame)
+            polygon = shapely.union_all(shapely.polygons(points[:, :, :2]))
+            if polygon.is_empty or not polygon.is_valid:
+                self.projected[identifier] = None
+                return None
+            # Rundes Puffern erweitert höchstens um EPS_GEOM. Derselbe Betrag
+            # steht ausdrücklich in der Abstandsschranke; keine Formtoleranz.
+            polygon = polygon.buffer(EPS_GEOM)
+            shapely.prepare(polygon)
+            self.projected[identifier] = _FacetProjection(
+                origin, frame, polygon, float(points[:, :, 2].min()), float(points[:, :, 2].max())
+            )
+        return self.projected[identifier]
+
+    def bounds(
+        self, triangles: np.ndarray, nearest: np.ndarray, cancelled: CancelToken
+    ) -> np.ndarray:
+        import shapely
+
+        result = np.full(len(triangles), math.inf)
+        groups = self.group_of[nearest]
+        for identifier in np.unique(groups):
+            cancelled.raise_if_cancelled()
+            if identifier < 0:
+                continue
+            projection = self.projection(int(identifier))
+            if projection is None:
+                continue
+            indices = np.flatnonzero(np.any(groups == identifier, axis=1))
+            points = turned(triangles[indices] - projection.origin, projection.frame)
+            covered = shapely.covers(projection.polygon, shapely.polygons(points[:, :, :2]))
+            if np.any(covered):
+                vertical = np.maximum(
+                    np.abs(points[covered, :, 2].max(axis=1) - projection.low),
+                    np.abs(points[covered, :, 2].min(axis=1) - projection.high),
+                )
+                selected = indices[covered]
+                result[selected] = np.minimum(result[selected], vertical + EPS_GEOM)
+        return result
+
+
+def surface_distance_bound(
+    before: MeshData,
+    after: MeshData,
+    *,
+    permitted_mm: float,
+    cancelled: CancelToken | None = None,
+    max_cells: int = 250_000,
+) -> SurfaceDistanceBound:
+    """Vergleicht beide vollständigen Häute mit konservativen Dreiecksschranken.
+
+    Abstand zu einer abgeschlossenen Menge ist 1-Lipschitz: Der Abstand am
+    Schwerpunkt plus die größte Entfernung zu einer Ecke schließt die ganze
+    Dreiecksfläche ein. Daneben ist der Abstand zu *einem* Zieldreieck konvex;
+    sein größter Eckabstand ist deshalb ebenfalls eine obere Schranke. Beide
+    Schranken dürfen enger werden, wenn ein Dreieck in vier zerlegt wird.
+    Eine feste Stichprobe allein kann hier niemals ein Modell freigeben.
+
+    Das Zellbudget begrenzt Arbeit, niemals die geforderte Formgenauigkeit.
+    Wird es aufgebraucht oder ist ein Messwert nicht endlich, bleibt die
+    Prüfung ausdrücklich unvollständig. Ein gefundener Gegenbeleg beendet
+    sie mit unterer Schranke oberhalb der Grenze.
+    """
+    from trimesh.triangles import closest_point
+
+    closest: Callable[[np.ndarray, np.ndarray], np.ndarray] = closest_point
+
+    if not math.isfinite(permitted_mm) or permitted_mm <= EPS_GEOM:
+        raise ValueError("surface_distance_requires_positive_budget_above_numerics")
+    token = cancelled or NeverCancelled()
+    token.raise_if_cancelled()
+    lower = upper = 0.0
+    samples = cells = 0
+    for source, target in ((before.raw, after.raw), (after.raw, before.raw)):
+        token.raise_if_cancelled()
+        triangles = np.asarray(source.triangles, dtype=np.float64)
+        target_triangles = np.asarray(target.triangles, dtype=np.float64)
+        if not len(triangles) or not len(target_triangles):
+            return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
+        if not np.isfinite(triangles).all() or not np.isfinite(target_triangles).all():
+            return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
+        # Gemeinsamer lokaler Ursprung begrenzt den Verlust bei fernen Modellen.
+        # Die Kopie besitzt ihren eigenen Suchindex und verändert keine Quelle.
+        origin = triangles[0, 0].copy()
+        triangles = triangles - origin
+        target_local = trimesh.Trimesh(
+            vertices=np.asarray(target.vertices) - origin,
+            faces=target.faces,
+            process=False,
+        )
+        target_triangles = np.asarray(target_local.triangles)
+        index = surface_index(target_local)
+        cover = _FacetCover(target_local)
+        pending = [triangles]
+        while pending:
+            token.raise_if_cancelled()
+            # Kurze Portionen halten Abbruch und Speicher unabhängig von der
+            # Verfeinerung. Kleine Restgruppen teilen sich einen Suchaufruf:
+            # jede einzeln kostete an der Lochplatte Tausende Baumabfragen.
+            pieces = []
+            count = 0
+            while pending and count < 1024:
+                piece = pending.pop()
+                room = 1024 - count
+                pieces.append(piece[:room])
+                count += len(pieces[-1])
+                if len(piece) > room:
+                    pending.append(piece[room:])
+            batch = pieces[0] if len(pieces) == 1 else np.concatenate(pieces)
+            cells += len(batch)
+            if cells > max_cells:
+                return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
+            centres = batch.mean(axis=1)
+            points = np.concatenate((centres, batch.reshape(-1, 3)))
+            _, distances, targets = on_surface(target_local, points, index=index)
+            samples += len(points)
+            if not np.isfinite(distances).all():
+                return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
+            lower = max(lower, max(0.0, float(distances.max()) - EPS_GEOM))
+            if lower > permitted_mm:
+                return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
+            radius = np.linalg.norm(batch - centres[:, None, :], axis=2).max(axis=1)
+            bounds = distances[: len(batch)] + radius
+            # Die den vier Proben nächsten Dreiecke sind Vorschläge für
+            # eine engere *obere* Schranke, niemals die nächste ganze Fläche.
+            candidate_faces = np.column_stack(
+                (targets[: len(batch)], targets[len(batch) :].reshape(-1, 3))
+            )
+            chosen = np.repeat(target_triangles[candidate_faces.ravel()], 3, axis=0)
+            corners = np.repeat(batch, 4, axis=0).reshape(-1, 3)
+            fixed = closest(chosen, corners)
+            fixed_bounds = (
+                np.linalg.norm(fixed - corners, axis=1).reshape(-1, 4, 3).max(axis=2).min(axis=1)
+            )
+            bounds = np.minimum(bounds, fixed_bounds) + EPS_GEOM
+            uncertain = bounds > permitted_mm
+            if uncertain.any():
+                bounds[uncertain] = np.minimum(
+                    bounds[uncertain],
+                    cover.bounds(batch[uncertain], candidate_faces[uncertain], token) + EPS_GEOM,
+                )
+            accepted = bounds <= permitted_mm
+            if accepted.any():
+                upper = max(upper, float(bounds[accepted].max()))
+            undecided = batch[~accepted]
+            if len(undecided):
+                a, b, c = undecided[:, 0], undecided[:, 1], undecided[:, 2]
+                ab, bc, ca = (a + b) / 2.0, (b + c) / 2.0, (c + a) / 2.0
+                pending.extend(
+                    np.stack(corners, axis=1)
+                    for corners in ((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca))
+                )
+    return SurfaceDistanceBound(lower, max(lower, upper), permitted_mm, samples, True)
 
 
 @dataclass(slots=True)
@@ -163,6 +394,7 @@ def compare(
     der keinen Drucker kennt, soll keinen erfinden.
     """
     entry = Difference(object_id="", noise_volume=_noise(profile))
+    before, after = _comparison_mesh(before), _comparison_mesh(after)
     before, after = _clipped_to_the_change(before, after, quality)
     first, second, common = _comparison_parts(before, after)
     balance = _volume_balance(first, second, common)
@@ -198,6 +430,28 @@ def compare(
             )
         )
     return entry
+
+
+def _comparison_mesh(mesh: MeshData) -> MeshData:
+    """Redundante Teilungen vor dem Vergleich entfernen, Quellen unverändert lassen.
+
+    Die vorhandene exakte Entlastung prüft Dichtheit, Teilezahl und Volumen.
+    Ihre Toleranz bleibt die native Rechengenauigkeit; Drucktoleranzen oder
+    eine Anzeigevereinfachung würden hier Änderungen verdecken. Nimmt der
+    Kern das Netz nicht, bleibt der normale Vergleich vollständig erhalten.
+    """
+    from app.core.geom.mesh_ops import _exactly_flattened
+
+    if mesh.triangle_count < COMPARISON_FLATTEN_FROM:
+        return mesh
+    try:
+        flattened = _exactly_flattened(mesh, None)
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
+        raise
+    except Exception as problem:
+        _log.info("comparison keeps the original mesh: %s", problem)
+        return mesh
+    return flattened if flattened is not None else mesh
 
 
 def _clipped_to_the_change(

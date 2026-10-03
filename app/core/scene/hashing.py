@@ -21,7 +21,7 @@ from collections.abc import Buffer, Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from app.core.scene import cache
-from app.core.types import Feature, Operation, Profile, Quality
+from app.core.types import Feature, Operation, Profile, Quality, Transform
 
 if TYPE_CHECKING:
     from app.core.geom.mesh import MeshData
@@ -220,6 +220,7 @@ def object_hash(
     cavity: MeshData | None = None,
     *,
     features: Mapping[str, Feature] | None = None,
+    frame: Transform | None = None,
     check_cancelled: Callable[[], None] | None = None,
     memo: FeatureMemo | None = None,
 ) -> str:
@@ -256,7 +257,9 @@ def object_hash(
                     memo[id(feature)] = (feature, part)
             checksum.update(part)
         feature_key = checksum.hexdigest()
-    key = digest(operation_key, position, sorted(reserved_feature_ids), cavity_key, feature_key)
+    key = digest(
+        operation_key, position, sorted(reserved_feature_ids), cavity_key, feature_key, frame
+    )
     if check_cancelled is not None:
         check_cancelled()
     return key

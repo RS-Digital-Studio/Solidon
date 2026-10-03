@@ -417,3 +417,397 @@ def test_an_import_at_the_marker_takes_its_source_along_when_it_does_not_land(
         assert not added & sources, "die Datei reiste sonst mit dem nächsten Speichern mit"
         assert not added & set(session.project.sources)
         assert not placed
+
+
+def test_history_slider_counts_transactions_and_supports_keyboard(qt_app):
+    """Zwei Ops in einem Auftrag geben eine Raste; Pfeile wählen den Stand."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.panels import HistoryPanel
+
+    history = _plate()
+    history.apply(
+        "Zwei Körper", [OperationDraft(op="create_box"), OperationDraft(op="create_sphere")]
+    )
+    panel = HistoryPanel()
+    panel.show_document(history.document)
+    chosen = []
+    panel.previewRequested.connect(chosen.append)
+    panel.compare.click()
+    assert panel.timeline_slider.maximum() == 4
+    assert panel.timeline_slider.minimum() == 1
+    assert panel.timeline_slider.accessibleName()
+    QTest.keyClick(panel.timeline_slider, Qt.Key.Key_Left)
+    assert chosen == [4, 3]
+    assert len(history.document.transactions) == 4
+    assert len(history.document.ops) == 5
+    panel.close()
+
+
+def test_history_preview_reconstructs_each_transaction_without_mutating_document(qt_app):
+    """Jede Raste liefert den echten früheren Hash, auch über eine Parameteränderung."""
+    import copy
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.types import Parameter
+    from app.ui.session import Session
+    from tests.ui_helpers import wait_until
+
+    session = Session()
+    session.add_parameter(Parameter(name="width", value=20.0, unit="mm"))
+    session.wait_for_idle()
+    session.history.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@width"})])
+    session.change_parameter("width", 35.0)
+    session.wait_for_idle()
+    session.history.apply("Zweiter Körper", [OperationDraft(op="create_sphere")])
+    original = copy.deepcopy(session.project.document)
+    for count in range(1, len(original.transactions) + 1):
+        document = copy.deepcopy(original)
+        history = History(document)
+        while len(document.transactions) > count:
+            history.undo()
+        expected = evaluate(
+            document, session.profile, quality=session.quality, detect_features=False
+        )
+        values, errors = [], []
+        session.history_preview_async(
+            count, values.append, explained=errors.append, progressed=lambda value: None
+        )
+        wait_until(qt_app, lambda values=values: bool(values))
+        assert not errors
+        actual = values[0][0]
+        assert actual.object_hashes == expected.object_hashes
+        assert session.project.document == original
+        assert not session.history.undone
+    session.release()
+
+
+@pytest.mark.parametrize(
+    "filename", ["weg2-halter-konstruieren.p3d", "skizze-mit-massen.p3d", "dose-mit-deckel.p3d"]
+)
+def test_history_preview_reaches_every_transaction_of_three_real_projects(qt_app, filename):
+    """Die Transaktionsrasten funktionieren auch an drei gespeicherten Kundenwegen."""
+    import copy
+
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load
+    from app.ui.session import Session
+    from tests.ui_helpers import wait_until
+
+    session = Session()
+    session.project = load(Path("app/examples") / filename)
+    session.history = History(session.project.document)
+    saved = copy.deepcopy(session.project.document)
+    assert len(saved.transactions) > 1
+    for count in range(1, len(saved.transactions) + 1):
+        document = copy.deepcopy(saved)
+        history = History(document)
+        while len(document.transactions) > count:
+            history.undo()
+        expected = evaluate(
+            document,
+            session.profile,
+            quality=session.quality,
+            sources=ProjectSources(session.project),
+            ask=lambda question, choices: choices[0],
+            detect_features=False,
+        )
+        assert expected.stopped_at is None
+        values, errors = [], []
+        session.history_preview_async(
+            count, values.append, explained=errors.append, progressed=lambda value: None
+        )
+        wait_until(qt_app, lambda values=values: bool(values))
+        assert not errors
+        assert values[0][0].object_hashes == expected.object_hashes
+        assert session.project.document == saved
+    session.release()
+
+
+@pytest.mark.parametrize("interruption", ["newer", "cancel", "project"])
+def test_history_preview_discards_outdated_answers(qt_app, monkeypatch, interruption):
+    """Schneller Wechsel, Abbruch und neues Projekt lassen keine alte Vorschau zurück."""
+    import threading
+
+    from app.ui import session as session_module
+    from app.ui.session import Session
+    from tests.ui_helpers import wait_until
+
+    session = Session()
+    session.history.apply("Quader", [OperationDraft(op="create_box")])
+    session.history.apply("Kugel", [OperationDraft(op="create_sphere")])
+    entered, release = threading.Event(), threading.Event()
+    original = session_module.evaluate
+    first = True
+
+    def delayed(*args, **kwargs):
+        nonlocal first
+        if first:
+            first = False
+            entered.set()
+            release.wait(5)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(session_module, "evaluate", delayed)
+    old, new = [], []
+    session.history_preview_async(
+        1, old.append, explained=lambda text: None, progressed=lambda value: None
+    )
+    wait_until(qt_app, entered.is_set)
+    if interruption == "newer":
+        session.history_preview_async(
+            2, new.append, explained=lambda text: None, progressed=lambda value: None
+        )
+    elif interruption == "cancel":
+        session.cancel_preview()
+    else:
+        session.start_new()
+    release.set()
+    assert session.wait_for_idle(30000)
+    session.release()
+    qt_app.processEvents()
+    assert not old
+    if interruption == "newer":
+        assert len(new) == 1
+        assert len(new[0][0].scene.objects) == 2
+
+
+def test_history_preview_restores_selection_and_explicitly_sets_insertion(qt_app):
+    """Der Vergleich zeigt keinen Griff; Rückweg und Einfügemarke bleiben getrennt."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.session.history.apply("Quader", [OperationDraft(op="create_box")])
+    window.session.history.apply("Kugel", [OperationDraft(op="create_sphere")])
+    window.session.evaluate_async()
+    assert window.session.wait_for_idle()
+    window.object_tree.select_objects(("obj_1",))
+    panel = window.history_panel
+    transactions = tuple(window.session.history.transactions)
+    panel.compare.click()
+    assert window.session.wait_for_idle()
+    assert window.viewport.highlighted_objects() == ()
+    assert window.object_tree.selected_objects() == ("obj_1",)
+    QTest.keyClick(panel.timeline_slider, Qt.Key.Key_Left)
+    assert window.session.wait_for_idle()
+    assert window.session.inserting is None
+    panel.timeline_end.click()
+    assert window.viewport.highlighted_objects() == ("obj_1",)
+    assert tuple(window.session.history.transactions) == transactions
+    panel.compare.click()
+    QTest.keyClick(panel.timeline_slider, Qt.Key.Key_Left)
+    assert window.session.wait_for_idle()
+    panel.timeline_insert.click()
+    assert window.session.wait_for_idle()
+    assert window.session.inserting == 2
+    assert not panel.compare.isChecked()
+    assert tuple(window.session.history.transactions) == transactions
+    window.session.stop_inserting()
+    assert window.session.wait_for_idle()
+    assert len(window.session.last_result.scene.objects) == 2
+
+
+@pytest.mark.parametrize(
+    "command", ["start_sculpt", "start_armature", "start_sketch", "operation", "undo"]
+)
+def test_history_comparison_keeps_camera_and_refuses_editing(qt_app, monkeypatch, command):
+    """Stand 1 hat einen leeren Vorgänger: Er darf weder Bettzoom noch Bearbeitung auslösen."""
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.history.apply("Quader", [OperationDraft(op="create_box")])
+        window.session.history.apply("Kugel", [OperationDraft(op="create_sphere")])
+        window.session.evaluate_async()
+        assert window.session.wait_for_idle()
+        window.object_tree.select_objects(("obj_1",))
+        fitted = []
+        monkeypatch.setattr(window.viewport, "_fit_camera", lambda **kwargs: fitted.append(kwargs))
+        panel = window.history_panel
+        transactions = tuple(window.session.history.transactions)
+        panel.compare.click()
+        assert window.session.wait_for_idle()
+        panel.timeline_slider.setValue(1)
+        assert window.session.wait_for_idle()
+        assert not fitted, "auch der leere Vorgänger hält den bisherigen Kamerarahmen"
+        if command == "operation":
+            window.launch_operation(REGISTRY.get("create_box"))
+        elif command == "start_sketch":
+            window.start_sketch("sketch_extrude")
+        elif command == "undo":
+            window.action_undo()
+        else:
+            getattr(window, command)()
+        assert panel.compare.isChecked(), "der Befehl darf den Vergleich nicht still beenden"
+        assert not window.sculpting() and not window.setting_armature()
+        assert window._sketch_panel is None and window._op_dialog is None
+        assert "Aktueller Stand" in window._announcement
+        assert tuple(window.session.history.transactions) == transactions
+        panel.timeline_end.click()
+        assert window.session.wait_for_idle()
+        assert not fitted, "der Rückweg hält ebenfalls den Kamerarahmen"
+        assert len(window.session.last_result.scene.objects) == 2
+    finally:
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.close()
+        window.release()
+
+
+def test_history_comparison_does_not_replace_an_active_editor(qt_app, monkeypatch):
+    """Schon die Wahl wird abgewiesen; kein Schließen-Signal stellt das Dokument darüber."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.history.apply("Quader", [OperationDraft(op="create_box")])
+        window.session.evaluate_async()
+        assert window.session.wait_for_idle()
+        closed = []
+        requested = []
+        window.history_panel.previewClosed.connect(lambda: closed.append(True))
+        window.history_panel.previewRequested.connect(requested.append)
+        for editor in ("sculpting", "setting_armature", "sketch", "measure"):
+            with monkeypatch.context() as patch:
+                if editor in ("sculpting", "setting_armature"):
+                    patch.setattr(window, editor, lambda: True)
+                elif editor == "sketch":
+                    patch.setattr(window, "_sketch_panel", object())
+                else:
+                    patch.setattr(
+                        window, "_quiet_host", SimpleNamespace(begun=True, committing=False)
+                    )
+                window.history_panel.compare.click()
+                assert not window.history_panel.compare.isChecked()
+                assert window._announcement
+                assert not closed and not requested
+    finally:
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.close()
+        window.release()
+
+
+def test_revision_lineage_keeps_titles_through_insert_move_undo_and_roundtrip(tmp_path):
+    """Gleiche Operationen behalten ihre Namen anhand der gespeicherten Herkunft."""
+    from app.core.knowledge import profiles
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import load
+    from app.ui.panels import history_step_titles
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Rumpf", [OperationDraft(op="create_box")])
+    history.apply("Kopf", [OperationDraft(op="create_sphere")])
+    history.apply(
+        "Kopf setzen",
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"z": 25.0})],
+    )
+    first = history.plan_insert(2, "Halter", [OperationDraft(op="create_box")])
+    history.commit(first)
+    assert history.document.transactions[-1].renumbered == first.renumbered
+    assert history_step_titles(project.document)[first.new_id(2)] == "Kopf"
+    assert history_step_titles(project.document)[first.new_id(3)] == "Kopf setzen"
+    second = history.plan_move([first.subjects[0]], 1)
+    history.commit(second)
+    expected = ["Halter", "Rumpf", "Kopf", "Kopf setzen"]
+    assert [
+        history_step_titles(project.document)[step.id] for step in history.operations
+    ] == expected
+    assert all(step.id > 4 for step in history.operations), "Kennungen bleiben monoton"
+    history.undo()
+    assert history_step_titles(project.document)[first.new_id(2)] == "Kopf"
+    history.redo()
+    third = history.plan_insert(
+        history.operations[-1].id, "Zweiter Halter", [OperationDraft(op="create_box")]
+    )
+    history.commit(third)
+    expected.insert(-1, "Zweiter Halter")
+    for _ in range(2):
+        history.undo()
+        history.redo()
+    assert [
+        history_step_titles(project.document)[step.id] for step in history.operations
+    ] == expected
+    saved = save(project, tmp_path / "lineage.p3d")
+    reopened = load(saved)
+    titles = history_step_titles(reopened.document)
+    assert [titles[step.id] for step in History(reopened.document).operations] == expected
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    original = evaluate(project.document, profile, detect_features=False)
+    restored = evaluate(reopened.document, profile, detect_features=False)
+    assert original.complete and restored.complete
+    assert original.object_hashes == restored.object_hashes
+
+
+def test_revision_rows_show_positions_and_keep_stable_ids(qt_app):
+    """Die zweite sichtbare Operation ist Position 2, auch wenn sie die Kennung 8 trägt."""
+    from app.ui.panels import HistoryPanel
+
+    history = _plate()
+    plan = history.plan_insert(2, "Eigener Halter", [OperationDraft(op="create_sphere")])
+    history.commit(plan)
+    panel = HistoryPanel()
+    try:
+        panel.show_document(history.document)
+        rows = [_row_of(panel, step.id) for step in history.operations]
+        assert [row.text().strip().split("  ", 1)[0] for row in rows] == ["1", "2", "3", "4"]
+        assert "Eigener Halter" in rows[1].text()
+        assert "Position 3" in rows[2].toolTip()
+        assert str(plan.new_id(2)) in rows[2].toolTip()
+    finally:
+        panel.deleteLater()
+
+
+def test_inserted_history_uses_positions_in_report_status_and_dependency_tips(qt_app):
+    """Kennung 5 ist nach Einfügen Position 3; Meldungen und Klickziele bleiben getrennt."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.panels import _origin_text
+    from app.ui.session import Session
+
+    session = Session()
+    try:
+        session.history.apply("Rumpf", [OperationDraft(op="create_box")])
+        session.history.apply("Kopf", [OperationDraft(op="create_sphere")])
+        plan = session.history.plan_insert(2, "Halter", [OperationDraft(op="create_box")])
+        session.history.commit(plan)
+        marker = plan.new_id(2)
+        assert marker != 3
+        session.start_inserting(marker)
+        assert session.wait_for_idle()
+        finding = next(
+            item
+            for item in session.last_result.scene.report.findings
+            if item.code == "history.inserting"
+        )
+        assert "vor Schritt 3" in str(finding.message)
+        assert finding.op_id == marker, "der Rückweg benutzt weiterhin die stabile Kennung"
+        announced = []
+        MainWindow._on_insertion_changed(
+            SimpleNamespace(session=session, announce=announced.append), marker
+        )
+        assert announced == ["Neue Schritte kommen jetzt vor Schritt 3."]
+        assert _origin_text(marker, session.project.document).startswith("aus Operation 3")
+        assert (
+            needs_tip(
+                marker,
+                [StepNeed(step=marker, on=plan.subjects[0], object_id="obj_1")],
+                session.project.document,
+            )
+            == "Braucht Schritt 2."
+        )
+    finally:
+        session.release()

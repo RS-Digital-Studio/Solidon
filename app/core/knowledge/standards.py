@@ -111,13 +111,15 @@ class ProfileSlot:
     slot: float
     """Nutbreite außen — die Öffnung, durch die ein Hals muss."""
     core: float
-    """Kerndurchmesser der Nut — die Kammer, in der ein Kopf sitzt."""
+    """Nutzbare Kopfbreite unter dem Steg, zwischen den oberen Eckradien."""
     lip: float
     """Stegdicke: wie dick das Material an der Öffnung ist. Halslänge."""
     depth: float
     """Kammertiefe von der Innenseite des Stegs bis zum Nutgrund. Kopfhöhe."""
     screw: str
     note: str = ""
+    taper_to_slot: bool = False
+    """Der Kopf verjüngt sich zum Nutgrund auf Halsbreite; nur am belegten Profil."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -367,6 +369,8 @@ def _validate(tables: Tables, source: Path) -> None:
         _ordered((inner, outer), "bearings", bearing.size, "inner_outer", source)
 
     for profile in tables.profiles.values():
+        if not isinstance(profile.taper_to_slot, bool):
+            raise _invalid("profiles", profile.size, "taper_to_slot_boolean", source)
         slot = _finite_positive(profile.slot, "profiles", profile.size, "slot", source)
         core = _finite_positive(profile.core, "profiles", profile.size, "core", source)
         _finite_positive(profile.lip, "profiles", profile.size, "lip", source)

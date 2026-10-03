@@ -2594,6 +2594,29 @@ def _bore_in(entry: SceneObject, kind: str) -> str:
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_separate_pin_does_not_turn_a_through_slot_into_a_blind_slot(
+    profile: Profile, kernel: str
+) -> None:
+    """Der eigene Träger bestimmt den Durchgang, auch mit einem fremden Stift an der Mündung."""
+    entry = _plate_with_a_second_body(kernel, inside=True)
+    pulled = run_op(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+    if kernel == "brep":
+        from app.core.brep.features import features_of
+
+        found = features_of(pulled.mesh)
+    else:
+        from app.core.perceive.features import forget_cache
+
+        forget_cache()
+        found = detect(as_mesh_data(pulled.mesh))
+    slot = next(feature for feature in found.values() if feature.kind == "slot")
+    assert slot.params["through"] is True
+    assert slot.params["depth"] == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
     profile: Profile, kernel: str
 ) -> None:
@@ -3040,6 +3063,224 @@ def test_an_inner_void_does_not_shorten_a_single_body_slot(
     if cavity:
         expected -= 4.0**3
     assert output.mesh.volume == pytest.approx(expected, abs=1e-6 if kernel == "brep" else 2.0)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
+def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
+    profile: Profile, kernel: str, quality: Quality, slope: bool
+) -> None:
+    """Ein unbeteiligter Würfel darf an den Langlochenden kein Material stehen lassen."""
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid, boolean_builder
+    from app.core.knowledge.parts.exact import compound
+
+    if slope:
+        base = edit.box(40.0, 20.0, 20.0)
+        plane = BRepBuilderAPI_MakeFace(
+            gp_Pln(gp_Pnt(0.0, 0.0, 10.0), gp_Dir(-0.25, 0.0, 1.0))
+        ).Face()
+        below = BRepPrimAPI_MakeHalfSpace(plane, gp_Pnt(0.0, 0.0, 0.0)).Solid()
+        builder = boolean_builder("intersection", base.shape, below)
+        builder.Build()
+        carrier = Solid(builder.Shape())
+        length = 16.0
+        probe = (7.5, 0.0, 11.5)
+    else:
+        carrier = edit.boolean(
+            "union",
+            [edit.box(40.0, 20.0, 10.0), edit.moved(edit.box(10.0, 20.0, 10.0), (10, 0, 10))],
+        )
+        length = 12.0
+        probe = (5.5, 0.0, 15.0)
+    carrier = edit.cut_bore(
+        carrier, position=(0.0, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6, depth=40
+    )
+    spare = edit.moved(edit.box(10, 10, 10), (60, 0, 0))
+    volumes = []
+    for assembled in (False, True):
+        solid = compound(carrier, spare) if assembled else carrier
+        if kernel == "brep":
+            entry = SceneObject(
+                id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+            )
+        else:
+            mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+            entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+        feature = entry.features[_bore_in(entry, "hole")]
+        assert inside(as_mesh_data(entry.mesh), [probe])[0]
+        output = run_op(
+            "slot_hole", entry, profile, quality=quality, at_feature=feature.id, slot_length=length
+        )
+        assert not inside(as_mesh_data(output.mesh), [probe])[0]
+        assert output.mesh.is_watertight
+        assert output.mesh.component_count == (2 if assembled else 1)
+        volumes.append(output.mesh.volume - (1000.0 if assembled else 0.0))
+    assert volumes[1] == pytest.approx(volumes[0], abs=0.1)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("params", [{"x": 8.0}, {"diameter": 4.0}], ids=["moved", "narrow"])
+def test_a_slot_cannot_silently_join_its_carrier_to_a_separate_pin(
+    profile: Profile, kernel: str, quality: Quality, params: dict[str, float]
+) -> None:
+    """Ohne vollständige Freistellung des Stifts verlangt der Zug getrennte Objekte."""
+    entry = _plate_with_a_second_body(kernel, inside=True)
+    original = as_mesh_data(entry.mesh).to_bytes()
+    with pytest.raises(ValidationError) as caught:
+        run_op(
+            "slot_hole",
+            entry,
+            profile,
+            quality=quality,
+            at_feature=_bore_in(entry, "hole"),
+            slot_length=12.0,
+            **params,
+        )
+    assert "split_bodies" in {action.id for action in caught.value.suggestions}
+    assert as_mesh_data(entry.mesh).to_bytes() == original
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_the_separate_pin_ends_at_the_same_mouth_in_both_kernels(profile, quality):
+    """Der axial bündige Schnitt verliert am Netz keine zusätzliche Stiftscheibe."""
+    remains = []
+    for kernel in ("mesh", "brep"):
+        entry = _plate_with_a_second_body(kernel, inside=True)
+        output = run_op(
+            "slot_hole",
+            entry,
+            profile,
+            at_feature=_bore_in(entry, "hole"),
+            slot_length=12.0,
+            quality=quality,
+        )
+        pieces = as_mesh_data(output.mesh).raw.split(only_watertight=True)
+        assert len(pieces) == 2
+        pin = min(pieces, key=lambda piece: piece.volume)
+        assert pin.bounds[:, 2] == pytest.approx((10.0, 15.0), abs=1e-6)
+        remains.append(pin.volume)
+        if kernel == "brep":
+            from app.core.brep.edit import separated_solids
+
+            volumes = sorted(part.volume for part, _faces in separated_solids(output.mesh))
+            assert volumes[0] == pytest.approx(math.pi * 2.5**2 * 5.0, abs=1e-6)
+    assert remains[0] == pytest.approx(remains[1], abs=0.1)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_slot_in_an_imported_assembly_survives_history_and_cache(
+    profile,
+    tmp_path,
+    kernel,
+    quality,
+):
+    """Quelle, Folgezug, Warmstart und Projekt-Rundreise halten Träger und Stift getrennt."""
+    from app.core.brep import step
+    from app.core.geom.mesh import MeshCodec
+    from app.core.ingest.plan import import_plan
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from app.core.types import Source
+
+    original = _plate_with_a_second_body(kernel, inside=True)
+    payload = (
+        step.write(original.mesh) if kernel == "brep" else original.mesh.raw.export(file_type="stl")
+    )
+    name = "assembly.step" if kernel == "brep" else "assembly.stl"
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = payload
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=f"sources/{name}",
+        sha256="",
+    )
+    history = History(project.document)
+    plan = import_plan("src_1", name, payload)
+    if kernel == "brep":
+        plan = dataclasses.replace(
+            plan,
+            draft=dataclasses.replace(
+                plan.draft,
+                params={**plan.draft.params, "bodies": '["*"]'},
+                produces=1,
+            ),
+        )
+    history.apply(plan.title, [plan.draft])
+    directory = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+
+    def evaluated():
+        result = evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            quality=quality,
+            cache=cache,
+        )
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        entry = result.scene.objects["obj_1"]
+        assert entry.kind == kernel
+        assert as_mesh_data(entry.mesh).is_watertight
+        assert as_mesh_data(entry.mesh).component_count == 2
+        return entry
+
+    before = evaluated()
+    history.apply(
+        "Zum Langloch ziehen",
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=("obj_1",),
+                seed=7,
+                params={"at_feature": _bore_in(before, "hole"), "slot_length": 12.0},
+            )
+        ],
+    )
+    first = evaluated()
+    history.apply(
+        "Langloch weiterziehen und drehen",
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=("obj_1",),
+                seed=7,
+                params={
+                    "at_feature": _bore_in(first, "slot"),
+                    "slot_length": 14.0,
+                    "slot_angle": 30.0,
+                },
+            )
+        ],
+    )
+    changed = evaluated()
+    assert changed.mesh.volume < first.mesh.volume < before.mesh.volume
+    hits = cache.statistics.hits
+    assert evaluated().mesh.volume == pytest.approx(changed.mesh.volume, abs=1e-6)
+    assert cache.statistics.hits > hits
+    history.undo()
+    assert evaluated().mesh.volume == pytest.approx(first.mesh.volume, abs=1e-6)
+    history.undo()
+    assert evaluated().mesh.volume == pytest.approx(before.mesh.volume, abs=1e-6)
+    history.redo()
+    history.redo()
+    assert evaluated().mesh.volume == pytest.approx(changed.mesh.volume, abs=1e-6)
+    path = save(project, tmp_path / "assembly.p3d")
+    project = load(path)
+    assert project.sources["src_1"] == payload
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    assert evaluated().mesh.volume == pytest.approx(changed.mesh.volume, abs=1e-6)
 
 
 def test_separate_contents_answer_is_shared_but_changes_with_the_geometry(

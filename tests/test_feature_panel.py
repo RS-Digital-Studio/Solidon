@@ -32,13 +32,51 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.perceive import actions, features
 from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANTS, actions_for
 from app.core.registry import REGISTRY, validate
-from app.core.types import Feature
+from app.core.types import Feature, FeatureKind
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
 from app.ui.panels import FeaturePanel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def test_measuring_keeps_footer_actions_hidden_through_a_feature_switch(qt_app) -> None:
+    """Kein kurzes Zeigen/Verbergen derselben Fußzeile in einer Auswahlrunde."""
+    from PySide6.QtCore import QEvent, QObject
+
+    class Watch(QObject):
+        def __init__(self):
+            super().__init__()
+            self.shown = []
+
+        def eventFilter(self, watched, event):  # noqa: N802
+            if event.type() in (QEvent.Type.Show, QEvent.Type.ShowToParent):
+                self.shown.append(watched)
+            return False
+
+    load_operations()
+    mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
+    found = features.detect(mesh)
+    holes = [key for key, feature in found.items() if feature.kind == "hole"]
+    panel = FeaturePanel()
+    watcher = Watch()
+    try:
+        panel.show_feature(holes[0], found[holes[0]], features=found, mesh=mesh)
+        panel.set_measuring(True, op="resize_hole")
+        for widget in (panel._in_view, panel._every, panel._apply):
+            widget.installEventFilter(watcher)
+        panel.set_locked("")
+        panel.show_feature(holes[1], found[holes[1]], features=found, mesh=mesh)
+        panel.set_measuring(True, op="resize_hole")
+        assert not watcher.shown
+        panel.set_measuring(False)
+        assert not panel._in_view.isHidden()
+        assert not panel._every.isHidden()
+        assert not panel._apply.isHidden()
+    finally:
+        panel.close()
+        panel.deleteLater()
 
 
 def test_texture_fields_keep_expressions_and_hidden_parameters(qt_app: QApplication) -> None:
@@ -89,6 +127,30 @@ def test_ambiguous_textures_require_a_choice_and_clear_the_previous_preview(
     assert len(cleared) == 2
 
 
+def test_a_texture_can_be_removed_directly_from_its_panel(qt_app: QApplication) -> None:
+    """Der sichtbare Knopf entfernt den ursprünglichen Schritt über den bestehenden Signalweg."""
+    from types import SimpleNamespace
+
+    step = SimpleNamespace(id=8, op="apply_texture", params={})
+    panel = FeaturePanel()
+    removed: list[int] = []
+    changed: list[object] = []
+    operations: list[object] = []
+    panel.stepRemoveRequested.connect(removed.append)
+    panel.stepChangeRequested.connect(lambda *args: changed.append(args))
+    panel.operationRequested.connect(lambda *args: operations.append(args))
+    panel.show_texture([step])
+    remove = next(
+        button
+        for button in panel.findChildren(QPushButton)
+        if button.text() == tr("Textur entfernen")
+    )
+    assert not remove.isHidden() and remove.isEnabled()
+    remove.click()
+    assert removed == [step.id]
+    assert not changed and not operations
+
+
 def test_texture_steps_follow_object_ancestry_and_provenance() -> None:
     """Gleiche Flächennamen fremder Körper und jüngere andere Texturen werden getrennt."""
     from app.core.types import Document, Operation
@@ -122,10 +184,18 @@ def test_texture_steps_follow_object_ancestry_and_provenance() -> None:
             ),
         ],
     )
-    face = Feature(id="top", kind="face", provenance="detected", created_by=1, params={})
-    candidates, certain = texture_steps_of("child", face, document)
+    pattern = Feature(
+        id="texture_1",
+        kind="pattern",
+        provenance="generated",
+        created_by=1,
+        params={},
+        face_indices=(0, 1),
+    )
+    face = Feature(id="top", kind="face", provenance="detected", params={})
+    candidates, certain = texture_steps_of("child", pattern, document)
     assert certain and [entry.id for entry in candidates] == [1]
-    candidates, certain = texture_steps_of("b", replace(face, created_by=None), document)
+    candidates, certain = texture_steps_of("b", replace(pattern, created_by=2), document)
     assert certain and [entry.id for entry in candidates] == [2]
     candidates, certain = texture_steps_of(
         "child", replace(face, id="unknown", created_by=None), document
@@ -134,13 +204,159 @@ def test_texture_steps_follow_object_ancestry_and_provenance() -> None:
     document.ops.append(
         Operation(id=5, op="apply_texture", inputs=("a",), outputs=("a",), params={"face": "top"})
     )
-    candidates, certain = texture_steps_of("child", replace(face, created_by=None), document)
+    candidates, certain = texture_steps_of("child", pattern, document)
     assert certain and [entry.id for entry in candidates] == [1]
     # Ein historisches Rechteck kann noch die inzwischen unwirksame
     # Flächenvorwahl tragen. Sie belegt seine heutige Lage nicht.
     document.ops[1] = replace(document.ops[1], params={"face": "top"})
     candidates, certain = texture_steps_of("b", replace(face, created_by=None), document)
     assert not certain and [entry.id for entry in candidates] == [2]
+
+
+@pytest.mark.parametrize(
+    "kind,created_by,recognised,indices,certain",
+    [
+        ("face", None, True, (0, 1), False),
+        ("face", 7, True, (0, 1), False),
+        ("hole", 7, True, (0, 1), False),
+        ("pattern", 7, False, (), False),
+        ("pattern", 7, True, (), False),
+        ("pattern", 7, True, (0, 1), True),
+    ],
+)
+def test_texture_steps_require_an_existing_pattern_for_direct_editing(
+    kind: FeatureKind,
+    created_by: int | None,
+    recognised: bool,
+    indices: tuple[int, ...],
+    certain: bool,
+) -> None:
+    """Ohne belegtes Muster bleiben wirkungslose Schritte und alte Einzelzellen wählbar."""
+    from app.core.types import Document, Operation
+    from app.ui.panels import texture_steps_of
+
+    step = Operation(
+        id=7,
+        op="apply_texture",
+        inputs=("body",),
+        outputs=("body",),
+        params={"coverage": "whole_face", "face": "top"},
+    )
+    document = Document(format_version=1, app_version="test", ops=[step])
+    feature = Feature(
+        id="top",
+        kind=kind,
+        provenance="detected",
+        created_by=created_by,
+        params={},
+        recognised=recognised,
+        face_indices=indices,
+    )
+    candidates, proven = texture_steps_of("body", feature, document, completed=(7,))
+    assert candidates == [step]
+    assert proven is certain
+    assert texture_steps_of("body", feature, document, completed=()) == ([], False)
+
+
+@pytest.mark.parametrize("changed", [{"cell_depth": 1.2}, {"style": "wave"}])
+@pytest.mark.parametrize(
+    "target,owner,after_split,completed,suppressed,certain",
+    [
+        ("op2.texture_1", "body", False, None, False, False),
+        ("body:op2.texture_1", "body", False, None, False, False),
+        ("op2.texture_1", "child", True, None, False, False),
+        ("child:op2.texture_1", "child", True, None, False, False),
+        ("op2.texture_1", "body", True, None, False, True),
+        ("op2.texture_1", "other", False, None, False, True),
+        ("other:op2.texture_1", "body", False, None, False, True),
+        ("op4.texture_1", "body", False, None, False, True),
+        ("op2.texture_1", "body", False, (2, 4), False, True),
+        ("op2.texture_1", "body", False, (2, 3, 4), True, True),
+    ],
+)
+def test_texture_steps_keep_later_feature_changes_in_the_current_panel(
+    changed: dict[str, float | str],
+    target: str,
+    owner: str,
+    after_split: bool,
+    completed: tuple[int, ...] | None,
+    suppressed: bool,
+    certain: bool,
+) -> None:
+    """Nach 0,6 → 1,2 mm zeigt die Auswahl aktuelle Maße; der Erzeuger bleibt separat wählbar."""
+    from app.core.types import Document, Operation, Suppression
+    from app.ui.panels import texture_steps_of
+
+    texture = Operation(
+        id=2,
+        op="apply_texture",
+        inputs=("body",),
+        outputs=("body",),
+        params={"depth": 0.6},
+    )
+    change = Operation(
+        id=3,
+        op="resize_feature",
+        inputs=(owner,),
+        outputs=(owner,),
+        params={"at_feature": target, **changed},
+        suppressed=Suppression() if suppressed else None,
+    )
+    split = Operation(id=4, op="split_bodies", inputs=("body",), outputs=("body", "child"))
+    document = Document(
+        format_version=1,
+        app_version="test",
+        ops=[texture, split, change] if after_split else [texture, change, split],
+    )
+    feature = Feature(
+        id="op2.texture_1",
+        kind="pattern",
+        provenance="generated",
+        created_by=2,
+        params={"cell_depth": 1.2},
+        face_indices=(0, 1),
+    )
+    candidates, proven = texture_steps_of("child", feature, document, completed=completed)
+    assert candidates == [texture]
+    assert proven is certain
+    # Schrittnummern sind keine Reihenfolge: Eine Änderung vor dem Erzeuger
+    # überschreibt dessen heutige Werte nicht.
+    before = replace(document, ops=[change, texture, split])
+    assert texture_steps_of("child", feature, before, completed=completed) == ([texture], True)
+    # Ein ausgeschalteter Erzeuger ist keine vorhandene Textur.
+    off = replace(document, ops=[replace(texture, suppressed=Suppression()), split])
+    assert texture_steps_of("child", feature, off, completed=completed) == ([], False)
+
+
+@pytest.mark.parametrize("combine", ["union_objects", "intersect_objects"])
+@pytest.mark.parametrize("owner,certain", [("body", False), ("other", True)])
+def test_texture_steps_follow_feature_names_before_combined_bodies(
+    combine: str, owner: str, certain: bool
+) -> None:
+    """Vor einer Vereinigung geänderte Texturen behalten ihren Bezug trotz neuer Namensräume."""
+    from app.core.types import Document, Operation
+    from app.ui.panels import texture_steps_of
+
+    texture = Operation(id=2, op="apply_texture", inputs=("body",), outputs=("body",))
+    change = Operation(
+        id=3,
+        op="resize_feature",
+        inputs=(owner,),
+        outputs=(owner,),
+        params={"at_feature": "op2.texture_1", "cell_depth": 1.2},
+    )
+    first = Operation(id=4, op=combine, inputs=("other", "body"), outputs=("joined",))
+    second = Operation(id=5, op=combine, inputs=("last", "joined"), outputs=("final",))
+    document = Document(format_version=1, app_version="test", ops=[texture, change, first, second])
+    feature = Feature(
+        id="joined.body.op2.texture_1",
+        kind="pattern",
+        provenance="generated",
+        created_by=2,
+        params={"cell_depth": 1.2},
+        face_indices=(0, 1),
+    )
+    assert texture_steps_of("final", feature, document) == ([texture], certain)
 
 
 def test_a_stopped_texture_is_not_presented_as_an_existing_surface(qt_app: QApplication) -> None:
@@ -1268,6 +1484,24 @@ def test_a_honeycomb_pattern_stands_in_the_panel_with_its_own_fields(qt_app: QAp
     press(panel, "Merkmal ändern")
     assert seen[-1][0] == "resize_feature" and seen[-1][1]["at_feature"] == identifier
     assert math.isclose(float(seen[-1][1]["pitch"]), pitch, abs_tol=0.01)
+
+
+def test_textures_from_other_bodies_have_distinct_visible_numbers() -> None:
+    """Gleichnamige Texturen bleiben nach einer Vereinigung sichtbar unterscheidbar."""
+    from app.ui.labels import feature_name
+
+    names = []
+    for identifier in ("texture_1", "obj_2.texture_1", "obj_3.obj_2.texture_1"):
+        pattern = Feature(
+            id=identifier,
+            kind="pattern",
+            provenance="generated",
+            params={"texture": True, "style": "rib"},
+        )
+        names.append(feature_name(identifier, pattern))
+    assert len(set(names)) == 3
+    assert all("obj_" not in name and "texture_" not in name for name in names)
+    assert [name.rsplit(" ", 1)[-1] for name in names] == ["1", "2.1", "3.2.1"]
 
 
 def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplication) -> None:
@@ -3454,6 +3688,110 @@ def _measure_group_state(group: QWidget) -> list[list[tuple[Any, ...]]]:
     return rows
 
 
+def test_measure_conditions_follow_bool_choice_chains_refresh_and_reuse(
+    qt_app: QApplication,
+) -> None:
+    """Die Maßgruppe folgt den Bedingungen, ohne verborgene Eingaben zu verlieren."""
+    from types import SimpleNamespace
+
+    from app.core.perceive.actions import ActionField, FeatureAction
+    from app.ui.panels import refresh_feature_fields, refused_feature_field
+
+    fields = (
+        ActionField("enabled", "Einschalten", "", False, "bool"),
+        ActionField(
+            "mode",
+            "Art",
+            "",
+            "extended",
+            "choice",
+            choices=(("simple", "Einfach"), ("extended", "Erweitert")),
+            depends_on=("enabled", (True,)),
+        ),
+        ActionField(
+            "length",
+            "Länge",
+            "mm",
+            5.0,
+            "length",
+            minimum=1.0,
+            maximum=20.0,
+            depends_on=("mode", ("extended",)),
+        ),
+    )
+    action = FeatureAction("Maße ändern", "slot_hole", fields=fields)
+    panel = FeaturePanel()
+    panel._runs["test"] = SimpleNamespace(op="slot_hole", action=action)
+    group = None
+    try:
+        built = panel.measure_fields("slot_hole", None)
+        assert built is not None
+        _, group, editors = built
+        assert editors["mode"].isHidden()
+        assert editors["length"].isHidden(), "auch die indirekte Bedingung gilt"
+        editors["enabled"].setChecked(True)
+        assert not editors["mode"].isHidden()
+        assert not editors["length"].isHidden()
+        editors["length"].set_value_mm(7.0)
+        editors["mode"].setCurrentIndex(0)
+        assert editors["length"].isHidden()
+        editors["enabled"].setChecked(False)
+        assert editors["mode"].isHidden()
+        refresh_feature_fields(fields, editors, {"mode": "extended", "enabled": True})
+        assert not editors["length"].isHidden(), "Kernwerte aktualisieren trotz blockierter Signale"
+        assert editors["length"].value_mm() == pytest.approx(7.0)
+        assert panel.keep_measure_group(group)
+        rebuilt = panel.measure_fields("slot_hole", None)
+        assert rebuilt is not None and rebuilt[1] is group
+        assert editors["mode"].isHidden() and editors["length"].isHidden()
+        editors["enabled"].setChecked(True)
+        assert not editors["length"].isHidden()
+        assert editors["length"].value_mm() == pytest.approx(5.0)
+        group.show()
+        QApplication.processEvents()
+        editor = editors["length"]
+        editor.lineEdit().setText(editor.textFromValue(50.0))
+        assert refused_feature_field(editors) is not None
+        editors["enabled"].setChecked(False)
+        assert refused_feature_field(editors) is None, "ein unwirksames Feld sperrt nicht"
+        editors["enabled"].setChecked(True)
+        assert refused_feature_field(editors) is not None, "die Eingabe bleibt korrigierbar"
+    finally:
+        if group is not None:
+            group.deleteLater()
+        panel.deleteLater()
+
+
+@pytest.mark.parametrize("op", ["drill_hole", "drill_brep_hole"])
+def test_original_bore_measures_hide_slot_fields_until_enabled(
+    qt_app: QApplication, op: str
+) -> None:
+    """Der native Fund: runde Bohrung zeigt keine Langlochlänge oder -richtung."""
+    from types import SimpleNamespace
+
+    load_operations()
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    owner = QWidget()
+    try:
+        panel.show_feature(identifier, feature)
+        step = SimpleNamespace(id=17, op=op, params={"diameter": 6.0, "slotted": False})
+        panel.offer_bore_step(step, REGISTRY.get(op), {})
+        built = panel.measure_fields(op, owner, feature=feature)
+        assert built is not None
+        _, _group, editors = built
+        assert editors["slot_length"].isHidden()
+        assert editors["slot_angle"].isHidden()
+        editors["slotted"].setChecked(True)
+        assert not editors["slot_length"].isHidden()
+        assert not editors["slot_angle"].isHidden()
+        editors["slotted"].setChecked(False)
+        assert editors["slot_length"].isHidden() and editors["slot_angle"].isHidden()
+    finally:
+        owner.deleteLater()
+        panel.deleteLater()
+
+
 def test_a_returned_measure_group_shows_what_a_fresh_one_would(qt_app: QApplication) -> None:
     """Eine zurückgegebene Maßgruppe kommt für die nächste Bohrung wieder — wie neu gebaut (RM-232).
 
@@ -3544,8 +3882,10 @@ def test_measure_group_owns_the_editable_fields_and_the_only_completion(
         panel.deleteLater()
 
 
+@pytest.mark.parametrize("op", ["drill_hole", "drill_brep_hole"])
 def test_the_original_bore_block_leaves_the_panel_while_its_measures_stand_in_the_view(
     qt_app: QApplication,
+    op: str,
 ) -> None:
     """RM-199 ganz: Auch der Block des Bohrschritts steht nicht rechts, solange er im Bild steht.
 
@@ -3558,23 +3898,33 @@ def test_the_original_bore_block_leaves_the_panel_while_its_measures_stand_in_th
 
     load_operations()
     identifier, feature = a_hole()
-    step = SimpleNamespace(id=17, op="drill_hole", params={"diameter": 6.0, "depth": 0.0})
+    step = SimpleNamespace(id=17, op=op, params={"diameter": 6.0, "depth": 0.0})
     panel = FeaturePanel()
     try:
         panel.show_feature(identifier, feature)
-        panel.offer_bore_step(step, REGISTRY.get("drill_hole"), {})
-        key = next(key for key, entry in panel._runs.items() if entry.op == "drill_hole")
+        panel.offer_bore_step(step, REGISTRY.get(op), {})
+        key = next(key for key, entry in panel._runs.items() if entry.op == op)
         assert key in panel._blocks, "der Bohrschritt-Block kennt seine Zeile"
         line, row = panel._blocks[key]
-        panel.set_measuring(True, op="drill_hole")
+        panel.set_measuring(True, op=op)
         assert not row.isVisibleTo(panel), "seine Maße stehen im Bild, nicht rechts"
         assert line is None or not line.isVisibleTo(panel)
         other = next(
             row for key, (_l, row) in panel._blocks.items() if panel._runs[key].op == "move_feature"
         )
         assert other.isVisibleTo(panel), "die übrigen Handlungen bleiben"
+        alternatives = [
+            widget
+            for key, (_line, widget) in panel._blocks.items()
+            if panel._runs[key].op in {"resize_hole", "slot_hole"}
+        ]
+        assert len(alternatives) == 2
+        assert all(not widget.isVisibleTo(panel) for widget in alternatives), (
+            "gemessene Folgemaße konkurrieren nicht mit den ursprünglichen Schrittmaßen"
+        )
         panel.set_measuring(False)
         assert row.isVisibleTo(panel)
+        assert all(widget.isVisibleTo(panel) for widget in alternatives)
     finally:
         panel.close()
         panel.deleteLater()
@@ -3674,6 +4024,37 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
         refusal = diameter.refusal()
         assert refusal and "Obergrenze" in refusal
         assert refused_feature_field(editors) == (refusal, diameter.text)
+    finally:
+        owner.close()
+        owner.deleteLater()
+        panel.close()
+        panel.deleteLater()
+
+
+@pytest.mark.parametrize("modified", [False, True])
+@pytest.mark.parametrize("focused", [False, True])
+def test_measure_refresh_only_protects_a_focused_draft(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, modified: bool, focused: bool
+) -> None:
+    """Neu fokussierte Karten erhalten Werte; eine wirklich getippte Eingabe bleibt stehen."""
+    from app.ui.panels import refresh_feature_fields
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    owner = QWidget()
+    try:
+        panel.show_feature(identifier, feature)
+        built = panel.measure_fields("slot_hole", owner)
+        assert built is not None
+        action, _group, editors = built
+        angle = editors["slot_angle"]
+        angle.setValue(12)
+        angle.lineEdit().setModified(modified)
+        monkeypatch.setattr(
+            QApplication, "focusWidget", lambda: angle.lineEdit() if focused else None
+        )
+        refresh_feature_fields(action.fields, editors, {"slot_angle": 45})
+        assert angle.value() == pytest.approx(12 if modified and focused else 45)
     finally:
         owner.close()
         owner.deleteLater()

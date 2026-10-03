@@ -59,6 +59,22 @@ SIDE_NAMES: Final[tuple[tuple[TranslatableText, TranslatableText], ...]] = (
 #: stimmt, bekommt der Wert einen eigenen Schlüssel — nicht diese Liste eine
 #: zweite Ebene.
 _CHOICE_NAMES: dict[str, TranslatableText] = {
+    "motedis-2020-b6": _("Motedis 2020 B-Typ, Nut 6"),
+    "motedis-3030-b8": _("Motedis 3030 B-Typ, Nut 8"),
+    "2020": _("2020 — ältere Vorgabe, Maße prüfen"),
+    "3030": _("3030 — ältere Vorgabe, Maße prüfen"),
+    "4040": _("4040 — ältere Vorgabe, Maße prüfen"),
+    "relative": _("um"),
+    "absolute": _("nach"),
+    "feature": _("Merkmal"),
+    "corner_000": _("Ecke links vorn unten"),
+    "corner_001": _("Ecke links vorn oben"),
+    "corner_010": _("Ecke links hinten unten"),
+    "corner_011": _("Ecke links hinten oben"),
+    "corner_100": _("Ecke rechts vorn unten"),
+    "corner_101": _("Ecke rechts vorn oben"),
+    "corner_110": _("Ecke rechts hinten unten"),
+    "corner_111": _("Ecke rechts hinten oben"),
     "whole_face": _("Gesamte Fläche"),
     "keep": _("Nur Bohrungsdurchmesser"),
     # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
@@ -72,6 +88,8 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "flush": _("Bündige Passung"),
     "mouth": _("Mündung"),
     "centre": _("Mitte"),
+    "centred": _("Mittig auf der Fläche"),
+    "point_on_surface": _("Am gewählten Punkt"),
     # Bei Mehrfachauswahl setzt das Fenster ihn auf die Mitte der
     # gemeinsamen Hülle; im Dialog trägt ihn ein, wer eine bestimmte
     # Stelle im Sinn hat. „Genannter Punkt" und nicht „Pivot": Das
@@ -171,6 +189,10 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # erraten, „dovetail" und „snap" nicht — und das sind die beiden, für die
     # man sich bewusst entscheidet.
     "round": _("Rund"),
+    "rectangular": _("Rechteckig"),
+    "screw": _("Schraubdeckel"),
+    "push": _("Steckdeckel"),
+    "hinged": _("Klappdeckel"),
     "ellipse": _("Oval"),
     "lower": _("Untere Hälfte"),
     "upper": _("Obere Hälfte"),
@@ -188,6 +210,8 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "honeycomb": _("Wabe"),
     "cubic": _("Würfelgitter"),
     "auto": _("Automatisch"),
+    "mesh": _("Dreiecksnetz"),
+    "brep": _("Echte Flächen und Kanten"),
     # Die drei Antworten auf die Frage, was mit den übrigen Abschnitten eines
     # Hohlraums geschieht (``remove_feature.sections``). „Nachfragen“ ist die
     # Vorgabe: Der Kern entscheidet die Mehrdeutigkeit nicht selbst (Regel 21).
@@ -531,7 +555,7 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         # schickte Nutzer und Agent an eine Stelle, die es nicht gibt.
         #
         # Wie er dort erreicht wird, hängt am Paar (``registry.twin_way``):
-        # ein Erzeuger über die Befehlspalette, eine Bearbeitung über den
+        # ein Erzeuger über das Kontextmenü im Verlauf, eine Bearbeitung über den
         # Körper, den man ihr gibt. Der Zusatz nannte früher den Umschalter
         # „Exakt" — den gibt es seit P2.8 nicht mehr.
         twin = source.get(twins[spec.name])
@@ -796,6 +820,7 @@ def cli_commands(registry: Registry | None = None) -> tuple[CliCommand, ...]:
                 default=entry.default,
             )
             for entry in spec.params.spec()
+            if not entry.internal
         )
         commands.append(CliCommand(name=spec.name, help=str(spec.doc), arguments=arguments))
     return tuple(commands)
@@ -1114,6 +1139,11 @@ def parameter_table(parameters: tuple[ParamSpec, ...], *, technical: bool = True
     kein Platzhalter für später, sondern eine Frage, die der Leser sich selbst
     stellt.
     """
+    # Migrationswerte bleiben im gespeicherten Schema, sind aber auch in der
+    # technischen Referenz keine Eingaben für neue Schritte (RM-422).
+    parameters = tuple(entry for entry in parameters if not entry.internal)
+    if not parameters:
+        return []
     if not technical:
         # Nur die Textansicht erhält übersetzte Bedingungswerte. Die gemeinsame
         # Satzbildung verfolgt weiterhin dieselben verschachtelten Bedingungen;

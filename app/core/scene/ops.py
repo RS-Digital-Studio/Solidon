@@ -15,8 +15,16 @@ from typing import Any, cast
 
 from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
 from app.core.geom.mesh import as_mesh_data
+from app.core.geom.transform import pattern_centre_param
 from app.core.registry import VARIABLE, op_params, param, register_op
-from app.core.types import BaseParams, OpContext, OpResult, SceneObject
+from app.core.types import (
+    BaseParams,
+    FeatureContinuation,
+    FeatureRef,
+    OpContext,
+    OpResult,
+    SceneObject,
+)
 from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
 from app.i18n import TranslatableText, _, tr
 
@@ -215,9 +223,12 @@ class PatternParams(BaseParams):
         default="z",
         choices=("x", "y", "z"),
         placement="advanced",
-        doc=_("Um welche Achse der Kranz läuft. Sie geht durch den Ursprung."),
+        doc=_("Um welche Achse der Kranz läuft. Sie geht durch die gewählte Drehmitte."),
         depends_on=("kind", ("circular",)),
     )
+    cx: float | None = pattern_centre_param("x", ("kind", ("circular",)))
+    cy: float | None = pattern_centre_param("y", ("kind", ("circular",)))
+    cz: float | None = pattern_centre_param("z", ("kind", ("circular",)))
     dx: float = param(
         title=_("Richtung X"),
         default=1.0,
@@ -243,6 +254,7 @@ class PatternParams(BaseParams):
 
 @register_op(
     name="pattern",
+    cache_version="2",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
     # Nicht „Muster": Das Wort heißt in dieser Anwendung schon etwas anderes —
@@ -269,7 +281,7 @@ def pattern(ctx: OpContext) -> OpResult:
     Millimeter, und das zu sagen ist billiger als dreißig Körper, die niemand
     drucken kann.
     """
-    from app.core.geom.transform import Axis, moved_object, rotation, translation
+    from app.core.geom.transform import Axis, moved_object, pattern_centre, rotation, translation
 
     params = cast(PatternParams, ctx.params)
     source = ctx.inputs[0]
@@ -281,6 +293,7 @@ def pattern(ctx: OpContext) -> OpResult:
             constraint="pattern_count",
         )
 
+    answered: dict[str, float] = {}
     if params.kind == "linear":
         direction = (params.dx, params.dy, params.dz)
         length = math.sqrt(sum(value * value for value in direction))
@@ -311,10 +324,11 @@ def pattern(ctx: OpContext) -> OpResult:
         # Ein voller Kranz teilt durch die Zahl, ein Teilbogen durch die
         # Zwischenräume — sonst fielen bei 360 Grad die erste und die letzte
         # Kopie aufeinander.
+        centre, answered = pattern_centre(source, params.cx, params.cy, params.cz)
         full = is_close(abs(params.angle), 360.0)
         divisor = params.count if full else max(params.count - 1, 1)
         steps = [
-            rotation(cast(Axis, params.axis), params.angle * index / divisor)
+            rotation(cast(Axis, params.axis), params.angle * index / divisor, centre)
             for index in range(params.count)
         ]
         # Die Bauraumprüfung galt nur der Reihe: Der Kranz meldete stattdessen
@@ -332,7 +346,20 @@ def pattern(ctx: OpContext) -> OpResult:
         )
         for index, step in enumerate(steps)
     ]
-    return OpResult(outputs=outputs)
+    # moved_object hat jeden mitgeführten Träger durch die Builder-Zuordnung
+    # belegt. Die Kopien teilen keine Bewegungsmatrix, aber diese Belege.
+    return OpResult(
+        outputs=outputs,
+        answered=answered,
+        feature_continuations=tuple(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, name), name)
+                for name in source.features
+                if name in output.features
+            )
+            for output in outputs
+        ),
+    )
 
 
 def _check_ring_volume(ctx: OpContext, source: SceneObject, steps: list[Any]) -> None:

@@ -303,7 +303,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_4754_cartesian_boundaries() -> None:
+def test_the_library_really_has_4786_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -316,10 +316,11 @@ def test_the_library_really_has_4754_cartesian_boundaries() -> None:
     vier Schrauben mal eigener Durchmesser, Breite, Wand und Spiel an je zwei.
     Seit dem 02.10.2026 die 1536 der vier Halter (RM-399): U-Form und Ablage
     je 512, rund und Gabel je 256 — vier Befestigungen mal sieben oder sechs
-    zweiwertige Felder.
+    zweiwertige Felder. Seit dem 03.10.2026 kommen 32 dazu: Die Profilnutfeder
+    trägt zwei Herstellerprofile (RM-017), fünf Größen statt drei (48 → 80).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 4754
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 4786
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -4879,6 +4880,81 @@ def test_the_tongue_reaches_behind_the_lip(size: str) -> None:
         f"{size}: der Kopf ({head:.2f}) ist nicht breiter als der Hals ({neck:.2f}) — "
         "die Feder greift nicht hinter den Steg"
     )
+
+
+@pytest.mark.parametrize("kernel", ("mesh", "brep"))
+@pytest.mark.parametrize("play", (0.1, 0.15, 0.25, 0.4, 1.0))
+def test_manufacturer_tongues_fit_independently_measured_sections(kernel, play) -> None:
+    """RM017: Die schrägen Kammerwände kommen aus Herstellerdaten, nicht der Bausteintabelle."""
+    import json
+
+    from tests.helpers import exact_kernel
+
+    if kernel == "brep":
+        exact_kernel()
+    measurements = json.loads(
+        (MESHES.parent / "profile_slot_motedis.json").read_text(encoding="utf-8")
+    )
+    spec = PARTS.get("profile_tongue")
+    for sample in measurements["profiles"]:
+        with shapes.building(kernel):
+            built = spec.fn(spec.params(size=sample["size"], play=play))
+        body = as_mesh_data(built.mesh)
+        assert body.is_watertight
+        assert body.component_count == 1
+        assert body.bounds.maximum[2] == pytest.approx(
+            sample["lip"] + sample["depth"] - play, abs=1e-6
+        )
+        for depth, width in sample["sections"]:
+            section = body.raw.section(plane_origin=(0, 0, depth), plane_normal=(0, 0, 1))
+            if section is not None:
+                assert np.max(np.abs(section.vertices[:, 0])) < width / 2
+        for feature in built.features.values():
+            assert feature.params["centre"][2] == pytest.approx(sample["lip"] + play)
+
+
+@pytest.mark.parametrize("size,volume", (("2020", 996.13), ("3030", 1540.0), ("4040", 1540.0)))
+def test_legacy_tongue_geometry_keeps_its_dimensions(size: str, volume: float) -> None:
+    """Die benannten Herstellerprofile verändern alte gespeicherte Größen nicht."""
+    spec = PARTS.get("profile_tongue")
+    body = spec.fn(spec.params(size=size, play=0.25)).mesh
+    # Die alten Werte werden vor dem Umbau am unveränderten Baustein gemessen.
+    assert body.volume == pytest.approx(volume, abs=1e-6)
+
+
+@pytest.mark.parametrize("size", ("motedis-2020-b6", "motedis-3030-b8"))
+@pytest.mark.parametrize("kernel", ("mesh", "brep"))
+def test_shorter_tongue_head_keeps_the_chamber_flanks(size, kernel) -> None:
+    """Eine kürzere Kopfhöhe schneidet die geprüfte Form ab, ohne die Flanken zu verschieben."""
+    from tests.helpers import exact_kernel
+
+    if kernel == "brep":
+        exact_kernel()
+    spec = PARTS.get("profile_tongue")
+    entry = standards.profile_slot(size)
+    with shapes.building(kernel):
+        full = spec.fn(spec.params(size=size, play=0.25)).mesh
+        short = spec.fn(spec.params(size=size, play=0.25, head=1.0)).mesh
+        cutting_box = shapes.box(50, 50, entry.lip + 0.25 + 1.0)
+        from app.core.knowledge.parts.build import intersect
+
+        expected = intersect(full, cutting_box)
+    assert short.volume == pytest.approx(expected.volume, rel=1e-9)
+    assert short.bounds.maximum[2] == pytest.approx(entry.lip + 1.25)
+
+
+@pytest.mark.parametrize("size", ("motedis-2020-b6", "motedis-3030-b8"))
+def test_tongue_rejects_a_head_that_would_hit_the_slot_floor(size: str) -> None:
+    """Eine ausdrücklich zu große Kopfhöhe wird mit Rückweg erklärt, nicht gekappt."""
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("profile_tongue")
+    values = spec.params(size=size, play=0.25, head=standards.profile_slot(size).depth)
+    assert spec.feasible is not None and spec.feasible(values) is not None
+    with pytest.raises(ValidationError) as raised:
+        spec.fn(values)
+    assert raised.value.field == "head"
+    assert raised.value.suggestions
 
 
 def test_the_tongue_takes_every_dimension_from_the_table() -> None:

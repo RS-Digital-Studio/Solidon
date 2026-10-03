@@ -40,6 +40,7 @@ from app.core.registry.surfaces import _CHOICE_NAMES as _CHOICE_NAMES
 from app.core.registry.surfaces import SIDE_NAMES
 from app.core.registry.surfaces import choice_label as _choice_label
 from app.core.types import (
+    Document,
     Feature,
     FeatureId,
     Finding,
@@ -65,6 +66,15 @@ from app.i18n import TranslatableText, _, get_language, tr
 # jetzt auch der Kern — die Werkzeugbeschreibungen nennen den Menüort, damit
 # der Chat als Suchfeld taugt (§2.6). Die Nutzer der Oberfläche importieren
 # beide weiter von hier; der Import darüber ist die Weiterleitung.
+
+
+def step_number(document: Document | None, op_id: int) -> int:
+    """Sichtbare Position eines Schritts; interne Kennungen bleiben unverändert."""
+    if document is not None:
+        for position, entry in enumerate(document.ops, start=1):
+            if entry.id == op_id:
+                return position
+    return op_id
 
 
 def localised(text: str) -> str:
@@ -1108,6 +1118,28 @@ def colour_name(value: str) -> str:
 #: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
+    "mesh": _("Berechnet die Form als Dreiecksnetz."),
+    "brep": _("Berechnet die Form mit dem exakten Kern aus Flächen und Kanten."),
+    "motedis-2020-b6": _(
+        "Für Motedis 20 × 20 mm, B-Typ, Nut 6; die Kopfkontur folgt den Herstellermaßen."
+    ),
+    "motedis-3030-b8": _(
+        "Für Motedis 30 × 30 mm, B-Typ, Nut 8; die Kopfkontur folgt den Herstellermaßen."
+    ),
+    "2020": _("Behält ältere Maße bei. Für eine neue Passung das genaue Herstellerprofil wählen."),
+    "3030": _("Behält ältere Maße bei. Für eine neue Passung das genaue Herstellerprofil wählen."),
+    "4040": _("Behält ältere Maße bei. Für eine neue Passung das genaue Herstellerprofil wählen."),
+    "relative": _("Addiert den eingegebenen Weg zur bisherigen Lage."),
+    "absolute": _("Setzt den Bezugspunkt auf die eingegebenen Koordinaten."),
+    "feature": _("Verwendet den Mittelpunkt des gewählten Merkmals am ersten Körper."),
+    "corner_000": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_001": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_010": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_011": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_100": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_101": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_110": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
+    "corner_111": _("Verwendet diese Ecke des gemeinsamen Hüllquaders aller gewählten Körper."),
     "whole_face": _("Füllt die gewählte ebene Fläche bis zum Rand; Bohrungen bleiben frei."),
     "keep": _("Außenmaße und Lage von Senkung, Stufen und Verengung bleiben erhalten."),
     "follow": _(
@@ -1122,6 +1154,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Prüft Innen- und Außengewinde auf gleiche Steigung und das vorgesehene Durchmesserspiel."
     ),
     "flush": _("Prüft, ob beide Flächen parallel und in derselben Ebene liegen."),
+    "centred": _("Setzt die Unterseite auf die Mitte der gewählten Fläche."),
+    "point_on_surface": _("Setzt die Unterseite auf den gewählten Punkt der Fläche."),
     "mouth": _("Die Position ist die Öffnung: Die Bohrung beginnt dort und geht ins Material."),
     # ``centre`` gilt an drei Stellen — Bohranker, Bezugspunkt der Grundkörper,
     # Fixpunkt von Drehen und Skalieren — und der Satz muss an allen dreien
@@ -1205,6 +1239,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "bolt_circle": _("Löcher gleichmäßig auf einem Teilkreis — Flansch, Deckel, Nabe."),
     "hole_grid": _("Löcher in Spalten und Zeilen — Lüftungsgitter, Steckplatte, Lochblech."),
     "round": _("Runder Querschnitt mit gleichmäßigem Radius."),
+    "rectangular": _("Rechteckiger Grundriss mit einstellbaren Ecken."),
+    "screw": _("Deckel und Hals erhalten zusammenpassende Gewinde."),
+    "push": _("Ein Kragen führt den abnehmbaren Deckel in der Öffnung."),
+    "hinged": _("Ein mitgedrucktes Scharnier verbindet Deckel und Behälter."),
     "ellipse": _("Elliptischer Querschnitt aus Breite und Höhe."),
     "lower": _("Die untere Schale nimmt die Schraubenköpfe auf."),
     "upper": _("Die obere Schale nimmt die Muttern auf."),
@@ -1380,11 +1418,15 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "press": _("Pressmaß"),
     "previous": _("Bisher"),
     "recipe": _("Rezept"),
+    # ``union.bore_*``: was vom Hohlraum der Bohrung nach dem Vereinigen frei bleibt.
+    "remaining_volume": _("Freier Bohrungsraum"),
     "required_wall": _("Erforderliche Restwand"),
     "second": _("Zweite Bedingung"),
     # ``ingest.threemf``: was eine 3MF an Hilfsteilen und Aussparungen des
     # Slicers überging, bevor kein druckbarer Körper blieb.
     "skipped": _("Übersprungen"),
+    "source_feature": _("Bohrung"),
+    "source_object": _("Körper"),
     # ``edges.skipped``: wie viele Kanten einer Gruppe bearbeitet wurden.
     "worked": _("Bearbeitet"),
     # ``hollow.fewer_vents``: wie viele Entlüftungen Platz fanden.
@@ -2355,7 +2397,10 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         from app.core.perceive.digest import pattern_style_name
 
         style = pattern_style_name(str(feature.params.get("style", "other")))
-        return f"{style} {feature_id.rsplit('_', 1)[-1]}"
+        # Bei vereinigten Körpern bewahrt jede Textur ihre Herkunftskennung.
+        # Ihre Nummernkette unterscheidet die Zeilen ohne technische Präfixe.
+        number = ".".join(part.rsplit("_", 1)[-1] for part in feature_id.split("."))
+        return f"{style} {number}"
     if feature.kind == "hole":
         name = tr("Sackbohrung") if feature.params.get("through") is False else tr("Bohrung")
         # Angeschnitten: Ein Nachbar hat den Mantel geöffnet (P1.5) — dasselbe

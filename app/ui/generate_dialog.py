@@ -416,7 +416,10 @@ class GenerateDialog(QDialog):
         self.seed = QSpinBox(self)
         self.seed.setRange(0, MAX_SEED)
         self.seed.setToolTip(
-            tr("Derselbe Startwert liefert dasselbe Modell, solange das Modell dasselbe bleibt.")
+            tr(
+                "Der Startwert steuert den Zufall. Für vergleichbare Versuche behalten "
+                "Sie Beschreibung, Bild, Modell und Einstellungen bei."
+            )
         )
 
         self.picture = QPushButton(tr("Bild wählen …"), self)
@@ -1177,7 +1180,10 @@ class GenerateDialog(QDialog):
         self._grow_explicit_soon()
         QTimer.singleShot(0, self, self._show_the_tries_in_view)
         self.state.setText(
-            tr("Der Zufall spielt mit — ein weiterer Versuch kostet nichts als Zeit.")
+            tr(
+                "Ein weiterer Versuch kann eine andere Form ergeben. Prüfen Sie das "
+                "Ergebnis vor dem Übernehmen."
+            )
         )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Übernehmen"))
         self._show_what_is_taken()

@@ -235,6 +235,12 @@ def _positive_evaluation_budget(value: object) -> int:
     return budget
 
 
+def _vector_norm(vector: np.ndarray) -> np.float64:
+    """NumPys Norm eines reellen Vektors, ohne Matrix-/Achsenargumente zu prüfen."""
+    result: np.float64 = np.sqrt(vector.dot(vector))
+    return result
+
+
 def solve(
     fun: Callable[[np.ndarray], np.ndarray],
     jac: Callable[[np.ndarray], np.ndarray],
@@ -249,7 +255,7 @@ def solve(
     diesem Weg — ``least_squares`` → ``trf`` → ``trf_no_bounds`` mit
     ``tr_solver='exact'`` und ``x_scale=1`` —, nur ohne ``VectorFunction``,
     SciPys übrige Argumentprüfung und ``OptimizeResult``: Dieselben NumPy- und
-    SciPy-Aufrufe (``np.dot``, ``norm``, ``scipy.linalg.svd``) auf denselben
+    SciPy-Rechenschritte (``np.dot``, Vektornorm, ``scipy.linalg.svd``) auf denselben
     Feldern, die Multiplikation mit dem Einheitsmaßstab entfällt, weil sie
     nichts ändert. Gemessen bitgleich in ``x``, Residuen, Ableitung,
     Auswertungszahl und Status an 5 033 Läufen der Erkennung (Kumiko-Schale,
@@ -274,13 +280,13 @@ def solve(
     m, n = jacobian.shape
     cost = 0.5 * np.dot(f, f)
     gradient = jacobian.T.dot(f)
-    delta = np.linalg.norm(x0)
+    delta: Any = _vector_norm(x0)
     if delta == 0:
         delta = 1.0
     alpha: Any = 0.0
     status: int | None = None
     while True:
-        if np.linalg.norm(gradient, ord=np.inf) < precision:
+        if np.abs(gradient).max() < precision:
             status = 1
         if status is not None or nfev == evaluations:
             break
@@ -295,7 +301,7 @@ def solve(
             x_new = x + step
             f_new = np.atleast_1d(fun(x_new.copy()))
             nfev += 1
-            step_norm = np.linalg.norm(step)
+            step_norm = _vector_norm(step)
             if not np.all(np.isfinite(f_new)):
                 delta = 0.25 * step_norm
                 continue
@@ -314,7 +320,7 @@ def solve(
             elif ratio > 0.75 and step_norm > 0.95 * delta:
                 delta_new *= 2.0
             by_cost = reduction < precision * cost and ratio > 0.25
-            by_step = step_norm < precision * (precision + np.linalg.norm(x))
+            by_step = step_norm < precision * (precision + _vector_norm(x))
             if by_cost and by_step:
                 status = 4
             elif by_cost:
@@ -344,16 +350,16 @@ def _trust_region_step(
 
     def phi_and_derivative(value: Any) -> tuple[Any, Any]:
         denominator = s**2 + value
-        p_norm = np.linalg.norm(suf / denominator)
+        p_norm = _vector_norm(suf / denominator)
         return p_norm - delta, -np.sum(suf**2 / denominator**3) / p_norm
 
     suf = s * uf
     full_rank = s[-1] > _EPS_SCIPY * m * s[0] if m >= n else False
     if full_rank:
         step = -v.dot(uf / s)
-        if np.linalg.norm(step) <= delta:
+        if _vector_norm(step) <= delta:
             return step, 0.0
-    upper = np.linalg.norm(suf) / delta
+    upper = _vector_norm(suf) / delta
     if full_rank:
         phi, derivative = phi_and_derivative(0.0)
         lower = -phi / derivative
@@ -373,7 +379,7 @@ def _trust_region_step(
         if np.abs(phi) < 0.01 * delta:
             break
     step = -v.dot(suf / (s**2 + alpha))
-    step *= delta / np.linalg.norm(step)
+    step *= delta / _vector_norm(step)
     return step, alpha
 
 

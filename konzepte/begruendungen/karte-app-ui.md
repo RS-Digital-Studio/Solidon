@@ -2651,3 +2651,10 @@ bis zur atomaren Journalprüfung, führt `booking_history_changed` über die
 vorhandene Handlung „Buchung prüfen …“ zurück in diese Ansicht und liest neu.
 Der Kunde bestätigt auf dem aktualisierten Stand; es entsteht kein weiterer
 Dialog und kein stiller zweiter Buchungsversuch.
+
+## Gebundene Platzierung
+
+`surface_object_for_worker` übergibt Netzen die geteilte Arbeitskopie unter
+`on_the_copy`. Mehrere Netzkopien werden nach ihrer Identität sortiert und
+jeweils genau einmal gesperrt, damit zwei Arbeiter dieselben Kopien nie in
+verschiedener Reihenfolge anfordern.

@@ -78,7 +78,7 @@ from app.i18n.catalog import read_catalog
 #: ist er hier nicht — ``make_video`` lädt das Operationsregister selbst
 #: (``load_operations`` weiter unten), zieht also nichts mit, was es nicht
 #: ohnehin braucht.
-from tools.make_figures import chosen_screen, release_viewport, wait_until_uncovered
+from tools.make_figures import chosen_screen, grab_uncovered, release_viewport
 
 #: Was eine Szene je Bild tut: Nummer und Gesamtzahl herein, Welt eingestellt.
 StepFn = Callable[[int, int], None]
@@ -1506,7 +1506,6 @@ def orbit(
     frames.mkdir(parents=True, exist_ok=True)
     viewport = window.viewport  # type: ignore[attr-defined]
     renderer = viewport.renderer
-    screen = window.screen() or QApplication.primaryScreen()
 
     viewport.reset_camera()
     settle(app, 20)
@@ -1539,7 +1538,7 @@ def orbit(
             redraw()
         renderer.render()
         app.processEvents()
-        shot = screen.grabWindow(window.winId())
+        shot = grab_uncovered(window)
         shot.save(str(frames / f"{index:05d}.png"))
 
     print(f"  {total} Bilder aufgenommen")
@@ -1773,14 +1772,12 @@ def record(
     einen einzigen Aufruf braucht.
     """
     frames.mkdir(parents=True, exist_ok=True)
-    screen = window.screen() or QApplication.primaryScreen()
     for index in range(count):
         step(index, count)
         app.processEvents()
         # Liegt das Fenster einer anderen Sitzung darüber, stünde es im Bild
         # (``make_figures.foreign_window_over``) — gewartet wird vor jedem Bild.
-        wait_until_uncovered(window)
-        shot = screen.grabWindow(window.winId())
+        shot = grab_uncovered(window)
         if caption is not None:
             _paint_feature_caption(shot, caption, index, count)
         mark = pointer(index, count) if pointer is not None else None

@@ -46,10 +46,155 @@ def anchor_point(mesh: Mesh, anchor: Anchor) -> Vec3:
     return bounds.centre
 
 
+def pattern_centre_param(
+    axis: Axis, depends_on: tuple[str, tuple[str | bool, ...]] | None = None
+) -> Any:
+    """Eine Koordinate des einmal aufgelösten Dreh- oder Spiegelpunkts."""
+    from app.core.registry import param
+    from app.core.units import FEATURE_REACH
+    from app.i18n import _
+
+    titles = {"x": _("Punkt X"), "y": _("Punkt Y"), "z": _("Punkt Z")}
+    return param(
+        title=titles[axis],
+        default=None,
+        optional=True,
+        unit="mm",
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
+        placement="advanced",
+        depends_on=depends_on,
+        doc=_("Dreh- oder Spiegelpunkt. Drei leere Koordinaten übernehmen einmal die Körpermitte."),
+    )
+
+
+def pattern_centre(
+    source: SceneObject,
+    cx: float | None,
+    cy: float | None,
+    cz: float | None,
+    *,
+    anchor: Anchor = "centre",
+    follow_anchor: bool = False,
+) -> tuple[Vec3, dict[str, float]]:
+    """Expliziter Punkt oder einmalige Körpermitte; Altspiegel folgen ihrem Anker."""
+    from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
+    from app.i18n import _
+
+    values = (cx, cy, cz)
+    if all(value is None for value in values):
+        point = anchor_point(source.mesh, anchor)
+        return point, {} if follow_anchor else dict(zip(("cx", "cy", "cz"), point, strict=True))
+    if any(value is None for value in values):
+        raise ValidationError(
+            field="cx",
+            detail=_(
+                "Bitte alle drei Koordinaten des Dreh- oder Spiegelpunkts angeben oder alle leeren."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return cast(Vec3, values), {}
+
+
 def translation(offset: Vec3) -> np.ndarray:
     matrix = np.eye(4)
     matrix[:3, 3] = np.asarray(offset, dtype=float)
     return matrix
+
+
+def reference_point(
+    objects: Sequence[SceneObject], reference: str = "bed", feature: str = ""
+) -> Vec3:
+    """Bezug der ganzen Auswahl: Hüllquader, Ecke oder benanntes Merkmal."""
+    from app.core.errors import ValidationError
+    from app.core.perceive.features import centre_of
+    from app.i18n import _
+
+    if not objects:
+        raise ValidationError(detail=_("Bitte zuerst einen Körper auswählen."))
+    if reference == "feature":
+        found = objects[0].features.get(feature)
+        centre = centre_of(found) if found is not None else None
+        if centre is None:
+            raise ValidationError(
+                field="reference_feature",
+                detail=_("Bitte ein Merkmal mit einem Mittelpunkt wählen."),
+            )
+        return cast(Vec3, tuple(float(value) for value in centre))
+    low = tuple(min(body.mesh.bounds.minimum[axis] for body in objects) for axis in range(3))
+    high = tuple(max(body.mesh.bounds.maximum[axis] for body in objects) for axis in range(3))
+    centre = tuple((low[axis] + high[axis]) / 2.0 for axis in range(3))
+    if reference == "bed":
+        return (centre[0], centre[1], low[2])
+    if reference.startswith("corner_"):
+        bits = reference.removeprefix("corner_")
+        if len(bits) == 3 and set(bits) <= {"0", "1"}:
+            return cast(
+                Vec3,
+                tuple(high[axis] if bit == "1" else low[axis] for axis, bit in enumerate(bits)),
+            )
+    return cast(Vec3, centre)
+
+
+def orientation_matrix(source: SceneObject) -> np.ndarray:
+    """Belegte Körperachsen, ohne positive Skalierung; Spiegelung wird benannt."""
+    from app.core.errors import ValidationError
+    from app.i18n import _
+
+    if source.frame is not None:
+        axes = np.asarray(source.frame, dtype=float)[:3, :3]
+        lengths = np.linalg.norm(axes, axis=0)
+        if np.all(lengths > EPS_GEOM):
+            axes = axes / lengths
+            right_handed = dot3(axes[:, 0], np.cross(axes[:, 1], axes[:, 2])) > 0
+            orthogonal = all(
+                abs(dot3(axes[:, first], axes[:, second])) <= EPS_GEOM
+                for first, second in ((0, 1), (0, 2), (1, 2))
+            )
+            if right_handed and orthogonal:
+                return cast(np.ndarray, axes)
+    raise ValidationError(
+        field="mode",
+        detail=_(
+            "Dieser Körper hat keine eindeutigen rechtwinkligen Ausgangsachsen. "
+            "Wählen Sie „um“, um ihn relativ zu drehen."
+        ),
+    )
+
+
+def orientation_angles(source: SceneObject) -> Vec3:
+    """Winkel X, dann Y, dann Z um feste Weltachsen zur Ausgangslage.
+
+    An der Polstelle ist Z null; X trägt die gemeinsame Drehung. Die
+    kanonische Darstellung bleibt eindeutig, auch wenn mehrere Winkeltripel
+    dieselbe Lage beschreiben.
+    """
+    matrix = np.eye(4)
+    matrix[:3, :3] = orientation_matrix(source)
+    angles = trimesh.transformations.euler_from_matrix(matrix, axes="sxyz")
+    return cast(Vec3, tuple(math.degrees(float(value)) for value in angles))
+
+
+def absolute_rotation(source: SceneObject, angles: Vec3, pivot: Vec3) -> np.ndarray:
+    """Dreht den belegten Rahmen auf gespeicherte Zielwinkel, um denselben Punkt."""
+    current = orientation_matrix(source)
+    target = composed(rotation("z", angles[2]), rotation("y", angles[1]), rotation("x", angles[0]))
+    inverse = np.eye(4)
+    inverse[:3, :3] = current.T
+    return composed(
+        translation(pivot),
+        target,
+        inverse,
+        translation(cast(Vec3, tuple(-value for value in pivot))),
+    )
+
+
+def angles_after_turn(source: SceneObject, axis: Axis, angle: float) -> Vec3:
+    """Zielwinkel eines Griffzugs; der gespeicherte Auftrag bleibt absolut."""
+    current = np.eye(4)
+    current[:3, :3] = orientation_matrix(source)
+    matrix = composed(rotation(axis, angle), current)
+    return orientation_angles(replace(source, frame=cast(Transform, tuple(map(tuple, matrix)))))
 
 
 def rotation(axis: Axis, degrees: float, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
@@ -159,6 +304,34 @@ def composed(*matrices: np.ndarray) -> np.ndarray:
             for row in range(4)
         ]
     return np.asarray(result, dtype=np.float64)
+
+
+def inverse_affine(matrix: np.ndarray) -> np.ndarray | None:
+    """Eine endliche affine Matrix ohne LAPACK umkehren; singulär ergibt ``None``.
+
+    Die Kofaktoren rechnen in fester Folge. Die Singularitätsgrenze gilt den
+    Richtungen, nicht dem gemeinsamen Maßstab eines kleinen Körpers.
+    """
+    cells = np.asarray(matrix, dtype=np.float64)
+    if cells.shape != (4, 4) or not np.isfinite(cells).all():
+        return None
+    if not np.allclose(cells[3], (0.0, 0.0, 0.0, 1.0), atol=EPS_GEOM, rtol=0.0):
+        return None
+    rows = cells[:3, :3]
+    lengths = np.linalg.norm(rows, axis=1)
+    if np.any(lengths <= 0.0):
+        return None
+    unit = rows / lengths[:, None]
+    cofactors = np.asarray(
+        (np.cross(unit[1], unit[2]), np.cross(unit[2], unit[0]), np.cross(unit[0], unit[1]))
+    )
+    determinant = dot3(unit[0], cofactors[0])
+    if abs(determinant) <= EPS_GEOM:
+        return None
+    result = np.eye(4)
+    result[:3, :3] = cofactors.T / determinant / lengths[None, :]
+    result[:3, 3] = -turned(cells[:3, 3], result)
+    return result if np.isfinite(result).all() else None
 
 
 def moved(body: object, matrix: np.ndarray) -> None:
@@ -508,6 +681,15 @@ def moved_object(
     return replace(
         source,
         mesh=body,
+        frame=None
+        if source.frame is None
+        else cast(
+            Transform,
+            tuple(
+                tuple(float(value) for value in row)
+                for row in matrix @ np.asarray(source.frame, dtype=float)
+            ),
+        ),
         features={
             name: feature for name, feature in mapped.candidates.items() if name in mapped.exact
         },

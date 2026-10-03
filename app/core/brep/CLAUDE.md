@@ -101,8 +101,8 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   (Halbwinkel im Bogenmaß, über beide Nappen getrimmt kein Kegel,
   Spitzenparameter nur in der Endpunktklammer auf null), Endlagen über Abstände
   (`AddOptimal` hat Zuschlag), Winkel aus den Randkurven, Radien nur angezeigt
-  gerundet. Kugel: Materialseite aus Hautnormale und Radiale, Auswahlmitte
-  einer Eckrundung ihr Flächenschwerpunkt.
+  gerundet. Kugel: Materialseite aus Hautnormale und Radiale; `centre` ist
+  auch an einer Eckrundung der Mittelpunkt ihrer Trägerkugel.
 - **Orientierung**: `TopAbs_REVERSED` dreht die Ebenennormale; Bohrung gegen
   Zapfen, Senkung gegen Kegel sagen Orientierung **und** `Position().Direct()`
   zusammen. Unvollständige U-Spanne heißt `partial`.
@@ -129,6 +129,10 @@ unveränderten Ergebnis (`HasSourceDeviation`).
 - **Bohrung**: Mitte auf der Achse in der Mitte der V-Spanne. Nicht
   durchgehend, wenn eine Nachbarfläche über die Achse oder einen der
   `THROUGH_RINGS` in die Mündung reicht — gemessen, nicht geschnitten.
+- **Zylindrische Rundung**: `centre` ist dieselbe begrenzte Achsmitte wie im
+  Netzfit, auch bei zusammengeführten Teilflächen. Der Flächenschwerpunkt
+  dient nur der Materialseitenprobe. Kugelige Eckrundungen tragen die
+  Trägerkugelmitte ohne erfundene Achse.
   Werkzeuge: Material über trägen `profiles.for_object`, Profil aus
   `geom.prepare.drill_outline`, analytisch rotiert;
   `revolved_bore_tool`/`clipped_bore_tool` schneiden an den echten Randebenen
@@ -138,6 +142,11 @@ unveränderten Ergebnis (`HasSourceDeviation`).
 - **Ein Langloch wird vom Boden zur Mündung aufgezogen** (`profiles.extrude`,
   sonst dreht `slot_angle` andersherum; `_bore_span`). `slot_bore` vereinigt
   koplanare Flanken, `fill_bore` endet an einer Randöffnung an der Außenwand.
+- **Getrennte Träger**: `edit.separated_solids` gibt private Teilkörper mit
+  ursprünglichen Flächenslots und der durch die Kopierhistorie belegten
+  Zuordnung ihrer nativen Flächen zurück. Der Langlochzug bearbeitet nur
+  seinen vollständigen Träger und setzt Nachbarn anschließend ohne Vereinigung
+  zum Verbund zusammen.
 
 ### Gewinde: erzeugt, gelesen, genäht
 

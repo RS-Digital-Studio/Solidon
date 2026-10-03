@@ -299,7 +299,7 @@ def fit_ladder(raw: BaseParams) -> PartResult:
 @op_params
 class WallLadderParams(BaseParams):
     extrusion: float = param(
-        title=_("Extrusionsbreite"),
+        title=_("Bahnbreite"),
         default=0.42,
         unit="mm",
         minimum=0.2,
@@ -314,7 +314,7 @@ class WallLadderParams(BaseParams):
         default=6,
         minimum=2,
         maximum=10,
-        doc=_("Wie viele Wände nebeneinander stehen, jede eine Extrusionsbreite dicker."),
+        doc=_("Wie viele Wände nebeneinander stehen, jede eine Bahnbreite dicker."),
     )
     height: float = param(
         title=_("Höhe"),
@@ -345,7 +345,7 @@ class WallLadderParams(BaseParams):
     features=["face"],
     wall=WallRequirement.from_parameter("extrusion"),
     doc=_(
-        "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker "
+        "Wände von einer bis mehreren Bahnbreiten. Zeigt, ab wann der Drucker "
         "wirklich noch Material legt — die Grundlage für die Mindestwandstärke."
     ),
     changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_LADDER_SEPARATE_STEPS, FACE_ON_THE_BODY],

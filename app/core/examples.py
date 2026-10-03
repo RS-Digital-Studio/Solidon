@@ -115,7 +115,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         way="",
         doc=_(
             "Ein Gehäuseboden mit Mutternfalle, Heat-Set-Buchse, Schraubenloch und "
-            "Kabeldurchführung. Vier Klicks statt vier halber Stunden."
+            "Kabeldurchführung. Die Maße der Bausteine bleiben änderbar."
         ),
     ),
     Example(
@@ -139,7 +139,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
     ),
     Example(
         id="drucker-kalibrieren",
-        title=_("Kalibrieren — einmal drucken, dann stimmt es"),
+        title=_("Kalibrieren — Passungen und Druckgrenzen prüfen"),
         way="",
         doc=_(
             "Toleranzleiter, Wandstärkenleiter und Überhangfächer auf einer Platte. "
@@ -189,9 +189,9 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         title=_("Wenn eine Passung nicht mehr passt"),
         way="",
         doc=_(
-            "Der Deckel soll aus weichem TPU kommen, damit er dichtet — und plötzlich "
-            "meldet der Prüfbericht, dass er zu stramm sitzt. Weiches Material braucht "
-            "mehr Spiel als hartes. Ein Klick auf die Meldung zeigt die Stelle."
+            "Der Deckel soll aus weichem TPU kommen. Der Prüfbericht meldet, dass er zu stramm "
+            "sitzt: Das gewählte TPU-Profil sieht hier mehr Spiel vor. Ein Klick auf die "
+            "Meldung zeigt die Stelle."
         ),
     ),
 )

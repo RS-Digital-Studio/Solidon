@@ -41,9 +41,13 @@ from app.core.geom.transform import (
     AXIS_VECTORS,
     Anchor,
     Axis,
+    absolute_rotation,
     anchor_point,
     composed,
     moved_object,
+    pattern_centre,
+    pattern_centre_param,
+    reference_point,
     rotation,
     scaling,
     translation,
@@ -112,7 +116,7 @@ def as_transform(matrix: Any) -> Transform:
     return cast(Transform, tuple(rows))
 
 
-def _keeping_on_bed() -> Any:
+def _keeping_on_bed(*, relative_only: bool = False) -> Any:
     """Der Parameter, der einen bewegten Körper auf der Druckfläche hält.
 
     **Die Vorgabe ist aus, und das ist der ganze Unterschied.** Ein getippter
@@ -135,6 +139,7 @@ def _keeping_on_bed() -> Any:
     return param(
         title=_("Auf dem Bett halten"),
         default=False,
+        depends_on=("mode", ("relative",)) if relative_only else None,
         placement="advanced",
         doc=_(
             "Bringt die Bewegung den Körper über den Rand der Druckfläche, "
@@ -216,25 +221,86 @@ def _held_on_bed(
 
 @op_params
 class TranslateParams(BaseParams):
+    mode: str = param(
+        title=_("Verschieben"),
+        default="relative",
+        choices=("relative", "absolute"),
+        doc=_("Um einen Weg verschieben oder einen Bezugspunkt auf eine feste Lage setzen."),
+    )
     dx: float = param(
         title=_("Verschiebung X"),
         default=0.0,
         unit="mm",
         doc=_("Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts."),
+        depends_on=("mode", ("relative",)),
     )
     dy: float = param(
         title=_("Verschiebung Y"),
         default=0.0,
         unit="mm",
         doc=_("Positiv geht nach hinten."),
+        depends_on=("mode", ("relative",)),
     )
     dz: float = param(
         title=_("Verschiebung Z"),
         default=0.0,
         unit="mm",
         doc=_("Positiv geht nach oben. Zum Aufsetzen gibt es *Auf das Bett setzen*."),
+        depends_on=("mode", ("relative",)),
     )
-    keep_on_bed: bool = _keeping_on_bed()
+    x: float = param(
+        title=_("Ziel X"),
+        default=0.0,
+        unit="mm",
+        depends_on=("mode", ("absolute",)),
+        doc=_("X-Lage des gewählten Bezugspunkts."),
+    )
+    y: float = param(
+        title=_("Ziel Y"),
+        default=0.0,
+        unit="mm",
+        depends_on=("mode", ("absolute",)),
+        doc=_("Y-Lage des gewählten Bezugspunkts."),
+    )
+    z: float = param(
+        title=_("Ziel Z"),
+        default=0.0,
+        unit="mm",
+        depends_on=("mode", ("absolute",)),
+        doc=_("Z-Lage des gewählten Bezugspunkts."),
+    )
+    reference: str = param(
+        title=_("Bezugspunkt"),
+        default="bed",
+        placement="advanced",
+        choices=(
+            "bed",
+            "centre",
+            "corner_000",
+            "corner_001",
+            "corner_010",
+            "corner_011",
+            "corner_100",
+            "corner_101",
+            "corner_110",
+            "corner_111",
+            "feature",
+        ),
+        depends_on=("mode", ("absolute",)),
+        doc=_(
+            "Bei mehreren Körpern gilt der gemeinsame Hüllquader. "
+            "Das Merkmal gehört zum ersten Körper."
+        ),
+    )
+    reference_feature: str = param(
+        title=_("Bezugsmerkmal"),
+        default="",
+        kind="feature",
+        placement="advanced",
+        depends_on=("reference", ("feature",)),
+        doc=_("Kennung des Merkmals, dessen Mittelpunkt die Zielstelle erreicht."),
+    )
+    keep_on_bed: bool = _keeping_on_bed(relative_only=True)
     plate: int = param(
         title=_("Auf Platte"),
         # **Null heißt: auf seiner Platte.** Die Platten zählen wie im
@@ -324,12 +390,13 @@ def _stood_still(matrix: object) -> list[Finding]:
     name="translate_object",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
-    cache_version="3",
+    cache_version="4",
     title=_("Verschieben"),
     category="transform",
     params=TranslateParams,
-    consumes=1,
-    produces=1,
+    consumes=VARIABLE,
+    minimum_inputs=1,
+    produces=VARIABLE,
     shortcut="Ctrl+T",
     # ``keep_on_bed`` sucht den freien Platz um die **übrigen** Körper herum;
     # kein Parameter benennt sie, also steht die Lesart am Register
@@ -341,6 +408,23 @@ def _stood_still(matrix: object) -> list[Finding]:
 )
 def translate_object(ctx: OpContext) -> OpResult:
     params = cast(TranslateParams, ctx.params)
+    if params.mode == "absolute":
+        point = reference_point(ctx.inputs, params.reference, params.reference_feature)
+        matrix = translation((params.x - point[0], params.y - point[1], params.z - point[2]))
+        outputs = [moved_object(source, matrix, cancelled=ctx.cancelled) for source in ctx.inputs]
+        if params.plate > 0:
+            outputs = [dataclasses.replace(body, plate=params.plate - 1) for body in outputs]
+        return OpResult(
+            outputs=outputs, transform=as_transform(matrix), findings=_stood_still(matrix)
+        )
+    if len(ctx.inputs) > 1:
+        outputs = []
+        findings = []
+        for source in ctx.inputs:
+            single = translate_object(dataclasses.replace(ctx, inputs=[source]))
+            outputs.extend(single.outputs)
+            findings.extend(single.findings)
+        return OpResult(outputs=outputs, findings=findings)
     source = ctx.inputs[0]
     matrix = translation((params.dx, params.dy, params.dz))
     moved = moved_object(source, matrix, cancelled=ctx.cancelled)
@@ -362,15 +446,50 @@ def translate_object(ctx: OpContext) -> OpResult:
 
 @op_params
 class RotateParams(BaseParams):
+    mode: str = param(
+        title=_("Drehen"),
+        default="relative",
+        choices=("relative", "absolute"),
+        doc=_("Um einen Winkel drehen oder die Ausgangsachsen auf Zielwinkel setzen."),
+    )
+    angle_x: float = param(
+        title=_("Zielwinkel X"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        depends_on=("mode", ("absolute",)),
+        doc=_("Zielwinkel zur Ausgangslage: erst X, dann Y, dann Z um die Weltachsen."),
+    )
+    angle_y: float = param(
+        title=_("Zielwinkel Y"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        depends_on=("mode", ("absolute",)),
+        doc=_("Zielwinkel zur Ausgangslage: erst X, dann Y, dann Z um die Weltachsen."),
+    )
+    angle_z: float = param(
+        title=_("Zielwinkel Z"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        depends_on=("mode", ("absolute",)),
+        doc=_("Zielwinkel zur Ausgangslage: erst X, dann Y, dann Z um die Weltachsen."),
+    )
     axis: str = param(
         title=_("Achse"),
         default="z",
         choices=_AXES,
+        depends_on=("mode", ("relative",)),
         doc=_("Um welche Achse gedreht wird. Z dreht auf dem Bett, X und Y kippen."),
     )
     angle: float = param(
         title=_("Winkel"),
         default=90.0,
+        depends_on=("mode", ("relative",)),
         unit=DEGREE_UNIT,
         minimum=-360.0,
         maximum=360.0,
@@ -379,12 +498,20 @@ class RotateParams(BaseParams):
     about: str = param(
         title=_("Drehpunkt"),
         default="centre",
-        choices=_ANCHORS_WITH_POINT,
+        choices=(*_ANCHORS_WITH_POINT, *(f"corner_{index:03b}" for index in range(8)), "feature"),
         placement="advanced",
         doc=_(
             "Mitte des Objekts, Ursprung oder Druckbett — oder ein genannter Punkt, "
             "um den mehrere Körper gemeinsam drehen."
         ),
+    )
+    reference_feature: str = param(
+        title=_("Bezugsmerkmal"),
+        default="",
+        kind="feature",
+        placement="advanced",
+        depends_on=("about", ("feature",)),
+        doc=_("Kennung des Merkmals, dessen Mittelpunkt die Zielstelle erreicht."),
     )
     pivot_x: float = param(
         title=_("Drehpunkt X"),
@@ -407,19 +534,20 @@ class RotateParams(BaseParams):
         placement="advanced",
         doc=_("Gilt nur, wenn der Drehpunkt „Genannter Punkt“ ist."),
     )
-    keep_on_bed: bool = _keeping_on_bed()
+    keep_on_bed: bool = _keeping_on_bed(relative_only=True)
 
 
 @register_op(
     name="rotate_object",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
-    cache_version="3",
+    cache_version="4",
     title=_("Drehen"),
     category="transform",
     params=RotateParams,
-    consumes=1,
-    produces=1,
+    consumes=VARIABLE,
+    minimum_inputs=1,
+    produces=VARIABLE,
     shortcut="Ctrl+R",
     # Wie bei *Verschieben*: ``keep_on_bed`` liest die übrigen Körper.
     reads_other_bodies=True,
@@ -431,9 +559,35 @@ class RotateParams(BaseParams):
 def rotate_object(ctx: OpContext) -> OpResult:
     params = cast(RotateParams, ctx.params)
     source = ctx.inputs[0]
+    if params.mode == "absolute":
+        pivot = named_pivot(params)
+        if pivot is None:
+            pivot = (
+                (0.0, 0.0, 0.0)
+                if params.about == "origin"
+                else reference_point(ctx.inputs, params.about, params.reference_feature)
+            )
+        matrix = absolute_rotation(source, (params.angle_x, params.angle_y, params.angle_z), pivot)
+        return OpResult(
+            outputs=[moved_object(body, matrix, cancelled=ctx.cancelled) for body in ctx.inputs],
+            transform=as_transform(matrix),
+            findings=_stood_still(matrix),
+        )
+    if len(ctx.inputs) > 1:
+        results = [rotate_object(dataclasses.replace(ctx, inputs=[body])) for body in ctx.inputs]
+        return OpResult(
+            outputs=[body for result in results for body in result.outputs],
+            findings=[finding for result in results for finding in result.findings],
+        )
     # Ein genannter Punkt schlägt den Anker aus dem eigenen Netz — nur so
     # drehen mehrere Körper um dieselbe Stelle statt jeder um sich selbst.
-    pivot = named_pivot(params) or anchor_point(source.mesh, cast(Anchor, params.about))
+    pivot = named_pivot(params)
+    if pivot is None:
+        pivot = (
+            (0.0, 0.0, 0.0)
+            if params.about == "origin"
+            else reference_point([source], params.about, params.reference_feature)
+        )
     matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
     turned = moved_object(source, matrix, cancelled=ctx.cancelled)
     turned, matrix, held = _held_on_bed(ctx, source, turned, matrix)
@@ -681,14 +835,27 @@ class MirrorParams(BaseParams):
         default="centre",
         choices=_ANCHORS,
         placement="advanced",
+        internal=True,
         doc=_(
             "Wo die Spiegelebene liegt: in der Mitte des Objekts, im Ursprung oder am Druckbett."
         ),
     )
+    follow_anchor: bool = param(
+        title=_("Bezugspunkt"),
+        default=False,
+        internal=True,
+        doc=_(
+            "Wo die Spiegelebene liegt: in der Mitte des Objekts, im Ursprung oder am Druckbett."
+        ),
+    )
+    cx: float | None = pattern_centre_param("x")
+    cy: float | None = pattern_centre_param("y")
+    cz: float | None = pattern_centre_param("z")
 
 
 @register_op(
     name="mirror_object",
+    cache_version="2",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
     title=_("Spiegeln"),
@@ -716,16 +883,23 @@ def mirror_object(ctx: OpContext) -> OpResult:
     """
     params = cast(MirrorParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = source.mesh
 
     factors = [1.0, 1.0, 1.0]
     factors["xyz".index(params.axis)] = -1.0
-    pivot = anchor_point(mesh, cast(Anchor, params.about))
+    pivot, answered = pattern_centre(
+        source,
+        params.cx,
+        params.cy,
+        params.cz,
+        anchor=cast(Anchor, params.about),
+        follow_anchor=params.follow_anchor,
+    )
     matrix = scaling((factors[0], factors[1], factors[2]), pivot)
 
     return OpResult(
         outputs=[moved_object(source, matrix, cancelled=ctx.cancelled)],
         transform=as_transform(matrix),
+        answered=answered,
     )
 
 
@@ -928,6 +1102,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid
+    from app.core.geom.prepare_ops import union_bore_findings
 
     exact = [entry.mesh for entry in ctx.inputs if isinstance(entry.mesh, Solid)]
     if len(exact) == len(ctx.inputs):
@@ -965,7 +1140,8 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
                 )
             ],
             solver=SolverInfo(strategy="direct", attempted=("direct",)),
-            findings=[nothing] if nothing is not None else [],
+            findings=([nothing] if nothing is not None else [])
+            + (union_bore_findings(ctx, solid) if kind == "union" else []),
         )
     bodies = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
     outcome = boolean(
@@ -997,6 +1173,8 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
         nothing = without_effect(bodies[0], outcome.mesh, kind, ctx.profile)
         if nothing is not None:
             findings.append(nothing)
+    if kind == "union":
+        findings.extend(union_bore_findings(ctx, outcome.mesh))
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -1012,6 +1190,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
 
 @register_op(
     name="union_objects",
+    cache_version="2",
     title=_("Vereinigen"),
     category="boolean",
     params=BooleanParams,

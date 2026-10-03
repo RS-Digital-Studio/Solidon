@@ -1819,7 +1819,9 @@ def test_a_changed_mesh_is_examined_again() -> None:
 # ``_face_candidates`` statt ``detect_faces``: Die Erkennung baut ihre Flächen
 # seit RM-207 in zwei Schritten (erst alle, billig; nach dem Musterfalten die
 # übrigen fertig), und ``detect_faces`` ist der Weg für Aufrufer von außen.
-@pytest.mark.parametrize("phase", ["fit_cone", "_face_candidates", "_shapes_on_a_freeform"])
+@pytest.mark.parametrize(
+    "phase", ["fit_cylinder", "fit_cone", "_face_candidates", "_shapes_on_a_freeform"]
+)
 def test_cancelled_recognition_does_not_fill_the_caches(
     monkeypatch: pytest.MonkeyPatch, phase: str
 ) -> None:
@@ -1827,7 +1829,7 @@ def test_cancelled_recognition_does_not_fill_the_caches(
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
-    mesh = plate()
+    mesh = plate("plate_countersunk.stl" if phase == "fit_cone" else "plate_holes.stl")
     vertices, faces = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
     signal = CancelSignal()
     forget_cache()
@@ -2021,6 +2023,43 @@ def test_a_solid_box_has_no_inner_faces() -> None:
 
     assert len(faces) == 6
     assert not any(f.params.get("inner") for f in faces)
+
+
+@pytest.mark.parametrize("hollow", [False, True])
+def test_a_raised_mark_does_not_turn_the_outer_wall_into_an_inner_face(hollow: bool) -> None:
+    """RM-422: Der Mittelpunkt unter einem Schriftzug belegt keinen Hohlraum."""
+    block = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    if hollow:
+        cavity = trimesh.creation.box(extents=(36.0, 26.0, 20.0))
+        cavity.apply_translation((0.0, 0.0, 2.0))
+        block = trimesh.boolean.difference([block, cavity])
+    marks = []
+    for side in (-1.0, 1.0):
+        mark = trimesh.creation.box(extents=(1.2, 2.0, 3.0))
+        mark.apply_translation((side * 20.0, 0.0, 0.0))
+        marks.append(mark)
+    body = MeshData.of(trimesh.boolean.union([block, *marks]))
+    found = list(detect(body).values())
+    walls = [
+        feature
+        for feature in found
+        if feature.kind == "face"
+        and abs(abs(float(feature.params["centre"][0])) - 20.0) < 1e-6
+        and float(feature.params["area"]) == pytest.approx(594.0)
+    ]
+    assert len(walls) == 2
+    assert all(not feature.params["inner"] for feature in walls)
+    assert features_module.face_roles(body, walls, limit=None) == {
+        feature.id: False for feature in walls
+    }
+    if hollow:
+        inside = [
+            feature
+            for feature in found
+            if feature.kind == "face" and abs(abs(float(feature.params["centre"][0])) - 18.0) < 1e-6
+        ]
+        assert len(inside) == 2
+        assert all(feature.params["inner"] for feature in inside)
 
 
 def test_an_inner_face_is_named_as_such() -> None:
@@ -7161,3 +7200,128 @@ def test_a_refined_open_mesh_counts_its_open_edges_anew() -> None:
     ]
     assert loops == fresh
     assert fresh[0]["open_edges"] > 4
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("degrees", [0.0, 90.0, 37.0])
+@pytest.mark.parametrize("scale", [0.5, 1.0, 2.0])
+def test_float32_cone_ridges_do_not_depend_on_triangle_order(
+    reverse: bool, degrees: float, scale: float
+) -> None:
+    """RM-210: STL-Rundung derselben Facette bestimmt keine neue Mantellinie."""
+    from app.core.geom.transform import rotation
+
+    angles = np.linspace(0.1, 1.1, 16)
+    vertices = np.asarray(
+        [
+            (40.0 + radius * np.cos(angle), 100.0 + height, -30.0 + radius * np.sin(angle))
+            for height, radius in [(0.0, 18.0), (0.5, 17.5)]
+            for angle in angles
+        ],
+        dtype=np.float32,
+    ).astype(float)
+    triangles = [(i, i + 1, i + 17) for i in range(15)] + [(i, i + 17, i + 16) for i in range(15)]
+    body = trimesh.Trimesh(vertices=vertices, faces=triangles, process=False)
+    baseline = features_module._surface_support(body, list(range(30)))
+    assert baseline is not None
+    matrix = rotation("z", degrees)
+    changed = body.copy()
+    changed.apply_scale(scale)
+    changed.apply_transform(matrix)
+    changed.apply_translation((13.7, -4.2, 3.0))
+    patch = list(reversed(range(30))) if reverse else list(range(30))
+    forget_cache()
+    actual = features_module._surface_support(changed, patch)
+    assert actual is not None
+    expected = baseline.directions @ matrix[:3, :3].T
+    # Die ungerichtete Kante darf ihr Vorzeichen wechseln, ihre Gerade nicht.
+    difference = np.minimum(
+        np.linalg.norm(actual.directions - expected, axis=1),
+        np.linalg.norm(actual.directions + expected, axis=1),
+    )
+    assert float(difference.max()) < 1e-9
+    cone = features_module.fit_cone(changed, patch)
+    assert cone is not None
+    assert cone.half_angle == pytest.approx(45.0, abs=0.02)
+    assert features_module._cone_is_recognisable(changed, cone, patch)
+
+
+def _offset_circle_chamfer() -> trimesh.Trimesh:
+    """45°-Fase einer Kreiswand: Innenkontur aus parallel versetzten Sehnen."""
+    angles = np.linspace(-0.1, 1.2, 18)
+    angles[1::2] += 0.002
+    outer = 18.0 * np.column_stack((np.cos(angles), np.sin(angles)))
+    sides = np.diff(outer, axis=0)
+    normals = np.column_stack((sides[:, 1], -sides[:, 0]))
+    normals /= np.linalg.norm(normals, axis=1)[:, None]
+    offsets = np.einsum("ij,ij->i", normals, outer[:-1]) - 0.5
+    inner = np.asarray(
+        [
+            np.linalg.solve(normals[index - 1 : index + 1], offsets[index - 1 : index + 1])
+            for index in range(1, 17)
+        ]
+    )
+    vertices = np.asarray(
+        [
+            (40.0 + point[0], 100.0 + height, -30.0 + point[1])
+            for height, ring in [(0.0, outer[1:-1]), (0.5, inner)]
+            for point in ring
+        ],
+        dtype=np.float32,
+    ).astype(float)
+    triangles = [(i, i + 1, i + 17) for i in range(15)] + [(i, i + 17, i + 16) for i in range(15)]
+    return trimesh.Trimesh(vertices=vertices, faces=triangles, process=False)
+
+
+@pytest.mark.parametrize("scale", [0.5, 1.0, 2.0, 4.0])
+@pytest.mark.parametrize("turned", [False, True])
+def test_a_circular_rim_proves_a_cone_when_short_generator_lines_do_not(
+    scale: float,
+    turned: bool,
+) -> None:
+    """RM-210: Eine echte Kreisrandkette bleibt bei anderer Lage ein Maßbeleg."""
+    body = _offset_circle_chamfer()
+    body.apply_scale(scale)
+    if turned:
+        body.apply_transform(trimesh.transformations.rotation_matrix(0.7, (1.0, 2.0, 3.0)))
+        body.apply_translation((13.0, -7.0, 22.0))
+    patch = list(range(len(body.faces)))
+    if turned:
+        patch.reverse()
+    forget_cache()
+    fit = features_module.fit_cone(body, patch)
+    assert fit is not None
+    assert fit.half_angle == pytest.approx(45.0, abs=0.03)
+    assert features_module._cone_is_recognisable(body, fit, patch)
+
+
+@pytest.mark.parametrize("damage", ["elliptical", "not_planar"])
+def test_a_cone_rim_needs_an_actual_planar_circle(damage: str) -> None:
+    """Ein naher Ellipsenbogen oder ein gewellter Rand ist kein Kreisbeleg."""
+    body = _offset_circle_chamfer()
+    points = np.asarray(body.vertices).copy()
+    if damage == "elliptical":
+        points[:, 0] = 40.0 + (points[:, 0] - 40.0) * 0.8
+    else:
+        points[:, 1] += 0.05 * np.sin(np.arange(32) * 0.8)
+    body = trimesh.Trimesh(points, np.asarray(body.faces), process=False)
+    support = features_module._surface_support(body, list(range(len(body.faces))))
+    assert support is not None
+    assert not features_module._circular_rim_points(support).any()
+
+
+def test_subdividing_a_cone_rim_does_not_invent_measured_circle_points() -> None:
+    """Die Sehnenmitte bleibt eine Sehnenmitte, auch wenn sie einen Index erhält."""
+    body = _offset_circle_chamfer()
+    original = features_module._surface_support(body, list(range(len(body.faces))))
+    assert original is not None
+    selected = features_module._circular_rim_points(original)
+    assert selected.any()
+    expected = original.points[selected]
+    points, triangles = trimesh.remesh.subdivide(np.asarray(body.vertices), np.asarray(body.faces))
+    refined = trimesh.Trimesh(points, triangles, process=False)
+    support = features_module._surface_support(refined, list(range(len(triangles))))
+    assert support is not None
+    measured = support.points[features_module._circular_rim_points(support)]
+    assert len(measured) == len(expected)
+    assert {tuple(point) for point in measured} == {tuple(point) for point in expected}

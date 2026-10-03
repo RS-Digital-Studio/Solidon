@@ -490,6 +490,14 @@ als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
 
 ## Viele gleiche Zellen sind ein Muster, und die Grenze zur Bohrung ist eine Entscheidung
 
+**Erzeugte Texturen** sind unabhängig von der Zellzahl ein `pattern` mit
+stabiler Schrittkennung. `surface_triangles` belegt ihre Flächen vollständig;
+Folgeschritte binden sie neu und messen die Restgeometrie. Einzelzellen gehen
+darin auf, fremde Bohrungen bleiben frei. Reine Tiefenänderungen erhalten die
+Umrisse. Ändern und Entfernen stehen direkt im Texturpanel und nutzen Verlauf
+und Undo. Ohne Erzeugerwissen gelten die Erkennungsschwellen unten; ein STL
+enthält keine Herkunft.
+
 `perceive/patterns.py` faltet erst ab `MIN_CELLS` deckungsgleichen Zellen
 (Streifen `MIN_STRIPS`, Streuung `MIN_SCATTER`, Rauschen `MIN_NOISE`). Runde
 Zellen nur als Noppe — blind, höchstens `ROUND_DEPTH`-mal so tief wie breit,
@@ -500,8 +508,8 @@ zeichnet, heißen sie `other` (entfernbar, nicht neu setzbar). Jeder Stil wird
 nur in seinem Gitter neu gezeichnet (`_GENERATOR_LATTICE`).
 
 - Gefaltet wird nach allen Einzelformen und **vor** dem Freiformfilter.
-- Was ein Muster ausmacht, steht am Netz, nie ein Trägername; ein
-  Zylinderträger wird in seiner Abwicklung gemessen.
+- Muster folgen zusammenhängenden Feldern und Streifenrichtungen; der
+  Träger wird am Netz belegt, am Zylinder in der Abwicklung.
 - **Unter gleichen Zellen wählt `patterns.SEAM_DIRECTION`** — Naht unter
   gleich großen Lücken (auch um Randstücke), Anker unter gleich nahen Zellen —,
   nie der Rundungsrest oder die erste Ebenenachse.

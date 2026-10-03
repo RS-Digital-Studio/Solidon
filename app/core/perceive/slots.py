@@ -466,7 +466,9 @@ def open_slots_instead_of_fillets(
         # Zwei Flanken eines Kreuzlochs liegen ebenfalls in einer Ebene.
         # Hinter ihrer vermeintlichen Mündung liegt aber wieder Material.
         reach = mesh.bounds.diagonal * 2.0
-        if not _reaches_through(body, mouth + normal * reach / 2.0, normal, axis, 0.0, reach):
+        if not _reaches_through(
+            body, mouth + normal * reach / 2.0, normal, axis, 0.0, reach, patch=chosen
+        ):
             continue
         travel = float(np.linalg.norm(mouth - centre)) if has_flanks else 0.0
         direction = (mouth - centre) / travel if travel > tolerance else normal
@@ -532,7 +534,7 @@ def open_slots_instead_of_fillets(
             "direction": tuple(float(v) for v in direction),
             "centre": tuple(float(v) for v in middle),
             "depth": depth,
-            "through": _reaches_through(body, centre, axis, direction, 0.0, depth),
+            "through": _reaches_through(body, centre, axis, direction, 0.0, depth, patch=indices),
             "open": True,
             "arc_centre": tuple(float(v) for v in centre),
             "mouth_centre": tuple(float(v) for v in mouth),
@@ -744,7 +746,7 @@ def slots_from_stadiums(
                 travel=float(fit.travel),
                 depth=float(fit.depth),
                 through=_reaches_through(
-                    body, centre, axis, direction, float(fit.travel), float(fit.depth)
+                    body, centre, axis, direction, float(fit.travel), float(fit.depth), patch=patch
                 ),
                 face_indices=tuple(sorted(int(face) for face in patch)),
                 swallowed=(),
@@ -1181,7 +1183,7 @@ def _slot_from(
         diameter=diameter,
         travel=travel,
         depth=depth,
-        through=_reaches_through(body, middle, axis, direction, travel, depth),
+        through=_reaches_through(body, middle, axis, direction, travel, depth, patch=faces),
         face_indices=tuple(faces.tolist()),
         swallowed=(index_a, index_b),
         diameter_source=diameter_source,
@@ -1699,6 +1701,8 @@ def _reaches_through(
     direction: np.ndarray,
     travel: float,
     depth: float,
+    *,
+    patch: Sequence[int] | np.ndarray | None = None,
 ) -> bool:
     """Ob man durch das Langloch hindurchsieht.
 
@@ -1730,7 +1734,20 @@ def _reaches_through(
     Gerufen wird die Schwester dort nicht: ``features`` liest dieses Modul, und
     die Gegenrichtung schlösse den Kreis.
     """
-    corners = np.asarray(body.triangles, dtype=float) - centre
+    # Ein separat eingelesener Stift kann vor der Mündung stehen. Er ändert
+    # nicht die Topologie des Langlochs im Träger. Echte Böden und Stege sind
+    # mit seinen Mantelflächen verbunden; nur deren Komponenten zählen.
+    corners = np.asarray(body.triangles, dtype=float)
+    if patch is not None and len(patch):
+        from app.core.geom.mesh import face_components
+
+        groups = face_components(body)
+        if len(groups) > 1:
+            selected = np.zeros(len(body.faces), dtype=bool)
+            selected[np.asarray(patch, dtype=np.intp)] = True
+            carriers = [group for group in groups if bool(selected[group].any())]
+            corners = corners[np.concatenate(carriers)]
+    corners = corners - centre
     along = corners @ axis
     reach = (along.min(axis=1) <= depth / 2.0 + EPS_GEOM) & (
         along.max(axis=1) >= -depth / 2.0 - EPS_GEOM

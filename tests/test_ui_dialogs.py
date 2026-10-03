@@ -336,13 +336,22 @@ def test_an_open_advanced_section_never_overlaps_the_action_buttons(
 
         box = dialog.findChild(QDialogButtonBox)
         assert box is not None
+        from app.ui.op_dialog import inactive_dependency
+
+        schema = dialog.spec.params.spec()
+        values = dialog.values()
         advanced = [
-            editor
-            for name, editor in dialog._editors.items()
-            if next(entry.placement for entry in dialog.spec.params.spec() if entry.name == name)
-            == "advanced"
+            dialog._editors[entry.name]
+            for entry in schema
+            if entry.placement == "advanced"
+            and not entry.internal
+            and inactive_dependency(entry, schema, values) is None
+            and entry.name not in {"surface_distance_1", "surface_distance_2"}
         ]
         assert advanced and all(editor.isVisibleTo(dialog) for editor in advanced)
+        for entry in schema:
+            if entry.internal:
+                assert not dialog._editors[entry.name].isVisibleTo(dialog)
         viewport = dialog._scroll.viewport()
         viewport_bottom = viewport.mapToGlobal(viewport.rect().bottomLeft()).y()
         footer_top = box.mapToGlobal(box.rect().topLeft()).y()
@@ -406,7 +415,7 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
     da. Ein eigener Schritt und ein gelöschter behalten den alten Satz.
     """
     from app.core.types import DocumentChange, DocumentState, Operation, Transaction
-    from app.ui.main_window import _undone_text
+    from app.ui.main_window import _history_feedback
 
     step = Operation(id=1, op="load", inputs=(), outputs=("obj_1",), params={})
     edited = Transaction(
@@ -417,9 +426,14 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
             before=DocumentState(edited_ops={1: step}), after=DocumentState(edited_ops={1: step})
         ),
     )
-    assert _undone_text(edited) == "Änderung an „Modell einfügen“ zurückgenommen."
+    assert _history_feedback(edited, undone=True) == "Änderung an „Modell einfügen“ zurückgenommen."
+    assert (
+        _history_feedback(edited, undone=False)
+        == "Änderung an „Modell einfügen“ wieder angewendet."
+    )
     own = Transaction(id="t1", title="Bohrung", ops=(2,))
-    assert _undone_text(own) == "Bohrung zurückgenommen."
+    assert _history_feedback(own, undone=True) == "Bohrung zurückgenommen."
+    assert _history_feedback(own, undone=False) == "Bohrung wieder angewendet."
     removed = Transaction(
         id="t3",
         title="Schritte löschen",
@@ -428,7 +442,8 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
             before=DocumentState(edited_ops={1: step}), after=DocumentState(edited_ops={1: None})
         ),
     )
-    assert _undone_text(removed) == "Schritte löschen zurückgenommen."
+    assert _history_feedback(removed, undone=True) == "Schritte löschen zurückgenommen."
+    assert _history_feedback(removed, undone=False) == "Schritte löschen wieder angewendet."
 
 
 @pytest.mark.parametrize(

@@ -781,3 +781,18 @@ def test_the_search_around_active_triangles_can_be_stopped_and_reports_progress(
     shares: list[float] = []
     intersections.crossings_at(vertices, faces, active, progress=shares.append)
     assert shares and shares[-1] == 1.0 and all(0.0 <= share <= 1.0 for share in shares)
+
+
+def test_a_shared_edge_needs_no_collinearity_recheck(monkeypatch) -> None:
+    """Zwei nicht koplanare Nachbarn tragen ihre gemeinsame Kante schon exakt."""
+    first = np.array([[[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [0.0, 3.0, 0.0]]])
+    second = np.array([[[4.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 3.0]]])
+
+    def unwanted(*args):
+        raise AssertionError("Die gemeinsame Kante braucht keine erneute Kollinearitätsprüfung")
+
+    monkeypatch.setattr(intersections, "_point_on_line_with_rounding", unwanted)
+    hit, flat = intersections.crossing_pairs(
+        first, second, np.array([[0, 1, 2]]), np.array([[1, 0, 3]]), with_coplanar=True
+    )
+    assert not hit.any() and not flat.any()

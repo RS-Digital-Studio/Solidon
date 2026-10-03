@@ -34,6 +34,31 @@ class ScatterParams(BaseParams):
     count: int = param(title=_("Anzahl"), default=3, minimum=1)
 
 
+def test_migration_fields_stay_out_of_cli_and_both_documentation_views() -> None:
+    """Stored compatibility fields are data, never choices for a new operation."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.surfaces import parameter_table
+
+    load_operations()
+    commands = {command.name: command for command in cli_commands()}
+    for name in ("drill_hole", "drill_brep_hole", "slot_hole"):
+        spec = REGISTRY.get(name)
+        internal = tuple(entry for entry in spec.params.spec() if entry.internal)
+        assert any(entry.name == "measured_frame" for entry in internal)
+        assert not {entry.name for entry in internal}.intersection(
+            argument.name for argument in commands[name].arguments
+        )
+        for technical in (False, True):
+            table = "\n".join(parameter_table(spec.params.spec(), technical=technical))
+            for entry in internal:
+                assert str(entry.title) not in table
+                assert entry.name not in table
+            assert "Parameter" in table
+            if technical:
+                assert "`slot_angle`" in table
+    assert "measured_frame" not in documentation()
+
+
 @pytest.mark.parametrize("fields", [("missing",), ("diameter",), ("liner", "liner")])
 def test_material_dependencies_name_distinct_material_fields(fields: tuple[str, ...]) -> None:
     """Eine falsch deklarierte Profilabhängigkeit darf keine Cachezusage vortäuschen."""
@@ -487,10 +512,12 @@ def test_a_feature_parameter_is_declared_as_one() -> None:
     assert named, "otherwise this test proves nothing"
     assert named <= declared, "a parameter that names a feature declares kind='feature'"
 
+    from app.core.registry import needed_inputs
+
     without_input = sorted(
         spec.name
         for spec in REGISTRY.all()
-        if spec.consumes < 1 and any(entry.kind == "feature" for entry in spec.params.spec())
+        if needed_inputs(spec) < 1 and any(entry.kind == "feature" for entry in spec.params.spec())
     )
     assert not without_input, "a feature reference is resolved against the input object"
 

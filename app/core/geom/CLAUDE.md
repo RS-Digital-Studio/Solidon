@@ -1,14 +1,9 @@
 # `app/core/geom/` — wo Geometrie entsteht
 
-Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2),
-gerechnet gegen `manifold3d` und `trimesh` — in Millimetern, ohne
-Toleranzkonstante, nie an einer Eingabe: `OpResult.outputs` sind neue Objekte.
-
-Die Regeln: `.claude/rules/operationen.md` (Register, Rückfallkette,
-Merkmalshandlungen, Muster, Aushöhlen, Auto Split), `kern.md`
-(plattformgleich, teure Aufrufe), `dateiformat.md` (Verschweißen),
-`schichtanalyse.md` (Panel und Kantenweg), `wartezeit.md` (grobe Vorschau).
-Ausführliches, Messwerte und Anlässe unter denselben Überschriften:
+Geometrie nur hier (Regel 2), gegen `manifold3d`/`trimesh`, in Millimetern.
+Eingaben bleiben unverändert; `OpResult.outputs` sind neue Objekte.
+Regeln: `.claude/rules/operationen.md`, `kern.md`, `dateiformat.md`,
+`schichtanalyse.md`, `wartezeit.md`. Herleitungen/Messwerte:
 `konzepte/begruendungen/karte-app-core-geom.md`.
 
 ## Plattformgleich gerechnet
@@ -23,6 +18,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | Lage vieler Punkte entlang einer Richtung | `transform.along` |
 | Punkte bewegen, Richtungen drehen | `transform.moved_points`, `transform.turned` |
 | 4x4-Matrizen zusammensetzen (`a @ b`) | `transform.composed` |
+| affine Matrix ohne LAPACK invertieren | `transform.inverse_affine` |
 | kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
 | Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
 | Arkuskosinus (Knickwinkel, Bogenspanne) | `mesh.stable_arccos` |
@@ -37,28 +33,32 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 Kantenwerkzeuge rechnen Längen über `_length`, kleine Systeme über
 `_solved3`/`_least_squares3` statt LAPACK, die Kugel über `_icosphere`.
 
+## Absolute Transformationen
+
+`translate_object`/`rotate_object`: mindestens ein Eingang, dieselbe Gruppe
+zurück. `mode="relative"` erhält Altschritte, `absolute` speichert Ziele.
+`reference_point`: Bodenmitte, Hüllmitte, Ecke oder Merkmal des ersten
+Eingangs (`reference_feature` ist Featurefeld). Absolute Drehung: Ausgang
+`SceneObject.frame`, Weltachsen X→Y→Z, positive Achsskalierung normalisiert.
+Unbekannte/gespiegelte/gescherte Rahmen verlangen relatives Drehen mit
+Handlungsvorschlag. Gruppen drehen starr um den gemeinsamen Bezugspunkt.
+
 ## Die Boolesche Rückfallkette (§17.2)
 
-Der Normalweg dieses Gebiets; Stufen und Vermerke stehen im Docstring von
-`boolean.py` und in `operationen.md`, `tests/test_boolean.py` erzwingt jede.
-Vor der Kette vereinigt `_parts_united_first` die Teile jedes Szeneneingangs,
-die einander durchdringen oder ineinanderliegen, beim Schließen einer alten
-Höhlung (`merge_face_contacts=True`) auch flächig berührende; am exakten Kern
-dasselbe über `prepare_ops._exact_closing_base` (Ketten:
-`_exact_closing_chain`). Die Vorfrage ist `repair.parts_that_cross`: Paare aus
-Hüllquaderbäumen (`box_pairs.BoxTree`, `box_pairs_between`), geprüft mit
-`intersections.crossing_pairs` — Rundungsgrenzen und Ursprung stehen dort im
-Docstring. Was sich nicht vereinigen lässt, geht unverändert weiter;
-`_meets_the_shells` fragt, ob ein Werkzeug eine Schale trifft, die sich selbst
-kreuzt (`repair.self_crossing_shells`).
+Stufen und Vermerke: `boolean.py`, `operationen.md`; erzwungen in
+`tests/test_boolean.py`. `_parts_united_first` vereinigt durchdringende oder
+verschachtelte Eingangsteile; beim Schließen alter Höhlung auch Flächenkontakt
+(`merge_face_contacts=True`). Exakt: `prepare_ops._exact_closing_base`/
+`_exact_closing_chain`. Vorfrage `repair.parts_that_cross`: Hüllquaderpaare
+(`box_pairs.BoxTree`, `box_pairs_between`) mit `intersections.crossing_pairs`;
+dessen Docstring nennt Rundungsgrenzen/Ursprung. Nicht Vereinbares bleibt.
+`_meets_the_shells` prüft Werkzeugtreffer an selbstkreuzenden Schalen
+(`repair.self_crossing_shells`).
 
-**Nach jeder gelungenen Stufe bekommt das Ergebnis die Darstellung seiner
-Eingänge zurück** (`attributes.in_source_layout`): Ein bitgleich übernommenes
-Dreieck beginnt an der Ecke seines Vorbilds, übernommene Ecken stehen in der
-Reihenfolge des Eingangs; Dreiecksfolge und Koordinaten bleiben die des Kerns.
-`prepare_ops._without_scars` legt ebenso zurück. Die Regel steht in
-`operationen.md`, der Messfall in `konzepte/begruendungen/regel-operationen.md`
-unter „Boolesches geht durch die Rückfallkette“.
+`attributes.in_source_layout`/`prepare_ops._without_scars` erhalten nach jeder
+Stufe bitgleich übernommene Dreiecksecken und deren Eingangsfolge;
+Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
+`operationen.md`, „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der
   Rückvernetzung; flächiger Kontakt ergibt ein leeres Netz, ob das gilt, sagt
@@ -66,9 +66,8 @@ unter „Boolesches geht durch die Rückfallkette“.
   Float64-Grenze `gamma(8) * max|Koordinate| * Oberfläche` je Komponente —
   keine Drucktoleranz; `EPS_GEOM` ist kein Mindestvolumen. Verbleibende Schalen
   werden angefügt, nie neu vereinigt (das füllte Hohlräume).
-- **`ctx.quality` und `ctx.cancelled` reichen durch jeden Teilschritt**, auch
-  Werkzeugvereinigung und Eckanschluss; nichts stuft den Entwurf hoch. Eine
-  erneute B-Rep-Erkennung nimmt dasselbe Token, nie ein eigenes.
+- **Qualität und Abbruch reichen durch**, auch Werkzeugvereinigung,
+  Eckanschluss und erneute B-Rep-Erkennung; keine Hochstufung des Entwurfs.
 - **Nur exakte Eingänge** gehen über `brep.edit.boolean`; ist ein Netz
   beteiligt, gilt die Kette. Beide prüfen leere und wirkungslose Ergebnisse;
   `body_split` ist das eine Urteil über einen zerfallenden Körper.
@@ -81,6 +80,10 @@ unter „Boolesches geht durch die Rückfallkette“.
   über `kernel_process.run`; Aufbau und Schnitt sind gemeinsam abbrechbar.
 - Eine Änderung am gemeinsamen Kern entwertet den Ergebnis-Cache
   (`paths.results_cache_dir()`, §38).
+- Nach Vereinigung prüft `prepare_ops.union_bore_findings` Bohrungsräume
+  **aller Eingänge**: verbleibende Luft und ganze alte Mündungen samt
+  koplanaren Deckeln. `filled`, `enclosed`, `blind`, `partial` sind gemessen;
+  `unchecked` ersetzt fehlenden Nachweis. Merkmalverlust beweist nichts.
 
 ## Die Karte
 
@@ -102,22 +105,17 @@ neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
 der Aufrufer)
 
-**Der Netzkern im Hilfsprozess** — `kernel_jobs.py` führt lange GIL-haltende
-Aufrufe (`manifold3d`, `csgraph`) als reine Rechnung mit Feldern hinein/heraus;
-`JOBS` ist der einzige Auftragseinstieg, `serve` die Helferseite,
-`pack`/`copied` der gemeinsame Speicher. `_opened` ordnet nur ENOMEM und
-die Windows-Speichercodes 8/14/1450/1455 als `MemoryError` ein; ENOSPC bleibt
-ein Transfer-`OSError` und pausiert den Hilfsprozess (`kern.md`).
-`kernel_process.py`: bitgleiches `run` hier/im Helfer, Vorrat, Abbruch, Tod,
-Rückfall, `warm_up`, `shutdown`; `NOT_A_KERNEL_FAILURE` schützt breite Fänge.
-Ein Start reserviert unter dem Poolschloss einen Platz; der gesamte Bestand
-behält ihn bis zum bestätigten Prozessende. Stoppreste bleiben sichtbar und erneut
-aufräumbar; die nächste Anfrage sammelt einen inzwischen toten Rest regulär
-ein. Lebende Reste sperren Starts und lokale Rückfälle, auch beim nächsten
-`run` nach Vorabstart, mit dem vorhandenen Fehlerbericht-Ausweg. Bleibende
-Start-/Helferabsagen überstehen das Einsammeln. `shutdown`
-gibt auch bei Fehler seine Wartenden frei, nimmt offene Starts mit und trennt
-alte Reservierungen/Rückgaben/Absagen vom neuen Bestand; Regel: `kern.md`.
+**Hilfsprozess** — `kernel_jobs.py`: GIL-Aufrufe (`manifold3d`, `csgraph`)
+mit reinen Feldern; `JOBS` Einstieg, `serve` Helfer, `pack`/`copied` geteilter
+Speicher. `_opened`: nur ENOMEM und Windows 8/14/1450/1455 werden
+`MemoryError`; ENOSPC bleibt Transfer-`OSError` und pausiert den Helfer.
+`kernel_process.py`: bitgleiches `run`, Vorrat, Abbruch/Tod/Rückfall,
+`warm_up`, `shutdown`; `NOT_A_KERNEL_FAILURE` schützt breite Fänge.
+Startplätze bleiben unter Poolschloss bis zum bestätigten Ende reserviert.
+Tote Stoppreste sammelt die nächste Anfrage; lebende sperren Starts/lokale
+Rückfälle, auch nach Vorabstart, mit Fehlerbericht. Dauerhafte Absagen bleiben.
+`shutdown` gibt trotz Fehler Wartende frei, erfasst offene Starts und trennt
+alte Reservierungen/Rückgaben/Absagen vom neuen Bestand. Vertrag: `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
@@ -131,7 +129,7 @@ zu `PROJECTION_WORKERS` Arbeitern, Folge und Bits eines Fadens)
 **Körper erzeugen und formen** — `primitive_ops.py` (Netzzwillinge der
 exakten Grundkörper, `primitive_local_tool()` für Op und Vorschau) ·
 `blend.py` · `displace.py` · `lattice.py` · `texture_ops.py`
-(`tool_in_outline()`; *Merkmal ändern* am Muster nimmt dasselbe
+(`tool_in_outline()`, *Merkmal ändern* am Muster nimmt dasselbe
 `flat_tool()`; eben heißt
 `faces.FLAT_ENOUGH_FOR_A_TOOL`, nicht `EPS_GEOM`) · `texture.py` ·
 `sculpt.py`, `pose.py` (Sammelparameter-Ops; `SculptPreview` rechnet die
@@ -146,7 +144,8 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 
 **Wandungen** — `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
-GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen)
+GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen) · `container_ops.py`
+(Behälter, Deckel und Einsätze; Transaktionsentwurf in `core/lid_flow.py`)
 
 **Druckvorbereitung** — `prepare.py`, `prepare_ops.py` (Bohrungen, Teilen,
 Anordnen, Kollisionen, §18.6; Merkmalshandlungen, `pattern_feature`; die
@@ -155,6 +154,12 @@ Nullnormalenrichtung am BRep teilt `drill_outward_axis_from_bounds` mit
 `mouth_cap.py` (Deckel einer gekrümmten Mündung als Höhenfeld, `None` ohne
 glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 (`mirror_plane`) · `pins.py` (Passstifte, `first_pin`)
+
+Die schnelle Orientierung bewertet die genaue Rangfolge und prüft Passung
+und Stand nur bis zur ersten brauchbaren Lage. Gleiche Formen teilen die
+Suche; ohne Stand bleibt die beste passende Lage mit `orient.no_footing`.
+Orientierung und Anordnung belegen mitgeführte Merkmale je Ausgang durch
+`FeatureContinuation`.
 
 **Kanten und Flächen** — `edge_ops.py`, `face_ops.py` (der Körper wählt den
 Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `choose` für die Gruppen
@@ -169,16 +174,23 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 `body_overlap`) · `section.py` (§18.2; Schnittkontakte siehe Stolperfallen) ·
 `difference.py` (§18.7; eine
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
-`_shells_apart`) · `mesh_ops.py` · `colour_ops.py` ·
+`_shells_apart`; große Vergleichsnetze durchlaufen zuerst die bestehende
+koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
+Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
 `label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
-*Auf beiden Seiten* setzt die Rückseite am ersten Austritt entgegen der
-Richtung, `opposite_side`)
+*Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen
+der Richtung, `opposite_side`; negative Innenhäute und die belegte Höhlung
+werden übersprungen, auch wenn eine Entlüftung die Häute verbindet)
 
 ## Stolperfallen
 
 **Merkmalshandlungen** (Regeln in `operationen.md`):
 
+- Hohlraumwerkzeuge entscheiden Richtung und Gültigkeit über das körpernahe
+  `signed_volume`; Schwerpunkt und Trägheit werden dafür nicht berechnet.
+  `_bore_end_rims` prüft alle Mündungsränder gemeinsam über
+  `_shares_in_material`, mit denselben Proben und unveränderten Bodenregeln.
 - **Eine Kette geht als Ganzes**: Werkzeug aus allen Abschnitten von
   `cavity_chain_at`; die gerundete Mündungskante reist über
   `mouth_blends=True` (`_cavity_plug`, `_paired_cavity_body`,
@@ -214,21 +226,18 @@ Richtung, `opposite_side`)
   `local_text_body()` trägt jeden Formparameter. Ein Ring ohne gemessene Achse
   hat keine Lage (`FEATURE_WITHOUT_AXIS`); beim Platzieren fallen alte
   Dreiecks- und Trägerbezüge gemeinsam.
-- **Durchgang im Langlochzug** (`slot_hole`): Ein einzelner Körper wird über
-  seine Hülle geschnitten (`_through_bore_depth`); negative Innenhäute zählen
-  am Netz nicht als weitere Körper (`_slot_has_multiple_bodies`). Bei mehreren Körpern
-  gilt die vor dem Schließen gemessene Tiefe des ausgewählten Merkmals. Andere
-  Körper werden innerhalb dieser Schnitttiefe mitgeschnitten; Material dahinter
-  bleibt stehen. `hole_has_separate_contents` gibt nur für diesen Zug eine
-  Bohrung mit getrennten Körpern frei, deren eigener Träger innen frei ist;
-  eine vollständige Kontaktprüfung schließt auch geometrisch angeschlossene
-  Naben aus. `repair.material_part_families` belegt positive Materialkörper
-  samt direkt zugeordneten negativen Innenhäuten; die eigene Bohrung wird am
-  ganzen Träger geprüft. Eine negative Wurzel, gleiche Vorzeichen an Eltern
-  und Kind oder ein unklarer Strahl geben nichts frei. Menü und Ausführung
-  teilen den gemerkten, abbrechbaren Beleg; Abbruch vor der Ablage setzt ihn nicht.
-  Verbundene Naben und Speichen bleiben gesperrt, auch wenn weitere Körper im
-  Objekt stehen (RM-320).
+- **Langloch durch getrennte Körper**: `_through_bore_depth` schneidet durch
+  die Trägerhülle. `_slot_has_multiple_bodies` zählt negative Innenhäute nicht
+  zusätzlich. `_slot_in_separate_carrier` trennt einen vollständig belegten
+  Träger ab; Nachbarn bleiben getrennt, Stifte werden nur im bisherigen
+  Bohrungshohlraum gekürzt. Verbindender Versatz/Verkleinerung verlangt vorher
+  Zerlegung. `hole_has_separate_contents` gibt ausschließlich diesen Zug frei:
+  eigener Träger innen frei, Kontaktprüfung am ganzen Träger. Angeschlossene
+  Naben/Speichen bleiben gesperrt, auch neben anderen Körpern (RM-320).
+  Menü und Ausführung teilen den abbrechbaren Beleg; nur fertige Belege werden
+  gemerkt. `repair.material_part_families` ordnet negative Innenhäute positiven
+  Materialkörpern zu; negative Wurzel, gleiche Eltern-/Kindvorzeichen oder
+  unklarer Strahl erlauben keine Freigabe.
 - **Altwinkel** (`measured_frame`, Migration 38 → 39): `slot_angle` bleibt als
   Ausdruck im Schritt; `bore_shape` und `slot_hole` rechnen ihn in jeder
   Auswertung mit der dann aktuellen Achse um, auch wenn deren Komponenten
@@ -278,20 +287,16 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   Sockel. Vereinigt werden nur verschiedene Schalen und Überlagerungen
   (`_crossing_shape`); behoben ist nur eine vollständig geprüfte direkte
   Vereinigung. Die Lochfüllung des Imports schaltet diese Diagnose nicht zu.
-- Außen gilt je Verschachtelungsbaum (`turn_shells_outward`); jedes
-  entscheidende Vorzeichen kommt aus `mesh.signed_volume` oder
-  `_shell_volumes`, nie aus `enclosed_volume`. Umschlossen heißt ganz darin
-  (`_Shells.inside`); eine Schale im Material wird gemeldet, nicht geraten.
-  `has_nested_parts` teilt diese Materialtiefe mit `parts_inside_parts`, gibt
-  aber `None` bei unentschiedenen Strahlen zurück. `material_part_families`
-  befragt auch negative Häute und verlangt vollständig entschiedene,
-  alternierende Elternketten mit positiven Wurzeln. Eine positive Insel im
-  Hohlraum bleibt eine eigene Familie. Dichtheit und Kontaktfreiheit belegt
-  der Aufrufer; `None` gibt keine Familie frei.
-  `material_part_count` zählt Familien nach vollständigem Vorbeleg.
-  Beide optionalen Abbruchtoken
-  reichen durch `_Shells` bis in Gitterzertifikat und genaue Kreuzungssuche;
-  Diagnose und boolesche Familien behalten ihre Standardschnittstelle.
+- Außen gilt je Verschachtelungsbaum (`turn_shells_outward`), Vorzeichen nur
+  aus `mesh.signed_volume`/`_shell_volumes`. `_Shells.inside` verlangt ganzes
+  Umschließen; Schalen im Material werden gemeldet. `has_nested_parts` und
+  `parts_inside_parts` teilen die Materialtiefe, unklare Strahlen ergeben
+  `None`. `material_part_families` verlangt auch an negativen Häuten eindeutig
+  alternierende Elternketten mit positiver Wurzel; positive Hohlrauminseln
+  bleiben eigene Familien. Aufrufer belegen Dichtheit/Kontaktfreiheit;
+  `None` gibt nichts frei. `material_part_count` zählt erst nach Vorbeleg.
+  Beide optionalen Abbruchtoken reichen durch `_Shells` bis Gitterzertifikat
+  und Kreuzungssuche; die Standardschnittstellen bleiben erhalten.
 
 **Anordnen und Ausrichten**:
 
@@ -302,22 +307,17 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `slice.orientation.standing_check` am Original trägt. Ohne stehende Lage
   sagt `NoStandingOrientationError` vor jeder Bewegung ab; Resin braucht
   diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split.
-- **Gepackt wird in der Ecke, gelegt in der Mitte** (`arrange_on_bed`,
-  `_into_the_middle` nur auf freier Fläche, `arrange.narrow_margin`;
-  `occupied` verhindert das Zentrieren). Jeder Körper kommt auf die erste
-  angefangene Platte mit Platz, erst dann auf eine neue; eine leere nimmt ihn
-  auch zu groß (`settle`). Ob eine Platte mehr hilft, fragt `_fits_alone` die
-  Anordnung selbst, wie `first_free_spot`. `orient_for_print` legt mit an
-  (`arrange`, `True` auch für gespeicherte Aufträge, ohne Migration —
-  Entscheidung Robert), Abstand aus `export.writer.clearance_margin`; nach
-  Filament getrennt wird, wo mehr Filamente als Düsen liegen (`by_material`,
-  Entscheidung Robert).
-- Anordnung, Bauraumprüfung und Orientierung teilen den Druckbereichsvertrag
-  aus `core/build_area.py`. Ein Körper: die Op meldet ihre Matrix; mehrere:
-  sie bewegt die Merkmale selbst — nie beides; die Erkennung findet die
-  Matrix je Körper dann am Bewegungsvermerk des Netzes. `SearchResult.transform` trägt
-  die ganze Bewegung samt B-Rep; `fits` entscheidet über die Fläche,
-  `oversize` nur über Maße.
+- `arrange_on_bed` packt in der Ecke, `_into_the_middle` zentriert nur freie
+  Flächen (`occupied`, `arrange.narrow_margin`). Erste angefangene Platte mit
+  Platz, sonst neue; leere nehmen auch Übergröße (`settle`). `_fits_alone`
+  prüft Zusatzplatten wie `first_free_spot`. `orient_for_print` ordnet mit an
+  (`arrange=True`, auch Altschritte ohne Migration, Entscheidung Robert);
+  Abstand: `export.writer.clearance_margin`. `by_material` trennt bei mehr
+  Filamenten als Düsen (Entscheidung Robert).
+- Gemeinsamer Druckbereich: `core/build_area.py`. Ein Körper meldet die
+  Transformationsmatrix, mehrere bewegen Merkmale selbst; nie beides.
+  Erkennung liest je Körper den Netzbewegungsvermerk. `SearchResult.transform`
+  trägt die ganze Bewegung samt B-Rep; `fits` prüft Fläche, `oversize` Maße.
 - `back_onto_bed` (`keep_on_bed`): die Vorgabe ist aus, den Haken setzt der
   Zug (`MainWindow._on_transform_dragged`); geprüft wird der Eingang, bewegt
   nur in XY, die Matrix trägt beides, von sich aus kein Plattenwechsel.
@@ -381,3 +381,18 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   Geometrieänderung; ohne sie tragen Innenschalen oder die Entlüftung
   (`_cavity_mesh`), nie ein Hüllquader. Kein Reparaturweg begründet einen
   Messnachweis (`measure.body_overlap`).
+
+Kreis-/Merkmalsmuster und Spiegelungen: `transform.pattern_centre` speichert
+bei drei leeren Koordinaten einmal die Körpermitte als `answered`. Explizite
+Punkte bleiben fest, Teilangaben sind Fehler; lineare Muster lesen nichts.
+Alte Spiegelungen behalten `follow_anchor`, explizite Punkte haben Vorrang.
+
+`slice._chain.orientation_scores` und NumPy-Rückfall verwenden gleiche
+Grundoperationen/IntegerGrid-Raster und liefern je Richtung bitgleiche Werte.
+Der Reserveplatz prüft Stand vor Bauraumpassung. Eigenkreuzungen prüfen alle
+koplanaren Überlagerungen; gemeinsame Kanten und widerlegte Kollinearität
+ersparen nur bereits entschiedene Restfragen.
+
+`IntegerGrid.of(count=...)` darf bekannte Nullen auslassen: Die ursprüngliche
+Gesamtzahl bestimmt den Rasterexponenten und muss mindestens der Wertzahl
+entsprechen. Ohne Angabe gilt der bisherige Vertrag.

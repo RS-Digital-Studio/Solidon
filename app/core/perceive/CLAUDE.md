@@ -16,12 +16,12 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | Datei | Rolle |
 |---|---|
 | `features.py` | Vollerkennung `detect` (§21.1): Ebenen, `_fitted` in Runden (Zylinder, Krümmungssplit, Stadion, `_arcs_of_a_prism`, `_pieces_at_a_seam`), Zusammenlegen, `detect_holes`, `detect_voids`, `narrowings_marked`, Anschnitt, `is_a_freeform`, zuletzt `detect_curved_faces` (nie auf einer Freiform); Fits (Felder an `CylinderFit`, `ConeFit`, `StadiumFit`), Merker, `numbering_order` und die Fragen, die Kantenweg und Panel teilen (`planar_facet`, `planes_beside`, `replaces_an_edge`, `tangent_walls`, `sits_at_the_mouth_of`); `_screened_fits` meldet den Rundform-Fortschritt schon bei den vorbereiteten Flecken |
-| `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; die Blockzahl hält die kalibrierte Spitzenschätzung mit `BATCH_PEAK_FACTOR` innerhalb `BATCH_BYTES`; `_run` meldet nach jeder Solverrunde; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`) |
+| `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; die Blockzahl hält die kalibrierte Spitzenschätzung mit `BATCH_PEAK_FACTOR` innerhalb `BATCH_BYTES`; `_run` meldet nach jeder Solverrunde; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`); `_vector_norm` führt dessen reelle Vektornorm unmittelbar als Skalarprodukt und Wurzel aus, mit unveränderter Rechenfolge |
 | `helix.py` | Gewinde am eingelesenen Netz: Spektrum `_best_pitch` (beide Vorzeichen), Kantenleser `_measured_helix`; was eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne. Bausteingewinde laufen nie hindurch (§24.1) |
 | `slots.py` | Langlöcher, topologisch: zwei Halbzylinder, zwei ebene Flanken (Gegenprobe `tests/test_slot_features.py`); `slots_from_stadiums`, `open_slots_instead_of_fillets`, `native_open_slot_measures`, Paarsuche `_PairPlan` |
 | `patterns.py` | Muster (§25): `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung; `cylinder_facet_groups` ordnet die Mantelnormalen plattformgleich über die Winkelnaht, `cylinder_facet_lines` liest daraus die achsparallelen Facettengeraden — dieselben für Stopfen (`FacetPolygon` mit Ecken am Schnitt der Facetten, Stirnenden `Frame.ends`) und Quellausrichtung |
 | `relations.py` | Nachbarschaften: Hohlraumketten (unten), Rohrwand (`sleeve_at`, `thinnest_sleeve`), Dreieckseigentum (`cell_owner_table`, `CONTESTED`), Gleichartigkeit (`alike_for_actions`, `_same_surface_patch`), Gruppensätze (`group_evidence_texts`, `group_reason_texts` — das Panel liest sie von hier) |
-| `matching.py` | Stabile Bezeichner (§21.3): `match`, `settled_by_surface` (Zwillinge nach der Lage ihrer Oberfläche), `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features` |
+| `matching.py` | Stabile Bezeichner (§21.3): `match`, `settled_by_surface` (Zwillinge nach der Lage ihrer Oberfläche), `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features`; `planar_source`, `planar_faces`, `pieces_in_place` prüfen die räumliche Herkunft ebener Restflächen gemeinsam für Auswertung und Abschneiden |
 | `match_records.py` | JSON-Struktur und körperqualifizierte Antwortschlüssel; Domänen `group:`, `native-group:`, `edge-answer:`, `recognition-answer:` als Konstanten |
 | `match_decisions.py` | Ganze Zuordnungsentscheidungen wiedererkennen und atomar prüfen; `resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei, eine Netzantwort nie für die native Frage; keine zweite Zuordnung |
 | `local.py` | Begrenzte Suche am großen Netz (unten) |
@@ -36,6 +36,39 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 ## Der Weg durch die Erkennung
 
+- **Konkurrierende Rundformen brauchen vollständige Nachweise**: Ein Zylinder
+  beendet die Frage vor dem Kegellauf nur, wenn seine Originalecken bis
+  `EPS_GEOM` und seine senkrechten Normalen bis `EPS_ANGLE` stimmen.
+  An angenäherten Wänden wird der Kegel ebenfalls geprüft. Bestehen beide
+  Nachweise, bleibt die Form mit dem kleineren maximalen Abstand zur
+  Originalhaut; ein fehlender Fehlerwert bestätigt keinen Vorrang.
+  `_screened_fits` überspringt nur dieselben bereits belegten Zylinder.
+- **Kegelläufe verwenden einen lokalen Rahmen**: `_cone_plan` legt die
+  beobachtete Achse auf Z und einen tatsächlichen radialen Stützpunkt auf X.
+  Die Normierung liest die Entfernung zum gewichteten Ursprung statt einer
+  Weltbox. Einzel- und Stapellöser erhalten denselben Plan; erst das Ergebnis
+  geht zurück in Weltkoordinaten. Budget und Nachweise bleiben unabhängig
+  von dieser Wahl des Rechenrahmens.
+- **Größenbelege folgen der Geometrie**: `_fits_in_the_body` misst die
+  Diagonale des kleinsten Rechtecks der quer zur Fitachse projizierten
+  Körperhülle. Zwei wirkliche Ecken können das positive Urteil schon vorher
+  belegen. `_area_and_reach` misst den größten tatsächlichen Eckabstand;
+  `_point_diameter` benutzt Suchbaumboxen nur als obere Schranken und
+  begrenzt die Punktpaarfelder auf Blattpaare. Der Breitenentscheid darf
+  enden, sobald eine obere oder untere Schranke seine Antwort beweist.
+  Weltboxen werden dadurch nicht zu lageabhängigen Merkmalsmaßen.
+
+- **Importierte Musterfelder** bleiben nach räumlicher Nachbarschaft und
+  Streifenrichtung getrennt; ihre Zellgrenzen werden nicht abgesenkt.
+  `without_pattern_cells` faltet nur vollständig in einem belegten Muster
+  enthaltene Einzelmerkmale. `detect_region` behält bei überlappenden Funden
+  die bereits belegte Textur samt Herkunft; Teilmerkmale werden nicht gekürzt.
+- **Erzeugte Texturen**: `patterns.rebound_textures` bindet ihre belegten
+  Dreiecke neu; `without_texture_cells` faltet die Einzelformen und misst
+  verbleibende Trägerflächen nach. Der Oberflächenbeleg gilt auch für kleine
+  Felder, die ohne Erzeugerwissen unter der Mustererkennungsschwelle liegen.
+  `cylinder_envelope` begrenzt ihren Stopfen an den belegten Mantelfacetten;
+  ein unbelegbarer Träger bleibt eine ausdrückliche Ablehnung.
 - **Erst der Merker.** Die Auswertung fragt vor jeder Erkennung
   (`scene.evaluate._with_features`): `detect` legt jede vollständige Erkennung
   unter `_mesh_key` ab; `carry_detection` (starr bewegt, Beleg `moved_twin`;
@@ -61,6 +94,9 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 - **Je Körper merkt `remembered`** (`_BodyMemory`, ein Schloss
   `_MEMORY_LOCK`; ein abgebrochener Auftrag bekommt keine Antwort); eine Kopie
   für einen Nebenfaden liest aus ihrem Original (`copy_with_answers`).
+  `moved_twin` teilt den vollständigen Bewegungsbeleg über alle Verbraucher,
+  geschlüsselt nach beiden Geometrieabdrücken und der tatsächlichen Matrix;
+  eine andere Matrix oder veränderte Ecke braucht einen neuen Beleg.
 - **Der Ursprung vor dem Teilen reist mit** (`geom.mesh.refined_units`: durch
   Boolesche an unberührten Dreiecken, Verschweißen, `MeshData.replacing`,
   Plattencache; frisch −1). Die Zählregeln lesen daran das ungeteilte Netz
@@ -190,7 +226,15 @@ Formabweichung liest nur vorhandene `SurfacePatch`-Belege.
   `clipped_patches`/`reindexed_patches` reparieren keine Indizes. Rundmaße
   stützen sich nur auf belegte Mantelpunkte (`_surface_support`) —
   Unterteilung und Nähte liefern keine, getrennte Fächer teilen keine, das
-  Originalnetz bleibt.
+  Originalnetz bleibt. Eine Mantellinie zwischen zwei Facettenfamilien
+  verwendet deren flächengewichtete Normalen; die Lesereihenfolge der
+  Float32-Dreiecke darf ihre Richtung nicht bestimmen.
+  Reichen die Mantellinien eines Kegels nicht aus, darf ein erhaltener
+  Kreisrand eigene Stützpunkte belegen (`_circular_rim_points`): mindestens
+  vier nicht kollineare Originalrandecken einer zusammenhängenden Kette,
+  gemeinsam eben und kreisförmig bis auf die örtliche Schweißtoleranz.
+  Sehnenmitten zählen nicht. Der Kreis ersetzt weder den Rangnachweis noch
+  die Prüfung der übrigen Haut und ihrer Normalen.
 - **Eine Rundform braucht vollen Beleg**: Kugel mit Rang vier und Krümmung in
   zwei Richtungen, Torus und Kegel mit der Normalenprobe, der Kegel mit allen
   Facettenecken; ein Kreis allein bestimmt keinen Kegel (Winkel bleibt
@@ -211,7 +255,8 @@ Formabweichung liest nur vorhandene `SurfacePatch`-Belege.
   nie der Ausschnitt (erst der Suchrand, dann die Ebenenregel); nur die ganze
   Facette ist die Fläche, Dreieckszahl macht keinen Mantelstreifen zur Ebene,
   ein Teilstück zählt je Umrissecke. `inner` verlangt dieselbe Schale und eine
-  parallele Außenkontur darüber, an Rundflächen bestimmen nur gekrümmte Nähte
+  parallele Außenkontur darüber, die den ganzen Flächenumriss umfasst;
+  ein Schriftzug über dessen Mitte genügt nicht. An Rundflächen bestimmen nur gekrümmte Nähte
   die Innenlage. Der Rundungsgang `continues_tangentially` beantwortet nur die
   Langlochfrage.
 - **Nachtrennung**: Geteilt wird nur, was jemand liest (`worth_splitting`);
@@ -234,6 +279,11 @@ Formabweichung liest nur vorhandene `SurfacePatch`-Belege.
   Eine Hohlraumkette braucht alle Abschnitte und vollständige Ringe; eine
   unvollständige Nachbarhöhlung verwirft eine Bohrung nur als mögliches
   Kettenglied. Ein Muster kommt erst, wenn sein Feld im Radius liegt.
+- **Bekannte Durchgangswände über dem lokalen Suchbudget** dürfen ihre zur
+  Achse senkrechten Dreiecke samt vollständigem Originalnachbarring nachmessen.
+  Die gewöhnliche Fit- und Randprüfung bleibt; nur ein am ganzen Original
+  erneut belegter Durchgang wird veröffentlicht. Sacklöcher, fehlende Ränder
+  und übrige Merkmale brauchen weiterhin ihren vollständigen Suchkontext.
 - **Rohrwände** rechnen mit dem Querversatz; am Langloch zählt der fernere
   Endmittelpunkt.
 - **Verlorene, erzeugte oder geschlossene Merkmale** (`perceive.orphaned`,

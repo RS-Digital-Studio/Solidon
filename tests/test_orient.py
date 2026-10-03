@@ -1076,3 +1076,44 @@ def test_the_preselection_counts_overhangs_against_the_printers_limit() -> None:
     assert {entry.direction for entry in ranked_orientations(body, overhang_limit=60.0)} == {
         entry.direction for entry in ranked_orientations(body)
     }, "dieselben Lagen, nur anders beurteilt"
+
+
+@pytest.mark.parametrize("overhang", [30.0, 45.0, 60.0, 80.0])
+def test_native_orientation_scores_are_bit_identical_to_numpy(monkeypatch, overhang) -> None:
+    """Projizieren und IntegerGrid-Summen ändern weder Zahlen noch Rangfolge."""
+    import trimesh
+
+    from app.core.geom import orient
+    from app.core.geom.mesh import MeshData
+
+    if orient._chain is None or not hasattr(orient._chain, "orientation_scores"):
+        pytest.skip("Schnittkern mit orientation_scores fehlt")
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=13.0))
+    mesh.raw.apply_scale((1.7, 0.9, 0.6))
+    mesh.raw.apply_translation((107.3, -93.7, 15.4))
+    directions = orient.candidates(mesh, hull_limit=40)
+    native = orient.evaluate_directions(mesh, directions, overhang_limit=overhang)
+    monkeypatch.setattr(orient, "_chain", None)
+    fallback = orient.evaluate_directions(mesh, directions, overhang_limit=overhang)
+    assert native == fallback
+
+
+@pytest.mark.parametrize("count", [4, 17, 100000])
+def test_integer_grid_can_omit_known_zero_values_without_changing_bits(count) -> None:
+    """Weggelassene Nullen ändern weder Raster noch Summe oder Teilmengen."""
+    from app.core.geom.mesh import IntegerGrid
+
+    values = np.asarray([0.123456789, 17.321654987, 8.571428571, 0.0])
+    full = IntegerGrid.of(np.pad(values, (0, count - len(values))))
+    short = IntegerGrid.of(values, count=count)
+    assert short.exponent == full.exponent
+    assert np.array_equal(short.steps, full.steps[: len(values)])
+    assert short.total() == full.total()
+    assert IntegerGrid.of(np.zeros(0), count=count).total() == 0.0
+
+
+def test_integer_grid_refuses_a_count_smaller_than_its_values() -> None:
+    from app.core.geom.mesh import IntegerGrid
+
+    with pytest.raises(ValueError):
+        IntegerGrid.of(np.ones(3), count=2)

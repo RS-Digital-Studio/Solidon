@@ -595,6 +595,21 @@ def test_cancelled_final_checks_publish_neither_cache_nor_completion(
         return result
 
     monkeypatch.setattr(module, finish, cancel)
+    if flush and finish == "check_thin_walls":
+        # Zwei bündige Quader tragen keine belegte Bohrungswand. Dieser
+        # Prüfauftrag ist nachweislich unzutreffend und beginnt nicht.
+        result = evaluate(
+            document,
+            profile,
+            registry=registry,
+            cache=cache,
+            cancelled=signal,
+            progress=lambda *args: progress.append(args),
+        )
+        status = next(value for value in result.check_states if value.key == "scene.thin_walls")
+        assert result.complete and status.state == "not_applicable"
+        assert not status.applicable and not signal.is_cancelled
+        return
     with pytest.raises(OperationCancelled):
         evaluate(
             document,

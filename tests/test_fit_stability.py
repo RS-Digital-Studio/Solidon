@@ -217,13 +217,12 @@ def test_the_start_angle_bound_stays_below_the_cone_threshold() -> None:
 
 
 def test_four_identical_bores_are_fitted_once() -> None:
-    """Die vier Bohrungen der Platte sind dasselbe Stück Geometrie — einmal gerechnet.
+    """Vier STL-gerundete Bohrungen teilen ihre zusätzliche Kegelfrage.
 
     ``plate_holes.stl`` ist 80 x 50 x 8 mm mit vier Bohrungen zu 5,2 mm. Sie
     sind deckungsgleich bis auf eine Verschiebung, tragen also dieselbe
-    Kennzahl, und die leere Kegelantwort der ersten gilt für alle vier. Das ist
-    zugleich die Probe darauf, dass der Hebel überhaupt greifen **kann**: Wären
-    es vier Klassen, prüfte dieser Test nichts.
+    Kennzahl. Ihre Originalecken sind gröber gerundet als EPS_GEOM; deshalb
+    wird ein Kegel einmal gefragt und die leere Antwort danach geteilt.
     """
     mesh = plate()
     body = mesh.raw
@@ -477,6 +476,71 @@ def _wall(radius: float = 5.0, spread: float = 0.1) -> CylinderFit:
         inward=False,
         spread=spread,
     )
+
+
+@pytest.mark.parametrize("angle", [0.0, 37.0, 90.0])
+@pytest.mark.parametrize("radius, expected", [(40.0, True), (80.0, False)])
+def test_the_size_proof_uses_the_body_and_not_its_rotated_world_box(
+    angle: float, radius: float, expected: bool
+) -> None:
+    """Eine gedrehte Weltbox macht keinen zuvor zu großen Kreis passend (RM-210)."""
+    body = trimesh.creation.box(extents=(120.0, 100.0, 10.0))
+    matrix = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))
+    body.apply_transform(matrix)
+    direction = matrix[:3, :3] @ np.array([0.0, 0.0, 1.0])
+    fit = CylinderFit(
+        axis=tuple(float(value) for value in direction),
+        centre=(0.0, 0.0, 0.0),
+        radius=radius,
+        residual=0.0,
+        inward=False,
+        spread=0.0,
+        radial_min=radius,
+        radial_max=radius,
+    )
+
+    assert features_module._fits_in_the_body(MeshData.of(body), fit) is expected
+
+
+@pytest.mark.parametrize("angle", [0.0, 37.0, 90.0])
+@pytest.mark.parametrize("width, narrow", [(0.24, False), (0.18, True)])
+@pytest.mark.parametrize("subdivide", [False, True])
+def test_a_small_faces_width_survives_rotation_and_subdivision(
+    angle: float, width: float, narrow: bool, subdivide: bool
+) -> None:
+    """Vier Flächen am Bohrerhalter kippten allein an der Weltboxdiagonale (RM-210)."""
+    vertices = np.array([[0.0, 0.0, 0.0], [0.6, 0.0, 0.0], [0.6, width, 0.0], [0.0, width, 0.0]])
+    faces = np.array([[0, 1, 2], [0, 2, 3]])
+    if subdivide:
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    body.apply_transform(
+        trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))
+    )
+    patch = list(range(len(body.faces)))
+
+    assert features_module._a_sliver(body, patch) is narrow
+    area, reach = features_module._area_and_reach(body, patch)
+    assert area == pytest.approx(0.6 * width, abs=units.EPS_GEOM)
+    assert reach == pytest.approx(math.hypot(0.6, width), abs=units.EPS_GEOM)
+
+
+@pytest.mark.parametrize("flat", [False, True])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_the_point_diameter_agrees_with_all_actual_pairs(flat: bool, reverse: bool) -> None:
+    """Die Boxen des Suchbaums sind nur Schranken; auch innere Ecken können gewinnen."""
+    points = np.random.default_rng(37).normal(size=(257, 3))
+    if flat:
+        points[:, 2] = 0.0
+    if reverse:
+        points = points[::-1].copy()
+    expected = max(math.dist(first, second) for first in points for second in points)
+    matrix = trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 2.0, 3.0))
+    turned = points @ matrix[:3, :3].T + (12.5, -4.0, 80.0)
+
+    assert features_module._point_diameter(points) == pytest.approx(expected, abs=units.EPS_GEOM)
+    assert features_module._point_diameter(turned) == pytest.approx(expected, abs=units.EPS_GEOM)
+    assert features_module._point_diameter(points, stop_after=expected / 2.0) > expected / 2.0
 
 
 def _joined_by(monkeypatch: pytest.MonkeyPatch, answers: dict[frozenset[str], Any]) -> None:
@@ -935,3 +999,86 @@ def test_moving_a_bore_keeps_the_layout_of_the_rest_of_the_body(profile: Any) ->
     assert np.array_equal(
         np.asarray(moved.raw.triangles)[kept], np.asarray(mesh.raw.triangles)[match[kept]]
     ), "jedes übernommene Dreieck beginnt an der Ecke seines Vorbilds"
+
+
+@pytest.mark.parametrize("turn", [37.0, 90.0])
+@pytest.mark.parametrize("scale", [0.5, 2.0])
+def test_the_cone_solver_sees_the_same_local_problem_after_a_rigid_move(turn, scale):
+    """Die Löseraufgabe hängt an der Form, nicht an Weltachsen und Weltbox."""
+    from app.core.geom.transform import rotation_about
+
+    source = trimesh.creation.cone(radius=5.0, height=12.0, sections=32)
+    source.apply_scale(scale)
+    patch = np.flatnonzero(np.asarray(source.face_normals)[:, 2] > 0.0).tolist()
+    matrix = rotation_about((1.0, 2.0, 3.0), (0.0, 0.0, 0.0), turn)
+    matrix[:3, 3] = (13.7, -4.2, 3.0)
+    target = source.copy()
+    target.apply_transform(matrix)
+    plans = []
+    for body, faces in ((source, patch), (target, patch[::-1])):
+        forget_cache()
+        support = features_module._surface_support(body, faces)
+        assert support is not None
+        plan = features_module._cone_plan(support, features_module.ROUND_WALL_TOLERANCE, None)
+        assert plan is not None
+        plans.append(plan)
+        fit = features_module.fit_cone(body, faces)
+        assert fit is not None and fit.good
+        assert fit.half_angle == pytest.approx(math.degrees(math.atan(5.0 / 12.0)), abs=1e-7)
+    before, after = plans
+    assert after.scale == pytest.approx(before.scale, rel=1e-12)
+    assert after.start() == pytest.approx(before.start(), abs=1e-10)
+    assert after.solving == pytest.approx(before.solving, abs=1e-10)
+    assert after.initial_axis == pytest.approx(before.initial_axis, abs=1e-12)
+    assert after.first == pytest.approx(before.first, abs=1e-12)
+    assert after.second == pytest.approx(before.second, abs=1e-12)
+
+
+@pytest.mark.parametrize("turn", [0.0, 37.0])
+@pytest.mark.parametrize("scale", [0.5, 2.0])
+def test_a_proven_cylinder_does_not_depend_on_a_competing_cone_solver(monkeypatch, turn, scale):
+    """Originalecken und Normalen belegen den Zylinder vor einem beliebigen Kegeltal."""
+    from app.core.geom.transform import rotation_about
+
+    raw = trimesh.creation.cylinder(radius=5.0 * scale, height=12.0 * scale, sections=64)
+    raw.apply_transform(rotation_about((1.0, 2.0, 3.0), (0.0, 0.0, 0.0), turn))
+    mesh = MeshData.of(raw)
+
+    def unnecessary_cone(*args, **kwargs):
+        pytest.fail("a cylinder already proved by its actual contour needs no cone solver")
+
+    forget_cache()
+    monkeypatch.setattr(features_module, "_cone_plan", unnecessary_cone)
+    fitted = features_module._fitted(mesh)
+    assert len(fitted.cylinders) == 1
+    assert not fitted.cones
+    cylinder, patch = fitted.cylinders[0]
+    assert cylinder.radius == pytest.approx(5.0 * scale, abs=1e-9)
+    assert len(patch) == 128
+
+
+@pytest.mark.parametrize("turn", [0.0, 37.0])
+def test_a_short_shallow_cone_is_not_replaced_by_a_close_cylinder(turn):
+    """Ein aufgelöster Kegel behält seinen kleineren Formfehler auch bei kurzer Wand."""
+    from app.core.geom.transform import rotation_about
+
+    angle, height, radius = 5.5, 0.1, 5.0
+    upper = radius - height * math.tan(math.radians(angle))
+    angles = np.linspace(0.0, math.tau, 64, endpoint=False)
+    vertices = np.vstack(
+        [
+            np.column_stack((radius * np.cos(angles), radius * np.sin(angles), np.zeros(64))),
+            np.column_stack((upper * np.cos(angles), upper * np.sin(angles), np.full(64, height))),
+        ]
+    )
+    faces = []
+    for index in range(64):
+        following = (index + 1) % 64
+        faces.extend(((index, following, index + 64), (following, following + 64, index + 64)))
+    raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    raw.apply_transform(rotation_about((1.0, 2.0, 3.0), (0.0, 0.0, 0.0), turn))
+    forget_cache()
+    fitted = features_module._fitted(MeshData.of(raw))
+    assert len(fitted.cones) == 1
+    assert not fitted.cylinders
+    assert fitted.cones[0][0].half_angle == pytest.approx(angle, abs=1e-8)

@@ -854,6 +854,10 @@ def evaluated_operation(
         lambda *_args: pytest.fail("unerwartete Zuordnungsfrage"),
         findings,
         previous_bounds=source.mesh.bounds,
+        source_mesh=source.mesh,
+        transform=result.transform,
+        touches_features=spec.touches_features,
+        continuations=result.feature_continuations[0] if result.feature_continuations else (),
     )
     return changed, findings
 
@@ -1746,3 +1750,18 @@ def recipe_with_halter(width_default: float, profile: Profile) -> Any:
         features={"top": "face_top"},
         profile=profile,
     )
+
+
+def pbr_glb() -> bytes:
+    """Ein GLB-Quader 20 × 16 × 12 mm mit roter und blauer PBR-Textur."""
+    from PIL import Image
+
+    body = trimesh.creation.box(extents=(20.0, 16.0, 12.0))
+    span = np.ptp(body.vertices[:, :2], axis=0)
+    uv = (body.vertices[:, :2] - body.vertices[:, :2].min(axis=0)) / span
+    image = Image.new("RGB", (2, 2))
+    image.putdata([(255, 0, 0), (0, 0, 255), (255, 0, 0), (0, 0, 255)])
+    material = trimesh.visual.material.PBRMaterial(name="Rot und Blau", baseColorTexture=image)
+    body.visual = trimesh.visual.TextureVisuals(uv=uv, material=material)
+    value = trimesh.Scene({"Farbig": body}).export(file_type="glb")
+    return value if isinstance(value, bytes) else value.encode("utf-8")

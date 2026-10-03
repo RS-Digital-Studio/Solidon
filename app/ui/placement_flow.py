@@ -12,6 +12,7 @@ import threading
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import replace
 from itertools import pairwise, product
 from typing import Any, Final, Protocol, cast, runtime_checkable
 
@@ -55,6 +56,7 @@ from app.core.log import get_logger
 from app.core.perceive.features import copy_with_answers
 from app.core.registry import OperationSpec
 from app.core.scene import placement
+from app.core.scene.cancel import CancelSignal
 from app.core.sketch.profile import strictly_crossing
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
@@ -592,6 +594,19 @@ def for_a_worker(mesh: Any) -> Any:
         while len(_worker_copies) > WORKER_COPIES_KEPT:
             _worker_copies.popitem(last=False)
     return copy
+
+
+def surface_object_for_worker(source: SceneObject) -> SceneObject:
+    """Eine Flächenkopie vor dem Arbeiter bilden; exakte Träger bleiben exakt."""
+    from app.core.brep.kernel import Solid
+
+    mesh = source.mesh
+    copy = (
+        mesh.with_triangle_slots(tuple(mesh.slot_indices))
+        if isinstance(mesh, Solid)
+        else for_a_worker(mesh)
+    )
+    return replace(source, mesh=copy)
 
 
 def _answers_at_once(mesh: Any) -> bool:
@@ -1534,6 +1549,8 @@ class PlacementFlow(QObject):
         self._interpreting_fields = False
         self._reference_pick: int | None = None
         self._held_references: tuple[placement.EdgeReference, ...] | None = None
+        self._binding_cancel: CancelSignal | None = None
+        self._had_binding = False
         self._held_centre = ""
         self._reference_message = ""
         self._typed_off_surface = False
@@ -2057,7 +2074,8 @@ class PlacementFlow(QObject):
             self._redraw_held = True
             try:
                 self._request_tool(at_once=True)
-                self._begin_at_feature()
+                if not self._begin_bound_surface():
+                    self._begin_at_feature()
             finally:
                 self._redraw_held = False
         else:
@@ -2074,6 +2092,8 @@ class PlacementFlow(QObject):
                 self._showing_input = True
                 self.viewport.show_scene(result)
                 self._request_tool()
+                if self._begin_bound_surface():
+                    return
                 if self._measure_group is not None:
                     self._begin_at_bore_step()
 
@@ -2245,6 +2265,9 @@ class PlacementFlow(QObject):
         self.dialog.valuesChanged.emit()
 
     def _stop(self) -> None:
+        if self._binding_cancel is not None:
+            self._binding_cancel.cancel()
+            self._binding_cancel = None
         self.active = False
         self._release_frames()
         self.viewport.clear_placement_resume(self._resume)
@@ -2884,6 +2907,7 @@ class PlacementFlow(QObject):
                     previous_object = self._object_id
                     self._object_id = object_id
                     self._distance_valid = True
+                    self._position_edited = True
                     if previous_object != object_id:
                         self._request_tool()
                     self._set_values()
@@ -2907,6 +2931,97 @@ class PlacementFlow(QObject):
                 )
 
         self.session.placement_async(on_the_copy(mesh, compute), done, failed)
+
+    def _begin_bound_surface(self) -> bool:
+        """Gespeicherte Kanten am historischen Träger wiederverwenden, ohne sie neu zu wählen."""
+        from app.ui.session import _no_questions
+
+        spec = self.spec_of()
+        values = dict(self.dialog.values())
+        fields = placement_fields(spec.params)
+        if not values.get(fields["surface_anchor"]) or self._result is None:
+            return False
+        stamp, epoch = self._serial, self._epoch
+        project = self.session.project
+        originals = self._result.scene.objects
+        objects: dict[str, SceneObject] = {}
+        parameters = dict(project.document.parameters)
+        token = CancelSignal()
+        if self._binding_cancel is not None:
+            self._binding_cancel.cancel()
+        self._binding_cancel = token
+        self._seat_waits = stamp
+        self._seated_at_feature = True
+        refusal: list[str] = []
+
+        def compute() -> placement.SurfaceBinding:
+            resolved = expressions.resolve_params(values, expressions.resolve(parameters))
+            return placement.bind_surface(
+                spec,
+                resolved,
+                objects,
+                {},
+                ask=_no_questions,
+                announce=None,
+                cancelled=token,
+            )
+
+        def current() -> bool:
+            return (
+                isValid(self)
+                and not self._disposed
+                and self.active
+                and stamp == self._serial
+                and epoch == self._epoch
+                and self.session.project is project
+            )
+
+        def ready(bound: placement.SurfaceBinding | None) -> None:
+            if not current():
+                return
+            if bound is None:
+                failed(None)
+                return
+            self._seat_waits = None
+            source = objects.get(bound.source_id) if bound.source_id is not None else None
+            if source is None or bound.placed is None or bound.prepared is None:
+                failed(None)
+                return
+            self._prepared, self._surface = bound.prepared, bound.placed
+            self._had_binding = True
+            self._object_id = source.id
+            self._prepared_mesh = originals[source.id].mesh
+            self._patch_faces = frozenset(bound.placed.face_indices)
+            self._held_references = bound.placed.edges
+            self._own_mouth = None
+            self._seated_by_default = True
+            self._distance_valid = True
+            self._settle()
+
+        def failed(_detail: Any) -> None:
+            if current():
+                self._seat_waits = None
+                if isinstance(_detail, AppError):
+                    refusal[:] = [refusal_sentence(_detail)]
+                self._invalid(
+                    " ".join([*refusal, str(tr("Andere Fläche wählen oder die Werte bearbeiten."))])
+                )
+
+        # Geteilte Netzkopien immer in derselben Reihenfolge sperren, auch wenn
+        # mehrere Objekte dieselbe Geometrie tragen. Exakte Kopien sind ungeteilt.
+        guarded: Callable[[], Any] = compute
+        held: set[int] = set()
+        ordered = sorted(originals.items(), key=lambda item: id(as_mesh_data(item[1].mesh).raw))
+        for key, original in ordered:
+            source = surface_object_for_worker(original)
+            objects[key] = source
+            if id(source.mesh) not in held:
+                held.add(id(source.mesh))
+                # Gleich festhalten: Die nächste Kopie kann die älteste aus dem
+                # begrenzten Merker verdrängen, deren Arbeiter aber noch ausläuft.
+                guarded = on_the_copy(source.mesh, guarded)
+        self.session.placement_async(guarded, ready, failed, failed)
+        return True
 
     def _begin_at_bore_step(self) -> None:
         """Die ursprüngliche Bohrstelle ausschließlich am historischen Eingang ablesen."""
@@ -3326,6 +3441,22 @@ class PlacementFlow(QObject):
             )
             entered = self.dialog.values()
             spec = self.spec_of()
+            fields = placement_fields(spec.params)
+            anchor = fields.get("surface_anchor", "")
+            if source is not None and anchor in entered:
+                if entered[anchor] and not self._position_edited:
+                    # Ein anderes Maß am alten Schritt löst dessen gespeicherten
+                    # Flächenbezug und Ausdrücke nicht durch eine neue Platzierung ab.
+                    return True
+                bound = placement.bound_surface_values(spec, source, self._surface)
+                if bound[anchor] == entered[anchor]:
+                    # Ein neuer Durchmesser ist keine neue Positionsgeste.
+                    for name in ("surface_distance_1", "surface_distance_2"):
+                        bound[fields[name]] = entered[fields[name]]
+                values.update(bound)
+                self._had_binding = True
+                if "surface_seat" in entered and self._position_edited:
+                    values["surface_seat"] = "point_on_surface"
             measured_drill = spec.name in placement.DRILL_OPERATIONS and bool(
                 entered.get("measured_frame")
             )
@@ -3516,6 +3647,7 @@ class PlacementFlow(QObject):
             # Gegenteil. Der Zug geht verloren; der Körper bleibt, wo er ist.
             return
         values = placement_values_of(np.asarray(matrix, dtype=float) @ before)
+        values.update(placement.clear_surface_binding(spec))
         self._updating = True
         try:
             self.dialog.take_placement(values)
@@ -3532,6 +3664,18 @@ class PlacementFlow(QObject):
             self._accept_pending = False
             self.refresh_available()
             if self.active:
+                fields = placement_fields(self.spec_of().params)
+                if self.dialog.values().get(fields["surface_anchor"]):
+                    self._serial += 1
+                    self._position_edited = False
+                    self._surface = None
+                    self._request_tool()
+                    self._begin_bound_surface()
+                    return
+                if self._had_binding:
+                    self._had_binding = False
+                    self.back()
+                    return
                 historical_measures = (
                     self._change_op is not None and self._measure_group is not None
                 )
@@ -5360,17 +5504,35 @@ class PlacementFlow(QObject):
                 # Die Abstandsränder der belegten Plätze einmal bilden, nicht je
                 # Kandidat und Platz neu (RM-232) — dieselbe Reihenfolge wie
                 # vorher, x außen, y innen.
-                spread = [rect.adjusted(-SPACE, -SPACE, SPACE, SPACE) for rect in taken]
-                admissible = []
+                candidates = []
                 for x in xs:
                     if not left <= x <= right:
                         continue
                     for y in ys:
                         if not top <= y <= bottom:
                             continue
-                        candidate = QRect(x, y, width, height)
-                        if not any(candidate.intersects(rect) for rect in spread):
-                            admissible.append(candidate)
+                        candidates.append(QRect(x, y, width, height))
+                spread = [rect.adjusted(-SPACE, -SPACE, SPACE, SPACE) for rect in taken]
+                admissible = [
+                    rect
+                    for rect in candidates
+                    if not any(rect.intersects(other) for other in spread)
+                ]
+                if not admissible and widget is self._measure_box and body is not None:
+                    # Eine hohe Fachkarte passt mitunter an keiner Seite neben
+                    # den Körper. Nur sie darf dann über dessen Rand stehen;
+                    # die kurzen Maßfelder behalten ihre freien Plätze und
+                    # Zuordnungen. Setzpunkt, Griff und andere Felder bleiben frei.
+                    spread = [
+                        rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+                        for rect in taken
+                        if rect is not body
+                    ]
+                    admissible = [
+                        rect
+                        for rect in candidates
+                        if not any(rect.intersects(other) for other in spread)
+                    ]
                 if not admissible:
                     return None
 
@@ -5513,6 +5675,12 @@ class PlacementFlow(QObject):
         """Das bestellte Bild zeichnen, falls es den Fluss noch gibt."""
         if not self._disposed and isValid(self):
             self.viewport._draw()
+
+    def flush_frame(self) -> None:
+        """Fertige Maße vor Ende der Auswahlrunde in dieselbe Bildbestellung aufnehmen."""
+        if self._frame.isActive():
+            self._frame.stop()
+            self._draw_now()
 
 
 def _same_direction(

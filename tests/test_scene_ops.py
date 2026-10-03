@@ -517,7 +517,15 @@ def test_a_ring_that_leaves_the_build_volume_is_refused_with_advice(
             OperationDraft(
                 op="pattern",
                 inputs=("obj_1",),
-                params={"kind": "circular", "count": 8, "angle": 360.0, "axis": "z"},
+                params={
+                    "kind": "circular",
+                    "count": 8,
+                    "angle": 360.0,
+                    "axis": "z",
+                    "cx": 0.0,
+                    "cy": 0.0,
+                    "cz": 0.0,
+                },
             )
         ],
     )
@@ -538,7 +546,9 @@ def test_a_ring_that_leaves_the_build_volume_is_refused_with_advice(
             OpContext(
                 scene=result.scene,
                 inputs=[result.scene.objects["obj_1"]],
-                params=spec.params(kind="circular", count=8, angle=360.0, axis="z"),
+                params=spec.params(
+                    kind="circular", count=8, angle=360.0, axis="z", cx=0.0, cy=0.0, cz=0.0
+                ),
                 profile=profile,
                 quality="fine",
                 seed=None,

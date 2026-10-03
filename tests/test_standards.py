@@ -64,3 +64,20 @@ def test_valid_leading_dimensions_keep_numeric_order_and_name_ties(tmp_path: Pat
     )
 
     assert tuple(standards.load(path).bearings) == ("first", "second", "large")
+
+
+@pytest.mark.parametrize("value", ['"false"', "0", "[]"])
+def test_profile_taper_requires_a_boolean(tmp_path: Path, value: str) -> None:
+    """Die Zeichenkette false darf keine konische Nutfeder einschalten."""
+    path = tmp_path / "standards.toml"
+    source = standards._DATA_FILE.read_text(encoding="utf-8")
+    assert "taper_to_slot = true" in source
+    path.write_text(
+        source.replace("taper_to_slot = true", f"taper_to_slot = {value}", 1), encoding="utf-8"
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        standards.load(path)
+
+    assert caught.value.field.endswith("taper_to_slot_boolean")
+    assert caught.value.suggestions

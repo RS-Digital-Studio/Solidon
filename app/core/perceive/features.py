@@ -18,6 +18,7 @@ Merkmal, und der Steckbrief sagt, wie viele gefunden wurden.
 from __future__ import annotations
 
 import hashlib
+import heapq
 import itertools
 import math
 import struct
@@ -1650,9 +1651,22 @@ def moved_twin(source: MeshData, moved: MeshData, transform: Any) -> bool:
     von der Auswertung für die örtliche Nachmessung eines großen Körpers
     (Review R6) — eine Auskunft, nicht zwei.
     """
+    matrix = np.asarray(transform, dtype=float)
+    return bool(
+        remembered(
+            "moved_twin",
+            moved.raw,
+            (),
+            lambda: _moved_twin_checked(source, moved, matrix),
+            extra=(_mesh_key(source), _mesh_key(moved), matrix.shape, matrix.tobytes()),
+        )
+    )
+
+
+def _moved_twin_checked(source: MeshData, moved: MeshData, matrix: Any) -> bool:
+    """Der vollständige Geometriebeleg; alle Verbraucher teilen dieselbe Antwort."""
     from app.core.geom.transform import is_rigid
 
-    matrix = np.asarray(transform, dtype=float)
     if not is_rigid(matrix):
         return False
     source_faces = np.asarray(source.raw.faces)
@@ -2554,19 +2568,19 @@ def _fitted(
             if _face_count(body, patch) < MIN_PATCH_FACES:
                 return False
             ball: SphereFit | None = None
-            # **Die Normalen entscheiden, welche Form es ist — nicht der
-            # Rückstand.** Der naheliegende Weg wäre, zuerst einen Zylinder
-            # einzupassen und den Kegel als Auffang zu nehmen. Er ist falsch, und
-            # der Fall, der es zeigt, ist ein aufgesetzter Kegel: Jede seiner
-            # Facetten ist **ein** Dreieck von der Grundfläche zur Spitze, deren
-            # Schwerpunkt liegt auf einem Drittel der Höhe — und damit liegen alle
-            # Schwerpunkte auf **einem Kreis**. Die Zylindereinpassung rechnet über
-            # die Schwerpunkte und findet einen tadellosen Zylinder, Rückstand
-            # 0,0000, an einem Kegel mit 31 Grad. Ein Rückstand kann das nicht
-            # sehen; die Normalen können es: Beim Zylinder stehen sie senkrecht auf
-            # der Achse, beim Kegel um ``sin`` des Halbwinkels daneben.
-            #
-            # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
+            # Ein bis zur Geometriegenauigkeit belegter Zylinder braucht keinen
+            # konkurrierenden Kegellauf. Bei einer nur angenäherten Zylinderhaut
+            # wird der Kegel weiterhin gefragt: Eine kurze, flache Verjüngung
+            # kann innerhalb der Wandtoleranz auch auf einen Zylinder passen.
+            fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+            if check_cancelled is not None:
+                check_cancelled()
+            cylinder = (
+                fit if fit is not None and fit.good and _fits_in_the_body(mesh, fit) else None
+            )
+            if cylinder is not None and _cylinder_precludes_a_cone(body, cylinder, patch):
+                found.append((cylinder, patch))
+                return True
             #
             # **Ein Muster fragt dieselbe Frage hundertfach.** Die Streben eines
             # Gitters sind deckungsgleich, und ein Kegelwinkel ändert sich unter
@@ -2585,28 +2599,32 @@ def _fitted(
                     no_cone_here.add(shape)
             if check_cancelled is not None:
                 check_cancelled()
-            if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
-                if cone.good and _cone_is_recognisable(
-                    body, cone, patch, check_cancelled=check_cancelled
-                ):
-                    ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
-                    if check_cancelled is not None:
-                        check_cancelled()
-                    if not _a_ball_fits_far_better(cone, ball):
-                        cones.append((cone, patch))
-                        return True
-                # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
-                # Normalen, und daran ändert ein schlechter Rückstand nichts. Die
-                # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
-                # hat einen Kegelwinkel, ohne ein Kegel zu sein.
-            else:
-                fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+            if (
+                cone is not None
+                and cone.half_angle >= CONE_MIN_ANGLE
+                and cone.good
+                and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
+            ):
+                ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
                 if check_cancelled is not None:
                     check_cancelled()
-                if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
-                    found.append((fit, patch))
+                if not _a_ball_fits_far_better(cone, ball):
+                    # Beide vollständigen Nachweise lesen dieselbe Originalhaut.
+                    # Ein zusätzlicher Freiheitsgrad verdrängt den Zylinder nur,
+                    # wenn der Kegel diese Haut mindestens ebenso genau trifft.
+                    if (
+                        cylinder is not None
+                        and cylinder.fit_error is not None
+                        and cone.fit_error is not None
+                        and cylinder.fit_error < cone.fit_error
+                    ):
+                        found.append((cylinder, patch))
+                    else:
+                        cones.append((cone, patch))
                     return True
-
+            if cylinder is not None:
+                found.append((cylinder, patch))
+                return True
             # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
             # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
             # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
@@ -2999,12 +3017,12 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     ganze Punkt: nach der dünnsten Kante gemessen fielen 92 von 165 Bohrungen
     durch, davon die meisten zu Recht vorhanden.
 
-    **„Quer zur Achse" heißt dabei die weitere der beiden übrigen Richtungen,
-    nicht die engere.** Ein Hüllquader ist nicht der Körper: Ein L-Profil ist
-    in einer Richtung 160 mm breit und trägt trotzdem nirgends ein Loch dieser
-    Größe. Die Schranke ist deshalb bewusst die lässigere von beiden — sie
-    fängt den Widerspruch (breiter als das ganze Teil) und maßt sich kein
-    Urteil darüber an, wo im Teil das Merkmal sitzt.
+    Die Diagonale des kleinsten Rechtecks um die quer projizierte Körperhülle
+    ist eine obere Größenschranke. Sie folgt dem Körper und nicht den
+    Weltachsen: Eine gedrehte Weltbox wurde größer und ließ am Organizer
+    plötzlich vier Rundungen mit Ø277 zu. Wo bereits zwei wirkliche Ecken
+    weit genug auseinanderliegen, steht dieselbe Antwort ohne Hüllrechnung
+    fest. Das sagt nichts darüber, wo im Teil das Merkmal sitzt.
 
     **Warum es das braucht.** Die Einpassung ist geometrisch nicht falsch: ein
     sanft gebogener Arm *ist* örtlich ein Zylinder mit großem Radius, und der
@@ -3020,26 +3038,35 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     Zapfen zählen dort), aber ein Merkmal, das nicht in seinen Körper passt,
     gehört in keine Liste und in kein Kontextmenü.
     """
-    import numpy as np
-
-    size = mesh.bounds.size
-    axis = np.abs(np.asarray(fit.axis, dtype=float))
-    if float(np.max(axis)) <= EPS_GEOM:
+    axis = np.asarray(fit.axis, dtype=float)
+    if float(np.max(np.abs(axis))) <= EPS_GEOM:
         return True
-    if fit.radial_min is not None:
-        # Das Umkreismaß kann breiter sein als seine facettierte Außenhaut.
-        # Der Größenfilter vergleicht deshalb das wirkliche radiale Band
-        # mit einer oberen Schranke der Körperausdehnung quer zur Fitachse.
-        # Die projizierte Boxdiagonale schließt auch gedrehte Halbmäntel ein;
-        # einzelne Weltachsenbreiten können deren Durchmesser unterschätzen.
-        first, second = _plane_basis(np.asarray(fit.axis, dtype=float))
-        across = math.hypot(
-            float(np.asarray(size) @ np.abs(first)), float(np.asarray(size) @ np.abs(second))
-        )
-        return fit.radial_min * 2.0 <= across + EPS_GEOM
-    along = int(np.argmax(axis))
-    across = max(size[index] for index in range(3) if index != along)
-    return fit.radius * 2.0 <= across + EPS_GEOM
+    radius = fit.radius if fit.radial_min is None else fit.radial_min
+    first, second = _plane_basis(axis)
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    extreme: np.ndarray = remembered(
+        "body_extreme_points",
+        mesh.raw,
+        [],
+        lambda: vertices[np.r_[vertices.argmin(axis=0), vertices.argmax(axis=0)]].copy(),
+    )
+    relative = extreme - extreme[0]
+    flat = np.column_stack((relative @ first, relative @ second))
+    distance = np.linalg.norm(flat[:, None, :] - flat[None, :, :], axis=2)
+    if radius * 2.0 <= float(distance.max()) + EPS_GEOM:
+        return True
+
+    from shapely import multipoints
+
+    relative = vertices - extreme[0]
+    flat = np.column_stack((relative @ first, relative @ second))
+    rectangle = multipoints(flat).minimum_rotated_rectangle
+    if rectangle.geom_type == "Polygon":
+        corners = np.asarray(rectangle.exterior.coords, dtype=float)
+        across = float(np.linalg.norm(corners[2] - corners[0]))
+    else:
+        across = float(rectangle.length)
+    return radius * 2.0 <= across + EPS_GEOM
 
 
 #: Ein Dreieck, das mehr Ringkandidaten trägt, als die Karte Plätze hat.
@@ -3799,18 +3826,23 @@ def _a_sliver_read(body: trimesh.Trimesh, patch: list[int]) -> bool:
     """Der Rumpf von :func:`_a_sliver` — die Antwort merkt sich die Hülle."""
     if not patch:
         return True
-    area, reach = _area_and_reach(body, patch)
+    area, reach = _area_and_reach(body, patch, minimum_width=MIN_SURFACE_WIDTH)
     if reach <= EPS_GEOM:
         return True
     return area / reach < MIN_SURFACE_WIDTH
 
 
-def _area_and_reach(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[float, float]:
-    """Fläche und Raumdiagonale eines Flecks; ihr Quotient ist seine Breite.
+def _area_and_reach(
+    body: trimesh.Trimesh, patch: Sequence[int], *, minimum_width: float | None = None
+) -> tuple[float, float]:
+    """Fläche und größter Abstand wirklicher Fleckecken; ihr Quotient ist seine Breite.
 
     Die Messung hinter :func:`_a_sliver` — und hinter der Zählregel in
     :func:`_flat_counts`, die aus derselben Breite den Radius liest, auf dem
-    ein schmaler Streifen läge. Eine Rechnung für beide Fragen.
+    ein schmaler Streifen läge. Eine Weltboxdiagonale ist kein Abstand im
+    Fleck: Sie wächst beim Drehen und ließ kleine ebene Seiten verschwinden.
+    Mit ``minimum_width`` genügen beweisende obere oder untere Schranken;
+    ohne Grenze wird der größte Abstand vollständig gemessen.
     """
     faces = np.asarray(patch, dtype=int)
     area = float(body.area_faces[faces].sum())
@@ -3821,9 +3853,61 @@ def _area_and_reach(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[float,
     # 17 ms für die Ecken — je Fleck. Die Vorschau von *Kanten verfeinern* auf
     # 0,04 mm am Spielwürfel stand damit über zehn Minuten in dieser Zeile
     # (Durchsicht 0.5.1, Stapelabzug unter Last).
-    corners = np.asarray(body.vertices)[np.asarray(body.faces)[faces].reshape(-1)]
-    reach = float(np.linalg.norm(corners.max(axis=0) - corners.min(axis=0)))
-    return area, reach
+    corners = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[faces])]
+    upper = float(np.linalg.norm(corners.max(axis=0) - corners.min(axis=0)))
+    if minimum_width is not None and area >= minimum_width * upper:
+        return area, upper
+    stop_after = None if minimum_width is None else area / minimum_width
+    return area, _point_diameter(corners, stop_after=stop_after)
+
+
+def _point_diameter(points: np.ndarray, *, stop_after: float | None = None) -> float:
+    """Größter Eckabstand; der Suchbaum verwirft nur nachweislich kürzere Paare.
+
+    Die Boxen sind ausschließlich obere Schranken, nie das Messergebnis.
+    Je Blattpaar werden die tatsächlichen Punkte verglichen. So braucht
+    auch eine fein unterteilte schmale Seite kein quadratisch großes Feld.
+    ``stop_after`` erlaubt dem Breitenentscheid einen frühen Beweis.
+    """
+    extremes = points[np.r_[points.argmin(axis=0), points.argmax(axis=0)]]
+    best = float(np.linalg.norm(extremes[:, None, :] - extremes[None, :, :], axis=2).max())
+    if stop_after is not None and best > stop_after:
+        return best
+    tree = cKDTree(points)
+    bounds: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+
+    def bound(first: Any, second: Any) -> float:
+        """Obere Abstandsschranke zwischen zwei Teilmengen des Suchbaums."""
+        for node in (first, second):
+            if id(node) not in bounds:
+                selected = points[node.indices]
+                bounds[id(node)] = selected.min(axis=0), selected.max(axis=0)
+        low, high = bounds[id(first)]
+        other_low, other_high = bounds[id(second)]
+        span = np.maximum(np.abs(high - other_low), np.abs(other_high - low))
+        return float(np.linalg.norm(span))
+
+    serial = itertools.count()
+    pending: list[tuple[float, int, Any, Any]] = [
+        (-bound(tree.tree, tree.tree), next(serial), tree.tree, tree.tree)
+    ]
+    while pending:
+        negative, _order, first, second = heapq.heappop(pending)
+        if -negative <= best:
+            break
+        if first.split_dim < 0 and second.split_dim < 0:
+            delta = points[first.indices][:, None, :] - points[second.indices][None, :, :]
+            best = max(best, float(np.linalg.norm(delta, axis=2).max()))
+            if stop_after is not None and best > stop_after:
+                return best
+            continue
+        if first.split_dim < 0 or (second.split_dim >= 0 and second.children > first.children):
+            first, second = second, first
+        for child in (first.lesser, first.greater):
+            upper = bound(child, second)
+            if upper > best:
+                heapq.heappush(pending, (-upper, next(serial), child, second))
+    return best
 
 
 def _too_small_to_make(size: float) -> bool:
@@ -6559,6 +6643,25 @@ def _fit_cylinder_measured(
     )
 
 
+def _cylinder_precludes_a_cone(
+    body: trimesh.Trimesh, fit: CylinderFit, patch: Sequence[int]
+) -> bool:
+    """Ein aufgelöster Zylinder braucht keine weitere Kegelnäherung.
+
+    Die übliche Wandtoleranz allein genügt nicht: Eine kurze Verjüngung kann
+    innerhalb davon liegen. Hier müssen sowohl die Originalecken als auch die
+    senkrechten Mantelnormalen bis zur jeweiligen Geometriegenauigkeit stimmen.
+    """
+    return (
+        fit.fit_error is not None
+        and fit.fit_error <= EPS_GEOM
+        and bool(
+            np.max(np.abs(np.asarray(body.face_normals)[np.asarray(patch)] @ np.asarray(fit.axis)))
+            <= units.exact_sin_degrees(EPS_ANGLE)
+        )
+    )
+
+
 def radial_cylinder(
     body: trimesh.Trimesh,
     patch: list[int],
@@ -6993,6 +7096,7 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
 #: jemand geprüft hat; ``test_features`` hält beide Mengen vollständig.
 BODY_BOUND_ANSWERS: Final[frozenset[str]] = frozenset(
     {
+        "body_extreme_points",
         "one_body",
         "merged_copy",
         "surface_index",
@@ -7042,6 +7146,7 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "hole_is_clear",
         "hole_has_separate_contents",
         "has_own_body",
+        "moved_twin",
         "voids",
     }
 )
@@ -7748,6 +7853,21 @@ def _read_surface_support(
             ridges[index] = False
             round_corners[index] = False
     directions = np.cross(first, second)
+    two_planes = ridges & ~round_corners
+    if bool(two_planes.any()):
+        # STL-Rundung gibt den Dreiecken derselben Facette geringfügig
+        # verschiedene Normalen. Das erste gelesene Dreieck bestimmte deshalb
+        # eine andere Mantellinie als das letzte (RM-210). Beide belegten
+        # Facettenfamilien tragen ihre flächengewichtete Normale bei.
+        other_agreement = np.einsum("ij,ij->i", repeated, second[reverse])
+        family = agreement >= other_agreement
+        grouped = reverse * 2 + (~family).astype(np.intp)
+        sums = np.zeros((len(points) * 2, 3))
+        np.add.at(sums, grouped, repeated * np.repeat(areas, 3)[:, None])
+        lengths = np.linalg.norm(sums, axis=1)
+        sums /= np.where(lengths > EPS_GEOM**2, lengths, 1.0)[:, None]
+        pairs = sums.reshape(-1, 2, 3)
+        directions[two_planes] = np.cross(pairs[two_planes, 0], pairs[two_planes, 1])
     lengths = np.linalg.norm(directions, axis=1)
     directions /= np.where(lengths > EPS_GEOM, lengths, 1.0)[:, None]
     if check_cancelled is not None:
@@ -7823,9 +7943,89 @@ def _cone_support_points(
 ) -> np.ndarray:
     """Belegte Netzecken und nachgewiesene gemeinsame Mantellinien des Kegels."""
     off_line = np.linalg.norm(np.cross(support.points - apex, support.directions), axis=1)
-    return support.round_corners | (
+    selected: np.ndarray = support.round_corners | (
         _ridge_endpoints(support, check_cancelled) & (off_line <= tolerance)
     )
+    if int(selected.sum()) >= 6:
+        return selected
+    selected |= _circular_rim_points(support, check_cancelled)
+    return selected
+
+
+def _circular_rim_points(
+    support: _SurfaceSupport, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
+    """Originale Kreisbögen am Fleckrand als eigenständiger Maßbeleg.
+
+    An einer kurzen Fase können die Facettenlinien wegen der STL-Rundung
+    keine gemeinsame Spitze belegen. Ein erhaltener Kreisrand trägt seine
+    Maße trotzdem. Gezählt werden nur wirkliche Knicke einer zusammenhängenden
+    Randkette, deren sämtliche Ecken bis auf Schweißtoleranz in einer Ebene
+    und auf einem Kreis liegen. Kollineare Teilungspunkte liefern kein neues
+    Maß. Die übrige Haut und ihre Normalen prüfen weiterhin den ganzen Kegel.
+    """
+    points = support.points
+    selected = np.zeros(len(points), dtype=bool)
+    raw = np.sort(support.corners[:, ((0, 1), (1, 2), (2, 0))].reshape(-1, 2), axis=1)
+    edges, counts = np.unique(raw, axis=0, return_counts=True)
+    edges = edges[counts == 1]
+    if not len(edges):
+        return selected
+    directions = points[edges[:, 1]] - points[edges[:, 0]]
+    directions /= np.maximum(np.linalg.norm(directions, axis=1), EPS_GEOM)[:, None]
+    adjacent: dict[int, list[int]] = {}
+    for number, (one, other) in enumerate(edges):
+        if check_cancelled is not None and number % FIT_SCAN_BLOCK == 0:
+            check_cancelled()
+        adjacent.setdefault(int(one), []).append(number)
+        adjacent.setdefault(int(other), []).append(number)
+    joins = []
+    corners = np.ones(len(points), dtype=bool)
+    smooth = units.exact_cos_degrees(CURVATURE_LIMIT)
+    straight = units.exact_cos_degrees(EPS_ANGLE)
+    for at, incident in adjacent.items():
+        if len(incident) != 2:
+            continue
+        one, other = incident
+        agreement = abs(float(directions[one] @ directions[other]))
+        if agreement >= smooth:
+            joins.append((one, other))
+        if agreement >= straight:
+            corners[at] = False
+    if not joins:
+        return selected
+    groups = trimesh.graph.connected_components(
+        np.asarray(joins), nodes=np.arange(len(edges)), min_len=3, engine="scipy"
+    )
+    tolerance = weld_tolerance(float(np.linalg.norm(np.ptp(points, axis=0))))
+    for group in groups:
+        if check_cancelled is not None:
+            check_cancelled()
+        indices = np.unique(edges[group])
+        indices = indices[corners[indices]]
+        # Drei Punkte bestimmen bereits einen Kreis; der vierte prüft ihn.
+        if len(indices) < 4:
+            continue
+        local = points[indices] - points[indices[0]]
+        along = local[int(np.argmax(np.einsum("ij,ij->i", local, local)))]
+        crossed = np.cross(along, local)
+        normal = crossed[int(np.argmax(np.einsum("ij,ij->i", crossed, crossed)))]
+        length = float(np.linalg.norm(normal))
+        if length <= EPS_GEOM:
+            continue
+        normal /= length
+        if float(np.abs(local @ normal).max()) > tolerance:
+            continue
+        first, second = _plane_basis(normal)
+        flat = np.column_stack((local @ first, local @ second))
+        centre, radius = _fit_circle(flat)
+        if radius <= EPS_GEOM:
+            continue
+        error = np.abs(np.linalg.norm(flat - centre, axis=1) - radius)
+        if float(error.max()) <= tolerance:
+            selected[indices] = True
+    selected &= support.round_corners | support.ridges
+    return selected
 
 
 def _row_lengths(vectors: np.ndarray) -> np.ndarray:
@@ -8004,6 +8204,22 @@ def _screened_fits(
         if check_cancelled is not None:
             check_cancelled()
         support = _surface_support(body, patch, check_cancelled)
+        if support is not None and seen is not None:
+            # Die Klassifikation fragt zuerst den vollständigen Zylindernachweis.
+            # Für einen belegten Zylinder wird daher auch kein konkurrierender
+            # Kegel- oder Ringlauf vorbereitet. Der gesonderte Mantelnachweis
+            # (shapes=None) behält seine ausdrücklich gestellte Frage.
+            supports[_patch_key(patch)] = support
+            cylinder = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+            if (
+                cylinder is not None
+                and cylinder.good
+                and _fits_in_the_body(MeshData(raw=body), cylinder)
+                and _cylinder_precludes_a_cone(body, cylinder, patch)
+            ):
+                planned += weight
+                planning.reach(planned / total_weight if total_weight else 1.0)
+                continue
         if support is not None:
             name = _patch_key(patch)
             supports[name] = support
@@ -8140,6 +8356,7 @@ class _ConePlan:
     line_tolerance: float
     weights: np.ndarray
     origin: np.ndarray
+    basis: np.ndarray
     half_angle: float
     points: np.ndarray
     selected: np.ndarray
@@ -8207,13 +8424,27 @@ def _cone_plan(
     selected = _cone_support_points(support, origin + apex, line_tolerance, check_cancelled)
     if int(selected.sum()) < 6:
         return None
-    scale = float(np.linalg.norm(np.ptp(points[selected], axis=0)))
+    # Normierung und Freiheitsgrade gehören in den Rahmen des Flecks. Eine
+    # Weltbox wächst beim Drehen; auch die zwei Neigungen gegen Weltachsen
+    # verändern den Weg des nichtlinearen Lösers. Beides konnte denselben
+    # Fleck einmal konvergieren und einmal am Budget enden lassen (RM-210).
+    scale = 2.0 * float(np.linalg.norm(points[selected], axis=1).max())
     if scale <= EPS_GEOM:
         return None
-    samples = points[selected] / scale
-    apex = apex / scale
-    initial_axis = axis
-    first, second = _plane_basis(initial_axis)
+    radial = points[selected] - np.outer(points[selected] @ axis, axis)
+    reaches = np.linalg.norm(radial, axis=1)
+    longest = float(reaches.max())
+    if longest <= EPS_GEOM:
+        return None
+    # Bei gleich weit entfernten Kreispunkten bleibt die ursprüngliche
+    # Punktfolge maßgeblich; Rundungsrauschen wählt keinen anderen Punkt.
+    anchor = int(np.flatnonzero(reaches >= longest - EPS_GEOM)[0])
+    across = radial[anchor] / reaches[anchor]
+    basis = np.column_stack((across, _cross3(axis, across), axis))
+    samples = (points[selected] @ basis) / scale
+    apex = (apex @ basis) / scale
+    initial_axis = np.array((0.0, 0.0, 1.0))
+    first, second = np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
     at_apex = np.flatnonzero(np.linalg.norm(samples - apex, axis=1) <= EPS_GEOM / scale)
     # Der Löser rechnet an einer Auswahl der Stützpunkte, die Spitze bleibt
     # darin (:data:`FIT_SOLVER_POINTS`); die Kennzahlen unten lesen alle.
@@ -8227,6 +8458,7 @@ def _cone_plan(
         line_tolerance=line_tolerance,
         weights=weights,
         origin=origin,
+        basis=basis,
         half_angle=half_angle,
         points=points,
         selected=selected,
@@ -8321,7 +8553,8 @@ def _cone_from_plan(
     apex, axis, angle = parameters(fitted)
     if not 0.0 < angle < math.pi / 2:
         return None
-    apex = apex * scale
+    apex = (apex @ plan.basis.T) * scale
+    axis = axis @ plan.basis.T
     relative = points - apex
     along = relative @ axis
     if float(along.min()) < -EPS_GEOM:
@@ -11827,7 +12060,7 @@ def _face_roles(
     body = mesh.raw
 
     # Eine parallele Fläche zählt nur auf derselben Schale und über dem
-    # örtlichen Flächenmittelpunkt. Ihre äußere Kontur schließt eine Öffnung
+    # ganzen Flächenumriss. Ihre äußere Kontur schließt eine Öffnung
     # mit ein: Der Boden einer Dose liegt unter deren Rand, obwohl durch die
     # Öffnung nach oben freie Sicht besteht. Eine seitlich versetzte Lippe
     # oder ein zweiter Körper belegt dagegen keine Innenlage.
@@ -11862,6 +12095,14 @@ def _face_roles(
             )
             outlines[other] = footprint.convex_hull
         return outlines[other]
+
+    def covers_face(feature: Feature, other: int) -> bool:
+        """Ein Schriftzug über der Mitte umschließt nicht die ganze Außenwand."""
+        corners = vertices[np.unique(faces[list(feature.face_indices)])] - centres[other]
+        footprint = MultiPoint(
+            np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
+        ).convex_hull
+        return bool(outline_of(other).covers(footprint))
 
     # **Gleichgerichtete Flächen fragen einen Baum, nicht jede Fläche jede.**
     # Ein Kreuzrändel mit 6 645 Rauten trägt 32 140 Wände in vier Richtungen;
@@ -11926,6 +12167,7 @@ def _face_roles(
                 if (
                     entry_shells[other] == own_shell
                     and float((centres[other] - centre) @ normal) > EPS_GEOM
+                    and covers_face(feature, int(other))
                     and (eligible is None or eligible(entries[int(other)][0]))
                 ):
                     inner = True
@@ -11961,7 +12203,8 @@ def _face_roles(
                 shapely.points(coordinates),
             )
             if any(
-                eligible is None or eligible(entries[int(other)][0])
+                covers_face(feature, int(other))
+                and (eligible is None or eligible(entries[int(other)][0]))
                 for other in block[np.asarray(covered, dtype=bool)]
             ):
                 inner = True

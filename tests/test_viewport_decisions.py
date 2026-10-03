@@ -6896,6 +6896,48 @@ def test_the_hint_at_the_pointer_belongs_to_the_hovered_feature_and_never_to_the
     assert "8" in viewport.accessibleDescription(), "die Auswahl bleibt hörbar"
 
 
+@pytest.mark.parametrize("multiple", [False, True])
+def test_delayed_hover_after_a_feature_click_keeps_the_selection_frame(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, multiple: bool
+) -> None:
+    """Der verspätete Hover ergänzt den Hinweis, ohne das fertige Auswahlbild zu erneuern."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_scene(_scene_with_two_holes())
+    viewport.select("obj_1")
+    viewport.select_feature("hole_1")
+    monkeypatch.setattr(viewport, "_click_target", lambda *args, **kw: ("obj_1", "hole_2"))
+    viewport._select_at((0.0, 0.0, 0.0))
+    assert viewport.selected_feature == "hole_2"
+    if multiple:
+        viewport.select_feature_refs((("obj_1", "hole_1"), ("obj_1", "hole_2")))
+    actors = tuple(viewport._feature_actors)
+    renders = renderer.renders
+    viewport._set_hover_target("obj_1", "hole_2")
+    assert "8" in viewport.toolTip() and "8" in viewport.accessibleDescription()
+    assert viewport._hover_feature
+    assert tuple(viewport._feature_actors) == actors
+    assert renderer.renders == renders, (
+        "ein bereits sichtbares Merkmal braucht keinen zweiten Frame"
+    )
+    viewport._set_hover_target(None, None)
+    assert not viewport.toolTip() and not viewport._hover_feature
+    assert viewport.accessibleDescription()
+    assert tuple(viewport._feature_actors) == actors
+    assert renderer.renders == renders
+    if multiple:
+        viewport._set_hover_target("obj_1", "hole_1")
+        assert "5" in viewport.toolTip()
+        assert renderer.renders == renders
+    else:
+        viewport._set_hover_target("obj_1", "hole_1")
+        assert "5" in viewport.toolTip()
+        assert renderer.renders > renders, "ein anderes Merkmal braucht seine Hoverdarstellung"
+
+
 def test_selecting_the_same_feature_refs_again_rebuilds_nothing(qt_app: QApplication) -> None:
     """Dieselben Merkmale noch einmal sind kein Aufbau.
 
@@ -8483,6 +8525,40 @@ def test_the_drawn_sketch_marks_keep_their_size_at_any_scaling(
         viewport.deleteLater()
 
 
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
+@pytest.mark.parametrize("normal", [(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 0.6, 0.8)])
+def test_the_sketch_origin_is_marked_on_every_plane_and_cleared_on_exit(
+    qt_app: QApplication, ratio: float, normal: tuple[float, float, float]
+) -> None:
+    """RM-395: Ein Nullring bleibt auf der Fläche sichtbar und folgt dem Bildschirmmaßstab."""
+    from app.core.sketch.planes import frame_of
+
+    viewport, per_mm = _scaled_sketch_view(ratio)
+    frame = frame_of(normal, (12.0, -8.0, 24.0))
+    try:
+        viewport.show_sketch((), frame, 10.0, 60.0)
+        ring = viewport.renderer.item_of("sketch_origin")
+        assert ring is not None, "auch die leere Zeichnung zeigt ihren Ursprung"
+        points = np.asarray(ring.points, dtype=float).reshape(-1, 3)
+        distances = np.linalg.norm(points - np.asarray(frame.origin), axis=1)
+        assert distances * per_mm / ratio == pytest.approx(np.full(len(points), 7.0))
+        assert (points - np.asarray(frame.origin)) @ np.asarray(normal) == pytest.approx(
+            np.zeros(len(points)), abs=1e-10
+        )
+        draw = next(
+            data
+            for kind, data in viewport.renderer.drawn
+            if kind == "lines" and data["name"] == "sketch_origin"
+        )
+        assert draw["keep_in_front"] and not draw["pickable"]
+        label = viewport.renderer.item_of("sketch_origin_label")
+        viewport.clear_sketch()
+        assert ring in viewport.renderer.removed
+        assert label in viewport.renderer.removed
+    finally:
+        viewport.deleteLater()
+
+
 def test_a_shadow_is_computed_once_per_piece_and_drawn_once_per_body(
     qt_app: QApplication,
 ) -> None:
@@ -9359,6 +9435,7 @@ def test_the_first_frame_of_a_preview_is_drawn_before_it_is_reported() -> None:
         ),
         _order_by_depth=lambda: None,
         _layout_feature_labels=lambda: None,
+        _place_surface_picker=lambda: None,
         _difference_is_ready=lambda: True,
         _difference=difference,
         _displayed_difference=None,

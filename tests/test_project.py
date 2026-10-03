@@ -4354,3 +4354,170 @@ def test_v42_preserves_arrangement_modes_in_both_history_sides() -> None:
     changes = migrated["transactions"][0]["changes"]
     assert changes["before"]["edited_ops"]["1"]["params"]["centre_slender"] is False
     assert changes["after"]["edited_ops"]["1"]["params"]["centre_slender"] is True
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_old_split_run_is_numbered_across_undo_save_and_reload(
+    profile, tmp_path: Path, quality: str
+) -> None:
+    """RM-287: Zwei alte Schnitte werden drei Nummern; Löschen und Undo zählen weiter."""
+    from app.core.scene.cache import ResultCache
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "auto_split_unnumbered_v42.p3d"
+    old = project_data(path)
+    assert old["format_version"] == 42
+    assert all("piece_count" not in entry["params"] for entry in old["ops"])
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    cache = ResultCache()
+
+    def names() -> set[str]:
+        result = evaluate(project.document, profile, quality=quality, cache=cache)
+        assert result.complete
+        # Konstruktion: Leiste 600 x 30 x 20, Schnittfuge ohne Stifte und Materialverlust.
+        assert sum(entry.mesh.volume for entry in result.scene.objects.values()) == pytest.approx(
+            600.0 * 30.0 * 20.0
+        )
+        return {str(entry.name).split(" · ")[0] for entry in result.scene.objects.values()}
+
+    numbered = {f"Leiste {index} von 3" for index in range(1, 4)}
+    assert names() == {"Leiste A", "Leiste B"}
+    assert names() == {"Leiste A", "Leiste B"}
+    history = History(project.document)
+    history.undo()
+    assert names() == numbered
+    history.redo()
+    assert names() == {"Leiste A", "Leiste B"}
+    stored = tmp_path / "nummerierter-schnittlauf.p3d"
+    save(project, stored)
+    project = load(stored)
+    assert names() == {"Leiste A", "Leiste B"}
+    History(project.document).undo()
+    assert names() == numbered
+
+
+def test_split_migration_does_not_join_independent_cuts() -> None:
+    """Zwei unabhängige Schnitte in einer Transaktion sind kein zusammenhängender Lauf."""
+    from app.core.scene.migrations import _number_old_split_runs
+
+    data = {
+        "ops": [
+            {"id": 1, "op": "split_pinned", "in": ["a"], "out": ["a1", "a2"], "params": {}},
+            {"id": 2, "op": "split_pinned", "in": ["b"], "out": ["b1", "b2"], "params": {}},
+        ],
+        "transactions": [{"ops": [1, 2]}],
+    }
+    before = deepcopy(data)
+    assert _number_old_split_runs(data) == before
+
+
+@pytest.mark.parametrize("operation", ["insert_profile_tongue", "create_profile_tongue"])
+@pytest.mark.parametrize("size", [None, "3030", "motedis-2020-b6"])
+def test_profile_tongue_migration_keeps_old_sizes_in_every_history_state(operation, size) -> None:
+    """RM-017: Die neue Herstellervorgabe verändert weder Altteile noch deren Undo-Fassungen."""
+    params = {} if size is None else {"size": size}
+    op = {"id": 1, "op": operation, "params": params}
+    data = {
+        "format_version": 42,
+        "ops": [deepcopy(op)],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"1": deepcopy(op)}},
+                    "after": {"edited_ops": {"1": deepcopy(op)}},
+                }
+            }
+        ],
+    }
+    migrated = migrate(data)
+    expected = "2020" if size is None else size
+    assert migrated["ops"][0]["params"]["size"] == expected
+    for side in ("before", "after"):
+        assert (
+            migrated["transactions"][0]["changes"][side]["edited_ops"]["1"]["params"]["size"]
+            == expected
+        )
+
+
+@pytest.mark.parametrize("operation", ["pattern", "pattern_feature", "mirror_object"])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_movement_anchor_migration_keeps_every_history_state(operation, explicit) -> None:
+    """Alte Muster bleiben am Ursprung; alte Spiegel folgen ihrem bisherigen Anker."""
+    params = {"follow_anchor": False, "cx": "breite / 2", "cy": 7.0, "cz": -3.0} if explicit else {}
+    op = {"id": 1, "op": operation, "params": params}
+    data = {
+        "format_version": 42,
+        "ops": [deepcopy(op)],
+        "transactions": [
+            {"changes": {side: {"edited_ops": {"1": deepcopy(op)}} for side in ("before", "after")}}
+        ],
+    }
+    migrated = migrate(data)
+    expected = dict(params)
+    if operation == "mirror_object":
+        expected.setdefault("follow_anchor", True)
+    else:
+        for axis in ("cx", "cy", "cz"):
+            expected.setdefault(axis, 0.0)
+    versions = [migrated["ops"][0]] + [
+        migrated["transactions"][0]["changes"][side]["edited_ops"]["1"]
+        for side in ("before", "after")
+    ]
+    assert all(version["params"] == expected for version in versions)
+
+
+def test_revision_v44_migrates_without_inventing_lineage(tmp_path: Path) -> None:
+    from app.core.scene.evaluate import evaluate
+
+    fixture = Path(__file__).parent / "data/projects/revision_titles_v44.p3d"
+    assert project_data(fixture)["format_version"] == 44
+    project = load(fixture)
+    assert project.document.format_version == FORMAT_VERSION
+    assert all(not transaction.renumbered for transaction in project.document.transactions)
+    assert [str(transaction.title) for transaction in project.document.transactions] == [
+        "Rumpf",
+        "Kopf",
+        "Kopf setzen",
+    ]
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = evaluate(project.document, profile, detect_features=False)
+    assert result.complete and len(result.scene.objects) == 2
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(40 * 30 * 20)
+    restored = load(save(project, tmp_path / "migrated.p3d"))
+    assert (
+        evaluate(restored.document, profile, detect_features=False).object_hashes
+        == result.object_hashes
+    )
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"1": True},
+        {"01": 3},
+        {"0": 3},
+        {"1": 1},
+        {"1": 999},
+        {"1": 3, "2": 3},
+        {"9": 3},
+        {"1": "3"},
+        [],
+        None,
+    ],
+)
+def test_revision_lineage_rejects_unproven_ids(mapping, tmp_path: Path) -> None:
+    from app.core.scene.serialise import document_to_data
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("First", [OperationDraft(op="create_box")])
+    history.apply("Second", [OperationDraft(op="create_box")])
+    history.commit(history.plan_insert(1, "Third", [OperationDraft(op="create_box")]))
+    data = document_to_data(project.document)
+    data["transactions"][-1]["renumbered"] = mapping
+    path = tmp_path / "invalid-lineage.p3d"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(PROJECT_ENTRY, json.dumps(data))
+    with pytest.raises(ValidationError):
+        load(path)

@@ -28,7 +28,7 @@ from app.core.errors import InternalError
 from app.core.geom import lathe, transform
 from app.core.geom.mesh import MeshData
 from app.core.types import Finding, Point2, Vec3
-from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, exact_cos, exact_sin
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
@@ -143,7 +143,7 @@ def cylinder(diameter: float, height: float, *, segments: int = SEGMENTS) -> For
 
         return twins.cylinder(diameter, height)
     body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=segments)
-    body.apply_translation([0.0, 0.0, height / 2.0])
+    transform.moved(body, transform.translation((0.0, 0.0, height / 2.0)))
     return MeshData.of(body)
 
 
@@ -154,7 +154,7 @@ def box(width: float, depth: float, height: float) -> Form:
 
         return twins.box(width, depth, height)
     body = trimesh.creation.box(extents=(width, depth, height))
-    body.apply_translation([0.0, 0.0, height / 2.0])
+    transform.moved(body, transform.translation((0.0, 0.0, height / 2.0)))
     return MeshData.of(body)
 
 
@@ -191,12 +191,13 @@ def rounded_box(width: float, depth: float, height: float, radius: float) -> For
         return twins.rounded_box(width, depth, height, radius)
     import manifold3d
 
-    step = 2 * math.acos(max(0.0, 1 - MAX_FACET_SAG / radius))
-    count = max(4, math.ceil(math.pi / (2 * step)))
+    count = 4
+    while radius * (1 - exact_cos(math.pi / (4 * count))) > MAX_FACET_SAG:
+        count += 1
     vertices: list[tuple[float, float]] = []
     for quadrant, (cx, cy) in enumerate(rounded_corners(width, depth, radius)):
         for angle in np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1):
-            point = (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
+            point = (cx + radius * exact_cos(angle), cy + radius * exact_sin(angle))
             if not vertices or math.dist(point, vertices[-1]) > EPS_GEOM:
                 vertices.append(point)
     built = manifold3d.CrossSection([vertices]).extrude(height).to_mesh64()
@@ -498,7 +499,7 @@ def thread_body(
 
     rings = []
     for angle, level in zip(angles, heights, strict=True):
-        direction = np.array([math.cos(angle), math.sin(angle), 0.0])
+        direction = np.array([exact_cos(angle), exact_sin(angle), 0.0])
         up = np.array([0.0, 0.0, 1.0])
         rings.append([direction * radial + up * (level + axial) for radial, axial in profile])
 
@@ -544,7 +545,7 @@ def moved(mesh: Form, offset: Vec3) -> Form:
 
         return twins.moved(mesh, offset)
     body = mesh.raw.copy()
-    body.apply_translation(np.asarray(offset, dtype=float))
+    transform.moved(body, transform.translation(offset))
     return mesh.replacing(body)
 
 

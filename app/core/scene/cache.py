@@ -17,6 +17,7 @@ ohne ihn bleibt sie abgeschaltet, und es gibt nur die Speicherebene.
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import struct
@@ -27,7 +28,7 @@ from collections import OrderedDict
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Final, Protocol
+from typing import Any, Final, Protocol, cast
 
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, results_cache_dir
@@ -149,7 +150,17 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   müssen neu berechnet werden.
 #: - 38 (RM-486): Clipper-Säulen ersetzen GEOS-Differenzen. Gespeicherte
 #:   Ausrichtungen rechnen mit den neuen Stützkennzahlen erneut.
-CACHE_FORMAT_VERSION: Final = 38
+#: - 39 (RM-388/RM-450): Merkmalsnamen folgen belegten Übergängen unabhängig
+#:   von späteren Verbrauchern; geteilte Flächen behalten nur räumlich belegte
+#:   Nachfolger. Frühere Bindungen werden mit denselben Schritten neu bestimmt.
+#: - 40: Importierte Musterfelder werden nach Lage und Richtung getrennt;
+#:   örtlich erkannte Muster ersetzen ihre alten Zellmerkmale auch im Folgeschritt.
+#: - 41 (RM-226): Die Mitte zylindrischer Rundungen liegt auch am exakten
+#:   Körper auf der begrenzten Achse; alte Flächenschwerpunkte dürfen keine
+#:   Nachbauten, Folgeschritte oder Merkmalsbindungen mehr steuern.
+#: - 42 (RM-226): Kugelige Eckrundungen tragen ebenfalls den Trägermittelpunkt
+#:   statt des Flächenschwerpunkts; Nachbau und Folgeoperationen lesen ihn.
+CACHE_FORMAT_VERSION: Final = 42
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,6 +406,30 @@ def feature_to_data(feature: Feature) -> dict[str, Any]:
             for patch in feature.surface_patches
         ],
     }
+
+
+def _frame_from_data(value: Any) -> Transform | None:
+    """Ein gespeicherter Bezugsrahmen ist endlich und affin, sonst ein Cachefehler."""
+    if value is None:
+        return None
+    if not isinstance(value, list | tuple) or len(value) != 4:
+        raise ValueError("invalid cached frame")
+    rows: list[tuple[float, ...]] = []
+    for row in value:
+        if not isinstance(row, list | tuple) or len(row) != 4:
+            raise ValueError("invalid cached frame row")
+        if any(isinstance(cell, bool) or not isinstance(cell, int | float) for cell in row):
+            raise ValueError("invalid cached frame value")
+        cells = tuple(float(cell) for cell in row)
+        if not all(math.isfinite(cell) for cell in cells):
+            raise ValueError("nonfinite cached frame")
+        rows.append(cells)
+    if not all(
+        math.isclose(cell, expected, rel_tol=0.0, abs_tol=0.0)
+        for cell, expected in zip(rows[3], (0.0, 0.0, 0.0, 1.0), strict=True)
+    ):
+        raise ValueError("nonaffine cached frame")
+    return cast(Transform, tuple(rows))
 
 
 def _surface_patches_from_data(
@@ -905,6 +940,7 @@ class DiskCache:
                         visible=entry["visible"],
                         plate=entry.get("plate", 0),
                         reserved_feature_ids=tuple(sorted(entry.get("reserved_feature_ids", ()))),
+                        frame=_frame_from_data(entry["frame"]),
                     )
                 )
             objects = tuple(objects_list)
@@ -992,6 +1028,7 @@ class DiskCache:
                     "visible": entry.visible,
                     "plate": entry.plate,
                     "reserved_feature_ids": list(entry.reserved_feature_ids),
+                    "frame": entry.frame,
                 }
                 refined = _refinement_to_disk(folder, position, entry.mesh)
                 if refined is not None:

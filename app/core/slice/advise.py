@@ -957,13 +957,14 @@ def _from_geometry(
                 path="support.placement",
                 value="build_plate",
                 reason=_(
-                    "Die übrigen Decken liegen in schmalen Kanälen und tragen sich "
-                    "selbst. Stützen darin kämen nicht mehr heraus."
+                    "Die übrigen Decken liegen in schmalen Kanälen. Stützen darin wären schwer "
+                    "zu entfernen. Prüfen Sie im Slicer, ob diese Decken ohne Stützen gedruckt "
+                    "werden können."
                 )
                 if model.channels
                 else _(
-                    "Alle Überhänge erreichen das Bett. Stützen auf dem Modell "
-                    "hinterlassen Narben, die keine sein müssen."
+                    "Stützen erreichen diese Überhänge vom Druckbett aus. So vermeiden Sie "
+                    "zusätzliche Ansatzstellen auf dem Modell."
                 ),
             )
         )
@@ -980,8 +981,9 @@ def _from_geometry(
                 path="support.block_channels",
                 value=True,
                 reason=_(
-                    "Dieses Teil hat schmale Kanäle. Eine Sperre hält die Stützen dort "
-                    "fern — sie kämen nicht mehr heraus, und die Decken tragen sich selbst."
+                    "Dieses Teil hat schmale Kanäle. Eine Sperre hält dort schwer entfernbare "
+                    "Stützen fern. Prüfen Sie im Slicer, ob die Decken ohne Stützen gedruckt "
+                    "werden können."
                 ),
             )
         )
@@ -1115,7 +1117,7 @@ def _from_geometry(
                 value="arachne",
                 reason=_(
                     "Die schmalste Stelle geht auf keine ganze Zahl von Bahnen auf. "
-                    "Mit fester Linienbreite bleibt dort eine Lücke, die nur "
+                    "Mit fester Bahnbreite bleibt dort eine Lücke, die nur "
                     "Lückenfüllung schließt — und die trägt nicht."
                 ),
                 severity="warning",
@@ -1153,7 +1155,7 @@ def _from_geometry(
                 path="layers.line_width",
                 value=round(max(thin / 2.0, least), 3),
                 reason=_(
-                    "Mit dieser Linienbreite passen zwei Bahnen in die dünnste "
+                    "Mit dieser Bahnbreite passen zwei Bahnen in die dünnste "
                     "Stelle. Bei breiteren Linien kann der Slicer dort nur eine "
                     "variable Bahn oder Lückenfüllung erzeugen."
                 ),
@@ -1736,8 +1738,8 @@ def warnings_for(
                 code="settings.uncalibrated_material",
                 severity="info",
                 message=_(
-                    "Die Toleranzen dieses Materials sind Startwerte. Mit dem "
-                    "Toleranz-Testkörper stimmen sie für Ihren Drucker."
+                    "Die Toleranzen dieses Materials sind Startwerte. Passen Sie sie anhand "
+                    "eines gedruckten Toleranz-Testkörpers in der Materialkalibrierung an."
                 ),
                 values={"material": profile.material.title},
                 suggestions=(CALIBRATE_MATERIAL,),

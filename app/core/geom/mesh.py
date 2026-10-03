@@ -701,12 +701,15 @@ class IntegerGrid:
     exponent: int
 
     @classmethod
-    def of(cls, values: np.ndarray) -> IntegerGrid:
+    def of(cls, values: np.ndarray, *, count: int | None = None) -> IntegerGrid:
+        """``count`` zählt auch ausgelassene Nullen; Raster und Summe bleiben gleich."""
         raw = np.abs(np.asarray(values, dtype=np.float64))
+        if count is not None and count < len(raw):
+            raise ValueError("count must include every stored value")
         largest = float(raw.max()) if len(raw) else 0.0
         if not largest or not math.isfinite(largest):
             return cls(np.zeros(len(raw), dtype=np.int64), 0)
-        exponent = 60 - math.frexp(float(len(raw)) * largest)[1]
+        exponent = 60 - math.frexp(float(len(raw) if count is None else count) * largest)[1]
         return cls(np.rint(np.ldexp(raw, exponent)).astype(np.int64), exponent)
 
     def sums(self, masks: np.ndarray) -> np.ndarray:

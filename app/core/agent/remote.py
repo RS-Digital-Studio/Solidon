@@ -550,7 +550,17 @@ def answer_bytes(raw: bytes, bridge: Bridge, *, max_bytes: int | None = None) ->
             exc_info=(RuntimeError, safe_problem, problem.__traceback__),
         )
         return _dumped(
-            _error(payload.get("id"), INTERNAL_ERROR, _("Unerwarteter Fehler.")), max_bytes
+            _error(
+                payload.get("id"),
+                INTERNAL_ERROR,
+                _(
+                    "Die Anfrage wurde unerwartet "
+                    "unterbrochen. Prüfen Sie den "
+                    "Projektstand im Fenster und stellen Sie "
+                    "die Anfrage erneut."
+                ),
+            ),
+            max_bytes,
         )
 
 

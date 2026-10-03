@@ -160,7 +160,7 @@ def test_card_context_delete_targets_clicked_spool(inventory, monkeypatch):
         def exec(self, _position):
             assert self.toolTipsVisible()
             action = next(
-                action for action in self.actions() if action.text() == "Filament löschen"
+                action for action in self.actions() if action.text() == "Spule archivieren"
             )
             assert not action.icon().isNull()
             action.trigger()

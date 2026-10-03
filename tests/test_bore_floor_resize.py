@@ -47,6 +47,10 @@ def _resize(source: SceneObject, hole: Feature, diameter: float, profile: Profil
         lambda *_args: pytest.fail("unexpected matching question"),
         findings,
         previous_bounds=source.mesh.bounds,
+        source_mesh=source.mesh,
+        transform=result.transform,
+        touches_features=spec.touches_features,
+        continuations=result.feature_continuations[0] if result.feature_continuations else (),
     )
     return changed, findings, result
 

@@ -62,7 +62,7 @@ er:** `skirt`, `brim`, `raft` mit „Skirt-Runden“, „Brim-Breite“,
 anders heißt als sein Feld, ist eine Fährte ins Nichts.
 
 **Jedes Feld sagt, was es tut — und zwar alle**, sonst lernt niemand, dass es
-hier Sätze gibt: die Druckeinstellungen über `note`, die 1580 Parameter der 155
+hier Sätze gibt: die Druckeinstellungen über `note`, die 1927 Parameter der 157
 Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
@@ -97,9 +97,10 @@ Vorschlag ist ausführbar.
 aus seinem Slicer: Richtung (nicht Normale), Außenseiten angleichen, geschlossen
 (nicht wasserdicht), auf einem Raster (nicht Voxelstufe), Vereinigen oder
 Abziehen (nicht boolesch), jede Kante sichtbar (nicht Facetten), ohne Zufall
-(nicht deterministisch). Begründet bleiben *Slot* im 3MF-Weg,
-*Extrusionsbreite* an der Wandstärkenleiter (Handbuch-Glossar; die Angleichung an
-*Bahnbreite* führt RM-084) und *Rasterweite* hinter der Klappe.
+(nicht deterministisch). Begründet bleiben *Slot* im 3MF-Weg und *Rasterweite* hinter der Klappe.
+*Bahnbreite* heißt dieselbe Druckgröße in Einstellungen, Befunden,
+Wandstärkenleiter und Handbuch; die Übersetzungen verwenden den Namen des
+Feldes (englisch *Line width*).
 `test_wording::test_no_customer_text_uses_a_designer_word` hält die Wortliste
 für Quelle und Englisch, `test_a_quoted_control_is_named_as_the_control_says`,
 dass ein zitierter Knopf in jeder Sprache so heißt wie der Knopf.
@@ -244,6 +245,17 @@ Rückmeldung, die nie stimmt. Das Vorschauband trägt den Grund aus dem Kern
 ändert sich nichts“ und nach 0,2 s ohne Ergebnis „wird gerechnet …“ (§2.8).
 Was nie etwas tun kann, sagt es schon am Menüeintrag (`grenzen.md`, „Der Satz
 kommt vor den Dialog“).
+
+**Eine Absage steht auch bei den Eingaben** (`OperationDialog.show_refusal`),
+selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
+Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die
+Rückmeldung im Bild.
+
+Eine fehlgeschlagene oder unvollständige Rechnung sperrt auch ohne Bildpflicht
+das Übernehmen und verwirft einen bereits wartenden Klick. Neue Werte brauchen
+eine neue Freigabe. Nur eine ausdrücklich gemeldete Rückfrage darf ohne Ergebnis
+zum Übernehmen weitergehen; eine erfolgreiche Rechnung mit ausgelassenem Bild
+liefert eine leere `SceneDifference`, kein `None`.
 
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 

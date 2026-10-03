@@ -5977,6 +5977,7 @@ class _SyncSignal:
 
 
 class _SyncWorker:
+    target = None
     """Nur der bestätigte Rückgabewert von wait beendet diese Arbeiterattrappe."""
 
     def __init__(self, record: Callable[[str], None]) -> None:
@@ -6031,6 +6032,7 @@ def _sync_cancel_case() -> SimpleNamespace:
         last_result=old_result,
         result_generation=7,
         result_current=False,
+        _withdraw_batch_import=lambda: False,
     )
 
     def record(name: str) -> None:
@@ -6509,3 +6511,249 @@ def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality()
 
     assert not first.reads_quality, "Voraussetzung: das Einlesen fragt nicht"
     assert changed.complete and not changed.reads_quality
+
+
+@pytest.mark.parametrize("following", [False, True])
+def test_preview_recognises_only_features_read_after_the_current_step(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, following: bool
+) -> None:
+    """RM-296: Ein bereits verbrauchter Bezug erzwingt keine abschließende Neuerkennung."""
+    from importlib import import_module
+
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _loaded_plate()
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    initial = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert initial.complete
+    entry = next(iter(initial.scene.objects.values()))
+    hole = next(feature for feature in entry.features.values() if feature.kind == "hole")
+    history = History(project.document)
+    for increment in range(1, 3 if following else 2):
+        history.apply(
+            "Bohrung ändern",
+            [
+                OperationDraft(
+                    "resize_hole",
+                    inputs=(entry.id,),
+                    params={
+                        "at_feature": hole.id,
+                        "diameter": float(hole.params["diameter"]) + increment,
+                        "compensate": False,
+                    },
+                )
+            ],
+        )
+    measured = []
+    original = module.detect
+
+    def track(mesh, **kwargs):
+        measured.append(mesh)
+        return original(mesh, **kwargs)
+
+    monkeypatch.setattr(module, "detect", track)
+    forget_cache()
+    result = evaluate(
+        project.document, profile, sources=sources, cache=cache, detect_features=False
+    )
+    assert result.complete
+    assert len(measured) == (2 if following else 1)
+    assert result.recognition_left_out == {entry.id}
+    assert not any(
+        finding.code.startswith("perceive.orphaned") for finding in result.scene.report.findings
+    )
+    measured.clear()
+    warm = evaluate(project.document, profile, sources=sources, cache=cache, detect_features=False)
+    assert warm.complete and warm.recognition_left_out == {entry.id}
+    assert len(measured) == (2 if following else 1)
+    assert (
+        warm.scene.objects[entry.id].features.keys()
+        == result.scene.objects[entry.id].features.keys()
+    )
+    accepted = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert accepted.complete and not accepted.recognition_left_out
+    assert hole.id in accepted.scene.objects[entry.id].features
+    changed = result.scene.objects[entry.id].features[hole.id]
+    assert changed.params["diameter"] == pytest.approx(
+        float(hole.params["diameter"]) + (2 if following else 1)
+    )
+
+
+def test_completed_checks_are_not_a_claim_that_the_model_has_no_findings(
+    profile: Profile,
+) -> None:
+    """RM-090: Ein fertiger Bauraumcheck darf weiterhin einen Befund tragen."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader", [OperationDraft("create_box", params={"width": 1000.0})]
+    )
+    events = []
+    result = evaluate(project.document, profile, check_status=events.append)
+    states = {value.key: value for value in result.check_states}
+    assert result.complete
+    assert states["evaluation"].state == "completed"
+    assert states["scene.placement"].state == "completed"
+    assert states["scene.coincident_bodies"].state == "not_applicable"
+    assert states["scene.thin_walls"].state == "not_applicable"
+    assert states["scene.form_deviation"].state == "not_applicable"
+    assert result.scene.report.findings, "Der Quader überschreitet den Bauraum."
+    assert [value.state for value in events if value.key == "scene.placement"] == [
+        "not_started",
+        "running",
+        "completed",
+    ]
+    assert all(value.source == "internal" for value in result.check_states)
+
+
+def test_missing_material_leaves_only_dependent_checks_unstarted(
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-090: Vorhandene Geometrie und Drucker belegen kein gewähltes Material."""
+    from importlib import import_module
+
+    import trimesh
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _loaded_plate()
+    project.sources["src_1"] = trimesh.creation.annulus(
+        r_min=5.0, r_max=10.0, height=10.0, sections=64
+    ).export(file_type="stl")
+    calls = []
+    original = module.check_thin_walls
+
+    def track(scene):
+        calls.append(scene)
+        return original(scene)
+
+    monkeypatch.setattr(module, "check_thin_walls", track)
+    result = evaluate(
+        project.document, profile, sources=ProjectSources(project), missing_basis=("material",)
+    )
+    states = {value.key: value for value in result.check_states}
+    assert result.complete and states["evaluation"].state == "completed"
+    assert states["scene.placement"].state == "completed"
+    assert states["scene.thin_walls"].state == "not_started"
+    assert states["scene.thin_walls"].missing_basis == ("material",)
+    assert states["scene.fits"].state == "not_started"
+    assert not calls
+    confirmed = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert calls
+    assert (
+        next(value for value in confirmed.check_states if value.key == "scene.thin_walls").state
+        == "completed"
+    )
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_a_check_reports_its_failure_without_finishing_later_checks(
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+    cancel: bool,
+) -> None:
+    """RM-090: Der Callback hält Teilstände auch ohne erfolgreiche Rückgabe."""
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _loaded_plate()
+    error = OperationCancelled() if cancel else RuntimeError("Prüfsonde")
+
+    def fail(scene):
+        raise error
+
+    monkeypatch.setattr(module, "check_placement", fail)
+    events = []
+    with pytest.raises(type(error)) as caught:
+        evaluate(
+            project.document, profile, sources=ProjectSources(project), check_status=events.append
+        )
+    assert caught.value is error
+    latest = {value.key: value for value in events}
+    expected = "cancelled" if cancel else "failed"
+    assert latest["scene.placement"].state == expected
+    assert latest["evaluation"].state == expected
+    assert latest["scene.thin_walls"].state == "not_started"
+    assert latest["scene.form_deviation"].state == "not_started"
+
+
+def test_check_completion_does_not_survive_a_new_cancelled_run(profile: Profile) -> None:
+    """RM-090: Ein warmer Operationscache ist keine fertige neue Prüfung."""
+    from app.core.scene.project import ProjectSources
+
+    project = _loaded_plate()
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    before = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert before.complete
+    token = CancelSignal()
+    token.cancel()
+    events = []
+    with pytest.raises(OperationCancelled):
+        evaluate(
+            project.document,
+            profile,
+            sources=sources,
+            cache=cache,
+            cancelled=token,
+            check_status=events.append,
+        )
+    latest = {value.key: value for value in events}
+    assert latest["evaluation"].state == "cancelled"
+    assert all(value.state == "not_started" for key, value in latest.items() if key != "evaluation")
+
+
+def test_checks_follow_undo_profile_change_and_reopened_project(
+    profile: Profile,
+    tmp_path: Path,
+) -> None:
+    """RM-090: Jeder Endstand wird neu geprüft; Fertigmarken reisen nicht mit."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, load, new_project, save
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft("create_box")])
+    cache = ResultCache()
+
+    def placement(document, selected, **kwargs):
+        result = evaluate(document, selected, cache=cache, **kwargs)
+        return result, next(
+            value for value in result.check_states if value.key == "scene.placement"
+        )
+
+    first, state = placement(project.document, profile)
+    assert state.state == "completed"
+    history.undo()
+    empty, state = placement(project.document, profile)
+    assert not empty.scene.objects and state.state == "not_applicable"
+    history.redo()
+    restored, state = placement(project.document, profile, missing_basis=("printer",))
+    assert restored.scene.objects and state.state == "not_started"
+    other = dataclasses.replace(profile, printer=dataclasses.replace(profile.printer, id="other"))
+    changed, state = placement(project.document, other)
+    assert changed.scene.objects and state.state == "completed"
+    path = save(project, tmp_path / "check-status.p3d")
+    reopened = load(path)
+    events = []
+    after, state = placement(
+        reopened.document, profile, sources=ProjectSources(reopened), check_status=events.append
+    )
+    assert state.state == "completed"
+    assert [value.state for value in events if value.key == "scene.placement"] == [
+        "not_started",
+        "running",
+        "completed",
+    ]
+    assert first.check_states == after.check_states

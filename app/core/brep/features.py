@@ -1031,15 +1031,15 @@ def _seam_split_cylinders_joined(
                 middle[axis_number] += props.mass * props.centre[axis_number]
         if weight <= EPS_GEOM:
             continue
-        # Derselbe Schwerpunkt wie an einer einzelnen Verrundung: der der
-        # Fläche, nicht der Achspunkt — ``_describe`` nennt ihn ``middle``.
+        # Die Innenprobe braucht die Höhe der Fläche. Die veröffentlichte
+        # Mitte liegt dagegen wie beim Netzfit auf der begrenzten Achse.
         surface_middle: Vec3 = (middle[0] / weight, middle[1] / weight, middle[2] / weight)
         if turn < _full_turn():
             kind: FeatureKind = "fillet"
             params: dict[str, Any] = {
                 "radius": radius,
                 "diameter": radius * 2.0,
-                "centre": surface_middle,
+                "centre": _axis_point(cylinder, (low + high) / 2.0),
                 "axis": _oriented(axis),
                 "length": depth,
                 "recess": first.inward
@@ -1671,7 +1671,7 @@ def _describe(
             return "fillet", {
                 "radius": radius,
                 "diameter": radius * 2.0,
-                "centre": middle,
+                "centre": _axis_point(cylinder, (first_v + last_v) / 2.0),
                 "axis": _oriented(axis),
                 "length": depth,
                 "recess": hollow
@@ -1781,7 +1781,7 @@ def _describe(
             return "fillet", {
                 "radius": radius,
                 "diameter": radius * 2.0,
-                "centre": middle,
+                "centre": tuple(float(value) for value in ball.Location().Coord()),
                 "length": 0.0,
                 "recess": hollow,
             }

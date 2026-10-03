@@ -197,6 +197,12 @@ Robert).
 - **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**
   (`OperationDialog.switch_variant`): Was die Variante nicht kennt,
   verschwindet, die Beschreibung wechselt.
+- **Leere Materialrollen beginnen mit dem Projektmaterial**
+  (`MainWindow.run_operation`), ausdrückliche Werte haben Vorrang. Beim
+  Wiederöffnen bleiben die gespeicherten Rollen stehen.
+- **Auch ein Sammeleintrag beginnt am gemeinsamen Einstieg**
+  (`MainWindow.launch_operation`): *Aus Skizze erzeugen* öffnet unmittelbar
+  die Zeichnung, wie Palette und Kürzel.
 
 ## Bedingte Felder
 
@@ -224,6 +230,13 @@ nicht gesperrt — die Sperre gehört dem Kettenhalt (`_settle_lock`).
   hieße der Wert „True“, und `1 == True`) und einen eigenen Satz.
 - **Die Art des Umschalters wird mitgeprüft:** Ein Wahrheitswert an einem
   Aufklappmenü oder ein Auswahlwert an einem Haken trifft nie zu.
+
+Maßgruppen im Bild übernehmen dieselben `depends_on`-Bedingungen wie die rechte
+Spalte, einschließlich Auswahlwerten und Ketten. Der Adapter `_saved_fields`
+reicht sie aus dem Parameterschema weiter. Titel, Eingabe und Ablehnung
+verschwinden gemeinsam; verborgene Werte bleiben erhalten und sperren die
+Übernahme nicht. Stille Wertaktualisierung und wiederverwendete Gruppen
+berechnen die Sichtbarkeit erneut (`FeaturePanel._follow_measure_conditions`).
 
 ## Zwillinge: eine Handlung, zwei Rechenkerne
 
@@ -314,7 +327,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Zweiundfünfzig von hundertfünfundfünfzig Operationen tragen einen (die Zahl prüft
+Zweiundfünfzig von hundertsiebenundfünfzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),

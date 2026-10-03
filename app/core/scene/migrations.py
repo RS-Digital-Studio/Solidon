@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 43
+FORMAT_VERSION: Final = 45
 
 
 @dataclass(frozen=True, slots=True)
@@ -1217,6 +1217,74 @@ def _keep_existing_arrangements(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _number_old_split_runs(data: dict[str, Any]) -> dict[str, Any]:
+    """43 → 44: Stücknummern, Profilnutvorgaben und alte Bewegungsanker bleiben eindeutig.
+
+    Die ursprüngliche Transaktion und ihre Ein-/Ausgänge belegen den Lauf,
+    nicht ihr übersetzter Titel. Einzelne Schnitte bleiben bei A/B. Die
+    ursprüngliche Zählung steht auch in alten Undo-Fassungen; die Auswertung
+    zählt danach nur die tatsächlich aktiven Schnitte. Profilnutsteine ohne
+    gespeicherte Größe behalten die bisherige Vorgabe 2020, auch im Undo.
+    """
+    versions = [entry for entry in data.get("ops", []) if isinstance(entry, dict)]
+    transactions = data.get("transactions", [])
+    for transaction in transactions:
+        for state in (transaction.get("changes") or {}).values():
+            if isinstance(state, dict):
+                versions.extend(
+                    entry
+                    for entry in (state.get("edited_ops") or {}).values()
+                    if isinstance(entry, dict)
+                )
+    by_id = {entry["id"]: entry for entry in versions if "id" in entry}
+    by_id.update({entry["id"]: entry for entry in data.get("ops", []) if "id" in entry})
+    for version in versions:
+        if version.get("op") in {"insert_profile_tongue", "create_profile_tongue"}:
+            version.setdefault("params", {}).setdefault("size", "2020")
+        if version.get("op") in {"pattern", "pattern_feature"}:
+            for axis in ("cx", "cy", "cz"):
+                version.setdefault("params", {}).setdefault(axis, 0.0)
+        if version.get("op") == "mirror_object":
+            version.setdefault("params", {}).setdefault("follow_anchor", True)
+    split_names = {"split_pinned", "split_line"}
+    for transaction in transactions:
+        if any(
+            isinstance(state, dict) and state.get("edited_ops") is not None
+            for state in (transaction.get("changes") or {}).values()
+        ):
+            continue
+        members = [by_id[op_id] for op_id in transaction.get("ops", []) if op_id in by_id]
+        if len(members) < 2 or any(entry.get("op") not in split_names for entry in members):
+            continue
+        first_inputs = members[0].get("in", [])
+        if len(first_inputs) != 1:
+            continue
+        pieces = list(first_inputs)
+        for entry in members:
+            inputs, outputs = entry.get("in", []), entry.get("out", [])
+            if len(inputs) != 1 or len(outputs) != 2 or inputs[0] not in pieces:
+                break
+            index = pieces.index(inputs[0])
+            pieces[index : index + 1] = outputs
+        else:
+            numbers = {piece: index for index, piece in enumerate(pieces, start=1)}
+            signatures = {tuple(entry["out"]) for entry in members}
+            for version in versions:
+                outputs = version.get("out", [])
+                if version.get("op") not in split_names or tuple(outputs) not in signatures:
+                    continue
+                params = version.setdefault("params", {})
+                params.setdefault("piece_count", len(pieces))
+                params.setdefault("number_a", numbers.get(outputs[0], 0))
+                params.setdefault("number_b", numbers.get(outputs[1], 0))
+    return data
+
+
+def _allow_revision_lineage(data: dict[str, Any]) -> dict[str, Any]:
+    """44 → 45: Alte Dateien bleiben lesbar; fehlende Herkunft wird nicht geraten."""
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1261,6 +1329,8 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=40, to_version=41, apply=_keep_sculpt_brushes_as_they_were),
     Step(from_version=41, to_version=42, apply=_name_the_cut_plane),
     Step(from_version=42, to_version=43, apply=_keep_existing_arrangements),
+    Step(from_version=43, to_version=44, apply=_number_old_split_runs),
+    Step(from_version=44, to_version=45, apply=_allow_revision_lineage),
 )
 
 
