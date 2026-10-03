@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
 | 2026-10-02 | [RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)](#rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026) |
 | 2026-10-02 | [RM-407: Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist (03.10.2026)](#rm-407-ausrichten-scheitert-an-exakten-körpern-obwohl-es-nur-eine-drehung-ist-03102026) |
 | 2026-10-02 | [RM-459: SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt (03.10.2026)](#rm-459-superslicer-stürzt-ab-sobald-solidon-die-schrägnaht-übergibt-03102026) |
@@ -37682,3 +37683,13 @@ Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nac
   Teil Italienisch erledigt mit `8cb019980` (02.10.2026): „Ridisegna il passaggio“ → „Ridipingi il passaggio“ (`app/i18n/locales/it.json:3258`), neuer Wächter `test_italian_painted_strokes_are_painted_again_not_redrawn` (ohne Fix rot); das zweite „Ridisegna“ (Kontur neu zeichnen) ist richtig und bleibt.
 
 **Abschluss:** `edges.unmapped` nennt den Grund und bietet *Flächenbearbeitung beenden und erneut versuchen*; ein voller Datenträger pausiert den Hilfsprozess 60 s statt ihn bis zum Neustart abzuschalten (`kernel.disk_full`, `ebb4f32c2`). Umgesetzt von Claude, in main mit `08c681543`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)
+
+<a id="rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026"></a>
+<a id="rm-498"></a>
+
+**RM-498 — Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei.**
+Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der Maßgruppe stand ein abgelehnter Ausdruck sichtbar im Feld, und nach einem Griffzug war *Übernehmen* wieder frei: Der Vorschauauftrag des Zugs überschrieb den Sperrgrund der Felder. Die beiden Tests dazu (`test_a_refused_measure_stays_blocked_after_focus_moves`, `test_a_refused_measure_expression_blocks_accept_and_survives_refresh`) waren seit ihrer Entstehung rot und deckten den Fehler deshalb nie auf: Der eine zeigte das Fenster nie (offscreen kein Fokuswechsel), der andere bot einen Schritt an, den der Verlauf nicht kennt.
+
+**Abschluss:** Die Ablehnung der Felder ist eine eigene Sperre (`QuietHost.refuse_fields` in `app/ui/placement_flow.py`, gelesen in `read_fields` in `app/ui/main_window.py`), die ein Vorschauauftrag nicht mehr überschreibt. Der Fokustest zeigt das Fenster und sichert den Fokuswechsel als Voraussetzung ab; der Ausdruckstest bohrt echt mit `=@bore` und wählt die Bohrung wie der Kunde. Regel in `.claude/rules/oberflaeche.md`, Begründung in `konzepte/begruendungen/regel-oberflaeche.md`. Fenstersonde am echten Fenster: vorher 6 von 7 (nach dem Zug *Übernehmen* frei, Sperrgrund leer), nachher 7 von 7. In main mit `bbbee3a57`. Umgesetzt von Claude (Thread „Bedienung und KI“).
