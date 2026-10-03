@@ -339,6 +339,24 @@ nennt `int` deshalb `count`, das Fenster baut dafür ein Ganzzahlfeld, und was
 zurückgeht, ist `int`. Wer eine neue Feldart in `ActionField.kind` einführt,
 baut sie an beiden Enden — im Kern benannt, im Fenster gebaut und eingesammelt.
 
+**Ein zusammengelegter Grund verneint die Voraussetzung** — maschinell prüfbar
+ist das nicht („ändern“ ist beides):
+`test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing` hält nur,
+dass keine Art auf `_UNKNOWN_KIND` zurückfällt.
+
+**Die Spalte rollt nur senkrecht** (RM-488). Seit v0.5.1 verlangte die
+Auswahl *Änderungsumfang* ihren längsten Eintrag („Senkung, Stufen und
+Verengung mitnehmen“) als Mindestbreite; das Auswahlfenster wurde breiter als
+seine Spalte, die Kopfzeile wurde gekappt statt umgebrochen, Zahlenfelder
+endeten ohne Pfeile, die Info-Zeichen lagen rechts außerhalb, unten stand ein
+waagrechter Balken. `column_choice` lässt eine Auswahl mit der Spalte schmal
+werden (die offene Liste zeigt unter Fusion den ganzen Text), und
+`ColumnScroller` bindet die Mindestbreite des Inhalts an die Spalte: Was sich
+nicht kürzen lässt — ein Haken, ein Knopftext in einer längeren Sprache —,
+verbreitert die Spalte, statt unter den Rand zu laufen. Wächter:
+`test_the_selection_column_fits_every_field_it_shows` und
+`test_the_selection_column_fits_in_every_language` in `tests/test_analysis_ui.py`.
+
 ## Ein Merkmal aus einem Baustein meint den Baustein
 
 **Und der Organizer gehört dazu, obwohl er kein Baustein ist** (Befund
