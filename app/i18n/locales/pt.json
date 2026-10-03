@@ -7436,5 +7436,17 @@
   "{name} ändern": "Alterar {name}",
   "Einheit von {name}": "Unidade de {name}",
   "{name} als Regler": "{name} como controlo deslizante",
-  "Von {low} bis {high}": "De {low} a {high}"
+  "Von {low} bis {high}": "De {low} a {high}",
+  "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navegação, rato 3D, atribuição de teclas, vista de diferenças, chat, aviso de IA, controlo remoto",
+  "Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navegação, atribuição de teclas, vista de diferenças, chat, aviso de IA, controlo remoto",
+  "3D-Maus": "Rato 3D",
+  "Öffnet die Einstellungen bei dieser Zeile.": "Abre as definições nesta linha.",
+  "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, als OpenSCAD schreiben, bearbeiten, entfernen": "Guardar blocos próprios, adicionar a partir de um ficheiro, partilhar, gravar como OpenSCAD, editar, remover",
+  "Untergrenze und Obergrenze": "Limite inferior e superior",
+  "Durchmesser, Kaufdatum, Preis, Notiz, Slicer-Profil": "Diâmetro, data de compra, preço, nota, perfil de slicer",
+  "Startwert und Modell": "Semente e modelo",
+  "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Paredes, preenchimento, temperaturas, suportes, velocidade e mais",
+  "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Impressora, perfil base, filamento e placa de impressão no slicer",
+  "Weitere Beispielprojekte": "Mais projetos de exemplo",
+  "Text und Anhänge vor dem Senden ansehen": "Ver o texto e os anexos antes de enviar"
 }

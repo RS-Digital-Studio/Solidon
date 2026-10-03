@@ -13642,6 +13642,48 @@ def test_the_object_tree_grows_with_its_content(qt_app: QApplication) -> None:
     )
 
 
+def test_the_object_tree_asks_only_for_the_rows_it_has(qt_app: QApplication) -> None:
+    """Die Körperzeile mit Vorschaubild ist doppelt so hoch wie ihre Merkmale.
+
+    Gerechnet wurde mit der Höhe der ersten Zeile mal der Zahl der Zeilen: Ein
+    Körper mit zehn Merkmalen wollte 583 statt rund 300 Punkte. Die Karte nahm
+    sie der Filamentliste darunter weg und zeigte selbst eine leere Fläche
+    unter „Rechte Seite" (RM-489, gemessen bei 1920×1080).
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import ObjectTree, view_chrome
+
+    tree = ObjectTree()
+    body = QTreeWidgetItem(tree.tree, ["Halter", "60 × 40 × 11 mm"])
+    body.setSizeHint(0, QSize(0, 48))
+    for number in range(10):
+        QTreeWidgetItem(body, [f"Fläche {number}", "400 mm²"])
+    body.setExpanded(True)
+    tree.resize(300, 800)
+    tree.show()
+    try:
+        for _ in range(6):
+            qt_app.processEvents()
+        rows = tree.tree.rowHeight(tree.tree.indexFromItem(body))
+        rows += sum(
+            tree.tree.rowHeight(tree.tree.indexFromItem(body.child(index)))
+            for index in range(body.childCount())
+        )
+        needed = view_chrome(tree.tree) + rows
+        assert tree.wanted_height() <= needed, (
+            f"Wunsch {tree.wanted_height()} Punkte für Zeilen, die {needed} brauchen"
+        )
+        tree.set_room(tree.wanted_height())
+        for _ in range(6):
+            qt_app.processEvents()
+        assert tree.tree.verticalScrollBar().maximum() == 0, "mit vollem Wunsch rollt nichts"
+    finally:
+        tree.close()
+        tree.deleteLater()
+
+
 def test_the_history_grows_with_its_content(qt_app: QApplication) -> None:
     """Dasselbe für den Verlauf — bei vier Schritten waren zwei zu sehen."""
     from app.core.types import Document, Operation, Transaction
@@ -17309,6 +17351,49 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert len(both) >= 2, (hidden, visible, rows[:6])
         assert len(set(both)) == len(both), both
         assert all(chr(10) in row for row in both), both
+
+
+def test_the_palette_finds_every_setting_behind_the_closed_section(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Tastenbelegung" und „Fernsteuerung" in der Palette führen zur Zeile (RM-491).
+
+    Seit sieben Optionen hinter „Weitere Einstellungen" liegen, fand die
+    Palette sie nicht: Sie kannte nur *Einstellungen …*. Jetzt steht jede
+    Zeile darin, unter ihrem Namen, und der Klick öffnet den Dialog mit
+    aufgeklapptem Bereich und dem Feld im Fokus.
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    from app.ui.command_palette import CommandPalette
+    from app.ui.settings_dialog import SettingsDialog
+
+    entries = window.palette_rows()
+    palette = CommandPalette(entries, parent=window)
+    for query, wanted in (
+        ("Tastenbelegung", "settings.shortcuts"),
+        ("Fernsteuerung", "settings.remote"),
+    ):
+        palette._refilter(query)
+        found = [
+            palette.list.item(row).data(Qt.ItemDataRole.UserRole)
+            for row in range(palette.list.count())
+        ]
+        assert found and found[0] == wanted, (query, found[:5])
+    palette.deleteLater()
+
+    seen: dict[str, object] = {}
+
+    def look(dialog: SettingsDialog) -> int:
+        heading = dialog.advanced.findChild(QToolButton)
+        seen["open"] = heading.isChecked()
+        seen["focus"] = dialog._shown_option is dialog.shortcuts
+        dialog.release()
+        return int(SettingsDialog.DialogCode.Rejected)
+
+    monkeypatch.setattr(SettingsDialog, "exec", look)
+    window.window_commands()["settings.shortcuts"][2]()
+    assert seen == {"open": True, "focus": True}, seen
 
 
 def test_command_palette_shows_explanations_without_repeating_window_titles(

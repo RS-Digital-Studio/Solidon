@@ -7436,5 +7436,17 @@
   "{name} ändern": "Modifier {name}",
   "Einheit von {name}": "Unité de {name}",
   "{name} als Regler": "{name} en curseur",
-  "Von {low} bis {high}": "De {low} à {high}"
+  "Von {low} bis {high}": "De {low} à {high}",
+  "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigation, souris 3D, affectation des touches, vue des différences, chat, information sur l'IA, commande à distance",
+  "Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigation, affectation des touches, vue des différences, chat, information sur l'IA, commande à distance",
+  "3D-Maus": "Souris 3D",
+  "Öffnet die Einstellungen bei dieser Zeile.": "Ouvre les réglages à cette ligne.",
+  "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, als OpenSCAD schreiben, bearbeiten, entfernen": "Enregistrer vos propres blocs, ajouter depuis un fichier, partager, écrire en OpenSCAD, modifier, retirer",
+  "Untergrenze und Obergrenze": "Borne inférieure et supérieure",
+  "Durchmesser, Kaufdatum, Preis, Notiz, Slicer-Profil": "Diamètre, date d'achat, prix, note, profil de slicer",
+  "Startwert und Modell": "Graine et modèle",
+  "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Parois, remplissage, températures, supports, vitesse et plus",
+  "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Imprimante, profil de base, filament et plateau d'impression dans le slicer",
+  "Weitere Beispielprojekte": "Autres projets d'exemple",
+  "Text und Anhänge vor dem Senden ansehen": "Voir le texte et les pièces jointes avant l'envoi"
 }

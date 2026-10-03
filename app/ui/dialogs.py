@@ -676,7 +676,10 @@ class ParameterDialog(QDialog):
             existing.minimum is not None or existing.maximum is not None
         )
         self._limits_section = collapsible(
-            tr("Weitere Einstellungen"), self._limits, open_now=bounded
+            tr("Weitere Einstellungen"),
+            self._limits,
+            open_now=bounded,
+            contents=tr("Untergrenze und Obergrenze"),
         )
         chain = (
             self.name_field,

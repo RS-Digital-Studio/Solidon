@@ -1476,7 +1476,7 @@ class FilamentOverrideDialog(QDialog):
         # skaliert (§19.3): eine feste Zahl wäre bei der nächsten Schriftgröße
         # wieder zu klein.
         edge = swatch_size(title)
-        colour.setPixmap(swatch(slot_colours(int(slot.index), slot)).pixmap(edge, edge))
+        colour.setPixmap(swatch(slot_colours(int(slot.index), slot), edge).pixmap(edge, edge))
         colour.setAccessibleName(tr("Filamentfarbe"))
         heading_layout.addWidget(colour)
         heading_layout.addWidget(title, 1)
@@ -4378,7 +4378,13 @@ class PrintSettingsDialog(QDialog):
         bar.setElideMode(Qt.TextElideMode.ElideRight)
         bar.setExpanding(False)
         self.tabs.currentChanged.connect(self._refit_sections)
-        box = collapsible(tr("Weitere Einstellungen"), self.tabs, open_now=False)
+        box = collapsible(
+            tr("Weitere Einstellungen"),
+            self.tabs,
+            open_now=False,
+            contents=tr("Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr"),
+            remember="print.more",
+        )
         self.tabs_toggle = _toggle_of(box)
         if self.tabs_toggle is not None:
             self.tabs_toggle.toggled.connect(self._unfold_tabs)
@@ -4627,7 +4633,13 @@ class PrintSettingsDialog(QDialog):
         """Die Namen der Slot-Zeilen — die Quelle für Meldungen über sie."""
         self.slot_form = form
         self._build_slot_rows(form)
-        self.slicer_box = collapsible(tr("Profile des Slicers"), self.slicer_inner, open_now=False)
+        self.slicer_box = collapsible(
+            tr("Profile des Slicers"),
+            self.slicer_inner,
+            open_now=False,
+            contents=tr("Drucker, Grundprofil, Filament und Druckplatte im Slicer"),
+            remember="print.slicer",
+        )
         self.slicer_toggle = _toggle_of(self.slicer_box)
         if self.slicer_toggle is not None:
             self.slicer_toggle.toggled.connect(self._unfold_slicer)

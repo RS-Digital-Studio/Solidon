@@ -174,9 +174,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“ (Teil 1 und 3 mit RM-371). Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe](#rm-487) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1; passive Anpassung darf vergrößern, solange der Kunde die Größe nicht gezogen hat |
 | [RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken](#rm-488) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.0; Inhaltsbreite an die Spalte binden |
-| [RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken](#rm-489) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch den größeren Farbpunkt; Symbolgröße und Listenhöhe festlegen |
 | [RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“](#rm-490) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.4; Zusatzangabe kurz oder als Tooltip, Spalte nach Inhalt |
-| [RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“](#rm-491) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 (Auffindbarkeit); Überschrift nennt den Inhalt, Palette findet die Optionen |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
@@ -4996,22 +4994,6 @@ m463_regression.md`.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U5), Bilder in `regression-0.5.2\ui\`.
   Ursache gemessen (Weg 1, 02.10.2026): Das Auswahlfeld „Änderungsumfang“ verlangt 196 px, weil Qt die Breite am längsten Eintrag „Senkung, Stufen und Verengung mitnehmen“ misst; die Leiste hat 160 px. Mit dem Text aus v0.5.0 sind es 150 px, mit `AdjustToMinimumContentsLengthWithIcon` 90 px. Stellen `app/ui/panels.py:6307`, `app/core/registry/surfaces.py:66`. Beleg `regression-0.5.2\weg1\befunde.md` (W1-3).
 
-<a id="rm-489"></a>
-
-- [ ] **RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1.** Seit `e969f88ce` steht
-  die Farbe als großer runder Punkt in der Filamentliste; die Zeile wird höher und breiter. Dunkel:
-  Die Liste bekommt einen waagrechten und einen senkrechten Balken, „Im Regal“ verschwindet. Hell:
-  Die Liste passt, dafür wird der Objektbaum gekürzt („Rechte Seite“ fehlt). Bei 1280×720 ebenso
-  ein waagrechter Balken. v0.5.0 und v0.5.1 zeigten alle Baumzeilen und beide Überschriften.
-  **Stellen:** `app/ui/filament_picker.py:211` (`swatch`), `:1966–1995` (`_fit` ohne waagrechten
-  Balken).
-  **Fix (allgemein):** Symbolgröße der Liste auf die bisherige Zeilenhöhe festlegen, lange
-  Einträge kürzen statt waagrecht rollen, `_fit` rechnet einen sichtbaren Balken mit.
-  **Abnahme:** drei Modelle mit 1, 2 und 4 Filamenten bei 1920×1080 und 1280×720, beide Schemata:
-  alle Baumzeilen und beide Überschriften sichtbar, kein waagrechter Balken. Bauplan §2.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U1), Bilder in `regression-0.5.2\ui\`.
-
 <a id="rm-490"></a>
 
 - [ ] **RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“.**
@@ -5025,21 +5007,6 @@ m463_regression.md`.
   **Abnahme:** Bohrung, Fläche und gemessene Kante bei 1280 und 1920: Maß vollständig lesbar,
   Zusatzangabe über Tooltip oder Zeichen erreichbar (zweite Kodierung, Regel 18). Bauplan §2.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U2), Bilder in `regression-0.5.2\ui\`.
-
-<a id="rm-491"></a>
-
-- [ ] **RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1** (Auffindbarkeit, aus
-  `48ffcf145`; anderer Ort als „Bausteine verwalten“). Navigation, Differenzansicht,
-  Tastenbelegung, Chat-Vorschläge ohne Nachfrage, KI-Hinweis, Fernsteuerung (MCP) und Port liegen
-  eingeklappt; nichts verrät von außen, dass dort die Tastenbelegung oder die Fernsteuerung steht.
-  **Stellen:** `app/ui/settings_dialog.py:586`.
-  **Fix (allgemein):** Die Überschrift eingeklappter Bereiche nennt ihren Inhalt (z. B. „Maus,
-  Tastatur, Chat, Fernsteuerung“), der Bereich merkt sich seinen Zustand, und die Befehlspalette
-  findet jede Einzeloption.
-  **Abnahme:** Einstellungen, „Bausteine verwalten“ und ein dritter eingeklappter Bereich nennen
-  ihren Inhalt; Palette findet „Tastenbelegung“ und „Fernsteuerung“. Bauplan §2.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U4), Bilder in `regression-0.5.2\ui\`.
 
 <a id="rm-492"></a>
 

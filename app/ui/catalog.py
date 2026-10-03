@@ -396,7 +396,16 @@ class PartCatalog(QDialog):
             management_layout.addWidget(action, index // 2, index % 2)
         management_layout.addWidget(self.save_hint, 3, 0, 1, 2)
         management_layout.addWidget(self.share_hint, 4, 0, 1, 2)
-        self.management_section = collapsible(tr("Bausteine verwalten"), management, open_now=False)
+        self.management_section = collapsible(
+            tr("Bausteine verwalten"),
+            management,
+            open_now=False,
+            contents=tr(
+                "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, "
+                "als OpenSCAD schreiben, bearbeiten, entfernen"
+            ),
+            remember="catalog.manage",
+        )
         self._management = management
 
         layout = QVBoxLayout(self)

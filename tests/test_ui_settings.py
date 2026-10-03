@@ -94,7 +94,7 @@ def test_a_slicer_path_write_error_reopens_the_settings_draft(monkeypatch, retry
         _apply_settings=lambda: None,
         _apply_remote=lambda: None,
     )
-    main_window.MainWindow.action_settings(window)
+    main_window.MainWindow.show_setting(window, "")
     assert len(opened) == 2
     assert len(problems) == 1 and isinstance(problems[0], FileWriteError)
     assert {action.id for action in problems[0].suggestions} == {"retry", "cancel"}
@@ -499,3 +499,122 @@ def test_printer_search_keeps_the_confirmed_choice_across_a_language_change(
     finally:
         rebuilt.release()
         rebuilt.deleteLater()
+
+
+def _summary_of(section):
+    """Die Zeile unter einer zugeklappten Überschrift, die den Inhalt nennt."""
+    from PySide6.QtWidgets import QLabel
+
+    return section.findChild(QLabel, "sectionSummary")
+
+
+def test_the_closed_settings_name_what_lies_behind_them(qt_app, monkeypatch) -> None:
+    """„Weitere Einstellungen" nennt Tastenbelegung und Fernsteuerung (RM-491).
+
+    Seit v0.5.2 liegen sieben Optionen dahinter, und von außen verriet nichts,
+    dass es sie gibt. Zugeklappt steht ihr Inhalt unter der Überschrift, ein
+    Klick darauf klappt auf, und der nächste Dialog öffnet so, wie der Kunde
+    den letzten verließ.
+    """
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QToolButton
+
+    from app.ui import settings_dialog as module
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+
+    def settle():
+        for _ in range(12):
+            qt_app.processEvents()
+
+    dialog = module.SettingsDialog(UiSettings())
+    try:
+        dialog.show()
+        settle()
+        summary = _summary_of(dialog.advanced)
+        heading = dialog.advanced.findChild(QToolButton)
+        assert summary is not None and summary.isVisible(), "zugeklappt steht der Inhalt da"
+        for word in ("Tastenbelegung", "Fernsteuerung", "Navigation", "Chat"):
+            assert word in summary.text(), (word, summary.text())
+        assert heading.accessibleDescription() == summary.text()
+        assert not dialog.shortcuts.isVisible()
+        QTest.mouseClick(summary, Qt.MouseButton.LeftButton, pos=QPoint(4, 4))
+        settle()
+        assert heading.isChecked() and dialog.shortcuts.isVisible()
+        assert not summary.isVisible(), "offen nennt der Inhalt sich selbst"
+    finally:
+        dialog.close()
+        dialog.release()
+        dialog.deleteLater()
+
+    again = module.SettingsDialog(UiSettings())
+    try:
+        heading = again.advanced.findChild(QToolButton)
+        assert heading.isChecked(), "der Bereich merkt sich, dass er offen verlassen wurde"
+        heading.click()
+    finally:
+        again.release()
+        again.deleteLater()
+    closed = module.SettingsDialog(UiSettings())
+    try:
+        assert not closed.advanced.findChild(QToolButton).isChecked()
+    finally:
+        closed.release()
+        closed.deleteLater()
+
+
+def test_the_remembered_sections_travel_in_the_settings_file(tmp_path, monkeypatch) -> None:
+    """Der Zustand der Abschnitte steht in ``settings.json`` und kommt zurück."""
+    from app.ui import settings as settings_module
+
+    monkeypatch.setattr(settings_module, "settings_path", lambda: tmp_path / "settings.json")
+    stored = settings_module.UiSettings(open_sections={"settings.more": True})
+    assert settings_module.save_settings(stored) is not None
+    assert settings_module.load_settings().open_sections == {"settings.more": True}
+
+
+@pytest.mark.parametrize("option", ["shortcuts", "remote", "remote_port", "language"])
+def test_a_setting_from_the_palette_opens_its_row(qt_app, monkeypatch, option) -> None:
+    """Die Palette führt zu jeder Zeile, auch hinter „Weitere Einstellungen" (RM-491)."""
+    from PySide6.QtWidgets import QToolButton
+
+    from app.ui import settings_dialog as module
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    dialog = module.SettingsDialog(UiSettings())
+    try:
+        dialog.show_option(option)
+        dialog.show()
+        for _ in range(12):
+            qt_app.processEvents()
+        field = getattr(dialog, option)
+        assert field.isVisible(), f"{option} steht nach dem Öffnen im Bild"
+        # Der Port ist gesperrt, solange die Fernsteuerung aus ist; dann führt
+        # der Weg über ihren Haken.
+        focused = dialog.remote if option == "remote_port" else field
+        assert dialog.focusWidget() is focused, (option, dialog.focusWidget())
+        hidden_behind = option != "language"
+        assert dialog.advanced.findChild(QToolButton).isChecked() is hidden_behind
+    finally:
+        dialog.close()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_palette_offers_every_visible_setting_under_its_row_name() -> None:
+    """Eine Quelle für Formular und Palette; die 3D-Maus erst, wenn sie da ist."""
+    from app.ui.settings import UiSettings
+    from app.ui.settings_dialog import SPACEMOUSE_OPTIONS, option_titles, searchable_options
+
+    titles = searchable_options(UiSettings())
+    assert titles["shortcuts"] == option_titles()["shortcuts"] == "Tastenbelegung"
+    assert "Fernsteuerung" in titles["remote"]
+    assert not set(SPACEMOUSE_OPTIONS) & set(titles), "ohne gesehenes Gerät keine 3D-Maus"
+    seen = searchable_options(UiSettings(spacemouse_seen=True))
+    assert set(SPACEMOUSE_OPTIONS) <= set(seen)
+    assert "3D-Maus" in seen["spacemouse_invert"], "„Richtung umkehren“ allein sagt nicht, wessen"

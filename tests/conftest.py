@@ -687,6 +687,19 @@ def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _remembered_sections_start_closed() -> Iterator[None]:
+    """Was ein Test aufklappt, steht im nächsten nicht offen (``panels.keep_sections_in``).
+
+    Nur geräumt, wenn ``panels`` schon geladen ist — ein Kerntest soll das
+    größte Modul der Oberfläche nicht beim Aufräumen laden.
+    """
+    yield
+    panels = sys.modules.get("app.ui.panels")
+    if panels is not None:
+        panels.keep_sections_in({})
+
+
+@pytest.fixture(autouse=True)
 def _no_backend_stays_rejected() -> Iterator[None]:
     """Dieselbe Begründung wie darüber, für einen zweiten Prozesszustand.
 

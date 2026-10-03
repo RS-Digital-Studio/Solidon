@@ -451,7 +451,13 @@ class GenerateDialog(QDialog):
         self._model_fields: dict[str, QComboBox] = {}
         advanced_form.addRow(self._models)
 
-        self.advanced = collapsible(tr("Weitere Einstellungen"), advanced, open_now=False)
+        self.advanced = collapsible(
+            tr("Weitere Einstellungen"),
+            advanced,
+            open_now=False,
+            contents=tr("Startwert und Modell"),
+            remember="generate.more",
+        )
 
         # Lange Hinweise bleiben vollständig im Rollbereich erreichbar, ohne
         # Statuswechsel als bewusste Fenstergrößenänderung zu behandeln.
