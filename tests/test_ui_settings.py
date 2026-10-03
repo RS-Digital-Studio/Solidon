@@ -408,6 +408,12 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
         settle()
         compact = dialog.height()
         compact_width = dialog.width()
+        # Was der zugeklappte Inhalt braucht. Die Aufmachgröße kann darüber
+        # liegen, wenn der Inhalt danach passiv schrumpft (Slicer- und
+        # Druckersuche melden sich nach dem Aufmachen); der Rahmen bleibt dann
+        # stehen (``fenster.md``). Das ausdrückliche Zuklappen gibt zurück,
+        # was der Inhalt nicht mehr braucht.
+        collapsed = min(compact, dialog.sizeHint().height())
         heading = dialog.advanced.findChild(QToolButton)
         assert heading is not None
         heading.click()
@@ -420,9 +426,9 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
         assert not dialog._scroll.isAncestorOf(dialog.save)
         heading.click()
         settle()
-        assert dialog.height() == compact
+        assert dialog.height() == collapsed, "Zuklappen gibt die Höhe der Zusatzzeilen zurück"
         assert dialog.width() == compact_width
-        dialog.resize(dialog.width(), compact + 80)
+        dialog.resize(dialog.width(), collapsed + 80)
         drawn = dialog.height()
         heading.click()
         settle()

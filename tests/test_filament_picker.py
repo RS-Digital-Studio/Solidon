@@ -35,6 +35,18 @@ def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
     assert hex_of((1.0, 0.0, 0.0)) == "#ff0000"
 
 
+def _next_tab(widget):
+    """Das nächste Widget der Fokuskette, das die Tabulatortaste annimmt."""
+    from PySide6.QtCore import Qt
+
+    following = widget.nextInFocusChain()
+    while following is not widget and not (
+        following.focusPolicy() & Qt.FocusPolicy.TabFocus and following.isEnabled()
+    ):
+        following = following.nextInFocusChain()
+    return following
+
+
 def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app, monkeypatch) -> None:
     """Eine weitere Farbe entfernt weder den bisherigen Fokusanker noch den Weg durchs Formular."""
     from PySide6.QtGui import QColor
@@ -47,10 +59,13 @@ def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app, monk
         dialog.add_colour.click()
         assert tuple(dialog.colour_buttons[:2]) == original
         assert len(dialog.colour_buttons) == 3
-        assert dialog.colour_buttons[0].nextInFocusChain() is dialog.colour_buttons[1]
-        assert dialog.colour_buttons[1].nextInFocusChain() is dialog.colour_buttons[2]
-        assert dialog.colour_buttons[2].nextInFocusChain() is dialog.add_colour
-        assert dialog.remove_colour.nextInFocusChain() is dialog.location
+        # Geprüft wird der Weg der Tabulatortaste. In der Fokuskette stehen
+        # auch die Namensschilder der Farben (Regel 18: die Farbe steht nie
+        # allein); die nimmt Tab nicht an, also überspringt sie auch der Test.
+        assert _next_tab(dialog.colour_buttons[0]) is dialog.colour_buttons[1]
+        assert _next_tab(dialog.colour_buttons[1]) is dialog.colour_buttons[2]
+        assert _next_tab(dialog.colour_buttons[2]) is dialog.add_colour
+        assert _next_tab(dialog.remove_colour) is dialog.location
         dialog.remove_colour.click()
         assert tuple(dialog.colour_buttons) == original
     finally:
@@ -323,8 +338,10 @@ def test_a_spool_with_several_colours_goes_whole_into_the_field(
     assert seen == ["#ff0000 #0000ff"], "beide Farben gehen in das Feld der Operation"
 
     image = field.itemIcon(position).pixmap(SWATCH_PIXELS, SWATCH_PIXELS).toImage()
-    left = image.pixelColor(1, SWATCH_PIXELS // 2).name()
-    right = image.pixelColor(SWATCH_PIXELS - 2, SWATCH_PIXELS // 2).name()
+    # Der Punkt ist rund (e969f88ce); am Rand mischt die Kantenglättung. Gelesen
+    # wird je in der Mitte der linken und der rechten Hälfte.
+    left = image.pixelColor(SWATCH_PIXELS // 4, SWATCH_PIXELS // 2).name()
+    right = image.pixelColor(3 * SWATCH_PIXELS // 4, SWATCH_PIXELS // 2).name()
     assert (left, right) == ("#ff0000", "#0000ff"), f"Streifen in Spulenreihenfolge: {left} {right}"
 
 

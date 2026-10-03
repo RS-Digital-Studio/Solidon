@@ -4461,10 +4461,8 @@ class PrintSettingsDialog(QDialog):
     def _fit_buttons(self) -> None:
         """Lange Aktionsnamen stehen bei schmalem Fenster untereinander."""
         visible = [button for button in self._buttons.buttons() if not button.isHidden()]
-        row = self._buttons.layout()
-        spacing = max(row.spacing(), 0) if row is not None else TIGHT
         wanted = sum(button.sizeHint().width() for button in visible)
-        wanted += spacing * max(0, len(visible) - 1)
+        wanted += SPACE * max(0, len(visible) - 1)
         available = self.width()
         screen = self.screen()
         if screen is not None:
@@ -4476,6 +4474,12 @@ class PrintSettingsDialog(QDialog):
         self._buttons.setOrientation(
             Qt.Orientation.Horizontal if wanted <= available else Qt.Orientation.Vertical
         )
+        # Ein Wechsel der Richtung baut das Layout des Knopfkastens neu, mit
+        # dem Abstand des Stils (6 statt 4 Punkte). Der vorgesehene gilt auch
+        # untereinander (a5e698c78).
+        row = self._buttons.layout()
+        if row is not None and row.spacing() != SPACE:
+            row.setSpacing(SPACE)
 
     def _natural_width(self) -> int:
         """Die Anfangsbreite: Reiterleiste und alles, was hinter den Klappen wartet.
