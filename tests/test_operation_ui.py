@@ -2179,13 +2179,17 @@ def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
     try:
         dialog.resize(520, 460)
         dialog.show()
-        description = dialog.layout().itemAt(0)
-
-        assert description.widget() is dialog._description
+        QApplication.processEvents()
+        # Seit der Inhalt im Rollbereich steht, ist der Satz dort der erste
+        # Eintrag und nicht mehr der des Dialogs; gemessen wird seine Höhe.
+        holder = dialog._description.parentWidget()
+        assert holder is not None and holder.layout() is not None
+        first = holder.layout().itemAt(0)
+        assert first is not None and first.widget() is dialog._description
         # Zwei Zeilen Text in einem Dialog dieser Höhe — großzügig gedeckelt,
         # damit der Test eine andere Schrift überlebt und trotzdem anschlägt,
         # wenn das Label wieder wächst.
-        assert description.geometry().height() < 120
+        assert dialog._description.height() < 120
     finally:
         dialog.deleteLater()
 
@@ -3477,8 +3481,11 @@ def test_a_number_field_stays_as_wide_as_a_number(empty_window: MainWindow) -> N
             "die Auswahl ist so schmal wie ein Zahlenfeld — dann wurde zu viel gedeckelt"
         )
         fields = dialog.findChildren(ValueField)
+        # ``even_value_fields`` (d80e1ce8e) gibt den Zahlenfeldern untereinander
+        # eine Kante: die Wunschbreite des breitesten. Breiter wird keines.
+        widest = max(field.spin.sizeHint().width() for field in fields)
         for field in fields:
-            assert field.spin.width() <= field.spin.sizeHint().width() + NUMBER_AIR, (
+            assert field.spin.width() <= widest + NUMBER_AIR, (
                 f"das Drehfeld wuchs auf {field.spin.width()} px"
             )
     finally:
@@ -5640,9 +5647,11 @@ def test_a_long_preview_offers_cancel_and_cancelling_leaves_the_model(
     shown: list[str] = []
     real = type(window.viewport).mark_preview
 
-    def noted(self: object, note: str, hint: str = "") -> object:
+    def noted(self: object, note: str, hint: str = "", **options: Any) -> object:
+        # ``mark_preview`` kennt seit dem Abbrechen-Weg ``changes=``; ohne
+        # Durchreichen brach der Ersatz dort ab, und das Band blieb stehen.
         shown.append(note)
-        return real(self, note, hint)
+        return real(self, note, hint, **options)
 
     monkeypatch.setattr(type(window.viewport), "mark_preview", noted)
     window.run_operation(REGISTRY.get("decimate_mesh"))
