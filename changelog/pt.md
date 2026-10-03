@@ -30,6 +30,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A «Lingueta para perfil de alumínio» serve no Motedis 20 × 20 tipo B ranhura 6 e 30 × 30 tipo B ranhura 8, com a cabeça à forma da ranhura. Os três tamanhos anteriores ficam como medidas antigas.
 - No relatório, «Reconstruir modelo» refaz uma peça importada a partir de formas base, furos e arredondamentos, compara-a com o original dentro do limite escolhido e aplica-a num só passo.
 - A «Abraçadeira com insertos» começa com o material do projeto nos dois campos de material. Até agora ambos ficavam vazios.
+- A pesquisa de peças encontra a «Lingueta para perfil de alumínio» também como porca em T, e a sua descrição diz em que se distingue de uma porca em T com rosca.
 
 ### Imprimir e entregar ao slicer
 

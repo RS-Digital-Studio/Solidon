@@ -390,7 +390,8 @@ def test_a_packaged_build_says_why_it_cannot(monkeypatch: pytest.MonkeyPatch) ->
     requirement = by_id("brep")
 
     assert not install.installable(requirement)
-    assert "Paketverwaltung" in str(install.why_not(requirement))
+    # Der Satz spricht vom Kunden, nicht von einer Entwicklungsumgebung (RM-084).
+    assert "nachinstallieren" in str(install.why_not(requirement))
 
 
 def test_without_a_package_manager_a_program_is_not_offered(

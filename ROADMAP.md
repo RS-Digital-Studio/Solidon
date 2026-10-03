@@ -48,7 +48,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
 | [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
-| [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Maße von Motedis 20×20 B-Typ Nut 6 und 30×30 B-Typ Nut 8 aus Zeichnung und STEP eingebaut, 360 Einschubfälle ohne Überschneidung; offen: gedruckte Passungsprobe an einem echten Profil oder Roberts Entscheidung, dass der STEP-Nachweis genügt, dazu das Wiederöffnen am Fenster (RM-213) |
+| [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Robert 04.10.: Der STEP-Nachweis genügt, eine gedruckte Probe entfällt; Suche nach Nutenstein und T-Nut gebaut. Offen allein das Wiederöffnen am Fenster beim Release (RM-213) |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Nachbau über den Prüfbericht gebaut (Kandidaten, Formgrenze, Vergleich, eine Transaktion), Übernahme prüft verknüpfte Quellen, beide P1-Funde der Durchsicht behoben; offen: Zapfen mit Kehle am Netz (mit RM-226), weitere Grundformen und Laufzeit (Lochplatte bis 48 s), die acht Fensterschritte beim Release (RM-213) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände) — ob Solidon dort Vorgaben setzt, entscheidet Robert |
@@ -101,7 +101,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut: `make_guides` meidet Text in Fenster, Menüs und Dialogen und setzt die Nummer bei vollem Dialog in den Bildrand; offen: Feldabnahme nach §11 mit einem Kunden ohne CAD, dazu die Anleitungsbilder beim Release neu erzeugen und Schritt 3 beider Anleitungen ansehen |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Rampe der 3D-Maus am echten Gerät; ob dieser Rest in RM-070 aufgeht und der Punkt damit schließt, entscheidet Robert |
-| [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | A16, A23, C12 und *Bahnbreite* erledigt, Inventar über 237 Module, 154 Quellenstände gelesen, Website in sechs Sprachen berichtigt; offen: übrige Kernquellen und die fünf Kataloge redaktionell, Browserabnahme der acht ES/FR/IT/PT-Seiten bei 390 und 1440 px, Handbuch und Assetstempel beim Release |
+| [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Bestand vor 0.5.0 in Anwendung und DE/EN-Website gelesen und berichtigt (04.10.); offen: Katalogdurchsichten je Sprache, Browserabnahme ES/FR/IT/PT bei 390 und 1440 px, Handbuch und Assetstempel beim Release |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Prüfzustände im Kern sowie Druckziel, vier Übergabezustände, Befundkarte, Änderungserklärung und eingefrorener Beleg in der Oberfläche gebaut; offen: erneute Druckfolgen der Kandidatenszene in der Vorschau, Wiederimport-Gegenprobe im Export, Abnahme auf den vier Hauptwegen am Fenster (RM-213) |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Mehrfachimport gebaut und am Piratenschiff am Fenster abgenommen (17 STL, eine Transaktion, Dateilage, keine Einzeldialoge, Reload); offen: gebündelte Meldungen zu enthaltenen Teilen, Dialogabbruch, *Modell einfügen* und späte Antwort am Fenster beim Release (RM-213) |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
@@ -715,6 +715,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   2020→3030, Undo/Redo, Speichern. „Nut 8 wie 3030“ ist gestrichen, 40×40 I-Typ hat 4,5 mm Steg.
   Offen: gedruckte Probe, Wiederöffnen; die Suche „Profilzunge“ findet den Baustein nicht. Beleg:
   `konzepte/nachweise-release-0.5.1/reports/rm017-herstellerprofile-2026-10-03.md`.
+
+  **Teilstand 04.10.2026:** Robert entschied, dass der Nachweis gegen die Hersteller-STEP
+  (360 Einschubfälle ohne Überschneidung) als Passungsprobe genügt; eine gedruckte Probe entfällt.
+  Die Bausteinsuche findet die Nutfeder jetzt unter „Nutenstein“, „T-Nut“, „Aluprofil“ und in den
+  fünf Sprachen unter der Mutter in T-Form; der `doc`-Satz nennt den Unterschied zum Nutenstein
+  (`registry.PartRegistry.search` zählt Wörter mit Bindestrich auch als Ganzes, 18 Fälle in
+  `tests/test_parts.py`). „Profilzunge“ ist kein Kundenwort. Offen allein das Wiederöffnen eines
+  gespeicherten 30×30-Projekts am Fenster beim Release.
 
 <a id="rm-022"></a>
 
@@ -3805,6 +3813,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Changelog-Seiten neu. Katalog 216, Changelog 48, Website 442 Fälle grün. Belege unter
   `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `construction-ui.md`,
   `rm084-website-four-languages.md`, `construction-wording-a23.md`.
+
+  **Teilstand 04.10.2026 (Claude, H1 texte-quelle):** Gelesen wurden alle
+  Kundentexte der 135 Quellmodule, die die Codex-Abdeckung nicht führt
+  (3304 Texte, darunter Kern, Bausteine, Kommandozeile, Erzeuger in `tools/`),
+  dazu 657 seit v0.5.1 neue Texte in 31 gelesenen, inzwischen geänderten
+  Modulen, die deutsche und englische Start- und Funktionsseite (Code gegen
+  Aussage) und das Impressum. 33 Schlüssel neu gefasst und in allen fünf
+  Katalogen neu übersetzt, drei englische Übersetzungen auf *line width*
+  gezogen: Entwicklersprache (Stapel, Container, Löser, Budget, Kern,
+  gestörte Eingangsgeometrie, Entwicklungsumgebung) durch Kundenwörter ersetzt,
+  `**im**` aus einem Feldtooltip, ein Datum aus einem Bausteinhinweis, zwei
+  Grammatikfehler. *Extrusionsbahnen* steht in keinem Kundentext mehr (vier
+  Quelltexte, drei englische Übersetzungen, drei Website-Stellen DE/EN). Die
+  Bausteinsuche zählt Wörter mit Bindestrich auch als Ganzes, die Nutfeder nennt
+  den Unterschied zum Nutenstein (`registry.PartRegistry.search`,
+  `structure.profile_tongue`); `tests/test_parts.py` 18 neue Fälle, vorher 7
+  der Wörter ohne Treffer (`suche-vorher.txt`). Website: Signaturhinweis in
+  sechs Sprachen „ab 0.5.0“ statt „0.5.0“, Merkmalsfenster → Auswahlfenster,
+  englische Bausteinnamen wie im Katalog (*nut trap*, *screw hole with
+  countersink*, *dowel pin*), Changelog-Sätze („vorher kostete …“) aus der
+  Funktionsseite. `tools/check_part_ranges.py` prüfte im Worktree den
+  Hauptklon (Editierinstallation), berichtigt; Bereichsnachweis für 26
+  Bausteine neu gefahren, alle bestanden. Belege unter
+  `F:\solidon-review-reports\claude-2026-10-04\texte-quelle\`.
 
 <a id="rm-090"></a>
 

@@ -154,8 +154,8 @@ class FilletParams(BaseParams):
         maximum=100.0,
         doc=_(
             "Radius der Verrundung, bei einem Verlauf der Radius am Anfang der Kante. "
-            "Größer als das dünnste angrenzende Material geht nicht — dann hat der Kern "
-            "keinen Platz mehr."
+            "Größer als das dünnste angrenzende Material geht nicht — dann bleibt "
+            "für die Rundung kein Platz."
         ),
     )
     # **P6.1 — Verrunden mit Verlauf.** Die Vorgabe bleibt der eine Radius;

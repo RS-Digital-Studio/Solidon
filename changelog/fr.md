@@ -31,6 +31,7 @@ dans `website/version.json`.
 - La « Languette pour profilé aluminium » va aux Motedis 20 × 20 type B rainure 6 et 30 × 30 type B rainure 8, tête à la forme de la rainure. Les trois tailles précédentes restent comme anciennes cotes.
 - Dans le rapport, « Reconstruire le modèle » refait une pièce importée à partir de formes de base, perçages et congés, la compare à l'original dans la limite choisie et l'applique en une étape.
 - Le « Collier avec garnitures » démarre avec le matériau du projet dans les deux champs de matériau. Jusqu'ici, les deux étaient vides.
+- La recherche de pièces trouve la « Languette pour profilé aluminium » aussi sous écrou en T, et sa description dit en quoi elle diffère d'un écrou en T fileté.
 
 ### Imprimer et transmettre au slicer
 

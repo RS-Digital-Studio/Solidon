@@ -88,7 +88,7 @@ DOWEL_DOVETAIL_PROFILE_FIXED = PartChange(
     effect=_(
         "Der Schwalbenschwanz folgt jetzt dem Nenn-Umkreis mit einer gerundeten "
         "Außenseite und einer formschlüssigen Sehne. Sein Umkreis bleibt gleich, "
-        "der kleinste Stift hält aber wieder zwei Extrusionsbahnen."
+        "der kleinste Stift hält aber wieder zwei Bahnen."
     ),
 )
 

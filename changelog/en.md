@@ -30,6 +30,7 @@ it into `website/version.json`.
 - The *T-slot tongue for extrusion* fits Motedis 20 × 20 B-type slot 6 and 30 × 30 B-type slot 8, with a head shaped like the slot. The three previous sizes remain available as older dimensions.
 - In the report, *Rebuild model* rebuilds an imported part from basic shapes, holes and fillets, compares it with the original within the limit you set and applies it in one step.
 - The *Profile clamp with liners* starts with the project material in both material fields. Until now both were empty.
+- The part search finds the *T-slot tongue for extrusion* under T-nut as well, and its description says how it differs from a threaded T-nut.
 
 ### Printing and slicer handover
 

@@ -55,6 +55,7 @@ Nutzen da und sonst nichts.
 - Die *Nutfeder für Aluprofil* passt zu Motedis 20 × 20 B-Typ Nut 6 und 30 × 30 B-Typ Nut 8, ihr Kopf folgt der Form der Nut. Die drei bisherigen Größen bleiben als ältere Maße wählbar.
 - Im Prüfbericht baut *Modell nachbauen* ein eingelesenes Teil aus Grundformen, Bohrungen und Rundungen nach, vergleicht es in der gewählten Grenze mit dem Original und übernimmt es in einem Schritt.
 - Die *Profilklemme mit Einlagen* beginnt mit dem Material des Projekts in beiden Materialfeldern. Bisher waren beide leer.
+- Die Bausteinsuche findet die *Nutfeder für Aluprofil* auch unter Nutenstein und T-Nut, und ihre Beschreibung sagt, worin sie sich von einem Nutenstein mit Gewinde unterscheidet.
 
 ### Drucken und Übergabe an den Slicer
 

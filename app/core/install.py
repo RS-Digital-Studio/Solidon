@@ -518,10 +518,7 @@ def why_not(requirement: Requirement) -> TranslatableText | str:
     if requirement.kind == "package":
         if not requirement.package:
             return _("Dieses Paket wird von Hand installiert — die Seite steht daneben.")
-        return _(
-            "Die gebaute Anwendung bringt keine Paketverwaltung mit. "
-            "In einer Entwicklungsumgebung ginge es von hier aus."
-        )
+        return _("Die installierte Anwendung kann das nicht nachinstallieren.")
     # Eigenname und Handlung bleiben Werte; der Katalog setzt den Satzrahmen.
     wanted = for_platform()
     if wanted is None:

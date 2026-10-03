@@ -31,6 +31,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La «Lengüeta para perfil de aluminio» encaja en Motedis 20 × 20 tipo B ranura 6 y 30 × 30 tipo B ranura 8, con cabeza a la forma de la ranura. Los tres tamaños previos quedan como medidas antiguas.
 - En el informe, «Reconstruir modelo» rehace una pieza importada con formas básicas, taladros y redondeos, la compara con el original dentro del límite elegido y la aplica en un solo paso.
 - La «Abrazadera con revestimientos» empieza con el material del proyecto en los dos campos de material. Hasta ahora ambos estaban vacíos.
+- La búsqueda de piezas encuentra la «Lengüeta para perfil de aluminio» también como tuerca en T, y su descripción dice en qué se diferencia de una tuerca en T con rosca.
 
 ### Imprimir y entregar al slicer
 

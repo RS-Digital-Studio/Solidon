@@ -23588,8 +23588,8 @@ class MainWindow(QMainWindow):
         else:
             self.announce(
                 tr(
-                    "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
-                    "eine Änderung am Stapel rechnet weiter."
+                    "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand; "
+                    "die nächste Änderung rechnet weiter."
                 )
             )
         if self.session.recognition_interrupted():
