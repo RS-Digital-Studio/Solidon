@@ -4143,6 +4143,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`F:\solidon-review-reports\register-bedienung.md`). Der erste rote Torlauf
   bleibt ein Altbefund. Die obigen Restarbeiten halten RM-312 offen.
 
+  **Teilstand 03.10.2026 — mehrere Druckdateien einer Platte:** Bambu Studio
+  verteilte sieben Objekte einer Eingabeplatte auf zwei Druckdateien (vier
+  Teile mit Werkzeug 0–2, drei mit 3–5); Solidon übernahm still die jüngste
+  Datei als vollständiges Ergebnis. `handover._find_gcode` zählt jetzt nur die
+  Dateien des jeweiligen Versuchs (eigener Vorbestand je Start, auch beim
+  Wiederholen ohne Anordnung und ohne `--cli`), liest `result.json` mit
+  `sliced_plates` und hält bei mehr als einer neuen Druckdatei oder Platte mit
+  *Auf dem Bett anordnen*, *Nur exportieren* und *Abbrechen* an. Reste einer
+  Absage und fremde Dateien im Zielordner zählen weder als Erfolg noch als
+  weitere Platte. Gegenprobe: `tests/test_slicer_output_completeness.py`
+  (Codex-Linie B, Worktree slicer-mehrplatten), dazu die echte Bambu-Ausgabe
+  durch den Rückgabeweg wiedergegeben (`rm312/replay_output.py` gegen den
+  integrierten Stand: abgewiesen, drei Handlungen, vorhandene fremde Datei
+  bytegleich). Ursache: die jüngste Datei als Rückfall stammt aus der Zeit vor
+  v0.5.1; ein Kundenpunkt in allen sechs Sprachen.
+
 <a id="rm-321"></a>
 
 - [~] **RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung

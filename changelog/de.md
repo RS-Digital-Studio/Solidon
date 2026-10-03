@@ -108,6 +108,7 @@ Nutzen da und sonst nichts.
 - Solidon ordnet überlappende Teile vor dem Schneiden mit PrusaSlicer oder Cura auf dem Druckbett an und meldet, wenn es keine passende Anordnung findet.
 - Meldet PrusaSlicer oder SuperSlicer eine leere erste Schicht, nennt Solidon das Teil und bietet Aufsetzen aufs Bett sowie passende Druckeinstellungen an.
 - Warnungen von PrusaSlicer und SuperSlicer stehen auch nach gelungenem Slicen im Prüfbericht, eine leere Schicht als Fehler. Der Abstand zum Raft ist eigens einstellbar.
+- Teilt der Slicer eine Platte auf mehrere Druckdateien auf, meldet Solidon das und bietet Anordnen oder den Export an. Bisher übernahm es still nur eine der Dateien.
 
 ### Bohrungen, Langlöcher und Teilen
 

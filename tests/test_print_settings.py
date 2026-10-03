@@ -4462,20 +4462,17 @@ def test_a_file_without_a_single_path_is_not_judged() -> None:
     assert handover.off_the_bed("G90\nG0 X400 Y400\nM104 S210\n", profile, "cura") is None
 
 
-def test_the_newest_gcode_in_the_folder_wins(tmp_path: Path) -> None:
+def test_only_the_print_file_of_this_attempt_counts(tmp_path: Path) -> None:
     """Orca hängt Plattennummern an; ein zweiter Lauf darf nicht die Zahlen des
-    ersten melden."""
-    import os
-    import time
-
+    ersten melden. Gezählt wird, was dieser Versuch neu geschrieben hat
+    (RM-312) — die Datei des ersten Laufs steht in seinem Vorbestand."""
     old = tmp_path / "plate_1.gcode"
     old.write_text("; alt\n", encoding="utf-8")
-    time.sleep(0.01)
+    before = handover._output_files(tmp_path)
     new = tmp_path / "plate_2.gcode"
     new.write_text("; neu\n", encoding="utf-8")
-    os.utime(new, (time.time() + 5, time.time() + 5))
 
-    assert handover._find_gcode(tmp_path) == new
+    assert handover._find_gcode(tmp_path, before=before) == new
 
 
 def test_an_empty_folder_has_no_gcode(tmp_path: Path) -> None:
@@ -6145,21 +6142,26 @@ def test_the_print_file_we_asked_for_beats_a_stranger_in_the_folder(tmp_path: Pa
     Namen, den Solidon nennt. Gesucht wurde trotzdem nur nach Endung, und die
     jüngste gewann — in einem Zielordner des Nutzers ist das die Datei eines
     fremden Programms, und ihre Zahlen standen dann im Prüfbericht.
-    """
-    import os
 
-    unser = tmp_path / handover.OUTPUT_NAME
-    unser.write_text("G1 X1 Y1 E1\n", encoding="utf-8")
+    Seit RM-312 zählt nur, was der Versuch neu geschrieben hat: Die fremde
+    Datei steht im Vorbestand und kommt weder als Ergebnis noch als Rückfall
+    in den Bericht.
+    """
     fremd = tmp_path / "irgendwas.gcode"
     fremd.write_text("G1 X2 Y2 E2\n", encoding="utf-8")
-    spaeter = unser.stat().st_mtime + 60.0
-    os.utime(fremd, (spaeter, spaeter))
+    before = handover._output_files(tmp_path)
+    unser = tmp_path / handover.OUTPUT_NAME
+    unser.write_text("G1 X1 Y1 E1\n", encoding="utf-8")
 
-    assert handover._find_gcode(tmp_path, handover.OUTPUT_NAME) == unser
-    assert handover._find_gcode(tmp_path) == fremd, "wo der Slicer selbst benennt, die jüngste"
+    assert handover._find_gcode(tmp_path, handover.OUTPUT_NAME, before=before) == unser
+    assert handover._find_gcode(tmp_path, before=before) == unser, "auch ohne genannten Namen"
 
     unser.unlink()
-    assert handover._find_gcode(tmp_path, handover.OUTPUT_NAME) == fremd, "Rückfall bleibt"
+    assert handover._find_gcode(tmp_path, handover.OUTPUT_NAME, before=before) is None
+    anders = tmp_path / "anders.gcode"
+    anders.write_text("G1 X3 Y3 E3\n", encoding="utf-8")
+    found = handover._find_gcode(tmp_path, handover.OUTPUT_NAME, before=before)
+    assert found == anders, "Rückfall auf die eine neue Datei bleibt"
 
 
 def test_the_slicer_run_reads_back_the_file_it_asked_for(

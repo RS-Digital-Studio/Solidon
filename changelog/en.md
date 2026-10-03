@@ -83,6 +83,7 @@ it into `website/version.json`.
 - Solidon arranges overlapping parts on the bed before slicing with PrusaSlicer or Cura and tells you if it cannot find a suitable layout.
 - When PrusaSlicer or SuperSlicer reports an empty first layer, Solidon names the part and offers to place it on the bed or open the relevant print settings.
 - Warnings from PrusaSlicer and SuperSlicer appear in the report even after successful slicing, an empty layer as an error. The raft gap can be set on its own.
+- If the slicer splits one plate into several print files, Solidon now says so and offers to rearrange or export. Until now it quietly took only one of the files.
 
 ### Holes, slots and splitting
 
