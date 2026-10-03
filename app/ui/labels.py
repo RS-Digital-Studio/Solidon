@@ -1612,6 +1612,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "params": _("Parameter"),
     "part": _("Baustein"),
     "part_index": _("Teil"),
+    "part_name": _("Teil"),
     "parts": _("Teile"),
     "path": _("Pfad"),
     "pitch": _("Steigung"),
@@ -1824,6 +1825,9 @@ _METHOD_NAMES: Final[dict[str, TranslatableText]] = {
 
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
+    if key == "part_name":
+        # Nutzernamen bleiben wörtlich, auch wenn sie wie Zahlen oder Auswahlwerte aussehen.
+        return str(value)
     if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
         return str(_METHOD_NAMES[value])
     if key in ("solver", "attempted") and isinstance(value, (list, tuple)):

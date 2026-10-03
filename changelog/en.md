@@ -81,6 +81,7 @@ it into `website/version.json`.
 - Oversized parts are reported before the slicer starts. If no arrangement fits all parts on one plate, you can choose to arrange them across several plates.
 - Special characters in project or user names no longer prevent slicing. Cura can now read models with Turkish or Chinese names too.
 - Solidon arranges overlapping parts on the bed before slicing with PrusaSlicer or Cura and tells you if it cannot find a suitable layout.
+- When PrusaSlicer or SuperSlicer reports an empty first layer, Solidon names the part and offers to place it on the bed or open the relevant print settings.
 
 ### Holes, slots and splitting
 

@@ -81,6 +81,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As peças demasiado grandes são indicadas antes de iniciar o slicer. Se não for encontrado espaço para todas numa placa, pode distribuí-las por várias placas.
 - Os caracteres especiais nos nomes de projeto ou utilizador já não impedem criar o ficheiro de impressão. O Cura também lê modelos com nomes turcos ou chineses.
 - O Solidon organiza na base as peças sobrepostas antes de fatiar com PrusaSlicer ou Cura e avisa se não encontrar uma disposição adequada.
+- Se o PrusaSlicer ou o SuperSlicer indicar uma primeira camada vazia, o Solidon identifica a peça e permite colocá-la na placa ou abrir as definições de impressão adequadas.
 
 ### Furos, furos oblongos e divisão
 

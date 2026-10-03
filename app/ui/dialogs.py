@@ -3389,6 +3389,7 @@ def show_error(
     offered = offered_actions(error, known)
 
     box = QMessageBox(parent)
+    box.setTextFormat(Qt.TextFormat.PlainText)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
     box.setText(str(error.title))

@@ -2594,3 +2594,20 @@ Plattenwahl ist durch `_bed_plate_context` gebunden: gleiche Suche erhält sie,
 ein Kontextwechsel leert sie. Historische leere Marker werden beim ersten
 gültigen Programm gebunden und nach einem späteren Ausfall nicht erneut
 herkunftslos übernommen.
+
+## Fehlermeldungen des Slicers
+
+Objektbezogene Handlungen arbeiten am eingefrorenen Auftrag. Bei einer
+Erstschichtabsage zeigt „Stelle zeigen“ die Schichten des eindeutig gebundenen
+Teils; „Auf das Bett legen“ benutzt die vorhandene Operation. Ohne eindeutige
+Zuordnung fällt keine Handlung auf die aktuelle Auswahl zurück.
+Szenenhandlungen werden nach Abschluss des Druckdialogs übergeben und prüfen
+den Kontext erneut. Ein Abbruch oder inzwischen geändertes Projekt verwirft
+nachlaufende Meldungen. „Druckeinstellungen“ hebt im bestehenden Dialog die
+Haftungsfelder hervor. Diese Wege benötigen keine Befehlspalette.
+
+Namen bleiben in Titel, Einzelheiten, Werteanzeige und Vorlesen wörtlicher
+Text. Die allgemeine Fehleransicht verwendet PlainText. Ein Name, der wie eine
+Zahl, ein Einstellungswert oder HTML aussieht, wird weder umformatiert noch
+als Auszeichnung behandelt. `part_name` trägt die übersetzte Beschriftung
+„Teil“; nur diese Beschriftung wird übersetzt.

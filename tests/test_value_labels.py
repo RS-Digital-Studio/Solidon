@@ -1805,3 +1805,43 @@ def test_a_refusal_names_the_limit_of_the_schema_not_the_step_below(qt_app: obje
             finally:
                 field.deleteLater()
     assert checked, "kein Feld mit „wie gemessen“ und Mindestwert gefunden"
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+@pytest.mark.parametrize("name", ["Cat2", "1.2", "grid", '  <Segel>& "Ö"\u00a0  '])
+def test_first_layer_error_labels_the_exact_part_name(language, name):
+    """Sichtbarer Text und Vorlesen bewahren auch zahlenähnliche Nutzernamen."""
+    from app.core.errors import OPEN_PRINT_SETTINGS, PLACE_ON_BED, SHOW_LOCATIONS, ExternalToolError
+    from app.i18n import _, get_language, set_language, tr
+    from app.i18n.catalog import install_language
+    from app.ui.dialogs import problem_text, spoken_values
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    try:
+        problem = ExternalToolError(
+            tool="PrusaSlicer",
+            detail=_(
+                "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil "
+                "auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.",
+                name=name,
+            ),
+            values={
+                "constraint": "empty_first_layer",
+                "field": "adhesion.kind",
+                "part_name": name,
+            },
+            suggestions=(SHOW_LOCATIONS, PLACE_ON_BED, OPEN_PRINT_SETTINGS),
+        )
+        expected = tr("{name}: {value}", name=tr("Teil"), value=name)
+        spoken = spoken_values(problem)
+        shown = problem_text(problem)
+        assert expected in spoken, spoken
+        assert expected in shown, shown
+        assert name in str(problem.detail)
+        assert "part_name:" not in shown and "empty_first_layer" not in shown
+        assert "adhesion.kind" not in shown
+        assert problem.values["part_name"] == name
+    finally:
+        set_language(previous)

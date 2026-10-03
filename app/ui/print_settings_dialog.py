@@ -19,6 +19,7 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from itertools import pairwise
@@ -65,6 +66,7 @@ from app.core.errors import (
     SCALE_TO_FIT,
     SPLIT_MODEL,
     AppError,
+    ExternalToolError,
     FileWriteError,
     InternalError,
     OperationCancelled,
@@ -1809,6 +1811,73 @@ class FilamentOverrideDialog(QDialog):
 
 
 @dataclass(frozen=True, slots=True)
+class _CliNameBinding:
+    """Der tatsächlich exportierte CLI-Name und sein eingefrorenes Szenenobjekt."""
+
+    exported_name: str
+    object_id: str
+    original_name: str
+
+
+def _cli_named_parts(
+    objects: Sequence[SceneObject],
+) -> tuple[tuple[SceneObject, ...], tuple[_CliNameBinding, ...]]:
+    """Eindeutige Zeilennamen nur für die temporäre CLI-Kopie dieser Platte."""
+    names = [source_text(entry.name) for entry in objects]
+    counts = Counter(names)
+    reserved = set(names)
+    used: set[str] = set()
+    copied: list[SceneObject] = []
+    bindings: list[_CliNameBinding] = []
+    for entry, original in zip(objects, names, strict=True):
+        name = original
+        if not original.strip() or original.splitlines() != [original] or counts[original] > 1:
+            one_line = " ".join(original.splitlines()) or entry.id
+            base = f"{one_line} [{entry.id}]"
+            name = base
+            suffix = 2
+            while name in reserved or name in used:
+                name = f"{base} [{suffix}]"
+                suffix += 1
+        copied.append(replace(entry, name=name))
+        bindings.append(_CliNameBinding(name, entry.id, original))
+        used.add(name)
+    return tuple(copied), tuple(bindings)
+
+
+def _bind_cli_part_name(
+    problem: ExternalToolError, bindings: Sequence[_CliNameBinding]
+) -> ExternalToolError:
+    """Der native Name trifft genau eine vorbereitete Kennung oder kein Objekt."""
+    native_name = problem.values.get("part_name")
+    matches = [entry for entry in bindings if entry.exported_name == native_name]
+    binding = matches[0] if len(matches) == 1 and matches[0].object_id else None
+    detail = problem.detail
+    values = dict(problem.values)
+    if binding is not None:
+        # Die Originalbezeichnung bleibt Kundentext; die technische Kennung
+        # steht weiterhin im vollständigen Slicer-Protokoll.
+        display_name = binding.original_name or binding.exported_name
+        values["part_name"] = display_name
+        if isinstance(detail, TranslatableText) and detail.values and "name" in detail.values:
+            detail = replace(detail, values={**detail.values, "name": display_name})
+    return ExternalToolError(
+        tool=problem.tool,
+        title=problem.title,
+        detail=detail,
+        values=values,
+        exit_code=problem.exit_code,
+        object_id=binding.object_id if binding is not None else None,
+        op_id=problem.op_id,
+        suggestions=tuple(
+            action
+            for action in problem.suggestions
+            if binding is not None or action.id not in {"show_locations", "place_on_bed"}
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class PlateRun:
     """Eine Druckplatte, wie sie in den Slicer geht.
 
@@ -1822,6 +1891,7 @@ class PlateRun:
     model: Path
     meshes: tuple[MeshData, ...] | None = None
     object_ids: tuple[str, ...] = ()
+    name_bindings: tuple[_CliNameBinding, ...] = ()
     slots: tuple[MaterialSlot, ...] = ()
     keep_arrangement: bool = False
     model_height: float | None = None
@@ -2054,6 +2124,10 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     )
     meshes = tuple(mesh_plan[0][entry.id] for entry in on_plate)
     keep = arrangement_holds(meshes, job.profile)
+    written_objects: Sequence[SceneObject] = on_plate
+    name_bindings: tuple[_CliNameBinding, ...] = ()
+    if job.setup.flavour == "prusa" and not job.for_window:
+        written_objects, name_bindings = _cli_named_parts(on_plate)
     comparison: PlateComparison | None = None
 
     def remember_comparison(
@@ -2070,7 +2144,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         )
 
     written, findings = write_assembly(
-        on_plate,
+        list(written_objects),
         job.folder,
         project_name=job.name if len(objects) == len(on_plate) else f"{job.name}-{plate + 1}",
         profile=job.profile,
@@ -2095,6 +2169,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         model=written,
         meshes=meshes,
         object_ids=tuple(entry.id for entry in on_plate),
+        name_bindings=name_bindings,
         slots=handover.with_slot_profiles(slots, chosen),
         keep_arrangement=keep,
         model_height=max(
@@ -2547,9 +2622,17 @@ class _SliceWorker(Worker):
                 # Eine Platte, die scheitert, nimmt den Auftrag mit: Was danach
                 # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
                 # und wer sie hinterher an den Drucker gibt, merkt das nicht.
+                if (
+                    problem.values.get("constraint") in {"slicer_build_volume", "empty_first_layer"}
+                    and self.cancelled.is_cancelled
+                ):
+                    return
+                if (
+                    isinstance(problem, ExternalToolError)
+                    and problem.values.get("constraint") == "empty_first_layer"
+                ):
+                    problem = _bind_cli_part_name(problem, entry.name_bindings)
                 if problem.values.get("constraint") == "slicer_build_volume":
-                    if self.cancelled.is_cancelled:
-                        return
                     part_index = problem.values.get("part_index")
                     problem.object_id = (
                         entry.object_ids[part_index]
@@ -4807,7 +4890,13 @@ class PrintSettingsDialog(QDialog):
         """
         known = dict(handlers_of(self.parentWidget()))
         context = self._job_context
-        for action_id in ("split_model", "scale_to_fit", "arrange_on_bed"):
+        for action_id in (
+            "split_model",
+            "scale_to_fit",
+            "arrange_on_bed",
+            "show_locations",
+            "place_on_bed",
+        ):
             handler = known.get(action_id)
             if handler is None:
                 continue
@@ -4817,7 +4906,7 @@ class PrintSettingsDialog(QDialog):
                 action_id: str = action_id,
                 handler: Callable[[AppError], None] = handler,
             ) -> None:
-                if error.values.get("constraint") == "slicer_build_volume":
+                if error.values.get("constraint") in {"slicer_build_volume", "empty_first_layer"}:
                     if context is None or context != self._print_context():
                         return
                     self.scene_action = (action_id, error)
@@ -4827,6 +4916,16 @@ class PrintSettingsDialog(QDialog):
                     handler(error)
 
             known[action_id] = after_dialog
+        parent_print_settings = known.get("open_print_settings")
+
+        def open_print_settings(error: AppError) -> None:
+            if error.values.get("constraint") == "empty_first_layer":
+                if context is not None and context == self._print_context():
+                    self._lift("adhesion.kind")
+            elif parent_print_settings is not None:
+                parent_print_settings(error)
+
+        known["open_print_settings"] = open_print_settings
         if self._failed_save_copies is not None:
 
             def retry(_error: AppError) -> None:
@@ -8888,7 +8987,7 @@ class PrintSettingsDialog(QDialog):
         """
         if self._settling:
             return
-        if problem.values.get("constraint") == "slicer_build_volume" and (
+        if problem.values.get("constraint") in {"slicer_build_volume", "empty_first_layer"} and (
             self._job_context is None
             or self._job_context != self._print_context()
             or (self._worker is not None and self._worker.cancelled.is_cancelled)
