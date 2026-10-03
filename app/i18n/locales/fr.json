@@ -7491,5 +7491,8 @@
   "Text und Anhänge vor dem Senden ansehen": "Voir le texte et les pièces jointes avant l'envoi",
   "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer ne gère pas les supports arborescents et utilise des supports en grille.",
   "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "Aucun profil du slicer n'est choisi pour ce matériau. Les valeurs proviennent du tableau de Solidon ; choisissez au besoin un profil de filament dans la fenêtre d'impression.",
-  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Pour Cura, l'accélération est limitée au maximum de l'imprimante. Vérifiez la valeur dans la fenêtre d'impression."
+  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Pour Cura, l'accélération est limitée au maximum de l'imprimante. Vérifiez la valeur dans la fenêtre d'impression.",
+  "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. Die Kammertemperatur bleibt ohne Wirkung.": "Le profil d'imprimante choisi ne prévoit pas de chauffage régulé de la chambre. Le réglage de température de la chambre n'a aucun effet.",
+  "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. Wählen Sie im Druckdialog ein passendes Maschinenprofil.": "Ce profil d'imprimante ne confirme pas la présence d'un chauffage régulé de la chambre. Choisissez un profil de machine adapté dans la fenêtre d'impression.",
+  "Kammertemperatur": "Température de la chambre"
 }

@@ -61,6 +61,14 @@ Rücklesung, `filament_type(..., flavour)` schreibt die Form des Zielprogramms.
 Ohne auflösbares Filamentprofil nennt `Foundation.material_from_table` die
 Materialherkunft; `slicer.filament_from_table` trägt sie in den Exportbericht.
 
+Kammerwerte verwenden `slicer_keys.native_key` beim Schreiben, Rücklesen,
+Aufteilen und Prüfen. `normalise_chamber` löst den alten Plural vor eigenen
+Werten auf. `Foundation.chamber_control` kommt ausschließlich aus der
+Maschine; unbekannt bleibt `None`. `manufacturer.chamber_limitation` begründet
+das gesperrte Druckfeld, das Vorschlagangebot und den Übergabebefund. Nur bei
+belegter Heizung und positivem Sollwert setzt die Orca-Übergabe den nötigen
+Filamentschalter.
+
 `write_config` und `project_settings` fragen `base_settings`; liegt ein
 lesbarer Herstellerprozess darunter, gehen nur die Pfade aus `chosen` und
 `accepted` hinaus (`as_mapping(paths=)`, `by_section(paths=)`), dazu das

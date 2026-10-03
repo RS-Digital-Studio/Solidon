@@ -7491,5 +7491,8 @@
   "Text und Anhänge vor dem Senden ansehen": "Ver o texto e os anexos antes de enviar",
   "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "O SuperSlicer não suporta suportes em árvore e usa suportes em grelha.",
   "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "Não foi escolhido um perfil do slicer para este material. Os valores vêm da tabela do Solidon; se necessário, escolher um perfil de filamento no diálogo de impressão.",
-  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Para o Cura, a aceleração fica limitada ao máximo da impressora. Verifique o valor no diálogo de impressão."
+  "Für Cura wird die Beschleunigung auf die Grenze des Druckers begrenzt. Prüfen Sie den Wert im Druckdialog.": "Para o Cura, a aceleração fica limitada ao máximo da impressora. Verifique o valor no diálogo de impressão.",
+  "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. Die Kammertemperatur bleibt ohne Wirkung.": "O perfil de impressora escolhido não prevê aquecimento regulável da câmara. A temperatura da câmara não tem efeito.",
+  "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. Wählen Sie im Druckdialog ein passendes Maschinenprofil.": "Este perfil de impressora não confirma a presença de aquecimento regulável da câmara. Escolher um perfil de máquina adequado no diálogo de impressão.",
+  "Kammertemperatur": "Temperatura da câmara"
 }

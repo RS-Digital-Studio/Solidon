@@ -2903,6 +2903,90 @@ def test_superslicer_greys_out_the_scarf_seam_and_drops_its_suggestion(
     assert (suggestion in dialog._current_advice()) is not ignored
 
 
+@pytest.mark.parametrize("supported", [True, False, None])
+def test_chamber_advice_requires_the_current_machines_heater(supported: bool | None) -> None:
+    """Die reine Angebotsfunktion darf die graue Kammerzeile nicht umgehen."""
+    from app.core.export import manufacturer
+    from app.core.slice import advise
+
+    profile = profiles.make_profile("centauri-carbon-2", "abs")
+    settings = print_settings.with_path(print_settings.resolve(profile), "temperature.chamber", 0)
+    foundation = manufacturer.Foundation(settings, chamber_control=supported)
+    host = SimpleNamespace(
+        _advice_entries=advise._from_material(settings, profile),
+        _current_flavour=lambda: "orca",
+        _slicer_path=Path("elegoo-slicer.exe"),
+        _foundation_for_current_setup=lambda: foundation,
+    )
+    shown = PrintSettingsDialog._current_advice(host)
+    assert any(entry.path == "temperature.chamber" for entry in shown) is (supported is True)
+    assert settings.temperature.chamber == 0, "der gespeicherte Wert bleibt unverändert"
+
+
+@pytest.mark.parametrize("supported", [True, False])
+def test_rebase_refreshes_hardware_offers_even_when_values_are_unchanged(
+    monkeypatch: pytest.MonkeyPatch, supported: bool
+) -> None:
+    """Die reine Anschlussprobe braucht kein Fenster und keine Ereignisschleife."""
+    from app.core.export import manufacturer
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca", base_process="Neu")
+    foundation = manufacturer.Foundation(settings, chamber_control=supported)
+    monkeypatch.setattr(manufacturer, "base_settings", lambda *_args: foundation)
+    refreshed = []
+
+    def nothing() -> None:
+        pass
+
+    host = SimpleNamespace(
+        _settling=False,
+        _built=True,
+        _current_setup=lambda: setup,
+        session=SimpleNamespace(profile=profile),
+        settings=settings,
+        _foundation_key=None,
+        _foundation=manufacturer.Foundation(settings, chamber_control=not supported),
+        _load_into_editors=nothing,
+        _mark_fields_this_slicer_ignores=lambda: refreshed.append(host._foundation.chamber_control),
+        _refresh_advice=nothing,
+        _refresh_auto_adhesion_values=nothing,
+        _update_inactive_setting_rows=nothing,
+        _refresh_search_target_for_conditions=nothing,
+        _mark_origins=nothing,
+        _show_foundation=nothing,
+    )
+    PrintSettingsDialog._rebase(host)
+    assert host.settings == settings
+    assert refreshed == [supported]
+
+
+@pytest.mark.parametrize("supported", [True, False, None])
+def test_chamber_field_names_missing_hardware_and_recovers_after_selection(
+    dialog: PrintSettingsDialog, supported: bool | None
+) -> None:
+    """Feld und Beschriftung erklären dieselbe belegte Maschinenfähigkeit."""
+    from app.core.export import manufacturer
+
+    dialog._slicer_path = Path("orca-slicer.exe")
+    dialog._foundation = manufacturer.Foundation(dialog.settings, chamber_control=supported)
+    dialog._mark_fields_this_slicer_ignores()
+    editor = dialog._editors["temperature.chamber"]
+    assert editor.isEnabled() is (supported is True)
+    reason = manufacturer.chamber_limitation(dialog._foundation)
+    if reason is not None:
+        for widget in (editor, dialog._labels["temperature.chamber"]):
+            assert widget.toolTip() == str(reason)
+            assert widget.statusTip() == str(reason)
+            assert widget.accessibleDescription() == str(reason)
+    dialog._foundation = manufacturer.Foundation(dialog.settings, chamber_control=True)
+    dialog._mark_fields_this_slicer_ignores()
+    assert editor.isEnabled()
+    assert "ohne Wirkung" not in editor.toolTip()
+    assert "nicht belegt" not in editor.toolTip()
+
+
 def test_superslicer_explains_tree_supports_and_restores_them_on_program_change(
     dialog: PrintSettingsDialog,
 ) -> None:

@@ -492,6 +492,22 @@ def foundation_findings(
         return []
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     findings = manufacturer.findings(foundation)
+    if setup.flavour == "orca":
+        chamber = 0 if slots else settings.temperature.chamber
+        for slot in slots:
+            resolved = _resolve_slot(settings, profile, slot, setup, foundation=foundation)
+            chamber = max(chamber, resolved.settings.temperature.chamber)
+        reason = manufacturer.chamber_limitation(foundation)
+        if chamber > 0 and reason is not None:
+            findings.append(
+                Finding(
+                    code="slicer.chamber_unavailable",
+                    severity="warning",
+                    message=reason,
+                    values={"setting": _("Kammertemperatur"), "value": f"{chamber} °C"},
+                    suggestions=(OPEN_PRINT_SETTINGS,),
+                )
+            )
     if setup.flavour != "orca" or not foundation.has_profile:
         return findings
     for slot in slots:
@@ -823,7 +839,9 @@ def as_mapping(
         # Gegenprobe: geschrieben überschriebe er den Wert des Herstellers,
         # verglichen meldete er eine Abweichung von nichts.
         if value != "":
-            written[entry.key] = slicer_keys.program_value(entry.key, value, program)
+            written[slicer_keys.native_key(entry.key, program)] = slicer_keys.program_value(
+                entry.key, value, program
+            )
     chosen = _only_chosen_adhesion(
         written, settings, flavour, native_adhesion_kinds=native_adhesion_kinds
     )
@@ -1070,9 +1088,10 @@ def by_section(
     split: dict[slicer_keys.ProfileSection, dict[str, str]] = {"process": {}}
     placed: set[str] = set()
     for entry in slicer_keys.TABLES[flavour]:
-        if entry.key in complete:
-            split.setdefault(entry.section, {})[entry.key] = complete[entry.key]
-            placed.add(entry.key)
+        key = slicer_keys.native_key(entry.key, program)
+        if key in complete:
+            split.setdefault(entry.section, {})[key] = complete[key]
+            placed.add(key)
     for key, value in complete.items():
         if key not in placed:
             split["process"][key] = value
@@ -2030,6 +2049,7 @@ def _resolve_slot(
                 _profile_roots(setup),
                 variant_name=foundation.variant_name if foundation is not None else "",
                 extruder_id=foundation.variant_id if foundation is not None else "",
+                program=manufacturer.program(setup),
             )
             for path, value in readback.values.items():
                 settings = with_path(settings, path, value)
@@ -2719,6 +2739,7 @@ def write_config(
                         "filament", {}
                     ),
                     plate=plate or None,
+                    chamber_control=foundation.chamber_control,
                 )
             )
         # **Erst angleichen, dann schreiben.** Die Orca-Familie indiziert jeden
@@ -2761,17 +2782,21 @@ def write_config(
         firmware = machine_document.get("gcode_flavor")
         if isinstance(firmware, str):
             expected["gcode_flavor"] = firmware
-        for entry in slicer_keys.TABLES[setup.flavour]:
-            if entry.section != "filament" or not all(
-                entry.key in document for document in filament_documents
-            ):
+        filament_keys = {
+            slicer_keys.native_key(entry.key, program)
+            for entry in slicer_keys.TABLES[setup.flavour]
+            if entry.section == "filament"
+        }
+        filament_keys.add("activate_chamber_temp_control")
+        for key in sorted(filament_keys):
+            if not all(key in document for document in filament_documents):
                 continue
             # Ein Wert je Spule, wie der G-Code sie führt. Die Filamentwerte
             # des Herstellers bleiben ganz in der Gegenprobe: an ElegooSlicer,
             # Bambu Studio, Creality Print und OrcaSlicer kam jeder an.
             printed_values = [
                 _printed_variant(
-                    document[entry.key],
+                    document[key],
                     document,
                     "filament_extruder_variant",
                     "filament_extruder_id",
@@ -2780,9 +2805,7 @@ def write_config(
                 for document in filament_documents
             ]
             if all(value is not None for value in printed_values):
-                expected[entry.key] = ",".join(
-                    value for value in printed_values if value is not None
-                )
+                expected[key] = ",".join(value for value in printed_values if value is not None)
         # Eine eigene Betttemperatur steht unter dem Schlüssel der aufliegenden
         # Platte (``_on_the_plate``), nicht unter ``hot_plate_temp`` — geprüft
         # wird sie dort (Review Stufe A+B, H3).
@@ -3030,6 +3053,7 @@ def project_settings(
                     "filament", {}
                 ),
                 plate=plate or None,
+                chamber_control=foundation.chamber_control,
             )
         )
 
@@ -3486,6 +3510,7 @@ def _orca_filament(
     *,
     deviating: Mapping[str, str] | None = None,
     plate: str | None = None,
+    chamber_control: bool | None = None,
 ) -> dict[str, object]:
     """Das Filamentprofil für die Orca-Familie.
 
@@ -3546,9 +3571,12 @@ def _orca_filament(
     # selbst setzt. Der Slicer wählte „Cool Plate", fand dort die 35 Grad
     # seiner eigenen Vorgabe, und ein PETG-Druck ging mit kaltem Bett hinaus.
     base = profile_file(chosen, setup, "filament")
+    program = manufacturer.program(setup)
     inherited: dict[str, object] = {}
     if base is not None:
-        inherited = slicer_profiles.resolve_values(base, roots=_profile_roots(setup))
+        inherited = slicer_keys.normalise_chamber(
+            slicer_profiles.resolve_values(base, roots=_profile_roots(setup)), program
+        )
         document.update({key: _as_slots(value) for key, value in inherited.items()})
 
     # Solidons Werte kommen darüber — außer sie gehören einem anderen Material.
@@ -3569,15 +3597,28 @@ def _orca_filament(
     if slot is not None and slot.material and inherited:
         override = override_for(settings, slot)
         from_the_material = {
-            orca
+            slicer_keys.native_key(orca, program)
             for solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK
-            if orca in inherited
+            if slicer_keys.native_key(orca, program) in inherited
             and (override is None or getattr(override, solidon.partition(".")[0]) is None)
         }
         own_values = {
             key: value for key, value in own_values.items() if key not in from_the_material
         }
     document.update(own_values)
+    if program == "bambustudio":
+        document.pop("activate_chamber_temp_control", None)
+    else:
+        temperatures = document.get("chamber_temperature")
+        if isinstance(temperatures, list) and (
+            "chamber_temperature" in own_values
+            or "activate_chamber_temp_control" not in document
+            or chamber_control is not True
+        ):
+            document["activate_chamber_temp_control"] = [
+                "1" if chamber_control is True and (_as_float(str(value)) or 0.0) > 0.0 else "0"
+                for value in temperatures
+            ]
     # Die ausdrücklich gewählte Spule gewinnt zuletzt. Eine lokale PLA-Spule
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.

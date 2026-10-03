@@ -41,6 +41,8 @@ from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
     has_user_profile_tree,
+    native_key,
+    normalise_chamber,
     normalise_filament_type,
 )
 from app.core.knowledge import profiles as knowledge_profiles
@@ -3962,6 +3964,7 @@ def filament_readback(
     *,
     variant_name: str = "",
     extruder_id: str = "",
+    program: str = "",
 ) -> FilamentReadback:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 
@@ -3999,6 +4002,9 @@ def filament_readback(
         readback = PRUSA_FILAMENT_READBACK
     elif source.name.endswith((".xml.fdm_material", ".inst.cfg")):
         readback = _CURA_FILAMENT_READBACK
+    else:
+        resolved = normalise_chamber(resolved, program)
+        readback = tuple((path, native_key(key, program), kind) for path, key, kind in readback)
     values: dict[str, float | int] = {}
     for solidon, native, kind in readback:
         raw = resolved.get(native)
@@ -4033,6 +4039,9 @@ def filament_values(
     *,
     variant_name: str = "",
     extruder_id: str = "",
+    program: str = "",
 ) -> dict[str, float | int]:
     """Liest bekannte Materialwerte, wenn die Profilvariante eindeutig ist."""
-    return filament_readback(path, roots, variant_name=variant_name, extruder_id=extruder_id).values
+    return filament_readback(
+        path, roots, variant_name=variant_name, extruder_id=extruder_id, program=program
+    ).values

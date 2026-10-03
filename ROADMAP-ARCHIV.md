@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)](#rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026) |
 | 2026-10-03 | [RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)](#rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026) |
 | 2026-10-03 | [RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)](#rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
@@ -38153,4 +38154,37 @@ Abnahme mit installierten Bündeln: 25 von 25 Vorwahlen für PLA, PETG, ABS, ASA
 
 Betroffene Prüfung über `tools/affected_tests.py tests/test_profiles.py tests/test_slicer_profiles.py tests/test_manufacturer.py --run`: 304 bestanden, Exit 0; der Stand umfasst bereits die zusätzlichen Kammerfälle. Die vorherige reine Materialprüfung hatte 285 bestandene Fälle. Übersetzungen: 216 bestanden, ein Releasefall abgewählt. Keine Fenster-, Renderer- oder Leistungsprüfungen ausgeführt. Das Entwicklungstor folgt mit dem vereinbarten Paket.
 
-Kundensichtbarer Fehler in v0.5.1: `git tag --contains` bestätigt die Ursachenstände `9c59e3a5e` und `f934a42219`. Je ein Punkt in allen sechs Changelogs für 0.5.2. Commit mit der Aussage „TPU übernimmt das passende Filamentprofil samt Startwerten“, aufbauend auf `1fbdb5de8`; die genaue Kennung wird beim nächsten Abschluss ergänzt.
+Kundensichtbarer Fehler in v0.5.1: `git tag --contains` bestätigt die Ursachenstände `9c59e3a5e` und `f934a42219`. Je ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `468f5de2f` (TPU übernimmt das passende Filamentprofil samt Startwerten), aufbauend auf `1fbdb5de8`.
+
+## RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)
+
+<a id="rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026"></a>
+<a id="rm-460"></a>
+
+**RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek.
+  - Bambu Studio 02.08.02.61 (alle 12 Profile): `chamber_temperature` fehlt im Konfigurationsblock;
+    Bambu führt `chamber_temperatures` (bleibt 0).
+  - ElegooSlicer 1.5.3.5 (alle mit Elegoo-/Bambu-Filamentprofil): `0` — die Filamentbasis bringt den
+    Altschlüssel `chamber_temperatures: ["0"]` mit und überschreibt Solidons Wert.
+  - OrcaSlicer 2.4.2, Creality Print 7.3: Wert steht im Block, aber `activate_chamber_temp_control
+    = 0` → kein `M141`/`M191` im G-Code. In keinem Lauf ein Kammerbefehl.
+  **Stellen:** `app/core/export/slicer_keys.py:411`, Rücklesung `slicer_profiles.py:3593`, `:3780`,
+  `manufacturer.py:924`.
+  **Fix (allgemein):** Wert an den Schlüssel, den dieses Programm liest, mit dem Schalter, ohne den er
+  nicht wirkt (wie `_positive_switch`); Altschlüssel der Basis mitsetzen oder entfernen; ohne
+  Kammerregelung (`support_chamber_temp_control = 0`) das Feld im Druckdialog als nicht wirksam
+  ausweisen.
+  **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
+  Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
+  Regression 02.10.2026: nein — v0.5.1 und v0.5.0 gleich (CC2 35 → `0`, P1S Schlüssel fehlt, kein `M141`/`M191`).
+
+**Abschluss:** Ursache waren unterschiedliche Schlüsselnamen und fehlende Aktivierungsschalter in der Orca-Familie. `native_key` übersetzt den Namen auch bei Gruppierung und Rücklesung. `normalise_chamber` löst geerbte Altnamen auf, bevor eigene Werte gesetzt werden; vollständige Spulenlisten bleiben erhalten. Die Grundlage liest `support_chamber_temp_control` als belegt vorhanden, belegt fehlend oder unbekannt. Ein positiver gewählter Wert aktiviert bei belegter Heizung den Filamentschalter; eine bewusste Null schaltet ihn ab. Bambu erhält seinen Plural ohne fremden Aktivierungsschlüssel. Dialog und Befund erklären dieselbe Hardwaregrenze, wirkungslose Vorschläge werden ausgefiltert. Gespeicherte Werte bleiben erhalten.
+
+Gegenprobe: 18 neue Kernfälle vor der Umsetzung rot; echte Vorherläufe aller vier Programme bestätigen den verlorenen Wert oder fehlenden Schalter. Nachher jeweils 35 °C am echten Würfel: Orca 2.4.2/P1S, Elegoo 1.5.3.5/Centauri Carbon 2, Bambu 02.08.02.61/P1S und Creality 7.3.0.6149/K1. Orca, Elegoo und Creality schreiben Singular 35, Bambu Plural 35. Alle vier Maschinen führen Hardwarefreigabe 0 und erzeugen deshalb den zutreffenden Hardwarehinweis bei Export und Slicen. Keine falsche Meldung über ignorierte Einstellungen. Zeiten/Massen: Orca 916 s/3,88 g, Elegoo 637 s/4,01 g, Bambu 886 s/3,71 g, Creality 875,566 s/3,46 g; die letzten beiden enthalten zugleich das Linienmuster für RM-461.
+
+Zusätzliche aktive Heizung: Qidi X-Max 3 in Orca hat Freigabe 1, der Aktivierungsschalter wechselt bei 35 °C von 0 auf 1 und der G-Code enthält `M141 S35` (1205 s/3,64 g). Bambu X1E übernimmt Plural 35; sein unveränderter Herstellerstart heizt erst ab 40 °C. Die ergänzende Probe bei 45 °C enthält `M141 S45` und `M191 S45`, Freigabe 1, 1678 s/4,13 g. Zwei Spulen behalten getrennte 35/50 °C. Originaldateien und Berichte: `F:\solidon-review-reports\gcode\agentB\rm460-codex-*.json` und deren Arbeitsordner; zusammengefasst in `rm460-report.md`.
+
+Prüfungen vor dem Anschlussreview: 1428 bestanden, 7 übersprungen, 63 abgewählt; abschließend 22 Kammerfälle grün. Der Anschlussreview ergänzte Gegenproben für Vorschläge ohne Heizung und eine unveränderte Wertebasis beim Wechsel der Grundlage: vier zunächst rot, danach fünf grün. Abschließender betroffener Lauf über `tools/affected_tests.py --run`: 153 bestanden, 3 übersprungen, 282 Fensterfälle abgewählt, Exit 0. Ruff, Format und mypy der geänderten Module grün. Drei neue Fensterfälle bleiben dem Release vorbehalten.
+
+Kundensichtbarer Fehler aus `f934a42219`, laut `git tag --contains` in v0.5.0 und v0.5.1. Je ein Punkt an derselben Stelle aller sechs Changelogs. Commit: „Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit“; genaue Kennung folgt mit dem nächsten Abschluss.

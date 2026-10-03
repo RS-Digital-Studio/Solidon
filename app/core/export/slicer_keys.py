@@ -1049,6 +1049,33 @@ PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 }
 
 
+#: Bambu behält den Plural; die übrige Orca-Familie führt den Singular.
+PROGRAM_KEYS: Final[dict[str, dict[str, str]]] = {
+    "bambustudio": {"chamber_temperature": "chamber_temperatures"},
+}
+
+
+def native_key(key: str, program: str) -> str:
+    """Der Schlüssel im Zielprogramm, auch für Profilgruppe und Gegenprobe."""
+    return PROGRAM_KEYS.get(program, {}).get(key, key)
+
+
+def normalise_chamber(values: Mapping[str, object], program: str) -> dict[str, object]:
+    """Ein Kammername pro Profil, mit derselben Aliasfolge wie beim Slicer.
+
+    Orcas alter Plural überschreibt beim Laden den Singular. Er wird vor
+    Solidons Abweichungen aufgelöst, damit geerbte 0 °C keine eigene Wahl
+    aushebeln. Listen bleiben vollständig, auch bei mehreren Spulen.
+    """
+    result = dict(values)
+    native = native_key("chamber_temperature", program)
+    value = result.pop("chamber_temperatures", result.get("chamber_temperature"))
+    result.pop("chamber_temperature", None)
+    if value is not None:
+        result[native] = value
+    return result
+
+
 #: Aufzählungswerte, die ein **Programm** anders führt als seine Familie — je
 #: Programmmarke, darunter Schlüssel des Slicers und geschriebener Wert → Wert
 #: dieses Programms. Ein unbekannter Wert fällt im Slicer still auf seine

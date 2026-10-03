@@ -301,6 +301,168 @@ def _cc2() -> Profile:
     return profiles.make_profile("centauri-carbon-2", "pla")
 
 
+@pytest.mark.parametrize(
+    ("executable_name", "native", "switch"),
+    [
+        ("orca-slicer.exe", "chamber_temperature", True),
+        ("elegoo-slicer.exe", "chamber_temperature", True),
+        ("bambu-studio.exe", "chamber_temperatures", False),
+        ("CrealityPrint.exe", "chamber_temperature", True),
+    ],
+)
+@pytest.mark.parametrize("supported", [True, False, None])
+def test_chamber_control_uses_the_program_key_and_proven_machine(
+    bestand: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    executable_name: str,
+    native: str,
+    switch: bool,
+    supported: bool | None,
+) -> None:
+    """35 °C dürfen weder unter einem fremden Schlüssel verschwinden noch
+    eine Kammerheizung erfinden. Eine alte Pluralangabe darf nicht gewinnen."""
+    executable = bestand.with_name(executable_name)
+    executable.touch()
+    setup = _setup(executable)
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine_path = root / "machine" / "fdm_machine_common.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    if supported is not None:
+        machine["support_chamber_temp_control"] = "1" if supported else "0"
+    _write(machine_path, machine)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(chamber_temperature=["0"], chamber_temperatures=["0"])
+    _write(filament_path, filament)
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    settings = print_settings.with_choice(print_settings.resolve(_cc2()), "temperature.chamber", 35)
+
+    config = handover.write_config(settings, _cc2(), setup, tmp_path)
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert document[native] == ["35"]
+    other = "chamber_temperature" if native.endswith("temperatures") else "chamber_temperatures"
+    assert other not in document, "nur ein Name darf die Temperatur bestimmen"
+    assert config.written[native] == "35", "die Gegenprobe liest denselben Schlüssel"
+    if switch:
+        assert document["activate_chamber_temp_control"] == ["1" if supported else "0"]
+        assert config.written["activate_chamber_temp_control"] == ("1" if supported else "0")
+    else:
+        assert "activate_chamber_temp_control" not in document
+    project = handover.project_settings(settings, _cc2(), setup)
+    assert project[native] == ["35"]
+    assert other not in project
+    foundation = manufacturer.base_settings(_cc2(), settings.quality, setup)
+    assert foundation.chamber_control is supported
+    assert bool(manufacturer.chamber_limitation(foundation)) is (supported is not True)
+    findings = handover.foundation_findings(settings, _cc2(), setup)
+    assert any(f.code == "slicer.chamber_unavailable" for f in findings) is (supported is not True)
+
+
+@pytest.mark.parametrize("program", ["orcaslicer", "elegooslicer", "bambustudio", "crealityprint"])
+def test_chamber_readback_follows_the_same_name_as_the_slicer(tmp_path: Path, program: str) -> None:
+    """Bambus Plural und der alte Orca-Alias kommen auch beim Übernehmen an."""
+    from app.core.export import slicer_profiles
+
+    source = _write(tmp_path / "material.json", {"chamber_temperatures": ["42"]})
+    assert slicer_profiles.filament_values(source, program=program)["temperature.chamber"] == 42
+    _write(source, {"chamber_temperature": ["42"], "chamber_temperatures": ["37"]})
+    assert slicer_profiles.filament_values(source, program=program)["temperature.chamber"] == 37
+
+
+@pytest.mark.parametrize("executable_name", ["orca-slicer.exe", "bambu-studio.exe"])
+def test_chamber_values_stay_separate_for_each_spool(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, executable_name: str
+) -> None:
+    """Die Maschinenfreigabe ist gemeinsam, die Temperatur gehört jeder Spule."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    machine_path = (
+        bestand.parent / "resources" / "profiles" / "Elegoo" / "machine" / "fdm_machine_common.json"
+    )
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    _write(machine_path, {**machine, "support_chamber_temp_control": "1"})
+    executable = bestand.with_name(executable_name)
+    executable.touch()
+    setup = _setup(executable)
+    settings = print_settings.resolve(_cc2())
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name="A", material_type="PLA", temperature=replace(settings.temperature, chamber=35)
+            ),
+            SlotOverride(
+                name="B", material_type="PLA", temperature=replace(settings.temperature, chamber=50)
+            ),
+        ),
+    )
+    slots = (
+        MaterialSlot(index=0, name="A", material_type="PLA"),
+        MaterialSlot(index=1, name="B", material_type="PLA"),
+    )
+    project = handover.project_settings(settings, _cc2(), setup, slots=slots)
+    key = "chamber_temperatures" if executable_name == "bambu-studio.exe" else "chamber_temperature"
+    assert project[key] == ["35", "50"]
+    if executable_name != "bambu-studio.exe":
+        assert project["activate_chamber_temp_control"] == ["1", "1"]
+
+
+@pytest.mark.parametrize(("project_temperature", "slot_temperature"), [(35, 0), (0, 35)])
+def test_chamber_warning_uses_only_the_spools_that_are_printed(
+    bestand: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    project_temperature: int,
+    slot_temperature: int,
+) -> None:
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    settings = print_settings.with_choice(
+        print_settings.resolve(_cc2()), "temperature.chamber", project_temperature
+    )
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name="A",
+                material_type="PLA",
+                temperature=replace(settings.temperature, chamber=slot_temperature),
+            ),
+        ),
+    )
+    slot = MaterialSlot(index=0, name="A", material_type="PLA")
+    findings = handover.foundation_findings(settings, _cc2(), _setup(bestand), (slot,))
+    assert any(f.code == "slicer.chamber_unavailable" for f in findings) is (slot_temperature > 0)
+
+
+@pytest.mark.parametrize("own_temperature", [0, None])
+def test_only_a_chamber_choice_changes_the_manufacturers_heater_switch(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, own_temperature: int | None
+) -> None:
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine_path = root / "machine" / "fdm_machine_common.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    _write(machine_path, {**machine, "support_chamber_temp_control": "1"})
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    original_switch = "1" if own_temperature is not None else "0"
+    _write(
+        filament_path,
+        {
+            **filament,
+            "chamber_temperature": ["45"],
+            "activate_chamber_temp_control": [original_switch],
+        },
+    )
+    setup = _setup(bestand)
+    settings = print_settings.resolve(_cc2())
+    if own_temperature is not None:
+        settings = print_settings.with_choice(settings, "temperature.chamber", own_temperature)
+    config = handover.write_config(settings, _cc2(), setup, tmp_path)
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert document["chamber_temperature"] == (["0"] if own_temperature is not None else ["45"])
+    assert document["activate_chamber_temp_control"] == ["0"]
+
+
 def test_the_base_is_read_back_from_the_manufacturers_profile(
     bestand: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

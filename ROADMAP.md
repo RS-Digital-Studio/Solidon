@@ -105,7 +105,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
-| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 9 von 16. G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
 | [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 10 von 16. G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
 | [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
@@ -3091,26 +3090,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Archivierung von RM-442 belegt seine Freigabe nicht. Keine neue Umsetzung
   im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
   Review 02.10.: bestätigt über die Oberfläche — mit X-Symmetrie wirkt ein Zug nicht, wenn nur seine Spiegelkopie die eben verformte Fläche greift, der Bericht nennt ihn verfehlt (gleich wie in v0.5.1). Beleg Fall C in `F:\solidon-review-reports\sonden\v8k_rm442_ui.py`.
-
-<a id="rm-460"></a>
-
-- [ ] **RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek.
-  - Bambu Studio 02.08.02.61 (alle 12 Profile): `chamber_temperature` fehlt im Konfigurationsblock;
-    Bambu führt `chamber_temperatures` (bleibt 0).
-  - ElegooSlicer 1.5.3.5 (alle mit Elegoo-/Bambu-Filamentprofil): `0` — die Filamentbasis bringt den
-    Altschlüssel `chamber_temperatures: ["0"]` mit und überschreibt Solidons Wert.
-  - OrcaSlicer 2.4.2, Creality Print 7.3: Wert steht im Block, aber `activate_chamber_temp_control
-    = 0` → kein `M141`/`M191` im G-Code. In keinem Lauf ein Kammerbefehl.
-  **Stellen:** `app/core/export/slicer_keys.py:411`, Rücklesung `slicer_profiles.py:3593`, `:3780`,
-  `manufacturer.py:924`.
-  **Fix (allgemein):** Wert an den Schlüssel, den dieses Programm liest, mit dem Schalter, ohne den er
-  nicht wirkt (wie `_positive_switch`); Altschlüssel der Basis mitsetzen oder entfernen; ohne
-  Kammerregelung (`support_chamber_temp_control = 0`) das Feld im Druckdialog als nicht wirksam
-  ausweisen.
-  **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
-  Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
-  Regression 02.10.2026: nein — v0.5.1 und v0.5.0 gleich (CC2 35 → `0`, P1S Schlüssel fehlt, kein `M141`/`M191`).
 
 <a id="rm-461"></a>
 

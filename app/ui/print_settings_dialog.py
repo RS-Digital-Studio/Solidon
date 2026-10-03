@@ -6129,7 +6129,11 @@ class PrintSettingsDialog(QDialog):
         # Klick folgenlos, und ein Wert wie ``nan`` warf aus dem Slot. Beides
         # sagt jetzt die Zustandszeile; die Einstellungen bleiben unberührt.
         try:
-            values = slicer_profiles.filament_values(source, self._profile_roots())
+            values = slicer_profiles.filament_values(
+                source,
+                self._profile_roots(),
+                program=slicer_keys.program_of(self._slicer_path) if self._slicer_path else "",
+            )
             settings = self.settings
             for path, value in values.items():
                 # Ohne Herstellergrundlage schreibt die Übergabe nur, was
@@ -6174,7 +6178,11 @@ class PrintSettingsDialog(QDialog):
         if self._foundation is not None and self._foundation.has_profile:
             return
         try:
-            values = slicer_profiles.filament_values(previous, self._profile_roots())
+            values = slicer_profiles.filament_values(
+                previous,
+                self._profile_roots(),
+                program=slicer_keys.program_of(self._slicer_path) if self._slicer_path else "",
+            )
         except AppError as problem:
             _log.warning("previous filament values could not be read: %s", problem)
             return
@@ -6385,10 +6393,8 @@ class PrintSettingsDialog(QDialog):
         Feldern im Operationsdialog: **grau und begründet**, nicht unsichtbar —
         wer eine Zeile vermisst, sucht sie.
 
-        Gemessen am 03.09.2026 trifft es eines von sechsundfünfzig Feldern bei
-        PrusaSlicer und fünf bei ``CuraEngine``; die Orca-Familie nimmt alles.
-        Vorher ließ sich an ihnen ziehen, ohne dass irgendetwas geschah — der
-        Wert stand im Projekt, in der Druckdatei stand er nie.
+        Die Programmtabelle nennt unbekannte Einstellungen, das Maschinenprofil
+        die Kammerheizung. Eine fehlende Heizungsangabe ist keine Freigabe.
 
         **Der eigene Hinweis wird gemerkt und zurückgegeben, nicht neu
         gebaut.** Ein Widget, das seinen Tooltip selbst führt, behält ihn: Der
@@ -6423,6 +6429,11 @@ class PrintSettingsDialog(QDialog):
             )
             if specific is not None:
                 reason = str(specific)
+            if flavour == "orca" and path == "temperature.chamber":
+                chamber_reason = manufacturer.chamber_limitation(self._foundation)
+                if chamber_reason is not None:
+                    ignored = True
+                    reason = str(chamber_reason)
             editor.setEnabled(not ignored)
             if isinstance(editor, QComboBox):
                 _offer_choices(editor, path, program)
@@ -7014,11 +7025,13 @@ class PrintSettingsDialog(QDialog):
         if settings != self.settings:
             self.settings = settings
             self._load_into_editors()
-            self._mark_fields_this_slicer_ignores()
-            self._refresh_advice()
         else:
             self._refresh_auto_adhesion_values()
             self._update_inactive_setting_rows()
+        # Eine andere Maschinenfähigkeit ändert nicht zwingend Druckwerte.
+        # Feld und Vorschläge müssen trotzdem dieselbe neue Grundlage sehen.
+        self._mark_fields_this_slicer_ignores()
+        self._refresh_advice()
         self._refresh_search_target_for_conditions()
         self._mark_origins()
         self._show_foundation()
@@ -7436,9 +7449,15 @@ class PrintSettingsDialog(QDialog):
             return entries
         caps = slicer_keys.caps_volumetric_speed(flavour)
         program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
+        chamber_unavailable = (
+            flavour == "orca"
+            and manufacturer.chamber_limitation(self._foundation_for_current_setup()) is not None
+        )
         shown: list[SettingAdvice] = []
         for entry in entries:
             if caps and advise.limits_flow(entry):
+                continue
+            if entry.path == "temperature.chamber" and chamber_unavailable:
                 continue
             if slicer_keys.takes(flavour, entry.path, program):
                 shown.append(entry)

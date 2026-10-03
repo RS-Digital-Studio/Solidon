@@ -41,7 +41,7 @@ from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
 from app.core.units import exact_atan_degrees, is_zero
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from app.core.export.handover import SlicerSetup
@@ -89,6 +89,8 @@ class Foundation:
     filament: str = ""
     material_from_table: bool = False
     """Ohne auflösbares Filamentprofil stammen die Materialwerte aus Solidons Tabelle."""
+    chamber_control: bool | None = None
+    """Die Kammerheizung ist im Maschinenprofil belegt; fehlend heißt unbekannt."""
     plate: str = ""
     """Die Druckplatte, für die die Betttemperatur gelesen wurde — der Name,
     wie die Orca-Familie ihn schreibt (``Textured PEI Plate``)."""
@@ -767,11 +769,14 @@ def _read_filament(
     machine: Mapping[str, Any],
     plate: str,
     source: Path,
+    program: str = "",
 ) -> tuple[dict[str, object], bool]:
     """Die Filamentwerte in Solidons Pfaden — samt Rückzug der Maschine, wo das
     Filament ``nil`` sagt, und der Betttemperatur der gewählten Platte."""
+    filament = slicer_keys.normalise_chamber(filament, program)
     read: dict[str, object] = {}
     for solidon, native, kind in slicer_profiles.FILAMENT_READBACK:
+        native = slicer_keys.native_key(native, program)
         text = _text(filament.get(native))
         if text is None:
             continue
@@ -1668,7 +1673,7 @@ def base_settings(
     refuses = False
     if filament_file is not None:
         filament_read, refuses = _read_filament(
-            filament_values, machine_values, plate, filament_file
+            filament_values, machine_values, plate, filament_file, program(setup)
         )
         read.update(filament_read)
     staged = (
@@ -1698,6 +1703,9 @@ def base_settings(
         process=setup.base_process,
         filament=setup.base_filament,
         material_from_table=filament_file is None,
+        chamber_control={"0": False, "1": True}.get(
+            _text(machine_values.get("support_chamber_temp_control")) or ""
+        ),
         plate=plate,
         plate_refuses_filament=refuses,
         plates=plate_temperatures(filament_values),
@@ -1768,6 +1776,21 @@ MATERIAL_GROUPS: Final = ("temperature", "cooling", "filament")
 def _material_path(path: str) -> bool:
     """Gehört dieser Pfad dem Filament und nicht Drucker oder Prozess?"""
     return path.partition(".")[0] in MATERIAL_GROUPS
+
+
+def chamber_limitation(foundation: Foundation | None) -> TranslatableText | None:
+    """Derselbe belegte Heizungsstatus für Druckfeld und Übergabebefund."""
+    if foundation is not None and foundation.chamber_control is True:
+        return None
+    if foundation is not None and foundation.chamber_control is False:
+        return _(
+            "Das gewählte Druckerprofil hat keine regelbare Kammerheizung. "
+            "Die Kammertemperatur bleibt ohne Wirkung."
+        )
+    return _(
+        "Eine regelbare Kammerheizung ist für dieses Druckerprofil nicht belegt. "
+        "Wählen Sie im Druckdialog ein passendes Maschinenprofil."
+    )
 
 
 def findings(foundation: Foundation) -> list[Finding]:
