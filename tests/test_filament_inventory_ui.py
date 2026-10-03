@@ -840,10 +840,13 @@ def test_journal_shows_source_correction_and_reverses_entire_operation(
         project_name="Halter",
     )
     inventory.show_spool(first.identifier)
-    assert "Rückgängig geht es am selben Knopf" in inventory.reverse_hint.text()
+    # Ruhend sagt der Knopf, worauf er wartet (29dcefa48, Regel 18); was er
+    # tut, steht da, sobald ein Vorgang gewählt ist.
+    assert "Buchungsverlauf wählen" in inventory.reverse_hint.text()
     assert "G-Code geplant" in inventory.history.item(0).text()
     assert "Korrektur" in inventory.history.item(0).text()
     inventory.history.setCurrentRow(0)
+    assert "Rückgängig geht es am selben Knopf" in inventory.reverse_hint.text()
     inventory.reverse_button.click()
     _wait_for_action(inventory)
     assert filaments.get(first.identifier).remaining_grams == pytest.approx(200)

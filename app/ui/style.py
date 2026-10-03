@@ -674,6 +674,11 @@ class ContentHeight:
             return
         if intent == "initial" and self._initialized:
             intent = "passive"
+        # Erst die liegengebliebenen Layout-Anfragen: Ein Zuklappen meldet sich
+        # bei den Eltern über ``LayoutRequest`` in der Warteschlange, und der
+        # Nullzeitgeber der Klappe kam davor an — gemessen wurde der
+        # aufgeklappte Inhalt, und die Einstellungen gaben ihre Höhe nicht zurück.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         floor = self.floor(dialog)
         if intent == "passive" and (self.user is not None or not self._initialized):
             return

@@ -992,7 +992,12 @@ class StartScreen(QWidget):
         # Die Überschrift **wird** der Umschalter, statt einen zweiten daneben
         # zu stellen: Der Text bleibt derselbe, und die ganze Zeile ist die
         # Fläche, die man trifft (Regel 18 über den gedrückten Zustand).
-        self.more_section = collapsible(tr("Was kann das noch?"), self.more_area, open_now=False)
+        self.more_section = collapsible(
+            tr("Was kann das noch?"),
+            self.more_area,
+            open_now=False,
+            contents=tr("Weitere Beispielprojekte"),
+        )
         inner.addWidget(self.more_section)
         # **Ausbalanciert, nicht oben angedockt** (Befund B27). Der ganze
         # Überschuss sammelte sich unten: Auf einem hohen Fenster endete der

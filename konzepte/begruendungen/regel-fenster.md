@@ -709,6 +709,47 @@ für eine gewachsene Berichtkarte) — eine Zusicherung nach einer Runde misst
 einen Zwischenstand. `is_room_taker` beantwortet die Frage je Widget-Typ
 einmal; sie ist strukturell, und der Typ ändert sich nicht.
 
+**Ungleiche Zeilen, ungleiche Rechnung (RM-489).** Der Objektbaum rechnete
+mit der Höhe seiner ersten Zeile mal der Zeilenzahl, und die erste ist die
+Körperzeile mit Vorschaubild, doppelt so hoch wie ein Merkmal: Ein Körper mit
+zehn Merkmalen wollte 583 statt rund 300 Punkte. Die Spalte gab sie ihm, unter
+„Rechte Seite" stand eine leere Fläche, und der Filamentliste fehlte genau
+diese Höhe für „Im Regal". Seit `ObjectTree.wanted_height` über `rows_height`
+misst, zeigt die Spalte bei 1920×1080 mit 1, 2 und 4 Filamenten alle
+Baumzeilen und beide Überschriften. Bei 1280×720 reicht die Spalte für alle
+vier offenen Abschnitte nicht, wie schon in v0.5.1.
+
+**Der Farbpunkt ist so groß wie das Feld vor ihm.** `swatch` zeichnet in
+doppelter Auflösung, damit der Kreis auf 200 % rund bleibt. Ein `QIcon` aus nur
+diesem Bild meldete Qt 28 statt 14 Punkte, und jede Spulenzeile wurde zehn
+Punkte höher; mit einem Bild einfacher Auflösung daneben misst Qt wieder 14.
+Die Filamentliste rollt nicht mehr waagrecht: Ein waagrechter Balken nahm ihr
+eine Zeile, die keine Höhenrechnung kannte. Lange Namen enden auf „…", der
+volle steht im Tooltip. `rows_height` zählt einen sichtbaren waagrechten
+Balken auch dann, wenn die Liste noch nicht angezeigt ist — vorher las es eine
+Differenz aus dem Bau (eine Liste von null Punkten über einem Sichtfeld von 28).
+
+## Klappen nennen ihren Inhalt
+
+Hinter „Weitere Einstellungen" lagen seit v0.5.2 Navigation, Tastenbelegung,
+Differenzansicht, Chat, KI-Hinweis und Fernsteuerung, hinter „Bausteine
+verwalten" Speichern, Weitergeben und Entfernen — und von außen verriet nichts,
+dass es sie gibt (RM-491, Versionsvergleich 0.5.2). Die gestufte Tiefe (§2.4)
+versteckt, was man selten ändert; sie darf nicht verstecken, dass es da ist.
+Deshalb steht unter einer zugeklappten Überschrift ihr Inhalt, klickbar, mit
+demselben Satz in Kurzhilfe und Bildschirmleser. Der Wächter liest den
+Quelltext; ausgenommen sind Abschnitte, deren Titel schon der Inhalt ist (die
+Filamente der linken Spalte, wo jede Zusatzzeile der Spalte Höhe nähme).
+
+Wer einen Bereich aufklappt, will ihn beim nächsten Mal wieder offen sehen:
+`remember=` schreibt den Zustand in `UiSettings.open_sections`, gebunden über
+`panels.keep_sections_in` an die Einstellungen des Fensters, damit jedes
+Speichern ihn mitnimmt — auch aus Dialogen, die eine Kopie bearbeiten. Die
+Befehlspalette findet jede Zeile der Einstellungen unter ihrem Namen
+(`settings_dialog.option_titles`, eine Quelle für Formular und Palette) und
+öffnet den Dialog dort; ein gesperrtes Feld gibt den Fokus an den Haken, der
+es freigibt.
+
 ## Rückmeldung und Fehlerbericht
 
 *Bis zur Verdichtung in `oberflaeche.md`:*

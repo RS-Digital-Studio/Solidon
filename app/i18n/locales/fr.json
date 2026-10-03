@@ -7461,5 +7461,17 @@
   "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.": "Un essai généré n'est pas encore dans le projet et sera perdu à la fermeture.",
   "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim Schließen verloren.": "{count} essais générés ne sont pas encore dans le projet et seront perdus à la fermeture.",
   "Zur Erzeugung": "Retour à la génération",
-  "Trotzdem schließen": "Fermer quand même"
+  "Trotzdem schließen": "Fermer quand même",
+  "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigation, souris 3D, affectation des touches, vue des différences, chat, information sur l'IA, commande à distance",
+  "Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigation, affectation des touches, vue des différences, chat, information sur l'IA, commande à distance",
+  "3D-Maus": "Souris 3D",
+  "Öffnet die Einstellungen bei dieser Zeile.": "Ouvre les réglages à cette ligne.",
+  "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, als OpenSCAD schreiben, bearbeiten, entfernen": "Enregistrer vos propres blocs, ajouter depuis un fichier, partager, écrire en OpenSCAD, modifier, retirer",
+  "Untergrenze und Obergrenze": "Borne inférieure et supérieure",
+  "Durchmesser, Kaufdatum, Preis, Notiz, Slicer-Profil": "Diamètre, date d'achat, prix, note, profil de slicer",
+  "Startwert und Modell": "Graine et modèle",
+  "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Parois, remplissage, températures, supports, vitesse et plus",
+  "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Imprimante, profil de base, filament et plateau d'impression dans le slicer",
+  "Weitere Beispielprojekte": "Autres projets d'exemple",
+  "Text und Anhänge vor dem Senden ansehen": "Voir le texte et les pièces jointes avant l'envoi"
 }

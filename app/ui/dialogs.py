@@ -16,7 +16,17 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QLocale,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+    QUrlQuery,
+    Signal,
+)
 from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -677,7 +687,10 @@ class ParameterDialog(QDialog):
             existing.minimum is not None or existing.maximum is not None
         )
         self._limits_section = collapsible(
-            tr("Weitere Einstellungen"), self._limits, open_now=bounded
+            tr("Weitere Einstellungen"),
+            self._limits,
+            open_now=bounded,
+            contents=tr("Untergrenze und Obergrenze"),
         )
         chain = (
             self.name_field,
@@ -1189,8 +1202,21 @@ class KeyDialog(QDialog):
         QTimer.singleShot(0, self, weak_slot(self, KeyDialog._fit_key_content, intent))
 
     def _fit_key_content(self, intent: ContentFitIntent) -> None:
-        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
-        self._height.fit(self, self._scroll, intent=intent)
+        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken.
+
+        Beim Öffnen so breit wie der Inhalt (``style.expanded_width``), soweit der
+        Bildschirm reicht: Die Zeile aus Modellwahl, *Modell holen* und
+        *Werkzeuge prüfen* war breiter als die Vorgabebreite, und das
+        Prüfergebnis darunter rollte quer.
+        """
+        initial = intent == "initial"
+        self._height.fit(
+            self,
+            self._scroll,
+            intent=intent,
+            grow_width=initial,
+            natural_width=expanded_width(self._scroll) if initial else 0,
+        )
 
     def _set_tab_order(self) -> None:
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
@@ -1843,6 +1869,11 @@ class KeyDialog(QDialog):
         self.probe_result.setMinimumHeight(max(0, result_height))
         self._scroll.updateGeometry()
         fit_dialog_to_screen(self)
+        # Erst die neue Höhe in den Rollbereich bringen: Die Layout-Anfrage
+        # dafür wartet in der Schlange, und ohne sie war die Rollweite noch
+        # die alte — ``ensureWidgetVisible`` rollte nicht, und die Warnung
+        # stand halb unter dem Rand.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         self._scroll.ensureWidgetVisible(self.probe_result)
 
     @staticmethod

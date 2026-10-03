@@ -2513,11 +2513,25 @@ def test_the_cpu_probe_result_fits_its_real_wrapped_text_on_a_640_by_720_screen(
     dialog.show()
     qt_app.processEvents()
     dialog._probe_done(True, llm.Speed(tokens_per_second=7.8))
-    qt_app.processEvents()
+    for _ in range(8):
+        qt_app.processEvents()
 
     required = dialog.probe_result.heightForWidth(dialog.probe_result.width())
     buttons = dialog.findChild(QDialogButtonBox)
     assert dialog.width() <= 640 and dialog.height() <= 720
     assert dialog.probe_result.height() >= required
-    assert dialog.contentsRect().contains(dialog.probe_result.geometry().bottomRight())
+    # Seit 48ffcf145 steht der Inhalt in einem Rollbereich; die Lage des
+    # Ergebnisses zählt im sichtbaren Ausschnitt, nicht im Dialog. Senkrecht
+    # holt ``ensureWidgetVisible`` es ganz ins Bild; quer rollt höchstens, was
+    # der Bildschirm von der Inhaltsbreite abschneidet (offscreen ist die
+    # Schrift breiter, mit Windows-Schrift passt die Zeile in 640 Punkte).
+    from PySide6.QtCore import QPoint
+
+    from app.ui.style import expanded_width
+
+    viewport = dialog._scroll.viewport()
+    top = dialog.probe_result.mapTo(viewport, QPoint(0, 0)).y()
+    assert top >= 0 and top + dialog.probe_result.height() <= viewport.height()
+    natural = expanded_width(dialog._scroll)
+    assert dialog._scroll.horizontalScrollBar().maximum() <= max(0, natural - dialog.width())
     assert buttons is not None and dialog.contentsRect().contains(buttons.geometry().bottomRight())

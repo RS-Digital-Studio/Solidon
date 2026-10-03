@@ -315,9 +315,7 @@ Ansichtsseite steht in `griffe.md`.
 ## Der Hauptknopf
 
 **Ein Hauptknopf entsteht über `style.make_primary()`, nie über
-`setDefault(True)`:** Qt rechnet die Breite aus der normalen Schrift, gezeichnet
-wird halbfett, und in einer engen Leiste wird die Beschriftung abgeschnitten.
-`make_primary` setzt die Schrift am Widget; das Fett bleibt als zweite
+`setDefault(True)`:** `make_primary` setzt die Schrift am Widget; das Fett bleibt als zweite
 Kodierung neben der Akzentfarbe (Regel 18). **Ein Knopf, der verwirft, entsteht
 über `style.make_danger()`** — Fehlerrot (`ROLES["error"]`) als Fläche, Schrift
 aus `readable_on`, das Wort als zweite Kodierung (*Abbrechen* unter
@@ -393,7 +391,8 @@ zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt.
 
 **Klappen:** überall die flache Überschrift (`panels.collapsible`,
-`sectionHeading`). Werte, die sich ein- und ausschalten lassen, sind eine
+`sectionHeading`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
+`test_interface_limits`), `remember=` hält den Zustand des Kunden. Werte, die sich ein- und ausschalten lassen, sind eine
 Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei
 `ContentHeight`-Dialogen werden Anfangsgröße und ausdrücklich bedientes
 Klappen getrennt gemessen; eigenes Wachsen gilt nicht als gezogene
@@ -424,9 +423,7 @@ nur die Liste.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster — bis zum Löschen
-steht es als eigenes Fenster auf dem Bildschirm, im selben Atemzug gelöscht
-bringt es den Absturz, und Tastenkürzel lösen falsch auf. Weggeräumt wird mit
+Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster. Weggeräumt wird mit
 `hide()` und `deleteLater()`, nie über den Elternteil: `takeAt` nimmt es aus
 dem Layout, `hide` aus dem Bild, der Elternteil trägt es bis zum Löschen.
 
@@ -464,7 +461,7 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 
 `tests/test_overlay.py` hält alle drei („settles on one answer“, „moves a card
 once“, „no card is pushed outside its section“). `fit_to_rows` rechnet mit
-**einer** Zeilenhöhe — ungleiche Zeilen misst `overlay.rows_height`, und
+**einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
 `wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
 steht, gehört in beide Rechnungen**, sonst schiebt die Liste den einzigen Weg
 der Karte hinaus.

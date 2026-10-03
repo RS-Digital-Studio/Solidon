@@ -2076,3 +2076,50 @@ def test_the_palette_names_the_key_the_menu_really_uses(window: MainWindow) -> N
     _title, key, _slot = window.window_commands()["edit.redo"]
 
     assert key == "Ctrl+Shift+Z"
+
+
+#: Zugeklappte Abschnitte, deren Titel schon ihr Inhalt ist, mit Grund.
+#: Die Filamente der linken Spalte: Eine Zusatzzeile kostete die Spalte Höhe,
+#: um die Objektbaum und Filamentliste ohnehin ringen (RM-489).
+_TITLE_IS_THE_CONTENT = {("main_window.py", "Filamente")}
+
+
+def test_every_closed_section_names_what_it_holds() -> None:
+    """Ein zugeklappter Abschnitt nennt seinen Inhalt (RM-491).
+
+    Hinter „Weitere Einstellungen" lagen Tastenbelegung und Fernsteuerung,
+    hinter „Bausteine verwalten" Speichern und Weitergeben — und von außen
+    verriet nichts, dass es sie gibt. Gelesen wird der Quelltext: Jeder Aufruf
+    von ``collapsible``, der nicht ausdrücklich offen beginnt, trägt
+    ``contents=``.
+    """
+    import ast
+
+    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    silent = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "collapsible"
+            ):
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            start = keywords.get("open_now")
+            if start is None or (isinstance(start, ast.Constant) and start.value is True):
+                continue
+            if "contents" in keywords:
+                continue
+            title = node.args[0] if node.args else None
+            text = (
+                title.args[0].value
+                if isinstance(title, ast.Call)
+                and title.args
+                and isinstance(title.args[0], ast.Constant)
+                else ""
+            )
+            if (path.name, text) not in _TITLE_IS_THE_CONTENT:
+                silent.append(f"{path.relative_to(root)}:{node.lineno} {text}")
+    assert not silent, f"zugeklappt, ohne zu sagen, was darin steht: {silent}"

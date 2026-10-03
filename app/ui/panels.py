@@ -178,7 +178,7 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
-from app.ui.overlay import LEFT_WIDTH
+from app.ui.overlay import LEFT_WIDTH, rows_height
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import (
     NORMAL,
@@ -1580,21 +1580,6 @@ def _feature_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
     return found
 
 
-def _visible_rows(item: QTreeWidgetItem | None) -> int:
-    """Wie viele Zeilen dieser Ast zeigt: er selbst plus, was offen darunter steht.
-
-    Der Nachbar von ``_feature_item`` und aus demselben Grund rekursiv — der
-    Baum ist unter einem Körper zwei Ebenen tief, seit die Merkmale eines
-    Bausteins unter seinem Knoten stehen.
-    """
-    if item is None:
-        return 0
-    rows = 1
-    if item.isExpanded():
-        rows += sum(_visible_rows(item.child(index)) for index in range(item.childCount()))
-    return rows
-
-
 def _empty_objects_text() -> str:
     """Was in der leeren Objektliste steht.
 
@@ -2416,29 +2401,15 @@ class ObjectTree(QWidget):
         if self._pending:
             QTimer.singleShot(0, self, self._render_pending)
 
-    def _rows(self) -> int:
-        """Die sichtbaren Zeilen — ein zugeklappter Ast zählt als eine.
-
-        **Über alle Ebenen, nicht nur die erste.** Gezählt wurden lange die
-        direkten Kinder, und das stimmte, solange der Baum zwei Ebenen hatte.
-        Seit die Merkmale eines eingesetzten Bausteins unter seinem Knoten
-        stehen, sind es drei — und dieser Knoten steht **immer** offen: Ein
-        Körper mit sechs Verrundungen unter einem Einhänger meldete zwei
-        Zeilen und zeigte acht. Die Karte bekam damit Höhe für zwei und einen
-        Rollbalken, den es an dieser Stelle nicht geben soll.
-
-        Dieselbe Ebenenblindheit hatte ``_restore`` schon einmal: Ein Klick im
-        Viewport fand das Merkmal nicht, weil es eine Ebene tiefer lag. Wer
-        eine Ebene einzieht, sucht die Stellen, die über Ebenen laufen.
-        """
-        return sum(
-            _visible_rows(self.tree.topLevelItem(index))
-            for index in range(self.tree.topLevelItemCount())
-        )
-
     def wanted_height(self) -> int:
-        """Die Höhe, bei der jede Zeile zu sehen wäre."""
-        return view_chrome(self.tree) + self._rows() * row_height_of(self.tree)
+        """Die Höhe, bei der jede Zeile zu sehen wäre.
+
+        Gemessen je Zeile (``rows_height``), nicht erste Zeile mal Zeilenzahl:
+        Die Körperzeile trägt ein Vorschaubild und ist doppelt so hoch wie
+        ihre Merkmale. Ein Körper mit zehn Merkmalen wollte so 583 statt rund
+        300 Punkte und nahm sie der Filamentliste darunter (RM-489).
+        """
+        return max(view_chrome(self.tree), rows_height(self.tree))
 
     def least_height(self) -> int:
         """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``)."""
@@ -2540,7 +2511,13 @@ class ObjectTree(QWidget):
         empty = self.tree.topLevelItemCount() == 0
         self._empty.setVisible(empty)
         self.tree.setVisible(not empty)
-        fit_to_rows(self.tree, self._rows(), room=self._room)
+        wanted = self.wanted_height()
+        ceiling = (
+            self._room
+            if self._room is not None
+            else view_chrome(self.tree) + MAX_ROWS * row_height_of(self.tree)
+        )
+        self.tree.setFixedHeight(max(least_height_of(self.tree), min(wanted, ceiling)))
         self._size_columns()
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
@@ -9651,7 +9628,47 @@ class FeaturePanel(QWidget):
         self.operationRequested.emit(op, params)
 
 
-def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:
+#: Welche merkenden Abschnitte offen stehen, unter ihrem Schlüssel.
+#:
+#: Gebunden an ``UiSettings.open_sections`` des Fensters
+#: (:func:`keep_sections_in`), damit das Speichern der Einstellungen den
+#: Zustand mitnimmt — auch aus Dialogen, die eine Kopie bearbeiten.
+_OPEN_SECTIONS: dict[str, bool] = {}
+
+
+def keep_sections_in(store: dict[str, bool]) -> None:
+    """Merkende Abschnitte schreiben ihren Zustand ab jetzt in ``store``."""
+    global _OPEN_SECTIONS
+    _OPEN_SECTIONS = store
+
+
+class _SectionSummary(QLabel):
+    """Was in einem zugeklappten Abschnitt steht — ein Klick klappt ihn auf."""
+
+    def __init__(self, text: str, heading: QToolButton, parent: QWidget) -> None:
+        super().__init__(text, parent)
+        self._heading = heading
+        self.setWordWrap(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        set_level(self, "caption")
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self._heading.setChecked(True)
+            return
+        super().mouseReleaseEvent(event)
+
+
+def collapsible(
+    title: str,
+    content: QWidget,
+    *,
+    open_now: bool = True,
+    contents: str = "",
+    remember: str = "",
+) -> QWidget:
     """Ein Abschnitt, der sich zuklappen lässt — §2.5 verlangt genau das.
 
     Er hieß so und war keiner: eine fette Überschrift über dem Inhalt, ohne
@@ -9662,7 +9679,19 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     Der Umschalter ist ein Knopf mit dem Titel darauf, kein Zeichen daneben:
     die ganze Zeile ist damit die Fläche, die man trifft, und der gedrückte
     Zustand sagt ohne Farbe, ob offen oder zu ist (Regel 18).
+
+    **Zugeklappt nennt er, was darin steht** (``contents``, RM-491): Hinter
+    „Weitere Einstellungen" lagen Tastenbelegung und Fernsteuerung, und von
+    außen verriet nichts, dass es sie gibt. Die Zeile steht unter der
+    Überschrift, nur solange sie zu ist, und klappt auf, wenn man sie
+    anklickt; Kurzhilfe und Bildschirmleser bekommen denselben Satz.
+
+    **Mit ``remember`` merkt er sich, wie der Kunde ihn verließ** — über
+    Dialoge und Neustarts hinweg (:func:`keep_sections_in`). Ohne Merker
+    gilt ``open_now``.
     """
+    if remember:
+        open_now = _OPEN_SECTIONS.get(remember, open_now)
     wrapper = QWidget()
     heading = QToolButton(wrapper)
     # Eine Kopfzeile ist kein Umschalter im Sinne der Werkzeugzeile: sie steht
@@ -9681,10 +9710,23 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     content.setVisible(open_now)
     set_level(heading, "section")
     heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    summary: _SectionSummary | None = None
+    if contents:
+        heading.setToolTip(contents)
+        heading.setAccessibleDescription(contents)
+        summary = _SectionSummary(contents, heading, wrapper)
+        summary.setObjectName("sectionSummary")
+        # Eingerückt bis unter den Titel, nicht unter den Pfeil.
+        summary.setIndent(heading.iconSize().width() + TIGHT)
+        summary.setVisible(not open_now)
 
     def toggled(open_now: bool) -> None:
         content.setVisible(open_now)
         heading.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+        if summary is not None:
+            summary.setVisible(not open_now)
+        if remember:
+            _OPEN_SECTIONS[remember] = open_now
 
     heading.toggled.connect(toggled)
 
@@ -9692,6 +9734,8 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     layout.addWidget(heading)
+    if summary is not None:
+        layout.addWidget(summary)
     layout.addWidget(content)
     return wrapper
 

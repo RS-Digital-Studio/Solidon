@@ -7461,5 +7461,17 @@
   "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.": "Un tentativo generato non è ancora nel progetto e andrà perso alla chiusura.",
   "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim Schließen verloren.": "{count} tentativi generati non sono ancora nel progetto e andranno persi alla chiusura.",
   "Zur Erzeugung": "Torna alla generazione",
-  "Trotzdem schließen": "Chiudi comunque"
+  "Trotzdem schließen": "Chiudi comunque",
+  "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigazione, mouse 3D, assegnazione dei tasti, vista delle differenze, chat, avviso sull'IA, controllo remoto",
+  "Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigazione, assegnazione dei tasti, vista delle differenze, chat, avviso sull'IA, controllo remoto",
+  "3D-Maus": "Mouse 3D",
+  "Öffnet die Einstellungen bei dieser Zeile.": "Apre le impostazioni su questa riga.",
+  "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, als OpenSCAD schreiben, bearbeiten, entfernen": "Salva i tuoi blocchi, aggiungi da un file, condividi, scrivi come OpenSCAD, modifica, rimuovi",
+  "Untergrenze und Obergrenze": "Limite inferiore e superiore",
+  "Durchmesser, Kaufdatum, Preis, Notiz, Slicer-Profil": "Diametro, data di acquisto, prezzo, nota, profilo slicer",
+  "Startwert und Modell": "Seme e modello",
+  "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Pareti, riempimento, temperature, supporti, velocità e altro",
+  "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Stampante, profilo di base, filamento e piatto di stampa nello slicer",
+  "Weitere Beispielprojekte": "Altri progetti di esempio",
+  "Text und Anhänge vor dem Senden ansehen": "Vedi il testo e gli allegati prima dell'invio"
 }

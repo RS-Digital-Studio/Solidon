@@ -160,11 +160,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken](#rm-489) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch den größeren Farbpunkt; Symbolgröße und Listenhöhe festlegen |
-| [RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“](#rm-491) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 (Auffindbarkeit); Überschrift nennt den Inhalt, Palette findet die Optionen |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
-| [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
+| [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile](#rm-500) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund aus RM-371; Ansagen und Hinweise neben dem Fortschritt sichtbar halten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -4693,36 +4691,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
-<a id="rm-489"></a>
-
-- [ ] **RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1.** Seit `e969f88ce` steht
-  die Farbe als großer runder Punkt in der Filamentliste; die Zeile wird höher und breiter. Dunkel:
-  Die Liste bekommt einen waagrechten und einen senkrechten Balken, „Im Regal“ verschwindet. Hell:
-  Die Liste passt, dafür wird der Objektbaum gekürzt („Rechte Seite“ fehlt). Bei 1280×720 ebenso
-  ein waagrechter Balken. v0.5.0 und v0.5.1 zeigten alle Baumzeilen und beide Überschriften.
-  **Stellen:** `app/ui/filament_picker.py:211` (`swatch`), `:1966–1995` (`_fit` ohne waagrechten
-  Balken).
-  **Fix (allgemein):** Symbolgröße der Liste auf die bisherige Zeilenhöhe festlegen, lange
-  Einträge kürzen statt waagrecht rollen, `_fit` rechnet einen sichtbaren Balken mit.
-  **Abnahme:** drei Modelle mit 1, 2 und 4 Filamenten bei 1920×1080 und 1280×720, beide Schemata:
-  alle Baumzeilen und beide Überschriften sichtbar, kein waagrechter Balken. Bauplan §2.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U1), Bilder in `regression-0.5.2\ui\`.
-
-<a id="rm-491"></a>
-
-- [ ] **RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1** (Auffindbarkeit, aus
-  `48ffcf145`; anderer Ort als „Bausteine verwalten“). Navigation, Differenzansicht,
-  Tastenbelegung, Chat-Vorschläge ohne Nachfrage, KI-Hinweis, Fernsteuerung (MCP) und Port liegen
-  eingeklappt; nichts verrät von außen, dass dort die Tastenbelegung oder die Fernsteuerung steht.
-  **Stellen:** `app/ui/settings_dialog.py:586`.
-  **Fix (allgemein):** Die Überschrift eingeklappter Bereiche nennt ihren Inhalt (z. B. „Maus,
-  Tastatur, Chat, Fernsteuerung“), der Bereich merkt sich seinen Zustand, und die Befehlspalette
-  findet jede Einzeloption.
-  **Abnahme:** Einstellungen, „Bausteine verwalten“ und ein dritter eingeklappter Bereich nennen
-  ihren Inhalt; Palette findet „Tastenbelegung“ und „Fernsteuerung“. Bauplan §2.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U4), Bilder in `regression-0.5.2\ui\`.
 
 <a id="rm-492"></a>
 

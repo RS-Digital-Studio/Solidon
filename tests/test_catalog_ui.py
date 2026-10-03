@@ -1891,3 +1891,27 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
     finally:
         catalog.close()
         catalog.deleteLater()
+
+
+def test_the_closed_management_names_what_it_holds(qt_app: QApplication) -> None:
+    """„Bausteine verwalten" sagt zugeklappt, was dahinter steht (RM-491).
+
+    Speichern, Weitergeben und Entfernen lagen hinter einer Überschrift, die
+    nicht verriet, dass es sie gibt. Der Zustand bleibt für den nächsten
+    Katalog stehen.
+    """
+    from PySide6.QtWidgets import QLabel, QToolButton
+
+    catalog = PartCatalog()
+    summary = catalog.management_section.findChild(QLabel, "sectionSummary")
+    heading = catalog.management_section.findChild(QToolButton)
+    assert summary is not None and summary.isVisibleTo(catalog)
+    for word in ("speichern", "weitergeben", "entfernen"):
+        assert word in summary.text(), (word, summary.text())
+    heading.click()
+    assert not summary.isVisibleTo(catalog)
+    catalog.deleteLater()
+
+    again = PartCatalog()
+    assert again.management_section.findChild(QToolButton).isChecked(), "offen verlassen, offen"
+    again.deleteLater()

@@ -7461,5 +7461,17 @@
   "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.": "One generated try is not in the project yet and will be lost on closing.",
   "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim Schließen verloren.": "{count} generated tries are not in the project yet and will be lost on closing.",
   "Zur Erzeugung": "Back to generation",
-  "Trotzdem schließen": "Close anyway"
+  "Trotzdem schließen": "Close anyway",
+  "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigation, 3D mouse, key bindings, difference view, chat, AI notice, remote control",
+  "Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung": "Navigation, key bindings, difference view, chat, AI notice, remote control",
+  "3D-Maus": "3D mouse",
+  "Öffnet die Einstellungen bei dieser Zeile.": "Opens the settings at this row.",
+  "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, als OpenSCAD schreiben, bearbeiten, entfernen": "Save your own parts, add from a file, share, write as OpenSCAD, edit, remove",
+  "Untergrenze und Obergrenze": "Lower and upper bound",
+  "Durchmesser, Kaufdatum, Preis, Notiz, Slicer-Profil": "Diameter, purchase date, price, note, slicer profile",
+  "Startwert und Modell": "Seed and model",
+  "Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr": "Walls, infill, temperatures, supports, speed and more",
+  "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Printer, base profile, filament and build plate in the slicer",
+  "Weitere Beispielprojekte": "More example projects",
+  "Text und Anhänge vor dem Senden ansehen": "View the text and attachments before sending"
 }

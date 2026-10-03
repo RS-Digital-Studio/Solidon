@@ -47,7 +47,9 @@ from typing import cast
 from PySide6.QtCore import (
     QCoreApplication,
     QEvent,
+    QModelIndex,
     QObject,
+    QPersistentModelIndex,
     QPoint,
     QRectF,
     QSignalBlocker,
@@ -58,6 +60,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -69,12 +72,15 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QProgressBar,
     QPushButton,
     QSlider,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -229,14 +235,24 @@ def swatch(
     mit Leerzeichen (:func:`colours_of`) oder eine Liste.
     """
     colours = colour.split() if isinstance(colour, str) else list(colour or ())
-    # In doppelter Auflösung gezeichnet: Ein Kreis aus vierzehn Bildpunkten
-    # ist auf einem Schirm mit 200 % sonst ein gestuftes Achteck.
-    scale = 2
+    # **Zwei Bilder, eine Größe.** Das zweite in doppelter Auflösung: Ein Kreis
+    # aus vierzehn Bildpunkten ist auf einem Schirm mit 200 % sonst ein
+    # gestuftes Achteck. Das erste in einfacher, denn nach ihm misst Qt die
+    # Größe des Symbols — mit dem doppelten allein meldete es 28 Punkte, und
+    # jede Spulenzeile der linken Spalte wuchs um zehn (RM-489).
+    icon = QIcon()
+    for scale in (1, 2):
+        icon.addPixmap(_dot(colours, size, scale, ring_when_empty=ring_when_empty))
+    return icon
+
+
+def _dot(colours: Sequence[str], size: int, scale: int, *, ring_when_empty: bool) -> QPixmap:
+    """Ein Farbpunkt von ``size`` Punkten in ``scale``-facher Auflösung."""
     image = QPixmap(size * scale, size * scale)
     image.setDevicePixelRatio(scale)
     image.fill(QColor(0, 0, 0, 0))
     if not colours and not ring_when_empty:
-        return QIcon(image)
+        return image
     painter = QPainter(image)
     try:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -260,7 +276,7 @@ def swatch(
         painter.drawEllipse(disc)
     finally:
         painter.end()
-    return QIcon(image)
+    return image
 
 
 #: Wie viele Treffer die Liste zeigt. Der Bestand geht in die Tausende, und
@@ -820,7 +836,13 @@ class NewFilamentDialog(QDialog):
         search_line.addWidget(self.stop_search)
         self.profile_search.hide()
         details.addRow(self.profile_search)
-        self.more_section = collapsible(tr("Weitere Angaben"), self.more, open_now=False)
+        self.more_section = collapsible(
+            tr("Weitere Angaben"),
+            self.more,
+            open_now=False,
+            contents=tr("Durchmesser, Kaufdatum, Preis, Notiz, Slicer-Profil"),
+            remember="filament.more",
+        )
         layout.addRow(self.more_section)
         heading = self.more_section.findChild(QToolButton)
         assert heading is not None
@@ -1790,6 +1812,28 @@ _PROFILE_ROLE = int(Qt.ItemDataRole.UserRole) + 5
 _ID_ROLE = int(Qt.ItemDataRole.UserRole) + 6
 
 
+class _WithinTheWidth(QStyledItemDelegate):
+    """Keine Zeile breiter als ihre Liste — was nicht passt, endet auf „…".
+
+    Eine Liste im Listenmodus macht jede Zeile so breit wie ihren längsten
+    Text und rollt dann waagrecht. In der schmalen linken Spalte kostete der
+    Balken eine Zeile, die keine Höhenrechnung kannte, und hinter dem
+    senkrechten Balken, der dazukam, verschwand „Im Regal" (RM-489). Gekappt
+    wird der Wunsch, also kürzt der Zeichner den Text; der volle Name steht
+    im Tooltip der Zeile.
+    """
+
+    def sizeHint(  # noqa: N802 — Qt-Name
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> QSize:
+        hint = super().sizeHint(option, index)
+        view = self.parent()
+        port = view.viewport() if isinstance(view, QAbstractItemView) else None
+        if port is not None and port.width() > 0:
+            hint.setWidth(min(hint.width(), port.width()))
+        return hint
+
+
 def _explain(button: QPushButton, free: bool, said: str) -> None:
     """Freigabe und Satz eines Knopfes in einem Zug — an allen drei Kanälen."""
     button.setEnabled(free)
@@ -1837,6 +1881,13 @@ class FilamentPanel(QWidget):
         super().__init__(parent)
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Filamente"))
+        # Der Farbpunkt ist so groß wie das Feld vor ihm, und kein Name rollt
+        # die Liste zur Seite (RM-489, :class:`_WithinTheWidth`).
+        self.list.setIconSize(QSize(SWATCH_PIXELS, SWATCH_PIXELS))
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.list.setItemDelegate(_WithinTheWidth(self.list))
         self.list.itemDoubleClicked.connect(self._on_activated)
         self.list.currentItemChanged.connect(self._selection_changed)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -2086,12 +2137,13 @@ class FilamentPanel(QWidget):
                 item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 if slot is not None:
                     item.setData(_SLOT_ROLE, slot)
-                item.setToolTip(
-                    tr(
-                        "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
-                        "rechts im Auswahlfenster, sobald er gewählt ist."
-                    )
+                # Der volle Text zuerst: In der schmalen Spalte endet die
+                # Zeile oft auf „…" (:class:`_WithinTheWidth`).
+                said = tr(
+                    "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
+                    "rechts im Auswahlfenster, sobald er gewählt ist."
                 )
+                item.setToolTip(f"{label}\n{said}")
                 self.list.addItem(item)
 
         self._heading(tr("Im Regal"))
@@ -2107,7 +2159,8 @@ class FilamentPanel(QWidget):
                 if entry.slicer_profile
                 else tr("Ohne Slicer-Profil")
             )
-            item.setToolTip(f"{tr('Doppelklick ändert Name, Typ und Farbe.')} {profile_hint}")
+            said = tr("Doppelklick ändert Name, Typ und Farbe.")
+            item.setToolTip(f"{label}\n{said} {profile_hint}")
             self.list.addItem(item)
 
         if entries:
