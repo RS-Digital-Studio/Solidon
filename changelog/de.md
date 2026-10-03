@@ -57,6 +57,9 @@ Nutzen da und sonst nichts.
 - Beim Öffnen älterer Projekte werden unbenutzte Filamente nicht mehr an den Slicer übergeben. Die Profile der benutzten Filamente bleiben zugeordnet.
 - Weitere Modelle finden auch hinter der zwölften Druckplatte einen freien Platz. Mitgebrachte Platten behalten ihre Aufteilung.
 - Weitere Modelle kommen bei unterschiedlichen Filamenten auf getrennte Druckplatten, wenn der Drucker nicht genügend Düsen hat.
+- Beim Wechsel von Drucker oder Slicer wird die bisherige Druckplattenwahl nicht mehr auf das neue Profil übertragen.
+- Schlanke Teile rücken beim Anordnen näher zur Mitte. Der Brim-Abstand lässt sich einstellen; für kleine Standflächen wird ein direkt anschließender Brim vorgeschlagen.
+- Beschädigte Profile in PrusaSlicer und SuperSlicer werden gemeldet. Solidon verwendet dann seine vollständigen Druckwerte.
 - Druckwerte für einzelne Teile kommen zuverlässiger im Slicer an. Werte, die nur für die ganze Platte gelten, werden am betroffenen Teil erklärt.
 - Bei Orca und Prusa bremst ein übernommener Vorschlag für eine Passung nur noch die betroffenen Teile.
 - Auch kleine übernommene Änderungen der Druckeinstellungen bleiben beim Export erhalten.

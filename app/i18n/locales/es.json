@@ -7520,5 +7520,12 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "Los valores coinciden dentro del límite de comparación.",
   "Quelle der Schätzung": "Origen de la estimación",
   "Interne Schichtanalyse": "Análisis interno de capas",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Los archivos de impresión no se pueden asignar de forma inequívoca a las placas comparadas."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Los archivos de impresión no se pueden asignar de forma inequívoca a las placas comparadas.",
+  "Abstand zwischen Rand und Teil. Null verbindet beide für besseren Halt; etwas Abstand erleichtert das Ablösen.": "Separación entre el borde y la pieza. Cero los une para mejorar la sujeción; una pequeña separación facilita retirarlo.",
+  "Brim-Abstand": "Separación del borde",
+  "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand hält seinen Fuß besser fest.": "Esta pieza alta y estrecha tiene una base pequeña. Un borde sin separación sujeta mejor su base.",
+  "Die Fußkorrektur des Herstellerprofils ist unbekannt. Wählen Sie ein vollständiges Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "Se desconoce la compensación de la base del perfil del fabricante. Elija un perfil de proceso completo o restablezca la separación del borde.",
+  "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "Este laminador no puede mantener la separación del borde solicitada con esta compensación de la base. Elija otro perfil de proceso o restablezca la separación del borde.",
+  "Rückt hohe, schmale Teile auf ihrer Platte näher zur Mitte, wenn dort Platz frei ist. Andere Teile und die Abstände bleiben erhalten.": "Acerca las piezas altas y estrechas al centro de su placa cuando hay espacio libre. Mantiene las demás piezas y las separaciones.",
+  "Schlanke Teile zur Mitte": "Acercar las piezas esbeltas al centro"
 }

@@ -911,3 +911,13 @@ Verwerfen löscht sie nicht. Der eigene Sitzungstoken erlaubt das Aufräumen.
 Prozessende gibt die Sperre frei, auch wenn keine Aufräumfunktion mehr läuft.
 Das gemeinsame Primitiv `paths.lock_file()` trägt auch die Lebensdauersperre
 des Absturzprotokolls; `_lock_recovery()` bleibt der bisherige Projekteinstieg.
+
+
+## Gespeicherte Mittellage schlanker Teile (§16.2)
+
+`centre_slender` ist ein gespeicherter Parameter von Anordnen und Ausrichten.
+Migration 42→43 ergänzt bei alten Schritten `False`, auch in den vorherigen
+und nachherigen Zuständen rücknehmbarer Operationsänderungen. Eine bereits
+gespeicherte ausdrückliche Wahl bleibt erhalten. Neue Schritte dürfen schlanke
+Körper auf ihrer bestehenden Platte zur nächsten besseren freien Mittellage
+verschieben; Plattenzahl, Nachbarn und Abstände bleiben erhalten.

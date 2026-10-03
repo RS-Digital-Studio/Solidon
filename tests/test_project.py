@@ -4280,3 +4280,77 @@ def test_v41_a_cut_at_a_face_keeps_its_face_and_computes_bit_for_bit(profile) ->
     assert stamp[:16] == "0e0416967210692d", "bitgleich zum Stand vor der Migration"
     assert len(raw.faces) == 28
     assert float(body.mesh.volume) == pytest.approx(10800.0, rel=1e-12)
+
+
+def test_v42_keeps_its_arrangement_and_a_new_step_can_move_the_rod_inward(tmp_path) -> None:
+    """Saved locations survive migration, saving and undo of a new arrangement."""
+    import hashlib
+
+    import numpy as np
+
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "slender_arrangement_v42.p3d"
+    assert project_data(path)["format_version"] == 42
+    project = load(path)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    def stamps():
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        return {
+            key: hashlib.sha256(
+                np.ascontiguousarray(obj.mesh.raw.vertices, dtype=np.float64).tobytes()
+                + np.ascontiguousarray(obj.mesh.raw.faces, dtype=np.int64).tobytes()
+            ).hexdigest()
+            for key, obj in result.scene.objects.items()
+        }
+
+    original = {
+        "obj_1": "63eead4d772c4f1614938645402682b210cb83e512030a8189e36f4f4ae1742c",
+        "obj_2": "a4b65f96a15308498d65471354101ed8d238acec2daa0a9e8f50fb292acac5a3",
+    }
+    assert stamps() == original
+    old_step = next(op for op in project.document.ops if op.op == "arrange_bed")
+    assert old_step.params["centre_slender"] is False
+    saved = save(project, tmp_path / "migrated.p3d")
+    project = load(saved)
+    assert stamps() == original
+    history = History(project.document)
+    history.apply("Arrange", [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2"))])
+    changed = stamps()
+    assert changed["obj_1"] == original["obj_1"]
+    assert changed["obj_2"] != original["obj_2"]
+    history.undo()
+    assert stamps() == original
+    history.redo()
+    assert stamps() == changed
+
+
+def test_v42_preserves_arrangement_modes_in_both_history_sides() -> None:
+    """Old edited steps keep their old rule; explicit new choices survive."""
+    data = {
+        "format_version": 42,
+        "ops": [
+            {"op": "arrange_bed", "params": {}},
+            {"op": "orient_for_print", "params": {"centre_slender": True}},
+        ],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"1": {"op": "orient_for_print", "params": {}}}},
+                    "after": {
+                        "edited_ops": {
+                            "1": {"op": "arrange_bed", "params": {"centre_slender": True}}
+                        }
+                    },
+                }
+            }
+        ],
+    }
+    migrated = migrate(data)
+    assert migrated["ops"][0]["params"]["centre_slender"] is False
+    assert migrated["ops"][1]["params"]["centre_slender"] is True
+    changes = migrated["transactions"][0]["changes"]
+    assert changes["before"]["edited_ops"]["1"]["params"]["centre_slender"] is False
+    assert changes["after"]["edited_ops"]["1"]["params"]["centre_slender"] is True

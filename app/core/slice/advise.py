@@ -73,7 +73,7 @@ SMALL_FOOTPRINT = 400.0
 
 #: Ab diesem Verhältnis von Höhe zu kleinster Grundkante ist ein Teil schlank
 #: genug, dass die Düse es beim Anfahren kippen kann.
-SLENDER_RATIO = 4.0
+SLENDER_RATIO = settings_table.SLENDER_RATIO
 
 #: Wie breit ein Steg der ersten Schicht höchstens ist, um als schmal zu gelten,
 #: in Bahnbreiten der ersten Schicht. Auf Roberts Minigolf-Platte (27.09.2026)
@@ -1044,6 +1044,19 @@ def _from_geometry(
     # Tempo sauber und bleiben schnell.
     if bounds is not None and _slender(bounds) and 0.0 < result.first_layer_area < SMALL_FOOTPRINT:
         advice += _calm_walls(settings)
+        if settings.adhesion.kind != "raft" and settings.adhesion.brim_gap > EPS_GEOM:
+            advice.append(
+                _advice(
+                    settings,
+                    path="adhesion.brim_gap",
+                    value=0.0,
+                    reason=_(
+                        "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand "
+                        "hält seinen Fuß besser fest."
+                    ),
+                    severity="warning",
+                )
+            )
 
     # **Schmale Stege brauchen eine langsame erste Schicht.** Roberts
     # Minigolf-Platte am Centauri Carbon 2 (27.09.2026): Elegoos Standard legt
@@ -1447,6 +1460,7 @@ PART_PATHS: Final = frozenset(
         "support.placement",
         "support.block_channels",
         "adhesion.kind",
+        "adhesion.brim_gap",
         "shell.precise_outer_wall",
         "shell.outer_wall_first",
         "shell.ironing",
@@ -1474,6 +1488,7 @@ SLICED_PATHS: Final = frozenset(
         "support.placement",
         "support.block_channels",
         "adhesion.kind",
+        "adhesion.brim_gap",
         "shell.wall_generator",
         "shell.outer_wall_first",
         "shell.scarf_seam",
@@ -1644,11 +1659,7 @@ def _calm_walls(settings: PrintSettings) -> list[SettingAdvice]:
 
 
 def _slender(bounds: BoundingBox) -> bool:
-    size = bounds.size
-    footprint = min(size[0], size[1])
-    if footprint <= 0.0:
-        return False
-    return size[2] / footprint >= SLENDER_RATIO
+    return settings_table.is_slender(bounds)
 
 
 def _has_thin_layers(result: SliceResult) -> bool:

@@ -34,6 +34,7 @@ from app.core.paths import user_profiles_dir
 from app.core.types import (
     AdhesionSettings,
     AdhesionType,
+    BoundingBox,
     CoolingSettings,
     FilamentSettings,
     InfillPattern,
@@ -66,6 +67,22 @@ MAX_LAYER_RATIO: Final = 0.75
 #: Länge der Schrägnaht-Rampe in Millimetern, wie Orca und Prusa sie vorgeben.
 #: Der Rat braucht zwei Rampen im Umfang; Cura schaltet sie mit einer Länge über null ein.
 SCARF_LENGTH: Final = 20.0
+
+#: Ab diesem Verhältnis von Höhe zur kleineren Fußausdehnung gilt ein Teil
+#: als schlank. Druckrat und Anordnung verwenden dieselbe geometrische Frage.
+SLENDER_RATIO: Final = 4.0
+
+
+def is_slender(bounds: BoundingBox) -> bool:
+    """Ob die Höhe mindestens viermal die kleinere waagerechte Ausdehnung ist.
+
+    Die tatsächliche Kontaktfläche liest der Druckrat zusätzlich aus der
+    ersten Schicht; die Anordnung verändert weder Lage noch Aufstandsfläche.
+    """
+    size = bounds.size
+    foot_width = min(size[0], size[1])
+    return foot_width > 0.0 and size[2] / foot_width >= SLENDER_RATIO
+
 
 #: Die Tempi, bei denen die Düse fördert, und ob sie mit den Maßen der ersten
 #: Schicht rechnen. Fahrt und Brücke stehen nicht darin: Die eine fördert
@@ -587,7 +604,7 @@ def with_accepted(settings: PrintSettings, path: str, value: Any) -> PrintSettin
 #: Skirt-Abstand wirkt nur mit Skirt-Runden.
 ADHESION_PATHS: Final[dict[str, tuple[str, ...]]] = {
     "skirt": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
-    "brim": ("adhesion.brim_width",),
+    "brim": ("adhesion.brim_width", "adhesion.brim_gap"),
     "raft": ("adhesion.raft_layers",),
 }
 

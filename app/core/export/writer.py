@@ -1361,7 +1361,13 @@ def _values_for(
         carried = [*applied, *everywhere]
         return _PartValues(
             handover.object_keys(
-                split.plate, carried, flavour, program=program, profile=profile, native=split.native
+                split.plate,
+                carried,
+                flavour,
+                program=program,
+                profile=profile,
+                native=split.native,
+                brim_foot_offset=split.brim_foot_offset,
             ),
             list(applied),
             list(unavailable),

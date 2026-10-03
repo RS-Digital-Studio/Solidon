@@ -7520,5 +7520,12 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "Les valeurs concordent dans la limite de comparaison.",
   "Quelle der Schätzung": "Source de l'estimation",
   "Interne Schichtanalyse": "Analyse interne des couches",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Les fichiers d'impression ne peuvent pas être associés sans ambiguïté aux plateaux comparés."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Les fichiers d'impression ne peuvent pas être associés sans ambiguïté aux plateaux comparés.",
+  "Abstand zwischen Rand und Teil. Null verbindet beide für besseren Halt; etwas Abstand erleichtert das Ablösen.": "Espace entre la bordure et la pièce. Zéro les relie pour un meilleur maintien ; un petit espace facilite le retrait.",
+  "Brim-Abstand": "Espace de la bordure",
+  "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand hält seinen Fuß besser fest.": "Cette pièce haute et étroite repose sur une petite surface. Une bordure sans espace maintient mieux sa base.",
+  "Die Fußkorrektur des Herstellerprofils ist unbekannt. Wählen Sie ein vollständiges Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "La compensation de la base du profil du fabricant est inconnue. Choisissez un profil de processus complet ou réinitialisez l'espace de la bordure.",
+  "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "Ce logiciel de tranchage ne peut pas respecter l'espace de bordure demandé avec cette compensation de la base. Choisissez un autre profil de processus ou réinitialisez l'espace de la bordure.",
+  "Rückt hohe, schmale Teile auf ihrer Platte näher zur Mitte, wenn dort Platz frei ist. Andere Teile und die Abstände bleiben erhalten.": "Rapproche les pièces hautes et étroites du centre de leur plateau si l'espace est libre. Les autres pièces et les espacements sont conservés.",
+  "Schlanke Teile zur Mitte": "Rapprocher les pièces élancées du centre"
 }

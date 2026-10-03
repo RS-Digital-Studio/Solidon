@@ -32,6 +32,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os filamentos não utilizados de projetos antigos deixam de ser enviados ao fatiador. Os perfis continuam associados aos filamentos em uso.
 - Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.
 - Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes.
+- Ao mudar de impressora ou fatiador, a mesa de impressão escolhida anteriormente deixa de ser transferida para o novo perfil.
+- As peças esguias ficam mais perto do centro ao serem dispostas. O espaço da aba é ajustável; para bases pequenas é sugerida uma aba em contacto com a peça.
+- Os perfis danificados no PrusaSlicer e no SuperSlicer são assinalados. O Solidon utiliza então o seu conjunto completo de definições de impressão.
 - As definições de cada peça chegam ao fatiador com mais fiabilidade. As que se aplicam a toda a placa são explicadas na peça afetada.
 - Com Orca e Prusa, aceitar uma sugestão de velocidade para um encaixe abranda apenas as peças afetadas.
 - Mesmo pequenas alterações aceites nas definições de impressão são preservadas na exportação.

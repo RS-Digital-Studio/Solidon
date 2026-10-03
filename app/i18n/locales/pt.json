@@ -7520,5 +7520,12 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "Os valores coincidem dentro do limite de comparação.",
   "Quelle der Schätzung": "Origem da estimativa",
   "Interne Schichtanalyse": "Análise interna das camadas",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Os ficheiros de impressão não podem ser associados inequivocamente às placas comparadas."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Os ficheiros de impressão não podem ser associados inequivocamente às placas comparadas.",
+  "Abstand zwischen Rand und Teil. Null verbindet beide für besseren Halt; etwas Abstand erleichtert das Ablösen.": "Espaço entre a aba e a peça. Zero une as duas para maior fixação; um pequeno espaço facilita a remoção.",
+  "Brim-Abstand": "Espaço da aba",
+  "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand hält seinen Fuß besser fest.": "Esta peça alta e estreita tem uma base pequena. Uma aba sem espaço fixa melhor a sua base.",
+  "Die Fußkorrektur des Herstellerprofils ist unbekannt. Wählen Sie ein vollständiges Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "A compensação da base no perfil do fabricante é desconhecida. Escolha um perfil de processo completo ou reponha o espaço da aba.",
+  "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "Este fatiador não consegue manter o espaço da aba pedido com esta compensação da base. Escolha outro perfil de processo ou reponha o espaço da aba.",
+  "Rückt hohe, schmale Teile auf ihrer Platte näher zur Mitte, wenn dort Platz frei ist. Andere Teile und die Abstände bleiben erhalten.": "Aproxima as peças altas e estreitas do centro da sua mesa quando há espaço livre. As outras peças e as distâncias são mantidas.",
+  "Schlanke Teile zur Mitte": "Aproximar peças esguias do centro"
 }

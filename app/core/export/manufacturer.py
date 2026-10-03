@@ -126,6 +126,12 @@ class Foundation:
     """Der vollständige Name der gewählten Bambu-Düsenvariante."""
     variant_id: str = ""
     """Der Extruder der gewählten Variante, soweit das Profil ihn benennt."""
+    brim_foot_offset: float | None = None
+    """Native Fußkorrektur der Orca-Familie; unbekannt verhindert die Umrechnung.
+
+    Dort bezieht sich der Brim auf den unkorrigierten Umriss. Solidons
+    Abstand gilt am korrigierten Fuß; Prusa und Cura rechnen dies selbst.
+    """
 
     @property
     def has_profile(self) -> bool:
@@ -427,6 +433,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
+    ("adhesion.brim_gap", "brim_object_gap", _number),
     ("adhesion.raft_layers", "raft_layers", _count),
     ("retraction.avoid_crossing_walls", "reduce_crossing_wall", _flag),
 )
@@ -564,7 +571,11 @@ def _machine_model(
 
 
 def _read_process(
-    values: Mapping[str, Any], context: _Context, defaults: Mapping[str, str]
+    values: Mapping[str, Any],
+    context: _Context,
+    defaults: Mapping[str, str],
+    *,
+    program_name: str = "",
 ) -> tuple[dict[str, object], dict[str, str]]:
     """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ."""
     read: dict[str, object] = {}
@@ -580,6 +591,14 @@ def _read_process(
             foreign[path] = value.raw
         elif value is not None:
             read[path] = value
+    if "adhesion.brim_gap" in read:
+        foot = brim_foot_offset(values, program_name)
+        raw_gap = read["adhesion.brim_gap"]
+        if foot is not None and isinstance(raw_gap, int | float):
+            read["adhesion.brim_gap"] = raw_gap + foot
+        else:
+            read.pop("adhesion.brim_gap")
+            foreign["adhesion.brim_gap"] = str(values.get("brim_object_gap", ""))
     first = _first_layer_speed(values, context, defaults)
     if isinstance(first, Foreign):
         foreign["speed.first_layer"] = first.raw
@@ -606,6 +625,52 @@ def _read_process(
     if density is not None:
         read["support.density"] = density
     return read, foreign
+
+
+def brim_foot_offset(values: Mapping[str, Any], program_name: str = "") -> float | None:
+    """Die belegte native Fußkorrektur; fehlende oder fremde Werte bleiben unbekannt."""
+    raw = _text(values.get("elefant_foot_compensation"))
+    amount = _float(raw) if raw is not None else None
+    if amount is None or amount < 0.0:
+        return None
+    if program_name == "orcaslicer":
+        # Orcas wählbarer Bezug verwendet bereits die korrigierte Kontur.
+        # Fehlend heißt nativ aus; einen fremden Schalterwert raten wir nicht.
+        outline = _text(values.get("brim_use_efc_outline", "0"))
+        if outline not in {"0", "1"}:
+            return None
+        if outline == "1":
+            return 0.0
+    return amount
+
+
+def native_brim_gap(value: float, foot: float | None, program_name: str) -> str:
+    """Abstand am tatsächlichen Fuß in den Bezug der Orca-Familie übersetzen."""
+    if foot is None:
+        from app.core.errors import OPEN_PRINT_SETTINGS, ValidationError
+
+        raise ValidationError(
+            field="adhesion.brim_gap",
+            detail=_(
+                "Die Fußkorrektur des Herstellerprofils ist unbekannt. Wählen Sie ein "
+                "vollständiges Prozessprofil oder setzen Sie den Brim-Abstand zurück."
+            ),
+            suggestions=(OPEN_PRINT_SETTINGS,),
+        )
+    native = value - foot
+    if native < 0.0 and program_name not in {"orcaslicer", "elegooslicer", "bambustudio"}:
+        from app.core.errors import OPEN_PRINT_SETTINGS, ValidationError
+
+        raise ValidationError(
+            field="adhesion.brim_gap",
+            detail=_(
+                "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur "
+                "nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie "
+                "den Brim-Abstand zurück."
+            ),
+            suggestions=(OPEN_PRINT_SETTINGS,),
+        )
+    return f"{native:.9g}"
 
 
 def _first_layer_speed(
@@ -941,6 +1006,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("adhesion.skirt_loops", "skirts", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
+    ("adhesion.brim_gap", "brim_separation", _number),
     ("adhesion.raft_layers", "raft_layers", _count),
     ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
 )
@@ -1751,7 +1817,7 @@ def base_settings(
             unresolved_in=lacking[0] or setup.base_process,
         )
     defaults = PROGRAM_DEFAULTS.get(program(setup), {})
-    read, foreign = _read_process(process_values, context, defaults)
+    read, foreign = _read_process(process_values, context, defaults, program_name=program(setup))
     refuses = False
     if filament_file is not None:
         filament_read, refuses = _read_filament(
@@ -1775,6 +1841,7 @@ def base_settings(
         read.pop(path, None)
     return Foundation(
         replace(base, chosen=frozenset(), accepted=frozenset()),
+        brim_foot_offset=brim_foot_offset(process_values, program(setup)),
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
         measured=measured,

@@ -33,6 +33,9 @@ dans `website/version.json`.
 - Les filaments inutilisés des anciens projets ne sont plus transmis au logiciel de tranchage. Les profils restent associés aux filaments utilisés.
 - Les modèles ajoutés trouvent aussi une place après le douzième plateau. Les plateaux importés gardent leur disposition.
 - Les modèles ajoutés avec des filaments différents sont placés sur des plateaux séparés si l’imprimante n’a pas assez de buses.
+- Lors d’un changement d’imprimante ou de logiciel de tranchage, le plateau précédemment choisi n’est plus repris dans le nouveau profil.
+- Les pièces élancées se rapprochent du centre lors du placement. L’espace de la bordure est réglable ; une bordure jointe à la pièce est proposée pour les petites bases.
+- Les profils endommagés de PrusaSlicer et SuperSlicer sont signalés. Solidon utilise alors l’ensemble de ses réglages d’impression.
 - Les réglages propres à chaque pièce sont mieux transmis au trancheur. Ceux qui s’appliquent à tout le plateau sont expliqués sur la pièce concernée.
 - Avec Orca et Prusa, une suggestion de vitesse acceptée pour un ajustement ne ralentit que les pièces concernées.
 - Même les petites modifications acceptées dans les réglages d’impression sont conservées à l’export.

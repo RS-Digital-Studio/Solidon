@@ -70,13 +70,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Zählung beim Löschen nachführen; Entscheidung zu alten Läufen (Migration) |
-| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | B7, B8, B12, B13, N3, N6 und N9 erledigt; offen bleiben getrennte Platten-/Teilwerte, Anzeige, Anschluss und Laufzeitreste |
+| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | B7, B8, B9, B11, B12, B13, N3, N6, N8 und N9 erledigt; offen bleiben getrennte Platten-/Teilwerte, Anzeige, Anschluss und Laufzeitreste |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
-| [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
+| [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Abstand und Mittellage umgesetzt; sechs Slicer mit Kontakt in den Bahnen. Offen: Creality kann den nötigen Abstand bei aktiver Fußkorrektur nicht darstellen und hält mit Handlungsmeldung an |
 | [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Zweitreview und Entwicklungstor mit 19.464/62 grün; alle 17 Pfade in `0041000a0` übernommen und unabhängig abgeglichen; Pushbeleg offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
 | [RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert](#rm-327) | Geometrie, Erkennung und Druckvorbereitung | 155 gezielte Fachfälle grün; Code und Dokumentation unabhängig freigegeben; gemeinsames Tor und Hauptzweigübernahme offen |
@@ -2318,7 +2318,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zum anfänglichen Prusa-Fähigkeitsbefund wird unter RM-317 durch große und
   kleine Konturen aufgelöst; ohne diesen Rollenanschluss keine gemeinsame
   Freigabe. Belege: `F:\solidon-review-reports\B-slicer-rest\rm289\bericht.md`
-  und `review.md`. B2/B6, B10/B11 und N4 bleiben offen; RM-289 wird
+  und `review.md`. B2/B6, B10 und N4 bleiben offen; RM-289 wird
   nicht archiviert. Genaue Commits und gemeinsames Tor stehen im Bericht B.
 
 
@@ -2358,7 +2358,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Ursachen `6a066c2bc`, `2cf02ad2d`, `22a2a20ad` und `eeadc09b1` liegen in
   v0.5.1; ein Kundenpunkt in allen sechs Sprachen. Belege samt Quellhashes
   unter `F:\solidon-review-reports\B-slicer-rest\rm289\n8-b9`.
-  B2/B6, B10/B11 und N4 bleiben separat; RM-289 bleibt im Register.
+  B2/B6, B10 und N4 bleiben separat; RM-289 bleibt im Register.
+
+  **B11 — Profile und Druckplatte:** Gemerkte Maschinenprofile und die erste
+  Plattenwahl verwenden dieselbe Prüfung auf Drucker und Programmpfad. Eine
+  eigene laufende Plattenwahl bleibt nur bei erneuter Suche im selben Kontext
+  erhalten. Drucker-/Slicerwechsel oder fehlendes Programm leeren die fremde
+  Wahl. Alte leere Herkunftsmarker gelten beim ersten gültigen Programm;
+  Programm A → fehlend → Programm B kann sie nicht erneut übernehmen.
+  Gegenprobe drei rot/eine grün, zusätzliche Wiederkehrgegenprobe rot; danach
+  26 gezielte und 116 breitere Kernfälle grün, drei übersprungen. Unabhängiges
+  Review ohne Befund. Ursache `aed31c787` liegt in v0.5.1; ein Kundenpunkt je
+  Sprache. Keine Fensterabnahme behauptet. Belege und Commit im Bericht B
+  und unter `F:\solidon-review-reports\B-slicer-rest\rm289-b11`.
 
 <a id="rm-292"></a>
 
@@ -2577,7 +2589,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-318"></a>
 
-- [ ] **RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand.**
+- [~] **RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand.**
   Dieselben Fahnenstangen (Ø 7,7 mm, 122 mm hoch, 46,5 mm² Fuß) rissen aus einem Brim, der
   fest lag: Elegoos Brim hält 0,1 mm Abstand zum Teil, und so trägt er den Fuß nicht mit.
   Solidon hat keinen Pfad für diesen Abstand (`AdhesionSettings`). Weg: Pfad für den
@@ -2587,6 +2599,49 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   30.09. in fremder Arbeit). Abnahme: die Stangenplatte geht mit Solidons Übergabe ohne
   Handarbeit im Slicer, Brim ohne Abstand an den Stangen, Stangen nicht am Rand.
   Registerabgleich 02.10.: Die genannte Datei `scene/placement.py` ist falsch — angeordnet wird in `app/core/geom/prepare.py` (`arrange_on_bed`).
+
+
+  **Teilstand 03.10.2026:** `adhesion.brim_gap` bezeichnet den Abstand zum
+  tatsächlichen Fuß. Der normale Druckdialog, Rat, Konsolenprozess und
+  Projekt-/Objektwerte verwenden denselben Pfad. Hersteller-Fußkorrekturen
+  bleiben unverändert; die Orca-Familie rechnet ihren anderen Bezug zurück.
+  Orcas `brim_use_efc_outline` verhindert eine doppelte Korrektur. Unbekannter
+  Bezug hält mit *Druckeinstellungen öffnen* an. Inaktive gespeicherte Werte
+  bei Keine, Skirt und Raft sperren nichts.
+
+  Der originale Minigolfsatz bleibt bei 31 Teilen und sieben Platten;
+  mindestens 5 mm Hüllabstand. Die beiden Stangen rücken von 118,062/83,374 mm
+  Abstand zur Mitte auf 73,911/73,913 mm. Nicht schlanke Teile bleiben exakt
+  gleich. Migration 42→43 erhält alte Anordnungen samt Undo mit
+  `centre_slender=False`; neue Schritte verwenden die freie bessere Mittellage.
+  Bohrungsbezüge bleiben an Netz und exaktem Körper nach der Bewegung und
+  nachfolgendem Vergrößern auf 4 mm erhalten.
+
+  Sechs echte Slicerläufe erzeugen Kontakt in den Bahnen: Elegoo
+  0,4764/0,4768 mm Mittellinienabstand bei 0,50 mm Linienbreite, Orca
+  0,7688/0,7690 bei 0,80, Bambu 0,4707/0,4728 bei 0,50, Prusa
+  0,4754/0,4767 bei 0,50, SuperSlicer 0,3970/0,3972 bei 0,42 und Cura
+  0,4117/0,4138 bei 0,42. Fußgeometrie und breites Kontrollteil bleiben gleich.
+  Dies sind G-Code-Messungen, kein physischer Drucknachweis.
+
+  **Offen mit zwei Gegenproben:** Creality ignoriert −0,15 mm als Objektwert;
+  plattenweit lehnt es denselben Wert mit Exit −18 und Bereich [0,2] ab.
+  Bei unveränderter Fußkorrektur 0,15 mm bleibt der Bahnabstand 0,6187/0,6193
+  statt Kontakt bei 0,50 mm Linienbreite. Solidon hält die unerfüllbare Wahl
+  mit Vorschlag zum Prozessprofil oder Zurücksetzen des Abstands an. Nächster
+  Schritt: eine native Wahl für den korrigierten Fuß belegen oder die Grenze
+  mit einer künftigen Creality-Version erneut messen. Die Fußkorrektur aller
+  Teile auszuschalten ist keine Lösung.
+
+  Gegenproben: fehlender Pfad/Anordnung/Migration rot, Fußbezug 13 rot/3 grün,
+  Programmgrenzen 4 rot/1 grün, inaktive Altwahl 3 rot. Danach 1.725 bestanden,
+  fünf übersprungen und 63 abgewählt; 37 zusätzliche Anschlussfälle grün.
+  Unabhängiges Schlussreview ohne verbleibenden P1/P2. Der Fähigkeitswächter
+  aus RM-317 umfasst jetzt 17 Pfade. Zentrales Tor und Commit im Bericht B;
+  alle nativen Dateien und Quellhashes unter
+  `F:\solidon-review-reports\B-slicer-rest\rm318`. Ursprünge
+  `f4f6e639d2` und `0214edd106` sind in v0.5.1: ein Kundenpunkt je Sprache.
+  Wegen der Creality-Grenze bleibt RM-318 im Register.
 
 <a id="rm-322"></a>
 

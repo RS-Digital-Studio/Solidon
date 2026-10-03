@@ -312,6 +312,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("adhesion.skirt_loops", "skirts", _integer),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
+    ("adhesion.brim_gap", "brim_separation", _number),
     ("adhesion.raft_layers", "raft_layers", _integer),
     ("retraction.length", "retract_length", _number),
     ("retraction.speed", "retract_speed", _number),
@@ -463,6 +464,7 @@ ORCA: Final[tuple[Row, ...]] = (
     ("adhesion.skirt_loops", "skirt_loops", _integer),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
+    ("adhesion.brim_gap", "brim_object_gap", _number),
     ("adhesion.raft_layers", "raft_layers", _integer),
     # Der Rückzug steht in der Orca-Familie am Drucker, nicht am Prozess —
     # ``retraction_length`` im Prozessprofil bleibt wirkungslos. Geschrieben
@@ -609,6 +611,7 @@ CURA: Final[tuple[Row, ...]] = (
     ("adhesion.skirt_loops", "skirt_line_count", _integer),
     ("adhesion.skirt_distance", "skirt_gap", _number),
     ("adhesion.brim_width", "brim_width", _number),
+    ("adhesion.brim_gap", "brim_gap", _number),
     ("adhesion.raft_layers", "raft_surface_layers", _integer),
     ("retraction.length", "retraction_amount", _number),
     ("retraction.speed", "retraction_speed", _number),

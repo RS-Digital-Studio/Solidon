@@ -7520,5 +7520,12 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "I valori corrispondono entro il limite di confronto.",
   "Quelle der Schätzung": "Fonte della stima",
   "Interne Schichtanalyse": "Analisi interna degli strati",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "I file di stampa non possono essere associati in modo univoco ai piatti confrontati."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "I file di stampa non possono essere associati in modo univoco ai piatti confrontati.",
+  "Abstand zwischen Rand und Teil. Null verbindet beide für besseren Halt; etwas Abstand erleichtert das Ablösen.": "Distanza tra il brim e la parte. Zero li unisce per una migliore tenuta; un piccolo spazio facilita la rimozione.",
+  "Brim-Abstand": "Distanza del brim",
+  "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand hält seinen Fuß besser fest.": "Questa parte alta e stretta poggia su una superficie ridotta. Un brim senza spazio tiene meglio ferma la base.",
+  "Die Fußkorrektur des Herstellerprofils ist unbekannt. Wählen Sie ein vollständiges Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "La compensazione della base nel profilo del produttore è sconosciuta. Scegli un profilo di processo completo o ripristina la distanza del brim.",
+  "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "Questo slicer non può mantenere la distanza del brim richiesta con questa compensazione della base. Scegli un altro profilo di processo o ripristina la distanza del brim.",
+  "Rückt hohe, schmale Teile auf ihrer Platte näher zur Mitte, wenn dort Platz frei ist. Andere Teile und die Abstände bleiben erhalten.": "Avvicina le parti alte e strette al centro del loro piatto quando c'è spazio libero. Le altre parti e le distanze restano invariate.",
+  "Schlanke Teile zur Mitte": "Avvicina le parti slanciate al centro"
 }

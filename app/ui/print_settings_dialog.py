@@ -944,6 +944,20 @@ FIELDS: tuple[Field, ...] = (
         ),
     ),
     Field(
+        "adhesion.brim_gap",
+        _("Brim-Abstand"),
+        "adhesion",
+        unit="mm",
+        minimum=0.0,
+        maximum=5.0,
+        step=0.05,
+        decimals=2,
+        note=_(
+            "Abstand zwischen Rand und Teil. Null verbindet beide für besseren Halt; "
+            "etwas Abstand erleichtert das Ablösen."
+        ),
+    ),
+    Field(
         "adhesion.raft_layers",
         _("Raft-Schichten"),
         "adhesion",
@@ -1195,6 +1209,15 @@ def settings_for_export(
     )
 
 
+def _remembered_profiles_match(settings: UiSettings, printer_id: str, slicer: Path | None) -> bool:
+    """Profile gelten für denselben Drucker und Slicer; alte leere Marker bleiben gültig."""
+    return (
+        slicer is not None
+        and (not printer_id or settings.slicer_profile_printer in ("", printer_id))
+        and settings.slicer_profile_slicer in ("", str(slicer))
+    )
+
+
 def remembered_setup(
     settings: UiSettings, material: str = "", printer_id: str = ""
 ) -> handover.SlicerSetup | None:
@@ -1231,20 +1254,10 @@ def remembered_setup(
     """
     if not settings.slicer_machine_profile:
         return None
-    chosen_for = settings.slicer_profile_printer
-    if printer_id and chosen_for and chosen_for != printer_id:
-        return None
     found = discover.find_program("slicer", tools.SLICERS)
-    if found is None:
+    if not _remembered_profiles_match(settings, printer_id, found):
         return None
-    # Dieselbe Regel für den Slicer wie für den Drucker: Die Profile gehören
-    # zu dem Programm, mit dem sie gewählt wurden — ein Orca-Maschinenprofil
-    # ist für PrusaSlicer eine fremde Datei. Leer heißt „von früher", dann
-    # wird nicht verglichen: Bestandskunden verlören sonst ihre Profilwahl
-    # mit der ersten Aktualisierung (Begründung am Feld in settings.py).
-    chosen_with = settings.slicer_profile_slicer
-    if chosen_with and str(found) != chosen_with:
-        return None
+    assert found is not None
     setup = handover.detect(found)
     if handover.only_opens(setup):
         # Ein Programm ohne Familie ist hier kein Fehler, sondern eine
@@ -4744,12 +4757,10 @@ class PrintSettingsDialog(QDialog):
         form.addRow(self.bed_plate_label, self.bed_plate_choice)
         self.bed_plate_label.setVisible(False)
         self.bed_plate_choice.setVisible(False)
-        self._bed_plate = (
-            self.ui_settings.slicer_bed_plate
-            if self.ui_settings.slicer_profile_printer in ("", self.session.profile.printer.id)
-            else ""
-        )
+        self._bed_plate = ""
         """Die gewählte Druckplatte — leer heißt die Standardplatte der Maschine."""
+        self._bed_plate_context: tuple[str, Path | None] | None = None
+        self._refresh_bed_plate_context()
 
         # Je Materialslot eine Zeile — aber nur, wenn es mehr als einen gibt.
         # Ein einfarbiges Teil hat eine Farbe und braucht keine Liste darüber;
@@ -4940,6 +4951,7 @@ class PrintSettingsDialog(QDialog):
         Geleert wird deshalb am Anfang jeder Suche, nicht am Ende — dann gilt
         es auch für die Wege, die vorzeitig zurückkehren.
         """
+        self._refresh_bed_plate_context()
         self._profiles = []
         self._nozzle_sizes = slicer_profiles.COMMON_NOZZLE_SIZES
         self._show_nozzle()
@@ -4955,6 +4967,22 @@ class PrintSettingsDialog(QDialog):
         self._cura_printer_id = ""
         self._cura_printer_candidate = None
         self._offer_the_slicers_printer("")
+
+    def _refresh_bed_plate_context(self) -> None:
+        """Eine neue Suche erhält die aktuelle Plattenwahl nur im selben Kontext."""
+        current = (self.session.profile.printer.id, self._slicer_path)
+        previous = self._bed_plate_context
+        if current == previous:
+            return
+        self._bed_plate = (
+            self.ui_settings.slicer_bed_plate
+            if previous is None and _remembered_profiles_match(self.ui_settings, *current)
+            else ""
+        )
+        # Eine kurzzeitig leere Suche macht eine schon zugeordnete alte Wahl
+        # nicht wieder herkunftslos. Erst der erste wirkliche Slicer bindet sie.
+        if self._slicer_path is not None:
+            self._bed_plate_context = current
 
     def _start_profile_search(self) -> None:
         # Die Halteleine hält ältere Arbeiter bis zum Ende. Ihre Signale
@@ -5195,8 +5223,9 @@ class PrintSettingsDialog(QDialog):
         )
         own = (
             self.ui_settings.slicer_machine_profile
-            if self.ui_settings.slicer_profile_printer in ("", self.session.profile.printer.id)
-            and self.ui_settings.slicer_profile_slicer in ("", str(self._slicer_path or ""))
+            if _remembered_profiles_match(
+                self.ui_settings, self.session.profile.printer.id, self._slicer_path
+            )
             else ""
         )
         remembered = already or own

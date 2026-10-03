@@ -107,6 +107,12 @@ Absage liest `_result_reason` aus `result.json`, nur vom letzten Lauf;
 `_result_written` fragt, ob der Lauf sie abgelegt hat, und `slice_model` gibt
 das der Orca-Familie als `finished` mit (Bambu endet manchmal nicht danach).
 
+## Brim-Abstand
+
+`AdhesionSettings.brim_gap` bezeichnet den Abstand am korrigierten Fuß.
+`manufacturer.native_brim_gap` übersetzt den belegten Bezug für Konsole und
+Projekt-/Objektwerte; Grenzen und Rückwege stehen in der Export-Herleitung.
+
 ## Die Lüfterkurve
 
 Alle drei Familien regeln den Bauteillüfter über der Schichtzeit (oben bis zur

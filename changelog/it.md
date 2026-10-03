@@ -32,6 +32,9 @@ scrive in `website/version.json`.
 - I filamenti inutilizzati dei vecchi progetti non vengono più inviati allo slicer. I profili restano associati ai filamenti in uso.
 - I modelli aggiunti trovano spazio anche oltre il dodicesimo piatto. I piatti importati mantengono la loro disposizione.
 - I modelli aggiunti con filamenti diversi vengono collocati su piatti separati se la stampante non ha abbastanza ugelli.
+- Quando cambi stampante o slicer, il piatto di stampa scelto in precedenza non viene più trasferito al nuovo profilo.
+- Le parti slanciate vengono disposte più vicine al centro. La distanza del brim è regolabile; per le basi piccole viene suggerito un brim a contatto con la parte.
+- I profili danneggiati di PrusaSlicer e SuperSlicer vengono segnalati. Solidon utilizza quindi tutte le proprie impostazioni di stampa.
 - Le impostazioni delle singole parti arrivano allo slicer in modo più affidabile. Quelle valide per tutto il piatto sono spiegate sulla parte interessata.
 - Con Orca e Prusa, un suggerimento di velocità accettato per un accoppiamento rallenta solo le parti interessate.
 - Anche le piccole modifiche accettate nelle impostazioni di stampa vengono mantenute nell’esportazione.

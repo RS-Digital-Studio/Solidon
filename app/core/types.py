@@ -1294,6 +1294,7 @@ class AdhesionSettings:
     skirt_loops: int = 2
     skirt_distance: float = 3.0
     brim_width: float = 5.0
+    brim_gap: float = 0.0
     raft_layers: int = 3
 
 

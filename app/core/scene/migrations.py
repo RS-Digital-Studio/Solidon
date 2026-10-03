@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 42
+FORMAT_VERSION: Final = 43
 
 
 @dataclass(frozen=True, slots=True)
@@ -1189,6 +1189,34 @@ def _name_the_cut_plane(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_existing_arrangements(data: dict[str, Any]) -> dict[str, Any]:
+    """Format 42 → 43: Bestehende Anordnungen behalten ihre Lage.
+
+    Neue Anordnungen rücken schlanke Teile auf ihrer Platte näher zur Mitte.
+    Alte Schritte und ihre gespeicherten Änderungsfassungen behalten dieses
+    Verhalten ausgeschaltet; eine bereits gespeicherte Wahl bleibt erhalten.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in (
+            "arrange_bed",
+            "orient_for_print",
+        ):
+            continue
+        params = operation.setdefault("params", {})
+        if isinstance(params, dict):
+            params.setdefault("centre_slender", False)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1232,6 +1260,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=39, to_version=40, apply=_keep_sculpt_mirrors_as_they_were),
     Step(from_version=40, to_version=41, apply=_keep_sculpt_brushes_as_they_were),
     Step(from_version=41, to_version=42, apply=_name_the_cut_plane),
+    Step(from_version=42, to_version=43, apply=_keep_existing_arrangements),
 )
 
 

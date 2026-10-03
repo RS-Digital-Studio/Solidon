@@ -604,12 +604,13 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
     )
 
 
-# Die unabhängige Zwei-Körper-Messung umfasst genau diese 16 Pfade. Die
+# Die unabhängigen Messungen aus RM-317 und RM-318 umfassen diese 17 Pfade. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
 MEASURED_PART_PATHS = frozenset(
     {
         "adhesion.kind",
+        "adhesion.brim_gap",
         "infill.density",
         "layers.line_width",
         "shell.ironing",
@@ -660,6 +661,7 @@ MEASURED_PART_PATHS = frozenset(
             "cura",
             {
                 "adhesion.kind",
+                "adhesion.brim_gap",
                 "layers.line_width",
                 "support.placement",
                 "shell.precise_outer_wall",

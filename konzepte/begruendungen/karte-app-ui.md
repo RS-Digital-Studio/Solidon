@@ -2584,3 +2584,13 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
 - **Gesetzt heißt nicht gezeigt.** `QMenu` verschluckt Tooltips; ein Test über
   den Wert eines Hinweises sagt nichts über seine Sichtbarkeit.
+
+
+## Herkunft der Slicer-Druckplatte (§29)
+
+`_remembered_profiles_match` prüft Druckerkennung und Programmpfad gemeinsam
+für Exportsetup, gemerkte Maschine und erste Druckplatte. Eine laufende
+Plattenwahl ist durch `_bed_plate_context` gebunden: gleiche Suche erhält sie,
+ein Kontextwechsel leert sie. Historische leere Marker werden beim ersten
+gültigen Programm gebunden und nach einem späteren Ausfall nicht erneut
+herkunftslos übernommen.

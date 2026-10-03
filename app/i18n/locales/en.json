@@ -7520,5 +7520,12 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "The values agree within the comparison limit.",
   "Quelle der Schätzung": "Estimate source",
   "Interne Schichtanalyse": "Internal layer analysis",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "The print files cannot be matched unambiguously to the compared plates."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "The print files cannot be matched unambiguously to the compared plates.",
+  "Abstand zwischen Rand und Teil. Null verbindet beide für besseren Halt; etwas Abstand erleichtert das Ablösen.": "Gap between the brim and the part. Zero joins them for a stronger hold; a small gap makes removal easier.",
+  "Brim-Abstand": "Brim gap",
+  "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand hält seinen Fuß besser fest.": "This tall, narrow part has a small footprint. A brim with no gap holds its base more securely.",
+  "Die Fußkorrektur des Herstellerprofils ist unbekannt. Wählen Sie ein vollständiges Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "The manufacturer's profile has an unknown base compensation. Choose a complete process profile or reset the brim gap.",
+  "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "This slicer cannot maintain the requested brim gap with this base compensation. Choose another process profile or reset the brim gap.",
+  "Rückt hohe, schmale Teile auf ihrer Platte näher zur Mitte, wenn dort Platz frei ist. Andere Teile und die Abstände bleiben erhalten.": "Moves tall, narrow parts closer to the centre of their plate when space is available. Other parts and spacing are preserved.",
+  "Schlanke Teile zur Mitte": "Move slender parts towards the centre"
 }

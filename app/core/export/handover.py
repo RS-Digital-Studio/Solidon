@@ -1124,6 +1124,7 @@ def object_keys(
     program: str = "",
     profile: Profile | None = None,
     native: Mapping[str, object] | None = None,
+    brim_foot_offset: float | None = 0.0,
 ) -> dict[str, str]:
     """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
 
@@ -1170,6 +1171,16 @@ def object_keys(
     if native is not None:
         written.update(_speed_roles(native, written, flavour, program=program))
         written.update(_acceleration_roles(native, written, flavour, applied))
+    if flavour == "orca" and "brim_object_gap" in written:
+        requested = any(entry.path == "adhesion.brim_gap" for entry in advice)
+        if "brim" not in print_settings.adhesion_kinds(applied.adhesion.kind) or (
+            brim_foot_offset is None and not requested
+        ):
+            written.pop("brim_object_gap")
+        else:
+            written["brim_object_gap"] = manufacturer.native_brim_gap(
+                applied.adhesion.brim_gap, brim_foot_offset, program
+            )
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 
 
@@ -1358,6 +1369,8 @@ class PartSplit:
     """Die Einstellungen mit allen Übernahmen, bevor der Split sie zurücksetzt."""
     native: Mapping[str, object] = field(default_factory=dict)
     """Die wirksamen Rollenwerte der Platte für begrenzende Objektwerte."""
+    brim_foot_offset: float | None = None
+    """Bezug des nativen Brim-Abstands, aus derselben Herstellergrundlage."""
 
     def accepted_per_part(self) -> dict[str, object]:
         """Die übernommenen Werte der Pfade je Teil — was der Rat je Teil in
@@ -1473,7 +1486,13 @@ def split_for_parts(
         else {}
     )
     return PartSplit(
-        trimmed, untouched, per_part, unavailable=unavailable, accepted=settings, native=native
+        trimmed,
+        untouched,
+        per_part,
+        unavailable=unavailable,
+        accepted=settings,
+        native=native,
+        brim_foot_offset=origin.brim_foot_offset,
     )
 
 
@@ -3788,6 +3807,19 @@ def _orca_process(
         if base is None or deviating is None
         else _followers_not_faster(document, deviating, suggested, foundation=foundation)
     )
+    if "brim_object_gap" in own:
+        own = dict(own)
+        foot = foundation.brim_foot_offset if foundation is not None else None
+        if "brim" not in print_settings.adhesion_kinds(settings.adhesion.kind):
+            own.pop("brim_object_gap")
+        elif foot is not None or "adhesion.brim_gap" in settings.explicit:
+            own["brim_object_gap"] = manufacturer.native_brim_gap(
+                settings.adhesion.brim_gap, foot, slicer_keys.program_of(setup.executable)
+            )
+        else:
+            # Ohne eigene Wahl bleibt der native Abstand unberührt, auch wenn
+            # eine fehlende Fußkorrektur seine Rücklesung verhindert.
+            own.pop("brim_object_gap")
     document.update(own)
     if base is not None:
         document.update(_speed_roles(document, own, "orca"))

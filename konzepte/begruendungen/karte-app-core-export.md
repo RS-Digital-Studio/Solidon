@@ -531,3 +531,28 @@ mit ihren tatsächlich wirksamen Netzabhängigkeiten geschrieben. Ein global
 nicht erfüllbarer Stützstil behält seinen Befund und erweitert nicht den
 Stützschalter auf unbeteiligte Körper. Kanalsperren bleiben körperbezogen.
 SuperSlicers fehlender Wandgenerator bedeutet Classic, Prusas Arachne.
+
+
+## Ausdrücklich gewählte Prusa-Dateien (§29)
+
+Die Erhebung darf beschädigte ungewählte Dateien überspringen. Die Auflösung
+eines gewählten Profils verlangt dagegen ein lesbares Dokument und den
+gewählten Abschnitt. Gültige Leere bleibt ein Delta; Lesefehler gehen über die
+vorhandene Herstellergrundlage samt Befund in den vollständigen Drucksatz.
+Der Profilcache beobachtet zusätzlich genau die gewählte Datei, auch außerhalb
+der Bestandswurzeln. Ihr Ordner wird dadurch keine weitere Suchwurzel.
+
+Der Cache speichert keinen Abbruchschalter. Jeder Abruf führt seinen Schalter
+durch Lesen und Vererbung; ein nachgelesenes Dokument samt Namensindex wird
+erst vollständig unter der bestehenden Sperre übernommen.
+
+
+## Brim-Abstand am tatsächlichen Fuß (§29)
+
+`AdhesionSettings.brim_gap` meint den Abstand am korrigierten Fuß. Die
+Herstellergrundlage trägt den nativen Fußversatz für Konsole und Projekt-/
+Objektwerte. Orcas aktiver Bezug zur korrigierten Kontur benötigt keinen
+zusätzlichen Versatz. Unbekannter Bezug oder nativ nicht darstellbarer Abstand
+hält mit dem Rückweg zu den Druckeinstellungen an. Ein inaktiver gespeicherter
+Haftungswert bleibt ohne Wirkung. Unveränderte Herstellerwerte behalten ihre
+native Schreibweise und verändern keine Fußgeometrie.

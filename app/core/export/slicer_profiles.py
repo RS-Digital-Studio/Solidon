@@ -384,11 +384,13 @@ def _read_prusa_ini(path: Path) -> configparser.ConfigParser | None:
     wie „nichts eingelegt".
     """
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError as problem:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as problem:
         _log.debug("skipping Prusa file %s: %s", path.name, problem)
         return None
-    parsed = configparser.ConfigParser(interpolation=None, strict=False)
+    # Native Prusa-Werte verwenden „=“. Mit dem ebenfalls erlaubten „:“
+    # würde ein kaputter Abschnittskopf wie „[print:Name“ zu einem Wert.
+    parsed = configparser.ConfigParser(interpolation=None, strict=False, delimiters=("=",))
     try:
         parsed.read_string(f"[{_PRUSA_HEAD}]\n{text}")
     except configparser.Error as problem:
@@ -2582,7 +2584,6 @@ class _PrusaStore:
         eager: bool = True,
         cancelled: CancelToken | None = None,
     ) -> None:
-        self.cancelled = cancelled
         self.roots = roots
         self.documents: dict[Path, configparser.ConfigParser] = {}
         self.entries: list[SlicerProfile] = []
@@ -2591,46 +2592,47 @@ class _PrusaStore:
         if not eager:
             return
         for root in roots:
-            for path in _prusa_files(root, self.cancelled):
-                _check_cancelled(self.cancelled)
+            for path in _prusa_files(root, cancelled):
+                _check_cancelled(cancelled)
                 if len(self.documents) >= MAX_FILES:
                     return
-                self.read(path)
+                self.read(path, cancelled=cancelled)
 
-    def find_parent(self, name: str, kind: ProfileKind) -> None:
+    def find_parent(
+        self, name: str, kind: ProfileKind, *, cancelled: CancelToken | None = None
+    ) -> None:
         """Beim Einzelabruf nur die Bündel öffnen, die den Elternnamen tragen."""
         prefix = next(key for key, value in _PRUSA_KINDS.items() if value == kind)
         heading = f"[{prefix}:{name}]"
         for root in self.roots:
-            for index, path in enumerate(_prusa_files(root, self.cancelled)):
-                _check_cancelled(self.cancelled)
+            for index, path in enumerate(_prusa_files(root, cancelled)):
+                _check_cancelled(cancelled)
                 if index >= MAX_FILES:
                     break
                 if path in self.documents:
                     continue
                 if path.parent.name == prefix and path.stem == name:
-                    self.read(path)
+                    self.read(path, cancelled=cancelled)
                     continue
                 try:
                     text = path.read_text(encoding="utf-8", errors="replace")
                 except OSError:
                     continue
                 if heading in text.splitlines():
-                    self.read(path)
+                    self.read(path, cancelled=cancelled)
 
-    def read(self, path: Path) -> None:
+    def read(self, path: Path, *, cancelled: CancelToken | None = None) -> None:
         """Ein Bündel oder eine kopflose eigene Einzeldatei lesen."""
-        _check_cancelled(self.cancelled)
+        _check_cancelled(cancelled)
         if path in self.documents:
             return
         document = _read_prusa_ini(path)
         if document is None:
             return
-        self.documents[path] = document
-        start = len(self.entries)
+        entries: list[SlicerProfile] = []
         own_kind = _PRUSA_KINDS.get(path.parent.name)
         if own_kind and document[_PRUSA_HEAD]:
-            self.entries.append(
+            entries.append(
                 SlicerProfile(
                     path,
                     path.stem,
@@ -2641,11 +2643,11 @@ class _PrusaStore:
                 )
             )
         for section in document.sections():
-            _check_cancelled(self.cancelled)
+            _check_cancelled(cancelled)
             prefix, separator, name = section.partition(":")
             kind = _PRUSA_KINDS.get(prefix)
             if separator and kind:
-                self.entries.append(
+                entries.append(
                     SlicerProfile(
                         path,
                         name,
@@ -2654,29 +2656,41 @@ class _PrusaStore:
                         inherits=document[section].get("inherits", ""),
                     )
                 )
-        for entry in self.entries[start:]:
+        # Ein abgebrochenes Nachlesen darf keinen halben Namensindex im
+        # geteilten Bestand hinterlassen. Der Abbruch gehört nur diesem Abruf.
+        _check_cancelled(cancelled)
+        self.documents[path] = document
+        self.entries.extend(entries)
+        for entry in entries:
             self.by_name.setdefault((entry.kind, entry.name), []).append(entry)
 
     def resolve(
-        self, profile: SlicerProfile, active: frozenset[tuple[Path, str]] = frozenset()
+        self,
+        profile: SlicerProfile,
+        active: frozenset[tuple[Path, str]] = frozenset(),
+        *,
+        cancelled: CancelToken | None = None,
     ) -> dict[str, Any]:
         """Innerhalb eines Bündels erben; eigene Dateien dürfen Herstellerbasen nutzen."""
-        _check_cancelled(self.cancelled)
+        _check_cancelled(cancelled)
         key = (profile.path, profile.section)
         if key in active or len(active) >= MAX_INHERITANCE:
             raise _incomplete_profile(profile.path)
         if key in self.resolved:
             return self.resolved[key]
-        self.read(profile.path)
+        self.read(profile.path, cancelled=cancelled)
         document = self.documents.get(profile.path)
         section = profile.section or _PRUSA_HEAD
         if document is None or not document.has_section(section):
-            return {}
+            # Die Bestandsauflistung überspringt unlesbare Dateien. Hier
+            # wurde dieses Profil ausdrücklich gewählt; fehlend ist nicht
+            # dasselbe wie ein vorhandenes gültiges leeres Delta.
+            raise _incomplete_profile(profile.path)
         raw = dict(document[section])
         values: dict[str, Any] = {}
         for name in _prusa_list(raw.get("inherits", "")):
             if profile.from_user:
-                self.find_parent(name, profile.kind)
+                self.find_parent(name, profile.kind, cancelled=cancelled)
             candidates = [
                 entry
                 for entry in self.by_name.get((profile.kind, name), ())
@@ -2689,7 +2703,7 @@ class _PrusaStore:
             if not choices:
                 raise _incomplete_profile(profile.path)
             parent = max(enumerate(choices), key=lambda item: (item[1].from_user, item[0]))[1]
-            values.update(self.resolve(parent, active | {key}))
+            values.update(self.resolve(parent, active | {key}, cancelled=cancelled))
         values.update({name: value for name, value in raw.items() if name != "inherits"})
         self.resolved[key] = values
         return values
@@ -2752,30 +2766,41 @@ _PRUSA_LOCK: Final = threading.RLock()
 _prusa_cache: _PrusaCache | None = None
 
 
-def _prusa_signature(roots: Sequence[Path]) -> tuple[tuple[str, int, int], ...]:
+def _prusa_signature(
+    roots: Sequence[Path], extra_file: Path | None = None
+) -> tuple[tuple[str, int, int], ...]:
     """Woran ein Prusa-Bestand erkannt wird: jede Datei mit Größe und Zeitstempel."""
     signature: list[tuple[str, int, int]] = []
-    for root in roots:
-        for path in _prusa_files(root):
-            try:
-                status = path.stat()
-            except OSError:
-                continue
-            signature.append((str(path), status.st_mtime_ns, status.st_size))
+    paths = {path for root in roots for path in _prusa_files(root)}
+    if extra_file is not None:
+        # Die ausdrücklich gewählte Einzeldatei darf außerhalb des Bestands
+        # liegen. Ihr Ordner wird dadurch keine weitere Suchwurzel.
+        paths.add(extra_file)
+    for path in sorted(paths):
+        try:
+            status = path.stat()
+        except OSError:
+            continue
+        signature.append((str(path), status.st_mtime_ns, status.st_size))
     return tuple(signature)
 
 
-def _prusa_store(roots: Sequence[Path], cancelled: CancelToken | None = None) -> _PrusaCache:
+def _prusa_store(
+    roots: Sequence[Path], cancelled: CancelToken | None = None, *, extra_file: Path | None = None
+) -> _PrusaCache:
     """Der gelesene Bestand zu diesen Wurzeln — aus dem Speicher, solange er stimmt."""
     global _prusa_cache
-    key = (tuple(roots), _prusa_signature(roots))
+    _check_cancelled(cancelled)
+    key = (tuple(roots), _prusa_signature(roots, extra_file))
     with _PRUSA_LOCK:
+        _check_cancelled(cancelled)
         if _prusa_cache is not None and _prusa_cache.key == key:
             return _prusa_cache
     # Gelesen wird außerhalb der Sperre: Das dauert, und ein abgebrochener
     # Suchauftrag hinterlässt so keinen halben Bestand im Speicher.
     cache = _PrusaCache(key, _PrusaStore(roots, cancelled=cancelled))
     with _PRUSA_LOCK:
+        _check_cancelled(cancelled)
         _prusa_cache = cache
     return cache
 
@@ -2806,6 +2831,7 @@ def _prusa_profiles(
     # Unter der Sperre, damit zwei Aufrufer den Bestand nicht zugleich
     # auflösen; ein Abbruch lässt die Liste leer statt halb.
     with _PRUSA_LOCK:
+        _check_cancelled(cancelled)
         if cache.profiles is None:
             cache.profiles = _prusa_listing(cache.store, cancelled)
         listed = cache.profiles
@@ -2820,7 +2846,7 @@ def _prusa_listing(store: _PrusaStore, cancelled: CancelToken | None) -> list[Sl
         if entry.name.startswith("*") and entry.name.endswith("*"):
             continue
         try:
-            values = store.resolve(entry)
+            values = store.resolve(entry, cancelled=cancelled)
         except ExternalToolError as problem:
             _log.warning("skipping incomplete Prusa profile %s: %s", entry.name, problem)
             continue
@@ -2932,11 +2958,11 @@ def resolve_profile(
                 return native
         raise _incomplete_profile(profile.cura_instance)
     if profile.path.suffix == ".ini":
-        store = _prusa_store(roots, cancelled).store
+        store = _prusa_store(roots, cancelled, extra_file=profile.path).store
         # Unter der Sperre: Eine Datei außerhalb der Wurzeln liest der Bestand
         # beim Auflösen nach, und zwei Aufrufer dürfen ihn dabei nicht teilen.
         with _PRUSA_LOCK:
-            return dict(store.resolve(profile))
+            return dict(store.resolve(profile, cancelled=cancelled))
     return resolve_values(
         profile.path,
         roots,

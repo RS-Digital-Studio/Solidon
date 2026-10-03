@@ -18474,6 +18474,11 @@ BY_MATERIAL_DOC = _(
     "Filamente, bleibt alles zusammen."
 )
 
+CENTRE_SLENDER_DOC = _(
+    "Rückt hohe, schmale Teile auf ihrer Platte näher zur Mitte, wenn dort Platz frei ist. "
+    "Andere Teile und die Abstände bleiben erhalten."
+)
+
 
 def _arranged_in_filament_groups(
     ctx: OpContext,
@@ -18482,6 +18487,8 @@ def _arranged_in_filament_groups(
     spacing: float,
     plates: int,
     occupied: Sequence[tuple[MeshData, int]] = (),
+    *,
+    centre_slender: bool = False,
 ) -> Arrangement:
     """Erst nach Filament gruppieren, dann jede Gruppe für sich anordnen.
 
@@ -18528,6 +18535,7 @@ def _arranged_in_filament_groups(
             # Die belegten Plätze in der Zählung dieser Gruppe: Was auf der
             # Szenenplatte ``start + k`` steht, steht für sie auf Platte ``k``.
             occupied=[(mesh, plate - start) for mesh, plate in occupied if plate >= start],
+            centre_slender=centre_slender,
         )
         findings.extend(arranged.findings)
         for entry, mesh, plate in zip(members, arranged.meshes, arranged.plates, strict=True):
@@ -18597,11 +18605,18 @@ class OrientParams(BaseParams):
         doc=BY_MATERIAL_DOC,
         depends_on=("arrange", (True,)),
     )
+    centre_slender: bool = param(
+        title=_("Schlanke Teile zur Mitte"),
+        default=True,
+        placement="advanced",
+        doc=CENTRE_SLENDER_DOC,
+        depends_on=("arrange", (True,)),
+    )
 
 
 @register_op(
     name="orient_for_print",
-    cache_version="2",
+    cache_version="3",
     title=_("Druckoptimal ausrichten"),
     category="transform",
     params=OrientParams,
@@ -18811,7 +18826,13 @@ def _laid_out_after_turning(
     groups = filament_groups(ctx.profile, turned) if params.by_material else None
     if groups is not None:
         arrangement = _arranged_in_filament_groups(
-            ctx, turned, groups, params.spacing, params.plates, occupied=standing
+            ctx,
+            turned,
+            groups,
+            params.spacing,
+            params.plates,
+            occupied=standing,
+            centre_slender=params.centre_slender,
         )
     else:
         arrangement = arrange_on_bed(
@@ -18821,6 +18842,7 @@ def _laid_out_after_turning(
             params.plates,
             object_ids=[entry.id for entry in turned],
             occupied=standing,
+            centre_slender=params.centre_slender,
         )
     findings.extend(arrangement.findings)
     for plate in range(arrangement.plate_count):
@@ -18857,6 +18879,12 @@ def _laid_out_after_turning(
 
 @op_params
 class ArrangeParams(BaseParams):
+    centre_slender: bool = param(
+        title=_("Schlanke Teile zur Mitte"),
+        default=True,
+        placement="advanced",
+        doc=CENTRE_SLENDER_DOC,
+    )
     spacing: float = param(
         title=_("Abstand"),
         default=ARRANGE_SPACING,
@@ -18900,6 +18928,7 @@ class ArrangeParams(BaseParams):
 
 @register_op(
     name="arrange_bed",
+    cache_version="2",
     title=_("Auf dem Bett anordnen"),
     category="scene",
     params=ArrangeParams,
@@ -18915,7 +18944,12 @@ def arrange_bed(ctx: OpContext) -> OpResult:
     groups = filament_groups(ctx.profile, ctx.inputs) if params.by_material else None
     if groups is not None:
         result = _arranged_in_filament_groups(
-            ctx, ctx.inputs, groups, params.spacing, params.plates
+            ctx,
+            ctx.inputs,
+            groups,
+            params.spacing,
+            params.plates,
+            centre_slender=params.centre_slender,
         )
     else:
         result = arrange_on_bed(
@@ -18924,6 +18958,7 @@ def arrange_bed(ctx: OpContext) -> OpResult:
             params.spacing,
             params.plates,
             object_ids=[entry.id for entry in ctx.inputs],
+            centre_slender=params.centre_slender,
         )
     findings = list(result.findings)
 

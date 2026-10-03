@@ -33,6 +33,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los filamentos sin uso de proyectos antiguos ya no se envían al laminador. Los perfiles siguen asociados a los filamentos utilizados.
 - Los modelos añadidos encuentran espacio también después de la duodécima placa. Las placas importadas conservan su distribución.
 - Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas.
+- Al cambiar de impresora o laminador, la placa de impresión seleccionada antes ya no se transfiere al nuevo perfil.
+- Las piezas esbeltas se colocan más cerca del centro. Puede ajustar la separación del borde; para bases pequeñas se propone un borde en contacto con la pieza.
+- Se avisa de los perfiles dañados en PrusaSlicer y SuperSlicer. Solidon utiliza entonces su conjunto completo de ajustes de impresión.
 - Los ajustes de cada pieza llegan al laminador con más fiabilidad. Los que afectan a toda la placa se explican en la pieza correspondiente.
 - Con Orca y Prusa, aceptar una sugerencia de velocidad para un encaje solo ralentiza las piezas afectadas.
 - También se conservan al exportar los pequeños cambios aceptados en los ajustes de impresión.

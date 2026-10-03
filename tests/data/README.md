@@ -17,6 +17,8 @@ aufgenommen, nicht als Sonderfall im Code.
 |---|---|---|---|
 | `projects/flat_lid_v19.json` | Eigene synthetische Vorlage im historischen Format 19: offene Schachtel 60 × 40 × 30 mm, Wand 3 mm, flacher Deckel mit Parameter `collar=0`, noch ohne Passung | Als Projektcontainer öffnen: Migration auf 20 ergänzt bedingte Passung; Parameterwechsel auf 4 mm aktiviert sie, Save/Load und Undo/Redo erhalten die Zuordnung | `test_lid_flow.py` |
 | `projects/example_v1.p3d` | Format 1 mit Parametern, Ausdruck, Passung, Quelle mit Lizenz, Agenten-Transaktion, Bericht und Vorschaubild | öffnet, zwei Ops (`rename_object`, `duplicate_object`), `half` trägt `=@width/2`, Passung trägt `auto:petg` | `test_project.py::test_the_checked_in_example_still_opens` |
+| `projects/slender_arrangement_v42.p3d` | Historische Anordnung einer Platte 120 × 120 × 4 mm und einer Stange 8 × 8 × 122 mm, Format 42 | Migration und Undo behalten die alte Lage; neue Anordnung darf die Stange zur freien Mitte verschieben | `test_project.py` |
+| `projects/example_v43.p3d` | Format 43 mit gespeicherter Wahl für die Mittellage schlanker Teile | Öffnen und Speichern erhalten den Parameter und die vollständige Migrationskette | `test_project.py` |
 
 Je Formatversion bleibt eine Beispieldatei liegen (§16.2). Sie wird nie
 nachträglich verändert — sie ist der Beweis, dass die Migrationskette

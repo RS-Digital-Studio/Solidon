@@ -55,6 +55,7 @@ from app.core.geom.measure import surface_gap
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated, ray_hit_distances
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, translation
+from app.core.knowledge.print_settings import is_slender
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
 from app.core.types import (
@@ -2786,6 +2787,7 @@ def arrange_on_bed(
     *,
     margin: float | None = None,
     occupied: Sequence[tuple[MeshData, int]] = (),
+    centre_slender: bool = False,
 ) -> Arrangement:
     """Legt jeden Körper an die hinterste, dann linkeste freie Stelle (§29).
 
@@ -2955,6 +2957,9 @@ def arrange_on_bed(
             arranged, assigned, area, allowed, printable_area(profile.printer)
         )
 
+    if centre_slender:
+        arranged = _slender_nearer_the_middle(arranged, assigned, area, allowed, spacing, occupied)
+
     findings.extend(check_build_volume(arranged, profile, assigned, object_ids, margin=edge_margin))
     if len(opened) >= plates and _overfull(arranged, assigned, profile, edge_margin):
         findings.append(
@@ -2983,6 +2988,53 @@ def arrange_on_bed(
             )
         )
     return Arrangement(meshes=arranged, plates=assigned, findings=findings)
+
+
+def _slender_nearer_the_middle(
+    arranged: list[MeshData],
+    assigned: list[int],
+    area: Any,
+    allowed: Any,
+    spacing: float,
+    occupied: Sequence[tuple[MeshData, int]],
+) -> list[MeshData]:
+    """Verbessert freie Mittellagen auf derselben Platte, ohne Nachbarn zu verschieben.
+
+    Es gilt dieselbe Schlankheit wie im Druckrat. Die bestehende Belegung
+    entscheidet über Plattenzahl und Reihenfolge; eine gleich gute oder nicht
+    sicher freie Mittellage bleibt unverändert. Sperrzonen und feste Körper
+    begrenzen dieselbe Suche wie beim Hinzufügen eines Modells.
+    """
+    if area.is_empty:
+        return arranged
+    left, front, right, back = area.bounds
+    centre = ((left + right) / 2.0, (front + back) / 2.0)
+    moved = list(arranged)
+    for index, original in enumerate(arranged):
+        if not is_slender(original.bounds) or not fits_xy(original, area):
+            continue
+        plate = assigned[index]
+        neighbours = [
+            mesh for at, mesh in enumerate(moved) if at != index and assigned[at] == plate
+        ]
+        neighbours.extend(mesh for mesh, at in occupied if at == plate)
+        taken = [
+            _Slot(mesh.bounds.minimum[0], mesh.bounds.maximum[1], *mesh.bounds.size[:2])
+            for mesh in neighbours
+        ]
+        spot = _nearest_the_middle(original.bounds.size, taken, area, allowed, spacing)
+        if spot is None:
+            continue
+        before = original.bounds.centre
+        after = (spot.left + spot.width / 2.0, spot.back - spot.depth / 2.0)
+        old_distance = math.hypot(before[0] - centre[0], before[1] - centre[1])
+        new_distance = math.hypot(after[0] - centre[0], after[1] - centre[1])
+        if new_distance >= old_distance - _TOUCH:
+            continue
+        body = original.raw.copy()
+        transform.moved(body, translation((after[0] - before[0], after[1] - before[1], 0.0)))
+        moved[index] = original.replacing(body)
+    return moved
 
 
 def first_free_spot(

@@ -26,7 +26,14 @@ from app.core.knowledge import print_settings, profiles
 from app.core.scene import serialise
 from app.core.scene.project import load
 from app.core.slice import advise
-from app.core.types import BoundingBox, MaterialSlot, PrintSettings, Profile, SlotOverride
+from app.core.types import (
+    BoundingBox,
+    MaterialSlot,
+    PrintSettings,
+    Profile,
+    SettingAdvice,
+    SlotOverride,
+)
 
 
 def _write(path: Path, document: dict[str, object]) -> Path:
@@ -36,6 +43,267 @@ def _write(path: Path, document: dict[str, object]) -> Path:
 
 
 # --- Herkunft je Wert -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("gap", [0.0, 0.1, 0.25])
+def test_orcas_brim_gap_comes_from_the_chosen_process(bestand: Path, gap: float) -> None:
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data["brim_object_gap"] = str(gap)
+    data["elefant_foot_compensation"] = "0"
+    _write(native, data)
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+    assert foundation.settings.adhesion.brim_gap == pytest.approx(gap)
+    assert not foundation.settings.explicit
+
+
+@pytest.mark.parametrize("foot", [0.0, 0.1, 0.15, 0.3])
+@pytest.mark.parametrize("chosen", [None, 0.0, 0.25])
+def test_orcas_brim_gap_means_the_distance_to_the_corrected_foot(
+    bestand: Path, tmp_path: Path, foot: float, chosen: float | None
+) -> None:
+    """Unverändert bleibt das Profil; eine Wahl wird um die Fußkorrektur bereinigt."""
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(brim_object_gap="0.10", elefant_foot_compensation=str(foot))
+    _write(native, data)
+    setup = _setup(bestand)
+    profile = _cc2()
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+    assert foundation.settings.adhesion.brim_gap == pytest.approx(0.1 + foot)
+    settings = foundation.settings
+    if chosen is not None:
+        settings = print_settings.with_choice(settings, "adhesion.kind", "brim")
+        settings = print_settings.with_choice(settings, "adhesion.brim_gap", chosen)
+    process, _ = _written(tmp_path, settings, setup)
+    expected = 0.1 if chosen is None else chosen - foot
+    assert float(process["brim_object_gap"]) == pytest.approx(expected)
+    assert process["elefant_foot_compensation"] == str(foot)
+    project = handover.project_settings(settings, profile, setup)
+    assert float(project["brim_object_gap"]) == pytest.approx(expected)
+    assert project["elefant_foot_compensation"] == str(foot)
+    if chosen is None:
+        assert process["brim_object_gap"] == "0.10"
+        assert project["brim_object_gap"] == "0.10"
+
+
+@pytest.mark.parametrize("foot", [None, "formula()", "nan", "-0.1"])
+def test_an_unknown_foot_correction_preserves_the_profile_but_stops_a_brim_gap_choice(
+    bestand: Path, tmp_path: Path, foot: str | None
+) -> None:
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data["brim_object_gap"] = "0.10"
+    if foot is not None:
+        data["elefant_foot_compensation"] = foot
+    _write(native, data)
+    setup = _setup(bestand)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    unchanged, _ = _written(tmp_path, foundation.settings, setup)
+    assert unchanged["brim_object_gap"] == "0.10"
+    chosen = print_settings.with_choice(foundation.settings, "adhesion.brim_gap", 0.0)
+    (tmp_path / "chosen").mkdir()
+    with pytest.raises(ValidationError) as caught:
+        _written(tmp_path / "chosen", chosen, setup)
+    assert caught.value.field == "adhesion.brim_gap"
+    assert caught.value.suggestions
+    with pytest.raises(ValidationError):
+        handover.project_settings(chosen, _cc2(), setup)
+
+
+@pytest.mark.parametrize("gap", [0.0, 0.1, 0.25])
+def test_prusas_brim_gap_comes_from_the_chosen_process(prusa_bundle: Path, gap: float) -> None:
+    native = prusa_bundle.parent / "resources/profiles/PrusaResearch.ini"
+    source = native.read_text(encoding="utf-8")
+    source = source.replace("skirts = 0\n", f"skirts = 0\nbrim_separation = {gap}\n", 1)
+    native.write_text(source, encoding="utf-8")
+    foundation = manufacturer.base_settings(_mk4s(), "standard", _prusa_setup(prusa_bundle))
+    assert foundation.settings.adhesion.brim_gap == pytest.approx(gap)
+    assert not foundation.settings.explicit
+
+
+@pytest.mark.parametrize("outline", ["0", "1", "unknown()"])
+def test_orcas_corrected_outline_is_used_by_both_brim_writers(
+    bestand: Path, tmp_path: Path, outline: str
+) -> None:
+    """Der native Konturschalter entscheidet über den Bezug, keine Formel wird geraten."""
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(
+        brim_object_gap="0.10",
+        elefant_foot_compensation="0.15",
+        brim_use_efc_outline=outline,
+        elefant_foot_compensation_layers="1",
+        raft_layers="0",
+    )
+    _write(native, data)
+    executable = bestand.with_name("orca-slicer.exe")
+    executable.write_bytes(b"")
+    setup = _setup(executable)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    chosen = print_settings.with_choice(foundation.settings, "adhesion.brim_gap", 0.0)
+    if outline == "unknown()":
+        assert "adhesion.brim_gap" in foundation.foreign
+        with pytest.raises(ValidationError):
+            _written(tmp_path, chosen, setup)
+        with pytest.raises(ValidationError):
+            handover.project_settings(chosen, _cc2(), setup)
+    else:
+        expected = 0.0 if outline == "1" else -0.15
+        assert foundation.settings.adhesion.brim_gap == pytest.approx(0.1 - expected)
+        process, _ = _written(tmp_path, chosen, setup)
+        assert float(process["brim_object_gap"]) == pytest.approx(expected)
+        project = handover.project_settings(chosen, _cc2(), setup)
+        assert float(project["brim_object_gap"]) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("chosen", [False, True])
+def test_creality_cannot_promise_contact_across_its_corrected_foot(
+    bestand: Path, tmp_path: Path, chosen: bool
+) -> None:
+    """Negative Abstände sind nativ unwirksam je Teil und ungültig an der Platte."""
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(brim_object_gap="0.10", elefant_foot_compensation="0.15")
+    _write(native, data)
+    executable = bestand.with_name("CrealityPrint.exe")
+    executable.write_bytes(b"")
+    setup = _setup(executable)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    setter = print_settings.with_choice if chosen else print_settings.with_accepted
+    settings = setter(foundation.settings, "adhesion.brim_gap", 0.0)
+    for emit in (
+        lambda: _written(tmp_path, settings, setup),
+        lambda: handover.project_settings(settings, _cc2(), setup),
+    ):
+        with pytest.raises(ValidationError) as caught:
+            emit()
+        assert caught.value.field == "adhesion.brim_gap"
+        assert caught.value.suggestions
+    safe = setter(foundation.settings, "adhesion.brim_gap", 0.25)
+    project = handover.project_settings(safe, _cc2(), setup)
+    assert float(project["brim_object_gap"]) == pytest.approx(0.1)
+    assert project["elefant_foot_compensation"] == "0.15"
+
+
+@pytest.mark.parametrize("kind", ["none", "skirt", "raft"])
+def test_an_inactive_brim_gap_does_not_prevent_another_adhesion_kind(
+    bestand: Path, tmp_path: Path, kind: str
+) -> None:
+    """Eine gespeicherte Wahl bleibt gespeichert, wirkt ohne Brim aber nicht."""
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(brim_object_gap="0.10", elefant_foot_compensation="unknown()")
+    _write(native, data)
+    setup = _setup(bestand)
+    base = manufacturer.base_settings(_cc2(), "standard", setup).settings
+    chosen = print_settings.with_choice(base, "adhesion.brim_gap", 0.0)
+    chosen = print_settings.with_choice(chosen, "adhesion.kind", kind)
+    process, _ = _written(tmp_path, chosen, setup)
+    project = handover.project_settings(chosen, _cc2(), setup)
+    assert process["brim_object_gap"] == project["brim_object_gap"] == "0.10"
+    object_values = handover.object_keys(
+        base,
+        [
+            SettingAdvice("adhesion.brim_gap", 0.0, 0.1, "Gespeicherte Wahl"),
+            SettingAdvice("adhesion.kind", kind, "auto", "Andere Haftung"),
+        ],
+        "orca",
+        program="crealityprint",
+        brim_foot_offset=None,
+    )
+    assert "brim_object_gap" not in object_values
+
+
+def test_choosing_a_brim_does_not_invent_an_unreadable_gap() -> None:
+    """Der gekoppelte Abstand bleibt nativ, solange der Kunde nur Brim einschaltet."""
+    base = print_settings.resolve(_cc2())
+    values = handover.object_keys(
+        base,
+        [SettingAdvice("adhesion.kind", "brim", "none", "Mehr Halt")],
+        "orca",
+        program="elegooslicer",
+        brim_foot_offset=None,
+    )
+    assert float(values["brim_width"]) > 0.0
+    assert "brim_object_gap" not in values
+
+
+@pytest.mark.parametrize("program", ["elegoo", "creality"])
+@pytest.mark.parametrize("chosen", [False, True])
+def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
+    bestand: Path, tmp_path: Path, chosen: bool, program: str
+) -> None:
+    """Der Objektweg und der ganze Auftrag verwenden denselben nativen Bezug."""
+    from xml.etree import ElementTree as ET
+
+    import trimesh
+
+    from app.core.export.writer import write_assembly
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(brim_object_gap="0.1", elefant_foot_compensation="0.15")
+    _write(native, data)
+    setup, profile = _setup(bestand), _cc2()
+    if program == "creality":
+        executable = bestand.with_name("CrealityPrint.exe")
+        executable.write_bytes(b"")
+        setup = _setup(executable)
+    base = manufacturer.base_settings(profile, "standard", setup).settings
+    base = print_settings.with_choice(base, "adhesion.kind", "brim")
+    setter = print_settings.with_choice if chosen else print_settings.with_accepted
+    settings = setter(base, "adhesion.brim_gap", 0.0)
+    meshes = [trimesh.creation.box(extents=(8, 8, 122)), trimesh.creation.box(extents=(30, 30, 4))]
+    objects = []
+    for index, mesh in enumerate(meshes):
+        mesh.apply_translation((index * 50.0, 0, -mesh.bounds[0, 2]))
+        objects.append(SceneObject(id=f"obj_{index}", name=f"Part_{index}", mesh=MeshData.of(mesh)))
+    if program == "creality":
+        with pytest.raises(ValidationError) as caught:
+            write_assembly(
+                objects,
+                tmp_path,
+                project_name="Brim",
+                profile=profile,
+                settings=settings,
+                setup=setup,
+                flavour="orca",
+            )
+        assert caught.value.field == "adhesion.brim_gap"
+        assert caught.value.suggestions
+        return
+    path, findings = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Brim",
+        profile=profile,
+        settings=settings,
+        setup=setup,
+        flavour="orca",
+    )
+    with zipfile.ZipFile(path) as archive:
+        config = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        project = json.loads(archive.read("Metadata/project_settings.config"))
+    keys = [
+        {item.get("key"): item.get("value") for item in obj.findall("metadata")}
+        for obj in config.iter("object")
+    ]
+    if chosen:
+        assert float(project["brim_object_gap"]) == pytest.approx(-0.15)
+        assert all("brim_object_gap" not in own for own in keys)
+    else:
+        assert project["brim_object_gap"] == "0.1"
+        assert keys[0]["brim_object_gap"] == "-0.15"
+        assert "brim_object_gap" not in keys[1]
+        assert [
+            (item.object_id, item.values["setting"])
+            for item in findings
+            if item.code == "export.part_setting"
+        ] == [("obj_0", "adhesion.brim_gap")]
+    assert project["elefant_foot_compensation"] == "0.15"
 
 
 def test_a_choice_and_an_accepted_suggestion_are_told_apart() -> None:
@@ -2302,7 +2570,12 @@ def test_prusa_auto_preserves_multiple_native_adhesion_measures(prusa_bundle: Pa
     shown = set(print_settings.ADHESION_DETAILS) - print_settings.inactive_paths(
         "auto", kind, also=kinds
     )
-    assert shown == {"adhesion.skirt_loops", "adhesion.skirt_distance", "adhesion.brim_width"}
+    assert shown == {
+        "adhesion.skirt_loops",
+        "adhesion.skirt_distance",
+        "adhesion.brim_width",
+        "adhesion.brim_gap",
+    }
 
     chosen_skirt = print_settings.with_choice(automatic, "adhesion.skirt_loops", 4)
     changed, _expected = handover.prusa_values(chosen_skirt, profile, setup, console=False)

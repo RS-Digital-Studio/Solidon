@@ -295,6 +295,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 
 **Anordnen und Ausrichten**:
 
+- `centre_slender` verbessert anschließend die freie Mittellage schlanker
+  Körper auf derselben Platte; `knowledge.print_settings.is_slender` gilt
+  auch im Druckrat. Migrierte alte Schritte behalten ihre bisherige Lage.
 - Die schnelle FDM-Ausrichtung nimmt die erste passende Lage, die
   `slice.orientation.standing_check` am Original trägt. Ohne stehende Lage
   sagt `NoStandingOrientationError` vor jeder Bewegung ab; Resin braucht

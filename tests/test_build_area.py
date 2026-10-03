@@ -1,7 +1,9 @@
 """Druckkontur, Sperrzonen und Orientierungen an analytischen Fehlerfällen."""
 
+import math
 from dataclasses import replace
 
+import numpy as np
 import pytest
 import trimesh
 from shapely.geometry import box
@@ -17,6 +19,80 @@ def body(size, centre=None):
     mesh = trimesh.creation.box(extents=size)
     mesh.apply_translation(centre or (0.0, 0.0, size[2] / 2.0))
     return MeshData.of(mesh)
+
+
+@pytest.mark.parametrize("shape", ["rectangle", "concave", "delta", "excluded", "centred"])
+def test_slender_parts_move_inward_on_the_same_valid_plate(shape):
+    """Die Mittelsuche wahrt Kontur, Sperrzonen, Nachbarn und ihre Abstände."""
+    from app.core.build_area import printable_area
+
+    profile = make_profile()
+    changes = {}
+    if shape == "concave":
+        changes["printable_area"] = (
+            (-110, -110),
+            (110, -110),
+            (110, 110),
+            (30, 110),
+            (30, 30),
+            (-110, 30),
+        )
+    elif shape == "delta":
+        changes["printable_area"] = tuple(
+            (110 * math.cos(angle), 110 * math.sin(angle))
+            for angle in np.linspace(0, 2 * math.pi, 96, endpoint=False)
+        )
+        changes["bed_origin"] = (0.0, 0.0)
+    elif shape == "excluded":
+        changes["bed_exclusions"] = (((-12, -12), (12, -12), (12, 12), (-12, 12)),)
+    elif shape == "centred":
+        changes["bed_origin"] = (0.0, 0.0)
+    profile = replace(profile, printer=replace(profile.printer, **changes))
+    meshes = [body((35, 35, 4)), body((8, 8, 122)), body((8, 8, 87))]
+    before = arrange_on_bed(meshes, profile, plates=3)
+    after = arrange_on_bed(meshes, profile, plates=3, centre_slender=True)
+    repeat = arrange_on_bed(meshes, profile, plates=3, centre_slender=True)
+    assert after.plates == before.plates
+    assert not after.findings
+    np.testing.assert_array_equal(after.meshes[0].raw.vertices, before.meshes[0].raw.vertices)
+    left, front, right, back = printable_area(profile.printer, margin=5).bounds
+    middle = ((left + right) / 2, (front + back) / 2)
+    for old, new, again in zip(before.meshes, after.meshes, repeat.meshes, strict=True):
+        assert (
+            math.dist(new.bounds.centre[:2], middle)
+            <= math.dist(old.bounds.centre[:2], middle) + 1e-8
+        )
+        np.testing.assert_array_equal(new.raw.vertices, again.raw.vertices)
+    rectangles = [box(*mesh.bounds.minimum[:2], *mesh.bounds.maximum[:2]) for mesh in after.meshes]
+    for index, rectangle in enumerate(rectangles):
+        for other in rectangles[index + 1 :]:
+            assert rectangle.distance(other) >= 5 - 1e-8
+
+
+def test_an_occupied_middle_uses_a_stable_nearest_side_without_moving_the_neighbour():
+    profile = make_profile()
+    fixed = body((120, 120, 4))
+    vertices = fixed.raw.vertices.copy()
+    rod = body((8, 8, 122))
+    after = arrange_on_bed([rod], profile, occupied=[(fixed, 0)], centre_slender=True)
+    assert after.plates == [0]
+    assert after.meshes[0].bounds.centre[:2] == pytest.approx((69, 0))
+    np.testing.assert_array_equal(fixed.raw.vertices, vertices)
+    # Eine belegte andere Platte begrenzt diese Mittellage nicht.
+    separate = arrange_on_bed([rod], profile, occupied=[(fixed, 1)], centre_slender=True)
+    assert separate.meshes[0].bounds.centre[:2] == pytest.approx((0, 0))
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_no_better_slender_pose_keeps_the_existing_vertices_and_plate_count(count):
+    profile = make_profile()
+    profile = replace(profile, printer=replace(profile.printer, build_volume=(8 * count, 8, 150)))
+    rods = [body((8, 8, 122)) for _ in range(count)]
+    before = arrange_on_bed(rods, profile, spacing=0, margin=0, plates=2)
+    after = arrange_on_bed(rods, profile, spacing=0, margin=0, plates=2, centre_slender=True)
+    assert after.plates == before.plates == [0] * count
+    for old, new in zip(before.meshes, after.meshes, strict=True):
+        np.testing.assert_array_equal(old.raw.vertices, new.raw.vertices)
 
 
 def test_cc2_excluded_corner_is_not_printable():

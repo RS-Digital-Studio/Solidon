@@ -4016,6 +4016,102 @@ def test_a_profile_of_another_printer_is_not_reused(monkeypatch: pytest.MonkeyPa
     assert same.machine_profile == "Centauri Carbon 0.4", "derselbe Drucker, alles gilt"
 
 
+@pytest.mark.parametrize("change", ["same", "slicer", "printer", "missing"])
+def test_a_profile_refresh_keeps_a_plate_only_in_its_current_context(
+    monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """Die laufende Wahl übersteht die erneute Suche, aber keinen fremden Drucker/Slicer."""
+    from contextlib import nullcontext
+
+    old = Path("elegoo-slicer.exe")
+    current = Path("orca-slicer.exe") if change == "slicer" else old
+    if change == "missing":
+        current = None
+    printer = "generic-220" if change == "printer" else "centauri-carbon-2"
+    combo = SimpleNamespace(clear=lambda: None, setEnabled=lambda enabled: None)
+    host = SimpleNamespace(
+        _bed_plate="Engineering Plate",
+        _bed_plate_context=("centauri-carbon-2", old),
+        _slicer_path=current,
+        session=SimpleNamespace(profile=profiles.make_profile(printer)),
+        ui_settings=UiSettings(),
+        _show_nozzle=lambda: None,
+        _forget_filament_profile=lambda: None,
+        machine_choice=combo,
+        process_choice=combo,
+        slot_rows=[],
+        profile_note=SimpleNamespace(setText=lambda text: None),
+        _offer_the_slicers_printer=lambda name: None,
+    )
+    host._refresh_bed_plate_context = lambda: PrintSettingsDialog._refresh_bed_plate_context(host)
+    monkeypatch.setattr(print_dialog, "QSignalBlocker", lambda value: nullcontext())
+
+    PrintSettingsDialog._clear_profile_choices(host)
+
+    assert host._bed_plate == ("Engineering Plate" if change == "same" else "")
+
+
+@pytest.mark.parametrize("saved_printer", ["", "centauri-carbon-2", "generic-220"])
+@pytest.mark.parametrize("saved_slicer", ["", "elegoo-slicer.exe", "orca-slicer.exe"])
+@pytest.mark.parametrize("available", [False, True])
+def test_the_initial_plate_and_export_share_the_same_profile_ownership(
+    monkeypatch: pytest.MonkeyPatch, saved_printer: str, saved_slicer: str, available: bool
+) -> None:
+    """Alte leere Marker gelten weiter; bekannte fremde Marker und fehlende Programme nicht."""
+    current = Path("elegoo-slicer.exe") if available else None
+    settings = UiSettings()
+    settings.slicer_machine_profile = "Ausgewählte Maschine"
+    settings.slicer_base_process = "Eigener Prozess"
+    settings.slicer_base_filament = "Eigenes Filament"
+    settings.slicer_bed_plate = "Engineering Plate"
+    settings.slicer_profile_printer = saved_printer
+    settings.slicer_profile_slicer = saved_slicer
+    host = SimpleNamespace(
+        ui_settings=settings,
+        _slicer_path=current,
+        _bed_plate_context=None,
+        _bed_plate="",
+        session=SimpleNamespace(profile=profiles.make_profile("centauri-carbon-2")),
+    )
+    monkeypatch.setattr(print_dialog.discover, "find_program", lambda *args: current)
+    monkeypatch.setattr(
+        print_dialog.handover, "detect", lambda path: handover.SlicerSetup(path, "orca")
+    )
+
+    PrintSettingsDialog._refresh_bed_plate_context(host)
+    exported = print_dialog.remembered_setup(settings, "pla", "centauri-carbon-2")
+
+    valid = available and saved_printer != "generic-220" and saved_slicer != "orca-slicer.exe"
+    assert host._bed_plate == ("Engineering Plate" if valid else "")
+    assert (exported is not None) is valid
+    if exported is not None:
+        assert exported.plate == host._bed_plate
+        assert exported.machine_profile == "Ausgewählte Maschine"
+        assert exported.base_process == "Eigener Prozess"
+        assert exported.base_filament == "Eigenes Filament"
+
+
+def test_a_later_slicer_does_not_revive_a_legacy_plate_from_a_missing_program() -> None:
+    """Ein zwischenzeitlich fehlendes Programm löscht die bekannte Herkunft nicht."""
+    settings = UiSettings()
+    settings.slicer_bed_plate = "Engineering Plate"
+    host = SimpleNamespace(
+        ui_settings=settings,
+        _slicer_path=Path("elegoo-slicer.exe"),
+        _bed_plate_context=None,
+        _bed_plate="",
+        session=SimpleNamespace(profile=profiles.make_profile("centauri-carbon-2")),
+    )
+    PrintSettingsDialog._refresh_bed_plate_context(host)
+    assert host._bed_plate == "Engineering Plate"
+    host._slicer_path = None
+    PrintSettingsDialog._refresh_bed_plate_context(host)
+    assert host._bed_plate == ""
+    host._slicer_path = Path("orca-slicer.exe")
+    PrintSettingsDialog._refresh_bed_plate_context(host)
+    assert host._bed_plate == ""
+
+
 def test_an_old_settings_file_still_carries_its_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ohne Vermerk wird nicht verglichen.
 

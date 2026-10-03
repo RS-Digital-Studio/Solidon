@@ -52,6 +52,101 @@ from tests.helpers import cube_mesh, exact_kernel
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def test_a_new_arrangement_moves_the_tall_rod_inward_without_another_plate(
+    profile: Profile,
+) -> None:
+    """Die breite Platte bleibt liegen; die Stange nutzt die freie Mittellage daneben."""
+    from app.core.geom.prepare_ops import ArrangeParams, arrange_bed
+    from app.core.scene.cancel import NeverCancelled
+
+    wide = MeshData.of(trimesh.creation.box(extents=(120.0, 120.0, 4.0)))
+    rod = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 122.0)))
+    objects = [
+        SceneObject(id="wide", name="Platte", mesh=wide),
+        SceneObject(id="rod", name="Stange", mesh=rod),
+    ]
+    prior = arrange_on_bed([wide, rod], profile)
+    ctx = OpContext(
+        params=ArrangeParams(),
+        inputs=objects,
+        profile=profile,
+        scene=Scene(objects={obj.id: obj for obj in objects}),
+        quality="fine",
+        seed=1,
+        progress=lambda fraction, text: None,
+        ask=lambda question, options: options[0],
+        cancelled=NeverCancelled(),
+    )
+    changed = arrange_bed(ctx)
+    after = changed.outputs[1].mesh.bounds.centre
+    before = prior.meshes[1].bounds.centre
+    assert math.hypot(after[0], after[1]) < math.hypot(before[0], before[1]) - 1.0
+    np.testing.assert_array_equal(
+        as_mesh_data(changed.outputs[0].mesh).raw.vertices, prior.meshes[0].raw.vertices
+    )
+    assert [obj.plate for obj in changed.outputs] == prior.plates
+    assert not check_collisions([as_mesh_data(obj.mesh) for obj in changed.outputs])
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_the_inward_moved_rod_keeps_its_hole_reference(kind: str, profile: Profile) -> None:
+    """Nach der zusätzlichen Verschiebung bleibt dieselbe Bohrung weiter bearbeitbar."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.prepare_ops import ArrangeParams, arrange_bed
+    from app.core.scene.cancel import NeverCancelled
+
+    exact_kernel()
+    exact = edit.box(8.0, 8.0, 122.0)
+    source = SceneObject(
+        id="rod", name="Stange", kind=kind, mesh=exact if kind == "brep" else as_mesh_data(exact)
+    )
+    drilled = _run_op(
+        "drill_brep_hole" if kind == "brep" else "drill_hole",
+        source,
+        profile,
+        diameter=3.0,
+        x=0.0,
+        y=0.0,
+        z=122.0,
+        compensate=False,
+    ).outputs[0]
+    features = features_of(drilled.mesh) if kind == "brep" else detect(drilled.mesh)
+    drilled = dataclasses.replace(drilled, features=features)
+    hole = next(name for name, feature in features.items() if feature.kind == "hole")
+    wide = SceneObject(
+        id="wide",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box(extents=(120.0, 120.0, 4.0))),
+    )
+    inputs = [wide, drilled]
+    ctx = OpContext(
+        params=ArrangeParams(),
+        inputs=inputs,
+        profile=profile,
+        scene=Scene(objects={obj.id: obj for obj in inputs}),
+        quality="fine",
+        seed=1,
+        progress=lambda fraction, text: None,
+        ask=lambda question, options: options[0],
+        cancelled=NeverCancelled(),
+    )
+    legacy = arrange_bed(dataclasses.replace(ctx, params=ArrangeParams(centre_slender=False)))
+    moved = arrange_bed(ctx).outputs[1]
+    before, after = legacy.outputs[1].mesh.bounds.centre, moved.mesh.bounds.centre
+    assert math.hypot(*after[:2]) < math.hypot(*before[:2]) - 1.0
+    assert moved.kind == kind
+    assert hole in moved.features
+    resized = _run_op(
+        "resize_hole", moved, profile, at_feature=hole, diameter=4.0, compensate=False
+    ).outputs[0]
+    assert resized.kind == kind
+    assert resized.mesh.is_watertight
+    assert resized.features[hole].params["diameter"] == pytest.approx(4.0, abs=0.01)
+    assert resized.mesh.volume < moved.mesh.volume
+    assert resized.mesh.bounds.centre == pytest.approx(moved.mesh.bounds.centre)
+
+
 def plate():
     """80 x 50 x 8 mm, watertight."""
     return normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh

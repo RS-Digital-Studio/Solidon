@@ -32,6 +32,9 @@ it into `website/version.json`.
 - Unused filaments from older projects are no longer sent to the slicer. Profiles stay linked to the filaments still in use.
 - Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.
 - Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles.
+- When you switch printers or slicers, the previous build plate choice is no longer carried over to the new profile.
+- Slender parts move closer to the centre when arranged. You can set the brim gap; a brim touching the part is suggested for small footprints.
+- Damaged profiles in PrusaSlicer and SuperSlicer are reported. Solidon then uses its complete set of print settings.
 - Print settings for individual parts reach the slicer more reliably. Settings that apply to the whole plate are explained on the affected part.
 - With Orca and Prusa, accepting a speed suggestion for a fitted part now slows only the affected parts.
 - Even small changes accepted for print settings are now preserved on export.

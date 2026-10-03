@@ -1262,6 +1262,20 @@ UNREACHABLE: dict[str, dict[str, str]] = {
 }
 
 
+@pytest.mark.parametrize(
+    ("flavour", "key"),
+    [("orca", "brim_object_gap"), ("prusa", "brim_separation"), ("cura", "brim_gap")],
+)
+@pytest.mark.parametrize("gap", [0.0, 0.1, 0.25])
+def test_a_chosen_brim_gap_reaches_the_actual_slicer_key(flavour, key, gap) -> None:
+    profile = profiles.make_profile()
+    settings = print_settings.with_choice(print_settings.resolve(profile), "adhesion.kind", "brim")
+    settings = print_settings.with_choice(settings, "adhesion.brim_gap", gap)
+    written = handover.values_for(settings, profile, flavour)
+    assert float(written[key]) == pytest.approx(gap)
+    assert settings.chosen >= {"adhesion.kind", "adhesion.brim_gap"}
+
+
 @pytest.mark.parametrize("flavour", ["prusa", "orca", "cura"])
 def test_every_setting_reaches_every_slicer(flavour: str) -> None:
     """Was der Dialog anbietet, muss überall ankommen — sonst stellt der
@@ -1302,6 +1316,7 @@ def _with_context(
         "adhesion.skirt_loops": "skirt",
         "adhesion.skirt_distance": "skirt",
         "adhesion.brim_width": "brim",
+        "adhesion.brim_gap": "brim",
         "adhesion.raft_layers": "raft",
     }.get(path)
     if needed is not None:
@@ -7781,8 +7796,8 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
     [
         ("none", set()),
         ("skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
-        ("brim", {"adhesion.brim_width"}),
-        ("auto", {"adhesion.brim_width"}),
+        ("brim", {"adhesion.brim_width", "adhesion.brim_gap"}),
+        ("auto", {"adhesion.brim_width", "adhesion.brim_gap"}),
         ("raft", {"adhesion.raft_layers"}),
     ],
 )
@@ -7802,13 +7817,13 @@ def test_only_the_measures_of_the_chosen_bed_type_are_active(kind: str, active: 
 @pytest.mark.parametrize(
     ("material_id", "flavour", "effective_kind", "active"),
     [
-        ("pla", "orca", "auto", {"adhesion.brim_width"}),
-        ("petg", "orca", "auto", {"adhesion.brim_width"}),
+        ("pla", "orca", "auto", {"adhesion.brim_width", "adhesion.brim_gap"}),
+        ("petg", "orca", "auto", {"adhesion.brim_width", "adhesion.brim_gap"}),
         ("pla", "prusa", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
         ("petg", "prusa", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
         ("pla", "cura", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
         ("petg", "cura", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
-        ("pla", "other", "auto", {"adhesion.brim_width"}),
+        ("pla", "other", "auto", {"adhesion.brim_width", "adhesion.brim_gap"}),
     ],
 )
 def test_auto_adhesion_uses_the_slicer_effective_type_for_active_measures(

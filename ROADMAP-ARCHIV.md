@@ -38927,6 +38927,35 @@ Die Ursachen `2cf02ad2d`, `44ab90965` und `f4f6e639d` liegen in v0.5.1.
 Die sichtbare Korrektur erhält deshalb einen Kundenpunkt in allen sechs
 Sprachen. Der später ergänzte Brim-Abstand wird separat unter RM-318 gemessen.
 
+
+**Folgenprüfung — gewählte Prusa-Profile:** Ein beschädigtes oder fehlendes
+Profil durfte als leere gültige Grundlage gelten. Der Leser prüft jetzt UTF-8,
+INI-Syntax und den ausdrücklich gewählten Abschnitt. Ein gültiges leeres Delta
+bleibt erlaubt. Die vorhandene Handlungsmeldung führt bei Lesefehlern zu
+Solidons vollständigem Drucksatz einschließlich Bett und Düse. Der Cache
+beobachtet auch eine ausdrücklich gewählte Einzeldatei außerhalb der
+Bestandswurzeln; deren Ordner wird keine neue Suchquelle. Änderung, Löschung,
+gültige Leere und fehlerhaftes UTF-8 werden erneut gelesen.
+
+Der gespeicherte Bestand hält außerdem keinen Abbruchschalter eines früheren
+Auftrags mehr. Jeder Abruf reicht seinen eigenen Schalter durch Auflösung und
+Vererbung. Ein abgebrochenes Nachlesen veröffentlicht weder einen halben
+Dateieintrag noch einen halben Namensindex. Zwei gleichzeitige Abrufe teilen
+weiter die vorhandene Sperre, aber keinen Abbruchzustand. Die Ursache
+`45238ec656` ist seit v0.4.1 veröffentlicht. Acht rote und drei grüne
+Gegenfälle werden mit der Korrektur elf grüne; alle 215 Profilfälle bestehen.
+Belege und Quellhashes liegen daneben unter `prusa-profile-cancel`.
+
+Die Lesekorrektur hat 13 rote/8 grüne Gegenfälle, der Cacheanschluss 8 rote/4
+grüne. Danach bestanden alle 33 neuen und insgesamt 72 gezielten Fälle.
+Alle 9.595 installierten Prusa- und 1.845 SuperSlicer-Profile liefern dieselben
+Kennungen und aufgelösten Werte wie vorher (SHA-256-Vergleich). Der beschädigte
+Dreibytefall schreibt mit Befund wieder 220 × 220 mm Bett und 0,4 mm Düse.
+Ursachen `b1250e46f0`, `3249afa51c` und `44ab909659` sind in v0.5.1 enthalten;
+ein zusätzlicher Kundenpunkt steht in allen sechs Sprachen. Quellhashes,
+Gegenproben und genauer Commit im Bericht B sowie unter
+`F:\solidon-review-reports\B-slicer-rest\prusa-profile-read`.
+
 ## RM-477: Modellnamen mit Sonderzeichen erreichen die Slicer (03.10.2026)
 
 <a id="rm-477-modellnamen-mit-sonderzeichen-erreichen-die-slicer-03102026"></a>

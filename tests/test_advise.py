@@ -33,6 +33,54 @@ from app.core.types import (
 SQUARE = ((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0))
 
 
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+@pytest.mark.parametrize("kind", ["brim", "auto", "skirt", "raft"])
+def test_a_tall_rod_needs_a_brim_touching_its_small_foot(flavour, kind) -> None:
+    """Ein fest liegender Brim mit Lücke hält die dünne Stange nicht mit."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "adhesion.kind", kind)
+    settings = print_settings.with_path(settings, "adhesion.brim_gap", 0.1)
+    raw = trimesh.creation.cylinder(radius=3.85, height=122.0, sections=64)
+    raw.apply_translation((0.0, 0.0, 61.0))
+    mesh = MeshData.of(raw)
+    result = slice_body(mesh, layer_height=0.2, support_volume=False)
+    offered = advise.advise(settings, profile, result=result, bounds=mesh.bounds, flavour=flavour)
+    gaps = [entry for entry in offered if entry.path == "adhesion.brim_gap"]
+    if kind == "raft":
+        assert not gaps
+    else:
+        assert len(gaps) == 1
+        assert gaps[0].value == pytest.approx(0.0)
+        assert gaps[0].was == pytest.approx(0.1)
+    unchanged = print_settings.with_path(settings, "adhesion.brim_gap", 0.0)
+    assert not any(
+        entry.path == "adhesion.brim_gap"
+        for entry in advise.advise(
+            unchanged, profile, result=result, bounds=mesh.bounds, flavour=flavour
+        )
+    )
+
+
+@pytest.mark.parametrize("size", [(30.0, 30.0, 200.0), (8.0, 8.0, 12.0)])
+def test_a_broad_foot_or_short_body_keeps_its_brim_gap(size) -> None:
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "adhesion.kind", "brim")
+    settings = print_settings.with_path(settings, "adhesion.brim_gap", 0.1)
+    raw = trimesh.creation.box(extents=size)
+    raw.apply_translation((0.0, 0.0, size[2] / 2.0))
+    mesh = MeshData.of(raw)
+    offered = advise.advise(
+        settings,
+        profile,
+        result=slice_body(mesh, support_volume=False),
+        bounds=mesh.bounds,
+        flavour="orca",
+    )
+    assert not any(entry.path == "adhesion.brim_gap" for entry in offered)
+
+
 def result_with(
     overhangs: list[float],
     *,

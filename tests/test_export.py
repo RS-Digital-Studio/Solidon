@@ -3414,8 +3414,6 @@ def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
     Die Grundlage ist hier eine mit Schürze, wie der Hersteller sie oft führt;
     Solidons eigene Tabelle legt für ABS schon selbst einen Brim, und dann
     gäbe es nichts zu trennen."""
-    from types import SimpleNamespace
-
     from app.core.export import manufacturer
 
     def split(material: str) -> handover.PartSplit:
@@ -3424,7 +3422,7 @@ def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
         monkeypatch.setattr(
             manufacturer,
             "base_settings",
-            lambda *_args, **_kwargs: SimpleNamespace(settings=skirted),
+            lambda *_args, **_kwargs: manufacturer.Foundation(skirted, profile=chosen),
         )
         accepted = print_settings.with_accepted(skirted, "adhesion.kind", "brim")
         return handover.split_for_parts(accepted, chosen, None, "orca")

@@ -2884,6 +2884,302 @@ def test_prusa_without_a_configuration_stays_quiet(
     assert sp.configured_filaments("prusa", executable) == ()
 
 
+@pytest.fixture(
+    params=["missing", "directory", "utf8", "utf8_value", "syntax", "section", "parent", "cycle"]
+)
+def broken_selected_prusa(tmp_path: Path, request: pytest.FixtureRequest) -> sp.SlicerProfile:
+    """Echte Dateifehler am ausdrücklich gewählten Profil, keine Decoder-Attrappe."""
+    path = tmp_path / "print" / "Selected.ini"
+    path.parent.mkdir()
+    contents = {
+        "utf8": b"\xff\xfe\xff",
+        "utf8_value": b"notes = damaged \xff value\n",
+        "syntax": b"[print:Selected\n",
+        "section": b"[print:Other]\nlayer_height = 0.2\n",
+        "parent": b"inherits = Missing parent\n",
+        "cycle": b"[print:Selected]\ninherits = Selected\n",
+    }
+    if request.param == "directory":
+        path.mkdir()
+    elif request.param != "missing":
+        path.write_bytes(contents[request.param])
+    return sp.SlicerProfile(
+        path,
+        "Selected",
+        "process",
+        from_user=True,
+        section="print:Selected" if request.param in {"section", "cycle"} else "",
+    )
+
+
+def test_selected_prusa_read_failure_is_an_actionable_error(
+    broken_selected_prusa: sp.SlicerProfile,
+) -> None:
+    """Ein gewähltes fehlendes/kaputtes Profil ist kein gültiges leeres Delta."""
+    from app.core.errors import ExternalToolError
+
+    with pytest.raises(ExternalToolError) as caught:
+        sp.resolve_profile(broken_selected_prusa, (broken_selected_prusa.path.parent.parent,))
+    assert caught.value.tool == broken_selected_prusa.path.name
+    assert caught.value.suggestions
+
+
+def test_selected_prusa_read_failure_reaches_foundation_and_written_fallback(
+    broken_selected_prusa: sp.SlicerProfile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Quelle und Befund bleiben benannt; der Rückfall schreibt Maschine und Prozess ganz."""
+    from app.core.export import handover, manufacturer
+
+    profile = profiles.make_profile("generic-220", "pla")
+    machine = tmp_path / "printer" / "Known.ini"
+    machine.parent.mkdir()
+    machine.write_text("gcode_flavor = marlin2\nnozzle_diameter = 0.4\n", encoding="utf-8")
+    setup = handover.SlicerSetup(
+        Path("PrusaSlicer.exe"), "prusa", machine_profile="Known", base_process="Selected"
+    )
+    monkeypatch.setattr(handover, "machine_for", lambda *_args: "Known")
+    monkeypatch.setattr(handover, "_profile_roots", lambda *_args: (tmp_path,))
+    monkeypatch.setattr(
+        handover,
+        "profile_source",
+        lambda _name, _setup, kind: machine if kind == "machine" else broken_selected_prusa,
+    )
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+    assert not foundation.has_profile
+    assert foundation.unreadable == "Selected"
+    findings = handover.foundation_findings(foundation.settings, profile, setup)
+    finding = next(item for item in findings if item.code == "slicer.process_unreadable")
+    assert finding.values["profile"] == "Selected"
+    assert finding.suggestions
+    directory = tmp_path / "written"
+    directory.mkdir()
+    config = handover.write_config(foundation.settings, profile, setup, directory)
+    text = config.process.read_text(encoding="utf-8")
+    assert "nozzle_diameter = 0.4\n" in text
+    assert "bed_shape = 0x0,220x0,220x220,0x220\n" in text
+    assert f"perimeters = {foundation.settings.shell.wall_count}\n" in text
+    assert "print_settings_id = Selected" not in text
+    assert "printer_settings_id = Known" not in text
+
+
+@pytest.mark.parametrize("kind", ["empty_file", "empty_section", "empty_parent", "parent"])
+def test_valid_empty_prusa_deltas_and_inheritance_remain_distinct(
+    tmp_path: Path, kind: str
+) -> None:
+    """Vorhandene gültige Leere ist erlaubt; ein benannter Elternabschnitt trägt seine Werte."""
+    path = tmp_path / "print" / "Chosen.ini"
+    path.parent.mkdir()
+    contents = {
+        "empty_file": "",
+        "empty_section": "[print:Chosen]\n",
+        "empty_parent": "[print:Base]\n[print:Chosen]\ninherits = Base\n",
+        "parent": "[print:Base]\nlayer_height = 0.17\n[print:Chosen]\ninherits = Base\n",
+    }
+    path.write_text(contents[kind], encoding="utf-8")
+    source = sp.SlicerProfile(
+        path,
+        "Chosen",
+        "process",
+        from_user=True,
+        section="" if kind == "empty_file" else "print:Chosen",
+    )
+    assert sp.resolve_profile(source, (tmp_path,)) == (
+        {"layer_height": "0.17"} if kind == "parent" else {}
+    )
+
+
+def test_prusa_discovery_skips_bad_files_and_keeps_good_profiles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Bestandsauflistung darf defekte ungewählte Dateien weiter überspringen."""
+    folder = tmp_path / "print"
+    folder.mkdir()
+    (folder / "Bad.ini").write_bytes(b"notes = bad \xff\n")
+    (folder / "Good.ini").write_text("layer_height = 0.17\n", encoding="utf-8")
+    monkeypatch.setattr(sp, "profile_roots", lambda *_args: (tmp_path,))
+    found = sp.find_profiles(Path("PrusaSlicer.exe"), "prusa", ("process",))
+    assert [entry.name for entry in found] == ["Good"]
+
+
+@pytest.mark.parametrize("location", ["without_roots", "outside_roots", "inside_roots"])
+@pytest.mark.parametrize("change", ["broken", "deleted", "empty", "value"])
+def test_selected_prusa_file_changes_invalidate_cached_values(
+    tmp_path: Path, location: str, change: str
+) -> None:
+    """Eine zuvor lesbare gewählte Datei bleibt auch außerhalb des Bestands überprüfbar."""
+    from app.core.errors import ExternalToolError
+
+    folder = tmp_path / "own" / "print"
+    folder.mkdir(parents=True)
+    path = folder / "Selected.ini"
+    path.write_text("layer_height = 0.17\n", encoding="utf-8")
+    stock = tmp_path / "stock"
+    stock.mkdir()
+    roots = {"without_roots": (), "outside_roots": (stock,), "inside_roots": (folder.parent,)}[
+        location
+    ]
+    assert sp.resolve_values(path, roots) == {"layer_height": "0.17"}
+    if change == "deleted":
+        path.unlink()
+    elif change == "broken":
+        path.write_bytes(b"notes = damaged \xff value\n")
+    else:
+        path.write_text("" if change == "empty" else "layer_height = 0.235\n", encoding="utf-8")
+    if change in {"broken", "deleted"}:
+        with pytest.raises(ExternalToolError):
+            sp.resolve_values(path, roots)
+    else:
+        assert sp.resolve_values(path, roots) == (
+            {} if change == "empty" else {"layer_height": "0.235"}
+        )
+
+
+@pytest.fixture
+def prusa_cache_bundle(tmp_path: Path) -> sp.SlicerProfile:
+    """Ein echter kleiner Bestand, dessen zwei Profile denselben Cache teilen."""
+    path = tmp_path / "Maker.ini"
+    path.write_text(
+        "[print:Base]\nlayer_height = 0.17\n"
+        "[print:First]\ninherits = Base\nperimeters = 3\n"
+        "[print:Second]\ninherits = Base\nperimeters = 5\n",
+        encoding="utf-8",
+    )
+    return sp.SlicerProfile(path, "First", "process", section="print:First")
+
+
+@pytest.mark.parametrize("caller", ["resolve", "listing"])
+@pytest.mark.parametrize("new_token", [False, True])
+def test_prusa_cached_profiles_do_not_keep_a_previous_cancellation(
+    prusa_cache_bundle, monkeypatch, caller, new_token
+):
+    """Ein beendeter Suchauftrag darf den nächsten Profilabruf nicht abbrechen."""
+    from app.core.scene.cancel import CancelSignal
+
+    profile = prusa_cache_bundle
+    roots = (profile.path.parent,)
+    previous = CancelSignal()
+    expected = {"layer_height": "0.17", "perimeters": "3"}
+    assert sp.resolve_profile(profile, roots, cancelled=previous) == expected
+    previous.cancel()
+    current = CancelSignal() if new_token else None
+    if caller == "resolve":
+        assert sp.resolve_profile(profile, roots, cancelled=current) == expected
+    else:
+        monkeypatch.setattr(sp, "profile_roots", lambda *_args: roots)
+        found = sp._prusa_profiles(Path("PrusaSlicer.exe"), frozenset({"process"}), current)
+        assert {entry.name for entry in found} == {"Base", "First", "Second"}
+
+
+@pytest.mark.parametrize("warm", [False, True])
+@pytest.mark.parametrize("when", ["before", "during_signature"])
+def test_prusa_current_cancellation_stops_cold_and_warm_reads(
+    prusa_cache_bundle, monkeypatch, warm, when
+):
+    """Auch ein bereits gelesener Bestand gehört dem aktuell abbrechenden Auftrag."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    profile = prusa_cache_bundle
+    roots = (profile.path.parent,)
+    if warm:
+        sp.resolve_profile(profile, roots)
+    current = CancelSignal()
+    if when == "before":
+        current.cancel()
+    else:
+        original = Path.stat
+
+        def cancel_at_file(path, *args, **kwargs):
+            status = original(path, *args, **kwargs)
+            if path == profile.path:
+                current.cancel()
+            return status
+
+        monkeypatch.setattr(Path, "stat", cancel_at_file)
+    with pytest.raises(OperationCancelled):
+        sp.resolve_profile(profile, roots, cancelled=current)
+
+
+def test_prusa_interrupted_external_read_can_resolve_again(prusa_cache_bundle, monkeypatch):
+    """Abgebrochenes Nachlesen hinterlässt keine Datei ohne ihre Erbabschnitte."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    profile = prusa_cache_bundle
+    current = CancelSignal()
+    original = sp._read_prusa_ini
+
+    def cancel_after_read(path):
+        document = original(path)
+        current.cancel()
+        return document
+
+    with monkeypatch.context() as patch:
+        patch.setattr(sp, "_read_prusa_ini", cancel_after_read)
+        with pytest.raises(OperationCancelled):
+            sp.resolve_profile(profile, cancelled=current)
+    assert sp.resolve_profile(profile, cancelled=CancelSignal()) == {
+        "layer_height": "0.17",
+        "perimeters": "3",
+    }
+
+
+@pytest.mark.parametrize("cancel_first", [False, True])
+def test_concurrent_prusa_reads_only_observe_their_own_cancellation(
+    prusa_cache_bundle, monkeypatch, cancel_first
+):
+    """Zwei echte Aufrufe teilen Dateien und Sperre, aber keinen Abbruchschalter."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    first = prusa_cache_bundle
+    second = replace(first, name="Second", section="print:Second")
+    roots = (first.path.parent,)
+    sp.resolve_profile(first, roots)
+    first_token, second_token = CancelSignal(), CancelSignal()
+    entered, waiting, release = Event(), Event(), Event()
+    original_resolve = sp._PrusaStore.resolve
+    original_store = sp._prusa_store
+
+    def held_resolve(store, profile, *args, **kwargs):
+        if profile.name == "First":
+            entered.set()
+            assert release.wait(5)
+        return original_resolve(store, profile, *args, **kwargs)
+
+    def seen_store(roots, cancelled=None, **kwargs):
+        if cancelled is second_token:
+            waiting.set()
+        return original_store(roots, cancelled, **kwargs)
+
+    monkeypatch.setattr(sp._PrusaStore, "resolve", held_resolve)
+    monkeypatch.setattr(sp, "_prusa_store", seen_store)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        first_result = workers.submit(sp.resolve_profile, first, roots, cancelled=first_token)
+        try:
+            assert entered.wait(5)
+            second_result = workers.submit(
+                sp.resolve_profile, second, roots, cancelled=second_token
+            )
+            assert waiting.wait(5)
+            (first_token if cancel_first else second_token).cancel()
+        finally:
+            release.set()
+        cancelled_result = first_result if cancel_first else second_result
+        active_result = second_result if cancel_first else first_result
+        with pytest.raises(OperationCancelled):
+            cancelled_result.result(timeout=5)
+        assert active_result.result(timeout=5) == {
+            "layer_height": "0.17",
+            "perimeters": "5" if cancel_first else "3",
+        }
+
+
 # --- Welcher Slicer kennt welchen Drucker ------------------------------------------
 
 
