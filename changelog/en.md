@@ -72,6 +72,7 @@ it into `website/version.json`.
 - Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
+- The skeleton editor shows bones and joint in the view, and a joint sits in the middle of the body instead of on its skin, so the figure bends evenly.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
@@ -115,6 +116,7 @@ it into `website/version.json`.
 - Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.
+- A local language model may take twelve instead of eight steps per request in the chat and so solves more requests made of several parts.
 
 ## 0.5.1
 

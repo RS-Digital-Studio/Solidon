@@ -816,38 +816,41 @@ def _comfy_generate(tutorial: Any, step: dict[str, Any]) -> None:
                 tutorial.settle(12)
                 elapsed = time.monotonic() - started
                 if not progress or elapsed - progress[-1]["elapsed_seconds"] >= 30:
-                    progress.append(
-                        {"elapsed_seconds": round(elapsed, 3), "text": dialog.state.text()}
-                    )
+                    # Der Dialog tritt während des Laufs zur Seite (RM-371); der
+                    # Lauf steht in der Statusleiste des bedienbaren Fensters.
+                    status = tutorial.window.status_message.text()
+                    progress.append({"elapsed_seconds": round(elapsed, 3), "text": status})
                     tutorial.add(
                         "ComfyUI rechnet · Wartezeit im Schnitt verkürzt",
                         "ComfyUI is generating · waiting shortened in the edit",
-                        dialog.state.text(),
-                        dialog.state.text(),
+                        status,
+                        status,
                         2.0,
-                        dialog=dialog,
                     )
-                    print(f"ComfyUI {phase}: {elapsed:.0f}s {dialog.state.text()}", flush=True)
+                    print(f"ComfyUI {phase}: {elapsed:.0f}s {status}", flush=True)
             _scene(
                 tutorial,
                 f"{key}-waiting",
                 (
                     "Die lokale Erzeugung abwarten",
                     "Wartezeit im Film verkürzt.",
-                    "Die Berechnung läuft jetzt in ComfyUI auf diesem Rechner. Ich "
-                    "lasse sie bis zur tatsächlichen Rückmeldung laufen. Die Wartezeit "
+                    "Die Berechnung läuft jetzt in ComfyUI auf diesem Rechner. "
+                    "Fortschritt und Abbrechen stehen unten in der Statusleiste, und "
+                    "Solidon bleibt währenddessen bedienbar. Ich lasse die Berechnung "
+                    "bis zur tatsächlichen Rückmeldung laufen. Die Wartezeit "
                     "ist im Film verkürzt; daraus lässt sich keine feste "
                     "Geschwindigkeit für andere Rechner ableiten.",
                 ),
                 (
                     "Wait for local generation",
                     "Waiting time is shortened in the video.",
-                    "ComfyUI is now calculating on this computer. I wait for its "
-                    "actual response. The video shortens the waiting time; it does not "
+                    "ComfyUI is now calculating on this computer. Progress and Cancel "
+                    "are in the status bar at the bottom, and Solidon stays usable "
+                    "meanwhile. I wait for its actual response. The video shortens the "
+                    "waiting time; it does not "
                     "establish a fixed speed for other computers.",
                 ),
                 seconds=5.0,
-                dialog=dialog,
                 first_slide=wait_start,
             )
         if dialog.result_mesh is None or not dialog.tries:
@@ -893,7 +896,22 @@ def _comfy_generate(tutorial: Any, step: dict[str, Any]) -> None:
         generated_scene["action_last_slide"] = len(tutorial.recorder.slides)
         generated_scene["last_slide"] = len(tutorial.recorder.slides)
 
-    tutorial.modal(lambda: _open_generator(tutorial, key), fill)
+    # Der Dialog ist nichtmodal (RM-371): Der Menüweg öffnet ihn und kehrt
+    # zurück, statt in einer eigenen Ereignisschleife zu warten.
+    _open_generator(tutorial, key)
+    _wait(
+        tutorial,
+        lambda: tutorial.window._generator is not None,
+        timeout=60.0,
+        reason="Erzeugen-Dialog",
+    )
+    generator = tutorial.window._generator
+    try:
+        fill(generator)
+    except BaseException:
+        if generator is not None:
+            generator.reject()
+        raise
     tutorial.checked(f"Echte ComfyUI-Erzeugung: {phase}")
     _proof(tutorial, evidence)
 

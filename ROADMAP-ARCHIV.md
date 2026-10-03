@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)](#rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026) |
+| 2026-10-03 | [RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)](#rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
 | 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
 | 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
@@ -44,6 +46,8 @@ entfernt hat.
 | 2026-10-02 | [RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)](#rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026) |
 | 2026-10-02 | [RM-359: Weg 2: Leiste, Haken beim Ändern, Grenzen mit Einheit, Regler, Namen und Parameterdialog (02.10.2026)](#rm-359-weg-2-leiste-haken-beim-ändern-grenzen-mit-einheit-regler-namen-und-parameterdialog-02102026) |
 | 2026-10-02 | [RM-342: Oberfläche: Reste aus dem Review seit 0.5.1 (02.10.2026)](#rm-342-oberfläche-reste-aus-dem-review-seit-051-02102026) |
+| 2026-10-02 | [RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)](#rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026) |
+| 2026-10-02 | [RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)](#rm-456-nach-einer-erzeugung-steht-die-verlaufsgruppe-offen-die-lizenzabsage-ohne-interne-kennung-der-mulden-formzug-mit-test-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -55,6 +59,7 @@ entfernt hat.
 | 2026-10-02 | [RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)](#rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026) |
 | 2026-10-02 | [RM-458: Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen (02.10.2026)](#rm-458-eine-datei-die-an-schritt-1-hält-sagt-das-statt-zum-anfangen-einzuladen-02102026) |
 | 2026-10-02 | [RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)](#rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026) |
+| 2026-10-02 | [RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)](#rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
@@ -37272,3 +37277,170 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   (Repository und Druckprojekte) gaben 171 dieselben Ringe wie trimesh mit lxml, die 150 übrigen
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
+
+## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
+
+<a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
+<a id="rm-367"></a>
+
+**RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett.**
+  Review 02.10.2026, Gebietsprüfung Weg 4, am HEAD `6ce767031`.
+  - **W4-3 — Ein von Hand verdorbener Strichtext endet als „unerwarteter Fehler“.** Feld *Striche*
+    im Dialog (auch über *Eingabe korrigieren*): `JSONDecodeError`, `KeyError: 'n'`, `IndexError`
+    → jedes Mal `op.sculpt_strokes.InternalError` mit *Fehler melden*
+    (`app/core/geom/sculpt.py:306–323`). Beim Skelett wird derselbe Fall als Eingabefehler
+    abgefangen. Fix: Strichtext prüfen und als `ValidationError` mit Handlungsvorschlag melden.
+    §2.7, Regel 17. Sonde `w4_strichtext.py`.
+  - **W4-6 — Der Skeletteditor zeigt im Bild keinen Knochen und keinen Gelenkpunkt**, nur die
+    Leiste zählt mit (`main_window.py:11755–11943`, `viewport.py`). §2.8. Sonde
+    `w4_knochen_sichtbar.py` (Quelltextprobe).
+  - **W4-7 — Ein Knochen landet auf dem angeklickten Hautpunkt statt im Gelenk**, obwohl die
+    Leiste „Erst das Gelenk anklicken“ sagt (`main_window.py:11848`, `pose_bar.py:77`); die
+    Beugung wird einseitig: +60° Volumen 0,841 statt 0,927 mit `pose.pinched`, −60° 1,013.
+    Fix: den Klickpunkt auf die Körperachse unter der Haut legen. §2.2, §2.7. Sonde
+    `w4_knochen_oberflaeche.py`.
+  - **W4-8 — Ende-zu-Ende-Test und Beispiel von Weg 4 lassen „Skelett setzen und stellen“ aus**
+    („stellen“ als „auf die Platte stellen“ gelesen): `tests/test_way_four.py:40–131`,
+    `tools/make_examples.py:166–232`. §40 P16, §2.2.
+  **Abnahme:** je Fund ein Test — verdorbener Strichtext → Eingabefehler mit Vorschlag; Knochen
+  und Gelenke im Bild sichtbar; Knochen liegt im Körperinneren, ±60° symmetrisch; `test_way_four`
+  setzt und stellt ein Skelett. Beleg: `F:\solidon-review-reports\gebiet-weg4.md`.
+  Nachprüfung am Stand `4cf460e87` (nach `88b5f425f`): W4-8 behoben (`test_way_four` setzt und stellt ein Skelett, Gegenprobe rot). W4-3 unvollständig: die drei Originalfälle sind jetzt ein Eingabefehler mit Vorschlag, aber `"s":NaN` und `"p":[NaN,…]` enden weiter als „unerwarteter Fehler“; r ≤ 0 wird angenommen und bewegt trotzdem Ecken; r = Infinity bleibt wirkungslos ohne Befund; vier Koordinaten werden still abgeschnitten (`types.as_vec3`). W4-6 und W4-7 offen. Belege `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonde `v4g_rm367_strichtext_zwillinge.py`.
+  **W4-3 vollständig (02.10.2026 abends, Claude, Thread „Bedienung und KI“):** `strokes_from_text`
+  liest Punkte und Normalen als genau drei endliche Koordinaten, Radius endlich und größer null,
+  Stärke endlich (`_finite`, `_finite_point`); sonst Eingabefehler mit Ausweg. Sechs neue Fälle in
+  `test_sculpt.py::test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out`.
+
+**Abschluss:** Alle vier Funde erledigt. W4-8 mit `88b5f425f` (`test_way_four` setzt und stellt ein Skelett). W4-3 vollständig: Strichtext mit NaN, Unendlich, Radius ≤ 0 oder vier Koordinaten ist ein Eingabefehler mit Ausweg (`_finite`, `_finite_point`; sechs neue Fälle in `test_sculpt.py`). W4-7: Ein Klick auf die Haut setzt das Gelenk unter den Klick in die Mitte des Körpers, entlang des Blicks bis zur Gegenwand (`pose.inside_the_body`, `Viewport.ray_toward`); neben der Haut, streifend oder ins Leere bleibt der Punkt (`test_pose.py::test_a_click_on_the_skin_becomes_a_joint_on_the_axis`). W4-6: Der Skeletteditor zeichnet Knochen und das gesetzte Gelenk vor dem Körper (`Viewport.show_bones`, `clear_bones`, `bones_shown`/`joint_shown`; `test_pose_session.py::test_bones_are_drawn_and_sit_inside_the_body`). Alle 62 Skeletttests einschließlich Fensterfällen grün. Fenstersonde am echten Fenster an `clean_figure.stl`: Gelenk 4,27 mm unter der Haut, Knochen im Bild sichtbar, nach *Fertig* weg; 4 von 4. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)
+
+<a id="rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026"></a>
+<a id="rm-497"></a>
+
+**RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü.**
+  Versionsvergleich Weg 1 (03.10.2026). Seit der Entscheidung vom 11.09. stehen Operationen nicht
+  mehr im Kontextmenü, sondern rechts im Auswahlfenster (§18.5; §2.2 ist schon angepasst). Zwei
+  Abnahmesätze in §40 sprechen noch vom alten Weg: P0 „zwei Ops im Register, sichtbar in Menü,
+  Palette, Kontextmenü, CLI und Tool-Schema“ und P1 „Klick liefert die korrekte Feature-ID und das
+  passende Kontextmenü“ (`3d-agent-bauplan.md:3164`, `:3200` am Stand `809141fdd`). Der Docstring
+  `_on_viewport_context_menu` in `app/ui/main_window.py` ist als Kleinigkeit berichtigt.
+  **Fix:** Beide Sätze auf das Auswahlfenster umstellen (Bauplan nur mit Ansage; Thread, der RM-360
+  umgesetzt hat).
+  **Abnahme:** `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nur noch Menüs, die es gibt.
+  Beleg: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md`.
+
+**Abschluss:** Beide Abnahmesätze in §40 nennen das Auswahlfenster: P0 „sichtbar in Menü, Palette, Auswahlfenster, CLI und Tool-Schema“, P1 „Klick liefert die korrekte Feature-ID und im Auswahlfenster die passenden Operationen“. `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nichts mehr; der verbleibende Treffer in §21 erzählt in der Vergangenheit, wie der Ausweg über die Provenienz gefunden wurde. Umgesetzt von Claude (Thread „Bedienung und KI“), Bauplanänderung angesagt mit RM-360.
+## RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)
+
+<a id="rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026"></a>
+<a id="rm-371"></a>
+
+**RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3, W3-4).
+  Der Erzeugen-Dialog läuft mit `dialog.exec()` (`app/ui/main_window.py:6577`) und ist
+  anwendungsmodal, solange der Generator rechnet (40 s bis viele Minuten); der Fortschritt steht
+  nur im Dialog. §2.8: „Oberfläche bedienbar“, „nie ein blockierendes Fenster“. Beleg
+  `F:\solidon-review-reports\sonden\w3_modal.txt` (`ApplicationModal`).
+  **Ablauf:** Nach *Erzeugen* schließt bzw. verkleinert sich der Dialog nicht modal; der Lauf geht
+  im Arbeiter weiter, die Statusleiste zeigt Fortschritt, verstrichene Zeit und *Abbrechen*
+  (§2.8), die Anwendung bleibt bedienbar. Ist der Lauf fertig, erscheint die Versuchsliste wieder
+  (nichtmodal) mit *Übernehmen*; ein Wechsel des Projekts oder eine gesetzte Einfügemarke
+  wird beim Übernehmen behandelt (RM-361).
+  **Stellen:** `main_window.py:6575–6579` (`_generate`), `app/ui/generate_dialog.py` (Lauf,
+  `_on_failed` `:1060–1068`, Abbrechen `:1091–1099`), Statusleisten-Fortschritt wie beim Laden.
+  **Abnahme:** Test mit gestelltem langsamen Backend: während des Laufs ist kein modales Fenster
+  aktiv, ein Menüeintrag lässt sich auslösen, die Statusleiste zeigt Fortschritt und *Abbrechen*
+  bricht den Lauf; danach ist das Ergebnis übernehmbar. Bauplan §2.8, §15.3.
+  **Vorgabe Robert 02.10.2026 — allgemein:** gleiches nichtmodales Verhalten für jede lange Erzeugung (Text, Bild, später weitere Generatoren); Abnahme mit mindestens drei unterschiedlichen Läufen (Text, Bild, Abbruch).
+
+**Abschluss:** **Abschluss 02.10.2026 (Claude, Thread „Bedienung und KI“):** Der Erzeugen-Dialog ist nichtmodal
+und einer zur Zeit (`MainWindow._generator`, ein zweiter Aufruf holt ihn nach vorn). Nach
+*Erzeugen* tritt er zur Seite; der neue Besitzer `"generate"` zeigt in der Statusleiste Satz,
+Anteil und verstrichene Zeit (eigene `ProgressTiming`, ab 10 s mit Schätzung) samt *Abbrechen*
+(`GenerateDialog.cancel_run`), ohne Wartezeiger (`_BACKGROUND_PROGRESS`), und steht zuletzt in
+`_PROGRESS_PRIORITY`. Ergebnis oder Fehler holen den Dialog ohne Fokusraub zurück
+(`runEnded`, `WA_ShowWithoutActivating`); ein Abbruch ohne fertigen Versuch schließt ihn mit
+Ansage, mit fertigen Versuchen bleiben sie übernehmbar. *Übernehmen* gilt dem jetzt offenen
+Projekt; ein Wechsel steht vorher über dem Knopf (`_say_generation_destination`), vom
+Startbildschirm aus beginnt es ein neues Projekt (`_begin_from_the_start_screen`). Die
+RM-361-Absagen (Einfügemarke, Lizenz) bleiben unverändert. Schließen des Fensters bricht den
+Wurf ab. Mit RM-418 verwirft ein zweites *Abbrechen* während des Auslaufens nichts; hängt der
+Generator dabei, lassen Esc und das Fensterkreuz den Dialog zur Seite treten, die Versuche
+bleiben, die Statusleiste nennt das Auslaufen. Text und Bild teilen den Weg; ein weiterer Generator nimmt ihn mit
+(`wartezeit.md`, „Eine Erzeugung läuft im Hintergrund“). Die Aufnahme des KI-Workshops
+(`tools/workshop_ai_capture.py`) bedient den Dialog nichtmodal und filmt die Wartezeit am Fenster.
+**Nachweis:** Fenstertests `tests/test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated[text|image]`,
+`::test_cancel_in_the_status_bar_stops_the_generation[False|True]`,
+`::test_a_project_opened_during_the_run_is_named_before_taking`,
+`::test_a_hanging_cancel_lets_the_dialog_step_aside_and_keeps_the_tries`, Wächter ohne Fenster
+`::test_generating_never_holds_the_window_in_a_modal_loop`; angepasst die RM-361-Tests,
+`test_ai_disclosure.py::test_main_window_keeps_the_generation_record_in_its_live_settings` und
+`test_widget_lifetime.py::test_a_window_that_opened_a_dialog_still_lets_go`. Fenstersonde am
+echten Fenster (zweiter Monitor, gestellter langsamer Generator), Läufe Text, Bild, Abbruch:
+43 von 43 Prüfungen — kein modales Fenster während des Laufs, Menüeintrag wirkt, Statusleiste
+„Modell wird erzeugt (2 s) · 14 % · Verstrichen: 2 s“ mit *Abbrechen*, Abbruch beendet den
+Arbeiter, Übernehmen und Strg+Z als ein Schritt. Ausgangsstand gegengeprüft: Dialog während des
+Laufs `ApplicationModal`. Commits: `4f8d55e28`, `4b9428337` (hängender Abbruch nach RM-418).
+
+## RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)
+
+<a id="rm-456-nach-einer-erzeugung-steht-die-verlaufsgruppe-offen-die-lizenzabsage-ohne-interne-kennung-der-mulden-formzug-mit-test-02102026"></a>
+<a id="rm-456"></a>
+
+**RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test.**
+  Review 02.10.2026 der Claude-Commits bis `73d83b55b` über die Oberfläche.
+  - **Regression gegenüber 0.5.1 (gering):** Seit RM-372 (`e27743131`) bündelt eine Erzeugung ihre
+    Schritte in einer Verlaufsgruppe, die zugeklappt erscheint — in v0.5.1 waren nach dem Erzeugen
+    2 von 4 Schritten sichtbar, jetzt 0 von 4; der Kunde sieht erst nach Aufklappen, was geschah.
+    Fix: die Gruppe der gerade entstandenen Transaktion offen zeigen.
+  - **Testlücke RM-438 (`6f64f7ed1`):** Wird `before=self._sculpt_shown()` in
+    `app/ui/main_window.py:11698` entfernt, bleiben alle 23 Fenstertests grün, die Züge setzen — der
+    Kundenfehler (Formzug in die eben gegrabene Mulde gilt als verfehlt) könnte unbemerkt
+    zurückkehren. Fix: Fenstertest mit zwei Zügen in dieselbe Mulde.
+  - **Interner Wert sichtbar (gering, keine Verschlechterung):** Die Lizenzabsage beim Erzeugen
+    zeigt die Zeile „Handlung: change“.
+  **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
+  macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
+  Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Stand 02.10.2026 (Claude, Thread „Bedienung und KI“): Teile 1 und 3 erledigt.** Teil 1:
+  `_take_generated` öffnet die Gruppe der neuen Transaktion (`HistoryPanel.open_group`);
+  Fenstertest `test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated`
+  (Mutation ohne den Aufruf: rot). Teil 3: `action` steht in `dialogs.ADDRESS_VALUES`, keine
+  Freischaltungsabsage nennt mehr ihre Kennung; Test ohne Fenster
+  `test_an_activation_refusal_names_no_internal_action` (vier Fehlerarten, Mutation rot), dazu
+  die RM-361-Fenstertests. Fenstersonde am echten Fenster: Gruppe nach Text- und Bildlauf offen
+  (`3 Modell einfügen` bis `6 Auf das Bett setzen`), Lizenzabsage ohne „Handlung: change“;
+  am Ausgangsstand beides nachgestellt (vier Kindzeilen verborgen, Zeile vorhanden). Commit wird
+  nachgetragen. **Offen: Teil 2** (Koordinator).
+  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
+
+**Abschluss:** **Abschluss 02.10.2026 (Claude, Thread „Bedienung und KI“):** Alle drei Teile erledigt. Teil 1 und
+3 mit RM-371 (`HistoryPanel.open_group` nach `_take_generated`; `action` in
+`dialogs.ADDRESS_VALUES`), Teil 2 vom Koordinator
+(`test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage`, Gegenprobe
+ohne `before=self._sculpt_shown()` rot). Am Ausgangsstand per Fenstersonde nachgestellt: vier
+Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nachher Gruppe offen
+(`3 Modell einfügen` bis `6 Auf das Bett setzen`), Absage ohne Kennung. Commit: `4f8d55e28`.
+
+## RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)
+
+<a id="rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026"></a>
+<a id="rm-303"></a>
+
+**RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F14, N8;
+  Text der Gesamtprüfung). Der Zweig hat die Fenstertests
+  `test_ui.py` (sechs Tests mit `keep_the_files_place`),
+  `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
+  `test_generate_ui.py` (Schrittliste mit `place_on_bed`) angepasst; sie gelten mit dem
+  Release-Tor. Der Plattenwechsel nach dem Import (`_show_the_plate_of_the_import`) hat
+  keinen Fenstertest und gilt nur für Dateien vom Pfad: gesetzt in `_on_import_confirmed`,
+  das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
+  erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
+  mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
+  auf Platte 2 kommt. Dazu aus der dritten Nachprüfung (Nachtrag
+  `e85c77ed0`, schon ab `bc901772c`): Ein abgebrochener Import an der Einfügemarke lässt
+  seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
+
+**Abschluss:** Ein weiteres Modell meldet seinen Körper auf allen drei Wegen mit demselben Signal (`Session.modelPlaced`): Datei und Download beim Annehmen des Imports, das erzeugte Modell in `add_generated`, ein Import an der Einfügemarke erst, wenn sein Umbau übernommen ist. Das Fenster zeigt daraufhin die Platte des neuen Körpers, sobald ein Ergebnis ihn trägt (`MainWindow._on_model_placed`); bisher wechselte nur eine Datei vom Pfad, und das über den letzten Schritt des Stapels, der an der Einfügemarke ein fremder ist. Ein Import an der Einfügemarke, dessen Umbau abgebrochen wird oder scheitert, nimmt seine Quelle wieder aus Dokument und Projekt (`Session._settle_revision_import`), statt sie mit dem nächsten Speichern mitreisen zu lassen. Tests: `test_ui.py::test_a_further_model_brings_its_plate_into_view` (Datei, Download, erzeugt; Platte 1 gewählt, das neue Modell kommt auf Platte 2 und die Kopfzeile zeigt sie) und `test_history_revision_ui.py::test_an_import_at_the_marker_takes_its_source_along_when_it_does_not_land` (abgebrochen, gescheitert, übernommen). Gegenprobe: ohne den Anschluss im Fenster und ohne die Rücknahme an der Marke 5 von 6 Fällen rot, nur „übernommen“ grün. Fenstersonde am echten Fenster: Brett 200 × 200 mm, Platte 1 gewählt, dann Datei, Download und erzeugtes Modell — jedes auf einer neuen Platte, die Kopfzeile zeigt jeweils dessen Platte; 10 von 10 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).

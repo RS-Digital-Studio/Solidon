@@ -104,7 +104,8 @@ def test_rounded_corners_are_round() -> None:
     exact = 40.0 * 20.0 - (4.0 - math.pi) * 5.0**2
     assert _area('<rect width="40" height="20" rx="5"/>') == pytest.approx(exact, rel=1e-3)
     # ``rx`` fehlt und folgt ``ry``. Zu große Radien kappt die Vorschrift je Achse
-    # auf die halbe Seite (SVG 1.1, Abschnitt 9.2): aus rx = ry = 50 wird eine Ellipse von 40 auf 20.
+    # auf die halbe Seite (SVG 1.1, Abschnitt 9.2): aus rx = ry = 50 wird eine
+    # Ellipse von 40 auf 20.
     assert _area('<rect width="40" height="20" ry="5"/>') == pytest.approx(exact, rel=1e-3)
     ellipse = math.pi * 20.0 * 10.0
     assert ellipse * 0.99 < _area('<rect width="40" height="20" rx="50"/>') <= ellipse

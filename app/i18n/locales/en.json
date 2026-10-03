@@ -7436,5 +7436,16 @@
   "{name} ändern": "Change {name}",
   "Einheit von {name}": "Unit of {name}",
   "{name} als Regler": "{name} as slider",
-  "Von {low} bis {high}": "From {low} to {high}"
+  "Von {low} bis {high}": "From {low} to {high}",
+  "Bricht die Erzeugung ab. Fertige Versuche bleiben zur Wahl.": "Cancels the generation. Finished tries remain available.",
+  "Das Modell ist fertig — „Übernehmen“ legt es ins Projekt.": "The model is ready — “Apply” adds it to the project.",
+  "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen stehen unten in der Statusleiste.": "The model is being generated in the background — progress and Cancel are in the status bar at the bottom.",
+  "Das erzeugte Modell liegt im Projekt. Strg+Z nimmt es zurück.": "The generated model is in the project. Ctrl+Z takes it back.",
+  "Die Erzeugung ist nicht gelungen. Warum und was hilft, steht im Dialog.": "The generation did not succeed. Why, and what helps, is in the dialog.",
+  "Die Erzeugung wurde abgebrochen.": "The generation was cancelled.",
+  "Die Erzeugung wurde abgebrochen. Die fertigen Versuche bleiben.": "The generation was cancelled. The finished tries remain.",
+  "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in dieses Projekt.": "A different project is open now. “Apply” adds the model to this project.",
+  "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in „{name}“.": "A different project is open now. “Apply” adds the model to “{name}”.",
+  "Modell wird erzeugt …": "Generating the model …",
+  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "“Apply” starts a new project with the model."
 }

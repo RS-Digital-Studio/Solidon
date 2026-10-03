@@ -4807,6 +4807,19 @@ class HistoryPanel(QWidget):
             self._open_groups.add(group)
         self._reflow_groups()
 
+    def open_group(self, transaction_id: str) -> None:
+        """Die Teilschritte dieser Transaktion offen zeigen — auch nach dem Neuaufbau.
+
+        Für eine Handlung, deren Schritte der Kunde gleich sehen soll: Nach
+        einer Erzeugung stand nur die zugeklappte Zeile „Modell erzeugen“ da,
+        und was aus dem Netz wurde (Größe, Reparatur, aufs Bett), sah erst, wer
+        aufklappte — in 0.5.1 standen die ersten Schritte offen (RM-456).
+        """
+        if transaction_id in self._open_groups:
+            return
+        self._open_groups.add(transaction_id)
+        self._reflow_groups()
+
     def _reflow_groups(self) -> None:
         """Zeichen und Sichtbarkeit an den gemerkten Zustand angleichen.
 
