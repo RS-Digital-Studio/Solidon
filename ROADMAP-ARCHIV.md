@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
+| 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
+| 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
 | 2026-10-02 | [RM-404: Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still (02.10.2026)](#rm-404-die-facettenausrichtung-aus-rm-225-greift-an-verschobenen-größeren-oder-fein-vernetzten-stl-nicht-still-02102026) |
 | 2026-10-02 | [RM-443: Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test (02.10.2026)](#rm-443-reste-aus-rm-399-die-halter-vorlage-setzt-immer-zwei-schlüssellöcher-exakte-halter-nur-im-test-02102026) |
 | 2026-10-02 | [RM-400: Schräg abschneiden (02.10.2026)](#rm-400-schräg-abschneiden-02102026) |
@@ -37171,6 +37174,106 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
 
 **Abschluss:** Alle Befunde erledigt. C-N1, D-N2, C-N2, D-N6, D-N7 und D-N1 wie oben beschrieben (Claude, Thread „Bedienung und KI“). D-N5: `style.expanded_width` ist die eine Rechnung der Anfangsbreite samt zugeklappter Formulare und Reiter, Ränder und Rollbalken — für Einstellungen, Ersteinrichtung, Operationsdialog und Druckdialog (dort neben der Reiterleiste); `_reserve_advanced_width`, die feste Randliste in `first_run` und die Rechnung in `op_dialog` sind ihr gewichen. Tests in `test_dialog_layout_regressions.py`: Einstellungen und Druckdialog in sechs Sprachen (Anfangsbreite = min(natürlich, Bildschirm), quer nur, was der Bildschirm abschneidet), die zugeklappte Rechnung gleich der aufgeklappten Messung. Fenstersonde am echten Fenster in sechs Sprachen: Einstellungen, Druckdialog über alle Reiter und *Quader anlegen* rollen nach dem Aufklappen nicht quer, die Breite bleibt. In main mit `97369c2f1`.
+
+## RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)
+
+<a id="rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026"></a>
+
+**RM-467, erster Lauf am 02.10.2026.** Geprüft: alle 77 Pins aus `constraints.txt` gegen PyPI
+  (Sicherheitsmeldungen aus dem Feld `vulnerabilities`, cp314-Räder für Windows x64, Linux x86_64,
+  Apple Silicon und Intel-Mac), CPython, die Actions-Pins, appimagetool, die AppImage-Laufzeit, die
+  Flatpak-Laufzeit und Inno Setup. Neu waren 18 Pakete und CPython 3.14.8; Actions, appimagetool
+  1.9.1, type2-runtime 20251108, Flatpak 26.08 und Inno Setup 7.1.0 sind aktuell.
+  **Übernommen:**
+  - `3c21802b9` — pypdf 6.19.0 (sechs Sicherheitsmeldungen, nur Handbuchwerkzeug), cryptography
+    50.0.2 mit OpenSSL 4.0.3 (Linux-Paket), manifold3d 3.5.4, networkx 3.7, vhacdx 0.1.0, fonttools
+    4.66.1, imageio 2.38.0, tifffile 2026.9.20, lazy-loader 0.6, pyparsing 3.3.3, uharfbuzz 0.56.2,
+    rubicon-objc 0.5.7, PyInstaller 6.22.3 mit Hooks 2026.8, ruff 0.16.10, mypy 2.4.0 mit librt 0.16.0
+    und ast_serialize 0.12.0; mypy 2.4 machte eine Typausnahme in `perceive/features.py` überflüssig.
+  - `301246160` — die Begründung von lxml nannte den 3MF-Export, gebraucht wurde es nur vom SVG-Import.
+  - `d84ff9695` — CI auf CPython 3.14.8 (RM-468) und fest auf `ubuntu-24.04`, weil `ubuntu-latest`
+    ab dem 19.10.2026 auf Ubuntu 26 wandert und Lizenzbeilage und glibc-Untergrenze des
+    Linux-Pakets still höbe; Wächter `test_linux_builds_on_the_ubuntu_its_licence_tables_name`,
+    Gegenprobe mit `ubuntu-latest` in `mac-netz.yml` rot.
+  - `71b7ba0a8` — RM-472 umgesetzt, lxml entfällt.
+  - `a4abca5f2` — Lizenzbeilage neu erzeugt (49 Laufzeitkomponenten).
+  - `8659ab060` — Abschnittsverweise des SVG-Lesers ohne „§“.
+  **Belege:** Vollstart 37060439101 auf dem Arbeitszweig: Kernsuite auf allen drei Systemen mit
+  denselben vier Fehlern wie main (Basislauf 37058800949: ein überholtes xfail zu RM-404, drei
+  französische Zahlenformate), dazu die Lizenzbeilage, behoben in `a4abca5f2`; 110 rote Fenstertests
+  stammen aus Test-Code-Drift auf main und liegen bei den zuständigen Threads. Kernlauf 37064825690
+  nach dem SVG-Leser: dieselben drei französischen Fälle wie main, dazu drei „§“-Verweise auf die
+  SVG-Vorschrift, die `test_plan_references.py` als Bauplanverweise las, behoben in `8659ab060`. UI-Audit (`tools/run_ui_audit.py` über die zwölf
+  Beispielprojekte und den Aufbau von Null) mit alter und neuer Umgebung: dieselben Befunde, alle 22
+  exportierten 3MF-Netze textgleich. Textsonde über den Renderer (Körper, Beschriftungen mit
+  Umlauten, Ø und °, fett, Achsenkreuz): Bild bitgleich, gleiche Textmaße.
+  **Ersetzbarkeit:** RM-470 gemessen und verworfen, RM-472 umgesetzt, RM-471 offen.
+  **Noch offen aus diesem Lauf:** der Paketbau auf vier Plattformen mit CPython 3.14.8 und
+  rubicon-objc 0.5.7 (RM-468, RM-469) — die Paketjobs warten auf grüne Fensterjobs.
+
+## RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)
+
+<a id="rm-470-marching-cubes-bleibt-bei-scikit-image-02102026"></a>
+<a id="rm-470"></a>
+
+**RM-470 — Marching Cubes ohne scikit-image.** Aus RM-467 (Auftrag Robert: Was eigener Code
+  oder eine andere Bibliothek besser kann, wird ersetzt). scikit-image dient allein
+  `measure.marching_cubes`: direkt in `geom/blend.py` und `geom/lattice.py`, mittelbar über
+  `trimesh.voxel.ops.matrix_to_marching_cubes` in `geom/boolean.py` (Voxelstufe, §17.2) und
+  `geom/hollow.py`. Dafür reisen scikit-image (22 MB installiert), tifffile und lazy-loader in
+  jedem Paket mit, und `pyproject.toml` klammert seinetwegen eine numpy-Warnung aus. Der bessere
+  Weg ist `manifold3d.Manifold.level_set`, schon Abhängigkeit: Marching Tetrahedra auf einem
+  raumzentrierten Gitter liefert garantiert mannigfaltige Netze, Marching Cubes an mehrdeutigen
+  Zellen nicht zwingend, und jede folgende Boolesche Op braucht die Mannigfaltigkeit. Gitter und
+  Verblendung haben eine geschlossene Feldfunktion, die Voxelstufen werten ihr Raster dreilinear
+  aus. Der Rückruf läuft je Gitterpunkt durch Python, darum zuerst am größten Voxelfall messen; ist
+  er zu langsam, ein eigenes vektorisiertes Marching Cubes neben `slice/_chain.pyx`.
+  `geom/displace.py` liest das Höhenbild dann über Pillow, das ohnehin mitkommt, und imageio
+  entfällt mit.
+  **Plattformfolgen:** vier Pakete weniger auf allen drei Plattformen und keine Abhängigkeit von
+  scikit-image-Rädern bei der nächsten Python-Fassung; `level_set` steckt in allen Zielrädern von
+  manifold3d. Lizenzliste, Lizenzbeilage und SBOM werden kürzer.
+  **Abnahme:** Geometrietests der vier Stellen mit Kennzahlen gegen den heutigen Stand (Volumen,
+  wasserdicht, Komponenten), Laufzeit am größten Voxelfall nicht schlechter; scikit-image, imageio,
+  tifffile und lazy-loader fehlen in `pyproject.toml`, `constraints.txt` und im Paket.
+
+**Abschluss:** Gemessen, scikit-image bleibt, weil es die Aufgabe besser löst. Am Gyroid
+  (Zelle 10 mm, Wand 1 mm, Würfel 40 mm; derselbe Rechner unter Last): `Manifold.level_set` mit
+  Python-Rückruf brauchte 0,70 / 2,15 / 6,42 s bei 1 / 0,5 / 0,33 mm Kantenlänge,
+  `skimage.measure.marching_cubes` 0,05 / 0,18 / 0,46 s — 13- bis 14-mal schneller — und lieferte
+  halb so viele Dreiecke (134 856 gegen 325 904 bei 1 mm). Bei 1 mm verlor `level_set` zudem die
+  Wand zwischen den Gitterpunkten (8 272 mm³ gegen 12 994 mm³ bei 0,5 mm). Ein eigenes Marching
+  Cubes in numpy erreicht die Cython-Fassung von scikit-image nicht. Der Preis bleibt: scikit-image,
+  tifffile und lazy-loader im Paket und die numpy-Ausnahme in `pyproject.toml`.
+
+## RM-472: Zeichnungsimport ohne lxml (02.10.2026)
+
+<a id="rm-472-zeichnungsimport-ohne-lxml-02102026"></a>
+<a id="rm-472"></a>
+
+**RM-472 — Zeichnungsimport ohne lxml.** Aus RM-467. lxml wird nur noch für den SVG-Import
+  gebraucht: `ingest/outline.py` ruft `trimesh.load_path`, und trimeshs SVG-Leser parst mit lxml.
+  Solidons 3MF-Leser und -Schreiber nutzen `xml.etree`. lxml bündelt libxml2 und libxslt, zwei
+  C-Bibliotheken mit regelmäßigen Sicherheitsmeldungen, für eine Datei, die `outline.py` vorher
+  ohnehin mit `xml.etree` öffnet (`_svg_defaults`). Der bessere Weg: die SVG-Elemente (`path`,
+  `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, verschachtelte `transform`) selbst
+  über `xml.etree` lesen, die Pfaddaten wie heute über svg.path, und daraus den `Path2D` bauen.
+  **Plattformfolgen:** ein natives Paket weniger auf allen drei Plattformen und weniger fremder
+  C-Code beim Öffnen einer fremden Datei; `xml.etree` kommt mit CPython und dessen Expat. DXF
+  bleibt bei trimesh.
+  **Abnahme:** die SVG-Fälle aus `tests/data/` ergeben dieselben Konturen (Anzahl, Fläche, Löcher);
+  lxml fehlt in allen Abhängigkeitsdateien und im Paket.
+
+**Abschluss:** `app/core/ingest/svg_drawing.py` liest SVG über `xml.etree` und baut dieselben
+  trimesh-Entitäten wie trimeshs Leser (`71b7ba0a8`); lxml fehlt in `pyproject.toml`,
+  `constraints.txt`, der Lizenzliste und der Lizenzbeilage. Dabei fielen trimeshs stille Fehler weg:
+  `rotate(90)` drehte um gut 107°, `skewX`/`skewY`, Ellipsen und abgerundete Ecken fehlten,
+  elliptische Bögen wurden Kreisbögen, Transformationen galten nur über zehn Ebenen, Inhalte aus
+  `defs`, `clipPath` und `marker` sowie ausgeblendete Ebenen kamen als Konturen an; `use` wird
+  eingesetzt, mit Schleifenschutz und 200 000 Grundformen als Grenze. Am Korpus von 321 SVG-Dateien
+  (Repository und Druckprojekte) gaben 171 dieselben Ringe wie trimesh mit lxml, die 150 übrigen
+  trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
+  rechnet jede Fläche von Hand.
 ## RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)
 
 <a id="rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026"></a>

@@ -7141,10 +7141,8 @@ def _memory_of(body: trimesh.Trimesh, lineage: _Lineage | None = None) -> _BodyM
     _MEMORIES[key] = memory
     farewell = weakref.finalize(body, _forget_body, key, memory)
     # Beim Beenden des Prozesses gibt es nichts mehr aufzuräumen — und die
-    # Modulvariablen sind dann womöglich schon abgebaut. (``atexit`` ist zur
-    # Laufzeit eine Eigenschaft der Klasse; der Stub führt sie als Feld neben
-    # leeren ``__slots__``, daher die Ausnahme für mypy.)
-    farewell.atexit = False  # type: ignore[misc]
+    # Modulvariablen sind dann womöglich schon abgebaut.
+    farewell.atexit = False
     return memory
 
 

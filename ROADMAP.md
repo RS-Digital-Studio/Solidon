@@ -46,11 +46,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
-| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Workflow-Pins und Lizenzbeilage auf 3.14.8, Lauf auf allen vier Paketplattformen, danach die Arbeitsplätze |
-| [RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf](#rm-469) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Pin heben und beide Mac-Jobs mit Fenster- und Rendererfällen fahren |
-| [RM-470 — Marching Cubes ohne scikit-image](#rm-470) | Plattformen, Pakete und Grafik | Aus RM-467: `Manifold.level_set` statt `skimage.measure.marching_cubes` an vier Stellen, zuerst am größten Voxelfall messen |
-| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Satz über uharfbuzz, Konturen über fontTools, eigene Schriftsuche je Plattform |
-| [RM-472 — Zeichnungsimport ohne lxml](#rm-472) | Plattformen, Pakete und Grafik | Aus RM-467: SVG über `xml.etree` und svg.path selbst lesen |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
+| [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
+| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Konturen über fontTools aus mitgelieferten Dateien, Satz über uharfbuzz, Kurven in `MAX_FACET_SAG`; DejaVu selbst mitliefern |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -172,6 +170,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
+| [RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe](#rm-487) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1; passive Anpassung darf vergrößern, solange der Kunde die Größe nicht gezogen hat |
+| [RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken](#rm-488) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.0; Inhaltsbreite an die Spalte binden |
+| [RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken](#rm-489) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch den größeren Farbpunkt; Symbolgröße und Listenhöhe festlegen |
+| [RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“](#rm-490) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.4; Zusatzangabe kurz oder als Tooltip, Spalte nach Inhalt |
+| [RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“](#rm-491) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 (Auffindbarkeit); Überschrift nennt den Inhalt, Palette findet die Optionen |
+| [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -195,7 +199,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
-| [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10.: 18 neue Fassungen, pypdf mit sechs Sicherheitsmeldungen zuerst |
+| [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -673,56 +677,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-468"></a>
 
-- [ ] **RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit.**
-  Aus RM-467, erster Lauf 02.10.2026. 3.14.8 erschien am 30.09.2026, `actions/python-versions`
-  führt es. Jedes Paket trägt den Interpreter seines CI-Baus, und alle drei Workflows nennen
-  `python-version: "3.14.7"`. Für Solidon zählen: `zipfile` begrenzt das Entpacken je Lesevorgang
-  jetzt auch für bzip2, LZMA und Zstandard (eine fremde 3MF ist ein ZIP-Archiv), `tarfile` schließt
-  einen Pfadausbruch beim Entpacken, der Windows-Bau bringt OpenSSL 3.5.9 für Update-Abfrage und
-  Support über HTTPS, dazu libexpat 2.8.5 und CVE-2026-15806 (`HTTPPasswordMgr`). Zurückgestellt bis
-  nach 0.5.2: Der Wechsel berührt die Tabellen der Lizenzbeilage (CPython- und OpenSSL-Fassungen in
-  `third_party_licenses.toml`, `make_sbom.WINDOWS_LIBFFI_VERSIONS`, `tests/test_sbom.py`), belegt
-  wird er erst von einem Lauf auf allen vier Paketplattformen, und auf den Arbeitsplätzen ersetzt
-  die Installation `python314.dll` unter jeder laufenden Umgebung.
-  **Umbau:** alle `python-version`-Pins; die drei Tabellen mit den Fassungen von OpenSSL, libffi und
-  Expat aus den CPython-Quellen zum Tag `v3.14.8`; `CLAUDE.md`, `README.md` und Kopf von
-  `constraints.txt`; danach die drei Arbeitsplätze, wenn keine Sitzung rechnet.
-  **Abnahme:** Taglauf oder Handstart mit allen Paketen grün, die Releaseakte nennt 3.14.8.
+- [~] **RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit.**
+  Aus RM-467, erster Lauf 02.10.2026. 3.14.8 (30.09.2026) begrenzt in `zipfile` das Entpacken
+  auch für bzip2, LZMA und Zstandard (eine fremde 3MF ist ein ZIP-Archiv), schließt einen
+  Pfadausbruch in `tarfile`, bringt unter Windows und macOS OpenSSL 3.5.9, libexpat 2.8.5 und die
+  Korrektur zu CVE-2026-15806. Jedes Paket trägt den Interpreter seines CI-Baus. Die drei
+  Workflows bauen seit `d84ff9695` mit 3.14.8, die Lizenzbeilage kennt 3.14.8 und OpenSSL 3.5.9
+  (belegt an `PCbuild/python.props` und `Mac/BuildScript/build-installer.py` zum Tag; libffi bleibt
+  3.4.4), Linux läuft fest auf `ubuntu-24.04`. Die Kernsuite zeigte damit auf Windows, Linux und
+  macOS dieselben Ergebnisse wie main (Handstart 37060439101 gegen 37058800949).
+  **Offen:** der Paketbau auf allen vier Plattformen samt Releaseakte — die Paketjobs warten auf
+  die Fensterjobs, die auf main rot sind —, danach die drei Arbeitsplätze. Deren Installation
+  ersetzt `python314.dll` unter jeder laufenden Umgebung und geht nur, wenn keine Sitzung rechnet.
+  **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
+  `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
 
 <a id="rm-469"></a>
 
-- [ ] **RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf.** Aus RM-467, erster Lauf
+- [~] **RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau.** Aus RM-467, erster Lauf
   02.10.2026. rubicon-objc kommt nur auf macOS über wgpu in den Baum, für die Metal-Oberfläche der
   Ansicht. 0.5.7 (30.09.2026) wirft für unbekannte C-Typen `ValueError` statt `AttributeError` und
-  verlangt ein funktionierendes `platform.processor()`, was im gefrorenen Mac-Paket nicht belegt
-  ist. Weder das lokale Tor noch die Push-CI (nur Ubuntu) fahren macOS. Zurückgestellt bis nach
-  0.5.2, damit der Mac-Renderer im Release nicht ungeprüft wechselt (vgl. RM-051).
-  **Umbau:** den Plattformpin in `constraints.txt` heben (`check_env --freeze` auf Windows behält
-  ihn, also von Hand) und einen Lauf mit beiden Mac-Jobs samt Fenster- und Rendererfällen fahren.
-  **Abnahme:** beide Mac-Jobs grün, die Ansicht des gebauten Mac-Pakets zeichnet.
-
-<a id="rm-470"></a>
-
-- [ ] **RM-470 — Marching Cubes ohne scikit-image.** Aus RM-467 (Auftrag Robert: Was eigener Code
-  oder eine andere Bibliothek besser kann, wird ersetzt). scikit-image dient allein
-  `measure.marching_cubes`: direkt in `geom/blend.py` und `geom/lattice.py`, mittelbar über
-  `trimesh.voxel.ops.matrix_to_marching_cubes` in `geom/boolean.py` (Voxelstufe, §17.2) und
-  `geom/hollow.py`. Dafür reisen scikit-image (22 MB installiert), tifffile und lazy-loader in
-  jedem Paket mit, und `pyproject.toml` klammert seinetwegen eine numpy-Warnung aus. Der bessere
-  Weg ist `manifold3d.Manifold.level_set`, schon Abhängigkeit: Marching Tetrahedra auf einem
-  raumzentrierten Gitter liefert garantiert mannigfaltige Netze, Marching Cubes an mehrdeutigen
-  Zellen nicht zwingend, und jede folgende Boolesche Op braucht die Mannigfaltigkeit. Gitter und
-  Verblendung haben eine geschlossene Feldfunktion, die Voxelstufen werten ihr Raster dreilinear
-  aus. Der Rückruf läuft je Gitterpunkt durch Python, darum zuerst am größten Voxelfall messen; ist
-  er zu langsam, ein eigenes vektorisiertes Marching Cubes neben `slice/_chain.pyx`.
-  `geom/displace.py` liest das Höhenbild dann über Pillow, das ohnehin mitkommt, und imageio
-  entfällt mit.
-  **Plattformfolgen:** vier Pakete weniger auf allen drei Plattformen und keine Abhängigkeit von
-  scikit-image-Rädern bei der nächsten Python-Fassung; `level_set` steckt in allen Zielrädern von
-  manifold3d. Lizenzliste, Lizenzbeilage und SBOM werden kürzer.
-  **Abnahme:** Geometrietests der vier Stellen mit Kennzahlen gegen den heutigen Stand (Volumen,
-  wasserdicht, Komponenten), Laufzeit am größten Voxelfall nicht schlechter; scikit-image, imageio,
-  tifffile und lazy-loader fehlen in `pyproject.toml`, `constraints.txt` und im Paket.
+  verlangt ein funktionierendes `platform.processor()`. Der Pin steht seit `3c21802b9` auf 0.5.7;
+  die Kernsuite auf macos-latest lief damit wie main, die Fensterverträge auf macOS zeigen dieselben
+  Fehler wie auf Windows und Linux (Handstart 37060439101).
+  **Offen:** beide Mac-Paketjobs (Apple Silicon und `macos-26-intel`, das nur paketiert wird) und
+  ein Blick auf die Ansicht im gebauten Paket; sie laufen, sobald die Fensterjobs grün sind.
+  **Abnahme:** beide Mac-Pakete gebaut, die Ansicht des Mac-Pakets zeichnet.
 
 <a id="rm-471"></a>
 
@@ -730,34 +710,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
   (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
   reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
-  kiwisolver, cycler, pyparsing, python-dateutil und six mit. TextPath setzt ohne Shaping: keine
-  Ligaturen, keine kontextabhängigen Formen, Kerning nur aus der alten `kern`-Tabelle. Der bessere
-  Weg: uharfbuzz für den Satz (kommt mit pygfx ohnehin ins Paket) und fontTools für die
-  Glyphenkonturen über einen Pen (kommt heute über matplotlib mit), dazu eine eigene Schriftsuche
-  über die Namenstabellen.
-  **Plattformfolgen:** Die Schriftsuche braucht je Plattform ihre Ordner: Windows
-  `%WINDIR%\Fonts` und den Nutzerordner, macOS `/System/Library/Fonts`, `/Library/Fonts` und
-  `~/Library/Fonts`, Linux fontconfig oder die XDG-Ordner, im Flatpak zusätzlich `/run/host/fonts`;
-  die mitgelieferten DejaVu-Schriften bleiben der Rückfall. uharfbuzz und fontTools wandern in die
-  Gruppe `geom`, weil der Kern sie ohne Oberfläche braucht. Sieben Pakete weniger.
-  **Abnahme:** Schriftzugtests an Netz und exaktem Kern mit unveränderten Kennzahlen für
-  lateinischen Text, ein Test mit Ligatur, je Plattform ein Fall der Schriftsuche nach Familie und
-  Schnitt; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
-
-<a id="rm-472"></a>
-
-- [ ] **RM-472 — Zeichnungsimport ohne lxml.** Aus RM-467. lxml wird nur noch für den SVG-Import
-  gebraucht: `ingest/outline.py` ruft `trimesh.load_path`, und trimeshs SVG-Leser parst mit lxml.
-  Solidons 3MF-Leser und -Schreiber nutzen `xml.etree`. lxml bündelt libxml2 und libxslt, zwei
-  C-Bibliotheken mit regelmäßigen Sicherheitsmeldungen, für eine Datei, die `outline.py` vorher
-  ohnehin mit `xml.etree` öffnet (`_svg_defaults`). Der bessere Weg: die SVG-Elemente (`path`,
-  `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, verschachtelte `transform`) selbst
-  über `xml.etree` lesen, die Pfaddaten wie heute über svg.path, und daraus den `Path2D` bauen.
-  **Plattformfolgen:** ein natives Paket weniger auf allen drei Plattformen und weniger fremder
-  C-Code beim Öffnen einer fremden Datei; `xml.etree` kommt mit CPython und dessen Expat. DXF
-  bleibt bei trimesh.
-  **Abnahme:** die SVG-Fälle aus `tests/data/` ergeben dieselben Konturen (Anzahl, Fläche, Löcher);
-  lxml fehlt in allen Abhängigkeitsdateien und im Paket.
+  kiwisolver, cycler, pyparsing, python-dateutil und six mit. Den Satz macht matplotlib 3.11 schon
+  über libraqm und damit HarfBuzz (`_text_helpers.layout`); uharfbuzz kommt mit pygfx ohnehin ins
+  Paket und setzt gleich. Gemessen am 02.10.2026: `TextPath.to_polygons` hält `MAX_FACET_SAG` ab
+  etwa 10 mm Schrifthöhe nicht mehr — an DejaVu Sans „Og“ 0,074 mm Sehnenfehler bei 10 mm,
+  0,23 mm bei 50 mm.
+  **Umbau:** Konturen über fontTools aus den mitgelieferten Dateien, Satz über uharfbuzz, Kurven
+  mit eigenem Sehnenfehler in `MAX_FACET_SAG`, die exakten Kurven für `brep.lettering` aus
+  denselben Kontrollpunkten. Eine Schriftsuche je Plattform entfällt, denn angeboten werden nur
+  mitgelieferte Familien; die drei DejaVu-Familien (zwölf Dateien) stammen heute aus matplotlib
+  und kommen dann selbst ins Paket, mit Lizenztext und Rechteeintrag. uharfbuzz und fontTools
+  wandern in die Gruppe `geom`.
+  **Plattformfolgen:** keine — Dateien statt Systemschriften, alle drei Pakete gleich; netto
+  rund 19 MB und sieben Pakete weniger.
+  **Abnahme:** Glyphenlagen gegen matplotlib innerhalb 0,002 mm für alle acht Familien und
+  Schnitte, Flächen der Schriftzüge an Netz und exaktem Kern gegen den heutigen Stand, Sehnenfehler
+  in `MAX_FACET_SAG`; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -3370,7 +3338,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
   Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
-  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcodeestm463_regression.md`.
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode
+est
+m463_regression.md`.
 
 <a id="rm-464"></a>
 
@@ -4948,6 +4918,102 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
+<a id="rm-487"></a>
+
+- [ ] **RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe.**
+  Versionsvergleich 0.5.2 (02.10.2026), Oberfläche offscreen, `grab()`. **Regression gegenüber
+  v0.5.1.** Erststart: Nach der Programmerkennung (3–10 s) wächst der Inhalt um 56 px, der Rahmen
+  nicht (v0.5.1: 680×651 → 723); „Zusatzprogramme verwalten …“ und „Chat einrichten …“ liegen zu
+  0 % im Ausschnitt, ein Rollbalken erscheint. „Modell erzeugen“ ohne ComfyUI: 480×243 statt
+  480×293, der Knopf „Zusätzliche Programme …“ liegt 32 px unter dem Rand, der Kunde liest „ohne das
+  bleibt dieser Weg zu“ und sieht keinen Ausweg (Regel 17). Gemeinsame Ursache: Inhalt aus einer
+  Hintergrundprüfung zählt als passive Anpassung, die den Rahmen seit `b837a73f8`/`2a0bbf121` nie
+  vergrößert. Trifft jeden Dialog, der nach dem Öffnen Inhalt nachreicht.
+  **Stellen:** `app/ui/style.py:515` (`ContentSizeFit.fit`), `app/ui/first_run.py:612`, `:730`,
+  `app/ui/generate_dialog.py:509–528`, `:632`, `:1231`.
+  **Fix (allgemein):** Solange der Kunde die Größe nicht selbst gezogen hat, darf eine passive
+  Anpassung den Rahmen bis zur verfügbaren Schirmhöhe vergrößern; nur Schrumpfen und das
+  Überschreiben einer Nutzergröße bleiben gesperrt.
+  **Abnahme:** Wächter an Erststart, „Modell erzeugen“ und einem dritten Dialog mit
+  nachgereichtem Inhalt: nach Eingang der Prüfung liegt jeder Knopf vollständig im Ausschnitt;
+  eine gezogene Nutzergröße bleibt erhalten. Bauplan §2.8.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U3, U6), Bilder in `regression-0.5.2\ui\`.
+
+<a id="rm-488"></a>
+
+- [ ] **RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.0** (seit v0.5.1). Nach Klick
+  auf ein Merkmal (z. B. „Bohrung 1“) ist der Inhalt breiter als die Spalte: Die Kopfzeile wird
+  rechts gekappt statt umzubrechen, alle Zahlen- und Auswahlfelder enden ohne Pfeile am Rand, unten
+  liegt ein waagrechter Rollbalken; die „i“-Knöpfe sind nicht mehr zu sehen. Gilt bei 1920×1080
+  und 1280×720, beide Schemata. v0.4.4 und v0.5.0 passten in die Spalte.
+  **Stellen:** `app/ui/panels.py:6848` (`FeaturePanel`, Rollbereich), `:6958`; eingeführt
+  zwischen v0.5.0 und v0.5.1 (Kandidaten `e8013c5cc`, `a255b14f8`, `5a90d4361`).
+  **Fix (allgemein):** Mindestbreite des Inhalts auf die Spaltenbreite begrenzen (Kopf mit
+  Umbruch, Felder mit wachsender statt fester Mindestbreite), waagrechten Balken abschalten.
+  **Abnahme:** an Bohrung, Fläche und Kante bei 1280 und 1920, beide Schemata: `contentsRect`
+  jedes Felds liegt im Ausschnitt, kein waagrechter Balken. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U5), Bilder in `regression-0.5.2\ui\`.
+
+<a id="rm-489"></a>
+
+- [ ] **RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1.** Seit `e969f88ce` steht
+  die Farbe als großer runder Punkt in der Filamentliste; die Zeile wird höher und breiter. Dunkel:
+  Die Liste bekommt einen waagrechten und einen senkrechten Balken, „Im Regal“ verschwindet. Hell:
+  Die Liste passt, dafür wird der Objektbaum gekürzt („Rechte Seite“ fehlt). Bei 1280×720 ebenso
+  ein waagrechter Balken. v0.5.0 und v0.5.1 zeigten alle Baumzeilen und beide Überschriften.
+  **Stellen:** `app/ui/filament_picker.py:211` (`swatch`), `:1966–1995` (`_fit` ohne waagrechten
+  Balken).
+  **Fix (allgemein):** Symbolgröße der Liste auf die bisherige Zeilenhöhe festlegen, lange
+  Einträge kürzen statt waagrecht rollen, `_fit` rechnet einen sichtbaren Balken mit.
+  **Abnahme:** drei Modelle mit 1, 2 und 4 Filamenten bei 1920×1080 und 1280×720, beide Schemata:
+  alle Baumzeilen und beide Überschriften sichtbar, kein waagrechter Balken. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U1), Bilder in `regression-0.5.2\ui\`.
+
+<a id="rm-490"></a>
+
+- [ ] **RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.4.4** (seit v0.5.0). Die neue
+  Zusatzangabe „eingepasst/gemessen“ macht die Spalte zu breit: „Ø5,20 mm · ein…“, „3915 mm² · ge…“
+  auch bei 1920×1080; bis v0.4.4 stand „Ø5,19 mm“ vollständig. Eine Angabe, die nie ganz zu lesen
+  ist, sagt nichts.
+  **Stellen:** Objektbaum in `app/ui/panels.py` (Spalte „Maße“).
+  **Fix (allgemein):** Zusatzangabe als kurzes Zeichen mit Tooltip oder Spalte auf den Inhalt
+  bemessen, Maß zuerst nie kürzen.
+  **Abnahme:** Bohrung, Fläche und gemessene Kante bei 1280 und 1920: Maß vollständig lesbar,
+  Zusatzangabe über Tooltip oder Zeichen erreichbar (zweite Kodierung, Regel 18). Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U2), Bilder in `regression-0.5.2\ui\`.
+
+<a id="rm-491"></a>
+
+- [ ] **RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.1** (Auffindbarkeit, aus
+  `48ffcf145`; anderer Ort als „Bausteine verwalten“). Navigation, Differenzansicht,
+  Tastenbelegung, Chat-Vorschläge ohne Nachfrage, KI-Hinweis, Fernsteuerung (MCP) und Port liegen
+  eingeklappt; nichts verrät von außen, dass dort die Tastenbelegung oder die Fernsteuerung steht.
+  **Stellen:** `app/ui/settings_dialog.py:586`.
+  **Fix (allgemein):** Die Überschrift eingeklappter Bereiche nennt ihren Inhalt (z. B. „Maus,
+  Tastatur, Chat, Fernsteuerung“), der Bereich merkt sich seinen Zustand, und die Befehlspalette
+  findet jede Einzeloption.
+  **Abnahme:** Einstellungen, „Bausteine verwalten“ und ein dritter eingeklappter Bereich nennen
+  ihren Inhalt; Palette findet „Tastenbelegung“ und „Fernsteuerung“. Bauplan §2.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U4), Bilder in `regression-0.5.2\ui\`.
+
+<a id="rm-492"></a>
+
+- [ ] **RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.1.2**, gegenüber v0.5.1
+  besser. `open_path(plate_holes.stl)` bis die Sitzung ruht (Median aus vier Läufen, F0FF, darin
+  1 s feste Wartezeit der Sonde): v0.1.2 1,31 s, v0.3.5 6,50, v0.4.4 8,68, v0.5.0 3,69, v0.5.1
+  2,92, heute 2,76 s. v0.1.2 erkannte weniger (keine Angaben „eingepasst/gemessen“, kein
+  Filamentabschnitt).
+  **Fix (allgemein):** Zeitanteile je Schritt messen; trägt die Erkennung den Hauptteil, Bild und
+  Bedienung vor ihrem Ende freigeben und den Rest nachreichen (§2.8).
+  **Abnahme:** an drei Modellen (klein, mittel, groß) Zeit bis bedienbar unter v0.5.1 und im
+  Budget §31, Erkennung kommt nach. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U7), Bilder in `regression-0.5.2\ui\`.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5510,6 +5576,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   CI-Wächter „Neueste Versionen“ läuft nur öffentlich, dieser Lauf lokal und regelmäßig.
   **Abnahme je Lauf:** geprüft, übernommen und zurückgestellt mit Commit im Archiv; der Punkt
   bleibt offen, solange der Auftrag gilt.
+  Erster Lauf: [02.10.2026](ROADMAP-ARCHIV.md#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026).
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

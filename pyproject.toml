@@ -52,9 +52,6 @@ geom = [
   # dort direkt importiert, nicht nur über scikit-image; Untergrenze wie dort.
   # BSD-2.
   "imageio>=2.33",
-  # 3MF ist das Format, das Slicer bevorzugen, und es braucht einen
-  # XML-Schreiber (§29). BSD-3.
-  "lxml>=5.0",
   # V-HACD sagt dem Auto Split, wo ein Körper von selbst auseinanderfällt
   # (§22.3). Zur Laufzeit optional: ohne es antwortet die Ebenensuche allein. BSD-3.
   "vhacdx>=0.0.8",

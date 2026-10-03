@@ -9,10 +9,10 @@ Modellierprogramm. Das hier ist der kurze Weg.
 Löcher kommen als Löcher heraus. Das klingt selbstverständlich und ist der
 Teil, der in naiven Umsetzungen schiefgeht — eine Kontur in einer anderen
 Kontur ist ein Loch, und das entscheidet die Verschachtelung, nicht die
-Reihenfolge, in der die Datei sie aufzählt. Gelesen wird die Zeichnung von
-trimesh; verschachtelt wird seit dem 24.08.2026 hier, über shapely — trimeshs
-eigener Weg (``polygons_full``) läuft durch ``rtree``, und warum das Paket den
-Prozess nicht mehr betreten darf, steht an
+Reihenfolge, in der die Datei sie aufzählt. Eine SVG liest
+:mod:`app.core.ingest.svg_drawing`, eine DXF trimesh; verschachtelt wird hier,
+über shapely — trimeshs eigener Weg (``polygons_full``) läuft durch ``rtree``,
+und warum das Paket den Prozess nicht mehr betreten darf, steht an
 :func:`app.core.geom.mesh.on_surface`.
 
 **Einheiten.** SVG hat keine verlässliche: eine Datei sagt 100 und meint
@@ -29,7 +29,6 @@ import io
 import json
 from dataclasses import dataclass
 from typing import Any
-from xml.etree import ElementTree as ET
 
 import numpy as np
 
@@ -44,13 +43,14 @@ from app.core.errors import PROGRAMMING_ERRORS, ValidationError
 # ``geom.section``.
 from app.core.geom import enclosure
 from app.core.geom.mesh import MeshData, concatenated
+from app.core.ingest import svg_drawing
 from app.core.log import get_logger
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Was sich hier lesen lässt. Beides kommt aus den Pfad-Ladern von trimesh.
+#: Was sich hier lesen lässt.
 OUTLINE_SUFFIXES: tuple[str, ...] = (".svg", ".dxf")
 
 
@@ -74,26 +74,6 @@ class OutlineProfile:
 
 def is_outline(suffix: str) -> bool:
     return suffix.lower() in OUTLINE_SUFFIXES
-
-
-def _svg_defaults(payload: bytes) -> bytes:
-    """Ergänzt SVG-Standardwerte, die der Pfadleser ausdrücklich erwartet.
-
-    An Rechtecken bedeutet ein fehlendes x oder y jeweils null. Die Kopie
-    behält alle vorhandenen Werte und Transformationen; die eingebettete
-    Originalquelle bleibt unverändert. ElementTree lädt keine externen
-    Entitäten und begrenzt die Expansion interner Entitäten selbst.
-    """
-    root = ET.fromstring(payload)
-    changed = False
-    for element in root.iter():
-        if element.tag not in ("rect", "{http://www.w3.org/2000/svg}rect"):
-            continue
-        for name in ("x", "y"):
-            if name not in element.attrib:
-                element.set(name, "0")
-                changed = True
-    return ET.tostring(root, encoding="utf-8") if changed else payload
 
 
 def nested_polygons(rings: list[np.ndarray]) -> list[Any]:
@@ -153,8 +133,10 @@ def read_profiles(payload: bytes, suffix: str) -> tuple[OutlineProfile, ...]:
 
     enclosure.install()
     try:
-        source = _svg_defaults(payload) if suffix.lower() == ".svg" else payload
-        path = trimesh.load_path(io.BytesIO(source), file_type=suffix.lower().lstrip("."))
+        if suffix.lower() == ".svg":
+            path = trimesh.load_path(svg_drawing.path_arguments(payload))
+        else:
+            path = trimesh.load_path(io.BytesIO(payload), file_type=suffix.lower().lstrip("."))
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # jeder Parser scheitert auf seine eigene Art
