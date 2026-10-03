@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-505: Mac-Pakete 0.5.1 beenden sich kurz nach dem Start (03.10.2026)](#rm-505-mac-pakete-051-beenden-sich-kurz-nach-dem-start-03102026) |
 | 2026-10-03 | [RM-484: PrusaSlicers Warnungen erreichen den Bericht, und der Raftabstand ist eigens wählbar (03.10.2026)](#rm-484-prusaslicers-warnungen-erreichen-den-bericht-und-der-raftabstand-ist-eigens-wählbar-03102026) |
 | 2026-10-03 | [RM-305: Weitere Importe nutzen auch Druckplatten hinter der zwölften (03.10.2026)](#rm-305-weitere-importe-nutzen-auch-druckplatten-hinter-der-zwölften-03102026) |
 | 2026-10-03 | [RM-304: Weitere Modelle beachten die Filamente der belegten Druckplatten (03.10.2026)](#rm-304-weitere-modelle-beachten-die-filamente-der-belegten-druckplatten-03102026) |
@@ -39108,6 +39109,39 @@ Die positiven Kontrollen sind keine Zusage für ein insgesamt warnungsfreies Mod
 Der betroffene Kernlauf über `tools/affected_tests.py` endet mit **20.384 bestanden, 107 übersprungen, 917,28 s, Exit 0** (`solidon-A-483-affected.txt`). Ruff, Format (1086 Dateien) und mypy (337 Quelldateien) bestehen. Die Korrektur ist in `b3fcceb4daad85cd66f530c5f2836ba840e3eec9` enthalten. Die anschließende Dokument- und Katalogprüfung besteht mit 275 Fällen, vier übersprungen und einem zurückgestellten Fensterfall, Exit 0. Fenster-, Renderer- und Leistungsprüfungen bleiben Releasearbeit.
 
 Changelog in allen sechs Sprachen, weil Ursache, Teilname und nutzbare Rückwege Kunden veröffentlichter Versionen betreffen. Commit: „Eine leere erste Schicht bekommt eine Meldung mit Teil und passenden Handlungen“.
+
+## RM-505: Mac-Pakete 0.5.1 beenden sich kurz nach dem Start (03.10.2026)
+
+<a id="rm-505-mac-pakete-051-beenden-sich-kurz-nach-dem-start-03102026"></a>
+<a id="rm-505"></a>
+
+**RM-505 — Solidon 0.5.1 beendet sich auf jedem Mac 20 bis 40 Sekunden nach dem Start.**
+  Kundenmeldung Intel-Mac, macOS 26.5: Das Programm startete zunächst nicht, unter
+  *Datenschutz & Sicherheit* fand sich keine Freigabe; nach `codesign --force --deep --sign -`
+  erschien kurz der Konfigurationsbildschirm (der Dialog *Erste Schritte*), dann endete es.
+
+**Befund (Lauf 37150755506, veröffentlichte Pakete):** Beide Pakete sind ordentlich
+signiert und notarisiert (`spctl`: „Notarized Developer ID“, Ticket geheftet) — Gatekeeper
+war nicht die Ursache. Auf macOS 26 ARM endet die App nach 23 bis 41 s mit `EXC_BREAKPOINT`
+(SIGTRAP) im Faden `spacemouse-search`: `hid_enumerate` → `IOHIDManagerSetDeviceMatchingMultiple`
+→ `IOHIDDeviceScheduleWithRunLoop` → `CFRunLoopAddSource` → `__CFCheckCFInfoPACSignature`.
+cython-hidapi ruft `hid_init` beim Import, und hidapi hängt den HID-Manager dabei an
+`CFRunLoopGetCurrent()`. Seit `578d1eb71` (28.09.2026, „Die Suche nach der 3D-Maus hält das
+Fenster nicht mehr an“, nur in v0.5.1) lief jede Suche in einem eigenen, danach beendeten
+Faden — ab der zweiten Suche zeigte der Manager auf einen freigegebenen Run Loop. Das trifft
+jeden Mac, mit oder ohne 3D-Maus; auf Intel als SIGSEGV.
+
+**Fix:** `spacemouse._SearchThread` — alle Suchen im selben Faden, der nie endet; ein Fehler
+wird eine leere Suche. Gegenprobe auf beiden Macs (Lauf 37152322275): der neue Test
+`test_repeated_searches_with_the_real_hid_module_keep_the_process_alive` stürzt mit dem
+Stand von v0.5.1 ab (Exit −11 auf ARM und Intel), mit dem Fix laufen alle 62 Kerntests der
+Datei grün.
+
+**Damit es nicht wiederkommt:** Kein Schritt hatte das ausgelieferte Programm je gestartet.
+Seither startet jeder Release-Lauf jedes Kundenpaket (`tools/check_frozen_start.py`,
+`app/ui/start_check.py`, Regel in `auslieferung.md`), über frisch gebaute Pakete aller vier
+Plattformen vorab gefahren (Diagnosezweig, danach entfernt). Offen bleibt allein die
+Rückmeldung des Kunden auf seinem Intel-Mac nach 0.5.2 (RM-104).
 
 ## RM-484: PrusaSlicers Warnungen erreichen den Bericht, und der Raftabstand ist eigens wählbar (03.10.2026)
 
