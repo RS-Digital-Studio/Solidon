@@ -48,7 +48,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
 | [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
-| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Konturen über fontTools aus mitgelieferten Dateien, Satz über uharfbuzz, Kurven in `MAX_FACET_SAG`; DejaVu selbst mitliefern |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -695,29 +694,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Offen:** beide Mac-Paketjobs (Apple Silicon und `macos-26-intel`, das nur paketiert wird) und
   ein Blick auf die Ansicht im gebauten Paket; sie laufen, sobald die Fensterjobs grün sind.
   **Abnahme:** beide Mac-Pakete gebaut, die Ansicht des Mac-Pakets zeichnet.
-
-<a id="rm-471"></a>
-
-- [ ] **RM-471 — Schriftzüge ohne matplotlib.** Aus RM-467. matplotlib dient allein den
-  Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
-  (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
-  reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
-  kiwisolver, cycler, pyparsing, python-dateutil und six mit. Den Satz macht matplotlib 3.11 schon
-  über libraqm und damit HarfBuzz (`_text_helpers.layout`); uharfbuzz kommt mit pygfx ohnehin ins
-  Paket und setzt gleich. Gemessen am 02.10.2026: `TextPath.to_polygons` hält `MAX_FACET_SAG` ab
-  etwa 10 mm Schrifthöhe nicht mehr — an DejaVu Sans „Og“ 0,074 mm Sehnenfehler bei 10 mm,
-  0,23 mm bei 50 mm.
-  **Umbau:** Konturen über fontTools aus den mitgelieferten Dateien, Satz über uharfbuzz, Kurven
-  mit eigenem Sehnenfehler in `MAX_FACET_SAG`, die exakten Kurven für `brep.lettering` aus
-  denselben Kontrollpunkten. Eine Schriftsuche je Plattform entfällt, denn angeboten werden nur
-  mitgelieferte Familien; die drei DejaVu-Familien (zwölf Dateien) stammen heute aus matplotlib
-  und kommen dann selbst ins Paket, mit Lizenztext und Rechteeintrag. uharfbuzz und fontTools
-  wandern in die Gruppe `geom`.
-  **Plattformfolgen:** keine — Dateien statt Systemschriften, alle drei Pakete gleich; netto
-  rund 19 MB und sieben Pakete weniger.
-  **Abnahme:** Glyphenlagen gegen matplotlib innerhalb 0,002 mm für alle acht Familien und
-  Schnitte, Flächen der Schriftzüge an Netz und exaktem Kern gegen den heutigen Stand, Sehnenfehler
-  in `MAX_FACET_SAG`; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 

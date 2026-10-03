@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
 | 2026-10-02 | [RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)](#rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026) |
@@ -37758,3 +37759,45 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Nachgestellt am pegboard-STEP und an `plate_holes.stl`: Im Bedienweg des Kunden erscheint der Satz nach *Bohrung ändern* im Auswahlfenster nicht (Feld ändern, Vorschau, *Übernehmen*; danach drei Sekunden kein Band). Im Versionsvergleich stammte das Band aus dem Schritt davor: Der Prüfstand löste in der Karte rechts den seit RM-360 verborgenen Knopf *Merkmal ändern* per `click()` aus, ließ den Dialog ohne Vorschau offen, und dessen Band stand noch beim Übernehmen im Auswahlfenster. Die Befehlspalette sperrt *Merkmal ändern* an einer Bohrung, im Menü steht es nicht. Behoben ist die Sackgasse dahinter für jeden Aufrufer: Eine Merkmalsoperation, die die Art des gewählten Merkmals nicht annimmt, öffnet die Schwester derselben Zeile (`MainWindow._sister_for_the_chosen_feature` über `actions.instead_of`) — *Merkmal ändern* an einer Bohrung öffnet *Bohrung ändern* an dieser Bohrung, statt eines Dialogs, dessen einziger Satz „Dafür ist „Bohrung ändern“ da“ war; an einem Merkmal, das sie annimmt, bleibt die Operation, was sie ist. Test `test_operation_ui.py::test_changing_a_hole_through_the_wrong_sister_opens_the_right_one`, ohne die Umleitung rot (Gegenprobe). Fenstersonde am echten Fenster am pegboard-STEP: 4 von 4, der Dialog ist *Bohrung ändern*, das Band nennt den Grund („Die Bohrung hat bereits diesen Durchmesser.“). Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)
+
+<a id="rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026"></a>
+<a id="rm-471"></a>
+
+**RM-471 — Schriftzüge ohne matplotlib.** Aus RM-467. matplotlib dient allein den
+  Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
+  (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
+  reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
+  kiwisolver, cycler, pyparsing, python-dateutil und six mit. Den Satz macht matplotlib 3.11 schon
+  über libraqm und damit HarfBuzz (`_text_helpers.layout`); uharfbuzz kommt mit pygfx ohnehin ins
+  Paket und setzt gleich. Gemessen am 02.10.2026: `TextPath.to_polygons` hält `MAX_FACET_SAG` ab
+  etwa 10 mm Schrifthöhe nicht mehr — an DejaVu Sans „Og“ 0,074 mm Sehnenfehler bei 10 mm,
+  0,23 mm bei 50 mm.
+  **Umbau:** Konturen über fontTools aus den mitgelieferten Dateien, Satz über uharfbuzz, Kurven
+  mit eigenem Sehnenfehler in `MAX_FACET_SAG`, die exakten Kurven für `brep.lettering` aus
+  denselben Kontrollpunkten. Eine Schriftsuche je Plattform entfällt, denn angeboten werden nur
+  mitgelieferte Familien; die drei DejaVu-Familien (zwölf Dateien) stammen heute aus matplotlib
+  und kommen dann selbst ins Paket, mit Lizenztext und Rechteeintrag. uharfbuzz und fontTools
+  wandern in die Gruppe `geom`.
+  **Plattformfolgen:** keine — Dateien statt Systemschriften, alle drei Pakete gleich; netto
+  rund 19 MB und sieben Pakete weniger.
+  **Abnahme:** Glyphenlagen gegen matplotlib innerhalb 0,002 mm für alle acht Familien und
+  Schnitte, Flächen der Schriftzüge an Netz und exaktem Kern gegen den heutigen Stand, Sehnenfehler
+  in `MAX_FACET_SAG`; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
+
+**Abschluss:** Umgesetzt in `25d5536ee`. `app/core/geom/glyphs.py` setzt über uharfbuzz und lässt
+  HarfBuzz die Umrisse zeichnen; `label_ops.outlines` und `brep.lettering` nehmen dieselben
+  Konturen. matplotlib, contourpy, cycler, kiwisolver, pyparsing, python-dateutil und six fehlen in
+  `pyproject.toml`, `constraints.txt`, der Lizenzliste und der Lizenzbeilage (41 statt 49
+  Laufzeitkomponenten). Die DejaVu-Familien liegen selbst bei, Fassung 2.35 bitgleich zur
+  Veröffentlichung, Lizenztext von der Primärquelle, Bitstream-Vera freigegeben. Der Sehnenfehler
+  folgt der Schriftgröße (ein Tausendstel, nie über `MAX_FACET_SAG`), die Sehnen bleiben unter drei
+  Prozent davon, damit die Erkennung fast gerade Kurvenstrecken nicht als Ebene liest (der untere
+  Bogen einer „3“ zerfiel sonst). Gemessen: Fläche bei jeder Größe höchstens 0,07 % neben der
+  exakten Glyphenfläche, matplotlib bei 3 mm bis 2,41 % darunter; Glyphenlage am Ende einer
+  50-mm-Zeile 0,04 mm genauer; exakte Schriftkörper höchstens 0,044 % anders; rund doppelt so
+  viele Punkte. Je Zeile in `konzepte/nachweise-bibliotheken-2026-10/`. UI-Audit der zwölf
+  Beispielprojekte im echten Fenster gegen origin/main ohne den Umbau: dieselben Befunde, 18 von
+  22 Exporten textgleich, anders nur die beiden mit Schrift (Lettern des Schilds +1,6 % Volumen).
+  Entwicklungstor 20 351 grün. Der volle CI-Lauf auf allen Plattformen steht unter RM-468.
