@@ -279,6 +279,12 @@ class EvaluationResult:
     ``progress`` und ``cancelled`` sie im Hintergrund nach — die Schritte
     selbst treffen dort den Cache, es rechnet nur die Erkennung. Leer heißt:
     Der Merker kannte alles, oder es gab nichts zu erkennen."""
+    reads_quality: bool = True
+    """Ob ein Schritt dieses Laufs nach der Güte gefragt hat (``ctx.quality``).
+
+    Ohne eine solche Frage ist der Entwurf schon die feine Rechnung, und der
+    Export schreibt das gezeigte Ergebnis (RM-494: am Lochbrett-STEP 0,04 s
+    statt 5 s Nachrechnen). Im Zweifel ``True``: lieber einmal zu fein."""
     question_reference: tuple[SceneObject, FeatureId] | None = None
     """Das bisherige Merkmal einer offenen Zuordnungsfrage samt seinem Körper.
 
@@ -563,6 +569,7 @@ def _evaluate(
             )
         )
     completed: list[OpId] = []
+    reads_quality = False
     pending: list[tuple[str, CachedResult, bool]] = []
     #: Körper, deren Erkennung ``detect_features=False`` ausgelassen hat.
     recognition_left_out: set[ObjectId] = set()
@@ -836,6 +843,7 @@ def _evaluate(
             # Solver weg, und nach einem Cache-Treffer fehlte die Stufe in
             # der Solver-Übersicht des Berichts.
             result = cached
+            reads_quality = reads_quality or cached.reads_quality
             # §15.7: Die Antwort reist mit dem Ergebnis. Die Sitzung schreibt
             # sie nur zu einem angenommenen Lauf; kam der Schritt danach aus
             # dem Cache — nach Strg+Z vor dem ersten Ergebnis, im nächsten
@@ -844,6 +852,7 @@ def _evaluate(
             if cached.answered:
                 answers[operation.id] = dict(cached.answered)
         else:
+            asked_quality = _WatchedQuality(quality)
             context = OpContext(
                 # Regel 3 hat jetzt einen Boden unter sich: ``scene`` ist eine
                 # Lesekopie — Wörterbücher kopiert, jede Objekthülle samt
@@ -876,7 +885,7 @@ def _evaluate(
                 inputs=inputs,
                 params=params,
                 profile=profile,
-                quality=quality,
+                quality=cast(Quality, asked_quality),
                 seed=operation.seed,
                 progress=progress,
                 ask=watched,
@@ -973,7 +982,9 @@ def _evaluate(
                 transform=produced.transform,
                 continuations=tuple(tuple(entries) for entries in produced.feature_continuations),
                 answered=dict(produced.answered),
+                reads_quality=asked_quality.read,
             )
+            reads_quality = reads_quality or asked_quality.read
 
         if len(result.objects) != len(operation.outputs):
             findings.append(_object_count_finding(operation, len(result.objects)))
@@ -1441,7 +1452,42 @@ def _evaluate(
         sights=sights,
         fit_sights=fit_sights,
         recognition_left_out=frozenset(recognition_left_out & scene.objects.keys()),
+        reads_quality=reads_quality,
     )
+
+
+class _WatchedQuality(str):
+    """Die Güte, die merkt, ob eine Operation nach ihr fragt (RM-494).
+
+    Jede Frage an einen Text geht über Vergleich oder Hashwert — ``==``,
+    ``in``, ein Wörterbuch nach Güte —, und eine Rechnung im Hilfsprozess
+    nimmt den Wert über ``pickle`` mit. Genau dort wird gemerkt. Ein Schritt,
+    der die Güte nur weiterreicht und nie fragt, rechnet in beiden Stufen
+    dasselbe.
+    """
+
+    read: bool
+
+    def __new__(cls, value: str) -> _WatchedQuality:
+        watched = super().__new__(cls, value)
+        watched.read = False
+        return watched
+
+    def __eq__(self, other: object) -> bool:
+        self.read = True
+        return str.__eq__(self, other)
+
+    def __ne__(self, other: object) -> bool:
+        self.read = True
+        return str.__ne__(self, other)
+
+    def __hash__(self) -> int:
+        self.read = True
+        return str.__hash__(self)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        self.read = True
+        return (str, (str(self),))
 
 
 #: Die Parameterarten, deren Wert eine Quellenkennung ist — was eine

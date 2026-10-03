@@ -21445,7 +21445,7 @@ def _a_blend_in_draft(window: MainWindow) -> None:
     Bis RM-427 tat es ein Kegel; seitdem rechnen Kegel und Ring in beiden
     Stufen mit derselben Teilung. Gröber im Entwurf ist nur noch das
     Verschmelzen über :data:`blend.DRAFT_SAMPLES` Rasterpunkten — hier rund
-    650 000 bei 0,6 mm.
+    330 000 bei 0,8 mm.
     """
     box = {"width": 40.0, "depth": 40.0, "height": 40.0}
     assert window.session.apply(
@@ -21455,7 +21455,7 @@ def _a_blend_in_draft(window: MainWindow) -> None:
             OperationDraft(op="create_box", params=box),
             OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 20.0}),
             OperationDraft(
-                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.6}
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.8}
             ),
         ],
     )
@@ -21508,6 +21508,26 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
     written = sum(len(trimesh.load(path, force="mesh").faces) for path in tmp_path.glob("*.stl"))
     assert written == fine, (written, fine, draft)
     assert window.session.last_quality == "fine"
+
+
+def test_an_export_without_quality_steps_writes_at_once(window: MainWindow, tmp_path: Path) -> None:
+    """Ohne Schritt, der nach der Güte fragt, ist der Entwurf schon fein (RM-494).
+
+    Seit RM-426 rechnete jeder Export fein nach — am Lochbrett-STEP 4,5 bis
+    5 s für eine Datei, die Byte für Byte gleich blieb. Ein eingelesenes Netz
+    fragt nicht nach der Güte; der Export beginnt sofort.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
+
+    window._start_export(tmp_path / "wuerfel.stl", "stl")
+
+    assert window._export_worker is not None, "der Export wartet auf keine feine Rechnung"
+    wait_for_export(window)
+    assert (tmp_path / "wuerfel.stl").is_file()
+    assert window.session.last_quality == "draft", "nachgerechnet wurde nichts"
 
 
 def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:

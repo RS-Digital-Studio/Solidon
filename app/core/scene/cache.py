@@ -169,6 +169,9 @@ class CachedResult:
     schreibt die Antwort nur, wenn sie das Ergebnis annimmt — kam der Schritt
     danach aus dem Cache, ohne sie, blieb er unbeantwortet und rechnete bei
     jeder Änderung davor anders."""
+    reads_quality: bool = True
+    """Ob die Operation nach der Güte gefragt hat (RM-494). Ein Treffer meldet
+    es weiter wie ein frischer Lauf; ohne Angabe gilt sie als gefragt."""
 
     @property
     def cost(self) -> int:
@@ -918,6 +921,7 @@ class DiskCache:
             answered = data.get("answered", {})
             if not isinstance(answered, dict) or not all(isinstance(k, str) for k in answered):
                 raise ValueError("invalid cached answers")
+            reads_quality = data.get("reads_quality", True) is not False
         except _DAMAGED_ENTRY as problem:
             # Ein beschädigter Cache-Eintrag ist nie fatal: verwerfen und
             # neu rechnen.
@@ -940,6 +944,7 @@ class DiskCache:
             transform=transform,
             continuations=continuations,
             answered=answered,
+            reads_quality=reads_quality,
         )
 
     def put(self, key: str, result: CachedResult) -> None:
@@ -1004,6 +1009,8 @@ class DiskCache:
                 ]
             if result.answered:
                 payload["answered"] = dict(result.answered)
+            if not result.reads_quality:
+                payload["reads_quality"] = False
             (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
         except (OSError, TypeError) as problem:
             # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat

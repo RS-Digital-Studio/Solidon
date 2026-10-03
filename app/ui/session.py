@@ -4913,8 +4913,15 @@ class Session(QObject):
         das Entwurfsergebnis — ein verschmolzenes Teil mit einem Viertel der
         Dreiecke, ein Kegel mit der Hälfte, während der Befund ``blend.draft``
         versprach, Export und Druckvorbereitung rechneten fein (RM-426).
+
+        **Fragte kein Schritt nach der Güte, ist der Entwurf schon fein**
+        (RM-494): Am Lochbrett-STEP rechnete der Export sonst 5 s nach, um
+        dieselbe Datei zu schreiben.
         """
-        return self.result_current and not self.busy and self.last_quality == "fine"
+        if not self.result_current or self.busy:
+            return False
+        result = self.last_result
+        return self.last_quality == "fine" or (result is not None and not result.reads_quality)
 
     def request_fine(self) -> None:
         """Einen feinen Lauf bestellen, wenn das gezeigte Ergebnis keiner ist.
