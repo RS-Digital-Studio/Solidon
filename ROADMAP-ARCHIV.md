@@ -38191,6 +38191,8 @@ Prüfungen vor dem Anschlussreview: 1428 bestanden, 7 übersprungen, 63 abgewäh
 
 Kundensichtbarer Fehler aus `f934a42219`, laut `git tag --contains` in v0.5.0 und v0.5.1. Je ein Punkt an derselben Stelle aller sechs Changelogs. Commit: `19ac6c8a9` (Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit).
 
+Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
+
 ## RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)
 
 <a id="rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026"></a>
@@ -38217,6 +38219,8 @@ Echte Vorher-Rundreisen: Bambu ersetzte `rectilinear` durch `cubic`, Creality du
 Abnahme: echte Würfelschnitte in Bambu Studio 02.08.02.61/P1S und Creality Print 7.3.0.6149/K1 mit gewähltem Linienmuster. Beide Konfigurationsblöcke enthalten `sparse_infill_pattern=zig-zag`. Unabhängiges Lesen der G1-Bahnen zeigt je 92 Füllschichten und 644 lange Segmente; pro Schicht sieben parallele Linien, zwischen den Schichten wechselnd 135°/45°. Konkrete Zeilen und Bahnlängen stehen in `F:\solidon-review-reports\gcode\agentB\rm461-codex-lines.json`. Bambu 886 s/3,71 g, Creality 875,566 s/3,46 g. Keine falsche Füllmusterwarnung. Die ergänzende Kammerwahl ändert die Musterzuordnung nicht.
 
 Kundensichtbarer Tabellenfehler seit `f934a42219`, in v0.5.1 enthalten; je ein Punkt in allen sechs Changelogs für 0.5.2. Implementierung: `1fbdb5de8`; Abschlusscommit: `106ddb5b9` (Bambu und Creality drucken das gewählte Linienmuster).
+
+Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.
 
 ## RM-462: Verworfene Druckwerte werden nach dem Schneiden gemeldet (03.10.2026)
 
@@ -38248,4 +38252,4 @@ Echte Abnahme: Der unveränderte ursprüngliche Bambu-P1S-Würfel-A-Lauf hatte 7
 
 Fünf von fünf neue Schnitte mit SuperSlicer 2.5.59.13/generic-220 und Bambu Studio 02.08.02.61/A1 erfolgreich und ohne falsche Übergabewarnung. SuperSlicer bestätigt bei drei Würfeln nativ 50, 60 und 0 Prozent (je 64 geschriebene/489 gelesene Werte); Bambu bestätigt Vorgabe und 60 Prozent (je 28/562, vier berechtigt fehlende nil-Overrides). Ein Bambu-Prozess wurde nach fertiger Druckdatei durch den vorhandenen Ergebniswächter beendet. Neue echte Läufe einspulig; Mehrspulen durch Regressionen und Codepfad geprüft. Belege: `F:\solidon-review-reports\B-rm462\final-evidence.json`, `probe-before.json`, `probe-after.json`, `bericht.md`; Druckdateien unter `F:\solidon-review-reports\gcode\codexB\rm462-nachher`.
 
-Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffentlichungen; kundensichtbar, deshalb ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `d6b13016f` (Verworfene Druckwerte werden nach dem Schneiden gemeldet). Das vollständige Entwicklungstor wird im gemeinsamen Abschluss ergänzt.
+Ursache `47da07a18`, laut `git tag --contains` in v0.5.1 und älteren Veröffentlichungen; kundensichtbar, deshalb ein Punkt in allen sechs Changelogs für 0.5.2. Commit: `d6b13016f` (Verworfene Druckwerte werden nach dem Schneiden gemeldet). Gemeinsames Entwicklungstor auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0. Ruff, Format und mypy ebenfalls Exit 0; Fenster, Renderer und Leistung blieben ausgeschlossen.

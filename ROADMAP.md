@@ -3271,8 +3271,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zusätzlich sechs rote Berichts- und vier rote Zahlen-/Fensterdateifälle.
   Abschließend 435 Kernfälle und 682 Wächter grün, Ruff/Format/mypy grün.
   Betroffener Lauf mit `tools/affected_tests.py --run`: 1401 bestanden,
-  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Das gemeinsame
-  Entwicklungstor steht im Abschlussbericht.
+  4 übersprungen, 346 Releasefälle abgewählt, Exit 0. Gemeinsames Entwicklungstor
+  auf `99eb00091`: 20547 bestanden, 61 übersprungen, Exit 0; Ruff, Format
+  und mypy ebenfalls grün. Fenster, Renderer und Leistung ausgeschlossen.
   Belege: `F:\solidon-review-reports\B-rm482\bericht.md`, `after-final`,
   `after-matched`, `review-choice-2`, `native-numeric-text.json`.
   Kundensichtbar und seit `f934a42219` in v0.5.1: Changelog in sechs Sprachen
