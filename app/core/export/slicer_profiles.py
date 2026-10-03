@@ -38,6 +38,7 @@ from app.core import build_area, discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
 from app.core.export import prusa_conditions
 from app.core.export.slicer_keys import (
+    CURA_JERK_LINKS,
     SlicerFlavour,
     has_readable_profiles,
     has_user_profile_tree,
@@ -1190,11 +1191,14 @@ def _cura_machine_instances(
     roots: Sequence[Path],
     indexes: ProfileIndexes,
     documents: ProfileDocuments,
+    *,
+    resolve_jerk: bool = False,
 ) -> Iterator[tuple[SlicerProfile, dict[str, Any]]]:
     """Eigene Cura-Maschinen einschließlich ihrer Maschinen- und Düsencontainer.
 
-    In der Stapelfolge steht die kleinste Nummer oben. Nur die drei
-    Hardwarecontainer werden gebraucht, keine Prozess- oder Materialwerte.
+    In der Stapelfolge steht die kleinste Nummer oben. Hardware kommt aus
+    Definition, Variante und Nutzerwerten; Jerk zusätzlich aus den gewählten
+    Prozesscontainern und dem Extruder. Andere Prozesswerte bleiben draußen.
     Ein referenzierter, aber fehlender Container macht die Maschine unbekannt.
     """
     definitions: dict[str, Path] = {}
@@ -1208,17 +1212,25 @@ def _cura_machine_instances(
                     for path in sorted((resources / kind).glob("*.def.json"))
                 }
             )
-        installed_containers.update(
-            {
-                unquote_plus(path.name.removesuffix(".inst.cfg")): path
-                for path in sorted((resources / "variants").rglob("*.inst.cfg"))
-            }
-        )
+        for kind in ("variants", "quality", "intent"):
+            installed_containers.update(
+                {
+                    unquote_plus(path.name.removesuffix(".inst.cfg")): path
+                    for path in sorted((resources / kind).rglob("*.inst.cfg"))
+                }
+            )
     for folder in roots:
         if not (folder / "machine_instances").is_dir():
             continue
         containers = dict(installed_containers)
-        for kind in ("definition_changes", "variants", "user"):
+        for kind in (
+            "definition_changes",
+            "variants",
+            "quality",
+            "intent",
+            "quality_changes",
+            "user",
+        ):
             containers.update(
                 {
                     unquote_plus(path.name.removesuffix(".inst.cfg")): path
@@ -1230,9 +1242,13 @@ def _cura_machine_instances(
             stack: Mapping[str, str],
             source: Path,
             paths: Mapping[str, Path] = containers,
+            *,
+            motion: bool = False,
         ) -> dict[str, Any]:
             values: dict[str, Any] = {}
-            for position in (_CURA_DEFINITION_CHANGES_INDEX, _CURA_VARIANT_INDEX, "0"):
+            positions: tuple[str, ...] = (_CURA_DEFINITION_CHANGES_INDEX, _CURA_VARIANT_INDEX)
+            positions += ("3", "2", "1", "0") if motion else ("0",)
+            for position in positions:
                 identifier = stack.get(position, "").strip()
                 if not identifier or identifier.startswith("empty_"):
                     continue
@@ -1243,7 +1259,14 @@ def _cura_machine_instances(
                 if parsed.has_section("values"):
                     # Formeln bleiben als ungültiger Wert stehen; sie dürfen
                     # keinen vorhandenen Default wieder sichtbar machen.
-                    values.update(parsed["values"])
+                    values.update(
+                        (key, value)
+                        for key, value in parsed["values"].items()
+                        if not motion
+                        or key.startswith("jerk_")
+                        or key.endswith("_jerk")
+                        or key == "magic_spiralize"
+                    )
             return values
 
         for path in sorted((folder / "machine_instances").glob("*.global.cfg")):
@@ -1258,15 +1281,20 @@ def _cura_machine_instances(
             if not machine or definition is None:
                 continue
             try:
+                overrides = changes(stack, path)
                 native = _cura_definition_values(
                     definition,
                     roots,
                     strict=True,
                     indexes=indexes,
                     documents=documents,
-                    overrides=changes(stack, path),
+                    overrides=overrides,
+                    resolve_jerk=False,
                 )
+                if resolve_jerk:
+                    overrides.update(changes(stack, path, motion=True))
                 trains = _cura_trains(folder, machine)
+                train_motion: list[dict[str, Any]] = []
                 if trains:
                     if [position for position, _stack in trains] != list(range(len(trains))):
                         raise _incomplete_profile(path)
@@ -1282,7 +1310,10 @@ def _cura_machine_instances(
                             indexes=indexes,
                             documents=documents,
                             overrides=changes(train, path),
+                            resolve_jerk=False,
                         )
+                        if resolve_jerk:
+                            train_motion.append(changes(train, path, motion=True))
                         nozzle_values.append(
                             _profile_numbers(
                                 hardware.get(
@@ -1295,6 +1326,27 @@ def _cura_machine_instances(
                         raise _incomplete_profile(path)
                     native["machine_nozzle_size"] = nozzle_values
                     native["machine_extruder_count"] = len(trains)
+                if resolve_jerk:
+                    resolved = _cura_definition_values(
+                        definition,
+                        roots,
+                        strict=True,
+                        indexes=indexes,
+                        documents=documents,
+                        overrides=overrides,
+                        extruder_overrides=train_motion,
+                        resolve_jerk=True,
+                    )
+                    native = {
+                        key: value
+                        for key, value in native.items()
+                        if not (key.startswith("jerk_") or key.endswith("_jerk"))
+                    }
+                    native.update(
+                        (key, value)
+                        for key, value in resolved.items()
+                        if key.startswith("jerk_") or key.endswith("_jerk")
+                    )
                 yield (
                     SlicerProfile(
                         definition,
@@ -2045,8 +2097,10 @@ def _cura_definition_values(
     indexes: ProfileIndexes | None = None,
     documents: ProfileDocuments | None = None,
     overrides: Mapping[str, Any] | None = None,
+    extruder_overrides: Sequence[Mapping[str, Any]] = (),
+    resolve_jerk: bool = False,
 ) -> dict[str, Any]:
-    """Definitionsvererbung als Daten; berechnete Eigenschaften bleiben unbekannt."""
+    """Definitionsdaten und bekannte Jerk-Beziehungen; fremde Ausdrücke bleiben unbekannt."""
     indexes = {} if indexes is None else indexes
     index: dict[str, Path] = {}
     for folder in [*(_cura_resources(root) / "definitions" for root in roots), path.parent]:
@@ -2085,7 +2139,8 @@ def _cura_definition_values(
         return definitions
 
     values: dict[str, Any] = {}
-    for key, properties in read(path, frozenset()).items():
+    definitions = read(path, frozenset())
+    for key, properties in definitions.items():
         if overrides is not None and key in overrides:
             values[key] = overrides[key]
             continue
@@ -2118,7 +2173,112 @@ def _cura_definition_values(
             values[key] = value
     if overrides is not None:
         values.update(overrides)
+    if resolve_jerk:
+        motion = []
+        for train in extruder_overrides or ({},):
+            selected = dict(overrides or {})
+            for key, value in train.items():
+                # Cura registriert die Vorgabe True. Explizit globale Werte
+                # umgehen laut ExtruderStack auch alte Extruder-Restwerte.
+                allowed = definitions.get(key, {}).get("settable_per_extruder", True)
+                if not isinstance(allowed, bool):
+                    raise _incomplete_profile(path)
+                if allowed:
+                    selected[key] = value
+            motion.append(_cura_jerk_values(path, definitions, values | selected, selected))
+        # Erst die wirksamen Rollen vergleichen: Bei ausgeschalteter Steuerung
+        # sind unterschiedliche alte Rollenwerte keine Mehrdeutigkeit.
+        if any(item != motion[0] for item in motion[1:]):
+            raise _incomplete_profile(path)
+        # Die strenge Übergabe erhält ausschließlich wirksame Rollen. Sonst
+        # würden inaktive Rohwerte trotz der Prüfung wieder geschrieben.
+        values = {
+            key: value
+            for key, value in values.items()
+            if not (key.startswith("jerk_") or key.endswith("_jerk"))
+        }
+        values.update(motion[0])
     return values
+
+
+def _cura_jerk_values(
+    path: Path,
+    definitions: Mapping[str, Mapping[str, Any]],
+    values: Mapping[str, Any],
+    overrides: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Belegte Jerk-Beziehungen als eigener Code, ohne native Formeln auszuführen.
+
+    Nur die unten ausdrücklich zugeordneten Ausdrücke gelten. Eine fremde
+    oder unvollständige Beziehung lässt die eingeschaltete Steuerung anhalten,
+    statt CuraEngines abweichende Vorgabewerte wieder sichtbar zu machen.
+    """
+    if "jerk_enabled" not in definitions and "jerk_enabled" not in overrides:
+        return {}
+
+    def boolean(key: str) -> bool:
+        value = str(values.get(key, "")).strip().casefold()
+        if value not in {"true", "false"}:
+            raise _incomplete_profile(path)
+        return value == "true"
+
+    enabled = boolean("jerk_enabled")
+    result: dict[str, Any] = {"jerk_enabled": enabled}
+    if not enabled:
+        return result
+    result["jerk_travel_enabled"] = boolean("jerk_travel_enabled")
+    active: set[str] = set()
+
+    def number(key: str) -> float:
+        if key in result:
+            return float(result[key])
+        if key in active:
+            raise _incomplete_profile(path)
+        active.add(key)
+        raw = overrides.get(key, definitions.get(key, {}).get("value", values.get(key)))
+        value: Any = raw
+        if isinstance(raw, str) and key not in overrides:
+            if raw == CURA_JERK_LINKS.get(key):
+                value = number(raw)
+            elif key == "jerk_travel" and raw == "jerk_print * 2":
+                value = number("jerk_print") * 2
+            elif key == "jerk_travel" and raw == "jerk_print if magic_spiralize else 30":
+                value = number("jerk_print") if boolean("magic_spiralize") else 30.0
+            elif key == "jerk_travel_layer_0" and raw == "jerk_travel":
+                value = number("jerk_travel")
+            elif key == "jerk_travel_layer_0" and raw == "jerk_layer_0 * jerk_travel / jerk_print":
+                printing = number("jerk_print")
+                if printing <= 0.0:
+                    raise _incomplete_profile(path)
+                value = number("jerk_layer_0") * number("jerk_travel") / printing
+            elif key in {"jerk_support_roof", "jerk_support_bottom"} and raw == (
+                "extruderValue(support_roof_extruder_nr, 'jerk_support_interface')"
+            ):
+                # Erst bei genau einer Düse ist der Verweis unabhängig vom
+                # Extruderindex eindeutig. Mehrere Züge bleiben unbekannt.
+                if str(values.get("machine_extruder_count")) not in {"1", "1.0"}:
+                    raise _incomplete_profile(path)
+                value = number("jerk_support_interface")
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError, OverflowError) as problem:
+            raise _incomplete_profile(path) from problem
+        if isinstance(value, bool) or not math.isfinite(parsed) or parsed < 0.0:
+            raise _incomplete_profile(path)
+        result[key] = parsed
+        active.remove(key)
+        return parsed
+
+    number("jerk_print")
+    for key in definitions.keys() | overrides.keys():
+        if (key.startswith("jerk_") or key.endswith("_jerk")) and not key.endswith("enabled"):
+            if not result["jerk_travel_enabled"] and key in {
+                "jerk_travel",
+                "jerk_travel_layer_0",
+            }:
+                continue
+            number(key)
+    return result
 
 
 _CURA_MATERIAL_KEYS: Final = {
@@ -2745,6 +2905,7 @@ def resolve_profile(
     cancelled: CancelToken | None = None,
     strict: bool = False,
     documents: ProfileDocuments | None = None,
+    cura_motion: bool = False,
 ) -> dict[str, Any]:
     """Native Werte ausschreiben, ohne Formeln oder G-Code auszuführen.
 
@@ -2753,6 +2914,8 @@ def resolve_profile(
     zwingend die Abschnittsidentität aus :func:`profile_by_name`.
     ``strict`` lehnt fehlende Erbbasen und unbelegte Cura-Maschinenmaße ab;
     ``documents`` teilt gelesene Dateien innerhalb einer Erhebung.
+    ``cura_motion`` prüft zusätzlich die gewählte Bewegungssteuerung vor der
+    Übergabe. Unbekannte Bewegung nimmt der Druckerauswahl keine bekannten Maße.
     """
     _check_cancelled(cancelled)
     if profile.cura_instance is not None:
@@ -2763,6 +2926,7 @@ def resolve_profile(
             folders,
             indexes if indexes is not None else {},
             documents if documents is not None else {},
+            resolve_jerk=cura_motion,
         ):
             if entry.cura_instance == profile.cura_instance and entry.section == profile.section:
                 return native
@@ -2780,6 +2944,7 @@ def resolve_profile(
         cancelled=cancelled,
         strict=strict,
         documents=documents,
+        cura_motion=cura_motion,
     )
 
 
@@ -2844,6 +3009,7 @@ def resolve_values(
     cancelled: CancelToken | None = None,
     strict: bool = False,
     documents: ProfileDocuments | None = None,
+    cura_motion: bool = False,
 ) -> dict[str, Any]:
     """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
 
@@ -2860,7 +3026,12 @@ def resolve_values(
     _check_cancelled(cancelled)
     if path.name.endswith(".def.json"):
         return _cura_definition_values(
-            path, roots, strict=strict, indexes=indexes, documents=documents
+            path,
+            roots,
+            strict=strict,
+            indexes=indexes,
+            documents=documents,
+            resolve_jerk=cura_motion,
         )
     if path.name.endswith(".xml.fdm_material"):
         return _cura_material_values(path)

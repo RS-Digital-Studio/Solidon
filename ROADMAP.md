@@ -110,7 +110,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
-| [RM-503 — Cura übernimmt die native Jerk-Steuerung nicht](#rm-503) | Geometrie, Erkennung und Druckvorbereitung | Schalter und vollständige abhängige Jerk-Werte aus dem gewählten Profil auflösen; M205 im G-Code gegen die Zeitberechnung prüfen |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
@@ -3156,39 +3155,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
   Lauf, kein Slicerstart. Bauplan §29, Regel 17.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
-
-<a id="rm-503"></a>
-
-- [ ] **RM-503 — Cura übernimmt die native Jerk-Steuerung nicht.**
-  Bei der Zeitabnahme von RM-482 am 03.10.2026 nachgestellt, Stand `cafd47ccc`,
-  CuraEngine 5.13.0, SV06/Pilz: beide Engine-Ebenen bekommen
-  `machine_max_jerk_xy=5`, aber weder `jerk_enabled` noch `jerk_print`.
-  Im gesamten G-Code steht nur das `M205 X8 Y8` des Startcodes. Cura berechnet
-  daher mit 5 mm/s, während der Drucker mit 8 fährt. Die native Profilkette
-  aktiviert die Steuerung und verlangt Druck 5, Leerfahrt 10 mm/s.
-  **Stellen:** `handover._cura_motion_values`,
-  `slicer_profiles._cura_definition_values`, `slicer_keys.CURA_MIRRORED`.
-  **Fix (allgemein):** Native Schalter und vollständige abhängige Rollenwerte
-  aus der gewählten Definitions- oder Instanzkette übernehmen. Eigene
-  Rollenwerte behalten Vorrang; unbekannte Formeln bleiben unbekannt. Kein
-  Ausführen fremder Ausdrücke und keine SV06-Sonderverzweigung. Daneben den
-  belegten Unterschied `machine_max_feedrate_e=40` gegen Startcode `M203 E50`
-  einordnen, ohne Hardwaregrenzen zu raten.
-  **Abnahme:** SV06 sowie je ein Profil mit ausgeschalteter Steuerung und
-  eigenen Rollenwerten: berechnete Jerk-Werte entsprechen den ausgegebenen
-  M205-Werten, einschließlich erster Schicht und Leerfahrt; Konsolen- und
-  Fensterprofil übernehmen dieselbe native Wahl. Unvollständige Stapel und
-  unbekannte Formeln werden ausdrücklich behandelt. Bauplan §29.
-  **Fortsetzbare Belege:** Cura 5.13
-  [Sovol-Grundprofil](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_base.def.json),
-  [Planetenextruder](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_base_planetary.def.json),
-  [SV06-Startcode](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_sv06.def.json)
-  und [Zeitrechnung](https://github.com/Ultimaker/CuraEngine/blob/5.13/src/timeEstimate.cpp).
-  Reproduktion: `write_config`/`slice_model` mit `sovol-sv06`, PLA, Standard und
-  `tests/data/meshes/cube_clean.stl`; alle `machine_max_jerk_xy`-/`jerk_*`-Argumente
-  mit jedem M205 vor und nach der ersten Schicht vergleichen. Die Zeitwirkung
-  dieses getrennten Befunds ist noch nicht gemessen; RM-482 belegt nur seine
-  Beschleunigungsgrenzen und den Vergleich mit gleichen Prozesswerten.
 
 <a id="rm-483"></a>
 

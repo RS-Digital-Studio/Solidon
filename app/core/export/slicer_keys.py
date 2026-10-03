@@ -623,6 +623,35 @@ CURA: Final[tuple[Row, ...]] = (
     # den Volumenstrom hält Solidon über die Tempi (``print_settings._within_flow``).
 )
 
+#: Jerk-Beziehungen aus Curas Grund- und Herstellerdefinitionen. Der Profilauflöser
+#: übernimmt sie nur, wenn der native Wert genau diesen Verweis trägt.
+CURA_JERK_LINKS: Final = {
+    "jerk_travel": "jerk_print",
+    "jerk_infill": "jerk_print",
+    "jerk_wall": "jerk_print",
+    "jerk_wall_0": "jerk_wall",
+    "jerk_wall_x": "jerk_wall",
+    "jerk_wall_0_roofing": "jerk_wall_0",
+    "jerk_wall_0_flooring": "jerk_wall_0",
+    "jerk_wall_x_roofing": "jerk_wall_x",
+    "jerk_wall_x_flooring": "jerk_wall_x",
+    "jerk_topbottom": "jerk_print",
+    "jerk_roofing": "jerk_topbottom",
+    "jerk_flooring": "jerk_topbottom",
+    "jerk_ironing": "jerk_topbottom",
+    "jerk_support": "jerk_print",
+    "jerk_support_infill": "jerk_support",
+    "jerk_support_interface": "jerk_support",
+    "jerk_prime_tower": "jerk_print",
+    "jerk_layer_0": "jerk_print",
+    "jerk_print_layer_0": "jerk_layer_0",
+    "jerk_skirt_brim": "jerk_layer_0",
+    "raft_jerk": "jerk_print",
+    "raft_base_jerk": "raft_jerk",
+    "raft_interface_jerk": "raft_jerk",
+    "raft_surface_jerk": "raft_jerk",
+}
+
 #: Was ``CuraEngine`` aus einem geschriebenen Wert **nicht** selbst ableitet.
 #:
 #: In ``fdmprinter.def.json`` trägt jede abgeleitete Einstellung zweierlei:

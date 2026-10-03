@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.
 - Se estiver selecionada outra impressora no Cura, a entrega identifica ambas e indica onde adotar a escolha do Cura.
 - Corrigida uma falha do ElegooSlicer e do OrcaSlicer ao preparar modelos multicoloridos com suportes em grelha.
 - A análise do espaço necessário para suportes é muito mais rápida nos modelos ocos e preserva os contornos finos.

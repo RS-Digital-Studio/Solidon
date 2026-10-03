@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)](#rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026) |
 | 2026-10-03 | [RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)](#rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026) |
 | 2026-10-03 | [RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)](#rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026) |
 | 2026-10-03 | [RM-482: Cura hält Beschleunigungsgrenzen ein und trennt volle Füllschichten von der Oberseite (03.10.2026)](#rm-482-cura-hält-beschleunigungsgrenzen-ein-und-trennt-volle-füllschichten-von-der-oberseite-03102026) |
@@ -38535,3 +38536,41 @@ Rohwerte und reproduzierbare Sonden: `F:\solidon-review-reports\B-rm482`,
   abdeckt. Abnahme: Übergabe an Cura mit abweichendem Drucker nennt beide.
 
 **Abschluss:** Die Umsetzung war bereits vorhanden: `4cf460e87` ergänzt den Befund am tatsächlichen Fensterexport; `048da569d` vermeidet eine Warnung bei gleicher Definition und gleichem Bett. Der frühere native Cura-5.13-Nachweis ist bei RM-417 dokumentiert. Aktuell über die normale `write_assembly(for_window=True)`-Übergabe nachgemessen: Installiertes Ender-3-V3-SE-Profil in einem isolierten Cura-Nutzerstand gegen Centauri Carbon 2 nennt mit und ohne mitgegebene Druckwerte beide Drucker und bietet die Druckeinstellungen an. Derselbe Ender in Solidon bleibt ohne Warnung. Roberts Nutzerkonfiguration wurde nicht geändert; im laufenden Prüfprozess war keine aktive native Auswahl vorhanden. Fünf bestehende Anschluss-/Gleichheitsfälle sind grün; bei im Prüfprozess abgeschalteter Warnung werden vier davon rot, die Kontrolle mit gleichem Drucker bleibt grün. Keine neue Produktivänderung und keine Fensterausführung. Der sichtbare Weg bleibt Druckdialog → Im Slicer öffnen, die Übernahme liegt im Druckdialog; keine Befehlspalette. Ursprung `d1c3d0462` ist in v0.5.1 enthalten; der bislang fehlende Kundenhinweis zur abweichenden Druckerauswahl steht nun in allen sechs 0.5.2-Changelogs. Belege: `F:\solidon-review-reports\B-slicer-rest\rm301` (`native.json`, `green.log`, `counter.log`); Abschlusscommit und zentrales Tor im Bericht B.
+
+## RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)
+
+<a id="rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026"></a>
+<a id="rm-503"></a>
+
+**RM-503 — Cura übernimmt die native Jerk-Steuerung nicht.**
+  Bei der Zeitabnahme von RM-482 am 03.10.2026 nachgestellt, Stand `cafd47ccc`,
+  CuraEngine 5.13.0, SV06/Pilz: beide Engine-Ebenen bekommen
+  `machine_max_jerk_xy=5`, aber weder `jerk_enabled` noch `jerk_print`.
+  Im gesamten G-Code steht nur das `M205 X8 Y8` des Startcodes. Cura berechnet
+  daher mit 5 mm/s, während der Drucker mit 8 fährt. Die native Profilkette
+  aktiviert die Steuerung und verlangt Druck 5, Leerfahrt 10 mm/s.
+  **Stellen:** `handover._cura_motion_values`,
+  `slicer_profiles._cura_definition_values`, `slicer_keys.CURA_MIRRORED`.
+  **Fix (allgemein):** Native Schalter und vollständige abhängige Rollenwerte
+  aus der gewählten Definitions- oder Instanzkette übernehmen. Eigene
+  Rollenwerte behalten Vorrang; unbekannte Formeln bleiben unbekannt. Kein
+  Ausführen fremder Ausdrücke und keine SV06-Sonderverzweigung. Daneben den
+  belegten Unterschied `machine_max_feedrate_e=40` gegen Startcode `M203 E50`
+  einordnen, ohne Hardwaregrenzen zu raten.
+  **Abnahme:** SV06 sowie je ein Profil mit ausgeschalteter Steuerung und
+  eigenen Rollenwerten: berechnete Jerk-Werte entsprechen den ausgegebenen
+  M205-Werten, einschließlich erster Schicht und Leerfahrt; Konsolen- und
+  Fensterprofil übernehmen dieselbe native Wahl. Unvollständige Stapel und
+  unbekannte Formeln werden ausdrücklich behandelt. Bauplan §29.
+  **Fortsetzbare Belege:** Cura 5.13
+  [Sovol-Grundprofil](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_base.def.json),
+  [Planetenextruder](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_base_planetary.def.json),
+  [SV06-Startcode](https://github.com/Ultimaker/Cura/blob/5.13/resources/definitions/sovol_sv06.def.json)
+  und [Zeitrechnung](https://github.com/Ultimaker/CuraEngine/blob/5.13/src/timeEstimate.cpp).
+  Reproduktion: `write_config`/`slice_model` mit `sovol-sv06`, PLA, Standard und
+  `tests/data/meshes/cube_clean.stl`; alle `machine_max_jerk_xy`-/`jerk_*`-Argumente
+  mit jedem M205 vor und nach der ersten Schicht vergleichen. Die Zeitwirkung
+  dieses getrennten Befunds ist noch nicht gemessen; RM-482 belegt nur seine
+  Beschleunigungsgrenzen und den Vergleich mit gleichen Prozesswerten.
+
+**Abschluss:** Die Maschinenübergabe ließ den nativen Schalter und abhängige Rollen fallen; gewählte Prozess- und Extrudercontainer wurden dafür ebenfalls nicht gelesen. Der vollständige bekannte Jerk-Bestand wird jetzt ohne Ausführen fremder Ausdrücke aufgelöst und in beide CuraEngine-Ebenen sowie das importierbare Fensterprofil geschrieben. Eigene Werte gehen vor; unbekannte aktive Ausdrücke und unvollständige Stapel halten mit Handlungsvorschlag an. Die Folgenprüfung hat die Hardwareaufnahme von der Bewegungsprüfung getrennt: alle 635 lesbaren installierten Drucker bleiben auswählbar, auch wenn erst ihre Übergabe einen unbekannten Jerk meldet. 527 Maschinen-/Profilfälle grün; rote Gegenproben für fehlende Rollen, Containerpriorität, Leerfahrt-Verweise und unabhängige Hardwareaufnahme. Die unabhängige Folgenprüfung ergänzt fünf zuvor rote Mehrdüsenfälle: Extrudercontainer beachten das geerbte settable_per_extruder; globale Schalter bleiben global, ausgeschaltete Altrollen wirken nicht. Eine aktive Gegenprobe hält echte Unterschiede weiterhin an. Die vollständige Schalter-Matrix ergänzt Druck- und Leerfahrtsteuerung an/aus, einen/zwei Extruder und gleiche, verschiedene oder ungültige Rollen. 26 weitere Gegenproben waren rot; 146 Schalter- und Anschlussfälle sind danach grün. Ausgeschaltete Leerfahrtwerte werden vor Auflösung und Vergleich ausgelassen; die strikte Ausgabe entfernt auch rohe Restwerte, sodass unbekannte inaktive Formeln weder CLI noch Fensterprofil erreichen. Das gilt auch nach Zusammenführung einer nativen Instanz: 96 Anschlusskombinationen prüfen Definition/Instanz und CLI/Fenster, acht weitere den konkreten Prozessschalter über unbekannter Definitionsformel. Zwölf neue Gegenproben waren vorher rot. Die vollständige gewählte Prozesskette wird vor der Schalterentscheidung gelesen; zwei ältere Teststapel verweisen dafür auf ihren tatsächlich vorhandenen Qualitätscontainer. CuraEngine 5.13 am Würfel: SV06 Druck 5/Leerfahrt 10 statt ausschließlich Start-M205 8, 1456,261771 statt 1483,763798 s; Ender-3 nativ aus bleibt ohne M205 bei 1300,685344 s. Eigene Rollen einschließlich erster Schicht sind an tatsächlichen Bewegungen gelesen; korrekt gebundener Ender mit eingeschalteter Steuerung liefert 2 → 3,5 → 5. SV06/Pilz 2552,113900 s, 9,72 % über dem RM-482-Prusa-Vergleich; Würfel 4,84 %. Der Herstellerwiderspruch E40 im Zeitmodell gegen M203 E50 bleibt ausgewiesen und wird nicht durch geratene Hardwarewerte verdeckt. Ursache `b5a18cbe0` liegt in v0.5.1, deshalb Kundenpunkt in allen sechs Changelogs. Belege: `F:\solidon-review-reports\B-slicer-rest\rm503\bericht.md`, native G-Codes, Profilbeilagen, `motion-analysis.json` und `discovery-compare.json`; genaue Abschlusscommits und zentrales Tor im Bericht B. Kein ausgeführter Fenster-/Renderer-/Leistungslauf.

@@ -53,6 +53,16 @@ Stapel; beide Fehler behalten den vollständigen Druckernamen. Der Anzeigename
 der aktiven Maschine kommt aus `machine_instances/*.global.cfg`, nicht aus der
 internen Instanzkennung.
 
+Curas Jerk-Steuerung folgt der gewählten Definitions- und Containerkette.
+Bekannte Abhängigkeiten werden aufgelöst, eigene Rollen und Schalter gehen
+vor. `resolve_profile(cura_motion=True)` prüft die Bewegungswerte erst für
+die konkrete Übergabe; Druckerliste und Bettlesen bleiben davon unabhängig.
+Unbekannte aktive Werte halten CLI und Fensterprofil mit derselben Handlung
+an. Beide schreiben denselben aufgelösten Bestand. Extrudercontainer beachten
+das geerbte `settable_per_extruder`; globale Schalter bleiben global. Verglichen
+werden wirksame Rollen; ausgeschaltete Druck- oder Leerfahrtwerte bleiben
+ohne Wirkung und ohne rohe Formeln in der strikten Ausgabe.
+
 ## Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung
 
 Materialarten werden in `slicer_keys` gelesen und geschrieben:
