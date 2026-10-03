@@ -46,7 +46,11 @@ it into `website/version.json`.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
+- SuperSlicer no longer crashes on round parts: it no longer receives the scarf seam it does not know.
+- The filament preselection takes Generic or your printer's brand instead of a third-party special filament, for example Generic PETG instead of BETA PETG on the Bambu A1.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
+- *Orient for printing*, *Rotate* and *Move* now also work on STEP surface models, for turns of almost 180° and on partly recognised faces. The body stays exact.
+- A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
 
 ### Holes, slots and splitting
 
@@ -57,6 +61,7 @@ it into `website/version.json`.
 - Patterns on cylindrical faces of imported models stay closed when you change them.
 - In the history of a STEP body you can reorder steps or insert one before, even when a later step refers to a hole. The reference follows the hole.
 - A hole moved or duplicated with a new direction stays exact on a STEP body.
+- A detected feature more than a metre from the origin keeps its place when you change it. Until now the field quietly clipped the number, and the hole moved.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: at the top you choose the *Plane* — along an axis with a tilt, parallel to a face, through an edge, or through three points you click in the view.
@@ -65,17 +70,26 @@ it into `website/version.json`.
 - If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
 - If you chose “Load now”, the pieces from *Split the model* no longer start minutes of recognition either; “Recognise all features” catches up on it.
 
+### Fillets and chamfers
+
+- Rounding a group of edges on a STEP body now rounds the edges that work instead of refusing the whole group. *Show the place* finds every edge that was left out.
+- Edges on a wall no thicker than the radius stay sharp, and the report names the radius that fits there. Previously the whole fillet was refused.
+- If a STEP body has no edge of its own at a selected location, the report offers *End face editing and try again*. On the triangle model that spot is rounded too.
+- If there is no space left for the exchange with the computing process, Solidon still computes the step and says so in the report. Previously it stopped with advice to compute more coarsely.
+
 ### Sculpting, text and sketching
 
 - With *On both sides*, *Put text on* also places the lettering on the back, readable from outside. That suits flags, signs and tags.
 - Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
+- The skeleton editor shows bones and joint in the view, and a joint sits in the middle of the body instead of on its skin, so the figure bends evenly.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
+- SVG drawings arrive correctly: rotations, shears, rounded corners, ellipses and elliptical arcs are right, and hidden layers stay out.
 - The target of *Align to feature* starts out empty, and the first click in the view fills it. *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
@@ -98,6 +112,7 @@ it into `website/version.json`.
 - An export during a running calculation waits for the new result. Until now the file could still carry the old size.
 - The parameter bar rejects a dimension beyond its limit instead of leaving the view empty.
 - In the parameter bar every arrow step counts, and the focus stays in the field.
+- In the parameter bar the dimensions of two boxes carry their number, and a dimension with its own working range has a slider.
 - If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
 - Checkmarks in lists are readable in every row, and colours appear as a round dot next to them.
@@ -112,6 +127,8 @@ it into `website/version.json`.
 - Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.
+- When other programs keep the computer busy, *Cancel* stops a long calculation in under a second instead of asking for a restart after several seconds.
+- A local language model may take twelve instead of eight steps per request in the chat and so solves more requests made of several parts.
 
 ## 0.5.1
 

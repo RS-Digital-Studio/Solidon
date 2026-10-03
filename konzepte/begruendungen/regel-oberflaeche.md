@@ -246,6 +246,13 @@ Text unverändert zurück; gelesen wird beim Übernehmen in `valueFromText`.
 Als Typprüfung bleibt `QDoubleSpinBox` richtig — `isinstance` fragt „ist das ein
 Dezimalfeld", nicht „ist das unsere Unterklasse".
 
+**Eine Grenze lehnt ab, sie kürzt nicht**, weil Qt sonst still kürzt: An einem
+Feld mit Obergrenze 100 verwirft es die Null von „150“, und die Eingabetaste
+übernimmt 15. **Die Ablehnung in einer Maßgruppe ist eine eigene Sperre**
+(`QuietHost.refuse_fields`): Jeder neue Vorschauauftrag, schon ein Griffzug,
+der ein anderes Feld zurückschreibt, setzte den Sperrgrund des Trägers neu und
+gab *Übernehmen* frei, während der abgelehnte Ausdruck sichtbar stehen blieb.
+
 ## Gestufte Tiefe
 
 **Und was gerade nichts tut, steht nicht da.** Ein Feld mit `depends_on`,

@@ -14,6 +14,7 @@ import pytest
 import trimesh
 
 from app.core.errors import ValidationError
+from app.core.export import threemf as threemf_writer
 from app.core.geom.mesh import MeshCodec, MeshData, read_mesh
 from app.core.geom.transform import apply, translation
 from app.core.ingest.loader import (
@@ -2309,8 +2310,12 @@ def test_a_shell_written_twice_with_its_own_corners_arrives_once(
         copy.invert()
     twice = trimesh.util.concatenate([ball, copy])
     assert len(twice.vertices) == 2 * len(ball.vertices), "jede Schale mit eigenen Ecken"
-    exported = twice.export(file_type=suffix.lstrip("."))
-    payload = exported if isinstance(exported, bytes) else exported.encode("utf-8")
+    if suffix == ".3mf":
+        # Solidons eigener Schreiber; trimeshs 3MF-Ausgabe bräuchte lxml.
+        payload = threemf_writer.write(MeshData(raw=twice))
+    else:
+        exported = twice.export(file_type=suffix.lstrip("."))
+        payload = exported if isinstance(exported, bytes) else exported.encode("utf-8")
 
     project = _project_of(payload, f"kugel{suffix}")
     History(project.document).apply(

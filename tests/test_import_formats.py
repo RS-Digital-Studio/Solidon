@@ -9,7 +9,6 @@ steht in der einen Liste, die auch die Oberfläche liest.
 from __future__ import annotations
 
 import base64
-import io
 import json
 from pathlib import Path
 
@@ -22,7 +21,7 @@ from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData
 from app.core.geom.texture import face_colours
-from app.core.ingest import loader
+from app.core.ingest import loader, svg_drawing
 from app.core.ingest.loader import READABLE_SUFFIXES, normalise, read_local_payload, read_model
 from app.core.ingest.outline import OUTLINE_SUFFIXES, extrude
 from app.core.ingest.plan import MODEL_SUFFIXES, import_plan
@@ -84,7 +83,7 @@ def _outline_payloads() -> dict[str, bytes]:
     svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20">
     <path d="M0 0 H40 V20 H0 Z M10 5 H30 V15 H10 Z" fill-rule="evenodd"/>
     </svg>"""
-    drawing = trimesh.load_path(io.BytesIO(svg), file_type="svg")
+    drawing = trimesh.load_path(svg_drawing.path_arguments(svg))
     return {".svg": svg, ".dxf": _bytes(drawing.export(file_type="dxf"))}
 
 

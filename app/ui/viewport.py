@@ -5794,6 +5794,11 @@ class Viewport(QWidget):
         self._splitting = False
         """§25: solange das an ist, setzen Klicks die Enden einer Trennlinie."""
         self._split_actors: list[Any] = []
+        self._bone_actors: list[Any] = []
+        #: Was der Skeletteditor gerade zeigt: Knochen als Strecken, Gelenke
+        #: als Punkte — eine Aussage über das Bild, auch ohne Renderer prüfbar.
+        self.bones_shown: tuple[tuple[Vec3, Vec3], ...] = ()
+        self.joint_shown: Vec3 | None = None
         """Was von der gezeichneten Linie im Bild steht. Eine eigene Liste, weil
         sie ein anderes Leben hat als die Körper: Ein Szenenaufbau räumt sie
         nicht weg, ein Werkzeugwechsel schon."""
@@ -9370,6 +9375,78 @@ class Viewport(QWidget):
                         connected=True,
                     )
                 )
+        self.renderer.render()
+
+    def show_bones(
+        self,
+        bones: Sequence[tuple[Vec3, Vec3]],
+        pending: Vec3 | None = None,
+        *,
+        target: ObjectId | None = None,
+    ) -> None:
+        """Die Knochen des Skeletteditors und das gesetzte Gelenk (RM-367, W4-6).
+
+        Bis hierher zählte nur die Leiste mit; im Bild stand nichts, und wer
+        zwei Klicks gesetzt hatte, wusste nicht, wo sein Knochen lag. Die
+        Knochen liegen im Körper, also vor dem Körper gezeichnet
+        (``keep_in_front``), mit demselben Ansichtsversatz wie ihr Körper.
+        """
+        import numpy as np
+
+        self.bones_shown = tuple(bones)
+        self.joint_shown = pending
+        self.clear_bones(keep=True)
+        if self.renderer is None or (not bones and pending is None):
+            return
+        entry = self._result.scene.objects.get(target) if self._result and target else None
+        shift = (
+            self._view_offset(entry, self._result)
+            if entry is not None and self._result is not None
+            else np.zeros(3)
+        )
+        if bones:
+            segments = np.asarray([end for bone in bones for end in bone], dtype=float) + shift
+            self._bone_actors.append(
+                self.renderer.add_lines(
+                    segments,
+                    name="bones:lines",
+                    colour=SELECTED_COLOUR,
+                    width=4.0,
+                    keep_in_front=True,
+                )
+            )
+            self._bone_actors.append(
+                self.renderer.add_points(
+                    segments,
+                    name="bones:joints",
+                    colour=SELECTED_COLOUR,
+                    size=10.0,
+                    keep_in_front=True,
+                )
+            )
+        if pending is not None:
+            self._bone_actors.append(
+                self.renderer.add_points(
+                    np.asarray([pending], dtype=float) + shift,
+                    name="bones:pending",
+                    colour=SELECTED_COLOUR,
+                    size=14.0,
+                    keep_in_front=True,
+                )
+            )
+        self.renderer.render()
+
+    def clear_bones(self, *, keep: bool = False) -> None:
+        """Nimmt die Knochen aus dem Bild; ``keep`` lässt die Auskunft stehen."""
+        if not keep:
+            self.bones_shown = ()
+            self.joint_shown = None
+        if self.renderer is None:
+            self._bone_actors.clear()
+            return
+        for actor in self._bone_actors:
+            self.renderer.remove(actor)
+        self._bone_actors.clear()
         self.renderer.render()
 
     def clear_split_line(self) -> None:
@@ -16383,6 +16460,21 @@ class Viewport(QWidget):
         self.renderer.reset_clipping_range()
         if draw:
             self._draw()
+
+    def ray_toward(self, point: Vec3) -> Vec3:
+        """Die Richtung des Blicks durch einen Punkt — perspektivisch vom Auge
+        aus, parallel entlang der Blickrichtung (RM-367, W4-7)."""
+        import numpy as np
+
+        if self.renderer is None or self.renderer.parallel_projection():
+            return self.view_direction()
+        position = np.asarray(self.renderer.camera_pose().position, dtype=float)
+        ray = np.asarray(point, dtype=float) - position
+        length = float(np.linalg.norm(ray))
+        if length <= 0.0:
+            return self.view_direction()
+        ray = ray / length
+        return (float(ray[0]), float(ray[1]), float(ray[2]))
 
     def camera_pose(self) -> tuple[Vec3, Vec3, Vec3, float | None]:
         """Standort, Blickpunkt, Oben — und der Parallelmaßstab, wenn die
