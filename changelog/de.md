@@ -69,12 +69,13 @@ Nutzen da und sonst nichts.
 - Auch in der schnellen Suche prüft *Druckoptimal ausrichten*, ob ein Teil sicher steht.
 - Jedes Teil kommt mit *Auf dem Bett anordnen* auf die erste Platte, auf der es Platz hat. Der Minigolf-Satz braucht so vier statt sechs Platten.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
+- Kommt ein weiteres Modell hinzu, ob aus einer Datei, einem Download oder erzeugt, zeigt das Bild die Platte, auf der es liegt.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
 - SuperSlicer stürzt bei runden Teilen nicht mehr ab: Die Schrägnaht, die er nicht kennt, bekommt er nicht mehr.
 - Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
-- *Druckoptimal ausrichten*, *Drehen* und *Verschieben* gelingen auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen. Der Körper bleibt exakt.
+- Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
 - Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
 
 ### Bohrungen, Langlöcher und Teilen
@@ -125,6 +126,7 @@ Nutzen da und sonst nichts.
 - Jeder Versuch in der Liste nennt seinen Satz oder sein Bild und den Startwert. Passt Ihre Eingabe nicht mehr zum gewählten Versuch, sagt der Dialog, welcher übernommen wird.
 - Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind.
 - Nennt ein Fehler beim Erzeugen die Einrichtung als Ausweg, steht sie als Knopf im Dialog.
+- Während ein Modell erzeugt wird, bleibt das Fenster bedienbar. Der Dialog tritt zur Seite, und die Statusleiste zeigt Fortschritt, Zeit und *Abbrechen*.
 - Der Erzeugen-Dialog nennt das Volumen in der Größe, in der das Teil ankommt.
 - Ein erzeugtes Modell nimmt ein einziges Strg+Z wieder zurück. Bisher brauchte es dafür drei bis vier.
 - Sagt *Übernehmen* beim Erzeugen ab, bleibt der Dialog mit allen Versuchen offen und nennt den Weg, statt das Netz zu verwerfen.
@@ -154,6 +156,8 @@ Nutzen da und sonst nichts.
 - Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.
 - Lasten andere Programme den Rechner aus, bricht *Abbrechen* eine lange Rechnung in unter einer Sekunde ab, statt nach Sekunden einen Neustart zu verlangen.
 - Ein lokales Sprachmodell darf im Chat zwölf statt acht Schritte je Auftrag gehen und löst so mehr Aufträge, die aus mehreren Teilen bestehen.
+- Das Auswahlfenster passt wieder in seine Spalte, und die Maßspalte im Objektbaum zeigt das Maß ganz, etwa „Ø5,19 mm“ statt „…“.
+- An einer Bohrung öffnet *Merkmal ändern* direkt *Bohrung ändern* mit Vorschau, statt nur auf diesen Weg zu verweisen.
 
 ## 0.5.1
 

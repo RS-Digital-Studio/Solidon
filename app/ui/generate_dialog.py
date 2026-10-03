@@ -576,6 +576,11 @@ class GenerateDialog(QDialog):
         return self._readiness is mesh.Readiness.READY
 
     @property
+    def running(self) -> bool:
+        """Ob gerade ein Wurf läuft — vor dem Schließen des Fensters gefragt (RM-499)."""
+        return self._busy
+
+    @property
     def readiness(self) -> mesh.Readiness | None:
         """Wie weit der Generator vorbereitet ist — oder ob die Antwort läuft."""
         return self._readiness

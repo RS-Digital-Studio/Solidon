@@ -7454,5 +7454,12 @@
   "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in dieses Projekt.": "Entretanto está aberto outro projeto. «Aplicar» adiciona o modelo a este projeto.",
   "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in „{name}“.": "Entretanto está aberto outro projeto. «Aplicar» adiciona o modelo a «{name}».",
   "Modell wird erzeugt …": "A gerar o modelo …",
-  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Aplicar» inicia um novo projeto com o modelo."
+  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Aplicar» inicia um novo projeto com o modelo.",
+  "Erzeugung läuft": "Geração em curso",
+  "Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab.": "Está a ser gerado um modelo. Fechar cancela a geração.",
+  "Nicht übernommene Versuche": "Tentativas não adicionadas",
+  "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.": "Uma tentativa gerada ainda não está no projeto e perde-se ao fechar.",
+  "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim Schließen verloren.": "{count} tentativas geradas ainda não estão no projeto e perdem-se ao fechar.",
+  "Zur Erzeugung": "Voltar à geração",
+  "Trotzdem schließen": "Fechar mesmo assim"
 }
