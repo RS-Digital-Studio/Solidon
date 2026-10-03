@@ -1211,6 +1211,12 @@ Besenhalter — `shapely` und `numpy` geben den GIL überwiegend her. Eine
 Prüfung, die nach jeder Geste neu anläuft, bekommt einen Abbruchschalter:
 Die Wandkarte nimmt seither `cancelled` (`maps.wall_thickness_map`).
 
+**Messfalle beim Takt:** Ein `QTimer` bis 20 ms (oder jeder präzise) hebt
+selbst die Zeitgeberauflösung des Prozesses; eine Sonde mit 5-ms-Takt misst
+die 15,6-ms-Wartezeit je GIL-Griff nie. Gemessen wird mit einem groben Takt ab
+25 ms. (Aus der Regel hierher verschoben, weil sie die Sonde betrifft, nicht
+den Code.)
+
 ### Ein Blick auf eine Datei ist eine Netzfrage
 
 „Zuletzt geöffnet" fragte beim Fensteraufbau jede gemerkte Datei nach ihrer

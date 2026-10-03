@@ -510,9 +510,7 @@ einem rechnenden Arbeiter wartet jeder. Daraus folgt:
   (`LoadingVeil._block_rect`); sonst malt jeder Takt das Fenster darunter mit.
 * **Gerätefragen laufen im Daemon-Faden** (`SpaceMouseController._search`), wie
   Dateiblicke (nächster Abschnitt).
-* **Messfalle:** Ein `QTimer` bis 20 ms (oder jeder präzise) hebt selbst die
-  Zeitgeberauflösung des Prozesses; eine Sonde mit 5-ms-Takt misst die
-  15,6-ms-Wartezeit nie. Gemessen wird mit einem groben Takt ab 25 ms.
+* **Messfalle** einer Sonde am Takt: Begründung.
 
 ### Ein Blick auf eine Datei ist eine Netzfrage
 
