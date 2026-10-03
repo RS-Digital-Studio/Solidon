@@ -7520,5 +7520,8 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "Os valores coincidem dentro do limite de comparação.",
   "Quelle der Schätzung": "Origem da estimativa",
   "Interne Schichtanalyse": "Análise interna das camadas",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Os ficheiros de impressão não podem ser associados inequivocamente às placas comparadas."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Os ficheiros de impressão não podem ser associados inequivocamente às placas comparadas.",
+  "Brim oder Raft prüfen …": "Verificar brim ou raft …",
+  "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.": "A primeira camada da peça «{name}» está vazia. Coloque a peça na placa ou verifique as definições de brim, raft e altura da primeira camada.",
+  "Die erste Schicht eines Teils ist leer. Prüfen Sie die Lage auf dem Bett sowie Brim, Raft und die Höhe der ersten Schicht.": "A primeira camada de uma peça está vazia. Verifique a sua posição na placa e as definições de brim, raft e altura da primeira camada."
 }

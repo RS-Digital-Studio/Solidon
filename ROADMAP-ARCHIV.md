@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-483: Eine leere erste Schicht bekommt eine Meldung mit Teil und passenden Handlungen (03.10.2026)](#rm-483-eine-leere-erste-schicht-bekommt-eine-meldung-mit-teil-und-passenden-handlungen-03102026) |
 | 2026-10-03 | [RM-478: PrusaSlicer erhält die Teile in einer passenden Anordnung auf dem Druckbett (03.10.2026)](#rm-478-prusaslicer-erhält-die-teile-in-einer-passenden-anordnung-auf-dem-druckbett-03102026) |
 | 2026-10-03 | [RM-477: Modellnamen mit Sonderzeichen erreichen die Slicer (03.10.2026)](#rm-477-modellnamen-mit-sonderzeichen-erreichen-die-slicer-03102026) |
 | 2026-10-03 | [RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)](#rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026) |
@@ -38898,3 +38899,48 @@ Commitnachweis zu RM-478: `9019a76ba84a7a97378898fb3ebe9fa2e0738a48`. Die Cache-
 Die Zusammenführung erhält den inzwischen hinzugekommenen Writer-Callback zur Plattengegenrechnung. Eine gezielte Anschlussprüfung mit echtem Writer bestätigt die Identität der angeordneten Netze und die endgültigen Teilwerte nach Verteilung eines übernommenen Vorschlags. Beide Wege mit und ohne Vergleich bestehen. Die Gegenprobe tauscht ausschließlich die Callbacknetze gegen Originalnetze und wird rot (164 statt 248 Dreiecke); Originalarrays und Szenenzuordnung bleiben erhalten. Belege: `codex_A_478_comparison_green.xml` und `codex_A_478_comparison_red.xml` im Scratchpad.
 
 **Gemeinsames Tor für RM-477/RM-478:** Nach Merge von `fa5d6179e` bestehen **21.237 Fälle, 87 übersprungen, 735,76 s, Exit 0** (`solidon-A-batch2-gate-repeat.txt`). Ruff, Format (1083 Dateien) und mypy (337 Quelldateien) sind grün. Die komplette Writer-Anschlussdatei besteht zusätzlich mit 28 Fällen, 2,91 s, Exit 0. Der erste Gesamtlauf hatte 21.235 bestandene Fälle und einen Fehler: Windows verweigerte im isolierten Aktivierungsfall das Ersetzen seiner temporären `trial.json` (WinError 5). Die unveränderte Aktivierungsdatei bestand danach mit 97 Fällen und zwei übersprungenen, 2,02 s; die vollständige Wiederholung bestätigt den gemeinsamen Stand. Dieser einzelne Schreibfehler ist dokumentiert, nicht durch eine gelockerte Zusicherung übergangen. Fenster, Renderer und Leistung bleiben außerhalb dieses Entwicklungstors.
+
+## RM-483: Eine leere erste Schicht bekommt eine Meldung mit Teil und passenden Handlungen (03.10.2026)
+
+<a id="rm-483-eine-leere-erste-schicht-bekommt-eine-meldung-mit-teil-und-passenden-handlungen-03102026"></a>
+<a id="rm-483"></a>
+
+**RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13 (PrusaSlicer schreibt denselben Satz),
+  `prusa-mini`. `Cat_2.stp` endet mit „There is an object with no extrusions in the first layer.
+  Object name: …“; Solidon sagt nur „Der Slicer hat keine Druckdatei geschrieben“ mit
+  „Maschinenprofil prüfen“. Codex' Matrix führt den Fall zweimal.
+  **Stellen:** `app/core/export/handover.py:5717–5722` (nur `OUTSIDE_THE_VOLUME`, `NO_LAYERS`
+  erkannt), `:5193–5199`.
+  **Fix (allgemein):** Jeder Absagesatz der Prusa-Familie, der eine Ursache nennt, wird übersetzt
+  — hier „Die erste Schicht des Teils ist leer“ mit *Stelle zeigen*, *Auf das Bett legen*,
+  *Brim/Raft* und dem Teilnamen aus der Ausgabe.
+  **Abnahme:** `Cat_2.stp` und zwei weitere Teile mit leerer erster Schicht an PrusaSlicer und
+  SuperSlicer → eigene Meldung mit Handlungen. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-8), `gcode\rest\`.
+
+**Abschluss:** Der Slicer nannte die leere erste Schicht und das betroffene Teil; Solidon ersetzte diese Ursache durch die allgemeine Meldung zur fehlenden Druckdatei. Dieser Weg stammt aus `f4f6e639d22074864862abb154cf6b9111d4dd68` und ist in v0.5.1 enthalten. Vor dem Fix wurden sechs echte Absagen nachgestellt: Cat_2, Cat_3 und das Segelteil aus `pirate+ship+with+sails_stls`, jeweils PrusaSlicer und SuperSlicer. Alle sechs Konsolen nannten die Ursache und das Teil, Solidon zeigte in keinem Fall die eigene Erstschichtdiagnose. Prusa-Katzen verwenden für die Gegenprobe Classic, das Segel Classic ohne Stützen bei 0,1 mm erster Schicht; Arachne beziehungsweise 0,2 mm dienen als positive Kontrollen.
+
+Die Prusa-Familie wird jetzt vor der Kürzung der Konsolenausgabe auf diese Ursache geprüft, sowohl bei fehlender/leer angelegter Datei als auch ohne Materialbahnen. Der vorhandene gemeinsame 8-MiB-Ausgabeschutz bleibt bestehen. Ursache und folgende Namenszeile müssen aus demselben Stream kommen. Unlesbare UTF-8-Namen oder widersprüchliche Zuordnungen führen zu einer ungebundenen Diagnose. Eine tatsächlich extrudierende Druckdatei bleibt auf dem bisherigen Erfolgsweg.
+
+Die temporäre CLI-Kopie unterscheidet doppelte, leere und mehrzeilige Namen; sonst bleibt der Name unverändert. `PlateRun.name_bindings` verbindet den tatsächlich ausgegebenen Namen mit der eingefrorenen Objekt-ID. Szene, Form, Materialslots und Merkmale bleiben erhalten. Ohne eindeutige Bindung gibt es keine objektbezogene Handlung und keinen Ersatz durch die aktuelle Auswahl. Die sichtbaren Handlungen zeigen die Schichten des Teils, legen es über die vorhandene Operation aufs Bett oder öffnen die Haftungsfelder im laufenden Druckdialog. Szenenhandlungen warten auf dessen Abschluss. Veraltete oder abgebrochene Aufträge dürfen keine aktuelle Szene bearbeiten. Keine Handlung benutzt die Befehlspalette.
+
+Namen wie `<b>Teil</b>` bleiben auch in der allgemeinen Fehlermeldung wörtlicher Text: `show_error` setzt wie die bestehende `ErrorNotice` ausdrücklich PlainText. Zwei Gegenfälle waren vorher rot. Die statische Sichtung von 1607 Error-Konstruktoraufrufen fand kein direkt eingebautes absichtliches HTML in Titel oder Detail; getrennte Richtextansichten bleiben unberührt.
+
+Der mitgeführte `part_name` erhält die vorhandene Beschriftung „Teil“. Die Werteanzeige und das Vorlesen bewahren den Namen wörtlich, statt `grid` als Auswahlwert oder `1.2` als Zahl zu übersetzen. 24 Gegenfälle über alle sechs tatsächlichen Sprachkataloge, einschließlich Leerzeichen, geschütztem Leerraum und XML-Zeichen, waren vorher rot und bestehen mit der Korrektur. Es entstehen keine neuen Katalogschlüssel. Belege: `codex_A_483_part_name_before.xml` und `codex_A_483_part_name_after.xml`.
+
+**Test zuerst und Gegenprobe:** Der ursprüngliche Kernlauf hatte 35 Fehler und neun Kontrollen; die erweiterten Namensfälle belegten zusätzlich Sonderzeichen und ähnliche Bezeichnungen. Die übernehmbaren Scratchprüfungen bestehen mit 54 Kern-/Anschlussfällen, 48 UI-Anschlussfällen und zwei Klartextfällen. Geprüft werden echte Methoden mit kleinen Stellvertretern, keine Fensterdarstellung. Die vollständigen roten und grünen Belege stehen unter `codex_A_483_*` im Scratchpad. Native Ausgangsbelege: `F:\solidon-review-reports\gcode\rest\codex_A_483_baseline_matrix\rm483-baseline-summary.json`, mit Verweisen auf sämtliche unveränderten Konsolenausgaben und Quellhashes.
+
+Die lokale Handlung heißt ausdrücklich „Brim oder Raft prüfen …“; die allgemeine Handlung „Druckeinstellungen öffnen“ behält ihren Text. Sechs native Anschlussfälle waren ohne diese lokale Beschriftung rot und mit ihr grün. Der sichtbare Weg hebt im bereits geöffneten Druckdialog die Haftungsfelder hervor.
+
+**Korrigierte Gegenprobe am integrierten Stand:** Die aktuellen 321 Fälle wurden mit dem Produktstand `03dbd2555` und anschließend mit dem eingefrorenen Fix ausgeführt. Ohne Fix: **103 rot, 218 grün, Exit 1**. Mit Fix: **321 grün, Exit 0**; jeweils 57 Fensterfälle ausgenommen und null Aufbaufehler. Acht Fehler des ersten Gegenlaufs kamen aus einer veralteten Prozessattrappe, die noch direkt in den endgültigen Ausgabeordner schrieb. Nach der Anpassung an den tatsächlich übergebenen `--output`-Pfad bleiben sechs fehlende/inerte Ausgaben fachlich rot, zwei echt extrudierende Kontrollen sind schon ohne Fix grün. Belege: `codex_A_483_corrected_countercheck_v2/{head,current}.xml`. Der gezielte integrierte Lauf mit Writer-, Beschriftungs-, Sprach- und Dokumentprüfungen besteht mit **576 Fällen, drei übersprungen, 58 zurückgestellt, Exit 0**.
+
+**Echte Abnahme:** Zehn Starts über `_PrepareAndSliceWorker` bestehen: Cat_2, Cat_3 und das Segel jeweils an PrusaSlicer und SuperSlicer ergeben sechs erwartete native Absagen mit passender Ursache, wörtlichem Teilnamen, eingefrorener Objekt-ID und allen vier Handlungen. Vier positive Kontrollen erzeugen G-Code mit Materialbahnen. Die tatsächlich exportierten Netze und wirksamen Teilwerte erreichen denselben Vergleich im `PlateRun` und `SliceComparison`; Originale und Nutzerprofile bleiben unverändert. Vollständige Belege: `F:\solidon-review-reports\gcode\rest\codex_A_483_integrated\rm483-summary.json` und die dort verknüpften Konsolen-/G-Code-Dateien.
+
+Positive G-Code-Kontrollen (Körperlagen / positive E-Bahnen mit XY in mm): Prusa Cat2/Arachne **75 / 1988,120**, Prusa Cat3/Arachne **75 / 2661,973**, SuperSlicer Segel bei 0,2 mm **462 / 539,510**, Prusa Segel bei 0,2 mm **350 / 516,371**. Alle zehn ASCII-Arbeitsordner wurden geräumt; die Ergebnisse blieben im Unicode-Ziel erhalten. Unverändert im unabhängigen Hashnachlauf: drei Modelle, 22.000 Herstellerprofile, 17 ursprüngliche Nutzerdateien, 54 isolierte Seed-Dateien, 361 Produktdateien und elf Sonden. Je Erfolg wurde der G-Code nochmals unabhängig gelesen. Nachweis: `rm483-integrationsabnahme.md` und `acceptance-proof.json`.
+
+Die positiven Kontrollen sind keine Zusage für ein insgesamt warnungsfreies Modell: SuperSlicer meldet am Segel bei 0,2 mm „Empty layer between 68.45 and 69.2.“, Prusa meldet Stabilität und geringe Haftung. Diese noch verlorenen Konsolenwarnungen gehören zum anschließenden RM-484. SuperSlicer nennt zusätzlich in allen vier Starts `binary_gcode=0` als unbekannte/substituierte Option; die Erfolgskontrolle liefert dennoch Text-G-Code. Die vollständigen Rohmeldungen bleiben erhalten.
+
+Der betroffene Kernlauf über `tools/affected_tests.py` endet mit **20.384 bestanden, 107 übersprungen, 917,28 s, Exit 0** (`solidon-A-483-affected.txt`). Ruff, Format (1086 Dateien) und mypy (337 Quelldateien) bestehen. Die Korrektur ist im eigenen Punktcommit mit der unten genannten Aussage enthalten; seine Kennung wird im gemeinsamen Abnahmecommit nachgetragen. Fenster-, Renderer- und Leistungsprüfungen bleiben Releasearbeit.
+
+Changelog in allen sechs Sprachen, weil Ursache, Teilname und nutzbare Rückwege Kunden veröffentlichter Versionen betreffen. Commit: „Eine leere erste Schicht bekommt eine Meldung mit Teil und passenden Handlungen“.

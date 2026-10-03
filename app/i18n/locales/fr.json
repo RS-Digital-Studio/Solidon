@@ -7520,5 +7520,8 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "Les valeurs concordent dans la limite de comparaison.",
   "Quelle der Schätzung": "Source de l'estimation",
   "Interne Schichtanalyse": "Analyse interne des couches",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Les fichiers d'impression ne peuvent pas être associés sans ambiguïté aux plateaux comparés."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Les fichiers d'impression ne peuvent pas être associés sans ambiguïté aux plateaux comparés.",
+  "Brim oder Raft prüfen …": "Vérifier le brim ou le raft …",
+  "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.": "La première couche de la pièce « {name} » est vide. Posez la pièce sur le plateau ou vérifiez les réglages du brim, du raft et de la hauteur de la première couche.",
+  "Die erste Schicht eines Teils ist leer. Prüfen Sie die Lage auf dem Bett sowie Brim, Raft und die Höhe der ersten Schicht.": "La première couche d'une pièce est vide. Vérifiez sa position sur le plateau ainsi que les réglages du brim, du raft et de la hauteur de la première couche."
 }

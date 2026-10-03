@@ -7520,5 +7520,8 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "Los valores coinciden dentro del límite de comparación.",
   "Quelle der Schätzung": "Origen de la estimación",
   "Interne Schichtanalyse": "Análisis interno de capas",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Los archivos de impresión no se pueden asignar de forma inequívoca a las placas comparadas."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "Los archivos de impresión no se pueden asignar de forma inequívoca a las placas comparadas.",
+  "Brim oder Raft prüfen …": "Revisar brim o raft …",
+  "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.": "La primera capa de la pieza «{name}» está vacía. Coloque la pieza sobre la cama o revise los ajustes de brim, raft y altura de la primera capa.",
+  "Die erste Schicht eines Teils ist leer. Prüfen Sie die Lage auf dem Bett sowie Brim, Raft und die Höhe der ersten Schicht.": "La primera capa de una pieza está vacía. Revise su posición sobre la cama y los ajustes de brim, raft y altura de la primera capa."
 }

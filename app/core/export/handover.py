@@ -46,6 +46,7 @@ from app.core.errors import (
     INSTALL_MISSING,
     OPEN_PRINT_SETTINGS,
     OPEN_SETTINGS,
+    PLACE_ON_BED,
     REPAIR_AND_RETRY,
     RETRY,
     SCALE_TO_FIT,
@@ -5884,6 +5885,9 @@ def slice_model(
                     _REFUSES_THE_ARRANGE_FLAG.add(setup.executable)
                 arranged_by_slicer = True
         if produced is None:
+            first_layer_error = _empty_first_layer_error(setup, completed.stdout, completed.stderr)
+            if first_layer_error is not None:
+                raise first_layer_error
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
             # ohne Text zu melden — und das ist schlimmer als keiner.
@@ -5988,6 +5992,9 @@ def slice_model(
                 or config.written.get("machine_gcode_flavor"),
             )
         if not analysis.extrudes:
+            first_layer_error = _empty_first_layer_error(setup, completed.stdout, completed.stderr)
+            if first_layer_error is not None:
+                raise first_layer_error
             # Eine große Datei ohne eine einzige Förderbewegung. Der Slicer ist
             # durchgelaufen und hat den Rückgabewert 0 gemeldet, aber das
             # Modell nicht verarbeitet — meist, weil ihm eine Einstellung
@@ -6663,6 +6670,65 @@ def _outside_the_volume(
         detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
         values={"output": output},
         suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
+    )
+
+
+def _empty_first_layer_error(setup: SlicerSetup, *streams: bytes) -> ExternalToolError | None:
+    """Ordnet die native Erstschichtabsage ihrem unveränderten Exportnamen zu.
+
+    Der Prozess begrenzt die gesamte Ausgabe bereits auf SLICER_OUTPUT_LIMIT.
+    Namen werden vor der Kürzung und nur im selben Ausgabestrom gelesen.
+    Mehrere verschiedene oder unlesbare Namen erlauben keine Objektbindung.
+    """
+    if setup.flavour != "prusa":
+        return None
+    cause = b"There is an object with no extrusions in the first layer."
+    prefix = b"Object name: "
+    names: set[str | None] = set()
+    for stream in streams:
+        lines = stream.splitlines()
+        for index, line in enumerate(lines):
+            if line.strip() != cause:
+                continue
+            name = None
+            if index + 1 < len(lines) and lines[index + 1].startswith(prefix):
+                raw_name = lines[index + 1][len(prefix) :]
+                with suppress(UnicodeDecodeError):
+                    name = raw_name.decode("utf-8") or None
+            names.add(name)
+    if not names:
+        return None
+    part_name = next(iter(names)) if len(names) == 1 else None
+    values: dict[str, Any] = {
+        "constraint": "empty_first_layer",
+        "field": "adhesion.kind",
+        "output": "\n".join(
+            stream.decode("utf-8", errors="replace") for stream in streams if stream
+        ),
+    }
+    if part_name is not None:
+        values["part_name"] = part_name
+        detail = _(
+            "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil "
+            "auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.",
+            name=part_name,
+        )
+    else:
+        detail = _(
+            "Die erste Schicht eines Teils ist leer. Prüfen Sie die Lage auf dem "
+            "Bett sowie Brim, Raft und die Höhe der ersten Schicht."
+        )
+    return ExternalToolError(
+        tool=setup.name,
+        title=SLICER_FAILED,
+        detail=detail,
+        values=values,
+        suggestions=(
+            SHOW_LOCATIONS,
+            PLACE_ON_BED,
+            replace(OPEN_PRINT_SETTINGS, label=_("Brim oder Raft prüfen …")),
+            SHOW_SLICER_OUTPUT,
+        ),
     )
 
 

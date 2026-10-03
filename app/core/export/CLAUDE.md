@@ -315,5 +315,10 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
 
 ## Grenzen
 
+Prusas Erstschichtabsage wird vor der Ausgabekürzung gelesen
+(`handover._empty_first_layer_error`). Der native Name bleibt wörtlich und
+muss eindeutig zur vorbereiteten Platte gehören; ungebundene Meldungen
+bieten keine Handlung an einer zufällig gewählten Szeneauswahl.
+
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 - Kennzahlen aus Schichtanalyse und G-Code bleiben getrennt (Regel 14).

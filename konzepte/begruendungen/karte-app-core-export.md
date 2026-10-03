@@ -500,3 +500,18 @@ Platten und Lagen wieder her.
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 
 - Kennzahlen aus Schichtanalyse und G-Code bleiben getrennt (Regel 14).
+
+## Native Erstschichtabsagen
+
+Ein Slicerprozess kann regulär enden und trotzdem keine Materialbahnen
+erzeugen. Seine konkrete Ursache wird vor der allgemeinen Absage gelesen.
+Die begrenzte vollständige Ausgabe bleibt für die Protokollhandlung erhalten;
+Ursache und folgende Objektzeile müssen aus demselben Ausgabestrom stammen.
+Ungültiges UTF-8 oder widersprüchliche Namen erlauben keine Objektbindung.
+Eine tatsächlich extrudierende Druckdatei behält den Erfolgsweg.
+
+Namen werden nicht normalisiert: Leerraum, Großschreibung und Zeichen gehören
+zum Namen. Nur doppelte, leere oder mehrzeilige Namen erhalten in der privaten
+CLI-Kopie eine eindeutige Kennzeichnung. `PlateRun.name_bindings` verbindet
+genau diese ausgegebenen Namen mit den eingefrorenen Szenenkennungen. Das
+Projekt und seine Materialzuordnung bleiben unverändert.

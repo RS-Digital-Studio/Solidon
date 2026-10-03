@@ -7520,5 +7520,8 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "I valori corrispondono entro il limite di confronto.",
   "Quelle der Schätzung": "Fonte della stima",
   "Interne Schichtanalyse": "Analisi interna degli strati",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "I file di stampa non possono essere associati in modo univoco ai piatti confrontati."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "I file di stampa non possono essere associati in modo univoco ai piatti confrontati.",
+  "Brim oder Raft prüfen …": "Controlla brim o raft …",
+  "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.": "Il primo strato del pezzo «{name}» è vuoto. Posiziona il pezzo sul piatto oppure controlla le impostazioni di brim, raft e altezza del primo strato.",
+  "Die erste Schicht eines Teils ist leer. Prüfen Sie die Lage auf dem Bett sowie Brim, Raft und die Höhe der ersten Schicht.": "Il primo strato di un pezzo è vuoto. Controlla la sua posizione sul piatto e le impostazioni di brim, raft e altezza del primo strato."
 }

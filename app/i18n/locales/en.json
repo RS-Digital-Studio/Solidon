@@ -7520,5 +7520,8 @@
   "Die Werte stimmen innerhalb der Vergleichsgrenze überein.": "The values agree within the comparison limit.",
   "Quelle der Schätzung": "Estimate source",
   "Interne Schichtanalyse": "Internal layer analysis",
-  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "The print files cannot be matched unambiguously to the compared plates."
+  "Die Druckdateien lassen sich nicht eindeutig den verglichenen Platten zuordnen.": "The print files cannot be matched unambiguously to the compared plates.",
+  "Brim oder Raft prüfen …": "Check brim or raft …",
+  "Die erste Schicht des Teils „{name}“ ist leer. Setzen Sie das Teil auf das Bett oder prüfen Sie Brim, Raft und die Höhe der ersten Schicht.": "The first layer of part “{name}” is empty. Place the part on the bed or check the brim, raft and first-layer height settings.",
+  "Die erste Schicht eines Teils ist leer. Prüfen Sie die Lage auf dem Bett sowie Brim, Raft und die Höhe der ersten Schicht.": "A part has an empty first layer. Check its position on the bed, as well as the brim, raft and first-layer height settings."
 }

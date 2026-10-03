@@ -22602,7 +22602,7 @@ class MainWindow(QMainWindow):
         """Der Körper, um den es geht — aus dem Fehler oder aus der Auswahl."""
         if error.object_id:
             return error.object_id
-        if error.values.get("constraint") == "slicer_build_volume":
+        if error.values.get("constraint") in {"slicer_build_volume", "empty_first_layer"}:
             return None
         chosen = self.object_tree.selected_objects()
         return chosen[0] if chosen else None
@@ -22670,6 +22670,9 @@ class MainWindow(QMainWindow):
         drei offenen Kanten wären es drei. Die Defektkarte färbt sie alle, und
         das ist die Antwort auf die Frage, die der Knopf stellt.
         """
+        if error.values.get("constraint") == "empty_first_layer":
+            self._show_layers_after_error(error)
+            return
         if not self._quiet_command_allowed():
             return
         object_id = self._object_of(error)
