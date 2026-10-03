@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- As definições de cada peça chegam ao fatiador com mais fiabilidade. As que se aplicam a toda a placa são explicadas na peça afetada.
 - Com Orca e Prusa, aceitar uma sugestão de velocidade para um encaixe abranda apenas as peças afetadas.
 - Mesmo pequenas alterações aceites nas definições de impressão são preservadas na exportação.
 - O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.

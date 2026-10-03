@@ -478,3 +478,21 @@ Platten und Lagen wieder her.
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 
 - Kennzahlen aus Schichtanalyse und G-Code bleiben getrennt (Regel 14).
+
+
+## Objektwerte und native Rollen
+
+Die Familie allein belegt keine Objektfähigkeit. `_part_paths` verwendet
+die gemessene Programmmarke; ohne sie gilt die konservative Schnittmenge
+der Familienmitglieder. `PartSplit.native` hält die wirksamen
+Plattenrollen für Rücknahme und Begrenzung bereit. `_speed_roles` und
+`_acceleration_roles` verwenden dieselbe Ableitung für Platte und Objekt.
+Unbekannte Prusa-Programmmarken beachten beide gemessenen Kleinperimeter-
+Vorgaben; vorhandene langsamere Rollen werden nicht beschleunigt.
+
+Cura koppelt die erste Bahnbreite global an die reguläre Breite. Deshalb
+bleibt `layers.line_width` dort plattenweit. Dichte und Stützschalter werden
+mit ihren tatsächlich wirksamen Netzabhängigkeiten geschrieben. Ein global
+nicht erfüllbarer Stützstil behält seinen Befund und erweitert nicht den
+Stützschalter auf unbeteiligte Körper. Kanalsperren bleiben körperbezogen.
+SuperSlicers fehlender Wandgenerator bedeutet Classic, Prusas Arachne.

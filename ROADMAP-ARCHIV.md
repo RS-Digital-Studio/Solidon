@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-317: Objektwerte folgen den gemessenen Fähigkeiten jedes Slicers (03.10.2026)](#rm-317-objektwerte-folgen-den-gemessenen-fähigkeiten-jedes-slicers-03102026) |
 | 2026-10-03 | [RM-503: Cura übernimmt die native Jerk-Steuerung und eigene Rollenwerte (03.10.2026)](#rm-503-cura-übernimmt-die-native-jerk-steuerung-und-eigene-rollenwerte-03102026) |
 | 2026-10-03 | [RM-301: Cura nennt beide Drucker bei abweichender Auswahl (03.10.2026)](#rm-301-cura-nennt-beide-drucker-bei-abweichender-auswahl-03102026) |
 | 2026-10-03 | [RM-252: Mehrfarbige 3MF-Modelle behalten ihre Koordinaten beim Slicen mit Gitterstützen (03.10.2026)](#rm-252-mehrfarbige-3mf-modelle-behalten-ihre-koordinaten-beim-slicen-mit-gitterstützen-03102026) |
@@ -38790,3 +38791,89 @@ Releaseprüfung abgewählt, Exit 0**, 30,98 s. Der Abschlussnachweis aus
 Roadmap-, Karten- und Changelogprüfungen besteht mit 77 Prüfungen und vier
 übersprungenen Plattformfällen. Protokolle: `solidon-A-batch1-kernel-repeat.txt`
 und `solidon-A-batch1-final-docs.txt` unter `%TEMP%`.
+
+## RM-317: Objektwerte folgen den gemessenen Fähigkeiten jedes Slicers (03.10.2026)
+
+<a id="rm-317-objektwerte-folgen-den-gemessenen-fähigkeiten-jedes-slicers-03102026"></a>
+<a id="rm-317"></a>
+
+**RM-317 — Welche Objektwerte nimmt jeder Slicer an?**
+  Solidon schreibt übernommene Vorschläge je Teil als Objektwert (`advise.PART_PATHS`,
+  `handover._part_paths`) und nimmt für PrusaSlicer und die Orca-Familie an, dass jeder
+  Pfad dort ankommt. Gemessen ist das nur für ElegooSlicer 1.5.3.5 im Konsolenlauf
+  (30.09.2026, Stangenplatte des Minigolf-Satzes): Wandtempo außen und innen,
+  `outer_wall_acceleration`, `default_acceleration`, `brim_type`/`brim_width`/`brim_object_gap`
+  und `wall_sequence` je Objekt kommen an — am Centauri Carbon 2 steht die Beschleunigung als
+  `SET_VELOCITY_LIMIT ACCEL=`, nicht als `M204`. Offen sind OrcaSlicer, Bambu Studio,
+  Creality Print, PrusaSlicer, SuperSlicer und Cura (`CURA_PER_MESH`), dort vor allem die
+  Beschleunigungen und der Brim je Objekt, und die Regeln, die je Teil wirken (Stützen,
+  Brim, schlanke Teile über `_calm_walls`, Passungen). Weg: je Slicer eine Platte mit zwei
+  Körpern, an einem jeder Pfad als Objektwert, G-Code lesen; was ein Slicer nicht annimmt,
+  fällt aus `_part_paths` und geht über `unavailable` mit Hinweis an die Platte. Abnahme: je
+  Slicer ein Wächter, der `_part_paths` gegen die Messung hält.
+  Registerabgleich 02.10.: `brim_object_gap` ist kein Solidon-Pfad; Commit `436e1ce0f` trägt das Etikett RM-317, betrifft aber den Matrixläufer.
+
+**Abschluss:** Die Übergabe behandelte gemeinsame Schlüsselnamen als Beleg für
+Objektfähigkeit. Tatsächlich ignorieren einzelne Programme Objektwerte oder
+überlagern sie durch eigene Rollen. Die allgemeine Korrektur führt gemessene
+Fähigkeiten je Programmmarke, vollständige Rollenwerte und den gemeinsamen
+Ableitungspfad für Platte und Objekt zusammen. Unbekannte Marken erhalten die
+konservativen Grenzen ihrer Familie. Nicht erfüllte Wünsche bleiben am
+betroffenen Teil mit ihrem ursprünglichen Wert sichtbar.
+
+Die Diagnose umfasst 16 Pfade × sieben Programme = 112 Zellen und 97 echte
+Schnitte. Die nachfolgenden 39 Fälle, zwei Cura-Erstschichtproben und 16 große
+und kleine Gegenformen erfüllen 468/468 datei- und bahnbezogene Bedingungen.
+56 Zellen tragen zusätzliche Nachherbelege; für unveränderte Fähigkeiten gilt
+der ursprüngliche Einzelpfadbeleg. Es wird keine zweite vollständige
+112-Zellen-Reihe behauptet. Ziel/Referenz: Wandtempi 17/29 mm/s an großen
+Konturen; Prusas kleine Zielkonturen fahren 17/17 statt der nativen 140/140,
+die Referenz bleibt 140/140. Beschleunigungen 123/321 mm/s² gelten bei Orca,
+Elegoo, Creality und Cura am Ziel, bei Bambu, Prusa und SuperSlicer mit Befund
+plattenweit. SuperSlicers unveränderter Erstschichtwert 800 erzwingt dabei
+keine höhere Beschleunigung als die normalen Druckrollen.
+
+Prusa und SuperSlicer schreiben sechs Rollenbreiten: tatsächlich 0,48 mm am
+Ziel und 0,45 mm an der Referenz. Cura ignoriert den Erstschichtfaktor am Netz;
+eine angebliche Einzelteilbreite änderte die erste Referenzbahn von 0,42 auf
+0,3675 mm. Deshalb bleibt die reguläre Breite dort begründet plattenweit.
+Nachher bleibt die erste Bahn beider Körper bei 0,42 mm (E/L 0,0342246678),
+die spätere bei 0,48 mm. Cura-Dichte 37/15 Prozent erzeugt 233,194/95,059 mm
+Füllbahn statt zweimal etwa 233 mm. Die Kanalsperre betrifft ausschließlich
+das Ziel: 0 mm Stützbahn gegenüber 13.809,37 mm an der Referenz. Der globale
+Stützstil und das Ein-/Ausschalten je Netz werden getrennt behandelt.
+
+Echte Passungen, natürliche Schlankteilberatung und Zweifarbenkörper sind
+zusätzlich belegt. Elegoo und Bambu fördern am Ziel beide Werkzeuge mit
+17/29 mm/s und 0,48 mm; Farben und Profilidentitäten bleiben erhalten.
+Die gemeinsame B7-Nachprobe ergibt Orca 30/162,364883 und Prusa
+29,999967/169,999783 mm/s für Passung/Klotz; Curas absichtlich niedriger
+Volumenstromdeckel hält beide bei 17. Alle drei Läufe liefern Druckdateien.
+
+Auch fehlende oder unlesbare Herstellerketten halten die Wandobergrenze.
+Prusas unbelegte Kleinrolle fuhr vorher trotz Wahl 5 noch 15 mm/s. Nachher
+5/15 bei Teilwahl, 5/5 bei eigener Plattenwahl; SuperSlicer 5/40. Ohne
+belegte Programmmarke zählt die gemeinsame Grenze aus gemessenen 15 mm/s
+und 50 Prozent der Innenwand. Sechs echte Familiengegenfälle erfüllen
+126/126 Bedingungen: SuperSlicer bei Außenwahl 5/15/20/30 und Innenwand 60
+fährt 5/15/15/30, Referenz stets 30. Eine langsamere Prozentrolle bleibt
+erhalten. Erste Schicht 25 mm/s und 700 mm/s² sowie übrige Plattenwerte
+bleiben unverändert. Der sichtbare Dateiexport ohne gefundenes Programm
+verwendet weiterhin die Orca-Familie.
+
+Rote Gegenproben: zunächst zehn Transportfälle, anschließend zwei Rollen-,
+sechs Fähigkeits-, drei Erstschicht- und sechs Konturfälle. Der erste
+Fallbacknachtrag hat 21 rote Gegenfälle, der Familiennachtrag 18. Danach
+286 gezielte Kernfälle grün; Übersetzungen, Ruff, Format und gezieltes mypy
+ebenfalls grün. Die früheren Freigaben mit 219 bzw. 230 Bedingungen wurden
+wegen der unvollständigen Cura-Erstschichtprüfung und der falschen Prusa-
+Temposperre ausdrücklich zurückgenommen. Belege liegen unter
+`F:\solidon-review-reports\B-slicer-rest\rm317`: `abschluss.md`,
+`matrix-after.md`, `fallback-family-bericht.md`, `review.md` und die dort
+genannten Originalprojekte und G-Codes. Zentrales Tor und genaue Commits
+stehen im Bericht B. Fenster-, Renderer- und Leistungsläufe bleiben beim
+Release; geschriebene Cura-Fensterdateien wurden als Dateien geprüft.
+
+Die Ursachen `2cf02ad2d`, `44ab90965` und `f4f6e639d` liegen in v0.5.1.
+Die sichtbare Korrektur erhält deshalb einen Kundenpunkt in allen sechs
+Sprachen. Der später ergänzte Brim-Abstand wird separat unter RM-318 gemessen.

@@ -29,6 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
+- Los ajustes de cada pieza llegan al laminador con más fiabilidad. Los que afectan a toda la placa se explican en la pieza correspondiente.
 - Con Orca y Prusa, aceptar una sugerencia de velocidad para un encaje solo ralentiza las piezas afectadas.
 - También se conservan al exportar los pequeños cambios aceptados en los ajustes de impresión.
 - Cura usa los límites de cambio brusco de velocidad del perfil, con valores separados para paredes, relleno y primera capa.

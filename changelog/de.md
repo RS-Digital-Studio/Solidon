@@ -53,6 +53,7 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- Druckwerte für einzelne Teile kommen zuverlässiger im Slicer an. Werte, die nur für die ganze Platte gelten, werden am betroffenen Teil erklärt.
 - Bei Orca und Prusa bremst ein übernommener Vorschlag für eine Passung nur noch die betroffenen Teile.
 - Auch kleine übernommene Änderungen der Druckeinstellungen bleiben beim Export erhalten.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.

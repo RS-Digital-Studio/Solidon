@@ -2337,7 +2337,12 @@ def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile:
         settings = print_settings.with_accepted(settings, path, value)
 
     written, findings = write_assembly(
-        objects, tmp_path, project_name="Stange", profile=profile, settings=settings
+        objects,
+        tmp_path,
+        project_name="Stange",
+        profile=profile,
+        settings=settings,
+        setup=handover.SlicerSetup(Path("OrcaSlicer.exe"), "orca"),
     )
 
     assert not [entry for entry in findings if entry.code == "export.part_setting_all"]
@@ -2353,13 +2358,9 @@ def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile:
         assert key not in values["Block"], (key, values["Block"])
 
 
-def test_cura_names_the_part_that_gets_the_rods_plate_wide_calm_walls(
-    tmp_path: Path, profile: Profile
-) -> None:
-    """RM-430: CuraEngine nimmt Innenwandtempo und Grundbeschleunigung nicht je
-    Netz an. Sie bleiben plattenweit auf den ruhigen Werten der Stange — auch am
-    Block, und kein Befund sagte es: Der Rat je Teil wurde an einer Grundlage
-    gefragt, die die Übernahme schon trug, und schwieg."""
+def test_cura_keeps_the_rods_calm_walls_on_the_rod(tmp_path: Path, profile: Profile) -> None:
+    """RM-317: Cura nimmt alle vier ruhigen Wandwerte je Netz an; die
+    Referenz erhält auch die abgeleiteten Rollenwerte ihrer Grundlage."""
     stange = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 122.0)))
     block = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
     objects = [
@@ -2387,20 +2388,17 @@ def test_cura_names_the_part_that_gets_the_rods_plate_wide_calm_walls(
     }
     assert per_part == {
         ("obj_1", "speed.outer_wall"),
+        ("obj_1", "speed.inner_wall"),
+        ("obj_1", "speed.acceleration"),
         ("obj_1", "speed.outer_wall_acceleration"),
     }
     plate_wide = [entry for entry in findings if entry.code == "export.part_setting_unavailable"]
-    assert {(entry.object_id, entry.values["setting"]) for entry in plate_wide} == {
-        ("obj_2", "speed.inner_wall"),
-        ("obj_2", "speed.acceleration"),
-    }
-    for entry in plate_wide:
-        assert entry.severity == "warning"
-        assert "ganze Platte" in str(entry.message)
-        assert str(entry.values["reason"]), "der Grund der Stange bleibt nachprüfbar"
+    assert not plate_wide
     meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(written)}
     assert meshes["Stange-part-1.stl"]["speed_wall_0"] == "60"
-    assert "speed_wall_x" not in meshes["Stange-part-2.stl"], "Cura nimmt es nicht je Netz"
+    baseline = print_settings.resolve(profile, "standard")
+    assert float(meshes["Stange-part-2.stl"]["speed_wall_x"]) == baseline.speed.inner_wall
+    assert float(meshes["Stange-part-2.stl"]["acceleration_wall_x"]) == baseline.speed.acceleration
 
 
 def test_the_calm_walls_of_a_slender_rod_keep_the_limit_of_soft_filament() -> None:
@@ -2654,8 +2652,8 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     """CuraEngine nimmt ob gestützt wird je Netz an (``support_enable``), die
     Stützart aber nur für die Platte (``support_structure``, Cura 5.13). Die
     Übernahme bleibt deshalb auf der Platte, und der Klotz bekommt sie je Netz
-    zurückgenommen; der Pilz behält die Stützart der Platte, und der Befund
-    nennt diese. Je Netz steht nur, was Cura dort liest."""
+    zurückgenommen; der Pilz verlangt automatische Stützen und erhält die
+    Stützart der Platte. Je Netz steht nur, was Cura dort liest."""
     settings = print_settings.with_accepted(
         print_settings.resolve(profile, "standard"), "support.style", "tree"
     )

@@ -29,6 +29,7 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- Les réglages propres à chaque pièce sont mieux transmis au trancheur. Ceux qui s’appliquent à tout le plateau sont expliqués sur la pièce concernée.
 - Avec Orca et Prusa, une suggestion de vitesse acceptée pour un ajustement ne ralentit que les pièces concernées.
 - Même les petites modifications acceptées dans les réglages d’impression sont conservées à l’export.
 - Cura reprend les limites de jerk du profil, avec des valeurs distinctes pour les parois, le remplissage et la première couche.

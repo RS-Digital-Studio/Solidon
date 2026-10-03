@@ -78,7 +78,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
-| [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
 | [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Zweitreview und Entwicklungstor mit 19.464/62 grün; alle 17 Pfade in `0041000a0` übernommen und unabhängig abgeglichen; Pushbeleg offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
@@ -2547,24 +2546,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Review-Sonde). (c) Ohne übersetzten Schnittkern (`_chain`) braucht der Leistungstest
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
-
-<a id="rm-317"></a>
-
-- [ ] **RM-317 — Welche Objektwerte nimmt jeder Slicer an?**
-  Solidon schreibt übernommene Vorschläge je Teil als Objektwert (`advise.PART_PATHS`,
-  `handover._part_paths`) und nimmt für PrusaSlicer und die Orca-Familie an, dass jeder
-  Pfad dort ankommt. Gemessen ist das nur für ElegooSlicer 1.5.3.5 im Konsolenlauf
-  (30.09.2026, Stangenplatte des Minigolf-Satzes): Wandtempo außen und innen,
-  `outer_wall_acceleration`, `default_acceleration`, `brim_type`/`brim_width`/`brim_object_gap`
-  und `wall_sequence` je Objekt kommen an — am Centauri Carbon 2 steht die Beschleunigung als
-  `SET_VELOCITY_LIMIT ACCEL=`, nicht als `M204`. Offen sind OrcaSlicer, Bambu Studio,
-  Creality Print, PrusaSlicer, SuperSlicer und Cura (`CURA_PER_MESH`), dort vor allem die
-  Beschleunigungen und der Brim je Objekt, und die Regeln, die je Teil wirken (Stützen,
-  Brim, schlanke Teile über `_calm_walls`, Passungen). Weg: je Slicer eine Platte mit zwei
-  Körpern, an einem jeder Pfad als Objektwert, G-Code lesen; was ein Slicer nicht annimmt,
-  fällt aus `_part_paths` und geht über `unavailable` mit Hinweis an die Platte. Abnahme: je
-  Slicer ein Wächter, der `_part_paths` gegen die Messung hält.
-  Registerabgleich 02.10.: `brim_object_gap` ist kein Solidon-Pfad; Commit `436e1ce0f` trägt das Etikett RM-317, betrifft aber den Matrixläufer.
 
 <a id="rm-318"></a>
 

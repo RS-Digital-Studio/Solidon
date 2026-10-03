@@ -1313,7 +1313,10 @@ def _part_values(
         item for item in asked if not same_value(item.value, read_path(split.plate, item.path))
     ]
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    return replace(_values_for(split, applied, unavailable, flavour, program=program), asked=asked)
+    return replace(
+        _values_for(split, applied, unavailable, flavour, program=program, profile=profile),
+        asked=asked,
+    )
 
 
 def _values_for(
@@ -1324,6 +1327,7 @@ def _values_for(
     everywhere: Sequence[SettingAdvice] = (),
     *,
     program: str = "",
+    profile: Profile | None = None,
 ) -> _PartValues:
     """Objektwerte und wirksame Einstellungen eines Teils aus seinem Rat.
 
@@ -1338,7 +1342,9 @@ def _values_for(
     if not split.revert:
         carried = [*applied, *everywhere]
         return _PartValues(
-            handover.object_keys(split.plate, carried, flavour, program=program),
+            handover.object_keys(
+                split.plate, carried, flavour, program=program, profile=profile, native=split.native
+            ),
             list(applied),
             list(unavailable),
             advise.apply(split.plate, carried),
@@ -1351,10 +1357,29 @@ def _values_for(
     def as_cura_takes_it(item: SettingAdvice) -> SettingAdvice:
         if handover.cura_takes_whole(item.path):
             return item
+        if item.path == "support.style":
+            # Ein/aus geht je Netz. Ein eingeschaltetes Netz bekommt die
+            # Stützart der Platte; „aus“ bleibt auch unter Bäumen aus.
+            if item.value == "none":
+                return item
+            actual = "tree" if split.plate.support.style == "tree" else "grid"
+            return replace(item, value=actual)
         return replace(item, value=read_path(split.plate, item.path))
 
-    own = [as_cura_takes_it(item) for item in applied]
-    carried = own + [as_cura_takes_it(item) for item in everywhere]
+    missing = list(unavailable)
+    own = []
+    for item in applied:
+        actual = as_cura_takes_it(item)
+        if same_value(item.value, actual.value) or (
+            item.path == "support.style" and item.value == "auto"
+        ):
+            own.append(actual)
+        elif item not in missing:
+            missing.append(item)
+    # Unerfüllte Stützarten müssen beim erneuten Schreiben (``everywhere``)
+    # ihre Ein/aus-Wirkung behalten, auch ohne falschen Übernahmebefund.
+    received = [*applied, *(item for item in unavailable if item.path in split.per_part)]
+    carried = [as_cura_takes_it(item) for item in [*received, *everywhere]]
     needed = {item.path for item in carried}
     changes = carried + [
         SettingAdvice(
@@ -1368,11 +1393,11 @@ def _values_for(
     keys = {
         key: value
         for key, value in handover.object_keys(
-            split.plate, changes, flavour, program=program
+            split.plate, changes, flavour, program=program, profile=profile
         ).items()
         if key in handover.CURA_PER_MESH
     }
-    return _PartValues(keys, own, list(unavailable), advise.apply(split.plate, changes))
+    return _PartValues(keys, own, missing, advise.apply(split.plate, changes))
 
 
 def _unserved(
@@ -1397,7 +1422,7 @@ def _unserved(
     """
     if split is None or accepted is None:
         return []
-    served = {item.path for entry in values for item in entry.applied}
+    served = {item.path for entry in values for item in (*entry.applied, *entry.unavailable)}
     return [
         SettingAdvice(
             path=path,
@@ -1446,7 +1471,7 @@ def _served_elsewhere(
             document,
             cancelled,
         )
-        hit = {item.path for item in values.applied} & open_paths
+        hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
         served |= hit
         open_paths -= hit
     return frozenset(served)
@@ -1534,9 +1559,9 @@ def _part_setting_findings(
                 _("Nur für dieses Teil: {reason}", reason=entry.reason)
                 if applied
                 else _(
-                    "Dieser Slicer übernimmt die empfohlenen Einstellungen für einzelne Teile "
-                    "nicht. Übernehmen Sie den genannten Vorschlag für die ganze Platte oder "
-                    "wählen Sie einen Slicer, der 3MF-Baugruppen liest."
+                    "Dieser Slicer übernimmt den genannten Vorschlag nicht für dieses Teil. "
+                    "Prüfen Sie die Einstellung für die ganze Platte oder wählen Sie einen "
+                    "Slicer, der diesen Wert je Teil übernimmt."
                 )
             ),
             # Beim übernommenen Wert steht der Grund im Satz; wo der Slicer ihn
@@ -1559,8 +1584,8 @@ def _plate_wide_findings(
 ) -> list[Finding]:
     """Wer eine Übernahme mitbekommt, die nur ein anderes Teil verlangt (RM-430).
 
-    Nimmt der Slicer einen Pfad nicht je Teil an — bei CuraEngine Innenwand
-    und Grundbeschleunigung —, bleibt die Übernahme plattenweit. Das Teil, das
+    Nimmt der Slicer einen Pfad nicht je Teil an — etwa Curas Haftungsart
+    oder Bambus Beschleunigung —, bleibt die Übernahme plattenweit. Das Teil, das
     sie verlangt, ist bedient; die übrigen bekommen sie trotzdem, und das
     sagt dieser Befund an ihnen, mit dem Grund des verlangenden Teils. Verlangt
     hier kein Teil den Wert, bleibt es still wie bisher.
@@ -1854,6 +1879,7 @@ def write_assembly(
                 flavour,
                 everywhere,
                 program=slicer_keys.program_of(setup.executable) if setup is not None else "",
+                profile=profile,
             )
             for key, values in part_values.items()
         }

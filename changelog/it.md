@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- Le impostazioni delle singole parti arrivano allo slicer in modo più affidabile. Quelle valide per tutto il piatto sono spiegate sulla parte interessata.
 - Con Orca e Prusa, un suggerimento di velocità accettato per un accoppiamento rallenta solo le parti interessate.
 - Anche le piccole modifiche accettate nelle impostazioni di stampa vengono mantenute nell’esportazione.
 - Cura usa i limiti di jerk del profilo, con valori distinti per pareti, riempimento e primo strato.

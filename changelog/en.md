@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- Print settings for individual parts reach the slicer more reliably. Settings that apply to the whole plate are explained on the affected part.
 - With Orca and Prusa, accepting a speed suggestion for a fitted part now slows only the affected parts.
 - Even small changes accepted for print settings are now preserved on export.
 - Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.
