@@ -405,9 +405,10 @@ jobs:
           # regelmäßig, und Qt startet dann nicht (make_sbom.LINUX_LIBRARY_FAMILIES).
           # ``libvulkan1`` und ``mesa-vulkan-drivers``: Die Ansicht zeichnet
           # über wgpu, und der Paketlauf soll auf demselben Boden stehen wie
-          # der Testlauf darüber.
+          # der Testlauf darüber. ``xvfb`` und ``xauth`` für den Starttest
+          # der fertigen Pakete.
           sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 pkg-config \
-            libvulkan1 mesa-vulkan-drivers \
+            libvulkan1 mesa-vulkan-drivers xvfb xauth \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
             libxcb-shape0 libxcb-util1 libxcb-xkb1 libxkbcommon-x11-0
 
@@ -469,6 +470,25 @@ jobs:
         # die Stückliste darunter sieht dasselbe Artefakt.
         timeout-minutes: 5
         run: python tools/check_frozen_helper.py dist
+
+      - name: Anwendung im Paket starten
+        # Die Oberfläche des gebauten Programms startet sonst kein Schritt.
+        # 0.5.1 bestand Suite, Bau, Signatur und Notarisierung und beendete
+        # sich auf jedem Mac 20 bis 40 Sekunden nach dem Start. Erster Start
+        # wie beim Kunden (tools/check_frozen_start.py): leeres Profil,
+        # Fenster, Erstlauf, 3D-Ansicht, sauberes Ende, Paketbaum unverändert.
+        # **Der Intel-Mac startet ohne Bildschirm**: Auf seinem Runner stürzt
+        # der Symboldienst des Systems in Metal ab (paravirtualisierte
+        # Grafik), und jedes Fenster wartet dann für immer auf ein Symbol
+        # (Lauf 37150755506). Einem Kunden-Mac fehlt diese Lage.
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py dist
+          else
+            python tools/check_frozen_start.py dist ${{ matrix.os == 'macos-26-intel' && '--offscreen' || '' }}
+          fi
 
       - name: Laufzeit-Stückliste gegen CycloneDX 1.6 prüfen
         # Das JSON Schema ist die Referenzimplementierung von CycloneDX. Der
@@ -609,6 +629,21 @@ jobs:
         run: |
           ls dist/*.AppImage >/dev/null
           ls dist/*.flatpak >/dev/null
+
+      - name: AppImage und Flatpak starten (Linux)
+        # Jedes Format ist eine eigene Hülle um denselben Baum, mit eigener
+        # Umgebung: Der Wayland-Absturz eines Kunden war im Flatpak behoben
+        # und kam mit AppImage und Archiv zurück. Deshalb startet jedes
+        # ausgelieferte Format für sich. Das Flatpak bekommt eine eigene
+        # Sitzungsbus-Instanz, wie auf einem Desktop.
+        if: runner.os == 'Linux'
+        timeout-minutes: 20
+        run: |
+          appimage=$(ls dist/*.AppImage)
+          xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --executable "$appimage"
+          app_id=$(python -c "from app.branding import APP_ID; print(APP_ID)")
+          flatpak install --user -y --noninteractive "$(ls dist/*.flatpak)"
+          dbus-run-session -- xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --flatpak "$app_id"
 
       - name: Bundle prüfen (macOS)
         # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
@@ -889,6 +924,31 @@ jobs:
           $sum = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLower()
           "$sum  $($handoff.setup_filename)" | Set-Content -Encoding ascii "$setup.sha256"
           "ARTIFACT_SETUP=$setup" >> $env:GITHUB_ENV
+
+      # Der Starttest braucht nur das Werkzeug und die Standardbibliothek:
+      # Quelltext neben die Übergabe, kein `pip install`, kein Token.
+      - name: Starttest-Werkzeug holen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+
+      - name: Installer still installieren und starten
+        # Wie beim Kunden: das Setup, dann die installierte Anwendung — und
+        # nicht der App-Baum, aus dem es entstand (tools/check_frozen_start.py).
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = Join-Path $env:RUNNER_TEMP 'Solidon3D-installed'
+          $log = Join-Path $env:RUNNER_TEMP 'setup-install.log'
+          $process = Start-Process -FilePath $env:ARTIFACT_SETUP -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/NOICONS', ('/DIR="' + $target + '"'), ('/LOG="' + $log + '"')) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { Get-Content -LiteralPath $log -Tail 40; throw "Das Setup endete mit $($process.ExitCode)." }
+          python source/tools/check_frozen_start.py --executable (Join-Path $target 'Solidon3D.exe')
+          if ($LASTEXITCODE -ne 0) { throw "Der Starttest der installierten Anwendung ist rot." }
 
       - name: Unsignierten Bau ausweisen
         shell: pwsh
@@ -1439,6 +1499,26 @@ jobs:
           # **Seit 0.5.0 blockiert die Releaseakte** (RM-115) — siehe Linux-Prüfjob.
           python -m tools.make_licence_notices --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json --package "macos-installer=build/$(basename "$package")"
           python -m tools.make_licence_notices --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json
+      - name: Installiertes Paket starten
+        # Das finale, signierte Paket wie aus dem Browser — mit Quarantäne,
+        # über Apples Installer —, dann Gatekeeper und der erste Start
+        # (tools/check_frozen_start.py). Ohne Bildschirm nur auf dem
+        # Intel-Runner, Grund im Paketjob unter „Anwendung im Paket starten".
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=$(find release-download -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.pkg")
+          # Das Paket ist umziehbar (pkgbuild): Apples Installer aktualisiert
+          # ein Bundle derselben Kennung dort, wo es liegt — hier die
+          # ausgepackte Prüfkopie, und /Applications bliebe leer.
+          rm -rf release-app
+          xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$package"
+          sudo installer -pkg "$package" -target /
+          if [ "$MACOS_SIGNING_MODE" = notarized ]; then
+            spctl --assess --type execute --verbose=2 /Applications/Solidon3D.app
+          fi
+          python tools/check_frozen_start.py --executable /Applications/Solidon3D.app ${{ matrix.os == 'macos-26-intel' && '--offscreen' || '' }}
       - name: Geprüften Mac-Bau veröffentlichen
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

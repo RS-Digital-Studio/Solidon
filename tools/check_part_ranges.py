@@ -47,18 +47,12 @@ ROOT: Final = Path(__file__).resolve().parent.parent
 @contextmanager
 def _isolate(parent: Path | None = None) -> Iterator[Path]:
     """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38)."""
-    variables = (
-        "APPDATA",
-        "LOCALAPPDATA",
-        "HOME",
-        "XDG_DATA_HOME",
-        "XDG_CONFIG_HOME",
-        "XDG_CACHE_HOME",
-    )
-    before = {variable: os.environ.get(variable) for variable in variables}
+    from app.core.paths import PROFILE_VARIABLES
+
+    before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
     with tempfile.TemporaryDirectory(prefix="solidon-part-ranges-", dir=parent) as isolated:
         try:
-            for variable in variables:
+            for variable in PROFILE_VARIABLES:
                 os.environ[variable] = isolated
             yield Path(isolated)
         finally:

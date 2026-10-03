@@ -46,12 +46,31 @@ Reihenfolge; `multiprocessing` darf nicht in die `excludes`.
 
 **Der Paketjob startet den Hilfsprozess aus dem gebauten Paket**, direkt nach
 *Bauen* und auf allen vier Runnern (`tools/check_frozen_helper.py`): eine
-Boolesche bitgleich, danach weder Prozess noch Temp-Ordner — kein anderer
-Schritt startet das gebaute Programm. `tests/test_packaging.py` hält den
-Schritt. Jeder Prozess des Pakets bekommt vom Laufzeithaken
-`pyi_rth_mplconfig` einen Temp-Ordner, den erst `atexit` wegräumt; der
-Hilfsprozess räumt seinen beim Start weg (`kernel_jobs.serve`), weil er meist
-hart endet.
+Boolesche bitgleich, danach weder Prozess noch Temp-Ordner.
+`tests/test_packaging.py` hält den Schritt. Jeder Prozess des Pakets bekommt
+vom Laufzeithaken `pyi_rth_mplconfig` einen Temp-Ordner, den erst `atexit`
+wegräumt; der Hilfsprozess räumt seinen beim Start weg (`kernel_jobs.serve`),
+weil er meist hart endet.
+
+## Jedes Kundenpaket startet bei jedem Release einmal
+
+Entscheidung Robert: auf allen unterstützten Plattformen, in jedem
+Release-Lauf. `tools/check_frozen_start.py` startet wie ein erster Kunde
+(leeres Profil, Erstlauf) und verlangt Fenster, gezeichnete 3D-Ansicht, ein
+Ende mit 0, leeres Absturzprotokoll, keinen überlebenden Hilfsprozess und
+einen unveränderten Paketbaum; die Anwendung steht dafür
+`start_check.SECONDS` lang und schließt sich selbst (`app/ui/start_check.py`).
+Gestartet wird der gebaute Baum im Paketjob aller vier Runner, AppImage und
+Flatpak, das installierte Windows-Setup in `build.yml` und in
+`windows-signed-installer.yml` und das finale Mac-Paket nach Quarantäne,
+Installer und Gatekeeper. Grund: 0.5.1 bestand Suite, Bau, Signatur und
+Notarisierung und beendete sich auf jedem Mac nach 20 bis 40 Sekunden.
+
+- **Ohne Bildschirm (`--offscreen`) nur der Intel-Mac-Runner**: Sein
+  Symboldienst (`iconservicesagent`) stürzt in Metal ab, jedes Fenster wartet
+  dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg.
+- `tests/test_packaging.py` hält die Schritte samt Gegenproben; ein neues
+  Paketformat bekommt seinen Start, bevor es ausgeliefert wird.
 
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 

@@ -1080,6 +1080,230 @@ def test_the_frozen_helper_check_fails_without_a_package(
     assert "::error::Die gebaute Anwendung fehlt" in capsys.readouterr().out
 
 
+#: Die Schritte, die ein fertiges Kundenpaket starten (``tools/check_frozen_start.py``):
+#: Paketjob auf allen vier Runnern, die Linux-Formate, das finale Mac-Paket und
+#: das Windows-Setup.
+_START_STEPS: Final = (
+    ("package", "Anwendung im Paket starten"),
+    ("package", "AppImage und Flatpak starten (Linux)"),
+    ("windows-installer", "Installer still installieren und starten"),
+    ("macos-release-check", "Installiertes Paket starten"),
+)
+
+#: Ohne Bildschirm darf nur der Intel-Mac starten — sein Runner hat einen
+#: kaputten Symboldienst; jeder andere Runner zeichnet die 3D-Ansicht.
+_OFFSCREEN_ONLY_ON_INTEL: Final = "${{ matrix.os == 'macos-26-intel' && '--offscreen' || '' }}"
+
+
+def _assert_start_steps(workflow: str, installer_workflow: str) -> None:
+    """Jedes Kundenpaket startet einmal, auf jeder Plattform, mit Frist, ohne erlaubten Fehler."""
+    for job_name, name in _START_STEPS:
+        step = step_block(job_block(workflow, job_name), name)
+        assert "check_frozen_start.py" in step, f"{name}: ohne Starttest"
+        assert "continue-on-error" not in step, f"{name}: Fehler erlaubt"
+        minutes = re.search(r"(?m)^        timeout-minutes: (\d+)$", step)
+        assert minutes is not None and int(minutes.group(1)) <= 20, f"{name}: ohne Frist"
+    package = job_block(workflow, "package")
+    names = re.findall(r"(?m)^      - name: (.+)$", package)
+    assert names[names.index(_FROZEN_HELPER_STEP) + 1] == _START_STEPS[0][1]
+    start = step_block(package, _START_STEPS[0][1])
+    assert not re.search(r"(?m)^        if:", start), "nicht auf allen vier Runnern"
+    assert start.count("python tools/check_frozen_start.py dist") == 2
+    formats = step_block(package, _START_STEPS[1][1])
+    assert 'check_frozen_start.py --executable "$appimage"' in formats
+    assert 'check_frozen_start.py --flatpak "$app_id"' in formats
+    for job_name, name, later in (
+        (
+            "windows-installer",
+            _START_STEPS[2][1],
+            "Unsignierten finalen Installer intern übergeben",
+        ),
+        ("macos-release-check", _START_STEPS[3][1], "Geprüften Mac-Bau veröffentlichen"),
+    ):
+        steps = re.findall(r"(?m)^      - name: (.+)$", job_block(workflow, job_name))
+        assert steps.index(name) < steps.index(later), f"{name}: erst nach der Übergabe"
+    mac = step_block(job_block(workflow, "macos-release-check"), _START_STEPS[3][1])
+    assert "sudo installer -pkg" in mac and "--executable /Applications/Solidon3D.app" in mac
+    installer = job_block(installer_workflow, "installer")
+    assert "check_frozen_start.py --executable" in step_block(installer, _START_STEPS[2][1])
+    steps = re.findall(r"(?m)^      - name: (.+)$", installer)
+    assert steps.index(_START_STEPS[2][1]) < steps.index(
+        "Installer ausschließlich zur lokalen Setupsignatur übergeben"
+    )
+    for text in (workflow, installer_workflow):
+        for line in text.splitlines():
+            if "--offscreen" in line and not line.lstrip().startswith("#"):
+                assert _OFFSCREEN_ONLY_ON_INTEL in line, f"ohne Bildschirm: {line.strip()}"
+
+
+def test_every_customer_package_is_started_in_the_release_run() -> None:
+    """0.5.1 beendete sich auf jedem Mac nach 20 bis 40 Sekunden — gestartet hatte es niemand.
+
+    Entscheidung Robert (03.10.2026): die Starttests bei jedem Release, auf
+    allen unterstützten Plattformen.
+    """
+    _assert_start_steps(
+        WORKFLOW.read_text(encoding="utf-8"), INSTALLER_WORKFLOW.read_text(encoding="utf-8")
+    )
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ("- name: Anwendung im Paket starten\n", "- name: Anwendung prüfen\n"),
+        (
+            "        timeout-minutes: 10\n        shell: bash\n        run: |\n"
+            '          if [ "$RUNNER_OS" = Linux ]; then',
+            "        timeout-minutes: 10\n        continue-on-error: true\n        shell: bash\n"
+            '        run: |\n          if [ "$RUNNER_OS" = Linux ]; then',
+        ),
+        (f"dist {_OFFSCREEN_ONLY_ON_INTEL}", "dist --offscreen"),
+        ('--flatpak "$app_id"', "--version"),
+        ("- name: Installiertes Paket starten\n", "- name: Paket ansehen\n"),
+        ("- name: Installer still installieren und starten\n", "- name: Installer ansehen\n"),
+    ],
+)
+def test_the_start_guard_rejects_a_weakened_step(before: str, after: str) -> None:
+    """Gegenproben: umbenannt, Fehler erlaubt, überall ohne Bildschirm, Flatpak ausgelassen."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert before in workflow
+    with pytest.raises(AssertionError):
+        _assert_start_steps(
+            workflow.replace(before, after, 1), INSTALLER_WORKFLOW.read_text(encoding="utf-8")
+        )
+
+
+def test_the_start_guard_rejects_an_installer_workflow_without_the_start() -> None:
+    """Auch der Installer mit der signierten Anwendung startet, bevor er zur Signatur geht."""
+    installer = INSTALLER_WORKFLOW.read_text(encoding="utf-8")
+    before = "- name: Installer still installieren und starten\n"
+    assert before in installer
+    with pytest.raises(AssertionError):
+        _assert_start_steps(
+            WORKFLOW.read_text(encoding="utf-8"),
+            installer.replace(before, "- name: Installer ansehen\n", 1),
+        )
+
+
+def _start_report(**changes: Any) -> dict[str, Any]:
+    from app.branding import APP_VERSION
+    from app.ui.start_check import FORMAT
+
+    report: dict[str, Any] = {
+        "format": FORMAT,
+        "version": APP_VERSION,
+        "window": {"visible": True, "title": "Unbenannt"},
+        "renderer": {"present": True, "kind": "GfxRenderer", "brightest": 74},
+    }
+    report.update(changes)
+    return report
+
+
+def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
+    """Jede Art, an der ein Start scheitern kann, ist rot und sagt, was zu tun ist."""
+    from tools.check_frozen_start import judge
+
+    def verdict(code: int | None, report: dict[str, Any] | None, **extra: Any) -> list[str]:
+        values: dict[str, Any] = {
+            "offscreen": False,
+            "crash_text": "",
+            "helpers_alive": [],
+            "tree_changed": [],
+        }
+        values.update(extra)
+        return judge(code, report, **values)
+
+    assert verdict(0, _start_report()) == []
+    assert any("SIGSEGV" in text for text in verdict(-11, _start_report()))
+    assert any("hängt" in text for text in verdict(None, _start_report()))
+    assert any("Kein Bericht" in text for text in verdict(-5, None))
+    assert verdict(0, _start_report(version="0.0.1")), "ein anderes Paket"
+    assert verdict(0, _start_report(window={"visible": False}))
+    assert verdict(0, _start_report(renderer={"present": False}))
+    assert verdict(0, _start_report(renderer={"present": True, "brightest": 0}))
+    assert verdict(0, _start_report(renderer={"present": True, "error": "Lost"}))
+    assert verdict(0, _start_report(renderer={"present": False}), offscreen=True) == []
+    assert verdict(0, _start_report(), crash_text="Fatal Python error")
+    assert verdict(0, _start_report(), helpers_alive=[4711])
+    assert verdict(0, _start_report(), tree_changed=["Contents/MacOS/neu.txt"])
+
+
+def test_the_start_check_sees_what_the_application_writes_into_its_own_tree(
+    tmp_path: Path,
+) -> None:
+    """Neue, fehlende und geänderte Dateien zählen; unberührte nicht."""
+    from tools.check_frozen_start import tree_changes, tree_state
+
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib" / "kern.bin").write_bytes(b"1")
+    (tmp_path / "weg.txt").write_text("a", encoding="utf-8")
+    before = tree_state(tmp_path)
+    assert tree_changes(before, tree_state(tmp_path)) == []
+    (tmp_path / "lib" / "kern.bin").write_bytes(b"22")
+    (tmp_path / "weg.txt").unlink()
+    (tmp_path / "neu.pyc").write_bytes(b"")
+    assert tree_changes(before, tree_state(tmp_path)) == ["lib/kern.bin", "neu.pyc", "weg.txt"]
+    assert tree_state(None) == {}
+
+
+def test_the_start_check_starts_each_format_like_a_first_customer_start(tmp_path: Path) -> None:
+    """Leeres Profil (nicht im Flatpak), Starttest verlangt, AppImage ohne FUSE."""
+    import argparse
+
+    from app.core.paths import PROFILE_VARIABLES
+    from app.ui.start_check import REPORT_VARIABLE
+    from tools.check_frozen_start import command_for, environment_for, package_root
+
+    def args(**values: Any) -> argparse.Namespace:
+        base = {"dist": None, "executable": None, "flatpak": None, "source": False}
+        return argparse.Namespace(**{**base, "offscreen": False, **values})
+
+    report, profile = tmp_path / "r.json", tmp_path / "p"
+    app = str(tmp_path / "Solidon3D.app")
+    assert command_for(args(executable=app), report) == [
+        str(Path(app) / "Contents" / "MacOS" / APP_NAME)
+    ]
+    assert package_root(args(executable=app)) == Path(app)
+    flatpak = command_for(args(flatpak="de.rsdigital.solidon3d", offscreen=True), report)
+    assert flatpak[:2] == ["flatpak", "run"] and flatpak[-1] == "de.rsdigital.solidon3d"
+    assert f"--env={REPORT_VARIABLE}={report}" in flatpak
+    assert "--env=QT_QPA_PLATFORM=offscreen" in flatpak
+    assert package_root(args(flatpak="de.rsdigital.solidon3d")) is None
+    image = str(tmp_path / "Solidon3D-0.5.2-x86_64.AppImage")
+    assert package_root(args(executable=image)) is None
+    env = environment_for(args(executable=image), report, profile)
+    assert env[REPORT_VARIABLE] == str(report) and env["APPIMAGE_EXTRACT_AND_RUN"] == "1"
+    assert all(env[name] == str(profile) for name in PROFILE_VARIABLES)
+    assert "QT_QPA_PLATFORM" not in env, "der echte Bildschirm, nicht offscreen der Suite"
+    sandboxed = environment_for(args(flatpak="de.rsdigital.solidon3d"), report, profile)
+    assert sandboxed.get("HOME") != str(profile)
+
+
+def test_the_start_check_fails_without_an_application(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein leeres ``dist`` ist rot, mit Satz — kein stilles Grün ohne Programm."""
+    from tools import check_frozen_start as tool
+
+    assert tool.main([str(tmp_path)]) == 1
+    assert "::error::Die Anwendung fehlt" in capsys.readouterr().out
+
+
+@pytest.mark.windowed
+def test_the_application_reports_and_closes_itself_for_the_start_check(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Der ganze Weg aus dem Quellbaum: Fenster, Erstlauf abgebrochen, Bericht, Ende mit 0.
+
+    Ein Fenster im Unterprozess, deshalb nur beim Release (``windowed``).
+    """
+    from tools import check_frozen_start as tool
+
+    assert tool.main(["--source", "--offscreen"]) == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert '"visible": true' in out and "Starttest bestanden." in out
+
+
 def test_the_customer_package_builds_the_fast_slice_core() -> None:
     """Die geprüfte schnelle Schichtanalyse muss auch beim Kunden ankommen.
 

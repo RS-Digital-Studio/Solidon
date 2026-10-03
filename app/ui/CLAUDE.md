@@ -80,10 +80,11 @@ Karte, dort das Gesetz.
 
 | Datei | Zweck |
 |---|---|
-| `app.py` | Einstiegspunkt (§38); richtet vor dem ersten Qt-Import den lokalen Absturzschutz ein (ein bloßer Import installiert nichts, `main()` ergänzt idempotent) und zieht die Adapterfrage des Renderers vor |
+| `app.py` | Einstieg (§38): lokaler Absturzschutz vor Qt nur in `main()`, idempotent; Rendereradapter früh abfragen |
 | `qt_platform.py` | welche Qt-Plattform die 3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import |
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
+| `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
 | `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |

@@ -13,9 +13,23 @@ import os
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Final
 
 from app.branding import APP_NAME, APP_VENDOR, APP_VERSION
+
+#: Die Umgebungsvariablen, aus denen dieses Modul die Nutzerordner liest. Wer
+#: sie vor dem Start auf einen leeren Ordner setzt, hat ein frisches Profil:
+#: die Suite (§38), der Starttest des Pakets, die Aufnahmen der Erzeuger.
+#: ``HOME`` gilt für macOS, wo jede Auflösung über ``Path.home()`` läuft;
+#: unter Windows ist es folgenlos.
+PROFILE_VARIABLES: Final = (
+    "APPDATA",
+    "LOCALAPPDATA",
+    "HOME",
+    "XDG_DATA_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+)
 
 _windows_ctypes: Any = None
 _windows_msvcrt: Any = None

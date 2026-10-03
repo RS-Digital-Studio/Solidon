@@ -39,14 +39,9 @@ _ISOLATED = tempfile.mkdtemp(prefix="solidon-tests-")
 # Auf Windows ist der Eintrag folgenlos (Python nimmt USERPROFILE); der Beleg
 # auf macOS ist der nächste Suitenlauf dort — von dieser Maschine aus ist er
 # nicht zu führen.
-for _variable in (
-    "APPDATA",
-    "LOCALAPPDATA",
-    "HOME",
-    "XDG_DATA_HOME",
-    "XDG_CONFIG_HOME",
-    "XDG_CACHE_HOME",
-):
+from app.core.paths import PROFILE_VARIABLES
+
+for _variable in PROFILE_VARIABLES:
     os.environ[_variable] = _ISOLATED
 
 from app.core import discover
