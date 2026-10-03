@@ -238,6 +238,11 @@ einzeln laufen grün. Deshalb:
   **ein Lauf, dessen Ausgabe nicht wächst, arbeitet nicht**; ein bis zwei
   Sekunden ohne CPU zwischen zwei Fensterdateien sind normal. Erst ohne
   CPU-Sekunde und ohne Byte über zwanzig Sekunden ist es ein Hänger.
+- **Ein BLAS-Faden je Testprozess**: Tor und `affected_tests.py --run` setzen
+  `OPENBLAS_NUM_THREADS=1`, wenn der Aufrufer nichts setzt; eigene Sonden und
+  Skripte starten ebenso. Sonst sagt jeder Prozess mit numpy und scipy je
+  Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und Läufe nebeneinander
+  reißen die Zusagegrenze. Leistungsläufe bleiben ohne Vorgabe.
 - **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
   Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
   Verteilen, und eine Zahl, die an der Kernzahl hängt, ist eine stille

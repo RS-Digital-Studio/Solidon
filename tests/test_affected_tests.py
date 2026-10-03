@@ -840,6 +840,39 @@ def test_a_successful_summary_cannot_hide_the_process_exit(
     )
 
 
+@pytest.mark.parametrize(("given", "expected"), [(None, "1"), ("6", "6")], ids=["frei", "gesetzt"])
+def test_every_run_gets_one_blas_thread_unless_the_caller_chose(
+    monkeypatch: pytest.MonkeyPatch, given: str | None, expected: str
+) -> None:
+    """OpenBLAS sagt beim Laden je Rechenkern einen Puffer zu — ein Testlauf bekommt einen Faden.
+
+    Gemessen an 32 Kernen: 1,6 GB privater Speicher je Prozess nach numpy,
+    scipy, trimesh und manifold3d, mit einem Faden 0,1 GB. Ein Wert des
+    Aufrufers bleibt, und die eigene Umgebung ändert sich nicht.
+    """
+    from tools import affected_tests
+
+    if given is None:
+        monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    else:
+        monkeypatch.setenv("OPENBLAS_NUM_THREADS", given)
+    seen: list[str | None] = []
+
+    def fake_run(arguments: list[str], **kwargs: dict[str, str]) -> CompletedProcess[str]:
+        seen.append(kwargs["env"].get("OPENBLAS_NUM_THREADS"))
+        return CompletedProcess(arguments, 0, "1 passed in 0.01s\n", "")
+
+    monkeypatch.setattr(affected_tests.subprocess, "run", fake_run)
+    lines = [
+        ["python", "-m", "pytest", "tests/test_a.py"],
+        ["python", "-m", "pytest", "tests/test_b.py"],
+    ]
+
+    assert affected_tests.run(lines) == 0
+    assert seen == [expected, expected]
+    assert affected_tests.os.environ.get("OPENBLAS_NUM_THREADS") == given
+
+
 def test_the_real_core_process_runs_the_plain_half_of_a_window_file(
     selection_tree: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,

@@ -104,6 +104,18 @@ else
     exit 2
   fi
 fi
+# **Ein BLAS-Faden je Prozess, wenn der Aufrufer nichts anderes sagt.**
+#
+# OpenBLAS, das numpy und scipy je einmal mitbringen, legt beim Laden für
+# jeden Rechenkern einen Faden mit Puffer an. Gemessen am 02.10.2026 auf dem
+# i9-13900K (32 logische Kerne): ein Prozess nach numpy, scipy, trimesh und
+# manifold3d sagt 1,6 GB privaten Speicher zu und hält 59 Fäden, mit einem
+# BLAS-Faden 0,1 GB und 15. Acht Arbeiter und jeder Kindprozess eines Tests
+# zahlen das einzeln — bei mehreren Läufen nebeneinander war die Zusagegrenze
+# erreicht, und Tests starben mit WinError 6 und „Auslagerungsdatei zu klein".
+# Die Parallelität des Tors kommt aus xdist, nicht aus BLAS; der Hilfsprozess
+# des Netzkerns rechnet ohnehin mit einem Faden (``HELPER_ENVIRONMENT``).
+export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
 # **Zuerst die Frage, ob der Baum überhaupt importierbar ist.**
 #
 # Am 23.08.2026 meldete ein Torlauf 27 Fehlschläge über zwölf Testdateien, alle

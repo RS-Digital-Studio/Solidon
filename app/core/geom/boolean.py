@@ -214,7 +214,7 @@ def boolean(
     if object_ids is not None and len(object_ids) != len(meshes):
         raise ValueError("object_ids must match meshes")
 
-    chain = stages if stages is not None else (FULL_CHAIN if quality == "fine" else DRAFT_CHAIN)
+    chain = stages if stages is not None else FULL_CHAIN
     given = meshes
     meshes, united, stuck = _parts_united_first(
         kind,
@@ -261,6 +261,12 @@ def boolean(
     """
 
     for stage in chain:
+        # **Nach der Güte gefragt wird erst hinter den verlustfreien Stufen**
+        # (RM-494): Beide Ketten beginnen mit :data:`DRAFT_CHAIN`. Hält eine
+        # davon, rechnet der Entwurf dasselbe wie die feine Rechnung, und die
+        # Auswertung weiß, dass der Export nicht nachrechnen muss.
+        if stages is None and stage not in DRAFT_CHAIN and quality != "fine":
+            break
         # Zwischen den Stufen, nicht mittendrin: eine Stufe ist ein nativer
         # Aufruf und kooperativ nicht zu unterbrechen — aber vier Versuche
         # plus Voxelisierung an einem großen Netz waren als Ganzes

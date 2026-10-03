@@ -155,7 +155,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
-| [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -4595,25 +4594,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: Schlüsselloch per Klick 10 mm unter der Oberkante → Lage stimmt, liegt ganz
   in der Fläche, nach einer Maßänderung der Fläche bleibt der Kantenabstand. Bauplan §2.6, §24.3.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Freie Lage für alle Bausteine an einer Fläche (Schlüsselloch, Einpressbuchse, Mutternfalle, Schraubloch, Wandhalter …) auf ebenen und einfach gekrümmten Flächen, Kantenabstände in Flächenkoordinaten. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 25 Teile mit Befestigungen (Wandhalterungen, Lochwand, Filamenthalter M6, Screen-Cover). Abnahme an mindestens drei unterschiedlichen Bausteinen und Modellen.
-
-
-
-<a id="rm-494"></a>
-
-- [ ] **RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben.**
-  Versionsvergleich 0.5.2 (02.10.2026), Weg 1. **Regression gegenüber v0.5.1**, eingeführt mit
-  `70aa4c52b` (Fix von RM-426, richtig für Kegel und weich verschmolzene Teile). Exportzeit:
-  pegboard-STEP 0,04 s → 4,5–5,0 s, Rucksack-Halter 0,07 s → 1,1–1,4 s — die geschriebene Datei
-  ist bei beiden byte- bzw. kennzahlgleich wie vorher, weil kein Schritt von der Güte abhängt.
-  **Stellen:** `app/ui/main_window.py:7946`, `app/core/scene/session.py:4628`.
-  **Fix (allgemein):** Fein nachrechnen nur, wenn ein Schritt des Stapels von `ctx.quality`
-  abhängt (Kennzeichen am Register oder Ergebnis der Entwurfsauswertung); sonst das gezeigte
-  Ergebnis schreiben. Die feine Fassung kann im Leerlauf vorab entstehen.
-  **Abnahme:** Kegel und weich verschmolzenes Teil weiter fein (RM-426), pegboard-STEP,
-  Rucksack-Halter und ein drittes Modell ohne gütewirksame Schritte in unter 0,5 s exportiert,
-  Datei unverändert. Bauplan §31.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
-
 
 ## KI und Generatoren
 

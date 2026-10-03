@@ -200,6 +200,7 @@ def fake_suite(
     wrapper.write_text(
         """#!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SUITE_WURZEL/calls.txt"
+printf 'BLAS=%s\n' "${OPENBLAS_NUM_THREADS:-ungesetzt}" >> "$SUITE_WURZEL/umgebung.txt"
 case "$*" in
   *list_windowed_tests.py*)
     printf '%s\n' 'tests/test_fake.py'
@@ -389,6 +390,30 @@ def test_a_clean_stub_suite_has_a_successful_process_exit(tmp_path: Path, releas
     assert ("list_windowed_tests.py" in calls) is release
     assert ("--collect-only -q -m (windowed or rendering) and not performance" in calls) is release
     assert ("tests/test_fake.py::test_0" in calls) is release
+
+
+@pytest.mark.parametrize(("given", "expected"), [(None, "1"), ("6", "6")], ids=["frei", "gesetzt"])
+def test_every_gate_process_gets_one_blas_thread_unless_the_caller_chose(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, given: str | None, expected: str
+) -> None:
+    """OpenBLAS sagt je Rechenkern einen Puffer zu — jeder Torprozess bekommt einen Faden.
+
+    Gemessen an 32 Kernen: 1,6 GB privater Speicher je Prozess nach numpy,
+    scipy, trimesh und manifold3d, mit einem Faden 0,1 GB; acht Arbeiter und
+    die Kindprozesse der Tests zahlen das einzeln. Ein Wert des Aufrufers
+    bleibt. Geprüft über Importprobe, Sammlung und alle Läufe des Release-Tors.
+    """
+    if given is None:
+        monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    else:
+        monkeypatch.setenv("OPENBLAS_NUM_THREADS", given)
+
+    result = fake_suite(tmp_path, release=True, FAKE_LIMIT="6")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    seen = (tmp_path / "umgebung.txt").read_text(encoding="utf-8").splitlines()
+    assert len(seen) >= 4, seen
+    assert set(seen) == {f"BLAS={expected}"}
 
 
 def test_an_empty_core_collection_cannot_pass_the_regular_gate(tmp_path: Path) -> None:

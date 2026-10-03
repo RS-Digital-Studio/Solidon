@@ -544,6 +544,21 @@ vergisst:
 mit rund einem Gigabyte und wachsender Rechenzeit im Hintergrund. Wer die Last
 der Maschine beurteilt, sollte ihn kennen, sonst rechnet er ihn jemandem zu.
 
+**Ein BLAS-Faden je Testprozess.** Am 02.10.2026 liefen auf dem i9-13900K
+neun Sitzungen mit Toren, Prüfern und Sonden nebeneinander: 75
+Python-Prozesse hielten 58 GB privaten Speicher, die Zusage stand bei 123 von
+148 GB, und Tests starben mit WinError 6 und „Auslagerungsdatei zu klein".
+Gemessen an einem frischen Prozess: numpy mit einer Matrixmultiplikation sagt
+796 MB zu und hält 27 Fäden, nach scipy, trimesh und manifold3d 1 591 MB und
+59 Fäden; mit `OPENBLAS_NUM_THREADS=1` 56 MB und 4 Fäden, danach 112 MB und
+15. OpenBLAS — in numpy und scipy je einmal — legt beim Laden für jeden
+logischen Kern einen Faden mit Puffer an, und jeder xdist-Arbeiter, jeder
+CLI-Kindprozess eines Tests und jede Sonde zahlt das einzeln. Das Tor und
+`affected_tests.py --run` setzen deshalb einen Faden, wenn der Aufrufer
+nichts setzt; die Parallelität kommt aus xdist. Leistungsläufe bleiben ohne
+Vorgabe, weil die Anwendung beim Kunden ohne sie rechnet; der Hilfsprozess
+des Netzkerns hat seinen einen Faden schon (`HELPER_ENVIRONMENT`).
+
 *Ursprünglich unter „Wann man aufhört zu zählen und anfängt zu lesen“*
 
 Die Basisraten oben sagen, **wie viele** Läufe eine Aussage trägt. Sie sagen

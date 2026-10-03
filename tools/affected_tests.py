@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import os
 import re
 import subprocess
 import sys
@@ -441,12 +442,26 @@ def run(lines: list[list[str]]) -> int:
     führt beide Fallen; hier kommt der Code aus ``returncode``, bevor
     irgendetwas anderes läuft. Auch ein Riss beim Abbau nach vollständiger
     Zusammenfassung bleibt ein Fehler (derselbe Maßstab wie im Tor).
+
+    Jeder Lauf bekommt einen BLAS-Faden, wenn der Aufrufer keinen Wert setzt —
+    derselbe Grund wie im Tor (``suite-getrennt.sh``): OpenBLAS sagt sonst je
+    Prozess einen Puffer je Rechenkern zu, an 32 Kernen 1,5 GB.
     """
+    environment = {
+        **os.environ,
+        "OPENBLAS_NUM_THREADS": os.environ.get("OPENBLAS_NUM_THREADS", "1"),
+    }
     failed = 0
     for arguments in lines:
         print("$", " ".join(arguments[3:]), flush=True)
         finished = subprocess.run(
-            arguments, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace"
+            arguments,
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         output = finished.stdout + finished.stderr
         summary = next(

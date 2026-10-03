@@ -6403,8 +6403,10 @@ def test_an_evaluation_knows_whether_a_step_asked_for_the_quality(profile: Profi
     """RM-494: Nur wer nach der Güte fragt, rechnet im Entwurf anders als fein.
 
     Der Export rechnete seit RM-426 jedes Modell fein nach — am Lochbrett-STEP
-    5 s für dieselbe Datei. Ein Quader fragt nicht, eine Bohrung schon; ein
-    Cachetreffer meldet dasselbe wie der frische Lauf.
+    5 s für dieselbe Datei. Weder Quader noch Bohrung fragen, denn die
+    Boolesche Kette hält schon auf einer verlustfreien Stufe; ein Cachetreffer
+    meldet dasselbe wie der frische Lauf. Das Gegenstück, ein Schritt, der
+    fragt: ``test_a_blend_asks_for_the_quality_and_keeps_its_fine_export``.
     """
     from app.core.bootstrap import load_operations
     from app.core.scene.project import new_project
@@ -6432,8 +6434,8 @@ def test_an_evaluation_knows_whether_a_step_asked_for_the_quality(profile: Profi
 
     assert plain.complete and not plain.reads_quality
     assert not again.reads_quality, "der Treffer fragt so wenig wie der Lauf"
-    assert drilled.complete and drilled.reads_quality
-    assert hit.reads_quality, "und so viel"
+    assert drilled.complete and not drilled.reads_quality
+    assert not hit.reads_quality
 
 
 def test_a_blend_asks_for_the_quality_and_keeps_its_fine_export(profile: Profile) -> None:
@@ -6468,6 +6470,36 @@ def test_a_blend_asks_for_the_quality_and_keeps_its_fine_export(profile: Profile
     )
 
     blended = evaluate(project.document, profile, quality="draft", cache=cache)
+    hit = evaluate(project.document, profile, quality="draft", cache=cache)
 
     assert apart.complete and not apart.reads_quality, "Voraussetzung: erst das Verschmelzen fragt"
     assert blended.complete and blended.reads_quality
+    assert hit.reads_quality, "der Treffer fragt so viel wie der Lauf"
+
+
+def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality() -> None:
+    """RM-494: Die Boolesche Kette fragt erst hinter den verlustfreien Stufen.
+
+    Beide Güten beginnen mit *direkt* und *verschweißt*. Hält die erste Stufe,
+    ist der Entwurf schon die feine Rechnung — am Rucksack-Halter rechnete der
+    Export sonst 1,2 s nach, um dieselbe Datei zu schreiben.
+    """
+    from app.core.scene.evaluate import evaluate
+
+    project, history, profile, cache, sources, first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Bohrung ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=(body,),
+                params={"at_feature": "hole_1", "diameter": 6.0},
+            )
+        ],
+    )
+
+    changed = evaluate(project.document, profile, sources=sources, cache=cache, quality="draft")
+
+    assert not first.reads_quality, "Voraussetzung: das Einlesen fragt nicht"
+    assert changed.complete and not changed.reads_quality
