@@ -32,6 +32,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los filamentos sin uso de proyectos antiguos ya no se envían al laminador. Los perfiles siguen asociados a los filamentos utilizados.
 - Los modelos añadidos encuentran espacio también después de la duodécima placa. Las placas importadas conservan su distribución.
 - Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas.
+- Los ajustes de cada pieza llegan al laminador con más fiabilidad. Los que afectan a toda la placa se explican en la pieza correspondiente.
+- Con Orca y Prusa, aceptar una sugerencia de velocidad para un encaje solo ralentiza las piezas afectadas.
+- También se conservan al exportar los pequeños cambios aceptados en los ajustes de impresión.
 - Cura usa los límites de cambio brusco de velocidad del perfil, con valores separados para paredes, relleno y primera capa.
 - Si Cura tiene otra impresora seleccionada, el envío indica ambas y muestra dónde adoptar la selección de Cura.
 - Corregido un cierre inesperado de ElegooSlicer y OrcaSlicer al laminar modelos multicolor con soportes de rejilla.
@@ -73,6 +76,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - PrusaSlicer y la familia Orca respetan la densidad de soporte elegida. El campo empieza en 1 %. Para imprimir sin soportes, elija «Ninguno».
 - En impresiones multicolor con OrcaSlicer, ElegooSlicer, Bambu Studio y Creality Print, la torre de purga recibe una posición inicial adaptada al tamaño de la cama.
 - Las piezas demasiado grandes se indican antes de iniciar el slicer. Si no se encuentra sitio para todas en una placa, puede distribuirlas en varias placas.
+- Los caracteres especiales en nombres de proyecto o usuario ya no impiden generar el archivo de impresión. Cura también lee modelos con nombres turcos o chinos.
+- Solidon coloca las piezas superpuestas en la base antes de laminarlas con PrusaSlicer o Cura y avisa si no encuentra una disposición adecuada.
 
 ### Taladros, ranuras y división
 

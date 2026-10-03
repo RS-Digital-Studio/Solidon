@@ -8133,6 +8133,41 @@ def test_cura_takes_the_channel_advice_like_the_orca_family(qt_app, monkeypatch)
         assert dialog._current_advice() == [advice], flavour
 
 
+@pytest.mark.parametrize("flavour", [None, "cura", "orca", "prusa"])
+def test_the_advice_without_bodies_keeps_material_reasons_before_filtering_flow(flavour):
+    """B7: Auch der synchrone Dialoganschluss muss die Slicerfähigkeit kennen.
+    Nur den fertigen Rat zu filtern verlor bei kleinem Durchsatz den TPU-Grund.
+    Die Prüfung ruft die fachlichen Methoden auf; sie erzeugt kein Fenster."""
+    profile = profiles.make_profile("bambu-p1s", "tpu-95a")
+    settings = print_settings.with_path(print_settings.resolve(profile), "speed.outer_wall", 200.0)
+    settings = print_settings.with_path(settings, "filament.max_flow", 0.6)
+    owner = SimpleNamespace(
+        _settling=False,
+        _stock_revision=0,
+        _stock_timer=SimpleNamespace(start=lambda: None),
+        _check_print_result=lambda: None,
+        _plate_bodies=list,
+        _advice_request=None,
+        _advice_worker=None,
+        _advice_timer=SimpleNamespace(stop=lambda: None),
+        settings=settings,
+        session=SimpleNamespace(profile=profile),
+        slice_result=None,
+        _show_advice=lambda: None,
+        _current_flavour=lambda: flavour,
+        _slicer_path=None,
+        _foundation_for_current_setup=lambda: print_dialog.manufacturer.Foundation(settings),
+    )
+
+    PrintSettingsDialog._refresh_advice(owner)
+    shown = PrintSettingsDialog._current_advice(owner)
+
+    outer = [entry for entry in shown if entry.path == "speed.outer_wall"]
+    assert len(outer) == 1
+    expected = 30.0 if flavour in ("orca", "prusa") else print_settings.flow_speed_limit(settings)
+    assert outer[0].value == pytest.approx(expected)
+
+
 def test_the_flow_cap_is_offered_only_where_the_slicer_does_not_cap(qt_app, monkeypatch):
     """Die Orca-Familie und PrusaSlicer deckeln das Tempo selbst nach dem
     Volumenstrom des Filaments. Dort ändert der Vorschlag nichts am Druck, und

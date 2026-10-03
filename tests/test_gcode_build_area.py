@@ -157,9 +157,9 @@ def test_slice_model_replays_the_real_output_for_the_contour_check(
     executable = tmp_path / "prusa-slicer-console.exe"
     executable.write_bytes(b"")
 
-    def write_output(*_args: object, **_kwargs: object):
-        (tmp_path / "produced.gcode").write_text(payload, encoding="utf-8")
-        return subprocess.CompletedProcess([], 0, "", "")
+    def write_output(command: list[str], *_args: object, **_kwargs: object):
+        Path(command[command.index("--output") + 1]).write_text(payload, encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
 
     monkeypatch.setattr(handover, "_run_slicer", write_output)
     profile = profiles.make_profile()
@@ -173,7 +173,7 @@ def test_slice_model_replays_the_real_output_for_the_contour_check(
     codes = {finding.code for finding in outcome.findings}
     assert ("gcode.off_the_bed" in codes) is (crosses and not unusable_exclusion)
     assert ("gcode.invalid_build_area" in codes) is unusable_exclusion
-    assert (tmp_path / "produced.gcode").read_text(encoding="utf-8") == payload
+    assert outcome.gcode_path.read_text(encoding="utf-8") == payload
 
 
 @pytest.mark.parametrize(

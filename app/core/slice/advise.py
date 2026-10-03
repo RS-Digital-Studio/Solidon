@@ -212,9 +212,9 @@ CHAMBER_FOR_WARPING: Final = 50
 NARROW_LINE_SHARE: Final = 0.85
 
 #: Ab welchem Umfang eine glatte Außenschleife ihre Naht als Linie zeigt, in
-#: mm: zwei Rampen der Schrägnaht (``slicer_keys.SCARF_LENGTH``). Ein Stift
+#: mm: zwei Rampen der Schrägnaht (``print_settings.SCARF_LENGTH``). Ein Stift
 #: unter Ø 13 mm hat keinen Platz für die Rampe, und seine Naht fällt kaum auf.
-SCARF_MIN_LOOP: Final = 40.0
+SCARF_MIN_LOOP: Final = 2.0 * settings_table.SCARF_LENGTH
 
 #: Über wie viel Höhe die glatte Außenwand reichen muss, bevor die Schrägnaht
 #: vorgeschlagen wird, in mm. Auf einem flachen Rand wird keine Linie aus der
@@ -270,7 +270,11 @@ def advise(
     # genau diesen Werten haben die Vorschläge oben womöglich gedreht. Er wird
     # deshalb gegen den Stand *nach* ihnen gerechnet, sonst begrenzt er ein
     # Tempo erneut, das nebenan bereits ausreichend gesenkt wurde.
-    advice = _merged(settings, advice + _from_flow(apply(settings, advice)))
+    # Vor dem Zusammenführen auslassen: Ein nachträglicher Filter verlöre
+    # den Passungs- oder TPU-Grund, den der kleinere Flow-Wert verdrängt hat.
+    if not settings_table.caps_volumetric_speed(flavour):
+        advice += _from_flow(apply(settings, advice))
+    advice = _merged(settings, advice)
 
     _log.info("advising %d settings", len(advice))
     return advice
@@ -708,9 +712,9 @@ def _unanchored(settings: PrintSettings, flavour: SlicerFlavour | None) -> bool:
     rechnet aus Höhe und Grundfläche selbst, und Solidons Brim ersetzte ihn
     durch die feste Breite des Profils — mit weniger Halt: den 200 mm hohen
     Schäften der Minigolf-Platte im ElegooSlicer 0,9 statt 1,9 m Randbahn, der
-    Waschschüssel auf zwölf Füßen 0,40 statt 0,93 m. Ohne bekannten Slicer
-    bleibt es bei der Vorsicht, denn dann ist offen, ob „automatisch“ etwas
-    rechnet.
+    Waschschüssel auf zwölf Füßen 0,40 statt 0,93 m. Die Kernabfrage ohne
+    Familie bleibt vorsichtig. Der Druckdialog ohne ausgewähltes Programm
+    verwendet dagegen wie sein 3MF-Export die Orca-Familie.
     """
     kind = settings.adhesion.kind
     if kind == "auto" and flavour in AUTO_BRIM_FLAVOURS:
@@ -1485,7 +1489,9 @@ SLICED_PATHS: Final = frozenset(
 )
 
 
-def plate_paths(settings: PrintSettings, profile: Profile) -> frozenset[str]:
+def plate_paths(
+    settings: PrintSettings, profile: Profile, *, flavour: SlicerFlavour | None = None
+) -> frozenset[str]:
     """Was die plattenweiten Regeln an diesen Einstellungen ändern wollen.
 
     Maschine, Material und Volumenstrom (:func:`advise` ohne Schnitt, Passung
@@ -1494,7 +1500,7 @@ def plate_paths(settings: PrintSettings, profile: Profile) -> frozenset[str]:
     einem Pfad gilt der ganzen Platte, auch wo die Geometrie ihn ebenfalls
     verlangt.
     """
-    return frozenset(entry.path for entry in advise(settings, profile))
+    return frozenset(entry.path for entry in advise(settings, profile, flavour=flavour))
 
 
 def connector_diameters(bodies: Sequence[SceneObject]) -> tuple[float, ...]:

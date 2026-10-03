@@ -581,6 +581,82 @@ def test_a_normal_program_works_in_the_system_temp(tmp_path: Path) -> None:
     assert not workspace.exists(), "danach ist er weg"
 
 
+def test_an_ascii_workspace_survives_unicode_temp_without_short_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ohne 8.3-Namen bleibt der private Arbeitsordner für Cura erreichbar."""
+    unicode_temp = tmp_path / "用户 Größe"
+    unicode_temp.mkdir()
+    fallback = tmp_path / "WindowsTemp"
+    fallback.mkdir()
+    monkeypatch.setattr(discover.tempfile, "tempdir", str(unicode_temp))
+    monkeypatch.setattr(discover.sys, "platform", "win32")
+    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None, raising=False)
+    monkeypatch.setattr(discover, "_windows_temp_dir", lambda: fallback, raising=False)
+    with discover.workspace_for(
+        tmp_path / "CuraEngine.exe", "probe-", ascii_only=True
+    ) as workspace:
+        assert str(workspace).isascii()
+        assert workspace.parent == fallback
+        (workspace / "model.stl").write_bytes(b"model")
+    assert not workspace.exists()
+    assert list(unicode_temp.iterdir()) == []
+    assert list(fallback.iterdir()) == []
+
+
+def test_ascii_workspace_failure_preserves_an_existing_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch bei Namenskollisionen gehört dem Aufrufer nur sein eigener Ordner."""
+    from app.core.errors import FileWriteError
+
+    directory = tmp_path / "用户"
+    directory.mkdir()
+    existing = tmp_path / "probe-fixed"
+    existing.mkdir()
+    keep = existing / "keep"
+    keep.write_bytes(b"keep")
+    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None)
+    monkeypatch.setattr(discover, "_windows_temp_dir", lambda: tmp_path)
+    monkeypatch.setattr(discover, "uuid4", lambda: SimpleNamespace(hex="fixed"))
+    with pytest.raises(FileWriteError), discover._ascii_workspace(directory, "probe-", "win32"):
+        raise AssertionError("Namenskollision muss abbrechen")
+    assert keep.read_bytes() == b"keep"
+
+
+def test_ascii_workspace_reports_a_denied_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fehlende Schreibrechte ergeben einen Vorschlag ohne Wiederholungsschleife."""
+    from app.core.errors import FileWriteError
+
+    directory = tmp_path / "用户"
+    directory.mkdir()
+    attempts = []
+
+    def denied() -> Path:
+        attempts.append(True)
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None)
+    monkeypatch.setattr(discover, "_windows_temp_dir", denied)
+    with (
+        pytest.raises(FileWriteError) as caught,
+        discover._ascii_workspace(directory, "probe-", "win32"),
+    ):
+        raise AssertionError("fehlende Schreibrechte müssen abbrechen")
+    assert len(attempts) == 1
+    assert caught.value.suggestions
+
+
+def test_linux_workspace_keeps_unicode_paths(tmp_path: Path) -> None:
+    """Linux benötigt für Dateipfade keinen Ersatzort."""
+    directory = tmp_path / "用户"
+    directory.mkdir()
+    with discover._ascii_workspace(directory, "probe-", "linux") as workspace:
+        assert workspace == directory
+
+
 def test_a_workspace_that_cannot_be_created_carries_a_suggestion(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

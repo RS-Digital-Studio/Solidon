@@ -70,13 +70,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Zählung beim Löschen nachführen; Entscheidung zu alten Läufen (Migration) |
-| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
+| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | B7, B8, B12, B13, N3, N6 und N9 erledigt; offen bleiben getrennte Platten-/Teilwerte, Anzeige, Anschluss und Laufzeitreste |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
-| [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
 | [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Zweitreview und Entwicklungstor mit 19.464/62 grün; alle 17 Pfade in `0041000a0` übernommen und unabhängig abgeglichen; Pushbeleg offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
@@ -102,8 +101,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Materialteil umgesetzt und geprüft; Zeitabnahme nach drei gemessenen Ansätzen offen. Nächster Schritt: Mindesttempo, Erstschichttempi und unabhängig belegte Startzeit |
-| [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
-| [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
@@ -1774,7 +1771,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   setzt den Hilfslüfter) — kein Fehler Solidons.
 
 
-  **Stand 03.10.2026 — Spulenteil umgesetzt:** `merge_slots` berücksichtigt nur
+  **Stand 03.10.2026 — Spulenteil umgesetzt (`e06d57cef`):** `merge_slots` berücksichtigt nur
   Filamente mit tatsächlich benutzten Flächen. Fehlende Deklarationen und
   notwendige Werkzeuglücken mehrerer Platten bleiben erhalten. Alte positionale
   Filamentprofile werden vor dem Filtern an die vollständige ursprüngliche
@@ -2268,7 +2265,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-289"></a>
 
-- [ ] **RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
+- [~] **RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
   `3018613e6`, `konzepte/nachweise-release-0.5.1/reports/review-gesamt-dd95985e5.md`; B1–B4 gehören
   zum Paket und werden vor dem Tag behoben). (B6) Nach dem Übernehmen zeigt der Druckdialog
   einen Wert je Teil als Wert der Platte (`print_settings_dialog.py`). (B7) `plate_paths`
@@ -2296,6 +2293,47 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   einmal (`writer._served_elsewhere`). (N9) Der Docstring von `orientation.shape_key`
   nennt einen Mikrometer, gerundet wird auf einen Nanometer. N6 (Dateiexport einer
   Auswahl ohne den ganzen Auftrag) ist behoben (`effaef006`).
+
+
+  **Teilstand 03.10.2026 — B7, B12, N3 und N9:** Reine Volumenstromgründe
+  werden für Slicer mit eigenem Deckel vor dem Zusammenführen der Vorschläge
+  ausgelassen. Passungs- und TPU-Gründe bleiben erhalten; der Rat stimmt in
+  Druckdialog, Plattenaufteilung und Teilübergabe überein. Echte Außenbahnen
+  zweier 40-mm-Teile: Orca nachher Passung 30/Klotz 162,364883 mm/s statt
+  30/30; 11,999970 mm³/s bleiben unter 12. Prusa 29,999967/169,999783 statt
+  zweimal 29,999967; 13,840695 mm³/s bleiben unter 15. Cura bleibt im
+  absichtlich begrenzten Kontrollfall bei 17/17. Alle sechs Vorher-/Nachherläufe
+  liefern Druckdateien. 18 rote Beratungsgegenproben vor dem Fix; danach 30
+  neue Fälle und insgesamt 974 gezielte Kernfälle grün, vier übersprungen,
+  288 Releasefälle abgewählt. Unabhängige Folgenprüfung bestätigt sieben
+  Programmmarken mit Passungs-/TPU-Gründen sowie positive, fehlende, null und
+  unlesbare native Grenzwerte, eigene Wahl und Bool/Zahl-Vergleich.
+  B12 leitet den Mindestumfang aus der gemeinsamen Schrägnahtlänge ab;
+  die Werte bleiben 20/40 mm. N3 verwendet die gemeinsame Einstellungspräzision:
+  Eine übernommene Bahnbreitenänderung um 0,005 mm bleibt erhalten. N9 korrigiert
+  nur die Einheitenangabe auf Nanometer. B8 ist bereits durch `094b2637b`
+  abgesichert, N6 durch `effaef006`. Kundenpunkte für B7 und N3: Ursachen
+  `9b58af5ef`/`2cf02ad2d` und `176d961c9` liegen in v0.5.1. Kein Kundeneintrag
+  für die unveränderten Zahlen von B12 oder den Docstring N9. Der Widerspruch
+  zum anfänglichen Prusa-Fähigkeitsbefund wird unter RM-317 durch große und
+  kleine Konturen aufgelöst; ohne diesen Rollenanschluss keine gemeinsame
+  Freigabe. Belege: `F:\solidon-review-reports\B-slicer-rest\rm289\bericht.md`
+  und `review.md`. B2/B6, B9–B11, N4 und N8 bleiben offen; RM-289 wird
+  nicht archiviert. Genaue Commits und gemeinsames Tor stehen im Bericht B.
+
+
+  **B13 ebenfalls geklärt:** Der Druckdialog ohne gewähltes Programm startet
+  seinen tatsächlichen Beratungsarbeiter mit der Orca-Familie, genau wie die
+  anschließend geschriebene 3MF. Automatische Haftung bleibt dabei automatisch;
+  ein Skirt am schlanken Körper führt weiter zum Brimvorschlag. Zwei neue
+  Anschlussfälle rufen den Dialogstart ohne Fenster auf, rechnen den Arbeiter
+  und lesen Projekt- und Objektwerte der geschriebenen 3MF. Beide bestehen;
+  mit entfernter Familienbindung sind beide rot. Die vorsichtige Kernabfrage
+  ohne Familie bleibt als eigener Grenzfall bestehen, ihre bisher irreführende
+  Beschreibung ist berichtigt. Drei gezielte Fälle grün, 625 abgewählt,
+  Exit 0; Gegenprobe zwei rot. Keine Produktverhaltensänderung und deshalb
+  kein Changelog-Punkt. Beleg: `rm289/b13-connection.log` und
+  `b13-counter.log` im B-Berichtsordner.
 
 <a id="rm-292"></a>
 
@@ -2511,24 +2549,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Review-Sonde). (c) Ohne übersetzten Schnittkern (`_chain`) braucht der Leistungstest
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
-
-<a id="rm-317"></a>
-
-- [ ] **RM-317 — Welche Objektwerte nimmt jeder Slicer an?**
-  Solidon schreibt übernommene Vorschläge je Teil als Objektwert (`advise.PART_PATHS`,
-  `handover._part_paths`) und nimmt für PrusaSlicer und die Orca-Familie an, dass jeder
-  Pfad dort ankommt. Gemessen ist das nur für ElegooSlicer 1.5.3.5 im Konsolenlauf
-  (30.09.2026, Stangenplatte des Minigolf-Satzes): Wandtempo außen und innen,
-  `outer_wall_acceleration`, `default_acceleration`, `brim_type`/`brim_width`/`brim_object_gap`
-  und `wall_sequence` je Objekt kommen an — am Centauri Carbon 2 steht die Beschleunigung als
-  `SET_VELOCITY_LIMIT ACCEL=`, nicht als `M204`. Offen sind OrcaSlicer, Bambu Studio,
-  Creality Print, PrusaSlicer, SuperSlicer und Cura (`CURA_PER_MESH`), dort vor allem die
-  Beschleunigungen und der Brim je Objekt, und die Regeln, die je Teil wirken (Stützen,
-  Brim, schlanke Teile über `_calm_walls`, Passungen). Weg: je Slicer eine Platte mit zwei
-  Körpern, an einem jeder Pfad als Objektwert, G-Code lesen; was ein Slicer nicht annimmt,
-  fällt aus `_part_paths` und geht über `unavailable` mit Hinweis an die Platte. Abnahme: je
-  Slicer ein Wächter, der `_part_paths` gegen die Messung hält.
-  Registerabgleich 02.10.: `brim_object_gap` ist kein Solidon-Pfad; Commit `436e1ce0f` trägt das Etikett RM-317, betrifft aber den Matrixläufer.
 
 <a id="rm-318"></a>
 
@@ -3047,45 +3067,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   **Stand 03.10.2026 — Materialteil umgesetzt, Zeitabnahme offen:** Der Vergleich benutzt nur das aus bekannten Druckrollen gelesene Modellmaterial und belegte Werkzeugdichten. Spülung und Reinigungsturm erscheinen getrennt; unvollständig belegte Mengen bleiben ausdrücklich unbekannt. Bedingte Firmwarezweige, Cutter-Wiederförderung, unbekannte Rollen und fehlende Materialdaten werden nicht als vollständiges Modellmaterial ausgegeben. Gesamtverbrauch und Verbrauchsbuchung behalten ihren bisherigen Weg. Die Materialgegenprobe bleibt an acht frischen einfarbigen Würfel-/Pilz-Ausgaben der vier verlangten Slicer innerhalb 15 %; bei sechs lesbaren realen Farbdateien liegen die Abweichungen zwischen 0,49 und 9,90 %. Cura ohne übergebene Filamentdaten bleibt unbekannt. Der Parser trennt ausdrücklich ausgewiesene Modellzeit von Gesamtzeit; deren Differenz ist ein Zusatzanteil, keine belegte reine Startzeit. 173 Parser-Kopietests und drei Anschlussfälle grün; vier Reviewfunde durch rote Gegenproben beziehungsweise korrigierte Texte erledigt, unabhängige Nachprüfung ohne offenen Fund. Ursprung des Summenvergleichs d2ed623c1f, enthalten in v0.5.0/v0.5.1; sechs Changelog-Punkte beschreiben ausschließlich die Materialkorrektur.
   **Drei gemessene Zeitansätze:** Eine feste Mindestschichtzeit ignoriert das Mindestdrucktempo (SuperSlicer-Pilz: 7,03 s trotz 15 s Vorgabe). Schichtweise Wand-/Füll-/Deckflächen mit Tempogrenze erreichen fünf von acht Vorgaben; CC2 bleibt bei −33,51 % am Würfel und −28,43 % am Pilz, MK4S-Würfel bei −15,52 %. Ein Beschleunigungsband plus unabhängig angenäherter CC2-Startanteil von 110 s ergibt −14,55 %/−16,28 % und erfüllt die gemeinsame Abnahme ebenfalls nicht. Keine passende Startzeit aus der Differenz zur eigenen Schätzung abgeleitet; Warnschwelle unverändert. Der bestehende Zeitvergleich warnt weiterhin in sieben von acht Standardfällen. Nächster Schritt: belegtes Mindestdrucktempo und getrennte Erstschichttempi aus dem Herstellerprofil, unabhängig belegte Start-/Zusatzzeiten mit Drucker- und Profilidentität. Tragende Messwerte, Formeln, Modellidentitäten und Grenzen der Wiederholung stehen im Repository: [Material- und Zeitgegenprobe](konzepte/konzept-slicer-uebergabe.md#9-rm-465--material--und-zeitgegenprobe-vom-03102026).
-
-<a id="rm-477"></a>
-
-- [ ] **RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt.**
-  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0 (Windows, Codepage 1252), jeder
-  Drucker. Teilnetze heißen `<Projektname>-part-<n>.stl`; bei Namen wie „obj_4_Bayrak Direği uzun“
-  oder „埃菲尔铁塔18cm“ meldet CuraEngine `Failed to load model … (error number 2/22)`, Solidon sagt
-  nur „Der Slicer hat keine Druckdatei geschrieben“ mit „Maschinenprofil prüfen“. In der
-  Codex-Matrix trifft es alle 12 Korpusmodelle mit solchen Namen in allen 29 Varianten; Namen mit
-  Zeichen aus cp1252 laufen. Abgeleitet: ebenso jeder Lauf, wenn schon der Benutzerordner solche
-  Zeichen trägt. Keine Regression.
-  **Stellen:** `app/core/export/writer.py:2048–2056` (`_cura_meshes`),
-  `app/core/export/handover.py:3838` (`-l`), `:5193–5199` (Rückfallsatz ohne Ursache).
-  **Fix (allgemein):** Dateien, die ein Fremdprogramm über die Kommandozeile öffnet, ASCII und
-  technisch benennen (`platte-1-teil-1.stl`), den Projektnamen nur für Anzeige und Druckdatei;
-  liegt der Arbeitsordner außerhalb der Codepage, einen kurzen ASCII-Ordner verwenden; „Failed to
-  load model“ als eigene Ursache übersetzen.
-  **Abnahme:** je Familie ein Lauf mit türkischem, chinesischem und deutschem Namen, alle mit
-  Druckdatei. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-1), `gcode\rest\`.
-
-<a id="rm-478"></a>
-
-- [ ] **RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält.**
-  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` und jedes Prusa-Bündelprofil.
-  `arrangement_holds` verwirft die Anordnung schon bei überlappenden Hüllquadern in der Aufsicht
-  (Siebhalter umgreift ein Sieb); dann liegen die Teile um (0,0). Die Orca-Familie ordnet selbst
-  an, PrusaSlicers Konsole nicht: „All objects are outside of the print volume“, keine Druckdatei,
-  obwohl die sieben Teile (198 × 178 mm) auf 250 × 210 mm passen. Ein Teil der 56
-  Bauraum-Absagen der Codex-Matrix gehört dazu. Keine Regression.
-  **Stellen:** `app/core/export/writer.py:580–626` (`arrangement_holds`), `:1807`,
-  `app/core/export/handover.py:3727–3736`, `:5038–5080`.
-  **Fix (allgemein):** „Der Slicer ordnet selbst an“ als Prädikat je Programm neben
-  `wants_bed_coordinates`; wo nicht, ordnet Solidon vorher an (wie *Auf dem Bett anordnen*) und
-  meldet einen eigenen Bauraumbefund, wenn es nicht passt.
-  **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
-  weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
-
 
 <a id="rm-483"></a>
 

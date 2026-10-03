@@ -1597,6 +1597,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "nominal": _("Nennmaß"),
     "nozzle": _("Düse"),
     "object": _("Objekt"),
+    "object_ids": _("Objekte"),
     "objects": _("Objekte"),
     "op": _("Operation"),
     "open_edges": _("Offene Kanten"),

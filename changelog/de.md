@@ -56,6 +56,9 @@ Nutzen da und sonst nichts.
 - Beim Öffnen älterer Projekte werden unbenutzte Filamente nicht mehr an den Slicer übergeben. Die Profile der benutzten Filamente bleiben zugeordnet.
 - Weitere Modelle finden auch hinter der zwölften Druckplatte einen freien Platz. Mitgebrachte Platten behalten ihre Aufteilung.
 - Weitere Modelle kommen bei unterschiedlichen Filamenten auf getrennte Druckplatten, wenn der Drucker nicht genügend Düsen hat.
+- Druckwerte für einzelne Teile kommen zuverlässiger im Slicer an. Werte, die nur für die ganze Platte gelten, werden am betroffenen Teil erklärt.
+- Bei Orca und Prusa bremst ein übernommener Vorschlag für eine Passung nur noch die betroffenen Teile.
+- Auch kleine übernommene Änderungen der Druckeinstellungen bleiben beim Export erhalten.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.
 - Ist in Cura ein anderer Drucker aktiv, nennt die Übergabe beide Drucker und zeigt, wo Sie Curas Auswahl übernehmen können.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.
@@ -97,6 +100,8 @@ Nutzen da und sonst nichts.
 - Die eingestellte Stützdichte wird in PrusaSlicer und der Orca-Familie korrekt übernommen. Das Feld beginnt bei 1 %. Für einen Druck ohne Stützen wählen Sie „Keine“.
 - Bei Mehrfarbdrucken mit OrcaSlicer, ElegooSlicer, Bambu Studio und Creality Print erhält der Reinigungsturm eine zur Bettgröße passende Startposition.
 - Zu große Teile meldet Solidon vor dem Slicerstart. Findet es für mehrere Teile keinen Platz auf einer Platte, können Sie sie auf mehrere Platten anordnen lassen.
+- Sonderzeichen im Projekt- oder Benutzernamen verhindern die Druckdatei nicht mehr. Cura findet auch Modelle mit türkischen oder chinesischen Namen.
+- Solidon ordnet überlappende Teile vor dem Schneiden mit PrusaSlicer oder Cura auf dem Druckbett an und meldet, wenn es keine passende Anordnung findet.
 
 ### Bohrungen, Langlöcher und Teilen
 

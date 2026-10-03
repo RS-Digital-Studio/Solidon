@@ -1002,6 +1002,7 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "skirt_distance": "6",
     "skirts": "1",
     "slowdown_below_layer_time": "5",
+    "small_perimeter_speed": "15",
     "solid_infill_speed": "20",
     "support_material": "0",
     "support_material_auto": "1",
@@ -1034,6 +1035,24 @@ PRUSA_MANAGING_KEYS: Final = frozenset(
         "alias",
     }
 )
+
+
+def prusa_defaults(program: str) -> Mapping[str, str]:
+    """Programmbezogene Vorgaben, wenn ein Bündel den Schlüssel offen lässt.
+
+    SuperSlicer 2.5.59.13 schneidet ohne ``perimeter_generator`` mit Classic;
+    PrusaSlicer 2.9.6 mit Arachne. Die Grundlage muss denselben Wechsel sehen
+    wie der Slicer, sonst unterschlägt der Differenzschreiber die Wahl.
+    Dieselben leeren ``--save``-Sätze nennen für kleine Umfänge 50 % des
+    Innenwandtempos bei SuperSlicer und 15 mm/s bei PrusaSlicer.
+    """
+    if program == "superslicer":
+        return {
+            **PRUSA_PROGRAM_DEFAULTS,
+            "perimeter_generator": "classic",
+            "small_perimeter_speed": "50%",
+        }
+    return PRUSA_PROGRAM_DEFAULTS
 
 
 @dataclass(frozen=True, slots=True)
@@ -1799,7 +1818,8 @@ def _prusa_foundation(
     if chain is None:
         return _table_foundation(profile, fallback, has_plates=False, material_from_table=True)
     context = _Context(nozzle=profile.printer.nozzle_diameter)
-    read, foreign = _read_prusa({**PRUSA_PROGRAM_DEFAULTS, **chain.values}, context)
+    defaults = prusa_defaults(slicer_keys.program_of(setup.executable))
+    read, foreign = _read_prusa({**defaults, **chain.values}, context)
     if not chain.filament:
         # Ohne Filament des Bestands gilt Solidons Material, nicht PrusaSlicers
         # eingebaute 200 °C bei kaltem Bett.

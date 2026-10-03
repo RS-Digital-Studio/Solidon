@@ -27,9 +27,11 @@ from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
     CHANGE_SELECTION,
+    CHOOSE_PRINTER,
     CONVERT_TO_EXACT,
     EXPORT_AS_MESH,
     SHOW_HISTORY,
+    ExternalToolError,
     FileWriteError,
     NeedsSolidError,
     ValidationError,
@@ -45,7 +47,7 @@ from app.core.export.slicer_keys import (
 )
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
-from app.core.geom.prepare import check_build_volume
+from app.core.geom.prepare import arrange_on_bed, check_build_volume
 from app.core.knowledge.print_settings import read_path, same_value
 from app.core.log import get_logger
 from app.core.types import (
@@ -580,46 +582,19 @@ def check_adhesion_on_bed(
 
 
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
-    """Ist die Anordnung dieser Teile eine, die der Slicer übernehmen darf?
+    """Darf der Slicer diese Lage unverändert übernehmen?
 
-    Solidons Anordnung geht nur dann mit (§29), wenn sie überhaupt eine ist:
-    kein Teil über dem anderen und keines außerhalb des Betts. Sonst bleibt es
-    beim Anordnen des Slicers — der druckte sie sonst übereinander, und das ist
-    schlimmer als eine verworfene Anordnung.
-
-    Geprüft wird in der Aufsicht und großzügig: die Ränder der Platte bleiben
-    frei, weil dort Rand, Düse und Reinigungsstelle liegen, und ein Teil, das
-    genau auf der Kante endet, ist kein Fall für eine Zusage.
-
-    **In der Höhe zählen beide Richtungen.** Nach oben stand die Grenze seit
-    je; nach unten stand keine, und die Zusage wird beim Slicer durchgesetzt
-    (``--arrange 0``): Ein Teil bei z = -15 steckte im Bett und wurde
-    abgeschnitten, eines bei z = 50 hing in der Luft — in beiden Fällen hätte
-    der Slicer es abgesetzt, wenn man ihn gelassen hätte.
-
-    Die zwei Grenzen sind nicht neu erfunden, sondern die, die der Bericht
-    ohnehin benutzt: ``EPS_GEOM`` für „unter dem Bett" wie in
-    :func:`app.core.geom.prepare.check_build_volume`, ``EPS_DISPLAY`` für
-    „schwebt" wie in ``prepare._floats``. Eine dritte Zahl für dieselbe Frage
-    hieße, dass Bericht und Übergabe sich widersprechen können.
-
-    Dass ein Deckel über seiner Dose kein Schweben ist, entscheidet hier schon
-    die Aufsicht: Zwei Körper, von denen einer über dem anderen liegt,
-    überlappen im Grundriss — und damit ist die Anordnung ohnehin keine.
+    Druckkontur und freigegebene Höhe kommen aus demselben Vertrag wie die
+    Platzierung. Dazu müssen alle Teile auf dem Bett stehen und sich in der
+    Aufsicht trennen. Die bestehenden Grenzen EPS_GEOM und EPS_DISPLAY
+    stimmen mit Bauraumprüfung und Schwebebefund überein.
     """
     if not meshes:
         return False
-    width, depth, height = profile.printer.build_volume
-    half_width, half_depth = width / 2.0, depth / 2.0
     for mesh in meshes:
-        box = mesh.bounds
-        if box.minimum[0] < -half_width or box.maximum[0] > half_width:
+        if not build_area.fits_on_bed(mesh, profile.printer):
             return False
-        if box.minimum[1] < -half_depth or box.maximum[1] > half_depth:
-            return False
-        if box.maximum[2] > height or box.minimum[2] < -EPS_GEOM:
-            return False
-        if box.minimum[2] > EPS_DISPLAY:
+        if mesh.bounds.minimum[2] > EPS_DISPLAY:
             return False
     for first in range(len(meshes)):
         for second in range(first + 1, len(meshes)):
@@ -1313,7 +1288,10 @@ def _part_values(
         item for item in asked if not same_value(item.value, read_path(split.plate, item.path))
     ]
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    return replace(_values_for(split, applied, unavailable, flavour, program=program), asked=asked)
+    return replace(
+        _values_for(split, applied, unavailable, flavour, program=program, profile=profile),
+        asked=asked,
+    )
 
 
 def _values_for(
@@ -1324,6 +1302,7 @@ def _values_for(
     everywhere: Sequence[SettingAdvice] = (),
     *,
     program: str = "",
+    profile: Profile | None = None,
 ) -> _PartValues:
     """Objektwerte und wirksame Einstellungen eines Teils aus seinem Rat.
 
@@ -1338,7 +1317,9 @@ def _values_for(
     if not split.revert:
         carried = [*applied, *everywhere]
         return _PartValues(
-            handover.object_keys(split.plate, carried, flavour, program=program),
+            handover.object_keys(
+                split.plate, carried, flavour, program=program, profile=profile, native=split.native
+            ),
             list(applied),
             list(unavailable),
             advise.apply(split.plate, carried),
@@ -1351,10 +1332,29 @@ def _values_for(
     def as_cura_takes_it(item: SettingAdvice) -> SettingAdvice:
         if handover.cura_takes_whole(item.path):
             return item
+        if item.path == "support.style":
+            # Ein/aus geht je Netz. Ein eingeschaltetes Netz bekommt die
+            # Stützart der Platte; „aus“ bleibt auch unter Bäumen aus.
+            if item.value == "none":
+                return item
+            actual = "tree" if split.plate.support.style == "tree" else "grid"
+            return replace(item, value=actual)
         return replace(item, value=read_path(split.plate, item.path))
 
-    own = [as_cura_takes_it(item) for item in applied]
-    carried = own + [as_cura_takes_it(item) for item in everywhere]
+    missing = list(unavailable)
+    own = []
+    for item in applied:
+        actual = as_cura_takes_it(item)
+        if same_value(item.value, actual.value) or (
+            item.path == "support.style" and item.value == "auto"
+        ):
+            own.append(actual)
+        elif item not in missing:
+            missing.append(item)
+    # Unerfüllte Stützarten müssen beim erneuten Schreiben (``everywhere``)
+    # ihre Ein/aus-Wirkung behalten, auch ohne falschen Übernahmebefund.
+    received = [*applied, *(item for item in unavailable if item.path in split.per_part)]
+    carried = [as_cura_takes_it(item) for item in [*received, *everywhere]]
     needed = {item.path for item in carried}
     changes = carried + [
         SettingAdvice(
@@ -1368,11 +1368,11 @@ def _values_for(
     keys = {
         key: value
         for key, value in handover.object_keys(
-            split.plate, changes, flavour, program=program
+            split.plate, changes, flavour, program=program, profile=profile
         ).items()
         if key in handover.CURA_PER_MESH
     }
-    return _PartValues(keys, own, list(unavailable), advise.apply(split.plate, changes))
+    return _PartValues(keys, own, missing, advise.apply(split.plate, changes))
 
 
 def _unserved(
@@ -1397,7 +1397,7 @@ def _unserved(
     """
     if split is None or accepted is None:
         return []
-    served = {item.path for entry in values for item in entry.applied}
+    served = {item.path for entry in values for item in (*entry.applied, *entry.unavailable)}
     return [
         SettingAdvice(
             path=path,
@@ -1406,7 +1406,7 @@ def _unserved(
             reason="",
         )
         for path in sorted(split.per_part - served)
-        if not _same_value(read_path(accepted, path), read_path(split.base, path))
+        if not same_value(read_path(accepted, path), read_path(split.base, path))
     ]
 
 
@@ -1446,7 +1446,7 @@ def _served_elsewhere(
             document,
             cancelled,
         )
-        hit = {item.path for item in values.applied} & open_paths
+        hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
         served |= hit
         open_paths -= hit
     return frozenset(served)
@@ -1455,17 +1455,6 @@ def _served_elsewhere(
 def _finding_value(value: object) -> float | str:
     """Ein Einstellungswert, wie ihn ein Befund trägt: Zahl, Wahrheitswert oder Wort."""
     return value if isinstance(value, int | float | str) else str(value)
-
-
-def _same_value(first: object, second: object) -> bool:
-    """Gleich bis auf die Anzeigegenauigkeit bei Zahlen, sonst genau gleich."""
-    if isinstance(first, float) or isinstance(second, float):
-        return (
-            isinstance(first, int | float)
-            and isinstance(second, int | float)
-            and abs(float(first) - float(second)) <= EPS_DISPLAY
-        )
-    return first == second
 
 
 def _body_analysis(
@@ -1545,9 +1534,9 @@ def _part_setting_findings(
                 _("Nur für dieses Teil: {reason}", reason=entry.reason)
                 if applied
                 else _(
-                    "Dieser Slicer übernimmt die empfohlenen Einstellungen für einzelne Teile "
-                    "nicht. Übernehmen Sie den genannten Vorschlag für die ganze Platte oder "
-                    "wählen Sie einen Slicer, der 3MF-Baugruppen liest."
+                    "Dieser Slicer übernimmt den genannten Vorschlag nicht für dieses Teil. "
+                    "Prüfen Sie die Einstellung für die ganze Platte oder wählen Sie einen "
+                    "Slicer, der diesen Wert je Teil übernimmt."
                 )
             ),
             # Beim übernommenen Wert steht der Grund im Satz; wo der Slicer ihn
@@ -1570,8 +1559,8 @@ def _plate_wide_findings(
 ) -> list[Finding]:
     """Wer eine Übernahme mitbekommt, die nur ein anderes Teil verlangt (RM-430).
 
-    Nimmt der Slicer einen Pfad nicht je Teil an — bei CuraEngine Innenwand
-    und Grundbeschleunigung —, bleibt die Übernahme plattenweit. Das Teil, das
+    Nimmt der Slicer einen Pfad nicht je Teil an — etwa Curas Haftungsart
+    oder Bambus Beschleunigung —, bleibt die Übernahme plattenweit. Das Teil, das
     sie verlangt, ist bedient; die übrigen bekommen sie trotzdem, und das
     sagt dieser Befund an ihnen, mit dem Grund des verlangenden Teils. Verlangt
     hier kein Teil den Wert, bleibt es still wie bisher.
@@ -1711,6 +1700,154 @@ def _support_blocker(
     return blocker, [finding]
 
 
+def prepare_slicer_meshes(
+    chosen: Sequence[SceneObject],
+    profile: Profile,
+    setup: SlicerSetup,
+    *,
+    for_window: bool = False,
+    cancelled: CancelToken | None = None,
+) -> tuple[dict[str, MeshData], bool]:
+    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben."""
+    from app.core.export import handover
+
+    exported: dict[str, MeshData] = {}
+    for entry in chosen:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        exported[entry.id] = mesh_for_export(entry.mesh, profile)
+    if for_window or profile.printer.is_resin or setup.flavour == "other":
+        return exported, False
+    # Der bestehende Größenbeweis wird je Körper gefragt, bevor die Platte
+    # gepackt wird. Seine Handlung gehört schon hier dem richtigen Objekt.
+    for index, entry in enumerate(chosen):
+        try:
+            handover._check_plate([exported[entry.id]], profile, setup, cancelled)
+        except ExternalToolError as problem:
+            if problem.values.get("constraint") == "slicer_build_volume":
+                problem.object_id = entry.id
+                problem.values["part_index"] = index
+            raise
+    program = slicer_keys.program_of(setup.executable)
+    if slicer_keys.arranges_on_cli(setup.flavour, program):
+        return exported, False
+    return _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+
+
+def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
+    """Deterministische Z-Kandidaten: gültige Lage zuerst, dann Kanten und Raster."""
+    import math
+    from itertools import pairwise
+
+    from shapely.geometry import MultiPoint
+
+    from app.core.geom.orient import extreme_points
+
+    yield np.eye(4)
+    for degrees in (90.0, 180.0, 270.0):
+        yield transform.rotation("z", degrees)
+    hull = MultiPoint(extreme_points(mesh)[:, :2]).convex_hull
+    if hull.geom_type == "Polygon":
+        points = list(hull.exterior.coords)
+        edges = sorted(
+            (float(second[0] - first[0]), float(second[1] - first[1]))
+            for first, second in pairwise(points)
+        )
+        for x, y in edges:
+            length = math.hypot(x, y)
+            if length <= EPS_GEOM:
+                continue
+            # Reine XY-Basis, ohne atan2 oder Plattformtrigonometrie; auch
+            # bei Gegenrichtung bleibt Z aufrecht. hypotenuse: kern.md.
+            turn = np.eye(4)
+            turn[:2, :2] = ((x / length, y / length), (-y / length, x / length))
+            for degrees in (0.0, 90.0, 180.0, 270.0):
+                yield transform.composed(transform.rotation("z", degrees), turn)
+    for degrees in range(0, 360, build_area.SIZE_ANGLE_STEP_DEGREES):
+        yield transform.rotation("z", float(degrees))
+
+
+def _fit_cli_mesh(
+    mesh: MeshData, profile: Profile, cancelled: CancelToken | None
+) -> MeshData | None:
+    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt."""
+    from app.core.geom.orient import _Placed, extreme_points, turned_extents
+
+    if build_area.fits_on_bed(mesh, profile.printer) and mesh.bounds.minimum[2] <= EPS_DISPLAY:
+        return mesh
+    points = extreme_points(mesh)
+    for turn in _cli_turns(mesh):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        low, high = turned_extents(points, turn)
+        bounds = BoundingBox(
+            (float(low[0]), float(low[1]), float(low[2])),
+            (float(high[0]), float(high[1]), float(high[2])),
+        )
+        placed = _Placed(mesh, turn, bounds)
+
+        def outline(matrix: np.ndarray = turn) -> np.ndarray:
+            return transform.moved_points(points, matrix)[:, :2]
+
+        offset = build_area.placement_offset(placed, profile.printer, outline=outline)
+        if offset is None:
+            continue
+        result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
+        if build_area.fits_on_bed(result, profile.printer):
+            return result
+    return None
+
+
+def _arrange_for_cli(
+    chosen: Sequence[SceneObject],
+    exported: dict[str, MeshData],
+    profile: Profile,
+    setup: SlicerSetup,
+    cancelled: CancelToken | None,
+) -> tuple[dict[str, MeshData], bool]:
+    """Nur Ausgabenetze ihrer Platte bewegen; die Szene bleibt unverändert."""
+    from app.core.export import handover
+
+    arranged = dict(exported)
+    changed = False
+    for plate in sorted({entry.plate for entry in chosen}):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        entries = [entry for entry in chosen if entry.plate == plate]
+        meshes = [exported[entry.id] for entry in entries]
+        if arrangement_holds(meshes, profile):
+            continue
+        fitted = [_fit_cli_mesh(mesh, profile, cancelled) for mesh in meshes]
+        ready = [mesh for mesh in fitted if mesh is not None]
+        if len(ready) == len(meshes) and not arrangement_holds(ready, profile):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            ready = arrange_on_bed(
+                ready, profile, plates=1, object_ids=[entry.id for entry in entries]
+            ).meshes
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if len(ready) != len(meshes) or not arrangement_holds(ready, profile):
+            raise ExternalToolError(
+                tool=setup.name,
+                title=handover.SLICER_FAILED,
+                detail=_(
+                    "Für diese Teile wurde keine Anordnung auf einer Druckplatte gefunden. "
+                    "Sie können alle Teile des Projekts neu auf Platten anordnen "
+                    "oder einen größeren Drucker wählen."
+                ),
+                values={
+                    "constraint": "slicer_build_volume",
+                    "plate": plate,
+                    "object_ids": tuple(entry.id for entry in entries),
+                },
+                suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, CANCEL),
+            )
+        arranged.update((entry.id, mesh) for entry, mesh in zip(entries, ready, strict=True))
+        changed = True
+    return arranged, changed
+
+
 def write_assembly(
     objects: list[SceneObject],
     directory: Path,
@@ -1730,6 +1867,7 @@ def write_assembly(
     cancelled: CancelToken | None = None,
     for_window: bool = False,
     job: Sequence[SceneObject] | None = None,
+    mesh_plan: tuple[dict[str, MeshData], bool] | None = None,
     comparison: Callable[[Sequence[tuple[SceneObject, MeshData, PrintSettings | None]]], None]
     | None = None,
 ) -> tuple[Path, list[Finding]]:
@@ -1805,7 +1943,57 @@ def write_assembly(
         settings = handover.bind_object_profiles(settings, objects if job is None else job)
     # Einmal je Körper vernetzt, für Prüfung, STL und 3MF dieselben Dreiecke
     # — ein exakter Körper so fein, wie der Drucker es braucht.
-    exported = {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen}
+    if mesh_plan is None:
+        if for_slicer:
+            from app.core.export import handover
+
+            known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
+            mesh_plan = prepare_slicer_meshes(
+                chosen, profile, known, for_window=for_window, cancelled=cancelled
+            )
+        else:
+            mesh_plan = (
+                {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen},
+                False,
+            )
+    exported, arranged_for_cli = mesh_plan
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    if (
+        for_slicer
+        and not for_window
+        and not profile.printer.is_resin
+        and flavour != "other"
+        and not slicer_keys.arranges_on_cli(flavour, program)
+    ):
+        place_on_bed = True
+    if arranged_for_cli:
+        # Nur die überholte Platzierungsprüfung wird durch den neuen Stand ersetzt.
+        replaced_codes = {
+            "arrange.narrow_margin",
+            "arrange.off_the_plate",
+            "arrange.out_of_build_volume",
+            "arrange.above_bed",
+            "arrange.below_bed",
+            "arrange.needs_more_plates",
+            "arrange.collision",
+        }
+        findings = [finding for finding in findings if finding.code not in replaced_codes]
+        findings.extend(
+            check_build_volume(
+                [exported[entry.id] for entry in chosen],
+                profile,
+                [entry.plate for entry in chosen],
+                [entry.id for entry in chosen],
+                about_to_write=True,
+            )
+        )
+        findings.append(
+            Finding(
+                code="export.arranged_for_slicer",
+                severity="info",
+                message=_("Die Teile wurden für diesen Slicer auf der Druckplatte angeordnet."),
+            )
+        )
     findings += _tessellation_finding(chosen, profile)
     split: PartSplit | None = None
     # Was der Kunde übernommen hat, bevor der Split die Platte zurücksetzt —
@@ -1869,6 +2057,7 @@ def write_assembly(
                 flavour,
                 everywhere,
                 program=slicer_keys.program_of(setup.executable) if setup is not None else "",
+                profile=profile,
             )
             for key, values in part_values.items()
         }

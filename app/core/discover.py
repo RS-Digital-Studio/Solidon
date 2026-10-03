@@ -64,6 +64,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from app.branding import APP_NAME
 from app.core import errors
@@ -833,7 +834,9 @@ def exchange_dir() -> Path:
 
 
 @contextmanager
-def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
+def workspace_for(
+    program: Path | str | None, prefix: str, *, ascii_only: bool = False
+) -> Iterator[Path]:
     """Ein Arbeitsordner, den *dieses* Programm auch lesen kann.
 
     **Der Fall, der ohne das still scheitert.** Die Slicer bekommen eine
@@ -867,7 +870,11 @@ def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
         except OSError as problem:
             raise _workspace_error(tempfile.gettempdir(), problem) from problem
         with keeper as directory:
-            yield Path(directory)
+            if ascii_only:
+                with _ascii_workspace(Path(directory), prefix, sys.platform) as workspace:
+                    yield workspace
+            else:
+                yield Path(directory)
         return
     shared = exchange_dir()
     try:
@@ -879,6 +886,75 @@ def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
         yield Path(directory)
     finally:
         shutil.rmtree(directory, ignore_errors=True)
+
+
+@contextmanager
+def _ascii_workspace(directory: Path, prefix: str, platform: str) -> Iterator[Path]:
+    """Windows-Dateileser mit schmalen Zeichenketten bekommen einen ASCII-Pfad."""
+    if platform != "win32" or str(directory).isascii():
+        yield directory
+        return
+    short = _windows_short_path(directory)
+    if short is not None:
+        # Nicht auflösen: resolve() macht aus dem lesbaren Alias wieder Unicode.
+        yield short
+        return
+    fallback: Path | None = None
+    try:
+        root = _windows_temp_dir()
+        candidate = root / f"{prefix}{uuid4().hex}"
+        # mkdtemp wiederholt unter Windows auch Zugriffsfehler sehr oft.
+        # mkdir scheitert sofort; 0o700 beschränkt unter Windows die ACL.
+        candidate.mkdir(mode=0o700)
+        fallback = candidate
+        usable = fallback if str(fallback).isascii() else _windows_short_path(fallback)
+        if usable is None:
+            raise OSError("No ASCII workspace path is available")
+    except OSError as problem:
+        if fallback is not None and fallback.is_dir():
+            shutil.rmtree(fallback, ignore_errors=True)
+        raise _workspace_error(str(directory), problem) from problem
+    try:
+        yield usable
+    finally:
+        shutil.rmtree(fallback, ignore_errors=True)
+
+
+def _windows_short_path(path: Path) -> Path | None:
+    """Ein 8.3-Alias zählt nur, wenn er ASCII ist und dieselbe Datei bezeichnet."""
+    import ctypes
+    from ctypes import wintypes
+
+    function = ctypes.WinDLL("kernel32", use_last_error=True).GetShortPathNameW
+    function.argtypes = (wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD)
+    function.restype = wintypes.DWORD
+    needed = function(str(path), None, 0)
+    if not needed:
+        return None
+    buffer = ctypes.create_unicode_buffer(needed)
+    written = function(str(path), buffer, needed)
+    if not written or written >= needed or not buffer.value.isascii():
+        return None
+    alias = Path(buffer.value)
+    try:
+        return alias if alias.samefile(path) else None
+    except OSError:
+        return None
+
+
+def _windows_temp_dir() -> Path:
+    """Systemweites Temp als zweiter Ort, ohne Annahme über Laufwerk oder Nutzer."""
+    import ctypes
+    from ctypes import wintypes
+
+    function = ctypes.WinDLL("kernel32", use_last_error=True).GetWindowsDirectoryW
+    function.argtypes = (wintypes.LPWSTR, wintypes.UINT)
+    function.restype = wintypes.UINT
+    buffer = ctypes.create_unicode_buffer(32768)
+    written = function(buffer, len(buffer))
+    if not written or written >= len(buffer):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return Path(buffer.value) / "Temp"
 
 
 def _workspace_error(target: str, problem: OSError) -> errors.FileWriteError:

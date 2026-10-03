@@ -28,6 +28,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
+from app.core.knowledge.print_settings import SCARF_LENGTH
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -215,11 +216,6 @@ def _angle_from_horizontal(value: object) -> str:
 
 # --- PrusaSlicer und SuperSlicer ------------------------------------------------
 
-#: Wie lang die Rampe der Schrägnaht ist, in Millimetern (``shell.scarf_seam``):
-#: die Vorgabe von OrcaSlicer und PrusaSlicer. Cura hat keine eigene, bei ihm
-#: schaltet eine Länge über null die Schrägnaht erst ein.
-SCARF_LENGTH: Final = 20.0
-
 _PRUSA_INFILL: Final = {
     "grid": "grid",
     "gyroid": "gyroid",
@@ -238,6 +234,12 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
     ("layers.first_layer_height", "first_layer_height", _number),
     ("layers.line_width", "extrusion_width", _number),
+    ("layers.line_width", "external_perimeter_extrusion_width", _number),
+    ("layers.line_width", "perimeter_extrusion_width", _number),
+    ("layers.line_width", "infill_extrusion_width", _number),
+    ("layers.line_width", "solid_infill_extrusion_width", _number),
+    ("layers.line_width", "top_infill_extrusion_width", _number),
+    ("layers.line_width", "support_material_extrusion_width", _number),
     ("layers.first_layer_line_width", "first_layer_extrusion_width", _number),
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
@@ -1071,6 +1073,50 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     "superslicer": frozenset({"shell.scarf_seam"}),
 }
 
+#: Diese Programme lesen die Werte nur für die Platte. Gemessen mit zwei
+#: Körpern, unverändertem Herstellerprofil und getrennten Bahnen (RM-317).
+#: Ein fehlender Rollenwert ist keine fehlende Objektfähigkeit.
+PLATE_ONLY_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    "prusaslicer": frozenset(
+        {
+            "speed.acceleration",
+            "speed.outer_wall_acceleration",
+        }
+    ),
+    "superslicer": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
+    "bambustudio": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
+    # Die regulären Rollenbreiten gehen je Netz, der Erstschichtfaktor nur
+    # je Extruder. Unterschiedliche Breiten würden die unabhängige absolute
+    # Erstschichtbreite am anderen Körper verändern (Cura 5.13, RM-317).
+    "cura": frozenset({"layers.line_width"}),
+}
+
+#: Eigene Druckbeschleunigungen überlagern die Grundbeschleunigung. Nur
+#: vorhandene höhere Rollen werden begrenzt; Anfahrt und Leerfahrt bleiben
+#: eigenständig. Eine ausdrücklich gewählte Außenwand bleibt ebenfalls eigen.
+ACCELERATION_ROLES: Final[dict[SlicerFlavour, tuple[str, ...]]] = {
+    "prusa": (
+        "external_perimeter_acceleration",
+        "perimeter_acceleration",
+        "infill_acceleration",
+        "solid_infill_acceleration",
+        "top_solid_infill_acceleration",
+        "bridge_acceleration",
+        "support_material_acceleration",
+        "support_material_interface_acceleration",
+    ),
+    "orca": (
+        "outer_wall_acceleration",
+        "inner_wall_acceleration",
+        "sparse_infill_acceleration",
+        "internal_solid_infill_acceleration",
+        "top_surface_acceleration",
+        "bridge_acceleration",
+    ),
+    "cura": (),
+    "other": (),
+}
+
 #: Schlüssel, die ein Programm nur als alten Namen kennt, mit den heutigen —
 #: die Konsole übersetzt sie, der 3MF-Leser von SuperSlicer nicht (RM-459).
 #: ``external_fill_pattern`` steht in SuperSlicers eigenem Prusa-Bündel.
@@ -1182,7 +1228,7 @@ def program_value(key: str, value: str, program: str) -> str:
 
 
 def program_of(executable: str | Path) -> str:
-    """Die Programmmarke eines Slicers — ``""``, wenn keiner bekannt ist."""
+    """Die Programmmarke; ohne Treffer bleibt der bereinigte Dateiname stehen."""
     from app.core import discover
 
     name = Path(executable).name
@@ -1238,7 +1284,9 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
     nicht (:data:`NOT_TAKEN_BY`) und deckelt nicht; dort ist der Vorschlag der
     einzige Deckel.
     """
-    return flavour in ("orca", "prusa")
+    from app.core.knowledge.print_settings import caps_volumetric_speed as caps_flow
+
+    return caps_flow(flavour)
 
 
 def limitation(
@@ -1271,6 +1319,24 @@ def limitation(
             layer=settings.cooling.disable_first_layers + 1,
         )
     return None
+
+
+def arranges_on_cli(flavour: SlicerFlavour, program: str = "") -> bool:
+    """Ordnet die Konsole dieses Programms eine ungeordnete Platte selbst an?
+
+    Die vier Orca-Programme tun es. PrusaSlicer, SuperSlicer und CuraEngine
+    brauchen eine fertige Anordnung. Ohne Programmmarke gilt die Familie.
+    """
+    programs = {
+        "orcaslicer": True,
+        "bambustudio": True,
+        "elegooslicer": True,
+        "crealityprint": True,
+        "prusaslicer": False,
+        "superslicer": False,
+        "cura": False,
+    }
+    return programs.get(program, flavour == "orca")
 
 
 def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:

@@ -1122,6 +1122,8 @@ def object_keys(
     flavour: SlicerFlavour,
     *,
     program: str = "",
+    profile: Profile | None = None,
+    native: Mapping[str, object] | None = None,
 ) -> dict[str, str]:
     """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
 
@@ -1145,12 +1147,29 @@ def object_keys(
         return {}
     applied = _applied(settings, advice)
     paths = _with_partners(frozenset(entry.path for entry in advice), applied)
-    keys = {entry.key for entry in slicer_keys.TABLES[flavour] if entry.path in paths}
-    before = as_mapping(settings, flavour, program=program)
-    changed = as_mapping(applied, flavour, program=program)
+    keys = {
+        slicer_keys.native_key(entry.key, program)
+        for entry in slicer_keys.TABLES[flavour]
+        if entry.path in paths
+    }
+    # CuraEngine wertet die Formeln seines Fensters nicht aus. Objektwerte
+    # und Rücknahmen brauchen dieselben Ableitungen wie die ganze Platte.
+    before = (
+        values_for(settings, profile, flavour, program=program)
+        if flavour == "cura" and profile is not None
+        else as_mapping(settings, flavour, program=program)
+    )
+    changed = (
+        values_for(applied, profile, flavour, program=program)
+        if flavour == "cura" and profile is not None
+        else as_mapping(applied, flavour, program=program)
+    )
     written = {
         key: value for key, value in changed.items() if key in keys or before.get(key) != value
     }
+    if native is not None:
+        written.update(_speed_roles(native, written, flavour, program=program))
+        written.update(_acceleration_roles(native, written, flavour, applied))
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 
 
@@ -1170,12 +1189,133 @@ def _with_automatic_prusa_support(written: dict[str, str]) -> dict[str, str]:
 
 
 #: Was CuraEngine je Netz annimmt, gelesen aus ``settable_per_mesh`` in
-#: ``fdmprinter.def.json`` (Cura 5.13): Wände, Füllung, Bahnbreite, Bügeln,
-#: Außenwand mit Tempo und Beschleunigung, die Schrägnaht, und ob überhaupt
-#: gestützt wird. Haftungsart (``adhesion_type``), Stützort (``support_type``)
+#: ``fdmprinter.def.json`` (Cura 5.13), einschließlich der geschriebenen
+#: Ableitungen. Haftungsart (``adhesion_type``), Stützort (``support_type``)
 #: und Stützart (``support_structure``) gelten nur der ganzen Platte.
 CURA_PER_MESH: Final = frozenset(
     {
+        "acceleration_flooring",
+        "acceleration_infill",
+        "acceleration_ironing",
+        "acceleration_layer_0",
+        "acceleration_print",
+        "acceleration_print_layer_0",
+        "acceleration_roofing",
+        "acceleration_topbottom",
+        "acceleration_wall",
+        "acceleration_wall_0_flooring",
+        "acceleration_wall_0_roofing",
+        "acceleration_wall_x",
+        "acceleration_wall_x_flooring",
+        "acceleration_wall_x_roofing",
+        "bottom_layers",
+        "bottom_skin_expand_distance",
+        "bottom_skin_preshrink",
+        "bridge_fan_speed",
+        "bridge_settings_enabled",
+        "bridge_skin_speed",
+        "bridge_skin_speed_2",
+        "bridge_skin_speed_3",
+        "bridge_wall_min_length",
+        "bridge_wall_speed",
+        "connect_infill_polygons",
+        "expand_skins_expand_distance",
+        "flooring_layer_count",
+        "flooring_line_width",
+        "flooring_material_flow",
+        "infill_angles",
+        "infill_before_walls",
+        "infill_line_distance",
+        "infill_line_width",
+        "infill_material_flow",
+        "infill_overlap",
+        "infill_overlap_mm",
+        "infill_pattern",
+        "infill_sparse_thickness",
+        "infill_wipe_dist",
+        "initial_bottom_layers",
+        "initial_layer_inset_direction",
+        "ironing_inset",
+        "material_flow",
+        "min_bead_width",
+        "min_even_wall_line_width",
+        "min_feature_size",
+        "min_odd_wall_line_width",
+        "min_wall_line_width",
+        "minimum_support_area",
+        "retraction_amount",
+        "retraction_extrusion_window",
+        "retraction_hop",
+        "retraction_hop_only_when_collides",
+        "retraction_min_travel",
+        "retraction_prime_speed",
+        "retraction_retract_speed",
+        "retraction_speed",
+        "roofing_layer_count",
+        "roofing_line_width",
+        "roofing_material_flow",
+        "seam_overhang_angle",
+        "skin_line_width",
+        "skin_material_flow",
+        "skin_overlap_mm",
+        "skin_preshrink",
+        "skin_support",
+        "skin_support_fan_speed",
+        "skin_support_speed",
+        "small_skin_width",
+        "speed_flooring",
+        "speed_infill",
+        "speed_ironing",
+        "speed_layer_0",
+        "speed_print",
+        "speed_print_layer_0",
+        "speed_roofing",
+        "speed_topbottom",
+        "speed_wall",
+        "speed_wall_0_flooring",
+        "speed_wall_0_roofing",
+        "speed_wall_x",
+        "speed_wall_x_flooring",
+        "speed_wall_x_roofing",
+        "support_angle",
+        "support_bottom_distance",
+        "support_bottom_enable",
+        "support_bottom_height",
+        "support_bottom_stair_step_height",
+        "support_interface_enable",
+        "support_interface_height",
+        "support_roof_enable",
+        "support_roof_height",
+        "support_top_distance",
+        "support_tree_angle",
+        "support_tree_angle_slow",
+        "support_tree_rest_preference",
+        "support_tree_tip_diameter",
+        "support_tree_top_rate",
+        "support_xy_distance",
+        "support_xy_distance_overhang",
+        "support_z_distance",
+        "top_layers",
+        "top_skin_expand_distance",
+        "top_skin_preshrink",
+        "wall_0_inset",
+        "wall_0_material_flow",
+        "wall_0_material_flow_flooring",
+        "wall_0_material_flow_roofing",
+        "wall_0_wipe_dist",
+        "wall_line_width",
+        "wall_line_width_0",
+        "wall_line_width_x",
+        "wall_material_flow",
+        "wall_overhang_angle",
+        "wall_overhang_speed_factors",
+        "wall_x_material_flow",
+        "wall_x_material_flow_flooring",
+        "wall_x_material_flow_roofing",
+        "z_seam_corner",
+        "z_seam_type",
+        "z_seam_x",
+        "z_seam_y",
         "support_enable",
         "infill_sparse_density",
         "line_width",
@@ -1216,6 +1356,8 @@ class PartSplit:
     es bleibt plattenweit, und der Export sagt, wo es nicht reicht."""
     accepted: PrintSettings | None = None
     """Die Einstellungen mit allen Übernahmen, bevor der Split sie zurücksetzt."""
+    native: Mapping[str, object] = field(default_factory=dict)
+    """Die wirksamen Rollenwerte der Platte für begrenzende Objektwerte."""
 
     def accepted_per_part(self) -> dict[str, object]:
         """Die übernommenen Werte der Pfade je Teil — was der Rat je Teil in
@@ -1225,18 +1367,37 @@ class PartSplit:
         return {path: read_path(self.accepted, path) for path in sorted(self.per_part)}
 
 
-def _part_paths(flavour: SlicerFlavour) -> frozenset[str]:
+def _part_paths(flavour: SlicerFlavour, program: str = "") -> frozenset[str]:
     """Welche Pfade dieser Slicer je Teil annehmen kann."""
     from app.core.slice import advise
 
+    supported = frozenset(
+        path for path in advise.PART_PATHS if slicer_keys.takes(flavour, path, program=program)
+    )
     if flavour in ("orca", "prusa"):
-        return advise.PART_PATHS
-    if flavour == "cura":
-        return frozenset(
-            entry.path
-            for entry in slicer_keys.TABLES["cura"]
-            if entry.path in advise.PART_PATHS and entry.key in CURA_PER_MESH
+        # Eine reine Datei kennt die spätere Programmauswahl noch nicht.
+        # Deshalb gelten die gemessenen Objektgrenzen aller Programme der
+        # Familie; vollständig unbekannte Schlüssel behandelt ``takes``.
+        plate_only = (
+            slicer_keys.PLATE_ONLY_BY_PROGRAM.get(program, frozenset())
+            if slicer_keys.flavour_of(program) == flavour
+            else frozenset(
+                path
+                for name, paths in slicer_keys.PLATE_ONLY_BY_PROGRAM.items()
+                if slicer_keys.flavour_of(name) == flavour
+                for path in paths
+            )
         )
+        return supported - plate_only
+    if flavour == "cura":
+        return (
+            slicer_keys.AS_GEOMETRY
+            | frozenset(
+                entry.path
+                for entry in slicer_keys.TABLES["cura"]
+                if entry.path in supported and entry.key in CURA_PER_MESH
+            )
+        ) - slicer_keys.PLATE_ONLY_BY_PROGRAM["cura"]
     return frozenset()
 
 
@@ -1248,6 +1409,10 @@ def cura_takes_whole(path: str) -> bool:
     die ganze Platte. Ein Teil bekommt dann den Wert der Platte, nicht seinen
     eigenen.
     """
+    if path in slicer_keys.AS_GEOMETRY:
+        return True
+    if path in slicer_keys.PLATE_ONLY_BY_PROGRAM["cura"]:
+        return False
     keys = [entry.key for entry in slicer_keys.TABLES["cura"] if entry.path == path]
     return bool(keys) and all(key in CURA_PER_MESH for key in keys)
 
@@ -1273,18 +1438,20 @@ def split_for_parts(
 
     # Was das Programm nicht kennt, geht an kein Teil (RM-459); auf der
     # Platte nimmt es :func:`prusa_values` heraus.
-    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(
-        slicer_keys.program_of(setup.executable) if setup is not None else "", frozenset()
-    )
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
     wanted = frozenset(settings.accepted) & advise.PART_PATHS - unknown
     if not wanted:
         return PartSplit(settings, settings)
-    foundation = manufacturer.base_settings(profile, settings.quality, setup).settings
+    origin = manufacturer.base_settings(profile, settings.quality, setup)
+    foundation = origin.settings
     base = settings
     for path in sorted(wanted):
         base = print_settings.without_choice(base, path, foundation)
-    wanted -= advise.plate_paths(base, profiles.for_process(profile, base, effective=True))
-    per_part = wanted & _part_paths(flavour)
+    wanted -= advise.plate_paths(
+        base, profiles.for_process(profile, base, effective=True), flavour=flavour
+    )
+    per_part = wanted & _part_paths(flavour, program)
     unavailable = wanted - per_part
     trimmed = settings
     for path in sorted(per_part):
@@ -1300,7 +1467,50 @@ def split_for_parts(
         return PartSplit(
             settings, untouched, per_part, revert=True, unavailable=unavailable, accepted=settings
         )
-    return PartSplit(trimmed, untouched, per_part, unavailable=unavailable, accepted=settings)
+    native = (
+        _part_native_values(trimmed, profile, setup, origin, flavour)
+        if per_part & {"speed.acceleration", "speed.outer_wall", "speed.inner_wall"}
+        else {}
+    )
+    return PartSplit(
+        trimmed, untouched, per_part, unavailable=unavailable, accepted=settings, native=native
+    )
+
+
+def _part_native_values(
+    plate: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    foundation: manufacturer.Foundation,
+    flavour: SlicerFlavour,
+) -> Mapping[str, object]:
+    """Tempo- und Beschleunigungsrollen der Platte vor den Teilwerten lesen."""
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    if flavour == "prusa":
+        # Auch ohne Kette erbt der vollständige Plattensatz offene Rollen
+        # aus den gemessenen Programmvorgaben. Der Dateiexport kennt setup
+        # nicht zwingend, seine ausdrücklich gewählte Familie aber schon.
+        return prusa_values(plate, profile, setup, console=False)[0]
+    if setup is None or not foundation.has_profile:
+        return {}
+    if setup.flavour != "orca":
+        return {}
+    source = profile_file(setup.base_process, setup, "process")
+    if source is None:
+        return {}
+    native = slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+    # Bambu ordnet Listen der Düsenvariante zu, nicht grundsätzlich Index 0.
+    values = {
+        key: _printed_variant(
+            value, native, "print_extruder_variant", "print_extruder_id", foundation
+        )
+        for key, value in native.items()
+    }
+    own = as_mapping(
+        plate, setup.flavour, manufacturer.written_paths(plate, foundation), program=program
+    )
+    own.update(_acceleration_roles(values, own, setup.flavour, plate))
+    return {**values, **own}
 
 
 def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:
@@ -2612,6 +2822,7 @@ def _prusa_values(
             _log.warning("Prusa profile unreadable, writing Solidon's table: %s", problem)
     if setup is None or chain is None:
         flat = values_for(effective, profile, "prusa", program=program)
+        flat.update(_speed_roles({}, flat, "prusa", program=program))
         flat["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
@@ -2635,16 +2846,13 @@ def _prusa_values(
         # bleiben als eigene Abweichung in ``paths``.
         paths = paths - {"adhesion.kind"}
     own = _followers_not_faster(
-        {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values},
+        {**manufacturer.prusa_defaults(program), **chain.values},
         as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_kinds, program=program),
         _suggested_speed_keys(effective, "prusa"),
         followers=_PRUSA_FOLLOWERS,
     )
-    own.update(
-        _roles_not_faster(
-            {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values}, own, _PRUSA_ROLES
-        )
-    )
+    own.update(_speed_roles(chain.values, own, "prusa", program=program))
+    own.update(_acceleration_roles(chain.values, own, "prusa", effective))
     document = dict(chain.values)
     document.update(_with_automatic_prusa_support(dict(own)))
     for key in ("retract_length", "retract_speed", "retract_lift", "wipe"):
@@ -3367,10 +3575,46 @@ _ORCA_ROLES: Final = {"small_perimeter_speed": ("outer_wall_speed", "outer_wall_
 _PRUSA_ROLES: Final = {"small_perimeter_speed": ("external_perimeter_speed", "perimeter_speed")}
 
 
+def _speed_roles(
+    base: Mapping[str, object],
+    own: Mapping[str, str],
+    flavour: SlicerFlavour,
+    *,
+    program: str = "",
+) -> dict[str, str]:
+    """Kleine Schleifen folgen auch je Teil den gewählten Wandtempi.
+
+    Prusas Kleinperimeterrolle überlagert Außen- und Innenwände. Sind beide
+    gewählt, gilt das kleinere Tempo; die Rolle wird nie schneller gemacht.
+    Prozentwerte beziehen sich weiterhin auf das innere Wandtempo.
+
+    Fehlt die Rolle im geschriebenen Prusa-Satz, gilt die gemessene Vorgabe
+    des Programms. Ohne belegte Programmmarke müssen beide Familienmitglieder
+    die Obergrenze halten, ohne die langsamere Vorgabe zu beschleunigen.
+    """
+    roles = _ORCA_ROLES if flavour == "orca" else _PRUSA_ROLES if flavour == "prusa" else {}
+    if flavour == "prusa" and "perimeter_speed" in own:
+        leaders = (key for key in ("external_perimeter_speed", "perimeter_speed") if key in own)
+        leader = min(leaders, key=lambda key: _as_float(own[key]) or float("inf"))
+        roles = {"small_perimeter_speed": (leader, "perimeter_speed")}
+    alternatives: Sequence[Mapping[str, object]] = ()
+    if flavour == "prusa" and "small_perimeter_speed" not in base:
+        programs = (
+            (program,)
+            if program in {"prusaslicer", "superslicer"}
+            else ("prusaslicer", "superslicer")
+        )
+        candidates = [{**manufacturer.prusa_defaults(entry), **base} for entry in programs]
+        base, *alternatives = candidates
+    return _roles_not_faster(base, own, roles, alternatives=alternatives)
+
+
 def _roles_not_faster(
     base: Mapping[str, object],
     own: Mapping[str, str],
     roles: Mapping[str, tuple[str, str]],
+    *,
+    alternatives: Sequence[Mapping[str, object]] = (),
 ) -> dict[str, str]:
     """Eine Rolle mit eigenem Tempo fährt nie schneller als das Tempo, das Solidon schreibt.
 
@@ -3387,16 +3631,53 @@ def _roles_not_faster(
         if leader not in own or key in own:
             continue
         limit = _as_float(own[leader])
-        written = _printed(base.get(key, "")).strip()
-        if written.endswith("%"):
-            share = _as_float(written[:-1])
-            basis = _as_float(own.get(reference) or _printed(base.get(reference, "")))
-            speed = share / 100.0 * basis if share is not None and basis is not None else None
-        else:
-            speed = _as_float(written)
-        if limit is not None and speed is not None and speed > limit:
-            capped[key] = own[leader]
+        speeds = []
+        for source in (base, *alternatives):
+            written = _printed(source.get(key, "")).strip()
+            if written.endswith("%"):
+                share = _as_float(written[:-1])
+                basis = _as_float(own.get(reference) or _printed(source.get(reference, "")))
+                speed = share / 100.0 * basis if share is not None and basis is not None else None
+            else:
+                speed = _as_float(written)
+            if speed is not None:
+                speeds.append(speed)
+        if limit is not None and any(speed > limit for speed in speeds):
+            capped[key] = f"{min(limit, *speeds):g}"
     return capped
+
+
+def _acceleration_roles(
+    base: Mapping[str, object],
+    own: Mapping[str, str],
+    flavour: SlicerFlavour,
+    settings: PrintSettings,
+    foundation: manufacturer.Foundation | None = None,
+) -> dict[str, str]:
+    """Eine kleinere Grundbeschleunigung erreicht auch geerbte Druckrollen.
+
+    Eigene Außenwandwerte und langsamere Herstellerrollen bleiben erhalten.
+    Erste Schicht und Leerfahrt besitzen unabhängige Vorgaben. Ein Prozentwert
+    bezieht sich bereits auf die neue Grundbeschleunigung.
+    """
+    keys = slicer_keys.ACCELERATION_ROLES[flavour]
+    if "speed.outer_wall_acceleration" in settings.explicit:
+        keys = tuple(
+            key
+            for key in keys
+            if key not in {"external_perimeter_acceleration", "outer_wall_acceleration"}
+        )
+    source: Mapping[str, object] = base
+    if foundation is not None:
+        source = {
+            key: _printed_variant(
+                value, base, "print_extruder_variant", "print_extruder_id", foundation
+            )
+            for key, value in base.items()
+        }
+    return _roles_not_faster(
+        source, own, dict.fromkeys(keys, ("default_acceleration", "default_acceleration"))
+    )
 
 
 def _followers_not_faster(
@@ -3509,7 +3790,8 @@ def _orca_process(
     )
     document.update(own)
     if base is not None:
-        document.update(_roles_not_faster(document, own, _ORCA_ROLES))
+        document.update(_speed_roles(document, own, "orca"))
+        document.update(_acceleration_roles(document, own, "orca", settings, foundation))
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
     # während das Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt.
@@ -5592,6 +5874,117 @@ def _check_plate(
                 )
 
 
+def _prepare_cura_cli(
+    command: list[str], workspace: Path, cancelled: CancelToken | None
+) -> list[str]:
+    """Curas Dateileser bekommt technische Namen, auch für Vorlagen und Blocker.
+
+    Die Definitionen bleiben vollständig: Nur ihre Dateiverweise ändern sich.
+    Curas Suchreihenfolge gilt dabei weiter, einschließlich der Verzeichnisse,
+    die beim Laden einer Definition hinzukommen. Originale bleiben unberührt.
+    """
+    roots = [
+        Path(entry)
+        for entry in os.environ.get("CURA_ENGINE_SEARCH_PATH", "").split(os.pathsep)
+        if entry
+    ]
+    for index, argument in enumerate(command[:-1]):
+        if argument == "-d":
+            roots = [Path(entry) for entry in command[index + 1].split(os.pathsep)]
+            break
+    roots = [path if path.is_absolute() else workspace / path for path in roots]
+    definitions = workspace / "definitions"
+    copied: dict[Path, str] = {}
+    active: set[Path] = set()
+
+    def invalid(path: Path) -> ExternalToolError:
+        return ExternalToolError(
+            tool="CuraEngine",
+            detail=_(
+                "Das Slicer-Profil „{name}“ ist unvollständig. "
+                "Prüfen Sie seine Vorlagen im Slicer.",
+                name=path.name,
+            ),
+            values={"name": path.name},
+            suggestions=(CHECK_SLICER_PROFILE, CHOOSE_SLICER, EXPORT_ONLY),
+        )
+
+    def reference(name: object, source: Path) -> str:
+        if not isinstance(name, str) or not name or Path(name).name != name or "\\" in name:
+            raise invalid(source)
+        for root in roots:
+            candidate = root / f"{name}.def.json"
+            if candidate.is_file():
+                return definition(candidate)
+        raise invalid(source)
+
+    def definition(source: Path) -> str:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        source = source.resolve()
+        if source in active or len(active) >= slicer_profiles.MAX_INHERITANCE:
+            raise invalid(source)
+        if source in copied:
+            return copied[source]
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, ValueError, RecursionError) as problem:
+            raise invalid(source) from problem
+        if not isinstance(data, dict):
+            raise invalid(source)
+        roots.append(source.parent)
+        active.add(source)
+        name = f"definition-{len(copied)}"
+        copied[source] = name
+        if "inherits" in data:
+            data["inherits"] = reference(data["inherits"], source)
+        metadata = data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            raise invalid(source)
+        trains = metadata.get("machine_extruder_trains", {})
+        if not isinstance(trains, dict):
+            raise invalid(source)
+        for key, value in trains.items():
+            trains[key] = reference(value, source)
+        (definitions / f"{name}.def.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+        active.remove(source)
+        return name
+
+    staged = [*command[:2], "-d", str(definitions)]
+    index = 2
+    mesh_count = 0
+    try:
+        definitions.mkdir()
+        while index < len(command):
+            flag = command[index]
+            if flag in {"-d", "-j", "-l", "-o", "-s"}:
+                value = command[index + 1]
+                if flag == "-d":
+                    index += 2
+                    continue
+                if flag == "-j":
+                    value = str(definitions / f"{definition(Path(value))}.def.json")
+                elif flag == "-l":
+                    target = workspace / f"model-{mesh_count}.stl"
+                    _copy_print_file(Path(value), target, cancelled=cancelled)
+                    value = str(target)
+                    mesh_count += 1
+                elif flag == "-o":
+                    value = str(workspace / OUTPUT_NAME)
+                staged.extend((flag, value))
+                index += 2
+            else:
+                staged.append(flag)
+                index += 1
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or workspace), detail=str(problem.strerror or problem)
+        ) from problem
+    return staged
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -5670,7 +6063,7 @@ def slice_model(
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
-    with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
+    with discover.workspace_for(setup.executable, "solidon-slice-", ascii_only=True) as workspace:
         cli_models = (
             [
                 _creality_cli_input(entry, workspace / f"model_{index}.3mf", cancelled)
@@ -5679,6 +6072,17 @@ def slice_model(
             if _is_creality_print(setup)
             else models
         )
+        if setup.flavour != "cura":
+            cli_models = [
+                (
+                    entry
+                    if entry.parent == workspace
+                    else _copy_print_file(
+                        entry, workspace / f"model-{index}{entry.suffix}", cancelled=cancelled
+                    )
+                )
+                for index, entry in enumerate(cli_models)
+            ]
         config = write_config(settings, profile, setup, workspace, slots)
         limited_settings = list(config.findings)
         requested_values = config.written
@@ -5687,7 +6091,9 @@ def slice_model(
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
         # wird — und ``_find_gcode`` sucht an der leeren Stelle.
-        target = (output_dir if output_dir is not None else workspace).resolve()
+        # Alle CLI-Dateipfade bleiben im privaten Arbeitsordner. Der Rückweg
+        # ins gewünschte Unicode-Ziel läuft nach dem Lesen über Python.
+        target = workspace
         try:
             target.mkdir(parents=True, exist_ok=True)
         except OSError as problem:
@@ -5709,10 +6115,13 @@ def slice_model(
         # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
         # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
+        command = _command(
+            setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
+        )
+        if setup.flavour == "cura":
+            command = _prepare_cura_cli(command, workspace, cancelled)
         completed = _run_slicer(
-            _command(
-                setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
-            ),
+            command,
             workspace,
             timeout,
             setup,
@@ -5843,6 +6252,17 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
+            if setup.flavour == "cura" and "failed to load model" in output.casefold():
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Der Slicer konnte eine Modelldatei nicht lesen. "
+                        "Übergeben Sie das Modell erneut oder wählen Sie einen anderen Slicer."
+                    ),
+                    values={"output": output},
+                    suggestions=(RETRY, CHOOSE_SLICER, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
+                )
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -5938,6 +6358,10 @@ def slice_model(
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
             produced = _kept_beside(models[0], produced, cancelled=cancelled)
+        else:
+            produced = _copy_print_file(
+                produced, output_dir.resolve() / produced.name, cancelled=cancelled
+            )
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -6701,11 +7125,16 @@ def _kept_beside(model: Path, produced: Path, *, cancelled: CancelToken | None =
     Ein Abbruch lässt deshalb weder eine Teildatei als Ergebnis zurück noch
     überschreibt er eine schon vorhandene Druckdatei.
     """
-    target = model.with_suffix(".gcode")
+    return _copy_print_file(produced, model.with_suffix(".gcode"), cancelled=cancelled)
+
+
+def _copy_print_file(produced: Path, target: Path, *, cancelled: CancelToken | None = None) -> Path:
+    """Kopiert vollständig und abbrechbar, bevor die Zieldatei ersetzt wird."""
     temporary: Path | None = None
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     try:
+        target.parent.mkdir(parents=True, exist_ok=True)
         with (
             produced.open("rb") as source,
             tempfile.NamedTemporaryFile(

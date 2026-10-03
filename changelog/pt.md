@@ -31,6 +31,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os filamentos não utilizados de projetos antigos deixam de ser enviados ao fatiador. Os perfis continuam associados aos filamentos em uso.
 - Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.
 - Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes.
+- As definições de cada peça chegam ao fatiador com mais fiabilidade. As que se aplicam a toda a placa são explicadas na peça afetada.
+- Com Orca e Prusa, aceitar uma sugestão de velocidade para um encaixe abranda apenas as peças afetadas.
+- Mesmo pequenas alterações aceites nas definições de impressão são preservadas na exportação.
 - O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.
 - Se estiver selecionada outra impressora no Cura, a entrega identifica ambas e indica onde adotar a escolha do Cura.
 - Corrigida uma falha do ElegooSlicer e do OrcaSlicer ao preparar modelos multicoloridos com suportes em grelha.
@@ -72,6 +75,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O PrusaSlicer e a família Orca respeitam a densidade de suporte escolhida. O campo começa em 1 %. Para imprimir sem suportes, escolha «Nenhum».
 - Nas impressões multicoloridas com OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, a torre de purga recebe uma posição inicial adequada ao tamanho da mesa.
 - As peças demasiado grandes são indicadas antes de iniciar o slicer. Se não for encontrado espaço para todas numa placa, pode distribuí-las por várias placas.
+- Os caracteres especiais nos nomes de projeto ou utilizador já não impedem criar o ficheiro de impressão. O Cura também lê modelos com nomes turcos ou chineses.
+- O Solidon organiza na base as peças sobrepostas antes de fatiar com PrusaSlicer ou Cura e avisa se não encontrar uma disposição adequada.
 
 ### Furos, furos oblongos e divisão
 

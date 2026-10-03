@@ -947,9 +947,9 @@ def test_a_slender_part_on_a_broad_foot_keeps_its_pace() -> None:
     assert [_paths(entries) & set(CALM_WALLS) for entries in cases] == [set(), set()]
 
 
-def test_without_a_known_slicer_automatic_adhesion_stays_unanchored() -> None:
-    """Ohne Slicer ist offen, ob „automatisch“ etwas rechnet — dann bleibt es
-    bei der Vorsicht, und ein Skirt hält auch unter Orca nichts fest."""
+def test_the_core_without_a_family_keeps_automatic_adhesion_conservative() -> None:
+    """Die ungebundene Kernabfrage bleibt vorsichtig; sie beschreibt nicht
+    den Druckdialog ohne Programmauswahl. Ein Skirt hält auch unter Orca nichts."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     table = print_settings.resolve(profile)
     automatic = print_settings.with_path(table, "adhesion.kind", "auto")
@@ -3614,7 +3614,8 @@ def test_only_creality_cli_omits_a_proven_single_plate_without_losing_filaments(
         """Prüft die Datei an der Prozessgrenze, bevor der Arbeitsordner verschwindet."""
         incoming = next(Path(argument) for argument in command if argument.endswith(".3mf"))
         received.append(incoming)
-        assert (incoming != model) is copied
+        assert incoming != model
+        assert str(incoming).isascii()
         with zipfile.ZipFile(incoming) as container:
             actual = {entry.filename: container.read(entry) for entry in container.infolist()}
         if copied:
@@ -3633,7 +3634,7 @@ def test_only_creality_cli_omits_a_proven_single_plate_without_losing_filaments(
         assert actual == original, "Geometrie, Farben und übrige Beilagen bleiben vollständig"
         assert b"#B1630A" in actual[threemf.MODEL_PATH]
         assert b"#FFFFFF" in actual[threemf.MODEL_PATH]
-        (tmp_path / handover.OUTPUT_NAME).write_text(_TWO_TOOLS, encoding="utf-8")
+        _slicer_output_path(command).write_text(_TWO_TOOLS, encoding="utf-8")
         return _Finished(b"")
 
     monkeypatch.setattr(handover, "_run_slicer", run)
@@ -3956,7 +3957,7 @@ def test_creality_slice_initializes_the_tower_inside_the_manufacturers_bed(
             if key not in {"wipe_tower_x", "wipe_tower_y"}
         )
         returned += "; wipe_tower_x = 0.000\n; wipe_tower_y = 0.000\n"
-        (tmp_path / "plate_1.gcode").write_text(returned, encoding="utf-8")
+        _slicer_output_path(command).write_text(returned, encoding="utf-8")
         return _Finished(b"")
 
     monkeypatch.setattr(handover, "write_config", write)
@@ -4230,21 +4231,28 @@ def _gcode_printing_at(*xs: float) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _slicer_output_path(command: list[str]) -> Path:
+    """Das Ziel aus der Kommandozeile, unabhängig vom gewählten Rückgabeordner."""
+    if "--outputdir" in command:
+        return Path(command[command.index("--outputdir") + 1]) / "plate_1.gcode"
+    flag = "-o" if "-o" in command else "--output"
+    return Path(command[command.index(flag) + 1])
+
+
 def _slicer_writing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, payload: str, flavour: str = "cura"
 ) -> tuple[Path, handover.SlicerSetup]:
     """Ein Slicer, der durchläuft und genau diese Datei schreibt.
 
-    Geschrieben wird in ``tmp_path``, denn genau der geht als ``output_dir``
-    hinein — ``_find_gcode`` sucht dort.
+    Geschrieben wird an das tatsächliche CLI-Ziel, wie beim echten Slicer.
     """
     model = tmp_path / "model.stl"
     model.write_bytes(b"solid x\nendsolid x\n")
     executable = tmp_path / f"{flavour}.exe"
     executable.write_bytes(b"")
 
-    def _writes(*_args: object, **_kwargs: object) -> _Finished:
-        (tmp_path / "geschrieben.gcode").write_text(payload, encoding="utf-8")
+    def _writes(command: list[str], *_args: object, **_kwargs: object) -> _Finished:
+        _slicer_output_path(command).write_text(payload, encoding="utf-8")
         return _Finished(b"")
 
     monkeypatch.setattr(handover, "_run_slicer", _writes)
@@ -4315,13 +4323,13 @@ def test_the_first_spools_value_is_verified_as_written(
         written.update(config.written)
         return config
 
-    def complete_gcode(*_args: object, **_kwargs: object) -> _Finished:
+    def complete_gcode(command: list[str], *_args: object, **_kwargs: object) -> _Finished:
         # Prusa bestätigt den ganzen Satz; nur die Temperatur kommt unabhängig
         # aus der gestellten Druckdatei, damit der Spulenvergleich aussagekräftig bleibt.
         rest = "".join(
             f"; {key} = {value}\n" for key, value in written.items() if key != "temperature"
         )
-        (tmp_path / "solidon.gcode").write_text(payload + rest, encoding="utf-8")
+        _slicer_output_path(command).write_text(payload + rest, encoding="utf-8")
         return _Finished(b"")
 
     monkeypatch.setattr(handover, "write_config", remember_config)
@@ -6150,10 +6158,8 @@ def test_the_slicer_run_reads_back_the_file_it_asked_for(
     executable = tmp_path / "cura.exe"
     executable.write_bytes(b"")
 
-    def _writes(*_args: object, **_kwargs: object) -> _Finished:
-        (tmp_path / handover.OUTPUT_NAME).write_text(
-            _gcode_printing_at(-10.0, 10.0), encoding="utf-8"
-        )
+    def _writes(command: list[str], *_args: object, **_kwargs: object) -> _Finished:
+        _slicer_output_path(command).write_text(_gcode_printing_at(-10.0, 10.0), encoding="utf-8")
         fremd = tmp_path / "fremd.gcode"
         fremd.write_text(_gcode_printing_at(400.0), encoding="utf-8")
         spaeter = fremd.stat().st_mtime + 60.0
@@ -7427,6 +7433,79 @@ def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: An
     return got[0]
 
 
+@pytest.mark.parametrize("kind", ["auto", "skirt"])
+def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
+    tmp_path: Path, kind: str
+) -> None:
+    """B13: Der echte Arbeiterstart bindet den Rat an dieselbe Familie wie
+    die anschließend geschriebene Datei. Eine ungebundene Kernprobe genügt nicht."""
+    from types import SimpleNamespace
+
+    from app.core.export.writer import write_assembly
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", kind)
+    bodies = (_standing_box("Turm", (4.0, 4.0, 80.0)),)
+    received: list[Any] = []
+    started: list[Any] = []
+
+    def quiet(*_args: Any) -> None:
+        pass
+
+    state = SimpleNamespace(
+        _settling=False,
+        _advice_pending=True,
+        _plate_bodies=lambda: bodies,
+        session=SimpleNamespace(profile=profile, busy=False),
+        settings=settings,
+        _advice_worker=None,
+        _advice_request=(),
+        _advice_context=lambda: (),
+        _current_flavour=lambda: None,
+        _slicer_path=None,
+        _plate_slots=list,
+        _profiles_for=lambda _slots: [],
+        _analysis_context=lambda: (),
+        _analysed_context=(),
+        _body_analyses={},
+        _fits_in_play=lambda: (),
+        _connector_diameters=lambda: (),
+        _part_fits=dict,
+        _advice_ready=lambda _worker, _context, _analysis, entries, _results: received.extend(
+            entries
+        ),
+        _advice_failed=quiet,
+        _advice_progressed=quiet,
+        _advice_finished=quiet,
+        _leash=SimpleNamespace(start=started.append),
+    )
+
+    PrintSettingsDialog._start_advice(state)
+    assert len(started) == 1
+    worker = started[0]
+    assert worker.setup is None and worker.flavour == "orca"
+    worker.work()
+    brim = [entry for entry in received if entry.path == "adhesion.kind"]
+    assert [entry.value for entry in brim] == ([] if kind == "auto" else ["brim"])
+
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Satz",
+        profile=profile,
+        settings=advise.apply(settings, brim),
+    )
+    with zipfile.ZipFile(written) as archive:
+        process = json.loads(archive.read("Metadata/project_settings.config"))
+        parts = ET.fromstring(archive.read("Metadata/model_settings.config"))
+    assert process["brim_type"] == ("auto_brim" if kind == "auto" else "no_brim")
+    actual = [
+        entry.get("value") for entry in parts.iter("metadata") if entry.get("key") == "brim_type"
+    ]
+    assert actual == ([] if kind == "auto" else ["outer_only"])
+
+
 def test_the_advice_names_the_part_the_export_gives_it_to(tmp_path: Path) -> None:
     """Die Zeile im Druckdialog nennt das Teil, an das der Export den
     übernommenen Vorschlag schreibt (Konzept Herstellerprofil, Stufe E).
@@ -7999,3 +8078,103 @@ def test_preflight_ignores_disabled_3mf_build_instances(
 
     assert len(calls) == 1, "Eine ausgeschaltete Instanz darf die druckbare Platte nicht sperren"
     assert "abgestürzt" in str(problem.detail)
+
+
+@pytest.mark.parametrize("flavour", ["cura", "prusa", "orca"])
+@pytest.mark.parametrize("explicit", [False, True])
+@pytest.mark.parametrize("ending", ["success", "cancel", "replace_denied"])
+def test_existing_output_and_sources_survive_the_return_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flavour: str,
+    explicit: bool,
+    ending: str,
+) -> None:
+    """Erfolg, Abbruch und Schreibfehler erhalten Quellen und ersetzen nur ein fertiges Ergebnis."""
+    from app.core.errors import FileWriteError, OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    payload = "G90\nM83\nG0 X10 Y10 Z0.2\nG1 X20 E1 F600\n"
+    for variable in (
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ):
+        monkeypatch.setenv(variable, str(tmp_path / "user-data"))
+    monkeypatch.setattr(activation, "require", lambda *_args, **_kwargs: None)
+    source = tmp_path / "Bayrak Direği 打印.stl"
+    source_bytes = (MESHES / "cube_clean.stl").read_bytes()
+    source.write_bytes(source_bytes)
+    executable = tmp_path / f"{flavour}.exe"
+    executable.touch()
+    directory = tmp_path / "Ausgabe 打印" if explicit else None
+    native_name = "plate_1.gcode" if flavour == "orca" else handover.OUTPUT_NAME
+    target = directory / native_name if directory else source.with_suffix(".gcode")
+    target.parent.mkdir(exist_ok=True)
+    target.write_bytes(b"existing print")
+    captured: list[Path] = []
+    token = CancelSignal()
+    original_temporary = handover.tempfile.NamedTemporaryFile
+    original_replace = Path.replace
+
+    def run(command: list[str], workspace: Path, *_args: Any, **_kwargs: Any) -> Any:
+        captured.append(workspace)
+        assert target.read_bytes() == b"existing print"
+        if flavour == "cura":
+            output = Path(command[command.index("-o") + 1])
+        elif flavour == "prusa":
+            output = Path(command[command.index("--output") + 1])
+        else:
+            output = Path(command[command.index("--outputdir") + 1]) / native_name
+        assert output.parent == workspace
+        assert output != target
+        output.write_text(payload, encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    def temporary(*args: Any, **kwargs: Any) -> Any:
+        result = original_temporary(*args, **kwargs)
+        if kwargs.get("dir") == target.parent and kwargs.get("prefix") == f".{target.name}.":
+            assert target.read_bytes() == b"existing print"
+            if ending == "cancel":
+                token.cancel()
+        return result
+
+    def replace(path: Path, destination: Any) -> Path:
+        if ending == "replace_denied" and Path(destination) == target:
+            raise PermissionError("final replace denied")
+        return original_replace(path, destination)
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    monkeypatch.setattr(handover.tempfile, "NamedTemporaryFile", temporary)
+    monkeypatch.setattr(Path, "replace", replace)
+    profile = profiles.make_profile()
+
+    def slice_once() -> handover.SliceOutcome:
+        return handover.slice_model(
+            source,
+            print_settings.resolve(profile),
+            profile,
+            handover.SlicerSetup(executable, flavour),
+            output_dir=directory,
+            cancelled=token,
+        )
+
+    if ending == "success":
+        result = slice_once()
+        assert result.gcode_path == target
+        assert target.read_text(encoding="utf-8") == payload
+    elif ending == "cancel":
+        with pytest.raises(OperationCancelled):
+            slice_once()
+        assert target.read_bytes() == b"existing print"
+    else:
+        with pytest.raises(FileWriteError) as caught:
+            slice_once()
+        assert caught.value.suggestions
+        assert target.read_bytes() == b"existing print"
+    assert source.read_bytes() == source_bytes
+    assert len(captured) == 1
+    assert not captured[0].exists()
+    assert not list(target.parent.glob(f".{target.name}.*.tmp"))

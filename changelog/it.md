@@ -31,6 +31,9 @@ scrive in `website/version.json`.
 - I filamenti inutilizzati dei vecchi progetti non vengono più inviati allo slicer. I profili restano associati ai filamenti in uso.
 - I modelli aggiunti trovano spazio anche oltre il dodicesimo piatto. I piatti importati mantengono la loro disposizione.
 - I modelli aggiunti con filamenti diversi vengono collocati su piatti separati se la stampante non ha abbastanza ugelli.
+- Le impostazioni delle singole parti arrivano allo slicer in modo più affidabile. Quelle valide per tutto il piatto sono spiegate sulla parte interessata.
+- Con Orca e Prusa, un suggerimento di velocità accettato per un accoppiamento rallenta solo le parti interessate.
+- Anche le piccole modifiche accettate nelle impostazioni di stampa vengono mantenute nell’esportazione.
 - Cura usa i limiti di jerk del profilo, con valori distinti per pareti, riempimento e primo strato.
 - Se in Cura è attiva un’altra stampante, il trasferimento indica entrambe e mostra dove adottare la scelta di Cura.
 - Risolto un arresto anomalo di ElegooSlicer e OrcaSlicer durante lo slicing di modelli multicolore con supporti a griglia.
@@ -72,6 +75,8 @@ scrive in `website/version.json`.
 - PrusaSlicer e la famiglia Orca rispettano la densità dei supporti scelta. Il campo parte dall'1 %. Per stampare senza supporti, scegli «Nessuno».
 - Nelle stampe multicolore con OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, la torre di spurgo parte da una posizione adatta alle dimensioni del piatto.
 - I pezzi troppo grandi vengono segnalati prima di avviare lo slicer. Se non si trova spazio per tutti su un piatto, puoi distribuirli su più piatti.
+- I caratteri speciali nei nomi di progetto o utente non impediscono più di creare il file di stampa. Cura legge anche i modelli con nomi turchi o cinesi.
+- Solidon dispone sul piatto le parti sovrapposte prima dello slicing con PrusaSlicer o Cura e avvisa se non trova una disposizione adatta.
 
 ### Fori, asole e divisione
 

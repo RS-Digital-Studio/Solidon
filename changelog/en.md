@@ -31,6 +31,9 @@ it into `website/version.json`.
 - Unused filaments from older projects are no longer sent to the slicer. Profiles stay linked to the filaments still in use.
 - Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.
 - Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles.
+- Print settings for individual parts reach the slicer more reliably. Settings that apply to the whole plate are explained on the affected part.
+- With Orca and Prusa, accepting a speed suggestion for a fitted part now slows only the affected parts.
+- Even small changes accepted for print settings are now preserved on export.
 - Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.
 - If Cura has a different printer selected, the handoff names both printers and shows where to adopt Cura’s selection.
 - Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
@@ -72,6 +75,8 @@ it into `website/version.json`.
 - PrusaSlicer and the Orca family now use the support density you set. The field starts at 1 %. To print without supports, choose “None”.
 - For multicolor prints in OrcaSlicer, ElegooSlicer, Bambu Studio and Creality Print, the prime tower now starts at a position suited to the bed size.
 - Oversized parts are reported before the slicer starts. If no arrangement fits all parts on one plate, you can choose to arrange them across several plates.
+- Special characters in project or user names no longer prevent slicing. Cura can now read models with Turkish or Chinese names too.
+- Solidon arranges overlapping parts on the bed before slicing with PrusaSlicer or Cura and tells you if it cannot find a suitable layout.
 
 ### Holes, slots and splitting
 

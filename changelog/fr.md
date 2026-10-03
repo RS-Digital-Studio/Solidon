@@ -32,6 +32,9 @@ dans `website/version.json`.
 - Les filaments inutilisés des anciens projets ne sont plus transmis au logiciel de tranchage. Les profils restent associés aux filaments utilisés.
 - Les modèles ajoutés trouvent aussi une place après le douzième plateau. Les plateaux importés gardent leur disposition.
 - Les modèles ajoutés avec des filaments différents sont placés sur des plateaux séparés si l’imprimante n’a pas assez de buses.
+- Les réglages propres à chaque pièce sont mieux transmis au trancheur. Ceux qui s’appliquent à tout le plateau sont expliqués sur la pièce concernée.
+- Avec Orca et Prusa, une suggestion de vitesse acceptée pour un ajustement ne ralentit que les pièces concernées.
+- Même les petites modifications acceptées dans les réglages d’impression sont conservées à l’export.
 - Cura reprend les limites de jerk du profil, avec des valeurs distinctes pour les parois, le remplissage et la première couche.
 - Si une autre imprimante est active dans Cura, le transfert nomme les deux et indique où reprendre le choix de Cura.
 - Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.
@@ -73,6 +76,8 @@ dans `website/version.json`.
 - PrusaSlicer et la famille Orca respectent la densité des supports choisie. Le champ commence à 1 %. Pour imprimer sans supports, choisissez « Aucun ».
 - Pour les impressions multicolores avec OrcaSlicer, ElegooSlicer, Bambu Studio et Creality Print, la tour de purge démarre à une position adaptée à la taille du plateau.
 - Les pièces trop grandes sont signalées avant le lancement du slicer. Si leur disposition sur un seul plateau échoue, vous pouvez les répartir sur plusieurs plateaux.
+- Les caractères spéciaux dans les noms de projet ou d’utilisateur ne bloquent plus la création du fichier d’impression. Cura lit aussi les modèles aux noms turcs ou chinois.
+- Solidon dispose les pièces qui se chevauchent sur le plateau avant le tranchage avec PrusaSlicer ou Cura et vous prévient si aucune disposition adaptée n’est trouvée.
 
 ### Perçages, trous oblongs et découpe
 

@@ -11,7 +11,7 @@ stehen in `.claude/rules/dateiformat.md`; Herleitungen in
 |---|---|
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3): `check_before_export`, `default_scheme` (Namensmuster, im Dateidialog), `mesh_for_export` an allen drei Stellen des Schreibers, `export_part_scad` (erst `activation.require(EXPORT)`); bei Resin lässt `write_assembly` den FDM-Satz fallen (keine Haftungs- und Filamentbefunde, keine Beilage); `part_advice` ist der Rat je Körper und Spule (auch für die Zeile im Druckdialog), mit den übernommenen Werten je Teil bis zum Fixpunkt gefragt, `_part_values` schreibt daraus Objekt- oder Netzwerte |
 | `threemf.py` | 3MF **schreiben** — Körper oder Baugruppe, Farbgruppen, Slicer-Beilagen (§20, §29), `AssemblyPart.support_blocker` je nach `blocker_as_part`; Körper und Sperren behalten ihre float64-Koordinaten ohne Rundung; gelesen wird in `ingest/threemf.py` |
-| `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values`; `machine_for` bindet importierte Orca-Düsenvarianten an Quellprofil, Modell und belegten Hersteller; `project_settings` und `_machine_name` schreiben bei auflösbarer Maschinenkennung den nativen Profilnamen, während intern die stabile Kennung erhalten bleibt (`_source_profile_name`); `split_for_parts` trennt übernommene Werte in plattenweite und solche je Teil (`PartSplit`, `CURA_PER_MESH`; `PartSplit.accepted_per_part` trägt die Übernahmen in den Rat je Teil); `settings_for_slot` liest gebundene Bambu-Filamente mit derselben aktiven Variante, `_resolve_slot` hält Rücklesen, Ausgabe und Befund zusammen; eine nicht zuordenbare Variante verwirft das gebundene Profil und schreibt Projektwerte; in gemischten 3MFs löst `project_settings` je Slot nur ausdrücklich variantengebundene Bambu-Felder (`BAMBU_FILAMENT_VARIANT_SETTINGS`) bei passender Variantenanzahl auf; Profilvektoren anderer Semantik bleiben auch bei gleicher Länge vollständig; `_followers_not_faster` vergleicht Tempovorschläge mit dem aktiven Prozesswert; `slot_processes` nennt je Spule eines Körpers Profil und Einstellungen, `chosen_slot_profiles` die gewählten Filamentprofile |
+| `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values`; `machine_for` bindet importierte Orca-Düsenvarianten an Quellprofil, Modell und belegten Hersteller; `project_settings` und `_machine_name` schreiben bei auflösbarer Maschinenkennung den nativen Profilnamen, während intern die stabile Kennung erhalten bleibt (`_source_profile_name`); `split_for_parts` trennt übernommene Werte nach gemessener Programmmarke in plattenweite und solche je Teil (`PartSplit`, `CURA_PER_MESH`; `PartSplit.accepted_per_part` trägt die Übernahmen in den Rat je Teil); `settings_for_slot` liest gebundene Bambu-Filamente mit derselben aktiven Variante, `_resolve_slot` hält Rücklesen, Ausgabe und Befund zusammen; eine nicht zuordenbare Variante verwirft das gebundene Profil und schreibt Projektwerte; in gemischten 3MFs löst `project_settings` je Slot nur ausdrücklich variantengebundene Bambu-Felder (`BAMBU_FILAMENT_VARIANT_SETTINGS`) bei passender Variantenanzahl auf; Profilvektoren anderer Semantik bleiben auch bei gleicher Länge vollständig; `_followers_not_faster` vergleicht Tempovorschläge mit dem aktiven Prozesswert; `slot_processes` nennt je Spule eines Körpers Profil und Einstellungen, `chosen_slot_profiles` die gewählten Filamentprofile |
 | `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, `slicer_profiles.FILAMENT_READBACK`); Bambu-Listen löst es über den vollständigen Variantennamen aus Extrudertyp und `nozzle_volume_type` auf, jedes Prozess-, Maschinen- und Filamentprofil mit seinem eigenen Variantenindex und Extruder (`_variant_selection`, `_variant_values`); mehrdeutige Varianten fallen auf Solidons Tabelle zurück, mit eigenem Befund (`Foundation.unresolved_variant`, `slicer.process_variant_unresolved`), nie als unlesbares Profil; ohne lesbare Variante (`nil`, leer, Zahl) ebenso, mit `slicer.process_variant_unreadable`. Die vier Orca-Programme ergänzen ihre gemessenen Vorgaben (`PROGRAM_DEFAULTS`), dazu kommen Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und Gemessenes (`Foundation.measured`, auf dem Raster der Probe: `measured_on`, Rückfall `Foundation.unmeasured`); die Stufe wählt den Prozess des Herstellers (`for_stage`), nur wo keiner passt, liegen ihre Werte über dem Standardprozess (`STAGE_PATHS`, `Foundation.staged`); `plate_temperatures`, `offers_plates`; `effective` (Grundlage plus Abweichung), `written_paths` (was die Übergabe davon schreibt), `findings` (Platte, unlesbares Profil, nicht zuordenbare Düsenvariante). Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück |
 | `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles._prusa_fits` bindet damit Prozesse und Filamente an den Drucker |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt; die Prädikate je Familie |
@@ -125,6 +125,11 @@ Importleser die Dateien. Stützsperren zählen nicht als Druckteile. Ein
 bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
 die normale Datei- und Fensterübergabe behält ihren Berichtweg.
 
+`prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
+Ohne eigene Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf
+exportlokal gepackt. `arrangement_holds` prüft auch tatsächliche Druckkontur,
+Sperrzonen und nutzbare Höhe; dies gilt ebenso für die Lageübernahme im Fenster.
+
 | Prüfung | Frage |
 |---|---|
 | `off_the_bed` | Liegt der Druck im Bauraum? |
@@ -174,6 +179,13 @@ hält die unabhängig gemessenen Aufzählungswerte für den Wächter fest.
 ## Stolperfallen
 
 ### Stützsperre und Cura
+
+Alle Slicer lesen technische Modellkopien und schreiben im privaten Arbeitsordner.
+Unter Windows sind diese Pfade ASCII; ein 8.3-Alias darf nicht wieder aufgelöst
+werden. Die Druckdatei gelangt danach atomar ins ursprüngliche Unicode-Ziel.
+Cura erhält zusätzlich Blocker und vollständige Definitionsketten mit technischen
+Namen (`handover._prepare_cura_cli`); nur Vererbung und Extruderzug-Verweise ändern
+sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
 
 - **Die Stützsperre** (`support.block_channels`, Regel in `dateiformat.md`):
   `writer._support_blocker` fragt zuerst die Schichten des Prüfberichts
