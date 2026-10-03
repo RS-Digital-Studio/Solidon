@@ -145,6 +145,7 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Sur Mac, Solidon ne se ferme plus peu après le démarrage. Dans la version 0.5.1, cela arrivait sur chaque Mac, même sans souris 3D branchée.
 - La case « Créer les cotes comme paramètres » est cochée la première fois, puis retient votre dernier choix, même après un redémarrage.
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
 - L'export, « Trancher » et « Ouvrir dans le slicer … » reçoivent toujours le calcul fin, pas la vue plus grossière de la fenêtre. Congés et cônes arrivent ainsi en pleine résolution.

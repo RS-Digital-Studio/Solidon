@@ -26,8 +26,8 @@ Das Modul zerfällt in zwei Teile, wie das Konzept es verlangt:
   bei laufendem 3DxWare). Gelesen wird nicht blockierend im Hauptthread —
   ein ``QTimer`` fragt mit ~60 Hz, was seit dem letzten Mal ankam; eine leere
   Lesung kostet unter einer Mikrosekunde (gemessen). **Gesucht wird in einem
-  Nebenfaden** (:meth:`SpaceMouseController._search`): ``hid.enumerate()``
-  fragt jedes HID-Gerät nach seinen Namen.
+  Nebenfaden, der so lange lebt wie der Prozess** (:class:`_SearchThread`):
+  ``hid.enumerate()`` fragt jedes HID-Gerät nach seinen Namen.
 
   **Auf dem Mac gilt der Satz vom Nebeneinander nicht.** Dort hält 3DxWare
   das Gerät exklusiv, und ``hidapi`` öffnet seinerseits exklusiv — wer den
@@ -64,6 +64,7 @@ import contextlib
 import ctypes
 import logging
 import math
+import queue
 import struct
 import sys
 import threading
@@ -934,6 +935,59 @@ def default_reader(
     return HidReader()
 
 
+#: Der Name des Suchfadens — im Absturzbericht und in den Tests derselbe.
+SEARCH_THREAD: Final = "spacemouse-search"
+
+
+class _SearchThread:
+    """Der eine Faden, in dem ``hidapi`` sucht. Er endet nie.
+
+    **Auf dem Mac gehört der HID-Manager dem Faden, der ``hid`` importiert.**
+    cython-hidapi ruft ``hid_init`` beim Import, und hidapi hängt den Manager
+    dabei an ``CFRunLoopGetCurrent()``; jede spätere Suche hängt die
+    gefundenen Geräte in genau diesen Run Loop. In 0.5.1 lief jede Suche in
+    einem eigenen Faden, der danach endete — ab der zweiten Suche zeigte der
+    Manager auf einen freigegebenen Run Loop, und ``CFRunLoopAddSource``
+    beendete die Anwendung mit SIGTRAP, auf jedem Mac und ohne 3D-Maus, 20 bis
+    40 Sekunden nach dem Start (Kundenmeldung Intel-Mac; nachgestellt auf
+    macOS 26 ARM). Unter Windows und Linux hängt nichts am Faden; der Weg ist
+    dort derselbe.
+
+    Deshalb kein neuer Faden je Suche und kein Neustart nach einem Fehler: Der
+    Faden, der zuerst gesucht hat, muss alle weiteren Suchen tun. Ein Fehler
+    wird eine leere Suche. Ein Daemon wie zuvor, denn eine Gerätefrage lässt
+    sich nicht abbrechen und darf das Ende des Prozesses nicht aufhalten.
+    """
+
+    def __init__(self) -> None:
+        self._searches: queue.SimpleQueue[tuple[HidReader, list[list[dict[str, Any]]]]] = (
+            queue.SimpleQueue()
+        )
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+
+    def submit(self, reader: HidReader, box: list[list[dict[str, Any]]]) -> None:
+        """Sucht mit ``reader`` und legt das Ergebnis in ``box``."""
+        with self._lock:
+            if self._thread is None:
+                self._thread = threading.Thread(target=self._serve, name=SEARCH_THREAD, daemon=True)
+                self._thread.start()
+        self._searches.put((reader, box))
+
+    def _serve(self) -> None:
+        while True:
+            reader, box = self._searches.get()
+            try:
+                found = reader.search()
+            except Exception as problem:
+                _log.debug("3D mouse search failed: %s", problem)
+                found = []
+            box.append(found)
+
+
+_SEARCHER: Final = _SearchThread()
+
+
 class SpaceMouseController(QObject):
     """Verbindet Leser und Abbildung mit der Kamera des Viewports.
 
@@ -1013,11 +1067,11 @@ class SpaceMouseController(QObject):
     def _search(self) -> None:
         """Nach einem Gerät suchen, ohne den Hauptthread daran warten zu lassen.
 
-        Ein **Daemon-Faden**, kein Arbeiter an der Leine — wie bei „Zuletzt
-        geöffnet“ (``MainWindow._show_recent``): Eine Gerätefrage lässt sich
-        nicht abbrechen, und eine späte Antwort landet in einem Kasten, den
-        niemand mehr abholt. Der Treiberweg auf dem Mac meldet sich über
-        Rückrufe an und bleibt im Hauptthread.
+        Im :class:`_SearchThread`, kein Arbeiter an der Leine — wie bei
+        „Zuletzt geöffnet“ (``MainWindow._show_recent``): Eine Gerätefrage
+        lässt sich nicht abbrechen, und eine späte Antwort landet in einem
+        Kasten, den niemand mehr abholt. Der Treiberweg auf dem Mac meldet sich
+        über Rückrufe an und bleibt im Hauptthread.
         """
         reader = self._reader
         if not isinstance(reader, HidReader) or reader.is_open:
@@ -1025,9 +1079,7 @@ class SpaceMouseController(QObject):
             return
         box: list[list[dict[str, Any]]] = []
         self._searched = box
-        threading.Thread(
-            target=lambda: box.append(reader.search()), name="spacemouse-search", daemon=True
-        ).start()
+        _SEARCHER.submit(reader, box)
         self._collect.start()
 
     def _collect_search(self) -> None:

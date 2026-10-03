@@ -169,6 +169,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Auf dem Mac beendet sich Solidon nicht mehr kurz nach dem Start. In Version 0.5.1 geschah das auf jedem Mac, auch ohne angeschlossene 3D-Maus.
 - Der Haken *Maße als Parameter anlegen* steht beim ersten Mal an und merkt sich danach Ihre letzte Wahl, auch über einen Neustart.
 - Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt.
 - Export, *Slicen* und *Im Slicer öffnen* bekommen immer die feine Rechnung, nicht die gröbere Ansicht des Fensters. Rundungen und Kegel kommen so mit voller Auflösung in die Datei.

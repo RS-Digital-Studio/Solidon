@@ -204,10 +204,11 @@ Operation.
   öffnet *Multi-axis Controller*, 3DxWare darf mitlesen. Raw Input bleibt leer
   (3DxWare reicht Rohdaten nur an bekannte Programme). Gelesen nicht
   blockierend im Hauptthread, ein Takt für Lesen und Fahren; gesucht
-  (`hid.enumerate`) im Daemon-Faden (`SpaceMouseController._search`) und
-  geöffnet im Hauptthread — die Suche griff dort für jeden Gerätenamen nach dem
-  GIL und hielt neben einem Arbeiter das Fenster an; die Vorzeichen stammen aus einer
-  aufgezeichneten Lesung (`tests/data/spacemouse/`), nicht aus einer Annahme.
+  (`hid.enumerate`) im **einen, nie endenden** Faden `_SearchThread` (hidapi
+  bindet seinen Manager auf dem Mac an den Run Loop des importierenden Fadens;
+  ein Faden je Suche ließ 0.5.1 abstürzen), geöffnet im Hauptthread — im
+  Hauptthread hielt die Suche neben einem Arbeiter das Fenster an; die
+  Vorzeichen stammen aus einer aufgezeichneten Lesung (`tests/data/spacemouse/`).
 * **Auf dem Mac durch den Treiber**: 3DxWare hält das Gerät exklusiv.
   `DriverReader` lädt das `3DconnexionClient`-Framework des Kunden zur Laufzeit
   (mitgeliefert wird nichts, Regel 22) und schreibt seine Meldungen in dieselben

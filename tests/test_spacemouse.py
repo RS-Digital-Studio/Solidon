@@ -16,7 +16,11 @@ import ctypes
 import json
 import math
 import struct
+import subprocess
 import sys
+import textwrap
+import threading
+import time
 import warnings
 from dataclasses import dataclass, field
 from itertools import pairwise
@@ -844,6 +848,94 @@ def test_the_controller_searches_off_the_main_thread(qt_app: QApplication) -> No
         assert controller._poll.isActive() and not controller._collect.isActive()
     finally:
         controller.stop()
+
+
+def test_every_search_runs_in_one_thread_that_outlives_it() -> None:
+    """Jede Suche läuft im selben Faden, auch nach einem Fehler, und er lebt weiter.
+
+    Auf dem Mac gehört der HID-Manager dem Faden, der ``hid`` importiert
+    (``hid_init`` hängt ihn an dessen Run Loop). In 0.5.1 lief jede Suche in
+    einem eigenen Faden; endete er, beendete die nächste Suche die Anwendung.
+    """
+    from app.ui.spacemouse import _SEARCHER, SEARCH_THREAD
+
+    seen: list[threading.Thread] = []
+
+    def enumerate_devices() -> list[dict[str, Any]]:
+        seen.append(threading.current_thread())
+        if len(seen) == 2:
+            raise RuntimeError("Gerätefrage gescheitert")
+        return []
+
+    reader = HidReader()
+    reader._module = SimpleNamespace(enumerate=enumerate_devices)
+    for _ in range(3):
+        box: list[list[dict[str, Any]]] = []
+        _SEARCHER.submit(reader, box)
+        deadline = time.monotonic() + 5.0
+        while not box and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert box == [[]], "auch eine gescheiterte Suche antwortet, leer"
+        # Ein Faden je Suche wäre bis hierher beendet.
+        time.sleep(0.05)
+    assert len(seen) == 3 and len(set(seen)) == 1, "alle Suchen im selben Faden"
+    assert seen[0].name == SEARCH_THREAD and seen[0] is not threading.main_thread()
+    assert seen[0].is_alive()
+
+
+def test_repeated_searches_with_the_real_hid_module_keep_the_process_alive() -> None:
+    """Vier Suchen der Steuerung mit dem echten ``hidapi`` — der Prozess überlebt sie.
+
+    Auf dem Mac stürzte die zweite Suche in 0.5.1 in ``CFRunLoopAddSource``
+    ab (SIGTRAP), gleich ob eine 3D-Maus steckt: Der Suchfaden, an dessen Run
+    Loop der HID-Manager hing, war beendet. Eigener Prozess, weil ein Absturz
+    keinen Test zurückgibt; ohne Fenster, damit die Kernsuite ihn auf jedem
+    System fährt.
+    """
+    pytest.importorskip("hid")
+    script = textwrap.dedent(
+        """
+        import sys
+        import time
+
+        from PySide6.QtCore import QCoreApplication
+
+        from app.ui.spacemouse import HidReader, SpaceMouseController
+
+
+        class Settings:
+            spacemouse_seen = False
+
+
+        application = QCoreApplication(sys.argv)
+        controller = SpaceMouseController(None, Settings(), lambda: None, reader=HidReader())
+        for _ in range(4):
+            controller._search()
+            box = controller._searched
+            if box is None:
+                break  # ein Gerät ist schon offen, gesucht wird nicht mehr
+            deadline = time.monotonic() + 30.0
+            while not box and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert box, "die Suche hat nicht geantwortet"
+            controller._collect_search()
+            time.sleep(0.3)
+        controller.stop()
+        print("searched")
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parent.parent,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0 and "searched" in result.stdout, (
+        result.returncode,
+        result.stderr[-2000:],
+    )
 
 
 def test_driver_fallback_keeps_the_blocked_device_visible() -> None:
