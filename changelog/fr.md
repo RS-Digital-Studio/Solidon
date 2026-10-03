@@ -64,6 +64,7 @@ dans `website/version.json`.
 - Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
 - Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
 - Une caractéristique reconnue à plus d'un mètre de l'origine garde sa place quand vous la modifiez. Avant, le champ tronquait le nombre sans rien dire, et le perçage bougeait.
+- Si une étape touche une pièce dont la surface se croise elle-même, elle s'arrête et montre l'endroit. Ailleurs, elle continue le calcul et signale que les pièces n'ont pas pu être réunies.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
 - Découper coupe maintenant aussi en biais : en haut, vous choisissez le « Plan » — sur un axe avec inclinaison, parallèle à une face, par une arête ou par trois points cliqués dans la vue.

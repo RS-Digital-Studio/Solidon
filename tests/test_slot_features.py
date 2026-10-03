@@ -3353,35 +3353,39 @@ def test_brep_slot_pull_reports_when_touching_solids_cannot_be_united(
     assert caught.value.suggestions == (SHOW_LOCATIONS, CORRECT_INPUT, CANCEL)
 
 
-def test_brep_slot_preflight_does_not_continue_when_search_is_incomplete(
-    monkeypatch: pytest.MonkeyPatch, profile: Profile
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_touching_plates_are_united_although_the_body_has_more_parts_than_the_import_limit(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, kernel: str
 ) -> None:
-    """Der exakte Kern bekommt denselben Vollständigkeitsvertrag wie der Netzkern."""
-    from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+    """Über der Teilegrenze verbindet der Zug berührende Platten trotzdem (RM-383).
+
+    Die Grenze (:data:`~app.core.geom.repair.CROSSING_PARTS_MAX`) gilt dem
+    Einlesen; eine vollständige Vorfrage hielt über ihr bis RM-383 mit „nicht
+    vollständig geprüft" an — an beiden Kernen. Gesenkt auf ein Teil, steht
+    der Fall mit zwei Platten genau darüber. Sollwert wie beim Zug ohne Grenze:
+    ``16 000 − (36 + 9π) · 20`` mm³, ein Langloch, ein Körper.
+    """
     from app.core.geom import repair as repair_module
-    from app.core.geom.repair import CROSSING_SEARCH_INCOMPLETE_DETAIL
 
-    entry = _touching_plates_with_a_bore("brep", profile)
-    observed: dict[str, object] = {}
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
 
-    def incomplete(_body, **kwargs):
-        observed.update(kwargs)
-        raise GeometryError(
-            detail=CROSSING_SEARCH_INCOMPLETE_DETAIL,
-            suggestions=(CORRECT_INPUT, CANCEL),
-        )
+        exact_kernel()
+    entry = _touching_plates_with_a_bore(kernel, profile)
+    monkeypatch.setattr(repair_module, "CROSSING_PARTS_MAX", 1)
 
-    monkeypatch.setattr(repair_module, "parts_that_cross", incomplete)
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
 
-    with pytest.raises(GeometryError) as caught:
-        run_op_with_findings(
-            "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
-        )
-
-    assert observed["include_face_contacts"] is True
-    assert observed["max_pairs"] is None
-    assert observed["require_complete"] is True
-    assert caught.value.detail == CROSSING_SEARCH_INCOMPLETE_DETAIL
+    expected = 16_000.0 - (36.0 + 9.0 * math.pi) * 20.0
+    assert output.mesh.volume == pytest.approx(expected, abs=1.0)
+    assert len([feature for feature in output.features.values() if feature.kind == "slot"]) == 1
+    assert "boolean.parts_united" in {finding.code for finding in findings}
+    if kernel == "brep":
+        assert output.mesh.solid_count == 1
+    else:
+        assert output.mesh.component_count == 1
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

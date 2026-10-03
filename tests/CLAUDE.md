@@ -106,6 +106,9 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
   oder `ui_helpers.py`; der AST-Wächter samt Gegenprobe steht in
   `test_toolchain.py` und prüft auch eingebettete Python-Skripte für
   Kindprozesse.
+- **Eine Testdatei definiert jede Funktion einmal**: Eine zweite Fassung
+  überschattet die erste still, und pytest sammelt nur die letzte — so lief
+  ein angehängter Doppelblock unbemerkt mit (`test_toolchain.py`).
 - **Wer `WorkerLeash.start` durch eine Testfunktion ersetzt, übernimmt den
   Abbau** der absichtlich nicht gestarteten Arbeiter: Ein lokaler Finalizer
   ruft `release_finished_references()`, merkt `deleteLater()` vor und stellt

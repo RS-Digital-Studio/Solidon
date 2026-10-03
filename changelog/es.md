@@ -64,6 +64,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el historial de un cuerpo STEP se pueden reordenar pasos o insertar uno antes, aunque un paso posterior se refiera a un taladro. La referencia sigue al taladro.
 - Un taladro desplazado o duplicado con una dirección nueva sigue exacto en un cuerpo STEP.
 - Una característica reconocida a más de un metro del origen conserva su lugar al cambiarla. Antes el campo recortaba la cifra sin aviso y el taladro se movía.
+- Si un paso alcanza una pieza cuya superficie se cruza consigo misma, se detiene y muestra el lugar. Fuera de ella sigue calculando y avisa de que las piezas no se pudieron unir.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
 - Recortar corta ahora también en ángulo: arriba elige el «Plano»: en un eje con inclinación, paralelo a una cara, por una arista o por tres puntos que marca en la vista.

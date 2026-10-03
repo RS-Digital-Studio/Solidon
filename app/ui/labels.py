@@ -1364,6 +1364,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "intersection": _("Durchdringung"),
     "last_angle": _("Letzter Winkel"),
     "length": _("Länge"),
+    # Wo ein Halt der Booleschen die kaputte Schale traf (RM-382); *Stelle
+    # zeigen* fliegt dorthin, im Prüfbericht steht er als Ort des Befunds.
+    "location": _("Stelle"),
     "narrowing": _("Verengung"),
     "nominal_side_clearance": _("Seitliches Nennspiel"),
     "normal": _("Richtung der Fläche"),

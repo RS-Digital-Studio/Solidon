@@ -63,6 +63,7 @@ it into `website/version.json`.
 - In the history of a STEP body you can reorder steps or insert one before, even when a later step refers to a hole. The reference follows the hole.
 - A hole moved or duplicated with a new direction stays exact on a STEP body.
 - A detected feature more than a metre from the origin keeps its place when you change it. Until now the field quietly clipped the number, and the hole moved.
+- If a step hits a part whose surface crosses itself, it stops and shows the spot. Elsewhere it keeps calculating and warns that the parts could not be joined.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: at the top you choose the *Plane* — along an axis with a tilt, parallel to a face, through an edge, or through three points you click in the view.

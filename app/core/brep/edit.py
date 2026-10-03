@@ -3978,6 +3978,18 @@ def _boolean_pair(
     return result, updated_slots, operation
 
 
+#: Warum eine exakte Boolesche nicht gebaut wurde und was hilft (RM-385): Der
+#: häufigste Grund ist bloße Berührung an einer Fläche oder Kante, und die
+#: behebt eine Bewegung, keine Reparatur. Bis ``eab5f4f47`` stand dieser Satz
+#: da; der allgemeine „ließ sich nicht zuverlässig berechnen" nannte weder
+#: Grund noch Weg (§2.7).
+BOOLEAN_REFUSED_DETAIL: Final = _(
+    "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — "
+    "meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden "
+    "so weit, dass sich die Körper wirklich überlappen."
+)
+
+
 #: Mit welcher Unschärfe eine Boolesche noch einmal rechnet, deren Ergebnis
 #: nicht gültig ist (RM-408). OpenCASCADE meldet ``IsDone`` auch für einen
 #: Körper mit einer zweiten Schale, wo zwei Flächen fast zusammenfallen — an
@@ -4037,7 +4049,7 @@ def _fuzzy_retry(
 def _boolean_refused() -> GeometryError:
     """Der vorhandene Handlungsvorschlag für unvereinbare B-Rep-Körper."""
     return GeometryError(
-        detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+        detail=BOOLEAN_REFUSED_DETAIL,
         suggestions=(CORRECT_INPUT, CANCEL),
     )
 

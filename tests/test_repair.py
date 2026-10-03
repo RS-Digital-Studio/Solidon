@@ -14,6 +14,7 @@ import trimesh
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
 from app.core.geom import kernel_process
+from app.core.geom.box_pairs import TREE_PAIR_FIRST_BLOCK
 from app.core.geom.mesh import MeshCodec, MeshData, edge_table, read_mesh
 from app.core.geom.repair import (
     _first_crossing_between,
@@ -256,20 +257,24 @@ def test_unbounded_crossing_search_scans_past_the_diagnostic_budget(
     monkeypatch.setattr(intersections, "crossing_pairs", no_crossing)
 
     bounded = _first_crossing_between(triangles, faces, low, high, one, other, budget=1)
-    assert bounded == (None, 1, False)
+    assert bounded == (None, TREE_PAIR_FIRST_BLOCK, False), "gezählt, nicht geprüft"
     assert checked == []
 
     unbounded = _first_crossing_between(triangles, faces, low, high, one, other, budget=None)
     assert unbounded == (None, 400, True)
-    assert checked == [400]
+    assert checked == [TREE_PAIR_FIRST_BLOCK, 400 - TREE_PAIR_FIRST_BLOCK]
 
 
 def test_crossing_search_splits_one_high_degree_row_into_bounded_blocks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Auch eine Dreiecksfläche mit sehr vielen Partnern bleibt im Blocklimit."""
+    """Auch eine Dreiecksfläche mit sehr vielen Partnern bleibt im Blocklimit.
+
+    Die Blöcke wachsen vom ersten (ein früher Treffer kostet wenig) bis zur
+    Grenze und bleiben dort; keiner ist größer.
+    """
     from app.core.geom import intersections
-    from app.core.geom.repair import CROSSING_BLOCK
+    from app.core.geom.box_pairs import TREE_PAIR_BLOCK
 
     triangle = np.asarray([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]])
     triangles = np.repeat(triangle, 100_001, axis=0)
@@ -291,7 +296,10 @@ def test_crossing_search_splits_one_high_degree_row_into_bounded_blocks(
     result = _first_crossing_between(triangles, faces, low, high, one, other, budget=None)
 
     assert result == (None, 100_000, True)
-    assert checked == [CROSSING_BLOCK, 100_000 - CROSSING_BLOCK]
+    growing = [TREE_PAIR_FIRST_BLOCK * 2**step for step in range(6)]
+    assert checked[: len(growing)] == growing
+    assert max(checked) == TREE_PAIR_BLOCK
+    assert sum(checked) == 100_000
 
 
 def test_unbounded_crossing_search_checks_cancellation_between_blocks(
@@ -300,7 +308,6 @@ def test_unbounded_crossing_search_checks_cancellation_between_blocks(
     """Eine laufende vollständige Suche reagiert nach dem ersten Kandidatenblock auf Abbruch."""
     from app.core.errors import OperationCancelled
     from app.core.geom import intersections
-    from app.core.geom.repair import CROSSING_BLOCK
 
     class Signal:
         cancelled = False
@@ -337,7 +344,7 @@ def test_unbounded_crossing_search_checks_cancellation_between_blocks(
             triangles, faces, low, high, one, other, budget=None, cancelled=signal
         )
 
-    assert checked == [CROSSING_BLOCK]
+    assert checked == [TREE_PAIR_FIRST_BLOCK]
 
 
 def test_crossing_preflight_uses_the_axis_with_fewer_candidates() -> None:
@@ -368,8 +375,13 @@ def test_crossing_preflight_uses_the_axis_with_fewer_candidates() -> None:
     assert complete
 
 
-def test_required_crossing_search_rejects_too_many_components() -> None:
-    """Die Teilegrenze ist ein abgebrochener Lauf, keine belegte Entwarnung."""
+def test_a_complete_crossing_search_is_not_limited_by_the_part_count() -> None:
+    """Über der Teilegrenze fragt nur das Einlesen nicht nach; wer die Antwort braucht, bekommt sie.
+
+    Bis RM-383 hielt eine vollständige Suche über 256 Teilen an, und damit
+    jede Boolesche Operation an einem solchen Körper — auch an getrennten
+    Teilen. Über die Hüllquaderbäume kosten getrennte Teile nichts.
+    """
     first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
     second = first.copy()
     second.apply_translation((1.0, 1.0, 0.0))
@@ -380,9 +392,10 @@ def test_required_crossing_search_rejects_too_many_components() -> None:
         distant.append(piece)
     body = trimesh.util.concatenate([first, second, *distant])
 
-    assert parts_that_cross(body) is None
-    with pytest.raises(GeometryError, match="nicht vollständig"):
-        parts_that_cross(body, require_complete=True)
+    assert parts_that_cross(body) is None, "das Einlesen fragt über der Grenze nicht"
+    place = parts_that_cross(body, require_complete=True)
+    assert place is not None
+    assert all(-1.0 - 1e-9 <= value <= 2.0 + 1e-9 for value in place[:2]), place
 
 
 def test_required_crossing_search_accepts_a_complete_no_contact_result() -> None:
@@ -2268,7 +2281,7 @@ def test_an_unproven_single_shell_does_not_settle_a_bore_warning(case: str) -> N
     assert len(kept) == 1 and kept[0] is said and said.values == {"count": 2}
 
 
-@pytest.mark.parametrize("phase", ["self_check", "contacts", "families", "part_budget"])
+@pytest.mark.parametrize("phase", ["self_check", "contacts", "families", "pair_budget"])
 def test_material_part_count_keeps_incomplete_proofs_unknown(monkeypatch, phase: str) -> None:
     """Unvollständigkeit bleibt unbekannt, auch wenn bisher kein Treffer gefunden wurde."""
     from app.core.geom import repair as module
@@ -2301,10 +2314,15 @@ def test_material_part_count_keeps_incomplete_proofs_unknown(monkeypatch, phase:
 
         monkeypatch.setattr(module._Shells, "inside", undecided)
     else:
-        monkeypatch.setattr(module, "CROSSING_PARTS_MAX", 1)
+        # Das Paarbudget der Kontaktsuche reicht nicht: Die Suche selbst meldet
+        # sich unvollständig, nicht ein Ersatz an ihrer Stelle.
+        def exhausted(*args, **kwargs):
+            calls.append("pair_budget")
+            return None, 1, False
+
+        monkeypatch.setattr(module, "_first_crossing", exhausted)
     assert module.material_part_count(body) is None
-    if phase != "part_budget":
-        assert calls, "Die gewählte unvollständige Prüfung muss tatsächlich erreicht werden."
+    assert calls, "Die gewählte unvollständige Prüfung muss tatsächlich erreicht werden."
 
 
 def test_the_end_report_counts_material_once_and_keeps_component_values(monkeypatch):

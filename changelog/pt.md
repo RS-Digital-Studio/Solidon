@@ -63,6 +63,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
 - Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
 - Uma característica reconhecida a mais de um metro da origem mantém o seu lugar ao alterá-la. Antes o campo cortava o número sem aviso, e o furo mudava de sítio.
+- Se um passo atinge uma peça cuja superfície se cruza a si própria, para e mostra o sítio. Fora dela continua a calcular e avisa que as peças não puderam ser unidas.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em cima escolhe o «Plano» — num eixo com inclinação, paralelo a uma face, por uma aresta ou por três pontos que clica na vista.

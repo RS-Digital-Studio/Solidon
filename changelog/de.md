@@ -88,6 +88,7 @@ Nutzen da und sonst nichts.
 - Im Verlauf eines STEP-Körpers lassen sich Schritte umstellen oder davor einfügen, auch wenn ein späterer Schritt eine Bohrung meint. Der Verweis folgt der Bohrung.
 - Eine Bohrung, mit neuer Richtung versetzt oder verdoppelt, bleibt an einem STEP-Körper exakt.
 - Ein erkanntes Merkmal mehr als einen Meter vom Nullpunkt entfernt behält beim Ändern seinen Ort. Bisher kürzte das Feld die Zahl still, und die Bohrung wanderte.
+- Trifft ein Schritt ein Teil, dessen Oberfläche sich selbst kreuzt, hält er an und zeigt die Stelle. Daneben rechnet er weiter und warnt, dass sich die Teile nicht vereinigen ließen.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Vorn wählen Sie die *Ebene* — an einer Achse mit Neigung, parallel zu einer Fläche, durch eine Kante oder durch drei Punkte, die Sie im Bild anklicken.

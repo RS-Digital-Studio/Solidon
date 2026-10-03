@@ -63,6 +63,7 @@ scrive in `website/version.json`.
 - Nella cronologia di un corpo STEP puoi riordinare i passi o inserirne uno prima, anche se un passo successivo riguarda un foro. Il riferimento segue il foro.
 - Un foro spostato o duplicato con una nuova direzione resta esatto su un corpo STEP.
 - Una caratteristica riconosciuta a più di un metro dall'origine mantiene il suo posto quando la modifichi. Prima il campo tagliava il numero in silenzio e il foro si spostava.
+- Se un passaggio colpisce un pezzo la cui superficie interseca se stessa, si ferma e mostra il punto. Altrove continua a calcolare e avvisa che i pezzi non si sono potuti unire.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in alto scegli il «Piano»: su un asse con inclinazione, parallelo a una faccia, per uno spigolo o per tre punti cliccati nella vista.

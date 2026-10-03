@@ -5845,7 +5845,17 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
     Objekts benennen", und beim Aufruf eines fremden Programms eine halbe
     Seite roher Ausgabe — während der lesbare Satz beide Male in ``values``
     versteckt lag.
+
+    **Der Körper reist mit, auch wo der Kern ihn nicht kennt** (RM-382): Ein
+    Fehler ohne ``object_id`` aus einem Schritt mit genau einem Eingang meint
+    diesen Eingang — dieselbe Regel wie bei den Befunden einer Ausgabe. An
+    ``drill_hole`` stand ein Halt ohne Kennung im Prüfbericht, und *Stellen
+    zeigen* hatte keinen Körper. Bei mehreren Eingängen wäre jede Zuordnung
+    geraten (Regel 21).
     """
+    object_id = error.object_id
+    if object_id is None and len(operation.inputs) == 1:
+        object_id = operation.inputs[0]
     # Orte und Konturen bleiben Geometrie. Als Text in ``values`` würden sie
     # beim Rückweg über ``panels.as_error`` die tatsächlichen Tupel verdrängen.
     values = {
@@ -5864,7 +5874,7 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
         code=f"op.{operation.op}.{type(error).__name__}",
         severity="error",
         message=message,
-        object_id=error.object_id,
+        object_id=object_id,
         op_id=operation.id,
         values=values,
         location=error.values.get("location"),
