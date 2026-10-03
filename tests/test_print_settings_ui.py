@@ -6292,7 +6292,12 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     # „0 >= 23" ist kein Befund über Stauchung, sondern über ein Layout, das
     # es noch nicht gibt (dieselbe Falle wie `isVisible` vor dem Anzeigen).
     dialog.show()
-    qt_app.processEvents()
+    # Gemessen wird gesammelt im nächsten Umlauf (``_queue_refit``): Ein
+    # einzelnes ``processEvents`` sah die Anfangsgröße noch nicht, und das
+    # Aufklappen ging in der noch wartenden Anfangsmessung auf.
+    for _ in range(8):
+        qt_app.processEvents()
+    assert dialog._content_height.initial_fit_done
     before = dialog.height()
     field = dialog._editors["layers.layer_height"]
     tall_enough = field.sizeHint().height()
@@ -6305,7 +6310,8 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     room = dialog.screen().availableGeometry().height() - SCREEN_MARGIN
 
     dialog._open_slicer_section()
-    qt_app.processEvents()
+    for _ in range(8):
+        qt_app.processEvents()
 
     wanted = min(dialog.sizeHint().height(), room)
     assert dialog.height() >= max(before, wanted), (
