@@ -2510,7 +2510,7 @@ def _prusa_values(
             _log.warning("Prusa profile unreadable, writing Solidon's table: %s", problem)
     if setup is None or chain is None:
         flat = values_for(effective, profile, "prusa", program=program)
-        flat["filament_type"] = slicer_keys.filament_type(profile.material.id)
+        flat["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
@@ -2551,7 +2551,7 @@ def _prusa_values(
     if chain.filament:
         document["filament_settings_id"] = chain.filament
     else:
-        document["filament_type"] = slicer_keys.filament_type(profile.material.id)
+        document["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
     document["printer_settings_id"] = chain.printer
     document["print_settings_id"] = chain.process
     if console:
@@ -3483,8 +3483,8 @@ def _orca_filament(
         slot is not None
         and slot.material_type
         and not slot.material
-        and slot.material_type.strip().casefold()
-        != slicer_keys.filament_type(profile.material.id).casefold()
+        and slicer_keys.normalise_filament_type(slot.material_type)
+        != slicer_keys.filament_type(profile.material.id)
     ):
         # Eine lokale Spule anderen Typs erbt keine fremden Materialwerte
         # oder Startsequenzen aus der allgemeinen Herstellerunterlage.
@@ -3496,7 +3496,7 @@ def _orca_filament(
         "from": "User",
         "instantiation": "true",
         "filament_type": [
-            slot.material_type
+            slicer_keys.filament_type(slot.material_type, "orca")
             if slot is not None and slot.material_type
             else slicer_keys.filament_type(profile.material.id)
         ],
@@ -3554,7 +3554,7 @@ def _orca_filament(
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.
     if slot is not None and slot.material_type:
-        document["filament_type"] = [slot.material_type]
+        document["filament_type"] = [slicer_keys.filament_type(slot.material_type, "orca")]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
     # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine

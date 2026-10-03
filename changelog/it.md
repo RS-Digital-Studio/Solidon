@@ -49,6 +49,7 @@ scrive in `website/version.json`.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
 - SuperSlicer non si blocca più con i pezzi rotondi: non riceve più la cucitura a sciarpa che non conosce.
 - SuperSlicer riceve supporti a griglia con un avviso se erano stati scelti supporti ad albero. La cucitura più vicina viene applicata senza falsi avvisi.
+- TPU trova il profilo filamento e i valori di avvio in PrusaSlicer e SuperSlicer. Se manca un profilo, Solidon indica che usa la propria tabella dei materiali.
 - La preselezione del filamento prende Generic o la marca della tua stampante invece di un filamento speciale di terzi, ad esempio Generic PETG invece di BETA PETG sulla Bambu A1.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 - Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano *Orienta per la stampa*, *Ruota* e *Sposta*. Il corpo resta esatto.

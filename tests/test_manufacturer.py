@@ -2184,6 +2184,94 @@ def test_without_prusas_printer_the_base_is_solidons_table(prusa_bundle: Path) -
     assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.printer_unknown"]
 
 
+@pytest.mark.parametrize("with_bundle", [False, True])
+def test_prusa_writes_flex_and_reports_its_missing_filament(
+    prusa_bundle: Path, with_bundle: bool
+) -> None:
+    """Ohne Herstellerfilament bleibt TPU lauffähig und die Herkunft sichtbar."""
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    setup = replace(_prusa_setup(prusa_bundle), base_filament="")
+    if not with_bundle:
+        setup = replace(setup, base_process="")
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+
+    written, _expected = handover.prusa_values(foundation.settings, profile, setup, console=True)
+    findings = handover.foundation_findings(foundation.settings, profile, setup)
+
+    assert written["filament_type"] == "FLEX"
+    assert "filament_settings_id" not in written
+    assert [entry.code for entry in findings] == ["slicer.filament_from_table"]
+    assert findings[0].values["source"] == "solidon_table"
+    assert findings[0].suggestions
+    assert (
+        foundation.settings.temperature.nozzle == print_settings.resolve(profile).temperature.nozzle
+    )
+
+
+def test_prusa_keeps_a_flexible_filaments_start_code(prusa_bundle: Path) -> None:
+    """Die richtige Vorwahl übernimmt die eigene Startsequenz des Filaments."""
+    from app.core.export import slicer_profiles
+
+    bundle = prusa_bundle.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    with bundle.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "\n[filament:Generic FLEX @MK4S]\nfilament_type = FLEX\n"
+            "filament_vendor = Generic\ntemperature = 230\nfirst_layer_temperature = 230\n"
+            "start_filament_gcode = M900 K0 ; Filament gcode\n"
+        )
+    found = slicer_profiles.find_profiles(prusa_bundle, "prusa", ("machine", "filament"))
+    machine = next(entry for entry in found if entry.kind == "machine")
+    filament = slicer_profiles.match_filament(found, machine, "TPU")
+    assert filament is not None
+    setup = replace(_prusa_setup(prusa_bundle), base_filament=slicer_profiles.identity(filament))
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+
+    written, _expected = handover.prusa_values(foundation.settings, profile, setup, console=True)
+
+    assert written["filament_type"] == "FLEX"
+    assert written["filament_settings_id"] == "Generic FLEX @MK4S"
+    assert written["start_filament_gcode"] == "M900 K0 ; Filament gcode"
+    assert handover.foundation_findings(foundation.settings, profile, setup) == []
+
+
+def test_a_missing_filament_does_not_hide_an_unknown_plate() -> None:
+    """Materialherkunft und unbekannte Platte brauchen beide ihren Hinweis."""
+    foundation = manufacturer.Foundation(
+        print_settings.resolve(_cc2()),
+        from_profile=frozenset({"shell.wall_count"}),
+        material_from_table=True,
+    )
+
+    assert [entry.code for entry in manufacturer.findings(foundation)] == [
+        "slicer.filament_from_table",
+        "slicer.plate_unknown",
+    ]
+
+
+def test_orca_receives_a_prusa_flex_slot_as_tpu_without_losing_its_profile(tmp_path: Path) -> None:
+    """Eine importierte FLEX-Spule ist für Orca TPU und behält passende Herstellerwerte."""
+    filament = _write(
+        tmp_path / "filament.json",
+        {
+            "type": "filament",
+            "name": "Generic TPU",
+            "filament_type": ["TPU"],
+            "filament_start_gcode": ["M900 K0"],
+        },
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "tpu-95a")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca", base_filament=str(filament))
+    slot = MaterialSlot(index=0, name="Flexible Spule", material_type="FLEX")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+
+    assert document["filament_type"] == ["TPU"]
+    assert document["filament_start_gcode"] == ["M900 K0"]
+
+
 def test_prusa_gets_the_whole_chain_and_only_the_deviation(prusa_bundle: Path) -> None:
     """Die Abnahme von Stufe C, nachgestellt: Ohne eigene Wahl steht in der
     Datei, was PrusaSlicer mit den drei Profilen im Fenster druckt — Startcode

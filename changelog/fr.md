@@ -50,6 +50,7 @@ dans `website/version.json`.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
 - SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
 - SuperSlicer reçoit des supports en grille avec une explication si des supports arborescents étaient choisis. La couture la plus proche est appliquée sans fausse alerte.
+- TPU trouve le profil de filament et ses valeurs de démarrage dans PrusaSlicer et SuperSlicer. Si aucun profil n'est disponible, Solidon indique qu'il utilise son propre tableau de matériaux.
 - La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 - Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent. Le corps reste exact.

@@ -843,9 +843,27 @@ CURA_INFILL_CROSSINGS: Final[dict[str, float]] = {
 FILAMENT_TYPES: Final[dict[str, str]] = {"tpu-95a": "TPU"}
 
 
-def filament_type(material_id: str) -> str:
-    """Der Materialbezeichner in der Schreibweise des Slicers."""
-    return FILAMENT_TYPES.get(material_id, material_id.upper())
+#: Die Materialart je Familie. PET und PETG bleiben verschiedene Materialien;
+#: Prusas Bündel führen beide, flexible Filamente dagegen als FLEX.
+FILAMENT_TYPES_BY_FLAVOUR: Final[dict[SlicerFlavour, dict[str, str]]] = {
+    "prusa": {"TPU": "FLEX"},
+}
+
+
+def normalise_filament_type(material_type: str) -> str:
+    """Eine native Materialart in Solidons familienübergreifende Schreibweise lesen."""
+    wanted = material_type.strip().upper()
+    for names in FILAMENT_TYPES_BY_FLAVOUR.values():
+        for common, native in names.items():
+            if wanted == native:
+                return common
+    return wanted
+
+
+def filament_type(material_id: str, flavour: SlicerFlavour = "other") -> str:
+    """Die Materialart schreiben; ohne Familie gilt die Schreibweise in Solidon."""
+    common = normalise_filament_type(FILAMENT_TYPES.get(material_id, material_id))
+    return FILAMENT_TYPES_BY_FLAVOUR.get(flavour, {}).get(common, common)
 
 
 #: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als

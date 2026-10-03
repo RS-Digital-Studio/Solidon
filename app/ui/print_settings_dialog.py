@@ -5703,10 +5703,10 @@ class PrintSettingsDialog(QDialog):
                     (
                         entry
                         for entry in fitting
-                        if slicer_profiles.type_of(
-                            entry, self._profile_roots(), indexes=indexes
-                        ).casefold()
-                        == wanted_type.casefold()
+                        if slicer_keys.normalise_filament_type(
+                            slicer_profiles.type_of(entry, self._profile_roots(), indexes=indexes)
+                        )
+                        == slicer_keys.normalise_filament_type(wanted_type)
                     ),
                     None,
                 )

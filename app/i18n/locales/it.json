@@ -7489,5 +7489,6 @@
   "Drucker, Grundprofil, Filament und Druckplatte im Slicer": "Stampante, profilo di base, filamento e piatto di stampa nello slicer",
   "Weitere Beispielprojekte": "Altri progetti di esempio",
   "Text und Anhänge vor dem Senden ansehen": "Vedi il testo e gli allegati prima dell'invio",
-  "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer non supporta i supporti ad albero e usa quelli a griglia."
+  "SuperSlicer kennt keine Baumstützen und stützt mit Gitter.": "SuperSlicer non supporta i supporti ad albero e usa quelli a griglia.",
+  "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil im Druckdialog.": "Non è stato scelto un profilo dello slicer per questo materiale. I valori provengono dalla tabella di Solidon; se necessario, scegli un profilo filamento nella finestra di stampa."
 }

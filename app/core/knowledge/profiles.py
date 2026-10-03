@@ -655,13 +655,13 @@ def material_id_for_type(material_type: str) -> str:
     """
     from app.core.export import slicer_keys
 
-    wanted = material_type.strip().casefold()
+    wanted = slicer_keys.normalise_filament_type(material_type)
     if not wanted:
         return ""
     matches = [
         identifier
         for identifier in material_profiles()
-        if slicer_keys.filament_type(identifier).casefold() == wanted
+        if slicer_keys.filament_type(identifier) == wanted
     ]
     return matches[0] if len(matches) == 1 else ""
 

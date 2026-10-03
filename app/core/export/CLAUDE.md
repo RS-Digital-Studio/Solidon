@@ -55,6 +55,12 @@ internen Instanzkennung.
 
 ## Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung
 
+Materialarten werden in `slicer_keys` gelesen und geschrieben:
+`normalise_filament_type` vereinheitlicht native Namen für Vorwahl und
+Rücklesung, `filament_type(..., flavour)` schreibt die Form des Zielprogramms.
+Ohne auflösbares Filamentprofil nennt `Foundation.material_from_table` die
+Materialherkunft; `slicer.filament_from_table` trägt sie in den Exportbericht.
+
 `write_config` und `project_settings` fragen `base_settings`; liegt ein
 lesbarer Herstellerprozess darunter, gehen nur die Pfade aus `chosen` und
 `accepted` hinaus (`as_mapping(paths=)`, `by_section(paths=)`), dazu das

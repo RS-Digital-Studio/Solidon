@@ -41,6 +41,7 @@ from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
     has_user_profile_tree,
+    normalise_filament_type,
 )
 from app.core.knowledge import profiles as knowledge_profiles
 from app.core.log import get_logger
@@ -3275,7 +3276,7 @@ def match_filament(
     """
     if machine is None:
         return None
-    wanted = material_type.casefold()
+    wanted = normalise_filament_type(material_type)
     # Der Typ steht wie die Verträglichkeit meist nicht in der obersten Datei,
     # sondern eine Ebene höher: von 42 verträglichen Filamentprofilen nennen
     # ihn sieben selbst. Aufgelöst wird deshalb über die Kette — und erst
@@ -3288,7 +3289,7 @@ def match_filament(
     fitting = [
         entry
         for entry in filaments(profiles, machine, indexes=indexes)
-        if type_of(entry, roots, indexes=indexes).casefold() == wanted
+        if normalise_filament_type(type_of(entry, roots, indexes=indexes)) == wanted
     ]
     if not fitting:
         return None

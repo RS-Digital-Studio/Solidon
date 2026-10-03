@@ -132,7 +132,15 @@ def test_every_material_is_marked_uncalibrated() -> None:
 
 @pytest.mark.parametrize(
     ("material_type", "identifier"),
-    (("PLA", "pla"), ("petg", "petg"), ("TPU", "tpu-95a"), ("PCTG", ""), ("", "")),
+    (
+        ("PLA", "pla"),
+        ("petg", "petg"),
+        ("TPU", "tpu-95a"),
+        (" FLEX ", "tpu-95a"),
+        ("PET", ""),
+        ("PCTG", ""),
+        ("", ""),
+    ),
 )
 def test_a_slicer_material_type_has_one_unambiguous_profile(
     material_type: str, identifier: str

@@ -115,7 +115,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
 | [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
-| [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 7 von 16. G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
 | [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
@@ -3276,24 +3275,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
   Lauf, kein Slicerstart. Bauplan §29, Regel 17.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
-
-<a id="rm-481"></a>
-
-- [ ] **RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund.**
-  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, SuperSlicer 2.5.59.13, alle
-  Bündeldrucker (`prusa-mk4s`, `prusa-mini`, `prusa-xl`, `sovol-sv06`). Solidon schreibt
-  `filament_type = TPU`, die Bündel führen Flex als `FLEX`: `filament_settings_id` bleibt leer,
-  kein Befund. Folge im G-Code des MK4S: Vermessen bei 170 statt 210 °C, Einzug `E-2` statt
-  `E-4`, kein Startcode des Herstellerfilaments. Keine Regression.
-  **Stellen:** `app/core/export/slicer_keys.py:841–846` (`FILAMENT_TYPES`),
-  `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
-  `app/ui/print_settings_dialog.py:5605–5625`, `app/core/export/handover.py:2357–2382`.
-  **Fix (allgemein):** Materialart je Familie an einer Stelle in Lese- und Schreibrichtung
-  übersetzen; fehlt ein Herstellerfilament, Befund mit Herkunft „Solidon-Tabelle statt
-  Slicerprofil“ (Regel 14).
-  **Abnahme:** je erkanntem Drucker und Material (PLA, PETG, ABS, ASA, TPU) eine nicht leere
-  Vorwahl, an mindestens drei Bündeldruckern gemessen. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-6), `gcode\rest\`.
 
 <a id="rm-482"></a>
 

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)](#rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026) |
 | 2026-10-03 | [RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)](#rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
@@ -38121,4 +38122,35 @@ Echte Abnahme mit SuperSlicer 2.5.59.13: Pilz, Würfel und `Wedge-Lock (Set).stl
 
 Betroffene Nachprüfung über tools/affected_tests.py: 1152 bestanden, 4 übersprungen, 346 Fenster-/Renderer-/Leistungsfälle abgewählt, Exit 0. Der vorherige breite Lauf hatte 19491 bestandene, 81 übersprungene und 3708 abgewählte Fälle sowie einen Fehler im Beschriftungswächter durch zwischenzeitliche Cura-Änderungen; die Benennung wurde korrigiert und der Wächter in der grünen Nachprüfung erneut ausgeführt. Ruff war grün, mypy meldete 337 geprüfte Dateien ohne Fehler. Das vollständige Entwicklungstor folgt nach dem vereinbarten Paket aus zwei bis drei abgeschlossenen Punkten.
 
-Kundensichtbare Korrektur eines veröffentlichten Fehlers: Der betreffende Tabellenstand `f934a42219` ist in `v0.5.1` enthalten (`git tag --contains`); ein Punkt steht an gleicher Stelle in allen sechs Changelogs für 0.5.2. Commit: `SuperSlicer erhält passende Stütz- und Nahtwerte`.
+Kundensichtbare Korrektur eines veröffentlichten Fehlers: Der betreffende Tabellenstand `f934a42219` ist in `v0.5.1` enthalten (`git tag --contains`); ein Punkt steht an gleicher Stelle in allen sechs Changelogs für 0.5.2. Commit: `1fbdb5de8` (SuperSlicer erhält passende Stütz- und Nahtwerte).
+
+## RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)
+
+<a id="rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026"></a>
+<a id="rm-481"></a>
+
+**RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, SuperSlicer 2.5.59.13, alle
+  Bündeldrucker (`prusa-mk4s`, `prusa-mini`, `prusa-xl`, `sovol-sv06`). Solidon schreibt
+  `filament_type = TPU`, die Bündel führen Flex als `FLEX`: `filament_settings_id` bleibt leer,
+  kein Befund. Folge im G-Code des MK4S: Vermessen bei 170 statt 210 °C, Einzug `E-2` statt
+  `E-4`, kein Startcode des Herstellerfilaments. Keine Regression.
+  **Stellen:** `app/core/export/slicer_keys.py:841–846` (`FILAMENT_TYPES`),
+  `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
+  `app/ui/print_settings_dialog.py:5605–5625`, `app/core/export/handover.py:2357–2382`.
+  **Fix (allgemein):** Materialart je Familie an einer Stelle in Lese- und Schreibrichtung
+  übersetzen; fehlt ein Herstellerfilament, Befund mit Herkunft „Solidon-Tabelle statt
+  Slicerprofil“ (Regel 14).
+  **Abnahme:** je erkanntem Drucker und Material (PLA, PETG, ABS, ASA, TPU) eine nicht leere
+  Vorwahl, an mindestens drei Bündeldruckern gemessen. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-6), `gcode\rest\`.
+
+**Abschluss:** Ursache war der gemeinsame Schreibwert `TPU`, während PrusaSlicer und SuperSlicer Flexmaterial als `FLEX` führen. Die zentrale Übersetzung in `slicer_keys` wird beim Lesen, Vorwählen und Schreiben verwendet; PET und PETG bleiben getrennt. Orca-Filamentslots übernehmen ebenfalls die normalisierte Materialart. Ohne gewähltes Herstellerfilament nennt `slicer.filament_from_table` Solidons Materialtabelle als Quelle und bietet den Druckdialog an. Dialogvorwahl und Kern verwenden dieselbe Normalisierung.
+
+Gegenprobe: sechs neue Materialfälle waren vor dem Fix rot, sechs bereits korrekt; die zusätzliche FLEX-Slot-Prüfung war ebenfalls rot. Ohne Übersetzung schneidet der MK4S den echten TPU-Würfel mit leerer Filamentkennung, 170 °C beim Vermessen, Einzug E-2 und ohne Hersteller-Filamentstart. Mit Fix: `FLEX`, `Generic FLEX @MK4S`, 210 °C, E-4, M900 K0 und M142 S36.
+
+Abnahme mit installierten Bündeln: 25 von 25 Vorwahlen für PLA, PETG, ABS, ASA und TPU sind nicht leer (Prusa MK4S, MINI, XL, SV06 sowie SuperSlicer MINI); auch die geschriebenen Werte nennen das Profil. Fünf echte TPU-Würfelschnitte ohne ignorierte Einstellungen: MK4S 1218 s/4,01 g, MINI 2387 s/4,35 g, XL 2572 s/4,27 g, SV06 2901 s/4,82 g, SuperSlicer MINI 2526 s/4,21 g. Belege: `F:\solidon-review-reports\gcode\agentB\rm481-codex-materials.json`, `rm481-codex-gcode.json` und die Projekt-/Druckdateien unter `rm481-codex\arbeit`.
+
+Betroffene Prüfung über `tools/affected_tests.py tests/test_profiles.py tests/test_slicer_profiles.py tests/test_manufacturer.py --run`: 304 bestanden, Exit 0; der Stand umfasst bereits die zusätzlichen Kammerfälle. Die vorherige reine Materialprüfung hatte 285 bestandene Fälle. Übersetzungen: 216 bestanden, ein Releasefall abgewählt. Keine Fenster-, Renderer- oder Leistungsprüfungen ausgeführt. Das Entwicklungstor folgt mit dem vereinbarten Paket.
+
+Kundensichtbarer Fehler in v0.5.1: `git tag --contains` bestätigt die Ursachenstände `9c59e3a5e` und `f934a42219`. Je ein Punkt in allen sechs Changelogs für 0.5.2. Commit mit der Aussage „TPU übernimmt das passende Filamentprofil samt Startwerten“, aufbauend auf `1fbdb5de8`; die genaue Kennung wird beim nächsten Abschluss ergänzt.

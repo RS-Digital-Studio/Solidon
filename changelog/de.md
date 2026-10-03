@@ -74,6 +74,7 @@ Nutzen da und sonst nichts.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
 - SuperSlicer stürzt bei runden Teilen nicht mehr ab: Die Schrägnaht, die er nicht kennt, bekommt er nicht mehr.
 - SuperSlicer erhält Gitterstützen mit Hinweis, wenn Baumstützen gewählt waren. Die Nahtwahl „Nächstgelegen“ kommt ohne falsche Warnung an.
+- TPU findet in PrusaSlicer und SuperSlicer das passende Filamentprofil samt Startwerten. Fehlt ein Profil, nennt Solidon die eigene Materialtabelle als Grundlage.
 - Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
