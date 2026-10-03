@@ -72,7 +72,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
@@ -326,6 +325,7 @@ from app.ui.overlay import CARD_PADDING, CardColumn, OverlayHost, card_styleshee
 from app.ui.palette import text_colour
 from app.ui.panels import (
     SEVERITY_MARKER,
+    ColumnScroller,
     FeaturePanel,
     HistoryPanel,
     MeasurementLabel,
@@ -12739,12 +12739,10 @@ class MainWindow(QMainWindow):
         stacked.addWidget(self.feature_panel)
         stacked.addWidget(self.selection_operations, 1)
 
-        scroller = QScrollArea(self)
+        # Rollt nur senkrecht; die Mindestbreite des Inhalts ist die der
+        # Spalte (RM-488: sonst ein waagrechter Balken, Felder ohne Pfeile).
+        scroller = ColumnScroller(self)
         scroller.setWidget(inside)
-        # Ohne dies bleibt das Panel auf seiner Wunschbreite stehen und wird
-        # waagerecht gerollt statt umgebrochen.
-        scroller.setWidgetResizable(True)
-        scroller.setFrameShape(QScrollArea.Shape.NoFrame)
 
         # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
         # 1600 auf 1000 Punkten mit gewählter Bohrung (13.09.2026): Sichtfeld

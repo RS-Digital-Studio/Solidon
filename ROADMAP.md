@@ -161,13 +161,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-487 — Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe](#rm-487) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1; passive Anpassung darf vergrößern, solange der Kunde die Größe nicht gezogen hat |
-| [RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken](#rm-488) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.0; Inhaltsbreite an die Spalte binden |
 | [RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken](#rm-489) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch den größeren Farbpunkt; Symbolgröße und Listenhöhe festlegen |
-| [RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“](#rm-490) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.4; Zusatzangabe kurz oder als Tooltip, Spalte nach Inhalt |
 | [RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“](#rm-491) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 (Auffindbarkeit); Überschrift nennt den Inhalt, Palette findet die Optionen |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
+| [RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren](#rm-499) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Seit RM-371 nichtmodal; vor dem Schließen nennen, was verloren geht |
+| [RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile](#rm-500) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund aus RM-371; Ansagen und Hinweise neben dem Fortschritt sichtbar halten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -4717,23 +4717,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   eine gezogene Nutzergröße bleibt erhalten. Bauplan §2.8.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U3, U6), Bilder in `regression-0.5.2\ui\`.
 
-<a id="rm-488"></a>
-
-- [ ] **RM-488 — Auswahlfenster am Merkmal: Felder rechts abgeschnitten, Kopfzeile gekappt, waagrechter Rollbalken.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.5.0** (seit v0.5.1). Nach Klick
-  auf ein Merkmal (z. B. „Bohrung 1“) ist der Inhalt breiter als die Spalte: Die Kopfzeile wird
-  rechts gekappt statt umzubrechen, alle Zahlen- und Auswahlfelder enden ohne Pfeile am Rand, unten
-  liegt ein waagrechter Rollbalken; die „i“-Knöpfe sind nicht mehr zu sehen. Gilt bei 1920×1080
-  und 1280×720, beide Schemata. v0.4.4 und v0.5.0 passten in die Spalte.
-  **Stellen:** `app/ui/panels.py:6848` (`FeaturePanel`, Rollbereich), `:6958`; eingeführt
-  zwischen v0.5.0 und v0.5.1 (Kandidaten `e8013c5cc`, `a255b14f8`, `5a90d4361`).
-  **Fix (allgemein):** Mindestbreite des Inhalts auf die Spaltenbreite begrenzen (Kopf mit
-  Umbruch, Felder mit wachsender statt fester Mindestbreite), waagrechten Balken abschalten.
-  **Abnahme:** an Bohrung, Fläche und Kante bei 1280 und 1920, beide Schemata: `contentsRect`
-  jedes Felds liegt im Ausschnitt, kein waagrechter Balken. Bauplan §2.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U5), Bilder in `regression-0.5.2\ui\`.
-  Ursache gemessen (Weg 1, 02.10.2026): Das Auswahlfeld „Änderungsumfang“ verlangt 196 px, weil Qt die Breite am längsten Eintrag „Senkung, Stufen und Verengung mitnehmen“ misst; die Leiste hat 160 px. Mit dem Text aus v0.5.0 sind es 150 px, mit `AdjustToMinimumContentsLengthWithIcon` 90 px. Stellen `app/ui/panels.py:6307`, `app/core/registry/surfaces.py:66`. Beleg `regression-0.5.2\weg1\befunde.md` (W1-3).
-
 <a id="rm-489"></a>
 
 - [ ] **RM-489 — Linke Spalte bei 1920×1080: Objektbaum gekürzt oder Filamentliste mit zwei Rollbalken.**
@@ -4749,20 +4732,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** drei Modelle mit 1, 2 und 4 Filamenten bei 1920×1080 und 1280×720, beide Schemata:
   alle Baumzeilen und beide Überschriften sichtbar, kein waagrechter Balken. Bauplan §2.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U1), Bilder in `regression-0.5.2\ui\`.
-
-<a id="rm-490"></a>
-
-- [ ] **RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.4.4** (seit v0.5.0). Die neue
-  Zusatzangabe „eingepasst/gemessen“ macht die Spalte zu breit: „Ø5,20 mm · ein…“, „3915 mm² · ge…“
-  auch bei 1920×1080; bis v0.4.4 stand „Ø5,19 mm“ vollständig. Eine Angabe, die nie ganz zu lesen
-  ist, sagt nichts.
-  **Stellen:** Objektbaum in `app/ui/panels.py` (Spalte „Maße“).
-  **Fix (allgemein):** Zusatzangabe als kurzes Zeichen mit Tooltip oder Spalte auf den Inhalt
-  bemessen, Maß zuerst nie kürzen.
-  **Abnahme:** Bohrung, Fläche und gemessene Kante bei 1280 und 1920: Maß vollständig lesbar,
-  Zusatzangabe über Tooltip oder Zeichen erreichbar (zweite Kodierung, Regel 18). Bauplan §2.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U2), Bilder in `regression-0.5.2\ui\`.
 
 <a id="rm-491"></a>
 
@@ -4825,6 +4794,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Rucksack-Halter und ein drittes Modell ohne gütewirksame Schritte in unter 0,5 s exportiert,
   Datei unverändert. Bauplan §31.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
+
+<a id="rm-499"></a>
+
+- [ ] **RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren.**
+  Fund aus RM-371 (03.10.2026). Seit „Modell erzeugen“ nichtmodal ist (RM-371), lässt sich das
+  Hauptfenster während eines Laufs schließen. Der Lauf bricht ab, und fertige, nicht übernommene
+  Versuche gehen ohne Rückfrage verloren — Minuten Rechenzeit, die kein Strg+Z zurückholt. Vorher
+  verhinderte der modale Dialog das Schließen.
+  **Fix:** Beim Schließen fragen, wenn ein Lauf läuft oder fertige Versuche nicht übernommen sind
+  (kein rücknehmbarer Schritt, Regel 19 erlaubt die Frage), mit *Übernehmen und schließen*,
+  *Verwerfen und schließen* und *Abbrechen*.
+  **Abnahme:** Test mit laufendem Lauf und mit fertigem Versuch; ohne Erzeugung bleibt das
+  Schließen unverändert.
+
+<a id="rm-500"></a>
+
+- [ ] **RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile.**
+  Fund aus RM-371 (03.10.2026). Solange eine Erzeugung läuft, belegt ihr Fortschritt („Modell wird
+  erzeugt … · 14 % · Verstrichen: 2 s“) die Statuszeile. Ansagen anderer Handlungen erscheinen dann
+  nur als Blase, Hinweise gar nicht; beim Agenten ist es genauso.
+  **Fix:** Fortschritt und Ansage teilen sich die Zeile so, dass eine Ansage sichtbar wird und der
+  Fortschritt danach zurückkehrt (oder der Fortschritt steht in seinem eigenen Bereich).
+  **Abnahme:** Test: während eines Laufs erreicht eine Ansage die Statuszeile, danach steht der
+  Fortschritt wieder da; dasselbe beim Agenten.
 
 ## KI und Generatoren
 
