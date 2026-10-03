@@ -12324,6 +12324,7 @@ class MainWindow(QMainWindow):
             chain=bool(self._armature_parent),
         )
         self._update_actions()
+        self._show_bones()
         self.statusBar().showMessage(tr("Zwei Klicks setzen einen Knochen — Escape beendet."))
 
     def _armature_of(self, target: str) -> tuple[int | None, list[Any]]:
@@ -12363,12 +12364,13 @@ class MainWindow(QMainWindow):
         """Ein Klick im Viewport: erst der Kopf, dann der Fuß eines Knochens."""
         if self._armature_target is None:
             return
-        place = (float(point[0]), float(point[1]), float(point[2]))
+        place = self._joint_inside((float(point[0]), float(point[1]), float(point[2])))
         if self._armature_head is None:
             self._armature_head = place
             self.pose_bar.show_state(
                 len(self._armature_bones), pending=True, chain=bool(self._armature_parent)
             )
+            self._show_bones()
             return
 
         name = self.pose_bar.next_name() or f"bone_{len(self._armature_bones) + 1}"
@@ -12386,12 +12388,36 @@ class MainWindow(QMainWindow):
         self.pose_bar.show_state(
             len(self._armature_bones), pending=False, chain=bool(self._armature_parent)
         )
+        self._show_bones()
+
+    def _joint_inside(self, place: Vec3) -> Vec3:
+        """Der Klick auf die Haut wird ein Punkt auf der Achse darunter (RM-367, W4-7)."""
+        from app.core.geom.pose import inside_the_body
+
+        result = self.session.last_result
+        target = self._armature_target
+        entry = result.scene.objects.get(target) if result is not None and target else None
+        if entry is None:
+            return place
+        try:
+            return inside_the_body(as_mesh_data(entry.mesh), place, self.viewport.ray_toward(place))
+        except AppError:
+            return place
+
+    def _show_bones(self) -> None:
+        """Knochen und gesetztes Gelenk ins Bild (RM-367, W4-6)."""
+        self.viewport.show_bones(
+            [(bone.head, bone.tail) for bone in self._armature_bones],
+            self._armature_head,
+            target=self._armature_target,
+        )
 
     def break_armature_chain(self) -> None:
         """Der nächste Knochen hängt an nichts — für den zweiten Arm."""
         self._armature_parent = ""
         self._armature_head = None
         self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=False)
+        self._show_bones()
 
     def undo_bone(self) -> bool:
         """Das Rückgängig des Editors: ein Knochen, nicht die Sitzung."""
@@ -12417,6 +12443,7 @@ class MainWindow(QMainWindow):
             pending=False,
             chain=bool(self._armature_parent),
         )
+        self._show_bones()
         return True
 
     def finish_armature(self) -> None:
@@ -12440,6 +12467,7 @@ class MainWindow(QMainWindow):
         self._armature_step = None
         self._armature_head = None
         self.viewport.set_boning(False)
+        self.viewport.clear_bones()
         self.pose_bar.setVisible(False)
         self.tools.setVisible(True)
         self.statusBar().clearMessage()

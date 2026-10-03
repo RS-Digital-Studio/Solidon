@@ -131,6 +131,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material](#rm-485) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: Material über die Umlaufrichtung (Clipper2 in manifold3d, `Manifold.slice`), nicht über die Tiefe |
 | [RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung](#rm-486) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: schwebende Säulenkontur als `CrossSection` führen; ersetzt den Fix von RM-405 b |
+| [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -158,7 +159,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
-| [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
 | [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Konzept §12/§7.5 einlösen, Befund nach dem Posieren |
@@ -176,10 +176,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-490 — Objektbaum: Spalte „Maße“ endet auch bei voller Breite in „…“](#rm-490) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.4; Zusatzangabe kurz oder als Tooltip, Spalte nach Inhalt |
 | [RM-491 — Einstellungen: sieben Optionen liegen ohne Hinweis hinter „Weitere Einstellungen“](#rm-491) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.5.1 (Auffindbarkeit); Überschrift nennt den Inhalt, Palette findet die Optionen |
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
+| [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
+| [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
+| [RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“](#rm-495) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1; Hinweis nicht zeigen, wenn der Kunde genau diese Handlung benutzt |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
-| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
 | [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) erledigt: `hollow.done` trägt *Diesen Schritt ändern*; offen (b) `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
@@ -3338,9 +3341,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
   Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
-  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode
-est
-m463_regression.md`.
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode\rest\rm463_regression.md`.
 
 <a id="rm-464"></a>
 
@@ -3626,6 +3627,21 @@ m463_regression.md`.
   relativ, Aushöhlbeispiel unter 0,5 s für `slice_body(detail="support")`, die einfachen
   Modelle höchstens 0,2 s schlechter; neuer Weg in `test_platform_identity`. Bauplan §31.
   Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
+
+<a id="rm-496"></a>
+
+- [ ] **RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1, unter Vorbehalt. Laden bis Ruhe: Rucksack-Halter
+  2,9–3,3 s (v0.5.1) → 5,3–6,1 s, pegboard-STEP ähnlich. Im Profil sind 2,2 s davon nachgeholte
+  Importe von trimesh/networkx und 1,4 s Merkmalserkennung. Der Prüfstand läuft ohne das
+  Vorwärmen beim Programmstart; ob der Kunde die Importzeit sieht, ist offen.
+  **Stellen:** Ladeweg `app/core/ingest/`, Vorwärmen in `app/ui/app.py`; Profil
+  `weg1\sonden\ladeprof.py`.
+  **Fix (allgemein):** am echten Fenster über den Startweg messen; sieht der Kunde die Importe,
+  gehören sie ins Vorwärmen, und die Erkennung darf das Bild nicht aufhalten (vgl. RM-492).
+  **Abnahme:** drei reale Modelle (Rucksack-Halter, pegboard-STEP, ein drittes) am echten Fenster
+  nicht langsamer als v0.5.1. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-5), Rohwerte in `weg1\ergebnisse\`.
 
 ## Bedienung und Darstellung
 
@@ -4706,32 +4722,6 @@ m463_regression.md`.
   §31), Oberfläche bleibt bedienbar. Bauplan §2.8, §31.
   Belege: `gebiet-weg4.md`, Sonde `w4_vorschau_hauptfaden.py`.
 
-<a id="rm-367"></a>
-
-- [ ] **RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett.**
-  Review 02.10.2026, Gebietsprüfung Weg 4, am HEAD `6ce767031`.
-  - **W4-3 — Ein von Hand verdorbener Strichtext endet als „unerwarteter Fehler“.** Feld *Striche*
-    im Dialog (auch über *Eingabe korrigieren*): `JSONDecodeError`, `KeyError: 'n'`, `IndexError`
-    → jedes Mal `op.sculpt_strokes.InternalError` mit *Fehler melden*
-    (`app/core/geom/sculpt.py:306–323`). Beim Skelett wird derselbe Fall als Eingabefehler
-    abgefangen. Fix: Strichtext prüfen und als `ValidationError` mit Handlungsvorschlag melden.
-    §2.7, Regel 17. Sonde `w4_strichtext.py`.
-  - **W4-6 — Der Skeletteditor zeigt im Bild keinen Knochen und keinen Gelenkpunkt**, nur die
-    Leiste zählt mit (`main_window.py:11755–11943`, `viewport.py`). §2.8. Sonde
-    `w4_knochen_sichtbar.py` (Quelltextprobe).
-  - **W4-7 — Ein Knochen landet auf dem angeklickten Hautpunkt statt im Gelenk**, obwohl die
-    Leiste „Erst das Gelenk anklicken“ sagt (`main_window.py:11848`, `pose_bar.py:77`); die
-    Beugung wird einseitig: +60° Volumen 0,841 statt 0,927 mit `pose.pinched`, −60° 1,013.
-    Fix: den Klickpunkt auf die Körperachse unter der Haut legen. §2.2, §2.7. Sonde
-    `w4_knochen_oberflaeche.py`.
-  - **W4-8 — Ende-zu-Ende-Test und Beispiel von Weg 4 lassen „Skelett setzen und stellen“ aus**
-    („stellen“ als „auf die Platte stellen“ gelesen): `tests/test_way_four.py:40–131`,
-    `tools/make_examples.py:166–232`. §40 P16, §2.2.
-  **Abnahme:** je Fund ein Test — verdorbener Strichtext → Eingabefehler mit Vorschlag; Knochen
-  und Gelenke im Bild sichtbar; Knochen liegt im Körperinneren, ±60° symmetrisch; `test_way_four`
-  setzt und stellt ein Skelett. Beleg: `F:\solidon-review-reports\gebiet-weg4.md`.
-  Nachprüfung am Stand `4cf460e87` (nach `88b5f425f`): W4-8 behoben (`test_way_four` setzt und stellt ein Skelett, Gegenprobe rot). W4-3 unvollständig: die drei Originalfälle sind jetzt ein Eingabefehler mit Vorschlag, aber `"s":NaN` und `"p":[NaN,…]` enden weiter als „unerwarteter Fehler“; r ≤ 0 wird angenommen und bewegt trotzdem Ecken; r = Infinity bleibt wirkungslos ohne Befund; vier Koordinaten werden still abgeschnitten (`types.as_vec3`). W4-6 und W4-7 offen. Belege `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonde `v4g_rm367_strichtext_zwillinge.py`.
-
 <a id="rm-368"></a>
 
 - [ ] **RM-368 — Schieberegler über den Verlauf (§18.7).**
@@ -4954,6 +4944,7 @@ m463_regression.md`.
   **Abnahme:** an Bohrung, Fläche und Kante bei 1280 und 1920, beide Schemata: `contentsRect`
   jedes Felds liegt im Ausschnitt, kein waagrechter Balken. Bauplan §2.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U5), Bilder in `regression-0.5.2\ui\`.
+  Ursache gemessen (Weg 1, 02.10.2026): Das Auswahlfeld „Änderungsumfang“ verlangt 196 px, weil Qt die Breite am längsten Eintrag „Senkung, Stufen und Verengung mitnehmen“ misst; die Leiste hat 160 px. Mit dem Text aus v0.5.0 sind es 150 px, mit `AdjustToMinimumContentsLengthWithIcon` 90 px. Stellen `app/ui/panels.py:6307`, `app/core/registry/surfaces.py:66`. Beleg `regression-0.5.2\weg1\befunde.md` (W1-3).
 
 <a id="rm-489"></a>
 
@@ -5013,6 +5004,54 @@ m463_regression.md`.
   **Abnahme:** an drei Modellen (klein, mittel, groß) Zeit bis bedienbar unter v0.5.1 und im
   Budget §31, Erkennung kommt nach. Bauplan §31.
   Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U7), Bilder in `regression-0.5.2\ui\`.
+
+<a id="rm-493"></a>
+
+- [ ] **RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 über die Oberfläche (Hauptfenster offscreen).
+  **Regression gegenüber v0.4.1** (seit v0.4.4). Zeit vom Klick auf *Übernehmen* bis das
+  Ergebnis in der Szene steht: Rucksack-Halter 0,37 s → 1,0–4,5 s (v0.5.1: 7,1 s),
+  pegboard-STEP 0,75 s → 4,2–5,3 s. Nach dem Klick rechnet die Vorschau rund 2,4 s fertig, danach
+  die Auswertung dieselbe Änderung noch einmal (2,3 s). Trifft jede Änderung über das
+  Auswahlfenster an größeren Modellen; verletzt das 2-s-Ziel aus §31.
+  **Stellen:** `app/ui/panels.py:8889` (`_run_armed`), `app/ui/main_window.py:16156`.
+  **Fix (allgemein):** Beim Übernehmen die laufende Vorschau abbrechen oder, wenn sie mit
+  denselben Parametern läuft, ihr Ergebnis als Auswertung übernehmen statt neu zu rechnen.
+  **Abnahme:** Rucksack-Halter, pegboard-STEP und ein drittes Modell über 100 000 Dreiecke:
+  Übernehmen bis Szene unter 2 s bzw. nicht länger als eine Auswertung allein; Ergebnis gleich
+  dem heutigen. Bauplan §31, §2.8.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-1), Rohwerte in `weg1\ergebnisse\`.
+
+<a id="rm-494"></a>
+
+- [ ] **RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1. **Regression gegenüber v0.5.1**, eingeführt mit
+  `70aa4c52b` (Fix von RM-426, richtig für Kegel und weich verschmolzene Teile). Exportzeit:
+  pegboard-STEP 0,04 s → 4,5–5,0 s, Rucksack-Halter 0,07 s → 1,1–1,4 s — die geschriebene Datei
+  ist bei beiden byte- bzw. kennzahlgleich wie vorher, weil kein Schritt von der Güte abhängt.
+  **Stellen:** `app/ui/main_window.py:7946`, `app/core/scene/session.py:4628`.
+  **Fix (allgemein):** Fein nachrechnen nur, wenn ein Schritt des Stapels von `ctx.quality`
+  abhängt (Kennzeichen am Register oder Ergebnis der Entwurfsauswertung); sonst das gezeigte
+  Ergebnis schreiben. Die feine Fassung kann im Leerlauf vorab entstehen.
+  **Abnahme:** Kegel und weich verschmolzenes Teil weiter fein (RM-426), pegboard-STEP,
+  Rucksack-Halter und ein drittes Modell ohne gütewirksame Schritte in unter 0,5 s exportiert,
+  Datei unverändert. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
+
+<a id="rm-495"></a>
+
+- [ ] **RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 am pegboard-STEP. **Regression gegenüber v0.4.1**
+  (auch in v0.5.1). Nach dem Übernehmen steht „Keine Vorschau: Dafür ist „Bohrung ändern“ da.“,
+  obwohl der Kunde gerade „Bohrung ändern“ benutzt hat; der Satz schickt ihn dorthin, wo er schon
+  ist.
+  **Stellen:** `app/core/perceive/actions.py:1270` (Text), Band im Auswahlfenster.
+  **Fix (allgemein):** Ein Verweis auf eine Handlung entfällt, wenn diese Handlung die gerade
+  laufende ist; ohne Vorschau sagt das Band, warum (exakter Kern) und dass das Ergebnis nach
+  *Übernehmen* kommt.
+  **Abnahme:** Bohrung, Senkung und Fase an drei STEP-Modellen: kein Selbstverweis, Hinweis nennt
+  den Grund. Bauplan §2.7.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
 
 ## KI und Generatoren
 
@@ -5091,6 +5130,13 @@ m463_regression.md`.
   sich jetzt an beiden Kernen vervielfachen, verdoppeln, versetzen und entfernen, samt
   Haltelippe (`51c17b7a6`) — der Grund, an dem magnet_lid endete, ist weg. Die Suite ist
   danach nicht neu gefahren; die Zahlen oben gelten für den Stand davor.
+
+  **(a) entschieden und gebaut (02.10.2026, Claude, Thread „Bedienung und KI“):** Robert
+  hat die Vorschläge freigegeben („alles ja“). Ein Zug mit einem lokalen Modell
+  (`OllamaBackend`) hat 12 Schritte, gehostet bleibt es bei 8 (`agent/session.py`,
+  `MAX_STEPS_LOCAL`, `steps_for`; eine ausdrücklich gesetzte Grenze gilt weiter). Test
+  `test_agent.py::test_a_local_model_gets_twelve_steps_and_a_hosted_one_eight`. Offen bleibt
+  (b); er ändert den Prompt und wird erst mit Suite vorher und nachher gebaut.
 
 <a id="rm-016"></a>
 
