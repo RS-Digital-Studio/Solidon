@@ -13166,6 +13166,24 @@ class MainWindow(QMainWindow):
         spec = REGISTRY.get(twin)
         return spec if feature.kind in (spec.applies_to or ()) else None
 
+    def _sister_for_the_chosen_feature(self, spec: OperationSpec) -> OperationSpec | None:
+        """Die Operation derselben Zeile, die für das gewählte Merkmal gilt (RM-495).
+
+        *Merkmal ändern* und *Bohrung ändern* sind eine Handlung mit zwei
+        Operationen (``actions.instead_of``). Wer an einer Bohrung die falsche
+        wählte — über Befehlspalette, Menü oder Karte —, bekam einen Dialog
+        ohne Vorschau und ohne *Übernehmen*, dessen einziger Satz „Dafür ist
+        „Bohrung ändern“ da“ war. ``None``, wenn die Operation das Merkmal
+        annimmt, keines gewählt ist oder die Zeile keine Schwester hat.
+        """
+        from app.core.perceive.actions import instead_of
+
+        feature = self._selected_feature_object()
+        if feature is None or not spec.applies_to or feature.kind in spec.applies_to:
+            return None
+        sister: OperationSpec | None = instead_of(spec.name, feature.kind)
+        return sister
+
     def _delete_the_chosen_feature(self) -> bool:
         """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
 
@@ -17579,6 +17597,7 @@ class MainWindow(QMainWindow):
             self._local_features.invalidate()
         if spec.name == "delete_object" and self._delete_the_chosen_feature():
             return
+        spec = self._sister_for_the_chosen_feature(spec) or spec
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
             feature_id = self.object_tree.selected_feature()

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)](#rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
 | 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
@@ -37328,3 +37329,23 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   Beleg: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md`.
 
 **Abschluss:** Beide Abnahmesätze in §40 nennen das Auswahlfenster: P0 „sichtbar in Menü, Palette, Auswahlfenster, CLI und Tool-Schema“, P1 „Klick liefert die korrekte Feature-ID und im Auswahlfenster die passenden Operationen“. `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nichts mehr; der verbleibende Treffer in §21 erzählt in der Vergangenheit, wie der Ausweg über die Provenienz gefunden wurde. Umgesetzt von Claude (Thread „Bedienung und KI“), Bauplanänderung angesagt mit RM-360.
+
+## RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)
+
+<a id="rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026"></a>
+<a id="rm-495"></a>
+
+**RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 am pegboard-STEP. **Regression gegenüber v0.4.1**
+  (auch in v0.5.1). Nach dem Übernehmen steht „Keine Vorschau: Dafür ist „Bohrung ändern“ da.“,
+  obwohl der Kunde gerade „Bohrung ändern“ benutzt hat; der Satz schickt ihn dorthin, wo er schon
+  ist.
+  **Stellen:** `app/core/perceive/actions.py:1270` (Text), Band im Auswahlfenster.
+  **Fix (allgemein):** Ein Verweis auf eine Handlung entfällt, wenn diese Handlung die gerade
+  laufende ist; ohne Vorschau sagt das Band, warum (exakter Kern) und dass das Ergebnis nach
+  *Übernehmen* kommt.
+  **Abnahme:** Bohrung, Senkung und Fase an drei STEP-Modellen: kein Selbstverweis, Hinweis nennt
+  den Grund. Bauplan §2.7.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
+
+**Abschluss:** Nachgestellt am pegboard-STEP und an `plate_holes.stl`: Im Bedienweg des Kunden erscheint der Satz nach *Bohrung ändern* im Auswahlfenster nicht (Feld ändern, Vorschau, *Übernehmen*; danach drei Sekunden kein Band). Im Versionsvergleich stammte das Band aus dem Schritt davor: Der Prüfstand löste in der Karte rechts den seit RM-360 verborgenen Knopf *Merkmal ändern* per `click()` aus, ließ den Dialog ohne Vorschau offen, und dessen Band stand noch beim Übernehmen im Auswahlfenster. Die Befehlspalette sperrt *Merkmal ändern* an einer Bohrung, im Menü steht es nicht. Behoben ist die Sackgasse dahinter für jeden Aufrufer: Eine Merkmalsoperation, die die Art des gewählten Merkmals nicht annimmt, öffnet die Schwester derselben Zeile (`MainWindow._sister_for_the_chosen_feature` über `actions.instead_of`) — *Merkmal ändern* an einer Bohrung öffnet *Bohrung ändern* an dieser Bohrung, statt eines Dialogs, dessen einziger Satz „Dafür ist „Bohrung ändern“ da“ war; an einem Merkmal, das sie annimmt, bleibt die Operation, was sie ist. Test `test_operation_ui.py::test_changing_a_hole_through_the_wrong_sister_opens_the_right_one`, ohne die Umleitung rot (Gegenprobe). Fenstersonde am echten Fenster am pegboard-STEP: 4 von 4, der Dialog ist *Bohrung ändern*, das Band nennt den Grund („Die Bohrung hat bereits diesen Durchmesser.“). Umgesetzt von Claude (Thread „Bedienung und KI“).

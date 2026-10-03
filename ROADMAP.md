@@ -179,7 +179,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-493 — Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal](#rm-493) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1, über dem 2-s-Ziel; Vorschau beim Übernehmen abbrechen oder ihr Ergebnis übernehmen |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
-| [RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“](#rm-495) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.4.1; Hinweis nicht zeigen, wenn der Kunde genau diese Handlung benutzt |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -5058,21 +5057,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Rucksack-Halter und ein drittes Modell ohne gütewirksame Schritte in unter 0,5 s exportiert,
   Datei unverändert. Bauplan §31.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
-
-<a id="rm-495"></a>
-
-- [ ] **RM-495 — Nach „Bohrung ändern“ am STEP sagt ein Band „Dafür ist „Bohrung ändern“ da“.**
-  Versionsvergleich 0.5.2 (02.10.2026), Weg 1 am pegboard-STEP. **Regression gegenüber v0.4.1**
-  (auch in v0.5.1). Nach dem Übernehmen steht „Keine Vorschau: Dafür ist „Bohrung ändern“ da.“,
-  obwohl der Kunde gerade „Bohrung ändern“ benutzt hat; der Satz schickt ihn dorthin, wo er schon
-  ist.
-  **Stellen:** `app/core/perceive/actions.py:1270` (Text), Band im Auswahlfenster.
-  **Fix (allgemein):** Ein Verweis auf eine Handlung entfällt, wenn diese Handlung die gerade
-  laufende ist; ohne Vorschau sagt das Band, warum (exakter Kern) und dass das Ergebnis nach
-  *Übernehmen* kommt.
-  **Abnahme:** Bohrung, Senkung und Fase an drei STEP-Modellen: kein Selbstverweis, Hinweis nennt
-  den Grund. Bauplan §2.7.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
 
 ## KI und Generatoren
 
