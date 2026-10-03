@@ -15528,8 +15528,8 @@ class MainWindow(QMainWindow):
     def _on_viewport_context_menu(self, x: int, y: int) -> None:
         """Zeigt am Zeiger dasselbe Menü, das der Objektbaum anbietet (§18.5).
 
-        Gebaut wird es dort, weil es dort schon steht: dieselbe Sichtbarkeit,
-        dieselben Operationen aus ``applies_to``. Zwei Menüs mit derselben
+        Gebaut wird es dort, weil es dort schon steht; Operationen stehen
+        im Auswahlfenster, nicht im Menü. Zwei Menüs mit derselben
         Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
 
         Die Ansicht meldet Gerätepixel, das Menü braucht Logikpunkte — die
