@@ -81,6 +81,7 @@ it into `website/version.json`.
 ### Sculpting, text and sketching
 
 - With *On both sides*, *Put text on* also places the lettering on the back, readable from outside. That suits flags, signs and tags.
+- Lettering is set more precisely: the letters stand in their place, and curves follow the font instead of losing up to 2 percent of their area at small sizes.
 - Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
