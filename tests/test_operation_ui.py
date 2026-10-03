@@ -5071,6 +5071,62 @@ def test_exact_apply_waits_for_the_displayed_result(deferred_exact_preview, monk
     assert window._op_dialog is None
 
 
+@pytest.fixture
+def deferred_mesh_preview(window: MainWindow, monkeypatch: pytest.MonkeyPatch):
+    """Die Platte als Netz, die Vorschau getrennt zustellbar, Übernehmen gezählt."""
+    identifier = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(identifier)
+    requests: list[Any] = []
+    applied: list[Any] = []
+
+    def request(then, drafts=None, **kwargs):
+        requests.append((then, tuple(drafts or ()), kwargs))
+
+    monkeypatch.setattr(window.session, "preview_async", request)
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, drafts, **kw: applied.append(drafts) or True
+    )
+    return window, requests, applied
+
+
+def test_a_mesh_apply_waits_for_the_preview_that_computes_it(deferred_mesh_preview):
+    """Ohne Bildpflicht wartet ein früher Klick auf die Rechnung — nicht auf das Bild (RM-493).
+
+    Sofort übernommen brach der Klick die laufende Vorschau ab, samt
+    Hilfsprozess des Netzkerns, und die Auswertung rechnete dieselbe Änderung
+    noch einmal: am Rucksack-Halter 1,0 bis 4,5 s statt 0,4 s. Die Vorschau
+    rechnet, was die Auswertung danach im Cache findet; der Klick läuft, sobald
+    sie fertig ist.
+    """
+    window, requests, applied = deferred_mesh_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
+    dialog = window._op_dialog
+    assert dialog is not None and requests, "die Vorschau rechnet"
+    approval = window._preview_approval
+    assert approval is not None and approval.required is False, "am Netz ist kein Bild Pflicht"
+    assert approval.is_the_evaluation
+    dialog._accept_button.click()
+    assert not applied and window._op_dialog is dialog, "der Klick wartet auf die Rechnung"
+    assert approval.pending_click is not None
+
+    requests[-1][0](_exact_difference(window))
+    assert len(applied) == 1 and tuple(applied[0]) == requests[-1][1], "einmal, mit dem Auftrag"
+    assert window._op_dialog is None
+
+
+def test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise(
+    deferred_mesh_preview, monkeypatch
+):
+    """Gegenprobe: Rechnet die Vorschau anders als die Auswertung, übernimmt der Klick sofort."""
+    window, requests, applied = deferred_mesh_preview
+    monkeypatch.setattr(window.session, "preview_is_the_evaluation", lambda *a, **k: False)
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
+    dialog = window._op_dialog
+    assert dialog is not None and requests
+    dialog._accept_button.click()
+    assert len(applied) == 1, "kein Warten auf eine grobe oder geschätzte Vorschau"
+
+
 def test_changed_values_revoke_exact_approval_before_the_timer(deferred_exact_preview):
     """Alte Rechnung und altes Bild dürfen neuere Zahlen nicht freigeben."""
     window, requests, shown = deferred_exact_preview

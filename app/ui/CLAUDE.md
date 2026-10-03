@@ -242,7 +242,9 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 - **Freigabe nur im Hauptfenster.** Übernehmen gilt nach dem gesehenen Bild;
   Vorschau-Warten sperrt nicht (Robert): früher Klick bindet an die erwartete
-  Freigabe (`_PreviewApproval.pending_click`, `MainWindow._apply_when_previewed`).
+  Freigabe (`_PreviewApproval.pending_click`, `MainWindow._apply_when_previewed`),
+  ohne Bildpflicht nur an eine rechnende Vorschau, die die Auswertung im Cache
+  findet (`Session.preview_is_the_evaluation`, RM-493).
   Zahl-, Dokument- oder Projektwechsel entwerten beides. `block_apply(reason)`
   sperrt nur bei Problemen. Dialog, Panel und `QuietHost` verwalten Vorschau
   nicht doppelt (`preview_check` fragt, `preview_defer` bindet).

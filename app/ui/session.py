@@ -3993,6 +3993,66 @@ class Session(QObject):
         self._previews.append(worker)
         self._leash.start(worker)
 
+    def preview_is_the_evaluation(
+        self,
+        drafts: Sequence[OperationDraft] = (),
+        *,
+        change_op: OpId | None = None,
+        change_values: Mapping[str, Any] | None = None,
+        changes: DocumentChange | None = None,
+    ) -> bool:
+        """Ob die Vorschau dieses Auftrags rechnet, was die Auswertung nach dem Übernehmen rechnet.
+
+        Dann legt sie ihre Schritte unter den Schlüsseln in den Cache, unter
+        denen die Auswertung sie sucht — gleiche Güte, gleiches Profil, gleiche
+        Eingänge und derselbe Startwert (``history._seed_of``) —, und ein
+        Übernehmen, das kommt, während sie rechnet, wartet besser auf sie, als
+        sie abzubrechen und dieselbe Rechnung von vorn zu beginnen (RM-493).
+
+        **Nein, wo die Vorschau anders rechnet:** in der groben Stufe
+        (:data:`COARSE_PREVIEW_ABOVE`, ein verkleinertes Netz ist ein anderer
+        Eingang), mit eigenem Profil (``changes``), mit Vorabzählung (die
+        Schätzung ist keine Rechnung) und wenn die Auswertung fein rechnen
+        soll. Die Antwort ist vorsichtig: Ein „nein" kostet nur, dass der Klick
+        wie bisher sofort übernimmt.
+        """
+        if changes is not None or (self._quality_once or self.quality) != "draft":
+            return False
+        result = self.last_result
+        before = result.scene if result is not None else None
+        if change_op is None:
+            steps = [(draft.op, draft.params, tuple(draft.inputs)) for draft in drafts]
+        else:
+            entry = next((op for op in self.project.document.ops if op.id == change_op), None)
+            if entry is None:
+                return False
+            steps = [(entry.op, {**entry.params, **dict(change_values or {})}, entry.inputs)]
+        if any(
+            not REGISTRY.has(name) or REGISTRY.get(name).expected_triangles is not None
+            for name, _params, _inputs in steps
+        ):
+            return False
+        if before is None:
+            return True
+        if change_op is not None:
+            _name, params, inputs = steps[0]
+            return _names_a_feature(params) or not any(
+                (body := before.objects.get(object_id)) is not None
+                and kind_of(body.mesh) == "mesh"
+                and int(getattr(body.mesh, "triangle_count", 0)) > COARSE_PREVIEW_ABOVE
+                for object_id in inputs
+            )
+        # Dieselbe Ausnahme wie in :meth:`_preview_outcome`: Ein Schritt, der
+        # etwas am Eingangsnetz beim Namen nennt, rechnet an ihm genau.
+        exact = {
+            body
+            for name, params, inputs in steps
+            if _names_a_feature(params)
+            or (name == "apply_texture" and params.get("coverage") == "whole_face")
+            for body in inputs
+        }
+        return all(exact.intersection(draft.inputs) for draft in _coarse_drafts(before))
+
     def placement_async(self, compute: Any, then: Any, failed: Any, refused: Any = None) -> None:
         """Berechnet einen Platzierungsbezug oder Anzeigegeist abseits des Fensters.
 

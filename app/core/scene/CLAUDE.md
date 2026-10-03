@@ -219,6 +219,10 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   verbrauchter Eingang ist ungültig, die Absage ändert nichts.
   `bundling.stays_exact` beendet ein Bündel, das nicht mehr der Summe der
   Schritte entspräche (Fälle im Docstring).
+- **Ein Startwert ohne Vorgabe folgt aus dem Entwurf** (`history._seed_of`:
+  Operation, Eingänge, Werte), nie aus dem Zufall: Vorschau und Übernehmen
+  desselben Schritts teilen sonst keinen Cache-Schlüssel, und die Auswertung
+  rechnet die Änderung doppelt (RM-493).
 - **Umbau** (Regel in `kern.md`): `plan_insert`, `plan_move`, `plan_suppress`,
   `plan_reactivate` → `RevisionPlan` → `revise` (`ReferenceSight`, `sights`,
   `fit_sights`; `verdict` fragt Herkunft, Abdruck, Lage) → `commit`. Neu

@@ -2131,6 +2131,12 @@ class _PreviewApproval:
     questioned: bool = False
     """Die Vorschau hielt an einer Rückfrage: Ein Bild gibt es erst nach der
     Antwort, und *Übernehmen* stellt sie (RM-389)."""
+    computing: bool = False
+    """Die angeforderte Vorschau rechnet noch — bis ihre Antwort da ist."""
+    is_the_evaluation: bool = False
+    """Die Vorschau rechnet, was die Auswertung nach dem Übernehmen rechnete
+    (``Session.preview_is_the_evaluation``): Ein Klick wartet auf sie, auch
+    wo kein Bild Pflicht ist (RM-493)."""
 
 
 def _candidate_token(entry: tuple[str, str] | EdgeTarget) -> str:
@@ -19082,11 +19088,29 @@ class MainWindow(QMainWindow):
         Statuszeile das Problem. Bis dahin hieß es „Die aktuelle Vorschau
         abwarten", der Knopf war grau, und wer 0,8 s später noch einmal
         klickte, schrieb den Schritt (Review Fenster #8).
+
+        **Auch wo kein Bild Pflicht ist, wartet ein Klick auf eine Vorschau,
+        die schon rechnet, was er übernehmen will** (RM-493). Sie legt ihr
+        Ergebnis unter dem Schlüssel in den Cache, den die Auswertung danach
+        sucht; sofort übernommen brach der Klick sie ab — samt Hilfsprozess
+        des Netzkerns — und die Auswertung rechnete dieselbe Änderung noch
+        einmal, am Rucksack-Halter 1,0 bis 4,5 s statt 0,4 s. Gewartet wird
+        nur auf die Rechnung, nicht auf das Bild (:func:`shown` in
+        :meth:`_request_order_preview`), und nur, wo der Eigentümer einen
+        wartenden Klick kennt (``preview_defer``).
         """
         approval = self._set_preview_order(owner, order)
         if not self._preview_is_current(approval):
             return False
         if approval.required is False:
+            if (
+                approval.computing
+                and approval.is_the_evaluation
+                and getattr(owner, "preview_defer", None) is not None
+            ):
+                if then is not None:
+                    self._apply_when_previewed(approval, then)
+                return False
             return not self._preview_block_reason and not approval.problem
         if approval.displayed and not approval.problem:
             if self.viewport.is_difference_applied(approval.difference):
@@ -19154,6 +19178,15 @@ class MainWindow(QMainWindow):
             return
         self._preview_busy.start()
         self._start_preview_progress()
+        approval.computing = True
+        approval.is_the_evaluation = order.change_name is None and (
+            self.session.preview_is_the_evaluation(
+                order.drafts,
+                change_op=order.change_op,
+                change_values=order.change_values,
+                changes=order.changes,
+            )
+        )
         if order.change_op is not None:
             name = order.change_name or self.session.history.operation(order.change_op).op
         else:
@@ -19175,6 +19208,20 @@ class MainWindow(QMainWindow):
                 approval.pending_click = None
                 self.announce(reason)
 
+        def computed_click_runs() -> None:
+            """Ohne Bildpflicht läuft ein wartender Klick, sobald gerechnet ist (RM-493).
+
+            Eine Sperre aus der Antwort — eine Handlung, die vor das Übernehmen
+            gehört — hält ihn an, und die Statuszeile sagt, warum.
+            """
+            click, approval.pending_click = approval.pending_click, None
+            if click is None:
+                return
+            if self._preview_block_reason:
+                self.announce(self._preview_block_reason)
+                return
+            click()
+
         told: list[str] = []
 
         def failed(_detail: Any) -> None:
@@ -19195,11 +19242,16 @@ class MainWindow(QMainWindow):
                     "oder öffnen Sie die Bearbeitung erneut."
                 )
             )
+            approval.computing = False
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)
             waiting_click_hears(reason)
             self._refresh_preview_block()
+            if approval.required is False:
+                # Ohne Bildpflicht galt der Klick der Rechnung, und die ist
+                # vorbei; die Auswertung sagt selbst, woran es liegt.
+                computed_click_runs()
 
         def explained(reason: str) -> None:
             """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
@@ -19214,6 +19266,7 @@ class MainWindow(QMainWindow):
             """Erst das Ergebnis darstellen, danach denselben Auftrag freigeben."""
             # Gerechnet ist; was jetzt noch fehlt, ist das Bild, und das hält
             # niemand mehr mit *Abbrechen* an.
+            approval.computing = False
             self._finish_preview_progress()
             if difference is None:
                 if approval.required is not False:
@@ -19222,10 +19275,9 @@ class MainWindow(QMainWindow):
                     self._show_preview(None)
                     # Ein Klick, der vor der Antwort kam und auf ein Bild
                     # wartete, das es nicht geben kann (:func:`asked`), läuft
-                    # jetzt — er stellt die Rückfrage.
-                    click, approval.pending_click = approval.pending_click, None
-                    if click is not None:
-                        click()
+                    # jetzt — er stellt die Rückfrage. Ebenso einer, der nur
+                    # auf die Rechnung wartete (RM-493).
+                    computed_click_runs()
                 return
             # **Ein Satz zu einem Ergebnis ist kein Problem.** Der Arbeiter meldet
             # ``explained`` auch dann, wenn ein Bild kommt — „Flächenbearbeitung
@@ -19269,6 +19321,14 @@ class MainWindow(QMainWindow):
                     "oder öffnen Sie die Bearbeitung erneut."
                 )
             approval.difference = difference
+            if approval.required is False and approval.pending_click is not None:
+                # **Der Klick wartete auf die Rechnung, nicht auf das Bild**
+                # (RM-493): Ihr Ergebnis liegt jetzt im Cache, und die
+                # Auswertung nach dem Übernehmen findet es dort. Ein Bild, das
+                # das Übernehmen gleich wieder abräumte, wäre Arbeit für nichts.
+                computed_click_runs()
+                if self._preview_approval is not approval or not self._preview_is_current(approval):
+                    return
             self._present_order_preview(approval)
 
         def refused(problem: object) -> None:
@@ -19897,6 +19957,7 @@ class MainWindow(QMainWindow):
         self._preview_action = ""
         if approval is not None:
             approval.requested = False
+            approval.computing = False
             approval.pending_click = None
         self._show_difference(None)
         note = tr(

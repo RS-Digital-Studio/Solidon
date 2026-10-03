@@ -16,10 +16,11 @@ mehr als eine betroffen ist — dafür gibt es :attr:`History.discardable`.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import itertools
+import json
 import math
 import re
-import secrets
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -83,6 +84,21 @@ _OBJECT_PATTERN = re.compile(r"^obj_(\d+)$")
 #: Vorgegebene Urheberschaft. Manuelle Operationen sind einzelne Transaktionen
 #: des Nutzers (§15.5).
 USER_ORIGIN: Final[Origin] = Origin(by="user")
+
+
+def _seed_of(draft: OperationDraft) -> int:
+    """Der Startwert eines Entwurfs, der keinen mitbringt — aus dem, was er tut (§11.3).
+
+    Operation, Eingänge und Werte bestimmen ihn; gespeichert wird er wie
+    jeder andere in der Operation. **Gezogen war er zufällig**, je Anwendung
+    neu, und dann rechneten die Vorschau eines Schritts und seine Übernahme
+    unter zwei Startwerten, also unter zwei Cache-Schlüsseln: Die Auswertung
+    nach *Übernehmen* rechnete dieselbe Änderung noch einmal, an der
+    STEP-Lochplatte 2,3 s nach 2,4 s Vorschau (RM-493). Gleicher Entwurf,
+    gleicher Startwert — die Vorschau ist damit die Rechnung des Übernehmens.
+    """
+    text = json.dumps([draft.op, list(draft.inputs), draft.params], sort_keys=True, default=repr)
+    return int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:4], "big") % 2**31
 
 
 def _living_objects(operations: Sequence[Operation]) -> set[ObjectId]:
@@ -1278,12 +1294,12 @@ class History:
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
         # §11.3: eine randomisierte Prozedur führt einen gespeicherten
-        # Startwert. Wo der Aufrufer keinen mitbringt, wird hier einer gezogen —
-        # entscheidend ist, dass er aufgehoben wird, nicht, wer ihn sich
-        # ausgedacht hat.
+        # Startwert. Wo der Aufrufer keinen mitbringt, wird hier einer
+        # bestimmt — entscheidend ist, dass er aufgehoben wird, nicht, wer ihn
+        # sich ausgedacht hat (:func:`_seed_of`).
         seed = draft.seed
         if seed is None and spec.requires_seed:
-            seed = secrets.randbelow(2**31)
+            seed = _seed_of(draft)
 
         outputs = draft.outputs if draft.outputs is not None else self._outputs_for(spec, draft)
         if draft.outputs is not None:

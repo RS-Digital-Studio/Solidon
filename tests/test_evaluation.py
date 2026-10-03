@@ -1985,6 +1985,89 @@ def _ellipsoid_session() -> tuple[Any, str, Any]:
     return session, body, entry.mesh
 
 
+def test_a_preview_is_the_computation_its_apply_finds_in_the_cache() -> None:
+    """Vorschau und Übernehmen rechnen eine Änderung einmal, nicht zweimal (RM-493).
+
+    Ein Schritt mit Startwert (``deterministic=False``, hier *Bohrung
+    setzen*) bekam ihn je Anwendung zufällig: einen in der Dokumentkopie der
+    Vorschau, einen anderen beim Übernehmen. Der Startwert steht im
+    Cache-Schlüssel, und die Auswertung nach dem Übernehmen rechnete dieselbe
+    Änderung noch einmal — an der STEP-Lochplatte 2,3 s nach 2,4 s Vorschau.
+    """
+    from app.core.registry import REGISTRY
+
+    session, body, _mesh = _ellipsoid_session()
+    # Ein eigener, leerer Cache: Mit festem Startwert fände die Vorschau sonst
+    # die Bohrung eines früheren Tests auf der Platte.
+    session.cache = ResultCache()
+    spec = REGISTRY.get("drill_hole")
+    assert spec.requires_seed, "die Prüfung braucht einen Schritt mit Startwert"
+    real = spec.fn
+    seeds: list[int | None] = []
+
+    def counted(ctx: OpContext) -> Any:
+        seeds.append(ctx.seed)
+        return real(ctx)
+
+    draft = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+    assert session.preview_is_the_evaluation([draft])
+    object.__setattr__(spec, "fn", counted)
+    try:
+        _scene, difference, reason = session._preview_outcome(
+            [draft], coarsened=[].append, detect_features=False
+        )
+        assert reason == "" and difference is not None, reason
+        assert len(seeds) == 1, "die Vorschau rechnet den Schritt"
+        session.history.apply("Bohrung setzen", [draft])
+        # Der Lauf des Fensters nach dem Übernehmen, in seiner Güte
+        # (``_EvaluationWorker``); ``evaluate_now`` rechnet fein für den Export.
+        applied = session.run_evaluation()
+    finally:
+        object.__setattr__(spec, "fn", real)
+
+    assert applied.stopped_at is None
+    assert session.project.document.ops[-1].seed == seeds[0], (
+        "der übernommene Schritt trägt den Startwert der Vorschau"
+    )
+    assert len(seeds) == 1, "die Auswertung findet die Rechnung der Vorschau im Cache"
+
+
+def test_the_preview_is_not_the_evaluation_where_it_computes_otherwise(monkeypatch) -> None:
+    """Grob, fein oder geschätzt: Dann wartet kein Klick auf die Vorschau (RM-493).
+
+    Ein Übernehmen während der Vorschau wartet nur auf eine, deren Rechnung
+    die Auswertung danach im Cache findet. Rechnet sie auf einem verkleinerten
+    Netz, soll die Auswertung fein rechnen oder zählt die Vorschau nur, wäre
+    das Warten Zeit für nichts.
+    """
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+
+    session, body, _mesh = _ellipsoid_session()
+    drill = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+    assert session.preview_is_the_evaluation([drill])
+    refine = OperationDraft(op="remesh_mesh", inputs=(body,), params={"edge": 1.0})
+    assert not session.preview_is_the_evaluation([refine]), "die Vorschau zählt vorab"
+    session._quality_once = "fine"
+    assert not session.preview_is_the_evaluation([drill]), "die Auswertung rechnet fein"
+    session._quality_once = None
+
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    assert not session.preview_is_the_evaluation([drill]), "die Vorschau rechnet grob"
+    named = dataclasses.replace(drill, params={**drill.params, "at_feature": "face_1"})
+    assert session.preview_is_the_evaluation([named]), (
+        "ein benanntes Merkmal rechnet die Vorschau genau"
+    )
+
+
 def test_a_refinement_the_original_refuses_is_refused_before_anything_is_reduced(
     monkeypatch,
 ) -> None:
