@@ -44,12 +44,13 @@ it into `website/version.json`.
 - In the quick search too, *Orient for printing* checks whether a part stands securely.
 - Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
+- When another model joins, whether from a file, a download or generated, the view shows the plate it lies on.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
 - SuperSlicer no longer crashes on round parts: it no longer receives the scarf seam it does not know.
 - The filament preselection takes Generic or your printer's brand instead of a third-party special filament, for example Generic PETG instead of BETA PETG on the Bambu A1.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
-- *Orient for printing*, *Rotate* and *Move* now also work on STEP surface models, for turns of almost 180° and on partly recognised faces. The body stays exact.
+- On STEP surface models too, for turns of almost 180° and on partly recognised faces, *Orient for printing*, *Rotate* and *Move* now work. The body stays exact.
 - A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
 
 ### Holes, slots and splitting
@@ -100,6 +101,7 @@ it into `website/version.json`.
 - Every attempt in the list names its sentence or image and its seed. If your input no longer matches the chosen attempt, the dialog says which one will be applied.
 - The image model is now fetched by *Set up image model …* even when the other weights are already there.
 - If an error while generating names the setup as the way out, it appears as a button in the dialog.
+- While a model is being generated, the window stays usable. The dialog steps aside, and the status bar shows progress, time and *Cancel*.
 - The generate dialog states the volume at the size the part will arrive in.
 - A generated model is taken back with a single Ctrl+Z. Until now it took three to four.
 - If *Apply* is refused while generating, the dialog stays open with all attempts and names the way forward instead of discarding the mesh.
@@ -129,6 +131,8 @@ it into `website/version.json`.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.
 - When other programs keep the computer busy, *Cancel* stops a long calculation in under a second instead of asking for a restart after several seconds.
 - A local language model may take twelve instead of eight steps per request in the chat and so solves more requests made of several parts.
+- The selection panel fits its column again, and the size column in the object tree shows the whole size, such as “Ø5.19 mm” instead of “…”.
+- On a hole, *Change feature* opens *Change bore* directly with a preview instead of only pointing to it.
 
 ## 0.5.1
 
