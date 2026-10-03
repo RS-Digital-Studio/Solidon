@@ -105,7 +105,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
-| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 10 von 16. G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
 | [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
@@ -3090,22 +3089,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Archivierung von RM-442 belegt seine Freigabe nicht. Keine neue Umsetzung
   im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
   Review 02.10.: bestätigt über die Oberfläche — mit X-Symmetrie wirkt ein Zug nicht, wenn nur seine Spiegelkopie die eben verformte Fläche greift, der Bericht nennt ihn verfehlt (gleich wie in v0.5.1). Beleg Fall C in `F:\solidon-review-reports\sonden\v8k_rm442_ui.py`.
-
-<a id="rm-461"></a>
-
-- [ ] **RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek. `sparse_infill_pattern`
-  `rectilinear` landet in Bambu Studio 02.08.02.61 als `cubic` (6 von 6 Läufen) und in Creality
-  Print 7.3 als `grid` (7 von 7); beide führen „Rectilinear“ unter `zig-zag`. Elegoo und Orca
-  richtig. Solidons Gegenprobe meldet `slicer.setting_ignored`, gedruckt wird trotzdem das falsche
-  Muster.
-  **Stellen:** `app/core/export/slicer_keys.py:335` (`"lines": "rectilinear"`), `:403` (eine Tabelle für
-  die ganze Orca-Familie).
-  **Fix (allgemein):** Aufzählungswerte je Programm übersetzen; jede Aufzählung einmal je Programm
-  gegen dessen Profilbestand prüfen.
-  **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
-  Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
-  Regression 02.10.2026: nein — Wert und Tabelle in v0.5.0, v0.5.1 und `09d8e9485` gleich (`slicer_keys.py:335`).
 
 <a id="rm-462"></a>
 

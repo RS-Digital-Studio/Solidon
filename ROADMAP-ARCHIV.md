@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)](#rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026) |
 | 2026-10-03 | [RM-460: Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit (03.10.2026)](#rm-460-kammerwerte-erreichen-den-slicer-mit-belegter-heizfähigkeit-03102026) |
 | 2026-10-03 | [RM-481: TPU übernimmt das passende Filamentprofil samt Startwerten (03.10.2026)](#rm-481-tpu-übernimmt-das-passende-filamentprofil-samt-startwerten-03102026) |
 | 2026-10-03 | [RM-480: SuperSlicer erhält passende Stütz- und Nahtwerte (03.10.2026)](#rm-480-superslicer-erhält-passende-stütz--und-nahtwerte-03102026) |
@@ -38187,4 +38188,31 @@ Zusätzliche aktive Heizung: Qidi X-Max 3 in Orca hat Freigabe 1, der Aktivierun
 
 Prüfungen vor dem Anschlussreview: 1428 bestanden, 7 übersprungen, 63 abgewählt; abschließend 22 Kammerfälle grün. Der Anschlussreview ergänzte Gegenproben für Vorschläge ohne Heizung und eine unveränderte Wertebasis beim Wechsel der Grundlage: vier zunächst rot, danach fünf grün. Abschließender betroffener Lauf über `tools/affected_tests.py --run`: 153 bestanden, 3 übersprungen, 282 Fensterfälle abgewählt, Exit 0. Ruff, Format und mypy der geänderten Module grün. Drei neue Fensterfälle bleiben dem Release vorbehalten.
 
-Kundensichtbarer Fehler aus `f934a42219`, laut `git tag --contains` in v0.5.0 und v0.5.1. Je ein Punkt an derselben Stelle aller sechs Changelogs. Commit: „Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit“; genaue Kennung folgt mit dem nächsten Abschluss.
+Kundensichtbarer Fehler aus `f934a42219`, laut `git tag --contains` in v0.5.0 und v0.5.1. Je ein Punkt an derselben Stelle aller sechs Changelogs. Commit: `19ac6c8a9` (Kammerwerte erreichen den Slicer mit belegter Heizfähigkeit).
+
+## RM-461: Bambu und Creality drucken das gewählte Linienmuster (03.10.2026)
+
+<a id="rm-461-bambu-und-creality-drucken-das-gewählte-linienmuster-03102026"></a>
+<a id="rm-461"></a>
+
+**RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek. `sparse_infill_pattern`
+  `rectilinear` landet in Bambu Studio 02.08.02.61 als `cubic` (6 von 6 Läufen) und in Creality
+  Print 7.3 als `grid` (7 von 7); beide führen „Rectilinear“ unter `zig-zag`. Elegoo und Orca
+  richtig. Solidons Gegenprobe meldet `slicer.setting_ignored`, gedruckt wird trotzdem das falsche
+  Muster.
+  **Stellen:** `app/core/export/slicer_keys.py:335` (`"lines": "rectilinear"`), `:403` (eine Tabelle für
+  die ganze Orca-Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm übersetzen; jede Aufzählung einmal je Programm
+  gegen dessen Profilbestand prüfen.
+  **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
+  Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
+  Regression 02.10.2026: nein — Wert und Tabelle in v0.5.0, v0.5.1 und `09d8e9485` gleich (`slicer_keys.py:335`).
+
+**Abschluss:** Die gemeinsame Orca-Tabelle schrieb `rectilinear`, während Bambu Studio und Creality Print dieselbe Wahl unter `zig-zag` führen. Die allgemeine programmbezogene Übersetzung und der vollständige Aufzählungswächter wurden einmal in RM-480 gebaut (Commit `1fbdb5de8`); dieser Abschluss belegt den zweiten Fehler derselben Bauart.
+
+Echte Vorher-Rundreisen: Bambu ersetzte `rectilinear` durch `cubic`, Creality durch `grid`. Der Wächter prüft alle angebotenen booleschen und Literal-Wahlen über den echten Schreibweg für sieben Programme gegen den unabhängig gemessenen Bestand in `tests/data/slicer_values.json`. Kontrolllauf mit ausschließlich ausgeschalteter Bambu-/Creality-Wertübersetzung: zwei Fehler wegen `rectilinear`; unverändert zwei bestanden. Die sieben Programmfälle wurden bereits mit RM-480 grün geprüft. Belege: `B-rm461-countercheck.log`, `B-rm461-green.log` im Scratchpad sowie 44 ursprüngliche Orca-Rundreisen unter `F:\solidon-review-reports\gcode\agentB\werte`.
+
+Abnahme: echte Würfelschnitte in Bambu Studio 02.08.02.61/P1S und Creality Print 7.3.0.6149/K1 mit gewähltem Linienmuster. Beide Konfigurationsblöcke enthalten `sparse_infill_pattern=zig-zag`. Unabhängiges Lesen der G1-Bahnen zeigt je 92 Füllschichten und 644 lange Segmente; pro Schicht sieben parallele Linien, zwischen den Schichten wechselnd 135°/45°. Konkrete Zeilen und Bahnlängen stehen in `F:\solidon-review-reports\gcode\agentB\rm461-codex-lines.json`. Bambu 886 s/3,71 g, Creality 875,566 s/3,46 g. Keine falsche Füllmusterwarnung. Die ergänzende Kammerwahl ändert die Musterzuordnung nicht.
+
+Kundensichtbarer Tabellenfehler seit `f934a42219`, in v0.5.1 enthalten; je ein Punkt in allen sechs Changelogs für 0.5.2. Implementierung: `1fbdb5de8`; dieser getrennte Abschluss wird unter „Bambu und Creality drucken das gewählte Linienmuster“ committed.

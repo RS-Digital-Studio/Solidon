@@ -52,6 +52,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O TPU encontra o perfil de filamento e os valores de arranque no PrusaSlicer e no SuperSlicer. Se faltar um perfil, o Solidon indica que usa a sua própria tabela de materiais.
 - O Cura respeita os limites de aceleração da impressora. Se um valor escolhido os ultrapassar, o Solidon mostra o valor reduzido no relatório.
 - A temperatura da câmara chega ao campo correto do slicer. Os perfis sem aquecimento regulável da câmara explicam por que o valor não tem efeito.
+- O preenchimento Linhas chega ao Bambu Studio e ao Creality Print como linhas, sem ser substituído por Grelha ou Cúbico.
 - A pré-seleção de filamento escolhe Generic ou a marca da sua impressora em vez de um filamento especial de terceiros, por exemplo Generic PETG em vez de BETA PETG na Bambu A1.
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
 - Também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte funcionam *Orientar para impressão*, *Rodar* e *Deslocar*. O corpo continua exato.
