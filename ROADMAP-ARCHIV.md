@@ -37380,7 +37380,7 @@ echten Fenster (zweiter Monitor, gestellter langsamer Generator), Läufe Text, B
 43 von 43 Prüfungen — kein modales Fenster während des Laufs, Menüeintrag wirkt, Statusleiste
 „Modell wird erzeugt (2 s) · 14 % · Verstrichen: 2 s“ mit *Abbrechen*, Abbruch beendet den
 Arbeiter, Übernehmen und Strg+Z als ein Schritt. Ausgangsstand gegengeprüft: Dialog während des
-Laufs `ApplicationModal`. Commit: wird nachgetragen.
+Laufs `ApplicationModal`. Commits: `4f8d55e28`, `4b9428337` (hängender Abbruch nach RM-418).
 
 ## RM-456: Nach einer Erzeugung steht die Verlaufsgruppe offen, die Lizenzabsage ohne interne Kennung, der Mulden-Formzug mit Test (02.10.2026)
 
@@ -37420,4 +37420,4 @@ Laufs `ApplicationModal`. Commit: wird nachgetragen.
 (`test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage`, Gegenprobe
 ohne `before=self._sculpt_shown()` rot). Am Ausgangsstand per Fenstersonde nachgestellt: vier
 Kindzeilen der Erzeugung verborgen, Lizenzabsage mit „Handlung: change“; nachher Gruppe offen
-(`3 Modell einfügen` bis `6 Auf das Bett setzen`), Absage ohne Kennung. Commit: wird nachgetragen.
+(`3 Modell einfügen` bis `6 Auf das Bett setzen`), Absage ohne Kennung. Commit: `4f8d55e28`.
