@@ -746,10 +746,7 @@ def _no_user_parts_stay_loaded() -> Iterator[None]:
     bootstrap._user_operations = ()
 
 
-def _profile_files() -> dict[Path, bytes]:
-    from app.core.paths import user_profiles_dir
-
-    folder = user_profiles_dir()
+def _profile_files(folder: Path) -> dict[Path, bytes]:
     if not folder.is_dir():
         return {}
     return {path: path.read_bytes() for path in folder.iterdir() if path.is_file()}
@@ -768,10 +765,18 @@ def _user_profiles_stay_with_their_test() -> Iterator[None]:
     0,4 statt 0,6, leere Ratschlagsliste — 25 rote Fälle im Lauf am Stück,
     jeder einzeln grün. Zurückgestellt werden die Dateien, wie sie vor dem
     Test lagen, und der Profilcache wird verworfen.
+
+    **Der Ordner wird vor dem Test bestimmt.** Manche Tests stellen
+    ``os.name`` um (POSIX-Wege unter Windows), und im Abbau gilt das noch:
+    ``user_profiles_dir()`` baute dann einen ``PosixPath`` und riss. Ein schon
+    gebauter Pfad und seine Kinder behalten ihre Art.
     """
-    before = _profile_files()
+    from app.core.paths import user_profiles_dir
+
+    folder = user_profiles_dir()
+    before = _profile_files(folder)
     yield
-    after = _profile_files()
+    after = _profile_files(folder)
     if after == before:
         return
     for path in after.keys() - before.keys():
