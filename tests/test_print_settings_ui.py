@@ -334,7 +334,10 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
     monkeypatch.setattr(dialog, "_queue_refit", record_intent)
     dialog.show()
     try:
-        dialog.wait_for_workers()
+        # Warten, nicht schließen: ``wait_for_workers`` setzt den Dialog auf
+        # „wird geschlossen“, und die späte Antwort unten fiele weg.
+        assert dialog.wait_for_slicers()
+        dialog._leash.wait_all(2000)
         for _ in range(3):
             qt_app.processEvents()
         toggle = dialog.slicer_toggle
@@ -4399,7 +4402,10 @@ def test_the_active_slicer_variant_and_nozzle_choice_stay_in_step(
     session.start_new("centauri-carbon-2", "pla")
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
-    dialog.wait_for_workers()
+    # Nur warten, nicht schließen: ``wait_for_workers`` ist der Abbau der Suite
+    # und setzt den Dialog auf „wird geschlossen“ — danach verwarf
+    # ``_profiles_found`` jede Antwort, und die Düse blieb auf 0,4.
+    dialog._leash.wait_all(2000)
 
     def close_dialog() -> None:
         dialog.reject()
@@ -4467,7 +4473,8 @@ def test_profile_search_preserves_a_pending_custom_nozzle_draft(
     session.start_new("centauri-carbon-2", "pla")
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers()
-    dialog.wait_for_workers()
+    # Warten, nicht schließen (siehe ``test_the_active_slicer_variant_…``).
+    dialog._leash.wait_all(2000)
 
     def close_dialog() -> None:
         dialog.reject()
