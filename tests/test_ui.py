@@ -5786,6 +5786,134 @@ def test_the_remesh_and_retry_button_refines_before_the_smoothing_and_runs_throu
     assert list(window.session.project.document.ops) == ops_before
 
 
+def test_the_mesh_and_retry_button_rounds_the_places_without_an_exact_edge(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Knick ohne eigene Kante im exakten Körper hat einen Weg: am Dreiecksmodell (RM-436).
+
+    ``edges.unmapped`` bot nur „Prüfen Sie die markierten Stellen“ an; am Knick
+    innerhalb einer Fläche gibt es nichts zu prüfen. Der Knopf setzt
+    *Flächenbearbeitung beenden* vor den Schritt, und derselbe Schritt rundet
+    am Netz — ein Zug, Strg+Z nimmt ihn zurück. Der Befund wird hier an die
+    echte Gruppenbindung angehängt; Angebot, Handler, Verlauf und Auswertung
+    sind echt.
+    """
+    from app.core.errors import CORRECT_INPUT, MESH_AND_RETRY, SHOW_LOCATION
+    from app.core.geom import edge_ops
+    from app.core.types import Finding
+    from app.ui.panels import actions_for_document, as_error
+
+    real = edge_ops._group_that_fits
+
+    def with_a_place_without_an_edge(*args: Any, **kwargs: Any) -> Any:
+        kept, findings = real(*args, **kwargs)
+        place = (((0.0, 0.0, 1.0), (0.0, 1.0, 1.0)),)
+        unmapped = Finding(
+            code="edges.unmapped",
+            severity="warning",
+            message="An 1 Stellen hat der exakte Körper keine eigene Kante.",
+            values={"skipped": 1, "worked": len(kept)},
+            location=place[0][0],
+            outline=place,
+            suggestions=(SHOW_LOCATION, MESH_AND_RETRY, CORRECT_INPUT),
+        )
+        return kept, [*findings, unmapped]
+
+    monkeypatch.setattr(edge_ops, "_group_that_fits", with_a_place_without_an_edge)
+    window.session.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    window.session.wait_for_idle()
+    body = window.session.project.document.ops[-1].outputs[0]
+    window.session.apply(
+        "Verrunden",
+        [
+            OperationDraft(
+                op="fillet_edges", inputs=(body,), params={"radius": 1.0, "edges": "vertical"}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    finding = next(f for f in result.scene.report.findings if f.code == "edges.unmapped")
+    handlers = window.error_handlers()
+    offered = [
+        action.id
+        for action in actions_for_document(
+            finding,
+            window.session.project.document,
+            stopped_at=result.stopped_at,
+            live_objects=result.scene.objects,
+        )
+        if action.id in handlers
+    ]
+    assert MESH_AND_RETRY.id in offered, offered
+    ops_before = list(window.session.project.document.ops)
+
+    handlers[MESH_AND_RETRY.id](as_error(finding, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "create_brep_box",
+        "brep_to_mesh",
+        "fillet_edges",
+    ]
+    assert after.scene.objects[body].kind == "mesh"
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert list(window.session.project.document.ops) == ops_before
+
+
+def test_a_bundle_of_places_on_one_body_keeps_show_the_place_for_all(
+    qt_app: QApplication,
+) -> None:
+    """Gleiche Sätze an verschiedenen Stellen eines Körpers: Die Sammelzeile zeigt alle (RM-412).
+
+    Zwei ausgelassene Rundungskanten standen als „(2) …“ ohne Ort und ohne
+    *Stelle zeigen* da; der Kunde musste raten, welche Kanten scharf blieben.
+    Trägt jedes Mitglied seinen Umriss, fliegt die Zeile zur ersten Stelle und
+    umrandet alle. Ohne Umriss bleibt sie ohne Ort — ein zufälliger erster
+    wäre eine Behauptung.
+    """
+    from app.core.errors import SHOW_LOCATION
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel, as_error
+
+    first = (((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),)
+    second = (((5.0, 0.0, 0.0), (6.0, 0.0, 0.0)),)
+    common: dict[str, Any] = {
+        "code": "edges.too_narrow",
+        "severity": "warning",
+        "message": "Einige Kanten dieser Auswahl sind nicht verrundet.",
+        "object_id": "obj_1",
+        "suggestions": (SHOW_LOCATION,),
+    }
+    panel = ReportPanel()
+    panel.add_findings(
+        [
+            Finding(location=first[0][0], outline=first, values={"edge": 1}, **common),
+            Finding(location=second[0][0], outline=second, values={"edge": 2}, **common),
+        ]
+    )
+
+    assert panel.list.count() == 1
+    row = panel.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert row.location == first[0][0]
+    assert row.outline == first + second
+    assert as_error(row).values["outline"] == first + second
+
+    points = ReportPanel()
+    points.add_findings(
+        [
+            Finding(location=first[0][0], values={"edge": 1}, **common),
+            Finding(location=second[0][0], values={"edge": 2}, **common),
+        ]
+    )
+    bare = points.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert bare.location is None and bare.outline == ()
+
+
 def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count() -> None:
     """*Dreiecke verringern und erneut versuchen* nimmt Schritt und Zahl aus dem Befund.
 
@@ -11427,6 +11555,8 @@ def test_split_restores_the_complete_export_progress(
     """Prüfung und Schreiben erhalten nach Split genau ihren eigenen Abbruchzustand zurück."""
 
     monkeypatch.setattr(window._leash, "start", lambda _worker: None)
+    # Am feinen Ergebnis beginnt der Export sofort (RM-426); um das Warten geht es hier nicht.
+    window.session.quality = "fine"
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._start_export(tmp_path / "halter.stl", "stl")
@@ -20798,23 +20928,27 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
 
 
-def _a_cone_in_draft(window: MainWindow) -> None:
-    """Ein Kegel, der im Entwurf mit halb so vielen Dreiecken steht wie fein."""
+def _a_blend_in_draft(window: MainWindow) -> None:
+    """Ein verschmolzenes Teil, das im Entwurf auf doppelt so grobem Raster steht wie fein.
+
+    Bis RM-427 tat es ein Kegel; seitdem rechnen Kegel und Ring in beiden
+    Stufen mit derselben Teilung. Gröber im Entwurf ist nur noch das
+    Verschmelzen über :data:`blend.DRAFT_SAMPLES` Rasterpunkten — hier rund
+    650 000 bei 0,6 mm.
+    """
+    box = {"width": 40.0, "depth": 40.0, "height": 40.0}
     assert window.session.apply(
-        "Kegel",
+        "Zwei verschmolzene Quader",
         [
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="create_box", params=box),
+            OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 20.0}),
             OperationDraft(
-                op="create_cone",
-                params={
-                    "bottom_diameter": 30.0,
-                    "top_diameter": 10.0,
-                    "height": 20.0,
-                    "segments": 64,
-                },
-            )
+                op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": 3.0, "grid": 0.6}
+            ),
         ],
     )
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
 
@@ -20847,13 +20981,13 @@ def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Pa
 
     from app.core.geom.mesh import as_mesh_data
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     result = window.session.last_result
     assert result is not None
     draft = sum(as_mesh_data(entry.mesh).triangle_count for entry in result.scene.objects.values())
     fine = _fine_triangles(window)
     assert fine > draft, "Voraussetzung: fein und Entwurf unterscheiden sich"
-    target = tmp_path / "kegel.stl"
+    target = tmp_path / "teil.stl"
 
     window._start_export(target, "stl")
     assert window.session.wait_for_idle(30_000)
@@ -20874,7 +21008,7 @@ def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:
     """
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
-    _a_cone_in_draft(window)
+    _a_blend_in_draft(window)
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     ran: list[str] = []
 

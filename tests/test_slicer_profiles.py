@@ -3150,6 +3150,159 @@ def test_prusa_filaments_fit_by_condition_and_the_models_suggestion_wins(
     assert petg is not None and petg.name == "Prusament PETG @MK4S HF0.4"
 
 
+def test_prusa_takes_generic_before_a_foreign_brand_with_a_shorter_name(
+    prusa_mk4s: Path,
+) -> None:
+    """RM-464: Das Modell schlägt kein ABS vor. Danach gewann der kürzeste Name,
+    „Esun ABS @MK4S HF0.4“ — ein Fremdfilament mit eigener Temperatur und
+    eigenem Lüfter für den ganzen Druck. Generic und die Marke des Druckers
+    gehen jeder Fremdmarke vor; erst dann zählt die Namenslänge."""
+    root = prusa_mk4s.parent / "resources" / "profiles"
+    bundle = root / "PrusaResearch.ini"
+    condition = 'compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]\n'
+    bundle.write_text(
+        bundle.read_text(encoding="utf-8")
+        + "\n"
+        + "".join(
+            f"[filament:{name}]\nfilament_type = ABS\nfilament_vendor = {vendor}\n{condition}\n"
+            for name, vendor in (
+                ("Esun ABS @MK4S HF0.4", "Esun"),
+                ("Buddy3D ABS @MK4S HF0.4", "Buddy3D"),
+                ("Prusament ABS Blend @MK4S HF0.4", "Prusa Polymers"),
+                ("Generic ABS @MK4S HF0.4", "Generic"),
+            )
+        ),
+        encoding="utf-8",
+    )
+    mk4s = PrinterProfile(
+        id="prusa-mk4s",
+        title="Prusa MK4S",
+        build_volume=(250.0, 210.0, 220.0),
+        prusaslicer_printer="Original Prusa MK4S HF0.4 nozzle",
+    )
+    found = sp.find_profiles(prusa_mk4s, "prusa", ("machine", "process"))
+    filaments = sp.find_profiles(prusa_mk4s, "prusa", ("filament",))
+    machine, _process = sp.match(found, mk4s)
+    assert machine is not None
+
+    chosen = sp.match_filament(filaments, machine, "ABS")
+
+    assert chosen is not None and chosen.name == "Generic ABS @MK4S HF0.4"
+
+
+def test_among_foreign_brands_the_plain_spool_wins_over_the_short_name(
+    prusa_mk4s: Path,
+) -> None:
+    """RM-464: Gibt es weder Generic noch die Marke des Druckers, wählte die
+    Namenslänge am MK4 „Kimya ABS Kevlar“. Ein Wort neben Marke und Material
+    macht eine Spule besonders; die schlichte geht vor."""
+    root = prusa_mk4s.parent / "resources" / "profiles"
+    bundle = root / "PrusaResearch.ini"
+    condition = 'compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]\n'
+    bundle.write_text(
+        bundle.read_text(encoding="utf-8")
+        + "\n"
+        + "".join(
+            f"[filament:{name}]\nfilament_type = ABS\nfilament_vendor = {vendor}\n{condition}\n"
+            for name, vendor in (
+                ("Kimya ABS CF @MK4S HF0.4", "Kimya"),
+                ("Fiberlogy ABS @MK4S HF0.4", "Fiberlogy"),
+            )
+        ),
+        encoding="utf-8",
+    )
+    mk4s = PrinterProfile(
+        id="prusa-mk4s",
+        title="Prusa MK4S",
+        build_volume=(250.0, 210.0, 220.0),
+        prusaslicer_printer="Original Prusa MK4S HF0.4 nozzle",
+    )
+    found = sp.find_profiles(prusa_mk4s, "prusa", ("machine", "process"))
+    filaments = sp.find_profiles(prusa_mk4s, "prusa", ("filament",))
+    machine, _process = sp.match(found, mk4s)
+    assert machine is not None
+
+    chosen = sp.match_filament(filaments, machine, "ABS")
+
+    assert chosen is not None and chosen.name == "Fiberlogy ABS @MK4S HF0.4"
+
+
+def _bambu_bundle(tmp_path: Path, suggested: list[str]) -> Path:
+    """Ein Bambu-Bestand der Orca-Familie: das Modell mit ``default_materials``,
+    eine Maschine, Filamente von Bambu, Generic und zwei Fremdmarken in
+    eigenen Unterordnern — so liegt es in ``BBL/filament/<Marke>/``."""
+    root = tmp_path / "resources" / "profiles" / "BBL"
+    _write(
+        root / "machine" / "Bambu Lab A1.json",
+        {
+            "type": "machine_model",
+            "name": "Bambu Lab A1",
+            "default_materials": ";".join(suggested),
+        },
+    )
+    machine = "Bambu Lab A1 0.4 nozzle"
+    _write(
+        root / "machine" / f"{machine}.json",
+        {
+            "type": "machine",
+            "name": machine,
+            "instantiation": "true",
+            "printer_model": "Bambu Lab A1",
+            "nozzle_diameter": ["0.4"],
+            "default_filament_profile": ["Bambu PLA Basic @BBL A1"],
+        },
+    )
+    for folder, name, vendor in (
+        ("", "Bambu PLA Basic @BBL A1", "Bambu Lab"),
+        ("", "Bambu PETG HF @BBL A1", "Bambu Lab"),
+        ("", "Generic PETG @BBL A1", "Generic"),
+        ("BETA", "BETA PETG @BBL A1", "BETA"),
+        ("addnorth", "addnorth PETG ESD", "addnorth"),
+    ):
+        _write(
+            root / "filament" / folder / f"{name}.json",
+            {
+                "type": "filament",
+                "name": name,
+                "instantiation": "true",
+                "filament_type": ["PLA" if "PLA" in name else "PETG"],
+                "filament_vendor": [vendor],
+                "compatible_printers": [machine],
+            },
+        )
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
+@pytest.mark.parametrize(
+    ("suggested", "expected"),
+    [
+        (
+            ["Bambu PLA Basic @BBL A1", "Generic PETG @BBL A1", "Bambu PETG HF @BBL A1"],
+            "Generic PETG @BBL A1",
+        ),
+        (["Bambu PLA Basic @BBL A1", "Bambu PETG HF @BBL A1"], "Bambu PETG HF @BBL A1"),
+        (["Bambu PLA Basic @BBL A1"], "Generic PETG @BBL A1"),
+    ],
+    ids=["modell-nennt-generic", "modell-nennt-bambu", "modell-nennt-kein-petg"],
+)
+def test_bambu_petg_comes_from_the_model_or_its_brands_never_a_foreign_one(
+    tmp_path: Path, suggested: list[str], expected: str
+) -> None:
+    """RM-464: Am A1 bekam PETG „BETA PETG @BBL A1“, am A1 mini das leitfähige
+    „addnorth PETG ESD“. Das Modellprofil der Orca-Familie nennt seine
+    Filamente (``default_materials``), und die Marke eines Filaments ist seine
+    eigene Angabe, nicht der Herstellerordner ``BBL``, in dem alle liegen."""
+    executable = _bambu_bundle(tmp_path, suggested)
+    found = sp.find_profiles(executable, "orca", kinds=("machine", "filament"))
+    machine = next(entry for entry in sp.machines(found) if entry.name.endswith("0.4 nozzle"))
+
+    chosen = sp.match_filament(found, machine, "PETG", sp.profile_roots("orca", executable))
+
+    assert chosen is not None and chosen.name == expected
+
+
 def test_prusa_offers_only_the_printers_own_bundle(
     prusa_mk4s: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
