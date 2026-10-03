@@ -151,8 +151,8 @@ Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
 ## Entwickeln
 
-Entwicklung und CI verwenden CPython 3.14.7. Die 3D-Ansicht zeichnet mit pygfx
-über wgpu.
+Entwickelt wird mit CPython 3.14, die Pakete baut die CI mit 3.14.8. Die
+3D-Ansicht zeichnet mit pygfx über wgpu.
 
 ```
 python -m venv .venv

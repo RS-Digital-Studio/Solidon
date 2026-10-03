@@ -75,6 +75,7 @@ Nutzen da und sonst nichts.
 - Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - *Druckoptimal ausrichten*, *Drehen* und *Verschieben* gelingen auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen. Der Körper bleibt exakt.
+- Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -85,6 +86,7 @@ Nutzen da und sonst nichts.
 - Muster auf Zylinderflächen eingelesener Modelle bleiben beim Ändern geschlossen.
 - Im Verlauf eines STEP-Körpers lassen sich Schritte umstellen oder davor einfügen, auch wenn ein späterer Schritt eine Bohrung meint. Der Verweis folgt der Bohrung.
 - Eine Bohrung, mit neuer Richtung versetzt oder verdoppelt, bleibt an einem STEP-Körper exakt.
+- Ein erkanntes Merkmal mehr als einen Meter vom Nullpunkt entfernt behält beim Ändern seinen Ort. Bisher kürzte das Feld die Zahl still, und die Bohrung wanderte.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Vorn wählen Sie die *Ebene* — an einer Achse mit Neigung, parallel zu einer Fläche, durch eine Kante oder durch drei Punkte, die Sie im Bild anklicken.
@@ -111,6 +113,7 @@ Nutzen da und sonst nichts.
 - Im Fenster rechnet *Weich verschmelzen* jetzt fein, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
+- SVG-Zeichnungen kommen richtig an: Drehungen, Scherungen, abgerundete Ecken, Ellipsen und elliptische Bögen stimmen, und ausgeblendete Ebenen bleiben draußen.
 - Das Ziel von *An Merkmal ausrichten* ist anfangs leer, und der erste Klick ins Bild füllt es. *Übernehmen* wartet bis dahin, statt den Körper still an die falsche Seite zu setzen.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 - Ein weiterer Zug in eine eben gegrabene Mulde gräbt tiefer, auch mit einem kleinen Pinsel. Bisher blieb er wirkungslos und galt als verfehlt.
@@ -133,6 +136,7 @@ Nutzen da und sonst nichts.
 - Ein Export während einer laufenden Berechnung wartet auf das neue Ergebnis. Bisher konnte die Datei noch das alte Maß tragen.
 - Ein Maß jenseits seiner Grenze lehnt die Parameterleiste ab, statt das Bild leer stehen zu lassen.
 - In der Parameterleiste zählt jeder Pfeilschritt, und der Fokus bleibt im Feld.
+- In der Parameterleiste tragen die Maße zweier Quader ihre Nummer, und ein Maß mit eigenem Arbeitsbereich hat einen Regler.
 - Wartet ein Schritt auf eine Rückfrage, bleibt *Übernehmen* frei, und die Frage kommt.
 - Im Dialog einer Operation stehen die Beschriftungen in einer Spalte, die Felder gleich breit, und jeder Schalter vor dem, was er schaltet.
 - Haken in Listen sind in jeder Zeile lesbar, und Farben stehen als runder Punkt daneben.

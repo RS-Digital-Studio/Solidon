@@ -51,6 +51,7 @@ dans `website/version.json`.
 - La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 - *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent aussi sur les surfaces STEP, pour des rotations de près de 180°, sur des faces reconnues en partie. Le corps reste exact.
+- Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
 
 ### Perçages, trous oblongs et découpe
 
@@ -61,6 +62,7 @@ dans `website/version.json`.
 - Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
 - Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
+- Une caractéristique reconnue à plus d'un mètre de l'origine garde sa place quand vous la modifiez. Avant, le champ tronquait le nombre sans rien dire, et le perçage bougeait.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
 - Découper coupe maintenant aussi en biais : en haut, vous choisissez le « Plan » — sur un axe avec inclinaison, parallèle à une face, par une arête ou par trois points cliqués dans la vue.
@@ -87,6 +89,7 @@ dans `website/version.json`.
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
+- Les dessins SVG arrivent correctement : rotations, cisaillements, coins arrondis, ellipses et arcs elliptiques sont justes, et les calques masqués restent dehors.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide, et le premier clic dans la vue la remplit. « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 - Un nouveau tracé dans un creux qui vient d'être creusé l'approfondit, même avec un petit pinceau. Jusqu'ici, il restait sans effet et comptait comme manqué.
@@ -109,6 +112,7 @@ dans `website/version.json`.
 - Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
 - La barre des paramètres refuse une cote hors de sa limite au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
+- Dans la barre des paramètres, les cotes de deux pavés portent leur numéro, et une cote avec sa propre plage de travail a un curseur.
 - Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
 - Les coches des listes sont lisibles sur chaque ligne, et les couleurs apparaissent en pastille ronde à côté.

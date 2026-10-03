@@ -46,11 +46,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
-| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Workflow-Pins und Lizenzbeilage auf 3.14.8, Lauf auf allen vier Paketplattformen, danach die Arbeitsplätze |
-| [RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf](#rm-469) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Pin heben und beide Mac-Jobs mit Fenster- und Rendererfällen fahren |
-| [RM-470 — Marching Cubes ohne scikit-image](#rm-470) | Plattformen, Pakete und Grafik | Aus RM-467: `Manifold.level_set` statt `skimage.measure.marching_cubes` an vier Stellen, zuerst am größten Voxelfall messen |
-| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Satz über uharfbuzz, Konturen über fontTools, eigene Schriftsuche je Plattform |
-| [RM-472 — Zeichnungsimport ohne lxml](#rm-472) | Plattformen, Pakete und Grafik | Aus RM-467: SVG über `xml.etree` und svg.path selbst lesen |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
+| [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
+| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Konturen über fontTools aus mitgelieferten Dateien, Satz über uharfbuzz, Kurven in `MAX_FACET_SAG`; DejaVu selbst mitliefern |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -197,7 +195,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
-| [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10.: 18 neue Fassungen, pypdf mit sechs Sicherheitsmeldungen zuerst |
+| [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -675,56 +673,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-468"></a>
 
-- [ ] **RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit.**
-  Aus RM-467, erster Lauf 02.10.2026. 3.14.8 erschien am 30.09.2026, `actions/python-versions`
-  führt es. Jedes Paket trägt den Interpreter seines CI-Baus, und alle drei Workflows nennen
-  `python-version: "3.14.7"`. Für Solidon zählen: `zipfile` begrenzt das Entpacken je Lesevorgang
-  jetzt auch für bzip2, LZMA und Zstandard (eine fremde 3MF ist ein ZIP-Archiv), `tarfile` schließt
-  einen Pfadausbruch beim Entpacken, der Windows-Bau bringt OpenSSL 3.5.9 für Update-Abfrage und
-  Support über HTTPS, dazu libexpat 2.8.5 und CVE-2026-15806 (`HTTPPasswordMgr`). Zurückgestellt bis
-  nach 0.5.2: Der Wechsel berührt die Tabellen der Lizenzbeilage (CPython- und OpenSSL-Fassungen in
-  `third_party_licenses.toml`, `make_sbom.WINDOWS_LIBFFI_VERSIONS`, `tests/test_sbom.py`), belegt
-  wird er erst von einem Lauf auf allen vier Paketplattformen, und auf den Arbeitsplätzen ersetzt
-  die Installation `python314.dll` unter jeder laufenden Umgebung.
-  **Umbau:** alle `python-version`-Pins; die drei Tabellen mit den Fassungen von OpenSSL, libffi und
-  Expat aus den CPython-Quellen zum Tag `v3.14.8`; `CLAUDE.md`, `README.md` und Kopf von
-  `constraints.txt`; danach die drei Arbeitsplätze, wenn keine Sitzung rechnet.
-  **Abnahme:** Taglauf oder Handstart mit allen Paketen grün, die Releaseakte nennt 3.14.8.
+- [~] **RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit.**
+  Aus RM-467, erster Lauf 02.10.2026. 3.14.8 (30.09.2026) begrenzt in `zipfile` das Entpacken
+  auch für bzip2, LZMA und Zstandard (eine fremde 3MF ist ein ZIP-Archiv), schließt einen
+  Pfadausbruch in `tarfile`, bringt unter Windows und macOS OpenSSL 3.5.9, libexpat 2.8.5 und die
+  Korrektur zu CVE-2026-15806. Jedes Paket trägt den Interpreter seines CI-Baus. Die drei
+  Workflows bauen seit `d84ff9695` mit 3.14.8, die Lizenzbeilage kennt 3.14.8 und OpenSSL 3.5.9
+  (belegt an `PCbuild/python.props` und `Mac/BuildScript/build-installer.py` zum Tag; libffi bleibt
+  3.4.4), Linux läuft fest auf `ubuntu-24.04`. Die Kernsuite zeigte damit auf Windows, Linux und
+  macOS dieselben Ergebnisse wie main (Handstart 37060439101 gegen 37058800949).
+  **Offen:** der Paketbau auf allen vier Plattformen samt Releaseakte — die Paketjobs warten auf
+  die Fensterjobs, die auf main rot sind —, danach die drei Arbeitsplätze. Deren Installation
+  ersetzt `python314.dll` unter jeder laufenden Umgebung und geht nur, wenn keine Sitzung rechnet.
+  **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
+  `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
 
 <a id="rm-469"></a>
 
-- [ ] **RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf.** Aus RM-467, erster Lauf
+- [~] **RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau.** Aus RM-467, erster Lauf
   02.10.2026. rubicon-objc kommt nur auf macOS über wgpu in den Baum, für die Metal-Oberfläche der
   Ansicht. 0.5.7 (30.09.2026) wirft für unbekannte C-Typen `ValueError` statt `AttributeError` und
-  verlangt ein funktionierendes `platform.processor()`, was im gefrorenen Mac-Paket nicht belegt
-  ist. Weder das lokale Tor noch die Push-CI (nur Ubuntu) fahren macOS. Zurückgestellt bis nach
-  0.5.2, damit der Mac-Renderer im Release nicht ungeprüft wechselt (vgl. RM-051).
-  **Umbau:** den Plattformpin in `constraints.txt` heben (`check_env --freeze` auf Windows behält
-  ihn, also von Hand) und einen Lauf mit beiden Mac-Jobs samt Fenster- und Rendererfällen fahren.
-  **Abnahme:** beide Mac-Jobs grün, die Ansicht des gebauten Mac-Pakets zeichnet.
-
-<a id="rm-470"></a>
-
-- [ ] **RM-470 — Marching Cubes ohne scikit-image.** Aus RM-467 (Auftrag Robert: Was eigener Code
-  oder eine andere Bibliothek besser kann, wird ersetzt). scikit-image dient allein
-  `measure.marching_cubes`: direkt in `geom/blend.py` und `geom/lattice.py`, mittelbar über
-  `trimesh.voxel.ops.matrix_to_marching_cubes` in `geom/boolean.py` (Voxelstufe, §17.2) und
-  `geom/hollow.py`. Dafür reisen scikit-image (22 MB installiert), tifffile und lazy-loader in
-  jedem Paket mit, und `pyproject.toml` klammert seinetwegen eine numpy-Warnung aus. Der bessere
-  Weg ist `manifold3d.Manifold.level_set`, schon Abhängigkeit: Marching Tetrahedra auf einem
-  raumzentrierten Gitter liefert garantiert mannigfaltige Netze, Marching Cubes an mehrdeutigen
-  Zellen nicht zwingend, und jede folgende Boolesche Op braucht die Mannigfaltigkeit. Gitter und
-  Verblendung haben eine geschlossene Feldfunktion, die Voxelstufen werten ihr Raster dreilinear
-  aus. Der Rückruf läuft je Gitterpunkt durch Python, darum zuerst am größten Voxelfall messen; ist
-  er zu langsam, ein eigenes vektorisiertes Marching Cubes neben `slice/_chain.pyx`.
-  `geom/displace.py` liest das Höhenbild dann über Pillow, das ohnehin mitkommt, und imageio
-  entfällt mit.
-  **Plattformfolgen:** vier Pakete weniger auf allen drei Plattformen und keine Abhängigkeit von
-  scikit-image-Rädern bei der nächsten Python-Fassung; `level_set` steckt in allen Zielrädern von
-  manifold3d. Lizenzliste, Lizenzbeilage und SBOM werden kürzer.
-  **Abnahme:** Geometrietests der vier Stellen mit Kennzahlen gegen den heutigen Stand (Volumen,
-  wasserdicht, Komponenten), Laufzeit am größten Voxelfall nicht schlechter; scikit-image, imageio,
-  tifffile und lazy-loader fehlen in `pyproject.toml`, `constraints.txt` und im Paket.
+  verlangt ein funktionierendes `platform.processor()`. Der Pin steht seit `3c21802b9` auf 0.5.7;
+  die Kernsuite auf macos-latest lief damit wie main, die Fensterverträge auf macOS zeigen dieselben
+  Fehler wie auf Windows und Linux (Handstart 37060439101).
+  **Offen:** beide Mac-Paketjobs (Apple Silicon und `macos-26-intel`, das nur paketiert wird) und
+  ein Blick auf die Ansicht im gebauten Paket; sie laufen, sobald die Fensterjobs grün sind.
+  **Abnahme:** beide Mac-Pakete gebaut, die Ansicht des Mac-Pakets zeichnet.
 
 <a id="rm-471"></a>
 
@@ -732,34 +706,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
   (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
   reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
-  kiwisolver, cycler, pyparsing, python-dateutil und six mit. TextPath setzt ohne Shaping: keine
-  Ligaturen, keine kontextabhängigen Formen, Kerning nur aus der alten `kern`-Tabelle. Der bessere
-  Weg: uharfbuzz für den Satz (kommt mit pygfx ohnehin ins Paket) und fontTools für die
-  Glyphenkonturen über einen Pen (kommt heute über matplotlib mit), dazu eine eigene Schriftsuche
-  über die Namenstabellen.
-  **Plattformfolgen:** Die Schriftsuche braucht je Plattform ihre Ordner: Windows
-  `%WINDIR%\Fonts` und den Nutzerordner, macOS `/System/Library/Fonts`, `/Library/Fonts` und
-  `~/Library/Fonts`, Linux fontconfig oder die XDG-Ordner, im Flatpak zusätzlich `/run/host/fonts`;
-  die mitgelieferten DejaVu-Schriften bleiben der Rückfall. uharfbuzz und fontTools wandern in die
-  Gruppe `geom`, weil der Kern sie ohne Oberfläche braucht. Sieben Pakete weniger.
-  **Abnahme:** Schriftzugtests an Netz und exaktem Kern mit unveränderten Kennzahlen für
-  lateinischen Text, ein Test mit Ligatur, je Plattform ein Fall der Schriftsuche nach Familie und
-  Schnitt; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
-
-<a id="rm-472"></a>
-
-- [ ] **RM-472 — Zeichnungsimport ohne lxml.** Aus RM-467. lxml wird nur noch für den SVG-Import
-  gebraucht: `ingest/outline.py` ruft `trimesh.load_path`, und trimeshs SVG-Leser parst mit lxml.
-  Solidons 3MF-Leser und -Schreiber nutzen `xml.etree`. lxml bündelt libxml2 und libxslt, zwei
-  C-Bibliotheken mit regelmäßigen Sicherheitsmeldungen, für eine Datei, die `outline.py` vorher
-  ohnehin mit `xml.etree` öffnet (`_svg_defaults`). Der bessere Weg: die SVG-Elemente (`path`,
-  `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, verschachtelte `transform`) selbst
-  über `xml.etree` lesen, die Pfaddaten wie heute über svg.path, und daraus den `Path2D` bauen.
-  **Plattformfolgen:** ein natives Paket weniger auf allen drei Plattformen und weniger fremder
-  C-Code beim Öffnen einer fremden Datei; `xml.etree` kommt mit CPython und dessen Expat. DXF
-  bleibt bei trimesh.
-  **Abnahme:** die SVG-Fälle aus `tests/data/` ergeben dieselben Konturen (Anzahl, Fläche, Löcher);
-  lxml fehlt in allen Abhängigkeitsdateien und im Paket.
+  kiwisolver, cycler, pyparsing, python-dateutil und six mit. Den Satz macht matplotlib 3.11 schon
+  über libraqm und damit HarfBuzz (`_text_helpers.layout`); uharfbuzz kommt mit pygfx ohnehin ins
+  Paket und setzt gleich. Gemessen am 02.10.2026: `TextPath.to_polygons` hält `MAX_FACET_SAG` ab
+  etwa 10 mm Schrifthöhe nicht mehr — an DejaVu Sans „Og“ 0,074 mm Sehnenfehler bei 10 mm,
+  0,23 mm bei 50 mm.
+  **Umbau:** Konturen über fontTools aus den mitgelieferten Dateien, Satz über uharfbuzz, Kurven
+  mit eigenem Sehnenfehler in `MAX_FACET_SAG`, die exakten Kurven für `brep.lettering` aus
+  denselben Kontrollpunkten. Eine Schriftsuche je Plattform entfällt, denn angeboten werden nur
+  mitgelieferte Familien; die drei DejaVu-Familien (zwölf Dateien) stammen heute aus matplotlib
+  und kommen dann selbst ins Paket, mit Lizenztext und Rechteeintrag. uharfbuzz und fontTools
+  wandern in die Gruppe `geom`.
+  **Plattformfolgen:** keine — Dateien statt Systemschriften, alle drei Pakete gleich; netto
+  rund 19 MB und sieben Pakete weniger.
+  **Abnahme:** Glyphenlagen gegen matplotlib innerhalb 0,002 mm für alle acht Familien und
+  Schnitte, Flächen der Schriftzüge an Netz und exaktem Kern gegen den heutigen Stand, Sehnenfehler
+  in `MAX_FACET_SAG`; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -3372,7 +3334,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
   Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
-  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcodeestm463_regression.md`.
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcode
+est
+m463_regression.md`.
 
 <a id="rm-464"></a>
 
@@ -5551,6 +5515,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   CI-Wächter „Neueste Versionen“ läuft nur öffentlich, dieser Lauf lokal und regelmäßig.
   **Abnahme je Lauf:** geprüft, übernommen und zurückgestellt mit Commit im Archiv; der Punkt
   bleibt offen, solange der Auftrag gilt.
+  Erster Lauf: [02.10.2026](ROADMAP-ARCHIV.md#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026).
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

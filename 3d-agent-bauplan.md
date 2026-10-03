@@ -2771,10 +2771,9 @@ Die historischen Fälle und Messreihen stehen im [Roadmap-Archiv](ROADMAP-ARCHIV
 | shapely | BSD-3, bündelt GEOS (LGPL) | Polygonarbeit hinter Schnitt und Schichtanalyse |
 | networkx | BSD-3 | Konturhierarchie des gedeckelten Schnitts — `rtree` ist am 24.08.2026 durch `app/core/geom/enclosure.py` (shapely-STRtree) ersetzt und steht auf der Sperrliste: libspatialindex korrumpierte den Heap |
 | scikit-image | BSD-3 | Marching Cubes der Voxelstufe (§17.2) |
-| lxml | BSD-3 | 3MF schreiben (§29) |
 | vhacdx (V-HACD) | BSD-3 | konvexe Zerlegung fürs Auto Split |
 | fast-simplification | MIT | dezimieren — der Ersatz für pymeshlab |
-| svg.path | MIT | Zeichnungsimport; DXF liest trimesh selbst |
+| svg.path | MIT | Pfaddaten des Zeichnungsimports; die SVG-Elemente liest `ingest/svg_drawing.py` über `xml.etree`, DXF liest trimesh selbst |
 | pygfx, wgpu, rendercanvas | BSD-2-Clause; wgpu-native Apache-2.0 oder MIT | einziger Renderer der 3D-Ansicht; native Grafikbibliotheken werden mitgeliefert |
 | VTK | BSD-3-Clause | ausschließlich kopflose Geometrie der Baustein-Bereichsprüfung, kein Renderer |
 | PySide6 | LGPL | geschlossene Weitergabe möglich, wenn dynamisch gebunden. **PyQt wäre GPL — nicht verwenden.** |

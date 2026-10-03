@@ -2506,6 +2506,11 @@ def _prusa_values(
         _suggested_speed_keys(effective, "prusa"),
         followers=_PRUSA_FOLLOWERS,
     )
+    own.update(
+        _roles_not_faster(
+            {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values}, own, _PRUSA_ROLES
+        )
+    )
     document = dict(chain.values)
     document.update(_with_automatic_prusa_support(dict(own)))
     for key in ("retract_length", "retract_speed", "retract_lift", "wipe"):
@@ -3209,6 +3214,46 @@ _ORCA_FOLLOWERS: Final = frozenset({"gap_infill_speed", "internal_solid_infill_s
 _PRUSA_FOLLOWERS: Final = frozenset({"gap_fill_speed", "solid_infill_speed"})
 
 
+#: Rollen, die ein Herstellerprozess mit eigenem Tempo über ein Solidon-Tempo
+#: legt: je Schlüssel der Rolle das Tempo, das sie überschreibt, und das Tempo,
+#: auf das sich eine Prozentangabe bezieht. Kleine Umfänge (Bohrungen, Stiele)
+#: fuhren sonst schneller als eine gebremste Außenwand (RM-463).
+_ORCA_ROLES: Final = {"small_perimeter_speed": ("outer_wall_speed", "outer_wall_speed")}
+_PRUSA_ROLES: Final = {"small_perimeter_speed": ("external_perimeter_speed", "perimeter_speed")}
+
+
+def _roles_not_faster(
+    base: Mapping[str, object],
+    own: Mapping[str, str],
+    roles: Mapping[str, tuple[str, str]],
+) -> dict[str, str]:
+    """Eine Rolle mit eigenem Tempo fährt nie schneller als das Tempo, das Solidon schreibt.
+
+    Gemessen in PrusaSlicer 2.9.6 an der MK4S (G-Code-Prüfung 02.10.2026):
+    Solidon schrieb die Außenwand mit 160 mm/s, der Stiel lief mit 170, denn
+    das Herstellerbündel führt ``small_perimeter_speed = 170`` absolut. Seit
+    0.5.1 die Herstellergrundlage trägt, galt das für jedes Bündel mit
+    absolutem Wert; in 0.5.0 lief die Außenwand nie schneller als gewählt.
+    Gedeckelt wird nur, wo Solidon das Leittempo schreibt; schneller wird
+    keine Rolle.
+    """
+    capped: dict[str, str] = {}
+    for key, (leader, reference) in roles.items():
+        if leader not in own or key in own:
+            continue
+        limit = _as_float(own[leader])
+        written = _printed(base.get(key, "")).strip()
+        if written.endswith("%"):
+            share = _as_float(written[:-1])
+            basis = _as_float(own.get(reference) or _printed(base.get(reference, "")))
+            speed = share / 100.0 * basis if share is not None and basis is not None else None
+        else:
+            speed = _as_float(written)
+        if limit is not None and speed is not None and speed > limit:
+            capped[key] = own[leader]
+    return capped
+
+
 def _followers_not_faster(
     base: Mapping[str, object],
     deviating: Mapping[str, str],
@@ -3312,11 +3357,14 @@ def _orca_process(
         # Solidon damit hing.
         document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     # Auf dem Herstellerprozess nur die Abweichung, ohne ihn alles (Entscheidung D).
-    document.update(
+    own = (
         values
         if base is None or deviating is None
         else _followers_not_faster(document, deviating, suggested, foundation=foundation)
     )
+    document.update(own)
+    if base is not None:
+        document.update(_roles_not_faster(document, own, _ORCA_ROLES))
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
     # während das Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt.

@@ -19,7 +19,8 @@
 | `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile; `names_in_use` nennt die im Stapel vergebenen Objektnamen, damit der Plan einen freien wählt; `is_only_imported` sagt umgekehrt, ob ein ganzes Dokument nichts als eingelesene Dateien trägt (RM-130). Eine STEP-Datei liest der Plan als Baugruppe (`BodyChoice`, `with_selection`, P7.4) |
 | `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32); eine Adresse von Printables, Thingiverse, MakerWorld, Cults3D, MyMiniFactory oder Thangs ohne Dateiendung ist eine Seite und wird ohne Netzzugriff mit dem Weg über den Herunterladen-Knopf beantwortet (`model_page_host`) |
 | `archive.py` | Ein ZIP mit Modellen **vor** dem Einbetten auflösen: nur das Modell kommt ins Projekt, bei mehreren wird gefragt; dieselben Grenzen wie beim 3MF, Pfadtricks übergangen, GLTF-Begleitdateien aus demselben Archiv. `IMPORT_SUFFIXES` ist die Liste für Dateidialog, Ablage, Netz und Kommandozeile; `plan.MODEL_SUFFIXES` bleibt die der Operationen |
-| `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen und extrudieren; SVG-Standardwerte für fehlende Rechteckpositionen werden nur in der Parserkopie ergänzt |
+| `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen und extrudieren |
+| `svg_drawing.py` | SVG ohne lxml lesen (RM-472): trimeshs Leser drehte `rotate(90)` um gut 107°, übersprang `skewX`/`skewY`, Ellipsen und abgerundete Ecken und las Inhalte aus `defs`, `clipPath` und `marker` als Konturen. Am Korpus vom 02.10.2026 (321 SVG-Dateien aus Repository und Druckprojekten) lieferten 171 dieselben Ringe, die 150 übrigen trugen genau diese Merkmale |
 
 ## Was die Stufe entscheidet
 
