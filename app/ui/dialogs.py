@@ -3227,8 +3227,11 @@ def spoken_values(error: AppError) -> list[str]:
 
 #: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden —
 #: auch im Hinweis einer Befundzeile (``panels._value_lines``), wo ein
-#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374).
-ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids"})
+#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374). Dazu
+#: ``action`` der Freischaltungsfehler (``change``, ``export``, ``slicer``,
+#: ``chat``): eine Kennung fürs Protokoll, die als „Handlung: change“ unter der
+#: Lizenzabsage stand — der Titel sagt schon, was fehlt (RM-456).
+ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids", "action"})
 
 
 def problem_text(

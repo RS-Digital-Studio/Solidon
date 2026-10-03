@@ -72,6 +72,7 @@ scrive in `website/version.json`.
 - La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.
 - Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
 - Un tratto sul piano di simmetria agisce una volta invece di due.
+- L'editor dello scheletro mostra ossa e giunto nella vista, e un giunto sta al centro del corpo invece che sulla pelle, così la figura si piega in modo uniforme.
 - La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
 - Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
 - Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
@@ -115,6 +116,7 @@ scrive in `website/version.json`.
 - Alcuni rilievi che riguardano un passo lo aprono per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
 - Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
 - L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
+- Un modello linguistico locale può fare dodici passi invece di otto per richiesta nella chat e risolve così più richieste composte da più parti.
 
 ## 0.5.1
 
