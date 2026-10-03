@@ -45,12 +45,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad.
 - Con «Organizar sobre la cama», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
 - Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
+- Cuando llega otro modelo, desde un archivo, una descarga o generado, la vista muestra la placa en la que está.
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
 - SuperSlicer ya no se bloquea con piezas redondas: ya no recibe la costura en bisel que no conoce.
 - La preselección de filamento toma Generic o la marca de su impresora en lugar de un filamento especial ajeno, por ejemplo Generic PETG en vez de BETA PETG en la Bambu A1.
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
-- *Orientar para imprimir*, *Girar* y *Trasladar* funcionan también con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte. El cuerpo sigue exacto.
+- También con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte funcionan *Orientar para imprimir*, *Girar* y *Trasladar*. El cuerpo sigue exacto.
 - Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
 
 ### Taladros, ranuras y división
@@ -101,6 +102,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cada intento de la lista indica su frase o su imagen y su semilla. Si su entrada ya no coincide con el intento elegido, el diálogo dice cuál se aplicará.
 - El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén.
 - Si un error al generar nombra la configuración como salida, aparece como botón en el diálogo.
+- Mientras se genera un modelo, la ventana sigue utilizable. El diálogo se aparta, y la barra de estado muestra progreso, tiempo y «Cancelar».
 - El diálogo de generar indica el volumen al tamaño con que llega la pieza.
 - Un modelo generado se deshace con un solo Ctrl+Z. Antes hacían falta tres o cuatro.
 - Si «Aplicar» se rechaza al generar, el diálogo sigue abierto con todos los intentos e indica la salida, en vez de desechar la malla.
@@ -130,6 +132,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
 - Si otros programas tienen el ordenador ocupado, *Cancelar* detiene un cálculo largo en menos de un segundo en lugar de pedir un reinicio tras varios segundos.
 - Un modelo de lenguaje local puede dar doce pasos en lugar de ocho por encargo en el chat y resuelve así más encargos de varias partes.
+- El panel de selección vuelve a caber en su columna, y la columna de medidas del árbol muestra la medida entera, como «Ø5,19 mm» en vez de «…».
+- En un taladro, «Cambiar elemento» abre directamente «Cambiar orificio» con vista previa, en vez de solo remitir a él.
 
 ## 0.5.1
 

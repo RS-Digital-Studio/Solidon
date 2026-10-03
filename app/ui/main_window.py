@@ -270,6 +270,7 @@ from app.ui.dialogs import (
     StepValuesDialog,
     confirm_discard,
     confirm_export,
+    confirm_generation_loss,
     confirm_unsaved,
     damaged_line,
     licence_lock_line,
@@ -6774,6 +6775,20 @@ class MainWindow(QMainWindow):
         dialog.raise_()
         if activate:
             dialog.activateWindow()
+
+    def _may_lose_the_generation(self) -> bool:
+        """Ob das Fenster schließen darf, obwohl eine Erzeugung etwas verlöre (RM-499).
+
+        Gefragt wird nur, wenn ein Lauf läuft oder fertige Versuche nicht
+        übernommen sind; *Zur Erzeugung* holt den Dialog nach vorn.
+        """
+        dialog = self._generator
+        if dialog is None or not (dialog.running or dialog.tries):
+            return True
+        if confirm_generation_loss(dialog.running, len(dialog.tries), self) == "close":
+            return True
+        self._show_generator(dialog, activate=True)
+        return False
 
     def _say_generation_destination(self) -> None:
         """Über *Übernehmen* nennen, wohin das Modell kommt, wenn sich das geändert hat.
@@ -24166,7 +24181,9 @@ class MainWindow(QMainWindow):
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
         # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
         # Sicherung und ging zu. Wer die nicht kennt, hat seine Arbeit verloren.
-        if not getattr(self, "_close_requested", False) and not self._may_discard():
+        if not getattr(self, "_close_requested", False) and not (
+            self._may_lose_the_generation() and self._may_discard()
+        ):
             event.ignore()
             return
         self._close_requested = True

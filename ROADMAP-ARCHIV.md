@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
 | 2026-10-02 | [RM-406: Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat (03.10.2026)](#rm-406-teilungsstücke-eines-großen-modells-werden-ungefragt-voll-erkannt-obwohl-der-kunde-die-lange-erkennung-abgelehnt-hat-03102026) |
@@ -37758,3 +37759,21 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-4), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Nachgestellt am pegboard-STEP und an `plate_holes.stl`: Im Bedienweg des Kunden erscheint der Satz nach *Bohrung ändern* im Auswahlfenster nicht (Feld ändern, Vorschau, *Übernehmen*; danach drei Sekunden kein Band). Im Versionsvergleich stammte das Band aus dem Schritt davor: Der Prüfstand löste in der Karte rechts den seit RM-360 verborgenen Knopf *Merkmal ändern* per `click()` aus, ließ den Dialog ohne Vorschau offen, und dessen Band stand noch beim Übernehmen im Auswahlfenster. Die Befehlspalette sperrt *Merkmal ändern* an einer Bohrung, im Menü steht es nicht. Behoben ist die Sackgasse dahinter für jeden Aufrufer: Eine Merkmalsoperation, die die Art des gewählten Merkmals nicht annimmt, öffnet die Schwester derselben Zeile (`MainWindow._sister_for_the_chosen_feature` über `actions.instead_of`) — *Merkmal ändern* an einer Bohrung öffnet *Bohrung ändern* an dieser Bohrung, statt eines Dialogs, dessen einziger Satz „Dafür ist „Bohrung ändern“ da“ war; an einem Merkmal, das sie annimmt, bleibt die Operation, was sie ist. Test `test_operation_ui.py::test_changing_a_hole_through_the_wrong_sister_opens_the_right_one`, ohne die Umleitung rot (Gegenprobe). Fenstersonde am echten Fenster am pegboard-STEP: 4 von 4, der Dialog ist *Bohrung ändern*, das Band nennt den Grund („Die Bohrung hat bereits diesen Durchmesser.“). Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)
+
+<a id="rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026"></a>
+<a id="rm-499"></a>
+
+**RM-499 — Das Hauptfenster schließt während einer Erzeugung ohne Frage, nicht übernommene Versuche gehen verloren.**
+  Fund aus RM-371 (03.10.2026). Seit „Modell erzeugen“ nichtmodal ist (RM-371), lässt sich das
+  Hauptfenster während eines Laufs schließen. Der Lauf bricht ab, und fertige, nicht übernommene
+  Versuche gehen ohne Rückfrage verloren — Minuten Rechenzeit, die kein Strg+Z zurückholt. Vorher
+  verhinderte der modale Dialog das Schließen.
+  **Fix:** Beim Schließen fragen, wenn ein Lauf läuft oder fertige Versuche nicht übernommen sind
+  (kein rücknehmbarer Schritt, Regel 19 erlaubt die Frage), mit *Übernehmen und schließen*,
+  *Verwerfen und schließen* und *Abbrechen*.
+  **Abnahme:** Test mit laufendem Lauf und mit fertigem Versuch; ohne Erzeugung bleibt das
+  Schließen unverändert.
+
+**Abschluss:** Schließen fragt jetzt, wenn eine Erzeugung läuft oder fertige Versuche nicht übernommen sind (`MainWindow._may_lose_the_generation`, `dialogs.confirm_generation_loss`, `GenerateDialog.running`): „Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab.“ bzw. „Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.“, mit *Zur Erzeugung* als Vorgabe (holt den Dialog nach vorn, das Fenster bleibt offen) und *Trotzdem schließen*. Ohne Erzeugung bleibt das Schließen, wie es war; die Frage nach ungesicherten Änderungen folgt danach unverändert. Regel 19 erlaubt die Frage, weil kein Strg+Z einen abgebrochenen Lauf zurückholt. Texte in allen fünf Katalogen. Tests in `test_generate_ui.py`: `test_closing_the_window_names_what_a_generation_would_lose` (laufend und fertig, je beide Antworten) und `test_closing_without_a_generation_asks_nothing_about_it`; ohne die Frage 4 von 4 rot (Gegenprobe). Fenstersonde am echten Fenster mit gestelltem langsamem Generator: 7 von 7 — gefragt während des Laufs und mit fertigem Versuch, *Zur Erzeugung* lässt das Fenster offen und holt den Dialog nach vorn, danach *Übernehmen* wie gewohnt. Umgesetzt von Claude (Thread „Bedienung und KI“).

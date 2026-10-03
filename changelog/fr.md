@@ -45,12 +45,13 @@ dans `website/version.json`.
 - Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
+- Quand un autre modèle arrive, depuis un fichier, un téléchargement ou généré, la vue montre le plateau où il se trouve.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
 - SuperSlicer ne plante plus sur les pièces rondes : il ne reçoit plus la couture en biseau qu'il ne connaît pas.
 - La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
-- *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent aussi sur les surfaces STEP, pour des rotations de près de 180°, sur des faces reconnues en partie. Le corps reste exact.
+- Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent. Le corps reste exact.
 - Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
 
 ### Perçages, trous oblongs et découpe
@@ -101,6 +102,7 @@ dans `website/version.json`.
 - Chaque essai de la liste indique sa phrase ou son image et sa graine. Si votre saisie ne correspond plus à l'essai choisi, la boîte de dialogue dit lequel sera appliqué.
 - Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.
 - Si une erreur de génération indique la configuration comme issue, elle apparaît comme bouton dans la boîte de dialogue.
+- Pendant la génération d'un modèle, la fenêtre reste utilisable. La boîte de dialogue se met de côté, et la barre d'état montre progression, temps et « Annuler ».
 - La boîte de dialogue de génération indique le volume à la taille où la pièce arrive.
 - Un modèle généré s'annule d'un seul Ctrl+Z. Il en fallait trois ou quatre.
 - Si « Appliquer » est refusé pendant la génération, la boîte de dialogue reste ouverte avec tous les essais et indique l'issue au lieu de jeter le maillage.
@@ -130,6 +132,8 @@ dans `website/version.json`.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
 - Quand d'autres programmes occupent l'ordinateur, *Annuler* arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
 - Un modèle de langage local peut faire douze étapes au lieu de huit par demande dans le chat et résout ainsi plus de demandes en plusieurs parties.
+- Le panneau de sélection tient de nouveau dans sa colonne, et la colonne des cotes de l'arbre montre la cote entière, par exemple « Ø5,19 mm » au lieu de « … ».
+- Sur un perçage, « Modifier l'élément » ouvre directement « Modifier le trou » avec aperçu, au lieu d'y renvoyer seulement.
 
 ## 0.5.1
 

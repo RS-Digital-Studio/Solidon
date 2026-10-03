@@ -3181,6 +3181,67 @@ def test_cancel_in_the_status_bar_stops_the_generation(
             window._generator.release()
 
 
+@pytest.mark.parametrize("answer", ["back", "close"])
+@pytest.mark.parametrize("state", ["running", "finished"])
+def test_closing_the_window_names_what_a_generation_would_lose(
+    qt_app: QApplication,
+    window: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    answer: str,
+) -> None:
+    """RM-499: Das Fenster schloss während einer Erzeugung ohne Frage.
+
+    Seit der Dialog nichtmodal ist (RM-371), brach Schließen den Lauf ab, und
+    fertige, nicht übernommene Versuche gingen wortlos verloren — kein Strg+Z
+    holt sie zurück. Jetzt fragt das Fenster; *Zur Erzeugung* holt den Dialog
+    nach vorn und lässt das Fenster offen, *Trotzdem schließen* schließt.
+    """
+    from app.ui import main_window as main_window_module
+
+    backend = _GatedBackend()
+    dialog = _run_in_window(window, qt_app, monkeypatch, backend)
+    asked: list[tuple[bool, int]] = []
+
+    def confirm(running: bool, tries: int, _parent: Any = None) -> str:
+        asked.append((running, tries))
+        return answer
+
+    monkeypatch.setattr(main_window_module, "confirm_generation_loss", confirm)
+    try:
+        if state == "finished":
+            backend.gate.set()
+            _wait_for_run(dialog, qt_app)
+        window.close()
+        qt_app.processEvents()
+        expected = (True, 0) if state == "running" else (False, 1)
+        assert asked == [expected], asked
+        if answer == "back":
+            assert not getattr(window, "_close_requested", False), "das Fenster bleibt offen"
+            assert window._generator is dialog
+            assert not dialog.isHidden(), "Zur Erzeugung holt den Dialog nach vorn"
+        else:
+            assert getattr(window, "_close_requested", False), "Trotzdem schließen schließt"
+    finally:
+        backend.gate.set()
+        if window._generator is not None:
+            window._generator.release()
+
+
+def test_closing_without_a_generation_asks_nothing_about_it(
+    window: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-499: Ohne Erzeugung bleibt das Schließen, wie es war."""
+    from app.ui import main_window as main_window_module
+
+    asked: list[object] = []
+    monkeypatch.setattr(
+        main_window_module, "confirm_generation_loss", lambda *args: asked.append(args) or "back"
+    )
+    assert window._may_lose_the_generation()
+    assert not asked
+
+
 def test_a_project_opened_during_the_run_is_named_before_taking(
     qt_app: QApplication, window: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

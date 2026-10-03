@@ -7454,5 +7454,12 @@
   "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in dieses Projekt.": "Un autre projet est ouvert entre-temps. «Appliquer» ajoute le modèle à ce projet.",
   "Inzwischen ist ein anderes Projekt offen. „Übernehmen“ legt das Modell in „{name}“.": "Un autre projet est ouvert entre-temps. «Appliquer» ajoute le modèle à «{name}».",
   "Modell wird erzeugt …": "Génération du modèle …",
-  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Appliquer» commence un nouveau projet avec le modèle."
+  "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Appliquer» commence un nouveau projet avec le modèle.",
+  "Erzeugung läuft": "Génération en cours",
+  "Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab.": "Un modèle est en cours de génération. Fermer annule la génération.",
+  "Nicht übernommene Versuche": "Essais non repris",
+  "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren.": "Un essai généré n'est pas encore dans le projet et sera perdu à la fermeture.",
+  "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim Schließen verloren.": "{count} essais générés ne sont pas encore dans le projet et seront perdus à la fermeture.",
+  "Zur Erzeugung": "Retour à la génération",
+  "Trotzdem schließen": "Fermer quand même"
 }

@@ -16,7 +16,17 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QLocale,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+    QUrlQuery,
+    Signal,
+)
 from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -1189,8 +1199,21 @@ class KeyDialog(QDialog):
         QTimer.singleShot(0, self, weak_slot(self, KeyDialog._fit_key_content, intent))
 
     def _fit_key_content(self, intent: ContentFitIntent) -> None:
-        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
-        self._height.fit(self, self._scroll, intent=intent)
+        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken.
+
+        Beim Öffnen so breit wie der Inhalt (``style.expanded_width``), soweit der
+        Bildschirm reicht: Die Zeile aus Modellwahl, *Modell holen* und
+        *Werkzeuge prüfen* war breiter als die Vorgabebreite, und das
+        Prüfergebnis darunter rollte quer.
+        """
+        initial = intent == "initial"
+        self._height.fit(
+            self,
+            self._scroll,
+            intent=intent,
+            grow_width=initial,
+            natural_width=expanded_width(self._scroll) if initial else 0,
+        )
 
     def _set_tab_order(self) -> None:
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
@@ -1843,6 +1866,11 @@ class KeyDialog(QDialog):
         self.probe_result.setMinimumHeight(max(0, result_height))
         self._scroll.updateGeometry()
         fit_dialog_to_screen(self)
+        # Erst die neue Höhe in den Rollbereich bringen: Die Layout-Anfrage
+        # dafür wartet in der Schlange, und ohne sie war die Rollweite noch
+        # die alte — ``ensureWidgetVisible`` rollte nicht, und die Warnung
+        # stand halb unter dem Rand.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         self._scroll.ensureWidgetVisible(self.probe_result)
 
     @staticmethod
@@ -4067,6 +4095,45 @@ def _go_on_despite(
     box.setDefaultButton(write)
     box.exec()
     return box.clickedButton() is write
+
+
+def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = None) -> str:
+    """Vor dem Schließen, wenn eine Erzeugung etwas verlöre (RM-499, Regel 19).
+
+    Seit *Modell erzeugen* nichtmodal ist (RM-371), lässt sich das Fenster
+    während eines Laufs schließen. Den Lauf und seine fertigen Versuche holt
+    kein Strg+Z zurück — Minuten Rechenzeit gingen sonst wortlos verloren.
+    Die Vorgabe ist der Weg zurück zur Erzeugung. Gibt ``back`` oder
+    ``close`` zurück.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    lost = ""
+    if tries == 1:
+        lost = tr(
+            "Ein erzeugter Versuch ist noch nicht im Projekt und geht beim Schließen verloren."
+        )
+    elif tries > 1:
+        lost = tr(
+            "{count} erzeugte Versuche sind noch nicht im Projekt und gehen beim "
+            "Schließen verloren.",
+            count=tries,
+        )
+    if running:
+        box.setWindowTitle(tr("Erzeugung läuft"))
+        box.setText(tr("Ein Modell wird gerade erzeugt. Schließen bricht die Erzeugung ab."))
+        if lost:
+            box.setInformativeText(lost)
+    else:
+        box.setWindowTitle(tr("Nicht übernommene Versuche"))
+        box.setText(lost)
+    back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
+    close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
+    make_primary(back)
+    box.setDefaultButton(back)
+    box.setEscapeButton(back)
+    box.exec()
+    return "close" if box.clickedButton() is close else "back"
 
 
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:
