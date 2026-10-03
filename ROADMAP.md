@@ -158,9 +158,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2](#rm-492) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Versionsvergleich 02.10.: Regression gegenüber v0.1.2 (gegenüber v0.5.1 besser); Bild vor Ende der Erkennung freigeben |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
-| [RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile](#rm-500) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund aus RM-371; Ansagen und Hinweise neben dem Fortschritt sichtbar halten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -4655,20 +4653,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
 
-<a id="rm-492"></a>
-
-- [ ] **RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2.**
-  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.1.2**, gegenüber v0.5.1
-  besser. `open_path(plate_holes.stl)` bis die Sitzung ruht (Median aus vier Läufen, F0FF, darin
-  1 s feste Wartezeit der Sonde): v0.1.2 1,31 s, v0.3.5 6,50, v0.4.4 8,68, v0.5.0 3,69, v0.5.1
-  2,92, heute 2,76 s. v0.1.2 erkannte weniger (keine Angaben „eingepasst/gemessen“, kein
-  Filamentabschnitt).
-  **Fix (allgemein):** Zeitanteile je Schritt messen; trägt die Erkennung den Hauptteil, Bild und
-  Bedienung vor ihrem Ende freigeben und den Rest nachreichen (§2.8).
-  **Abnahme:** an drei Modellen (klein, mittel, groß) Zeit bis bedienbar unter v0.5.1 und im
-  Budget §31, Erkennung kommt nach. Bauplan §31.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U7), Bilder in `regression-0.5.2\ui\`.
-
 <a id="rm-494"></a>
 
 - [ ] **RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben.**
@@ -4685,17 +4669,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Datei unverändert. Bauplan §31.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
 
-
-<a id="rm-500"></a>
-
-- [ ] **RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile.**
-  Fund aus RM-371 (03.10.2026). Solange eine Erzeugung läuft, belegt ihr Fortschritt („Modell wird
-  erzeugt … · 14 % · Verstrichen: 2 s“) die Statuszeile. Ansagen anderer Handlungen erscheinen dann
-  nur als Blase, Hinweise gar nicht; beim Agenten ist es genauso.
-  **Fix:** Fortschritt und Ansage teilen sich die Zeile so, dass eine Ansage sichtbar wird und der
-  Fortschritt danach zurückkehrt (oder der Fortschritt steht in seinem eigenen Bereich).
-  **Abnahme:** Test: während eines Laufs erreicht eine Ansage die Statuszeile, danach steht der
-  Fortschritt wieder da; dasselbe beim Agenten.
 
 ## KI und Generatoren
 

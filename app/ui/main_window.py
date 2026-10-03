@@ -94,6 +94,7 @@ from app.core.agent.session import (
     parse_number,
     report_text,
     standard_text,
+    steps_for,
 )
 from app.core.agent.tools import (
     ADD_FIT,
@@ -1165,6 +1166,16 @@ _PROGRESS_PRIORITY: Final = (
 #: Oberfläche bleibt minutenlang bedienbar, und der Zeiger gilt dem, worauf
 #: der Kunde gerade wartet (§2.8).
 _BACKGROUND_PROGRESS: Final = frozenset({"generate"})
+
+#: Läufe, neben denen der Kunde weiterarbeitet: Ihr Fortschritt gibt die
+#: Statuszeile für Ansagen und Hinweise frei (RM-500). Eine Erzeugung dauert
+#: Minuten, ein Zug des Agenten bis zu einer; was der Kunde währenddessen
+#: selbst tut, sagte bisher nur eine Blase, ein Hinweis gar nichts.
+_WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
+
+#: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
+#: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
+SPOKEN_HOLD_MS: Final = 8000
 
 
 class _ExportWorker(Worker):
@@ -2389,6 +2400,17 @@ class MainWindow(QMainWindow):
         self._announcement = ""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._hint = ""
+        """Der Hinweis, der gerade gilt (``announce(receipt=False)``) — neben
+        einem Lauf aus :data:`_WORKED_ALONGSIDE` steht er in der Zeile (RM-500)."""
+        self._spoken = QTimer(self)
+        """Solange er läuft, steht die letzte Ansage neben einem solchen Lauf in
+        der Zeile; danach kehrt der Fortschritt zurück (RM-500)."""
+        self._spoken.setSingleShot(True)
+        self._spoken.setInterval(SPOKEN_HOLD_MS)
+        self._spoken.timeout.connect(self._render_progress_state)
+        self._agent_steps = MAX_STEPS
+        """Der Schrittdeckel des laufenden Zugs — er hängt am Modell (RM-501)."""
         self._on_start_screen = True
         """Ob der Startbildschirm steht — dort lädt die leere Szene nicht ein (RM-370)."""
         self._last_complete: tuple[Any, EvaluationResult] | None = None
@@ -3836,6 +3858,11 @@ class MainWindow(QMainWindow):
             self.status_message.setText(self._announcement)
             return
         status = self._progress_states[status_owner]
+        if status_owner in _WORKED_ALONGSIDE:
+            spoken = self._hint or (self._announcement if self._spoken.isActive() else "")
+            if spoken:
+                self.status_message.setText(spoken)
+                return
         if status.immediate or status_owner == "split" or self._waiting:
             self.status_message.setText(status.text or self._announcement)
         else:
@@ -6810,6 +6837,14 @@ class MainWindow(QMainWindow):
             return
         self._generator_project = self.session._project_generation
         self._generation_timing.end()
+        # **Die Ansage vor dem Lauf** (RM-500): Sie sagt, wo der Fortschritt
+        # steht, und soll ihn nicht acht Sekunden lang verdecken.
+        self.announce(
+            tr(
+                "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen "
+                "stehen unten in der Statusleiste."
+            )
+        )
         self._set_progress_state(
             "generate",
             active=True,
@@ -6822,12 +6857,6 @@ class MainWindow(QMainWindow):
         )
         self._generation_timing.begin()
         dialog.hide()
-        self.announce(
-            tr(
-                "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen "
-                "stehen unten in der Statusleiste."
-            )
-        )
 
     def _generation_stepped(self, fraction: float, text: str) -> None:
         if self._generator is None or self.sender() is not self._generator:
@@ -14840,6 +14869,9 @@ class MainWindow(QMainWindow):
         selected = self.object_tree.selected()
         feature = self.object_tree.selected_feature()
         selection = (selected, feature or "") if selected else None
+        # Ein lokales Modell hat mehr Schritte je Zug (RM-251a); die Zeile
+        # nannte bis dahin immer „/8“ und zählte dann über ihren Deckel (RM-501).
+        self._agent_steps = steps_for(backend)
         self.session.propose_async(request, selection, backend=backend)
 
     def _disclosure_stopped(self, request: str, *, rendering_problem: bool) -> None:
@@ -14892,7 +14924,7 @@ class MainWindow(QMainWindow):
         """
         if not self.chat.busy:
             return
-        text = f"{tr('Schritt')} {step}/{MAX_STEPS} — {label}"
+        text = f"{tr('Schritt')} {step}/{self._agent_steps} — {label}"
         self._set_progress_state("agent", text=text, accessible_description=text)
         # **Und im Chat**, wo der Nutzer während eines Zuges hinsieht. Die
         # Statuszeile bleibt: Sie trägt den Deckel (``/MAX_STEPS``) und steht
@@ -21452,10 +21484,21 @@ class MainWindow(QMainWindow):
         sich nur darüber und gibt sie danach wieder frei.
         """
         if not receipt:
-            if self._active_progress_owner() is None:
+            self._hint = text
+            owner = self._active_progress_owner()
+            if owner is None:
                 self.status_message.setText(text or self._announcement)
+            elif owner in _WORKED_ALONGSIDE:
+                self._render_progress_state()
             return
         self._announcement = text
+        # Nur was neben einem solchen Lauf gesagt wird, nimmt ihm die Zeile:
+        # Eine Ansage unter einer Teilung oder einem Export gehört zu diesem
+        # und soll danach nicht über dem Agenten stehen bleiben.
+        if text and self._active_progress_owner() in _WORKED_ALONGSIDE:
+            self._spoken.start()
+        else:
+            self._spoken.stop()
         # Eine neue Ankündigung räumt den Ordner-Knopf des Exports ab; der
         # Export stellt ihn nach seiner eigenen wieder hin.
         if hasattr(self, "reveal_export"):

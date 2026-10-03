@@ -1305,3 +1305,11 @@ Zusammenhangskomponente (`scipy.sparse.csgraph`). An der Lochplatte mit
 815 104 Dreiecken kamen Griff und Maße nach dem Klick auf eine Bohrung vorher
 nach 9 bis 21 s, danach nach 1 bis 2,4 s; am Korpus sind alle 339 ebenen
 Stücke und 999 Flächenwahlen dieselben wie vorher.
+
+## Ein Filter auf einem sterblichen Widget bestellt beim `Destroy` ab
+
+Die Richtung entscheidet, nicht die Zählung der `installEventFilter`: Stirbt
+der Filter, räumt Qt selbst auf; stirbt das *überwachte* Objekt, liefe der
+Filter in dessen Abbau, und `Destroy` ist der letzte Takt davor. Auf der
+`QCoreApplication` braucht es den Griff deshalb nicht, an jeder sterblichen
+Filterstelle steht er als Vorsorge.

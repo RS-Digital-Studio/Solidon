@@ -35,6 +35,9 @@ entfernt hat.
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
 | 2026-10-03 | [RM-487: Nachgereichter Inhalt vergrößert Dialoge nicht mehr: Erststart und „Modell erzeugen“ verstecken ihre Knöpfe (03.10.2026)](#rm-487-nachgereichter-inhalt-vergrößert-dialoge-nicht-mehr-erststart-und-modell-erzeugen-verstecken-ihre-knöpfe-03102026) |
 | 2026-10-03 | [RM-306: Ein weiteres Modell kommt an die freie Stelle nächst der Plattenmitte (03.10.2026)](#rm-306-ein-weiteres-modell-kommt-an-die-freie-stelle-nächst-der-plattenmitte-03102026) |
+| 2026-10-03 | [RM-501: Die Statuszeile zählte Agentenschritte gegen den falschen Deckel (03.10.2026)](#rm-501-die-statuszeile-zählte-agentenschritte-gegen-den-falschen-deckel-03102026) |
+| 2026-10-03 | [RM-492: Öffnen bis Ruhe: Import verlagert, Hauptfaden frei, gegenüber v0.5.1 kein Rückschritt (03.10.2026)](#rm-492-öffnen-bis-ruhe-import-verlagert-hauptfaden-frei-gegenüber-v051-kein-rückschritt-03102026) |
+| 2026-10-03 | [RM-500: Neben einer Erzeugung oder einem Agentenzug erreichen Ansagen die Statuszeile (03.10.2026)](#rm-500-neben-einer-erzeugung-oder-einem-agentenzug-erreichen-ansagen-die-statuszeile-03102026) |
 | 2026-10-03 | [RM-499: Schließen während einer Erzeugung fragt, bevor Versuche verloren gehen (03.10.2026)](#rm-499-schließen-während-einer-erzeugung-fragt-bevor-versuche-verloren-gehen-03102026) |
 | 2026-10-03 | [RM-495: Merkmal ändern an einer Bohrung öffnet Bohrung ändern (03.10.2026)](#rm-495-merkmal-ändern-an-einer-bohrung-öffnet-bohrung-ändern-03102026) |
 | 2026-10-03 | [RM-498: Ein Griffzug gab Übernehmen trotz abgelehntem Ausdruck in der Maßgruppe frei (03.10.2026)](#rm-498-ein-griffzug-gab-übernehmen-trotz-abgelehntem-ausdruck-in-der-maßgruppe-frei-03102026) |
@@ -37947,3 +37950,48 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-1), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Ursache war nicht das Warten selbst, sondern dass die Vorschau nicht die Rechnung des Übernehmens war: *Bohrung ändern* und jede andere Operation mit `deterministic=False` bekam ihren Startwert je Anwendung zufällig, einen in der Dokumentkopie der Vorschau und einen anderen beim Übernehmen. Der Startwert steht im Cache-Schlüssel, also rechnete die Auswertung dieselbe Änderung noch einmal. `History` bestimmt einen fehlenden Startwert jetzt aus Operation, Eingängen und Werten (`history._seed_of`), gespeichert wird er wie bisher in der Operation; die Auswertung nach dem Übernehmen findet die Rechnung der Vorschau im Cache. Die Prüfung der Werte durch die Vorschau bleibt, wo ein Bild Pflicht ist (exakte Körper, Maßgruppe im Bild): Ein unmöglicher Wert wird weiter nicht übernommen. Ohne Bildpflicht (Netz im Auswahlfenster oder Dialog) brach ein früher Klick die laufende Vorschau samt Hilfsprozess ab und rechnete daneben neu; er wartet jetzt auf eine Vorschau, die dasselbe rechnet wie die Auswertung (`Session.preview_is_the_evaluation`; nicht bei grober Stufe, feiner Güte oder Vorabzählung), und läuft, sobald gerechnet ist, ohne den Vergleich fürs Bild (`Session.drop_preview_picture`). Tests ohne Fenster `test_evaluation.py::test_a_preview_is_the_computation_its_apply_finds_in_the_cache` (am Ausgangsstand rot: anderer Startwert, zweite Rechnung), `::test_a_preview_nobody_will_see_computes_without_comparing`, `::test_the_preview_is_not_the_evaluation_where_it_computes_otherwise`; Fenstertests (Release) `test_operation_ui.py::test_a_mesh_apply_waits_for_the_preview_that_computes_it` (am Ausgangsstand rot) und die Gegenprobe `::test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise`. Gemessen Klick auf *Übernehmen* 0,2 s nach Vorschaustart bis Ergebnis in der Szene, Ausgangsstand gegen Fix im Wechsel, Auswahlfenster: pegboard-STEP 3,41/1,93 s → 1,26/1,12 s, Rucksack-Halter 0,81/0,56 s → 0,71/0,38 s, `garden-hose-holder.3mf` (392 612 Dreiecke) 12,15/11,28 s → 12,23/11,34 s, also nie länger als eine Auswertung allein; am echten Fenster über die Maßgruppe im Bild *Bohrung ändern* je einmal statt zweimal gerechnet, STEP 3,12 → 2,04 s, Rucksack 0,98/0,93 → 0,64/0,64 s, Gartenschlauchhalter 35,4 → 28,2 s (Rechner unter Last). Dreieckszahl und Volumen gleich dem Ausgangsstand (2 762 / 10 647,01 mm³, 15 978 / 27 051,234 mm³, 392 612 / 517 062,054 mm³). Offen und nicht Teil dieses Punkts: *Bohrung ändern* selbst kostet am STEP rund 2,3 s (Gewindelesen in `features_of` des Ergebnisses), am 392k-Netz rund 11 s. Umgesetzt von Claude (Thread „Bedienung und KI“). In main mit `b4eab0244` und `a640ac8dc` (Merge `feb0482c6`).
+
+## RM-500: Neben einer Erzeugung oder einem Agentenzug erreichen Ansagen die Statuszeile (03.10.2026)
+
+<a id="rm-500-neben-einer-erzeugung-oder-einem-agentenzug-erreichen-ansagen-die-statuszeile-03102026"></a>
+<a id="rm-500"></a>
+
+**RM-500 — Während einer Erzeugung verdrängt ihr Fortschritt Ansagen und Hinweise aus der Statuszeile.**
+  Fund aus RM-371 (03.10.2026). Solange eine Erzeugung läuft, belegt ihr Fortschritt („Modell wird
+  erzeugt … · 14 % · Verstrichen: 2 s“) die Statuszeile. Ansagen anderer Handlungen erscheinen dann
+  nur als Blase, Hinweise gar nicht; beim Agenten ist es genauso.
+  **Fix:** Fortschritt und Ansage teilen sich die Zeile so, dass eine Ansage sichtbar wird und der
+  Fortschritt danach zurückkehrt (oder der Fortschritt steht in seinem eigenen Bereich).
+  **Abnahme:** Test: während eines Laufs erreicht eine Ansage die Statuszeile, danach steht der
+  Fortschritt wieder da; dasselbe beim Agenten.
+
+**Abschluss:** Neben einem Lauf, an dem der Kunde weiterarbeitet (`_WORKED_ALONGSIDE`: Erzeugung und Agent), steht eine dort gesagte Ansage so lange in der Statuszeile wie ihre Blase (`SPOKEN_HOLD_MS`, 8 s), ein Hinweis, solange er gilt; danach kehrt der Fortschritt zurück (`MainWindow._render_progress_state`, `announce`). Ein Lauf, auf den der Kunde wartet (Export, Teilung, Auswertung), behält die Zeile wie bisher, und eine Ansage, die unter einer solchen Teilung gesagt wurde, bleibt danach nicht über dem Agenten stehen. Die Startansage der Erzeugung kommt vor dem Fortschritt und verdeckt ihn nicht. Regel in `.claude/rules/wartezeit.md`; Platz dafür aus der Begründung zum Ereignisfilter, die nach `konzepte/begruendungen/regel-wartezeit.md` zog. Tests in `test_ui.py`: `test_beside_a_run_the_customer_works_alongside_sayings_reach_the_status_line` (Erzeugung, Agent), `test_a_run_the_customer_waits_for_keeps_the_status_line`; ohne die Änderung rot (Gegenprobe). 56 Fenstertests zu Statuszeile, Fortschritt und Agent sowie `test_generate_ui.py` grün. Fenstersonde am echten Fenster mit gestelltem langsamem Generator: 5 von 5 — *Druckplatte ausgeblendet* steht während des Laufs 7 s in der Zeile, der Balken bleibt, danach steht „Modell wird erzeugt (9 s) · 26 % · Verstrichen: 9 s“ wieder da. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-492: Öffnen bis Ruhe: Import verlagert, Hauptfaden frei, gegenüber v0.5.1 kein Rückschritt (03.10.2026)
+
+<a id="rm-492-öffnen-bis-ruhe-import-verlagert-hauptfaden-frei-gegenüber-v051-kein-rückschritt-03102026"></a>
+<a id="rm-492"></a>
+
+**RM-492 — Modell öffnen bis Ruhe dauert netto 1,8 s statt 0,3 s in v0.1.2.**
+  Versionsvergleich 0.5.2 (02.10.2026). **Regression gegenüber v0.1.2**, gegenüber v0.5.1
+  besser. `open_path(plate_holes.stl)` bis die Sitzung ruht (Median aus vier Läufen, F0FF, darin
+  1 s feste Wartezeit der Sonde): v0.1.2 1,31 s, v0.3.5 6,50, v0.4.4 8,68, v0.5.0 3,69, v0.5.1
+  2,92, heute 2,76 s. v0.1.2 erkannte weniger (keine Angaben „eingepasst/gemessen“, kein
+  Filamentabschnitt).
+  **Fix (allgemein):** Zeitanteile je Schritt messen; trägt die Erkennung den Hauptteil, Bild und
+  Bedienung vor ihrem Ende freigeben und den Rest nachreichen (§2.8).
+  **Abnahme:** an drei Modellen (klein, mittel, groß) Zeit bis bedienbar unter v0.5.1 und im
+  Budget §31, Erkennung kommt nach. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\ui\befunde.md` (U7), Bilder in `regression-0.5.2\ui\`.
+
+**Abschluss:** Gemessen (03.10.2026, offscreen, je Lauf ein frischer Prozess, `scratchpad/r492/messen.py`, v0.5.1 und Stand dieses Zweigs im Wechsel, Rechner unter Last): Die Zeit bis zur ruhenden Sitzung ist beim **ersten** Öffnen nach dem Start fast ganz der Import von trimesh samt networkx und scipy (2,2–2,7 s an `plate_holes.stl`, mit vorgeladenen Bibliotheken 0,46–0,70 s). Die Merkmalserkennung trägt den Hauptteil nicht; der Vorschlag „Bild vor Ende der Erkennung freigeben“ greift deshalb hier nicht (ab 50 000 Dreiecken gibt es ihn schon, KUNDE-14). Der Import ist seit der Entscheidung zu §31 verlagert: Das Fenster steht früher, die Bibliotheken lädt `_ImportWarmup` dahinter, und nur wer sofort nach dem Start öffnet, wartet auf den Rest (v0.1.2 lud alles vor dem Fenster). Gegenüber v0.5.1 kein Rückschritt: `plate_holes.stl` kalt 2,17/2,62 s gegen 2,78/2,43 s, warm 0,43/0,46 s gegen 0,47/0,49 s bis ins Bild; Kugel mit 81 920 Dreiecken 3,5–9,0 s gegen 4,5–7,7 s (streut unter Last); die längste Blockade des Hauptfadens 0,09–0,12 s gegen 0,13–0,23 s. Behoben ist der eine Rückschritt beim Öffnen, den die Messung fand: Die Einladung fragte beim Wechsel vom Startbildschirm das Sprachmodell im Hauptfaden (Schlüsselbund, Netzprobe, WMI), am Arbeiter dafür vorbei, bis zu 0,45 s Stillstand; sie nimmt jetzt nur eine bekannte Antwort, der Chatknopf kommt mit ihr (`17639f4bc`, Test `test_chat_ui.py::test_the_invitation_waits_for_the_model_question_instead_of_asking_itself`, Gegenprobe rot). Verworfen nach Versuch: networkx über `importlib.util.LazyLoader` nachzuladen — Pythons Importmaschine fasst das Modul schon bei `import networkx` an. Das 1,3-Mio.-Modell ließ sich unter der Last dieser Nacht nicht sinnvoll messen; sein Weg ist das Bild vor der Erkennung. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-501: Die Statuszeile zählte Agentenschritte gegen den falschen Deckel (03.10.2026)
+
+<a id="rm-501-die-statuszeile-zählte-agentenschritte-gegen-den-falschen-deckel-03102026"></a>
+<a id="rm-501"></a>
+
+**RM-501 — Die Statuszeile zählte Agentenschritte gegen den falschen Deckel.**
+Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachmodell zwölf Schritte je Zug hat (`agent.session.steps_for`), zählte die Statuszeile während eines Zugs weiter gegen den festen Deckel acht (`MAX_STEPS`) und zeigte „Schritt 9/8“.
+
+**Abschluss:** Der Deckel kommt vom Modell, das den Zug rechnet: `_on_request_sent` merkt sich `steps_for(backend)`, `_on_agent_progress` zählt dagegen. Test `test_ui.py::test_the_step_counter_of_a_local_model_counts_to_its_own_cap` (Ollama, Schritt 9 von 12), ohne die Änderung rot (Gegenprobe). Umgesetzt von Claude (Thread „Bedienung und KI“).
