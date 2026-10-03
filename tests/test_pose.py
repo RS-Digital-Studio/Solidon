@@ -23,6 +23,8 @@ Parameteränderung den Körper **mitbewegt** und nicht am Cache hängen bleibt.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 import trimesh
@@ -621,3 +623,32 @@ def test_the_missing_armature_reaches_the_report_at_its_own_step(profile: Profil
     assert treffer, "der Befund kommt im Prüfbericht nicht an"
     assert treffer[0].op_id == 2, f"ohne Schrittnummer liest das Band ihn nicht: {treffer[0]}"
     assert treffer[0].severity == "warning"
+
+
+def test_a_click_on_the_skin_becomes_a_joint_on_the_axis() -> None:
+    """RM-367 W4-7: Ein Knochen lag auf dem angeklickten Hautpunkt statt im Gelenk.
+
+    Ein Zylinder vom Radius 5 um die Z-Achse, von der Seite angeschaut: Ein
+    Klick auf (5, 0, 10) wird (0, 0, 10), die Mitte unter dem Klick. Ein Klick
+    neben die Haut, ein streifender Blick und ein Blick ins Leere bleiben, wo
+    sie sind.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import inside_the_body
+
+    body = trimesh.creation.cylinder(radius=5.0, height=40.0, sections=64)
+    body.apply_translation((0.0, 0.0, 20.0))
+    mesh = MeshData.of(body)
+    for angle in (0.0, 1.0, 2.5, 4.0):
+        point = (5.0 * math.cos(angle), 5.0 * math.sin(angle), 10.0)
+        towards = (-math.cos(angle), -math.sin(angle), 0.0)
+        inside = inside_the_body(mesh, point, towards)
+        assert math.hypot(inside[0], inside[1]) < 0.3, (angle, inside)
+        assert inside[2] == pytest.approx(10.0, abs=0.3)
+
+    on_top = (0.0, 0.0, 40.0)
+    assert inside_the_body(mesh, on_top, (1.0, 0.0, 0.0)) == on_top, "streifend bleibt"
+    beside = (9.0, 0.0, 10.0)
+    assert inside_the_body(mesh, beside, (-1.0, 0.0, 0.0)) == beside, "neben der Haut bleibt"

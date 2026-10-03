@@ -57,6 +57,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
 - No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
 - Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
+- Uma característica reconhecida a mais de um metro da origem mantém o seu lugar ao alterá-la. Antes o campo cortava o número sem aviso, e o furo mudava de sítio.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em cima escolhe o «Plano» — num eixo com inclinação, paralelo a uma face, por uma aresta ou por três pontos que clica na vista.
@@ -76,6 +77,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Na janela, «Fundir suavemente» calcula agora fino, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
+- Os desenhos SVG chegam corretos: rotações, inclinações, cantos arredondados, elipses e arcos elípticos estão certos, e as camadas ocultas ficam de fora.
 - O destino de «Alinhar à característica» começa vazio, e o primeiro clique na vista preenche-o. «Aplicar» espera até lá em vez de pôr o corpo do lado errado.
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 - Outro traço numa cavidade acabada de escavar torna-a mais funda, também com um pincel pequeno. Até agora não tinha efeito e contava como falhado.
@@ -98,6 +100,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
 - A barra de parâmetros recusa uma medida fora do seu limite em vez de deixar a vista vazia.
 - Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
+- Na barra de parâmetros as medidas de dois paralelepípedos levam o seu número, e uma medida com intervalo de trabalho próprio tem um cursor.
 - Se um passo espera uma pergunta, «Aplicar» continua disponível e a pergunta aparece.
 - No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
 - As marcas nas listas leem-se em todas as linhas, e as cores aparecem como um ponto redondo ao lado.

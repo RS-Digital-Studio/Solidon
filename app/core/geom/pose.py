@@ -34,7 +34,7 @@ from app.core.deferred import trimesh
 from app.core.errors import Action, ValidationError
 from app.core.expressions import evaluate, is_expression, references
 from app.core.geom import transform
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, ray_hits_batch
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Bone, Finding, OpContext, OpResult, Pose, Vec3, as_vec3
@@ -81,6 +81,121 @@ _INVERSE_LN2: Final = 1.4426950408889634
 #: Taylorkoeffizienten ``1/n!`` bis ``n = 13`` — genug für ``|r| ≤ ln 2 / 2``:
 #: Der erste weggelassene Term liegt unter 10⁻¹⁷.
 _EXP_TERMS: Final = tuple(1.0 / math.factorial(order) for order in range(14))
+
+
+#: Wie weit ein Klick neben dem Netz liegen darf und noch auf der Haut gilt —
+#: der Sehnenfehler einer feinen Rundung, nicht mehr.
+ON_THE_SKIN: Final = 0.05
+
+#: Unter welchem Winkel zur Fläche ein Blick noch hineinführt (Kosinus). Ein
+#: streifender Blick trifft die Gegenwand irgendwo weit hinten.
+GRAZING: Final = 0.2
+
+
+def inside_the_body(mesh: MeshData, point: Vec3, direction: Vec3) -> Vec3:
+    """Wohin ein Gelenk gehört, wenn auf die Haut geklickt wurde (RM-367, W4-7).
+
+    Ein Klick trifft die Oberfläche; ein Knochen dort lag auf der Haut statt im
+    Gelenk, und die Beugung wurde einseitig (+60° Volumen 0,841, -60° 1,013).
+    Von der Stelle aus geht der Blick weiter in den Körper bis zur Gegenwand;
+    das Gelenk sitzt in der Mitte dazwischen — unter dem Klick, in der Tiefe
+    des Glieds, wie es der Kunde von vorn sieht. Liegt der Punkt nicht auf der
+    Haut, schaut der Blick streifend oder trifft er nichts, bleibt der Punkt.
+    """
+    raw = mesh.raw
+    vertices = np.asarray(raw.vertices, dtype=float)
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    if not len(vertices) or not len(faces):
+        return point
+    here = np.asarray(point, dtype=float)
+    found = _surface_normal_at(vertices, faces, here)
+    if found is None:
+        return point
+    normal, start, gap = found
+    if gap > ON_THE_SKIN:
+        return point
+    ray = np.asarray(direction, dtype=float)
+    length = float(np.sqrt((ray * ray).sum()))
+    if length <= units.EPS_GEOM:
+        return point
+    ray = ray / length
+    if float((ray * normal).sum()) > -GRAZING:
+        return point
+    # Das eigene Dreieck und seine Nachbarn am Startpunkt sind kein Gegenüber:
+    # Ein Klick auf eine Ecke trifft sie bei null. Ein Hundertstel Millimeter
+    # ist dünner als jede druckbare Wand.
+    depth, _hit = ray_hits_batch(
+        vertices[faces],
+        start[None, :],
+        ray[None, :],
+        edge_margin=units.EPS_GEOM,
+        minimum_travel=units.EPS_DISPLAY,
+    )
+    reach = float(depth[0])
+    if not math.isfinite(reach):
+        return point
+    inside = start + ray * (reach / 2.0)
+    return (float(inside[0]), float(inside[1]), float(inside[2]))
+
+
+def _surface_normal_at(
+    vertices: np.ndarray, faces: np.ndarray, point: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, float] | None:
+    """Normale, Fußpunkt und Abstand des Dreiecks, auf dem ``point`` liegt — oder ``None``.
+
+    Nicht die Normale des nächsten Eckpunkts: An einem Zylinder liegen die
+    Eckpunkte nur an den Enden, und deren Normale zeigt halb nach unten.
+    Gesucht wird das Dreieck, in dessen Ebene der Punkt liegt und dessen
+    Fläche ihn enthält; elementweise gerechnet, dasselbe auf jeder Maschine.
+    """
+    a = vertices[faces[:, 0]]
+    ab = vertices[faces[:, 1]] - a
+    ac = vertices[faces[:, 2]] - a
+    cross = np.stack(
+        (
+            ab[:, 1] * ac[:, 2] - ab[:, 2] * ac[:, 1],
+            ab[:, 2] * ac[:, 0] - ab[:, 0] * ac[:, 2],
+            ab[:, 0] * ac[:, 1] - ab[:, 1] * ac[:, 0],
+        ),
+        axis=1,
+    )
+    length = np.sqrt((cross * cross).sum(axis=1))
+    usable = length > units.EPS_GEOM
+    if not usable.any():
+        return None
+    unit = np.zeros_like(cross)
+    unit[usable] = cross[usable] / length[usable, None]
+    offset = point - a
+    distance = (offset * unit).sum(axis=1)
+    flat = offset - distance[:, None] * unit
+    d00 = (ab * ab).sum(axis=1)
+    d01 = (ab * ac).sum(axis=1)
+    d11 = (ac * ac).sum(axis=1)
+    d20 = (flat * ab).sum(axis=1)
+    d21 = (flat * ac).sum(axis=1)
+    denominator = d00 * d11 - d01 * d01
+    safe = np.where(np.abs(denominator) > units.EPS_GEOM, denominator, 1.0)
+    v = (d11 * d20 - d01 * d21) / safe
+    w = (d00 * d21 - d01 * d20) / safe
+    slack = 1e-6
+    inside = usable & (v >= -slack) & (w >= -slack) & (v + w <= 1.0 + slack)
+    if not inside.any():
+        return None
+    candidates = np.flatnonzero(inside)
+    closest = float(np.min(np.abs(distance[candidates])))
+    touching = candidates[np.abs(distance[candidates]) <= closest + units.EPS_GEOM]
+    # Liegt der Klick auf einer Kante oder Ecke, tragen ihn mehrere Dreiecke;
+    # ihre Normalen gemittelt, nach Fläche gewichtet — sonst entschiede die
+    # Dreiecksnummer, und an einer Spitze zeigte die Normale quer.
+    mean = (cross[touching]).sum(axis=0)
+    size = float(np.sqrt((mean * mean).sum()))
+    if size <= units.EPS_GEOM:
+        return None
+    normal = mean / size
+    best = int(touching[0])
+    # Zurück kommt auch der Punkt in der Ebene des Dreiecks: Ein Klick auf
+    # eine gekrümmte Fläche liegt um den Sehnenfehler daneben.
+    return normal, point - distance[best] * unit[best], abs(float(distance[best]))
 
 
 def _falloff(values: np.ndarray) -> np.ndarray:

@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
+| 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
+| 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
 | 2026-10-02 | [RM-404: Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still (02.10.2026)](#rm-404-die-facettenausrichtung-aus-rm-225-greift-an-verschobenen-größeren-oder-fein-vernetzten-stl-nicht-still-02102026) |
 | 2026-10-02 | [RM-443: Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test (02.10.2026)](#rm-443-reste-aus-rm-399-die-halter-vorlage-setzt-immer-zwei-schlüssellöcher-exakte-halter-nur-im-test-02102026) |
 | 2026-10-02 | [RM-400: Schräg abschneiden (02.10.2026)](#rm-400-schräg-abschneiden-02102026) |
@@ -41,6 +44,7 @@ entfernt hat.
 | 2026-10-02 | [RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)](#rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026) |
 | 2026-10-02 | [RM-359: Weg 2: Leiste, Haken beim Ändern, Grenzen mit Einheit, Regler, Namen und Parameterdialog (02.10.2026)](#rm-359-weg-2-leiste-haken-beim-ändern-grenzen-mit-einheit-regler-namen-und-parameterdialog-02102026) |
 | 2026-10-02 | [RM-342: Oberfläche: Reste aus dem Review seit 0.5.1 (02.10.2026)](#rm-342-oberfläche-reste-aus-dem-review-seit-051-02102026) |
+| 2026-10-02 | [RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)](#rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -37169,3 +37173,138 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
 
 **Abschluss:** Alle Befunde erledigt. C-N1, D-N2, C-N2, D-N6, D-N7 und D-N1 wie oben beschrieben (Claude, Thread „Bedienung und KI“). D-N5: `style.expanded_width` ist die eine Rechnung der Anfangsbreite samt zugeklappter Formulare und Reiter, Ränder und Rollbalken — für Einstellungen, Ersteinrichtung, Operationsdialog und Druckdialog (dort neben der Reiterleiste); `_reserve_advanced_width`, die feste Randliste in `first_run` und die Rechnung in `op_dialog` sind ihr gewichen. Tests in `test_dialog_layout_regressions.py`: Einstellungen und Druckdialog in sechs Sprachen (Anfangsbreite = min(natürlich, Bildschirm), quer nur, was der Bildschirm abschneidet), die zugeklappte Rechnung gleich der aufgeklappten Messung. Fenstersonde am echten Fenster in sechs Sprachen: Einstellungen, Druckdialog über alle Reiter und *Quader anlegen* rollen nach dem Aufklappen nicht quer, die Breite bleibt. In main mit `97369c2f1`.
+
+## RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)
+
+<a id="rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026"></a>
+
+**RM-467, erster Lauf am 02.10.2026.** Geprüft: alle 77 Pins aus `constraints.txt` gegen PyPI
+  (Sicherheitsmeldungen aus dem Feld `vulnerabilities`, cp314-Räder für Windows x64, Linux x86_64,
+  Apple Silicon und Intel-Mac), CPython, die Actions-Pins, appimagetool, die AppImage-Laufzeit, die
+  Flatpak-Laufzeit und Inno Setup. Neu waren 18 Pakete und CPython 3.14.8; Actions, appimagetool
+  1.9.1, type2-runtime 20251108, Flatpak 26.08 und Inno Setup 7.1.0 sind aktuell.
+  **Übernommen:**
+  - `3c21802b9` — pypdf 6.19.0 (sechs Sicherheitsmeldungen, nur Handbuchwerkzeug), cryptography
+    50.0.2 mit OpenSSL 4.0.3 (Linux-Paket), manifold3d 3.5.4, networkx 3.7, vhacdx 0.1.0, fonttools
+    4.66.1, imageio 2.38.0, tifffile 2026.9.20, lazy-loader 0.6, pyparsing 3.3.3, uharfbuzz 0.56.2,
+    rubicon-objc 0.5.7, PyInstaller 6.22.3 mit Hooks 2026.8, ruff 0.16.10, mypy 2.4.0 mit librt 0.16.0
+    und ast_serialize 0.12.0; mypy 2.4 machte eine Typausnahme in `perceive/features.py` überflüssig.
+  - `301246160` — die Begründung von lxml nannte den 3MF-Export, gebraucht wurde es nur vom SVG-Import.
+  - `d84ff9695` — CI auf CPython 3.14.8 (RM-468) und fest auf `ubuntu-24.04`, weil `ubuntu-latest`
+    ab dem 19.10.2026 auf Ubuntu 26 wandert und Lizenzbeilage und glibc-Untergrenze des
+    Linux-Pakets still höbe; Wächter `test_linux_builds_on_the_ubuntu_its_licence_tables_name`,
+    Gegenprobe mit `ubuntu-latest` in `mac-netz.yml` rot.
+  - `71b7ba0a8` — RM-472 umgesetzt, lxml entfällt.
+  - `a4abca5f2` — Lizenzbeilage neu erzeugt (49 Laufzeitkomponenten).
+  - `8659ab060` — Abschnittsverweise des SVG-Lesers ohne „§“.
+  **Belege:** Vollstart 37060439101 auf dem Arbeitszweig: Kernsuite auf allen drei Systemen mit
+  denselben vier Fehlern wie main (Basislauf 37058800949: ein überholtes xfail zu RM-404, drei
+  französische Zahlenformate), dazu die Lizenzbeilage, behoben in `a4abca5f2`; 110 rote Fenstertests
+  stammen aus Test-Code-Drift auf main und liegen bei den zuständigen Threads. Kernlauf 37064825690
+  nach dem SVG-Leser: dieselben drei französischen Fälle wie main, dazu drei „§“-Verweise auf die
+  SVG-Vorschrift, die `test_plan_references.py` als Bauplanverweise las, behoben in `8659ab060`. UI-Audit (`tools/run_ui_audit.py` über die zwölf
+  Beispielprojekte und den Aufbau von Null) mit alter und neuer Umgebung: dieselben Befunde, alle 22
+  exportierten 3MF-Netze textgleich. Textsonde über den Renderer (Körper, Beschriftungen mit
+  Umlauten, Ø und °, fett, Achsenkreuz): Bild bitgleich, gleiche Textmaße.
+  **Ersetzbarkeit:** RM-470 gemessen und verworfen, RM-472 umgesetzt, RM-471 offen.
+  **Noch offen aus diesem Lauf:** der Paketbau auf vier Plattformen mit CPython 3.14.8 und
+  rubicon-objc 0.5.7 (RM-468, RM-469) — die Paketjobs warten auf grüne Fensterjobs.
+
+## RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)
+
+<a id="rm-470-marching-cubes-bleibt-bei-scikit-image-02102026"></a>
+<a id="rm-470"></a>
+
+**RM-470 — Marching Cubes ohne scikit-image.** Aus RM-467 (Auftrag Robert: Was eigener Code
+  oder eine andere Bibliothek besser kann, wird ersetzt). scikit-image dient allein
+  `measure.marching_cubes`: direkt in `geom/blend.py` und `geom/lattice.py`, mittelbar über
+  `trimesh.voxel.ops.matrix_to_marching_cubes` in `geom/boolean.py` (Voxelstufe, §17.2) und
+  `geom/hollow.py`. Dafür reisen scikit-image (22 MB installiert), tifffile und lazy-loader in
+  jedem Paket mit, und `pyproject.toml` klammert seinetwegen eine numpy-Warnung aus. Der bessere
+  Weg ist `manifold3d.Manifold.level_set`, schon Abhängigkeit: Marching Tetrahedra auf einem
+  raumzentrierten Gitter liefert garantiert mannigfaltige Netze, Marching Cubes an mehrdeutigen
+  Zellen nicht zwingend, und jede folgende Boolesche Op braucht die Mannigfaltigkeit. Gitter und
+  Verblendung haben eine geschlossene Feldfunktion, die Voxelstufen werten ihr Raster dreilinear
+  aus. Der Rückruf läuft je Gitterpunkt durch Python, darum zuerst am größten Voxelfall messen; ist
+  er zu langsam, ein eigenes vektorisiertes Marching Cubes neben `slice/_chain.pyx`.
+  `geom/displace.py` liest das Höhenbild dann über Pillow, das ohnehin mitkommt, und imageio
+  entfällt mit.
+  **Plattformfolgen:** vier Pakete weniger auf allen drei Plattformen und keine Abhängigkeit von
+  scikit-image-Rädern bei der nächsten Python-Fassung; `level_set` steckt in allen Zielrädern von
+  manifold3d. Lizenzliste, Lizenzbeilage und SBOM werden kürzer.
+  **Abnahme:** Geometrietests der vier Stellen mit Kennzahlen gegen den heutigen Stand (Volumen,
+  wasserdicht, Komponenten), Laufzeit am größten Voxelfall nicht schlechter; scikit-image, imageio,
+  tifffile und lazy-loader fehlen in `pyproject.toml`, `constraints.txt` und im Paket.
+
+**Abschluss:** Gemessen, scikit-image bleibt, weil es die Aufgabe besser löst. Am Gyroid
+  (Zelle 10 mm, Wand 1 mm, Würfel 40 mm; derselbe Rechner unter Last): `Manifold.level_set` mit
+  Python-Rückruf brauchte 0,70 / 2,15 / 6,42 s bei 1 / 0,5 / 0,33 mm Kantenlänge,
+  `skimage.measure.marching_cubes` 0,05 / 0,18 / 0,46 s — 13- bis 14-mal schneller — und lieferte
+  halb so viele Dreiecke (134 856 gegen 325 904 bei 1 mm). Bei 1 mm verlor `level_set` zudem die
+  Wand zwischen den Gitterpunkten (8 272 mm³ gegen 12 994 mm³ bei 0,5 mm). Ein eigenes Marching
+  Cubes in numpy erreicht die Cython-Fassung von scikit-image nicht. Der Preis bleibt: scikit-image,
+  tifffile und lazy-loader im Paket und die numpy-Ausnahme in `pyproject.toml`.
+
+## RM-472: Zeichnungsimport ohne lxml (02.10.2026)
+
+<a id="rm-472-zeichnungsimport-ohne-lxml-02102026"></a>
+<a id="rm-472"></a>
+
+**RM-472 — Zeichnungsimport ohne lxml.** Aus RM-467. lxml wird nur noch für den SVG-Import
+  gebraucht: `ingest/outline.py` ruft `trimesh.load_path`, und trimeshs SVG-Leser parst mit lxml.
+  Solidons 3MF-Leser und -Schreiber nutzen `xml.etree`. lxml bündelt libxml2 und libxslt, zwei
+  C-Bibliotheken mit regelmäßigen Sicherheitsmeldungen, für eine Datei, die `outline.py` vorher
+  ohnehin mit `xml.etree` öffnet (`_svg_defaults`). Der bessere Weg: die SVG-Elemente (`path`,
+  `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, verschachtelte `transform`) selbst
+  über `xml.etree` lesen, die Pfaddaten wie heute über svg.path, und daraus den `Path2D` bauen.
+  **Plattformfolgen:** ein natives Paket weniger auf allen drei Plattformen und weniger fremder
+  C-Code beim Öffnen einer fremden Datei; `xml.etree` kommt mit CPython und dessen Expat. DXF
+  bleibt bei trimesh.
+  **Abnahme:** die SVG-Fälle aus `tests/data/` ergeben dieselben Konturen (Anzahl, Fläche, Löcher);
+  lxml fehlt in allen Abhängigkeitsdateien und im Paket.
+
+**Abschluss:** `app/core/ingest/svg_drawing.py` liest SVG über `xml.etree` und baut dieselben
+  trimesh-Entitäten wie trimeshs Leser (`71b7ba0a8`); lxml fehlt in `pyproject.toml`,
+  `constraints.txt`, der Lizenzliste und der Lizenzbeilage. Dabei fielen trimeshs stille Fehler weg:
+  `rotate(90)` drehte um gut 107°, `skewX`/`skewY`, Ellipsen und abgerundete Ecken fehlten,
+  elliptische Bögen wurden Kreisbögen, Transformationen galten nur über zehn Ebenen, Inhalte aus
+  `defs`, `clipPath` und `marker` sowie ausgeblendete Ebenen kamen als Konturen an; `use` wird
+  eingesetzt, mit Schleifenschutz und 200 000 Grundformen als Grenze. Am Korpus von 321 SVG-Dateien
+  (Repository und Druckprojekte) gaben 171 dieselben Ringe wie trimesh mit lxml, die 150 übrigen
+  trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
+  rechnet jede Fläche von Hand.
+
+## RM-367: Weg 4: Strichtext geprüft, Skelett im Bild, Gelenk unter der Haut (02.10.2026)
+
+<a id="rm-367-weg-4-strichtext-geprüft-skelett-im-bild-gelenk-unter-der-haut-02102026"></a>
+<a id="rm-367"></a>
+
+**RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett.**
+  Review 02.10.2026, Gebietsprüfung Weg 4, am HEAD `6ce767031`.
+  - **W4-3 — Ein von Hand verdorbener Strichtext endet als „unerwarteter Fehler“.** Feld *Striche*
+    im Dialog (auch über *Eingabe korrigieren*): `JSONDecodeError`, `KeyError: 'n'`, `IndexError`
+    → jedes Mal `op.sculpt_strokes.InternalError` mit *Fehler melden*
+    (`app/core/geom/sculpt.py:306–323`). Beim Skelett wird derselbe Fall als Eingabefehler
+    abgefangen. Fix: Strichtext prüfen und als `ValidationError` mit Handlungsvorschlag melden.
+    §2.7, Regel 17. Sonde `w4_strichtext.py`.
+  - **W4-6 — Der Skeletteditor zeigt im Bild keinen Knochen und keinen Gelenkpunkt**, nur die
+    Leiste zählt mit (`main_window.py:11755–11943`, `viewport.py`). §2.8. Sonde
+    `w4_knochen_sichtbar.py` (Quelltextprobe).
+  - **W4-7 — Ein Knochen landet auf dem angeklickten Hautpunkt statt im Gelenk**, obwohl die
+    Leiste „Erst das Gelenk anklicken“ sagt (`main_window.py:11848`, `pose_bar.py:77`); die
+    Beugung wird einseitig: +60° Volumen 0,841 statt 0,927 mit `pose.pinched`, −60° 1,013.
+    Fix: den Klickpunkt auf die Körperachse unter der Haut legen. §2.2, §2.7. Sonde
+    `w4_knochen_oberflaeche.py`.
+  - **W4-8 — Ende-zu-Ende-Test und Beispiel von Weg 4 lassen „Skelett setzen und stellen“ aus**
+    („stellen“ als „auf die Platte stellen“ gelesen): `tests/test_way_four.py:40–131`,
+    `tools/make_examples.py:166–232`. §40 P16, §2.2.
+  **Abnahme:** je Fund ein Test — verdorbener Strichtext → Eingabefehler mit Vorschlag; Knochen
+  und Gelenke im Bild sichtbar; Knochen liegt im Körperinneren, ±60° symmetrisch; `test_way_four`
+  setzt und stellt ein Skelett. Beleg: `F:\solidon-review-reports\gebiet-weg4.md`.
+  Nachprüfung am Stand `4cf460e87` (nach `88b5f425f`): W4-8 behoben (`test_way_four` setzt und stellt ein Skelett, Gegenprobe rot). W4-3 unvollständig: die drei Originalfälle sind jetzt ein Eingabefehler mit Vorschlag, aber `"s":NaN` und `"p":[NaN,…]` enden weiter als „unerwarteter Fehler“; r ≤ 0 wird angenommen und bewegt trotzdem Ecken; r = Infinity bleibt wirkungslos ohne Befund; vier Koordinaten werden still abgeschnitten (`types.as_vec3`). W4-6 und W4-7 offen. Belege `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonde `v4g_rm367_strichtext_zwillinge.py`.
+  **W4-3 vollständig (02.10.2026 abends, Claude, Thread „Bedienung und KI“):** `strokes_from_text`
+  liest Punkte und Normalen als genau drei endliche Koordinaten, Radius endlich und größer null,
+  Stärke endlich (`_finite`, `_finite_point`); sonst Eingabefehler mit Ausweg. Sechs neue Fälle in
+  `test_sculpt.py::test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out`.
+
+**Abschluss:** Alle vier Funde erledigt. W4-8 mit `88b5f425f` (`test_way_four` setzt und stellt ein Skelett). W4-3 vollständig: Strichtext mit NaN, Unendlich, Radius ≤ 0 oder vier Koordinaten ist ein Eingabefehler mit Ausweg (`_finite`, `_finite_point`; sechs neue Fälle in `test_sculpt.py`). W4-7: Ein Klick auf die Haut setzt das Gelenk unter den Klick in die Mitte des Körpers, entlang des Blicks bis zur Gegenwand (`pose.inside_the_body`, `Viewport.ray_toward`); neben der Haut, streifend oder ins Leere bleibt der Punkt (`test_pose.py::test_a_click_on_the_skin_becomes_a_joint_on_the_axis`). W4-6: Der Skeletteditor zeichnet Knochen und das gesetzte Gelenk vor dem Körper (`Viewport.show_bones`, `clear_bones`, `bones_shown`/`joint_shown`; `test_pose_session.py::test_bones_are_drawn_and_sit_inside_the_body`). Alle 62 Skeletttests einschließlich Fensterfällen grün. Fenstersonde am echten Fenster an `clean_figure.stl`: Gelenk 4,27 mm unter der Haut, Knochen im Bild sichtbar, nach *Fertig* weg; 4 von 4. Umgesetzt von Claude (Thread „Bedienung und KI“).
