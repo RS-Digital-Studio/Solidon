@@ -37,11 +37,20 @@ import trimesh
 
 from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
+from app.core.ingest.loader import normalise
 from app.core.slice import analysis
 from app.core.slice.analysis import cross_section, cross_sections, slice_body
 
+
+@pytest.fixture(autouse=True)
+def segment_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Diese Gegenüberstellung fährt wirklich die beiden Segmentwege."""
+    monkeypatch.setattr(analysis, "_solid_sections", lambda *_args, **_kwargs: None)
+
+
 pytestmark = pytest.mark.skipif(
-    analysis._chain is None or getattr(analysis._chain, "PLANE_SEGMENTS_API", None) != 2,
+    analysis._chain is None
+    or getattr(analysis._chain, "PLANE_SEGMENTS_API", None) != analysis.PLANE_SEGMENTS_API,
     reason="app/core/slice/_chain ist nicht aktuell gebaut (tools/build_slice_core.py)",
 )
 
@@ -98,11 +107,36 @@ def bodies() -> list[tuple[str, MeshData]]:
         hole = trimesh.creation.cylinder(radius=3.0, height=20.0)
         hole.apply_translation((x, 0.0, 0.0))
         plate = trimesh.boolean.difference([plate, hole])
+    # Teile als eigene Schalen, die sich überlappen oder ineinanderstecken
+    # (RM-485): Hier entscheidet die Umlaufrichtung, und beide Wege müssen sie
+    # gleich lesen.
+    bars = [
+        ((40.0, 10.0, 10.0), (0.0, 15.0, 0.0)),
+        ((40.0, 10.0, 10.0), (0.0, -15.0, 0.0)),
+        ((10.0, 40.0, 10.0), (15.0, 0.0, 0.0)),
+        ((10.0, 40.0, 10.0), (-15.0, 0.0, 0.0)),
+    ]
+    frame = trimesh.util.concatenate(
+        [
+            trimesh.creation.box(extents, trimesh.transformations.translation_matrix(centre))
+            for extents, centre in bars
+        ]
+    )
+    nested = trimesh.util.concatenate(
+        [
+            trimesh.creation.box(extents=(20.0, 20.0, 20.0)),
+            trimesh.creation.cylinder(radius=3.0, height=10.0, sections=32),
+        ]
+    )
+    enclosing = read_mesh((MESHES / "parts_enclosing_air.stl").read_bytes(), ".stl")
     return [
         ("Würfel", MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 10.0)))),
         ("Rohr", MeshData.of(tube)),
         ("Lochplatte", MeshData.of(plate)),
         ("zwei Kugeln", MeshData.of(twin)),
+        ("Rahmen aus Balken", MeshData.of(frame)),
+        ("Teil im Teil", MeshData.of(nested)),
+        ("Teile um Luft", normalise(enclosing, "mm").mesh),
     ]
 
 

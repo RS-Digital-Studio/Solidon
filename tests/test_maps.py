@@ -1178,7 +1178,7 @@ def test_the_support_budget_uses_an_injected_monotonic_clock() -> None:
     }
 
 
-@pytest.mark.parametrize("phase", ["sections", "raster"])
+@pytest.mark.parametrize("phase", ["sections", "direct_sections", "raster"])
 def test_support_budget_interrupts_inside_the_solid_field(
     phase: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1196,6 +1196,9 @@ def test_support_budget_interrupts_inside_the_solid_field(
         ),
     )
     original_segments = analysis._plane_segments
+    original_shape = analysis._shape_from_rings
+    if phase == "sections":
+        monkeypatch.setattr(analysis, "_solid_sections", lambda *_args, **_kwargs: None)
     original_contains = maps.shapely.contains_xy
     rastered = 0
 
@@ -1203,6 +1206,11 @@ def test_support_budget_interrupts_inside_the_solid_field(
         if phase == "sections":
             now[0] = 4.25
         return original_segments(*args, **kwargs)
+
+    def expire_in_direct_section(*args, **kwargs):
+        if phase == "direct_sections":
+            now[0] = 4.25
+        return original_shape(*args, **kwargs)
 
     def expire_in_raster(*args, **kwargs):
         nonlocal rastered
@@ -1213,11 +1221,12 @@ def test_support_budget_interrupts_inside_the_solid_field(
         return answer
 
     monkeypatch.setattr(analysis, "_plane_segments", expire_in_segments)
+    monkeypatch.setattr(analysis, "_shape_from_rings", expire_in_direct_section)
     monkeypatch.setattr(maps.shapely, "contains_xy", expire_in_raster)
     with pytest.raises(maps.MapBudgetExceeded):
         maps.support_map(cube(), cancelled=deadline)
 
-    assert rastered == (0 if phase == "sections" else 1), (
+    assert rastered == (1 if phase == "raster" else 0), (
         f"{rastered} raster sections after the budget expired in {phase}"
     )
 

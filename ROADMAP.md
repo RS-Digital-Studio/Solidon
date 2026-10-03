@@ -120,7 +120,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
-| [RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material](#rm-485) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: Material über die Umlaufrichtung (Clipper2 in manifold3d, `Manifold.slice`), nicht über die Tiefe |
 | [RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung](#rm-486) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: schwebende Säulenkontur als `CrossSection` führen; ersetzt den Fix von RM-405 b |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
@@ -3366,31 +3365,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
   ohne leere Schicht. Bauplan §29, Regel 14.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
-
-<a id="rm-485"></a>
-
-- [ ] **RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material.**
-  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_polygon_with_contours`/`_nested`
-  entscheiden Material und Loch nach der Verschachtelungstiefe der Ringe und werfen die
-  Umlaufrichtung weg. Bei mehreren sich überlappenden Schalen (Tinkercad- und viele
-  Thingiverse-Exporte, Baugruppen als eine STL) wird eine Fläche, die nur von Ringen
-  verschiedener Teile umschlossen ist, als Material gezählt. Gemessen: Rahmen aus vier
-  überlappenden Balken 1600 statt 1200 mm² in allen Schichten, Ring aus acht Zylindern 1195,6
-  statt 892,9 mm², `parametric-laptop-riser.stl` 46 von 460 Schichten über 1 %, 5 über 10 %
-  falsch (z 65,10: 2694 statt 2146 mm²). Kontrollfälle ohne eingeschlossene Luft (Kreuz, Mini
-  Golf v17, Piratenschiff) stimmen. Falsch werden damit Schichtfläche, Inseln, Überhänge,
-  Stützraum, Brücken und Materialschätzung im Prüfbericht.
-  **Stellen:** `app/core/slice/analysis.py:1251–1362`, Einzelringweg `:1264–1275`.
-  **Fix (allgemein):** Richtung jedes Schnittsegments aus dem Dreieck übernehmen, gerichtete
-  Ringe mit Füllregel Positive vereinigen (Clipper2 in `manifold3d.CrossSection`, schon im
-  Paket, ganzzahlig und plattformgleich); für gültige Körper direkt `Manifold.slice(z)` (am
-  Laptop-Ständer 0,33–0,50 statt 3,4–4,1 s). Clipper2 auf den heutigen Ringen ohne Richtung
-  ist ebenfalls falsch.
-  **Abnahme:** Geometrietests zuerst: Rahmen (1200 mm², Fenster ohne Insel/Überhang), Ring
-  aus acht Zylindern, Laptop-Ständer oder ein kleiner Korpuszwilling (je Schicht gleich
-  `Manifold.slice` bis 1e-6 relativ); Kreuz, Mini Golf v17, Piratenschiff, Hohlkugel und
-  `aushoehlen-und-teilen.p3d` unverändert. Bauplan §22, §31; Regel 6.
-  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-1), `bibliotheken\sonden\b9_*`, `b3_*`.
 
 <a id="rm-486"></a>
 

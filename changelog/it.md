@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- Nelle parti sovrapposte, l'analisi di stampa non conta più l'aria racchiusa come materiale. Migliora anche il rilevamento degli sbalzi e dei supporti necessari.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
 - Scegli l'ugello nelle impostazioni di stampa tra le misure che la tua stampante conosce, e lo slicer riceve il profilo corrispondente.
 - Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.

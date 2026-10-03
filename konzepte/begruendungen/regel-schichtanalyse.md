@@ -1318,3 +1318,65 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   Teilfeld behält seine eine große Lücke. Der Anker (nächste Zelle zur Mitte)
   hat bei gerader Zellenzahl zwei gleich nahe; auch dort entscheidet die
   Richtung.
+
+## Gerichtete Schnitte und Dokumentationsbudget (RM-485)
+
+Die folgende ausführliche Fassung wurde in die Begründung verschoben, damit
+die gemeinsam geladene Regel innerhalb ihres Budgets bleibt.
+
+## Die Abgrenzung, die nicht verhandelbar ist
+
+Kein eigener G-Code-Slicer (`AGENTS.md`, §22.5): Hier entsteht Analyse, in
+Millisekunden und ohne Fremdprozess. Kennzahlen aus Schichtanalyse und G-Code
+werden nie vermischt, jeder Wert nennt seine Herkunft (Regel 14) — der
+Prüfbericht sagt, ob geschätzt oder gemessen. In der Oberfläche heißt sie
+„Schichtanalyse“, nicht „Vorschau“: Sie zeigt Geometrie, keine Werkzeugwege.
+
+## Zwei Wege durch den Schnitt, und beide müssen dasselbe rechnen
+
+Dichte, konsistent gewundene Körper mit erhaltenem Volumenintegral werden ab elf
+Ebenen über `Manifold.slice` geschnitten. Bis zehn Ebenen geht es vor jeder
+Dichtheitsprüfung direkt zum Segmentweg: An Laptop, MiniGolf, Piratenschiff
+und Aushöhlprojekt kostete der native Aufbau samt einem Schnitt 0,011–0,389 s,
+der gerichtete Segmentweg nur 0,001–0,027 s; auch zehn Ebenen waren bei allen
+vier schneller. Die Grenze ist konservativ und verändert keine Kontur.
+Offene Kontaktbänder werden vor jedem nativen
+Volumenaufbau abgefangen: An einem solchen Ausschnitt konnte schon der
+Manifold-Konstruktor nativ abbrechen, bevor sein Status geprüft werden konnte.
+Sonst verbinden Cython oder NumPy/GEOS dieselben gerichteten
+Segmente; Clipper2 (`CrossSection`, Füllregel Positive) entscheidet Material.
+
+- **Beide Segmentwege bleiben gleichwertig** und auf sechs Stellen gerundet;
+  `tests/test_slice_core.py` erzwingt sie, statt den Direktweg zu vergleichen.
+- **Netztopologie vor Punktgleichheit**: Berührende Teile bleiben eigene Ringe.
+- **Freie inverse Schalen drehen zusammen**: Ein invertiertes Rohr hat einen
+  negativen Außenring und ein positives Bohrungsloch. Nur den Außenring zu
+  drehen füllt das Loch; alle enthaltenen Ringe zu drehen verschluckt eine
+  unabhängige positive Insel. `_rings_from` und `_numpy_rings` liefern deshalb
+  zusätzlich die ursprünglichen Kanten-IDs in Ringreihenfolge. Nur wenn ein
+  freier negativer Ring neben weiteren Ringen vorkommt, fragt `_shells_for_edges`
+  den vorhandenen `component_labels`-Job über die echte Flächennachbarschaft.
+  Sortierte Kantencodes und Schalenlabels liegen im Geometriecache des Netzes;
+  es entstehen keine globalen oder nativen Cachezustände. Ganze betroffene
+  Schalen wechseln die Richtung, vollständig eingeschlossene Hohlräume bleiben
+  negativ. Teilweise überlappende positive Nachbarn ändern daran nichts.
+  Eine vollständig im Materialbereich liegende positive Kontur einer anderen
+  Schale bleibt dagegen mehrdeutig: Bei einer insgesamt invertierten Hohlkugel
+  ist sie die getrennte Innenwand, sie könnte aber auch eine Materialinsel sein.
+  In genau dieser Konstellation übernimmt der bestehende Verschachtelungs- und
+  Reparaturweg. Eine unabhängige Insel im eigenen Loch eines verbundenen Rohrs
+  liegt außerhalb seines Materialbereichs und bleibt eindeutig erhalten.
+- **Kontaktbänder behalten ihre Herkunft**: `_contact` gibt dem internen
+  `_cross_sections` das Originalnetz und die verwendeten Vertex-IDs mit.
+  Damit gehören Innen- und Außenwand auch ohne die abgeschnittenen Deckflächen
+  weiter zum selben Rohr. Die öffentliche Schnitt-API bleibt unverändert.
+  `standing_check` gibt sein Token über `_contact` bis zum Topologiejob weiter.
+- **Zwei Punkte sind keine Fläche**: NumPy lässt Zyklen mit weniger als drei
+  Segmenten wie Cython aus und nummeriert die übrigen Ringe dicht. Eine
+  doppelseitige Dreiecksfläche neben einem Würfel darf weder eine Ausnahme
+  noch den Verlust des Würfels verursachen.
+- **Umlaufrichtung vor Tiefe**: Überlappende Schalen vereinigen Material,
+  eingeschlossene Luft bleibt frei. Die Tiefe allein gilt nur im Rückfall bei
+  offenen oder widersprüchlich gerichteten Segmenten.
+- Der optionale `_chain.pyx` entsteht mit `tools/build_slice_core.py`; ohne
+  ihn verbinden NumPy und GEOS. Abbruchprüfungen gelten für jeden Weg.

@@ -130,6 +130,7 @@ python tests/data/make_corpus.py
 | `meshes/generated_figure.stl` | drei verschmolzene Kugeln mit den Fehlern eines Generators: fünf einzelne fehlende Dreiecke, ein Fünftel verdrehte Normalen, ein loser Splitter | nach der Kette aus `GENERATED_REPAIR` **geschlossen**, ein Körper; die Merkmalserkennung findet keine Flächen (alle unter `MIN_FACE_AREA`), seit dem 22.08.2026 aber **genau die drei Kugeln**, aus denen die Datei gebaut ist — Ø 19,9, Ø 11,9 und Ø 8,0, Rückstände unter 0,0005 | `test_examples.py`, `test_features.py` |
 | `meshes/broken_selfint.stl` | zwei Würfel, die sich durchdringen, ohne verschnitten zu sein | 24 Dreiecke; die Rückfallkette löst es derzeit schon auf Stufe 1 — die Datei hält fest, dass das so bleibt | `test_corpus.py` |
 | `meshes/crossing_and_apart.stl` | zwei Würfel zu 20 mm, die sich durchdringen, dazu ein dritter daneben | drei Teile, Befund `ingest.multiple_components` mit *Überschneidungen auflösen*; danach zwei Teile, 14 272 + 8 000 mm³, und der Satz über drei Teile fällt (KUNDE-13) | `test_repair.py` |
+| `meshes/parts_enclosing_air.stl` | 13 nicht vereinigte Schalen (`make_corpus.parts_enclosing_air`): Rahmen aus vier überlappenden Balken mit Fenster, ein schräger Balken hindurch, Ring aus sechs Zylindern um einen Luftkern, ein Zylinder ganz in einem Balken, ein umgekehrter Quader als Hohlraum im anderen | nach dem Einlesen dicht, 13 Komponenten, `Manifold` gültig; jede Schicht gleich `Manifold.slice` (rel. 1e-6), die erste gleich der Vereinigung der vier Balken (RM-485) | `test_slice.py`, `test_slice_core.py` |
 | `meshes/colored.3mf` | zwei Würfel in Slot 1 und 2, mit der eigenen 3MF-Hälfte geschrieben | zwei Materialgruppen „Rot" und „Schwarz", je Dreieck zugeordnet; Rundweg durch `threemf.read` | `test_corpus.py` |
 | `projects/assembly_fit.p3d` | Platte mit 6-mm-Bohrung, Deckel mit 5,95-mm-Stift, dazu ein Passungspaar `auto:petg`; **gespeichert liegen beide Grundkörper auf z = 0 und durchdringen sich** — die Einbaulage auf der Stiftschulter stellt `test_corpus.py` als regulären Schritt her | roh meldet die Datei `fit.collision` (in PLA dazu `fit.mesh_uncertain`); in der Einbaulage hält die Passung mit PETG und meldet sich mit einem anderen Material — die Bohrung folgt dem Druckmaterial, die Toleranz dem, was im Paar steht | `test_corpus.py` |
 | `meshes/oversized.stl` | 400 × 80 × 40 mm: zwei dicke Enden, schlanke Mitte | passt auf keinen Bauraum; der Auto Split findet die Trennebene in der Mitte (Querschnitt 1200 mm², eine Kontur) und macht daraus zwei wasserdichte Teile | `test_autosplit.py` |
@@ -169,6 +170,18 @@ Weitere Sonderfälle, je mit eigenem Test:
 | `projects/sculpt_mirror_v39.p3d` | eine Kugel Ø 30, um 40 mm nach +X verschoben, ein Formzug bei x = 55 mit Symmetrie X, geschrieben vom Stand vor der Körpermitte | die Migration setzt `mirror_at_body: False`, der Zwilling trifft wie gespeichert nichts; mit Haken trifft er die andere Seite | `test_project.py` |
 | `projects/sculpt_brush_v40.p3d` | eine 4-mm-Platte mit einem Abtragzug, der die Unterseite mitnahm (Unterkante z = −0,498), und einem Zug mit Symmetrie Y, geschrieben vom Stand vor dem Vorderseitenfilter | die Migration setzt `front_only` und `mirror_once` auf `False`, die Platte rechnet wie gespeichert; mit den Schaltern von heute bleibt die Unterseite auf dem Bett | `test_project.py` |
 | `projects/cut_away_face_v41.p3d` | ein Quader 40 × 30 × 20 mm (Netz), *Abschneiden* an der Oberseite (*An Fläche*, −2 mm) und danach 20° um X bei z = 9, geschrieben vom Stand vor dem Feld *Ebene* | die Migration setzt beim ersten Schnitt `plane = "at_face"`, der zweite bleibt an der Achse mit Kippachse X; 10 800 mm³, 28 Dreiecke, Abdruck `0e0416967210692d` bitgleich zum Schreiben | `test_project.py` |
+
+## Analytische Schnitt-Gegenproben
+
+`test_slice.py` ergänzt `parts_enclosing_air.stl` um ein invertiertes Rohr
+(Radien 4/10 mm, Höhe 20 mm, 48 Segmente): allein, neben getrenntem oder
+überlappendem Material, mit unabhängiger Insel im Loch sowie als eingeschlossene
+Luft. Geprüft werden Vollschnitt und Kontaktband über alle drei Schnittwege.
+Eine insgesamt invertierte Hohlkugel (Radien 7/10 mm, zwei getrennte Wände)
+belegt den konservativen Verschachtelungsweg bei uneindeutiger Herkunft.
+Ein Würfel mit freistehendem doppelseitigem Dreieck belegt, dass Zweipunktzyklen
+in Cython und NumPy entfallen, ohne die übrige Schnittfläche zu verlieren.
+Alle diese Gegenproben werden im Test konstruiert; Kundenmodelle sind nicht kopiert.
 
 ## Daneben
 

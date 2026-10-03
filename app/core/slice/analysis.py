@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import math
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
+import manifold3d
 import numpy as np
 import shapely
 from shapely.geometry import MultiPolygon
@@ -28,6 +30,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
 from app.core.errors import ValidationError
+from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
@@ -54,6 +57,11 @@ except ImportError:  # pragma: no cover — hängt daran, ob gebaut wurde
     _chain = None
 else:
     _chain = _compiled_chain
+
+#: Die Fassung des Ebenenschnitts, die dieser Kern vom übersetzten Teil
+#: verlangt — dieselbe Zahl wie ``_chain.PLANE_SEGMENTS_API``. Ein älterer Bau
+#: nimmt den NumPy-Weg (seit 3: gerichtete Segmente, RM-485).
+PLANE_SEGMENTS_API: Final = 3
 
 #: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
@@ -173,6 +181,11 @@ BRIDGE_FROM = 1.0
 #: Unter so vielen Schichten kostet das Auffächern mehr, als es spart — acht
 #: Threads für zwanzig Polygone zu starten ist reiner Verwaltungsaufwand.
 PARALLEL_FROM = 40
+
+#: Bis zu zehn Ebenen spart der Segmentweg den vollständigen Körperaufbau.
+#: Gemessen am Laptop, MiniGolf, Piratenschiff und Aushöhlprojekt: für eine
+#: Ebene 0,001 bis 0,027 s statt 0,011 bis 0,389 s, auch bei zehn Ebenen schneller.
+DIRECT_SECTIONS_ABOVE = 10
 
 #: Obergrenze der Threads für die Stützsuche. Sechzehn statt acht brachten die
 #: 200 Kandidaten auf dieser Maschine ans gemessene Minimum. Die vollständige
@@ -928,6 +941,7 @@ def _cross_sections(
     *,
     capture_contours: bool,
     cancelled: CancelToken | None = None,
+    shell_source: tuple[MeshData, np.ndarray] | None = None,
 ) -> tuple[list[ShapelyPolygon | None], list[tuple[Polygon, ...] | None]]:
     """Schnitte und optional ihre bereits vorhandenen Kernkonturen.
 
@@ -944,6 +958,17 @@ def _cross_sections(
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    direct = _solid_sections(mesh, heights, cancelled=cancelled)
+    if direct is not None:
+        result: list[ShapelyPolygon | None] = []
+        contours: list[tuple[Polygon, ...] | None] = []
+        for rings in direct:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            shape = _shape_from_rings(rings)
+            result.append(shape)
+            contours.append(_to_polygons(shape) if capture_contours and shape is not None else None)
+        return result, contours
     points, layers, nodes = _plane_segments(mesh, heights, cancelled=cancelled)
     if not len(points):
         return empty, no_contours
@@ -966,8 +991,8 @@ def _cross_sections(
     # frei. Aufgefächert wird trotzdem nicht — sie kostet dann 11 ms für alle
     # vierhundert Schichten, und das Herumreichen der Aufträge wäre wieder
     # teurer als die Arbeit (gemessen: 23 ms auf vier Threads).
-    result: list[ShapelyPolygon | None] = []
-    contours: list[tuple[Polygon, ...] | None] = []
+    result = []
+    contours = []
     for start, end in zip(starts, ends, strict=True):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -976,11 +1001,123 @@ def _cross_sections(
             contours.append(None)
             continue
         shape, own = _polygon_with_contours(
-            points[start:end], nodes[start:end], capture_contours=capture_contours
+            points[start:end],
+            nodes[start:end],
+            capture_contours=capture_contours,
+            shell_ids=lambda edges: _shells_for_edges(mesh, edges, shell_source, cancelled),
         )
         result.append(shape)
         contours.append(own)
     return result, contours
+
+
+def _shells_for_edges(
+    mesh: MeshData,
+    edges: np.ndarray,
+    source: tuple[MeshData, np.ndarray] | None,
+    cancelled: CancelToken | None,
+) -> np.ndarray:
+    """Netzschalen nur bei freier inverser Hülle, samt Herkunft eines Kontaktbands.
+
+    Geteilt werden Kanten nach Eckennummern. Räumlich gleiche Kanten anderer
+    Schalen bleiben getrennt. Im Netzcache liegen nur Felder, kein nativer Kern.
+    """
+    if source is not None:
+        original, used = source
+        ends = used[np.column_stack((edges // mesh.vertex_count, edges % mesh.vertex_count))]
+        edges = ends.min(axis=1) * original.vertex_count + ends.max(axis=1)
+        mesh = original
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    body = mesh.raw
+    key = "solidon_slice_shell_edges"
+    saved = body._cache[key]
+    if saved is None:
+        labels = kernel_process.run(
+            "component_labels",
+            {"edges": np.asarray(body.face_adjacency, dtype=np.int64)},
+            {"count": mesh.triangle_count},
+            weight=mesh.triangle_count,
+            cancelled=cancelled,
+        )[0]["labels"]
+        unique = np.asarray(body.edges_unique, dtype=np.int64)
+        owners = np.empty(len(unique), dtype=np.int64)
+        owners[body.edges_unique_inverse] = np.repeat(labels, 3)
+        codes = unique[:, 0] * mesh.vertex_count + unique[:, 1]
+        order = np.argsort(codes)
+        saved = codes[order], owners[order]
+        body._cache[key] = saved
+    codes, owners = saved
+    return np.asarray(owners[np.searchsorted(codes, edges)], dtype=np.int64)
+
+
+def _solid_sections(
+    mesh: MeshData, heights: np.ndarray, *, cancelled: CancelToken | None = None
+) -> list[list[np.ndarray]] | None:
+    """Direkte Schnitte als Felder; große Kernaufrufe laufen im Hilfsprozess."""
+    if len(heights) <= DIRECT_SECTIONS_ABOVE:
+        return None
+    # Kontaktprüfungen reichen offene Dreiecksbänder herein. Sie tragen
+    # gültige Schnitte, aber keinen Volumenkern; dessen nativer Aufbau kann
+    # an solchen Ausschnitten bereits vor der Statusantwort abbrechen.
+    if not mesh.is_watertight or not mesh.raw.is_winding_consistent:
+        return None
+    arrays, values = kernel_process.run(
+        "slice_sections",
+        {
+            "vertices": np.asarray(mesh.raw.vertices),
+            "faces": np.asarray(mesh.raw.faces),
+            "heights": heights,
+        },
+        {"volume": mesh.volume, "volume_band": EPS_GEOM * mesh.area},
+        weight=mesh.triangle_count,
+        cancelled=cancelled,
+    )
+    if not values["usable"]:
+        return None
+    rings = np.split(arrays["coordinates"], np.cumsum(arrays["sizes"])[:-1])
+    result: list[list[np.ndarray]] = [[] for height in heights]
+    for ring, owner in zip(rings if len(arrays["sizes"]) else [], arrays["owners"], strict=True):
+        result[int(owner)].append(ring)
+    return result
+
+
+def _cross_shape(section: manifold3d.CrossSection) -> ShapelyPolygon | None:
+    """Clipper-Ringe sind vereinigt und gerichtet; die Tiefe ordnet nur Löcher zu."""
+    return _shape_from_rings(section.to_polygons())
+
+
+def _shape_from_rings(rings: list[np.ndarray]) -> ShapelyPolygon | None:
+    """Vereinigte Clipper-Ringe mit positiven Hüllen und negativen Löchern."""
+    if not rings:
+        return None
+    if len(rings) == 1:
+        return ShapelyPolygon(rings[0])
+    outlines = shapely.polygons(
+        shapely.linearrings(
+            np.concatenate(rings),
+            indices=np.repeat(np.arange(len(rings)), [len(ring) for ring in rings]),
+        )
+    )
+    positive = shapely.is_ccw(shapely.get_exterior_ring(outlines))
+    shells = outlines[positive]
+    holes = outlines[~positive]
+    assigned: list[list[Any]] = [[] for shell in shells]
+    if len(holes):
+        # Ein Loch gehört zur kleinsten Hülle, die seine ganze Fläche trägt.
+        # Ein Punkt allein könnte auf einer Materialinsel im Loch liegen.
+        child, parent = shapely.STRtree(shells).query(holes, predicate="covered_by")
+        areas = shapely.area(shells)
+        for number, hole in enumerate(holes):
+            candidates = parent[child == number]
+            if len(candidates):
+                owner = int(candidates[np.argmin(areas[candidates])])
+                assigned[owner].append(hole.exterior)
+    parts = [
+        _repaired(ShapelyPolygon(shell.exterior, inner))
+        for shell, inner in zip(shells, assigned, strict=True)
+    ]
+    return parts[0] if len(parts) == 1 else cast(ShapelyPolygon, unary_union(parts))
 
 
 def _plane_segments(
@@ -1003,8 +1140,9 @@ def _plane_segments(
     # Ein ignorierter lokaler Bau kann älter als die Quelle sein. Der
     # Quellklon bleibt dann funktionsfähig und sagt über die übersprungenen
     # Vergleichstests klar, dass ``build_slice_core.py`` erneut laufen muss.
-    # Version 2 bestätigt auch den optionalen Abbruchrückruf als fünftes Argument.
-    if _chain is not None and getattr(_chain, "PLANE_SEGMENTS_API", None) == 2:
+    # Version 2 bestätigte den optionalen Abbruchrückruf als fünftes Argument,
+    # Version 3 die gerichteten Segmente.
+    if _chain is not None and getattr(_chain, "PLANE_SEGMENTS_API", None) == PLANE_SEGMENTS_API:
         # ``ascontiguousarray`` kann einen schreibgeschützten Puffer unverändert
         # zurückgeben; der übersetzte Kern braucht schreibbare Speicherbereiche.
         args = (
@@ -1085,6 +1223,7 @@ def _plane_segments_numpy(
         return _no_segments()
 
     corners, height_above, crossing = corners[keep], height_above[keep], crossing[keep]
+    falls_first = above[keep]
     rows = np.arange(len(corners))[:, None]
     # Die zwei kreuzenden Kanten, in der Reihenfolge, in der das Dreieck sie
     # benennt.
@@ -1152,6 +1291,14 @@ def _plane_segments_numpy(
     nodes = np.minimum(corner_from, corner_to) * len(mesh.raw.vertices) + np.maximum(
         corner_from, corner_to
     )
+
+    # Die Richtung des Segments, wie im übersetzten Kern (RM-485): Es beginnt
+    # auf der Kante, die im Umlauf des Dreiecks von oben nach unten führt. Bei
+    # nach außen gerichteten Dreiecken liegt das Material dann links, ein
+    # Außenring läuft gegen den Uhrzeigersinn und ein Hohlraum mit ihm.
+    rising = ~falls_first[np.arange(len(edges)), edges[:, 0]]
+    points[rising] = points[rising][:, ::-1]
+    nodes[rising] = nodes[rising][:, ::-1]
     kept_points, kept_layers, kept_nodes = points, layers[keep], nodes
     order = np.argsort(kept_layers, kind="stable")
     return kept_points[order], kept_layers[order], kept_nodes[order]
@@ -1177,37 +1324,16 @@ def _lexicographically_after(first: Any, second: Any) -> Any:
     )
 
 
-def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
-    """Die geschlossenen Ringe einer Schicht, aus den Kantennummern verkettet.
+def _pairs_up(ends: Any) -> Any | None:
+    """Die Sortierung der Segmentenden, wenn jeder Knoten genau zwei trägt.
 
-    Ein Schnittpunkt gehört genau einer Kante, und eine Kante genau zwei
-    Dreiecken. Damit trägt jeder Knoten genau zwei Segmente, und die Ringe
-    sind schlicht die Zyklen dieser Zuordnung — kein Noden, keine
-    Fließkommaentscheidung, keine Toleranz.
-
-    ``None`` heißt „nicht hier entschieden" und hat zwei Gründe. Der erste:
-    ``_chain`` ist nicht gebaut. Der Weg lohnt sich nur übersetzt — als
-    Python-Schleife kostet derselbe Durchlauf 608 ms, wo GEOS für die
-    schwerere Aufgabe 826 ms braucht, und die Verkettung wäre ein Umbau ohne
-    Gewinn. Der zweite: Die Voraussetzung trägt nicht, weil ein Knoten einen
-    Grad ungleich zwei hat — eine offene Kante im Netz, oder eine Ebene genau
-    durch eine Ecke. Dann ist GEOS die richtige Antwort, denn es kommt auch
-    mit dem zurecht, was hier nicht mehr eindeutig ist.
-
-    Zurück kommen die Koordinaten in Ringreihenfolge und je Koordinate die
-    Nummer ihres Rings — genau die Form, die ``shapely.linearrings`` erwartet.
+    Ein Sort genügt für drei Aufgaben: gleiche Knoten paaren, Grad zwei
+    prüfen und ihre Nummern dicht machen. Vorher sortierte ``np.unique``
+    zuerst die großen Kantennummern und ``argsort`` danach dieselben Enden
+    noch einmal über ihre dichten Nummern — rund 20 ms für 400 Schichten.
     """
-    if _chain is None:
-        return None
-
-    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
     if len(ends) < 6:
         return None
-
-    # Ein Sort genügt für drei Aufgaben: gleiche Knoten paaren, Grad zwei
-    # prüfen und ihre Nummern dicht machen. Vorher sortierte ``np.unique``
-    # zuerst die großen Kantennummern und ``argsort`` danach dieselben Enden
-    # noch einmal über ihre dichten Nummern — rund 20 ms für 400 Schichten.
     order = np.argsort(ends, kind="stable")
     ordered = ends[order]
     if len(ordered) % 2 or np.any(ordered[0::2] != ordered[1::2]):
@@ -1216,6 +1342,51 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
     # Grenze zwischen den Paaren deckt jeden Grad über zwei ab.
     if np.any(ordered[1:-1:2] == ordered[2::2]):
         return None
+    return order
+
+
+def _directions_agree(nodes: Any) -> bool:
+    """Ob die gerichteten Segmente einer Schicht geschlossene Umläufe bilden.
+
+    Jeder Knoten trägt genau zwei Segmente, und an jedem endet eines, während
+    das andere beginnt. Nur dann hat die Umlaufzahl eines Punkts eine
+    Bedeutung; eine offene Kante oder ein Dreieck gegen die Richtung seiner
+    Nachbarn nimmt sie ihm (RM-485).
+    """
+    pairs = np.asarray(nodes, dtype=np.int64)
+    if _pairs_up(pairs.reshape(-1)) is None:
+        return False
+    return bool(np.array_equal(np.sort(pairs[:, 0]), np.sort(pairs[:, 1])))
+
+
+def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any, bool, Any] | None:
+    """Die geschlossenen Ringe einer Schicht, aus den Kantennummern verkettet.
+
+    Ein Schnittpunkt gehört genau einer Kante, und eine Kante genau zwei
+    Dreiecken. Damit trägt jeder Knoten genau zwei Segmente, und die Ringe
+    sind schlicht die Zyklen dieser Zuordnung — kein Noden, keine
+    Fließkommaentscheidung, keine Toleranz.
+
+    ``None`` heißt „nicht hier entschieden": Die Voraussetzung trägt nicht,
+    weil ein Knoten einen Grad ungleich zwei hat — eine offene Kante im Netz,
+    ein verzweigtes Netz. Dann ist GEOS die richtige Antwort, denn es kommt
+    auch mit dem zurecht, was hier nicht mehr eindeutig ist.
+
+    Ohne ``_chain`` ordnet NumPy dieselben Zyklen nach Netzknoten
+    (:func:`_numpy_rings`). Räumlich gleiche Punkte bleiben getrennt, wenn
+    das Netz sie nicht verbindet — auch an einer Rücklaufnaht.
+
+    Zurück kommen die Koordinaten in Ringreihenfolge, je Koordinate die
+    Nummer ihres Rings — genau die Form, die ``shapely.linearrings`` erwartet —
+    und ob jeder Ring in der Richtung seiner Segmente läuft. Nur dann sagt die
+    Umlaufrichtung, wo Material ist. Zuletzt stehen die Kanten-IDs in derselben Reihenfolge.
+    """
+    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
+    order = _pairs_up(ends)
+    if order is None:
+        return None
+    if _chain is None:
+        return _numpy_rings(points, nodes)
 
     dense_flat = np.empty(len(order), dtype=np.int64)
     dense_flat[order] = np.repeat(np.arange(len(order) // 2, dtype=np.int64), 2)
@@ -1245,24 +1416,141 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
     # Zwei Wege durch dieselbe Rechnung dürfen sich nicht in der letzten
     # Stelle unterscheiden. Der übersetzte ist der schnellere, nicht der
     # genauere — und das ist Absicht.
-    return np.round(points.reshape(-1, 2), 6)[walk[:written]], ring_of[:written]
+    #
+    # Ein ungerader Schritt heißt: Ein Segment wurde von seinem Ende her
+    # betreten, die Richtungen der Dreiecke widersprechen sich dort.
+    oriented = not bool(np.any(walk[:written] & 1))
+    return (
+        np.round(points.reshape(-1, 2), 6)[walk[:written]],
+        ring_of[:written],
+        oriented,
+        np.asarray(nodes).reshape(-1)[walk[:written]],
+    )
+
+
+def _numpy_rings(points: Any, nodes: Any) -> tuple[Any, Any, bool, Any] | None:
+    """Gerichtete Zyklen rein aus Netzknoten, unabhängig von gleichen XY-Punkten.
+
+    Zeigerverdopplung findet zuerst den kleinsten Segmentindex jedes Umlaufs,
+    dann den Abstand zu diesem Anfang. Sortieren dieser Abstände ordnet die
+    Ringe, ohne eine Python-Schleife je Segment und ohne räumliche Verkettung.
+    Das erhält Rücklaufnähte und berührende Schalen genau wie der native Weg.
+    """
+    if not _directions_agree(nodes):
+        return None
+    count = len(points)
+    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
+    order = _pairs_up(ends)
+    assert order is not None
+    first, second = order[0::2], order[1::2]
+    paired = np.empty(len(ends), dtype=np.int64)
+    paired[first], paired[second] = second, first
+    following = paired[1::2] // 2
+    labels = np.arange(count)
+    step = following.copy()
+    for _level in range(count.bit_length()):
+        labels = np.minimum(labels, labels[step])
+        step = step[step]
+    anchor = np.arange(count) == labels
+    distance = np.where(anchor, 0, 1)
+    step = np.where(anchor, np.arange(count), following)
+    for _level in range(count.bit_length()):
+        distance += distance[step]
+        step = step[step]
+    order = np.lexsort((-distance, labels))
+    lengths = np.bincount(labels, minlength=count)
+    order = order[lengths[labels[order]] >= 3]
+    if not len(order):
+        return None
+    _, ring_of = np.unique(labels[order], return_inverse=True)
+    return np.round(np.asarray(points)[order, 0], 6), ring_of, True, np.asarray(nodes)[order, 0]
+
+
+def _positive_rings(
+    coordinates: np.ndarray,
+    ring_of: np.ndarray,
+    edges: np.ndarray,
+    shells: Callable[[np.ndarray], np.ndarray] | None,
+) -> manifold3d.CrossSection | None:
+    """Gerichtete Fläche; ein quer selbstschneidender Umlauf ist mehrdeutig.
+
+    Eine Berührung oder eine zurücklaufende Naht kann dagegen eindeutig sein:
+    Nur eine Seite der Umlaufzahl trägt Fläche. Belegt sind diese Nähte am
+    Laptop-Ständer; die Acht mit zwei entgegengesetzten Lappen bleibt beim
+    Reparaturweg über die losen Segmente.
+    """
+    starts = np.flatnonzero(np.r_[True, ring_of[1:] != ring_of[:-1]])
+    rings = np.split(coordinates, starts[1:])
+    simple = shapely.is_simple(shapely.linearrings(coordinates, indices=ring_of))
+    for number in np.flatnonzero(~simple):
+        ring = [rings[number]]
+        positive = manifold3d.CrossSection(ring, manifold3d.FillRule.Positive)
+        negative = manifold3d.CrossSection(ring, manifold3d.FillRule.Negative)
+        if not positive.is_empty() and not negative.is_empty():
+            return None
+    outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
+    following = np.arange(1, len(coordinates) + 1)
+    following[np.r_[starts[1:], len(coordinates)] - 1] = starts
+    x, y = coordinates[:, 0], coordinates[:, 1]
+    positive_direction = np.add.reduceat(x * y[following] - x[following] * y, starts) > 0.0
+    negative_indices = np.flatnonzero(~positive_direction)
+    if len(negative_indices):
+        positive_area = unary_union(
+            [_repaired(outline) for outline in outlines[positive_direction]]
+        )
+        free = [number for number in negative_indices if not positive_area.covers(outlines[number])]
+        turn = np.zeros(len(rings), dtype=bool)
+        turn[free] = True
+        if free and len(rings) > 1:
+            if shells is None:
+                return None
+            owners = shells(edges[starts])
+            for owner in np.unique(owners[free]):
+                own = owners == owner
+                material = manifold3d.CrossSection(
+                    [ring for ring, belongs in zip(rings, own, strict=True) if belongs],
+                    manifold3d.FillRule.Negative,
+                )
+                for number in np.flatnonzero(positive_direction & ~own):
+                    foreign = manifold3d.CrossSection([rings[number]], manifold3d.FillRule.Positive)
+                    if not foreign.is_empty() and (foreign - material).is_empty():
+                        # Getrennte inverse Innenwand oder Materialinsel?
+                        # Ohne Herkunft ist das nicht entschieden. Die alte
+                        # Verschachtelung bleibt der konservative Reparaturweg.
+                        return None
+            turn = np.isin(owners, owners[free])
+        for number in np.flatnonzero(turn):
+            rings[number] = rings[number][::-1]
+    return manifold3d.CrossSection(rings, manifold3d.FillRule.Positive)
 
 
 def _polygon_with_contours(
-    points: Any, nodes: Any, *, capture_contours: bool
+    points: Any,
+    nodes: Any,
+    *,
+    capture_contours: bool,
+    shell_ids: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> tuple[ShapelyPolygon | None, tuple[Polygon, ...] | None]:
     """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
 
     Zuerst über die Kantennummern verkettet (:func:`_rings_from`); trägt deren
     Voraussetzung nicht, schließt GEOS die Ringe selbst aus den gerundeten
-    Koordinaten. Beide Wege enden an derselben Stelle: Zurück kommen Ringe,
-    keine Flächen — ein Außenring und der Ring einer Bohrung sehen gleich aus.
-    Was was ist, folgt daraus, wie tief ein Ring in den anderen sitzt — gerade
-    ist Material, ungerade ein Loch.
+    Koordinaten. Gerichtete Ringe werden mit positiver Umlaufzahl vereinigt:
+    Das Material liegt links, Hohlräume laufen andersherum als Außenränder.
+    Ohne widerspruchsfreie Richtung bleibt die bisherige Verschachtelung
+    mit Reparatur der losen Segmente.
     """
     chained = _rings_from(points, nodes)
     if chained is not None:
-        coordinates, ring_of = chained
+        coordinates, ring_of, oriented, edges = chained
+        if oriented:
+            section = _positive_rings(coordinates, ring_of, edges, shell_ids)
+            if section is not None and not section.is_empty():
+                shape = _cross_shape(section)
+                return (
+                    shape,
+                    _to_polygons(shape) if capture_contours and shape is not None else None,
+                )
         if len(ring_of) and ring_of[-1] == 0:
             # ``polygonize`` richtet einen einzelnen Außenring im Uhrzeigersinn
             # aus und schließt ihn. Beides ist hier ohne GEOS bekannt. Dieselbe

@@ -12,25 +12,17 @@ Messwerte, Modellreihen und Anlässe stehen unter denselben Überschriften in
 
 ## Die Abgrenzung, die nicht verhandelbar ist
 
-Kein eigener G-Code-Slicer (`AGENTS.md`, §22.5): Hier entsteht Analyse, in
-Millisekunden und ohne Fremdprozess. Kennzahlen aus Schichtanalyse und G-Code
-werden nie vermischt, jeder Wert nennt seine Herkunft (Regel 14) — der
-Prüfbericht sagt, ob geschätzt oder gemessen. In der Oberfläche heißt sie
-„Schichtanalyse“, nicht „Vorschau“: Sie zeigt Geometrie, keine Werkzeugwege.
+Solidon analysiert Geometrie und schreibt keinen G-Code (§22.5). Jede Kennzahl
+nennt ihre Herkunft; Schätzung und G-Code-Wert verschmelzen nie. Die Oberfläche
+nennt sie „Schichtanalyse“.
 
 ## Zwei Wege durch den Schnitt, und beide müssen dasselbe rechnen
 
-`app/core/slice/_chain.pyx` (gebaut von `tools/build_slice_core.py`) ist
-optional; ohne ihn läuft derselbe Schnitt über `shapely.polygonize`.
-
-- **Der GEOS-Weg bleibt der Bezug**: Ihn nimmt jeder Klon ohne Compiler — nie
-  entfernen, vernachlässigen oder als Notlösung behandeln.
-- **Jede Änderung gilt beiden**; `tests/test_slice_core.py` hält sie aneinander
-  (Fläche, Löcher, Geometrieart, Überhang).
-- **Der übersetzte Weg rundet wie GEOS** auf sechs Stellen, obwohl er genauer
-  könnte: Zwei Wege durch dieselbe Rechnung unterscheiden sich nicht in der
-  letzten Stelle, auch nicht zum Besseren.
-- **Keine weitere Python-Idee für den Schnitt** — drei sind gemessen.
+Ab elf Ebenen dichte Körper mit Volumenerhalt: `Manifold.slice`; sonst gerichtete
+Segmente über Cython oder NumPy/GEOS, Material über `CrossSection(Positive)`.
+Netzknoten trennen berührende Schalen. Ohne eindeutige Richtung gilt der
+Reparaturweg. Beide Segmentwege runden gleich auf sechs Stellen;
+`test_slice_core.py` erzwingt beide. Jeder Weg bleibt abbrechbar.
 
 ## Die Einstellungen bleiben trotzdem hier
 

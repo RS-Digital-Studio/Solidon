@@ -434,8 +434,43 @@ def component_labels(arrays: Mapping[str, np.ndarray], values: Values, check: Ch
     return {"labels": np.ascontiguousarray(labels)}, {}
 
 
+def slice_sections(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
+    """Gerichtete Schichtschnitte eines unverändert übernommenen Volumens.
+
+    Negative freie Schalen können hier nicht von Hohlräumen unterschieden
+    werden. Bei negativen Komponenten übernimmt daher der Segmentweg diese
+    Entscheidung, statt eine freie invertierte Schale still zu verlieren.
+    """
+    check()
+    body = solid(arrays["vertices"], arrays["faces"])
+    check()
+    if (
+        body.status() != manifold3d.Error.NoError
+        or body.volume() <= 0.0
+        or abs(body.volume() - values["volume"]) > values["volume_band"]
+    ):
+        return {}, {"usable": False}
+    if any(part.volume() < 0.0 for part in body.decompose()):
+        return {}, {"usable": False}
+    check()
+    rings: list[np.ndarray] = []
+    owners: list[int] = []
+    for index, height in enumerate(arrays["heights"]):
+        check()
+        contours = body.slice(float(height)).to_polygons()
+        rings.extend(contours)
+        owners.extend([index] * len(contours))
+    check()
+    return {
+        "coordinates": np.concatenate(rings) if rings else np.empty((0, 2), dtype=np.float64),
+        "sizes": np.asarray([len(ring) for ring in rings], dtype=np.int64),
+        "owners": np.asarray(owners, dtype=np.int64),
+    }, {"usable": True}
+
+
 #: Was der Hilfsprozess rechnen darf — nach Namen, und sonst nichts.
 JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcome]]] = {
+    "slice_sections": slice_sections,
     "display_simplify": display_simplify,
     "simplify_at_most": simplify_at_most,
     "simplify_search": simplify_search,

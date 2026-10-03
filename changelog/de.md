@@ -53,6 +53,7 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- Bei ineinandergesteckten Teilen zählt die Druckanalyse eingeschlossene Luft nicht mehr als Material. Das verbessert auch die Erkennung von Überhängen und nötigen Stützen.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
 - Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
 - Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.

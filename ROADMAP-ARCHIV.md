@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)](#rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026) |
 | 2026-10-03 | [RM-494: Der Export schreibt sofort, wo kein Schritt nach der Güte fragt (03.10.2026)](#rm-494-der-export-schreibt-sofort-wo-kein-schritt-nach-der-güte-fragt-03102026) |
 | 2026-10-03 | [RM-493: Übernehmen im Auswahlfenster wartet die laufende Vorschau ab und rechnet danach noch einmal (03.10.2026)](#rm-493-übernehmen-im-auswahlfenster-wartet-die-laufende-vorschau-ab-und-rechnet-danach-noch-einmal-03102026) |
 | 2026-10-03 | [RM-471: Schriftzüge setzt HarfBuzz statt matplotlib (03.10.2026)](#rm-471-schriftzüge-setzt-harfbuzz-statt-matplotlib-03102026) |
@@ -38089,3 +38090,34 @@ Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachm
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-2), Rohwerte in `weg1\ergebnisse\`.
 
 **Abschluss:** Die Auswertung reicht jeder Operation eine beobachtete Güte (`evaluate._WatchedQuality`: Vergleich, Hashwert und `pickle` merken die Frage) und meldet in `EvaluationResult.reads_quality`, ob ein Schritt sie gelesen hat; ein Cachetreffer trägt die Angabe mit, auch von der Platte, ein alter Eintrag ohne sie gilt als gefragt. `Session.fine_current` behandelt einen Entwurf ohne solche Frage als fein. Dazu fragt die Boolesche Kette erst hinter den verlustfreien Stufen nach der Güte (`boolean.boolean`): Beide Ketten beginnen mit `DRAFT_CHAIN`, und hielt *direkt*, war der Entwurf schon die feine Rechnung; vorher wählte die Kette ihre Stufen vorab und meldete so jede Bohrung als gütewirksam. Kegel und Ring rechnen seit RM-427 in beiden Stufen gleich, eine Bohrung an Quader und Platte ist im Entwurf bitgleich zur feinen Rechnung; weich verschmolzene Teile fragen weiter und werden fein nachgerechnet (RM-426). Tests in `test_evaluation.py` (Quader und Bohrung fragen nicht, *Bohrung ändern* an der Platte fragt nicht, Verschmelzen fragt, Treffer melden dasselbe) und `test_cache.py` (Angabe übersteht die Platte); ohne die Kettenänderung 2 von 4 rot (Gegenprobe). Weg-1-Detailsonde am echten Fenster (offscreen, F0FF), Klick bis Datei: Lochbrett-STEP 5,017 → 0,016 s, Rucksack-Halter 1,072 → 0,032 s, Platte 0,285 → 0,017 s (v0.5.1: 0,039 / 0,069 / 0,027 s); Dreiecke und Volumen der Dateien unverändert (2762 / 10 633,23 mm³, 15 978 / 27 026,24 mm³, 796 / 31 250,93 mm³). Rohwerte `F:\solidon-review-reports\regression-0.5.2\weg1\ergebnisse\detail-aufl494b-*`. Begonnen in `claude/rm-494`, abgeschlossen von Claude (Thread „Zweige auflösen“).
+
+## RM-485: Die Schichtanalyse unterscheidet Material und Luft auch bei überlappenden Schalen (03.10.2026)
+
+<a id="rm-485-die-schichtanalyse-unterscheidet-material-und-luft-auch-bei-überlappenden-schalen-03102026"></a>
+<a id="rm-485"></a>
+
+**RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_polygon_with_contours`/`_nested`
+  entscheiden Material und Loch nach der Verschachtelungstiefe der Ringe und werfen die
+  Umlaufrichtung weg. Bei mehreren sich überlappenden Schalen (Tinkercad- und viele
+  Thingiverse-Exporte, Baugruppen als eine STL) wird eine Fläche, die nur von Ringen
+  verschiedener Teile umschlossen ist, als Material gezählt. Gemessen: Rahmen aus vier
+  überlappenden Balken 1600 statt 1200 mm² in allen Schichten, Ring aus acht Zylindern 1195,6
+  statt 892,9 mm², `parametric-laptop-riser.stl` 46 von 460 Schichten über 1 %, 5 über 10 %
+  falsch (z 65,10: 2694 statt 2146 mm²). Kontrollfälle ohne eingeschlossene Luft (Kreuz, Mini
+  Golf v17, Piratenschiff) stimmen. Falsch werden damit Schichtfläche, Inseln, Überhänge,
+  Stützraum, Brücken und Materialschätzung im Prüfbericht.
+  **Stellen:** `app/core/slice/analysis.py:1251–1362`, Einzelringweg `:1264–1275`.
+  **Fix (allgemein):** Richtung jedes Schnittsegments aus dem Dreieck übernehmen, gerichtete
+  Ringe mit Füllregel Positive vereinigen (Clipper2 in `manifold3d.CrossSection`, schon im
+  Paket, ganzzahlig und plattformgleich); für gültige Körper direkt `Manifold.slice(z)` (am
+  Laptop-Ständer 0,33–0,50 statt 3,4–4,1 s). Clipper2 auf den heutigen Ringen ohne Richtung
+  ist ebenfalls falsch.
+  **Abnahme:** Geometrietests zuerst: Rahmen (1200 mm², Fenster ohne Insel/Überhang), Ring
+  aus acht Zylindern, Laptop-Ständer oder ein kleiner Korpuszwilling (je Schicht gleich
+  `Manifold.slice` bis 1e-6 relativ); Kreuz, Mini Golf v17, Piratenschiff, Hohlkugel und
+  `aushoehlen-und-teilen.p3d` unverändert. Bauplan §22, §31; Regel 6.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-1), `bibliotheken\sonden\b9_*`, `b3_*`.
+
+**Abschluss:** Ursache war die Entscheidung nach Verschachtelung ohne gerichtete Materialseite (546eff167, bereits in v0.5.0 und v0.5.1). Schnittsegmente tragen jetzt die Richtung des Dreiecks; Cython API 3 und NumPy verketten dieselbe Netztopologie. Positive Umlaufzahl in Clipper2 hält die Luft zwischen überlappenden Teilen frei. Gültige geschlossene Körper mit mehr als zehn Ebenen werden über den vorhandenen abbrechbaren Hilfsprozess direkt geschnitten. Wenige Ebenen und offene Kontaktbänder nehmen den Segmentweg. Cache-Version 37 entwertet frühere Ausrichtungen und Auto-Split-Ergebnisse. Vor dem Fix: vier rote Materialfälle (Rahmen 1600 statt 1200 mm², Zylinderring 1195,64 statt 892,94 mm², Teil im Teil, Korpuszwilling). Danach: alle Materialfälle mit Direkt-, Cython- und NumPy-Weg grün; Rahmen 1200 mm², freies Fenster, keine Insel, kein Überhang, kein Stützraum. Vollständige 0,2-mm-Raster von Laptop-Ständer, Mini Golf v17, gesamtem Piratenschiff, Aushöhlprojekt, Kreuz und Hohlkugel verglichen: maximal 4,492e-7 relativ zwischen Segment- und Direktschnitt am Laptop, Cython/NumPy dort identisch; die Kontrollmodelle bleiben innerhalb 8,932e-7 zum alten Stand. Das erste Entwicklungstor zeigte sieben native Auto-Split-Abbrüche an offenen Kontaktbändern; isoliert mit Exit 3221225477 reproduziert, vor dem nativen Aufbau durch Dichtheits- und Umlaufprüfung behoben. Die sieben Fälle und ein neuer Wächter bestehen. Wenige Schnitte: eine Ebene am Piratenschiff 0,0270 s im Segmentweg statt 0,3886 s im Direktweg; frühe Routenwahl bis zehn Ebenen mit roten Gegenproben abgesichert. Gezielte Läufe: 1144 bestanden, 3 übersprungen, 1 abgewählt; nach den letzten Guards 251 bestanden, 3 übersprungen. Endgültiges Entwicklungstor am eingefrorenen Stand: 20569 passed, 34 skipped in 628.82s (0:10:28); Ruff, Formatprüfung, mypy und Suite jeweils Exit 0. Keine Fenster-/Renderer-/Release-Leistungsprüfung. Sechs Changelog-Punkte in 0.5.2. Eigener Commit zu RM-485 mit diesen Quellen, dem neuen Korpuszwilling und diesem Abschluss; Rohprotokolle und Messskripte unter F:\3D Druck\tmp\schichtanalyse-gegenproben-20261003, Bericht geometrie-bericht.md.
+ Die unabhängige Nachprüfung ergänzte zwei weitere Fehlerbilder: vollständig invertierte Rohre verloren ihre Öffnung (12 rote Fälle), und NumPy übernahm einen Zweipunktring, den Cython auslässt (ein roter Fall). Kanten-IDs ordnen Ringe jetzt bei Bedarf ihrer echten Netzschale zu; eigene Innenringe drehen mit, unabhängige Inseln bleiben erhalten. Der offene Kontaktband-Ausschnitt trägt dafür seine Originaltopologie weiter. Nur in diesem Bedarfspfad entsteht ein gecachter Komponentenindex; der normale positive Schnitt baut keinen Netzgraphen. Drei rote Fälle einer vollständig invertierten Hohlkugel mit getrennten Innenwänden belegen zusätzlich die Mehrdeutigkeit dieser Eingabe; dort bleibt der bestehende Verschachtelungsweg erhalten. Alle Schnitt-, Kern-, Stand- und Orientierungsfälle zusammen: 257 bestanden. Die sechs echten Modellkontrollen wurden nach den Änderungen erneut über alle Schichten geprüft. Die statische Nachprüfung hat keinen offenen Fund mehr. Der vorzeitig gestartete dritte Gesamtlauf wurde wegen des letzten Reviewfunds vollständig beendet und bleibt ausdrücklich als unvollständig dokumentiert.
