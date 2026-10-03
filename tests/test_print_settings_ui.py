@@ -2565,6 +2565,21 @@ def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) ->
 # --- Aussehen und gestufte Tiefe ----------------------------------------------------
 
 
+def _path_of(dialog: PrintSettingsDialog, editor: QWidget) -> str:
+    """Der Einstellungspfad zu einem Feld des Dialogs."""
+    return next(path for path, known in dialog._editors.items() if known is editor)
+
+
+def _in_form(form: QFormLayout, editor: QWidget) -> bool:
+    """Ob ``editor`` in einer Feldzelle dieses Formulars steht, auch in einem Halter."""
+    for row in range(form.rowCount()):
+        item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+        holder = item.widget() if item is not None else None
+        if holder is not None and (holder is editor or holder.isAncestorOf(editor)):
+            return True
+    return False
+
+
 def test_no_field_stretches_across_the_whole_dialog(dialog: PrintSettingsDialog) -> None:
     """Ein Wert wie 0,200 stand in einem 726 Bildpunkte breiten Kasten.
 
@@ -2576,17 +2591,38 @@ def test_no_field_stretches_across_the_whole_dialog(dialog: PrintSettingsDialog)
     Gemessen wird am gezeigten Fenster und nicht an `maximumWidth`: Dass eine
     Grenze gesetzt ist, heißt nicht, dass das Layout sie einhält.
     """
-    dialog.resize(960, 760)
+    # Erst zeigen, dann aufziehen — wie der Kunde: Die Anfangsgröße beim
+    # Zeigen folgt dem Bildschirm (offscreen 800 Punkte) und nicht einem
+    # ``resize`` davor; eine danach gezogene Breite bleibt (``fenster.md``).
     dialog.show()
-    QApplication.processEvents()
+    for _ in range(16):
+        QApplication.processEvents()
+    dialog.resize(960, 760)
+    for _ in range(16):
+        QApplication.processEvents()
 
     assert dialog.width() >= 900, "der Test taugt nur an einem breiten Fenster"
+    # ``panels.even_fields`` (4d955a9e7) gibt den gedeckelten Feldern eines
+    # Formulars eine Kante: die Wunschbreite des breitesten Nachbarn. Breiter
+    # als der breiteste Wert seines Formulars wird damit keines — und genau das
+    # ist die Zusage, nicht die eigene Wunschbreite jedes Felds.
+    neighbours: dict[int, int] = {}
+    for form in dialog.findChildren(QFormLayout):
+        members = [
+            editor
+            for editor in dialog._editors.values()
+            if FIELD_WIDTH.get(dialog._fields[_path_of(dialog, editor)].kind) is not None
+            and _in_form(form, editor)
+        ]
+        widest = max((editor.sizeHint().width() for editor in members), default=0)
+        for editor in members:
+            neighbours[id(editor)] = max(neighbours.get(id(editor), 0), widest)
     too_wide = []
     for path, editor in dialog._editors.items():
         limit = FIELD_WIDTH.get(dialog._fields[path].kind)
         if limit is None:
             continue
-        allowed = max(limit, editor.sizeHint().width())
+        allowed = max(limit, editor.sizeHint().width(), neighbours.get(id(editor), 0))
         if editor.width() > allowed:
             too_wide.append(f"{path}: {editor.width()} statt höchstens {allowed}")
     assert not too_wide, "\n".join(too_wide)
