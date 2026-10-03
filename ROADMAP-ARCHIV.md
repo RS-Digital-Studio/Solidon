@@ -76,12 +76,15 @@ entfernt hat.
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
 | 2026-10-02 | [RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)](#rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026) |
 | 2026-10-02 | [RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)](#rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026) |
+| 2026-10-02 | [RM-358: Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz (02.10.2026)](#rm-358-weg-1-export-nennt-den-umfang-nicht-die-differenz-trägt-kein-muster-zahlen-und-ablegen-ohne-satz-02102026) |
+| 2026-10-02 | [RM-440: Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten (02.10.2026)](#rm-440-sammelzeile-modell-teilen-über-mehrere-körper-teilt-nur-den-ersten-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
 | 2026-10-02 | [RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)](#rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026) |
 | 2026-10-02 | [RM-458: Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen (02.10.2026)](#rm-458-eine-datei-die-an-schritt-1-hält-sagt-das-statt-zum-anfangen-einzuladen-02102026) |
 | 2026-10-02 | [RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)](#rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026) |
+| 2026-10-02 | [RM-451: Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl (02.10.2026)](#rm-451-bei-einem-halt-verliert-das-erhaltene-bild-ausblendungen-und-plattenwahl-02102026) |
 | 2026-10-02 | [RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)](#rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
@@ -37995,3 +37998,72 @@ Gefunden beim Beheben der roten CI-Fenstertests, Gruppe C (03.10.2026). In der M
 Gefunden bei RM-500 (03.10.2026), Zwilling von RM-251a: Seit ein lokales Sprachmodell zwölf Schritte je Zug hat (`agent.session.steps_for`), zählte die Statuszeile während eines Zugs weiter gegen den festen Deckel acht (`MAX_STEPS`) und zeigte „Schritt 9/8“.
 
 **Abschluss:** Der Deckel kommt vom Modell, das den Zug rechnet: `_on_request_sent` merkt sich `steps_for(backend)`, `_on_agent_progress` zählt dagegen. Test `test_ui.py::test_the_step_counter_of_a_local_model_counts_to_its_own_cap` (Ollama, Schritt 9 von 12), ohne die Änderung rot (Gegenprobe). Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-451: Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl (02.10.2026)
+
+<a id="rm-451-bei-einem-halt-verliert-das-erhaltene-bild-ausblendungen-und-plattenwahl-02102026"></a>
+<a id="rm-451"></a>
+
+**RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
+  Quellenreview `6c9420b1f`, R6C942-02; Folge zum archivierten RM-354.
+  `_show_scene` bereinigt `_hidden` und Plattenzahl aus dem leeren aktuellen
+  Haltergebnis, bevor `_picture_for` das letzte vollständige Bild wählt
+  (`app/ui/main_window.py:19852–19916` am geprüften Stand).
+  **Fix:** Zuerst das gezeigte Bild bestimmen, dessen Ansichtsfilter erhalten.
+  **Abnahme:** Halt am ersten Schritt lässt ausgeblendete Körper und gewählte
+  Platte des erhaltenen Bilds unverändert; echte spätere Körperlöschung
+  bereinigt Filter weiterhin. Bauplan §15.3, §18.8, §25.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+**Abschluss:** `_show_scene` bestimmt zuerst das gezeigte Bild (`_picture_for`) und misst daran Ausblendungen und Plattenzahl; ein Halt am ersten Schritt behält so die ausgeblendeten Körper und die gewählte Platte des erhaltenen Bilds, eine echte Löschung räumt weiter auf. Mitgefunden am Fenster: Über dem erhaltenen Bild stand die Einladung „Womit fangen Sie an?“, weil `_show_invitation` das leere Haltergebnis fragte; sie fragt jetzt ebenfalls das gezeigte Bild. Test: `test_ui.py::test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid` (zwei Platten, eine Ausblendung, Platte 2, Halt am ersten Schritt; Gegenfall Löschung), am Ausgangsstand rot, einzeln grün; die Nachbarn zu Halt und Einladung (9 Fälle) grün. Fenstersonde am echten Fenster (Plattenwahl per Tastatur, Ausblenden über das Signal des Kontextmenüs, Halt über eine gespeicherte Breite jenseits der Feldgrenze): am Stand `origin/main` 3 von 6 (Ausblendung leer, „Alle Platten“, Wähler verborgen), danach 7 von 7. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `7cd40930a`; Entwicklungstor grün (20209 bestanden, ruff, format und mypy ohne Befund).
+
+## RM-440: Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten (02.10.2026)
+
+<a id="rm-440-sammelzeile-modell-teilen-über-mehrere-körper-teilt-nur-den-ersten-02102026"></a>
+<a id="rm-440"></a>
+
+**RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
+  Fund 02.10.2026 bei RM-372 (Claude, Unteragent), am Code gelesen, nicht im Fenster
+  nachgestellt: Wählt der Kunde in der Sammelzeile des Prüfberichts *Modell teilen* für
+  mehrere Körper, startet die Handlung je Körper eine Teilungssuche; die zweite trifft die
+  laufende erste und endet mit „Die Teilung läuft schon“. Geteilt wird nur der erste Körper.
+  **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
+  zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
+  geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
+
+**Abschluss:** Am Fenster nachgestellt (drei 300-mm-Leisten aus einer 3MF, Sammelzeile „(3) Ein Objekt steht über den Bauraum hinaus.“, *Modell teilen*, Körperwahl mit allen): am Stand `origin/main` geteilt nur die erste, eine Transaktion. Jetzt reicht die Sammelzeile alle gewählten Körper an das Fenster (`split_objects`), und `MainWindow.split_in_turn` teilt sie nacheinander: Der nächste startet, wenn der Arbeiter des vorigen ausgelaufen ist (`_on_split_busy`, Sperre `_split_next_due` gegen einen Doppelstart während `wait_for_idle`). Der Fortschritt nennt „Körper 2 von 3 · …“, *Abbrechen* hält auch die wartenden Körper an, jede Teilung bleibt ein eigener Rückgängig-Schritt wie beim einzelnen *Modell teilen*, die Befunde der Suchen sammeln sich über die Reihe, am Ende steht „3 von 3 Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.“ (Abbruch nach geteilten Körpern: eigener Satz). Tests: `test_ui.py::test_a_bundle_row_splits_every_chosen_body_in_turn` (Knopf der Sammelzeile, beide geteilt, zwei Transaktionen, kein „läuft schon“, ein Strg+Z nimmt eine Teilung zurück; am Ausgangsstand rot), `test_cancelling_a_turn_of_splits_leaves_the_rest_whole`, Nachbar `test_a_bundle_row_acting_on_each_body_is_one_undo_step` grün. Fenstersonde am echten Fenster (Klick auf *Modell teilen*, Körperwahl mit Klick auf den Hauptknopf): am Stand `origin/main` 3 von 5, danach 7 von 7. Drei neue Texte in allen Katalogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `fdd3b4bc8`; Entwicklungstor: 20212 bestanden, zwei Abbaufehler in `test_kernel_process.py` unter Last, die Datei allein grün; ruff, format und mypy ohne Befund.
+
+## RM-358: Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz (02.10.2026)
+
+<a id="rm-358-weg-1-export-nennt-den-umfang-nicht-die-differenz-trägt-kein-muster-zahlen-und-ablegen-ohne-satz-02102026"></a>
+<a id="rm-358"></a>
+
+**RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
+  Review 02.10.2026, Gebietsprüfung Weg 1, am HEAD `6ce767031`.
+  - **W1-4 — Strg+E nach einem Merkmalklick exportiert still nur diesen Körper.** Zwei Körper im
+    Bild, die 3MF enthält einen, Quittung „Exportiert: projekt.3mf“. `main_window.py:7693–7698`,
+    `:7811–7816` exportieren die Auswahl; Menütipp (`:3830`), Dialogtitel (`:7764`) und Quittung
+    (`:8011–8019`) nennen den Umfang nicht. Fix ohne Rückfrage: Titel und Quittung nennen „1 von
+    2 Körpern“. §29, §2.8. Sonde `w1_export_auswahl.py`.
+  - **W1-3 — Die Differenzansicht zeichnet ihr Muster nicht.** `Encoding.pattern`
+    (`app/ui/palette.py:182–184`, `:213–229`) wird in `app/ui` nirgends gelesen;
+    `viewport.py:13021–13026` und `_add_body` (`:13156–13171`) unterscheiden Hinzugekommenes und
+    Entferntes nur über Farbe und Deckkraft. `tests/test_palette.py:24–30` prüft eine Zusage, die
+    keine Ansicht einlöst. Fix: `hatch_lines` (`viewport.py:1047`) an die Differenzkörper hängen.
+    Regel 18, §18.7, §19.1 (nur aus der Quelle belegt, Renderer nicht gefahren).
+  - **W1-1 — Die Einheitenfrage schreibt Zahlen mit Punkt und immer in mm**: deutsch „Zoll (in):
+    177.80 × 177.80 × 38.10 mm“, auch bei gewählter Anzeigeeinheit Zoll.
+    `app/core/ingest/ops.py:750–751` (`format_length`), `app/ui/dialogs.py:161` übernimmt;
+    `app.i18n.format_decimal` (`app/i18n/__init__.py:242`) bleibt ungenutzt. §17.1, §19.3,
+    `oberflaeche.md` „Zahlen“. Sonde `w1_einheit.py` Teil A.
+  - **W1-6 — `.f3d`, `.blend`, `.scad`, `.skp`, `.gcode` bekommen beim Ziehen nur das
+    Verbotszeichen.** `start_screen.py:509–528` filtert nach Endung, `main_window.py:22628–22634`
+    nimmt dann nicht an; für Web-Adressen ist dasselbe schon behoben (`start_screen.py:477–490`).
+    Fix: jede lokale Datei annehmen und mit einem Satz samt Weg antworten (G-Code → *G-Code
+    prüfen*). §2.7, §2.3. Sonde `w1_ablegen.py`.
+  **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
+  `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
+  Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
+
+**Abschluss:** Alle vier Funde behoben. **W1-4:** `main_window.export_scope` nennt den Umfang, sobald nicht die ganze Szene hinausgeht; der Dateidialog heißt „Exportieren: 1 von 2 Körpern“, die Quittung „Exportiert: auswahl.3mf · 1 von 2 Körpern“ (auch für mehrere Dateien). **W1-3:** Die Differenzkörper tragen ihr Muster aus `Encoding.pattern`: `viewport.body_hatch` schraffiert je Hauptrichtung der Flächen, Hinzugekommenes unter +45, Entferntes unter −45 Grad (`hatch_lines(turn=…)`, jetzt je Ebene vektorisiert; 327 680 Dreiecke in 0,25 s), Strichfarbe auf dem deckenden Körper die lesbare Gegenfarbe, auf dem durchscheinenden die eigene; gemerkt je Netz. **W1-1:** Die Anzeigeeinheit liegt als Zustand in `app.i18n` (die Oberfläche greift weiter über `labels.set_display_unit`/`display_unit`), und `unit_question` schreibt Zahlen mit dem Dezimalzeichen der Sprache in der Anzeigeeinheit; die Kommandozeile stellt dieselbe Frage samt Größen statt einer ohne. **W1-6:** Startbildschirm, Ablagefeld und Fenster nehmen jede lokale Datei an (`start_screen.dropped_file`); `open_path` schickt G-Code zu *G-Code prüfen* (`check_gcode`), ein Bild zum Relief und sagt sonst „„figur.blend“ kann Solidon nicht öffnen. Speichern Sie das Modell in seinem Programm als 3MF, STEP oder STL und ziehen Sie diese Datei hierher.“ — auf dem Startbildschirm zusätzlich im Ablagefeld, weil die Quittung dort hinter ihm liegt. Tests: `test_ui.py::test_the_export_scope_is_empty_only_for_the_whole_scene`, `test_exporting_a_selection_names_its_scope_in_title_and_receipt`, `test_a_dropped_file_solidon_cannot_read_gets_a_sentence_with_the_way` (f3d, blend, scad, skp), `test_a_dropped_gcode_file_is_checked`, `test_the_start_screen_takes_every_local_file`, `test_the_start_screen_says_the_way_where_the_file_was_dropped`, angepasst `test_a_part_file_drop_reaches_open_path_but_json_does_not`; `test_ingest.py::test_the_question_writes_its_sizes_in_the_display_unit`, angepasst `test_the_question_says_how_big_each_answer_would_be` (hielt „101.60“ fest); `test_viewport_decisions.py::test_a_turned_hatch_runs_diagonally_and_mirrors_with_the_other_turn`, `test_the_difference_bodies_carry_their_pattern`; Renderertest einzeln `test_render_contract.py::test_the_hatch_of_an_added_body_shows_on_its_surface` (grün am echten pygfx). Fenstersonde am echten Fenster (Ablegen über echte `QDropEvent`, Strg+E mit Tastendruck, Einheitenfrage im auf Zoll gestellten Fenster, Vorschau von *Verschieben* mit 12 mm): am Stand `origin/main` 2 von 12, danach 14 von 14; im Bildschirmfoto der Vorschau steht der verschobene Körper blau mit Schrägschraffur. Regeln `kern.md` (Zahlen in fertigem Kerntext) und `oberflaeche.md` nachgezogen. Umgesetzt von Claude (Thread „Bedienung und KI“). Commit `7e7072b88`; Entwicklungstor: 20209 bestanden, Ausfälle nur in `test_kernel_process.py` unter Last (die Datei allein 141 bestanden); ruff, format und mypy ohne Befund.

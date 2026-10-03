@@ -146,7 +146,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
@@ -156,8 +155,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
-| [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
-| [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-494 — Der Export rechnet fein nach, auch wenn Entwurf und feine Rechnung dasselbe ergeben](#rm-494) | Bedienung und Darstellung | Versionsvergleich 02.10.: Regression gegenüber v0.5.1 durch `70aa4c52b` (RM-426); nur nachrechnen, wo die Güte das Ergebnis ändert |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -4440,34 +4437,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und Schnitt teilen den Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei einer
   leicht geneigten Mündung. Die native Viewport-Abnahme bleibt dem Release vorbehalten.
 
-<a id="rm-358"></a>
-
-- [ ] **RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
-  Review 02.10.2026, Gebietsprüfung Weg 1, am HEAD `6ce767031`.
-  - **W1-4 — Strg+E nach einem Merkmalklick exportiert still nur diesen Körper.** Zwei Körper im
-    Bild, die 3MF enthält einen, Quittung „Exportiert: projekt.3mf“. `main_window.py:7693–7698`,
-    `:7811–7816` exportieren die Auswahl; Menütipp (`:3830`), Dialogtitel (`:7764`) und Quittung
-    (`:8011–8019`) nennen den Umfang nicht. Fix ohne Rückfrage: Titel und Quittung nennen „1 von
-    2 Körpern“. §29, §2.8. Sonde `w1_export_auswahl.py`.
-  - **W1-3 — Die Differenzansicht zeichnet ihr Muster nicht.** `Encoding.pattern`
-    (`app/ui/palette.py:182–184`, `:213–229`) wird in `app/ui` nirgends gelesen;
-    `viewport.py:13021–13026` und `_add_body` (`:13156–13171`) unterscheiden Hinzugekommenes und
-    Entferntes nur über Farbe und Deckkraft. `tests/test_palette.py:24–30` prüft eine Zusage, die
-    keine Ansicht einlöst. Fix: `hatch_lines` (`viewport.py:1047`) an die Differenzkörper hängen.
-    Regel 18, §18.7, §19.1 (nur aus der Quelle belegt, Renderer nicht gefahren).
-  - **W1-1 — Die Einheitenfrage schreibt Zahlen mit Punkt und immer in mm**: deutsch „Zoll (in):
-    177.80 × 177.80 × 38.10 mm“, auch bei gewählter Anzeigeeinheit Zoll.
-    `app/core/ingest/ops.py:750–751` (`format_length`), `app/ui/dialogs.py:161` übernimmt;
-    `app.i18n.format_decimal` (`app/i18n/__init__.py:242`) bleibt ungenutzt. §17.1, §19.3,
-    `oberflaeche.md` „Zahlen“. Sonde `w1_einheit.py` Teil A.
-  - **W1-6 — `.f3d`, `.blend`, `.scad`, `.skp`, `.gcode` bekommen beim Ziehen nur das
-    Verbotszeichen.** `start_screen.py:509–528` filtert nach Endung, `main_window.py:22628–22634`
-    nimmt dann nicht an; für Web-Adressen ist dasselbe schon behoben (`start_screen.py:477–490`).
-    Fix: jede lokale Datei annehmen und mit einem Satz samt Weg antworten (G-Code → *G-Code
-    prüfen*). §2.7, §2.3. Sonde `w1_ablegen.py`.
-  **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
-  `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
-  Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
 
 <a id="rm-366"></a>
 
@@ -4497,7 +4466,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stand stehen, ein eigener Knopf setzt bei Bedarf die Einfügemarke dorthin.
   **Stellen:** Verlaufsleiste und Einfügemarke in `app/ui/panels.py` (Verlauf) und
   `app/ui/main_window.py`; Vorschau über den vorhandenen Auswertungs-Cache (`scene/cache.py`),
-  Differenzdarstellung `viewport.py:13021–13026` (Muster aus RM-358 W1-3 mitnehmen).
+  Differenzdarstellung `Viewport._redraw_difference` (trägt seit RM-358 W1-3 ihr Muster, `_add_body`).
   **Abnahme:** Test: Regler hat so viele Rasten wie Transaktionen; Ziehen ändert weder Dokument
   noch Verlauf; jede Raste zeigt die Objekt-Hashes des Stands nach dieser Transaktion; Tastatur
   (Pfeile) bedient ihn, zugänglicher Name gesetzt. Bauplan §18.7, §2.1, §2.8 (Vorschau aus dem
@@ -4627,30 +4596,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   in der Fläche, nach einer Maßänderung der Fläche bleibt der Kantenabstand. Bauplan §2.6, §24.3.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Freie Lage für alle Bausteine an einer Fläche (Schlüsselloch, Einpressbuchse, Mutternfalle, Schraubloch, Wandhalter …) auf ebenen und einfach gekrümmten Flächen, Kantenabstände in Flächenkoordinaten. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 25 Teile mit Befestigungen (Wandhalterungen, Lochwand, Filamenthalter M6, Screen-Cover). Abnahme an mindestens drei unterschiedlichen Bausteinen und Modellen.
 
-<a id="rm-451"></a>
-
-- [ ] **RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
-  Quellenreview `6c9420b1f`, R6C942-02; Folge zum archivierten RM-354.
-  `_show_scene` bereinigt `_hidden` und Plattenzahl aus dem leeren aktuellen
-  Haltergebnis, bevor `_picture_for` das letzte vollständige Bild wählt
-  (`app/ui/main_window.py:19852–19916` am geprüften Stand).
-  **Fix:** Zuerst das gezeigte Bild bestimmen, dessen Ansichtsfilter erhalten.
-  **Abnahme:** Halt am ersten Schritt lässt ausgeblendete Körper und gewählte
-  Platte des erhaltenen Bilds unverändert; echte spätere Körperlöschung
-  bereinigt Filter weiterhin. Bauplan §15.3, §18.8, §25.
-  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
-  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
-
-<a id="rm-440"></a>
-
-- [ ] **RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
-  Fund 02.10.2026 bei RM-372 (Claude, Unteragent), am Code gelesen, nicht im Fenster
-  nachgestellt: Wählt der Kunde in der Sammelzeile des Prüfberichts *Modell teilen* für
-  mehrere Körper, startet die Handlung je Körper eine Teilungssuche; die zweite trifft die
-  laufende erste und endet mit „Die Teilung läuft schon“. Geteilt wird nur der erste Körper.
-  **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
-  zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
-  geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
 
 
 <a id="rm-494"></a>

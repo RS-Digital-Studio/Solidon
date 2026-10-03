@@ -253,3 +253,25 @@ def format_decimal(value: float | int, digits: int | None = None) -> str:
     """
     text = f"{value:.{digits}f}" if digits is not None else f"{value:g}"
     return text.replace(".", decimal_separator())
+
+
+#: Die Längeneinheit, in der geschrieben wird: ``"mm"`` oder ``"in"`` (§19.3).
+#:
+#: **Ein Zustand, wie die Sprache einer ist** — und deshalb hier neben ihr.
+#: Gestellt wird sie von der Oberfläche (``labels.set_display_unit``), gelesen
+#: von jedem, der Längen schreibt: der Oberfläche und dem Kern, wo er Text
+#: **fertig** ausliefert. Die Einheitenfrage beim Einlesen schrieb ihre Maße
+#: immer in Millimetern, auch im auf Zoll gestellten Fenster (RM-358 W1-1).
+#: Gerechnet wird weiter in Millimetern.
+_DISPLAY_UNIT = "mm"
+
+
+def set_display_unit(unit: str) -> None:
+    """Stellt die Längeneinheit, in der geschrieben wird, für den ganzen Prozess."""
+    global _DISPLAY_UNIT
+    _DISPLAY_UNIT = unit
+
+
+def display_unit() -> str:
+    """Die eingestellte Längeneinheit (``"mm"`` oder ``"in"``)."""
+    return _DISPLAY_UNIT

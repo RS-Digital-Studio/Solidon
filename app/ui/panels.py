@@ -5465,6 +5465,15 @@ class ReportPanel(QWidget):
             if REGISTRY.has(action_id):
                 self.actionOnBodies.emit(action_id, chosen)
                 return
+            if handler is not None and action_id == SPLIT_MODEL.id:
+                # **Eine Teilung nach der anderen** (RM-440): Die Suche läuft
+                # im Arbeiter, und je Körper gestartet traf die zweite die
+                # erste („Die Teilung läuft schon“). Das Fenster bekommt alle
+                # gewählten Körper und teilt sie der Reihe nach.
+                error = as_error(finding, self._document)
+                error.values["split_objects"] = chosen
+                handler(error)
+                return
             members: dict[str, Finding] = item.data(_MEMBERS_ROLE) or {}
             if handler is not None:
                 # **Ein Klick, ein Rückgängig-Schritt** (RM-372): Je Körper

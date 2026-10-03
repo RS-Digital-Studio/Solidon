@@ -777,3 +777,40 @@ def test_render_orders_a_frame_and_render_now_draws_it_at_once() -> None:
     GfxRenderer.render(windowless)  # type: ignore[arg-type]
     GfxRenderer.render_now(windowless)  # type: ignore[arg-type]
     assert calls == ["direkt", "direkt"], "ohne Fenster zeichnen beide sofort"
+
+
+def test_the_hatch_of_an_added_body_shows_on_its_surface(renderer: Renderer) -> None:
+    """Die Schraffur des Hinzugekommenen steht sichtbar auf dem Körper (RM-358 W1-3).
+
+    Gezeichnet wie in der Differenzansicht: der Körper in der Farbe von
+    „Hinzugefügt“, deckend und als Überlagerung, darüber die angehobenen
+    Striche in der lesbaren Gegenfarbe. Von oben gesehen trägt die Fläche
+    Bildpunkte beider Farben — die Striche verschwinden nicht in ihr.
+    """
+    import math
+
+    from app.ui.palette import DIFF_PALETTES, readable_on
+    from app.ui.viewport import body_hatch
+
+    added = DIFF_PALETTES["blue_orange"].added
+    vertices, faces = cube()
+    renderer.add_surface(
+        vertices,
+        faces,
+        name="added",
+        style=SurfaceStyle(colour=added.colour, opacity=0.95, coplanar_overlay=True),
+    )
+    ends = body_hatch(vertices, faces, 2.0, math.pi / 4, 0.02)
+    assert len(ends), "ein 20-mm-Würfel trägt bei 2 mm Abstand Striche"
+    line = readable_on(added.colour)
+    renderer.add_lines(ends, name="hatch:added", colour=line, width=2.0)
+    look_down(renderer, (0.0, 20.0, 0.0, 20.0, 0.0, 20.0))
+    image = renderer.screenshot()
+    x0, y0, _ = renderer.world_to_display((2.0, 2.0, 20.0))
+    x1, y1, _ = renderer.world_to_display((18.0, 18.0, 20.0))
+    top = image[round(min(y0, y1)) : round(max(y0, y1)), round(min(x0, x1)) : round(max(x0, x1))]
+    flat = top.reshape(-1, 3).astype(int)
+    want = np.array([round(part * 255) for part in rgb(line)])
+    near_line = np.abs(flat - want).sum(axis=1) < 90
+    assert near_line.mean() > 0.03, f"die Striche sind zu sehen ({near_line.mean():.3f})"
+    assert near_line.mean() < 0.7, "und die Fläche bleibt dazwischen zu sehen"
