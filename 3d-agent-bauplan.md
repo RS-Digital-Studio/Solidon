@@ -3161,7 +3161,7 @@ geforderte Modell-, Feld-, Signier- oder Rechtsabnahme.
 (Grundfenster, Viewport, Objektbaum, Parameterleiste, Verlauf), `tests/data`
 
 *Fertig, wenn:* `core` ohne Qt importierbar · Sprachregelungstest grün · zwei
-Ops im Register, sichtbar in Menü, Palette, Kontextmenü, CLI und Tool-Schema ·
+Ops im Register, sichtbar in Menü, Palette, Auswahlfenster, CLI und Tool-Schema ·
 Projekt speichern und laden erhält den Stack bitgleich · zweimalige Auswertung
 liefert identische Geometrie · Undo/Redo über zehn Transaktionen · Import in
 mm, Zoll und cm mit Einheitenrückfrage · Parameteränderung rechnet nur den
@@ -3197,7 +3197,8 @@ Ergebnis · 3MF-Export öffnet im Slicer mit korrekten Objektnamen · **Weg 1 au
 
 *Fertig, wenn:* `plate_holes` vollständig erkannt · IDs bleiben über zehn Ops
 stabil · `plate_holes_twin` wird als mehrdeutig gemeldet statt geraten · Klick
-liefert die korrekte Feature-ID und das passende Kontextmenü · Klick auf eine
+liefert die korrekte Feature-ID und im Auswahlfenster die passenden
+Operationen · Klick auf eine
 Warnung schaltet die Karte ein und fährt die Kamera hin · verletzte Passung
 erscheint im Bericht · **Schichtanalyse**: Fläche und Stützvolumen stimmen bei
 analytisch bekannten Körpern auf 1 % · `island_tower.stl` wird erkannt ·

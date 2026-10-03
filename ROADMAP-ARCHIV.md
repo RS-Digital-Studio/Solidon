@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)](#rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
 | 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
 | 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
@@ -37308,3 +37309,22 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   `test_sculpt.py::test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out`.
 
 **Abschluss:** Alle vier Funde erledigt. W4-8 mit `88b5f425f` (`test_way_four` setzt und stellt ein Skelett). W4-3 vollständig: Strichtext mit NaN, Unendlich, Radius ≤ 0 oder vier Koordinaten ist ein Eingabefehler mit Ausweg (`_finite`, `_finite_point`; sechs neue Fälle in `test_sculpt.py`). W4-7: Ein Klick auf die Haut setzt das Gelenk unter den Klick in die Mitte des Körpers, entlang des Blicks bis zur Gegenwand (`pose.inside_the_body`, `Viewport.ray_toward`); neben der Haut, streifend oder ins Leere bleibt der Punkt (`test_pose.py::test_a_click_on_the_skin_becomes_a_joint_on_the_axis`). W4-6: Der Skeletteditor zeichnet Knochen und das gesetzte Gelenk vor dem Körper (`Viewport.show_bones`, `clear_bones`, `bones_shown`/`joint_shown`; `test_pose_session.py::test_bones_are_drawn_and_sit_inside_the_body`). Alle 62 Skeletttests einschließlich Fensterfällen grün. Fenstersonde am echten Fenster an `clean_figure.stl`: Gelenk 4,27 mm unter der Haut, Knochen im Bild sichtbar, nach *Fertig* weg; 4 von 4. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-497: Bauplan §40 nennt das Auswahlfenster statt des Kontextmenüs (03.10.2026)
+
+<a id="rm-497-bauplan-40-nennt-das-auswahlfenster-statt-des-kontextmenüs-03102026"></a>
+<a id="rm-497"></a>
+
+**RM-497 — Bauplan §40 nennt in P0 und P1 noch Operationen im Kontextmenü.**
+  Versionsvergleich Weg 1 (03.10.2026). Seit der Entscheidung vom 11.09. stehen Operationen nicht
+  mehr im Kontextmenü, sondern rechts im Auswahlfenster (§18.5; §2.2 ist schon angepasst). Zwei
+  Abnahmesätze in §40 sprechen noch vom alten Weg: P0 „zwei Ops im Register, sichtbar in Menü,
+  Palette, Kontextmenü, CLI und Tool-Schema“ und P1 „Klick liefert die korrekte Feature-ID und das
+  passende Kontextmenü“ (`3d-agent-bauplan.md:3164`, `:3200` am Stand `809141fdd`). Der Docstring
+  `_on_viewport_context_menu` in `app/ui/main_window.py` ist als Kleinigkeit berichtigt.
+  **Fix:** Beide Sätze auf das Auswahlfenster umstellen (Bauplan nur mit Ansage; Thread, der RM-360
+  umgesetzt hat).
+  **Abnahme:** `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nur noch Menüs, die es gibt.
+  Beleg: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md`.
+
+**Abschluss:** Beide Abnahmesätze in §40 nennen das Auswahlfenster: P0 „sichtbar in Menü, Palette, Auswahlfenster, CLI und Tool-Schema“, P1 „Klick liefert die korrekte Feature-ID und im Auswahlfenster die passenden Operationen“. `grep -n Kontextmenü 3d-agent-bauplan.md` trifft in §40 nichts mehr; der verbleibende Treffer in §21 erzählt in der Vergangenheit, wie der Ausweg über die Provenienz gefunden wurde. Umgesetzt von Claude (Thread „Bedienung und KI“), Bauplanänderung angesagt mit RM-360.
