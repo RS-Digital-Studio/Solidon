@@ -3265,7 +3265,7 @@ def spoken_values(error: AppError) -> list[str]:
 #: ``action`` der Freischaltungsfehler (``change``, ``export``, ``slicer``,
 #: ``chat``): eine Kennung fürs Protokoll, die als „Handlung: change“ unter der
 #: Lizenzabsage stand — der Titel sagt schon, was fehlt (RM-456).
-ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids", "action"})
+ADDRESS_VALUES: Final = frozenset({"field", "constraint", "feature_ids", "action", "part_index"})
 
 
 def problem_text(

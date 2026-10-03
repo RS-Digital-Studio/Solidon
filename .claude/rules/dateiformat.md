@@ -212,6 +212,8 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   Filaments (Elegoo, Orca und Creality kennen den Schlüssel nicht und
   übergehen ihn). Cura: `scarf_joint_seam_length` je Netz. Die Grundlage liest
   „an“ nur mit einer Länge über null.
+- **Stützdichte bei Prusa und Orca:** Lücke `s/d−s`, zurück `s/(Lücke+s)`;
+  `s` aus der wirksamen Stützbahn. Ohne positive Dichte aktive Übergabe anhalten.
 - **Eine Stützsperre gehört zu ihrem Objekt, und jede Familie schreibt sie
   anders** (`slicer_keys.helpers_as_parts`): Orca-Familie als eigenes Teil
   (`model_settings.config` nennt die zweite Komponente `support_blocker`),
@@ -462,9 +464,7 @@ Fehlalarm entwertet den echten Befund.
 
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 
-Bambu Studio legt Druckdatei und `result.json` ab und endet manchmal nicht
-mehr. Läufe der Orca-Familie bekommen deshalb
-`finished=handover._result_written(target)`, und `process.run_limited`
+Läufe der Orca-Familie bekommen `finished=handover._result_written(target)`, und `process.run_limited`
 beendet den Baum `FINISHED_LINGER_SECONDS` nach dem gemeldeten Ergebnis.
 Gezählt wird nur eine **neue**, lesbare `result.json` dieses Laufs — eine
 ältere im Ordner des Kunden oder die des ersten Versuchs zählt nicht. Ein
@@ -506,6 +506,5 @@ Eine 3MF soll man drucken können, nicht erst einrichten:
 | Orca-Familie | `Metadata/project_settings.config` | JSON |
 | PrusaSlicer | `Metadata/Slic3r_PE.config` | `; schlüssel = wert` je Zeile |
 
-PrusaSlicer **überspringt die erste Zeile** seiner Beilage (seine Kennung);
-ohne `PRUSA_CONFIG_HEADER` fiele der alphabetisch erste Schlüssel lautlos
-heraus. Cura bekommt seine Einstellungen über die Kommandozeile.
+PrusaSlicers Beilage beginnt mit `PRUSA_CONFIG_HEADER`. Cura bekommt seine
+Einstellungen über die Kommandozeile.

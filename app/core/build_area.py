@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 from shapely import (
@@ -29,6 +29,9 @@ from app.core.errors import CHOOSE_PRINTER, ValidationError
 from app.core.types import BoundingBox, Mesh, PrinterProfile, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
+
+#: Rasterweite der Größenmessung um Z; die Absage berücksichtigt deren Schranke.
+SIZE_ANGLE_STEP_DEGREES: Final = 1
 
 
 def printable_height(printer: PrinterProfile) -> float:
@@ -404,8 +407,7 @@ def placement_offset(
 
 
 def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
-    """Um wie viel ein Körper über den Bauraum hinausgeht, gleich wo er liegt
-    und wie er um die Hochachse gedreht ist, in mm — null, wenn er passt.
+    """Gemessener Überstand über den Bauraum im Winkelraster, in mm.
 
     Die Frage vor dem Slicen (KUNDE-09): Ein Körper **neben** dem Bett ist mit
     *Auf dem Bett anordnen* erledigt, und ein langer Stab, der nur schräg auf
@@ -421,7 +423,9 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     Winkelfunktionen der Plattform rechnen (``.claude/rules/kern.md``, RM-187).
     Passt das Hüllrechteck, der Körper aber wegen einer Sperrzone nirgends,
     kommt der kleinste positive Wert zurück (:data:`EPS_GEOM`) — dort gibt es
-    kein Maß, nur ein „passt nicht".
+    kein Maß, sondern eine erfolglose Platzierungsprobe. Für eine harte
+    Größenabsage muss :func:`size_excess_uncertainty` abgezogen werden;
+    das Winkelraster kann eine tatsächlich passende Drehung verfehlen.
     """
     from shapely.affinity import rotate
 
@@ -436,7 +440,7 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     points = np.asarray(as_mesh_data(mesh).raw.vertices, dtype=float)[:, :2]
     hull = MultiPoint(points).convex_hull
     flat = float("inf")
-    for degrees in range(90):
+    for degrees in range(0, 90, SIZE_ANGLE_STEP_DEGREES):
         low_x, low_y, high_x, high_y = rotate(hull, degrees, origin="centroid").bounds
         over = max(high_x - low_x - width, high_y - low_y - depth)
         flat = min(flat, over, max(high_x - low_x - depth, high_y - low_y - width))
@@ -447,3 +451,15 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     # ihn der Slicer beim Anordnen selbst.
     square = bounds.size[0] <= width + EPS_GEOM and bounds.size[1] <= depth + EPS_GEOM
     return EPS_GEOM if square else 0.0
+
+
+def size_excess_uncertainty(mesh: Mesh) -> float:
+    """Obere Schranke des XY-Messfehlers aus dem Winkelraster.
+
+    Die Projektionsbreite ändert sich bei Winkelabstand delta höchstens um
+    2 D sin(delta/2), D ist der Durchmesser der Projektion. Die XY-Diagonale
+    begrenzt D nach oben; die nächste Rasterprobe liegt höchstens einen
+    halben Schritt entfernt. Kleine Restüberstände belegen kein Nichtpassen.
+    """
+    diameter = math.hypot(*mesh.bounds.size[:2])
+    return 2.0 * diameter * math.sin(math.radians(SIZE_ANGLE_STEP_DEGREES / 4.0))

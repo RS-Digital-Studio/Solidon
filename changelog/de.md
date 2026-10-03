@@ -88,6 +88,9 @@ Nutzen da und sonst nichts.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
 - Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
+- Die eingestellte Stützdichte wird in PrusaSlicer und der Orca-Familie korrekt übernommen. Das Feld beginnt bei 1 %. Für einen Druck ohne Stützen wählen Sie „Keine“.
+- Bei Mehrfarbdrucken mit OrcaSlicer, ElegooSlicer, Bambu Studio und Creality Print erhält der Reinigungsturm eine zur Bettgröße passende Startposition.
+- Zu große Teile meldet Solidon vor dem Slicerstart. Findet es für mehrere Teile keinen Platz auf einer Platte, können Sie sie auf mehrere Platten anordnen lassen.
 
 ### Bohrungen, Langlöcher und Teilen
 

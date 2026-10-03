@@ -106,11 +106,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Materialteil umgesetzt und geprüft; Zeitabnahme nach drei gemessenen Ansätzen offen. Nächster Schritt: Mindesttempo, Erstschichttempi und unabhängig belegte Startzeit |
-| [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
-| [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 2 von 16. G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
 | [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
 | [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
-| [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
 | [RM-503 — Cura übernimmt die native Jerk-Steuerung nicht](#rm-503) | Geometrie, Erkennung und Druckvorbereitung | Schalter und vollständige abhängige Jerk-Werte aus dem gewählten Profil auflösen; M205 im G-Code gegen die Zeitberechnung prüfen |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
@@ -3109,46 +3106,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Stand 03.10.2026 — Materialteil umgesetzt, Zeitabnahme offen:** Der Vergleich benutzt nur das aus bekannten Druckrollen gelesene Modellmaterial und belegte Werkzeugdichten. Spülung und Reinigungsturm erscheinen getrennt; unvollständig belegte Mengen bleiben ausdrücklich unbekannt. Bedingte Firmwarezweige, Cutter-Wiederförderung, unbekannte Rollen und fehlende Materialdaten werden nicht als vollständiges Modellmaterial ausgegeben. Gesamtverbrauch und Verbrauchsbuchung behalten ihren bisherigen Weg. Die Materialgegenprobe bleibt an acht frischen einfarbigen Würfel-/Pilz-Ausgaben der vier verlangten Slicer innerhalb 15 %; bei sechs lesbaren realen Farbdateien liegen die Abweichungen zwischen 0,49 und 9,90 %. Cura ohne übergebene Filamentdaten bleibt unbekannt. Der Parser trennt ausdrücklich ausgewiesene Modellzeit von Gesamtzeit; deren Differenz ist ein Zusatzanteil, keine belegte reine Startzeit. 173 Parser-Kopietests und drei Anschlussfälle grün; vier Reviewfunde durch rote Gegenproben beziehungsweise korrigierte Texte erledigt, unabhängige Nachprüfung ohne offenen Fund. Ursprung des Summenvergleichs d2ed623c1f, enthalten in v0.5.0/v0.5.1; sechs Changelog-Punkte beschreiben ausschließlich die Materialkorrektur.
   **Drei gemessene Zeitansätze:** Eine feste Mindestschichtzeit ignoriert das Mindestdrucktempo (SuperSlicer-Pilz: 7,03 s trotz 15 s Vorgabe). Schichtweise Wand-/Füll-/Deckflächen mit Tempogrenze erreichen fünf von acht Vorgaben; CC2 bleibt bei −33,51 % am Würfel und −28,43 % am Pilz, MK4S-Würfel bei −15,52 %. Ein Beschleunigungsband plus unabhängig angenäherter CC2-Startanteil von 110 s ergibt −14,55 %/−16,28 % und erfüllt die gemeinsame Abnahme ebenfalls nicht. Keine passende Startzeit aus der Differenz zur eigenen Schätzung abgeleitet; Warnschwelle unverändert. Der bestehende Zeitvergleich warnt weiterhin in sieben von acht Standardfällen. Nächster Schritt: belegtes Mindestdrucktempo und getrennte Erstschichttempi aus dem Herstellerprofil, unabhängig belegte Start-/Zusatzzeiten mit Drucker- und Profilidentität. Tragende Messwerte, Formeln, Modellidentitäten und Grenzen der Wiederholung stehen im Repository: [Material- und Zeitgegenprobe](konzepte/konzept-slicer-uebergabe.md#9-rm-465--material--und-zeitgegenprobe-vom-03102026).
 
-<a id="rm-475"></a>
-
-- [ ] **RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2,
-  PrusaSlicer 2.9.6, Weg Bibliothek (Vorwahl wie der Druckdialog). Orca und PrusaSlicer führen den
-  Stützabstand als **Lücke** zwischen zwei Linien, Solidon schreibt `Bahnbreite / Dichte` als
-  Teilung. Gemessen am Pilz (CC2, Schicht z = 10 mm): 15 % → 12 %, 50 % → 31 %, und 0 % ergibt
-  die dichteste Stütze (28 922 mm³, 42,4 g statt 13,5 g, 62,7 statt 23,2 min), während Solidons
-  Schätzung 0 mm³ nennt. Die Rücklesung des Herstellerwerts irrt ebenso (Orca Kobra 2:
-  `support_base_pattern_spacing = 0.2` als 100 % statt 66 %). Trifft jeden Drucker der Familien
-  `orca` und `prusa` mit Stützen; am Kobra 2 gleich gemessen. Keine Regression gegenüber v0.5.1.
-  **Stellen:** `app/core/export/handover.py:1175–1197` (`_support_spacing`),
-  `app/core/export/manufacturer.py:783–797` und `:1285–1290` (Rücklesung),
-  `app/core/slice/estimate.py:100–134`, Feld `app/ui/print_settings_dialog.py:807–817`.
-  **Fix (allgemein):** `spacing = s / d − s` und zurück `d = s / (spacing + s)` mit `s` =
-  Linienabstand der Stützbahn; 0 % ist als Abstand nicht darstellbar — keine Stützfüllung
-  schreiben oder das Feld auf den kleinsten darstellbaren Wert begrenzen und es im Dialog sagen.
-  **Abnahme:** je Familie ein Lauf mit 15 % und 50 %, gemessene Teilung gegen Bahnbreite / Dichte
-  (drei Drucker: CC2, Kobra 2, MK4S); Test `_support_spacing` gegen `_support_density` und die
-  Formel. Bauplan §28, §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G1), `gcode\rest\`.
-
-<a id="rm-476"></a>
-
-- [ ] **RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts.**
-  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, OrcaSlicer 2.4.2, ElegooSlicer 1.5.3.5,
-  Bambu Studio 02.08.02.61, Modell `tests/data/meshes/colored.3mf` (zwei Farben). Ohne
-  `wipe_tower_x/y` bleibt die Konsolenvorgabe 15/220 stehen: Kobra 2 (220 mm) Turm bis y 236,3
-  (Orca) bzw. 258,3 (Elegoo), A1 mini (180 mm) bis y 246,8 (Orca) bzw. 242,6 (Bambu). Solidon
-  meldet danach `gcode.off_the_bed`, die Druckdatei ist unbrauchbar. Auf 256-mm-Betten passt es
-  zufällig. Für Creality Print setzt Solidon die Position bereits selbst. Keine Regression
-  gegenüber v0.5.1.
-  **Stellen:** `app/core/export/handover.py:4892–4975` (`_creality_cli_tower_position`, nur
-  `crealityprint`), `:170–171`; `slicer_keys.py` schreibt `wipe_tower_x/y` für keine Familie.
-  **Fix (allgemein):** Startposition des Turms als Regel je Programm der Orca-Familie, immer so,
-  dass Turmfläche plus Rand im nutzbaren Bett liegt.
-  **Abnahme:** je Programm (Orca, Elegoo, Bambu, Creality) zwei Farben auf einem 180- und einem
-  220-mm-Bett, Turm im Bett, kein `gcode.off_the_bed`. Bauplan §29.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G2), `gcode\rest\`.
-
 <a id="rm-477"></a>
 
 - [ ] **RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt.**
@@ -3186,24 +3143,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
   weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
-
-<a id="rm-479"></a>
-
-- [ ] **RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher.**
-  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` (180 × 180 mm).
-  Besteckeinsatz (231 × 231 mm) und Siebhalter (sieben Teile, zusammen zu groß): Rückgabe
-  `0xC0000409`, Solidon: „abgestürzt … prüfen Sie Drucker- und Filamentprofile“, obwohl der
-  Export vorher `arrange.out_of_build_volume` bzw. `arrange.off_the_plate` meldet. Erklärt 64 der
-  108 SuperSlicer-Abstürze der Codex-Matrix (u. a. Filament-Regal, Bohrerhalter, Küchenhalter).
-  **Stellen:** `app/core/export/handover.py:5136–5154` (Absturzsatz vor jeder Ursache),
-  `:5751–5783` (`_outside_the_volume` kennt nur die Höhe), Anordnungsprüfung in
-  `app/core/export/writer.py`.
-  **Fix (allgemein):** Passt ein Teil in keiner Drehung um Z, hält die Übergabe mit derselben
-  Meldung wie für die Höhe an (Teilen, Verkleinern, anderer Drucker); nach einem Absturz zuerst
-  Solidons bekannte Ursache nennen, „Profile prüfen“ nur ohne.
-  **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
-  Lauf, kein Slicerstart. Bauplan §29, Regel 17.
-  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
 
 <a id="rm-503"></a>
 

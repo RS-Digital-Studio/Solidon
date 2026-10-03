@@ -1279,6 +1279,10 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
             self.reported.emit([finding])
             return 0
 
+        def take_scene_action(self) -> None:
+            """Die Attrappe meldet nur einen Befund und fordert keine Szenenhandlung an."""
+            return None
+
         def refresh_materials(self) -> None:
             """Was ``_show_filaments`` beim Zurückkommen ruft.
 

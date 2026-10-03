@@ -283,13 +283,33 @@ Kunde, dem die Konsole eine gerettete Datei gab, soll im Fenster nicht an der
 ungeretteten scheitern. Die Originaldatei, der allgemeine Mehrplattenexport
 und andere Slicer benutzen die vollständige Datei.
 
-Im selben CLI-Weg werden fehlende Reinigungsturmkoordinaten nach Crealitys
-Herstellermodus, Bettkontur und Turmbreite initialisiert. Das ersetzt die sonst
-fehlende Fensterinitialisierung für rechteckige Betten bei 0 oder 90 Grad.
+Die Konsolen von OrcaSlicer, ElegooSlicer, Bambu Studio und Creality Print
+bekommen fehlende Reinigungsturmkoordinaten aus `_orca_cli_tower_position`.
+Crealitys bekannter Herstellermodus bleibt maßgeblich. Ohne Modus beginnt der
+Turm bei rechteckigen Betten unten, bei 0 Grad links und bei 90 Grad rechts:
+Die gedrehte Tiefe wächst nach links. Der Rand beträgt die vorhandenen 15 mm
+Freiraum zuzüglich der nativen Brimbreite. Passt bereits die bekannte Breite
+mit beiden Rändern nicht oder verbrauchen die Ränder die andere Bettachse,
+bleiben die Koordinaten aus; ein geklemmter Wert würde keinen Platz schaffen.
+
+Fehlt `prime_tower_brim_width`, gilt der Herstellerstandard **3 mm** aus
+`PrintConfig.cpp`: [OrcaSlicer v2.4.0](https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/v2.4.0/src/libslic3r/PrintConfig.cpp),
+[ElegooSlicer](https://raw.githubusercontent.com/elegooofficial/ElegooSlicer/main/src/libslic3r/PrintConfig.cpp),
+[Bambu Studio v02.02.01.60](https://raw.githubusercontent.com/bambulab/BambuStudio/v02.02.01.60/src/libslic3r/PrintConfig.cpp)
+und [Creality Print](https://raw.githubusercontent.com/CrealityOfficial/CrealityPrint/master/src/libslic3r/PrintConfig.cpp)
+setzen ihn mit `ConfigOptionFloat(3.)`. Die installierten Orca- und
+Elegoo-Fassungen bestätigen ihn im G-Code auch ohne Schlüssel im Prozess.
+Ein ausdrücklich negativer Wert bezeichnet dagegen eine automatische Breite;
+ohne bekannten Herstellermodus bleibt er ebenso wie ein ungültiger Wert ohne
+ergänzte Position.
+
 Explizite Koordinaten aus Maschinen-, Prozess- oder eingebetteten 3MF-Profilen
 bleiben erhalten, auch wenn nur eine Achse vorgegeben ist. Unbekannte Modi und
-andere Konturen oder Winkel werden nicht geraten. Die geschriebenen Koordinaten
-gehen bei tatsächlich mehreren im G-Code verwendeten Werkzeugen in die
+andere Konturen oder Winkel werden nicht geraten. Die Initialposition ist
+keine Platzgarantie: Tiefe, Rippen und Reinigungsvolumen bestimmen die
+tatsächliche Turmfläche erst beim Slicen; auch Sperrflächen prüft weiterhin
+die G-Code-Bauraumprüfung. Die geschriebenen Koordinaten gehen bei tatsächlich
+mehreren im G-Code verwendeten Werkzeugen in die
 Einstellungsgegenprobe ein: Creality nullt den inaktiven Einfilament-Turm. Dabei
 zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen oder
 eine möglicherweise unbekannte Eingangsbelegung. Ausdrückliche Sollwerte werden
@@ -328,6 +348,26 @@ OrcaSlicer, PrusaSlicer und CuraEngine; die Regel dazu steht in
 ## Die vier Gegenproben nach dem Lauf
 
 `slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.
+
+Vor dem Prozessstart prüft es den unveränderten Netzsatz der einzelnen Platte.
+`_prepare_plate` verwendet dafür `mesh_for_export`, dieselbe feinere Vernetzung
+wie der Schreiber. `_SliceWorker` reicht genau diesen Satz weiter. Wer nur
+Dateipfade übergibt, verwendet die begrenzten STL-/3MF-Leser beziehungsweise
+Curas Netzliste ohne Hilfskörper. Ein bloßer Versatz sperrt den Lauf nicht;
+`size_excess` prüft mögliche Z-Drehungen. Wenn der vorhandene Packweg für
+mehrere Teile keine Anordnung auf einer Platte findet, lautet die Meldung
+genau so: Die Heuristik beweist keine mathematische Unmöglichkeit.
+
+Auch der positive Wert aus `size_excess` ist allein kein Beweis: Das Raster
+prüft ganze Grad, und ein Sperrzonen-Sentinel bedeutet nur eine erfolglose
+Platzierungsprobe. Vor der harten XY-Absage gilt deshalb die Schranke aus
+`size_excess_uncertainty`: Bei Winkelraster h ändert sich die Breite gegenüber
+der nächsten Probe höchstens um `2 D sin(h/4)`, mit D als XY-Diagonale des
+Hüllquaders. Nur ein darüber hinausgehender Überstand belegt Nichtpassen.
+Kleine Restüberstände bleiben unentschieden und dürfen zum Slicer. Die Höhe
+wird getrennt gemessen. Die 3MF-Vorprüfung lässt abgeschaltete Build-Instanzen
+aus; beim normalen Import bleiben sie editierbar.
+
 Jede sieht etwas, das die anderen durchlassen:
 
 | Prüfung | Frage |
@@ -417,6 +457,23 @@ Prüfbericht. Ein gleichzeitig nachgewiesener Bauraumübertritt hat Vorrang und
 trägt den Profilrückfall oder die ausgelassene Sperre als Einzelheit mit.
 
 ## Grenzen
+
+Bauraumfehler aus dem Schneideauftrag tragen einen Index in dessen Netzsatz.
+`PlateRun.object_ids` ordnet diesen Index den eingefrorenen Szenenobjekten zu;
+ohne eindeutige Zuordnung werden Teilen und Verkleinern nicht angeboten.
+Der Druckdialog merkt Szenenhandlungen vor und gibt sie erst nach seinem
+Abschluss an das Hauptfenster zurück. Vor der Meldung, beim Klick und bei
+der Rückgabe wird der Druckkontext erneut verglichen. Ein älterer Auftrag
+darf weder die aktuelle Auswahl noch eine inzwischen geänderte Szene bearbeiten.
+
+Ein gleichzeitig abgebrochener Auftrag unterdrückt die nachlaufende Absage
+im Arbeiter und vor der Anzeige. Die Bauraumhandlung „Verkleinern …“ öffnet
+den vorhandenen Skalierdialog am ganzen betroffenen Körper; sie verspricht
+keinen aus den Nennmaßen errechneten Faktor. Runde Bettkonturen und eine
+begrenzte nutzbare Druckhöhe lassen sich daraus nicht sicher ableiten.
+„Anordnen“ verwendet die vorhandene projektweite Operation; die Meldung
+nennt deshalb ausdrücklich alle Projektteile. Ein Undo stellt deren vorherige
+Platten und Lagen wieder her.
 
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.
 

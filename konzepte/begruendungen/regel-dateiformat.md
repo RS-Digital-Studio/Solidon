@@ -205,6 +205,29 @@ lief in C durch alle Ecken und Dreiecke.
 
 ## Was welcher Slicer bekommt
 
+Zur Stützdichte (RM-475): PrusaSlicer und die Orca-Familie rechnen
+`support_density = Linienabstand / (Lücke + Linienabstand)`
+(`SupportParameters`); Solidon schrieb die Teilung Bahnbreite / Dichte als
+Lücke, und gedruckt wurden 15 % als 12 %, 50 % als 31 %. Eine Lücke null ist
+die dichteste Stütze (am Pilz 28,9 cm³ statt 5,8 cm³). Die Umkehrung lautet
+`Lücke = s / Dichte − s`, mit `s = Breite − Höhe · (1 − π/4)` der
+Stützbahn. Bahnbreite statt `s` im Zähler würde weiter zu wenig Stütze
+ergeben, auch wenn Schreiben und Rücklesen übereinstimmen.
+
+Die Rücklesung nimmt die Stützbahnbreite des Herstellerprofils. Bei
+automatischer Breite gilt zuerst die allgemeine Bahnbreite, danach die
+Düse; Prozentwerte beziehen sich bei Orca auf die Düse, bei Prusa auf die
+Schichthöhe. Eine ausdrücklich geschriebene Dichte schreibt auch die zur
+Umrechnung verwendete Stützbahnbreite. Ändern sich Schichthöhe oder
+Bahnbreite, wird der Abstand mitgerechnet, damit die gewählte Dichte bleibt.
+
+Das Prozentfeld beginnt bei 1 %, dem kleinsten positiven ganzzahligen
+Eingabewert; das ist keine technische Untergrenze des Slicers. Ohne Stützen
+wählt der Nutzer „Keine“. Gespeicherte Nullwerte bleiben beim Öffnen
+erhalten. Eine aktive Übergabe mit 0 % hält mit einem Hinweis auf die
+Druckeinstellungen an, weil eine Stützdichte von 0 % keinen endlichen
+Linienabstand ergibt.
+
 Die Messung zur Stützsperre:
 
 > **Jede Familie liest nur ihre Schreibweise, und die andere druckt sie als
@@ -421,6 +444,11 @@ verschwindendes Profil ist schlimmer als keines.
 `crashed()` steht vor den Ausgabeprüfungen, weil ein abgestürztes Programm
 keinen Satz schreibt; der Rat, das Slicer-Profil zu prüfen, führte ins Leere.
 
+## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
+
+Bambu Studio legt Druckdatei und `result.json` ab und endet manchmal nicht
+mehr (Gesamtprüfung, 27.09.2026).
+
 ## Ein Wert gehört an einen Schlüssel, der dasselbe meint
 
 > Bis zum 23.09.2026 stand `cooling.fan_speed` unter `fan_max_speed` **und**
@@ -448,3 +476,9 @@ der Regel.
 > In dieser Lücke saß `outer_inset_first`: ein Name aus Cura 4, in Cura 5
 > verworfen, ohne Fehler und ohne Warnung — null von fünfzig Lagen begannen
 > außen, obwohl der Wert geschrieben war.
+
+## Einstellungen reisen mit der exportierten Datei
+
+Eine 3MF soll man drucken können, nicht erst einrichten. PrusaSlicer
+**überspringt die erste Zeile** seiner Beilage (seine Kennung); ohne
+`PRUSA_CONFIG_HEADER` fiele der alphabetisch erste Schlüssel lautlos heraus.

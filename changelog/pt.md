@@ -63,6 +63,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
 - Também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte funcionam *Orientar para impressão*, *Rodar* e *Deslocar*. O corpo continua exato.
 - Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
+- O PrusaSlicer e a família Orca respeitam a densidade de suporte escolhida. O campo começa em 1 %. Para imprimir sem suportes, escolha «Nenhum».
+- Nas impressões multicoloridas com OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, a torre de purga recebe uma posição inicial adequada ao tamanho da mesa.
+- As peças demasiado grandes são indicadas antes de iniciar o slicer. Se não for encontrado espaço para todas numa placa, pode distribuí-las por várias placas.
 
 ### Furos, furos oblongos e divisão
 

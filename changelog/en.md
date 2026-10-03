@@ -63,6 +63,9 @@ it into `website/version.json`.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 - On STEP surface models too, for turns of almost 180° and on partly recognised faces, *Orient for printing*, *Rotate* and *Move* now work. The body stays exact.
 - A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
+- PrusaSlicer and the Orca family now use the support density you set. The field starts at 1 %. To print without supports, choose “None”.
+- For multicolor prints in OrcaSlicer, ElegooSlicer, Bambu Studio and Creality Print, the prime tower now starts at a position suited to the bed size.
+- Oversized parts are reported before the slicer starts. If no arrangement fits all parts on one plate, you can choose to arrange them across several plates.
 
 ### Holes, slots and splitting
 
