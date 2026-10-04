@@ -110,7 +110,7 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
   **Ein geändertes Gewinde nimmt sein Gegenstück mit**: `with_coupled_threads`
   ergänzt jedes `resize_feature` an einem Gewinde einer aktiven Gewindepassung
   um den Schritt am anderen Teil (gleiche Steigung, Durchmesser aus
-  `fits.target`) — gefragt von `Session.apply`/`preview_async`, der
+  `fits.target(as_stated=True)`) — gefragt von `Session.apply`/`preview_async`, der
   Kommandozeile `run` und dem Agentenzug, damit jeder Weg dieselbe Transaktion baut.
   Ändert sich ein **gespeicherter** Gewindeschritt, liefert `coupled_step_change`
   die Partnerschritte (`StepCoupling`: geänderte Werte, neue Schritte am Ende),

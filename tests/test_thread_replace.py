@@ -154,7 +154,12 @@ def test_changing_a_paired_thread_changes_its_counterpart_in_the_same_step(
 ) -> None:
     document, cache, feature, fit = _paired(profile)
     before = evaluate(document, profile, cache=cache)
-    wanted, _names = target(before.scene, fit, profile)
+    # Das Spiel für zwei Gewinde, die so gebaut sind, wie sie dastehen — so
+    # setzt *Merkmal ändern* beide Hälften. Das gedruckte Paar davor trug das
+    # Spiel des Materials je Hälfte.
+    wanted, _names = target(before.scene, fit, profile, as_stated=True)
+    assert wanted == pytest.approx(profile.material.hole_compensation)
+    assert target(before.scene, fit, profile)[0] == pytest.approx(2.0 * profile.material.clearance)
     partner = fit.b if fit.a.object_id == "obj_1" else fit.a
 
     own = OperationDraft(
@@ -360,18 +365,20 @@ def test_changing_the_saved_thread_size_changes_the_counterpart_step_too() -> No
     assert History(document).operation(partner).params["size"] == "M8"
     assert len(document.transactions) == transactions + 1, "eine Transaktion"
     assert len(document.ops) == steps, "kein Schritt dazu"
-    # Beide Hälften tragen wieder dieselbe Größe und Steigung. Die
-    # Passungsprüfung selbst steht hier nicht im Satz: Das gedruckte Paar meldet
-    # seine Nennmaße ohne das eingebaute Spiel (``fasteners._printed_thread``),
-    # bei M6 wie bei M8 — dieselbe Auskunft vor und nach der Änderung.
+    # Beide Hälften sind wieder ein gedrucktes Paar derselben Größe, und die
+    # Passung hält: je Hälfte das Spiel des Materials neben M8.
+    _no_violated_fit(session, document)
     result = session.evaluate_now()  # type: ignore[attr-defined]
     fit = active_fits(document)[0]
     first, second = (
         result.scene.objects[ref.object_id].features[ref.feature_id] for ref in (fit.a, fit.b)
     )
-    assert first.params["diameter"] == pytest.approx(8.0)
-    assert second.params["diameter"] == pytest.approx(8.0)
+    assert first.params["nominal"] == pytest.approx(8.0)
+    assert second.params["nominal"] == pytest.approx(8.0)
     assert first.params["pitch"] == pytest.approx(second.params["pitch"])
+    play = session.evaluation_profile.material.clearance  # type: ignore[attr-defined]
+    gap = abs(float(first.params["diameter"]) - float(second.params["diameter"]))
+    assert gap == pytest.approx(2.0 * play)
 
     assert session.history.undo()  # type: ignore[attr-defined]
     assert History(document).operation(own).params["size"] == "M6"

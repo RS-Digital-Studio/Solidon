@@ -7354,7 +7354,9 @@ class ResizeFeatureParams(BaseParams):
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
     # 17: Ein geändertes Gewinde misst die Wand, die es lässt — Absage beim
     # Durchbruch, Befund ``thread.thin_wall`` unter der Mindestwand (RM-184).
-    cache_version="17",
+    # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
+    # gebaut, wie es dasteht, ohne Spiel daneben.
+    cache_version="18",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -16339,7 +16341,18 @@ def _resize_thread(
                 "lead": pitch,
                 "handedness": "right",
             }.items()
-            if key not in ("root_radius", "crest_radius", "depth", "turns", "uncertainty", "starts")
+            # Das Nennmaß eines gedruckten Gewindes gilt nicht mehr: Das neue
+            # Gewinde ist gebaut, wie es dasteht (``fits._thread_wanted``).
+            if key
+            not in (
+                "root_radius",
+                "crest_radius",
+                "depth",
+                "turns",
+                "uncertainty",
+                "starts",
+                "nominal",
+            )
         },
         measure_sources={
             **dict.fromkeys(("diameter", "pitch", "centre", "axis", "length"), "parameter")

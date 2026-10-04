@@ -376,7 +376,14 @@ def thread_size_for(feature: Feature) -> str:
     kein Gegenstück, sondern ein Loch, durch das er fällt. Liegt das Gewinde
     über der größten Tabellengröße, nennt der Satz sie als Grenze.
     """
-    diameter = float(feature.params.get("diameter", 0.0))
+    # Ein gedrucktes Gewinde nennt sein Nennmaß neben dem gebauten
+    # (``build.thread``); das gebaute liegt um das Spiel daneben, bei TPU weiter
+    # als die Erkennungsgrenze.
+    named = feature.params.get("nominal")
+    if isinstance(named, int | float) and not isinstance(named, bool) and named > 0.0:
+        diameter = float(named)
+    else:
+        diameter = float(feature.params.get("diameter", 0.0))
     pitch = float(feature.params.get("pitch", 0.0))
     sizes = standards.screw_sizes()
     largest = max(sizes, key=lambda size: standards.screw(size).nominal)
@@ -613,7 +620,9 @@ def coupled_thread_drafts(
     und der Prüfbericht meldet es erst hinterher. Deshalb geht die andere
     Hälfte mit, **in derselben Transaktion**: dieselbe Steigung, und der
     Durchmesser, den die Passung verlangt (``fits.target`` — das Spiel aus dem
-    Material des Lochs, §12). Innen das Spiel weiter, außen enger.
+    Material des Lochs, §12). Innen das Spiel weiter, außen enger. Gefragt
+    wird das Spiel für zwei Gewinde, die so gebaut sind, wie sie dastehen
+    (``as_stated``): Genau so setzt *Merkmal ändern* beide Hälften.
 
     Kein Schritt, wo nichts gekoppelt ist: kein Gewinde, keine Passung, eine
     Passung, die sich nicht messen lässt (die meldet der Prüfbericht selbst),
@@ -645,7 +654,7 @@ def coupled_thread_drafts(
         if other is None or other.kind != "thread" or other_ref.object_id == object_id:
             continue
         try:
-            wanted, _materials = target(scene, fit, profile)
+            wanted, _materials = target(scene, fit, profile, as_stated=True)
         except ValueError:
             continue
         inner = bool(feature.params.get("internal", False))
@@ -783,7 +792,7 @@ def coupled_step_change(
             continue
         pitch = float(pitch) or float(own_feature.params.get("pitch", 0.0))
         try:
-            wanted, _materials = target(scene, fit, profile)
+            wanted, _materials = target(scene, fit, profile, as_stated=True)
         except ValueError:
             continue
         inner = bool(own_feature.params.get("internal", False))
