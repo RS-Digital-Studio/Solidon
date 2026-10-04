@@ -2478,9 +2478,12 @@ def lifted_caps(raw: trimesh.Trimesh, caps: Sequence[tuple[Any, Any, float]]) ->
 
     Je Deckel ``(Dreiecke, Richtung, Strecke)``: Seine Punkte werden um die
     Strecke entlang der Richtung kopiert, der Deckel wandert auf die Kopie, und
-    zwischen altem und neuem Rand entsteht die Wand. Die alten Randpunkte
-    bleiben bei den Flächen darunter; das Netz bleibt geschlossen, und was
-    davor war, behält seine Punkte und Dreiecke in derselben Reihenfolge.
+    zwischen altem und neuem Rand entsteht die Wand. Die Richtung ist ein
+    Vektor für alle Punkte oder einer je Punkt, in der Folge von ``np.unique``
+    seiner Dreiecke — so setzt ``prepare_ops._continued_walls`` die Wand selbst
+    fort. Die alten Randpunkte bleiben bei den Flächen darunter; das Netz
+    bleibt geschlossen, und was davor war, behält seine Punkte und Dreiecke in
+    derselben Reihenfolge.
 
     Der Netz-Zwilling von ``brep.edit.collared`` (ein Prisma über einer ebenen
     Fläche) und die eine Stelle, an der das am Netz geschieht: für die

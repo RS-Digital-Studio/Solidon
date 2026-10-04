@@ -23,7 +23,16 @@ from app.core.knowledge.parts import builtin
 from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
-from app.core.types import BaseParams, Feature, OpContext, OpResult, Profile, SceneObject, Source
+from app.core.types import (
+    BaseParams,
+    Feature,
+    OpContext,
+    OpResult,
+    Profile,
+    Quality,
+    SceneObject,
+    Source,
+)
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from tests.helpers import exact_kernel
 
@@ -1828,7 +1837,12 @@ def _evaluated(
 
 
 def _evaluation(
-    op: str, params: dict[str, Any], inputs: list[SceneObject], profile: Profile
+    op: str,
+    params: dict[str, Any],
+    inputs: list[SceneObject],
+    profile: Profile,
+    *,
+    quality: Quality = "fine",
 ) -> tuple[Any, Any]:
     """Auswertung und geprüfter Schritt, ohne Urteil — auch für eine erwartete Absage."""
     load_operations()
@@ -1866,6 +1880,7 @@ def _evaluation(
     result = evaluate(
         project.document,
         profile,
+        quality=quality,
         registry=registry,
         sources=ProjectSources(project),
         ask=_unexpected_question,
@@ -2280,3 +2295,230 @@ def test_a_slot_copied_over_the_side_says_the_same_on_both_kernels(
     assert sorted(finding.code for finding in result.scene.report.findings) == said
     (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
     assert [feature.kind for feature in output.features.values()].count("slot") == 1
+
+
+def _sunk_cavity(lift: float) -> float:
+    """Hohlraum der Senkbohrung an der schrägen Platte, bis ``lift`` über ihre Randebene.
+
+    Bohrung Ø 6 bis z = 8, darüber der Kegel 90° (Radius ``z − 5``), oben die
+    Ebene ``z = 10 + u/4 + lift`` (``u`` längs X ab der Achse). Innerhalb des
+    Radius 3 steht die Säule bis zur Ebene, ``9π(10 + lift)``; außerhalb die Höhe
+    ``5 + lift − kρ`` mit ``k = 1 − cos φ/4`` bis ``ρ = (5 + lift)/k``. Über den
+    Radius integriert ``(5 + lift)³/(6k²) − 4,5(5 + lift) + 9k``, über den Winkel
+    mit ∫dφ/k² = 2π/(15/16)^{3/2}.
+    """
+    head = 5.0 + lift
+    turned = 2.0 * math.pi / (15.0 / 16.0) ** 1.5
+    return (
+        9.0 * math.pi * (10.0 + lift)
+        + head**3 * turned / 6.0
+        - 9.0 * math.pi * head
+        + 18.0 * math.pi
+    )
+
+
+def _sunk_bore(plate: Any) -> Any:
+    """Die Senkbohrung aus :func:`_sunk_cavity` auf der Achse x = y = 0 von ``plate``."""
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    outline = [(0.0, -1.0), (3.0, -1.0), (3.0, 8.0), (8.0, 13.0), (0.0, 13.0), (0.0, -1.0)]
+    return edit.bore_profile(plate, outline, frame_of((0.0, 0.0, 1.0), (0, 0, 0)))
+
+
+def _place_of(feature: Feature, targets: list[tuple[float, float]]) -> int | None:
+    """Die Nummer des Platzes in ``targets``, auf dessen Achse ``feature`` liegt —
+    seitlich bis zur Facettengrenze; ``None`` abseits aller."""
+    x, y = (float(value) for value in feature.params["centre"][:2])
+    for index, (u, v) in enumerate(targets):
+        if math.hypot(x - u, y - v) <= MAX_FACET_SAG:
+            return index
+    return None
+
+
+def _copy_twin(case: str) -> tuple[Any, tuple[float, float, float], list[str], float]:
+    """Träger, Verschiebung, Befunde und Volumen danach für die Kopie einer Bohrung.
+
+    Die Sollwerte kommen aus der Konstruktion: schräge Platte 40 x 20 (für die
+    Kopie quer zur Schräge 40 x 40) mit mittlerer Höhe 10, Stufenplatte 10 000 mm³,
+    Bohrung Ø 6 mit ``9π`` je Millimeter Säule. Eine Kopie ist starr: Sie endet an
+    den mitbewegten Randebenen, die offene Mündung um die Zugabe aus §39
+    (``FEATURE_OVERLAP``) längs ihrer Normale weiter — an der schrägen Ebene senkrecht
+    ``FEATURE_OVERLAP · √(1 + 1/16)``. Wo diese Ebene im Material liegt, bleibt dort
+    eine Haut, und der Satz heißt „geht nicht mehr durch“.
+    """
+    from app.core.brep import edit
+    from app.core.geom.prepare import FEATURE_OVERLAP
+    from tests.helpers import slanted_plate, stepped_plate
+
+    lift = FEATURE_OVERLAP * math.sqrt(1.0 + 1.0 / 16.0)
+    covered = ["duplicate_feature.no_longer_through"]
+
+    def bored(body: Any, x: float) -> Any:
+        return edit.cut_bore(
+            body, position=(x, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=60.0
+        )
+
+    if case == "along_the_slope":
+        bore_volume = 9.0 * math.pi * 10.0
+        expected = 8000.0 - bore_volume - 9.0 * math.pi * (10.0 + lift)
+        return bored(slanted_plate(), 0.0), (10.0, 0.0, 0.0), covered, expected
+    if case == "sunk_along_the_slope":
+        expected = 8000.0 - _sunk_cavity(0.0) - _sunk_cavity(lift)
+        return _sunk_bore(slanted_plate()), (10.0, 0.0, 0.0), covered, expected
+    if case == "across_the_slope":
+        return bored(slanted_plate(40.0), 0.0), (0.0, 10.0, 0.0), [], 16000.0 - 180.0 * math.pi
+    if case == "over_the_step":
+        # Die obere Mündung lag an der Quelle frei; unter dem Aufsatz reicht die
+        # Zugabe in ihn hinein.
+        expected = 10000.0 - 90.0 * math.pi - 9.0 * math.pi * (10.0 + FEATURE_OVERLAP)
+        return bored(stepped_plate(), -10.0), (20.0, 0.0, 0.0), covered, expected
+    # Von der Stufe herab: 20 mm Säule durch Aufsatz und Grundplatte, die Kopie
+    # trifft nur die 10 mm der Grundplatte und ragt darüber in die Luft.
+    return bored(stepped_plate(), 10.0), (-20.0, 0.0, 0.0), [], 10000.0 - 270.0 * math.pi
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "along_the_slope",
+        "sunk_along_the_slope",
+        "across_the_slope",
+        "over_the_step",
+        "off_the_step",
+    ],
+)
+def test_a_bore_copied_on_a_slanted_or_stepped_plate_is_the_same_copy_on_both_kernels(
+    case: str, quality: Quality, profile: Profile
+) -> None:
+    """*Merkmal verdoppeln* setzt an beiden Kernen dieselbe Kopie (RM-226, Nachtrag).
+
+    Längs der schrägen Oberseite (z = 10 + x/4) liegt die mitbewegte obere
+    Mündung der Kopie im Material. Der exakte Kern führt die Bohrung als Zylinder
+    bis zur um die Zugabe verschobenen Randebene, die Senkung als Kegel. Am Netz
+    hob ``_past_the_mouths`` den Deckel längs seiner Normale: Die Wand der Kopie
+    trug oben ein um 14° geschertes Band von 0,02 mm, das keine Zylinderwand ist.
+    Vor der tangentialen Trennung (RM-226 Teil 2) las die Erkennung die ganze Wand
+    deshalb als gekrümmte Fläche, und die Kopie hieß am Netz verloren; danach
+    zählte sie das Band nicht mit — Tiefe 10,750 gegen 10,771 mm, die Senkung
+    Ø 13,333 gegen 13,388 mm. Quer zur Schräge, über und von der Stufe herab sind
+    die Zwillinge: Dort steht die Mündung frei oder senkrecht zur Achse.
+    """
+    exact_kernel()
+    load_operations()
+    body, travel, codes, expected = _copy_twin(case)
+    _placed_alike_on_both_kernels(
+        case, "duplicate_feature", body, travel, codes, expected, quality, profile
+    )
+
+
+def _placed_alike_on_both_kernels(
+    case: str,
+    op: str,
+    body: Any,
+    travel: tuple[float, float, float],
+    codes: list[str],
+    expected: float,
+    quality: Quality,
+    profile: Profile,
+    *,
+    count: int = 2,
+) -> None:
+    """``op`` setzt die engste Bohrung von ``body`` um ``travel`` an beiden Kernen gleich.
+
+    Über den echten Auswertungsweg, je Kern: dieselben Befunde (``codes``),
+    dieselben Merkmale auf der Achse am Ziel — Art, Durchmesser, Tiefe, Winkel,
+    Durchgang und Mitte auf 0,001 mm —, das Volumen am Netz gegen den
+    Netz-Zwilling des exakten Ergebnisses auf 0,1 mm³ und das des exakten
+    Körpers gegen die Konstruktion (``expected``). Ein Muster setzt die Bohrung
+    als Plätze 2 bis ``count`` einer Reihe in Richtung ``travel``; verglichen
+    wird jeder Platz.
+    """
+    said: dict[str, list[str]] = {}
+    placed: dict[str, list[Feature]] = {}
+    volumes: dict[str, float] = {}
+    for kind in ("mesh", "brep"):
+        entry = _object(body, kind)
+        bore = min(
+            (feature for feature in entry.features.values() if feature.kind == "hole"),
+            key=lambda feature: float(feature.params["diameter"]),
+        )
+        x, y, z = (float(value) for value in bore.params["centre"])
+        targets = [(x + travel[0] * number, y + travel[1] * number) for number in range(1, count)]
+        params: dict[str, Any] = (
+            {
+                "at_features": (bore.id,),
+                "kind": "linear",
+                "count": count,
+                "spacing": math.hypot(*travel),
+                "dx": travel[0],
+                "dy": travel[1],
+                "dz": travel[2],
+            }
+            if op == "pattern_feature"
+            else {
+                "at_feature": bore.id,
+                "x": targets[0][0],
+                "y": targets[0][1],
+                "z": z + travel[2],
+            }
+        )
+        result, step = _evaluation(op, params, [entry], profile, quality=quality)
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        found: list[tuple[int, str, Feature]] = []
+        for feature in output.features.values():
+            place = _place_of(feature, targets)
+            if feature.kind in ("hole", "cone") and place is not None:
+                found.append((place, feature.kind, feature))
+        found.sort(key=lambda item: item[:2])
+        placed[kind] = [feature for _place, _kind, feature in found]
+        volumes[kind] = as_mesh_data(output.mesh).volume
+        if kind == "brep":
+            # Das Volumen des exakten Körpers aus dem Kern, gegen die Konstruktion.
+            assert output.mesh.volume == pytest.approx(expected, abs=1e-3), case
+    assert said["mesh"] == said["brep"] == codes, (case, said)
+    kinds = {kind: [feature.kind for feature in found] for kind, found in placed.items()}
+    assert kinds["mesh"] == kinds["brep"] and kinds["mesh"], (case, kinds)
+    for mesh_bore, exact_bore in zip(placed["mesh"], placed["brep"], strict=True):
+        for name in ("diameter", "depth", "angle"):
+            if name in exact_bore.params:
+                assert float(mesh_bore.params[name]) == pytest.approx(
+                    float(exact_bore.params[name]), abs=1e-3
+                ), (case, exact_bore.kind, name)
+        assert mesh_bore.params.get("through") == exact_bore.params.get("through"), case
+        assert [float(value) for value in mesh_bore.params["centre"]] == pytest.approx(
+            [float(value) for value in exact_bore.params["centre"]], abs=1e-3
+        ), (case, exact_bore.kind)
+    # Volumen je Körper: das Netz gegen den Netz-Zwilling des exakten Ergebnisses.
+    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), (case, volumes)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("sunk", [False, True], ids=["bore", "sunk"])
+@pytest.mark.parametrize("op", ["move_feature"])
+def test_a_bore_moved_or_patterned_along_a_slanted_plate_is_the_same_on_both_kernels(
+    op: str, sunk: bool, quality: Quality, profile: Profile
+) -> None:
+    """*Merkmal versetzen* längs der Schräge, ein Geschwister der Kopie.
+
+    Dieselbe Platte (z = 10 + x/4), dieselben 10 mm längs X; der Hohlraum an der
+    alten Stelle ist zu. Das Werkzeug der Quelle sitzt starr am neuen Platz, und
+    beide Kerne sagen „geht nicht mehr durch“.
+    """
+    exact_kernel()
+    load_operations()
+    body, travel, _codes, expected = _copy_twin(
+        "sunk_along_the_slope" if sunk else "along_the_slope"
+    )
+    if op == "move_feature":
+        # Die alte Stelle wird geschlossen: Es fehlt nur der versetzte Hohlraum.
+        from app.core.geom.prepare import FEATURE_OVERLAP
+
+        lift = FEATURE_OVERLAP * math.sqrt(1.0 + 1.0 / 16.0)
+        expected = 8000.0 - (_sunk_cavity(lift) if sunk else 9.0 * math.pi * (10.0 + lift))
+        codes = ["move_feature.no_longer_through"]
+    else:
+        codes = ["pattern_feature.done", "pattern_feature.no_longer_through"]
+    _placed_alike_on_both_kernels(op, op, body, travel, codes, expected, quality, profile)

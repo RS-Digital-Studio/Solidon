@@ -2662,7 +2662,15 @@ def _tool_for(
         travel = np.asarray(centre, dtype=np.float64) - np.asarray(
             feature.params["centre"], dtype=np.float64
         )
-        built = _past_the_mouths(mesh, built, travel=travel if rigid else None)
+        # Die Bohrung starr bewegt wächst als Zylinder in die verschobene
+        # Randebene, wie ``_exact_rigid_cut`` sie schneidet; die Tasche mit Lippe
+        # hebt der exakte Kern längs der Normale an (``_exact_own_cut``).
+        built = _past_the_mouths(
+            mesh,
+            built,
+            travel=travel if rigid else None,
+            walls=rigid and air is None and feature.kind == "hole",
+        )
     if feature.kind == "pin" and rooted:
         # **Ein gesetzter Zapfen ist so hoch wie der gemessene** (22.09.2026).
         # Unverändert kommt er aus seinen Flächen und bekommt unten einen
@@ -4362,7 +4370,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
-    cache_version="11",
+    # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="12",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4734,7 +4743,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
     # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 8: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
-    cache_version="8",
+    # 9: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="9",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5149,7 +5159,8 @@ class _PatternPlace:
     # 3: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 4: jede Instanz einer Kette trägt ihre gerundete Mündungskante (RM-259).
-    cache_version="5",
+    # 6: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="6",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -5763,11 +5774,18 @@ def _chain_copy_tool(
     # Kennzahlen mit anderer Teilung schnitt an der neuen Stelle mehr ab, als
     # er zurückgab — an der Platte mit Zylinder R 40 1,1 mm³ je Versetzen.
     # Die Kopie nimmt die gerundete Mündungskante mit (RM-259).
+    from app.core.perceive.relations import cavity_blend_indices
+
     exact = _paired_cavity_body(body, *chain, mouth_blends=True) or _past_curved_mouths(
         body, chain, mouth_blends=True
     )
+    # Die Wand trägt den Kragen, wo der exakte Kern die Kette als Drehkörper an
+    # den mitbewegten Randebenen schneidet (``_exact_chain_tool_placed``); eine
+    # Kette mit Lippe oder gerundeter Mündungskante hebt er aus ihren Flächen
+    # längs der Normale an (``_exact_chain_own_cavity``, ``edit.collared``).
+    walls = not _narrows_outward(chain) and not cavity_blend_indices(body, tuple(chain))
     tool = (
-        _past_the_mouths(body, exact)
+        _past_the_mouths(body, exact, walls=walls)
         if exact is not None
         else _chain_tool(body, chain, pivot=measured, tilt=0.0)
         or _cavity_tool(
@@ -6964,7 +6982,11 @@ def _shares_in_material(
 
 
 def _past_the_mouths(
-    mesh: MeshData, cavity: MeshData, *, travel: NDArray[np.float64] | None = None
+    mesh: MeshData,
+    cavity: MeshData,
+    *,
+    travel: NDArray[np.float64] | None = None,
+    walls: bool = False,
 ) -> MeshData:
     """Der exakte Hohlraumkörper, an seinen Mündungen um ``FEATURE_OVERLAP``
     über die Oberfläche hinaus verlängert — das Werkzeug für die Differenz (§39).
@@ -6976,6 +6998,16 @@ def _past_the_mouths(
     0,5 mm gegen seine schräge Unterseite versetzt, sonst unter einer Haut von
     0,03 mm stehen und hieß „geht nicht mehr durch" — der exakte Kern sagte am
     Teppichclip mit derselben Zunge nichts (Durchsicht 0.5.1, BOHRUNG-05).
+
+    ``walls`` lässt die Wand den Deckel tragen (:func:`_continued_walls`): Die
+    Bohrung wächst als Zylinder, die Senkung als Kegel bis in die verschobene
+    Randebene, wie der exakte Kern sie schneidet (``clipped_bore_tool``,
+    ``_exact_chain_tool_placed``). Längs der Deckelnormale angehoben stand an
+    einer schrägen Mündung ein um 14° gescherter Ring — liegt sie an der neuen
+    Stelle im Material, wurde er Wand der Kopie, und die Erkennung las diese
+    nicht mehr als Bohrung (RM-226, Nachtrag 04.10.2026). Ohne ``walls`` bleibt
+    es beim Kragen längs der Normale — für Langloch und Tasche mit Lippe, die der
+    exakte Kern ebenso anhebt (``edit.collared``).
 
     Ein Hohlraum aus seinen Flächen (:func:`_body_from_faces`) endet bündig
     in der Oberfläche, und eine bündige Differenz lässt eine Haut stehen. Das
@@ -7025,7 +7057,7 @@ def _past_the_mouths(
     shares = _shares_in_material(
         mesh, [(points[rim[:, 0]], normal) for _facet, _cap, normal, _members, rim in candidates]
     )
-    for (facet, _cap, normal, _members, _rim), share in zip(candidates, shares, strict=True):
+    for (facet, _cap, normal, members, rim), share in zip(candidates, shares, strict=True):
         if share > 0.0:
             continue
         reach = FEATURE_OVERLAP
@@ -7033,7 +7065,11 @@ def _past_the_mouths(
             along = units.dot3(normal, travel)
             if -MAX_FACET_SAG <= along < 0.0:
                 reach -= along
-        lifts.append((facet, normal, reach))
+        carried = _continued_walls(raw, facet, members, rim, reach) if walls else None
+        if carried is not None:
+            lifts.append((facet, carried, 1.0))
+        else:
+            lifts.append((facet, normal, reach))
     if not lifts:
         return cavity
     # Anheben und Wand ergänzen: der Netz-Zwilling von ``edit.collared``.
@@ -7041,6 +7077,107 @@ def _past_the_mouths(
     if not widened.is_watertight or widened.volume <= raw.volume - EPS_GEOM:
         return cavity
     return MeshData.of(widened)
+
+
+def _continued_walls(
+    raw: Any,
+    facet: NDArray[np.int64],
+    members: NDArray[np.int64],
+    rim: NDArray[np.int64],
+    reach: float,
+) -> NDArray[np.float64] | None:
+    """Wohin jede Ecke eines Deckels rückt, wenn ihn seine Wand um ``reach``
+    hinausträgt — je Ecke in der Folge von ``members`` (``np.unique`` seiner
+    Dreiecke), wie :func:`~app.core.geom.mesh.lifted_caps` sie liest.
+
+    Der Deckel wandert in seine um ``reach`` längs der Normale verschobene
+    Ebene, jede Randecke dorthin, wo sich die Ebenen ihrer zwei Wanddreiecke
+    mit ihr schneiden: ``reach · c / (n · c)`` mit ``c`` dem Kreuzprodukt der
+    Wandnormalen. Am Facettenmantel einer Bohrung ist ``c`` die Achse, an einer
+    Senkung ihre Mantellinie — die Wand läuft weiter, wie der exakte Kern sie
+    schneidet, und das Band zwischen altem und neuem Rand liegt in den Ebenen
+    der Facetten. Liegen beide Wanddreiecke einer Ecke in einer Ebene (eine
+    feiner geteilte Facette, :data:`~app.core.units.SAME_PLANE_AT_A_CORNER`),
+    teilt sie den Weg ihrer Nachbarn längs des Rands, nach der Bogenlänge.
+    Innere Ecken nehmen die Mitte der Randwege; so bleibt der Deckel eben.
+
+    ``None`` heißt: Kragen längs der Normale wie bisher — wo eine Ecke weiter
+    als :data:`~app.core.units.GRAZING_SLIDE`-mal die Zugabe rutschte (die Wand
+    läuft fast parallel aus, eine gerundete Mündungskante), wo der Rand kein
+    Ring ist oder keine Ecke eine Richtung hat.
+    """
+    from app.core.geom.mesh import stable_normals
+
+    loop = _rim_loop(rim)
+    if loop is None:
+        return None
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    wall_normals = stable_normals(raw)[0]
+    normal = wall_normals[int(facet[0])]
+    # Je Randkante das Dreieck außerhalb des Deckels, über eine Nummer je Kante.
+    width = len(points)
+    sides = faces[:, [[0, 1], [1, 2], [2, 0]]]
+    codes = np.minimum(sides[..., 0], sides[..., 1]) * width + np.maximum(
+        sides[..., 0], sides[..., 1]
+    )
+    outside = np.ones(len(faces), dtype=bool)
+    outside[np.asarray(facet, dtype=np.int64)] = False
+    ring = np.asarray(loop, dtype=np.int64)
+    following = np.roll(ring, -1)
+    rim_codes = np.minimum(ring, following) * width + np.maximum(ring, following)
+    owner: dict[int, int] = {}
+    for face, side in zip(*np.nonzero(np.isin(codes, rim_codes) & outside[:, None]), strict=True):
+        owner[int(codes[face, side])] = int(face)
+    walls_at = [owner.get(int(code)) for code in rim_codes]
+    if any(face is None for face in walls_at):
+        return None
+    count = len(ring)
+    shifts = np.full((count, 3), np.nan, dtype=np.float64)
+    for position in range(count):
+        before = wall_normals[cast(int, walls_at[position - 1])]
+        after = wall_normals[cast(int, walls_at[position])]
+        if 1.0 - units.dot3(before, after) <= units.SAME_PLANE_AT_A_CORNER:
+            continue
+        line = np.cross(before, after)
+        rise = units.dot3(normal, line)
+        if abs(rise) <= EPS_GEOM:
+            return None
+        step = line * (reach / rise)
+        if math.hypot(*(float(value) for value in step)) > units.GRAZING_SLIDE * reach:
+            return None
+        shifts[position] = step
+    known = np.flatnonzero(np.isfinite(shifts[:, 0]))
+    if not len(known):
+        return None
+    if len(known) < count:
+        # Bogenlänge längs des Rands; jede Ecke ohne eigene Richtung liegt
+        # zwischen zwei Ecken mit einer und teilt deren Wege linear.
+        lengths = [
+            math.hypot(
+                *(float(value) for value in points[ring[(index + 1) % count]] - points[node])
+            )
+            for index, node in enumerate(ring)
+        ]
+        total = math.fsum(lengths)
+        along = [0.0] * count
+        for index in range(1, count):
+            along[index] = along[index - 1] + lengths[index - 1]
+        for position in np.flatnonzero(~np.isfinite(shifts[:, 0])).tolist():
+            later = int(known[np.searchsorted(known, position) % len(known)])
+            earlier = int(known[np.searchsorted(known, position) - 1])
+            gap = (along[later] - along[earlier]) % total or total
+            share = ((along[position] - along[earlier]) % total) / gap
+            shifts[position] = shifts[earlier] * (1.0 - share) + shifts[later] * share
+    moved = np.zeros((len(members), 3), dtype=np.float64)
+    slot = {int(node): index for index, node in enumerate(np.asarray(members).tolist())}
+    on_the_rim = set(ring.tolist())
+    for position, node in enumerate(ring.tolist()):
+        moved[slot[int(node)]] = shifts[position]
+    inner = [index for node, index in slot.items() if node not in on_the_rim]
+    if inner:
+        moved[inner] = np.asarray(units.exact_centre(shifts.tolist()), dtype=np.float64)
+    return moved
 
 
 def _chain_tool(
