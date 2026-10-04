@@ -3731,6 +3731,7 @@ class MainWindow(QMainWindow):
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
         self.parameters.parameterUnitEdited.connect(self._on_parameter_unit_edited)
         self.parameters.addRequested.connect(self.action_add_parameter)
+        self.parameters.bindRequested.connect(self.action_bind_parameters)
         self.parameters.limitsRequested.connect(self.action_edit_parameter)
         self.right_column.setVisible(self.settings.right_panel_visible)
 
@@ -10908,6 +10909,11 @@ class MainWindow(QMainWindow):
                 tr("Parameter anlegen …"),
                 "",
                 self.action_add_parameter,
+            ),
+            "edit.bind_parameters": (
+                tr("Feste Zahlen binden …"),
+                "",
+                self.action_bind_parameters,
             ),
             "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
             # Jede Einzeloption der Einstellungen, auch die hinter „Weitere
@@ -22835,11 +22841,12 @@ class MainWindow(QMainWindow):
         self.object_tree.show_scene(result, self.session.project.document)
         effective_settings = self.effective_print_settings()
         self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
-        plates = {entry.plate for entry in picture.scene.objects.values()}
+        plates = [entry.plate for entry in picture.scene.objects.values()]
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
         # unter einem Werkzeug, das Teile auseinanderzieht.
-        self.header.show_plates(max(plates, default=0) + 1)
+        count = max(plates, default=0) + 1
+        self.header.show_plates(count, [plates.count(index) for index in range(count)])
         # Die Leiste bereitet sich vor und setzt ihren Schieber zurück, wenn es
         # nichts auseinanderzuziehen gibt; ob ihr Knopf geht, sagt
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
@@ -25103,6 +25110,34 @@ class MainWindow(QMainWindow):
         if dialog.exec() != ParameterDialog.DialogCode.Accepted:
             return
         self.session.add_parameter(dialog.parameter())
+
+    def action_bind_parameters(self) -> None:
+        """Feste Zahlen an Projektmaße binden (Dateiaudit §4): wählen, dann eine Transaktion.
+
+        Der Kern findet die Zahlen (``scene.parameter_binding``); vorgewählt ist
+        nur, was ohne Zweifel ist. Keine Rückfrage danach: Die Bindung ist eine
+        Transaktion, Strg+Z nimmt sie ganz zurück (Regel 19).
+        """
+        from app.core.scene.parameter_binding import binding_spots, bound_params
+        from app.ui.binding_dialog import BindingDialog
+
+        document = self.session.project.document
+        result = self.session.last_result
+        spots = result.binding_spots if result is not None else ()
+        if not spots:
+            spots = binding_spots(document)
+        if not spots:
+            self.announce(tr("Keine feste Zahl im Projekt passt zu einem Projektmaß."))
+            return
+        dialog = BindingDialog(document, spots, self)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            chosen = dialog.chosen()
+        finally:
+            dialog.deleteLater()
+        if chosen:
+            self.session.bind_parameters(bound_params(document, chosen))
 
     def action_edit_parameter(self, name: str) -> None:
         """§13: die Grenzen eines vorhandenen Maßes ändern — derselbe Dialog.

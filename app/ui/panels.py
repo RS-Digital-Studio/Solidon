@@ -136,6 +136,7 @@ from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, sho
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
+from app.core.scene.parameter_binding import BindingSpot
 from app.core.scene.parameter_usage import field_bounds
 from app.core.types import (
     CancelToken,
@@ -3355,6 +3356,8 @@ class ParameterPanel(QWidget):
     """Die frei gesetzte Seitenkarte soll ihre Geometrie neu verteilen."""
     addRequested = Signal()
     """Der Nutzer will ein Maß benennen — das Fenster öffnet den Dialog."""
+    bindRequested = Signal()
+    """Feste Zahlen, die zu Maßen passen, binden — das Fenster öffnet die Wahl (RM-184)."""
     limitsRequested = Signal(str)
     """Grenzen, Einheit oder Ausdruck eines vorhandenen Maßes ändern.
 
@@ -3431,23 +3434,42 @@ class ParameterPanel(QWidget):
         # ohne Sprachmodell arbeitet, brauchte einen Weg mit der Maus.
         self.add_button = QPushButton(tr("Parameter anlegen …"), self)
         self.add_button.clicked.connect(self.addRequested)
+        # **Und der Weg zu den Maßen, die nur halb wirken** (Dateiaudit §4):
+        # Steht im Stapel eine feste Zahl, die genau zu einem Maß passt, folgt
+        # sie ihm nicht. Der Knopf steht nur, wenn es solche Zahlen gibt
+        # (``scene.parameter_binding``); die Wahl trifft der Dialog.
+        self.bind_button = QPushButton(tr("Feste Zahlen binden …"), self)
+        self.bind_button.clicked.connect(self.bindRequested)
+        _set_shown(self.bind_button, False)
         outer.addWidget(self._scroll)
+        outer.addWidget(self.bind_button, alignment=Qt.AlignmentFlag.AlignLeft)
         outer.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self._outer = outer
         self._fit()
 
     def _around_the_rows(self) -> int:
-        """Was fest um die Zeilen herum steht: Knopf, Ränder, Abstände.
+        """Was fest um die Zeilen herum steht: Knöpfe, Ränder, Abstände.
 
         Aus den Wunschhöhen gerechnet und nicht aus den gelegten — dieselbe
         Bedingung, unter der die ganze Verteilung stillsteht
         (``OverlayHost._share_room``). Wortgleich mit
         ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
-        Hinweis und drei Knöpfe, hier einer.
+        Hinweis und drei Knöpfe, hier einer — zwei, solange *Feste Zahlen
+        binden* dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
         """
         margins = self._outer.contentsMargins()
-        gaps = max(self._outer.count() - 1, 0) * self._outer.spacing()
-        return margins.top() + margins.bottom() + gaps + self.add_button.sizeHint().height()
+        shown = [
+            widget
+            for index in range(self._outer.count())
+            if (item := self._outer.itemAt(index)) is not None
+            and (widget := item.widget()) is not None
+            and not widget.isHidden()
+        ]
+        gaps = max(len(shown) - 1, 0) * self._outer.spacing()
+        buttons = self.add_button.sizeHint().height()
+        if not self.bind_button.isHidden():
+            buttons += self.bind_button.sizeHint().height()
+        return margins.top() + margins.bottom() + gaps + buttons
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jede Zeile zu sehen wäre.
@@ -3786,8 +3808,28 @@ class ParameterPanel(QWidget):
         """Beschriftung und Kurzhilfe einer Zeile nach dem jüngsten Ergebnis."""
         label = self._titles[name]
         uses = self._usage_result.parameter_usage if self._usage_result is not None else None
-        if uses is not None and name in uses and not uses[name]:
+        fitting = len(self._spots_for(name))
+        unused = uses is not None and name in uses and not uses[name]
+        if unused and fitting:
+            label.setText(
+                f"{title}\n"
+                + (
+                    tr("Nicht verwendet — eine feste Zahl passt")
+                    if fitting == 1
+                    else tr("Nicht verwendet — {count} feste Zahlen passen", count=fitting)
+                )
+            )
+        elif unused:
             label.setText(f"{title}\n{tr('Nicht verwendet')}")
+        elif fitting:
+            label.setText(
+                f"{title}\n"
+                + (
+                    tr("Eine feste Zahl passt")
+                    if fitting == 1
+                    else tr("{count} feste Zahlen passen", count=fitting)
+                )
+            )
         else:
             label.setText(title)
         note = self._usage_note(name)
@@ -3824,7 +3866,51 @@ class ParameterPanel(QWidget):
             )
         if len(uses) > 8:
             lines.append(tr("Weitere Verwendungen: {count}").format(count=len(uses) - 8))
-        return "\n".join(lines)
+        return "\n".join([*lines, *self._spot_lines(name)])
+
+    def _spots_for(self, name: str) -> tuple[BindingSpot, ...]:
+        """Die festen Zahlen, deren erster Vorschlag dieses Maß liest."""
+        result = self._usage_result
+        if result is None:
+            return ()
+        return tuple(spot for spot in result.binding_spots if name in spot.choices[0].parameters)
+
+    def _spot_lines(self, name: str) -> list[str]:
+        """Wo eine feste Zahl zu diesem Maß passt — für die Kurzhilfe der Zeile."""
+        from app.ui.binding_dialog import spot_title
+
+        spots = self._spots_for(name)
+        if not spots or self._document is None:
+            return []
+        lines = [
+            tr(
+                "{place} passt zu {expression}",
+                place=spot_title(self._document, spot),
+                expression=spot.choices[0].expression.removeprefix("="),
+            )
+            for spot in spots[:8]
+        ]
+        if len(spots) > 8:
+            lines.append(tr("Weitere feste Zahlen: {count}", count=len(spots) - 8))
+        return lines
+
+    def _show_binding(self) -> None:
+        """*Feste Zahlen binden …* nur, wenn es eine gibt — mit ihrer Zahl am Knopf."""
+        result = self._usage_result
+        spots = result.binding_spots if result is not None else ()
+        shown = bool(spots)
+        if shown:
+            note = tr(
+                "{count} feste Zahlen passen zu Projektmaßen. Gebunden folgen sie dem Maß, "
+                "wenn Sie es ändern.",
+                count=len(spots),
+            )
+            self.bind_button.setToolTip(note)
+            self.bind_button.setStatusTip(note)
+            self.bind_button.setAccessibleDescription(note)
+        if shown != (not self.bind_button.isHidden()):
+            _set_shown(self.bind_button, shown)
+            self._fit()
 
     def show_document(self, document: Document, result: EvaluationResult | None = None) -> None:
         """Zeigt die Maße des Dokuments — **bestehende Zeilen behalten ihr Feld** (RM-355).
@@ -3866,6 +3952,7 @@ class ParameterPanel(QWidget):
             if editor is not None:
                 editor.setFocus(Qt.FocusReason.OtherFocusReason)
         self._mark_stored_beyond()
+        self._show_binding()
 
     def _mark_stored_beyond(self) -> None:
         """Eine gespeicherte Zahl jenseits ihrer Grenze bekommt ihren Satz (RM-447).

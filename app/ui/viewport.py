@@ -8464,6 +8464,12 @@ class Viewport(QWidget):
         if plate == self._plate:
             return
         self._plate = plate
+        # **Und das Bild rahmt, was jetzt zu sehen ist** (Dateiaudit §5): Bei
+        # „Alle Platten" stehen die Betten nebeneinander, eine einzelne Platte
+        # steht im Nullpunkt — ohne neuen Rahmen blickte die Kamera nach der
+        # Wahl dorthin, wo die Platte vorher lag. Einmal, ohne der Auswahl zu
+        # folgen; die Lage der Körper bleibt, wie sie ist.
+        self.frame_next_scene()
         # Eine einzelne Platte heißt ein Bett; „Alle" heißt so viele, wie die
         # Szene belegt. ``show_scene`` zieht die Kulisse nach, sobald sich die
         # Zahl ändert — und ``_plate`` ist gesetzt, bevor sie gezählt wird.

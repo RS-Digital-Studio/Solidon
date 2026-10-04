@@ -2953,6 +2953,20 @@ class Session(QObject):
         self._changed()
         return True
 
+    def bind_parameters(self, params: Mapping[int, Mapping[str, Any]]) -> bool:
+        """Feste Zahlen an Projektmaße binden — eine Transaktion (Dateiaudit §4, RM-184).
+
+        Wie :meth:`change_params` für mehrere Schritte zugleich: Gibt zurück, ob
+        die Bindung im Dokument steht; eine Absage kommt über ``failed``.
+        """
+        try:
+            self.history.bind_parameters(params)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._changed()
+        return True
+
     def reopen_recognition(self, object_ids: Sequence[str]) -> None:
         """Die Frage vor der Vollerkennung geladener Körper erneut stellen (§21.1).
 

@@ -169,6 +169,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |
 | `seal_dialog.py` | Dichtweg als Zeichnung oder Öffnung wählen (§19.2); schreibt keine Operation |
+| `binding_dialog.py` | feste Zahlen wählen, die an Projektmaße gebunden werden (§13) |
 | `seal_flow.py` | bindet die Dichtwegwahl an den normalen Operationsdialog |
 | `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27); nichtmodal, der Lauf steht in der Statusleiste |
 | `variants_dialog.py` | Variantengenerator (§28.3, §25) |

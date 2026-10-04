@@ -1594,6 +1594,50 @@ class History:
         )
         return swapped
 
+    def bind_parameters(
+        self,
+        params: Mapping[OpId, Mapping[str, Any]],
+        title: TranslatableText | str | None = None,
+    ) -> Transaction:
+        """Feste Zahlen mehrerer Schritte an Projektmaße binden — als **eine** Transaktion.
+
+        Der Weg des Bindungshelfers (``scene.parameter_binding``, Dateiaudit §4):
+        Jeder Schritt behält Kennung, Platz, Eingänge und Ausgänge; nur die
+        genannten Felder tragen danach Ausdrücke statt Zahlen, eine Zeichnung
+        ihre neuen Maße. Ein Strg+Z nimmt alle zurück (Regel 16, §15.5).
+        Geprüft wird vor dem ersten Schreiben, wie bei :meth:`change_params`:
+        Feldnamen, Ausdruckssyntax und dass jedes gelesene Maß im Projekt steht.
+        """
+        activation.require(activation.CHANGE)
+        if not params:
+            raise ValidationError(
+                field="params",
+                detail=_("Es ist keine Zahl zum Binden gewählt."),
+                constraint="empty",
+            )
+        known = set(self.document.parameters)
+        pairs: list[tuple[Operation, Operation]] = []
+        for op_id, values in params.items():
+            entry = self.operation(op_id)
+            spec = self._spec_of(entry)
+            self._check_params(spec.name, spec.params.spec(), values)
+            missing = sorted(expressions.used_parameters(values.values()) - known)
+            if missing:
+                # Derselbe Satz und Schlüssel wie bei der Auflösung der Maße
+                # (``expressions.resolution_order``).
+                raise ValidationError(
+                    field=next(iter(values)),
+                    detail=_("Ein Ausdruck verweist auf einen Parameter, den es nicht gibt."),
+                    constraint="unknown_parameter",
+                    values={"missing": missing},
+                )
+            pairs.append((entry, dataclasses.replace(entry, params={**entry.params, **values})))
+        _log.info("bound fixed numbers of %d ops to parameters", len(pairs))
+        transaction, _swapped = self._swap_operations(
+            title or _("Feste Zahlen an Projektmaße binden"), tuple(pairs)
+        )
+        return transaction
+
     def change_inputs(self, op_id: OpId, inputs: Sequence[ObjectId]) -> Operation:
         """Gibt einem Schritt andere Objekte, auf denen er arbeitet (§15.4).
 

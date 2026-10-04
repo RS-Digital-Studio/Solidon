@@ -139,6 +139,10 @@ Schemata — ein Nachbau, der neigt, wo sein Vorbild es nicht tut, ist keiner.
 * **Eine frische Teilung rahmt einmal neu**: `MainWindow._reveal_split_result`
   ruft vor dem Auseinanderziehen `Viewport.frame_next_scene` (alle Körper, ohne
   Auswahl, mit Versatz); danach bleibt die Kamera.
+* **Die Wahl einer Platte rahmt einmal neu** (`Viewport.set_plate` →
+  `frame_next_scene`): Alle Platten stehen nebeneinander, eine einzelne im
+  Nullpunkt. Die gespeicherte Lage der Körper bleibt, dieselbe Wahl rahmt
+  nicht noch einmal.
 * **Ein Größenschritt rahmt einmal nach, wenn er über den Rahmen wächst**
   (RM-280): `MainWindow._frame_after_resizing` meldet eine neue Transaktion mit
   `RESIZING_OPERATIONS` an `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die

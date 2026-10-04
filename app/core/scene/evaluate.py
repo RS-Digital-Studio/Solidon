@@ -125,6 +125,7 @@ from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import FeatureMemo, digest, object_hash, operation_hash
 from app.core.scene.orphans import Reference, feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
+from app.core.scene.parameter_binding import BindingSpot, binding_spots
 from app.core.scene.parameter_usage import ParameterUse, parameter_uses
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
@@ -253,6 +254,8 @@ class EvaluationResult:
     parameter_usage: Mapping[str, tuple[ParameterUse, ...]] | None = None
     """Verwendungen im aktuellen Stapel; None bedeutet noch nicht zuverlässig erhoben."""
     parameter_usage_error: AppError | None = None
+    binding_spots: tuple[BindingSpot, ...] = ()
+    """Feste Zahlen im Stapel, die zu Projektmaßen passen (``parameter_binding``)."""
     blocked_references: tuple[FeatureRef, ...] = ()
     """Verweise, die den Halt tragen: alte native Flächenbezüge, die nach dem
     angehaltenen Schritt nicht belegt sind (§21.2).
@@ -505,7 +508,8 @@ def evaluate(
         usage = parameter_uses(document, registry) if document.parameters else {}
     except AppError as error:
         return dataclasses.replace(result, parameter_usage_error=error.with_traceback(None))
-    return dataclasses.replace(result, parameter_usage=usage)
+    spots = binding_spots(document, registry) if document.parameters else ()
+    return dataclasses.replace(result, parameter_usage=usage, binding_spots=spots)
 
 
 def _auto_split_name_parameters(
