@@ -413,6 +413,16 @@ CASES = [
         1664.0,
     ),
     Case("intersect_objects", "overlapping", {}, KEEP, "volume", 1600.0),
+    # Stift für Bohrung (RM-184): ein loser Stift in der Bohrung Ø 6 der 10 mm
+    # dicken Platte; der Träger bleibt, der Stift ist ein Körper seiner Art.
+    Case(
+        "pin_for_bore",
+        "hole",
+        {"at_feature": "hole"},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "loose_pin",
+        (6.0, 10.0),
+    ),
     # Bündige Einlage (RM-184): Träger und Einlage aus demselben Werkzeug, in
     # beiden Kernen; zusammen genau das Volumen von vorher, die Einlage bündig.
     Case(
@@ -1602,6 +1612,13 @@ def _assert_invariant(
         insert, tool = outputs
         assert tool.mesh.volume == pytest.approx(inputs[1].mesh.volume, rel=1e-9)
         assert low < insert.mesh.volume < high
+    elif rule == "loose_pin":
+        diameter, length = expected
+        carrier, pin = outputs
+        assert carrier.mesh.volume == pytest.approx(inputs[0].mesh.volume, rel=1e-9)
+        assert pin.mesh.bounds.size[2] == pytest.approx(length, rel=0.02)
+        assert pin.mesh.bounds.size[0] < diameter
+        assert pin.mesh.is_watertight
     elif rule == "inlay":
         before, top = expected
         carrier, inlay = outputs

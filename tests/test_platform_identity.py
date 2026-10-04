@@ -27,6 +27,7 @@ verschiedenen Rechenwerken herauskommen.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import json
 import math
@@ -419,6 +420,61 @@ def _counter_form() -> str:
         "cut_counter_form", _plate(), {}, others=[MeshData.of(tool)], grip=9.0
     )
     return _mesh_print(outputs[0])
+
+
+def _hinged_lid() -> str:
+    """Konturdeckel mit Scharnier (RM-184): rundes Gehäuse, Kragen beschnitten, aufgeklappt.
+
+    Dazu der lose Stift in der Bohrung eines Deckels mit Stift — Lage, Kragenraum
+    und Stift laufen über Quadratwurzeln und Vierteldrehungen, nie über Winkel.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE
+    from app.core.geom.mesh import MeshData
+
+    outer = lathe.cylinder(radius=38.5, height=30.0, sections=96)
+    inner = lathe.cylinder(radius=35.5, height=30.0, sections=96)
+    inner.vertices = np.asarray(inner.vertices) + np.array([0.0, 0.0, 2.0])
+    housing = boolean("difference", [MeshData.of(outer), MeshData.of(inner)], quality="fine").mesh
+    printed = _registered_outputs(
+        "create_lid",
+        housing,
+        {},
+        hinge="barrel",
+        collar=8.0,
+        thickness=3.0,
+        hinge_side="hinge_left",
+    )
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    entry = SceneObject(id="obj_1", name="Ring", mesh=housing, features={})
+
+    def run(name: str, source: SceneObject, **params: object) -> list[SceneObject]:
+        spec = REGISTRY.get(name)
+        return spec.fn(
+            OpContext(
+                scene=Scene(objects={source.id: source}, profile=profile),
+                inputs=[source],
+                params=spec.params(**params),
+                profile=profile,
+                quality="fine",
+                seed=20260922,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        ).outputs
+
+    loose = run("create_lid", entry, hinge="loose_pin", collar=8.0, thickness=3.0)
+    lid = dataclasses.replace(loose[1], id="obj_2")
+    pin = run("pin_for_bore", lid, at_feature=HINGE_HOLE_FEATURE)[1]
+    return "|".join(_mesh_print(mesh) for mesh in (*printed, loose[1].mesh, pin.mesh))
 
 
 def _registered_outputs(
@@ -1010,6 +1066,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "differently_split_contact_edge": _differently_split_contact_edge,
     "drill_hole": _drilled_along_the_face,
     "fill_band": _bore_wall_band,
+    "hinged_lid": _hinged_lid,
     "fill_bridged": _top_with_holes,
     "fit_pieces": _fit_pieces,
     "import_repair": _mended_import,

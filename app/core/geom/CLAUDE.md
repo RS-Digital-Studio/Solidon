@@ -145,9 +145,10 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 
 **Wandungen** — `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
-GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen) · `container_ops.py`
-(Behälter, Deckel und Einsätze; Transaktionsentwurf in `core/lid_flow.py`) ·
-`counter_form_ops.py` (Taschen aus dem Schatten der Teile)
+GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
+Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
+Einsätze; Entwurf in `core/lid_flow.py`) · `counter_form_ops.py` (Taschen aus
+dem Schatten der Teile)
 
 **Druckvorbereitung** — `prepare.py`, `prepare_ops.py` (Bohrungen, Teilen,
 Anordnen, Kollisionen, §18.6; Merkmalshandlungen, `pattern_feature`; die

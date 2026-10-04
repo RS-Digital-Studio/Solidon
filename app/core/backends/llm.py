@@ -2350,7 +2350,10 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Mit *Gegenform einlassen* (RM-184) derselbe Aufruf: **8 361 Token bei 186
 #: Werkzeugen**, 25,5 % des Fensters; SHA-256
 #: ``0414aa80760535459915458d4f30f50233b0c4ad520e6eebe8782ec55685e97a``.
-PROMPT_TOKENS: Final = 8361
+#: Mit *Stift für Bohrung* und dem Scharnier an *Deckel erzeugen* (RM-184):
+#: **8 394 Token bei 187 Werkzeugen**, 25,6 % des Fensters; SHA-256
+#: ``8c6e6097e5aee4c30cd3189d0d9f583fd70b04911ae4d99d17f97d96a78456eb``.
+PROMPT_TOKENS: Final = 8394
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2379,7 +2382,7 @@ TURN_TOKENS: Final = 9061
 #:
 #: Die funktionale Zählung vom 04.10.2026 enthält genau diese 186 Werkzeuge;
 #: Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 186
+PROMPT_TOOL_COUNT: Final = 187
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

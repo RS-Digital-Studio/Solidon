@@ -327,6 +327,14 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Wie eine Beschriftung zur Rundung ihres Trägers liegt (RM-184).
     "around": _("Um die Rundung"),
     "along": _("Längs der Rundung"),
+    # Das Scharnier eines Deckels und seine Seite (RM-184). Eigene Schlüssel:
+    # „pin“ ist beim Passstift das Teil, an dem der Stift entsteht.
+    "barrel": _("Mitgedruckt"),
+    "loose_pin": _("Mit Stift"),
+    "hinge_back": _("Hinten"),
+    "hinge_front": _("Vorn"),
+    "hinge_left": _("Links"),
+    "hinge_right": _("Rechts"),
 }
 
 

@@ -34,6 +34,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.lattice",
     "app.core.geom.texture_ops",
     "app.core.geom.lid",
+    "app.core.geom.lid_hinge",
     "app.core.geom.container_ops",
     # RM-184: Taschen eines Werkzeugeinsatzes aus den Teilen selbst.
     "app.core.geom.counter_form_ops",

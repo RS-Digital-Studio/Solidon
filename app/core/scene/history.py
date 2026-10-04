@@ -1316,6 +1316,19 @@ class History:
                     values={"op": draft.op, "taken": taken},
                     suggestions=(CANCEL,),
                 )
+            # Und die Vergabe rückt über sie hinweg: Ein Ablauf nennt die
+            # Kennung seines ersten neuen Körpers (``next_object_id``), und
+            # der nächste Entwurf ohne eigene bekam sonst genau sie ein
+            # zweites Mal (RM-184, Deckel mit Stift).
+            fresh = next(self._next_object)
+            named = [
+                int(match.group(1))
+                for entry in outputs
+                if (match := _OBJECT_PATTERN.match(entry)) is not None
+            ]
+            self._next_object: itertools.count[int] = itertools.count(
+                max([fresh, *(index + 1 for index in named)])
+            )
         return Operation(
             id=next(self._next_op),
             op=draft.op,

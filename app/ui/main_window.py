@@ -19910,6 +19910,18 @@ class MainWindow(QMainWindow):
                         ),
                         changes=changes,
                     )
+                if picked.name in LID_OPS and len(targets) == 1 and targets[0]:
+                    # Ein Deckel mit Stift sind zwei Schritte (RM-184): Die
+                    # Vorschau zeigt auch den Stift, den *Übernehmen* baut.
+                    from app.core.lid_flow import lid_drafts
+
+                    planned = lid_drafts(
+                        self.session.displayed_document(), targets[0][0], params, op=picked.name
+                    )
+                    return _PreviewOrder(
+                        drafts=tuple(replace(draft, seed=dialog_seed) for draft in planned),
+                        changes=changes,
+                    )
                 return _PreviewOrder(
                     drafts=tuple(
                         OperationDraft(

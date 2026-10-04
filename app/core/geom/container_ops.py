@@ -23,11 +23,11 @@ from app.core.geom.lid import (
     create_lid,
     screw_lid,
 )
+from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE, barrel_halves
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, pin
 from app.core.knowledge.parts.containers import rounded_prism
-from app.core.knowledge.parts.mechanics import BarrelHingeParams, barrel_hinge
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.registry.params import validate
 from app.core.types import (
@@ -42,9 +42,6 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM, exact_cos_degrees, exact_sin_degrees
 from app.i18n import _
-
-HINGE_PIN_FEATURE = "lid_hinge_pin"
-HINGE_HOLE_FEATURE = "lid_hinge_hole"
 
 
 @op_params
@@ -580,37 +577,15 @@ def _hinged(
             "thickness",
             _("Die Deckelplatte erreicht die Scharnierlasche nicht. Erhöhen Sie die Deckelstärke."),
         )
-    hinge = barrel_hinge(
-        validate(
-            BarrelHingeParams,
-            {
-                "pin": params.hinge_pin,
-                "width": params.hinge_width,
-                "reach": reach,
-                "wall": params.hinge_wall,
-                "play": gap,
-            },
-        )
-    ).mesh
-    halves: list[shapes.Form]
-    if isinstance(hinge, MeshData):
-        halves = [MeshData.of(part) for part in hinge.raw.split(only_watertight=False)]
-    else:
-        from app.core.brep.edit import separated_solids
-        from app.core.brep.kernel import Solid
-
-        if not isinstance(hinge, Solid):
-            raise TypeError("a constructed hinge must be a mesh or an exact solid")
-        halves = [part for part, _faces in separated_solids(hinge, cancelled=build.ctx.cancelled)]
-    if len(halves) != 2:
-        raise GeometryError(
-            detail=_(
-                "Das Scharnier besteht nicht aus zwei getrennten Teilen. "
-                "Prüfen Sie das Materialspiel."
-            ),
-            suggestions=(CORRECT_INPUT, CANCEL),
-        )
-    halves.sort(key=lambda form: form.bounds.minimum[0])
+    # Dieselben zwei Hälften wie am Konturdeckel mit Scharnier (``lid_hinge``).
+    halves = barrel_halves(
+        params.hinge_pin,
+        params.hinge_width,
+        reach,
+        params.hinge_wall,
+        gap,
+        cancelled=build.ctx.cancelled,
+    )
     axis = (0.0, depth / 2 + radius + gap, params.height + radius + gap)
     left = shapes.moved(halves[0], (0.0, -reach, -radius))
     left = shapes.moved(shapes.turned(left, 90.0, (1.0, 0.0, 0.0)), axis)

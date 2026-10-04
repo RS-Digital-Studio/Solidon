@@ -1377,6 +1377,14 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Die Zeile läuft an einer Rundung entlang, die Buchstaben biegen sich über ihre "
         "Höhe — ein Rohr, ein Griff."
     ),
+    "barrel": _("Das Scharnier kommt beweglich aus dem Drucker; der Deckel entsteht aufgeklappt."),
+    "loose_pin": _(
+        "Gehäuse und Deckel bekommen Augen mit Bohrung, der Stift entsteht als eigenes Teil."
+    ),
+    "hinge_back": _("Die Achse liegt an der hinteren Seite der Öffnung."),
+    "hinge_front": _("Die Achse liegt an der vorderen Seite der Öffnung."),
+    "hinge_left": _("Die Achse liegt an der linken Seite der Öffnung."),
+    "hinge_right": _("Die Achse liegt an der rechten Seite der Öffnung."),
 }
 
 
@@ -1695,6 +1703,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "part_name": _("Teil"),
     "parts": _("Teile"),
     "path": _("Pfad"),
+    # ``geom.lid``: der Durchmesser des Scharnierstifts.
+    "pin": _("Stift"),
     "pitch": _("Steigung"),
     "pixels": _("Bildpunkte"),
     "plate": _("Platte"),
