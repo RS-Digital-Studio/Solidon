@@ -3762,6 +3762,80 @@ def test_automatic_tower_position_reserves_the_brim_on_a_shifted_bed(
     assert float(positioned.written["wipe_tower_y"]) == pytest.approx(20 + margin)
 
 
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("program", ["bambu-studio.exe", "orca-slicer.exe"])
+def test_an_automatic_tower_keeps_out_of_the_beds_exclusion_area(
+    tmp_path: Path, rotation: int, program: str
+) -> None:
+    """Bambu P1S, P1P, X1 und X1 Carbon sperren vorn links 18 × 28 mm (``bed_exclude_area``).
+
+    Gemessen in der Slicer-Matrix (RM-312) mit Bambu Studio 02.08.02.61 am
+    P1S und der zweifarbigen ``carpet-corner-clip.step``: Der Turm begann bei
+    18/18 und reichte bis x = 17,2 mm in die Sperrfläche; Solidon meldete
+    danach selbst ``gcode.off_the_bed``. Der Turm samt Brim und Herstellerabstand
+    beginnt deshalb hinter der Sperrfläche, quer zu seiner unbekannten Tiefe.
+    """
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps(
+            {
+                "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+                "bed_exclude_area": ["0x0", "18x0", "18x28", "0x28"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps(
+            {
+                "enable_prime_tower": "1",
+                "prime_tower_width": "35",
+                "prime_tower_brim_width": "3",
+                "wipe_tower_rotation_angle": str(rotation),
+            }
+        ),
+        encoding="utf-8",
+    )
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    x = float(positioned.written["wipe_tower_x"])
+    y = float(positioned.written["wipe_tower_y"])
+    margin = 15 + 3
+    if rotation:
+        # Die Breite läuft entlang y, die Tiefe wächst von x nach links.
+        assert x == pytest.approx(256 - margin)
+        assert y == pytest.approx(28 + margin), "über der Sperrfläche, mit Abstand und Brim"
+    else:
+        assert x == pytest.approx(18 + margin), "rechts neben der Sperrfläche"
+        assert y == pytest.approx(margin)
+
+
+def test_an_exclusion_that_leaves_no_room_keeps_the_slicers_own_tower(tmp_path: Path) -> None:
+    """Passt der Turm neben keiner Sperrfläche, wird keine Lage erfunden."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps(
+            {
+                "printable_area": "0x0,120x0,120x120,0x120",
+                "bed_exclude_area": "0x0,80x0,80x120,0x120",
+            }
+        ),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps({"enable_prime_tower": "1", "prime_tower_width": "35"}), encoding="utf-8"
+    )
+    before = config.process.read_bytes()
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+
+    assert handover._orca_cli_tower_position(config, setup, ()) is config
+    assert config.process.read_bytes() == before
+
+
 @pytest.mark.parametrize(
     ("width", "brim", "initialized"),
     [(144, "3", True), (144.1, "3", False), (35, "nan", False), (35, "-1", False)],

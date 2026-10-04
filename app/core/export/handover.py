@@ -5815,7 +5815,8 @@ def _orca_cli_tower_position(
 
     Crealitys bekannter Platzierungsmodus bleibt maßgeblich. Ohne Modus
     beginnt der Turm unten mit Abstand zum Rand, statt bei der festen
-    Konsolenvorgabe 15/220. Bei 90 Grad wächst seine Tiefe nach links.
+    Konsolenvorgabe 15/220, und neben den Sperrflächen der Maschine
+    (:func:`_beside_the_exclusions`). Bei 90 Grad wächst seine Tiefe nach links.
     Gespeicherte Koordinaten gewinnen immer, auch aus einer 3MF-Beilage.
     Native Breite und Brim begrenzen den Start; erst die G-Code-Gegenprobe
     kennt die wirkliche Fläche einschließlich Rippen und Reinigungsvolumen.
@@ -5886,8 +5887,24 @@ def _orca_cli_tower_position(
                 across, along = along, across
             if width + 2 * margin > across or 2 * margin >= along:
                 return config
-            x = left + margin if is_zero(rotation) else right - margin
-            placed = dict(zip(coordinates, (str(x), str(bottom + margin)), strict=True))
+            start = _beside_the_exclusions(
+                values.get("bed_exclude_area"),
+                left + margin if is_zero(rotation) else bottom + margin,
+                width,
+                margin,
+                vertical=not is_zero(rotation),
+            )
+            if start is None:
+                return config
+            if is_zero(rotation):
+                if start + width + margin > right:
+                    return config
+                x, y = start, bottom + margin
+            else:
+                if start + width + margin > top:
+                    return config
+                x, y = right - margin, start
+            placed = dict(zip(coordinates, (str(x), str(y)), strict=True))
         elif is_zero(rotation):
             xs = {
                 "Left": left + side,
@@ -5914,6 +5931,49 @@ def _orca_cli_tower_position(
             detail=str(problem.strerror or problem),
         ) from problem
     return replace(config, written={**config.written, **placed})
+
+
+def _beside_the_exclusions(
+    raw: object, start: float, width: float, margin: float, *, vertical: bool
+) -> float | None:
+    """Wo der Turm quer zu seiner Tiefe beginnt, ohne eine Sperrfläche zu berühren.
+
+    Bambu P1S, P1P, X1 und X1 Carbon sperren vorn links 18 mal 28 mm
+    (``bed_exclude_area``); dort begann der Turm aus RM-476 und reichte in
+    die Sperrfläche (Slicer-Matrix RM-312, P1S mit Bambu Studio). Die Tiefe
+    des Turms kennt erst der Slicer — sie wächst mit der Spülmenge —, deshalb
+    gilt jede Sperrfläche, deren Ausdehnung quer zur Tiefe die Turmbreite samt
+    Rand (``margin``, Herstellerabstand und Brim) überlappt, gleich wo sie in
+    der Tiefe liegt: Der Anfang rückt hinter sie, mit demselben Rand wie am
+    Bettrand. ``vertical`` heißt, die Breite läuft entlang y (90 Grad).
+    Unlesbare Sperrflächen sind keine Auskunft: dann ``None``, und die Lage
+    bleibt beim Slicer.
+    """
+    if isinstance(raw, list) and all(isinstance(point, str) for point in raw):
+        raw = ",".join(raw)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return start
+    if not isinstance(raw, str):
+        return None
+    contours = [part for part in raw.split(";") if part.strip()]
+    areas = gcode.analyze(f"; bed_exclude_area = {raw}\n").excluded_areas
+    if len(areas) != len(contours):
+        return None
+    spans: list[tuple[float, float]] = []
+    for contour in areas:
+        shape = _usable_area(contour)
+        if shape is None:
+            return None
+        low_x, low_y, high_x, high_y = shape.bounds
+        spans.append((low_y, high_y) if vertical else (low_x, high_x))
+    for _round in range(len(spans) + 1):
+        blocking = [
+            high for low, high in spans if low < start + width + margin and high > start - margin
+        ]
+        if not blocking:
+            return start
+        start = max(blocking) + margin
+    return None
 
 
 def _meshes_from_files(models: Sequence[Path], setup: SlicerSetup) -> tuple[MeshData, ...]:

@@ -292,6 +292,16 @@ Freiraum zuzüglich der nativen Brimbreite. Passt bereits die bekannte Breite
 mit beiden Rändern nicht oder verbrauchen die Ränder die andere Bettachse,
 bleiben die Koordinaten aus; ein geklemmter Wert würde keinen Platz schaffen.
 
+Sperrflächen der Maschine (`bed_exclude_area`) rücken den Anfang quer zur
+Tiefe hinter sich, mit demselben Rand (`_beside_the_exclusions`): Bambu P1S,
+P1P, X1 und X1 Carbon sperren vorn links 18 mal 28 mm, genau dort, wo der Turm
+sonst begann. In der Slicer-Matrix (RM-312) reichte er am P1S mit Bambu Studio
+bis x = 17,2 mm hinein, und Solidons G-Code-Prüfung meldete den eigenen Turm
+als `gcode.off_the_bed`; nach der Regel beginnt er bei x = 36. Weil die Tiefe
+erst der Slicer kennt, zählt jede Sperrfläche, die quer zur Tiefe die
+Turmbreite samt Rand überlappt. Eine unlesbare Sperrfläche oder ein Turm, der
+neben keiner passt, lässt die Lage beim Slicer.
+
 Fehlt `prime_tower_brim_width`, gilt der Herstellerstandard **3 mm** aus
 `PrintConfig.cpp`: [OrcaSlicer v2.4.0](https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/v2.4.0/src/libslic3r/PrintConfig.cpp),
 [ElegooSlicer](https://raw.githubusercontent.com/elegooofficial/ElegooSlicer/main/src/libslic3r/PrintConfig.cpp),
@@ -307,8 +317,8 @@ Explizite Koordinaten aus Maschinen-, Prozess- oder eingebetteten 3MF-Profilen
 bleiben erhalten, auch wenn nur eine Achse vorgegeben ist. Unbekannte Modi und
 andere Konturen oder Winkel werden nicht geraten. Die Initialposition ist
 keine Platzgarantie: Tiefe, Rippen und Reinigungsvolumen bestimmen die
-tatsächliche Turmfläche erst beim Slicen; auch Sperrflächen prüft weiterhin
-die G-Code-Bauraumprüfung. Die geschriebenen Koordinaten gehen bei tatsächlich
+tatsächliche Turmfläche erst beim Slicen; Bauraum und Sperrflächen prüft
+danach weiterhin die G-Code-Bauraumprüfung. Die geschriebenen Koordinaten gehen bei tatsächlich
 mehreren im G-Code verwendeten Werkzeugen in die
 Einstellungsgegenprobe ein: Creality nullt den inaktiven Einfilament-Turm. Dabei
 zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen oder

@@ -291,10 +291,9 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
   `--cli` ablehnt, bekommt den alten Aufruf. Das Fenster fragt nach dem
   Drucker und nimmt dessen Profile (`window_findings`).
 - **Reinigungsturm:** Die vier Orca-Konsolen ergänzen fehlende Koordinaten
-  nach Crealitys bekanntem Modus oder ohne Modus unten mit Rand für Breite und Brim
-  (rechteckiges Bett, 0 oder 90 Grad). Kundenkoordinaten bleiben erhalten;
-  Unbekanntes wird nicht geraten. Erst die G-Code-Gegenprobe prüft die
-  tatsächliche Turmfläche. Herleitung: `konzepte/begruendungen/karte-app-core-export.md`.
+  nach Crealitys bekanntem Modus oder ohne Modus unten mit Rand für Breite und Brim,
+  neben Sperrflächen (rechteckiges Bett, 0 oder 90 Grad). Kundenkoordinaten
+  bleiben; Unbekanntes wird nicht geraten. Die Turmfläche prüft der G-Code.
 
 ### Die Prüfung vor dem Export
 
