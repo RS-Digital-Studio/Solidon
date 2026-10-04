@@ -99,6 +99,35 @@ def test_a_part_too_tall_for_the_printer_does_not_fit_instead_of_failing(
     assert report.state_of(entry) == ("passt nicht", [])
 
 
+def test_the_slicers_own_reading_of_a_handed_chain_value_is_no_deviation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kobra 2: Solidon übergibt „50%“ wie die Kette, OrcaSlicer fährt 30.
+
+    Mit der Kette wörtlich und mit 30 entsteht derselbe G-Code (04.10.2026);
+    die Matrix meldete das als Abweichung von der Herstellerkette.
+    """
+    unit = _load_module(
+        DELIVERY / "einheit.py",
+        "delivery_matrix_handed_review",
+        monkeypatch,
+        [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
+        (DELIVERY, MATRIX),
+    )
+    wanted = {"initial_layer_speed": ("process", "50%"), "outer_wall_speed": ("process", "150")}
+    block = {"initial_layer_speed": "30", "outer_wall_speed": "120"}
+
+    handed = unit.against_chain(
+        block, wanted, {"initial_layer_speed": "50%", "outer_wall_speed": "120"}
+    )
+    assert handed["differences"] == {"outer_wall_speed": ["process", "150", "120"]}
+    assert handed["console"] == {"initial_layer_speed": ["process", "50%", "30"]}
+    assert set(unit.against_chain(block, wanted)["differences"]) == {
+        "initial_layer_speed",
+        "outer_wall_speed",
+    }
+
+
 @pytest.mark.parametrize("key", ["machine_start_gcode", "start_gcode"])
 def test_missing_startcode_is_not_attributed_to_the_manufacturer(
     key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

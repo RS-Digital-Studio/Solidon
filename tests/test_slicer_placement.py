@@ -197,6 +197,60 @@ def test_valid_diagonal_pose_is_unchanged(subject):
     assert not changed and planned[entry.id] is entry.mesh
 
 
+def test_the_orca_family_gets_a_part_turned_that_only_fits_turned(subject):
+    """Die Orca-Familie ordnet an, dreht aber nicht: Die Waschschüssel aus dem
+    Korpus lehnten Creality Print und OrcaSlicer gerade übergeben ab, schräg
+    rechnete OrcaSlicer sie (04.10.2026). Was gerade passt, ordnet weiter der
+    Slicer an."""
+    writer, profile, _setup = subject
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca")
+    rod = body("rod", (200, 20, 10))
+    small = body("small", (50, 20, 10))
+    assert build_area.placement_offset(rod.mesh, profile.printer) is None
+
+    planned, changed = writer.prepare_slicer_meshes([rod], profile, setup)
+    untouched, kept = writer.prepare_slicer_meshes([small], profile, setup)
+
+    assert changed and build_area.fits_on_bed(planned[rod.id], profile.printer)
+    assert not kept and untouched[small.id] is small.mesh
+
+
+def test_the_free_margin_is_measured_in_the_best_turn():
+    """Ein Rechteck 100 × 50 mm auf 180 × 180 mm hat gerade 40 mm Rand; ein Stab
+    243 × 10 mm passt nur schräg, mit ``(180 − 253/√2) / 2`` mm."""
+    import math
+
+    printer = profiles.make_profile("prusa-mini", "pla").printer
+    corners = np.asarray([(0, 0), (100, 0), (100, 50), (0, 50)], dtype=float)
+    rod = np.asarray([(0, 0), (243, 0), (243, 10), (0, 10)], dtype=float)
+
+    assert build_area.free_margin(corners, printer) == pytest.approx(40.0, abs=1e-6)
+    assert build_area.free_margin(rod, printer) == pytest.approx(
+        (180.0 - 253.0 / math.sqrt(2.0)) / 2.0, abs=1e-6
+    )
+
+
+def test_creality_print_is_told_beforehand_when_its_own_arrangement_lacks_room(subject):
+    """Creality Print ordnet über die Konsole selbst an und lehnte die schräg
+    gelegte Waschschüssel mit 0,15 bis 0,79 mm Rand ab, mit 1,04 mm nicht.
+    Ein Teil mit weniger Rand geht nicht still hinaus, sondern hält vorher an."""
+    writer, profile, _setup = subject
+    setup = handover.SlicerSetup(Path("CrealityPrint.exe"), "orca")
+    tight = body("tight", (243, 10, 10))
+    loose = body("loose", (230, 10, 10))
+
+    with pytest.raises(ExternalToolError) as raised:
+        writer.prepare_slicer_meshes([tight], profile, setup)
+    planned, changed = writer.prepare_slicer_meshes([loose], profile, setup)
+
+    assert raised.value.values["constraint"] == "slicer_build_volume"
+    assert raised.value.object_id == "tight"
+    assert {"scale_to_fit", "choose_printer", "choose_slicer"} <= {
+        action.id for action in raised.value.suggestions
+    }
+    assert changed and build_area.fits_on_bed(planned[loose.id], profile.printer)
+
+
 def packing_error(subject):
     writer, profile, setup = subject
     with pytest.raises(AppError) as raised:

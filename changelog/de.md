@@ -79,7 +79,7 @@ Nutzen da und sonst nichts.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.
 - Nach dem Slicen vergleicht Solidon auch Stützmaterial und Modellschichten je Druckplatte. Der Prüfbericht zeigt die interne Schätzung und die Werte aus der Druckdatei.
 - Die Material-Gegenprobe vergleicht nur das gedruckte Modell. Spülmaterial wird getrennt gezeigt; unvollständig lesbare Mengen werden kenntlich gemacht.
-- Die Gegenprobe der Druckzeit rechnet ab der ersten Schicht mit den Tempi Ihres Druckers und meldet nicht mehr bei fast jedem Druck eine starke Abweichung.
+- Die Gegenprobe der Druckzeit rechnet ab der ersten Schicht mit den Tempi Ihres Druckers, auch mit Stützen, und meldet nicht mehr bei fast jedem Druck eine starke Abweichung.
 - Die Schichtanalyse rechnet an Hohlkörpern und Modellen mit vielen Decken mehrfach schneller und erhält feine Konturen. Die Ansicht der Schichten nutzt, was der Prüfbericht schon gerechnet hat.
 - Bei ineinandergesteckten Teilen zählt die Druckanalyse eingeschlossene Luft nicht mehr als Material. Das verbessert auch die Erkennung von Überhängen und nötigen Stützen.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
@@ -133,7 +133,8 @@ Nutzen da und sonst nichts.
 - Läuft ein Teil oben in eine Kante aus, die der Slicer nicht druckt, meldet Solidon nach dem Slicen kein abgeschnittenes Modell mehr.
 - Ist die erste Schicht eines Teils schmaler als eine Bahn, nennt die Meldung nach dem Slicen die Wandbahnen und den Raft als Ausweg.
 - SuperSlicer behält die Anordnung aus Solidon und schiebt die Teile nicht mehr bis an den Bettrand; der Skirt bleibt auf dem Bett.
-- Passt ein Teil nur schräg gestellt auf das Druckbett, geht es gedreht an OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print.
+- Passt ein Teil nur schräg gestellt auf das Druckbett, geht es gedreht an OrcaSlicer, Bambu Studio und ElegooSlicer; reicht Creality Print der Rand dafür nicht, sagt Solidon das vorher.
+- Einen Brim schlägt Solidon nur so breit vor, wie das Bett Platz lässt.
 - Reicht der Rand um ein Teil in eine Sperrfläche des Druckbetts, sagt das die Prüfung vor dem Export.
 - Kreuzen sich im Slicer die Bahnen zweier Teile oder eines Teils und des Reinigungsturms, sagt die Meldung das und bietet Auswege an.
 - Steht der Brim auf automatisch, warnt Solidon vor dem Export, wenn er über das Bett oder in eine Sperrfläche wachsen kann, und bietet eine feste Brimbreite an.

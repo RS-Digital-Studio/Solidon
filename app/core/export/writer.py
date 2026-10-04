@@ -22,15 +22,18 @@ from typing import TYPE_CHECKING, Final, Literal
 import numpy as np
 
 from app.core import activation, build_area
+from app.core.build_area import ORCA_AUTO_BRIM_MAX, rim_of
 from app.core.deferred import trimesh
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
+    CHOOSE_SLICER,
     CONVERT_TO_EXACT,
     EXPORT_AS_MESH,
     OPEN_PRINT_SETTINGS,
+    SCALE_TO_FIT,
     SHOW_HISTORY,
     ExternalToolError,
     FileWriteError,
@@ -513,77 +516,6 @@ def check_adhesion_clearance(
     return findings
 
 
-#: Die größte Breite, die der Auto-Brim der Orca-Familie wählt, in mm.
-#: OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups`` (aus Bambu Studio
-#: übernommen, ``BBS``): Die Breite folgt aus Höhe, Flächenträgheit und
-#: Wärmelänge der ersten Schicht und wird bei 18 mm gekappt („large brims are
-#: omitted"), unabhängig von ``brim_width``. Gemessen in der Slicer-Matrix
-#: (RM-312): ElegooSlicer legte am Rack 14,7 mm statt der 5 mm des Profils.
-ORCA_AUTO_BRIM_MAX: Final = 18.0
-
-
-@dataclass(frozen=True, slots=True)
-class RimReach:
-    """Wie weit die erste Schicht über ein Teil hinausreicht, und woraus."""
-
-    reach: float
-    """In mm über die Aufsicht des Teils hinaus."""
-    auto_brim: bool = False
-    """Der Auto-Brim der Orca-Familie zählt mit seiner Höchstbreite."""
-    support_foot: bool = False
-    """Die verbreiterte erste Stützschicht reicht weiter als der Brim."""
-    support_foot_unknown: bool = False
-    """Stützen sind an, ihre Verbreiterung nennt das Profil nicht."""
-
-
-def rim_of(
-    settings: PrintSettings,
-    flavour: SlicerFlavour = "other",
-    support_foot: float | None = None,
-) -> RimReach:
-    """Die belegte Außenkante der ersten Schicht um ein Teil (RM-312).
-
-    Von innen nach außen: Brim (bei der Orca-Familie mit ``auto`` bis
-    :data:`ORCA_AUTO_BRIM_MAX`) oder, mit Stützen, die verbreiterte erste
-    Stützschicht (``support_foot``, ``manufacturer.Foundation.support_foot``),
-    je nachdem, was weiter reicht; darum der Skirt mit Abstand und Bahnen.
-    Der Skirt zählt bei Haftungsart Skirt und bei Prusa und Orca neben einem
-    Brim, solange Solidon die Haftungsart nicht schreibt — dann drucken sie
-    beides, wie das Profil es sagt; schreibt Solidon eine Art, nullt die
-    Übergabe die übrigen (``handover._only_chosen_adhesion``). Cura druckt
-    nur eine Art.
-    """
-    adhesion = settings.adhesion
-    auto = adhesion.kind == "auto" and flavour == "orca"
-    if auto:
-        band = ORCA_AUTO_BRIM_MAX + max(0.0, adhesion.brim_gap)
-    elif adhesion.kind in ("brim", "auto", "raft"):
-        band = adhesion.brim_width
-    else:
-        band = 0.0
-    supported = settings.support.style != "none"
-    foot = False
-    if supported and support_foot is not None and support_foot > band:
-        band = support_foot
-        foot = True
-    written = "adhesion.kind" in settings.chosen or "adhesion.kind" in settings.accepted
-    skirt = adhesion.skirt_loops > 0 and (
-        adhesion.kind == "skirt"
-        or (flavour in ("prusa", "orca") and not written and adhesion.kind != "raft")
-    )
-    reach = band
-    if skirt:
-        reach += adhesion.skirt_distance + (
-            adhesion.skirt_loops * settings.layers.first_layer_line_width
-        )
-    return RimReach(
-        reach,
-        auto_brim=auto,
-        support_foot=foot,
-        support_foot_unknown=supported and support_foot is None,
-    )
-
-
 def rim_reach(
     settings: PrintSettings,
     flavour: SlicerFlavour = "other",
@@ -687,7 +619,10 @@ def check_adhesion_on_bed(
         if over <= EPS_GEOM:
             continue
         values: dict[str, float | str | TranslatableText] = {"distance": format_length(over)}
-        suggestions: tuple[Action, ...] = (ARRANGE_ON_BED,)
+        # Liegt ein Teil schon schräg so knapp, dass auch Anordnen nichts frei
+        # macht (Waschschüssel auf 220 auf 220 mm: 0,15 mm), hilft nur ein
+        # schmalerer Rand oder ein größeres Bett.
+        suggestions: tuple[Action, ...] = (ARRANGE_ON_BED, OPEN_PRINT_SETTINGS, CHOOSE_PRINTER)
         if rim.auto_brim:
             # Ob der Slicer die Höchstbreite wirklich wählt, weiß erst er —
             # gewarnt wird vor dem, was er wählen darf; der Kunde entscheidet
@@ -698,14 +633,14 @@ def check_adhesion_on_bed(
                 width=format_length(ORCA_AUTO_BRIM_MAX),
             )
             values["field"] = "adhesion.kind"
-            suggestions = (FIX_BRIM_WIDTH, ARRANGE_ON_BED)
+            suggestions = (FIX_BRIM_WIDTH, ARRANGE_ON_BED, CHOOSE_PRINTER)
         elif rim.support_foot:
             message = _(
                 "Die erste Stützschicht und der Skirt um sie reichen über das Bett oder in "
                 "eine Sperrfläche."
             )
             values["field"] = "adhesion.skirt_loops"
-            suggestions = (ARRANGE_ON_BED, SMALLER_SKIRT)
+            suggestions = (ARRANGE_ON_BED, SMALLER_SKIRT, CHOOSE_PRINTER)
         findings.append(
             Finding(
                 code="arrange.adhesion_off_bed",
@@ -2013,7 +1948,10 @@ def prepare_slicer_meshes(
             raise
     program = slicer_keys.program_of(setup.executable)
     if slicer_keys.arranges_on_cli(setup.flavour, program):
-        return _turned_for_cli(chosen, exported, profile, cancelled, rim)
+        turned, changed = _turned_for_cli(chosen, exported, profile, setup, cancelled, rim)
+        if changed and handover._creality_cli(setup):
+            _check_creality_edge(chosen, turned, profile, setup)
+        return turned, changed
     return _arrange_for_cli(chosen, exported, profile, setup, cancelled, rim)
 
 
@@ -2021,6 +1959,7 @@ def _turned_for_cli(
     chosen: Sequence[SceneObject],
     exported: dict[str, MeshData],
     profile: Profile,
+    setup: SlicerSetup,
     cancelled: CancelToken | None,
     rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
@@ -2031,7 +1970,10 @@ def _turned_for_cli(
     Teil durch, das gedreht passt; ungedreht sagte der Slicer dann mit -50
     ab (RM-312: eine Schüssel von 240 mal 200 mm am 220er-Bett von K1 und
     Kobra 2, die nur um 14,5° gedreht Platz hat). Was ungedreht irgendwo
-    passt, bleibt unberührt — die Lage gehört dort dem Slicer.
+    passt, bleibt unberührt — die Lage gehört dort dem Slicer. Was auch
+    gedreht keine Lage findet, geht nicht still hinaus: Die Übergabe hält mit
+    derselben Absage an wie :func:`_arrange_for_cli`. Creality Print legt die
+    gedrehte Platte danach selbst und braucht Rand (:func:`_check_creality_edge`).
     """
     turned = dict(exported)
     changed = False
@@ -2040,9 +1982,10 @@ def _turned_for_cli(
         if _fit_cli_mesh(mesh, profile, cancelled, turns=(np.eye(4),)) is not None:
             continue
         fitted = _fit_cli_mesh(mesh, profile, cancelled, rim=rim)
-        if fitted is not None:
-            turned[entry.id] = fitted
-            changed = True
+        if fitted is None:
+            raise _no_arrangement(setup, entry.plate, (entry.id,))
+        turned[entry.id] = fitted
+        changed = True
     return turned, changed
 
 
@@ -2125,6 +2068,72 @@ def _fit_cli_mesh(
     return None
 
 
+#: Wie viel Rand Creality Print zum Bettrand braucht, wenn es eine Platte über
+#: die Konsole selbst anordnet, in mm. Gemessen an der schräg gelegten
+#: Waschschüssel auf dem K1 (220 auf 220 mm, 04.10.2026): mit 0,15, 0,53 und
+#: 0,79 mm Rand abgelehnt („Nicht jedes Teil liegt ganz auf der Druckplatte“),
+#: mit 1,04 und 1,25 mm gerechnet. OrcaSlicer übernimmt die Lage mit
+#: ``--arrange 0`` und rechnete schon 0,15 mm.
+CREALITY_ARRANGE_EDGE: Final = 1.04
+
+
+def _check_creality_edge(
+    chosen: Sequence[SceneObject],
+    arranged: dict[str, MeshData],
+    profile: Profile,
+    setup: SlicerSetup,
+) -> None:
+    """Sagt vor dem Lauf ab, was Creality Print beim eigenen Anordnen ablehnt.
+
+    Creality Print nimmt über die Konsole keine Lage an (:func:`handover._creality_cli`)
+    und legt jede Platte selbst — mit Abstand zum Bettrand. Ein Teil, das nur
+    schräg und knapper passt, ginge sonst hinaus und käme als Absage zurück.
+    """
+    from app.core.export import handover
+
+    for entry in chosen:
+        mesh = arranged[entry.id]
+        room = build_area.free_margin(
+            np.asarray(mesh.raw.vertices, dtype=float)[:, :2], profile.printer
+        )
+        if room >= CREALITY_ARRANGE_EDGE:
+            continue
+        raise ExternalToolError(
+            tool=setup.name,
+            title=handover.SLICER_FAILED,
+            detail=_(
+                "Dieses Teil passt nur schräg und sehr knapp auf das Bett. Creality Print legt "
+                "die Teile selbst auf das Bett und lässt dabei mehr Abstand zum Rand."
+            ),
+            values={
+                "constraint": "slicer_build_volume",
+                "room": format_length(max(room, 0.0)),
+                "needed": format_length(CREALITY_ARRANGE_EDGE),
+            },
+            object_id=entry.id,
+            suggestions=(SCALE_TO_FIT, CHOOSE_SLICER, CHOOSE_PRINTER),
+        )
+
+
+def _no_arrangement(
+    setup: SlicerSetup, plate: int, object_ids: tuple[str, ...]
+) -> ExternalToolError:
+    """Die Absage, wenn für die Teile einer Platte keine Lage gefunden wurde."""
+    from app.core.export import handover
+
+    return ExternalToolError(
+        tool=setup.name,
+        title=handover.SLICER_FAILED,
+        detail=_(
+            "Für diese Teile wurde keine Anordnung auf einer Druckplatte gefunden. "
+            "Sie können alle Teile des Projekts neu auf Platten anordnen "
+            "oder einen größeren Drucker wählen."
+        ),
+        values={"constraint": "slicer_build_volume", "plate": plate, "object_ids": object_ids},
+        suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, CANCEL),
+    )
+
+
 def _arrange_for_cli(
     chosen: Sequence[SceneObject],
     exported: dict[str, MeshData],
@@ -2134,7 +2143,6 @@ def _arrange_for_cli(
     rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
     """Nur Ausgabenetze ihrer Platte bewegen; die Szene bleibt unverändert."""
-    from app.core.export import handover
 
     arranged = dict(exported)
     changed = False
@@ -2156,21 +2164,7 @@ def _arrange_for_cli(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if len(ready) != len(meshes) or not arrangement_holds(ready, profile):
-            raise ExternalToolError(
-                tool=setup.name,
-                title=handover.SLICER_FAILED,
-                detail=_(
-                    "Für diese Teile wurde keine Anordnung auf einer Druckplatte gefunden. "
-                    "Sie können alle Teile des Projekts neu auf Platten anordnen "
-                    "oder einen größeren Drucker wählen."
-                ),
-                values={
-                    "constraint": "slicer_build_volume",
-                    "plate": plate,
-                    "object_ids": tuple(entry.id for entry in entries),
-                },
-                suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, CANCEL),
-            )
+            raise _no_arrangement(setup, plate, tuple(entry.id for entry in entries))
         arranged.update((entry.id, mesh) for entry, mesh in zip(entries, ready, strict=True))
         changed = True
     return arranged, changed

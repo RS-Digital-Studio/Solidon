@@ -244,6 +244,21 @@ den schlanken Körper je Teil. Und wo die Stütze auf dem Bett bis an die Füße
 reicht, legt der Slicer den Rand nur, wo Platz ist — an der Schüssel mit
 Gitter vom Bett 236 mm.
 
+**Der Brim wird nur so breit vorgeschlagen, wie das Bett Platz lässt**
+(04.10.2026, RM-281 Nachtrag). Dieselbe Schüssel passt auf 220 auf 220 mm nur
+schräg, mit 0,15 mm Rand; vorgeschlagen war ein Brim von 5 mm, und übernommen
+druckte CuraEngine (SV06) den Rand neben das Bett („Rand zerrissen“, 176 statt
+2 Züge in der ersten Schicht). `advise.brim_room` misst den Rand in der besten
+Drehung (`build_area.free_margin`, dasselbe Winkelraster wie `size_excess`):
+Reicht er für den Brim des Profils, bleibt es beim Vorschlag; reicht er für
+mindestens drei Bahnen, wird die Breite mitvorgeschlagen; sonst entfällt der
+Vorschlag, und der Prüfbericht sagt `settings.brim_no_room` mit der Handlung
+„Anderes Druckerprofil wählen“. Ebenso der Skirt; beide fragen dieselbe
+Randrechnung wie die Übergabe (`build_area.rim_of`, RM-312): Curas Skirt lief an der schrägen Schüssel über den
+Bettrand und riss in 23 Züge; fehlt ihm der Platz, heißt der Vorschlag „keine“.
+Am Schnitt des Druckdialogs misst die Schüssel −0,06 mm statt 0,14 mm am Netz;
+knapp unter null gilt deshalb als „kein Platz“, nicht als „passt nicht“.
+
 **Schmale Stege bekommen eine langsame erste Schicht** (27.09.2026). Auf
 Roberts Minigolf-Platte am Centauri Carbon 2 rissen zwischen den Löchern die
 kurzen Bodenbahnen der ersten Schicht; Elegoos Standard legt deren Füllung
@@ -475,6 +490,27 @@ Rechnung anfasst, prüft **beide** Familien — kompakt und dünnwandig —, und
 Was die Schätzung nicht kann und nicht können soll: Stützen, Schürze, Rand,
 Fahrwege, Nahtstellen, Lückenfüllung. Sie trägt `source="internal"`, steht neben
 dem gemessenen Wert und wird nie mit ihm vermischt (Regel 14).
+
+**Die Zeitgegenprobe rechnet Stützen mit** (04.10.2026, RM-281 Nachtrag zu
+RM-465). Ohne sie lag sie mit „Stützen automatisch“ am Pilz (`F:\3D
+Dateien\mushroom.stl`) 28 bis 68 % unter der Druckdatei, an der Waschschüssel 31
+bis 48 %. `print_time` legt seitdem die Säulen je Schicht in Clipper an,
+schließt sie wie der Slicer (Prusa `support_material_closing_radius`, Cura
+`support_join_distance`, Orca fest 2 mm), wirft Krümel unter zwei Bahnen im
+Quadrat weg und füllt sie mit Muster und Kontaktschichten oder, bei Bäumen, mit
+einem Zug kurzer Stücke. Die Mindestschichtzeit bremst und zählt die Stütze
+nicht: Mit Abbremsen blieb der Pilz in PrusaSlicer 19 % und in Bambu Studio 28 %
+zu kurz, ohne 0 und 14 %. Am Pilz liegen danach ElegooSlicer +2 %, PrusaSlicer
+0 %, CuraEngine −11 %, Bambu Studio −14 %, Creality Print −1 %; an der
+Seitenablage (`Side kit rest 3 Ø36.stl`) PrusaSlicer −8 %, Creality Print −12 %,
+Bambu Studio −13 % — ElegooSlicer und Cura −18 und −20 %, wie dort ohne Stützen.
+**Wo die Stützen nicht dieselben sind, bleibt die Zeit offen**: Der Kobra 2
+stützt keine Brücken (`bridge_no_support`), OrcaSlicer las die Pilzunterseite als
+Brücke und stützte nur ihren Rand (39 statt rund 60 m Bahn); gerechnet wären
++96 %. Und an gewölbten Flächen druckt der Slicer drei- bis zwölfmal so viel
+Stütze, wie die Schichtanalyse in schmalen Bändern liest (Waschschüssel,
+Arbeitsplattenreiniger) — eine Zeitwarnung wiederholte dort nur die Stützwarnung.
+`SUPPORT_TIME_AGREEMENT` (Faktor 2) trennt beides an den gemessenen Mengen.
 
 ## Was die Analyse liefert
 

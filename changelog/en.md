@@ -54,7 +54,7 @@ it into `website/version.json`.
 - Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
 - After slicing, Solidon also compares support material and model layers for each plate. The report shows the internal estimate alongside values from the print file.
 - The material cross-check compares only the printed model. Purge material is shown separately, with a note when the amount cannot be read in full.
-- The print time cross-check counts from the first layer using your printer's speeds and no longer reports a large deviation for almost every print.
+- The print time cross-check counts from the first layer using your printer's speeds, supports included, and no longer reports a large deviation for almost every print.
 - Layer analysis is several times faster on hollow models and on models with many ceilings, and preserves fine contours. The layer view reuses what the report has already calculated.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
@@ -108,7 +108,8 @@ it into `website/version.json`.
 - If a part runs out at the top into an edge the slicer does not print, Solidon no longer reports a cut-off model after slicing.
 - If a part's first layer is narrower than one line, the message after slicing names wall lines and a raft as ways out.
 - SuperSlicer keeps Solidon's arrangement and no longer pushes parts to the bed edge; the skirt stays on the bed.
-- If a part only fits the bed turned at an angle, it goes turned to OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print.
+- If a part only fits the bed turned at an angle, it goes turned to OrcaSlicer, Bambu Studio and ElegooSlicer; if Creality Print lacks the margin for it, Solidon says so beforehand.
+- Solidon only suggests a brim as wide as the bed leaves room for.
 - If the rim around a part reaches into an exclusion area of the bed, the check before export says so.
 - If the paths of two parts, or of a part and the wipe tower, cross in the slicer, the message says so and offers ways out.
 - If the brim is set to automatic, Solidon warns before export when it could grow past the bed or into an exclusion area, and offers a fixed brim width.

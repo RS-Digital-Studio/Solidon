@@ -129,18 +129,18 @@ oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
 
 Vor dem Konsolenlauf prüft `slice_model` die Exportnetze der gewählten Platte
 auf Höhe, drehbare Grundfläche und eine Anordnung auf einer Platte.
-`PlateRun.meshes` hält den vorbereiteten Netzsatz; ohne ihn lesen begrenzte
-Importleser die Dateien. Stützsperren zählen nicht als Druckteile. Ein
-bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
-Datei- und Fensterübergabe behalten ihren Berichtweg.
+`PlateRun.meshes` hält den vorbereiteten Netzsatz, sonst lesen begrenzte
+Importleser; Stützsperren zählen nicht als Druckteile. Ein Bauraumgrund hält
+vor dem Prozessstart mit Handlung an.
 
 `prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
 Ohne Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf gepackt
-(Prusa: `--dont-arrange`), sonst nur gedreht, was ungedreht nicht passt.
-`arrangement_holds` prüft Druckkontur, Sperrzonen und nutzbare Höhe,
-auch für die Lageübernahme im Fenster. Die Außenkante der ersten Schicht
-rechnet `writer.rim_of`: Orca-Auto-Brim bis `ORCA_AUTO_BRIM_MAX`, Stützfuß
-(`Foundation.support_foot`, unbekannt heißt Befund), Skirt.
+(Prusa: `--dont-arrange`), sonst nur gedreht, was ungedreht nicht passt; findet
+sich keine Lage, hält es an, und Creality Print braucht `CREALITY_ARRANGE_EDGE`
+Rand (`_check_creality_edge`). `arrangement_holds` prüft Kontur, Sperrzonen und
+Höhe, auch im Fenster. Die Außenkante der ersten Schicht rechnet
+`build_area.rim_of` (Orca-Auto-Brim bis `ORCA_AUTO_BRIM_MAX`, Stützfuß aus
+`Foundation.support_foot`, unbekannt: Befund, Skirt), auch für den Rat.
 
 | Prüfung | Frage |
 |---|---|

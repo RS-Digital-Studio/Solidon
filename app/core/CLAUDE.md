@@ -35,7 +35,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
 | `action_effects.py` | Was jede angebotene Handlung außer ihrem Zweck verändert (`SIDE_EFFECTS`, `side_effect`; Befundkarte des Produktkompasses, Abschnitt 4.3); jede `Action`-Kennung des Kerns steht dort (`tests/test_action_effects.py`) |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
-| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); `machine_shift` rechnet Solidons Bettmitte in Maschinenkoordinaten um (`PrinterProfile.bed_origin`); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten; `size_excess_uncertainty` begrenzt den Winkelfehler vor einer harten Größenabsage |
+| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); `machine_shift` rechnet Solidons Bettmitte in Maschinenkoordinaten um (`PrinterProfile.bed_origin`); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten; `size_excess_uncertainty` begrenzt den Winkelfehler vor einer harten Größenabsage; `free_margin` misst den Rand in der besten Drehung, `rim_of` die Außenkante der ersten Schicht (Brim, Auto-Brim, Stützfuß, Skirt) für Übergabe und Rat |
 | `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): Vorbereitungsfingerabdrücke, Spulenbindungen, werkzeugweise G-Code-Mengen; `costs_for` rechnet Kosten je Währung aus übergebenen Daten. Das Journal schreibt `knowledge/filaments.py` |
 
 - **`Feature.measure_sources`** nennt je Parameter die Wertequelle (`native`,

@@ -55,7 +55,7 @@ dans `website/version.json`.
 - Correction d’un plantage d’ElegooSlicer et d’OrcaSlicer lors du tranchage de modèles multicolores avec des supports en grille.
 - Après le tranchage, Solidon compare aussi les supports et les couches du modèle par plateau. Le rapport présente l'estimation interne et les valeurs du fichier d'impression.
 - La comparaison de matière porte uniquement sur le modèle imprimé. La purge est affichée séparément, avec une indication si sa quantité ne peut pas être lue entièrement.
-- La comparaison de la durée d'impression compte à partir de la première couche avec les vitesses de votre imprimante et ne signale plus un fort écart à presque chaque impression.
+- La comparaison de la durée d'impression compte à partir de la première couche avec les vitesses de votre imprimante, supports compris, et ne signale plus un fort écart à presque chaque impression.
 - L'analyse des couches est plusieurs fois plus rapide sur les modèles creux ou à nombreux plafonds, et préserve les contours fins. La vue des couches reprend ce que le rapport a déjà calculé.
 - Pour les pièces qui se chevauchent, l'analyse d'impression ne compte plus l'air enfermé comme de la matière. La détection des surplombs et des supports nécessaires s'améliore aussi.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
@@ -109,7 +109,8 @@ dans `website/version.json`.
 - Si une pièce se termine en haut par une arête que le slicer n'imprime pas, Solidon ne signale plus de modèle tronqué après le tranchage.
 - Si la première couche d'une pièce est plus étroite qu'une ligne, le message après le tranchage propose les lignes de paroi et le radeau comme issue.
 - SuperSlicer garde la disposition de Solidon et ne pousse plus les pièces jusqu'au bord du plateau ; la jupe reste sur le plateau.
-- Si une pièce ne tient sur le plateau qu'en biais, elle part tournée vers OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
+- Si une pièce ne tient sur le plateau qu'en biais, elle part tournée vers OrcaSlicer, Bambu Studio et ElegooSlicer ; si la marge ne suffit pas à Creality Print, Solidon le dit avant.
+- Solidon ne propose une bordure qu'aussi large que le plateau le permet.
 - Si la bordure autour d'une pièce entre dans une zone interdite du plateau, le contrôle avant l'export le signale.
 - Si les trajets de deux pièces, ou d'une pièce et de la tour de purge, se croisent dans le slicer, le message le dit et propose des issues.
 - Si la bordure est en automatique, Solidon prévient avant l'export quand elle peut déborder du plateau ou entrer dans une zone interdite, et propose une largeur fixe.

@@ -40951,6 +40951,23 @@ Mindestdrucktempo in der Herstellerkette nennt, dass nicht verglichen wurde.
 Changelog: **ja** — der Zeitvergleich schlug seit der Slicer-Rückkopplung
 `d2efb2577` (ab v0.1.1) bei fast jedem Lauf an.
 
+**Nachtrag 04.10.2026 (`5e1251ffb`, Zweig `claude/rm281-paket3`):** Die Zeitgegenprobe rechnet
+Stützen mit. Ohne sie lag sie mit „Stützen automatisch“ am Pilz 28 bis 68 % und an der
+Waschschüssel 31 bis 48 % unter der Druckdatei. `print_time` legt die Säulen je Schicht in Clipper
+an, schließt sie wie der Slicer, verwirft Krümel unter zwei Bahnen im Quadrat und füllt sie mit
+Muster und Kontaktschichten oder als Baum mit einem Zug kurzer Stücke; Tempo, Beschleunigung,
+Kontaktdichte und Art aus dem Herstellerprofil (`Motion.support_*`,
+`manufacturer._orca_support_motion`, `_prusa_support_motion`, `cura_motion`). Die
+Mindestschichtzeit bremst und zählt die Stütze nicht (gemessen: mit Abbremsen bis 28 % zu kurz,
+ohne bis 14 %). Stützt der Slicer mehr als doppelt oder weniger als halb so viel, wie die
+Schichtanalyse schätzt, oder stützt das Profil keine Brücken (Kobra 2), bleibt die Zeit mit Grund
+offen (`estimate.time_comparison_blocked`, `PlateComparison.seconds_reason`). Pilz in sechs
+Slicern: ElegooSlicer +2 %, PrusaSlicer 0 %, CuraEngine −11 %, Bambu Studio −14 %, Creality Print
+−1 %, Kobra 2 offen; Seitenablage (`Side kit rest 3 Ø36.stl`): PrusaSlicer −8 %, Bambu Studio −13
+%, Creality Print und Cura offen (Stütze 2,1 und 2,9 mal die Schätzung), Kobra 2 offen,
+ElegooSlicer −18 % wie dort ohne Stützen. Ohne Stützen unverändert. Tests in
+`tests/test_print_time.py` (sieben neue).
+
 ## RM-380: Der Hilfsprozess verhungert nicht auf ausgelasteten Kernen, und seine Tests teilen keinen Plattencache (04.10.2026)
 
 <a id="rm-380-der-hilfsprozess-verhungert-nicht-auf-ausgelasteten-kernen-und-seine-tests-teilen-keinen-plattencache-04102026"></a>

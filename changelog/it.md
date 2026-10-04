@@ -54,7 +54,7 @@ scrive in `website/version.json`.
 - Risolto un arresto anomalo di ElegooSlicer e OrcaSlicer durante lo slicing di modelli multicolore con supporti a griglia.
 - Dopo lo slicing, Solidon confronta anche il materiale dei supporti e gli strati del modello per piatto. Il rapporto mostra la stima interna e i valori del file di stampa.
 - Il confronto del materiale considera solo il modello stampato. Lo spurgo è mostrato separatamente, segnalando se la quantità non può essere letta completamente.
-- Il confronto del tempo di stampa conta dal primo strato con le velocità della tua stampante e non segnala più una forte differenza quasi a ogni stampa.
+- Il confronto del tempo di stampa conta dal primo strato con le velocità della tua stampante, anche con i supporti, e non segnala più una forte differenza quasi a ogni stampa.
 - L'analisi degli strati è diverse volte più rapida sui modelli cavi e su quelli con molti soffitti, e mantiene i contorni fini. La vista degli strati riusa ciò che il rapporto ha già calcolato.
 - Nelle parti sovrapposte, l'analisi di stampa non conta più l'aria racchiusa come materiale. Migliora anche il rilevamento degli sbalzi e dei supporti necessari.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
@@ -108,7 +108,8 @@ scrive in `website/version.json`.
 - Se un pezzo termina in alto in uno spigolo che lo slicer non stampa, dopo lo slicing Solidon non segnala più un modello tagliato.
 - Se il primo strato di un pezzo è più stretto di una linea, il messaggio dopo lo slicing propone le linee di parete e il raft come via d'uscita.
 - SuperSlicer mantiene la disposizione di Solidon e non spinge più i pezzi fino al bordo del piano; lo skirt resta sul piano.
-- Se un pezzo entra nel piano solo ruotato, arriva ruotato a OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Se un pezzo entra nel piano solo ruotato, arriva ruotato a OrcaSlicer, Bambu Studio ed ElegooSlicer; se a Creality Print non basta il margine, Solidon lo dice prima.
+- Solidon propone un brim solo largo quanto il piano lo consente.
 - Se il bordo attorno a un pezzo entra in una zona esclusa del piano, il controllo prima dell'esportazione lo segnala.
 - Se nello slicer si incrociano i percorsi di due pezzi, o di un pezzo e della torre di spurgo, il messaggio lo dice e propone vie d'uscita.
 - Se il brim è su automatico, Solidon avvisa prima dell'esportazione quando può uscire dal piano o entrare in una zona esclusa, e propone una larghezza fissa.

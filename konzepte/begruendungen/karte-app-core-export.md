@@ -483,7 +483,22 @@ sagt daher, dass keine Anordnung gefunden wurde, und bietet die vorhandene
 projektweite Anordnung oder die Druckerwahl an. Der Abbruch wird vor und nach
 dem synchronen Packer geprüft. Der normale Datei- und Fensterweg wird nicht
 automatisch gepackt; das gemeinsame Prädikat zur Lageübernahme berücksichtigt
-aber auch dort Druckkontur, Sperrzonen und nutzbare Höhe.
+aber auch dort Druckkontur, Sperrzonen und nutzbare Höhe. Ein bekannter
+Bauraumgrund hält vor dem Prozessstart an; Datei- und Fensterübergabe behalten
+ihren Berichtweg.
+
+**Die Orca-Familie ordnet an, aber sie dreht nicht** (04.10.2026, RM-281
+Nachtrag). Die Waschschüssel aus dem Korpus (240 auf 200 mm) passt auf
+220 auf 220 mm nur schräg, mit 0,15 mm Rand. Gerade übergeben lehnten Creality
+Print (K1) und OrcaSlicer (Kobra 2) sie ab; die Vorprüfung ließ sie durch, weil
+der Überstand von 0,12 mm unter der Unsicherheit des Winkelrasters lag. Seitdem
+packt Solidon eine Platte auch für die Orca-Familie selbst, sobald ein Teil nur
+gedreht passt, und gibt die Lage vor; OrcaSlicer rechnete die schräg
+übergebene Schüssel mit `--arrange 0`, den Brim schnitt es am Bettrand ab.
+Creality Print nimmt über die Konsole keine Lage an und ordnet selbst an — mit
+Abstand zum Rand: abgelehnt mit 0,15, 0,53 und 0,79 mm, gerechnet mit 1,04 und
+1,25 mm (`CREALITY_ARRANGE_EDGE`). Darunter sagt `_check_creality_edge` vor dem
+Lauf ab und bietet Verkleinern, einen anderen Slicer oder Drucker an.
 
 ## Die Prüfung vor dem Export
 
@@ -704,7 +719,7 @@ Schicht an (RM-228).
 
 ## Die Außenkante der ersten Schicht (RM-312)
 
-`writer.rim_of` rechnet, wie weit die erste Schicht über ein Teil
+`build_area.rim_of` (früher `writer.rim_of`) rechnet, wie weit die erste Schicht über ein Teil
 hinausreicht, und `check_adhesion_on_bed` warnt, wenn das über den Bettrand
 oder in eine Sperrfläche geht. Drei Bausteine, jeder belegt:
 

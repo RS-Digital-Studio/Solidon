@@ -332,3 +332,229 @@ def test_the_plate_comparison_carries_the_time_only_with_motion() -> None:
     expected = print_time.plate_seconds([(_box(20.0, 20.0, 20.0), settings)], _motion())
     assert with_motion.seconds == pytest.approx(expected, rel=CLOSE)
     assert without.seconds is None
+
+
+# --- Stützen (RM-281 Paket 3, Nachtrag RM-465) ---------------------------------------
+
+
+def _mushroom() -> SliceResult:
+    """Ein Stiel 10 × 10 × 10 mm, darauf ein Hut 30 × 30 × 2 mm."""
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box(extents=(30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    body = trimesh.boolean.union([stem, cap])
+    return slice_body(MeshData.of(body), 0.2, first_layer_height=0.2, support_volume=False)
+
+
+def _supported(**changes: object) -> PrintSettings:
+    values: dict[str, object] = {
+        "support__style": "grid",
+        "support__density": 0.2,
+        "support__xy_gap": 0.5,
+        "support__interface_layers": 0,
+    }
+    return _settings(**{**values, **changes})
+
+
+def _under_the_cap(result: SliceResult) -> int:
+    return sum(1 for layer in result.layers if layer.area > 1e-6 and layer.z < 10.0)
+
+
+def _support_seconds(
+    result: SliceResult, settings: PrintSettings, motion: print_time.Motion
+) -> float:
+    bare = print_settings.with_path(settings, "support.style", "none")
+    return print_time.plate_seconds([(result, settings)], motion) - print_time.plate_seconds(
+        [(result, bare)], motion
+    )
+
+
+def test_supports_run_their_path_through_their_speed_outside_the_minimum_layer_time() -> None:
+    """Unter dem Hut steht je Schicht der Ring ``30² − (10 + 2 · 0,5)²`` mm²
+    (seitlicher Abstand zum Stiel), gefüllt mit 20 % Bahn von 0,5 mm Breite:
+    ``779 · 0,2 / 0,5`` mm je Schicht bei 40 mm/s.
+
+    Die Mindestschichtzeit bremst und zählt die Stütze nicht: Gemessen am Pilz
+    lag die Rechnung mit Abbremsen 19 % (PrusaSlicer) und 11 % (CuraEngine)
+    unter der Druckdatei, ohne 0 und 11 % (04.10.2026). Deshalb ist der Zuschlag
+    mit 5 s Mindestzeit derselbe wie ohne.
+    """
+    result = _mushroom()
+    motion = _motion(support_speed=40.0)
+    per_layer = (30.0 * 30.0 - 11.0 * 11.0) * 0.2 / 0.5 / 40.0
+    for minimum in (0.0, 5.0):
+        settings = _supported(cooling__minimum_layer_time=minimum)
+        added = _support_seconds(result, settings, motion)
+        assert added == pytest.approx(_under_the_cap(result) * per_layer, rel=1e-3), minimum
+    assert _under_the_cap(result) == 50
+
+
+def test_the_contact_layers_under_the_overhang_print_dense_at_their_own_speed() -> None:
+    """Zwei Kontaktschichten direkt unter dem Hut: dort die volle Fläche mit der
+    Kontaktdichte des Profils und dem Kontakttempo, darunter das Muster."""
+    result = _mushroom()
+    ring = 30.0 * 30.0 - 11.0 * 11.0
+    motion = _motion(
+        support_speed=40.0, support_interface_speed=20.0, support_interface_density=0.5
+    )
+    layers = _under_the_cap(result)
+    expected = (layers - 2) * ring * 0.2 / 0.5 / 40.0 + 2 * ring * 0.5 / 0.5 / 20.0
+
+    added = _support_seconds(result, _supported(support__interface_layers=2), motion)
+
+    assert added == pytest.approx(expected, rel=1e-3)
+
+
+def test_a_tree_runs_the_same_path_slower_than_a_pattern() -> None:
+    """Die Orca-Familie schreibt Äste als Zug kurzer Stücke; mit Ruck und
+    Beschleunigung der Maschine dauert dieselbe Bahn länger als ein Muster aus
+    langen Linien (Pilz: rund 27 s je Meter in ElegooSlicer und Bambu Studio)."""
+    result = _mushroom()
+    motion = _motion(support_speed=150.0, jerk=9.0)
+    settings = _supported(speed__acceleration=10000.0)
+    grid = _support_seconds(result, settings, motion)
+    tree = _support_seconds(
+        result, print_settings.with_path(settings, "support.style", "tree"), motion
+    )
+    automatic = _support_seconds(
+        result,
+        print_settings.with_path(settings, "support.style", "auto"),
+        replace(motion, support_tree=True),
+    )
+
+    assert tree > grid * 1.5
+    assert automatic == pytest.approx(tree, rel=CLOSE)
+
+
+def test_without_supports_the_time_is_unchanged() -> None:
+    """Ohne Stützen kommt nichts dazu, auch wenn das Profil Stütztempi nennt."""
+    result = _mushroom()
+    settings = print_settings.with_path(_supported(), "support.style", "none")
+
+    plain = print_time.plate_seconds([(result, settings)], _motion())
+    with_values = print_time.plate_seconds(
+        [(result, settings)], _motion(support_speed=40.0, support_tree=True, support_closing=2.0)
+    )
+
+    assert with_values == pytest.approx(plain, rel=CLOSE)
+
+
+def test_the_manufacturer_chain_names_speed_contact_and_kind_of_its_supports() -> None:
+    """Orca: ``support_speed``, Kontakt über den Abstand, Bäume an ``support_type``;
+    einen Anteil im Kontakttempo verwirft OrcaSlicer 2.4.2 und fährt 80 mm/s
+    (Kobra 2). Prusa: Kontakttempo als Anteil des Stütztempos, ``organic`` ist Baum."""
+    from app.core.export import manufacturer
+
+    orca = manufacturer.orca_motion(
+        {
+            **_ELEGOO_PROCESS,
+            "support_speed": "150",
+            "support_interface_speed": "100%",
+            "support_line_width": "0.42",
+            "support_interface_spacing": "0.5",
+            "support_type": "tree(auto)",
+            "bridge_no_support": "1",
+        },
+        _ELEGOO_MACHINE,
+        {"slow_down_min_speed": ["20"]},
+        0.4,
+    )
+    prusa = manufacturer.prusa_motion(
+        {
+            "min_print_speed": "15",
+            "support_material_speed": "120",
+            "support_material_interface_speed": "50%",
+            "support_material_extrusion_width": "0.4",
+            "support_material_interface_spacing": "0.2",
+            "support_material_style": "organic",
+            "support_material_closing_radius": "2",
+            "default_acceleration": "4000",
+        },
+        0.4,
+    )
+
+    assert orca is not None and prusa is not None
+    assert orca.support_speed == 150.0
+    assert orca.support_interface_speed == manufacturer.ORCA_SUPPORT_INTERFACE_SPEED
+    assert orca.support_interface_density == pytest.approx(0.42 / 0.92)
+    assert orca.support_acceleration == 10000.0
+    assert orca.support_tree and orca.support_skips_bridges
+    assert orca.support_closing == manufacturer.ORCA_SUPPORT_CLOSING
+    assert prusa.support_speed == 120.0
+    assert prusa.support_interface_speed == pytest.approx(60.0)
+    assert prusa.support_interface_density == pytest.approx(0.4 / 0.6)
+    assert prusa.support_tree and not prusa.support_skips_bridges
+    assert prusa.support_closing == 2.0
+
+
+def test_the_time_is_not_compared_when_the_slicer_supports_differently() -> None:
+    """Die Zeit rechnet die Stützen mit, die die Schichtanalyse schätzt. Stützt
+    der Slicer mehr als doppelt oder weniger als halb so viel, sagt eine
+    Zeitwarnung nur, dass die Stützen andere sind (Waschschüssel: ein Viertel
+    bis ein Drittel der gedruckten Stützmenge geschätzt, 04.10.2026)."""
+    from app.core.slice.estimate import (
+        SUPPORT_TIME_AGREEMENT,
+        PlateComparison,
+        time_comparison_blocked,
+    )
+    from app.core.slice.gcode import GcodeMetrics
+
+    estimate = PlateComparison(0, 1000.0, 50)
+    near = 1000.0 * SUPPORT_TIME_AGREEMENT * 0.9
+    far = 1000.0 * SUPPORT_TIME_AGREEMENT * 1.1
+
+    assert time_comparison_blocked([estimate], GcodeMetrics(support_mm3=near)) == ""
+    assert time_comparison_blocked([estimate], GcodeMetrics(support_mm3=far))
+    assert time_comparison_blocked(
+        [estimate], GcodeMetrics(support_mm3=1000.0 / SUPPORT_TIME_AGREEMENT / 1.1)
+    )
+    assert (
+        time_comparison_blocked([PlateComparison(0, 0.0, 50)], GcodeMetrics(support_mm3=0.0)) == ""
+    ), "ohne Stützen bleibt der Vergleich"
+    assert (
+        time_comparison_blocked([PlateComparison(0, 0.0, 50)], GcodeMetrics(support_mm3=None)) == ""
+    ), "ohne Stützen fehlt der Druckdatei nichts"
+    assert time_comparison_blocked([estimate], GcodeMetrics(support_mm3=None))
+
+
+def test_a_profile_without_bridge_supports_leaves_time_and_support_unchecked() -> None:
+    """Kobra 2 (``bridge_no_support = 1``): OrcaSlicer las die Pilzunterseite als
+    Brücke und stützte nur ihren Rand — mit Stützen +96 % gerechnet, ohne −32 %.
+    Welche Decke das ist, weiß nur der Slicer; Zeit und Stützmenge bleiben offen,
+    mit Grund, ohne Stützen wird verglichen wie immer."""
+    from app.core.slice.estimate import plate_comparison
+    from app.core.types import SceneObject
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box(extents=(30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    mesh = MeshData.of(trimesh.boolean.union([stem, cap]))
+    entry = SceneObject(id="pilz", name="Pilz", mesh=mesh)
+    profile = profiles.make_profile("anycubic-kobra-2", "pla")
+    motion = _motion(support_skips_bridges=True)
+    supported = _supported()
+    bare = print_settings.with_path(supported, "support.style", "none")
+
+    with_support = plate_comparison(
+        0,
+        [(entry, mesh, supported)],
+        profile,
+        keep_arrangement=True,
+        separate_objects=True,
+        motion=motion,
+    )
+    without = plate_comparison(
+        0,
+        [(entry, mesh, bare)],
+        profile,
+        keep_arrangement=True,
+        separate_objects=True,
+        motion=motion,
+    )
+
+    assert with_support.seconds is None and with_support.seconds_reason
+    assert with_support.support_material_mm3 is None and with_support.support_reason
+    assert without.seconds is not None and without.seconds > 0.0
+    assert not without.seconds_reason

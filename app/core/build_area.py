@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Final
 
 import numpy as np
@@ -26,7 +27,7 @@ from shapely.geometry import MultiPoint, Polygon, box
 from shapely.geometry.base import BaseGeometry
 
 from app.core.errors import CHOOSE_PRINTER, ValidationError
-from app.core.types import BoundingBox, Mesh, PrinterProfile, Vec3
+from app.core.types import BoundingBox, Mesh, PrinterProfile, PrintSettings, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -427,8 +428,6 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     Größenabsage muss :func:`size_excess_uncertainty` abgezogen werden;
     das Winkelraster kann eine tatsächlich passende Drehung verfehlen.
     """
-    from shapely.affinity import rotate
-
     from app.core.geom.mesh import as_mesh_data
 
     if placement_offset(mesh, printer) is not None:
@@ -438,12 +437,7 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     left, front, right, back = printable_area(printer).bounds
     width, depth = right - left, back - front
     points = np.asarray(as_mesh_data(mesh).raw.vertices, dtype=float)[:, :2]
-    hull = MultiPoint(points).convex_hull
-    flat = float("inf")
-    for degrees in range(0, 90, SIZE_ANGLE_STEP_DEGREES):
-        low_x, low_y, high_x, high_y = rotate(hull, degrees, origin="centroid").bounds
-        over = max(high_x - low_x - width, high_y - low_y - depth)
-        flat = min(flat, over, max(high_x - low_x - depth, high_y - low_y - width))
+    flat = _turned_overhang(MultiPoint(points).convex_hull, width, depth)
     if max(flat, height) > EPS_GEOM:
         return max(flat, height)
     # Er passt in einer Drehung. Liegt er achsparallel schon im Rechteck und
@@ -451,6 +445,38 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     # ihn der Slicer beim Anordnen selbst.
     square = bounds.size[0] <= width + EPS_GEOM and bounds.size[1] <= depth + EPS_GEOM
     return EPS_GEOM if square else 0.0
+
+
+def _turned_overhang(hull: BaseGeometry, width: float, depth: float) -> float:
+    """Der kleinste Überstand einer Hülle über ein Rechteck ``width`` mal ``depth``
+    über alle Drehungen im Winkelraster, in mm; negativ heißt so viel Luft auf
+    der knapperen Achse. Eine Messung wie :func:`size_excess`."""
+    from shapely.affinity import rotate
+
+    least = float("inf")
+    for degrees in range(0, 90, SIZE_ANGLE_STEP_DEGREES):
+        low_x, low_y, high_x, high_y = rotate(hull, degrees, origin="centroid").bounds
+        least = min(
+            least,
+            max(high_x - low_x - width, high_y - low_y - depth),
+            max(high_x - low_x - depth, high_y - low_y - width),
+        )
+    return least
+
+
+def free_margin(points: np.ndarray, printer: PrinterProfile) -> float:
+    """Wie breit ein Rand rundum um diesen Umriss höchstens sein darf, damit
+    Umriss und Rand in einer Drehung noch auf die Druckfläche passen, in mm.
+
+    ``points`` sind Punkte in XY, deren konvexe Hülle die der Projektion ist.
+    Negativ heißt: Schon der Umriss passt nicht. Die Waschschüssel aus dem
+    Korpus (240 auf 200 mm) hat auf 220 auf 220 mm schräg gelegt 0,15 mm —
+    kein Brim, kein Skirt, und Creality Print wie OrcaSlicer legten sie gerade
+    und lehnten ab (04.10.2026). Gleiches Winkelraster wie :func:`size_excess`.
+    """
+    left, front, right, back = printable_area(printer).bounds
+    hull = MultiPoint(np.asarray(points, dtype=float)[:, :2]).convex_hull
+    return -_turned_overhang(hull, right - left, back - front) / 2.0
 
 
 def size_excess_uncertainty(mesh: Mesh) -> float:
@@ -463,3 +489,75 @@ def size_excess_uncertainty(mesh: Mesh) -> float:
     """
     diameter = math.hypot(*mesh.bounds.size[:2])
     return 2.0 * diameter * math.sin(math.radians(SIZE_ANGLE_STEP_DEGREES / 4.0))
+
+
+#: Die größte Breite, die der Auto-Brim der Orca-Familie wählt, in mm.
+#: OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups`` (aus Bambu Studio
+#: übernommen, ``BBS``): Die Breite folgt aus Höhe, Flächenträgheit und
+#: Wärmelänge der ersten Schicht und wird bei 18 mm gekappt („large brims are
+#: omitted"), unabhängig von ``brim_width``. Gemessen in der Slicer-Matrix
+#: (RM-312): ElegooSlicer legte am Rack 14,7 mm statt der 5 mm des Profils.
+ORCA_AUTO_BRIM_MAX: Final = 18.0
+
+
+@dataclass(frozen=True, slots=True)
+class RimReach:
+    """Wie weit die erste Schicht über ein Teil hinausreicht, und woraus."""
+
+    reach: float
+    """In mm über die Aufsicht des Teils hinaus."""
+    auto_brim: bool = False
+    """Der Auto-Brim der Orca-Familie zählt mit seiner Höchstbreite."""
+    support_foot: bool = False
+    """Die verbreiterte erste Stützschicht reicht weiter als der Brim."""
+    support_foot_unknown: bool = False
+    """Stützen sind an, ihre Verbreiterung nennt das Profil nicht."""
+
+
+def rim_of(
+    settings: PrintSettings,
+    flavour: str = "other",
+    support_foot: float | None = None,
+) -> RimReach:
+    """Die belegte Außenkante der ersten Schicht um ein Teil (RM-312).
+
+    Von innen nach außen: Brim (bei der Orca-Familie mit ``auto`` bis
+    :data:`ORCA_AUTO_BRIM_MAX`) oder, mit Stützen, die verbreiterte erste
+    Stützschicht (``support_foot``, ``manufacturer.Foundation.support_foot``),
+    je nachdem, was weiter reicht; darum der Skirt mit Abstand und Bahnen.
+    Der Skirt zählt bei Haftungsart Skirt und bei Prusa und Orca neben einem
+    Brim, solange Solidon die Haftungsart nicht schreibt — dann drucken sie
+    beides, wie das Profil es sagt; schreibt Solidon eine Art, nullt die
+    Übergabe die übrigen (``handover._only_chosen_adhesion``). Cura druckt
+    nur eine Art. Die eine Rechnung für Übergabe (``writer.rim_reach``,
+    ``check_adhesion_on_bed``) und Druckvorschläge (``advise``: Brim und Skirt
+    nur, wo das Bett Platz lässt).
+    """
+    adhesion = settings.adhesion
+    auto = adhesion.kind == "auto" and flavour == "orca"
+    if auto:
+        band = ORCA_AUTO_BRIM_MAX + max(0.0, adhesion.brim_gap)
+    elif adhesion.kind in ("brim", "auto", "raft"):
+        band = adhesion.brim_width
+    else:
+        band = 0.0
+    supported = settings.support.style != "none"
+    foot = False
+    if supported and support_foot is not None and support_foot > band:
+        band = support_foot
+        foot = True
+    written = "adhesion.kind" in settings.chosen or "adhesion.kind" in settings.accepted
+    skirt = adhesion.skirt_loops > 0 and (
+        adhesion.kind == "skirt"
+        or (flavour in ("prusa", "orca") and not written and adhesion.kind != "raft")
+    )
+    reach = band
+    if skirt:
+        line = settings.layers.first_layer_line_width or settings.layers.line_width
+        reach += adhesion.skirt_distance + adhesion.skirt_loops * line
+    return RimReach(
+        reach,
+        auto_brim=auto,
+        support_foot=foot,
+        support_foot_unknown=supported and support_foot is None,
+    )

@@ -107,7 +107,7 @@ from app.core.scene.project import (  # noqa: E402
     next_source_id,
 )
 from app.core.slice import advise  # noqa: E402
-from app.core.slice.estimate import plates_findings  # noqa: E402
+from app.core.slice.estimate import plates_findings, time_comparison_blocked  # noqa: E402
 from app.core.slice.gcode import DEVIATION_LIMIT as TIME_DEVIATION  # noqa: E402
 from app.core.types import Source  # noqa: E402
 from app.ui.print_settings_dialog import (  # noqa: E402
@@ -211,7 +211,9 @@ def arranged_for(objects: list[Any], profile: Any, settings: Any) -> tuple[list[
     plates = sorted({int(getattr(o, "plate", 0) or 0) for o in objects})
     crowded = []
     for plate in plates:
-        meshes = [as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate]
+        meshes = [
+            as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate
+        ]
         if len(meshes) < 2:
             continue
         planned = arrange_on_bed(meshes, profile)
@@ -416,8 +418,20 @@ BAMBU_CONSOLE_LIMITS = frozenset(
 STARTCODE_KEYS = frozenset({"machine_start_gcode", "start_gcode"})
 
 
-def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> dict[str, Any]:
+def against_chain(
+    block: dict[str, str],
+    wanted: dict[str, tuple[str, str]],
+    handed: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Jeder Schlüssel der Herstellerkette gegen einen Konfigurationsblock.
+
+    ``handed`` ist, was Solidon dem Slicer übergab (Projektdatei). Steht dort
+    der Wert der Kette und druckt der Slicer trotzdem etwas anderes, ist das
+    seine Lesart des Herstellerprofils, keine Abweichung Solidons: Der
+    Kobra-2-Prozess nennt ``initial_layer_speed = 50%``,
+    ``support_interface_speed = 100%`` und ``support_object_xy_distance =
+    60%``; OrcaSlicer 2.4.2 verwirft alle drei und fährt 30, 80 und 0,35 —
+    mit der Kette wörtlich und mit diesen Zahlen bahngleich (04.10.2026).
 
     Was die Konsole selbst anders druckt, als die Kette sagt, steht getrennt
     unter ``console`` — gemessen, nicht vermutet (27.09.2026): Mit einem
@@ -468,9 +482,13 @@ def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> 
             normalised[key] = [kind, value, first]
             continue
         if not same(first, value) and not same(str(found), value):
-            if value == "" or (
-                key in BAMBU_CONSOLE_LIMITS
-                and str(block.get("printer_model", "")).startswith("Bambu Lab A1")
+            if (
+                value == ""
+                or (
+                    key in BAMBU_CONSOLE_LIMITS
+                    and str(block.get("printer_model", "")).startswith("Bambu Lab A1")
+                )
+                or (handed is not None and key in handed and same(handed[key], value))
             ):
                 normalised[key] = [kind, value[:120], str(found)[:120]]
             else:
@@ -663,6 +681,16 @@ def plate_run(
             estimated_minutes=round(run.comparison.seconds / 60.0, 1)
             if run.comparison is not None and run.comparison.seconds
             else None,
+            # Wie das Hauptfenster: Stützt der Slicer deutlich anders oder ist
+            # die Zeit aus einem genannten Grund offen, gibt es keinen Vergleich.
+            time_blocked=str(
+                (run.comparison.seconds_reason if run.comparison is not None else "")
+                or (time_comparison_blocked([run.comparison], metrics) if run.comparison else "")
+            ),
+            support_estimated_mm3=run.comparison.support_material_mm3
+            if run.comparison is not None
+            else None,
+            support_gcode_mm3=metrics.support_mm3,
             filament_g=metrics.filament_grams,
             slice_findings=sorted(
                 {f"{f.severity}:{f.code}" for f in findings if f.severity != "info"}
@@ -882,7 +910,7 @@ def flags_for(
     # derselben Grenze wie ``gcode.compare``; hier für jede Platte, damit die
     # Gesamtabnahme zählt, wo der Kunde „Druckzeit weicht ab“ liest (RM-465).
     printing, estimated = row.get("printing_minutes"), row.get("estimated_minutes")
-    if row.get("ok") and printing and estimated:
+    if row.get("ok") and printing and estimated and not row.get("time_blocked"):
         deviation = (estimated - printing) / printing
         if abs(deviation) > TIME_DEVIATION:
             found.append(f"Zeit ab Schicht 1 weicht ab ({deviation:+.0%})")
@@ -1093,7 +1121,7 @@ def main() -> int:
                 assert isinstance(previous, dict)
                 result = previous
                 result["done"] = False
-        except (OSError, ValueError):
+        except OSError, ValueError:
             pass
     finished = {(c["slicer"], c["printer"]) for c in result["combos"] if c.get("complete")}
 
@@ -1221,8 +1249,13 @@ def main() -> int:
                         bed,
                     )
                     if row.get("gcode") and Path(row["gcode"]).exists() and wanted is not None:
+                        written = Path(row.get("written") or "")
                         row["chain"] = against_chain(
-                            gcode_lesen.config_block(Path(row["gcode"])), wanted
+                            gcode_lesen.config_block(Path(row["gcode"])),
+                            wanted,
+                            project_block(written)
+                            if written.suffix == ".3mf" and written.exists()
+                            else None,
                         )
                     elif (
                         row.get("written")

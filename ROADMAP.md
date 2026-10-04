@@ -2109,6 +2109,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`; Konzept Herstellerprofil, Abschnitt
   7.
 
+  **Teilstand 04.10.2026 (Nachtrag, G1):** Rand und Drehung sind mit RM-312 zu einer Lösung vereint:
+  `build_area.rim_of` (Auto-Brim, Stützfuß, Skirt) fragen Prüfung und Druckrat; gedreht wird nur,
+  was ungedreht nicht passt, Creality Print bekommt zusätzlich die Randprüfung. Echte Läufe:
+  Waschschüssel an OrcaSlicer/Kobra 2 schräg gerechnet, an Creality Print/K1 vorher abgesagt; Rack
+  am Centauri Carbon 2 mit Auto-Brim-Warnung; garden-hose-holder am MINI mit Stützfußwarnung. Die
+  Zeitgegenprobe rechnet Stützen mit (Archiv RM-465). Nach 0.5.2 offen: ElegooSlicer −18 % an der
+  Seitenablage (Füllanker und senkrechte Schalen), Stützmenge an gewölbten Flächen drei- bis
+  zwölfmal unterschätzt, Rechenzeit der Zeitschätzung. Belege unter
+  `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`.
+
 <a id="rm-259"></a>
 
 - [ ] **RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer
@@ -3719,6 +3729,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `‹B›\matrixwerkzeug\uebernahme\` (einheit.py, bericht.py, dazu die Diffs und `LISTE.txt` mit Ziel,
   Basis-SHA und Inhalt), eingepflegt auf den Stand von G1 (13:03) und an `image_00001_.glb` und
   `1x1-bin.stl` erprobt (`‹B›\werkzeugprobe\`).
+
+  **Teilstand 04.10.2026 (Fehlalarm nach 0.5.2 zu beheben):** Die Randprüfung misst Brim und Skirt
+  von der Aufsicht des ganzen Teils aus, die Slicer legen sie um die erste Schicht; Teile, die oben
+  breiter sind als am Fuß, bekommen eine Warnung, obwohl der Rand auf dem Bett bleibt
+  (garden-hose-holder am MINI ohne Stützen; Waschschüssel am Kobra 2 mit Auto-Brim-Warnung, Brim im
+  G-Code 4,5 mm, 21 mm vom Rand). Richtig: Brim und Skirt vom Umriss der ersten Schicht, nur den
+  Stützfuß von der Aufsicht messen. Beleg
+  `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\bericht.md` (Nachtrag 2).
 
 <a id="rm-502"></a>
 

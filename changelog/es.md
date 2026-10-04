@@ -55,7 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Corregido un cierre inesperado de ElegooSlicer y OrcaSlicer al laminar modelos multicolor con soportes de rejilla.
 - Tras laminar, Solidon también compara el material de soporte y las capas del modelo por placa. El informe muestra la estimación interna y los valores del archivo de impresión.
 - La comparación de material considera solo el modelo impreso. La purga se muestra por separado y se indica si su cantidad no puede leerse por completo.
-- La comparación del tiempo de impresión cuenta desde la primera capa con las velocidades de su impresora y ya no avisa de una gran desviación en casi cada impresión.
+- La comparación del tiempo de impresión cuenta desde la primera capa con las velocidades de su impresora, también con soportes, y ya no avisa de una gran desviación en casi cada impresión.
 - El análisis de capas es varias veces más rápido en modelos huecos y en modelos con muchos techos, y conserva los contornos finos. La vista de capas aprovecha lo que el informe ya calculó.
 - En piezas superpuestas, el análisis de impresión ya no cuenta el aire encerrado como material. También mejora la detección de voladizos y soportes necesarios.
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
@@ -109,7 +109,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza termina arriba en una arista que el slicer no imprime, Solidon ya no avisa tras el laminado de un modelo cortado.
 - Si la primera capa de una pieza es más estrecha que una línea, el aviso tras el laminado propone las líneas de pared y la balsa como salida.
 - SuperSlicer conserva la disposición de Solidon y ya no empuja las piezas hasta el borde de la placa; la falda queda sobre la placa.
-- Si una pieza solo cabe girada en la placa, llega girada a OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
+- Si una pieza solo cabe girada en la placa, llega girada a OrcaSlicer, Bambu Studio y ElegooSlicer; si a Creality Print no le basta el margen, Solidon lo dice antes.
+- Solidon solo propone un borde de adherencia tan ancho como permite la placa.
 - Si el borde alrededor de una pieza entra en una zona prohibida de la placa, la comprobación antes de exportar lo dice.
 - Si en el slicer se cruzan las trayectorias de dos piezas, o de una pieza y la torre de purga, el aviso lo dice y ofrece salidas.
 - Si el borde de adherencia está en automático, Solidon avisa antes de exportar cuando puede crecer fuera de la placa o en una zona prohibida, y propone un ancho fijo.

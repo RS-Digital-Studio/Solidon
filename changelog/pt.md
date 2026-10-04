@@ -54,7 +54,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Corrigida uma falha do ElegooSlicer e do OrcaSlicer ao preparar modelos multicoloridos com suportes em grelha.
 - Após fatiar, Solidon também compara o material de suporte e as camadas do modelo por placa. O relatório mostra a estimativa interna e os valores do ficheiro de impressão.
 - A comparação de material considera apenas o modelo impresso. A purga aparece separadamente, com indicação quando a quantidade não pode ser lida por completo.
-- A comparação do tempo de impressão conta a partir da primeira camada com as velocidades da sua impressora e já não aponta um grande desvio em quase todas as impressões.
+- A comparação do tempo de impressão conta a partir da primeira camada com as velocidades da sua impressora, também com suportes, e já não aponta um grande desvio em quase todas as impressões.
 - A análise de camadas é várias vezes mais rápida em modelos ocos e em modelos com muitos tetos, e preserva os contornos finos. A vista de camadas aproveita o que o relatório já calculou.
 - Nas peças sobrepostas, a análise de impressão deixa de contar o ar fechado como material. Também melhora a deteção de saliências e dos suportes necessários.
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
@@ -108,7 +108,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma peça acaba no topo numa aresta que o slicer não imprime, o Solidon já não avisa de um modelo cortado depois do fatiamento.
 - Se a primeira camada de uma peça for mais estreita que uma linha, a mensagem depois do fatiamento propõe as linhas de parede e o raft como saída.
 - O SuperSlicer mantém a disposição do Solidon e já não empurra as peças até à borda da mesa; a saia fica na mesa.
-- Se uma peça só cabe na mesa rodada, segue rodada para OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Se uma peça só cabe na mesa rodada, segue rodada para OrcaSlicer, Bambu Studio e ElegooSlicer; se ao Creality Print não chegar a margem, o Solidon avisa antes.
+- O Solidon só propõe uma aba tão larga quanto a mesa permite.
 - Se a borda em volta de uma peça entra numa zona de exclusão da mesa, a verificação antes da exportação avisa.
 - Se no slicer se cruzam os percursos de duas peças, ou de uma peça e da torre de purga, a mensagem diz isso e propõe saídas.
 - Se a aba estiver em automático, o Solidon avisa antes de exportar quando ela pode passar da mesa ou entrar numa zona de exclusão, e propõe uma largura fixa.
