@@ -112,6 +112,8 @@ dans `website/version.json`.
 - Si une pièce ne tient sur le plateau qu'en biais, elle part tournée vers OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
 - Si la bordure autour d'une pièce entre dans une zone interdite du plateau, le contrôle avant l'export le signale.
 - Si les trajets de deux pièces, ou d'une pièce et de la tour de purge, se croisent dans le slicer, le message le dit et propose des issues.
+- Si la bordure est en automatique, Solidon prévient avant l'export quand elle peut déborder du plateau ou entrer dans une zone interdite, et propose une largeur fixe.
+- Les supports et la jupe au bord du plateau comptent dans le contrôle avant l'export, avec l'élargissement de la première couche de support indiqué par le profil du slicer.
 
 ### Perçages, trous oblongs et découpe
 

@@ -112,6 +112,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza solo cabe girada en la placa, llega girada a OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
 - Si el borde alrededor de una pieza entra en una zona prohibida de la placa, la comprobación antes de exportar lo dice.
 - Si en el slicer se cruzan las trayectorias de dos piezas, o de una pieza y la torre de purga, el aviso lo dice y ofrece salidas.
+- Si el borde de adherencia está en automático, Solidon avisa antes de exportar cuando puede crecer fuera de la placa o en una zona prohibida, y propone un ancho fijo.
+- Los soportes y la falda junto al borde de la placa cuentan en la comprobación antes de exportar, con el ensanche de la primera capa de soporte que indica el perfil del slicer.
 
 ### Taladros, ranuras y división
 

@@ -138,7 +138,9 @@ Datei- und Fensterübergabe behalten ihren Berichtweg.
 Ohne Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf gepackt
 (Prusa: `--dont-arrange`), sonst nur gedreht, was ungedreht nicht passt.
 `arrangement_holds` prüft Druckkontur, Sperrzonen und nutzbare Höhe,
-auch für die Lageübernahme im Fenster.
+auch für die Lageübernahme im Fenster. Die Außenkante der ersten Schicht
+rechnet `writer.rim_of`: Orca-Auto-Brim bis `ORCA_AUTO_BRIM_MAX`, Stützfuß
+(`Foundation.support_foot`, unbekannt heißt Befund), Skirt.
 
 | Prüfung | Frage |
 |---|---|
@@ -151,10 +153,6 @@ auch für die Lageübernahme im Fenster.
 vollständige Blöcke, fehlende Druckwerte sind deshalb Befunde. Belegte
 Umbenennungen werden vor dem Vergleich übersetzt; reine `nil`-Overrides
 bleiben Vererbung. Randart, Wandfolge und Stützart werden ebenfalls verglichen.
-
-`verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
-Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
-ein wörtlicher Backslash erhalten.
 
 Die vierte fragt `expected_tools` aus `threemf.tools_in_use`; ohne sie entfällt
 der Vergleich, ohne Filamentprofile je Spule sagt es `unreachable_overrides`

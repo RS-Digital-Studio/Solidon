@@ -111,6 +111,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma peça só cabe na mesa rodada, segue rodada para OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - Se a borda em volta de uma peça entra numa zona de exclusão da mesa, a verificação antes da exportação avisa.
 - Se no slicer se cruzam os percursos de duas peças, ou de uma peça e da torre de purga, a mensagem diz isso e propõe saídas.
+- Se a aba estiver em automático, o Solidon avisa antes de exportar quando ela pode passar da mesa ou entrar numa zona de exclusão, e propõe uma largura fixa.
+- Os suportes e a saia junto à borda da mesa contam na verificação antes da exportação, com o alargamento da primeira camada de suporte que o perfil do slicer indica.
 
 ### Furos, furos oblongos e divisão
 

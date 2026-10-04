@@ -136,6 +136,8 @@ Nutzen da und sonst nichts.
 - Passt ein Teil nur schräg gestellt auf das Druckbett, geht es gedreht an OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print.
 - Reicht der Rand um ein Teil in eine Sperrfläche des Druckbetts, sagt das die Prüfung vor dem Export.
 - Kreuzen sich im Slicer die Bahnen zweier Teile oder eines Teils und des Reinigungsturms, sagt die Meldung das und bietet Auswege an.
+- Steht der Brim auf automatisch, warnt Solidon vor dem Export, wenn er über das Bett oder in eine Sperrfläche wachsen kann, und bietet eine feste Brimbreite an.
+- Stützen und Skirt am Bettrand zählen in der Prüfung vor dem Export mit der Verbreiterung der ersten Stützschicht, die das Slicerprofil nennt.
 
 ### Bohrungen, Langlöcher und Teilen
 

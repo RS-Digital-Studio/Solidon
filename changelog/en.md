@@ -111,6 +111,8 @@ it into `website/version.json`.
 - If a part only fits the bed turned at an angle, it goes turned to OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print.
 - If the rim around a part reaches into an exclusion area of the bed, the check before export says so.
 - If the paths of two parts, or of a part and the wipe tower, cross in the slicer, the message says so and offers ways out.
+- If the brim is set to automatic, Solidon warns before export when it could grow past the bed or into an exclusion area, and offers a fixed brim width.
+- Supports and skirt at the bed edge count in the check before export, with the first support layer expansion the slicer profile gives.
 
 ### Holes, slots and splitting
 

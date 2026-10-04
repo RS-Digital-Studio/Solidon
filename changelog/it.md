@@ -111,6 +111,8 @@ scrive in `website/version.json`.
 - Se un pezzo entra nel piano solo ruotato, arriva ruotato a OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - Se il bordo attorno a un pezzo entra in una zona esclusa del piano, il controllo prima dell'esportazione lo segnala.
 - Se nello slicer si incrociano i percorsi di due pezzi, o di un pezzo e della torre di spurgo, il messaggio lo dice e propone vie d'uscita.
+- Se il brim è su automatico, Solidon avvisa prima dell'esportazione quando può uscire dal piano o entrare in una zona esclusa, e propone una larghezza fissa.
+- I supporti e lo skirt al bordo del piano contano nel controllo prima dell'esportazione, con l'allargamento del primo strato di supporto indicato dal profilo dello slicer.
 
 ### Fori, asole e divisione
 

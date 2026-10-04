@@ -85,7 +85,7 @@ from app.core.export.writer import (
     arrangement_holds,
     part_advice,
     prepare_slicer_meshes,
-    rim_reach,
+    slicer_rim,
     write_assembly,
 )
 from app.core.filament_usage import UsageRequest, from_gcode
@@ -1286,7 +1286,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         job.setup,
         for_window=job.for_window,
         cancelled=job.cancelled,
-        rim=rim_reach(local_settings) if job.with_settings else 0.0,
+        rim=slicer_rim(local_settings, job.profile, job.setup) if job.with_settings else 0.0,
     )
     meshes = tuple(mesh_plan[0][entry.id] for entry in on_plate)
     keep = arrangement_holds(meshes, job.profile)
@@ -3713,6 +3713,14 @@ class PrintSettingsDialog(QDialog):
             .replace("{position}", localised(str(place)))
             .replace("{count}", localised(str(len(self._search_hits))))
         )
+
+    def show_setting(self, path: str) -> None:
+        """Die Zeile eines Befunds zeigen, wenn das Fenster dafür geöffnet wird.
+
+        *Brim-Breite festlegen …* und *Skirt verkleinern …* (RM-312) öffnen
+        den Dialog aus dem Prüfbericht und tragen das Feld im Befund.
+        """
+        self._lift(path)
 
     def _lift(self, path: str, *, focus: bool = True, reveal: bool = True) -> None:
         """Eine Zeile in den Blick holen und hervorheben — höchstens eine."""

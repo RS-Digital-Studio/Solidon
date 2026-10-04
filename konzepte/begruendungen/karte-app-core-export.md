@@ -363,6 +363,10 @@ Qualitätsstufe gelten (RM-228).
 
 ## Die vier Gegenproben nach dem Lauf
 
+**Maskierte Anführungszeichen.** `verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
+Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
+ein wörtlicher Backslash erhalten.
+
 `slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.
 
 Vor dem Prozessstart prüft es den unveränderten Netzsatz der einzelnen Platte.
@@ -697,3 +701,34 @@ Bei Cura kommen unteres Ende und Schwelle der Lüfterkurve aus der
 Druckerdefinition (`manufacturer.cura_fan_curve`), nicht aus Solidons
 Materialkurve: Deren PLA-Schwelle von 80 s hob den Lüfter schon in der ersten
 Schicht an (RM-228).
+
+## Die Außenkante der ersten Schicht (RM-312)
+
+`writer.rim_of` rechnet, wie weit die erste Schicht über ein Teil
+hinausreicht, und `check_adhesion_on_bed` warnt, wenn das über den Bettrand
+oder in eine Sperrfläche geht. Drei Bausteine, jeder belegt:
+
+- **Auto-Brim der Orca-Familie.** `configBrimWidthByVolumeGroups` in
+  OrcaSlicers `Brim.cpp` (aus Bambu Studio übernommen) rechnet die Breite aus
+  Höhe, Flächenträgheit und Wärmelänge der ersten Schicht und kappt bei
+  18 mm, unabhängig von `brim_width`. ElegooSlicer legte am Rack 14,7 mm statt
+  5 mm. Entscheidung zu RM-312: Steht der Brim beim Herstellerprofil auf
+  „automatisch“, rechnet die Warnung mit 18 mm und bietet *Brim-Breite
+  festlegen* an; wählt der Kunde „Brim“ oder übernimmt einen Vorschlag,
+  schreibt Solidon `outer_only` mit Breite, und der Slicer wählt nichts mehr
+  selbst. Zwischen zwei Teilen bleibt es bei der Brimbreite des Profils
+  (`adhesion_margin`, Entscheidung J).
+- **Stützfuß.** `raft_first_layer_expansion` verbreitert die erste Raft- und
+  Stützschicht. Gelesen aus der Kette, sonst die gemessene Programmvorgabe
+  (`manufacturer.SUPPORT_FOOT_DEFAULTS`: Orca, Elegoo, Creality 2 mm, Prusa
+  und SuperSlicer 3 mm). Bambu Studio schreibt `-1`, Cura führt den Schlüssel
+  nicht: unbekannt, und `arrange.support_foot_unknown` sagt das, statt eine
+  Zahl zu schätzen. Gezählt wird der Fuß, sobald Stützen an sind — wo die
+  Stütze das Bett berührt, weiß erst der Slicer.
+- **Skirt.** Abstand und Bahnen aus dem Profil, außen um Brim oder Stützfuß.
+  Prusa und Orca drucken ihn neben einem Brim, solange Solidon die
+  Haftungsart nicht schreibt; schreibt es eine, nullt
+  `handover._only_chosen_adhesion` die übrigen. Cura druckt nur eine Art.
+
+Dieselbe Außenkante gibt `slicer_rim` der Drehung für die Konsole
+(`_fit_cli_mesh`) als Rand mit, in Druckdialog und Schreiber gleich.
