@@ -184,7 +184,12 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Bögen, deren Mantel über eine weitere Wand läuft, sind keines. Gespeicherte
 #:   Merkmale nannten dort ein Langloch, und ein exakter Stopfen, der den Körper
 #:   verlöre, ist jetzt eine Absage statt eines Ergebnisses.
-CACHE_FORMAT_VERSION: Final = 48
+#: - 49 (RM-254/RM-210): Zusammenführung mit der Erkennungslinie (dort die 43).
+#:   Im wandernden Umriss bestätigt nur ein Kreis, den sein Stück festlegt, und
+#:   ein Bogen zwischen zwei seiner Ecken gehört zu ihm; Kegelläufe beginnen an
+#:   der Quadrik der Stützpunkte. Gespeicherte Erkennungen trügen alte
+#:   Verrundungen und Kegel.
+CACHE_FORMAT_VERSION: Final = 49
 
 
 @dataclass(frozen=True, slots=True)

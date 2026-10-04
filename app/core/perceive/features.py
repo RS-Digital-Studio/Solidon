@@ -2617,6 +2617,10 @@ def _fitted(
         #: Die Dreiecke, die als Stücke eines wandernden Umrisses eingepasst
         #: wurden (RM-243) — sie fallen nach der Zusammenlegung.
         outline = np.zeros(len(body.faces), dtype=bool)
+        #: Die Dreiecke der ganzen Flecken, die ein wandernder Umriss sind —
+        #: an ihnen fragt :func:`_between_corners_of`, ob ein Nachbarfleck
+        #: dazugehört (RM-254).
+        wandering = np.zeros(len(body.faces), dtype=bool)
         #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
         #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
         #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
@@ -2978,6 +2982,7 @@ def _fitted(
                     _wandering_outline(body, pieces, check_cancelled) if any(classified) else None
                 )
                 if standing is not None:
+                    wandering[np.asarray(patch, dtype=np.intp)] = True
                     for number, (piece, known) in enumerate(zip(pieces, classified, strict=True)):
                         if known and number not in standing:
                             outline[np.asarray(piece, dtype=np.intp)] = True
@@ -3064,6 +3069,15 @@ def _fitted(
         if check_cancelled is not None:
             check_cancelled()
         rings = _merged_tori(body, tori.entries, check_cancelled=check_cancelled)
+        if wandering.any():
+            # **Ein Bogen zwischen zwei Ecken eines wandernden Umrisses gehört
+            # zu ihm** (RM-254): ein eigener Fleck derselben Seitenwand, den
+            # Ecken vom Umriss trennen und der deshalb nie unter dessen Stücken
+            # stand — am Screen-Cover das Wandband R 13,73 einer Stufe im
+            # Buchstaben. Er bleibt nur, wenn er gezeichnet ist.
+            for fit, patch in found:
+                if _between_corners_of(body, fit, patch, wandering, check_cancelled):
+                    outline[np.asarray(patch, dtype=np.intp)] = True
         if outline.any():
             found = _off_the_outline(found, outline)
             cones = _off_the_outline(cones, outline)
@@ -8327,6 +8341,8 @@ def _refined_fit(
     residual: Callable[[np.ndarray], np.ndarray],
     check_cancelled: Callable[[], None] | None,
     jacobian: Callable[[np.ndarray], np.ndarray] | None = None,
+    *,
+    spent: list[bool] | None = None,
 ) -> np.ndarray | None:
     """Begrenzt geometrisch verfeinern und numerisch unbestimmte Maße verwerfen.
 
@@ -8336,6 +8352,9 @@ def _refined_fit(
     14 870 Jacobi-Schätzungen für 1 263 Verfeinerungen, mehr als die Hälfte
     ihrer Zeit (gemessen am 21.09.2026). Kegel, Kugel und Ring bringen ihre
     Ableitung deshalb mit; das Ergebnis ist dasselbe Minimum.
+
+    ``spent`` bekommt ein ``True``, wenn der Lauf sein Budget ausschöpfte —
+    die eine Absage, nach der ein zweiter Start lohnt (:func:`_cone_from_plan`).
     """
 
     def checked(values: np.ndarray) -> np.ndarray:
@@ -8374,6 +8393,8 @@ def _refined_fit(
             precision=ROUND_FIT_PRECISION,
             evaluations=ROUND_FIT_EVALUATIONS,
         )
+    if spent is not None and result.nfev >= ROUND_FIT_EVALUATIONS:
+        spent.append(True)
     if not result.success or not np.isfinite(result.x).all() or not np.isfinite(result.fun).all():
         return None
     # **Wer sein Budget ausschöpft, hat nicht gerechnet, sondern aufgehört**
@@ -8521,14 +8542,34 @@ def _screened_fits(
         planned += weight
         planning.reach(planned / total_weight if total_weight else 1.0)
     planning.reach(1.0)
+    first_runs = solving.part(0.0, 0.8)
     verdicts = refine.exhausted(
         [problem for _key, problem in asked],
         precision=ROUND_FIT_PRECISION,
         evaluations=ROUND_FIT_EVALUATIONS,
         check_cancelled=check_cancelled,
-        progress=solving.reach,
+        progress=first_runs.reach,
     )
+    # Wer vom ersten Start sicher am Budget endet und einen Quadrikstart hat,
+    # rechnet von dort ein zweites Mal (:func:`_cone_from_plan`) — auch dieser
+    # Lauf bekommt das sichere Nein des Stapels.
+    second: list[tuple[tuple[Any, ...], refine.Problem]] = []
     for (key, _problem), verdict in zip(asked, verdicts, strict=True):
+        if verdict:
+            plan = entries[key][0]
+            entries[key] = (plan, True)
+            if key[0] == "fit_cone" and plan.seed is not None:
+                seeded = ("fit_cone_seed", *key[1:])
+                entries[seeded] = (plan, False)
+                second.append((seeded, plan.problem(plan.seed)))
+    second_verdicts = refine.exhausted(
+        [problem for _key, problem in second],
+        precision=ROUND_FIT_PRECISION,
+        evaluations=ROUND_FIT_EVALUATIONS,
+        check_cancelled=check_cancelled,
+        progress=solving.part(0.8, 1.0).reach,
+    )
+    for (key, _problem), verdict in zip(second, second_verdicts, strict=True):
         if verdict:
             entries[key] = (entries[key][0], True)
     share.reach(1.0)
@@ -8614,6 +8655,11 @@ def _fit_cone_measured(
         if screened is None
         else screened.fits.get(("fit_cone", support.digest, line_tolerance))
     )
+    seeded = (
+        None
+        if screened is None
+        else screened.fits.get(("fit_cone_seed", support.digest, line_tolerance))
+    )
     if entry is None:
         plan = _cone_plan(support, line_tolerance, check_cancelled)
         exhausted = False
@@ -8621,7 +8667,12 @@ def _fit_cone_measured(
         plan, exhausted = entry
     if plan is None:
         return None
-    return _cone_from_plan(plan, check_cancelled, exhausted=exhausted)
+    return _cone_from_plan(
+        plan,
+        check_cancelled,
+        exhausted=exhausted,
+        seed_exhausted=seeded is not None and seeded[1],
+    )
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -8644,21 +8695,26 @@ class _ConePlan:
     second: np.ndarray
     solving: np.ndarray
     solving_apex: np.ndarray
+    #: Der zweite Start aus der Quadrik der Stützpunkte, wo sie einen gültigen
+    #: Kegel gibt (:func:`_quadric_cone_start`), sonst ``None``. Er rechnet nur,
+    #: wenn der Lauf vom ersten sein Budget ausschöpft (:func:`_cone_from_plan`).
+    seed: np.ndarray | None = None
 
     def start(self) -> np.ndarray:
         """Der Startwert des Lösers: Spitze, zwei Achsneigungen, Winkel."""
         start: np.ndarray = np.r_[self.apex, 0.0, 0.0, self.half_angle]
         return start
 
-    def problem(self) -> refine.ConeProblem:
-        """Dieselbe Aufgabe für den Stapel (:func:`refine.exhausted`)."""
+    def problem(self, initial: np.ndarray | None = None) -> refine.ConeProblem:
+        """Dieselbe Aufgabe für den Stapel (:func:`refine.exhausted`) — vom ersten
+        Start oder von ``initial`` (dem zweiten)."""
         return refine.ConeProblem(
             points=self.solving,
             apex=self.solving[self.solving_apex[0]] if len(self.solving_apex) else None,
             axis=self.initial_axis,
             first=self.first,
             second=self.second,
-            initial=self.start(),
+            initial=self.start() if initial is None else initial.copy(),
         )
 
 
@@ -8729,6 +8785,9 @@ def _cone_plan(
     solving_apex = (
         at_apex if rows is None or not len(at_apex) else np.flatnonzero(rows == int(at_apex[0]))
     )
+    # Eine belegte Spitze hält den Start ohnehin fest; sonst darf die Quadrik
+    # der Stützpunkte ihn ersetzen, wenn sie näher am Kegel liegt (RM-210).
+    seed = None if len(solving_apex) else _quadric_cone_start(samples)
     return _ConePlan(
         support=support,
         line_tolerance=line_tolerance,
@@ -8746,7 +8805,76 @@ def _cone_plan(
         second=second,
         solving=solving,
         solving_apex=solving_apex,
+        seed=seed,
     )
+
+
+def _quadric_cone_start(samples: np.ndarray) -> np.ndarray | None:
+    """Ein Kegelstart aus der Quadrik der Stützpunkte — oder ``None`` (RM-210).
+
+    Der Start aus den Normalen (:func:`_cone_plan`) steht an flachen, kurzen
+    Kegelstücken weit vom Ziel: Deren Normalen streuen wenig, ihre Achse ist
+    kaum bestimmt, und der Winkel aus der mittleren Normale lag am
+    Gartenschlauchhalter bei 70 bis 84 statt 35 bis 43 Grad. Fünf Teilstücke
+    zweier Kegelgruppen brauchten so 58 bis 100 Auswertungen und endeten je
+    nach Lage des Körpers mal knapp unter, mal am Budget
+    (:data:`ROUND_FIT_EVALUATIONS`) — dann ohne Kegel. Eine Quadrik durch die
+    Stützpunkte ist ein linearer Ausgleich; ist sie ein Kegel oder Hyperboloid
+    (eine Eigenrichtung mit anderem Vorzeichen als die beiden übrigen), geben
+    ihr Mittelpunkt, diese Richtung und das Verhältnis der Eigenwerte Spitze,
+    Achse und Winkel. Von dort kamen dieselben fünf Stücke in 6 bis 40
+    Auswertungen an, mit demselben Formfehler (04.10.2026).
+
+    **Er ist der zweite Start, nicht der erste.** Für jeden Kegel gesetzt,
+    änderte er Merkmale an elf von 193 Korpusdateien — darunter zehn gleiche
+    Kegel Ø 31,6 an einer Minigolfbahn, die vom Normalenstart ankommen und
+    vom Quadrikstart nicht. Er rechnet deshalb nur, wo der erste Lauf sein Budget
+    ausschöpft (:func:`_cone_from_plan`). Ein Vergleich der Startkosten trennt
+    nicht: Der Normalenstart liegt als fast ebener Kegel nahe an den Punkten
+    und trotzdem im falschen Tal. Gültig ist der Quadrikstart, wenn der
+    Ausgleich eindeutig ist, sein Winkel zwischen :data:`CONE_START_ANGLE` und
+    :data:`CONE_MAX_ANGLE` liegt und alle Stützpunkte auf einer Seite der
+    Spitze. Löser, Budget und jede Prüfung danach bleiben dieselben.
+    Ausgleich und Eigenzerlegung laufen über LAPACK wie der Normalenstart;
+    beide sind ein Startwert, keine Antwort.
+    """
+    if len(samples) < 10:
+        return None
+    x, y, z = samples[:, 0], samples[:, 1], samples[:, 2]
+    design = np.column_stack(
+        (x * x, y * y, z * z, 2.0 * x * y, 2.0 * x * z, 2.0 * y * z, x, y, z, np.ones(len(x)))
+    )
+    _left, singular, right = np.linalg.svd(design, full_matrices=False)
+    if singular[-2] <= singular[0] * math.sqrt(float(np.finfo(float).eps)):
+        return None
+    q = right[-1]
+    quadric = np.array(((q[0], q[3], q[4]), (q[3], q[1], q[5]), (q[4], q[5], q[2])))
+    values, vectors = np.linalg.eigh(quadric)
+    if float(np.abs(values).min()) <= float(np.abs(values).max()) * math.sqrt(
+        float(np.finfo(float).eps)
+    ):
+        return None
+    if values[0] < 0.0 < values[1]:
+        odd = 0
+    elif values[1] < 0.0 < values[2]:
+        odd = 2
+    else:
+        return None
+    tip = np.linalg.solve(quadric, -q[6:9] / 2.0)
+    axis = vectors[:, odd]
+    side = (float(values[(odd + 1) % 3]) + float(values[(odd + 2) % 3])) / 2.0
+    angle = math.atan(math.sqrt(-float(values[odd]) / side))
+    along = (samples - tip) @ axis
+    if float(along.mean()) < 0.0:
+        axis, along = -axis, -along
+    if float(along.min()) < 0.0 or axis[2] <= math.sqrt(float(np.finfo(float).eps)):
+        return None
+    if not math.radians(CONE_START_ANGLE) <= angle <= math.radians(CONE_MAX_ANGLE):
+        return None
+    seed: np.ndarray = np.r_[tip, axis[0] / axis[2], axis[1] / axis[2], angle]
+    if not np.isfinite(seed).all():
+        return None
+    return seed
 
 
 def _cone_from_plan(
@@ -8754,12 +8882,20 @@ def _cone_from_plan(
     check_cancelled: Callable[[], None] | None,
     *,
     exhausted: bool = False,
+    seed_exhausted: bool = False,
 ) -> ConeFit | None:
     """Der Löser und das Maß der Kegeleinpassung.
 
     ``exhausted`` sagt der Stapel (:func:`refine.exhausted`): Der Löserlauf
     schöpft sein Budget sicher aus und hätte nichts geliefert — dann entfällt
     er, und es geht weiter wie nach einem vergeblichen Lauf.
+
+    **Am Budget beginnt ein zweiter Lauf am Quadrikstart** (``plan.seed``,
+    RM-210), und nur dort: Wo der erste ankommt, bleibt sein Ergebnis Bit für
+    Bit, und eine Antwort, die vom ersten Start an der Lage des Körpers hing,
+    bekommt eine zweite Chance aus einem Start, der nicht an den Normalen
+    hängt. ``seed_exhausted`` ist das sichere Nein des Stapels für diesen
+    zweiten Lauf.
     """
     support, line_tolerance = plan.support, plan.line_tolerance
     weights, origin, half_angle = plan.weights, plan.origin, plan.half_angle
@@ -8809,7 +8945,14 @@ def _cone_from_plan(
             columns = np.vstack((columns, apex_rows))
         return columns
 
-    fitted = None if exhausted else _refined_fit(plan.start(), residual, check_cancelled, jacobian)
+    spent: list[bool] = []
+    fitted = (
+        None
+        if exhausted
+        else _refined_fit(plan.start(), residual, check_cancelled, jacobian, spent=spent)
+    )
+    if fitted is None and (exhausted or spent) and plan.seed is not None and not seed_exhausted:
+        fitted = _refined_fit(plan.seed.copy(), residual, check_cancelled, jacobian)
     normal_constrained = False
     if fitted is None and float(np.ptp(samples @ initial_axis)) <= line_tolerance / scale:
         # Ein einziger erhaltener Kreis bestimmt nicht sechs Kegelgrößen.
@@ -11686,8 +11829,12 @@ def _wandering_outline(
     Achse wie in :func:`_same_cylinder`, und eines liegt auf dem Kreis des
     anderen (:func:`_lies_on_the_cylinder`). Beide Richtungen zu verlangen
     ist zu streng — am verrauschten Korbbogen verlören dann echte Bögen ihre
-    Bestätigung. Ein gezeichneter Bogen (:func:`_exactly_an_arc`) ist ohnehin
-    einer. Ein
+    Bestätigung. **Bestätigen kann nur ein Kreis, den sein eigenes Stück
+    festlegt** (:func:`_carries_its_radius`, RM-254): Auf dem Kreis eines
+    kurzen Stücks, das ihn nur ungefähr trifft, liegt jedes glatte Nachbarstück
+    — am Screen-Cover zwei Buchstabenstücke R 11,27 und R 10,46, am
+    Schmierwerkzeug Paare R 2,4, deren Vereinigung R 3,5 ergibt. Ein
+    gezeichneter Bogen (:func:`_exactly_an_arc`) ist ohnehin einer. Ein
     Umriss mit wanderndem Radius trägt dagegen auf jedem Stück einen eigenen
     Kreis. Gezählt werden nur diese unbestätigten Kreise von Stücken mit
     Gewicht (:data:`MIN_PATCH_FACES`).
@@ -11763,9 +11910,17 @@ def _wandering_outline(
             continue
         if check_cancelled is not None:
             check_cancelled()
-        if _lies_on_the_cylinder(
-            body, fits[one], pieces[other], check_cancelled=check_cancelled
-        ) or _lies_on_the_cylinder(body, fits[other], pieces[one], check_cancelled=check_cancelled):
+        if (
+            _carries_its_radius(body, fits[one], pieces[one])
+            and _lies_on_the_cylinder(
+                body, fits[one], pieces[other], check_cancelled=check_cancelled
+            )
+        ) or (
+            _carries_its_radius(body, fits[other], pieces[other])
+            and _lies_on_the_cylinder(
+                body, fits[other], pieces[one], check_cancelled=check_cancelled
+            )
+        ):
             confirmed.update((one, other))
     circles = [number for number in numbers if number not in confirmed]
     if len(circles) < 3:
@@ -11840,6 +11995,111 @@ def _wandering_outline(
     # Ein Kreis mit einem engeren Nachbarn und einem weiteren: zwei Wechsel in
     # dieselbe Richtung.
     return confirmed if smaller & larger else None
+
+
+def _carries_its_radius(body: trimesh.Trimesh, fit: CylinderFit, piece: Sequence[int]) -> bool:
+    """Ob ein Stück den Radius seines Kreises auf :data:`CYLINDER_TOLERANCE` festlegt (RM-254).
+
+    Ein Stück mit der Sehne ``L`` hat die Pfeilhöhe ``L²/8R``. Liegen seine
+    Ecken bis ``e`` neben dem Kreis (``fit_error``), passt derselbe Abstand
+    auch auf Kreise, deren Pfeilhöhe um ``e`` anders ist — der Radius ist also
+    nur auf ``8·R·e/L²`` relativ bestimmt. Ist das mehr, als
+    :func:`_same_cylinder` zwei Radien auseinanderliegen lässt, sagt „das
+    andere Stück liegt auf diesem Kreis" nichts: Es läge ebenso auf dem Kreis
+    eines Nachbarn mit anderem Radius.
+
+    Gemessen am 04.10.2026: Die Buchstabenstücke R 11,27 und R 10,46 am
+    Screen-Cover legen ihren Radius auf 11 und 12 Prozent fest, die Stücke
+    R 2,4 am Schmierwerkzeug auf 18 bis 23; die Stücke der 24 verrauschten
+    Korbbögen, die einen anderen bestätigen, auf höchstens 3,7, die Stücke,
+    die am Schmierwerkzeug die Bögen R 4,2 und R 6,75 bestätigen, auf
+    höchstens 0,4.
+    """
+    if fit.fit_error is None:
+        return False
+    span = min(angular_span(body, fit, list(piece)), 180.0)
+    chord = 2.0 * fit.radius * units.exact_sin_degrees(span / 2.0)
+    return 8.0 * fit.radius * fit.fit_error <= CYLINDER_TOLERANCE * chord * chord
+
+
+def _between_corners_of(
+    body: trimesh.Trimesh,
+    fit: CylinderFit,
+    patch: Sequence[int],
+    wandering: np.ndarray,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Ob ein Rundstück zwischen zwei Ecken eines wandernden Umrisses liegt (RM-254).
+
+    ``wandering`` markiert die Dreiecke der Flecken, die
+    :func:`_wandering_outline` als gerundete Seite gelesen hat. Ein eigener
+    Fleck, der an **beiden** Enden seines Bogens an einen solchen grenzt, ist
+    dieselbe Seitenwand, nur durch Ecken abgesetzt — am Screen-Cover das
+    0,4 mm hohe Wandband R 13,73 einer Stufe im Buchstaben, dessen Radius je
+    Dreieck selbst von 8 bis 14 mm wandert. Er gehört zum Umriss, außer er ist
+    gezeichnet (:func:`_exactly_an_arc`): Ein CAD-Umriss setzt Bögen auch
+    zwischen Ecken.
+
+    Beide Enden heißt: Ecken (Nähte ab :data:`CURVATURE_LIMIT`) längs der
+    Achse (:data:`PARALLEL_AXES`, wie die axialen Seiten in
+    :func:`_radial_boundaries_are_planar`) auf beiden Seiten der Bogenmitte,
+    gemessen längs der Tangente dort — ohne Winkelfunktion, für jeden Bogen
+    unter einem vollen Umlauf (:data:`FULL_TURN_SPAN`; ein ganzer Zylinder hat
+    keine Enden). Eine Naht quer zur Achse ist die Stirnkante des Streifens:
+    Am Gartenschlauchhalter stoßen zwei von vier Bändern R 6,3 eines
+    Kreismusters mit ihrer Stirn an einen wandernden Fleck, und deren
+    Berührungen liegen über die ganze Breite verteilt, also auch auf beiden
+    Seiten der Mitte.
+    """
+    faces = np.asarray(patch, dtype=np.intp)
+    if bool(wandering[faces].all()):
+        return False
+    if angular_span(body, fit, list(patch)) >= FULL_TURN_SPAN:
+        return False
+    neighbours, rows = _neighbour_index(body)
+    beside = neighbours[faces].ravel()
+    seams = rows[faces].ravel()
+    present = beside >= 0
+    beside, seams = beside[present], seams[present]
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[faces] = True
+    axis = np.asarray(fit.axis, dtype=float)
+    centre = np.asarray(fit.centre, dtype=float)
+    # Nur über eine Ecke an einem Ende des Bogens: Eine Naht unter
+    # CURVATURE_LIMIT ist ein glatter Übergang, und eine Naht quer zur Achse
+    # ist eine Stirnkante des Streifens, kein Ende seines Bogens.
+    sharp = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[seams]) >= (
+        CURVATURE_LIMIT
+    )
+    ends = np.asarray(body.face_adjacency_edges)[seams]
+    vertices = np.asarray(body.vertices, dtype=float)
+    vectors = vertices[ends[:, 1]] - vertices[ends[:, 0]]
+    along = np.abs(vectors[:, 0] * axis[0] + vectors[:, 1] * axis[1] + vectors[:, 2] * axis[2])
+    axial = along >= PARALLEL_AXES * np.sqrt((vectors * vectors).sum(axis=1))
+    chosen = wandering[beside] & ~inside[beside] & sharp & axial
+    if not bool(chosen.any()):
+        return False
+
+    def across(points: np.ndarray) -> np.ndarray:
+        """Die Punkte quer zur Achse, vom Kreismittelpunkt aus."""
+        relative = points - centre
+        along = relative[:, 0] * axis[0] + relative[:, 1] * axis[1] + relative[:, 2] * axis[2]
+        result: np.ndarray = relative - along[:, None] * axis
+        return result
+
+    corners = across(vertices[np.unique(np.asarray(body.faces)[faces])])
+    lengths = np.sqrt((corners * corners).sum(axis=1))
+    middle = (corners[lengths > EPS_GEOM] / lengths[lengths > EPS_GEOM][:, None]).sum(axis=0)
+    size = math.sqrt(float((middle * middle).sum()))
+    if size <= EPS_GEOM:
+        return False
+    middle = middle / size
+    tangent = _cross3(axis, middle)
+    contacts = across((vertices[ends[chosen, 0]] + vertices[ends[chosen, 1]]) / 2.0)
+    sides = contacts[:, 0] * tangent[0] + contacts[:, 1] * tangent[1] + contacts[:, 2] * tangent[2]
+    if not (bool((sides > EPS_GEOM).any()) and bool((sides < -EPS_GEOM).any())):
+        return False
+    return not _exactly_an_arc(body, list(patch), check_cancelled)
 
 
 def _off_the_outline[Fit](

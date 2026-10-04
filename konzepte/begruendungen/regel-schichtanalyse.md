@@ -1127,11 +1127,41 @@ Was trennt, sind zwei Sätze über die Nachbarschaft:
   verloren: Ein Stück über der Naht zweier Bögen passt auf einen
   Zwischenkreis (R 15,1) und täuscht eine steigende Folge vor. **Beide
   Richtungen zu verlangen ist zu streng:** Dann verlieren 20 von 72
-  verrauschten Korbbögen echte Bögen. Der Preis der einen Richtung ist
-  bekannt: Mit den zehn Mikrometern von `_lies_on_the_cylinder` liegt ein
-  kurzes Stück auch auf einem Kreis mit vier Prozent anderem Radius, und so
-  bestätigen sich am Scheitel einer verrauschten Ellipse und an zwei
-  Buchstabenstücken R 11,2 Splinestücke gegenseitig — sie bleiben stehen.
+  verrauschten Korbbögen echte Bögen. Der Preis der einen Richtung: Mit den
+  zehn Mikrometern von `_lies_on_the_cylinder` liegt ein kurzes Stück auch auf
+  einem Kreis mit vier Prozent anderem Radius, und so bestätigten sich am
+  Scheitel einer verrauschten Ellipse und an zwei Buchstabenstücken R 11,2
+  Splinestücke gegenseitig.
+* **Bestätigen kann nur ein Kreis, den sein Stück festlegt** (RM-254,
+  04.10.2026). Ein Fehler `e` an der Sehne `L` verschiebt die Pfeilhöhe
+  `L²/8R` um `e`, den Radius also um `8·R·e/L²`; über `CYLINDER_TOLERANCE`
+  sagt „liegt auf dem Kreis“ nichts. Gemessen: Buchstabenstücke R 11,27 und
+  R 10,46 am Screen-Cover 11 und 12 Prozent, Stückpaare R 2,4 am
+  Schmierwerkzeug (Vereinigung R 3,36 und R 3,50) 18 bis 23, die bestätigenden
+  Stücke der 24 Korbbögen höchstens 3,7, die bestätigenden Stücke der Bögen
+  R 4,2 und R 6,75 höchstens 0,4. Verworfen vorher (Codex, 03.10.2026): ein gemeinsamer Zylinder über
+  beide Stücke statt der Einzelprüfung (lockert den Konturtest, bis zehn
+  falsche Verrundungen an Ellipsen), ein gemeinsamer Kreisfit mit
+  Fehlerbindung als Summe, Maximum oder Minimum (hilft nicht oder nimmt
+  Korbbögen), und hier zusätzlich zum alten Satz verlangt (ändert das
+  Screen-Cover nicht, nimmt am Schmierwerkzeug beide R 6,75 — getrennte
+  Stücke desselben Zylinders tragen keinen gemeinsamen Konturfit). Was
+  bleibt: An verrauschten Ellipsen bestätigen Stücke, die ihren Radius auf
+  sieben Prozent festlegen, einander weiter.
+* **Ein Bogen zwischen zwei Ecken eines wandernden Umrisses gehört zu ihm**
+  (RM-254). Das Wandband R 13,73 am Screen-Cover, 0,4 mm hoch, ist ein
+  eigener Fleck einer Stufe im Buchstaben, von dessen Umriss durch Ecken
+  (62 und 152 Grad) getrennt und deshalb nie unter dessen Stücken; sein
+  Radius je Dreieck wandert von 8 bis 14 mm. Er fällt, wenn der Umriss ihn an
+  beiden Enden berührt und er nicht gezeichnet ist. Zählen nur Ecken längs
+  der Achse: Eine erste Fassung, die jede Berührung zählte, nahm am
+  Gartenschlauchhalter zwei von vier gleichen Bändern R 6,3 eines
+  Kreismusters, deren Stirnkante an einen wandernden Fleck stößt — die
+  Berührungen dort verteilen sich über die ganze Breite. Beide Sätze hält
+  `test_features.py`: die Ellipse mit ±4 µm, die Pfeilhöhengrenze knapp
+  darüber und darunter, das Band zwischen zwei Ellipsenhälften (verrauscht
+  fällt es, gezeichnet bleibt es) und dasselbe Band an nur einer Hälfte oder
+  nur mit Boden und Deckel am Umriss.
 * **Zwei Wechsel in dieselbe Richtung sind ein Verlauf.** Unbestätigte
   Kreise, die über Splitter und formlose Stücke aufeinanderfolgen und
   tangential ineinander übergehen, mit einem Radiusschritt unter

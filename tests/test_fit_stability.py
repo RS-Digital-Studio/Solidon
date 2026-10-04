@@ -188,10 +188,12 @@ def test_a_flat_patch_never_reaches_the_cone_solver(monkeypatch: pytest.MonkeyPa
     runs = [0]
     raw = features_module._refined_fit
 
-    def counted(initial: Any, residual: Any, check: Any, jacobian: Any = None) -> Any:
+    def counted(
+        initial: Any, residual: Any, check: Any, jacobian: Any = None, **options: Any
+    ) -> Any:
         if len(np.asarray(initial)) == 6:
             runs[0] += 1
-        return raw(initial, residual, check, jacobian)
+        return raw(initial, residual, check, jacobian, **options)
 
     monkeypatch.setattr(features_module, "_refined_fit", counted)
     forget_cache()
@@ -1091,3 +1093,80 @@ def test_a_short_shallow_cone_is_not_replaced_by_a_close_cylinder(turn):
     assert len(fitted.cones) == 1
     assert not fitted.cylinders
     assert fitted.cones[0][0].half_angle == pytest.approx(angle, abs=1e-8)
+
+
+# --- Der Kegelstart steht nicht im falschen Tal ----------------------------------
+
+
+def _shallow_cone_strip(placement: np.ndarray) -> trimesh.Trimesh:
+    """Ein Streifen eines Kegels mit 40 Grad Halbwinkel, 15 Grad um die Achse
+    und 0,5 mm hoch, unregelmäßig vernetzt wie ein CAD-Export und auf Float32
+    gerundet wie eine STL — erst bewegt, dann gerundet."""
+    from scipy.spatial import Delaunay
+
+    generator = np.random.default_rng(210)
+    corners = np.vstack(
+        (generator.random((20, 2)), [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])
+    )
+    height = 10.0 + 0.5 * corners[:, 1]
+    turn = np.radians(20.0 + 15.0 * corners[:, 0])
+    reach = height * math.tan(math.radians(40.0))
+    vertices = np.column_stack((reach * np.cos(turn), reach * np.sin(turn), height))
+    raw = trimesh.Trimesh(vertices=vertices, faces=Delaunay(corners).simplices, process=False)
+    raw.apply_transform(placement)
+    raw.vertices = np.asarray(raw.vertices, dtype=np.float32).astype(float)
+    return raw
+
+
+_PLACEMENTS = {
+    "original": np.eye(4),
+    "shifted": trimesh.transformations.translation_matrix((13.7, -4.2, 3.0)),
+    "z90": trimesh.transformations.rotation_matrix(math.radians(90.0), (0.0, 0.0, 1.0)),
+    "oblique37": trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 2.0, 3.0)),
+}
+
+
+def test_a_shallow_cone_strip_is_found_wherever_it_lies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der zweite Kegelstart aus der Quadrik trägt einen flachen Streifen in jeder Lage (RM-210).
+
+    Am Gartenschlauchhalter endeten fünf Teilstücke zweier Kegelgruppen nach
+    58 bis 100 Auswertungen — je nach Lage knapp unter oder am Budget, dann
+    ohne Kegel. Der Start aus den Normalen steht an so einem Streifen im
+    falschen Tal: Die Normalen streuen kaum, Achse und Winkel sind aus ihnen
+    nicht bestimmt. Schöpft er das Budget aus, rechnet ein zweiter Lauf von
+    der Quadrik der Stützpunkte. Der Sollwert ist der gebaute Winkel; die
+    Float32-Rundung nach der Bewegung verschiebt ihn um Hundertstel Grad.
+    """
+    from app.core.perceive.features import fit_cone
+
+    solve = features_module.refine.solve
+    spent: list[int] = []
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        result = solve(*args, **kwargs)
+        spent.append(int(result.nfev))
+        return result
+
+    monkeypatch.setattr(features_module.refine, "solve", counted)
+    for name, placement in _PLACEMENTS.items():
+        raw = _shallow_cone_strip(placement)
+        forget_cache()
+        spent.clear()
+        fit = fit_cone(raw, list(range(len(raw.faces))))
+        assert fit is not None, f"{name}: kein Kegel"
+        assert fit.half_angle == pytest.approx(40.0, abs=0.05), name
+        # Der erste Lauf schöpft sein Budget aus, der zweite kommt rasch an.
+        assert spent == [ROUND_FIT_EVALUATIONS, spent[-1]], f"{name}: {spent}"
+        assert spent[-1] < ROUND_FIT_EVALUATIONS // 4, f"{name}: {spent}"
+
+    # Gegenprobe: Vom Normalenstart aus findet der Löser den Kegel in keiner
+    # dieser Lagen — sonst prüfte der Test den Start nicht.
+    monkeypatch.setattr(features_module, "_quadric_cone_start", lambda *_args: None)
+    missed = []
+    for name, placement in _PLACEMENTS.items():
+        raw = _shallow_cone_strip(placement)
+        forget_cache()
+        fit = fit_cone(raw, list(range(len(raw.faces))))
+        if fit is None or abs(fit.half_angle - 40.0) > 0.05:
+            missed.append(name)
+    assert missed == list(_PLACEMENTS), "ohne den Quadrikstart prüft der Test nichts"
