@@ -3498,6 +3498,45 @@ def test_an_unknown_arrange_flag_falls_back_and_reports(
     assert any(entry.code == "slicer.arranged_itself" for entry in again.findings)
 
 
+@pytest.mark.parametrize("program", ["superslicer.exe", "prusa-slicer-console.exe"])
+def test_the_prusa_family_keeps_a_holding_arrangement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str
+) -> None:
+    """Ohne ``--dont-arrange`` ordnet SuperSlicer auf der Konsole selbst an.
+
+    Gemessen in der Slicer-Matrix (RM-312) an SuperSlicer 2.5.59.13 mit dem
+    MINI-Profil: Solidons Anordnung lag 8,7 mm vom Rand, SuperSlicer schob
+    die Teile bis 1,05 mm an den Rand, und die Skirt lief bei y = -1,41 mm
+    vom Bett. Mit dem Schalter blieb die Lage, die Skirt bei 6,5 mm.
+    PrusaSlicer hielt die Lage schon ohne ihn und nimmt ihn an. Gesetzt nur,
+    wenn die Anordnung hält — sonst druckten zwei Teile übereinander.
+    """
+    profile = profiles.make_profile()
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"keine echte 3MF")
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        commands.append(list(command))
+        output = Path(command[command.index("--output") + 1])
+        output.write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", fake_run)
+    settings = print_settings.resolve(profile)
+    kept = handover.slice_model(model, settings, profile, setup, keep_arrangement=True)
+    handover.slice_model(model, settings, profile, setup, keep_arrangement=False)
+
+    assert len(commands) == 2
+    assert "--dont-arrange" in commands[0]
+    assert commands[0][-1].endswith(".3mf"), "das Modell bleibt das letzte Argument"
+    assert "--dont-arrange" not in commands[1], "eine Platte ohne Anordnung ordnet der Slicer"
+    assert not any(entry.code == "slicer.arranged_itself" for entry in kept.findings)
+
+
 def test_creality_print_slices_on_its_console_before_and_after_7_3(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

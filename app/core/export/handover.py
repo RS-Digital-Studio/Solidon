@@ -4430,9 +4430,15 @@ def _command(
     files = [str(entry) for entry in models]
 
     if setup.flavour == "prusa":
+        # SuperSlicer ordnet auf der Konsole ohne ``--dont-arrange`` selbst an,
+        # bis an den Bettrand und ohne Platz für die Skirt (RM-312: MINI,
+        # Skirt bei y = -1,4 mm). PrusaSlicer hält die Lage auch so und nimmt
+        # den Schalter an. Gesetzt wie ``--arrange 0`` nur bei haltender
+        # Anordnung (:func:`app.core.export.writer.arrangement_holds`).
         return [
             binary,
             "--export-gcode",
+            *(["--dont-arrange"] if keep_arrangement else []),
             "--load",
             str(config.process),
             "--output",

@@ -447,6 +447,14 @@ und benannte Merkmale bleiben erhalten. Jede Projektplatte wird getrennt
 behandelt. Curas Stützsperren folgen derselben exportierten Lage und erhalten
 den Maschinenversatz genau einmal.
 
+Die gepackte Lage hält nur, wenn der Slicer sie nicht wieder verwirft.
+SuperSlicer 2.5 ordnet auf der Konsole ohne `--dont-arrange` jede Eingabe
+selbst an, auch eine 3MF mit gültiger Lage, und zwar bis an den Bettrand ohne
+Platz für die Skirt: In der Slicer-Matrix (RM-312) lief sie am MINI bei
+y = -1,41 mm vom Bett, obwohl Solidons Anordnung 8,7 mm Rand ließ. PrusaSlicer
+2.9 hielt die Lage auch ohne den Schalter und nimmt ihn an. Gesetzt wird er
+wie `--arrange 0` der Orca-Familie nur bei haltender Anordnung.
+
 Eine erfolglose Suche beweist keine mathematische Unmöglichkeit. Die Meldung
 sagt daher, dass keine Anordnung gefunden wurde, und bietet die vorhandene
 projektweite Anordnung oder die Druckerwahl an. Der Abbruch wird vor und nach
