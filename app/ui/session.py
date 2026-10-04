@@ -4359,6 +4359,15 @@ class Session(QObject):
             # geschieht, geschieht im fremden Faden, und ein direkter Aufruf
             # ins Fenster hinein wäre genau der Fehler, den ``done`` und
             # ``explained`` vermeiden.
+            estimated: list[bool] = []
+
+            def count(numbers: Any) -> None:
+                """Merkt, ob die Zahl geschätzt statt gerechnet ist, und reicht sie weiter."""
+                if getattr(numbers, "estimated", False):
+                    estimated.append(True)
+                if counted is not None:
+                    worker.counted.emit(generation, numbers)
+
             quick = self._preview_outcome(
                 list(drafts or []),
                 change_op=change_op,
@@ -4385,11 +4394,7 @@ class Session(QObject):
                 refused=(
                     None if refused is None else (lambda why: worker.refused.emit(generation, why))
                 ),
-                counted=(
-                    None
-                    if counted is None
-                    else (lambda numbers: worker.counted.emit(generation, numbers))
-                ),
+                counted=count,
                 # Der Dialog zeigt Geometrie und Differenz, keine Merkmale:
                 # Eine Erkennung je getippter Zahl wäre eine Sekunde für nichts.
                 detect_features=False,
@@ -4397,6 +4402,16 @@ class Session(QObject):
                 unseen=worker.unseen,
             )
             if pictured is None or quick[1] is None:
+                return quick
+            # **Keine Prüfung, wo nichts gerechnet wurde oder niemand hinsieht.**
+            # Ist die geschätzte Dreieckszahl die Vorschau, rechnet niemand die
+            # Form (``TriangleCounts``, Vorabzählung) — die genaue Prüfung danach
+            # rechnete sie doch, am Spielwürfel über zehn Minuten, und ihr Satz
+            # überschrieb die Zahl im Band. Und wartet ein Übernehmen nur noch
+            # auf die Rechnung (RM-493, :meth:`drop_preview_picture`), liegt sie
+            # im Cache; eine feine Auswertung beider Stände wäre Wartezeit für
+            # ein Bild, das gleich wieder abgeräumt wird.
+            if estimated or worker.unseen.is_cancelled:
                 return quick
             cancel.raise_if_cancelled()
             worker.pictured.emit(generation, quick[1])
@@ -4410,6 +4425,9 @@ class Session(QObject):
                 cancelled=cancel,
                 snapshot=snapshot,
                 progress=lambda fraction, text: worker.progressed.emit(generation, fraction, text),
+                # Kommt der Klick erst während der Prüfung, fallen wenigstens
+                # Vergleich und Schichtanalyse beider Stände weg.
+                unseen=worker.unseen,
                 review_print=True,
                 review_settings=review_settings,
             )

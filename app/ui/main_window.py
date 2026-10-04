@@ -21018,7 +21018,13 @@ class MainWindow(QMainWindow):
         approval = self._set_preview_order(owner, order)
         if not self._preview_is_current(approval):
             return False
-        if approval.computing and approval.reviewing:
+        # **Die Druckfolgenprüfung hält nur einen Klick, der auf ein Bild
+        # wartet.** Ohne Bildpflicht entscheidet allein RM-493 unten: Warten
+        # auf eine Vorschau, die rechnet, was die Auswertung danach im Cache
+        # findet, sonst sofort. Stand diese Weiche vorn, wartete jeder Klick
+        # an einem Netz auf die feine Auswertung beider Stände samt
+        # Schichtanalyse — auch hinter einer groben oder nur gezählten Vorschau.
+        if approval.computing and approval.reviewing and approval.required is not False:
             if then is not None:
                 self._apply_when_previewed(approval, then)
             return False
