@@ -1045,6 +1045,7 @@
   "Das Modell liegt jetzt hier. Die Probe sagt, ob es taugt.": "The model is downloaded. Run the tool test to check whether it works with Solidon.",
   "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft.": "The model writes tool calls as text instead of executing them. The chat can reply, but it cannot perform actions with this model. Choose another model.",
   "Das Modell steht in keiner geprüften Lage sicher. Prüfen Sie Stützen oder eine größere Plattenhaftung.": "The model is not stable in any of the checked orientations. Check supports or increase build plate adhesion.",
+  "Das Modell wird angezeigt …": "Displaying the model …",
   "Das Modell wird geladen und gefragt — das dauert.": "Loading the model and testing a request. This may take a while.",
   "Das Modell wird geprüft. Sie können jederzeit abbrechen.": "The model is being checked. You can cancel at any time.",
   "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen stehen unten in der Statusleiste.": "The model is being generated in the background — progress and Cancel are in the status bar at the bottom.",

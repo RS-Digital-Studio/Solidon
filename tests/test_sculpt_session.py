@@ -1485,6 +1485,42 @@ def test_a_sculpt_preview_outside_the_printer_is_reported(
     )
 
 
+def test_a_new_sculpt_session_does_not_inherit_the_last_note(window: MainWindow) -> None:
+    """Der Befund der vorigen Sitzung gehört ihrem Körper und ihren Zügen.
+
+    Am Mausoleum-Drachen stand nach dem Wiederöffnen des Schritts noch
+    „3863 Stellen dünner als 0,84 mm“ aus der Sitzung davor, bevor eine
+    Prüfung gelaufen war (Fensterabnahme RM-366).
+    """
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window.sculpt_bar.analysis.show_note("12 Stellen dünner als 0,84 mm")
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+    window.start_sculpt(object_id)
+    assert window.sculpt_bar.analysis.note.text() == ""
+
+
+def test_thin_walls_are_named_once_in_the_sculpt_bar(window: MainWindow) -> None:
+    """Die Warnzeile nennt zu dünne Stellen; die Kartenzeile wiederholt sie nicht."""
+    from dataclasses import replace
+
+    from app.core.perceive import maps
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    mesh = window._sculpt_preview_for(window._sculpt_mesh(object_id)).shown
+    card = maps.wall_thickness_map(mesh, 1.0)
+    thin = replace(card, highlighted=(0, 1, 2))
+    window._sculpt_wall_number += 1
+    number = window._sculpt_wall_number
+    window._sculpt_walls_checked(number, 3)
+    window._gesture_analysis_ready(number, thin, [])
+    warning = window.sculpt_bar.warning.text()
+    assert "3" in warning
+    assert warning not in window.sculpt_bar.analysis.note.text()
+
+
 def test_cancelling_a_gesture_check_rejects_its_late_answer(window: MainWindow) -> None:
     """Abbruch lässt die Geste stehen und verhindert eine verspätete Karte."""
     object_id = with_a_body(window)

@@ -1045,6 +1045,7 @@
   "Das Modell liegt jetzt hier. Die Probe sagt, ob es taugt.": "Le modèle est là. L'essai dira s'il convient.",
   "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft.": "Le modèle écrit ses appels sous forme de texte au lieu de les faire — le chat répond avec, mais rien n'est exécuté. Un autre modèle aidera.",
   "Das Modell steht in keiner geprüften Lage sicher. Prüfen Sie Stützen oder eine größere Plattenhaftung.": "Le modèle n'est stable dans aucune des orientations vérifiées. Vérifiez les supports ou augmentez l'adhérence au plateau.",
+  "Das Modell wird angezeigt …": "Affichage du modèle …",
   "Das Modell wird geladen und gefragt — das dauert.": "Le modèle se charge et reçoit la question — cela prend du temps.",
   "Das Modell wird geprüft. Sie können jederzeit abbrechen.": "Le modèle est en cours de vérification. Vous pouvez annuler à tout moment.",
   "Das Modell wird im Hintergrund erzeugt — Fortschritt und Abbrechen stehen unten in der Statusleiste.": "Le modèle est généré en arrière-plan — la progression et Annuler se trouvent en bas, dans la barre d'état.",

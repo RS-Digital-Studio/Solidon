@@ -82,6 +82,10 @@ nicht nur verdeckt** (`middle_stack.setVisible`): Die Grafikfläche ist ein
 natives Fenster, liegt über jedem gemalten Geschwister und zeigt bis zu ihrem
 ersten Bild alte Pixel. `widget.grab()` sieht das nicht; Beweisbilder nur über
 `grabWindow` (`ansicht.md`, „Was nur das Bild zeigt").
+**Gelesen ist nicht gezeigt:** Bereitet der Ansichtsarbeiter das erste Bild
+vor (`Viewport.preparing_an_empty_view`), bleibt er mit „Das Modell wird
+angezeigt …“ stehen, bis `sceneApplied` oder `sceneFailed` kommt
+(`loading.veil_reason`); ohne laufende Auswertung ohne Linie und *Abbrechen*.
 
 ### Vor der Auswertung: `waiting()` und der Einleseplan
 

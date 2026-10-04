@@ -7192,6 +7192,15 @@ class Viewport(QWidget):
 
         return self._requested_result if self._scene_worker is not None else self._result
 
+    def preparing_an_empty_view(self) -> bool:
+        """Ob die Ansicht noch nichts zeigt, während ihr Arbeiter das Bild vorbereitet.
+
+        Die Ladeanzeige fragt das (``loading.veil_reason``): Ein gelesenes
+        Modell ist noch kein gezeigtes. Steht schon ein Körper da, bleibt er
+        bis zum neuen Bild stehen, und dann ist nichts zu verdecken.
+        """
+        return self._scene_worker is not None and not self._actors
+
     def is_scene_applied(self, result: EvaluationResult | None) -> bool:
         """Ob die angefragte Szene bereits die sichtbaren Pick-Flächen trägt."""
         return result is not None and self._result is result
@@ -7325,6 +7334,10 @@ class Viewport(QWidget):
         """Die alte Ansicht stehen lassen und den Fehler nach außen melden."""
 
         if generation == self._scene_generation:
+            # Vorbereitet wird nichts mehr; die Ladeanzeige fragt das
+            # (:meth:`preparing_an_empty_view`) und darf nicht stehen bleiben.
+            # Losgelassen wird der Arbeiter weiter in ``_scene_worker_done``.
+            self._scene_worker = None
             self.sceneFailed.emit(detail)
 
     def _scene_worker_done(self, worker: _SceneMeshWorker) -> None:

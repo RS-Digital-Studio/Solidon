@@ -33,6 +33,28 @@ from app.ui.loading import (
 )
 
 
+def test_the_veil_stays_until_the_view_shows_the_model() -> None:
+    """Ein fertiges Ergebnis ist noch kein Bild.
+
+    Am Mausoleum-Drachen (2,3 Millionen Dreiecke) wich die Ladeanzeige, sobald
+    das Modell gelesen war, und die Ansicht stand dann sechseinhalb Sekunden
+    leer und ohne Wort, während ihr Arbeiter Kanten, Hüllen und Normalen
+    vorbereitete (Fensterabnahme RM-366, 04.10.2026).
+    """
+    from app.ui.loading import veil_reason
+
+    assert veil_reason(busy=True, bodies=False, preparing=False) == "run"
+    assert veil_reason(busy=False, bodies=True, preparing=False) == ""
+    assert veil_reason(busy=True, bodies=True, preparing=False) == "", (
+        "über einem gezeigten Körper bleibt die Ansicht die Ansicht"
+    )
+    assert veil_reason(busy=False, bodies=True, preparing=True) == "view"
+    assert veil_reason(busy=True, bodies=True, preparing=True) == "view", (
+        "das Bild vor der Erkennung: die Erkennung rechnet weiter, das Bild fehlt noch"
+    )
+    assert veil_reason(busy=True, bodies=False, preparing=True) == "run"
+
+
 def _running(veil: LoadingVeil, seconds: float) -> None:
     """Tut so, als liefe der Lauf schon so lange.
 
