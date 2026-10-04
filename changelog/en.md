@@ -24,11 +24,13 @@ it into `website/version.json`.
 - New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
 - New is the *Container with lid* assistant: round or rectangular, with a screw, push-on or hinged lid, plus compartments, an insert and shaker holes if you like. All main dimensions are parameters.
 - Four holders are made in one step with true faces and edges: U-shaped, round, fork and shelf, fixed with a keyhole, screw holes, a pegboard hook or a clamp.
+- New are the *Bayonet lock* and the *Detent dial*, each as a matching pair, and the *Socket sleeve and rod connector* for two to four rods.
+- New are the *Hose barb*, whose passage goes straight through the wall, the *Channel joint* for gutters, and *Room floor*, *Room wall* and *Window pane* for push-fit rooms.
 - An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
 - New bodies appear on the bed instead of at a selected body, and are selected afterwards. On a selected face they attach at the clicked point or centred, and can join the part in the same step.
 - Catalogue parts such as a magnet pocket or a screw hole sit where you click on the face. Their distance to two edges stays when the model changes later.
 - The *T-slot tongue for extrusion* fits Motedis 20 × 20 B-type slot 6 and 30 × 30 B-type slot 8, with a head shaped like the slot. The three previous sizes remain available as older dimensions.
-- In the report, *Rebuild model* rebuilds an imported part from basic shapes, holes and fillets, compares it with the original within the limit you set and applies it in one step.
+- In the report, *Rebuild model* rebuilds an imported part, including brackets, coves and countersinks, compares it with the original within the limit you set and applies it in one step.
 - The *Profile clamp with liners* starts with the project material in both material fields. Until now both were empty.
 - The part search finds the *T-slot tongue for extrusion* under T-nut as well, and its description says how it differs from a threaded T-nut.
 
@@ -42,16 +44,19 @@ it into `website/version.json`.
 - Slender parts move closer to the centre when arranged. You can set the brim gap; a brim touching the part is suggested for small footprints.
 - Damaged profiles in PrusaSlicer and SuperSlicer are reported. Solidon then uses its complete set of print settings.
 - Print settings for individual parts reach the slicer more reliably. Settings that apply to the whole plate are explained on the affected part.
+- If you accept a brim for one slender part only, the other parts keep your own adhesion choice, and the field names the parts the brim applies to.
 - With Orca and Prusa, accepting a speed suggestion for a fitted part now slows only the affected parts.
 - Even small changes accepted for print settings are now preserved on export.
 - Cura now uses the profile’s jerk limits, including separate values for walls, infill and the first layer.
-- If Cura has a different printer selected, the handoff names both printers and shows where to adopt Cura’s selection.
+- If Cura has a different printer selected, the handover names both printers and shows where to adopt Cura’s selection.
 - Fixed a crash in ElegooSlicer and OrcaSlicer when slicing multicolour models with grid supports.
 - After slicing, Solidon also compares support material and model layers for each plate. The report shows the internal estimate alongside values from the print file.
 - The material cross-check compares only the printed model. Purge material is shown separately, with a note when the amount cannot be read in full.
+- The print time cross-check counts from the first layer using your printer's speeds and no longer reports a large deviation for almost every print.
 - Layer analysis is several times faster on hollow models and on models with many ceilings, and preserves fine contours. The layer view reuses what the report has already calculated.
 - For overlapping parts, print analysis no longer counts enclosed air as material. This also improves the detection of overhangs and required supports.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
+- If you click *Save and start* on first start while Solidon is still searching for the slicer's printers, the application no longer freezes.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
 - You can now create print files directly from Solidon with Creality Print 7.2 and 7.3.
@@ -75,6 +80,7 @@ it into `website/version.json`.
 - SuperSlicer receives grid supports with an explanation when tree supports were chosen. The Nearest seam choice arrives without a false warning.
 - TPU now selects the matching filament profile and start settings in PrusaSlicer and SuperSlicer. If no profile is available, Solidon identifies its own material table as the source.
 - Cura respects acceleration limits and reports reduced custom values. Solid infill uses the infill speed; only the top surface uses the surface speed.
+- Cura takes the minimum fan speed and the layer time threshold from your printer's profile. Until now the fan came on in the first layer, where it should stay off.
 - Chamber temperatures reach the correct slicer field. Printer profiles without controlled chamber heating now explain why the setting has no effect.
 - The Lines infill pattern reaches Bambu Studio and Creality Print as lines, without being replaced by Grid or Cubic.
 - After slicing, Solidon also reports settings discarded by PrusaSlicer or Orca-based slicers. Changes to brim, wall order and support type are detected too.
@@ -90,13 +96,19 @@ it into `website/version.json`.
 - When PrusaSlicer or SuperSlicer reports an empty first layer, Solidon names the part and offers to place it on the bed or open the relevant print settings.
 - Warnings from PrusaSlicer and SuperSlicer appear in the report even after successful slicing, an empty layer as an error. The raft gap can be set on its own.
 - If the slicer splits one plate into several print files, Solidon now says so and offers to rearrange or export. Until now it quietly took only one of the files.
-- The top of the report says whether the handoff is ready, needs a decision or is not recommended, and what is still unchecked. A part without findings no longer counts as ready to print by itself.
-- After an export or *Open in slicer …*, the report holds a record: files, print target, material and whether print settings went along. It also says that the file was not read back and compared.
+- The top of the report says whether the handover is ready, needs a decision or is not recommended, and what is still unchecked. A part without findings no longer counts as ready to print by itself.
+- A selected finding names its consequence for the print, and every offered action says what else it changes.
+- After an export or *Open in slicer …*, Solidon reads the file back in. The record in the report names files, print target, material, print settings and whether the file matches the job.
 - Exported as 3MF from the command line, a single-colour body keeps its filament when the file is opened again.
+- For print settings on individual parts, the command line names which parts they are and which value they get.
 
 ### Holes, slots and splitting
 
 - The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness.
+- A slot in a side wall facing left or right can be shortened, narrowed and turned. Projects from earlier versions keep their slots until you change the step.
+- On STEP bodies, a slot in a slanted face no longer counts as sticking out at the side, and a second drag on a slot that runs into a step no longer fills the body up.
+- A slot through a slanted or chamfered plate shows its full depth on STEP bodies, and its copy beyond the edge reports the same on STL and STEP parts.
+- On a body with true faces and edges, a part placed after a hole sits on the face you chose, and *Create screw lid* also works on the rim of a hollowed-out box.
 - Two plates that touch stay one body at a hole and keep their material, whether you pull, change, move or close the hole. A pin above it stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
@@ -119,7 +131,9 @@ it into `website/version.json`.
 - When the dimension card of a hole grows tall, the other dimensions stay beside the body, and the handle for moving sits at the mouth instead of deep inside the part.
 - When you select a hole you made in Solidon, its diameter appears only in the dimension card in the view. Until now it appeared a second time on the right.
 - A direction you enter on the right for a slot also reaches the dimension card in the view, and *Apply* stays available. Until now it fell back to 0° there.
-- Solidon recognises cones, fillets and narrow faces the same way on more models, whether the model is moved, rotated or scaled.
+- Solidon recognises cones, including flat and short ones, fillets and narrow faces the same way on more models, whether the model is moved, rotated or scaled.
+- A domed top is now a *Curved face* on STEP bodies too instead of a *Fillet*, and STL parts rounded all over show their fillets one by one, like the same part from STEP.
+- Letters and curved outlines in imported models no longer show false fillets.
 - Solidon recognises each rib, honeycomb or dimple field in an imported file as one pattern, and *Detect features here* combines the cells of a field.
 - A small field that Solidon reads only as separate features becomes one pattern with *Combine into a pattern*. Patterns in STEP files are now recognised directly.
 - Pieces of an automatic split are numbered in projects from older versions too, and a deleted or disabled cut no longer counts.
@@ -140,7 +154,7 @@ it into `website/version.json`.
 - A sculpting stroke on the mirror plane now acts once instead of twice, and just beside it the stroke and its mirror image blend smoothly.
 - The skeleton editor shows bones and joint in the view, and a joint sits in the middle of the body instead of on its skin, so the figure bends evenly.
 - The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
-- If a sculpting stroke pierces the wall or makes it too thin, the report and the export say so, with *Show the place* and *Take back the stroke*.
+- If a sculpting stroke pierces the wall or makes it too thin, the report and the export say so, with *Show the place* and *Undo the stroke*.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, even with just its countersink or chamfer, or into a wall behind it, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
@@ -149,15 +163,15 @@ it into `website/version.json`.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
 - In *Sculpt*, the window shows every stroke just as quickly after many strokes as after the first, and large sessions compute their preview in the background. Until now it got slower with each stroke.
-- With *Fix the state*, Solidon stores a sculpting session as finely as export and printing compute it, and the window stays usable. Until now it stored the coarser view.
+- With *Lock in the state*, Solidon stores a sculpting session as finely as export and printing compute it, and the window stays usable. Until now it stored the coarser view.
 - Double-clicking *Sculpt* in the history reopens the session with its strokes. Ctrl+Z takes back a whole stroke, and *Done* changes the same step.
 - The menu entry *Create from sketch …* starts drawing straight away, the drawing plane shows its origin, and a double-click in the history reopens a sketch in drawing mode.
 - In *Sculpt* and in the skeleton editor, the bar shows wall thickness or overhang as a map with a legend and reports a stroke beyond the build volume. After bending, it says how it will print.
-- An applied texture is selected as a whole. The selection panel then offers *Edit texture* and *Remove texture*.
+- An applied texture is selected as a whole. The selection panel then offers *Change texture* and *Remove texture*.
 
 ### Generating with AI
 
-- Cancelling during *One more try* only stops the running attempt. The finished ones remain to choose from.
+- Cancelling during *One more attempt* only stops the running attempt. The finished ones remain to choose from.
 - Every attempt in the list names its sentence or image and its seed. If your input no longer matches the chosen attempt, the dialog says which one will be applied.
 - The image model is now fetched by *Set up image model …* even when the other weights are already there.
 - If an error while generating names the setup as the way out, it appears as a button in the dialog.
@@ -185,7 +199,8 @@ it into `website/version.json`.
 - If saving a calibration fails, the previous values are kept.
 - In the example project for the second way, the screw holes follow width and thickness.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
-- English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
+- All translations use the same words for features, buttons and print terms throughout, and messages use punctuation as each language requires.
+- The form of address is consistent: Spanish, Portuguese and French are formal, Italian is informal. Three Spanish and Portuguese messages that said the opposite are corrected.
 - While a dialog shows its preview, spaces reach every text field, including the feedback questionnaire and the chat, and ticks and buttons accept the space bar.
 - With *Scale*, a body stays standing on the bed instead of sinking below the plate, and the view reframes it when it grows.
 - Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.

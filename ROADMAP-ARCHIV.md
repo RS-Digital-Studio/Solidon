@@ -31,6 +31,16 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-04 | [RM-411: Langlöcher an schrägen und gestuften Trägern melden an beiden Kernen dasselbe (04.10.2026)](#rm-411-langlöcher-an-schrägen-und-gestuften-trägern-melden-an-beiden-kernen-dasselbe-04102026) |
+| 2026-10-04 | [RM-422: Langlöcher an ±X sind gedreht geprüft, und alte Projekte rechnen sie wie gespeichert (04.10.2026)](#rm-422-langlöcher-an-x-sind-gedreht-geprüft-und-alte-projekte-rechnen-sie-wie-gespeichert-04102026) |
+| 2026-10-04 | [RM-388: Schlüsselloch nach Bohrung und Drehdeckel am Randring sind als Originalwege geprüft (04.10.2026)](#rm-388-schlüsselloch-nach-bohrung-und-drehdeckel-am-randring-sind-als-originalwege-geprüft-04102026) |
+| 2026-10-04 | [RM-226: Netz und exakter Kern nennen gewölbte, rundum verrundete und Langlochflächen gleich (04.10.2026)](#rm-226-netz-und-exakter-kern-nennen-gewölbte-rundum-verrundete-und-langlochflächen-gleich-04102026) |
+| 2026-10-04 | [RM-254: Splinestücke bestätigen einander nur noch mit festgelegtem Radius (04.10.2026)](#rm-254-splinestücke-bestätigen-einander-nur-noch-mit-festgelegtem-radius-04102026) |
+| 2026-10-04 | [RM-210: Flache Kegelstücke finden einen zweiten Start, und die Restgrenze steht im Handbuch (04.10.2026)](#rm-210-flache-kegelstücke-finden-einen-zweiten-start-und-die-restgrenze-steht-im-handbuch-04102026) |
+| 2026-10-04 | [RM-228: Lüfterwerte bleiben beim Herstellerprofil, auch in Cura (04.10.2026)](#rm-228-lüfterwerte-bleiben-beim-herstellerprofil-auch-in-cura-04102026) |
+| 2026-10-04 | [RM-289: Eigene Plattenwahl bleibt neben Vorschlägen je Teil, die Ersten Schritte frieren nicht ein, Feldtabelle im Kern (04.10.2026)](#rm-289-eigene-plattenwahl-bleibt-neben-vorschlägen-je-teil-die-ersten-schritte-frieren-nicht-ein-feldtabelle-im-kern-04102026) |
+| 2026-10-04 | [RM-318: Creality legt den anliegenden Brim über eine je Teil gesenkte Fußkorrektur an (04.10.2026)](#rm-318-creality-legt-den-anliegenden-brim-über-eine-je-teil-gesenkte-fußkorrektur-an-04102026) |
+| 2026-10-04 | [RM-465: Die Zeitgegenprobe rechnet aus der Schichtanalyse ab der ersten Schicht (04.10.2026)](#rm-465-die-zeitgegenprobe-rechnet-aus-der-schichtanalyse-ab-der-ersten-schicht-04102026) |
 | 2026-10-04 | [RM-287: Alte Teilungsläufe zählen durch, und gelöschte Schnitte zählen nicht mehr mit (04.10.2026)](#rm-287-alte-teilungsläufe-zählen-durch-und-gelöschte-schnitte-zählen-nicht-mehr-mit-04102026) |
 | 2026-10-03 | [RM-175: Der Bauplan nennt alle 18 Bedingungsarten und die Zweiklick-Werkzeuge (03.10.2026)](#rm-175-der-bauplan-nennt-alle-18-bedingungsarten-und-die-zweiklick-werkzeuge-03102026) |
 | 2026-10-03 | [RM-278: Ein Zug in der Öffnung einer Senkbohrung lässt den Körper stehen und nennt den nächsten Schritt (03.10.2026)](#rm-278-ein-zug-in-der-öffnung-einer-senkbohrung-lässt-den-körper-stehen-und-nennt-den-nächsten-schritt-03102026) |
@@ -33307,7 +33317,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   beim Versetzen. Am Korpus sind das die sechs Fälle, in denen der Stand nach `e1b897ca2`
   mehr Merkmale des vorigen Schritts verliert als der Stand davor. Eine solche Wahl darf
   nicht an der Darstellung hängen (`.claude/rules/kern.md`); dieselbe Familie wie
-  [RM-210](ROADMAP.md#rm-210). Weg: die Wahl des Bezugs von Ecken- und Dreiecksfolge lösen und am
+  [RM-210](#rm-210). Weg: die Wahl des Bezugs von Ecken- und Dreiecksfolge lösen und am
   Korpus gegen die Schrittfolge messen. Abnahme: Am Gewürzdeckel bleiben Mitte und
   Richtung des Rändelmusters über die vier Schritte der Korpusfolge gleich.
 
@@ -39803,3 +39813,996 @@ nicht geraten, unabhängige Schnitte bleiben unabhängig. Nachweis an
 (`tests/test_project.py`); der Integrationsstand `91a2514ac` besteht das
 Entwicklungstor mit 23 146 Fällen. Changelog: **ja** — die stehengebliebene
 Zählung lag in v0.5.1, die Altprojekte stammen aus Versionen davor.
+
+## RM-411: Langlöcher an schrägen und gestuften Trägern melden an beiden Kernen dasselbe (04.10.2026)
+
+<a id="rm-411-langlöcher-an-schrägen-und-gestuften-trägern-melden-an-beiden-kernen-dasselbe-04102026"></a>
+<a id="rm-411"></a>
+
+**RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden.**
+  Review 02.10.2026 von `e3dff1907`, Funde F1–F3 und F12; Folgepunkt zu RM-320, das im Archiv steht.
+  - **F1 (hoch, Regression):** Bei mehr als einem Körper endet der Schnitt an der gemessenen
+    Wandtiefe der Bohrung (`app/core/geom/prepare_ops.py:8675–8679` exakt, `:8833–8837` Netz); wo
+    der Träger an den neuen Langlochenden dicker ist, bleibt Material stehen, ohne Befund. Schräge
+    Platte mit getrenntem Würfel: Netz 7 131,888 statt 7 117,595, exakt 7 132,705 statt
+    7 118,016 mm³; Stufenplatte +31,3/+31,9 mm³; `carpet-corner-clip.step` (2 Solids): exakt bleibt
+    an den neuen Enden Material stehen. Am Stand `7f0de659d` waren Baugruppe und Einzelkörper
+    gleich. Regel `operationen.md`: „Durchgänge schneiden im Änderungsweg über den ganzen
+    Zielkörper“.
+  - **F2 (hoch):** Am Teppichclip misst `_mesh_bore_depth` (`:10918–10946`, Aufruf `:8812`) die
+    Spanne aller Merkmalsflächen samt Mündungsfasen (3,299 statt 1,752 mm); das Schließen vereint am
+    Netz beide Körper. Ergebnis: exakt Träger −26,51 mm³, zweiter Körper unverändert; Netz Träger
+    −37,28, zweiter Körper −11,73 mm³ — die Kerne sagen Verschiedenes, und das Netz schneidet den
+    fremden Körper an.
+  - **F3 (mittel):** Langloch um 8 mm versetzt oder 4 mm breit: ein freier Stift wird an beiden
+    Kernen still Teil der Platte (1 statt 2 Teile, `:8470–8481`, `_closed_at`), Regel 21.
+  - **F12:** Die Abnahme „Stiftrest gleich auf 0,1 mm³“ wurde ersetzt statt erfüllt (Netz 97,613
+    gegen exakt 97,809 mm³).
+  **Fix:** Träger über seine eigene Hülle schneiden, fremde Körper nur im alten Bohrungsvolumen;
+  Tiefe für fremde Körper aus der Wand; das Schließen vereint fremde Körper nicht mit dem Träger;
+  Freigabe des Stifts nur, wenn der neue Umriss die alte Bohrung ganz enthält, sonst Stopfen um den
+  Stift verkleinern oder mit Satz und *In Einzelteile zerlegen* absagen.
+  **Abnahme:** schräge Platte, Stufenplatte, Teppichclip, versetzter und schmaler Zug — beide Kerne,
+  beide Güten: Durchgang an den Enden, Volumen je Körper gleich auf 0,1 mm³, Teilezahl erhalten.
+  Bauplan §21.1, §25, Regel 21. Belege: `F:\solidon-review-reports\review-e3dff1907.md`, Sonden
+  `r3_langloch_*`, `r3_teppichclip_*`, `r3_rm320_*`.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):**
+  `prepare_ops._slot_in_separate_carrier` ordnet die Mantelflächen dem ganzen Träger zu, bearbeitet
+  ihn allein und setzt die unveränderten Nachbarn wieder als getrennte Körper zusammen
+  (`brep.edit.separated_solids`); ein Stift wird nur um den alten Hohlraum gekürzt, ein Zug, der ihn
+  mit dem Träger verbände, hält an. `perceive/slots.py::_reaches_through` prüft nur die
+  Trägerkomponente. Schräge Platte 7 117,595 bzw. 7 118,016 mm³ wie die Einzelplatte, Stiftrest Netz
+  zu exakt unter 0,001 mm³ (Integral 98,174770); Teppichclip, Langloch +2 mm: Träger allein und in
+  der Baugruppe je Kern auf 0,0001 mm³ gleich, zwei Körper. Vorher 16 rote Fälle, danach 298
+  Langloch- und 6 Lebenslauffälle grün. Belege unter
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\`: `geometrie\RM411.md`,
+  `erkennung\bericht.md`.
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-langloch-flaechen`,
+zusammengeführt in `741b72838`):** Die Befunde liefen an der einzelnen
+schrägen und gestuften Platte auseinander, weil der exakte Zug die Kante am
+ungefüllten Körper und nur über die halbe Bohrungstiefe fragte
+(`prepare_ops.slot_hole`, ebenso exakt `resize_hole`): An der schrägen Platte
+(z = 10 + x/4) hieß ein Langloch mitten in der Fläche „über die Kante“, an der
+Stufenplatte fehlte der Riss in der Wand des Aufsatzes. Beide Kerne fragen
+jetzt am gefüllten Körper über die Schnittlänge; eine alte Öffnung, die ein
+Zug ohne Schließen überdeckt, zählt dabei als Material
+(`prepare.OpeningSpace`). Zwei weitere Ursachen kamen am Weg heraus: Der
+exakte Kern las zwei Bögen mit zwei Flanken auch bei offenem Mantel als
+Langloch (Ende in der Stufenwand), und ein zweiter Zug füllte dann bis an die
+konvexe Hülle und ließ von 9 327,48 mm³ nur 431,50 stehen —
+`brep.features._continues_the_mantle` verlangt jetzt den geschlossenen Mantel
+wie `perceive.slots`; und `brep.edit.fill_bore` sagt ab, wenn die Vereinigung
+des Stopfens Material verliert (`FILL_DID_NOT_HOLD`, alle Kataloge). Beim
+Abgleich der Zwillinge: *Merkmal verschieben* und *Merkmal verdoppeln* eines
+Langlochs längs der Schräge sagten am Netz „geht nicht mehr durch“, exakt
+„Mündung zugedeckt“ — `_exact_move_cavity` und `_exact_duplicate_cavity`
+fragen jetzt die Säule im Schlauch wie die Kette (`_exact_through_checked`).
+Abnahme: schräge Platte, Stufenplatte, Teppichclip (`F:\3D
+Dateien\carpet-corner-clip.step`, zwei Körper), versetzter und schmaler Zug,
+Netz und exakt, Entwurf und fein — dieselben Befunde an beiden Kernen, Volumen
+je Körper allein und in der Baugruppe gleich (Abweichung 0,000 mm³ bei 0,1 mm³
+Toleranz), Teilezahl erhalten, an den Enden kein Material. Tests in
+`tests/test_slot_features.py`
+(`test_both_kernels_report_the_same_at_a_slanted_and_a_stepped_carrier` 12
+Fälle, `test_a_slot_changed_inside_a_slanted_plate_is_not_over_the_edge` 8,
+`test_a_slot_whose_end_opens_into_a_step_wall_is_no_slot_on_either_kernel` 4,
+`test_a_slot_set_up_a_slanted_plate_says_the_same_on_both_kernels` 3) und
+`tests/test_exact_feature_ops.py::test_a_fill_that_loses_the_body_is_refused`:
+am Stand davor (`91a2514ac`) 14 von 25 rot, danach alle grün; Gegenproben je
+Teil der Behebung rot (ungefüllter Körper 3, Bohrungstiefe 6, ohne
+Mantelprüfung 7, *Bohrung ändern* ungefüllt 1). Commits `0fbb08bd9`,
+`d1e00b0f4`; Merkmalscache 44. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\langloch-flaechen\`
+(`s411_abnahme_vorher.txt`, `s411_abnahme_nachher.txt`,
+`t411_vorher_alle.txt`, `t411_gegenprobe_*.txt`, `s411_zwillinge*.txt`,
+`tor_ende.txt`).
+
+Fensterprobe beim Release unter RM-213: An der Teppichecke oder einer
+STEP-Platte mit schräger Oberseite *Zum Langloch ziehen* auf 16 mm ohne
+Kantenbefund, am Dreiecksmodell derselbe Prüfbericht, an der Platte mit
+Aufsatz an beiden Kernen Kantenbefund und „Langloch verloren“ ohne zweiten
+Zug, *Merkmal verschieben* längs der Schräge an beiden Kernen „geht nicht mehr
+durch“. Nicht Teil dieser Abnahme und an die koordinierende Sitzung gemeldet:
+*Merkmal verdoppeln* einer **Bohrung** 10 mm längs der schrägen Platte
+verliert am Netz die Kopie (`duplicate_feature.feature_lost`, keine `hole_2`),
+exakt bleibt sie (`s411_verdoppeln_vor411.txt`, am Stand davor genauso).
+
+Changelog: **ja** — die Kantenfrage am ungefüllten Körper kam mit `48453904d`
+(v0.5.1), die exakte Langlocherkennung ohne geschlossenen Mantel mit
+`9c4e55f37` (v0.4.1 bis v0.5.1).
+
+## RM-422: Langlöcher an ±X sind gedreht geprüft, und alte Projekte rechnen sie wie gespeichert (04.10.2026)
+
+<a id="rm-422-langlöcher-an-x-sind-gedreht-geprüft-und-alte-projekte-rechnen-sie-wie-gespeichert-04102026"></a>
+<a id="rm-422"></a>
+
+**RM-422 — Reste aus RM-325 und RM-332: Drehtest an ±X, gespeicherte Lagen, Aushöhlen mit Entlüftung, `measured_frame` in Handbuch und CLI.**
+  Review 02.10.2026 am Stand `4cf460e87`; RM-325 und RM-332 sind archiviert. Das Verhalten von RM-325
+  ist an 44 Zwillingen richtig (beide Kerne, beide Güten).
+  - **RM-325, Test:** Der neue Test deckt nur Kürzen ab; kein Test dreht ein Langloch an ±X (Abnahme
+    verlangte beides). Kommentar `app/core/geom/prepare_ops.py:925–930` beschreibt das alte
+    Verfahren; `tests/test_slot_features.py:3553–3556`, `:3571`, `:3638` nennen `SLOT_ACROSS_LIMIT`
+    noch als Rahmenkegel.
+  - **RM-325, gespeicherte Projekte:** Netzprojekte mit Drehen oder *Zum Langloch ziehen* an ±X
+    rechnen nach dem Update still eine andere Lage — keine Migration, kein Befund. Nach der
+    Leitlinie (keine still andere Geometrie): Migration wie bei RM-363, die alte gespeicherte
+    Lage bleibt, oder ein Befund beim Öffnen mit *Neu ausrichten*.
+  - **RM-332 N3:** *Aushöhlen* mit der Vorgabe Entlüftungen = 1 setzt die Schrift-Rückseite weiter
+    in den Hohlraum (x = 14,17), außen leer, ohne Befund.
+  - **RM-332 N5:** Die Handbuch-Referenz listet `measured_frame` weiter dreimal (`drill_hole`,
+    `drill_brep_hole`, `slot_hole`); die Kommandozeile bietet `--measured-frame` an.
+  **Abnahme:** Drehtest an ±X an beiden Kernen; altes Projekt mit Langloch an ±X öffnet mit
+  unveränderter Lage oder mit Befund; Aushöhlen mit Entlüftung → Rückseite außen; `measured_frame`
+  weder im Handbuch noch in der CLI. Belege: `verif-4cf460e87-geometrie.md`, Sonden `v4g_rm325_*`,
+  `v4g_rm332_*`.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `_face_roles` verlangt eine
+  parallele Außenkontur, die den ganzen Flächenumriss umfasst; eine kleine erhabene Fläche belegt
+  keinen Hohlraum dahinter. Quader 40 × 30 × 20 mit beidseitigen 6-mm²-Erhebungen, massiv und
+  ausgehöhlt: vorher beide rot, danach beide Außenwände mit 594 mm² außen, echte Innenwände bleiben
+  innen; Voll- und örtliche Erkennung, 444 Fachfälle. Am Fenster: Schrift beidseitig graviert und
+  übernommen, beide Ansichten lesbar, Undo/Redo, Speichern, Wiederöffnen mit Linke/Rechte Seite.
+  Aushöhlen mit Entlüftung ist nicht eigens nachgestellt. Am Integrationsstand nachgesehen: kein
+  `measured_frame` in `app/cli`, `manual.py` oder `website`. Belege unter
+  `F:\solidon-review-reports\codex-2026-10-03\`: `geometrie\erkennung\bericht.md` (RM-422),
+  `bedienung\geometry-contracts.md`.
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-langloch-flaechen`,
+zusammengeführt in `741b72838`):** (1)
+`tests/test_slot_features.py::test_a_slot_in_a_side_wall_can_be_turned` dreht
+ein Langloch in den Wänden +X, −X und +Y über *Zum Langloch ziehen* auf 0° und
+über *Merkmal drehen* um 45°, an beiden Kernen (12 Fälle, mit dem Kürzen 18);
+mit dem Werkzeug von vor RM-325 sind die sechs Netzfälle an ±X rot. Kommentar
+und Tests nennen den Rahmenkegel `SLOT_FRAME_CONE`. (2) Gespeicherte Projekte
+rechneten nach RM-325 still eine andere Lage, an `slot_tool_v40.p3d` fünf von
+elf Körpern. Migration 45 → 46 markiert in Dateien bis Format 40 die sieben
+Langlochhandlungen mit `legacy_slot_tool`, auch in den Undo-Fassungen;
+`_feature_solid` zieht für sie das Werkzeug wie damals auf, eine bewusste
+Änderung des Schritts nimmt den Marker heraus (`ParamSpec.dropped_on_change`,
+`History.change_params`), entschieden wird an der gespeicherten Version
+(`migrations.SAVED_FORMAT_KEY`). Danach rechnen alle elf Körper wie beim
+Schreiben, ebenso eine von v0.5.1 geschriebene Datei (Format 38). Ein Marker
+einer Migration ist im Merkmalfenster kein Feld mehr
+(`perceive.actions._fields_of`). Tests in `tests/test_project.py` und
+`tests/test_slot_features.py`; Gegenproben ohne alten Werkzeugweg, ohne
+Aufheben bei Änderung, ohne Versionsgrenze und ohne Feldregel je rot. Format
+46, `example_v46.p3d`. (3) Die Rückseite nach *Aushöhlen* mit Entlüftung steht
+außen (Netz- und exakter Quader, Entwurf und fein, Undo/Redo, Speichern/Öffnen
+nachgestellt). Dabei gefunden: Bei einer oben offenen Dose legte das Netz die
+Rückseite außen auf die Hinterwand, der exakte Kern innen an die Vorderwand.
+Jetzt sagt das Aushöhlen, ob sein Innenraum offen ist
+(`MeshData.cavity_open`);
+`test_both_sides_on_an_open_box_put_the_back_on_its_inner_wall` (4 Fälle, Netz
+vorher rot). (4) `measured_frame` steht weder im Handbuch noch in den
+Referenzen, in `--help` oder auf der Website;
+`tests/test_registry.py::test_migration_fields_stay_out_of_cli_and_both_documentation_views`
+hält es. Commits `c0a53c00d`, `9fe36783b`, `427fff4d7`. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\langloch-flaechen\`
+(`t422_drehen*.txt`, `s422_*.txt`, `t422_2_gegenprobe_*.txt`,
+`t422_offen_rot.txt`, `tor_422_*.txt`).
+
+Fensterprobe beim Release unter RM-213: Langloch in der rechten Wand auf 0°
+stellen und um X 45° drehen, eine Projektdatei aus 0.5.1 mit so einem Langloch
+öffnen und die Länge ändern, eine oben offene Dose mit Schrift *Auf beiden
+Seiten* beschriften, und in den Dialogen keine Zeile „aus einem älteren
+Projekt“.
+
+Changelog: **ja** für (1) und (2) — das verdrehte Werkzeug an ±X lag in v0.4.1
+bis v0.5.1 (`4a74d00a2`, an v0.5.1 nachgestellt in `s422_v051_bauen.txt`),
+behoben mit RM-325 (`9d9092083`, in keinem Tag); nein für (3), *Auf beiden
+Seiten* ist neu in 0.5.2, und für (4).
+
+## RM-388: Schlüsselloch nach Bohrung und Drehdeckel am Randring sind als Originalwege geprüft (04.10.2026)
+
+<a id="rm-388-schlüsselloch-nach-bohrung-und-drehdeckel-am-randring-sind-als-originalwege-geprüft-04102026"></a>
+<a id="rm-388"></a>
+
+**RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl.**
+  Review 02.10.2026, Nachbau-Test F1 und F3, am HEAD `4449e3370`.
+  **Fehlerfall 1:** *Quader anlegen* 40 × 30 × 10 → Deckfläche → *Bohrung setzen* Ø 6 → Deckfläche
+  erneut anklicken (Auswahlfenster „Oberseite · 1170 mm²“, `face_3`) → *Baustein einsetzen …* →
+  Schlüsselloch → *Einsetzen*: Das Schlüsselloch sitzt in der Vorderseite (Achse [0, −1, 0]).
+  Nach der Bohrung tauschen drei Flächen des exakten Quaders ihre Namen (`face_2` +X → −Y,
+  `face_3` −Y → oben, `face_6` oben → +X); der Schritt speichert den angezeigten Namen, ausgewertet
+  wird gegen die Namen des Eingangskörpers im Lauf.
+  **Fehlerfall 2 (F3):** *Zylinder anlegen* Ø 45 × 17 → *Aushöhlen* „Oben öffnen“ → Randring
+  anklicken → *Drehdeckel erzeugen*: *Einsetzen* gesperrt, das Band sagt „Der Körper ist auf
+  dieser Höhe massiv“; im Lauf ist `face_2` der Boden (Normale −Z), in der Ansicht der Randring
+  (+Z, z = 17). `reason_against` (`app/core/geom/lid.py:670`) bejaht dieselbe Fläche, weil sie an
+  den angezeigten Merkmalen prüft. Nur ohne Flächenwahl entsteht der Deckel — am Standardweg des
+  Kunden eine Sackgasse.
+  **Stellen:** Namensvergabe `app/core/scene/evaluate.py:3500` (`_with_features`) gegen die
+  Verbraucher `app/core/knowledge/parts/ops.py:1939–1990` und `app/core/geom/lid.py:687–760`
+  (`opening_frame`, `_face_named`). Der ungesicherte RM-218-Stand im Arbeitsbaum hält die Namen
+  nach der Bohrung stabil, der Widerspruch Anzeige gegen Lauf bleibt beim Drehdeckel.
+  **Fix:** Anzeige und Lauf beziehen die Flächennamen aus derselben Vergabe (bzw. der Schritt
+  speichert eine lauffeste Referenz); Vorprüfungen fragen dieselben Merkmale wie der Lauf.
+  **Abnahme:** An exaktem Quader (nach Bohrung) und ausgehöhltem exaktem Zylinder trifft jeder
+  Schritt mit `at_feature` dieselbe Fläche, die die Anzeige vor dem Schritt nennt (Normale und
+  Mitte gleich); *Drehdeckel erzeugen* am Randring geht. Bauplan §21.2, §2.6, §18.5, §25, Regel 21.
+  Belege: `F:\solidon-review-reports\nachbau\bericht.md`, Sonden `f1_flaeche_nach_bohrung.py`,
+  `f1_kern.txt`, `f3_im_lauf.txt`, `f3_drehdeckel_ui.py`. Verwandt: RM-218, RM-226.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `scene/evaluate.py` ordnet alle
+  belegbaren unveränderten Merkmale vor der Veröffentlichung zu, unabhängig davon, ob ein späterer
+  Schritt darauf zeigt; nicht belegte alte Namen bleiben reserviert, Kandidaten folgen den
+  veröffentlichten Namen. Vorher rot: exakter Quader 40 × 30 × 10 mit Bohrung Ø 6, angezeigte
+  Deckfläche um 0,5 mm versetzen → `NativeReferenceLost`, kalt und warm. Jetzt grün, ebenso der
+  Randring am ausgehöhlten Zylinder Ø 45 × 17, je mit Folgekennungen, Undo/Redo und Speichern/Öffnen
+  (`test_native_face_names_do_not_depend_on_a_later_consumer`). Die Originalwege Schlüsselloch und
+  Drehdeckel sind nicht nachgestellt. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md` (RM-388).
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-langloch-flaechen`,
+zusammengeführt in `741b72838`):** Die Behebung kam mit den Codex-Linien
+(Teilstand 03.10.); dieser Zweig bringt die Originalwege als Test über
+dieselben Kernfunktionen wie die Oberfläche — Dialogbelegung
+`placement.values_for` an der angezeigten Fläche, Sperre `lid.reason_against`,
+Übernahme als Schritt bzw. über `lid_flow.apply_lid` wie `Session.create_lid`:
+exakter und Netzquader 40 × 30 × 10, Deckfläche, *Bohrung setzen* Ø 6,
+Deckfläche erneut, Schlüsselloch → beide Teile mit Achse +Z unter der
+Deckfläche; exakter und Netzzylinder Ø 45 × 17, *Aushöhlen* „Oben öffnen“ ohne
+Entlüftung, Randring → keine Sperre, Deckel und Passung entstehen; je Undo,
+Redo und Speichern/Öffnen (`tests/test_native_references.py`,
+`test_a_keyhole_chosen_on_the_top_face_after_a_bore_sits_in_the_top_face` und
+`test_a_screw_lid_chosen_at_the_rim_of_a_hollowed_cylinder_is_made`, 4 Fälle).
+Am Stand vor den Codex-Linien (`60fcb028d`) sind beide exakten Fälle rot,
+heute grün; an v0.5.1 saß das Schlüsselloch in der Vorderseite. Dabei
+korrigiert: `test_native_face_names_do_not_depend_on_a_later_consumer` höhlte
+den „exakten“ Zylinder mit Entlüftung aus und prüfte so ein Dreiecksmodell; er
+verlangt jetzt den exakten Körper (Gegenprobe mit der alten Vorgabe 2 rot).
+Commit `80b54e3c0`. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\langloch-flaechen\`
+(`s388_wege.txt`, `s388_wege_vorher.txt`, `s388_wege_v051.txt`,
+`t388_wege.txt`, `t388_wege_vorher.txt`, `t388_codex_gegenprobe.txt`).
+
+Fensterprobe beim Release unter RM-213: Quader 40 × 30 × 10, Bohrung in der
+Deckfläche, Deckfläche erneut gewählt, *Baustein einsetzen …* → Schlüsselloch
+sitzt in der Deckfläche, auch nach Strg+Z, Strg+Y, Speichern und Öffnen;
+Zylinder Ø 45 × 17 mit „Oben öffnen“ ohne Entlüftung, Randring, *Drehdeckel
+erzeugen*: *Einsetzen* frei, danach zwei Körper und die Passung im
+Prüfbericht.
+
+Changelog: **ja** — an v0.5.1 nachgestellt saß das Schlüsselloch nach einer
+Bohrung in der Vorderseite, und der Drehdeckel am Randring brach mit „auf
+dieser Höhe massiv“ ab (`s388_wege_v051.txt`).
+
+## RM-226: Netz und exakter Kern nennen gewölbte, rundum verrundete und Langlochflächen gleich (04.10.2026)
+
+<a id="rm-226-netz-und-exakter-kern-nennen-gewölbte-rundum-verrundete-und-langlochflächen-gleich-04102026"></a>
+<a id="rm-226"></a>
+
+**RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden.**
+  Zwei Zwillingsbrüche aus der Durchsicht 0.5.0: Der exakte Kern nennt jeden
+  Zylinderausschnitt unter 300 Grad eine Verrundung, das Netz nur einen, der die
+  Kante zwischen zwei Ebenen ersetzt (`replaces_an_edge`) — am Quader mit
+  gewölbter Oberseite bei 6, 12 und 30 Grad exakt „Verrundung R 382 / 191 / 77",
+  am Netzzwilling „gekrümmte Fläche" (erkennung, `zwilling_bogen.py`, am alten
+  Stand genauso). Und *Fläche versetzen* an einer Quaderseite lässt am exakten
+  Körper die angesetzte Scheibe als eigene koplanare Flächen stehen (Deckfläche
+  1 200 + 30 mm² statt 1 230), worauf die native Erkennung unberührte Flächen
+  neu nummeriert (beziehungen; die Neuwahl fragt seit B25 nicht mehr, die
+  Topologie bleibt). Weg: die Regel des Netzes an den exakten Kern
+  (`replaces_an_edge`), koplanare Flächen nach dem Versetzen vereinigen
+  (`ShapeUpgrade_UnifySameDomain`). Abnahme: beide Fälle in
+  `test_exact_body_parity` als KEEP mit gleicher Merkmalsart und Flächenzahl.
+
+  **Durchsicht v0.5.1 (27.09.2026, rest-erkennung2):** Zwei weitere Zwillingsbrüche am
+  Langloch. Die Tiefe eines Langlochs mit Fase misst der exakte Kern ohne die Fase
+  (2,01 mm an der schrägen Testplatte), das Netz mit ihr (3,20 mm) — auch wo beide Kerne
+  dasselbe Langloch wählen (REST-ERKENNUNG2-04, in Übernahme), steht im Merkmalfenster
+  eine andere Zahl. Und die Kopie eines Langlochs über die Kante warnt an beiden Kernen
+  mit `bore.over_the_edge`, den zweiten Satz aber verschieden: exakt
+  `duplicate_feature.feature_lost`, am Netz `duplicate_feature.no_longer_through`
+  (Teppichclip, Kopie 12 mm quer). Beide Sätze sind wahr; einheitlich wäre besser.
+  Abnahme dazu: dieselbe Tiefe und derselbe Satz an beiden Kernen.
+  Registerabgleich 02.10. (Stand `3fd3b1ace`): *Fläche versetzen* behoben (`push_faces` ruft `unified`; Sonde `g_rm226.py`: 6 Flächen, Deckfläche 1 230 mm²). Offen bleibt die gewölbte Oberseite (exakt `fillet`, am Netz `curved_face`); die Langloch-Reste sind nicht nachgestellt.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `brep.features._describe` und
+  `_seam_split_cylinders_joined` gaben den Flächenschwerpunkt statt der begrenzten Achsmitte,
+  Kugelecken ebenso; jetzt halbe V-Spanne auf der Achse bzw. `sphere.Location()`. Vorher rot: R3 am
+  Quader 1,909859 mm verschoben, acht Kugelecken je 1,5 mm, auch frei gedreht. Danach Netzfits und
+  Sollmitten auf ±0,000001 mm gleich, 867 Fälle grün, Merkmalscache 42; am Korpus
+  `block_with_rounded_edge.stl` stimmt die Achsmitte (17, 0, 7). Offen: Das gerundete T bleibt am
+  Netz mit 2 598 von 2 820 Dreiecken ein tangentialer Fleck, der Achsenprototyp liegt nur unter tmp.
+  Belege unter `F:\solidon-review-reports\codex-2026-10-03\geometrie\`:
+  `geometrie\RM226-native-centres.md`, `erkennung\bericht.md` (RM226).
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-exakt-nachbau`,
+zusammengeführt in `2323082b2`):** (1) *Gewölbte Oberseite:* Der exakte Kern
+nannte jeden Zylinderausschnitt unter vollem Umlauf eine Verrundung (R
+382/191/77 bei 6/12/30 Grad), der Netzzwilling dieselbe Wölbung gekrümmte
+Fläche. Beide fragen jetzt, ob der Zylinder quer zu seiner Achse in den Körper
+passt (`perceive.features.cylinder_fits_in_the_body`, exakt über
+`brep.features._oversized_rounds_dropped`). (2) *Tangentiale Trennung:* Eine
+sechste Runde in `perceive.features._fitted` trennt einen Verbund aus
+Rundungen gleichen Radius an Zylinderstücken (`_tangential_pieces`); Züge
+gleichen Radius zählen als Ganzes (`_drawn_chains`), ein Stück nur am
+unerklärten Rest fällt (`_enclosed_rounds`), eine Kugelecke heißt an beiden
+Kernen nur zwischen Kanten ihres Radius Verrundung (`rounds_the_corner`), und
+nach 1 024 Keimen vor dem ersten Stück oder 4 096 danach ohne Treffer gibt die
+Runde auf (`TANGENTIAL_FIRST_SEEDS`, `TANGENTIAL_FUTILE_SEEDS`; Baum mit
+Tablett 18,2 → 5,6 s, im Korpus kein Merkmal anders). (3) *Langlochtiefe:*
+exakt über beide Bögen auf der Achse des ersten (`brep.features._one_slot`),
+Endlagen schräg berandeter Zylinder an der Form
+(`brep.canonical._rims_on_grid`); 4,6993 und 3,1993 mm an beiden Kernen statt
+3,51 und 2,01. (4) *Kopie über die Seite:* Das Netz prüft Langlochkopien wie
+Bohrungen nach (`geom.prepare_ops._copies_found`) und nennt die verlorene
+Kopie, unter einem Steg die bedeckte Mündung. Abnahme in
+`tests/test_exact_body_parity.py`: gewölbter Quader 3 Fälle plus zwei
+Verlaufsfälle (vorher 3 von 5 rot), rundum verrundete Körper 8, Kuppel 1,
+Zapfen mit Kehle 3, Kugelecke 2 (vorher rot: vier verrundete Körper, Zapfen R
+3 und R 4, Kugelecke an beiden Kernen, die Kuppel), Langlochtiefe 2 (vorher 2
+rot), Kopie über die Seite 6 (vorher 4 rot); dazu `tests/test_features.py`
+(Rohr als Gehrungszug, Einschlussregel, Keimgrenze am Ellipsoid). Korpus
+`F:\3D Dateien`, 228 Körper: 61 geändert, jedes gesichtet; 14 STEP-Körper,
+vier Werte um höchstens 0,001 mm zum Netz hin; Teppichclip an beiden Kernen
+`duplicate_feature.feature_lost`. Merkmalscache 43 → 47. Commits `51071e944`,
+`187d70189`, `9615eb61c`, `6732f951d`; Entwicklungstor 23 151 bestanden, 122
+übersprungen, Exit 0. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\exakt-nachbau\`
+(`vergleich_regeln.txt`, `p8d.txt`, `p5a_nachher.txt`,
+`p13i_grenzen_1024.txt`, `p13c_wechsel_final.txt`, `p8a_vorher.txt`,
+`p8a_nachher.txt`).
+
+Fensterprobe beim Release unter RM-213: `Cat_1.stp` und sein STL-Zwilling
+zeigen die drei flachen Bögen als gekrümmte Flächen; ein rundum verrundeter
+Quader R 3 als STL zeigt zwölf Verrundungen und acht Ecken wie sein
+STEP-Zwilling; die Teppichecke als STEP und STL sagt beim *Merkmal verdoppeln*
+eines Langlochs 12 mm quer dieselben Sätze und dieselbe Tiefe 1,75 mm; der
+Baum mit Tablett lädt, ohne in der Rundformsuche lange zu stehen.
+
+Changelog: **ja** — Teilzylinder als Verrundung seit `0f85cbc42` und die
+Eckregel am Netz seit `25163ffc2` (beide ab v0.2.0), Langlochtiefe über einen
+Bogen seit `9c4e55f37` (v0.4.1), Nachprüfung nur für Bohrungskopien seit
+`48453904d` (v0.5.1); im Abschnitt 0.5.2 zu zwei Punkten zusammengefasst.
+
+## RM-254: Splinestücke bestätigen einander nur noch mit festgelegtem Radius (04.10.2026)
+
+<a id="rm-254-splinestücke-bestätigen-einander-nur-noch-mit-festgelegtem-radius-04102026"></a>
+<a id="rm-254"></a>
+
+**RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen.**
+  Gefunden beim Abschluss von RM-243 (26.09.2026). `_wandering_outline`
+  schont im wandernden Umriss jeden Kreis, den ein zweites Stück bestätigt —
+  eines liegt auf dem Kreis des anderen, mit den zehn Mikrometern von
+  `_lies_on_the_cylinder`. Ein kurzes Stück liegt so auch auf einem Kreis mit
+  vier Prozent anderem Radius: Am `Screen-Cover_RS.stl` bleiben zwei
+  Buchstabenstücke als R 11,2 stehen, an verrauschten Ellipsen ein bis vier
+  von vorher acht bis fünfzehn Stücken (Scheitel, wo die Krümmung ruht).
+  Beidseitige Bestätigung räumt beides ab, nimmt aber 20 von 72 verrauschten
+  Korbbögen R 10 · R 16 · R 10 echte Bögen. Daneben ein Fall, den die Regel
+  gar nicht sieht: das Wandband R 13,73 am selben Screen-Cover, 0,4 mm hoch
+  zwischen zwei Buchstabenecken, ein **ganzer** Fleck, der auf 52 Grad einen
+  Kreis trifft und in der ersten Runde eingepasst wird (vor RM-219 schon da).
+  Weg: eine Bestätigung, die an der gemeinsamen Länge beider Stücke misst,
+  wie gut ein Kreis sie trägt, statt an der Toleranz eines einzelnen; für das
+  Wandband klären, ob ein Bogen zwischen zwei Ecken eines wandernden Umrisses
+  zu diesem gehört. Abnahme: `Screen-Cover_RS.stl` ohne Verrundungen an den
+  Buchstaben, die 72 Korbbögen aus der Reihe von RM-243 und das
+  Schmierwerkzeug (R 4,2 · R 6,75) unverändert.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Keine Änderung am Code. In Sonden
+  gemessen und verworfen: Ein gemeinsamer Zylinderfit über bestätigende Stücke lässt 24 verrauschte
+  Korbbögen gleich, macht Ellipsen aber schlechter (bis zehn falsche Verrundungen statt drei). Ein
+  gemeinsamer Kreisfit mit Fehlerbindung hilft als Summe nicht, als Maximum entfernt er zwei
+  Ellipsenreste und verliert echte Korbbögen in sechs von 24 Varianten, als Minimum noch mehr. Ganze
+  Kreisgruppen zu bestätigen ändert keinen der 30 Fälle. Das Screen-Cover behält neun Verrundungen.
+  Beleg: `F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md` (RM254,
+  `outline-*-probe.json`).
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-erkennung-lage`,
+zusammengeführt in `bf58a19a1`):** Zwei Regeln in
+`features._wandering_outline` und `_fitted`. **Bestätigen kann nur ein Kreis,
+den sein Stück festlegt** (`_carries_its_radius`): Ein Stück mit Sehne `L` und
+Formfehler `e` bestimmt seinen Radius nur auf `8·R·e/L²`; liegt das über
+`CYLINDER_TOLERANCE`, sagt „das andere Stück liegt auf diesem Kreis“ nichts.
+Die Buchstabenstücke am Screen-Cover legen ihren Radius auf 11 und 12 Prozent
+fest, die bestätigenden Stücke der 24 Korbbögen auf höchstens 3,7, die am
+Schmierwerkzeug auf höchstens 0,4. **Ein Bogen zwischen zwei Ecken eines
+wandernden Umrisses gehört zu ihm** (`_between_corners_of`): ein eigener
+Rundfleck, an beiden Enden über eine Naht längs der Achse vom Umriss berührt
+und nicht gezeichnet — das Wandband R 13,73. Die axiale Bedingung hält zwei
+von vier gleichen Bändern R 6,3 am Gartenschlauchhalter, die eine erste
+Fassung nahm. Abnahme: `Screen-Cover_RS.stl` ohne R 11,2 und ohne das Wandband
+R 13,73; es bleiben sechs Ecken R 2 des Deckels und der im Original
+gezeichnete Bogen R 22,975, den RM-243 ausdrücklich behält
+(`test_a_drawn_arc_beside_a_restless_spline_stays_a_fillet`) — keiner davon
+ist eine Verrundung an den Buchstaben. Die 72 Korbbögen und das
+Schmierwerkzeug (R 4,2 · R 6,75) unverändert. Korpus `F:\3D Dateien`, 231
+Dateien gegen `91a2514ac`: vier Dateien verändert, Screen-Cover 9 → 7
+Verrundungen und das Schmierwerkzeug in drei Dateien ohne die Paare R 3,36 und
+R 3,50. Tests: `tests/test_features.py` fünf neue Fälle (Ellipse ±4 µm vorher
+R 12,08, Sagittengrenze, Band zwischen zwei Ecken, Band mit nur einem
+berührten Ende); Gegenproben durch Mutation (beide Enden zu „eines“, Ausnahme
+für gezeichnete Bögen entfernt, axiale Bedingung entfernt) je rot. Was bleibt:
+An verrauschten Ellipsen bestätigen Stücke mit sieben Prozent Festlegung
+einander weiter, nicht Teil der Abnahme. Commit `a7c9c2eb8`; Merkmalscache 43.
+Belege unter `F:\solidon-review-reports\claude-2026-10-04\erkennung-lage\`
+(`compare-base-final.txt`, `outline-final.json`, `outline-variants.json`,
+`pair-stats.json`, `band-debug.txt`, `garden-fillets-3.txt`, `mut1.txt` bis
+`mut4.txt`).
+
+Fensterprobe beim Release unter RM-213: `Screen-Cover_RS.stl` öffnen — sieben
+Verrundungen (sechs R 2, eine R 22,975), keine R 11,2 und keine R 13,73, die
+Buchstaben als *Gerundete Seite*; `elegoo_grease_tool.3mf` mit R 4,2 und R
+6,75, ohne R 3,36 und R 3,50.
+
+Changelog: **ja** — die falschen Verrundungen kamen mit `615cefdeb` (RM-243),
+enthalten in v0.5.1.
+
+## RM-210: Flache Kegelstücke finden einen zweiten Start, und die Restgrenze steht im Handbuch (04.10.2026)
+
+<a id="rm-210-flache-kegelstücke-finden-einen-zweiten-start-und-die-restgrenze-steht-im-handbuch-04102026"></a>
+<a id="rm-210"></a>
+
+**RM-210 — Dasselbe Modell, anders im Raum gelegt, ergibt andere Merkmale.** Gemessen am
+  22.09.2026: `Elegoo_erster_Druck.3mf` (227 244 Dreiecke) liefert 166 Merkmale. Derselbe Körper
+  um 13,7 mm verschoben — keine Drehung, keine Skalierung — liefert 164: ein Kegel und eine
+  Verrundung fehlen. Um 90 Grad um die Z-Achse gedreht ebenfalls 164, um 37 Grad um (1,2,3)
+  dagegen 171, also fünf Verrundungen und ein Kegel mehr. An der Kumiko-Schale sind es 7 325
+  gegen 7 320 (gedreht um 90 Grad) und 7 327 (gedreht um 37 Grad). `countercleaner.3mf` bleibt
+  bei 60 Merkmalen, aber seine Verrundungsradien wandern in der vierten Nachkommastelle
+  (1,199937 → 1,199869 mm).
+
+  **Die Gegenprobe ist gefahren und sie ist sauber:** Zweimal hintereinander am unveränderten
+  Körper erkannt, kommen beide Male dieselben Merkmale heraus. Die Erkennung ist deterministisch;
+  was sie nicht ist, ist unabhängig von der Lage.
+
+  **Die Kippstelle ist bis auf den einzelnen Fleck eingegrenzt.** Bei der Verschiebung um 13,7 mm
+  zerfällt der Körper in exakt dieselben Flecken, und von 202 Kegelfits antwortet genau **einer**
+  anders — ein Fleck mit 32 Dreiecken, hier ein Kegel von 53,501825 Grad mit Rückstand 4,957·10⁻⁴,
+  dort keiner. Sein Startwert ist in beiden Lagen Bit für Bit derselbe, denn `_fit_cone_read`
+  zentriert auf den Schwerpunkt und normiert auf die Fleckausdehnung; die Verschiebung fällt also
+  heraus. Was bleibt, ist die Rundung in `support.points - origin`: Bei großen Koordinaten ist
+  diese Differenz nicht exakt. Und beide Läufe brauchen hundert Auswertungen — der Fleck stand
+  ohnehin an der Kippe.
+
+  **Daraus folgt der Vorschlag, und er ist fachlich begründet statt numerisch: Ein Fit, der sein
+  Auswertungsbudget ausschöpft, hat nicht konvergiert.** Ob am Ende trotzdem ein Ergebnis
+  dasteht, entscheidet dann die Lage des Körpers — es ist keine Aussage über die Geometrie. Wer
+  ihn verwirft, verliert keine Erkenntnis, sondern einen Zufall. Über die 71 Korpusdateien
+  gemessen trifft die Regel sehr wenig: Von 173 Läufen an `Elegoo_erster_Druck.3mf` enden 49 am
+  Limit, aber nur **einer** davon mit Ergebnis; an `countercleaner.3mf` sind es 6 von 167, an
+  `garden-hose-holder.3mf` 14 von 1 276. Vier Dateien ändern sich, und an der ersten sind es
+  **genau die beiden Merkmale, die beim Verschieben ohnehin verschwinden** — `cone_7` und
+  `fillet_21`. Die Regel trifft also, was sie treffen soll. Zeit spart sie kaum (14,5 → 13,0 s an
+  `countercleaner.3mf`), denn der Lauf läuft trotzdem; sie macht das Kriterium scharf, an dem
+  RM-209 und RM-208 messen.
+
+  Offen bleibt die Mehrzahl der Abweichungen: Die Verrundungen stellen sie, und die kommen nicht
+  aus `fit_cone`.
+
+  Was daran wiegt: Ein Kunde, der sein Teil auf der Platte anders ablegt, bekommt einen anderen
+  Steckbrief. Und da ARM anders rundet als x86, kann dasselbe Modell auf zwei Rechnern
+  verschieden gelesen werden — die Zusage „Plattformen funktionieren gleich" ist damit nicht
+  eingelöst.
+
+  **Die Regel ist seit dem 22.09.2026 gebaut (RM-209), und sie trägt genau so weit, wie sie
+  kann.** Gemessen an 39 echten Modellen, beide Stände als fester Commit in eigenen Bäumen
+  (`4fa4d38f` gegen `6c3b1e5c`), jedes Modell dreimal bewegt:
+
+  | Bewegung | vorher | nachher |
+  |---|---|---|
+  | ungleichmäßig verschoben | 1 | 1 |
+  | gleichmäßig verschoben | 3 | **0** |
+  | gedreht | 16 | 16 |
+  | betroffene Bewegungen | 20 | **17** |
+
+  **Die Zahl der betroffenen Modelle bleibt 16 — dieselben sechzehn.** Was sinkt, ist die Zahl
+  der Bewegungen, unter denen sie kippen: Die gleichmäßige Verschiebung ist vollständig
+  behoben, `Elegoo_erster_Druck.3mf` und `elegoo_grease_tool.3mf` wackeln nur noch beim Drehen,
+  am Gartenschlauchhalter fällt eine von drei Bewegungen weg. Das passt zur Ursache: Ein Lauf
+  am Auswertungslimit kippt, wenn sich die Koordinaten leicht verschieben; eine Drehung ändert
+  mehr und trifft andere Schwellen — vor allem die der Verrundungen, und die kennen keinen
+  Löser.
+
+  Ein früherer Zwischenstand meldete an `countercleaner.3mf` und `bottom-double.stl` **neue**
+  Lageabhängigkeit. Das war ein Messfehler derselben Familie: Der Vorher-Lauf lief, während die
+  Nachbarsitzung ihren Umbau noch ungestaged im Baum hatte. Gegen feste Commits gemessen
+  verschlechtert sich kein Modell.
+
+  **Die Entscheidung, die offen ist: ein Mindestbogen für Rundformen.** Sie ist keine
+  Numerikfrage, sondern eine über das Erzeugnis, und deshalb steht sie hier und wird nicht
+  nebenbei gebaut. Was heute passiert: Ein Fleck aus acht Dreiecken mit 0,03 Millimetern
+  Wölbung zeigt 2,8 Grad eines Kreises, und daraus extrapoliert die Einpassung einen Radius von
+  99 Millimetern. Die Grenze dafür ist `FLAT_ANGLE` = 0,5 Grad, und daran kommt so ein Fleck
+  bequem vorbei. Für einen Drucker ist das keine Rundung, sondern eine Kante.
+
+  Gemessen, wieviel Kreis eine Verrundung zeigt:
+
+  | Herkunft | überstrichener Bogen |
+  |---|---|
+  | `block_with_rounded_edge.stl` (konstruiert) | 86,25° |
+  | `desk-organizer-v3`, die zwei echten | 82,7° bis 85,9° |
+  | `drill-holder.3mf`, 26 gemeldete | median 151,5°, kleinste 4,6° |
+  | die wackelnden Flecken | 2,0° bis 18,3° |
+
+  Drei Wege, und jeder kostet etwas anderes:
+
+  * **Nichts ändern.** Die Artefakte bleiben, und mit ihnen die Drehabhängigkeit an sechzehn
+    von 39 Modellen.
+  * **Konservativ, etwa 5 Grad.** Trifft am Organizer alle sechs wackelnden Flecken und keine
+    der zwei echten Verrundungen. An `drill-holder.3mf` kostet es vier der 26 gemeldeten, an
+    `Blessed+Family+–+Heart+Script+Decor.3mf` — einem Zierschild mit Schriftzug — sechs von 29.
+  * **Streng, etwa 30 Grad.** Dann bleiben nur konstruierte Verrundungen übrig. Am Zierschild
+    fielen 18 der 29 weg; ob das ein Verlust ist oder eine Bereinigung, hängt daran, ob seine
+    Verrundungen mit median 15 Grad überhaupt gewollt sind.
+
+  Eine feste Schranke trennt **nicht überall**: Am Zierschild überlappen die Bereiche
+  vollständig (gemeldet ab 2,0 Grad, wackelig bis 18,3). Wer sie einführt, entscheidet also
+  auch, dass an solchen Körpern weniger gemeldet wird.
+
+  Abnahme: Entscheidung über den Mindestbogen; danach die Verrundungen ebenso eingegrenzt wie
+  die Kegel — die Kippstelle ist bekannt (`_cylinder_contour`, `hull.geom_type`) —, und
+  entweder die Erkennung gegen starre Bewegungen abgesichert oder die Grenze der Zusage
+  dokumentiert. Ein Test, der einen Korpuskörper verschoben und gedreht einliest und
+  dieselbe Merkmalsmenge verlangt, steht seit dem 22.09.2026 in
+  `tests/test_fit_stability.py` — **er ist heute grün und bleibt stumpf**, solange kein
+  eingecheckter Körper den Fall trägt: Alle 34 Korpuskörper sind stabil, weil sie analytisch
+  gebaut sind. Zwei Versuche, einen wackelnden zu konstruieren (ein Feld gefaster Sechsecke,
+  ein Feld verrundeter Bohrungsmündungen, beide auch durch eine STL geschickt), sind
+  gescheitert: Der Effekt ist statistisch und braucht tausende Flecken an der Kippe.
+
+  **Entschieden und gebaut am 23.09.2026** (erkennung B13–B16, `3fa7d719`):
+  Unter `MIN_ROUND_ARC` = 5 Grad ist eine Rundform eine Kante, am Netz wie am
+  exakten Kern (dort der native Umfang). Kosten: `drill-holder.3mf` vier von 26
+  Verrundungen (alle 4,2 Grad), `garden-hose-holder.3mf` 67 von 293 (flache
+  Streifen mit 1,6 bis 4,9 Grad) — teurer als geschätzt. Die Kippstelle der
+  Verrundungen lag nicht an `hull.geom_type`, sondern an der Vereinfachung der
+  Kontur (Douglas-Peucker hielt den Ringanfang fest, und der folgt der Lage) und
+  an der Folge der Zusammenlegung; die Erkennung fragt ihre Flecken jetzt nach
+  Größe statt nach Koordinaten. Lageprobe an 101 Körpern mit festen Ständen:
+  vorher 27 lageabhängig (verschoben 1, 90° um Z 5, 37° um (1,2,3) 24), jetzt 17
+  (0, 2, 17); umgekehrte Dreiecksfolge 101 von 101 gleich. Die Aussage oben, die
+  Kippstelle sei bekannt (`_cylinder_contour`, `hull.geom_type`), ist damit
+  berichtigt. Ob die übrigen Kippen weiter eingegrenzt werden oder das Handbuch
+  die Grenze der Zusage „drehfest“ nennt, entscheidet Robert.
+
+  **Nachtrag 28.09.2026 (Release 0.5.1, Review von `merkmale-an-kopien`):** Seit starr
+  bewegte Körper die Erkennung ihres Ursprungs erben, erkennt eine frische Erkennung in
+  gedrehter Lage an 9 von 30 Korpusmodellen anderes als die übertragene. Ein Projekt aus
+  0.5.0, dessen Folgeschritt nach dem Ausrichten auf ein nur so erkanntes Merkmal zeigt,
+  hält deshalb mit Befund an diesem Schritt an
+  (`konzepte/nachweise-release-0.5.1/reports/review-kopien.md`).
+  Registerabgleich 02.10.: Die Registerzelle nennt fünf Kippen, die am Punkt nirgends stehen — Zelle und Punkt angleichen.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Gebaut: flächengewichtete Normalen
+  beider Float32-Facettenfamilien, `_circular_rim_points` (Kreisrand aus echten Ecken),
+  `_fits_in_the_body` aus der Querprojektion, `_area_and_reach` aus echten Eckabständen, lokaler
+  `_cone_plan`; passen Zylinder und Kegel, entscheidet der kleinere Formfehler. Keine Schwelle
+  gelockert, 345, 360, 409 und 420 Fachfälle grün. Kumiko in vier Lagen 7 329 Merkmale mit sechs
+  Kegeln, bei Maßstab 2 jetzt ebenfalls sechs; Organizer, Bohrerhalter, Schmierwerkzeug, erster
+  Druck und Countercleaner in vier Lagen gleich. Offen: Gartenschlauchhalter 229/73 → 231/72 (Z90)
+  und 232/73, zwei Kegelgruppen enden nach 98–100 Auswertungen verschieden; `cone_seed_probe.py` ist
+  nicht übernommen. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md` (RM-210).
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-erkennung-lage`,
+zusammengeführt in `bf58a19a1`):** Schöpft ein Kegellauf vom Normalenstart
+sein Budget aus, rechnet ein zweiter von der Quadrik der Stützpunkte
+(`features._quadric_cone_start`, `_ConePlan.seed`, `_cone_from_plan`); der
+Stapel gibt beiden Läufen sein sicheres Nein (`fit_cone_seed` in
+`_screened_fits`). Am Gartenschlauchhalter standen die fünf Teilstücke der
+zwei Kegelgruppen mit dem Normalenstart bei 58 bis 100 Auswertungen; vom
+Quadrikstart kommen sie in 5 bis 40 an, in allen vier Lagen mit demselben
+Formfehler — vorher fehlten 4 von 15 Lagefällen (`garden-leaf-base.txt`),
+jetzt keiner (`garden-leaf-final.txt`). Als einziger Start änderte die Quadrik
+elf von 193 Korpusdateien, darunter zehn gleiche Kegel einer Minigolfbahn, die
+nur vom Normalenstart ankommen; deshalb nur nach ausgeschöpftem Budget, und wo
+der erste Lauf ankommt, bleibt er Bit für Bit. Lageprobe (verschoben, 90° um
+Z, 37° um (1,2,3)) über 191 Körper: vorher 11 Körper mit 17 lageabhängigen
+Bewegungen, nachher dieselben 11 mit 15, kein neuer. Die verbleibende Grenze —
+am Gartenschlauchhalter fehlt bei 90° um Z weiter ein Kegel aus 92 Dreiecken,
+bei dem beide Starts am Budget enden, wie schon vorher — nennt jetzt das
+Handbuch („Dieselbe Form in anderer Lage“, `app/core/manual.py`, Seite
+`features`, übersetzt in alle fünf Kataloge); erzeugt wird die Seite beim
+Release mit `tools/make_manual.py`. Kosten lastunabhängig gezählt:
+Löserauswertungen am Gartenschlauchhalter +8,7 %, Kumiko +3,9 %,
+Meshy-Murmelbrett +1,3 %. Tests:
+`tests/test_fit_stability.py::test_a_shallow_cone_strip_is_found_wherever_it_lies`
+(ohne Quadrikstart in keiner Lage gefunden, die Gegenprobe steht im Test) und
+die Stapelproben in `tests/test_refine.py`. Commit `1ff8caaf5`; Merkmalscache
+43. Belege unter `F:\solidon-review-reports\claude-2026-10-04\erkennung-lage\`
+(`lage-compare.txt`, `lage-final.json`, `lage-base.json`, `garden-leaf-*.txt`,
+`seed-variants.txt`, `cone92-starts.txt`, `new-cones.txt`, `time-meshy.txt`).
+
+Fensterprobe beim Release unter RM-213: `garden-hose-holder.3mf` öffnen (77
+Kegel, 217 Verrundungen), dieselbe Datei außerhalb von Solidon um 90° um Z
+gedreht als STL einlesen (76 Kegel, beide großen Kegelgruppen als Kegel), und
+im Handbuch steht „Dieselbe Form in anderer Lage“ vor „Das Auswahlfenster“, in
+allen sechs Sprachen.
+
+Changelog: **ja** — die Lageabhängigkeit der Kegelläufe am Budget besteht seit
+`6c3b1e5c6` (v0.5.0 und v0.5.1); im Abschnitt 0.5.2 mit dem vorhandenen Punkt
+zur lagefesten Erkennung zusammengeführt.
+
+## RM-228: Lüfterwerte bleiben beim Herstellerprofil, auch in Cura (04.10.2026)
+
+<a id="rm-228-lüfterwerte-bleiben-beim-herstellerprofil-auch-in-cura-04102026"></a>
+<a id="rm-228"></a>
+
+**RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller.**
+  Aus Roberts Befund „Modelllüfter immer 100 %" (Bericht luefter, 23.09.2026):
+  Die Kurve aus Mindest- und Höchstwert mit Schichtzeitschwelle ist gebaut, alte
+  Projekte lesen den gespeicherten Wert als Höchstwert und bekommen Mindestwert
+  und Schwelle aus dem Materialprofil (luefter, `6a53f0a9`). Offen bleibt:
+  Solidons PLA-Vorgabe 50…100 % folgt Elegoos Profil für den CC2, während Orca
+  Generic PLA und PrusaResearch fest 100 % fahren — die Materialprofile sind
+  druckerunabhängig, und ob die Vorgabe so bleibt, entscheidet Robert; nicht in
+  Solidon und damit beim Herstellerprofil bleiben Überhangschwelle,
+  Lüfterhochlauf, Innenbrücken-, Stützschnittstellen- und Bügellüfter, der
+  **Hilfslüfter des Centauri** (`additional_cooling_fan_speed`, im Lauf
+  `M106 P2 S0`) und der Kammerlüfter aus Elegoos Filament-Startcode;
+  PETG-Brückenlüfter 100 % gegen Elegoos 90 % meldet `slicer.filament_differs`.
+  Daneben (formops): Eine deklarierte, aber unbemalte Spule geht aus älteren
+  Projekten über `threemf.assembly_slots` weiter als Filament in die Baugruppe;
+  neue Projekte erzeugen keine mehr. Weg: `merge_slots` nimmt nur benutzte Slots
+  (`tools_in_use` weiß es); je Lüfterschlüssel entscheiden, ob Solidon ihn
+  schreibt, und die Gegenprobe darauf ansetzen. Abnahme: am CC2 und an einem
+  Prusa je ein Lauf, Lüfterwerte im G-Code wie im Dialog, keine unbemalte Spule
+  in der Übergabe.
+
+  **Ergänzung Durchsicht v0.5.1 (26.09.2026, druck):** Curas
+  `cool_min_layer_time_fan_speed_max = 80` s aus der PLA-Kurve lässt Cura jede erste
+  Schicht unter 80 s hochkühlen (Okarina 75 %, Würfel 92 % am Ender-3 V3 mit
+  Herstellertempo); die Pause wird geschrieben und überstimmt, Curas Vorgabe ist 10 s.
+  Entscheidung: für Cura die Schwelle der Kurve anders abbilden, oder die Warnung als
+  erwartbar stehen lassen. Nachgemessen am CC2 (ElegooSlicer, Okarina):
+  `additional_cooling_fan_speed = 0` → `M106 P2 S0` ist auch Elegoos Wert für PLA am
+  CC2 (Orca-Bestand `Generic PLA @Elegoo Centauri`, ElegooSlicer `ECC2/*`: nur PLA-CF
+  setzt den Hilfslüfter) — kein Fehler Solidons.
+
+  **Stand 03.10.2026 — Spulenteil umgesetzt (`e06d57cef`):** `merge_slots` berücksichtigt nur
+  Filamente mit tatsächlich benutzten Flächen. Fehlende Deklarationen und
+  notwendige Werkzeuglücken mehrerer Platten bleiben erhalten. Alte positionale
+  Filamentprofile werden vor dem Filtern an die vollständige ursprüngliche
+  Reihenfolge gebunden; danach folgt die Zuordnung der Filamentidentität durch
+  Plattenwahl, neue Profilwahl, Speichern, Öffnen, Löschen und Undo. Der Kern,
+  die Session und die sichtbaren Druckdialogwege verwenden denselben Anschluss.
+  Auch die Verbrauchsvorbereitung bindet alte Profilplätze vor dem Filtern.
+  Zwei neue Gegenfälle zeigten vorher vertauschte Materialprofile; Ausgabe und
+  Verbrauch stimmen jetzt bei 231/243 °C, 1,2/1,3 g/cm³ und 2,85/1,75 mm überein.
+  Echte Mehrplattenlücken bleiben erhalten, ein gespeicherter alter
+  Werkzeug-Snapshot liest seine frühere Druckdatei unverändert zurück.
+  Ohne frühe Bindung sind neun Anschlussgegenproben rot, weil Blau das rote
+  Temperaturprofil erhielte. 1.164 gezielte Kernfälle und ein zusätzlicher
+  Legacy-Rundlauf bestanden. Echte Wedge-Lock-Basis: Elegoo und Prusa erhalten
+  nur die benutzte Spule, Dreiecke und Farben bleiben erhalten. Die kombinierte
+  Wiederholung mit RM-252 bestätigt identische 1.144 Koordinaten, 2.292
+  Dreiecke und Lüfterwerte der benutzten Spule: Elegoo 791 statt 792 s,
+  4,73 g; Prusa unverändert 1.128 s und 4,68 g, beide 60 Schichten.
+  Messwerte und genaue Commits stehen im Bericht B und in
+  `F:\solidon-review-reports\B-slicer-rest\rm228\bericht.md`.
+  Ursache `67a5a3f014` liegt in v0.4.0 bis v0.5.1; ein Kundenpunkt je Sprache.
+  Die fünf alten `chufang.3mf`-Meldungen aus RM-312 betreffen tatsächlich
+  benutzte Filamente und gehören nicht zu diesem Altspulenfehler. Die oben
+  beschriebenen Lüfterentscheidungen bleiben offen; RM-228 wird deshalb
+  nicht archiviert. Fenster-, Renderer- und Leistungsläufe bleiben beim Release.
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-slicer-reste`,
+zusammengeführt in `1d7a60267`):** Der Spulenteil war am 03.10. erledigt
+(`e06d57cef`). Offen waren die Lüfterentscheidungen, entschieden je
+Lüfterschlüssel: Orca-Familie und PrusaSlicer schrieben schon nichts über das
+Herstellerprofil, Cura dagegen Solidons ganze Materialkurve mit 80 s
+Schichtzeitschwelle. `manufacturer.cura_fan_curve` legt bei Cura
+`cooling.minimum_fan_speed` und `cooling.fan_below_layer_time` aus der
+Definitionskette in die Grundlage (fdmprinter 10 s, eine Definition mit
+eigenem Zahlwert gilt); Dialog, Konsole und Spule (`handover._resolve_slot`)
+sehen dieselben Werte, das Fensterprofil nennt beide nur als eigene Wahl
+(`_without_curas_own_fan_curve`). Das obere Ende bleibt der Materialwert;
+Solidons PLA-Vorgabe 50…100 % bleibt damit nur, wo kein Herstellerwert gilt.
+Tests: neu `tests/test_cura_fan_curve.py`, vor dem Fix 6 rot und 3 grün,
+danach grün (Gegenprobe ohne Fix wieder 6 rot), mit der Cura-Bewegung aus
+RM-465 heute 10 Fälle. Abnahme an echten Läufen mit der Okarina:
+ElegooSlicer/CC2 43 von 43 Lüfterschlüsseln gleich denen des Herstellerprofils
+allein, Lüfterspur ab Schicht 1 identisch; PrusaSlicer/MK4S 23 von 23 gleich;
+CuraEngine 5.13/Ender-3 V3 SE vorher 49 % in Schicht 1 trotz Pause
+(`gcode.fan_in_first_layers`), nachher Schicht 0 ohne Lüfter und kein Befund.
+Keine unbemalte Spule in der Übergabe (Spulenteil). Commits `da95dd3ea`,
+`21ea8b187`. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\slicer-reste\` (Ordner `rm228\`:
+`compare-elegoo-before.json`, `maker\maker_only.json`,
+`compare-prusa-before.json`, `before\cura-okarina\`, `after\cura-okarina\`,
+`after\cura-wuerfel\`).
+
+Fensterprobe beim Release unter RM-213: Druckdialog mit Ender-3 V3 SE, Cura
+und PLA — „Lüfter ab Schichtzeit“ zeigt 10 s, die minimale Lüfterleistung den
+Wert des Druckers; nach *Im Slicer öffnen* keine eigene Überschreibung dieser
+beiden Werte in Cura, eine eigene Wahl steht dort.
+
+Changelog: **ja** — die Kurve mit Schichtzeitschwelle kam mit `6a53f0a9`
+(v0.5.0 und v0.5.1), Cura bekommt die Werte seit `f4f6e639d` (ab v0.1.1).
+
+## RM-289: Eigene Plattenwahl bleibt neben Vorschlägen je Teil, die Ersten Schritte frieren nicht ein, Feldtabelle im Kern (04.10.2026)
+
+<a id="rm-289-eigene-plattenwahl-bleibt-neben-vorschlägen-je-teil-die-ersten-schritte-frieren-nicht-ein-feldtabelle-im-kern-04102026"></a>
+<a id="rm-289"></a>
+
+**RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
+  `3018613e6`, `konzepte/nachweise-release-0.5.1/reports/review-gesamt-dd95985e5.md`; B1–B4 gehören
+  zum Paket und werden vor dem Tag behoben). (B6) Nach dem Übernehmen zeigt der Druckdialog
+  einen Wert je Teil als Wert der Platte (`print_settings_dialog.py`). (B7) `plate_paths`
+  und `for_part` fragen Volumenstromdeckel, die der Dialog für Orca und Prusa verwirft
+  (`advise.py`). (B8) `fit_kinds_for` zählt ausgeschaltete Passungsschritte mit
+  (`fits.py`). (B9) Der Rat je Teil schneidet einen Körper, und die Stützsperre schneidet
+  ihn noch einmal; `result` wird nie übergeben, der Dateiexport hat keinen Abbruch
+  (`writer.py`). (B10) *Fertig* in den Ersten Schritten hält den Oberflächen-Thread bis zu
+  zehn Sekunden (`first_run.py`). (B11) Zwei Stellen entscheiden, ob eine gemerkte
+  Maschine noch gilt (`print_settings_dialog.py`). (B12) `SCARF_MIN_LOOP` ist eine
+  abgeschriebene Ableitung (`advise.py`). (B13) Test und Docstring für `flavour=None`, den
+  kein Aufrufer übergibt. Dazu die vollständige Lösung zu B2: der Plattenwert der eigenen
+  Wahl neben dem übernommenen Wert je Teil braucht ein Feld im Format. Abnahme: je Befund
+  behoben oder mit Grund verworfen.
+
+  **Nachtrag 28.09.2026 (Review des Nachtrags `211789878`):** (N3) `writer._same_value`
+  ist ein zweites „derselbe Einstellungswert“ neben `print_settings.same_value`, mit
+  `EPS_DISPLAY` statt `EPS_SETTING` und ohne dessen Bool-Abfrage (`True` gleich `1.0`);
+  heute unschädlich, zusammenlegen. (N4) Die Kommandozeile nennt bei Einstellungen je Teil
+  weder Teil noch Einstellung: `print_findings` bündelt nach Satz; Feldnamen, Einheiten und
+  Wahlbezeichnungen liegen im Qt-Dialog (`print_settings_dialog.FIELDS`,
+  `labels.choice_label`), und die Kommandozeile lädt kein Qt. Weg: die Feldtabelle in den
+  Kern, Dialog und Kommandozeile lesen sie. (N8) Im seltenen Fall von B2 (ein übernommener
+  Vorschlag, den kein Teil verlangt) wird jeder Körper einmal je Platte befragt statt
+  einmal (`writer._served_elsewhere`). (N9) Der Docstring von `orientation.shape_key`
+  nennt einen Mikrometer, gerundet wird auf einen Nanometer. N6 (Dateiexport einer
+  Auswahl ohne den ganzen Auftrag) ist behoben (`effaef006`).
+
+  **Teilstand 03.10.2026 — B7, B12, N3 und N9:** Reine Volumenstromgründe
+  werden für Slicer mit eigenem Deckel vor dem Zusammenführen der Vorschläge
+  ausgelassen. Passungs- und TPU-Gründe bleiben erhalten; der Rat stimmt in
+  Druckdialog, Plattenaufteilung und Teilübergabe überein. Echte Außenbahnen
+  zweier 40-mm-Teile: Orca nachher Passung 30/Klotz 162,364883 mm/s statt
+  30/30; 11,999970 mm³/s bleiben unter 12. Prusa 29,999967/169,999783 statt
+  zweimal 29,999967; 13,840695 mm³/s bleiben unter 15. Cura bleibt im
+  absichtlich begrenzten Kontrollfall bei 17/17. Alle sechs Vorher-/Nachherläufe
+  liefern Druckdateien. 18 rote Beratungsgegenproben vor dem Fix; danach 30
+  neue Fälle und insgesamt 974 gezielte Kernfälle grün, vier übersprungen,
+  288 Releasefälle abgewählt. Unabhängige Folgenprüfung bestätigt sieben
+  Programmmarken mit Passungs-/TPU-Gründen sowie positive, fehlende, null und
+  unlesbare native Grenzwerte, eigene Wahl und Bool/Zahl-Vergleich.
+  B12 leitet den Mindestumfang aus der gemeinsamen Schrägnahtlänge ab;
+  die Werte bleiben 20/40 mm. N3 verwendet die gemeinsame Einstellungspräzision:
+  Eine übernommene Bahnbreitenänderung um 0,005 mm bleibt erhalten. N9 korrigiert
+  nur die Einheitenangabe auf Nanometer. B8 ist bereits durch `094b2637b`
+  abgesichert, N6 durch `effaef006`. Kundenpunkte für B7 und N3: Ursachen
+  `9b58af5ef`/`2cf02ad2d` und `176d961c9` liegen in v0.5.1. Kein Kundeneintrag
+  für die unveränderten Zahlen von B12 oder den Docstring N9. Der Widerspruch
+  zum anfänglichen Prusa-Fähigkeitsbefund wird unter RM-317 durch große und
+  kleine Konturen aufgelöst; ohne diesen Rollenanschluss keine gemeinsame
+  Freigabe. Belege: `F:\solidon-review-reports\B-slicer-rest\rm289\bericht.md`
+  und `review.md`. B2/B6, B10 und N4 bleiben offen; RM-289 wird
+  nicht archiviert. Genaue Commits und gemeinsames Tor stehen im Bericht B.
+
+  **B13 ebenfalls geklärt:** Der Druckdialog ohne gewähltes Programm startet
+  seinen tatsächlichen Beratungsarbeiter mit der Orca-Familie, genau wie die
+  anschließend geschriebene 3MF. Automatische Haftung bleibt dabei automatisch;
+  ein Skirt am schlanken Körper führt weiter zum Brimvorschlag. Zwei neue
+  Anschlussfälle rufen den Dialogstart ohne Fenster auf, rechnen den Arbeiter
+  und lesen Projekt- und Objektwerte der geschriebenen 3MF. Beide bestehen;
+  mit entfernter Familienbindung sind beide rot. Die vorsichtige Kernabfrage
+  ohne Familie bleibt als eigener Grenzfall bestehen, ihre bisher irreführende
+  Beschreibung ist berichtigt. Drei gezielte Fälle grün, 625 abgewählt,
+  Exit 0; Gegenprobe zwei rot. Keine Produktverhaltensänderung und deshalb
+  kein Changelog-Punkt. Beleg: `rm289/b13-connection.log` und
+  `b13-counter.log` im B-Berichtsordner.
+
+  **B9 und N8 umgesetzt:** Die Exportvorbereitung behält je unveränderlichem
+  Netz höchstens einen Schnitt pro Detailstufe und den letzten Rat je
+  Objektkennung. Raster, Stützschwelle, Brückenbreite, tatsächliche Profile,
+  Passungen und übernommene Werte müssen passen; Geometrieänderungen verwerfen
+  die Merker. Ein Exportschnitt ersetzt keinen vollständigen Prüfbericht.
+  Vorprüfung, Rat und Stützsperre beachten Abbruch auch bei warmem Cache.
+  Erst das Schreiben der fertigen Nutzlast sperrt den Abbruch.
+
+  Kalte Matrix mit drei Klötzen, Pilz und Waschschüssel über Orca, Prusa und
+  Cura: **47 → 21 Schnitte**. Alle 30 Ausgabedateien behalten
+  Geometrie, Teilwerte, Sperrkörper und Beilagen; Befunde bleiben gleich.
+  Der finale Familienwechsel benötigt insgesamt sieben Schnitte und beim
+  Wechsel selbst keinen zusätzlichen. Je 45 von 45 Bedingungen bestanden.
+  Vier echte Abbruchzeitpunkte, kalt und warm, erzeugen keine Exportdatei;
+  vorhandene Zieldateien bleiben bytegleich. Gegenprobe: acht rot; finale
+  Auswahl 273 grün. Sechs Rasterwahlen halten höchstens zwei statt zwölf
+  Analysen; drei Materialien auf gemeinsamem Netz verlangen drei statt acht
+  Ratsabfragen. Unabhängige Prüfung ohne offenen Fund.
+
+  Ursachen `6a066c2bc`, `2cf02ad2d`, `22a2a20ad` und `eeadc09b1` liegen in
+  v0.5.1; ein Kundenpunkt in allen sechs Sprachen. Belege samt Quellhashes
+  unter `F:\solidon-review-reports\B-slicer-rest\rm289\n8-b9`.
+  B2/B6, B10 und N4 bleiben separat; RM-289 bleibt im Register.
+
+  **B11 — Profile und Druckplatte:** Gemerkte Maschinenprofile und die erste
+  Plattenwahl verwenden dieselbe Prüfung auf Drucker und Programmpfad. Eine
+  eigene laufende Plattenwahl bleibt nur bei erneuter Suche im selben Kontext
+  erhalten. Drucker-/Slicerwechsel oder fehlendes Programm leeren die fremde
+  Wahl. Alte leere Herkunftsmarker gelten beim ersten gültigen Programm;
+  Programm A → fehlend → Programm B kann sie nicht erneut übernehmen.
+  Gegenprobe drei rot/eine grün, zusätzliche Wiederkehrgegenprobe rot; danach
+  26 gezielte und 116 breitere Kernfälle grün, drei übersprungen. Unabhängiges
+  Review ohne Befund. Ursache `aed31c787` liegt in v0.5.1; ein Kundenpunkt je
+  Sprache. Keine Fensterabnahme behauptet. Belege und Commit im Bericht B
+  und unter `F:\solidon-review-reports\B-slicer-rest\rm289-b11`.
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-slicer-reste`,
+zusammengeführt in `1d7a60267`):** Die übrigen Befunde B2, B6, B10 und N4. B2:
+`PrintSettings.plate_choices` hält die eigene Wahl, solange der Pfad
+übernommen ist; `split_for_parts` gibt sie der Platte
+(`print_settings.for_the_plate`), *Zurücksetzen* kehrt zu ihr zurück
+(`print_settings.reset`); sie reist als `plate_choices` in der Projektdatei,
+ein älteres Programm übergeht den Schlüssel (kein Formatsprung). B6: Der Rat
+fragt mit derselben Frage wie der Export, welchen Teilen ein übernommener
+Vorschlag gilt (`_AdviceWorker._accepted_targets`); das Feld zeigt „Nur für
+Turm. Die übrigen Teile drucken mit Keine (Ihre Einstellung).“ oder „Gilt
+allen Teilen“. B10: `first_run.py` merkt sich den Klick auf einen der drei schließenden Knöpfe
+(*Speichern und starten*, *Eigenes Modell öffnen …*, *Filamentlager öffnen …*), sperrt sie und führt ihn nach Antwort oder Scheitern der
+Suche aus; das Warten mit `processEvents` ist weg. N4:
+`app/core/knowledge/print_fields.py` trägt `FIELDS`, `setting_title`,
+`shown_value`; Dialog, Bericht und Kommandozeile (`print_findings` bündelt
+nach Satz und Einstellung und nennt die Teile) lesen dieselbe Tabelle. Tests:
+neu `tests/test_plate_choice.py` 10 (Slicerdatei: Platte ohne Haftung, Turm
+mit Brim als Objektwert; vorher bekam die Platte den Skirt der Grundlage),
+drei B6-Fälle in `tests/test_print_settings_ui.py`, B10 in
+`tests/test_first_run_setup.py` (ohne Fix rot nach 15,5 s, mit Fix grün in 1,0
+s), N4 zwei Fälle in `tests/test_cli.py`. Damit ist jeder Befund aus B1–B13
+und N3–N9 behoben oder mit Grund verworfen. Commits `b9e807fdb`, `9b5195be4`,
+`dc2f67e8d`, `51c19d2f0`, `4a9286f15`; Entwicklungstor 23 104 bestanden, ein
+Rot in `4a9286f15` behoben. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\slicer-reste\`.
+
+Fensterprobe beim Release unter RM-213: Erste Schritte mit langsam
+antwortendem Slicer, *Speichern und starten* während der Suche — Fenster
+bedienbar, Knöpfe gesperrt, danach schließt der Dialog mit dem gefundenen Drucker; Druckdialog mit Haftung „Keine“, Brim nur für den Turm übernommen,
+Feld „Nur für Turm …“, *Zurücksetzen* führt zu „Keine“, im Slicer Platte ohne
+Skirt und Turm mit Brim; Kommandozeile `export` mit zwei Teilen nennt
+Teilnamen und Wert.
+
+Changelog: **ja**, drei Punkte — B2/B6 aus `176d961c9` und B10 aus `75bdc1914`
+(beide v0.5.1), N4: `print_findings` bündelte schon in v0.5.1 ohne Teil und
+Einstellung.
+
+## RM-318: Creality legt den anliegenden Brim über eine je Teil gesenkte Fußkorrektur an (04.10.2026)
+
+<a id="rm-318-creality-legt-den-anliegenden-brim-über-eine-je-teil-gesenkte-fußkorrektur-an-04102026"></a>
+<a id="rm-318"></a>
+
+**RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand.**
+  Dieselben Fahnenstangen (Ø 7,7 mm, 122 mm hoch, 46,5 mm² Fuß) rissen aus einem Brim, der
+  fest lag: Elegoos Brim hält 0,1 mm Abstand zum Teil, und so trägt er den Fuß nicht mit.
+  Solidon hat keinen Pfad für diesen Abstand (`AdhesionSettings`). Weg: Pfad für den
+  Brim-Abstand mit den drei Slicerschlüsseln, Vorschlag 0 am schlanken Teil auf kleinem Fuß
+  neben `_calm_walls`. Dazu legte *Auf dem Bett anordnen* die Stangen an den äußersten Rand
+  (x 241–251 von 256); hohe, schlanke Körper gehören in die Mitte (`scene/placement.py`, am
+  30.09. in fremder Arbeit). Abnahme: die Stangenplatte geht mit Solidons Übergabe ohne
+  Handarbeit im Slicer, Brim ohne Abstand an den Stangen, Stangen nicht am Rand.
+  Registerabgleich 02.10.: Die genannte Datei `scene/placement.py` ist falsch — angeordnet wird in `app/core/geom/prepare.py` (`arrange_on_bed`).
+
+  **Teilstand 03.10.2026:** `adhesion.brim_gap` bezeichnet den Abstand zum
+  tatsächlichen Fuß. Der normale Druckdialog, Rat, Konsolenprozess und
+  Projekt-/Objektwerte verwenden denselben Pfad. Hersteller-Fußkorrekturen
+  bleiben unverändert; die Orca-Familie rechnet ihren anderen Bezug zurück.
+  Orcas `brim_use_efc_outline` verhindert eine doppelte Korrektur. Unbekannter
+  Bezug hält mit *Druckeinstellungen öffnen* an. Inaktive gespeicherte Werte
+  bei Keine, Skirt und Raft sperren nichts.
+
+  Der originale Minigolfsatz bleibt bei 31 Teilen und sieben Platten;
+  mindestens 5 mm Hüllabstand. Die beiden Stangen rücken von 118,062/83,374 mm
+  Abstand zur Mitte auf 73,911/73,913 mm. Nicht schlanke Teile bleiben exakt
+  gleich. Migration 42→43 erhält alte Anordnungen samt Undo mit
+  `centre_slender=False`; neue Schritte verwenden die freie bessere Mittellage.
+  Bohrungsbezüge bleiben an Netz und exaktem Körper nach der Bewegung und
+  nachfolgendem Vergrößern auf 4 mm erhalten.
+
+  Sechs echte Slicerläufe erzeugen Kontakt in den Bahnen: Elegoo
+  0,4764/0,4768 mm Mittellinienabstand bei 0,50 mm Linienbreite, Orca
+  0,7688/0,7690 bei 0,80, Bambu 0,4707/0,4728 bei 0,50, Prusa
+  0,4754/0,4767 bei 0,50, SuperSlicer 0,3970/0,3972 bei 0,42 und Cura
+  0,4117/0,4138 bei 0,42. Fußgeometrie und breites Kontrollteil bleiben gleich.
+  Dies sind G-Code-Messungen, kein physischer Drucknachweis.
+
+  **Offen mit zwei Gegenproben:** Creality ignoriert −0,15 mm als Objektwert;
+  plattenweit lehnt es denselben Wert mit Exit −18 und Bereich [0,2] ab.
+  Bei unveränderter Fußkorrektur 0,15 mm bleibt der Bahnabstand 0,6187/0,6193
+  statt Kontakt bei 0,50 mm Linienbreite. Solidon hält die unerfüllbare Wahl
+  mit Vorschlag zum Prozessprofil oder Zurücksetzen des Abstands an. Nächster
+  Schritt: eine native Wahl für den korrigierten Fuß belegen oder die Grenze
+  mit einer künftigen Creality-Version erneut messen. Die Fußkorrektur aller
+  Teile auszuschalten ist keine Lösung.
+
+  Gegenproben: fehlender Pfad/Anordnung/Migration rot, Fußbezug 13 rot/3 grün,
+  Programmgrenzen 4 rot/1 grün, inaktive Altwahl 3 rot. Danach 1.725 bestanden,
+  fünf übersprungen und 63 abgewählt; 37 zusätzliche Anschlussfälle grün.
+  Unabhängiges Schlussreview ohne verbleibenden P1/P2. Der Fähigkeitswächter
+  aus RM-317 umfasst jetzt 17 Pfade. Zentrales Tor und Commit im Bericht B;
+  alle nativen Dateien und Quellhashes unter
+  `F:\solidon-review-reports\B-slicer-rest\rm318`. Ursprünge
+  `f4f6e639d2` und `0214edd106` sind in v0.5.1: ein Kundenpunkt je Sprache.
+  Wegen der Creality-Grenze bleibt RM-318 im Register.
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-slicer-reste`,
+zusammengeführt in `1d7a60267`):** Offen war allein Creality, das den nötigen
+Abstand bei aktiver Fußkorrektur nicht darstellte und deshalb anhielt. Aus dem
+Creality-Quelltext (Brim.cpp: Erstschichtgruppen vor der Fußkorrektur,
+`brim_object_gap` 0…2, kein `brim_use_efc_outline`) und `full_print_config`:
+Die Fußkorrektur ist ein Objektwert. `manufacturer.part_brim_gap` senkt sie je
+Teil genau auf den gewünschten Abstand und schreibt nativ null; der Export
+meldet es mit `export.brim_foot_lowered`. Eine eigene Wahl für die ganze
+Platte hält wie bisher an — die Korrektur aller Teile zu senken wäre keine
+Antwort auf einen Teilwunsch. Tests: `tests/test_manufacturer.py` 35 grün,
+ohne Fix
+`test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice[False-creality]`
+rot. Echter Lauf Creality Print 7.2/K1 mit beiden Originalstangen und einem
+breiten Kontrollkörper: Brim-Mittellinie 0,4676/0,4691 mm bei 0,50 mm Bahn
+(vorher 0,6187/0,6193), Kontrollkörper unverändert; ElegooSlicer als
+Gegenstück 0,476/0,477 mm. Damit geht die Stangenplatte mit allen sieben
+Slicern ohne Handarbeit, Brim ohne Abstand an den Stangen, Stangen nicht am
+Rand. Commit `d95edde75`. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\slicer-reste\` (Ordner `rm318\`:
+`brim-measurements.json`, `after\creality\`, `after\elegoo\`).
+
+Fensterprobe beim Release unter RM-213: K1 mit Creality Print, zwei schlanke
+Stangen und eine Platte, Vorschlag „Brim anliegend“ für die Stangen übernehmen
+und exportieren — der Bericht nennt die gesenkte Fußkorrektur, Creality Print
+zeigt sie nur an den Stangen, Schicht 1: Brim liegt an.
+
+Changelog: **nein** für diesen Teil — der Halt kam mit `1c30ef2b5`, in keinem
+Tag. Der Brim-Abstand und die Mittellage stehen schon im Abschnitt 0.5.2.
+
+## RM-465: Die Zeitgegenprobe rechnet aus der Schichtanalyse ab der ersten Schicht (04.10.2026)
+
+<a id="rm-465-die-zeitgegenprobe-rechnet-aus-der-schichtanalyse-ab-der-ersten-schicht-04102026"></a>
+<a id="rm-465"></a>
+
+**RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an.**
+  G-Code-Gegenprüfung 02.10.2026 (§28.2). Die interne Schätzung (`slice/estimate.py`, Herkunft
+  `internal`) kennt keine Mindestschichtzeit: Am 20-mm-Würfel ist jede Schicht kürzer als
+  `slow_down_layer_time`; mit der Untergrenze „Schichtzahl × Mindestschichtzeit“ sinkt der Median
+  der Abweichung (ElegooSlicer +74 % → +31 %, Creality +78 % → +10 %, PrusaSlicer +75 % → +21 %,
+  SuperSlicer +41 % → +12 %). Rest: Startcode (Bambu P1S Kalibrierung 6–7 min) und Beschleunigung.
+  Mehrfarbig: `colored.3mf` 9,6 g geschätzt gegen 61,7–83 g wegen Spülmenge → `gcode.deviation` bei
+  jedem Mehrfarbdruck. Die Herkunft ist sauber getrennt (Regel 14 erfüllt).
+  **Stellen:** `app/core/slice/estimate.py:199–227`, `:61` (`TRAVEL_SHARE`),
+  `app/core/slice/gcode.py:1459` (`compare`, Schwelle 15 %), Aufruf `app/ui/main_window.py:7672–7718`.
+  **Fix:** Untergrenze je Schicht aus `cooling.minimum_layer_time`; Startzeit je Drucker aus der
+  letzten Druckdatei (§28.3); Spülmenge (`total filament used for wipe tower`) getrennt ausweisen und
+  aus dem Materialvergleich nehmen.
+  **Abnahme:** Würfel und Pilz an vier Slicern ohne Fehlalarm bei Standardwerten; Mehrfarbdruck mit
+  getrennter Spülmenge. Beleg: `gcode\befunde_teil1.md` (B8), `gcode\matrix.md`.
+  Regression 02.10.2026: nein — `estimate.py` seit v0.5.0 unverändert, Abweichungen in v0.5.1 identisch.
+
+  **Stand 03.10.2026 — Materialteil umgesetzt, Zeitabnahme offen:** Der Vergleich benutzt nur das aus bekannten Druckrollen gelesene Modellmaterial und belegte Werkzeugdichten. Spülung und Reinigungsturm erscheinen getrennt; unvollständig belegte Mengen bleiben ausdrücklich unbekannt. Bedingte Firmwarezweige, Cutter-Wiederförderung, unbekannte Rollen und fehlende Materialdaten werden nicht als vollständiges Modellmaterial ausgegeben. Gesamtverbrauch und Verbrauchsbuchung behalten ihren bisherigen Weg. Die Materialgegenprobe bleibt an acht frischen einfarbigen Würfel-/Pilz-Ausgaben der vier verlangten Slicer innerhalb 15 %; bei sechs lesbaren realen Farbdateien liegen die Abweichungen zwischen 0,49 und 9,90 %. Cura ohne übergebene Filamentdaten bleibt unbekannt. Der Parser trennt ausdrücklich ausgewiesene Modellzeit von Gesamtzeit; deren Differenz ist ein Zusatzanteil, keine belegte reine Startzeit. 173 Parser-Kopietests und drei Anschlussfälle grün; vier Reviewfunde durch rote Gegenproben beziehungsweise korrigierte Texte erledigt, unabhängige Nachprüfung ohne offenen Fund. Ursprung des Summenvergleichs d2ed623c1f, enthalten in v0.5.0/v0.5.1; sechs Changelog-Punkte beschreiben ausschließlich die Materialkorrektur.
+  **Drei gemessene Zeitansätze:** Eine feste Mindestschichtzeit ignoriert das Mindestdrucktempo (SuperSlicer-Pilz: 7,03 s trotz 15 s Vorgabe). Schichtweise Wand-/Füll-/Deckflächen mit Tempogrenze erreichen fünf von acht Vorgaben; CC2 bleibt bei −33,51 % am Würfel und −28,43 % am Pilz, MK4S-Würfel bei −15,52 %. Ein Beschleunigungsband plus unabhängig angenäherter CC2-Startanteil von 110 s ergibt −14,55 %/−16,28 % und erfüllt die gemeinsame Abnahme ebenfalls nicht. Keine passende Startzeit aus der Differenz zur eigenen Schätzung abgeleitet; Warnschwelle unverändert. Der bestehende Zeitvergleich warnt weiterhin in sieben von acht Standardfällen. Nächster Schritt: belegtes Mindestdrucktempo und getrennte Erstschichttempi aus dem Herstellerprofil, unabhängig belegte Start-/Zusatzzeiten mit Drucker- und Profilidentität. Tragende Messwerte, Formeln, Modellidentitäten und Grenzen der Wiederholung stehen im Repository: [Material- und Zeitgegenprobe](konzepte/konzept-slicer-uebergabe.md#9-rm-465--material--und-zeitgegenprobe-vom-03102026).
+
+**Abschluss 04.10.2026 (Claude, Zweig `claude/rm-slicer-reste`,
+zusammengeführt in `1d7a60267`):** Der Materialteil war am 03.10. erledigt.
+Für die Zeit neu `app/core/slice/print_time.py`: Wände mit Ecktempo, Deck- und
+Bodenflächen aus Nachbarschichten, Brücken, Abbremsen bis zum
+Mindestdrucktempo, Beschleunigung, Leerfahrt, Rückzug, Z-Hub; Bewegungswerte
+aus derselben Herstellerkette (`Foundation.motion`: `orca_motion`,
+`prusa_motion`, `cura_motion`). Ohne belegtes Mindestdrucktempo gibt es keinen
+Vergleich, der Bericht sagt das (`gcode.printing_time_not_compared`).
+`GcodeMetrics.start_seconds` kommt aus `M73 P` vor der ersten Schicht,
+verglichen wird `printing_seconds`. Abnahme mit Standardwerten, Abweichung
+vorher (alte Schätzung gegen Gesamtzeit) und nachher, Würfel/Pilz: Creality
+Print/K1 −80,6/−75,6 % → −0,9/−8,2 %, ElegooSlicer/CC2 −62,9/−60,5 % →
+−6,9/−6,1 %, PrusaSlicer/MK4S −75,7/−72,2 % → −4,7/−7,7 %, SuperSlicer/MINI
+−41,3/−13,5 % → −2,2/−11,0 %; kein `gcode.deviation` mehr. Mehrfarbdruck mit
+getrennter Spülmenge seit dem Materialteil. Außerhalb der Abnahme die Okarina
+(Prusa +8,5 %, Elegoo −21,1 %, Cura −23,3 % mit Befund), Ursache Zugbeginne an
+schrägen Doppelschalen, als Grenze in `konzepte/konzept-slicer-uebergabe.md`
+§9 festgehalten. Tests: neu `tests/test_print_time.py` 15,
+`tests/test_gcode.py` vier Startfälle, Vergleichsfälle in
+`tests/test_print_settings_ui.py` und `tests/test_ui.py`. Die Schätzung läuft
+im Arbeiter der Plattenvorbereitung und folgt `cancelled` (Okarina allein 2,7
+s). Commit `11d3a2fc8`. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\slicer-reste\` (Ordner `rm465\`:
+`before-read.json`, `before-product.json`, `before\`, `extra-product.json`).
+
+Fensterprobe beim Release unter RM-213: Würfel 20 mm auf CC2 mit ElegooSlicer
+und Pilz mit PrusaSlicer/MK4S slicen — Prüfbericht zeigt „Druckzeit ab der
+ersten Schicht“ mit beiden Werten ohne Warnung; ein Drucker ohne
+Mindestdrucktempo in der Herstellerkette nennt, dass nicht verglichen wurde.
+
+Changelog: **ja** — der Zeitvergleich schlug seit der Slicer-Rückkopplung
+`d2efb2577` (ab v0.1.1) bei fast jedem Lauf an.
