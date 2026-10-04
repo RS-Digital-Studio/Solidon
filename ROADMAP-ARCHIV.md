@@ -40235,6 +40235,60 @@ Korpusausgabe. Cacheversionen: `move_feature` 13, `duplicate_feature` 12,
 Entwicklungstor am Endstand 23 582 bestanden, 122 übersprungen, Exit 0. Belege unter
 `F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
 
+**Dritter Nachtrag 04.10.2026 (Claude, Zweig `claude/kopie-schraeg`):** Zwei
+Funde an `pegboard-gs-100-v2`. (1) *Zwei Bögen eines Rings:* Die Durchbrüche
+der Mulde teilen die Kehle an ihrem Grund in zwei Bögen. Das Netz aus der 3MF
+des Herstellers las einen Ring über beide (`_merged_tori` legt Ringflecken nach
+ihrer Mitte zusammen, seit v0.2.0), der exakte Kern zwei (`_joined_tori`
+verband nur angrenzende Ringflächen, seit v0.5.0). Ein Ring ist sein Träger —
+*Versetzen*, *Verdoppeln* und *Drehen* bauen den vollen Ring aus Achse, Mitte
+und Radien —, also verbindet jetzt auch der exakte Kern Stücke mit denselben
+nativen Kennzahlen; an der STEP-Datei steht ein Ring über beide Bögen. Die
+Gegenrichtung (an beiden Kernen nur Anstoßendes) teilte im Erkennungszensus an
+acht Korpusnetzen ganze Ringe in Stücke und ist verworfen. Nach einem Schritt,
+der sie nicht berührte, hießen gleiche Merkmale am exakten Kern neu (an gs-100
+nach der wirkungslosen Kopie `torus_3`/`torus_4`, ein Bezug auf `torus_1`
+verlor sein Ziel; am Teppichclip `carpet-corner-clip.step`, zweiter Körper,
+die zwei Kegelstücke Ø 17 nach einer Bohrung Ø 2 anderswo `cone_12`/`cone_13`
+statt `cone_4`/`cone_11`, in v0.5.1 `cone_2`/`cone_5`): Zwillinge entschied nur
+die Auswertung am Netz nach der Lage ihrer Oberfläche. Jetzt stellen die
+Auswertung des exakten Körpers und jeder Neubau, der alte Merkmale neuen
+zuordnet (`_exact_features_after`, `_preserved_exact_features`,
+`_exact_rest_carried`, der Baustein am exakten Träger `_read_exactly`),
+dieselbe Frage (`matching.settled_twins`, Regel in `kern.md`). (2) *Eckkegel
+am Netzzwilling:* Die Tessellierung der STEP-Datei trug vier Dreiecke über drei
+Knoten einer geraden Kante (Fläche null, auch v0.5.1); nur sie trennten am
+Netzzwilling die Eckkegel Ø 2 von den anliegenden Fasen. Jede Boolesche — die
+wirkungslose Kopie wie eine Bohrung weit weg — löste sie über manifold3d auf,
+danach meldete die Auswertung `cone_1` und `cone_10` verwaist. Die
+Tessellierung lässt solche Dreiecke jetzt weg und vernäht die T-Kreuzung; der
+Netzzwilling liest die Eckkegel dieser Vernetzung seither vor und nach jedem
+Schritt gleich, nämlich nicht (die 3MF liest sie). Abnahme:
+`tests/test_exact_body_parity.py` — die zwei Bögen einer Rille sind an beiden
+Kernen ein Ring auf denselben Dreiecken (vorher exakt zwei); die Wandstücke
+einer geschlitzten Tasche und der Ring behalten Namen und Seiten durch eine
+Kopie in die Luft und ins Material, an beiden Kernen und Güten (vorher exakt
+`fillet_3`/`fillet_4`); der Neubau selbst gibt die Wandstücke nach Verdoppeln,
+*Bohrung ändern*, *Bohrung ändern* mit Einlauf und einer Magnettasche unter
+ihren Namen aus; `tests/test_brep_surfaces.py` — ein Ring, von einem Quader in
+zwei getrennte Körper geteilt, ist an beiden Kernen ein Ring auf denselben
+Dreiecken (der bisherige Test verlangte exakt zwei, das Netz las einen; er
+bewachte die alte Regel); `tests/test_brep.py` mit einem Würfel, dessen
+Vorderseite ein flächenloses Dreieck trägt. Gegenproben: ohne die Frage in der
+Auswertung zwei Fälle rot, im Verdoppeln zwei, in *Bohrung ändern* vier, nur
+im Einlaufweg zwei, am Baustein zwei, ohne Flächenprüfung einer. Korpus:
+Erkennung an 241 Körpern beider Stände verglichen (16 über 400 000 Dreiecken
+ausgelassen), drei anders: am exakten Kern gs-100 ein Ring über 487 statt zwei
+über 241 und 246 Dreiecke, an den Netzzwillingen der Tessellierung von gs-100
+und `Cat_3.stp` die Folgen der flächenlosen Dreiecke (gs-100 ohne die
+Eckkegel Ø 2, die er vorher nur bis zur ersten Booleschen las; je eine Fläche
+mit zwei Dreiecken mehr oder weniger); jedes eingelesene Netz (STL, OBJ, GLB,
+3MF) gleich; Kopien an gs-100, Teppichclip, pb3041, Crimper und Bohrerhalter
+unverändert.
+Cacheformat 50 und 51. Commits `b2dbf4c24`, `477f87bca`; Entwicklungstor am
+Endstand nach dem Merge von main 23 736 bestanden, 122 übersprungen, Exit 0.
+Belege unter `F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
+
 ## RM-254: Splinestücke bestätigen einander nur noch mit festgelegtem Radius (04.10.2026)
 
 <a id="rm-254-splinestücke-bestätigen-einander-nur-noch-mit-festgelegtem-radius-04102026"></a>

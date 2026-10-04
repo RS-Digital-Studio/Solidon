@@ -114,6 +114,7 @@ dans `website/version.json`.
 - Si les trajets de deux pièces, ou d'une pièce et de la tour de purge, se croisent dans le slicer, le message le dit et propose des issues.
 - Si la bordure est en automatique, Solidon prévient avant l'export quand elle peut déborder du plateau ou entrer dans une zone interdite, et propose une largeur fixe.
 - Les supports et la jupe au bord du plateau comptent dans le contrôle avant l'export, avec l'élargissement de la première couche de support indiqué par le profil du slicer.
+- Les fichiers STL exportés depuis des pièces STEP ne contiennent plus de triangles sans surface.
 
 ### Perçages, trous oblongs et découpe
 
@@ -159,6 +160,8 @@ dans `website/version.json`.
 - Un perçage fraisé qui finit entièrement dans la matière après duplication, déplacement ou répétition ne signale plus qu'il dépasse du bord.
 - Si la fraisure d'une copie dépasse d'un côté, Solidon retrouve la copie de la même façon sur les pièces STL et STEP.
 - Si vous dupliquez un perçage le long de son propre axe dans le vide, l'original garde son nom sur les pièces STL, et la copie est dite perdue comme sur les pièces STEP.
+- Une gorge ou un bourrelet coupé en deux arcs par une ouverture apparaît sur les pièces STEP comme un seul anneau dans l'arbre, comme sur les pièces STL et 3MF.
+- Les caractéristiques identiques des pièces STEP, comme deux morceaux d'une surface conique, gardent leur nom quand vous percez, dupliquez, modifiez un perçage ou insérez une pièce ailleurs.
 
 ### Congés et chanfreins
 
