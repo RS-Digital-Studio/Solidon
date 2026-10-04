@@ -77,6 +77,8 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "dialog.accept",
         # Der Haken „Maße als Parameter anlegen" in einem Dialog, der ihn anbietet
         "dialog.naming",
+        # Die Klappe „Weitere Einstellungen" im offenen Operationsdialog
+        "dialog.more",
         # Die Zahlenfelder der Bewegen-Leiste, gleich welche Rolle gewählt ist
         "transform.values",
         # Das Wertfeld der ersten Zeile unter „Parameter" — über die Reihenfolge,
@@ -308,11 +310,14 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 ),
                 "history.last",
             ),
+            # Die Lage steht im wieder geöffneten Schritt hinter der Klappe:
+            # Vorn bleibt, was man an einer Bohrung meist ändert.
             step(
                 _(
-                    "Ändern Sie *Position X* oder *Position Y* "
-                    "und klicken Sie auf *Bohrung setzen*."
+                    "Klappen Sie *Weitere Einstellungen* auf, ändern Sie *Position X* "
+                    "oder *Position Y* und klicken Sie auf *Bohrung setzen*."
                 ),
+                "dialog.more",
                 "field:x",
                 "field:y",
                 "dialog.accept",

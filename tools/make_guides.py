@@ -980,6 +980,10 @@ def story_drill_a_hole(run: GuideRun) -> None:
     dialog = run.window._op_dialog
     if dialog is None or not dialog.isVisible():
         raise SystemExit("Der Schritt „Bohrung setzen“ ging im Verlauf nicht wieder auf")
+    # Die Lage steht hinter der Klappe, wie beim Kunden: aufklappen wie er.
+    if not dialog.advanced.isChecked():
+        dialog.advanced.click()
+        run.settle(40)
     dialog._editors["x"].set_value(float(chosen["x"]) + 15.0)
     run.settle(40)
     run.capture(8)

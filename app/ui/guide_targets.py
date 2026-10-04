@@ -146,6 +146,15 @@ def _naming_box(window: MainWindow) -> QWidget:
     return naming
 
 
+def _more_flap(window: MainWindow) -> QWidget:
+    """Die Klappe *Weitere Einstellungen* im offenen Operationsdialog."""
+    dialog = window._op_dialog
+    flap = getattr(dialog, "advanced", None) if dialog is not None and dialog.isVisible() else None
+    if not isinstance(flap, QWidget) or not flap.isVisible():
+        raise MissingTargetError("dialog.more: kein offener Dialog mit weiteren Einstellungen")
+    return flap
+
+
 def _draw_button(window: MainWindow) -> QWidget:
     """*Zeichnen* in der Werkzeugleiste — ein Knopf ohne Menüeintrag gleichen Namens."""
     button = window.toolbar.widgetForAction(window._toolbar_sketch)
@@ -261,6 +270,7 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "dialog": _open_dialog,
     "dialog.accept": _accept_button,
     "dialog.naming": _naming_box,
+    "dialog.more": _more_flap,
     "transform.values": _transform_values,
     "parameters.first": _first_parameter,
     "toolbar.draw": _draw_button,

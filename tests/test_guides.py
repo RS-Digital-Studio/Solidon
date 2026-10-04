@@ -591,6 +591,7 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "dialog",
         "dialog.accept",
         "dialog.naming",
+        "dialog.more",
         "parameters.first",
         "sketch.plane",
         "report.action",
@@ -603,7 +604,14 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
             assert guide_targets.widget_for(window, name) is not None, name
         for name in ("tool:transform", "transform:rotate"):
             assert guide_targets.widget_for(window, name) is not None, name
-        for name in ("dialog", "dialog.naming", "parameters.first", "sketch.plane", *printing):
+        for name in (
+            "dialog",
+            "dialog.naming",
+            "dialog.more",
+            "parameters.first",
+            "sketch.plane",
+            *printing,
+        ):
             with pytest.raises(guide_targets.MissingTargetError):
                 guide_targets.widget_for(window, name)
         with pytest.raises(guide_targets.MissingTargetError):
