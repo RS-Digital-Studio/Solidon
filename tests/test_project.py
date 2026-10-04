@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import json
 import math
@@ -11,7 +12,7 @@ import sys
 import zipfile
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -50,6 +51,7 @@ from app.core.scene.serialise import (
 from app.core.types import (
     Action,
     ChatEntry,
+    Document,
     FeatureRef,
     Finding,
     Fit,
@@ -57,6 +59,7 @@ from app.core.types import (
     Operation,
     Origin,
     Parameter,
+    Profile,
     Report,
     Source,
     SourceOrigin,
@@ -4489,6 +4492,191 @@ def test_revision_v44_migrates_without_inventing_lineage(tmp_path: Path) -> None
         evaluate(restored.document, profile, detect_features=False).object_hashes
         == result.object_hashes
     )
+
+
+#: Was der Stand vor RM-325 (``38006b338``, Format 40) aus ``slot_tool_v40.p3d``
+#: rechnete, gemessen beim Schreiben der Datei: je Körper das Volumen in mm³ und die
+#: Langlöcher als (Richtung, Länge). Elf Klötze 60 x 100 x 60 mm, je ein Langloch
+#: Ø 6 auf 20 mm bei 30° durch die Wand +X (``obj_10`` durch -X, ``obj_11`` durch
+#: +Y) und genau ein Folgeschritt.
+SAVED_SLOT_TOOL_RESULT: Final = {
+    # Zum Langloch ziehen auf 0°: kein Langloch mehr (slot_hole.feature_lost).
+    "obj_1": (350751.9583, ()),
+    # auf 14 mm gekürzt: blieb 20 mm lang (slot_hole.feature_lost).
+    "obj_2": (353265.6924, (((0.0, 0.866, 0.5), 20.0),)),
+    "obj_3": (350267.6936, (((0.0, 0.866, 0.5), 22.0),)),
+    # Merkmal drehen um X, 45°: -15° statt +75°.
+    "obj_4": (353265.5776, (((0.0, 0.9659, -0.2588), 20.0),)),
+    "obj_5": (353265.6924, (((0.0, 0.866, 0.5), 20.0),)),
+    "obj_6": (346531.3847, (((0.0, 0.866, 0.5), 20.0), ((0.0, 0.866, 0.5), 20.0))),
+    "obj_7": (360000.0, ()),
+    # Bohrung ändern auf Ø 4: kein Langloch mehr (resize_hole.feature_lost).
+    "obj_8": (353988.0924, ()),
+    "obj_9": (346531.3847, (((0.0, 0.866, 0.5), 20.0), ((0.0, 0.866, 0.5), 20.0))),
+    # -X, Merkmal drehen um X, 45°.
+    "obj_10": (353265.6924, (((0.0, 0.2588, -0.9659), 20.0),)),
+    "obj_11": (348775.9627, (((0.2588, 0.0, -0.9659), 20.0),)),
+}
+
+
+def _slot_tool_result(document: Document, profile: Profile) -> dict[str, Any]:
+    """Volumen und Langlöcher je Körper, wie in :data:`SAVED_SLOT_TOOL_RESULT`."""
+    from app.core.scene.evaluate import evaluate
+
+    result = evaluate(document, profile)
+    assert result.complete, result.scene.report.findings
+    return {
+        name: (
+            float(entry.mesh.volume),
+            tuple(
+                sorted(
+                    (
+                        tuple(float(value) for value in feature.params["direction"]),
+                        float(feature.params["length"]),
+                    )
+                    for feature in entry.features.values()
+                    if feature.kind == "slot"
+                )
+            ),
+        )
+        for name, entry in result.scene.objects.items()
+    }
+
+
+def _same_slot_tool_result(measured: dict[str, Any], saved: dict[str, Any]) -> list[str]:
+    """Die Körper, die anders rechnen als gespeichert — Richtung ohne Vorzeichen."""
+    different = []
+    for name, (volume, slots) in saved.items():
+        got_volume, got_slots = measured[name]
+        same = got_volume == pytest.approx(volume, abs=0.01) and len(got_slots) == len(slots)
+        for (direction, length), (got_direction, got_length) in zip(slots, got_slots, strict=False):
+            along = abs(sum(a * b for a, b in zip(direction, got_direction, strict=True)))
+            same = (
+                same
+                and along == pytest.approx(1.0, abs=1e-3)
+                and got_length == pytest.approx(length, abs=0.01)
+            )
+        if not same:
+            different.append(name)
+    return different
+
+
+def test_v40_slot_tools_keep_the_geometry_they_were_saved_with(profile) -> None:
+    """45 → 46: Ein Langloch aus einer Datei bis Format 40 rechnet wie gespeichert (RM-422).
+
+    Vor RM-325 zog ``_feature_solid`` das Werkzeug eines Langlochs lokal auf und
+    drehte es mit ``rotation_between`` in die Achse; an einer Wand mit Normale ±X lag
+    es um 90° gegen den Winkel verdreht. ``slot_tool_v40.p3d`` hat der Stand davor
+    geschrieben, die Sollwerte stehen in :data:`SAVED_SLOT_TOOL_RESULT`. Nach der
+    Migration tragen alle sieben Langlochhandlungen ``legacy_slot_tool`` und rechnen
+    alle elf Körper wie damals; ohne den Marker rechnen fünf anders — so sähe das
+    Projekt nach dem Update aus, still.
+    """
+    path = Path(__file__).parent / "data" / "projects" / "slot_tool_v40.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 40
+    assert not any("legacy_slot_tool" in entry["params"] for entry in original["ops"])
+
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    marked = {entry.op for entry in project.document.ops if entry.params.get("legacy_slot_tool")}
+    assert marked == {
+        "slot_hole",
+        "resize_hole",
+        "rotate_feature",
+        "move_feature",
+        "duplicate_feature",
+        "pattern_feature",
+        "remove_feature",
+    }
+    assert (
+        _same_slot_tool_result(_slot_tool_result(project.document, profile), SAVED_SLOT_TOOL_RESULT)
+        == []
+    ), "wie gespeichert"
+
+    today = deepcopy(project.document)
+    today.ops = [
+        dataclasses.replace(entry, params={**entry.params, "legacy_slot_tool": False})
+        if "legacy_slot_tool" in entry.params
+        else entry
+        for entry in today.ops
+    ]
+    assert _same_slot_tool_result(_slot_tool_result(today, profile), SAVED_SLOT_TOOL_RESULT) == [
+        "obj_1",
+        "obj_2",
+        "obj_4",
+        "obj_8",
+        "obj_10",
+    ], "ohne Marker rechnen die Fälle an ±X heute anders"
+
+
+def test_v40_a_changed_slot_step_computes_with_todays_tool(profile) -> None:
+    """Eine bewusste Änderung nimmt ``legacy_slot_tool`` heraus (``dropped_on_change``).
+
+    Am gekürzten Langloch aus ``slot_tool_v40.p3d`` (``obj_2``, gespeichert auf 14 mm,
+    gerechnet wie damals mit 20): Dieselben Werte noch einmal übernommen lassen den
+    Marker stehen; eine neue Länge rechnet mit dem Werkzeug von heute und ergibt genau
+    ein Langloch dieser Länge. Rückgängig bringt den Marker zurück.
+    """
+    project = load(Path(__file__).parent / "data" / "projects" / "slot_tool_v40.p3d")
+    (step,) = [
+        entry
+        for entry in project.document.ops
+        if entry.op == "slot_hole" and entry.outputs == ("obj_2",)
+    ]
+    assert step.params["legacy_slot_tool"] is True
+    history = History(project.document)
+
+    unchanged = history.change_params(step.id, dict(step.params))
+    assert unchanged.params["legacy_slot_tool"] is True, "nichts geändert, nichts aufgehoben"
+
+    changed = history.change_params(step.id, {**step.params, "slot_length": 16.0})
+    assert not changed.params.get("legacy_slot_tool")
+    volume, slots = _slot_tool_result(project.document, profile)["obj_2"]
+    assert [length for _direction, length in slots] == [pytest.approx(16.0, abs=0.01)]
+    # Sollwert aus den Maßen: Klotz minus Langloch Ø 6 auf 16 mm durch die 60-mm-Wand.
+    assert volume == pytest.approx(
+        60.0 * 100.0 * 60.0 - (math.pi * 9.0 + 6.0 * 10.0) * 60.0, abs=60.0 * 0.05
+    )
+
+    assert history.undo() is not None
+    restored = next(entry for entry in project.document.ops if entry.id == step.id)
+    assert restored.params["legacy_slot_tool"] is True
+
+
+@pytest.mark.parametrize("saved", [37, 40, 41, 45])
+def test_only_files_saved_with_the_old_slot_tool_get_the_marker(saved: int) -> None:
+    """45 → 46 fragt die Version, mit der gespeichert wurde, nicht die der Kette.
+
+    Format 41 und später rechnete schon mit dem Werkzeug von heute; dort bliebe ein
+    Marker eine stille Änderung in die andere Richtung. Mitmarkiert werden auch die
+    gespeicherten Fassungen einer Änderung (``before``/``after``), und die
+    gespeicherte Version reist nicht in die Datei.
+    """
+    from app.core.scene.migrations import SAVED_FORMAT_KEY
+
+    def slot_step() -> dict[str, Any]:
+        return {"id": 2, "op": "slot_hole", "in": ["obj_1"], "out": ["obj_1"], "params": {}}
+
+    data = {
+        "format_version": saved,
+        "ops": [
+            {"id": 1, "op": "create_box", "in": [], "out": ["obj_1"], "params": {}},
+            slot_step(),
+        ],
+        "transactions": [
+            {"changes": {"before": {"edited_ops": {"2": slot_step()}}, "after": None}}
+        ],
+    }
+    migrated = migrate(data)
+
+    old = saved <= 40
+    assert migrated["format_version"] == FORMAT_VERSION
+    assert SAVED_FORMAT_KEY not in migrated
+    assert ("legacy_slot_tool" in migrated["ops"][1]["params"]) is old
+    assert "legacy_slot_tool" not in migrated["ops"][0]["params"]
+    edited = migrated["transactions"][0]["changes"]["before"]["edited_ops"]["2"]
+    assert ("legacy_slot_tool" in edited["params"]) is old
 
 
 @pytest.mark.parametrize(

@@ -1533,6 +1533,17 @@ class History:
         # dieselbe Ausrichtung wie vor jeder Transaktion (:meth:`_reseed`).
         self._reseed()
         merged = {**entry.params, **params}
+        # **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
+        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert, rechnet
+        # der Schritt wie heute. Wer alle Werte durchreicht, reicht den Marker
+        # unverändert mit; nur ein ausdrücklich anderer Markerwert bleibt stehen.
+        markers = [item.name for item in spec.params.spec() if item.dropped_on_change]
+        if markers and any(
+            merged.get(name) != entry.params.get(name) for name in params if name not in markers
+        ):
+            for name in markers:
+                if merged.get(name) == entry.params.get(name):
+                    merged.pop(name, None)
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
         # **Dieselbe Zahl heißt nicht dieselben Körper.** Eine Auswahl aus

@@ -634,10 +634,6 @@ _NOT_A_FIELD: Final[frozenset[tuple[str, str]]] = frozenset(
         # Der Musterstil hat eine Vorgabe (``other``), aber nur ein Muster hat
         # einen Stil.
         *((kind, "style") for kind in ("pin", "cone", "sphere", "fillet", "torus", "thread")),
-        # Der Haken für einen Winkel aus einem Projekt bis Format 38 hat an
-        # keinem Merkmal einen Gegenstand: Die Migration setzt ihn, die
-        # Operation liest ihn einmal und nimmt ihn wieder heraus.
-        *((kind, "measured_frame") for kind in ("hole", "slot")),
     }
 )
 
@@ -677,6 +673,9 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
         # mit eigenem Maß ``nx`` nennt sie anders, und die blieben sonst stehen.
         if entry.kind not in {"feature", "features"}
         and entry.name not in normal_fields_of(spec)
+        # Ein Marker einer Migration (``ParamSpec.internal``) ist an keinem
+        # Merkmal ein Feld: ``measured_frame``, ``legacy_slot_tool``.
+        and not entry.internal
         and _carried_by(entry, feature)
         # Was die Operation selbst erfragt, ist hier kein Feld: Die Antwort
         # entsteht beim Ausführen und gilt nur, wo die Frage einen Gegenstand

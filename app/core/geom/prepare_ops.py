@@ -10,7 +10,8 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from functools import lru_cache
+from contextvars import ContextVar
+from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import numpy as np
@@ -868,6 +869,50 @@ FACETED_CONE_ANGLE: Final = 1.0
 # derselben Begründung — einmal hier, einmal als ``SLOT_OVERLAP`` daneben; die
 # zweite ist gefallen.
 
+#: Ob :func:`_feature_solid` ein Langloch aufzieht wie bis Format 40: das Profil
+#: lokal und mit ``rotation_between`` in die Achse gedreht (vor RM-325). Gesetzt
+#: nur für die Dauer eines Schritts, den die Migration 45 → 46 markiert hat
+#: (``legacy_slot_tool``) — eine Kontextvariable und kein Parameter, weil das
+#: Werkzeug mehrere Aufrufe tief entsteht und nur der Schritt weiß, dass er alt
+#: ist (dieselbe Bauart wie ``knowledge.parts.shapes._KERNEL``).
+_SAVED_SLOT_TOOL: ContextVar[bool] = ContextVar("solidon_saved_slot_tool", default=False)
+
+
+def _saved_slot_tool_marker() -> Any:
+    """Der Marker der Migration 45 → 46, gleich an jeder Operation, die ein Langloch
+    aus seinen Kennzahlen aufziehen kann (:func:`_feature_solid`)."""
+    return param(
+        title=_("Langlochwerkzeug aus einem älteren Projekt"),
+        default=False,
+        placement="advanced",
+        internal=True,
+        dropped_on_change=True,
+        doc=_(
+            "Zieht ein Langloch so auf, wie es Projekte bis Format 40 gespeichert haben. "
+            "Eine Änderung am Schritt rechnet wie heute."
+        ),
+    )
+
+
+def _keeps_the_saved_slot_tool(
+    fn: Callable[[OpContext], OpResult],
+) -> Callable[[OpContext], OpResult]:
+    """Lässt einen Schritt mit ``legacy_slot_tool`` sein Langloch wie gespeichert aufziehen.
+
+    Für die Dauer seines Laufs, über :data:`_SAVED_SLOT_TOOL`; ohne den Marker
+    ändert sich nichts.
+    """
+
+    @wraps(fn)
+    def run(ctx: OpContext) -> OpResult:
+        token = _SAVED_SLOT_TOOL.set(bool(getattr(ctx.params, "legacy_slot_tool", False)))
+        try:
+            return fn(ctx)
+        finally:
+            _SAVED_SLOT_TOOL.reset(token)
+
+    return run
+
 
 def _slot_angle_in_frame(feature: Feature, direction: Any) -> float:
     """Die Richtung eines erkannten Langlochs, gezählt gegen seinen Rahmen.
@@ -954,6 +999,26 @@ def _feature_solid(
         travel = max(0.0, float(feature.params.get("length", 0.0)) - measured)
         if travel <= EPS_GEOM:
             body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS)
+        elif _SAVED_SLOT_TOOL.get():
+            # **Wie gespeichert, bis Format 40** (Migration 45 → 46): lokal
+            # aufgezogen, der Schluss unten dreht es mit ``rotation_between`` in
+            # die Achse — an ±X um 90° gegen den Winkel verdreht. Ein altes
+            # Projekt sieht damit aus wie vor dem Update; eine Änderung am
+            # Schritt nimmt den Marker heraus.
+            body = extrude_profile(
+                slot_profile(
+                    radius=diameter / 2.0,
+                    travel=travel,
+                    angle_deg=_slot_angle_in_frame(feature, direction),
+                ),
+                height,
+                PlaneFrame(
+                    origin=(0.0, 0.0, -height / 2.0),
+                    x_axis=(1.0, 0.0, 0.0),
+                    y_axis=(0.0, 1.0, 0.0),
+                    normal=(0.0, 0.0, 1.0),
+                ),
+            )
         else:
             # **Im Rahmen, gegen den der Winkel zählt** (RM-325). Hier stand ein
             # lokales Profil, das der Schluss unten mit ``rotation_between``
@@ -3546,6 +3611,7 @@ class MoveFeatureParams(FeaturePlacementParams):
         placement="front",
         doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
     )
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
@@ -4309,6 +4375,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
         "Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Lufteinschluss."
     ),
 )
+@_keeps_the_saved_slot_tool
 def move_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal an eine andere Stelle — in einem Schritt.
 
@@ -4652,6 +4719,7 @@ class DuplicateFeatureParams(FeaturePlacementParams):
             "Durchmesser versetzt."
         ),
     )
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 @register_op(
@@ -4680,6 +4748,7 @@ class DuplicateFeatureParams(FeaturePlacementParams):
         "Senkung, Verjüngung, Kuppel, Pfanne, Wulst oder Kehle."
     ),
 )
+@_keeps_the_saved_slot_tool
 def duplicate_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal ein zweites Mal — die halbe Bewegung des Versetzens.
 
@@ -5033,6 +5102,7 @@ class PatternFeatureParams(BaseParams):
     cx: float | None = transform.pattern_centre_param("x", ("kind", ("circular", "mirror")))
     cy: float | None = transform.pattern_centre_param("y", ("kind", ("circular", "mirror")))
     cz: float | None = transform.pattern_centre_param("z", ("kind", ("circular", "mirror")))
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -5080,6 +5150,7 @@ class _PatternPlace:
         "Quelle bleibt maßgebend — ändert sich ihr Maß im Verlauf, folgen die Kopien."
     ),
 )
+@_keeps_the_saved_slot_tool
 def pattern_feature(ctx: OpContext) -> OpResult:
     """Merkmale linear, kreisförmig oder gespiegelt wiederholen — ein Schritt (P6.7).
 
@@ -5773,6 +5844,7 @@ class RemoveFeatureParams(BaseParams):
             "sobald der Fall auftritt."
         ),
     )
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 @register_op(
@@ -5809,6 +5881,7 @@ class RemoveFeatureParams(BaseParams):
         "füllt einen Lufteinschluss mit Material."
     ),
 )
+@_keeps_the_saved_slot_tool
 def remove_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal wegnehmen — die halbe Bewegung des Versetzens.
 
@@ -6004,6 +6077,7 @@ class RotateFeatureParams(BaseParams):
         placement="front",
         doc=_("Wie weit gedreht wird, in Grad."),
     )
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 @register_op(
@@ -6038,6 +6112,7 @@ class RotateFeatureParams(BaseParams):
         "Senkung, Verjüngung, Wulst oder Kehle."
     ),
 )
+@_keeps_the_saved_slot_tool
 def rotate_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal kippen — dieselbe Maschine, eine Matrix dazwischen.
 
@@ -7723,6 +7798,7 @@ class ResizeHoleParams(BaseParams):
             "Aus bleibt das gemessene Maß unverändert."
         ),
     )
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 #: Wie weit eine eingetragene Tiefe von der gemessenen abweichen darf und
@@ -8117,6 +8193,7 @@ OPEN_BODY_DETAIL: Final = _(
         "seine Breite; der Weg der Schraube bleibt, die Enden wachsen mit."
     ),
 )
+@_keeps_the_saved_slot_tool
 def resize_hole(ctx: OpContext) -> OpResult:
     """Der gemeinsame Kundenweg für STL-Netze und exakte STEP-Körper."""
     params = cast(ResizeHoleParams, ctx.params)
@@ -8773,6 +8850,7 @@ class SlotHoleParams(BaseParams):
             "Auswertung in den neuen Rahmen um. Neue Langlöcher brauchen den Haken nicht."
         ),
     )
+    legacy_slot_tool: bool = _saved_slot_tool_marker()
 
 
 #: Die Arten, aus denen ein Langloch werden kann.
@@ -8838,6 +8916,7 @@ SLOT_FEATURE_RENAMED: Final = _(
         "eine runde Bohrung. Ohne neue Breite bleibt der gemessene Durchmesser."
     ),
 )
+@_keeps_the_saved_slot_tool
 def slot_hole(ctx: OpContext) -> OpResult:
     """Dieselbe Formänderung für Netze und für exakte Körper.
 

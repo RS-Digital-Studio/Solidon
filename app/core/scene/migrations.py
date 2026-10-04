@@ -26,7 +26,13 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 45
+FORMAT_VERSION: Final = 46
+
+#: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
+#: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
+#: einer bestimmten Rechnung zuletzt gesehen wurde (45 → 46). :func:`migrate`
+#: setzt ihn vor dem ersten Schritt und nimmt ihn nach dem letzten heraus.
+SAVED_FORMAT_KEY: Final = "_saved_format_version"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1285,6 +1291,70 @@ def _allow_revision_lineage(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Die Operationen, die ein Langloch aus seinen Kennzahlen aufziehen können
+#: (``prepare_ops._feature_solid``) und an einem Langloch gelten.
+_SLOT_TOOL_OPERATIONS: Final = frozenset(
+    {
+        "slot_hole",
+        "resize_hole",
+        "rotate_feature",
+        "move_feature",
+        "duplicate_feature",
+        "pattern_feature",
+        "remove_feature",
+    }
+)
+
+#: Bis zu dieser Version rechnete ein gespeichertes Projekt das Langlochwerkzeug
+#: noch lokal aufgezogen (RM-325 kam mit Format 40, das noch 17 Minuten weiter
+#: geschrieben wurde; veröffentlicht war zuletzt Format 38 mit 0.5.1).
+_LAST_FORMAT_WITH_THE_OLD_SLOT_TOOL: Final = 40
+
+
+def _keep_slot_tools_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """45 → 46: Ein Langloch aus einer Datei bis Format 40 bleibt, wie es gespeichert wurde.
+
+    Bis RM-325 zog ``_feature_solid`` das Werkzeug eines Langlochs lokal auf und
+    drehte es mit ``rotation_between`` in die Achse; der Winkel zählte aber im
+    Rahmen von ``prepare.slot_frame``. An einer Wand mit Normale ±X lag das
+    Werkzeug um 90° verdreht: *Zum Langloch ziehen* auf 0° ließ kein Langloch
+    stehen, ein gekürztes blieb so lang, *Merkmal drehen* um 45° zeigte -15°
+    statt +75°. Ein altes Projekt rechnete nach dem Update still eine andere
+    Lage. Jede Operation, die ein Langloch aus seinen Kennzahlen aufziehen kann,
+    bekommt deshalb ``legacy_slot_tool`` — auch in den gespeicherten Fassungen
+    ``before`` und ``after`` jeder Änderung —, und rechnet wie gespeichert; eine
+    bewusste Änderung des Schritts nimmt den Marker heraus
+    (``ParamSpec.dropped_on_change``).
+
+    **Entschieden wird an der Version, mit der die Datei gespeichert wurde**
+    (:data:`SAVED_FORMAT_KEY`), nicht an der, die die Kette gerade hat: Eine
+    Datei aus Format 41 wurde schon mit dem neuen Werkzeug gerechnet und
+    gesehen. Format 40 schrieb auch noch der Stand nach der Behebung, bis Format
+    41 kam — nur Entwicklungsstände; markiert wird dort trotzdem, denn die
+    meisten Dateien dieser Version sahen das alte Werkzeug. Festgehalten an
+    ``tests/data/projects/slot_tool_v40.p3d``, geschrieben vom Stand davor.
+    """
+    saved = int(data.get(SAVED_FORMAT_KEY, _LAST_FORMAT_WITH_THE_OLD_SLOT_TOOL + 1))
+    if saved > _LAST_FORMAT_WITH_THE_OLD_SLOT_TOOL:
+        return data
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in _SLOT_TOOL_OPERATIONS:
+            continue
+        params = operation.setdefault("params", {})
+        if isinstance(params, dict):
+            params.setdefault("legacy_slot_tool", True)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1331,6 +1401,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=42, to_version=43, apply=_keep_existing_arrangements),
     Step(from_version=43, to_version=44, apply=_number_old_split_runs),
     Step(from_version=44, to_version=45, apply=_allow_revision_lineage),
+    Step(from_version=45, to_version=46, apply=_keep_slot_tools_as_they_were),
 )
 
 
@@ -1364,7 +1435,9 @@ def migrate(
         )
 
     by_source = {step.from_version: step for step in steps}
-    current = data
+    # Die gespeicherte Version reist durch die Kette mit (``SAVED_FORMAT_KEY``)
+    # und wird danach herausgenommen — kein Schritt schreibt sie in die Datei.
+    current = {**data, SAVED_FORMAT_KEY: version}
     while version < target:
         step = by_source.get(version)
         if step is None:
@@ -1378,4 +1451,5 @@ def migrate(
         current = step.apply(dict(current))
         current["format_version"] = step.to_version
         version = step.to_version
+    current.pop(SAVED_FORMAT_KEY, None)
     return current

@@ -4654,3 +4654,60 @@ def test_the_migration_marker_is_not_offered_to_the_agent(operation: str) -> Non
     spec = REGISTRY.get(operation)
     assert any(entry.name == "measured_frame" and entry.internal for entry in spec.params.spec())
     assert "measured_frame" not in json_schema(spec.params)["properties"]
+
+
+#: Die Operationen, die ein Langloch aus seinen Kennzahlen aufziehen können und an
+#: einem Langloch gelten — sie tragen den Marker der Migration 45 → 46.
+SAVED_SLOT_TOOL_OPERATIONS = (
+    "duplicate_feature",
+    "move_feature",
+    "pattern_feature",
+    "remove_feature",
+    "resize_hole",
+    "rotate_feature",
+    "slot_hole",
+)
+
+
+@pytest.mark.parametrize("operation", SAVED_SLOT_TOOL_OPERATIONS)
+def test_the_saved_slot_tool_marker_is_no_choice_and_ends_with_a_change(operation: str) -> None:
+    """``legacy_slot_tool`` setzt nur die Migration 45 → 46 (RM-422): intern, nicht im
+    Werkzeugschema des Agenten, und eine bewusste Änderung des Schritts hebt ihn auf."""
+    from app.core.registry.params import json_schema
+
+    load_operations()
+    spec = REGISTRY.get(operation)
+    (marker,) = [entry for entry in spec.params.spec() if entry.name == "legacy_slot_tool"]
+    assert marker.internal and marker.dropped_on_change and marker.default is False
+    assert "legacy_slot_tool" not in json_schema(spec.params)["properties"]
+
+
+def test_no_row_at_a_slot_offers_a_migration_marker_as_a_field() -> None:
+    """Ein Marker einer Migration ist im Merkmalfenster kein Feld (``ParamSpec.internal``).
+
+    ``measured_frame`` stand dort bis RM-422 nur über eine Ausnahmeliste je Merkmalsart
+    nicht; ``legacy_slot_tool`` stünde ohne die allgemeine Regel an sechs Zeilen.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    slot = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 5.0,
+            "length": 20.0,
+            "travel": 15.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+            "centre": (0.0, 0.0, 0.0),
+            "depth": 10.0,
+            "through": True,
+        },
+    )
+    rows = {action.op: {field.name for field in action.fields} for action in actions_for(slot)}
+    # Die Zeilen, in denen der Marker sonst stünde — sonst prüfte das Verbot nichts.
+    assert set(rows) >= set(SAVED_SLOT_TOOL_OPERATIONS) - {"pattern_feature"}, rows
+    for operation, fields in rows.items():
+        assert not fields & {"legacy_slot_tool", "measured_frame"}, (operation, fields)
