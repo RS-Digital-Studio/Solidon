@@ -677,3 +677,54 @@ Nähme man die gröbere ungekühlte Obergrenze als festen Zuschlag, ergäben sic
 Zusätzlich steckt Beschleunigung bereits im angenommenen25-%-Fahrweganteil. Ein separater Zuschlag kann ihn doppelt zählen. Die Wandrechnung ist deshalb nur als Fehlerschranke/Diagnose verwendbar, nicht ungeprüft als additiver Produktivfix.
 
 **Ohne neue Profilfelder implementierbar:** geometrische Wand-Beschleunigungsintervalle aus `speed.acceleration`/`outer_wall_acceleration`; schon vorhandener Rückzugsweg und -tempo als Teilkosten, wenn die Rückzugsanzahl unabhängig bekannt ist. **Nicht aus den vorhandenen Feldern bestimmbar:** tatsächliche Eckgeschwindigkeit, Füllweg-Anzahl und Wendepunkte, Mindestdrucktempo, getrenntes Erstschichttempo, Z-Achsen-Tempo/-Beschleunigung und Auto-Lift-Bahn. Eine exakte Restzeit würde eine Bewegungsplanung erfordern; ein solcher eigener Slicer gehört ausdrücklich nicht in Solidon.
+
+### Umsetzung vom 04.10.2026: Zeit aus der Schichtanalyse
+
+Die Empfehlung oben ist umgesetzt, ohne Modell- oder Slicerfaktor und ohne
+Änderung der 15-%-Schwelle:
+
+1. **Mindestdrucktempo und getrennte Erstschichttempi** kommen aus derselben
+   aufgelösten Herstellerkette wie die Mindestschichtzeit
+   (`manufacturer.orca_motion`, `prusa_motion`, `cura_motion`;
+   `Foundation.motion`). Dazu Beschleunigung je Bahnart, Maschinengrenzen,
+   Junction-Deviation (Orca) bzw. Ruck (PrusaSlicer rechnet laut
+   `GCodeProcessor.cpp` nur mit dem Ruck je Achse), Z- und Rückzugstempo.
+   Ohne belegtes Mindestdrucktempo gibt es keine `Motion` und keine Zeit.
+2. **Startanteil** ist eine Angabe des Slicers selbst: Fortschritt `M73 P`
+   vor der ersten Schicht mal Gesamtzeit (`GcodeMetrics.start_seconds`, auf
+   ein Prozent genau); verglichen wird ab der ersten Schicht
+   (`printing_seconds`). Er wird aus der Datei gelesen, die verglichen wird,
+   ist also immer an Drucker und Profil dieses Laufs gebunden.
+3. **Die Schnittauswertung** steht getrennt von der Mikrosekunden-Schätzung
+   in `slice/print_time.py` und rechnet aus den Schichten, die die
+   Plattengegenprobe ohnehin schneidet: Wände als versetzte Kontur mit
+   Ecktempo, Deck/Boden an den ganzen Nachbarschichten, Brücke und innere
+   Brücke, Bahnzahl über die mittlere Sehne, Abbremsen über Weg/Tempo bis zum
+   Mindesttempo und danach Beschleunigung, Leerfahrt, Rückzug und Z-Hub.
+
+Dieselben acht Standardläufe, frisch geslicet am 04.10.2026 (Elegoo/CC2,
+Creality/K1, Prusa/MK4S, SuperSlicer/MINI; Würfel `cube_clean.stl`, Pilz
+`mushroom.stl` wie oben), am Produktweg (Grundlage → `plate_comparison` →
+`gcode.compare`):
+
+| Fall | vorher: Volumen/Fläche gegen Gesamtzeit | Schichtanalyse s | ab erster Schicht s | Abweichung |
+|---|---:|---:|---:|---:|
+| Creality / K1 Pilz | −75,6 % | 1056,5 | 1150,9 | −8,2 % |
+| Creality / K1 Würfel | −80,6 % | 875,9 | 883,7 | −0,9 % |
+| Elegoo / CC2 Pilz | −60,5 % | 818,3 | 871,3 (Start 107,7) | −6,1 % |
+| Elegoo / CC2 Würfel | −62,9 % | 492,4 | 528,7 (Start 108,3) | −6,9 % |
+| Prusa / MK4S Pilz | −72,2 % | 999,0 | 1082,0 | −7,7 % |
+| Prusa / MK4S Würfel | −75,7 % | 712,1 | 747,5 (Start 7,5) | −4,7 % |
+| SuperSlicer / MINI Pilz | −13,5 % | 2403,6 | 2702,0 | −11,0 % |
+| SuperSlicer / MINI Würfel | −41,3 % | 2202,7 | 2252,2 (Start 22,8) | −2,2 % |
+
+Kein `gcode.deviation` mehr (vorher sieben von acht). Außerhalb der Abnahme
+nachgemessen und als Grenze festgehalten: die Okarina (hohle Doppelschale)
+liegt bei PrusaSlicer +8,5 %, bei ElegooSlicer −21,1 % und bei CuraEngine
+−23,3 %, der Cura-Würfel bei −13,8 %. Die Lücke der Okarina steckt in der
+Zahl der Zugbeginne: ElegooSlicer fährt an ihren schrägen Schalen je Schicht
+bis zu 58 Rückzüge mit Z-Hub, die Bahnzahl über die mittlere Sehne kennt
+diese Stückelung nicht. Eine solche Datei meldet weiter eine Abweichung — als
+Hinweis, dass die Schätzung diese Form nicht trägt, nicht als Fehler der
+Übergabe. Die Rechnung kostet an der Okarina (309 Schichten) rund 2,7 s unter
+Fremdlast im Arbeiter des Druckdialogs, an Würfel und Pilz 0,1 bis 0,2 s.

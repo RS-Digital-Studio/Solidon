@@ -45,6 +45,7 @@ from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from app.core.export.handover import SlicerSetup
+    from app.core.slice.print_time import Motion
 
 _log = get_logger(__name__)
 
@@ -132,6 +133,11 @@ class Foundation:
     Dort bezieht sich der Brim auf den unkorrigierten Umriss. Solidons
     Abstand gilt am korrigierten Fuß; Prusa und Cura rechnen dies selbst.
     """
+    motion: Motion | None = None
+    """Was die Druckzeit außer den Einstellungen bestimmt, aus derselben Kette
+    gelesen (RM-465): Mindestdrucktempo, getrennte Erstschichttempi,
+    Beschleunigung je Bahnart, Maschinengrenzen. ``None`` ohne belegtes
+    Mindestdrucktempo — dann behauptet die Gegenprobe keine Zeit."""
 
     @property
     def has_profile(self) -> bool:
@@ -672,6 +678,185 @@ def native_brim_gap(value: float, foot: float | None, program_name: str) -> str:
             suggestions=(OPEN_PRINT_SETTINGS,),
         )
     return f"{native:.9g}"
+
+
+#: Das Programm, dessen Brim am unkorrigierten Umriss hängt und das keinen
+#: negativen Abstand annimmt (RM-318): Creality Print legt den Brim um die
+#: Erstschichtgruppen vor der Fußkorrektur (``Brim.cpp``,
+#: ``firstLayerObjGroups``), ``brim_object_gap`` hat die Grenzen 0 bis 2
+#: (``PrintConfig.cpp``), und ``brim_use_efc_outline`` gibt es dort nicht.
+#: Die Fußkorrektur ist dagegen ein Objektwert (``PrintObjectConfig``).
+_FOOT_PER_PART: Final = frozenset({"crealityprint"})
+
+
+def part_brim_gap(value: float, foot: float | None, program: str) -> dict[str, str]:
+    """Der Brim-Abstand eines Teils in den Schlüsseln seines Slicers (RM-318).
+
+    Wo der Slicer den Abstand am unkorrigierten Umriss misst und keinen
+    negativen nimmt, senkt Solidon die Fußkorrektur **dieses Teils** genau so
+    weit, dass der Brim im gewünschten Abstand am tatsächlichen Fuß liegt:
+    Abstand null heißt Korrektur null, der native Abstand bleibt null. Die
+    übrigen Teile behalten die Korrektur des Herstellers. Was der Kunde für die
+    ganze Platte wählt, bleibt bei :func:`native_brim_gap` — die Korrektur
+    aller Teile zu senken, ist keine Antwort auf einen Brim-Abstand.
+    """
+    if foot is not None and program in _FOOT_PER_PART and value - foot < 0.0:
+        return {"brim_object_gap": "0", "elefant_foot_compensation": f"{max(value, 0.0):.9g}"}
+    return {"brim_object_gap": native_brim_gap(value, foot, program)}
+
+
+def _amount(raw: object, base: float | None = None) -> float | None:
+    """Eine positive Zahl oder ein Anteil von ``base``; null und Unlesbares sind nicht belegt.
+
+    Null heißt in diesen Schlüsseln der Slicer „wie die Vorgabe“ — etwa
+    ``inner_wall_acceleration = 0`` bei Elegoo —, nicht „gar nicht“.
+    """
+    text = _text(raw)
+    if text is None:
+        return None
+    if "," in text:
+        text = text.split(",", 1)[0].strip()
+    if text.endswith("%"):
+        share = _float(text[:-1])
+        value = None if share is None or base is None else share / 100.0 * base
+    else:
+        value = _float(text)
+    return value if value is not None and value > 0.0 else None
+
+
+def orca_motion(
+    process: Mapping[str, Any],
+    machine: Mapping[str, Any],
+    filament: Mapping[str, Any],
+    nozzle: float,
+) -> Motion | None:
+    """Was die Druckzeit bestimmt, aus Prozess, Maschine und Filament der Orca-Familie.
+
+    Ohne Mindestdrucktempo (``slow_down_min_speed``, am Filament) keine
+    :class:`Motion` — die Mindestschichtzeit ist ohne ihn keine belegte
+    Untergrenze (RM-465). Anteile beziehen sich, wie in Orcas
+    ``PrintConfig.cpp``: die innere Vollfüllung auf die dünne, die innere
+    Brücke auf die Brücke, ihre Beschleunigung auf die Außenwand.
+    """
+    from app.core.slice.print_time import Motion
+
+    minimum = _amount(filament.get("slow_down_min_speed"))
+    if minimum is None:
+        return None
+    default = _amount(process.get("default_acceleration"))
+    outer = _amount(process.get("outer_wall_acceleration"), default) or default
+    sparse = _amount(process.get("sparse_infill_acceleration"), default)
+    retraction = _amount(machine.get("retraction_speed"))
+    return Motion(
+        nozzle=nozzle,
+        minimum_speed=minimum,
+        first_layer_wall_speed=_amount(process.get("initial_layer_speed")),
+        first_layer_infill_speed=_amount(process.get("initial_layer_infill_speed")),
+        solid_infill_speed=_amount(
+            process.get("internal_solid_infill_speed"), _amount(process.get("sparse_infill_speed"))
+        ),
+        internal_bridge_speed=_amount(
+            process.get("internal_bridge_speed"), _amount(process.get("bridge_speed"))
+        ),
+        inner_wall_acceleration=_amount(process.get("inner_wall_acceleration"), default),
+        infill_acceleration=sparse,
+        solid_infill_acceleration=_amount(
+            process.get("internal_solid_infill_acceleration"), sparse or default
+        ),
+        top_surface_acceleration=_amount(process.get("top_surface_acceleration"), default),
+        bridge_acceleration=_amount(process.get("bridge_acceleration"), outer),
+        first_layer_acceleration=_amount(process.get("initial_layer_acceleration"), default),
+        travel_acceleration=_amount(process.get("travel_acceleration"), default),
+        acceleration_limit=_amount(machine.get("machine_max_acceleration_extruding")),
+        travel_acceleration_limit=_amount(machine.get("machine_max_acceleration_travel")),
+        junction_deviation=_amount(machine.get("machine_max_junction_deviation")),
+        jerk=_amount(process.get("default_jerk")) or _amount(machine.get("machine_max_jerk_x")),
+        z_speed=_amount(machine.get("machine_max_speed_z")),
+        z_acceleration=_amount(machine.get("machine_max_acceleration_z")),
+        retraction_speed=retraction,
+        deretraction_speed=_amount(machine.get("deretraction_speed")) or retraction,
+    )
+
+
+#: Wann PrusaSlicer die Maschinengrenzen in seine Zeitrechnung nimmt.
+_PRUSA_LIMITS_USED: Final = frozenset({"emit_to_gcode", "time_estimate_only"})
+
+
+def prusa_motion(values: Mapping[str, Any], nozzle: float) -> Motion | None:
+    """Was die Druckzeit bestimmt, aus der aufgelösten Kette eines Prusa-Bündels.
+
+    Mindestdrucktempo ``min_print_speed`` am Filament. PrusaSlicers
+    Zeitrechnung kennt keine Junction-Deviation, nur den Ruck je Achse
+    (``GCodeProcessor.cpp``, 2.9); deshalb bleibt sie hier leer. Die
+    Maschinengrenzen gelten nur, wo das Profil sie zur Zeitrechnung gibt
+    (``machine_limits_usage``). SuperSlicers innere Brücke steht unter
+    ``bridge_speed_internal``.
+    """
+    from app.core.slice.print_time import Motion
+
+    minimum = _amount(values.get("min_print_speed"))
+    if minimum is None:
+        return None
+    limits = (_text(values.get("machine_limits_usage")) or "") in _PRUSA_LIMITS_USED
+
+    def limit(key: str) -> float | None:
+        return _amount(values.get(key)) if limits else None
+
+    first_wall = _amount(values.get("first_layer_speed"))
+    retraction = _amount(values.get("filament_retract_speed")) or _amount(
+        values.get("retract_speed")
+    )
+    return Motion(
+        nozzle=nozzle,
+        minimum_speed=minimum,
+        first_layer_wall_speed=first_wall,
+        first_layer_infill_speed=_amount(values.get("first_layer_infill_speed"), first_wall),
+        solid_infill_speed=_amount(
+            values.get("solid_infill_speed"), _amount(values.get("infill_speed"))
+        ),
+        internal_bridge_speed=_amount(
+            values.get("bridge_speed_internal"), _amount(values.get("bridge_speed"))
+        ),
+        inner_wall_acceleration=_amount(values.get("perimeter_acceleration")),
+        infill_acceleration=_amount(values.get("infill_acceleration")),
+        solid_infill_acceleration=_amount(values.get("solid_infill_acceleration")),
+        top_surface_acceleration=_amount(values.get("top_solid_infill_acceleration")),
+        bridge_acceleration=_amount(values.get("bridge_acceleration")),
+        first_layer_acceleration=_amount(values.get("first_layer_acceleration")),
+        travel_acceleration=_amount(values.get("travel_acceleration")),
+        acceleration_limit=limit("machine_max_acceleration_extruding"),
+        travel_acceleration_limit=limit("machine_max_acceleration_travel"),
+        jerk=limit("machine_max_jerk_x"),
+        z_speed=limit("machine_max_feedrate_z"),
+        z_acceleration=limit("machine_max_acceleration_z"),
+        retraction_speed=retraction,
+        deretraction_speed=_amount(values.get("filament_deretract_speed"))
+        or _amount(values.get("deretract_speed"))
+        or retraction,
+    )
+
+
+def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
+    """Was die Druckzeit bei Cura bestimmt, aus der Druckerdefinition.
+
+    Das Mindestdrucktempo ``cool_min_speed`` steht in ``fdmprinter``; ohne
+    lesbare Definition gibt es keines. Tempo und Beschleunigung schreibt
+    Solidon Cura selbst (``values_for``), sie kommen aus den Einstellungen.
+    """
+    from app.core.slice.print_time import Motion
+
+    chain = _cura_chain(setup, profile)
+    minimum = _cura_number(chain.get("cool_min_speed"))
+    if minimum is None or minimum <= 0.0:
+        return None
+    jerk = _cura_number(chain.get("machine_max_jerk_xy"))
+    limit = _cura_number(chain.get("machine_max_acceleration_x"))
+    return Motion(
+        nozzle=profile.printer.nozzle_diameter,
+        minimum_speed=minimum,
+        jerk=jerk if jerk is not None and jerk > 0.0 else None,
+        acceleration_limit=limit if limit is not None and limit > 0.0 else None,
+    )
 
 
 def _first_layer_speed(
@@ -1505,6 +1690,115 @@ def _unmeasured(profile: Profile, read: Mapping[str, object]) -> dict[str, objec
     }
 
 
+#: Curas Schwelle der Lüfterkurve, wenn keine Definition lesbar ist:
+#: ``cool_min_layer_time_fan_speed_max.default_value`` in ``fdmprinter.def.json``
+#: (Cura 5.13). Das untere Ende ist dort die Formel ``cool_fan_speed``.
+CURA_FAN_THRESHOLD: Final = 10.0
+
+#: Was bei Cura der Druckerdefinition gehört, nicht Solidons Materialtabelle
+#: (RM-228): unteres Ende und Schwelle der Lüfterkurve. Das obere Ende bleibt
+#: der Materialwert — die Konsole bekommt kein Cura-Materialprofil, und
+#: ``fdmprinter`` nennt für jedes Material 100 %.
+CURA_FAN_PATHS: Final = ("cooling.minimum_fan_speed", "cooling.fan_below_layer_time")
+
+#: Die gelesene Erbkette einer Cura-Druckerdefinition, geprüft an Pfad,
+#: Zeitstempel und Größe — Dialog und Übergabe fragen sie bei jeder Grundlage.
+_CURA_CHAIN_CACHE: dict[tuple[str, int, int], Mapping[str, Any]] = {}
+
+
+def _cura_number(raw: object) -> float | None:
+    """Ein Zahlwert der Definition; eine Formel ist keine Zahl (Regel 10)."""
+    if isinstance(raw, bool) or not isinstance(raw, int | float | str):
+        return None
+    try:
+        number = float(raw)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _cura_chain(setup: SlicerSetup, profile: Profile) -> Mapping[str, Any]:
+    """Die Werte der Erbkette des Druckers in Cura — leer, wenn keine lesbar ist.
+
+    Eine eingerichtete Cura-Instanz geht vor, dann die Druckerdefinition, dann
+    ``fdmprinter``. Eine Formel steht nicht darin (``resolve_values`` rechnet
+    keine): Wer einen Wert nicht findet, nimmt Curas Grundwert oder die Formel.
+    """
+    from app.core.export import handover
+
+    roots = handover._profile_roots(setup)
+    try:
+        source = handover.profile_source(setup.machine_profile, setup, "machine")
+        if isinstance(source, slicer_profiles.SlicerProfile):
+            return slicer_profiles.resolve_profile(source, roots)
+        definition = handover._cura_printer_definition(
+            setup.executable, profile.printer
+        ) or handover._cura_base(setup.executable)
+        if not definition:
+            return {}
+        path = Path(definition)
+        stat = path.stat()
+        key = (str(path), stat.st_mtime_ns, stat.st_size)
+        cached = _CURA_CHAIN_CACHE.get(key)
+        if cached is None:
+            cached = slicer_profiles.resolve_values(path, roots)
+            _CURA_CHAIN_CACHE[key] = cached
+        return cached
+    except (ExternalToolError, OSError) as problem:
+        _log.warning("Cura definition unreadable, using Cura's base values: %s", problem)
+        return {}
+
+
+def _cura_fan_definition(setup: SlicerSetup, profile: Profile) -> tuple[float | None, float | None]:
+    """Schwelle und unteres Ende (Prozent) aus der Erbkette des Druckers.
+
+    ``None`` heißt: die Kette nennt keine Zahl — beim unteren Ende Curas
+    Formel ``cool_fan_speed``, bei der Schwelle Curas Grundwert.
+    """
+    chain = _cura_chain(setup, profile)
+    return (
+        _cura_number(chain.get("cool_min_layer_time_fan_speed_max")),
+        _cura_number(chain.get("cool_fan_speed_min")),
+    )
+
+
+def cura_fan_curve(
+    settings: PrintSettings, profile: Profile, setup: SlicerSetup | None
+) -> PrintSettings:
+    """Unteres Ende und Schwelle der Lüfterkurve, wie Cura sie fährt (RM-228).
+
+    **Die Lüfterkurve bleibt beim Herstellerprofil** (Entscheidung zu RM-228):
+    Bei der Orca-Familie und PrusaSlicer liest die Grundlage sie aus dem
+    Filamentprofil des Herstellers und schreibt sie nur auf eigene Wahl. Cura
+    bekam dagegen Solidons ganzen Satz, und mit ihm Elegoos PLA-Kurve: 50 bis
+    100 % bei 80 s. Cura hebt jede Schicht unter der Schwelle an, auch die
+    erste, deren Pause :func:`handover._cura_fan_start` schreibt — gemessen
+    an der Okarina 49 % in Schicht 1. Curas eigene Definition nennt 10 s und
+    kein unteres Ende unter dem oberen.
+
+    Hier, in der Grundlage, damit Dialog, Konsole und Gegenprobe dieselben
+    Werte sehen; eine eigene Wahl (``settings.explicit``) bleibt. Für alle
+    anderen Familien ändert sich nichts.
+    """
+    if setup is None or setup.flavour != "cura":
+        return settings
+    threshold, minimum = _cura_fan_definition(setup, profile)
+    lower_path, threshold_path = CURA_FAN_PATHS
+    curve = (
+        (threshold_path, CURA_FAN_THRESHOLD if threshold is None else threshold),
+        (
+            lower_path,
+            settings.cooling.fan_speed
+            if minimum is None
+            else min(minimum / 100.0, settings.cooling.fan_speed),
+        ),
+    )
+    for path, value in curve:
+        if path not in settings.explicit:
+            settings = settings_table.with_path(settings, path, value)
+    return settings
+
+
 def _table_foundation(profile: Profile, fallback: PrintSettings, **known: Any) -> Foundation:
     """Solidons Tabelle als Grundlage — mit der Messung, wo sie auf ihr gilt."""
     return Foundation(
@@ -1729,7 +2023,7 @@ def base_settings(
     Solidons Tabelle (:func:`app.core.knowledge.print_settings.resolve`) —
     und die Übergabe schreibt sie dann vollständig.
     """
-    fallback = settings_table.resolve(profile, quality)
+    fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
         return _table_foundation(
             profile,
@@ -1737,6 +2031,9 @@ def base_settings(
             material_from_table=(
                 setup is not None and setup.flavour in ("orca", "prusa") and not setup.base_filament
             ),
+            motion=cura_motion(setup, profile)
+            if setup is not None and setup.flavour == "cura"
+            else None,
         )
     if setup.flavour == "prusa":
         return _prusa_foundation(profile, quality, setup, fallback)
@@ -1845,6 +2142,12 @@ def base_settings(
         read.pop(path, None)
     return Foundation(
         replace(base, chosen=frozenset(), accepted=frozenset()),
+        motion=orca_motion(
+            {**defaults, **process_values},
+            machine_values,
+            filament_values,
+            profile.printer.nozzle_diameter,
+        ),
         brim_foot_offset=brim_foot_offset(process_values, program(setup)),
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
@@ -1908,6 +2211,7 @@ def _prusa_foundation(
         read.pop(path, None)
     return Foundation(
         replace(base, chosen=frozenset(), accepted=frozenset()),
+        motion=prusa_motion({**defaults, **chain.values}, profile.printer.nozzle_diameter),
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
         measured=measured,

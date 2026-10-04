@@ -345,6 +345,12 @@ die zwei Schlüssel still übergeht. Gemessen am 23.09.2026 mit ElegooSlicer,
 OrcaSlicer, PrusaSlicer und CuraEngine; die Regel dazu steht in
 `.claude/rules/dateiformat.md`.
 
+Bei Cura legt `manufacturer.cura_fan_curve` unteres Ende und Schwelle aus der
+Druckerdefinition in die Grundlage (`CURA_FAN_PATHS`), auch je Spule
+(`handover._resolve_slot`); das Fensterprofil nennt beide nur als eigene Wahl
+(`handover._without_curas_own_fan_curve`), damit Curas Formel und
+Qualitätsstufe gelten (RM-228).
+
 ## Die vier Gegenproben nach dem Lauf
 
 `slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.
@@ -553,7 +559,16 @@ erst vollständig unter der bestehenden Sperre übernommen.
 Herstellergrundlage trägt den nativen Fußversatz für Konsole und Projekt-/
 Objektwerte. Orcas aktiver Bezug zur korrigierten Kontur benötigt keinen
 zusätzlichen Versatz. Unbekannter Bezug oder nativ nicht darstellbarer Abstand
-hält mit dem Rückweg zu den Druckeinstellungen an. Ein inaktiver gespeicherter
+hält mit dem Rückweg zu den Druckeinstellungen an. Creality Print legt den Brim um die
+Erstschichtgruppen vor der Fußkorrektur (`Brim.cpp`, `firstLayerObjGroups`),
+nimmt `brim_object_gap` nur von 0 bis 2 und kennt kein `brim_use_efc_outline`;
+die Fußkorrektur ist dort aber ein Objektwert. Je Teil senkt
+`manufacturer.part_brim_gap` deshalb die Korrektur genau dieses Teils auf den
+gewünschten Abstand und schreibt nativ null; der Export sagt es mit
+`export.brim_foot_lowered`. Gemessen an den Fahnenstangen (RM-318): Mittellinien
+0,4676/0,4691 mm bei 0,50 mm Bahn, der breite Körper behält seine Korrektur.
+Für die ganze Platte bleibt die Absage, denn die Korrektur aller Teile zu
+senken ist keine Antwort auf einen Brim-Abstand. Ein inaktiver gespeicherter
 Haftungswert bleibt ohne Wirkung. Unveränderte Herstellerwerte behalten ihre
 native Schreibweise und verändern keine Fußgeometrie.
 

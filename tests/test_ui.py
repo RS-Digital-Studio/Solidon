@@ -14488,11 +14488,14 @@ def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
     from app.core.knowledge import print_settings as settings_table
     from app.core.slice import gcode
     from app.core.slice.estimate import total as estimate_total
+    from app.ui.print_settings_dialog import SliceComparison
 
     _with_two_objects(window)
     window.report.show_result(None)
 
-    # Was der Slicer geschrieben hat: gut ein Fünftel unter der Schätzung.
+    # Was der Slicer geschrieben hat: gut ein Fünftel unter der Schätzung. Die
+    # Zeit kommt seit RM-465 aus der Schichtanalyse des Auftrags; hier steht
+    # sie als fertige Zahl des Auftrags.
     result = window.session.last_result
     settings = settings_table.resolve(window.session.profile)
     bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
@@ -14500,10 +14503,10 @@ def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
     measured = gcode.GcodeMetrics(
         filament_grams=estimate.grams * 0.8,
         resolved_model_grams=estimate.grams * 0.8,
-        print_seconds=estimate.seconds * 0.8,
+        print_seconds=600.0 * 0.8,
     )
 
-    window._compare_totals(measured)
+    window._compare_totals(measured, SliceComparison(grams=estimate.grams, seconds=600.0))
 
     # Zwei Befunde mit demselben Satz sind seit dem 11.09.2026 **eine** Zeile
     # „(2) …" (Robert: „gleiche Meldungen zusammenfassen"); was jeder für
@@ -14518,7 +14521,7 @@ def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
     ]
     assert len(rows) == 1 and rows[0].data(_BUNDLE_ROLE) == 2, "Material und Zeit, beide"
     assert rows[0].text().startswith("(2) ")
-    assert "Material" in rows[0].toolTip() and "Zeit" in rows[0].toolTip(), rows[0].toolTip()
+    assert "Material" in rows[0].toolTip() and "Druckzeit" in rows[0].toolTip(), rows[0].toolTip()
 
 
 def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
@@ -14545,6 +14548,9 @@ def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
     )
 
     assert "gcode.deviation" not in _report_codes(window)
+    # Eine zurückgelesene Datei ohne Auftrag hat keine Zeitschätzung aus der
+    # Schichtanalyse; das steht da, statt still zu fehlen (RM-465).
+    assert "gcode.printing_time_not_compared" in _report_codes(window)
 
 
 def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:

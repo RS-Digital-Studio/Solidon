@@ -275,6 +275,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   gehört zum Projekt. Nur wo der Hersteller keinen nennt (Creality Print heißt
   jeden Prozess „Standard"), liegen `STAGE_PATHS` über dem Standardprozess;
   ein selbst gewählter Prozess ist die Stufe.
+- **Die Lüfterkurve bleibt beim Hersteller** (RM-228): bei Cura unteres Ende
+  und Schwelle aus der Druckerdefinition (`manufacturer.cura_fan_curve`).
 - **Was ohne Partner nicht wirkt, geht mit ihm** (`handover.COUPLED_PATHS`):
   Haftungsart mit den Maßen aller Arten, Lüfter-Obergrenze mit dem unteren
   Ende; eine gewählte Haftungsart bringt ihr Maß mit, wenn es null ist
@@ -300,7 +302,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Übernahme (`PartSplit.base`), und wer sie nur mitbekommt, erfährt es
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
-  den das Teil bekommt. Eine eigene Wahl gilt der Platte. Ein Objektwert
+  den das Teil bekommt. Eine eigene Wahl gilt der Platte, auch unter einem
+  Vorschlag je Teil (`PrintSettings.plate_choices`). Ein Objektwert
   trägt die Pfade seines Rats und deren Partner (`COUPLED_PATHS`), nie die
   ganze Gruppe (`handover.object_keys`). **Ein übernommener Vorschlag
   verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
@@ -309,10 +312,9 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Auftrags: Jeder Aufrufer gibt `write_assembly` den Auftrag als `job` mit,
   der Druckdialog die gewählten Platten, der Dateiexport alle Körper, auch
   wenn nur einer gewählt ist.
-- **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
-  nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
-  (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
-  Modells (Elegoos `default_bed_type = 4` = texturierte PEI). Nur ohne
+- **Die Druckplatte ist eine Angabe, keine Vermutung**: die im Druckdialog
+  gewählte (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
+  Modells. Nur ohne
   Plattenwahl (`support_multi_bed_types` fehlt) gilt die eine Temperatur
   `hot_plate_temp` (`manufacturer.SINGLE_PLATE`); mit Wahl und ohne
   Standardplatte keine geratene, sondern `slicer.plate_unknown`. Die
@@ -369,7 +371,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   nicht. Unklare Spulen: Projektwerte; Befund zum Druckdialog.
 - **Die Abnahme ist der Konfigurationsblock**: Ohne Vorschläge gleicht
   Solidons G-Code-Konfiguration der des Herstellerprofils allein, bis auf
-  Namen, Objektmarken und `filament_self_index` (Messstand in `ROADMAP.md`).
+  Namen, Objektmarken und `filament_self_index`.
 - **Ältere Dateien ordnet die Migration gegen jede Auflösung ein, mit der eine
   Version schrieb** (`print_settings.legacy_choices`: heutige und 0.5.0,
   `resolve(..., legacy=True)`); wer die Auflösung ändert, prüft an einer von
@@ -388,8 +390,7 @@ einem Drucker seines Bündels bekommt `prusa_values` statt `values_for` — die
 Maschine kommt aus der Kette, `_machine_keys` entfällt. Für Cura folgt die
 Maschine (`_cura_machine` in `write_config`: Druckerdefinition hinter `-j`,
 Start- und Endcode als eigene `-s`, die zwei Schalter für Curas
-Temperaturbefehle); sie braucht Installation und fertige Werte und steht
-deshalb nicht in `values_for`.
+Temperaturbefehle), nicht in `values_for`.
 
 ## CuraEngine rechnet keine Formeln
 

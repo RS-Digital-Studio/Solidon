@@ -112,7 +112,8 @@ das der Orca-Familie als `finished` mit (Bambu endet manchmal nicht danach).
 
 `AdhesionSettings.brim_gap` bezeichnet den Abstand am korrigierten Fuß.
 `manufacturer.native_brim_gap` übersetzt den belegten Bezug für Konsole und
-Projekt-/Objektwerte; Grenzen und Rückwege stehen in der Export-Herleitung.
+Projekt-/Objektwerte, `part_brim_gap` je Teil (Creality: Fußkorrektur des
+Teils); Grenzen und Rückwege stehen in der Export-Herleitung.
 
 ## Die Lüfterkurve
 
@@ -121,7 +122,9 @@ Mindestzeit, unten ab einer Schwelle): `CoolingSettings` mit `fan_speed`,
 `minimum_fan_speed`, `fan_below_layer_time`, `minimum_layer_time`, übersetzt in
 `slicer_keys`. `handover._fan_curve_in_order` deckelt den unteren Wert auf den
 oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
-`slicer_profiles` liest beide Enden und die Schwelle zurück.
+`slicer_profiles` liest beide Enden und die Schwelle zurück. Bei Cura kommen
+unteres Ende und Schwelle aus der Druckerdefinition
+(`manufacturer.cura_fan_curve`).
 
 ## Die vier Gegenproben nach dem Lauf
 

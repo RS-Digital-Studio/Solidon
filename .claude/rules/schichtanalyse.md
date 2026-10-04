@@ -40,9 +40,8 @@ G-Code zurück.
   des Materials aufs Hotend. Ältere Projekte bekommen die Leerfahrt als
   Vorschlag.
 - **Kein Tempo fördert mehr, als das Filament fließt**
-  (`print_settings.flow_speed_limit`, Rechnung der Volumenstromregel) — die
-  Herstellertempi gelten seinem schnellsten Filament. Ältere Projekte behalten
-  ihre Tempi; schneller wird nie vorgeschlagen.
+  (`print_settings.flow_speed_limit`, Rechnung der Volumenstromregel). Ältere
+  Projekte behalten ihre Tempi; schneller wird nie vorgeschlagen.
 - **Was Solidon meint, wird geschrieben, auch das Muster**: „Gitter“ als
   `rectilinear-grid` (Orca, PrusaSlicer) bzw. `grid` (Cura, Linienabstand mal
   zwei); Bäume behalten das Muster des Herstellers (`slicer_keys._only`).
@@ -220,12 +219,13 @@ Element).
 
 ## Die Schätzung ist eine Näherung mit Herkunft, keine Rechnung
 
-`slice/estimate.py` antwortet in Mikrosekunden, damit die Zahl beim Ziehen an
-einem Parameter steht. Die Schale ist die Differenz zweier Körper (mittlere
-Wanddicke `3V/A`, Kern als deren dritte Potenz), nie Fläche mal Dicke — das
-zählt Kanten doppelt. Wer die Rechnung anfasst, prüft kompakte **und**
-dünnwandige Körper (`tests/test_estimate.py`). Stützen, Rand, Fahrwege und
-Nähte kennt sie nicht; sie trägt `source="internal"` (Regel 14).
+`slice/estimate.py` antwortet in Mikrosekunden für die Anzeige: Schale als
+Differenz zweier Körper (`3V/A`), nie Fläche mal Dicke; geprüft an kompakten
+**und** dünnwandigen Körpern (`tests/test_estimate.py`). **Die Zeitgegenprobe
+rechnet aus der Schichtanalyse** (`slice/print_time.py`): Mindestschichtzeit,
+belegtes Mindesttempo und Beschleunigung aus dem Herstellerprofil (`Motion`;
+ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
+(`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`.
 
 ## Was die Analyse liefert
 

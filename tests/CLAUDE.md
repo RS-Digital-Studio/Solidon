@@ -36,7 +36,10 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Bleiben Tutorialreihenfolge, echte Gestendauer, Hook-Manifest, skalierte Dialogausschnitte und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
 | Sind G-Code-Auswertung, Startcodevergleich und Vorschlagsbefunde der Slicer-Matrix vollständig belegt? | `test_delivery_matrix_review.py` — fehlende Werte, unvollständige Vorschläge und G2/G3-Bögen |
 | Meldet die Übergabe-Gegenprobe verworfene Schlüssel und geänderte Aufzählungen, während belegte Umbenennungen still bleiben? | `test_slicer_verify.py` — Prusa-/Orca-Konfigurationsblöcke und Anschluss beim Schneiden |
+| Bleibt die eigene Wahl der Platte neben einem übernommenen Vorschlag je Teil — Datei, Projekt, Zurücksetzen? | `test_plate_choice.py`; die Anzeige am Feld in `test_print_settings_ui.py` |
 | Folgen Objektwerte den gemessenen Fähigkeiten des Zielprogramms und bleiben andere Teile unverändert? | `test_slicer_part_settings.py` — Rollen, Familiengrenzen, Cura-Erstschichtbreite und fehlende Herstellerketten |
+| Bleibt Curas Lüfterkurve (unteres Ende, Schwelle) bei seiner Definition, in Dialog, Konsole, Spule und Fensterprofil? | `test_cura_fan_curve.py` |
+| Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`; der Startanteil aus `M73 P` in `test_gcode.py` |
 | Behalten innere Vollschichten, sichtbare Oberseite und Bügeln ihre Tempi in Cura? | `test_cura_skin_speeds.py` — Engine-Ebenen; `test_export.py` — importierbares Profil, mit und ohne obere Schichten |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |

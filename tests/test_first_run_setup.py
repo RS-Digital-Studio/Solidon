@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 
 from app.core import discover
 from app.core.knowledge import profiles
@@ -350,7 +350,7 @@ def test_the_remembered_slicer_suggests_its_printer_and_done_waits_for_it(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Der gemerkte Slicer schlägt seinen Drucker gleich beim Öffnen vor, und
-    *Fertig* speichert ihn auch, wenn die Suche noch läuft.
+    *Fertig* speichert ihn auch, wenn die Suche noch läuft — ohne auf sie zu warten.
 
     Robert, 27.09.2026: Der ElegooSlicer steht auf dem Centauri Carbon 2, im
     Druckdialog stand danach der allgemeine Drucker. Die Drucker des Slicers
@@ -382,8 +382,19 @@ def test_the_remembered_slicer_suggests_its_printer_and_done_waits_for_it(
 
     assert dialog._printer_survey is not None, "die Drucker des gemerkten Slicers werden gesucht"
     assert not dialog.printer.isEnabled(), "und die Auswahl sagt, dass sie noch kommt"
-    threading.Timer(0.3, gate.set).start()
+    # *Fertig* hält den Oberflächen-Thread nicht an (RM-289, B10): Der Klick
+    # kehrt sofort zurück, solange die Suche noch am Tor wartet, und die
+    # schließenden Knöpfe sind bis zur Antwort gesperrt.
     dialog.accept()
+    assert dialog.result() != QDialog.DialogCode.Accepted
+    assert not dialog.start.isEnabled() and not dialog.open_button.isEnabled()
+    assert not dialog.inventory_button.isEnabled()
+    gate.set()
+    assert dialog.wait_for_survey()
+    assert dialog.result() == QDialog.DialogCode.Accepted, (
+        "der gemerkte Klick läuft nach der Antwort"
+    )
+    assert dialog.start.isEnabled()
     dialog.apply_to(settings)
     assert settings.printer == "centauri-carbon-2"
 

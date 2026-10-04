@@ -1271,3 +1271,45 @@ def test_the_command_line_takes_back_a_skipped_recognition(
     said = capsys.readouterr().err
     assert "obj_9" in said
     assert load(path).document.ops[0].matches[key]["allowed"] is False
+
+
+def test_a_setting_per_part_names_the_parts_and_the_setting(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """RM-289, N4: Die Kommandozeile bündelte gleiche Sätze und nannte bei einer
+    Einstellung je Teil weder Teil noch Einstellung. Feldname und Wert kommen
+    aus derselben Tabelle wie im Druckdialog, die Teile beim Namen."""
+    from app.cli.main import print_findings
+    from app.core.types import Finding
+
+    def part(object_id: str, value: object) -> Finding:
+        return Finding(
+            code="export.part_setting",
+            severity="info",
+            message="Nur für dieses Teil: Die Überhänge sind zu groß.",
+            values={"setting": "support.style", "value": value},
+            object_id=object_id,
+        )
+
+    print_findings(
+        [part("obj_1", "auto"), part("obj_2", "auto"), part("obj_3", "tree")],
+        {"obj_1": "Pilz", "obj_2": "Turm", "obj_3": "Baum"},
+    )
+    lines = capsys.readouterr().out.splitlines()
+
+    assert len(lines) == 2, lines
+    assert lines[0].startswith("  - (2) ")
+    assert "Pilz, Turm" in lines[0] and "Stützen: Automatisch" in lines[0], lines[0]
+    assert "Baum" in lines[1] and "Stützen: Baum" in lines[1], lines[1]
+    assert not any("support.style" in line for line in lines)
+
+
+def test_the_dialog_reads_the_same_field_table_as_the_command_line() -> None:
+    """Eine Tabelle, nicht zwei: Der Dialog liest die Felder aus dem Kern."""
+    from app.core.knowledge import print_fields
+    from app.ui import print_settings_dialog
+
+    assert print_settings_dialog.FIELDS is print_fields.FIELDS
+    assert print_settings_dialog.setting_title("shell.wall_count") == (
+        print_fields.setting_title("shell.wall_count")
+    )

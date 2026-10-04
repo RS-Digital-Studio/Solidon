@@ -175,7 +175,7 @@ FLEXIBLE_MATERIALS: Final = frozenset({"tpu-95a"})
 
 #: Mehr Wände schlägt hier nichts vor — es ist die Obergrenze des Feldes, in
 #: das der Vorschlag hineingeht (``shell.wall_count`` in
-#: ``print_settings_dialog.FIELDS``).
+#: ``knowledge.print_fields.FIELDS``).
 #:
 #: Ein Vorschlag über diesem Wert wäre nicht bloß unpraktisch, sondern
 #: gefährlich: Er ist **übernehmbar**, das Feld kann ihn aber nicht anzeigen.

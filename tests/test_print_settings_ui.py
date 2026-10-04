@@ -7361,7 +7361,7 @@ def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
 ) -> None:
     """Die Gegenprobe enthält weder die übrige Platte noch alte Projektvorgaben."""
     from app.core.export import threemf
-    from app.core.slice.estimate import estimate
+    from app.core.slice.estimate import PlateComparison, estimate
     from app.ui import print_settings_dialog as module
 
     profile = profiles.make_profile()
@@ -7388,7 +7388,14 @@ def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
             ]
         )
     )
-    run = module.PlateRun(1, tmp_path / "plate.3mf", slots=merged)
+    # Die Zeit kommt aus der Schichtanalyse der Platte (RM-465), nicht aus
+    # Volumen und Oberfläche der Teile.
+    run = module.PlateRun(
+        1,
+        tmp_path / "plate.3mf",
+        slots=merged,
+        comparison=PlateComparison(1, None, None, seconds=321.0),
+    )
 
     actual = module._comparison_for_job(job, [run])
 
@@ -7401,13 +7408,12 @@ def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
         for entry, own in zip(selected, choices, strict=True)
     ]
     assert actual.grams == pytest.approx(sum(item.grams for item in expected))
-    assert actual.seconds == pytest.approx(sum(item.seconds for item in expected))
-    old = estimate(objects[0].mesh.volume, objects[0].mesh.area, print_settings.resolve(profile))
-    assert actual.seconds != pytest.approx(old.seconds * len(objects))
+    assert actual.seconds == pytest.approx(321.0)
 
 
 def test_slice_comparison_keeps_unknown_material_distribution_unknown(tmp_path: Path) -> None:
     """Oberflächenanteile beweisen keine Volumenanteile verschiedener Filamente."""
+    from app.core.slice.estimate import PlateComparison
     from app.ui import print_settings_dialog as module
 
     profile = profiles.make_profile()
@@ -7423,12 +7429,17 @@ def test_slice_comparison_keeps_unknown_material_distribution_unknown(tmp_path: 
     body = replace(body, mesh=replace(body.mesh, slots=(0, 1) * 6), material_slots=[first, second])
     setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
     job = module._PlateJob((body,), (0,), tmp_path, "Teil", setup, settings, profile, {})
-    run = module.PlateRun(0, tmp_path / "plate.3mf", slots=(first, second))
+    run = module.PlateRun(
+        0,
+        tmp_path / "plate.3mf",
+        slots=(first, second),
+        comparison=PlateComparison(0, None, None, seconds=99.0),
+    )
 
     actual = module._comparison_for_job(job, [run])
 
     assert actual.grams is None
-    assert actual.seconds is not None, "gleicher Volumenstrom erlaubt weiterhin die Zeitschätzung"
+    assert actual.seconds == pytest.approx(99.0), "die Zeit der Platte hängt nicht am Material"
 
 
 def test_slice_comparison_resolves_the_profile_bound_to_the_plate(tmp_path: Path) -> None:
@@ -7457,7 +7468,7 @@ def test_slice_comparison_resolves_the_profile_bound_to_the_plate(tmp_path: Path
         replace(settings, filament=replace(settings.filament, density=2.4, max_flow=2.0)),
     )
     assert actual.grams == pytest.approx(expected.grams)
-    assert actual.seconds == pytest.approx(expected.seconds)
+    assert actual.seconds is None, "ohne Schichtanalyse der Platte keine Zeit (RM-465)"
 
 
 def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_scene(
@@ -7466,7 +7477,7 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     """Arbeiter, Ergebnisannahme und Prüfbericht reichen denselben Vergleichskontext weiter."""
     from types import SimpleNamespace
 
-    from app.core.slice.estimate import estimate
+    from app.core.slice.estimate import PlateComparison, estimate
     from app.ui import print_settings_dialog as module
     from app.ui.main_window import MainWindow
 
@@ -7484,14 +7495,17 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [1])
     monkeypatch.setattr(dialog, "_plate_slots", list)
+    expected = estimate(selected.mesh.volume, selected.mesh.area, settings)
     monkeypatch.setattr(
         module,
         "_prepare_plate",
         lambda _job, plate: module.PlateRun(
-            plate, tmp_path / "plate.3mf", slots=(MaterialSlot(0, ""),)
+            plate,
+            tmp_path / "plate.3mf",
+            slots=(MaterialSlot(0, ""),),
+            comparison=PlateComparison(plate, None, None, seconds=expected.seconds),
         ),
     )
-    expected = estimate(selected.mesh.volume, selected.mesh.area, settings)
     monkeypatch.setattr(
         module.handover,
         "slice_model",
@@ -9628,6 +9642,7 @@ def test_unknown_material_does_not_discard_independent_plate_comparisons(tmp_pat
     run = module.PlateRun(0, tmp_path / "actual.3mf", comparison=PlateComparison(0, 0.0, 100))
     actual = module._comparison_for_job(job, [run])
     assert actual.grams is None
+    assert actual.seconds is None, "die Platte nennt keine Zeit"
     assert actual.plates == (run.comparison,)
 
 
@@ -10298,3 +10313,84 @@ def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_
         ("select", "large"),
         ("actual-dialog", "scale_object", ("large",), {"about": "bed"}),
     ]
+
+
+# --- Ein Vorschlag je Teil am Feld (RM-289, B6) ---------------------------------------
+
+
+def _tower_and_plate() -> tuple[SceneObject, SceneObject]:
+    tower = trimesh.creation.box(extents=(4.0, 4.0, 80.0))
+    tower.apply_translation((0.0, 0.0, 40.0))
+    wide = trimesh.creation.box(extents=(60.0, 60.0, 10.0))
+    wide.apply_translation((50.0, 0.0, 5.0))
+    return (
+        SceneObject(id="obj_1", name="Turm", mesh=MeshData.of(tower)),
+        SceneObject(id="obj_2", name="Platte", mesh=MeshData.of(wide)),
+    )
+
+
+def test_the_advice_worker_names_who_gets_an_accepted_suggestion(qt_app: QApplication) -> None:
+    """Nach dem Übernehmen fragt der Rat, welchen Teilen der Brim gilt — dieselbe
+    Frage wie der Export (``split_for_parts``, ``part_advice``)."""
+    from app.core.slice.analysis import slice_body
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "adhesion.kind", "brim"
+    )
+    objects = _tower_and_plate()
+    worker = print_dialog._AdviceWorker(objects, settings, profile, None, {}, (), (), {})
+    results = {
+        body.id: (
+            45.0,
+            0.8,
+            slice_body(
+                body.mesh,
+                settings.layers.layer_height,
+                first_layer_height=settings.layers.first_layer_height,
+                support_volume=False,
+            ),
+        )
+        for body in objects
+    }
+
+    assert worker._accepted_targets(results) == {"adhesion.kind": ("Turm",)}
+
+
+def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B6: Im Feld stand „Brim“ fett, als gälte er der Platte. Daneben steht jetzt,
+    dass nur der Turm ihn bekommt und die übrigen Teile die eigene Wahl drucken;
+    *Zurücksetzen* führt zu dieser Wahl zurück (B2)."""
+    chosen = print_settings.with_choice(dialog.settings, "adhesion.kind", "none")
+    dialog.settings = print_settings.with_accepted(chosen, "adhesion.kind", "brim")
+    monkeypatch.setattr(dialog, "_plate_bodies", lambda: list(_tower_and_plate()))
+    dialog._accepted_parts = {"adhesion.kind": ("Turm",)}
+
+    dialog._mark_origins()
+
+    note = dialog._part_notes["adhesion.kind"]
+    assert not note.isHidden()
+    assert "Turm" in note.text() and "Ihre Einstellung" in note.text(), note.text()
+    assert "Ihre Einstellung" in dialog._resets["adhesion.kind"].toolTip()
+
+    dialog._reset_field("adhesion.kind")
+
+    assert dialog.settings.adhesion.kind == "none"
+    assert "adhesion.kind" in dialog.settings.chosen
+    assert dialog._part_notes["adhesion.kind"].isHidden()
+
+
+def test_a_suggestion_no_part_asks_for_says_it_applies_to_all(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dialog.settings = print_settings.with_accepted(dialog.settings, "adhesion.kind", "brim")
+    monkeypatch.setattr(dialog, "_plate_bodies", lambda: list(_tower_and_plate()))
+    dialog._accepted_parts = {"adhesion.kind": ()}
+
+    dialog._mark_origins()
+
+    note = dialog._part_notes["adhesion.kind"]
+    assert not note.isHidden()
+    assert note.text() == str(tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich."))

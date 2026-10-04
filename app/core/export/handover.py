@@ -1196,8 +1196,8 @@ def object_keys(
         ):
             written.pop("brim_object_gap")
         else:
-            written["brim_object_gap"] = manufacturer.native_brim_gap(
-                applied.adhesion.brim_gap, brim_foot_offset, program
+            written.update(
+                manufacturer.part_brim_gap(applied.adhesion.brim_gap, brim_foot_offset, program)
             )
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 
@@ -1477,8 +1477,10 @@ def split_for_parts(
     origin = manufacturer.base_settings(profile, settings.quality, setup)
     foundation = origin.settings
     base = settings
+    # Die Platte bekommt die eigene Wahl unter dem Vorschlag, sonst die
+    # Grundlage (RM-289, B2).
     for path in sorted(wanted):
-        base = print_settings.without_choice(base, path, foundation)
+        base = print_settings.for_the_plate(base, path, foundation)
     wanted -= advise.plate_paths(
         base, profiles.for_process(profile, base, effective=True), flavour=flavour
     )
@@ -1486,14 +1488,14 @@ def split_for_parts(
     unavailable = wanted - per_part
     trimmed = settings
     for path in sorted(per_part):
-        trimmed = print_settings.without_choice(trimmed, path, foundation)
+        trimmed = print_settings.for_the_plate(trimmed, path, foundation)
     # **Der Rat je Teil wird ohne jede Übernahme je Teil gefragt**, auch ohne
     # die, die der Slicer nur plattenweit annimmt. Trug die Grundlage sie
     # schon, schwieg der Rat an der Stange, und am Block stand bei Cura das
     # ruhige Innenwandtempo der Stange, ohne dass ein Befund es sagte (RM-430).
     untouched = trimmed
     for path in sorted(unavailable):
-        untouched = print_settings.without_choice(untouched, path, foundation)
+        untouched = print_settings.for_the_plate(untouched, path, foundation)
     if flavour == "cura":
         return PartSplit(
             settings, untouched, per_part, revert=True, unavailable=unavailable, accepted=settings
@@ -2329,6 +2331,10 @@ def _resolve_slot(
             )
             for path, value in readback.values.items():
                 settings = with_path(settings, path, value)
+    if (material_id and material_id != profile.material.id) or readback is not None:
+        # Die Kurve der Spule folgt bei Cura derselben Regel wie die des
+        # Projekts (RM-228); ohne neues Material bleibt sie aus der Grundlage.
+        settings = manufacturer.cura_fan_curve(settings, profile, setup)
     override = override_for(settings, slot)
     if override is not None and not override.empty:
         settings = replace(
@@ -6672,6 +6678,24 @@ def for_the_cura_window(
     }
 
 
+def _without_curas_own_fan_curve(
+    values: Mapping[str, str], settings: PrintSettings
+) -> dict[str, str]:
+    """Das Fenster rechnet unteres Ende und Schwelle der Lüfterkurve selbst (RM-228).
+
+    Die Konsole liest nur Vorgabewerte und bekommt deshalb, was die
+    Druckerdefinition sagt (:func:`manufacturer.cura_fan_curve`). Das Fenster
+    rechnet Formel und Qualitätsstufe der aktiven Maschine; ein importiertes
+    Profil überschriebe sie. Es nennt die beiden deshalb nur als eigene Wahl.
+    """
+    dropped = {
+        slicer_keys.native_key(entry.key, "")
+        for entry in slicer_keys.TABLES["cura"]
+        if entry.path in manufacturer.CURA_FAN_PATHS and entry.path not in settings.explicit
+    }
+    return {key: value for key, value in values.items() if key not in dropped}
+
+
 def cura_profile_beside(
     model: Path,
     settings: PrintSettings,
@@ -6765,7 +6789,9 @@ def cura_profile_beside(
         if position is not None:
             lines.append(f"position = {position}")
         lines += ["", "[values]"]
-        limited = for_the_cura_window(values, machine=motion)
+        limited = for_the_cura_window(
+            _without_curas_own_fan_curve(values, settings), machine=motion
+        )
         if findings is not None:
             findings.extend(_cura_limit_findings(values, limited, paths=settings.explicit))
         for key, value in sorted(limited.items()):

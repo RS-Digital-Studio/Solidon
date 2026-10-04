@@ -25,7 +25,7 @@ jetzt sofort seine Fragen und trägt die Antworten nach.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
@@ -97,11 +97,6 @@ from app.ui.style import (
 )
 
 _log = get_logger(__name__)
-
-#: So lange wartet *Fertig* höchstens auf die Drucker des Slicers, in ms
-#: (:meth:`FirstRunDialog._await_printer_survey`). Gemessen braucht die Suche
-#: am ElegooSlicer mit 1001 Profilen rund eine Sekunde.
-PRINTER_SURVEY_WAIT_MS = 10_000
 
 #: Der Zustand jedes Programms steht als Wort in der Zeile, damit sich die
 #: Liste auch ohne Farbe liest (§19.1). Vorher stand dort ein Plus- und ein
@@ -389,6 +384,9 @@ class FirstRunDialog(QDialog):
         self._printer_survey: _PrinterSurvey | None = None
         self._surveyed_slicer = ""
         """Für welchen Slicer die Drucker zuletzt gesucht wurden."""
+        self._after_printers: Callable[[], None] | None = None
+        """Was ein Knopf während der Druckersuche verlangt hat — es läuft, sobald
+        die Antwort da ist (:meth:`_when_printers_known`)."""
 
         self.printer = PrinterComboBox(self)
         self.printer.setSizeAdjustPolicy(
@@ -862,7 +860,7 @@ class FirstRunDialog(QDialog):
     # Antwort trifft einen Dialog, dessen Werte schon übernommen sind.
 
     def accept(self) -> None:
-        if not self._await_printer_survey():
+        if not self._when_printers_known(self.accept):
             return
         if not self._save_custom_printer():
             return
@@ -870,28 +868,38 @@ class FirstRunDialog(QDialog):
             return
         super().accept()
 
-    def _await_printer_survey(self) -> bool:
+    def _when_printers_known(self, action: Callable[[], None]) -> bool:
         """Gespeichert wird die Druckerwahl nach der Suche, nicht die davor.
 
         Solange die Drucker des Slicers gesucht werden, zeigt die Auswahl noch
         den bisherigen Drucker, und erst die Antwort setzt den des Slicers
         (:meth:`_fill_printers`). *Fertig* in dieser Zeit übernahm den
-        bisherigen. Die Suche dauert rund eine Sekunde; gewartet wird mit
-        Wartezeiger, und eine späte Antwort wird noch zugestellt. Die
-        Programmsuche daneben wartet weiter nicht (siehe unten): Ihr Ergebnis
-        wird nicht gespeichert.
+        bisherigen. Bis 0.5.1 wartete der Knopf deshalb im Oberflächen-Thread
+        auf die Suche, bis zu zehn Sekunden mit Wartezeiger und einem
+        ``processEvents``, das einen zweiten Klick zustellen konnte (RM-289,
+        B10). Jetzt merkt sich der Dialog, was verlangt war, sperrt die drei
+        Knöpfe, die den Dialog schließen, und führt es aus, sobald die Antwort
+        da ist (:meth:`_printers_known`). ``True`` heißt: sofort weiter.
         """
-        survey = self._printer_survey
-        if survey is None:
+        if self._printer_survey is None:
             return True
-        if survey.isRunning():
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-            try:
-                survey.wait(PRINTER_SURVEY_WAIT_MS)
-            finally:
-                QApplication.restoreOverrideCursor()
-        QCoreApplication.processEvents()
-        return self._printer_survey is None
+        self._after_printers = action
+        self._set_closing_enabled(False)
+        return False
+
+    def _set_closing_enabled(self, enabled: bool) -> None:
+        for button in (self.start, self.open_button, self.inventory_button):
+            button.setEnabled(enabled)
+
+    def _printers_known(self) -> None:
+        """Die Druckersuche ist beantwortet: ein gemerkter Klick läuft jetzt."""
+        if self._printer_survey is not None:
+            # Eine neue Suche für eine andere Wahl läuft schon — sie entscheidet.
+            return
+        action, self._after_printers = self._after_printers, None
+        self._set_closing_enabled(True)
+        if action is not None:
+            action()
 
     def _language_changed(self) -> None:
         """Die Sprache wechselt sofort — auch im Dialog selbst.
@@ -934,8 +942,13 @@ class FirstRunDialog(QDialog):
     # --- result -----------------------------------------------------------------
 
     def apply_to(self, settings: UiSettings) -> UiSettings:
-        """Übernimmt die Antworten und markiert die angenommene Einrichtung als beendet."""
-        if not self._await_printer_survey():
+        """Übernimmt die Antworten und markiert die angenommene Einrichtung als beendet.
+
+        Angenommen wird erst nach der Druckersuche (:meth:`accept`); läuft
+        trotzdem noch eine, bleibt alles, wie es war — eine Druckerwahl vor
+        ihrer Antwort wäre die alte.
+        """
+        if self._printer_survey is not None:
             return settings
         if not self._save_custom_printer():
             return settings
@@ -1035,6 +1048,8 @@ class FirstRunDialog(QDialog):
         """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei
         „fertig".
         """
+        if not self._when_printers_known(self._open):
+            return
         self.accept()
         if self.result() != self.DialogCode.Accepted:
             return
@@ -1043,6 +1058,8 @@ class FirstRunDialog(QDialog):
 
     def _open_inventory(self) -> None:
         """Die Einrichtung übernehmen und danach das Filamentlager öffnen."""
+        if not self._when_printers_known(self._open_inventory):
+            return
         self.accept()
         if self.result() != self.DialogCode.Accepted:
             return
@@ -1240,6 +1257,7 @@ class FirstRunDialog(QDialog):
         if not chosen:
             self._fill_printers(tuple(profiles.printer_profiles()))
             self.printer_state.clear()
+            self._printers_known()
             return
         self.printer.setEnabled(False)
         self.printer_state.setText(tr("Drucker des gewählten Slicers werden gesucht …"))
@@ -1340,6 +1358,7 @@ class FirstRunDialog(QDialog):
                 )
             )
         self._grow_soon()
+        self._printers_known()
 
     def _printers_failed(self, detail: str) -> None:
         """Die eigene Druckerwahl bleibt auch ohne lesbaren Profilbestand erreichbar."""
@@ -1354,6 +1373,7 @@ class FirstRunDialog(QDialog):
                 "Slicer oder richten Sie Ihren Drucker selbst ein."
             )
         )
+        self._printers_known()
 
 
 def choose_slicer_file(parent: QWidget, box: QComboBox) -> None:

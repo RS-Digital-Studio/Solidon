@@ -53,7 +53,7 @@ im Quelltext und die Ausgaben gemeinsamer Beschriftungshelfer.
 `flat`, `linear` steht in `_CHOICE_NAMES` (`app/ui/labels.py`);
 `tests/test_translations.py` lässt nur Selbstnamen durch (M4, 6x3, mm, x,
 DejaVu Sans). Es gibt **eine** Namenstabelle — der Test prüft auch
-`print_settings_dialog.FIELDS` gegen sie, und eine dritte Liste von
+`knowledge.print_fields.FIELDS` gegen sie, und eine dritte Liste von
 Auswahlwerten wird dort eingehängt.
 
 **Findet der Kunde die Sache im Slicer unter dem englischen Begriff, bleibt

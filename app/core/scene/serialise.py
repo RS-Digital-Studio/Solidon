@@ -961,6 +961,10 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         # alles andere ist Grundlage und kommt neu aus dem Profil.
         "chosen": sorted(settings.chosen),
         "accepted": sorted(settings.accepted),
+        # Die eigene Wahl der Platte unter einem übernommenen Vorschlag je
+        # Teil (RM-289, B2). Ein älterer Leser übergeht den Schlüssel und
+        # druckt die Platte wie bisher mit der Grundlage.
+        "plate_choices": dict(settings.plate_choices),
     }
     for group in _SETTING_GROUPS:
         section = getattr(settings, group)
@@ -1014,8 +1018,39 @@ def print_settings_from_data(data: dict[str, Any], material: str = "") -> PrintS
         inventory_project_id=data.get("inventory_project_id", ""),
         chosen=_known_paths(data.get("chosen", ())),
         accepted=_known_paths(data.get("accepted", ())) - _known_paths(data.get("chosen", ())),
+        plate_choices=_plate_choices(
+            data.get("plate_choices"),
+            _known_paths(data.get("accepted", ())) - _known_paths(data.get("chosen", ())),
+        ),
         **groups,
     )
+
+
+def _plate_choices(raw: object, accepted: frozenset[str]) -> tuple[tuple[str, object], ...]:
+    """Nur Werte unter einem übernommenen Pfad, die der Pfad annimmt.
+
+    Was sonst in der Datei steht — ein Pfad ohne Übernahme, ein Wert falscher
+    Art —, wäre eine Wahl, die niemand sieht; es fällt weg.
+    """
+    if not isinstance(raw, dict):
+        return ()
+    probe = PrintSettings()
+    kept: list[tuple[str, object]] = []
+    for path, value in raw.items():
+        if path not in accepted:
+            continue
+        current = print_settings.read_path(probe, path)
+        if isinstance(current, bool) or isinstance(value, bool):
+            ok = isinstance(current, bool) and isinstance(value, bool)
+        elif isinstance(current, int | float) or current is None:
+            ok = value is None or isinstance(value, int | float)
+            if ok and isinstance(current, float) and isinstance(value, int):
+                value = float(value)
+        else:
+            ok = isinstance(value, type(current))
+        if ok:
+            kept.append((path, value))
+    return tuple(sorted(kept, key=lambda entry: entry[0]))
 
 
 def document_to_data(document: Document) -> dict[str, Any]:
