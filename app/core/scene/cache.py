@@ -173,7 +173,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   STEP-Import trüge sonst weiter Einzelflächen. Ausdrücklich
 #:   zusammengefasste Zellen binden sich wie Texturen an ihre Oberfläche. Ein
 #:   Eintrag aus nur einer der beiden Linien kennt die andere Änderung nicht.
-CACHE_FORMAT_VERSION: Final = 45
+#: - 46 (RM-226): Ein Langloch ist am exakten Kern so tief wie seine ganze
+#:   Wand, über beide Bögen; ein Zylinder mit schrägem oder freiem Rand misst
+#:   seine Achsgrenzen an der Form statt an den Parametergrenzen.
+CACHE_FORMAT_VERSION: Final = 46
 
 
 @dataclass(frozen=True, slots=True)

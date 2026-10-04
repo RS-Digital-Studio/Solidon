@@ -24,7 +24,7 @@ from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import BaseParams, Feature, OpContext, OpResult, Profile, SceneObject, Source
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from tests.helpers import exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -2122,3 +2122,124 @@ def test_a_corner_round_refuses_on_both_kernels_with_the_sentence_of_the_panel(
             if finding.code == f"op.{operation}.GeometryError"
         ]
         assert refusals == [str(NOT_BETWEEN_TWO_PLANES)], operation
+
+
+@pytest.mark.parametrize("chamfer", [False, True])
+def test_a_slot_through_a_sloped_plate_is_as_deep_on_both_kernels(chamfer: bool) -> None:
+    """Ein Langloch durch eine schräge Platte ist an beiden Kernen gleich tief (RM-226).
+
+    Die Platte 40 x 40 x 6 ist unten um 4 Grad geneigt, das Langloch Ø 6
+    über 20 mm läuft quer zur Neigung hindurch; seine Wand reicht vom
+    tiefsten Punkt des tieferen Bogens (y = -10, Z 2 - 10 tan 4°) bis zur
+    Oberseite, mit Fase 0,75 an beiden Mündungen um 1,5 mm weniger. Der exakte
+    Kern maß nur den ersten Bogen — 3,51 statt 4,70 mm, mit Fase 2,01 statt
+    3,20 — und setzte die Mitte auf dessen halbe Höhe; das Netz misst die
+    ganze Wand. Über beide Bögen gemessen lag der tiefere Bogen dann noch
+    0,042 mm zu tief: Seine Parametergrenzen kamen aus der Näherung des
+    schrägen Randes, jetzt misst der exakte Kern an der Form
+    (``canonical._rims_on_grid``). Beide Kerne tragen dieselbe Tiefe und
+    dieselbe Mitte. Die Fase erklärte den Unterschied nicht: Beide Kerne
+    zählen sie nicht mit.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+    from tests.helpers import sloped_slot_plate
+
+    solid = sloped_slot_plate(chamfer=chamfer)
+    expected = 6.0 - (2.0 - 10.0 * math.tan(math.radians(4.0))) - (1.5 if chamfer else 0.0)
+    slots = {}
+    for kind, found in (("brep", features_of(solid)), ("mesh", detect(as_mesh_data(solid)))):
+        (slot,) = [feature for feature in found.values() if feature.kind == "slot"]
+        slots[kind] = slot
+        assert slot.params["depth"] == pytest.approx(expected, abs=1e-3), kind
+    # Die Mitte des Netzes liest die Endringe der vernetzten Wand; an der
+    # Fase liegen sie 0,0014 mm über der exakten — innerhalb der Durchbiegung
+    # der Vernetzung, vorher 0,59 mm daneben.
+    assert slots["brep"].params["centre"] == pytest.approx(
+        slots["mesh"].params["centre"], abs=MAX_FACET_SAG
+    )
+
+
+def _plate_with_a_slot_near_the_side(ledge: bool) -> Any:
+    """Platte 40 x 30 x 6 mit durchgehendem Langloch Ø 6 über 14 mm bei x = 10 (RM-226).
+
+    ``ledge`` setzt am Rand einen Steg 6 x 30 x 6 auf (x 14 bis 20): Eine Kopie
+    über die Seite trifft dann mit ihrer Achse Material und geht nicht mehr
+    durch — die Lage des Teppichclips, an dem der Fund auffiel.
+    """
+    from app.core.brep import edit
+
+    plate = edit.slot_bore(
+        edit.box(40.0, 30.0, 6.0),
+        position=(10.0, 0.0, 3.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+        length=14.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    if not ledge:
+        return plate
+    return edit.boolean("union", [plate, edit.moved(edit.box(6.0, 30.0, 6.0), (17.0, 0.0, 6.0))])
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("ledge", "shift", "said"),
+    [
+        (False, 9.0, ["bore.over_the_edge", "duplicate_feature.feature_lost"]),
+        (
+            False,
+            14.0,
+            ["boolean.without_effect", "bore.over_the_edge", "duplicate_feature.feature_lost"],
+        ),
+        (
+            True,
+            9.0,
+            [
+                "bore.over_the_edge",
+                "duplicate_feature.feature_lost",
+                "duplicate_feature.mouth_covered",
+            ],
+        ),
+    ],
+)
+def test_a_slot_copied_over_the_side_says_the_same_on_both_kernels(
+    kind: str, ledge: bool, shift: float, said: list[str], profile: Profile
+) -> None:
+    """Eine Langlochkopie über die Seite sagt an beiden Kernen dasselbe (RM-226).
+
+    Am Teppichclip sagte der exakte Kern zur 12 mm quer verdoppelten
+    Langlochkopie „nicht als eigenes Merkmal zu erkennen“, das Netz „geht
+    nicht mehr durch“ und danach „nicht mehr automatisch wiederzuerkennen“:
+    Am Netz prüfte ``_copies_found`` nur Bohrungen und Kegel nach, und den
+    Durchgang fragte es auch an einer Kopie, die es nicht gibt. Neben der Seite
+    (Verschiebung 12) stand die Kopie am Netz sogar als zweites Langloch im
+    Baum. Jetzt nennen beide Kerne die Kante, die verlorene Kopie und — wo das
+    Werkzeug ganz daneben liegt — den Schnitt ohne Wirkung, und im Baum steht
+    an beiden nur das Original. Die Kopie berührt es nie (x 7 bis 13 gegen
+    16 bis 22 und 21 bis 27). Unter dem Steg sagen beide zusätzlich, dass die
+    Mündung der Kopie unter Material liegt — am Netz schwieg dieser Satz,
+    weil „geht nicht mehr durch“ schon dastand.
+    """
+    exact_kernel()
+    load_operations()
+    entry = _object(_plate_with_a_slot_near_the_side(ledge), kind)
+    (slot,) = [feature for feature in entry.features.values() if feature.kind == "slot"]
+    centre = slot.params["centre"]
+    result, step = _evaluation(
+        "duplicate_feature",
+        {
+            "at_feature": slot.id,
+            "x": float(centre[0]) + shift,
+            "y": float(centre[1]),
+            "z": float(centre[2]),
+        },
+        [entry],
+        profile,
+    )
+    assert sorted(finding.code for finding in result.scene.report.findings) == said
+    (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+    assert [feature.kind for feature in output.features.values()].count("slot") == 1

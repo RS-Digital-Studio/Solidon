@@ -1563,11 +1563,27 @@ def _one_slot(
 
     surface = surface_of(first)
     first_v, last_v = surface.first, surface.last
-    depth = abs(last_v - first_v)
-    # Die Mitte liegt auf halbem Weg zwischen den Achsen, auf halber Tiefe des
-    # **ersten** Bogens — der zweite hat denselben Mantel, aber vielleicht
-    # einen anderen Parameterursprung (siehe :func:`_across_between`).
-    first_centre = _axis_point(one, (first_v + last_v) / 2.0)
+    # **Die Tiefe ist die Spanne beider Bögen** (RM-226), auf die Achse des
+    # ersten gelegt — der zweite hat vielleicht einen anderen
+    # Parameterursprung (siehe :func:`_across_between`) und eine gespiegelte
+    # Achse. Durch eine schräge Platte ist jeder Bogen anders hoch; gemessen
+    # wurde nur der erste: an der um 4 Grad geneigten Platte 3,51 statt
+    # 4,70 mm, mit Fase 2,01 statt 3,20. Das Netz misst die ganze Wand.
+    partner = surface_of(second)
+    origin, way = one.Location(), one.Axis().Direction()
+    offset, turn = other.Location(), other.Axis().Direction()
+    shift = (
+        (offset.X() - origin.X()) * way.X()
+        + (offset.Y() - origin.Y()) * way.Y()
+        + (offset.Z() - origin.Z()) * way.Z()
+    )
+    sign = turn.X() * way.X() + turn.Y() * way.Y() + turn.Z() * way.Z()
+    ends = (first_v, last_v, shift + sign * partner.first, shift + sign * partner.last)
+    low, high = min(ends), max(ends)
+    depth = high - low
+    # Die Mitte liegt auf halbem Weg zwischen den Achsen, auf halber Tiefe der
+    # ganzen Wand.
+    first_centre = _axis_point(one, (low + high) / 2.0)
     centre: Vec3 = (
         first_centre[0] + across[0] / 2.0,
         first_centre[1] + across[1] / 2.0,
