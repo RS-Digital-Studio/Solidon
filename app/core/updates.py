@@ -214,10 +214,11 @@ MAX_PACKAGE_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:
 #: Wer **diese** Grenze anfasst, prüft dagegen weiterhin, ob das Fenster den
 #: Zuwachs verträgt; sie gehört der Anzeige und nicht der Auswahl. Mit 0.5.1
-#: wuchs sie von 120 auf 200, weil der Abschnitt mehr als 120 Punkte trägt.
+#: wuchs sie von 120 auf 200, mit 0.5.2 auf 300, weil der Abschnitt jeweils mehr
+#: Punkte trägt (0.5.2: 212).
 #: Was eine ältere Installation liest, kürzt ``make_download`` ohnehin von
 #: hinten (``cap_for_legacy_clients``) — deshalb steht das Wichtigste vorn.
-MAX_CHANGES: Final = 200
+MAX_CHANGES: Final = 300
 
 
 def _room_for_the_version_file() -> int:
