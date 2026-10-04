@@ -283,8 +283,8 @@ ihr (`actions._carried_by`).
 - **Eine Mündung unter Material** (`{op}.mouth_covered`: ab der Hälfte des
   Rands, `COVERED_SHARE`, nie nach einer Kantenprobe; exakt zusätzlich die Säule
   im Werkzeug).
-- **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt
-  seitlich auf der gesetzten Achse bis zur Facettengrenze.
+- **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
+  und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung, nicht die Achse.

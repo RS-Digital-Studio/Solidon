@@ -1235,7 +1235,19 @@ und tut dasselbe — beim Verdoppeln einzeln und als Kette und im Muster.
 Wiedergefunden heißt: seitlich auf der Achse, auf die sie gesetzt wurde, bis
 zur Facettengrenze. Die Messung am Netz nimmt sonst auch einen
 angeschnittenen Zylinder über einer Seite als Bohrung, mit seiner Mitte bis
-1,25 mm daneben, und die Auswertung verwarf ihn danach still.
+1,25 mm daneben, und die Auswertung verwarf ihn danach still. **Und neu**
+(RM-226, Nachtrag 04.10.2026): Eine Durchgangsbohrung darf entlang ihrer
+Achse wandern, und längs dieser Achse verdoppelt liegt die Vorlage auf ihr.
+An `pegboard-gs-100-v2` fiel die 12 mm verschobene Kette in einen Durchbruch,
+nichts wurde abgetragen; der exakte Kern nannte alle drei Kopien verloren, das
+Netz zwei — die Kopie der Bohrung Ø 6 fand es in der Vorlage, deren Dreiecke
+danach den Namen der Kopie trugen. Die Ketten waren an beiden Kernen gleich.
+Der exakte Kern nimmt nur Merkmale mit neuem Namen; am Netz ist kein Fund eine
+Kopie, der in Art, Mitte und Durchmesser bis zur Facettengrenze auf einem
+Merkmal der Quelle liegt (`_already_there`) — ohne Freiheit entlang der Achse,
+damit eine Kopie in eine zweite Wand Kandidat bleibt
+(`test_a_copy_along_its_own_axis_into_the_air_is_lost_on_both_kernels`, vorher
+am Netz alle sechs Fälle rot).
 
 **Und eine Bohrung, in deren Zylinder Material steht, ist keine** —
 `hole_is_clear` fragt die Dreiecksmitten des Körpers zwischen den Mündungen

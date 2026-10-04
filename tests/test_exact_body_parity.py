@@ -2704,3 +2704,134 @@ def test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels(
     expected = ["bore.over_the_edge", "duplicate_feature.no_longer_through"]
     assert said["mesh"] == said["brep"] == expected, said
     assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), volumes
+
+
+def _bored_flat_plate(shape: str) -> Any:
+    """Platte 40 x 20 x 10 mit einer Bohrung Ø 6 durch bei x = y = 0, Achse Z.
+
+    ``counterbore`` trägt oben eine Plansenkung Ø 10 ab z = 7, ``sink`` eine
+    Senkung 90° bis Ø 10 an der Oberseite; ``bore`` ist die Bohrung allein.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    plate = edit.box(40.0, 20.0, 10.0)
+    if shape == "bore":
+        return edit.cut_bore(
+            plate, position=(0.0, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=60.0
+        )
+    head = (
+        [(3.0, 7.0), (5.0, 7.0), (5.0, 11.0)]
+        if shape == "counterbore"
+        else [(3.0, 8.0), (6.0, 11.0)]
+    )
+    outline = [(0.0, -1.0), (3.0, -1.0), *head, (0.0, 11.0), (0.0, -1.0)]
+    return edit.bore_profile(plate, outline, frame_of((0.0, 0.0, 1.0), (0, 0, 0)))
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(("shape", "members"), [("bore", 1), ("counterbore", 2), ("sink", 2)])
+def test_a_copy_along_its_own_axis_into_the_air_is_lost_on_both_kernels(
+    shape: str, members: int, quality: Quality, profile: Profile
+) -> None:
+    """Eine Kopie längs der eigenen Achse findet nicht ihre Vorlage (RM-226, Nachtrag).
+
+    An der Lochplatte ``pegboard-gs-100-v2`` lag eine 12 mm verdoppelte
+    Schraubbohrung samt Kette ganz in einem Durchbruch: Nichts wurde
+    abgetragen. Der exakte Kern nannte alle drei Kopien verloren, das Netz nur
+    zwei — es fand die Kopie der durchgehenden Bohrung Ø 6 in der Vorlage selbst
+    wieder, denn eine Durchgangsbohrung darf entlang ihrer Achse wandern
+    (``_copies_found``), und die Vorlage liegt auf derselben Achse. Ihre Dreiecke
+    trugen danach den Namen der Kopie. Der exakte Kern nimmt nur frische
+    Merkmale (``_exact_copy_result``); jetzt auch das Netz. Nachgebaut an einer
+    Platte, die Kopie 12 mm über ihr in der Luft: an beiden Kernen „ohne
+    Wirkung“ und jede Kopie verloren, die Vorlage unter ihrem Namen.
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    body = _bored_flat_plate(shape)
+    said: dict[str, list[str]] = {}
+    for kind in ("mesh", "brep"):
+        mesh = body if kind == "brep" else as_mesh_data(body)
+        features = dict(features_of(body) if kind == "brep" else detect(mesh))
+        entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, kind=kind, features=features)
+        bore = min(
+            (feature for feature in features.values() if feature.kind == "hole"),
+            key=lambda feature: float(feature.params["diameter"]),
+        )
+        x, y, z = (float(value) for value in bore.params["centre"])
+        params = {"at_feature": bore.id, "x": x, "y": y, "z": z + 12.0}
+        result, step = _evaluation("duplicate_feature", params, [entry], profile, quality=quality)
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        source = sorted(name for name, found in features.items() if found.kind in ("hole", "cone"))
+        after = sorted(
+            name for name, found in output.features.items() if found.kind in ("hole", "cone")
+        )
+        assert after == source, (kind, after, source)
+    expected = ["boolean.without_effect", *["duplicate_feature.feature_lost"] * members]
+    assert said["mesh"] == said["brep"] == expected, said
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_copy_along_its_own_axis_into_a_second_wall_is_found_on_both_kernels(
+    quality: Quality, profile: Profile
+) -> None:
+    """Die Gegenrichtung: Längs der Achse in eine zweite Wand ist die Kopie neu.
+
+    Zwei Wände 40 x 20 x 5 übereinander (z 0 … 5 und 12 … 17), seitlich
+    verbunden; die Bohrung Ø 6 durch die untere, 12 mm längs ihrer Achse in die
+    obere verdoppelt. Die Vorlage liegt auf derselben Achse, die Kopie aber an
+    einer anderen Mitte — ``_already_there`` vergleicht ohne Freiheit entlang
+    der Achse und lässt sie Kandidat. An beiden Kernen kein Satz, beide Wände
+    durchbohrt (``9π · 5`` je Wand).
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    walls = edit.unified(
+        edit.boolean(
+            "union",
+            [
+                edit.box(40.0, 20.0, 5.0),
+                edit.moved(edit.box(40.0, 20.0, 5.0), (0.0, 0.0, 12.0)),
+                edit.moved(edit.box(5.0, 20.0, 17.0), (17.5, 0.0, 0.0)),
+            ],
+        )
+    )
+    body = edit.cut_bore(
+        walls, position=(0.0, 0.0, 2.5), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=8.0
+    )
+    said: dict[str, list[str]] = {}
+    volumes: dict[str, float] = {}
+    for kind in ("mesh", "brep"):
+        mesh = body if kind == "brep" else as_mesh_data(body)
+        features = dict(features_of(body) if kind == "brep" else detect(mesh))
+        entry = SceneObject(id="obj_1", name="Wände", mesh=mesh, kind=kind, features=features)
+        bore = next(feature for feature in features.values() if feature.kind == "hole")
+        x, y, z = (float(value) for value in bore.params["centre"])
+        params = {"at_feature": bore.id, "x": x, "y": y, "z": z + 12.0}
+        result, step = _evaluation("duplicate_feature", params, [entry], profile, quality=quality)
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        holes = sorted(
+            round(float(found.params["centre"][2]), 2)
+            for found in output.features.values()
+            if found.kind == "hole"
+        )
+        assert holes == [2.5, 14.5], (kind, holes)
+        volumes[kind] = as_mesh_data(output.mesh).volume
+        if kind == "brep":
+            # Zwei Wände und die Verbindung, abzüglich ihrer zwei Überlappungen
+            # 5 x 20 x 5, abzüglich zweier Bohrungen 9π · 5.
+            assert output.mesh.volume == pytest.approx(
+                2.0 * 4000.0 + 1700.0 - 2.0 * 500.0 - 2.0 * 45.0 * math.pi, abs=1e-3
+            )
+    assert said["mesh"] == said["brep"] == [], said
+    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), volumes

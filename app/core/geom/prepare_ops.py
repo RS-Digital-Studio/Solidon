@@ -4790,7 +4790,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 8: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
     # 9: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
     # 10: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
-    cache_version="10",
+    # 11: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
+    cache_version="11",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4930,7 +4931,11 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     kept: dict[FeatureId, Feature] = {copy.id: copy}
     if cavity:
         kept, missing = _copies_found(
-            "duplicate_feature", placed.mesh, kept, check_cancelled=ctx.cancelled.raise_if_cancelled
+            "duplicate_feature",
+            placed.mesh,
+            kept,
+            existing=source.features,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
         )
         findings += missing
         if copy.id not in kept:
@@ -5046,7 +5051,11 @@ def _duplicate_cavity_chain(
     )
     findings += lost
     copies, missing = _copies_found(
-        "duplicate_feature", placed.mesh, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
+        "duplicate_feature",
+        placed.mesh,
+        copies,
+        existing=source.features,
+        check_cancelled=ctx.cancelled.raise_if_cancelled,
     )
     findings += missing
     if lost and bore.id in copies:
@@ -5209,7 +5218,8 @@ class _PatternPlace:
     # 7: exakt endet eine Durchgangsbohrung an ihren mitbewegten Randebenen, und
     # jede Kopie fragt die Säule; am Netz im Werkzeug ihres Platzes (RM-226).
     # 8: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
-    cache_version="8",
+    # 9: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
+    cache_version="9",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -5670,7 +5680,11 @@ def _mesh_pattern_result(
                     through_lost[copy.id] = lost
             copies[copy.id] = copy
     copies, missing = _copies_found(
-        "pattern_feature", placed, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
+        "pattern_feature",
+        placed,
+        copies,
+        existing=source.features,
+        check_cancelled=ctx.cancelled.raise_if_cancelled,
     )
     findings.extend(missing)
     for name, lost in through_lost.items():
@@ -12040,6 +12054,7 @@ def _measured_on(
     *,
     check_cancelled: Callable[[], None] | None = None,
     shifted: bool = False,
+    existing: Sequence[Feature] = (),
 ) -> dict[FeatureId, Feature]:
     """Eben versetzte oder gekippte Bohrungen und Senkungen, am Ergebnis
     gemessen — unter ihren Namen.
@@ -12071,6 +12086,9 @@ def _measured_on(
     statt der 20,2 der Ellipse an der Oberseite) — gekippt, verdoppelt und im
     Muster bleibt es bei der vollen Erkennung; eine Kopie hat an der neuen
     Stelle nichts, wovon die örtliche Suche ausgehen könnte.
+
+    ``existing`` sind Merkmale, die vor der Operation schon da waren; ein Fund
+    an ihrer Stelle ist keines der gesuchten (:func:`_copies_found`).
     """
     from app.core.perceive.local import detect_known
 
@@ -12092,6 +12110,7 @@ def _measured_on(
             wanted,
             detect_known(mesh, known, required=(), check_cancelled=check_cancelled),
             check_cancelled=check_cancelled,
+            existing=existing,
         )
         if len(near) == len(wanted):
             return near
@@ -12100,6 +12119,7 @@ def _measured_on(
         wanted,
         _detect_resized_bores(mesh, known, check_cancelled=check_cancelled),
         check_cancelled=check_cancelled,
+        existing=existing,
     )
 
 
@@ -12109,11 +12129,13 @@ def _measured_among(
     detected: Mapping[FeatureId, Feature],
     *,
     check_cancelled: Callable[[], None] | None = None,
+    existing: Sequence[Feature] = (),
 ) -> dict[FeatureId, Feature]:
     """Der Rumpf von :func:`_measured_on`: jedes gewollte Merkmal unter den Funden
-    gesucht, jeder Fund höchstens einmal vergeben."""
+    gesucht, jeder Fund höchstens einmal vergeben — und keiner, der an der
+    Stelle eines Merkmals aus ``existing`` liegt (:func:`_already_there`)."""
     measured: dict[FeatureId, Feature] = {}
-    taken: set[str] = set()
+    taken: set[str] = {name for name, entry in detected.items() if _already_there(entry, existing)}
     for want in wanted:
         free = {name: entry for name, entry in detected.items() if name not in taken}
         found = _bore_match_id(
@@ -12141,6 +12163,7 @@ def _copies_found(
     mesh: MeshData,
     copies: Mapping[FeatureId, Feature],
     *,
+    existing: Mapping[FeatureId, Feature],
     check_cancelled: Callable[[], None] | None = None,
 ) -> tuple[dict[FeatureId, Feature], list[Finding]]:
     """Die Kopien am Ergebnis nachgemessen — und was sich nicht wiederfindet,
@@ -12165,6 +12188,17 @@ def _copies_found(
     seitlich genau dort, wo sie hin sollte — mehr als die Facettengrenze
     daneben (:data:`~app.core.units.MAX_FACET_SAG`) ist sie nicht mehr diese
     Kopie.
+
+    **Und sie ist neu** (RM-226, Nachtrag 04.10.2026): Was vor der Operation
+    schon da war (``existing``, die Merkmale der Quelle), ist keine Kopie. Eine
+    Durchgangsbohrung darf entlang ihrer Achse wandern; verdoppelt man sie
+    längs dieser Achse, liegt die Vorlage auf ihr. An der Lochplatte
+    ``pegboard-gs-100-v2`` fiel die 12 mm verschobene Kette in einen
+    Durchbruch, nichts wurde abgetragen, und das Netz fand die Kopie der
+    Bohrung Ø 6 in der Vorlage selbst wieder — deren Dreiecke trugen danach den
+    Namen der Kopie, die Vorlage hieß verwaist. Der exakte Kern nimmt nur
+    frische Merkmale (:func:`_exact_copy_result`) und nannte alle drei Kopien
+    verloren.
     """
     # **Nur was die Erkennung überhaupt sieht** (Durchsicht 0.5.1, BOHRUNG-13):
     # Die Tasche eines Bausteins erkennt sie nicht (``recognised`` falsch,
@@ -12176,7 +12210,9 @@ def _copies_found(
         for copy in copies.values()
         if copy.kind in ("hole", "cone", "slot") and is_a_cavity(copy) and copy.recognised
     ]
-    measured = _measured_on(mesh, cavities, check_cancelled=check_cancelled)
+    measured = _measured_on(
+        mesh, cavities, check_cancelled=check_cancelled, existing=tuple(existing.values())
+    )
     kept: dict[FeatureId, Feature] = {}
     findings: list[Finding] = []
     wanted = {copy.id for copy in cavities}
@@ -12187,6 +12223,35 @@ def _copies_found(
             continue
         kept[name] = found or copy
     return kept, findings
+
+
+def _already_there(found: Feature, existing: Sequence[Feature]) -> bool:
+    """Ob ein Fund an der Stelle eines Merkmals liegt, das vor der Operation
+    schon da war — gleiche Art, Mitte und Durchmesser bis zur Facettengrenze
+    (:func:`_copies_found`).
+
+    Ohne Freiheit entlang der Achse: Eine Kopie längs der Achse in eine zweite
+    Wand ist eine neue Bohrung an einer anderen Mitte und bleibt Kandidat.
+    """
+    if "centre" not in found.params:
+        return False
+    centre = np.asarray(found.params["centre"], dtype=np.float64)
+    diameter = found.params.get("diameter")
+    for before in existing:
+        if before.kind != found.kind or "centre" not in before.params:
+            continue
+        offset = centre - np.asarray(before.params["centre"], dtype=np.float64)
+        if math.hypot(float(offset[0]), float(offset[1]), float(offset[2])) > MAX_FACET_SAG:
+            continue
+        other = before.params.get("diameter")
+        if (
+            isinstance(diameter, int | float)
+            and isinstance(other, int | float)
+            and abs(float(diameter) - float(other)) > MAX_FACET_SAG
+        ):
+            continue
+        return True
+    return False
 
 
 def _beside_its_axis(found: Feature, expected: Feature) -> bool:
