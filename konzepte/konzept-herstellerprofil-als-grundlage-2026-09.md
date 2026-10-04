@@ -377,7 +377,8 @@ und mit einem eigenen Merge. Reihenfolge nach Wirkung und Abhängigkeit.
 
 Danach folgen Paket 3 (die Vorschlagsregeln selbst: Mindestschichtzeit,
 Keilspitzen, Stützbedarf gegen das Urteil des Herstellers, Brückenregel) und
-der Lauf „jedes Modell × jeder Slicer" als Gesamtabnahme.
+der Lauf „jedes Modell × jeder Slicer" als Gesamtabnahme. Was Paket 3 am
+echten Slicer ergab, steht in Abschnitt 7.
 
 ---
 
@@ -411,3 +412,69 @@ sind die Richtung, nicht der Wortlaut.
 - Cura bekommt den Startcode Ihres Druckers.
 - Stützen und Brim gelten nur den Teilen, die sie brauchen.
 - Die Druckplatte wird mitgegeben; die Temperatur stimmt zur Platte.
+
+---
+
+## 7. Paket 3 am echten Slicer (04.10.2026)
+
+Gemessen zwischen `7b3d8057e` und `131edad7f`, ElegooSlicer 1.5.3.5, PrusaSlicer 2.9.6,
+CuraEngine 5.13.0, Modelle aus `F:\3D Dateien`; Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`.
+
+**Mindestschichtzeit und Keilspitzen.** Die Hersteller tragen sie im Profil
+(CC2 4 s bei 20 mm/s Mindesttempo, MK4S 6 s bei 20 mm/s); Solidon schlägt
+seit `3018613e6` nur vor, wo keine gilt. Am Golfschlägerkopf (Keil mit
+Spitze oben) hätte der alte Vorschlag „15 s“ die Druckzeit im ElegooSlicer von
+34,1 auf 72,1 min verlängert, in PrusaSlicer von 36,1 auf 67,6 min, in Cura
+von 98,2 auf 106,6 min. Die Spitzen selbst änderte er nicht: Ihre Schichten
+stehen schon am Mindesttempo (0,9 bis 3,0 s je Schicht in beiden Läufen).
+Gebremst wurden nur die übrigen Schichten.
+
+**Inseln an Schrauben.** Die liegende Schraube „Vida“ meldete bis v0.5.1 auf
+1,3 mm eine Insel von 152 mm² und bekam Stützen samt Kanalsperre
+vorgeschlagen. Ursache war ein Schnitt, dessen Kontur sich kreuzte; behoben
+mit `206dca76d` (gefunden per Bisektion v0.5.1 → `206dca76d~1` → `206dca76d`).
+Mit Stützen an legen die Slicer an der Schraube fast nichts an (Elegoo
+0,83 m, Prusa 0,09 m, Cura 0,28 m), Solidon schlägt keine mehr vor.
+
+**Stützbedarf gegen das Urteil des Herstellers.** Im Matrixlauf vom
+02.10.2026 schlug Solidon an 49 Modellen Stützen vor; in 312 von 340 Läufen
+„Stützen automatisch“ stützte der Slicer mit Art, Schwelle und Brückenregel
+seines Herstellerprofils nennenswert mit (mehr als 0,5 m Stützbahn), in 28
+nicht. Keiner der 28 ist eine Regel Solidons, die zu früh anschlägt: Fünf
+kamen aus einer Ablageschale, deren fünf Körper der Matrixläufer nicht über
+Platten verteilt hatte (verteilt stützen Elegoo, Prusa und Cura 17 bis 24 m
+unter ihrer Fensterbrücke von 21,8 mm); dreizehn aus Decken knapp über dem
+Bett (0,7 mm an der Schriftplatte, 1,1 mm an der Werkzeugbox — die Slicer
+legen darunter null bis vier Stützschichten); sieben aus Eigenheiten
+einzelner Slicer (Bambu Studio und ElegooSlicer an vier Platten der
+Murmelbahn, an denen die übrigen 55 bis 340 m stützen, Creality an zwei
+Segeln, PrusaSlicer an einer Platte aus Kleinteilen); drei aus dem
+Kobra-2-Profil, das Brücken nie stützt (`bridge_no_support = 1`), an den
+Magnettaschen des Schabers. Die Projektdateien der Entwerfer sind sparsamer
+als die Slicer — den Besteckeinsatz mit 0,85 mm Stapelkante drucken sie ohne
+Stütze, der ElegooSlicer legt mit Stützen 1436 m an —; diesem Urteil folgt
+keine Regel, weil die Slicer selbst es nicht teilen und eine eigene Schwelle
+dafür die Profillogik der Slicer nachbauen müsste
+(`konzept-slicer-uebergabe.md`, §6).
+
+**Brückenregel.** Solidon verlangt Stützen ab 15 mm freier Spannweite. Die
+Profile sind strenger oder gleich: Orca stützt mit `max_bridge_length` ab
+10 mm (Vorgabe, Elegoo und K1), Bambu jede Brücke (`0`), PrusaSlicer am MK4S
+ebenfalls (`dont_support_bridges = 0`), Cura kennt keine Ausnahme; nur Kobra 2
+nie. Am Wedge-Lock (25,7 mm, allein über die Brückenregel) stützen Elegoo,
+Prusa und Cura genau unter der Decke (2,6/1,8/2,0 m). Die Schwelle bleibt.
+**Falsch war, was der Rat dazu sagte:** Weil die Decke unter den
+Flächengrenzen blieb, kam zur Stütze „nur vom Bett“, und ihre Säule setzt auf
+dem Modell auf. Übernommen brachten Creality Print, OrcaSlicer (Kobra 2),
+PrusaSlicer und Cura null Stützbahn, Elegoo 1,1 und Bambu 0,8 m; im
+Cura-Raster sperrte zudem die Kanalsperre eines Kanalstücks darunter den Raum
+der Brücke. Behoben: Eine lange Brücke über dem Modell zählt wie ein großes
+Stück dort, und die Sperre spart die Säulen der Stücke auf dem Modell aus.
+Übernommen stützen jetzt Creality 2,9, Kobra 2 3,0, Elegoo 2,6, Prusa 1,8
+und Cura samt Sperre 1,8 m unter der Decke.
+
+**Beim Prüfen gefunden und behoben:** Die Schichtanalyse brach am Wizard Tower
+mit einer `GEOSException` ab — eine sich kreuzende Aufweitung in
+`analysis._protrusion` (`8ca9b136b`). Am Stand v0.5.1 lief derselbe Körper
+durch; der Fehler kam mit der späteren Konturbildung zum Vorschein.

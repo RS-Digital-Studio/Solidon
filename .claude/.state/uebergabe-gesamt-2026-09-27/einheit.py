@@ -93,10 +93,6 @@ load_operations()
 
 import gcode_lesen  # noqa: E402
 
-# Der Weg des Druckdialogs ohne Fenster: Arbeiter und Plattenvorbereitung sind
-# Kerncode in Qt-Hüllen und brauchen nur eine Anwendungsinstanz.
-from PySide6.QtCore import QCoreApplication  # noqa: E402
-
 from app.core.errors import AppError  # noqa: E402
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles  # noqa: E402
 from app.core.geom.mesh import as_mesh_data  # noqa: E402
@@ -112,6 +108,7 @@ from app.core.scene.project import (  # noqa: E402
 )
 from app.core.slice import advise  # noqa: E402
 from app.core.slice.estimate import plates_findings  # noqa: E402
+from app.core.slice.gcode import DEVIATION_LIMIT as TIME_DEVIATION  # noqa: E402
 from app.core.types import Source  # noqa: E402
 from app.ui.print_settings_dialog import (  # noqa: E402
     _AdviceWorker,
@@ -119,7 +116,6 @@ from app.ui.print_settings_dialog import (  # noqa: E402
     _prepare_plate,
 )
 
-QT = QCoreApplication.instance() or QCoreApplication([])
 MATERIAL = "pla"
 #: Weniger Stützbahn als das in Metern heißt im Lauf ``stuetzen_auto``: Der
 #: Slicer stützt nichts Nennenswertes (ein halber Meter ist ein Stützfleck von
@@ -509,6 +505,14 @@ def advised(objects: list[Any], settings: Any, profile: Any, setup: Any) -> tupl
     ``_calculate`` reinen Kerncode und meldet über ``done`` (Rat, Messungen je
     Körper). Kein Nachbau mehr — der lief dreimal auseinander.
     """
+    # Der Arbeiter ist ein QThread und braucht eine Anwendungsinstanz — angelegt
+    # erst hier, nicht beim Import: Die Suite lädt dieses Modul
+    # (``tests/test_delivery_*.py``), und eine QCoreApplication im Testprozess
+    # nahm den späteren Tests dort ihre QApplication (``topLevelWidgets``).
+    from PySide6.QtCore import QCoreApplication
+
+    if QCoreApplication.instance() is None:
+        LOADED["qt"] = QCoreApplication([])
     worker = _AdviceWorker(
         tuple(objects),
         settings,
@@ -852,10 +856,36 @@ def minutes_from(header: dict[str, str]) -> float | None:
 
 
 def flags_for(
-    variant: str, row: dict[str, Any], base: dict[str, Any] | None, narrow: dict[str, Any]
+    variant: str,
+    row: dict[str, Any],
+    base: dict[str, Any] | None,
+    narrow: dict[str, Any],
+    *,
+    support_accepted: bool = False,
 ) -> list[str]:
-    """Wo ein Lauf auffällt — gegen den Standardlauf (der ohne Vorschläge das Herstellerprofil ist)."""
+    """Wo ein Lauf auffällt — gegen den Standardlauf (der ohne Vorschläge das Herstellerprofil ist).
+
+    ``support_accepted`` sagt, dass die übernommenen Vorschläge Stützen
+    einschalten. Kommt dann keine Stütze im G-Code an, hebt ein zweiter
+    Vorschlag den ersten auf — am Wedge-Lock (04.10.2026) „nur vom Bett“ zu
+    einer Brücke über dem Modell, in vier von sieben Slicern null Stützbahn.
+    """
     found: list[str] = []
+    if (
+        variant == "vorschlaege"
+        and support_accepted
+        and row.get("ok")
+        and (row.get("support_m") or 0.0) < SUPPORT_WORTH_METRES
+    ):
+        found.append(f"Stützvorschlag ohne Stütze ({row.get('support_m') or 0.0:.2f} m)")
+    # Die Zeitgegenprobe des Hauptfensters (``_compare_totals``) warnt ab
+    # derselben Grenze wie ``gcode.compare``; hier für jede Platte, damit die
+    # Gesamtabnahme zählt, wo der Kunde „Druckzeit weicht ab“ liest (RM-465).
+    printing, estimated = row.get("printing_minutes"), row.get("estimated_minutes")
+    if row.get("ok") and printing and estimated:
+        deviation = (estimated - printing) / printing
+        if abs(deviation) > TIME_DEVIATION:
+            found.append(f"Zeit ab Schicht 1 weicht ab ({deviation:+.0%})")
     if not row.get("ok"):
         if "nur in seinem Fenster" in str(row.get("detail", "")):
             # Creality Print rechnet über die Konsole keine 3MF (RM-164); der
@@ -1213,7 +1243,13 @@ def main() -> int:
             for variant, runs in entry["variants"].items():
                 for row in runs:
                     base = None if variant == "standard" else base_runs.get(row["plate"])
-                    row["flags"] = flags_for(variant, row, base, result.get("narrow", {}))
+                    row["flags"] = flags_for(
+                        variant,
+                        row,
+                        base,
+                        result.get("narrow", {}),
+                        support_accepted=taken is not None and taken.support.style != "none",
+                    )
                     if significant(row["flags"]):
                         flagged.append((variant, row))
             if flagged:

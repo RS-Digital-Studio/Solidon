@@ -448,6 +448,20 @@ def main() -> int:
                     f"| {run.get('support_m') or 0.0:.2f} | {'; '.join(ways)[:200]} |"
                 )
     lines += ["", f"Der Slicer stützt, wo Solidon Stützen verlangt: {agreeing}; er stützt nicht: {disagreeing}.", ""]
+    # Übernommene Vorschläge, die Stützen einschalten und trotzdem keine
+    # bringen: ein zweiter Vorschlag hebt den ersten auf (Wedge-Lock, 04.10.2026).
+    cancelled = [
+        f"{Path(result.get('model', '?')).name} · {entry['slicer']}/{entry['printer']}"
+        for result in results
+        for entry in result.get("combos", [])
+        for run in entry.get("variants", {}).get("vorschlaege", [])
+        if any(f.startswith("Stützvorschlag ohne Stütze") for f in run.get("flags", []))
+    ]
+    lines += [
+        f"Übernommene Stützvorschläge ohne Stütze im G-Code: {len(cancelled)}"
+        + (f" ({', '.join(cancelled[:20])})" if cancelled else ""),
+        "",
+    ]
     print("\n".join(lines))
     return 0
 
