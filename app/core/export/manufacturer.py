@@ -1783,15 +1783,17 @@ def cura_fan_curve(
     if setup is None or setup.flavour != "cura":
         return settings
     threshold, minimum = _cura_fan_definition(setup, profile)
-    values: dict[str, float] = {
-        "cooling.fan_below_layer_time": CURA_FAN_THRESHOLD if threshold is None else threshold,
-        "cooling.minimum_fan_speed": (
+    lower_path, threshold_path = CURA_FAN_PATHS
+    curve = (
+        (threshold_path, CURA_FAN_THRESHOLD if threshold is None else threshold),
+        (
+            lower_path,
             settings.cooling.fan_speed
             if minimum is None
-            else min(minimum / 100.0, settings.cooling.fan_speed)
+            else min(minimum / 100.0, settings.cooling.fan_speed),
         ),
-    }
-    for path, value in values.items():
+    )
+    for path, value in curve:
         if path not in settings.explicit:
             settings = settings_table.with_path(settings, path, value)
     return settings
