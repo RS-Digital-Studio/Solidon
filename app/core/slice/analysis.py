@@ -1970,11 +1970,23 @@ def _protrusion(
         # Nachkommastellen, :func:`_rings_from`), das ohnehin die Auflösung
         # der Konturen ist.
         boxes = shapely.box(*windows.T)
-        beyond = shapely.difference(
-            shapely.intersection(opened, boxes, grid_size=EPS_GEOM),
-            shapely.intersection(shape, boxes, grid_size=EPS_GEOM),
-            grid_size=EPS_GEOM,
-        )
+        try:
+            beyond = shapely.difference(
+                shapely.intersection(opened, boxes, grid_size=EPS_GEOM),
+                shapely.intersection(shape, boxes, grid_size=EPS_GEOM),
+                grid_size=EPS_GEOM,
+            )
+        except shapely.errors.GEOSException:
+            # **Die Aufweitung selbst kann ungültig sein**: Zwei gefast
+            # aufgeweitete Stücke überlappen sich, und ihr Multipolygon kreuzt
+            # sich an einer Nadel. Dann scheitert auch das Raster („side
+            # location conflict“), und die Ausnahme riss die ganze
+            # Schichtanalyse mit (Wizard Tower, 04.10.2026). Als Fläche gültig
+            # gemacht bleibt die Nadel, wo sie ist, und ihre Fläche zählt.
+            valid = shapely.make_valid(opened, method="structure", keep_collapsed=False)
+            beyond = shapely.difference(
+                shapely.intersection(valid, boxes), shapely.intersection(shape, boxes)
+            )
     return float(shapely.area(beyond).sum())
 
 
