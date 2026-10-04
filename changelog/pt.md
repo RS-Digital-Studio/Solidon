@@ -137,6 +137,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Solidon reconhece cada campo de nervuras, favo de mel ou saliências de um ficheiro importado como um só padrão, e «Reconhecer características neste local» junta as células de um campo.
 - Um campo pequeno que o Solidon só lê como características soltas passa a ser um padrão com «Agrupar como padrão». Os padrões em ficheiros STEP são reconhecidos diretamente.
 - As peças de uma divisão automática também são numeradas em projetos de versões anteriores, e um corte apagado ou desativado deixa de contar.
+- Um furo que duplica, desloca ou repete ao longo de uma face inclinada continua a ser o mesmo furo em peças STL e STEP, com as mesmas medidas e mensagens.
+- Após «Repetir característica», uma cópia numa peça STEP já não fura até ao topo, e um furo STL de facetas grosseiras continua a contar como passante.
 
 ### Arredondar e chanfrar
 

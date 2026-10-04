@@ -2662,7 +2662,15 @@ def _tool_for(
         travel = np.asarray(centre, dtype=np.float64) - np.asarray(
             feature.params["centre"], dtype=np.float64
         )
-        built = _past_the_mouths(mesh, built, travel=travel if rigid else None)
+        # Die Bohrung starr bewegt wächst als Zylinder in die verschobene
+        # Randebene, wie ``_exact_rigid_cut`` sie schneidet; die Tasche mit Lippe
+        # hebt der exakte Kern längs der Normale an (``_exact_own_cut``).
+        built = _past_the_mouths(
+            mesh,
+            built,
+            travel=travel if rigid else None,
+            walls=rigid and air is None and feature.kind == "hole",
+        )
     if feature.kind == "pin" and rooted:
         # **Ein gesetzter Zapfen ist so hoch wie der gemessene** (22.09.2026).
         # Unverändert kommt er aus seinen Flächen und bekommt unten einen
@@ -4362,7 +4370,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
-    cache_version="11",
+    # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="12",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4734,7 +4743,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
     # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 8: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
-    cache_version="8",
+    # 9: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="9",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5149,7 +5159,10 @@ class _PatternPlace:
     # 3: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 4: jede Instanz einer Kette trägt ihre gerundete Mündungskante (RM-259).
-    cache_version="5",
+    # 6: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    # 7: exakt endet eine Durchgangsbohrung an ihren mitbewegten Randebenen, und
+    # jede Kopie fragt die Säule; am Netz im Werkzeug ihres Platzes (RM-226).
+    cache_version="7",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -5587,11 +5600,15 @@ def _mesh_pattern_result(
         findings.extend(outcome.findings)
         stages.append(outcome.solver)
     copies: dict[FeatureId, Feature] = {}
+    through_lost: dict[FeatureId, list[Finding]] = {}
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
         findings.extend(_edge_findings(body, place.copies))
         for copy in place.copies:
             if copy.params.get("through"):
+                # Die Säule im Werkzeug des Platzes, wie beim Verdoppeln (RM-133):
+                # Was erst hinter seinem Ende steht, liegt hinter Luft.
+                tool = place.probe if is_a_cavity(place.unit.feature) else None
                 lost = _throughness_lost(
                     placed,
                     copy,
@@ -5600,15 +5617,26 @@ def _mesh_pattern_result(
                     quality=ctx.quality,
                     seed=seed,
                     cancelled=ctx.cancelled,
+                    tool=tool,
                 )
-                findings.extend(lost)
                 if lost:
-                    copy = dataclasses.replace(copy, params={**copy.params, "through": False})
+                    through_lost[copy.id] = lost
             copies[copy.id] = copy
     copies, missing = _copies_found(
         "pattern_feature", placed, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
     )
     findings.extend(missing)
+    for name, lost in through_lost.items():
+        # **Erst nachgemessen, dann nicht mehr durchgehend** — wie beim
+        # Verdoppeln (RM-220): Die Messung am Ergebnis nannte die Bohrung einer
+        # vervielfachten Senkbohrung wieder durchgehend, während der Satz „geht
+        # nicht mehr durch“ dastand. Und was es nicht gibt, geht auch nicht mehr
+        # durch (RM-226): Eine verlorene Kopie trägt nur ihren eigenen Satz.
+        if name in copies:
+            findings.extend(lost)
+            copies[name] = dataclasses.replace(
+                copies[name], params={**copies[name].params, "through": False}
+            )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -5645,24 +5673,26 @@ def _exact_pattern_result(
 
     solid = _exact_body(source)
     faces_bodies: dict[str, Any] = {}
+    rims: dict[str, tuple[_Rim, ...]] = {}
     material: list[Any] = []
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
         if not is_a_cavity(place.unit.feature):
-            material.append(_exact_place_tool(source, solid, place, faces_bodies))
+            material.append(_exact_place_tool(source, solid, place, faces_bodies, rims))
     placed = solid
     if material:
         placed = edit.unified(edit.boolean("union", [placed, *material]))
     hollow = [place for place in kept if is_a_cavity(place.unit.feature)]
+    tools = None
     if hollow:
         # Alle Hohlräume in einer Differenz, wie bisher — und wie beim
         # Verdoppeln wiederholt, wenn sie still scheitert
         # (:func:`_exact_chain_cut_holding`).
         base = placed
-        placed, _tools = _exact_chain_cut_holding(
+        placed, tools = _exact_chain_cut_holding(
             base,
             lambda overlap: _pattern_hollow_tool(
-                source, solid, hollow, faces_bodies, overlap=overlap
+                source, solid, hollow, faces_bodies, rims, overlap=overlap
             ),
         )
     copies = [copy for place in kept for copy in place.copies]
@@ -5679,6 +5709,16 @@ def _exact_pattern_result(
     result = _exact_copy_result(
         ctx, source, placed, copies, findings, op="pattern_feature", mouths=mouths
     )
+    if tools is not None:
+        # **Dieselbe Säule je Kopie wie beim Verdoppeln** (RM-226, Nachtrag):
+        # Die Bohrung einer Senkbohrung, längs der Schräge vervielfacht, mündet
+        # in ihren Kegel und heißt für die Erkennung durchgehend; das Netz sagte
+        # „geht nicht mehr durch“ (``_mesh_pattern_result``), der exakte Kern
+        # nichts.
+        for place in hollow:
+            for copy in place.copies:
+                if copy.params.get("through"):
+                    result = _exact_through_checked(ctx, result, copy.id, tools, "pattern_feature")
     result.findings = [dataclasses.replace(entry, object_id=source.id) for entry in result.findings]
     return result
 
@@ -5688,6 +5728,7 @@ def _pattern_hollow_tool(
     solid: Any,
     places: Sequence[_PatternPlace],
     faces_bodies: dict[str, Any],
+    rims: dict[str, tuple[_Rim, ...]],
     *,
     overlap: float,
 ) -> Any:
@@ -5695,7 +5736,8 @@ def _pattern_hollow_tool(
     from app.core.brep import edit
 
     tools = [
-        _exact_place_tool(source, solid, place, faces_bodies, overlap=overlap) for place in places
+        _exact_place_tool(source, solid, place, faces_bodies, rims, overlap=overlap)
+        for place in places
     ]
     return edit.boolean("union", tools) if len(tools) > 1 else tools[0]
 
@@ -5705,10 +5747,16 @@ def _exact_place_tool(
     solid: Any,
     place: _PatternPlace,
     faces_bodies: dict[str, Any],
+    rims: dict[str, tuple[_Rim, ...]],
     *,
     overlap: float = FEATURE_OVERLAP,
 ) -> Any:
-    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung."""
+    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung.
+
+    ``faces_bodies`` und ``rims`` merken je Merkmal, was an der Quelle gelesen
+    wird: Flächenkörper und Endringe sind an jedem Platz und in jedem Versuch
+    dieselben (die Endringe kosten je Lesung einige Millisekunden).
+    """
     from app.core.brep import edit
 
     feature = place.unit.feature
@@ -5729,8 +5777,21 @@ def _exact_place_tool(
         own = _exact_own_cavity(source, feature)
         if own is not None:
             return _own_placed(own, place.matrix, overlap)
+        # **Und starr wie beim Verdoppeln** (RM-226, Nachtrag 04.10.2026): Die
+        # Durchgangsbohrung endet an ihren mitbewegten Randebenen
+        # (:func:`_exact_rigid_cut`). Mit der ganzen Zielhülle als Tiefe bohrte
+        # sie längs einer schrägen Platte bis an die höhere Oberseite durch —
+        # 69,9 mm³ mehr und durchgehend, wo das Netz „geht nicht mehr durch“ sagt.
+        if feature.id not in rims:
+            rims[feature.id] = _through_rims(source, feature)
         axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
-        return _exact_cavity_tool(solid, copy, centre, axis)
+        tool = _exact_cavity_tool(solid, copy, centre, axis, reach=overlap)
+        return _clipped_at_moved_rims(
+            tool,
+            rims[feature.id],
+            lambda plane: _plane_placed(plane, place.matrix),
+            overlap,
+        )
     if feature.id not in faces_bodies:
         faces_bodies[feature.id] = _exact_body_from_faces(source, feature)
     return edit.transformed(faces_bodies[feature.id], as_transform(place.matrix))
@@ -5763,11 +5824,18 @@ def _chain_copy_tool(
     # Kennzahlen mit anderer Teilung schnitt an der neuen Stelle mehr ab, als
     # er zurückgab — an der Platte mit Zylinder R 40 1,1 mm³ je Versetzen.
     # Die Kopie nimmt die gerundete Mündungskante mit (RM-259).
+    from app.core.perceive.relations import cavity_blend_indices
+
     exact = _paired_cavity_body(body, *chain, mouth_blends=True) or _past_curved_mouths(
         body, chain, mouth_blends=True
     )
+    # Die Wand trägt den Kragen, wo der exakte Kern die Kette als Drehkörper an
+    # den mitbewegten Randebenen schneidet (``_exact_chain_tool_placed``); eine
+    # Kette mit Lippe oder gerundeter Mündungskante hebt er aus ihren Flächen
+    # längs der Normale an (``_exact_chain_own_cavity``, ``edit.collared``).
+    walls = not _narrows_outward(chain) and not cavity_blend_indices(body, tuple(chain))
     tool = (
-        _past_the_mouths(body, exact)
+        _past_the_mouths(body, exact, walls=walls)
         if exact is not None
         else _chain_tool(body, chain, pivot=measured, tilt=0.0)
         or _cavity_tool(
@@ -6964,7 +7032,11 @@ def _shares_in_material(
 
 
 def _past_the_mouths(
-    mesh: MeshData, cavity: MeshData, *, travel: NDArray[np.float64] | None = None
+    mesh: MeshData,
+    cavity: MeshData,
+    *,
+    travel: NDArray[np.float64] | None = None,
+    walls: bool = False,
 ) -> MeshData:
     """Der exakte Hohlraumkörper, an seinen Mündungen um ``FEATURE_OVERLAP``
     über die Oberfläche hinaus verlängert — das Werkzeug für die Differenz (§39).
@@ -6976,6 +7048,16 @@ def _past_the_mouths(
     0,5 mm gegen seine schräge Unterseite versetzt, sonst unter einer Haut von
     0,03 mm stehen und hieß „geht nicht mehr durch" — der exakte Kern sagte am
     Teppichclip mit derselben Zunge nichts (Durchsicht 0.5.1, BOHRUNG-05).
+
+    ``walls`` lässt die Wand den Deckel tragen (:func:`_continued_walls`): Die
+    Bohrung wächst als Zylinder, die Senkung als Kegel bis in die verschobene
+    Randebene, wie der exakte Kern sie schneidet (``clipped_bore_tool``,
+    ``_exact_chain_tool_placed``). Längs der Deckelnormale angehoben stand an
+    einer schrägen Mündung ein um 14° gescherter Ring — liegt sie an der neuen
+    Stelle im Material, wurde er Wand der Kopie, und die Erkennung las diese
+    nicht mehr als Bohrung (RM-226, Nachtrag 04.10.2026). Ohne ``walls`` bleibt
+    es beim Kragen längs der Normale — für Langloch und Tasche mit Lippe, die der
+    exakte Kern ebenso anhebt (``edit.collared``).
 
     Ein Hohlraum aus seinen Flächen (:func:`_body_from_faces`) endet bündig
     in der Oberfläche, und eine bündige Differenz lässt eine Haut stehen. Das
@@ -7025,7 +7107,7 @@ def _past_the_mouths(
     shares = _shares_in_material(
         mesh, [(points[rim[:, 0]], normal) for _facet, _cap, normal, _members, rim in candidates]
     )
-    for (facet, _cap, normal, _members, _rim), share in zip(candidates, shares, strict=True):
+    for (facet, _cap, normal, members, rim), share in zip(candidates, shares, strict=True):
         if share > 0.0:
             continue
         reach = FEATURE_OVERLAP
@@ -7033,7 +7115,11 @@ def _past_the_mouths(
             along = units.dot3(normal, travel)
             if -MAX_FACET_SAG <= along < 0.0:
                 reach -= along
-        lifts.append((facet, normal, reach))
+        carried = _continued_walls(raw, facet, members, rim, reach) if walls else None
+        if carried is not None:
+            lifts.append((facet, carried, 1.0))
+        else:
+            lifts.append((facet, normal, reach))
     if not lifts:
         return cavity
     # Anheben und Wand ergänzen: der Netz-Zwilling von ``edit.collared``.
@@ -7041,6 +7127,107 @@ def _past_the_mouths(
     if not widened.is_watertight or widened.volume <= raw.volume - EPS_GEOM:
         return cavity
     return MeshData.of(widened)
+
+
+def _continued_walls(
+    raw: Any,
+    facet: NDArray[np.int64],
+    members: NDArray[np.int64],
+    rim: NDArray[np.int64],
+    reach: float,
+) -> NDArray[np.float64] | None:
+    """Wohin jede Ecke eines Deckels rückt, wenn ihn seine Wand um ``reach``
+    hinausträgt — je Ecke in der Folge von ``members`` (``np.unique`` seiner
+    Dreiecke), wie :func:`~app.core.geom.mesh.lifted_caps` sie liest.
+
+    Der Deckel wandert in seine um ``reach`` längs der Normale verschobene
+    Ebene, jede Randecke dorthin, wo sich die Ebenen ihrer zwei Wanddreiecke
+    mit ihr schneiden: ``reach · c / (n · c)`` mit ``c`` dem Kreuzprodukt der
+    Wandnormalen. Am Facettenmantel einer Bohrung ist ``c`` die Achse, an einer
+    Senkung ihre Mantellinie — die Wand läuft weiter, wie der exakte Kern sie
+    schneidet, und das Band zwischen altem und neuem Rand liegt in den Ebenen
+    der Facetten. Liegen beide Wanddreiecke einer Ecke in einer Ebene (eine
+    feiner geteilte Facette, :data:`~app.core.units.SAME_PLANE_AT_A_CORNER`),
+    teilt sie den Weg ihrer Nachbarn längs des Rands, nach der Bogenlänge.
+    Innere Ecken nehmen die Mitte der Randwege; so bleibt der Deckel eben.
+
+    ``None`` heißt: Kragen längs der Normale wie bisher — wo eine Ecke weiter
+    als :data:`~app.core.units.GRAZING_SLIDE`-mal die Zugabe rutschte (die Wand
+    läuft fast parallel aus, eine gerundete Mündungskante), wo der Rand kein
+    Ring ist oder keine Ecke eine Richtung hat.
+    """
+    from app.core.geom.mesh import stable_normals
+
+    loop = _rim_loop(rim)
+    if loop is None:
+        return None
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    wall_normals = stable_normals(raw)[0]
+    normal = wall_normals[int(facet[0])]
+    # Je Randkante das Dreieck außerhalb des Deckels, über eine Nummer je Kante.
+    width = len(points)
+    sides = faces[:, [[0, 1], [1, 2], [2, 0]]]
+    codes = np.minimum(sides[..., 0], sides[..., 1]) * width + np.maximum(
+        sides[..., 0], sides[..., 1]
+    )
+    outside = np.ones(len(faces), dtype=bool)
+    outside[np.asarray(facet, dtype=np.int64)] = False
+    ring = np.asarray(loop, dtype=np.int64)
+    following = np.roll(ring, -1)
+    rim_codes = np.minimum(ring, following) * width + np.maximum(ring, following)
+    owner: dict[int, int] = {}
+    for face, side in zip(*np.nonzero(np.isin(codes, rim_codes) & outside[:, None]), strict=True):
+        owner[int(codes[face, side])] = int(face)
+    walls_at = [owner.get(int(code)) for code in rim_codes]
+    if any(face is None for face in walls_at):
+        return None
+    count = len(ring)
+    shifts = np.full((count, 3), np.nan, dtype=np.float64)
+    for position in range(count):
+        before = wall_normals[cast(int, walls_at[position - 1])]
+        after = wall_normals[cast(int, walls_at[position])]
+        if 1.0 - units.dot3(before, after) <= units.SAME_PLANE_AT_A_CORNER:
+            continue
+        line = np.cross(before, after)
+        rise = units.dot3(normal, line)
+        if abs(rise) <= EPS_GEOM:
+            return None
+        step = line * (reach / rise)
+        if math.hypot(*(float(value) for value in step)) > units.GRAZING_SLIDE * reach:
+            return None
+        shifts[position] = step
+    known = np.flatnonzero(np.isfinite(shifts[:, 0]))
+    if not len(known):
+        return None
+    if len(known) < count:
+        # Bogenlänge längs des Rands; jede Ecke ohne eigene Richtung liegt
+        # zwischen zwei Ecken mit einer und teilt deren Wege linear.
+        lengths = [
+            math.hypot(
+                *(float(value) for value in points[ring[(index + 1) % count]] - points[node])
+            )
+            for index, node in enumerate(ring)
+        ]
+        total = math.fsum(lengths)
+        along = [0.0] * count
+        for index in range(1, count):
+            along[index] = along[index - 1] + lengths[index - 1]
+        for position in np.flatnonzero(~np.isfinite(shifts[:, 0])).tolist():
+            later = int(known[np.searchsorted(known, position) % len(known)])
+            earlier = int(known[np.searchsorted(known, position) - 1])
+            gap = (along[later] - along[earlier]) % total or total
+            share = ((along[position] - along[earlier]) % total) / gap
+            shifts[position] = shifts[earlier] * (1.0 - share) + shifts[later] * share
+    moved = np.zeros((len(members), 3), dtype=np.float64)
+    slot = {int(node): index for index, node in enumerate(np.asarray(members).tolist())}
+    on_the_rim = set(ring.tolist())
+    for position, node in enumerate(ring.tolist()):
+        moved[slot[int(node)]] = shifts[position]
+    inner = [index for node, index in slot.items() if node not in on_the_rim]
+    if inner:
+        moved[inner] = np.asarray(units.exact_centre(shifts.tolist()), dtype=np.float64)
+    return moved
 
 
 def _chain_tool(
@@ -13465,10 +13652,13 @@ def _exact_through_checked(
     output = result.outputs[0]
     bore = output.features.get(bore_id)
     code = f"{op}.no_longer_through"
+    # Je Bohrung gefragt: Im Muster stehen mehrere Kopien, jede mit eigenem Satz.
     if (
         bore is None
         or not bore.params.get("through")
-        or any(finding.code == code for finding in result.findings)
+        or any(
+            finding.code == code and bore_id in finding.feature_ids for finding in result.findings
+        )
     ):
         return result
     slim = dataclasses.replace(
@@ -13542,34 +13732,19 @@ def _exact_rigid_cut(
     dickeres Material (RM-220, 25.09.2026). Ohne flache Ränder bleibt es beim
     Hüllschnitt.
     """
-    from app.core.brep import edit
-
     own = _exact_own_cavity(source, feature)
     if own is not None:
         return _exact_own_cut(solid, own, travel)
-    rims = (
-        _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
-        if feature.params.get("through")
-        else ()
-    )
-    if len(rims) != 2:
-        rims = ()
+    rims = _through_rims(source, feature)
+
+    def seated(plane: SectionPlane) -> SectionPlane:
+        normal = np.asarray(plane.normal, dtype=np.float64)
+        shift = units.dot3(normal, _seated(travel, normal))
+        return dataclasses.replace(plane, position=plane.position + shift)
 
     def tool_with(overlap: float) -> Any:
         tool = _exact_cavity_tool(solid, feature, target, axis, reach=overlap)
-        if not rims:
-            return tool
-        planes = []
-        for rim in rims:
-            normal = np.asarray(rim.plane.normal, dtype=np.float64)
-            shift = units.dot3(normal, _seated(travel, normal))
-            # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
-            # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
-            extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
-            planes.append(
-                dataclasses.replace(rim.plane, position=rim.plane.position + shift + extra)
-            )
-        return edit.clipped_bore_tool(tool, tuple(planes))
+        return _clipped_at_moved_rims(tool, rims, seated, overlap)
 
     # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken,
     # ihre Teilungsnähte gehören nicht zum Mantel (``slot_bore``) — deshalb
@@ -13581,6 +13756,40 @@ def _exact_rigid_cut(
         overlaps=CUT_OVERLAPS if rims else (1.0,),
         unify=feature.kind == "slot",
     )
+
+
+def _through_rims(source: SceneObject, feature: Feature) -> tuple[_Rim, ...]:
+    """Die zwei Endringe einer Durchgangsbohrung oder eines Langlochs, an denen
+    ihr starr bewegtes Werkzeug endet — leer an einem Sackloch oder ohne zwei
+    flache Ränder; dann bleibt es beim Hüllschnitt (:func:`_exact_rigid_cut`,
+    :func:`_exact_place_tool`)."""
+    if not feature.params.get("through"):
+        return ()
+    rims = _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+    return rims if len(rims) == 2 else ()
+
+
+def _clipped_at_moved_rims(
+    tool: Any,
+    rims: Sequence[_Rim],
+    moved: Callable[[SectionPlane], SectionPlane],
+    overlap: float,
+) -> Any:
+    """``tool`` an den Randebenen ``rims`` begrenzt, nachdem ``moved`` sie an den
+    neuen Platz gebracht hat — das starre Werkzeug einer Bohrung, die versetzt,
+    verdoppelt oder vervielfacht wird."""
+    from app.core.brep import edit
+
+    if not rims:
+        return tool
+    planes = []
+    for rim in rims:
+        plane = moved(rim.plane)
+        # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
+        # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
+        extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
+        planes.append(dataclasses.replace(plane, position=plane.position + extra))
+    return edit.clipped_bore_tool(tool, tuple(planes))
 
 
 def _exact_slot_body(source: SceneObject, feature: Feature) -> Any | None:

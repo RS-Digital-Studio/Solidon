@@ -162,6 +162,8 @@ Nutzen da und sonst nichts.
 - Rippen-, Waben- und Noppenfelder einer eingelesenen Datei erkennt Solidon je als ein Muster, und *Merkmale an dieser Stelle erkennen* fasst die Zellen eines Felds zusammen.
 - Ein kleines Feld, das Solidon nur als einzelne Merkmale liest, fassen Sie mit *Als Muster zusammenfassen* zu einem Muster zusammen. Muster in STEP-Dateien erkennt Solidon direkt.
 - Auch in Projekten aus älteren Versionen zählen die Stücke einer automatischen Teilung durch, und ein gelöschter oder ausgeschalteter Schnitt zählt nicht mehr mit.
+- Eine Bohrung, die Sie längs einer schrägen Fläche verdoppeln, versetzen oder vervielfachen, bleibt an STL- und STEP-Teilen dieselbe Bohrung mit denselben Maßen und Meldungen.
+- Nach *Merkmal vervielfachen* bohrt eine Kopie an STEP-Teilen nicht mehr bis an die Oberseite durch, und eine grob facettierte STL-Bohrung gilt weiter als durchgehend.
 
 ### Verrunden und Fasen
 

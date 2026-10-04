@@ -215,9 +215,9 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   `prepare.plug_placement`). „Nur das gewählte Merkmal" einer Kette geht erst
   ganz zu und wird frisch geschnitten. Verliert die Vereinigung des Stopfens
   Material, sagt `brep.edit.fill_bore` ab (`FILL_DID_NOT_HOLD`).
-- **Starr:** gleiche Länge, exakt bis zu den mitbewegten Randebenen;
-  `no_longer_through` meldet, was stehen bleibt; Einrücken bis zur
-  Facettengrenze ist Rauschen (`_seated`).
+- **Starr:** gleiche Länge, bis zu den mitbewegten Randebenen, Kragen längs
+  der Wand (`_continued_walls`); `no_longer_through` meldet, was stehen bleibt;
+  Einrücken bis zur Facettengrenze ist Rauschen (`_seated`).
 - **Eine Kette reist aus ihren Flächen**, mit Kragen `FEATURE_OVERLAP` an jeder
   Mündung ohne Materialseite davor (`_past_the_mouths`); Sacklochboden,
   Ringstufe und vergrabene Mündung bleiben bündig; ohne Flächenkörper füllt der

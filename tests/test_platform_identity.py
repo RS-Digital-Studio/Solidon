@@ -710,6 +710,59 @@ def _curved_mouth() -> str:
     return f"{_mesh_print(plug)}|{_mesh_print(tool)}"
 
 
+_SLOPED: list[Any] = []
+
+
+def _carried_collar() -> str:
+    """Der Kragen einer Bohrung, den ihre Wand an der schrägen Mündung trägt (RM-226).
+
+    Je Randecke der Schnitt ihrer zwei Wandebenen mit der verschobenen
+    Deckelebene (``prepare_ops._continued_walls``) — die Lage jeder neuen Ecke.
+    Platte 40 x 20 mit Oberseite z = 10 + x/4 aus festen Ecken, Bohrung Ø 6 als
+    48-Eck; Körper und Bohrung entstehen einmal und außerhalb des Rauschens,
+    unter ihm laufen nur Hohlraumkörper und Kragen, starr um 10 mm längs X.
+    """
+    from app.core.deferred import trimesh
+    from app.core.geom import prepare_ops
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    if not _SLOPED:
+        corners = np.array(
+            [
+                (-20.0, -10.0, 0.0),
+                (20.0, -10.0, 0.0),
+                (20.0, 10.0, 0.0),
+                (-20.0, 10.0, 0.0),
+                (-20.0, -10.0, 5.0),
+                (20.0, -10.0, 15.0),
+                (20.0, 10.0, 15.0),
+                (-20.0, 10.0, 5.0),
+            ]
+        )
+        sides = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4)]
+        sides += [(3, 7, 6), (3, 6, 2), (0, 4, 7), (0, 7, 3), (1, 2, 6), (1, 6, 5)]
+        plate = MeshData.of(trimesh.Trimesh(corners, np.array(sides), process=False))
+        bore = lathe.cylinder(radius=3.0, height=40.0, sections=48)
+        bore.apply_translation((0.0, 0.0, 10.0))
+        mesh = boolean("difference", [plate, MeshData.of(bore)]).mesh
+        hole = next(feature for feature in detect(mesh).values() if feature.kind == "hole")
+        _SLOPED.extend((mesh, hole))
+    mesh, hole = _SLOPED
+    cavity = prepare_ops._body_from_faces(mesh, hole.face_indices, allowed_rings=(2,))
+    assert cavity is not None, "die Bohrung muss einen Hohlraumkörper hergeben"
+    tool = prepare_ops._past_the_mouths(mesh, cavity, travel=np.array([10.0, 0.0, 0.0]), walls=True)
+    corners = np.asarray(tool.raw.vertices)
+    radial = np.hypot(corners[:, 0], corners[:, 1])
+    rim = radial > 1.0
+    assert len(corners) > len(cavity.raw.vertices), "beide Mündungen müssen einen Kragen tragen"
+    assert float(np.abs(radial[rim] - radial[rim].max()).max()) < 1e-9, (
+        "die Wand muss den Kragen tragen, nicht die Deckelnormale"
+    )
+    return _mesh_print(tool)
+
+
 def _aligned_pattern_facets(tilted: bool = False) -> str:
     """Die Facettenkorrektur vor einer Musteränderung, mit unabhängig gebautem Eingang."""
     from app.core.geom.prepare_ops import _aligned_facets
@@ -896,6 +949,7 @@ def _tangential_rounds() -> str:
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "bound_surface": _bound_surface,
+    "carried_collar": _carried_collar,
     "container_hinge": lambda: _container("hinged"),
     "container_screw": lambda: _container("screw"),
     "container_rectangular": lambda: _container("push", "rectangular"),

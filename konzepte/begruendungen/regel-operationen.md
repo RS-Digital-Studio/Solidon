@@ -853,6 +853,28 @@ einem Deckel aus Material, und ein Werkzeug, das dort um die Zugabe über die
 Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
 Ø 9,2 (Review, 21.09.2026).
 
+**Den Kragen trägt die Wand, nicht die Deckelnormale** (RM-226, Nachtrag
+04.10.2026). `_past_the_mouths` hob den Deckel längs seiner Normale an; an
+einer schrägen Mündung ist das ein gescherter Ring — an der Platte mit
+Oberseite z = 10 + x/4 um 14,04°, der Arkustangens der Neigung. In der Luft
+schneidet er nichts. Starr längs der Schräge versetzt, verdoppelt oder
+vervielfacht, liegt die mitbewegte Mündung aber im Material, und der Ring
+wurde Wand der Kopie: 98 von 192 Wanddreiecken kippten bis 14,03° aus der
+Senkrechten zur Achse. Vor der tangentialen Trennung (RM-226 Teil 2) las die
+Erkennung die ganze Wand deshalb als gekrümmte Fläche, und die Kopie hieß am
+Netz verloren (`duplicate_feature.feature_lost`, exakt eine Sackbohrung);
+danach zählte sie den Ring nicht mit — Tiefe 10,750 gegen 10,771 mm, die
+Senkung Ø 13,333 gegen 13,388 mm. Der exakte Kern schneidet die Bohrung als
+Zylinder bis in die verschobene Randebene (`clipped_bore_tool`), die Kette als
+Drehkörper ihrer Profile (`_exact_chain_tool_placed`). Jetzt setzt
+`_continued_walls` jede Randecke in den Schnitt ihrer zwei Wandebenen mit der
+verschobenen Deckelebene; am Facettenzylinder ist das die Achse, am Kegel die
+Mantellinie. Langloch und Tasche mit Lippe bleiben beim Kragen längs der
+Normale, weil der exakte Kern sie aus ihren Flächen ebenso anhebt
+(`edit.collared`); eine Wand, die fast parallel zum Deckel ausläuft (eine
+gerundete Mündungskante), auch — dort gibt es keine Fortsetzung, und die Ecke
+rutschte weiter als `GRAZING_SLIDE`-mal die Zugabe.
+
 **Die gerundete Mündungskante einer Zylindersenkung reist mit** (RM-259,
 Durchsicht 0.5.1): Versetzen, Verdoppeln, Muster und Entfernen der ganzen
 Kette fragen die Hohlraumflächen mit `mouth_blends=True`
@@ -1694,7 +1716,18 @@ versehentliche Kopie des gesamten Körpers" (Konzept §13.9). Drei Regeln:
   an der Stelle der Quelle (`_pattern_probe`) und ein exaktes Gegenstück
   (`_exact_place_tool`); die Merkmale der Kopie führt
   `transformed_features` nach, damit Achsen, Richtungen und Öffnungen
-  drehen und spiegeln wie beim ganzen Körper.
+  drehen und spiegeln wie beim ganzen Körper. Das exakte Gegenstück ist
+  starr wie beim Verdoppeln (RM-226, Nachtrag 04.10.2026): Die
+  Durchgangsbohrung endet an ihren mitbewegten Randebenen
+  (`_clipped_at_moved_rims`), und jede Kopie fragt die Säule
+  (`_exact_through_checked`, je Bohrung). Mit der ganzen Zielhülle als Tiefe
+  bohrte das Muster längs der schrägen Platte bis an die höhere Oberseite
+  durch — 69,9 mm³ mehr, durchgehend, ohne Satz —, die vervielfachte
+  Senkbohrung sagte exakt nichts, wo das Netz „geht nicht mehr durch“
+  meldete, und nach dem ersten Satz schwieg die Frage für jeden weiteren
+  Platz. Am Netz liegt die Säule im Werkzeug des Platzes wie bei allen
+  Geschwistern: Ohne meldete ein 32-Eck Ø 6,1, um 9,1 mm vervielfacht, „geht
+  nicht mehr durch“ bei unverändertem Volumen.
 - **Ein Platz, der nicht passt, entsteht nicht und wird genannt.**
   Überschneidung mit der Quelle oder einem anderen Platz, kein Material
   unter dem Werkzeug — beides ein Befund mit den Platznummern und einem

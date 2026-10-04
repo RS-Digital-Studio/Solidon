@@ -137,6 +137,8 @@ scrive in `website/version.json`.
 - Solidon riconosce ogni campo di nervature, nido d'ape o bugne di un file importato come un solo motivo, e «Riconosci caratteristiche qui» raggruppa le celle di un campo.
 - Un campo piccolo che Solidon legge solo come caratteristiche singole diventa un motivo con «Raggruppa come motivo». I motivi nei file STEP vengono riconosciuti direttamente.
 - Anche nei progetti di versioni precedenti i pezzi di una divisione automatica vengono numerati, e un taglio eliminato o disattivato non conta più.
+- Un foro duplicato, spostato o ripetuto lungo una faccia inclinata resta lo stesso foro su pezzi STL e STEP, con le stesse misure e gli stessi messaggi.
+- Dopo «Ripeti caratteristica», una copia su un pezzo STEP non fora più fino alla faccia superiore, e un foro STL a sfaccettature grossolane resta passante.
 
 ### Raccordi e smussi
 
