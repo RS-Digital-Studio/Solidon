@@ -8065,6 +8065,8 @@ def _refined_fit(
     residual: Callable[[np.ndarray], np.ndarray],
     check_cancelled: Callable[[], None] | None,
     jacobian: Callable[[np.ndarray], np.ndarray] | None = None,
+    *,
+    spent: list[bool] | None = None,
 ) -> np.ndarray | None:
     """Begrenzt geometrisch verfeinern und numerisch unbestimmte Maße verwerfen.
 
@@ -8074,6 +8076,9 @@ def _refined_fit(
     14 870 Jacobi-Schätzungen für 1 263 Verfeinerungen, mehr als die Hälfte
     ihrer Zeit (gemessen am 21.09.2026). Kegel, Kugel und Ring bringen ihre
     Ableitung deshalb mit; das Ergebnis ist dasselbe Minimum.
+
+    ``spent`` bekommt ein ``True``, wenn der Lauf sein Budget ausschöpfte —
+    die eine Absage, nach der ein zweiter Start lohnt (:func:`_cone_from_plan`).
     """
 
     def checked(values: np.ndarray) -> np.ndarray:
@@ -8112,6 +8117,8 @@ def _refined_fit(
             precision=ROUND_FIT_PRECISION,
             evaluations=ROUND_FIT_EVALUATIONS,
         )
+    if spent is not None and result.nfev >= ROUND_FIT_EVALUATIONS:
+        spent.append(True)
     if not result.success or not np.isfinite(result.x).all() or not np.isfinite(result.fun).all():
         return None
     # **Wer sein Budget ausschöpft, hat nicht gerechnet, sondern aufgehört**
@@ -8259,14 +8266,34 @@ def _screened_fits(
         planned += weight
         planning.reach(planned / total_weight if total_weight else 1.0)
     planning.reach(1.0)
+    first_runs = solving.part(0.0, 0.8)
     verdicts = refine.exhausted(
         [problem for _key, problem in asked],
         precision=ROUND_FIT_PRECISION,
         evaluations=ROUND_FIT_EVALUATIONS,
         check_cancelled=check_cancelled,
-        progress=solving.reach,
+        progress=first_runs.reach,
     )
+    # Wer vom ersten Start sicher am Budget endet und einen Quadrikstart hat,
+    # rechnet von dort ein zweites Mal (:func:`_cone_from_plan`) — auch dieser
+    # Lauf bekommt das sichere Nein des Stapels.
+    second: list[tuple[tuple[Any, ...], refine.Problem]] = []
     for (key, _problem), verdict in zip(asked, verdicts, strict=True):
+        if verdict:
+            plan = entries[key][0]
+            entries[key] = (plan, True)
+            if key[0] == "fit_cone" and plan.seed is not None:
+                seeded = ("fit_cone_seed", *key[1:])
+                entries[seeded] = (plan, False)
+                second.append((seeded, plan.problem(plan.seed)))
+    second_verdicts = refine.exhausted(
+        [problem for _key, problem in second],
+        precision=ROUND_FIT_PRECISION,
+        evaluations=ROUND_FIT_EVALUATIONS,
+        check_cancelled=check_cancelled,
+        progress=solving.part(0.8, 1.0).reach,
+    )
+    for (key, _problem), verdict in zip(second, second_verdicts, strict=True):
         if verdict:
             entries[key] = (entries[key][0], True)
     share.reach(1.0)
@@ -8352,6 +8379,11 @@ def _fit_cone_measured(
         if screened is None
         else screened.fits.get(("fit_cone", support.digest, line_tolerance))
     )
+    seeded = (
+        None
+        if screened is None
+        else screened.fits.get(("fit_cone_seed", support.digest, line_tolerance))
+    )
     if entry is None:
         plan = _cone_plan(support, line_tolerance, check_cancelled)
         exhausted = False
@@ -8359,7 +8391,12 @@ def _fit_cone_measured(
         plan, exhausted = entry
     if plan is None:
         return None
-    return _cone_from_plan(plan, check_cancelled, exhausted=exhausted)
+    return _cone_from_plan(
+        plan,
+        check_cancelled,
+        exhausted=exhausted,
+        seed_exhausted=seeded is not None and seeded[1],
+    )
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -8382,21 +8419,26 @@ class _ConePlan:
     second: np.ndarray
     solving: np.ndarray
     solving_apex: np.ndarray
+    #: Der zweite Start aus der Quadrik der Stützpunkte, wo sie einen gültigen
+    #: Kegel gibt (:func:`_quadric_cone_start`), sonst ``None``. Er rechnet nur,
+    #: wenn der Lauf vom ersten sein Budget ausschöpft (:func:`_cone_from_plan`).
+    seed: np.ndarray | None = None
 
     def start(self) -> np.ndarray:
         """Der Startwert des Lösers: Spitze, zwei Achsneigungen, Winkel."""
         start: np.ndarray = np.r_[self.apex, 0.0, 0.0, self.half_angle]
         return start
 
-    def problem(self) -> refine.ConeProblem:
-        """Dieselbe Aufgabe für den Stapel (:func:`refine.exhausted`)."""
+    def problem(self, initial: np.ndarray | None = None) -> refine.ConeProblem:
+        """Dieselbe Aufgabe für den Stapel (:func:`refine.exhausted`) — vom ersten
+        Start oder von ``initial`` (dem zweiten)."""
         return refine.ConeProblem(
             points=self.solving,
             apex=self.solving[self.solving_apex[0]] if len(self.solving_apex) else None,
             axis=self.initial_axis,
             first=self.first,
             second=self.second,
-            initial=self.start(),
+            initial=self.start() if initial is None else initial.copy(),
         )
 
 
@@ -8467,6 +8509,9 @@ def _cone_plan(
     solving_apex = (
         at_apex if rows is None or not len(at_apex) else np.flatnonzero(rows == int(at_apex[0]))
     )
+    # Eine belegte Spitze hält den Start ohnehin fest; sonst darf die Quadrik
+    # der Stützpunkte ihn ersetzen, wenn sie näher am Kegel liegt (RM-210).
+    seed = None if len(solving_apex) else _quadric_cone_start(samples)
     return _ConePlan(
         support=support,
         line_tolerance=line_tolerance,
@@ -8484,7 +8529,76 @@ def _cone_plan(
         second=second,
         solving=solving,
         solving_apex=solving_apex,
+        seed=seed,
     )
+
+
+def _quadric_cone_start(samples: np.ndarray) -> np.ndarray | None:
+    """Ein Kegelstart aus der Quadrik der Stützpunkte — oder ``None`` (RM-210).
+
+    Der Start aus den Normalen (:func:`_cone_plan`) steht an flachen, kurzen
+    Kegelstücken weit vom Ziel: Deren Normalen streuen wenig, ihre Achse ist
+    kaum bestimmt, und der Winkel aus der mittleren Normale lag am
+    Gartenschlauchhalter bei 70 bis 84 statt 35 bis 43 Grad. Fünf Teilstücke
+    zweier Kegelgruppen brauchten so 58 bis 100 Auswertungen und endeten je
+    nach Lage des Körpers mal knapp unter, mal am Budget
+    (:data:`ROUND_FIT_EVALUATIONS`) — dann ohne Kegel. Eine Quadrik durch die
+    Stützpunkte ist ein linearer Ausgleich; ist sie ein Kegel oder Hyperboloid
+    (eine Eigenrichtung mit anderem Vorzeichen als die beiden übrigen), geben
+    ihr Mittelpunkt, diese Richtung und das Verhältnis der Eigenwerte Spitze,
+    Achse und Winkel. Von dort kamen dieselben fünf Stücke in 6 bis 40
+    Auswertungen an, mit demselben Formfehler (04.10.2026).
+
+    **Er ist der zweite Start, nicht der erste.** Für jeden Kegel gesetzt,
+    änderte er Merkmale an elf von 193 Korpusdateien — darunter zehn gleiche
+    Kegel Ø 31,6 an einer Minigolfbahn, die vom Normalenstart ankommen und
+    vom Quadrikstart nicht. Er rechnet deshalb nur, wo der erste Lauf sein Budget
+    ausschöpft (:func:`_cone_from_plan`). Ein Vergleich der Startkosten trennt
+    nicht: Der Normalenstart liegt als fast ebener Kegel nahe an den Punkten
+    und trotzdem im falschen Tal. Gültig ist der Quadrikstart, wenn der
+    Ausgleich eindeutig ist, sein Winkel zwischen :data:`CONE_START_ANGLE` und
+    :data:`CONE_MAX_ANGLE` liegt und alle Stützpunkte auf einer Seite der
+    Spitze. Löser, Budget und jede Prüfung danach bleiben dieselben.
+    Ausgleich und Eigenzerlegung laufen über LAPACK wie der Normalenstart;
+    beide sind ein Startwert, keine Antwort.
+    """
+    if len(samples) < 10:
+        return None
+    x, y, z = samples[:, 0], samples[:, 1], samples[:, 2]
+    design = np.column_stack(
+        (x * x, y * y, z * z, 2.0 * x * y, 2.0 * x * z, 2.0 * y * z, x, y, z, np.ones(len(x)))
+    )
+    _left, singular, right = np.linalg.svd(design, full_matrices=False)
+    if singular[-2] <= singular[0] * math.sqrt(float(np.finfo(float).eps)):
+        return None
+    q = right[-1]
+    quadric = np.array(((q[0], q[3], q[4]), (q[3], q[1], q[5]), (q[4], q[5], q[2])))
+    values, vectors = np.linalg.eigh(quadric)
+    if float(np.abs(values).min()) <= float(np.abs(values).max()) * math.sqrt(
+        float(np.finfo(float).eps)
+    ):
+        return None
+    if values[0] < 0.0 < values[1]:
+        odd = 0
+    elif values[1] < 0.0 < values[2]:
+        odd = 2
+    else:
+        return None
+    tip = np.linalg.solve(quadric, -q[6:9] / 2.0)
+    axis = vectors[:, odd]
+    side = (float(values[(odd + 1) % 3]) + float(values[(odd + 2) % 3])) / 2.0
+    angle = math.atan(math.sqrt(-float(values[odd]) / side))
+    along = (samples - tip) @ axis
+    if float(along.mean()) < 0.0:
+        axis, along = -axis, -along
+    if float(along.min()) < 0.0 or axis[2] <= math.sqrt(float(np.finfo(float).eps)):
+        return None
+    if not math.radians(CONE_START_ANGLE) <= angle <= math.radians(CONE_MAX_ANGLE):
+        return None
+    seed: np.ndarray = np.r_[tip, axis[0] / axis[2], axis[1] / axis[2], angle]
+    if not np.isfinite(seed).all():
+        return None
+    return seed
 
 
 def _cone_from_plan(
@@ -8492,12 +8606,20 @@ def _cone_from_plan(
     check_cancelled: Callable[[], None] | None,
     *,
     exhausted: bool = False,
+    seed_exhausted: bool = False,
 ) -> ConeFit | None:
     """Der Löser und das Maß der Kegeleinpassung.
 
     ``exhausted`` sagt der Stapel (:func:`refine.exhausted`): Der Löserlauf
     schöpft sein Budget sicher aus und hätte nichts geliefert — dann entfällt
     er, und es geht weiter wie nach einem vergeblichen Lauf.
+
+    **Am Budget beginnt ein zweiter Lauf am Quadrikstart** (``plan.seed``,
+    RM-210), und nur dort: Wo der erste ankommt, bleibt sein Ergebnis Bit für
+    Bit, und eine Antwort, die vom ersten Start an der Lage des Körpers hing,
+    bekommt eine zweite Chance aus einem Start, der nicht an den Normalen
+    hängt. ``seed_exhausted`` ist das sichere Nein des Stapels für diesen
+    zweiten Lauf.
     """
     support, line_tolerance = plan.support, plan.line_tolerance
     weights, origin, half_angle = plan.weights, plan.origin, plan.half_angle
@@ -8547,7 +8669,14 @@ def _cone_from_plan(
             columns = np.vstack((columns, apex_rows))
         return columns
 
-    fitted = None if exhausted else _refined_fit(plan.start(), residual, check_cancelled, jacobian)
+    spent: list[bool] = []
+    fitted = (
+        None
+        if exhausted
+        else _refined_fit(plan.start(), residual, check_cancelled, jacobian, spent=spent)
+    )
+    if fitted is None and (exhausted or spent) and plan.seed is not None and not seed_exhausted:
+        fitted = _refined_fit(plan.seed.copy(), residual, check_cancelled, jacobian)
     normal_constrained = False
     if fitted is None and float(np.ptp(samples @ initial_axis)) <= line_tolerance / scale:
         # Ein einziger erhaltener Kreis bestimmt nicht sechs Kegelgrößen.

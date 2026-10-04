@@ -87,16 +87,29 @@ def runs(bumpy: MeshData) -> list[Run]:
         plain_cone, plain_torus = features._cone_from_plan, features._torus_from_plan
         plain_fit = features._refined_fit
 
-        def cone(plan: Any, check: Any, *, exhausted: bool = False) -> Any:
+        def cone(plan: Any, check: Any, **options: Any) -> Any:
+            # Der zweite Lauf vom Quadrikstart (RM-210) ist eine eigene Aufgabe
+            # für den Stapel und wird ebenso aufgezeichnet.
             current[:] = [plan.problem()]
-            return plain_cone(plan, check, exhausted=exhausted)
+            if plan.seed is not None:
+                current.append(plan.problem(plan.seed))
+            return plain_cone(plan, check, **options)
 
         def torus(plan: Any, check: Any, *, exhausted: bool = False) -> Any:
             current[:] = [plan.problem()]
             return plain_torus(plan, check, exhausted=exhausted)
 
-        def fit(initial: Any, residual: Any, check: Any, jacobian: Any = None) -> Any:
-            if current and jacobian is not None and len(initial) == len(current[0].initial):
+        def fit(
+            initial: Any, residual: Any, check: Any, jacobian: Any = None, **options: Any
+        ) -> Any:
+            asked = [
+                problem
+                for problem in current
+                if jacobian is not None
+                and len(initial) == len(problem.initial)
+                and np.array_equal(initial, problem.initial)
+            ]
+            if asked:
                 result = least_squares(
                     residual,
                     initial,
@@ -106,9 +119,9 @@ def runs(bumpy: MeshData) -> list[Run]:
                     gtol=features.ROUND_FIT_PRECISION,
                     max_nfev=features.ROUND_FIT_EVALUATIONS,
                 )
-                captured.append(Run(current[0], residual, jacobian, int(result.nfev)))
-                current.clear()
-            return plain_fit(initial, residual, check, jacobian)
+                captured.append(Run(asked[0], residual, jacobian, int(result.nfev)))
+                current.remove(asked[0])
+            return plain_fit(initial, residual, check, jacobian, **options)
 
         patch.setattr(features, "_cone_from_plan", cone)
         patch.setattr(features, "_torus_from_plan", torus)
@@ -449,9 +462,9 @@ def counted(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[int]]:
     calls = [0]
     plain = features._refined_fit
 
-    def fit(initial: Any, residual: Any, check: Any, jacobian: Any = None) -> Any:
+    def fit(initial: Any, residual: Any, check: Any, jacobian: Any = None, **options: Any) -> Any:
         calls[0] += 1
-        return plain(initial, residual, check, jacobian)
+        return plain(initial, residual, check, jacobian, **options)
 
     monkeypatch.setattr(features, "_refined_fit", fit)
     yield calls

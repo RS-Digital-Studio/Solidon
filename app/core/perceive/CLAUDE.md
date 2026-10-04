@@ -48,7 +48,11 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
   Die Normierung liest die Entfernung zum gewichteten Ursprung statt einer
   Weltbox. Einzel- und Stapellöser erhalten denselben Plan; erst das Ergebnis
   geht zurück in Weltkoordinaten. Budget und Nachweise bleiben unabhängig
-  von dieser Wahl des Rechenrahmens.
+  von dieser Wahl des Rechenrahmens. Schöpft der Lauf vom Normalenstart sein
+  Budget aus, rechnet ein zweiter von der Quadrik der Stützpunkte
+  (`_quadric_cone_start`, `_ConePlan.seed`) — der Normalenstart steht an
+  flachen Streifen im falschen Tal. Der Stapel fragt beide Läufe
+  (`fit_cone_seed` in `_SCREENED`); wo der erste ankommt, bleibt er.
 - **Größenbelege folgen der Geometrie**: `_fits_in_the_body` misst die
   Diagonale des kleinsten Rechtecks der quer zur Fitachse projizierten
   Körperhülle. Zwei wirkliche Ecken können das positive Urteil schon vorher
