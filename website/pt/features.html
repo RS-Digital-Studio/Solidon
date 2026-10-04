@@ -109,7 +109,7 @@
           <span class="kicker">Características</span>
           <h3>Num STL alheio, um furo volta a ser um furo</h3>
           <p>Ao abrir, o Solidon3D procura na malha de triângulos aquilo que um
-          dia foi projeto: furos, pinos, escareados, cúpulas e sedes,
+          dia foi projeto: furos, pinos, escareamentos, cúpulas e sedes,
           arredondamentos, golas, roscas, faces planas e arestas abertas. Cada
           característica encontrada recebe uma identidade usada como referência nos passos seguintes — e um clique mostra os seus valores <b>medidos</b>, como cotas na vista e, à direita, no painel Seleção: posição, diâmetro, profundidade,
           eixo.</p>
@@ -117,7 +117,7 @@
           <b>Sem modo e sem um segundo diálogo</b> — e a pré-visualização na
           imagem acompanha enquanto ainda está a escrever.</p>
           <p>Mover, rodar, duplicar, remover, pôr à medida: estas ações
-          aplicam-se diretamente ao elemento reconhecido. Até agora, deslocar
+          aplicam-se diretamente à característica reconhecida. Até agora, deslocar
           um furo três milímetros significava tapá-lo e furar outro em
           coordenadas novas — dois passos, seis números à mão, e a identidade
           perdia-se. Agora é um passo, e os ajustes continuam a referenciar esse furo. As referências que já não possam ser resolvidas são assinaladas.</p>
@@ -127,11 +127,11 @@
           indicam a sua distância — no espaço e por eixo, sem ferramenta de
           medição.</p>
           <p class="note" data-kinds="hole,pin,cone,sphere">Nem todos os tipos suportam todas as ações. Mover, duplicar e remover valem para
-          furos, pinos, escareados, cúpulas e sedes; rodar, para todos menos a
-          superfície esférica — não tem uma orientação que se possa rodar. Nos arredondamentos e golas que substituem visivelmente uma aresta, pode alterar o raio ou remover o elemento; uma transição que se funde suavemente com as faces vizinhas, não. <b>O
+          furos, pinos, escareamentos, cúpulas e sedes; rodar, para todos menos a
+          superfície esférica — não tem uma orientação que se possa rodar. Nos arredondamentos e golas que substituem visivelmente uma aresta, pode alterar o raio ou remover a característica; uma transição que se funde suavemente com as faces vizinhas, não. <b>O
           Solidon3D explica quais as ações disponíveis no ponto escolhido e
           porquê.</b></p>
-          <p>Pode repetir furos reconhecidos e outros elementos compatíveis
+          <p>Pode repetir furos reconhecidos e outras características compatíveis
           em fila, à volta de um círculo ou com cópias espelhadas. Assim, um
           único furo dá origem a um conjunto de furos com espaçamento regular.
           Se alterar a medida do original num passo anterior do histórico,
@@ -140,7 +140,7 @@
         <figure class="shot">
           <div class="stage">
             <a href="../bilder/beleg-merkmal-pt.webp?v=3fd1d737"><img src="../bilder/beleg-merkmal-pt.webp?v=3fd1d737" width="2560" height="1369" loading="lazy" decoding="async"
-                 alt="Um suporte importado com cinco furos reconhecidos; o furo 4 está selecionado. Na vista, as suas distâncias às arestas e o grupo «Alterar furo» com diâmetro, posição e profundidade; à direita, no painel Seleção, a linha «Provavelmente corresponde a M5» e por baixo Mover elemento, Esticar para furo oblongo, Rodar elemento, Duplicar elemento, Remover elemento, Escarear e Fechar furo."></a>
+                 alt="Um suporte importado com cinco furos reconhecidos; o furo 4 está selecionado. Na vista, as suas distâncias às arestas e o grupo «Alterar furo» com diâmetro, posição e profundidade; à direita, no painel Seleção, a linha «Provavelmente corresponde a M5» e por baixo Mover característica, Esticar para furo oblongo, Rodar característica, Duplicar característica, Remover característica, Escarear e Fechar furo."></a>
           </div>
           <figcaption>Um furo clicado: as suas cotas na vista, as suas ações à direita no painel Seleção.</figcaption>
         </figure>
@@ -216,7 +216,7 @@
           <p class="note">Num sólido exato, o contorno mantém a sua curva.
           <b>Um círculo desenhado torna-se um cilindro redondo, não um
           polígono com muitos cantos.</b></p>
-          <p>A grelha mostra a que é que o imantado se agarra, e o seu passo
+          <p>A grelha mostra onde o cursor se prende, e o seu passo
           pode ser escrito. A cota fica junto ao ponteiro, e a barra por
           baixo diz a face em que se está a desenhar. Uma linha auxiliar
           continua auxiliar — mesmo depois de aparar, prolongar, deslocar e
@@ -225,7 +225,7 @@
           selecionado. Para retirar material, rode uma secção em torno de um
           eixo, por exemplo para criar uma ranhura anular. Uma transição entre
           dois contornos recorta um funil ou um canal de secção quadrada para
-          circular. Ao longo de um arco ou de um percurso desenhado, pode cortar um canal guiado que também pode sair pela lateral.</p>
+          circular. Ao longo de um arco ou de um trajeto desenhado, pode cortar um canal guiado que também pode sair pela lateral.</p>
         </div>
         <figure class="shot">
           <div class="stage">
@@ -346,7 +346,7 @@
         <div>
           <span class="kicker">Superfícies</span>
           <h3>Oito padrões verificados segundo o perfil de impressão</h3>
-          <p>Nervura, onda, moletado reto e cruzado, favo de mel, covinhas,
+          <p>Nervura, onda, recartilhado reto e cruzado, favo de mel, covinhas,
           Voronoi e ruído — como <b>geometria real</b> e como grelha exata,
           não como campo de alturas amostrado. O detalhe impresso depende também do bico, do material e das definições do slicer.</p>
           <p class="note">Antes de calcular, a pergunta: será que o padrão
@@ -355,7 +355,7 @@
           calculados.</p>
           <p>Uma imagem em tons de cinzento também pode tornar-se uma superfície percetível ao
           toque: <b>Aplicar relevo</b> traduz as zonas claras e escuras em altura.
-          <b>Preencher com grelha</b> cria uma treliça espacial na cavidade de um
+          <b>Preencher com treliça</b> cria uma treliça espacial na cavidade de um
           sólido esvaziado, com estrutura, tamanho de célula e espessura das barras à
           escolha. A geometria da treliça acompanha o modelo exportado.</p>
         </div>
@@ -363,7 +363,7 @@
           <picture>
             <source srcset="../handbuch/pt/textures-dark.svg?v=63d99235" media="(prefers-color-scheme: dark)">
             <img class="figure" src="../handbuch/pt/textures.svg?v=f0923429" width="454" height="274" loading="lazy" decoding="async"
-                 alt="Oito mosaicos de padrão em duas filas: nervura como riscas paralelas, onda como riscas onduladas, moletado reto e cruzado como riscas oblíquas e losangos, favo de mel como hexágonos, covinhas como grelha de pontos, Voronoi como células irregulares e ruído como manchas dispersas.">
+                 alt="Oito mosaicos de padrão em duas filas: nervura como riscas paralelas, onda como riscas onduladas, recartilhado reto e cruzado como riscas oblíquas e losangos, favo de mel como hexágonos, covinhas como grelha de pontos, Voronoi como células irregulares e ruído como manchas dispersas.">
           </picture>
           <figcaption>Os mesmos contornos que depois são impressos — a pré-visualização é calculada, não pintada.</figcaption>
         </figure>
@@ -377,7 +377,7 @@
           triângulos mal orientados, paredes abaixo de duas larguras de
           extrusão, unidades em falta. Ordenado por erros, avisos e notas —
           e as entradas com localização indicam o sítio em causa no modelo.</p>
-          <p class="note">Cada achado traz uma sugestão de ação.
+          <p class="note">Cada constatação traz uma sugestão de ação.
           <b>Aqui, um erro nunca acaba em «falhou».</b></p>
         </div>
         <figure class="shot">
@@ -394,8 +394,8 @@
           <span class="kicker">Análise de camadas</span>
           <h3>Ver o que a impressora vai ver</h3>
           <p>O Solidon3D corta o modelo em camadas e mede o que daí decorre:
-          áreas sem suporte, ilhas a pairar, paredes abaixo de dois
-          cordões, vãos de ponte e o volume de suporte. A procura de
+          áreas sem suporte, ilhas a pairar, paredes abaixo de duas
+          linhas, vãos de ponte e o volume de suporte. A procura de
           orientação procura uma posição que exija menos suportes entre as orientações avaliadas.</p>
           <p class="note">Nenhum slicer próprio — e nenhum número misturado:
           <b>o que vem da análise e o que vem do G-Code está sempre
@@ -403,7 +403,7 @@
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Um desenho: uma linha de análise sobe da mesa de impressão através de uma peça; um após outro aparecem três achados — saliência de 90 graus, ilha a pairar e uma parede abaixo de dois cordões.">
+               aria-label="Um desenho: uma linha de análise sobe da mesa de impressão através de uma peça; um após outro aparecem três constatações — saliência de 90 graus, ilha a pairar e uma parede abaixo de duas linhas.">
             <text class="ink" x="24" y="30" font-weight="600">Análise de camadas</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -428,7 +428,7 @@
             </g>
             <g class="anim fig-find-3">
               <path class="warn" d="M368 168 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="183" font-size="12">Parede &lt; 2 cordões</text>
+              <text class="ink" x="386" y="183" font-size="12">Parede &lt; 2 linhas</text>
             </g>
           </svg>
           <figcaption>Três constatações que pode examinar antes de fatiar.</figcaption>
@@ -524,7 +524,7 @@
           <span class="kicker">Inventário de filamentos</span>
           <h3>O que resta na bobina está no inventário — não na memória</h3>
           <p>Cada bobina é um registo: nome, tipo de material, até quatro
-          cores, local, carga nominal e quantidade restante, além da data de
+          cores, local, conteúdo nominal e quantidade restante, além da data de
           compra, da data de abertura e do preço. Duas bobinas iguais continuam
           a ser dois registos, cada um com o seu próprio stock. Se já tem os
           filamentos configurados no slicer, importa-os de lá — de forma
@@ -701,7 +701,7 @@
         anéis com faces e arestas reais, uni-los, subtraí-los ou conservar a
         sua interseção. Colocar um furo
         diretamente na face escolhida.
-        Criar um furo com escareado ou alargamento cilíndrico num só passo, com
+        Criar um furo com escareamento ou alargamento cilíndrico num só passo, com
         diâmetro, profundidade e ângulo de transição ajustáveis.</p></div>
         </details>
         <details class="tool-card" id="anordnen" data-operations="align_to_feature duplicate_object fit_to_size mirror_object pattern rotate_object scale_object translate_object">
@@ -776,7 +776,7 @@
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Organizar a placa e verificar a impressão</summary>
-          <div class="tool-content"><p>Assentar peças na cama — um conjunto importado também por inteiro,
+          <div class="tool-content"><p>Assentar peças na mesa — um conjunto importado também por inteiro,
         com a posição das suas peças entre si —, encontrar uma orientação
         favorável, distribuí-las na placa e verificar sobreposições. A
         passagem direta para o slicer inclui as definições adequadas; o G-code
@@ -839,12 +839,12 @@
   <section id="entwicklung" class="tint">
     <div class="wrap">
       <h2>Mais possibilidades para a sua peça</h2>
-      <p class="lead">Altere os furos em conjunto com os escareados, divida os organizadores à medida e crie campos de furos com margem. Pode voltar a ajustar as dimensões mais tarde.</p>
+      <p class="lead">Altere os furos em conjunto com os escareamentos, divida os organizadores à medida e crie campos de furos com margem. Pode voltar a ajustar as dimensões mais tarde.</p>
       <div class="showcase" id="bohrung-senkung">
         <div>
-          <span class="kicker">Furo e escareado</span>
+          <span class="kicker">Furo e escareamento</span>
           <h3>O furo cresce. A entrada acompanha.</h3>
-          <p>Um furo reconhecido tem frequentemente mais de um diâmetro: um escareado em cima,
+          <p>Um furo reconhecido tem frequentemente mais de um diâmetro: um escareamento em cima,
           depois um degrau ou uma segunda secção por baixo. Ao editar, decide quais
           as secções que pertencem ao mesmo conjunto.</p>
           <p><b>Incluir escareamento, degraus e estreitamento</b> ajusta todos os diâmetros
@@ -858,8 +858,8 @@
         </div>
         <div>
           <figure class="shot">
-            <img class="feature-model" src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À esquerda, o furo escareado original; à direita, o furo e o escareado aumentados em conjunto. As dimensões exteriores da peça mantêm-se.">
-            <figcaption>À esquerda, o furo escareado original; à direita, o furo e o escareado aumentados em conjunto. As dimensões exteriores da peça mantêm-se.</figcaption>
+            <img class="feature-model" src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À esquerda, o furo escareado original; à direita, o furo e o escareamento aumentados em conjunto. As dimensões exteriores da peça mantêm-se.">
+            <figcaption>À esquerda, o furo escareado original; à direita, o furo e o escareamento aumentados em conjunto. As dimensões exteriores da peça mantêm-se.</figcaption>
           </figure>
           <details class="feature-diagram"><summary>Ver o corte transversal</summary>
             <figure class="shot"><svg class="figure" viewBox="0 0 560 260" role="img"
@@ -928,19 +928,19 @@
 
 <footer class="site">
   <div class="wrap">
-    © 2026 RS Digital ·
-    <a href="/pt/">Início</a> ·
-    <a href="/pt/#ways">Quatro caminhos</a> ·
-    <a href="/pt/ai-models.html">Modelos de IA</a> ·
-    <a href="/pt/manual.html">Manual</a> ·
-    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
-    <a href="/impressum.html">Aviso legal</a> ·
+    © 2026 RS Digital&nbsp;·
+    <a href="/pt/">Início</a>&nbsp;·
+    <a href="/pt/#ways">Quatro caminhos</a>&nbsp;·
+    <a href="/pt/ai-models.html">Modelos de IA</a>&nbsp;·
+    <a href="/pt/manual.html">Manual</a>&nbsp;·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a>&nbsp;·
+    <a href="/impressum.html">Aviso legal</a>&nbsp;·
     <a href="/datenschutz.html">Privacidade</a>
-    <em>(textos legais em alemão — faz fé a versão alemã)</em> ·
-    <a href="/">Deutsch</a> ·
-    <a href="/en/">English</a> ·
-    <a href="/es/">Español</a> ·
-    <a href="/fr/">Français</a> ·
+    <em>(textos legais em alemão — faz fé a versão alemã)</em>&nbsp;·
+    <a href="/">Deutsch</a>&nbsp;·
+    <a href="/en/">English</a>&nbsp;·
+    <a href="/es/">Español</a>&nbsp;·
+    <a href="/fr/">Français</a>&nbsp;·
     <a href="/it/">Italiano</a>
   </div>
 </footer>
