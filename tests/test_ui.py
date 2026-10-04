@@ -619,19 +619,25 @@ def test_unused_parameters_become_bound_only_after_a_step_reads_them(window: Mai
             if label.text().startswith("width")
         ]
 
+    def usage() -> str:
+        """Der Hinweis unter der Zeile; ohne Hinweis ist die Zeile weg."""
+        hint = window.parameters._hints["width"]
+        return hint.text() if window.parameters._form.isRowVisible(hint) else ""
+
     assert len(labels()) == 1
-    assert "Nicht verwendet" in labels()[0].text()
+    assert labels()[0].text() == "width"
+    assert usage() == "Nicht verwendet"
     assert "=@width" in labels()[0].accessibleDescription()
     assert session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@width"})])
     assert session.wait_for_idle()
-    assert labels()[0].text() == "width"
+    assert usage() == ""
     assert "Operation 1" in labels()[0].toolTip() and "Breite" in labels()[0].toolTip()
     session.undo()
     assert session.wait_for_idle()
-    assert "Nicht verwendet" in labels()[0].text()
+    assert usage() == "Nicht verwendet"
     session.redo()
     assert session.wait_for_idle()
-    assert labels()[0].text() == "width"
+    assert usage() == ""
 
 
 @pytest.mark.parametrize(

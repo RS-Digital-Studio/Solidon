@@ -1302,7 +1302,7 @@ def test_local_report_action_availability_receives_the_group_at_every_entry(monk
         _offers=Mock(),
         offer_effect=Mock(),
         _show_finding_context=lambda _item: None,
-        _set_slicer_primary=lambda _primary: None,
+        _emphasise_slicer=lambda _primary: None,
         list=SimpleNamespace(
             selectedItems=lambda: [] if entry == "_preselect" else [item],
             itemAt=lambda _position: item,

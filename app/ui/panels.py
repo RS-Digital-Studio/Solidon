@@ -5976,16 +5976,21 @@ class ReportPanel(QWidget):
                 button.clicked.connect(weak_slot(self, ReportPanel._run_action, action.id))
             row.addWidget(button)
         self._offers.setVisible(bool(offered))
-        self._set_slicer_primary(bool(self._live_objects) and not offered)
+        self._emphasise_slicer(bool(self._live_objects) and not offered)
 
-    def _set_slicer_primary(self, primary: bool) -> None:
-        if primary:
-            make_primary(self.to_slicer)
-        else:
-            self.to_slicer.setDefault(False)
-            font = self.to_slicer.font()
-            font.setBold(False)
-            self.to_slicer.setFont(font)
+    def _emphasise_slicer(self, ready: bool) -> None:
+        """Bietet der Bericht nichts mehr an, steht der Weg zum Slicer halbfett da.
+
+        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteine* den Akzent
+        (Entscheidung Robert, ``test_resting_state.py``). Als Hauptknopf leuchtete
+        dieser Knopf neben ihm, sobald ein Modell übergabebereit war — zwei
+        Signale, keines davon mehr eines. Dass nichts mehr aussteht, sagt die
+        Zeile darüber mit Haken.
+        """
+        self.to_slicer.setDefault(False)
+        font = self.to_slicer.font()
+        font.setBold(ready)
+        self.to_slicer.setFont(font)
 
     def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
         """Der angezeigte Importumfang bleibt gebunden, der Handler prüft seine Gültigkeit."""
@@ -6645,7 +6650,7 @@ class ReportPanel(QWidget):
         # ein Körper da ist — auch neben Warnungen und Hinweisen, die den
         # Druck nicht verhindern. Ohne Körper gibt es nichts zu übergeben.
         self.to_slicer.setVisible(bool(self._live_objects))
-        self._set_slicer_primary(bool(self._live_objects) and self._offers.isHidden())
+        self._emphasise_slicer(bool(self._live_objects) and self._offers.isHidden())
         if not self._live_objects and not any(counts.values()):
             self.summary.setText(tr("Keine Befunde."))
             return
