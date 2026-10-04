@@ -20,6 +20,28 @@ den umgerechneten Winkel über `answered` zurück — wie die freie Stelle eines
 weiteren Modells (Format 38). Belegt an `slot_angle_frame_v38.p3d`, geschrieben
 vom Stand davor (`test_project.test_v38_a_slot_keeps_the_world_direction_it_was_cut_with`).
 
+**Behalten statt reparieren, bis jemand den Schritt ändert** (04.10.2026, Format
+46, RM-422). RM-325 zog das Werkzeug eines Langlochs aus seinen Kennzahlen im
+Rahmen von `slot_frame` auf; vorher lag es an einer Wand mit Normale ±X um 90°
+verdreht. Gespeicherte Netzprojekte hätten nach dem Update still anders
+gerechnet — am Beispiel `slot_tool_v40.p3d` (elf Klötze, je ein Langloch durch
+die Wand und ein Folgeschritt) fünf von elf: Zug auf 0° (alt kein Langloch,
+350 751,96 mm³; heute eines, 353 265,58), Kürzen auf 14 mm (alt blieb es 20 mm
+lang), *Merkmal drehen* um 45° (alt -15°, heute +75°), Verschmälern auf Ø 4 (alt
+kein Langloch) und dasselbe Drehen an -X. Die alte Rechnung war ein Fehler, aber
+der Kunde hat ihr Ergebnis gesehen, oft mit dem Befund „Langloch verloren“, und
+vielleicht gedruckt. Ein Hinweis beim Öffnen hätte ihn eine Lage suchen lassen,
+die er nicht verändert hat; die Migration markiert deshalb die sieben
+Langlochhandlungen mit `legacy_slot_tool`, und `_feature_solid` zieht für sie das
+alte Werkzeug auf. Wer den Schritt ändert, meint die heutige Rechnung:
+`ParamSpec.dropped_on_change` lässt `History.change_params` den Marker fallen,
+sobald sich ein anderer Wert ändert. Entschieden wird an der Version, mit der die
+Datei gespeichert wurde (`migrations.SAVED_FORMAT_KEY`), denn eine Datei aus
+Format 41 rechnete schon neu; Format 40 schrieb nach der Behebung noch 17
+Minuten lang, nur in Entwicklungsständen, und wird trotzdem markiert. Am Beispiel
+rechnen nach der Migration alle elf Körper bis auf die vierte Nachkommastelle wie
+beim Schreiben (`test_v40_slot_tools_keep_the_geometry_they_were_saved_with`).
+
 ## Was nicht in die Datei gehört
 
 Zu den mitreisenden Druckern und Materialien: Passungen aus *Teilen* und

@@ -3166,8 +3166,10 @@ def test_removing_a_feature_is_registered_completely() -> None:
     # Ein Hohlraum aus mehreren Abschnitten hat zwei sinnvolle Ergebnisse, und
     # der Kern entscheidet Mehrdeutigkeit nicht selbst (Regel 21); die Antwort
     # landet über ``OpResult.answered`` hier und wird beim nächsten Lauf nicht
-    # noch einmal erfragt. Deshalb steht es hinten und nicht vorn.
-    assert set(fields) == {"at_feature", "sections"}, sorted(fields)
+    # noch einmal erfragt. Deshalb steht es hinten und nicht vorn. Ein Marker
+    # einer Migration (``legacy_slot_tool``, intern) ist kein Feld.
+    shown = {name for name, entry in fields.items() if not entry.internal}
+    assert shown == {"at_feature", "sections"}, sorted(fields)
     assert fields["sections"].placement == "advanced"
     assert fields["sections"].default == "ask", "gefragt wird, solange niemand entschieden hat"
 

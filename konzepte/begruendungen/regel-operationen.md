@@ -1108,6 +1108,20 @@ schließender Vereinigung); am exakten Kern fällt sie nur bei mehreren
 Volumenkörpern an. Der Wächter: `test_feature_moves_keep_shape.py`, beide
 Kerne gegen die Platte aus einem Stück.
 
+**Ein exakter Stopfen, der den Körper verliert, ist eine Absage** (RM-411,
+04.10.2026). An einer Stufenplatte (9 326,282 mm³) mit einem Langlochende in
+der Wand des Aufsatzes gab `BRepAlgoAPI_Fuse` aus Körper und Stopfen
+(1 156,435 mm³, an der konvexen Hülle gekappt) einen gültigen, geschlossenen
+Volumenkörper von 1 156,435 mm³ zurück — den Stopfen allein, ohne Fehler und
+ohne Warnung; ohne Kappung kamen zwei Volumenkörper mit der Summe beider
+Volumina zurück, verbunden war auch dort nichts. Der Zug danach ließ 431,5 mm³
+stehen. `fill_bore` vergleicht deshalb am Zwilling: Füllen fügt
+nur hinzu, und was über dem Sehnenfehler der Stopfenflächen fehlt
+(`deflection` mal Stopfenfläche), sagt mit `FILL_DID_NOT_HOLD` ab
+(`test_a_fill_that_loses_the_body_is_refused`). Ausgelöst hatte den Fall eine
+falsche Erkennung (siehe „Ein Langloch ist an beiden Kernen ein Merkmal und ein
+Hohlraum"); die Absage bleibt, weil sie zum Vertrag des Füllens gehört.
+
 ## Wulst und Kehle schließen je Kern anders, ein Gewinde wird nicht bewegt
 
 **Und seit P2.6 gilt es für Wulst und Kehle** (21.09.2026): Ein Torusmerkmal
@@ -1170,6 +1184,15 @@ eine Bohrung in eine vergrabene Senkung durchgehend. **Und die Säule liegt im
 Werkzeug** (`_inscribed_radius`): Versetzt wird das Vieleck der Datei, und eine
 Säule 0,02 mm unter dem Durchmesser traf an einem 32-Eck jede Sehne — „geht
 nicht mehr durch" an einer glatt versetzten Bohrung einer Furnierplatte.
+**Und der einzelne Hohlraum fragt dieselbe Säule** (RM-411, 04.10.2026): Nur
+die Kette rief `_exact_through_checked`, `_exact_move_cavity` und
+`_exact_duplicate_cavity` nicht. An der schrägen Platte (z = 10 + x/4) blieb ein
+Langloch, 2 mm längs der Schräge versetzt, unter der mitgenommenen Randebene
+hinter einer Haut von 0,5 mm; das Netz sagte „geht nicht mehr durch“, der exakte
+Kern „Mündung zugedeckt“ und nannte das Langloch weiter durchgehend — quer
+versetzt und verdoppelt ebenso. Eine Bohrung traf das nicht, ihre Erkennung
+misst den Durchgang selbst
+(`test_a_slot_set_up_a_slanted_plate_says_the_same_on_both_kernels`).
 
 **Gemeldet wird, was am Ergebnis steht** (`_measured_on`). Der exakte Kern
 erkennt nach jeder Merkmalshandlung neu; das Netz trug beim Versetzen, Kippen
@@ -1260,6 +1283,28 @@ ziehen* und *Bohrung ändern*
 `test_widening_a_slot_with_a_second_body_in_it_is_no_split`, Gegenrichtung
 `test_a_pull_through_the_plate_beside_a_second_body_still_says_it_splits`).
 
+**Gefüllt und über die Länge des Schnitts, an beiden Kernen** (RM-411,
+04.10.2026). Der exakte Zweig von *Zum Langloch ziehen* fragte die Kante am
+Körper vor dem Füllen und nur über die halbe Bohrungstiefe, das Netz am
+gefüllten über die halbe Schnitttiefe. An einer schrägen Platte (Oberseite
+z = 10 + x/4, Bohrung Ø 6, Zug auf 16 mm ganz in der Fläche) sahen Punkte in
+der alten Bohrung unter der tiefen Seite der Mündung hindurch ins Freie: exakt
+„über die Kante", am Netz nichts. An einer Stufenplatte, deren Langlochende
+1 mm in die Wand eines Aufsatzes läuft, sah der Kranz über die Bohrungstiefe
+nur die Grundplatte: am Netz „über die Kante" und `feature_lost`, exakt nur
+die Umbenennung. *Bohrung ändern* fragte exakt ebenfalls ungefüllt
+(Verbreitern auf Ø 8 an der schrägen Platte: exakt „über die Kante", Netz
+nichts). **Eine alte Öffnung, die ein Zug ohne Schließen überdeckt, zählt als
+Material** (`prepare.OpeningSpace`): Wer ein Langloch an derselben Stelle
+verlängert, schließt es nicht, und seine Luft lag im inneren Halbkranz der
+neuen Enden — an der schrägen Platte sagten beide Kerne „über die Kante". Den
+inneren Halbkranz wegzulassen genügt nicht: Läuft ein Ende genau in eine
+Stufenwand, liegt der Riss dort
+(`test_both_kernels_report_the_same_at_a_slanted_and_a_stepped_carrier`,
+`test_a_slot_changed_inside_a_slanted_plate_is_not_over_the_edge`; Gegenproben:
+ungefüllt sind die schrägen Fälle rot, mit der Bohrungstiefe die sechs
+gestuften, ohne gefüllten Körper beim Ändern das Verbreitern).
+
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
 **Der Winkel zählt gegen den Rahmen, den er bekommt — und die zwei Wege
@@ -1296,7 +1341,8 @@ das Feld *Richtung* zeigte für dasselbe Langloch, in der Welt 90°, -168,5°,
 geänderten Feinheit um rund 100°, ragte über die Kante, zerteilte das Teil und
 verlor das Merkmal; ein getippter Winkel 90 tat dasselbe schon beim ersten
 Mal. Am Besenhalter lagen sechs Bohrungen 3e-6° neben Z, und Winkel 0 zeigte
-auf 53,1° bis 126,9°. `prepare.slot_frame` gibt innerhalb `SLOT_ACROSS_LIMIT`
+auf 53,1° bis 126,9°. `prepare.slot_frame` gibt innerhalb `SLOT_FRAME_CONE`
+(bis RM-325 hieß der Kegel wie die Drehschwelle `SLOT_ACROSS_LIMIT`)
 den Rahmen der Hauptachse, gegen die gemessene Achse gestellt; eine genau
 liegende oder wirklich geneigte Achse behält `frame_of`. Danach, am selben
 Lauf: Feld 90,000°, 90,000°, 90,000° und 89,982° (Spanne 0,018°), der Zug
@@ -1491,6 +1537,19 @@ die, auf die es ankommt: Eine Tasche mit vier verrundeten Ecken hat dieselben
 Paare, aber zwei benachbarte Ecken teilen **eine** Wand, nicht zwei. Die
 Flanken gehen im Langloch auf, der Boden eines Sacklangloch nicht — seine
 Normale zeigt entlang der Achse, er liegt gar nicht im Mantel.
+
+**Und der Mantel ist geschlossen** (RM-411, 04.10.2026). Das Netz flutet den
+Mantel über Flächen quer zur Achse (`_connected_shell`); läuft ein Bogen in
+eine weitere Wand längs der Achse weiter, erreicht die Flut die Außenseiten,
+und es ist kein Langloch. Der exakte Kern fragte nur die vier Flächen: An der
+Stufenplatte, deren Langlochende in der Wand des Aufsatzes liegt, las er ein
+Langloch der Tiefe 20 über Grundplatte und Aufsatz, und ein zweiter Zug auf
+8 mm füllte dessen Umriss bis an die konvexe Hülle — aus 9 327,48 mm³ wurden
+431,5. `_continues_the_mantle` fragt jetzt jede Nachbarfläche der vier: eine
+Ebene längs der Achse oder ein paralleler Zylinder, der keiner der beiden
+Bögen ist, setzt den Mantel fort
+(`test_a_slot_whose_end_opens_into_a_step_wall_is_no_slot_on_either_kernel`;
+dasselbe Langloch ganz in der Grundplatte bleibt an beiden Kernen eines).
 
 **Offene Ausschnitte bleiben Langlöcher** (Entscheidung Robert, 11.09.2026).
 Eine angeschnittene Rundbohrung und ein Langloch mit offenen parallelen

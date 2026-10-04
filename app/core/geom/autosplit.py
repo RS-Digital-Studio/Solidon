@@ -404,7 +404,11 @@ def split_to_fit(
     # danach selbst, samt Farben. Am Besteckeinsatz aus dem Korpus (fünf
     # Teile, farbig) kostete das 4,7 von 4,8 s je Probeschnitt — 14 Schnitte,
     # 65 der 69 s der Suche.
-    mesh = MeshData(raw=mesh.raw, cavity=mesh.cavity) if mesh.slots else mesh
+    mesh = (
+        MeshData(raw=mesh.raw, cavity=mesh.cavity, cavity_open=mesh.cavity_open)
+        if mesh.slots
+        else mesh
+    )
     outcome = SplitOutcome(parts=[mesh])
     budget = _Budget(PLAN_BUDGET)
     planned = False

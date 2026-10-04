@@ -2131,6 +2131,22 @@ was danach eingeschlossen ist, ist der Innenraum; der Befund
 Menüeintrag deshalb nicht mehr. Ein Hüllquader oder eine konvexe Hülle
 ersetzt weiterhin keinen Innenraum.
 
+**Ob der Innenraum offen ist, sagt nur das Aushöhlen** (`MeshData.cavity_open`,
+RM-422, 04.10.2026). Seit dem 03.10. übersprang *Auf beiden Seiten* jede Haut
+der belegten Höhlung, damit eine Entlüftung, die Innen- und Außenhaut zu einer
+Schale verbindet, die Rückseite nicht in den Hohlraum legt (am Quader
+40 × 30 × 20, Wand 5: x = 14,17 statt −20). Das traf auch die oben offene
+Dose: Am Netz stand die Rückseite danach außen auf der Hinterwand (x = −20,6),
+am exakten Kern, der seine Dose ohne Innenraum zurückgibt, an der Innenseite
+der Vorderwand (x = 15) — zwei Kerne, zwei Antworten. Aus der Geometrie allein
+trennt eine Entlüftung eine offene Dose nur über eine Größenschwelle; die
+Operation weiß es und schreibt es dazu: offen nur, wenn eine Öffnung
+tatsächlich geschnitten wurde (*Oben öffnen*, *Öffnen an Fläche*, gewählte
+Flächen), sonst geschlossen. Das Feld reist durch Bewegung, Farbe und den
+Plattencache; ein Eintrag von davor liest sich geschlossen, und *Aushöhlen*
+rechnet mit `cache_version` 3 neu
+(`test_both_sides_on_an_open_box_put_the_back_on_its_inner_wall`).
+
 Neuvernetzung überträgt Slots über `attributes.transfer` — außer *Kanten
 verfeinern*, das die Herkunft jedes Dreiecks kennt (`mesh_ops._inherited`,
 `.claude/rules/operationen.md`). Sein Ergebnis trägt je Dreieck den Ursprung

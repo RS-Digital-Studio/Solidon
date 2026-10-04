@@ -180,8 +180,9 @@ Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `col
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
 `label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen
-der Richtung, `opposite_side`; negative Innenhäute und die belegte Höhlung
-werden übersprungen, auch wenn eine Entlüftung die Häute verbindet)
+der Richtung, `opposite_side`; negative Innenhäute und die belegte, nicht
+offene Höhlung (`MeshData.cavity_open`) werden übersprungen, auch wenn eine
+Entlüftung die Häute verbindet)
 
 ## Stolperfallen
 
@@ -377,10 +378,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `FONT_STYLES_AVAILABLE` je Familie; `stroke_width` gegen `narrowest_bead`
   als Befund, ohne Tabelle je Familie; `glyphs.font_file` lehnt fehlende
   Datei oder Schnitt ab.
-- `MeshData.cavity` folgt `transform.apply` und verfällt bei jeder anderen
-  Geometrieänderung; ohne sie tragen Innenschalen oder die Entlüftung
-  (`_cavity_mesh`), nie ein Hüllquader. Kein Reparaturweg begründet einen
-  Messnachweis (`measure.body_overlap`).
+- `MeshData.cavity` (samt `cavity_open`) folgt `transform.apply` und verfällt
+  bei jeder anderen Geometrieänderung; ohne sie tragen Innenschalen oder die
+  Entlüftung (`_cavity_mesh`), nie ein Hüllquader. Kein Reparaturweg begründet
+  einen Messnachweis (`measure.body_overlap`).
 
 Kreis-/Merkmalsmuster und Spiegelungen: `transform.pattern_centre` speichert
 bei drei leeren Koordinaten einmal die Körpermitte als `answered`. Explizite

@@ -36,8 +36,13 @@ driftet ab — deshalb gibt es keine.
 ## Parameterarten mit Folgen
 
 - `ParamSpec.internal` kennzeichnet gespeicherte Kompatibilitätswerte. CLI,
-  Agentenschema und beide Referenzfassungen bieten sie nicht als Eingabe an;
+  Agentenschema, beide Referenzfassungen und das Merkmalfenster
+  (`perceive.actions._fields_of`) bieten sie nicht als Eingabe an;
   Validierung und Projektdatei behalten sie für alte Schritte.
+  `dropped_on_change` dazu heißt: Der Marker gilt dem gespeicherten Schritt,
+  `History.change_params` nimmt ihn heraus, sobald sich ein anderer Wert
+  ändert (`legacy_slot_tool`, Migration 45 → 46); `measured_frame` trägt ihn
+  nicht, er meint die Lesart eines Winkels.
 - `documentation()` und `parameter_table()` behalten mit `technical=True`
   interne Schlüssel und Ausführungsverträge für technische Aufrufer. Das
   Handbuch verwendet `technical=False`: Kundentitel, Bedienort, Kürzel,

@@ -2659,7 +2659,30 @@ def fill_bore(
         )
         envelope = transformed(box(reach * 2.0, reach * 2.0, reach), matrix)
         tool = boolean("intersection", [tool, envelope])
-    return unified(boolean("union", [solid, tool]))
+    filled = unified(boolean("union", [solid, tool]))
+    # **Ein Stopfen fügt Material hinzu — kommt weniger heraus, ist die Vereinigung
+    # gescheitert** (RM-411). Gemessen am 04.10.2026: An einer Stufenplatte, deren
+    # Langlochende in den Aufsatz geschnitten war, gab OpenCASCADE als Vereinigung
+    # von Platte (9 326 mm³) und an der Hülle begrenztem Stopfen nur den Stopfen
+    # zurück, 1 156 mm³, gültig und geschlossen. Gefragt wird am Zwilling wie in
+    # ``boolean.without_effect`` (das Integral kann eine Minute kosten); ihn trennt
+    # vom Integral höchstens der Sehnenfehler der Flächen, die der Stopfen ändert.
+    lost = float(solid.to_mesh().volume) - float(filled.to_mesh().volume)
+    if lost > solid.deflection * float(tool.to_mesh().area):
+        raise GeometryError(
+            title=_("Die alte Öffnung lässt sich an dieser Stelle nicht sauber schließen."),
+            detail=FILL_DID_NOT_HOLD,
+            values={"lost_mm3": round(lost, 3)},
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return filled
+
+
+#: Der Satz, wenn das Füllen einer Öffnung Material des Körpers verlöre.
+FILL_DID_NOT_HOLD: Final = _(
+    "Beim Füllen ginge Material des Körpers verloren. Setzen Sie die Stelle oder das Maß "
+    "um einen Bruchteil eines Millimeters anders und versuchen Sie es erneut."
+)
 
 
 def cut_bore(

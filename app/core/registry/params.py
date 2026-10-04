@@ -115,6 +115,7 @@ def param(
     optional: bool = False,
     sketch_planes: tuple[str, ...] = (),
     internal: bool = False,
+    dropped_on_change: bool = False,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -142,7 +143,9 @@ def param(
     Skizzenfelds liegen darf — siehe :attr:`app.core.types.ParamSpec.sketch_planes`.
 
     ``internal`` markiert einen Migrationsmarker ohne Feld — siehe
-    :attr:`app.core.types.ParamSpec.internal`.
+    :attr:`app.core.types.ParamSpec.internal`; ``dropped_on_change`` einen,
+    den eine bewusste Änderung des Schritts aufhebt — siehe
+    :attr:`app.core.types.ParamSpec.dropped_on_change`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -164,6 +167,7 @@ def param(
             "optional": optional,
             "sketch_planes": tuple(sketch_planes),
             "internal": internal,
+            "dropped_on_change": dropped_on_change,
         }
     }
     if default is MISSING:
@@ -259,6 +263,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 optional=metadata["optional"],
                 sketch_planes=metadata["sketch_planes"],
                 internal=metadata["internal"],
+                dropped_on_change=metadata["dropped_on_change"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]

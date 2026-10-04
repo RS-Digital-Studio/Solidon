@@ -46,11 +46,19 @@ class MeshData:
     raw: trimesh.Trimesh
     slots: tuple[int, ...] = field(default_factory=tuple)
     cavity: MeshData | None = None
+    #: Ob die belegte Innengeometrie über eine Öffnung frei liegt — *Oben öffnen*,
+    #: eine gewählte Fläche — und nicht nur über Entlüftungen. Sagt nur das
+    #: Aushöhlen, das sie geschnitten hat; eine Dose hat zwei Seiten an jeder
+    #: Wand, ein entlüfteter Hohlraum eine (``label_ops.opposite_side``).
+    cavity_open: bool = False
 
     def __post_init__(self) -> None:
-        """Die belegte Innengeometrie trägt selbst keine weitere Innengeometrie."""
+        """Die belegte Innengeometrie trägt selbst keine weitere Innengeometrie,
+        und offen sein kann nur eine, die es gibt."""
         if self.cavity is not None and self.cavity.cavity is not None:
             raise ValueError("nested_cavity")
+        if self.cavity_open and self.cavity is None:
+            raise ValueError("open_without_cavity")
 
     # --- Protokoll --------------------------------------------------------------
 
@@ -191,6 +199,7 @@ class MeshData:
                 if self.cavity is not None
                 else np.empty((0, 3), dtype=np.int64)
             ),
+            cavity_open=np.asarray([self.cavity_open], dtype=np.bool_),
             **extra,
         )
         return buffer.getvalue()
@@ -218,13 +227,21 @@ class MeshData:
                         process=False,
                     )
                 )
+            # Ein Eintrag von vor dem Feld zählt als entlüftet; das Aushöhlen
+            # trägt dafür eine neue ``cache_version`` und rechnet neu.
+            opened = bool(
+                cavity is not None
+                and "cavity_open" in data.files
+                and data["cavity_open"].shape == (1,)
+                and data["cavity_open"][0]
+            )
             # Ein Ursprung, der nicht zu den Dreiecken passt, wird nicht
             # angelegt: Das Netz erkennt dann wie ein ungeteiltes.
             if "refined_units" in data.files:
                 units = data["refined_units"]
                 if units.dtype.kind in "iu" and units.shape == (len(mesh.faces),):
                     remember_refined_units(mesh, units)
-        return cls(raw=mesh, slots=slots, cavity=cavity)
+        return cls(raw=mesh, slots=slots, cavity=cavity, cavity_open=opened)
 
     def to_stl(self) -> bytes:
         """Binäres STL, für den Export und die Übergabe an einen Slicer (§29)."""

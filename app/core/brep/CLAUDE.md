@@ -119,7 +119,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Volumen, ihre Flächen zur Grenze, ihre Kammern sind eigene; jeder Luftraum
   einmal; `void.centre`/`size` sind Welt-AABB. Keine Handles oder Builder im
   Merkmal; `voids_instead_of_phantom_bores` verdrängt Phantome.
-- **Langloch** (Regel in `operationen.md`): Ein von der Naht geteilter Mantel
+- **Langloch** (Regel in `operationen.md`): Der Mantel ist geschlossen — keine
+  Nachbarfläche der vier setzt ihn längs der Achse fort
+  (`_continues_the_mantle`). Ein von der Naht geteilter Mantel
   wird vorher zusammengeführt (`_seam_split_cylinders_joined`; der Umfang einer
   Bohrung ist `perceive.features.FULL_TURN_SPAN`, gelesen über `_full_turn`). Die Mündungsfase gehört dazu (`_mouth_chamfers_folded`,
   Nennmaße ohne Fase); auf schräger Fläche macht OpenCASCADE ihre Bögen zu
@@ -228,7 +230,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
 
 - **`fill_bore`/`cut_bore`** über `_centred_bore`; nur Füllen bekommt `gain`
   auf den Radius, die Länge bleibt exakt. `unified` legt Nähte mit
-  Filamentgrenzen zusammen.
+  Filamentgrenzen zusammen. Verliert die Vereinigung des Stopfens Material
+  (am Zwilling, über dem Sehnenfehler der Stopfenflächen), sagt `fill_bore` ab
+  (`FILL_DID_NOT_HOLD`).
 - **`solid_from_faces`**: **Geschlossen heißt keine freie Kante** — `Closed()`
   setzt Sewing nicht. Ein Ring außerhalb einer Ebene gibt keinen Körper, außer
   mit `fan_caps`: die fortgesetzte Fläche (`_continued_cap`), zuletzt der

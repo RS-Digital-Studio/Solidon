@@ -18,6 +18,7 @@ import dataclasses
 import math
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -33,7 +34,16 @@ from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
 from app.core.registry import REGISTRY
-from app.core.types import Feature, Finding, OpContext, Profile, Quality, Scene, SceneObject
+from app.core.types import (
+    Feature,
+    Finding,
+    OpContext,
+    Profile,
+    Quality,
+    Scene,
+    SceneObject,
+    Vec3,
+)
 from tests.helpers import exact_kernel, inside
 
 
@@ -3065,22 +3075,22 @@ def test_an_inner_void_does_not_shorten_a_single_body_slot(
     assert output.mesh.volume == pytest.approx(expected, abs=1e-6 if kernel == "brep" else 2.0)
 
 
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-@pytest.mark.parametrize("quality", ["draft", "fine"])
-@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
-def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
-    profile: Profile, kernel: str, quality: Quality, slope: bool
-) -> None:
-    """Ein unbeteiligter Würfel darf an den Langlochenden kein Material stehen lassen."""
+def _raised_carrier(slope: bool) -> tuple[Any, float, Vec3]:
+    """Platte 40 x 20 mit Bohrung Ø 6 in der Mitte, deren Oberseite nicht eben bleibt.
+
+    ``slope``: Oberseite schräg, z = 10 + x/4 — ein Langloch von 16 mm liegt ganz in
+    ihr. Sonst eine Stufe: Grundplatte 10 mm, Aufsatz x 5 … 15 bis z = 20 — das Ende
+    eines Langlochs von 12 mm reicht bis x = 6 in den Aufsatz. Zurück kommen der
+    exakte Träger, die Langlochlänge und ein Punkt im neuen Ende, der vorher im
+    Material liegt und nachher frei sein muss.
+    """
     exact_kernel()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
     from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
 
     from app.core.brep import edit
-    from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid, boolean_builder
-    from app.core.knowledge.parts.exact import compound
 
     if slope:
         base = edit.box(40.0, 20.0, 20.0)
@@ -3103,6 +3113,22 @@ def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
     carrier = edit.cut_bore(
         carrier, position=(0.0, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6, depth=40
     )
+    return carrier, length, probe
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
+def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
+    profile: Profile, kernel: str, quality: Quality, slope: bool
+) -> None:
+    """Ein unbeteiligter Würfel darf an den Langlochenden kein Material stehen lassen."""
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.knowledge.parts.exact import compound
+
+    carrier, length, probe = _raised_carrier(slope)
     spare = edit.moved(edit.box(10, 10, 10), (60, 0, 0))
     volumes = []
     for assembled in (False, True):
@@ -3124,6 +3150,236 @@ def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
         assert output.mesh.component_count == (2 if assembled else 1)
         volumes.append(output.mesh.volume - (1000.0 if assembled else 0.0))
     assert volumes[1] == pytest.approx(volumes[0], abs=0.1)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(
+    "change", [{}, {"x": 2.0}, {"diameter": 4.0}], ids=["straight", "moved", "narrow"]
+)
+@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
+def test_both_kernels_report_the_same_at_a_slanted_and_a_stepped_carrier(
+    profile: Profile, quality: Quality, change: dict[str, float], slope: bool
+) -> None:
+    """Dieselben Befunde an beiden Kernen, allein und neben einem fremden Körper (RM-411).
+
+    **Die schräge Platte trägt das Langloch ganz in ihrer Oberseite** — keine offene
+    Flanke. Der exakte Zweig fragte die Kante am ungefüllten Körper: Punkte in der alten
+    Bohrung sahen unter der schrägen Mündung hindurch ins Freie, und es hieß „über die
+    Kante". Gefragt wird am gefüllten Körper, wie am Netz (``_edge_findings``).
+
+    **An der Stufe läuft das Ende des Langlochs in den Aufsatz** und reißt dessen Wand bei
+    x = 5 auf: über die Kante, und der Mantel ist kein geschlossenes Langloch mehr — er
+    läuft über die Stufenwand. Das Netz sagte beides; der exakte Kern fragte die Kante nur
+    über die Bohrungstiefe statt über die Schnittlänge und las zwei Bögen mit zwei
+    gemeinsamen Flanken als Langloch, gleich, woran der Bogen sonst grenzt.
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.knowledge.parts.exact import compound
+
+    carrier, length, _probe = _raised_carrier(slope)
+    spare = edit.moved(edit.box(10, 10, 10), (60, 0, 0))
+    said: dict[tuple[str, bool], set[str]] = {}
+    for assembled in (False, True):
+        solid = compound(carrier, spare) if assembled else carrier
+        for kernel in ("mesh", "brep"):
+            if kernel == "brep":
+                entry = SceneObject(
+                    id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+                )
+            else:
+                mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+                entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+            _output, findings = run_op_with_findings(
+                "slot_hole",
+                entry,
+                profile,
+                quality=quality,
+                at_feature=_bore_in(entry, "hole"),
+                slot_length=length,
+                **change,
+            )
+            said[(kernel, assembled)] = {finding.code for finding in findings}
+    for assembled in (False, True):
+        assert said[("mesh", assembled)] == said[("brep", assembled)], said
+    assert said[("mesh", False)] == said[("mesh", True)], said
+    codes = said[("mesh", False)]
+    assert ("bore.over_the_edge" in codes) is not slope, said
+    assert ("slot_hole.feature_lost" in codes) is not slope, said
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("operation", "values"),
+    [
+        ("slot_hole", {"slot_length": 18.0}),
+        ("slot_hole", {"slot_length": 12.0}),
+        ("resize_hole", {"diameter": 8.0}),
+        ("resize_hole", {"diameter": 4.0}),
+    ],
+    ids=["longer", "shorter", "wider", "narrower"],
+)
+def test_a_slot_changed_inside_a_slanted_plate_is_not_over_the_edge(
+    profile: Profile, kernel: str, operation: str, values: dict[str, float]
+) -> None:
+    """Ein Langloch mitten in der schrägen Oberseite reißt nirgends seitlich auf (RM-411).
+
+    Gefragt wurde an jedem Bogenende mit dem ganzen Kranz. Seine innere Hälfte liegt
+    im Langloch selbst, und wo die alte Öffnung noch Luft war — beim Weiterziehen
+    ohne Schließen, am exakten Kern beim Verbreitern am ungefüllten Körper —, sah sie
+    unter der tiefen Seite der schrägen Mündung hindurch ins Freie: „über die Kante".
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    carrier, _length, _probe = _raised_carrier(True)
+    slotted = edit.slot_bore(
+        carrier,
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=40.0,
+        length=16.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    if kernel == "brep":
+        entry = SceneObject(
+            id="obj_1", name="Platte", mesh=slotted, kind="brep", features=features_of(slotted)
+        )
+    else:
+        mesh = MeshData.of(as_mesh_data(slotted).raw.copy())
+        entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    slot = next(feature for feature in entry.features.values() if feature.kind == "slot")
+
+    output, findings = run_op_with_findings(operation, entry, profile, at_feature=slot.id, **values)
+
+    assert "bore.over_the_edge" not in {finding.code for finding in findings}
+    assert output.mesh.is_watertight
+    assert [feature.kind for feature in output.features.values()].count("slot") == 1
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("into_the_step", [True, False], ids=["step-wall", "flat"])
+def test_a_slot_whose_end_opens_into_a_step_wall_is_no_slot_on_either_kernel(
+    kernel: str, into_the_step: bool
+) -> None:
+    """Zwei Bögen und zwei Flanken sind erst mit geschlossenem Mantel ein Langloch.
+
+    Läuft ein Bogen weiter in eine Wand längs der Achse — hier die Stufe eines Aufsatzes,
+    in die das Langlochende geschnitten ist —, ist der Mantel offen: Das Netz flutet ihn
+    über die Stufenwand bis an die Außenseiten und findet keines. Der exakte Kern las
+    dasselbe als Langloch der Tiefe 20, und ein späterer Zug füllte dessen Umriss bis an
+    die konvexe Hülle — aus 9 327 mm³ wurden 431. Dasselbe Langloch ganz in der
+    Grundplatte bleibt an beiden Kernen eines.
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    stepped = edit.boolean(
+        "union",
+        [edit.box(40.0, 20.0, 10.0), edit.moved(edit.box(10.0, 20.0, 10.0), (10, 0, 10))],
+    )
+    slotted = edit.slot_bore(
+        stepped,
+        position=(0.0 if into_the_step else -10.0, 0.0, 10.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=30.0,
+        length=12.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    if kernel == "brep":
+        found = features_of(slotted)
+    else:
+        found = detect(MeshData.of(as_mesh_data(slotted).raw.copy()))
+    slots = [feature for feature in found.values() if feature.kind == "slot"]
+    if into_the_step:
+        assert slots == [], [feature.params for feature in slots]
+    else:
+        assert len(slots) == 1
+        assert float(slots[0].params["length"]) == pytest.approx(12.0, abs=0.01)
+        assert float(slots[0].params["depth"]) == pytest.approx(10.0, abs=0.01)
+
+
+@pytest.mark.parametrize(
+    ("operation", "slot", "shift"),
+    [
+        ("move_feature", (16.0, 0.0), 2.0),
+        ("move_feature", (10.0, 90.0), 8.0),
+        ("duplicate_feature", (10.0, 90.0), 12.0),
+    ],
+    ids=["move-along", "move-across", "duplicate-across"],
+)
+def test_a_slot_set_up_a_slanted_plate_says_the_same_on_both_kernels(
+    profile: Profile, operation: str, slot: tuple[float, float], shift: float
+) -> None:
+    """Starr versetzt endet ein Langloch an seinen mitbewegten Randebenen (RM-411).
+
+    Längs der schrägen Oberseite (z = 10 + x/4) liegt die Fläche an der neuen Stelle
+    höher als die mitgenommene obere Randebene: Es bleibt eine Haut, und das Langloch
+    geht nicht mehr durch. Das Netz sagte ``no_longer_through`` und nannte es nicht
+    mehr durchgehend; der exakte Kern sagte ``mouth_covered`` und nannte es weiter
+    durchgehend — sein einzelner Hohlraum fragte die Säule im Schlauch nicht
+    (``_exact_through_checked``), die Kette schon.
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.scene.cancel import NeverCancelled
+
+    load_operations()
+    length, angle = slot
+    carrier, _length, _probe = _raised_carrier(True)
+    slotted = edit.slot_bore(
+        carrier,
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=40.0,
+        length=length,
+        angle_deg=angle,
+        overlap=0.0,
+    )
+    said: dict[str, set[str]] = {}
+    for kernel in ("mesh", "brep"):
+        if kernel == "brep":
+            entry = SceneObject(
+                id="obj_1", name="Platte", mesh=slotted, kind="brep", features=features_of(slotted)
+            )
+        else:
+            mesh = MeshData.of(as_mesh_data(slotted).raw.copy())
+            entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+        original = next(feature for feature in entry.features.values() if feature.kind == "slot")
+        x, y, z = (float(value) for value in original.params["centre"])
+        spec = REGISTRY.get(operation)
+        # Die Merkmale, die die Operation selbst ausgibt — die Auskunft, die der
+        # Steckbrief bis zur nächsten Erkennung zeigt; keine Neuerkennung dazwischen.
+        result = spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(at_feature=original.id, x=x + shift, y=y, z=z),
+                profile=profile,
+                quality="fine",
+                seed=7,
+                progress=lambda fraction, text: None,
+                ask=lambda question, options: options[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+        said[kernel] = {finding.code for finding in result.findings}
+        placed = [
+            feature
+            for name, feature in result.outputs[0].features.items()
+            if feature.kind == "slot" and (operation == "move_feature" or name != original.id)
+        ]
+        assert [feature.params.get("through") for feature in placed] == [False], (kernel, placed)
+    assert said["mesh"] == said["brep"] == {f"{operation}.no_longer_through"}, said
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -4078,7 +4334,7 @@ def _along_world_y(axis: tuple[float, float, float]) -> Feature:
 #: Wie weit eine gemessene Achse in den Fällen unten neben +Z steht, in Grad:
 #: das Rauschen eines float32-Netzes (Besenhalter, 4e-8 rad), die vernetzte
 #: Teppichecke bei Feinheit 0,01 und 0,05 (0,023° und 0,071°), und knapp
-#: innerhalb von ``SLOT_ACROSS_LIMIT``.
+#: innerhalb von ``SLOT_FRAME_CONE``.
 MEASURED_NOISE = (math.degrees(4e-8), 0.023, 0.071, 0.45)
 
 
@@ -4093,7 +4349,7 @@ def test_a_slot_angle_counts_against_the_main_axis_despite_measurement_noise(
     Langloch (in der Welt 90°) zeigte bei Feinheit 0,01 −168,5°, bei 0,02
     132,0°, bei 0,05 91,8°; exakt 90°. ``frame_of`` nimmt Z × Achse als erste
     Rahmenachse bis 1e-9 neben Z, und deren Richtung bestimmte das Rauschen.
-    Innerhalb von ``SLOT_ACROSS_LIMIT`` neben einer Hauptachse zählt der Winkel
+    Innerhalb von ``SLOT_FRAME_CONE`` neben einer Hauptachse zählt der Winkel
     jetzt gegen die Hauptachse (Entscheidung 30.09.2026).
     """
     from app.core.geom.prepare_ops import slot_angle_of
@@ -4160,7 +4416,7 @@ def test_the_slot_frame_keeps_the_frame_of_exact_and_really_tilted_axes(
 
     Gespeicherte Winkel an exakten Körpern und an gekippten Bohrungen (17,5°)
     bedeuten damit dasselbe wie vorher — geändert hat sich nur, was im Kegel
-    von ``SLOT_ACROSS_LIMIT`` um eine Hauptachse liegt, ohne auf ihr zu liegen.
+    von ``SLOT_FRAME_CONE`` um eine Hauptachse liegt, ohne auf ihr zu liegen.
     """
     from app.core.geom.prepare import slot_frame
     from app.core.sketch.planes import frame_of
@@ -4318,31 +4574,32 @@ def test_bores_with_their_own_noise_all_pull_to_the_same_world_direction(
         assert min(angle, 180.0 - angle) == pytest.approx(0.0, abs=0.5), angles
 
 
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
-def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, side: str) -> None:
-    """Das Werkzeug aus den Kennzahlen drehte das Profil mit ``rotation_between``
-    statt im Rahmen von ``slot_frame``: An einer Seitenwand mit Normale ±X lag
-    es um 90° verdreht, *Zum Langloch ziehen* schloss den alten Umriss nicht,
-    und es blieb ``slot_hole.feature_lost`` (RM-325). +Y war schon richtig."""
-    exact = kernel == "brep"
-    sign = -1.0 if side.startswith("-") else 1.0
-    along_x = side.endswith("x")
-    if exact:
-        exact_kernel()
-        from app.core.brep import edit
+def _recognised_in(kernel: str, mesh: object) -> dict[str, Feature]:
+    """Frisch erkannt, wie die Auswertung es je Kern tut."""
+    if kernel == "brep":
         from app.core.brep.features import features_of
 
-        body = edit.box(60.0, 100.0, 60.0)
+        return features_of(mesh)
+    return detect(as_mesh_data(mesh))
+
+
+def _side_wall_slot(profile: Profile, kernel: str, side: str) -> tuple[SceneObject, Feature, float]:
+    """Klotz 60 x 100 x 60, durch die Wand ``side`` ein Langloch Ø 6 auf 20 mm bei 30°.
+
+    Zurück kommen der Körper mit seinen Merkmalen, das Langloch und die Wanddicke
+    entlang der Bohrachse.
+    """
+    sign = -1.0 if side.startswith("-") else 1.0
+    along_x = side.endswith("x")
+    if kernel == "brep":
+        exact_kernel()
+        from app.core.brep import edit
+
+        body: object = edit.box(60.0, 100.0, 60.0)
     else:
         body = MeshData.of(trimesh.creation.box(extents=(60.0, 100.0, 60.0)))
-        body.raw.apply_translation((0.0, 0.0, 30.0))
-    wall = 60.0 if along_x else 100.0
-
-    def recognised(result: SceneObject) -> dict[str, Feature]:
-        return features_of(result.mesh) if exact else detect(as_mesh_data(result.mesh))
-
-    entry = SceneObject(id="obj_1", name="Klotz", mesh=body, kind=kernel)
+        body.raw.apply_translation((0.0, 0.0, 30.0))  # type: ignore[attr-defined]
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=body, kind=kernel)  # type: ignore[arg-type]
     drilled = run_op(
         "drill_hole",
         entry,
@@ -4361,8 +4618,82 @@ def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, s
         depth=0.0,
         compensate=False,
     )
-    drilled = dataclasses.replace(drilled, features=recognised(drilled))
+    drilled = dataclasses.replace(drilled, features=_recognised_in(kernel, drilled.mesh))
     before = next(feature for feature in drilled.features.values() if feature.kind == "slot")
+    return drilled, before, 60.0 if along_x else 100.0
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
+@pytest.mark.parametrize("way", ["pull", "rotate"])
+def test_a_slot_in_a_side_wall_can_be_turned(
+    profile: Profile, kernel: str, side: str, way: str
+) -> None:
+    """Drehen an einer Seitenwand ±X wie an +Y, an beiden Kernen (RM-325, RM-422).
+
+    Vor RM-325 lag das Werkzeug aus den Kennzahlen an einer Wand mit Normale ±X um
+    90° verdreht: *Zum Langloch ziehen* auf 0° ließ am Netz zwei Rundflächen und
+    vier Verrundungen statt eines Langlochs stehen, und *Merkmal drehen* um 45°
+    ergab dort −15° statt +75°. Gedreht wird hier beides: der Zug auf einen neuen
+    Winkel und das Drehen um die Wandachse. Das Langloch bleibt gleich groß, also
+    bleibt das Volumen; die neue Richtung kommt von außen — der Rahmen von
+    ``slot_frame`` bzw. die alte Richtung, rechtshändig um 45° gedreht.
+    """
+    from app.core.geom.prepare import slot_frame
+
+    exact = kernel == "brep"
+    drilled, before, wall = _side_wall_slot(profile, kernel, side)
+    axis = tuple(float(value) for value in before.params["axis"])
+    if way == "pull":
+        result, findings = run_op_with_findings(
+            "slot_hole",
+            drilled,
+            profile,
+            at_feature=before.id,
+            slot_length=20.0,
+            slot_angle=0.0,
+            diameter=6.0,
+            compensate=False,
+        )
+        wanted = np.asarray(slot_frame(axis, (0.0, 0.0, 0.0)).x_axis, dtype=float)
+    else:
+        turn_axis = side[1]
+        result, findings = run_op_with_findings(
+            "rotate_feature", drilled, profile, at_feature=before.id, axis=turn_axis, angle=45.0
+        )
+        old = np.asarray(before.params["direction"], dtype=float)
+        unit = np.zeros(3)
+        unit["xyz".index(turn_axis)] = 1.0
+        # Rodrigues mit 45 Grad: v cos + (k x v) sin + k (k . v)(1 - cos).
+        half = math.sqrt(0.5)
+        wanted = old * half + np.cross(unit, old) * half + unit * float(unit @ old) * (1 - half)
+
+    solid = 60.0 * 100.0 * 60.0
+    # Am Netz sind die Bögen Sehnenzüge; die Abweichung wächst mit der Wandlänge.
+    assert result.mesh.volume == pytest.approx(
+        solid - (math.pi * 9.0 + 6.0 * 14.0) * wall, abs=1e-6 if exact else 0.05 * wall
+    )
+    slots = [
+        feature
+        for feature in _recognised_in(kernel, result.mesh).values()
+        if feature.kind == "slot"
+    ]
+    assert len(slots) == 1, "genau ein Langloch, keine Reste des alten Umrisses"
+    assert slots[0].params["length"] == pytest.approx(20.0, abs=1e-6 if exact else 0.01)
+    direction = np.asarray(slots[0].params["direction"], dtype=float)
+    assert abs(float(direction @ wanted)) == pytest.approx(1.0, abs=1e-4), (direction, wanted)
+    assert not any(finding.code.endswith("feature_lost") for finding in findings)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
+def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, side: str) -> None:
+    """Das Werkzeug aus den Kennzahlen drehte das Profil mit ``rotation_between``
+    statt im Rahmen von ``slot_frame``: An einer Seitenwand mit Normale ±X lag
+    es um 90° verdreht, *Zum Langloch ziehen* schloss den alten Umriss nicht,
+    und es blieb ``slot_hole.feature_lost`` (RM-325). +Y war schon richtig."""
+    exact = kernel == "brep"
+    drilled, before, wall = _side_wall_slot(profile, kernel, side)
 
     result, findings = run_op_with_findings(
         "slot_hole",
@@ -4380,7 +4711,11 @@ def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, s
     assert result.mesh.volume == pytest.approx(
         solid - (math.pi * 9.0 + 6.0 * 8.0) * wall, abs=1e-6 if exact else 0.05 * wall
     )
-    slots = [feature for feature in recognised(result).values() if feature.kind == "slot"]
+    slots = [
+        feature
+        for feature in _recognised_in(kernel, result.mesh).values()
+        if feature.kind == "slot"
+    ]
     assert len(slots) == 1, "genau ein Langloch, keine Reste des alten Umrisses"
     assert slots[0].params["length"] == pytest.approx(14.0, abs=1e-6 if exact else 0.01)
     assert not any(finding.code == "slot_hole.feature_lost" for finding in findings)
@@ -4395,3 +4730,60 @@ def test_the_migration_marker_is_not_offered_to_the_agent(operation: str) -> Non
     spec = REGISTRY.get(operation)
     assert any(entry.name == "measured_frame" and entry.internal for entry in spec.params.spec())
     assert "measured_frame" not in json_schema(spec.params)["properties"]
+
+
+#: Die Operationen, die ein Langloch aus seinen Kennzahlen aufziehen können und an
+#: einem Langloch gelten — sie tragen den Marker der Migration 45 → 46.
+SAVED_SLOT_TOOL_OPERATIONS = (
+    "duplicate_feature",
+    "move_feature",
+    "pattern_feature",
+    "remove_feature",
+    "resize_hole",
+    "rotate_feature",
+    "slot_hole",
+)
+
+
+@pytest.mark.parametrize("operation", SAVED_SLOT_TOOL_OPERATIONS)
+def test_the_saved_slot_tool_marker_is_no_choice_and_ends_with_a_change(operation: str) -> None:
+    """``legacy_slot_tool`` setzt nur die Migration 45 → 46 (RM-422): intern, nicht im
+    Werkzeugschema des Agenten, und eine bewusste Änderung des Schritts hebt ihn auf."""
+    from app.core.registry.params import json_schema
+
+    load_operations()
+    spec = REGISTRY.get(operation)
+    (marker,) = [entry for entry in spec.params.spec() if entry.name == "legacy_slot_tool"]
+    assert marker.internal and marker.dropped_on_change and marker.default is False
+    assert "legacy_slot_tool" not in json_schema(spec.params)["properties"]
+
+
+def test_no_row_at_a_slot_offers_a_migration_marker_as_a_field() -> None:
+    """Ein Marker einer Migration ist im Merkmalfenster kein Feld (``ParamSpec.internal``).
+
+    ``measured_frame`` stand dort bis RM-422 nur über eine Ausnahmeliste je Merkmalsart
+    nicht; ``legacy_slot_tool`` stünde ohne die allgemeine Regel an sechs Zeilen.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    slot = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 5.0,
+            "length": 20.0,
+            "travel": 15.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+            "centre": (0.0, 0.0, 0.0),
+            "depth": 10.0,
+            "through": True,
+        },
+    )
+    rows = {action.op: {field.name for field in action.fields} for action in actions_for(slot)}
+    # Die Zeilen, in denen der Marker sonst stünde — sonst prüfte das Verbot nichts.
+    assert set(rows) >= set(SAVED_SLOT_TOOL_OPERATIONS) - {"pattern_feature"}, rows
+    for operation, fields in rows.items():
+        assert not fields & {"legacy_slot_tool", "measured_frame"}, (operation, fields)

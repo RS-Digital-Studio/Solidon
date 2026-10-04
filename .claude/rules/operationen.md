@@ -213,7 +213,8 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   nicht hergibt (`evaluate.exact_became_mesh`). Mündung und Materialseite fragt
   ein Helfer für beide Kerne (`prepare.sink_placement`,
   `prepare.plug_placement`). „Nur das gewählte Merkmal" einer Kette geht erst
-  ganz zu und wird frisch geschnitten.
+  ganz zu und wird frisch geschnitten. Verliert die Vereinigung des Stopfens
+  Material, sagt `brep.edit.fill_bore` ab (`FILL_DID_NOT_HOLD`).
 - **Starr:** gleiche Länge, exakt bis zu den mitbewegten Randebenen;
   `no_longer_through` meldet, was stehen bleibt; Einrücken bis zur
   Facettengrenze ist Rauschen (`_seated`).
@@ -288,12 +289,14 @@ ihr (`actions._carried_by`).
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung, nicht die Achse.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
-  (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt; den
-  Zerfall gegen den Körper vor dem Schritt, `_split_counted_from`): Mitte,
-  beide Enden eines Langlochs (`prepare.slot_ends`), Austritte der Achse (erster
-  Durchstoß, nicht der Hüllquader) — einmal, an beiden Kernen; eine Senkung nur
-  am weiten Ende, am Austritt nur einen halben Radius tief
-  (`prepare.mouth_over_the_edge`).
+  (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
+  Schnittlänge; den Zerfall gegen den Körper vor dem Schritt,
+  `_split_counted_from`): Mitte, beide Enden eines Langlochs
+  (`prepare.slot_ends`), Austritte der Achse (erster Durchstoß, nicht der
+  Hüllquader) — einmal, an beiden Kernen; eine Senkung nur am weiten Ende, am
+  Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`). Eine
+  ungeschlossen überdeckte alte Öffnung zählt als Material
+  (`prepare.OpeningSpace`).
 
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
@@ -359,9 +362,11 @@ ist keine Vorgabe. Die Materialtoleranz weitet überall, auf dem Radius:
 Erkannt topologisch (`perceive.slots`,
 `brep.features._slots_instead_of_half_bores`): zwei gleiche, parallele, ins Loch
 gewölbte Bögen, die sich genau zwei ebene Nachbarn teilen, die an beide grenzen;
-der Boden eines Sacklanglochs gehört nicht dazu. Offene Ausschnitte bleiben
-Langlöcher (Entscheidung Robert); ihr Füllkörper endet an der Außenwand,
-verlorene Form meldet `slot_hole.feature_lost`.
+der Boden eines Sacklanglochs gehört nicht dazu. **Der Mantel ist geschlossen**:
+Setzt eine weitere Wand ihn längs der Achse fort, ist es keines
+(`brep.features._continues_the_mantle`, am Netz `_connected_shell`). Offene
+Ausschnitte bleiben Langlöcher (Entscheidung Robert); ihr Füllkörper endet an
+der Außenwand, verlorene Form meldet `slot_hole.feature_lost`.
 
 `types.is_a_cavity` führt `slot`. Drehen schließt mit der alten und setzt mit
 der neuen Richtung; *Bohrung ändern* ändert die Breite, die Länge folgt aus dem

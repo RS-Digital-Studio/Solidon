@@ -1465,7 +1465,48 @@ def _flanks_of_a_slot(
     normals = [surface_of(flank).plane.Axis().Direction() for flank in flanks]
     if abs(normals[0].Dot(normals[1])) < PARALLEL_AXES:
         return None
+    # **Geschlossen auch ringsum** (RM-411): Außer den vier Flächen selbst setzt keine
+    # ihrer Nachbarinnen den Mantel längs der Achse fort. Am Netz gehört zum Mantel,
+    # was quer zur Achse steht und zusammenhängt, und läuft er über mehr als die zwei
+    # Bögen und zwei Flanken, ist es kein Langloch (``perceive.slots._connected_shell``).
+    # Hier fehlte die Frage: Ein Langloch, dessen Ende in den Aufsatz einer
+    # Stufenplatte geschnitten ist, grenzt dort mit seinem Bogen an die Stufenwand —
+    # das Netz fand kein Langloch, der exakte Kern eines der Tiefe 20, und ein
+    # späterer Zug füllte dessen Umriss bis an die konvexe Hülle.
+    own = {first, second, *flanks}
+    arcs = (one, other)
+    for face in own:
+        for neighbour in around.get(face, set()):
+            if neighbour not in own and _continues_the_mantle(
+                surface_of(neighbour), arcs, axis, radius
+            ):
+                return None
     return (flanks[0], flanks[1])
+
+
+def _continues_the_mantle(surface: Any, arcs: Sequence[Any], axis: Any, radius: float) -> bool:
+    """Ob eine Nachbarfläche des Langlochmantels ihn längs der Achse fortsetzt.
+
+    Eine Ebene längs der Achse tut es und ein achsparalleler Zylinder — beider
+    Normalen stehen quer zur Achse, dieselbe Grenze wie am Netz
+    (:data:`app.core.perceive.slots.ACROSS_THE_AXIS`). Ein Stück eines der beiden
+    Bogenzylinder (eine Naht im Bogen) gehört zum Bogen selbst; Deckel, Boden,
+    Mündungsfase und Rundungen an den Rändern stehen quer und setzen nichts fort.
+    """
+    from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, SAME_RADIUS
+
+    if isinstance(surface, PlaneSurface):
+        return bool(abs(surface.plane.Axis().Direction().Dot(axis)) < ACROSS_THE_AXIS)
+    if not isinstance(surface, CylinderSurface):
+        return False
+    cylinder = surface.cylinder
+    if abs(cylinder.Axis().Direction().Dot(axis)) < PARALLEL_AXES:
+        return False
+    return not any(
+        abs(float(cylinder.Radius()) - float(arc.Radius())) <= radius * SAME_RADIUS
+        and _plane_free_distance(arc.Axis().Location(), cylinder) <= radius * SAME_RADIUS
+        for arc in arcs
+    )
 
 
 def _across_between(one: Any, other: Any) -> tuple[float, float, float]:
