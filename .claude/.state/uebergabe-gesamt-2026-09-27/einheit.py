@@ -211,7 +211,9 @@ def arranged_for(objects: list[Any], profile: Any, settings: Any) -> tuple[list[
     plates = sorted({int(getattr(o, "plate", 0) or 0) for o in objects})
     crowded = []
     for plate in plates:
-        meshes = [as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate]
+        meshes = [
+            as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate
+        ]
         if len(meshes) < 2:
             continue
         planned = arrange_on_bed(meshes, profile)
@@ -416,8 +418,20 @@ BAMBU_CONSOLE_LIMITS = frozenset(
 STARTCODE_KEYS = frozenset({"machine_start_gcode", "start_gcode"})
 
 
-def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> dict[str, Any]:
+def against_chain(
+    block: dict[str, str],
+    wanted: dict[str, tuple[str, str]],
+    handed: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Jeder Schlüssel der Herstellerkette gegen einen Konfigurationsblock.
+
+    ``handed`` ist, was Solidon dem Slicer übergab (Projektdatei). Steht dort
+    der Wert der Kette und druckt der Slicer trotzdem etwas anderes, ist das
+    seine Lesart des Herstellerprofils, keine Abweichung Solidons: Der
+    Kobra-2-Prozess nennt ``initial_layer_speed = 50%``,
+    ``support_interface_speed = 100%`` und ``support_object_xy_distance =
+    60%``; OrcaSlicer 2.4.2 verwirft alle drei und fährt 30, 80 und 0,35 —
+    mit der Kette wörtlich und mit diesen Zahlen bahngleich (04.10.2026).
 
     Was die Konsole selbst anders druckt, als die Kette sagt, steht getrennt
     unter ``console`` — gemessen, nicht vermutet (27.09.2026): Mit einem
@@ -468,9 +482,13 @@ def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> 
             normalised[key] = [kind, value, first]
             continue
         if not same(first, value) and not same(str(found), value):
-            if value == "" or (
-                key in BAMBU_CONSOLE_LIMITS
-                and str(block.get("printer_model", "")).startswith("Bambu Lab A1")
+            if (
+                value == ""
+                or (
+                    key in BAMBU_CONSOLE_LIMITS
+                    and str(block.get("printer_model", "")).startswith("Bambu Lab A1")
+                )
+                or (handed is not None and key in handed and same(handed[key], value))
             ):
                 normalised[key] = [kind, value[:120], str(found)[:120]]
             else:
@@ -1093,7 +1111,7 @@ def main() -> int:
                 assert isinstance(previous, dict)
                 result = previous
                 result["done"] = False
-        except (OSError, ValueError):
+        except OSError, ValueError:
             pass
     finished = {(c["slicer"], c["printer"]) for c in result["combos"] if c.get("complete")}
 
@@ -1221,8 +1239,13 @@ def main() -> int:
                         bed,
                     )
                     if row.get("gcode") and Path(row["gcode"]).exists() and wanted is not None:
+                        written = Path(row.get("written") or "")
                         row["chain"] = against_chain(
-                            gcode_lesen.config_block(Path(row["gcode"])), wanted
+                            gcode_lesen.config_block(Path(row["gcode"])),
+                            wanted,
+                            project_block(written)
+                            if written.suffix == ".3mf" and written.exists()
+                            else None,
                         )
                     elif (
                         row.get("written")
