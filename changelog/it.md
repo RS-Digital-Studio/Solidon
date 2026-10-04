@@ -105,6 +105,14 @@ scrive in `website/version.json`.
 - Per le impostazioni dei singoli pezzi, la riga di comando indica quali pezzi sono e quale valore ricevono.
 - Se accetti i supporti per un ponte lungo sopra il pezzo stesso, ora arrivano anche lì. Prima si aggiungeva «Solo dal piano», e diversi slicer stampavano il ponte senza supporto.
 - I pezzi piccoli distesi, come le viti, non ricevono più supporti proposti dove un bordo di taglio mostrava per errore un punto sospeso.
+- Se un pezzo termina in alto in uno spigolo che lo slicer non stampa, dopo lo slicing Solidon non segnala più un modello tagliato.
+- Se il primo strato di un pezzo è più stretto di una linea, il messaggio dopo lo slicing propone le linee di parete e il raft come via d'uscita.
+- SuperSlicer mantiene la disposizione di Solidon e non spinge più i pezzi fino al bordo del piano; lo skirt resta sul piano.
+- Se un pezzo entra nel piano solo ruotato, arriva ruotato a OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Se il bordo attorno a un pezzo entra in una zona esclusa del piano, il controllo prima dell'esportazione lo segnala.
+- Se nello slicer si incrociano i percorsi di due pezzi, o di un pezzo e della torre di spurgo, il messaggio lo dice e propone vie d'uscita.
+- Se il brim è su automatico, Solidon avvisa prima dell'esportazione quando può uscire dal piano o entrare in una zona esclusa, e propone una larghezza fissa.
+- I supporti e lo skirt al bordo del piano contano nel controllo prima dell'esportazione, con l'allargamento del primo strato di supporto indicato dal profilo dello slicer.
 
 ### Fori, asole e divisione
 
@@ -147,6 +155,9 @@ scrive in `website/version.json`.
 - Una coppia di filettature stampate supera la verifica dell'accoppiamento: entrambe indicano la misura con cui sono costruite, e la verifica si aspetta il gioco di entrambe le metà.
 - Con «Verifica il percorso di montaggio», i pezzi possono anche ruotare, oppure essere inseriti e poi ruotati come una baionetta.
 - Un pezzo da «Crea pezzo di prova» ritaglia la stessa finestra da entrambe le parti di un accoppiamento e indica il gioco.
+- Un foro svasato che dopo la duplicazione, lo spostamento o la ripetizione finisce tutto nel materiale non segnala più di sporgere oltre il bordo.
+- Se la svasatura di una copia supera un lato, Solidon ritrova la copia allo stesso modo su pezzi STL e STEP.
+- Se duplichi un foro lungo il suo asse nel vuoto, l'originale mantiene il suo nome sui pezzi STL, e la copia risulta persa come sui pezzi STEP.
 
 ### Raccordi e smussi
 
@@ -234,6 +245,7 @@ scrive in `website/version.json`.
 - Dopo Ctrl+Y, la riga di stato indica il passaggio ripristinato, come dopo Ctrl+Z.
 - Le anteprime di esempi e blocchi mostrano l'altezza verso l'alto. Finora i pezzi alti vi puntavano verso il basso.
 - Se Solidon non riesce a salvare la scelta «Includi i valori», l'avviso compare direttamente accanto all'interruttore.
+- Se altri programmi occupano tutti i core su Windows, un calcolo su un modello grande non resta più fermo per minuti.
 
 ## 0.5.1
 

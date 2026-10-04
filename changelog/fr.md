@@ -106,6 +106,14 @@ dans `website/version.json`.
 - Pour les réglages de pièces individuelles, la ligne de commande indique de quelles pièces il s'agit et quelle valeur elles reçoivent.
 - Les supports acceptés pour un long pont au-dessus de la pièce y arrivent maintenant. Avant, « Depuis le plateau uniquement » s'ajoutait et plusieurs slicers imprimaient le pont sans support.
 - Les petites pièces couchées, comme les vis, ne reçoivent plus de supports proposés là où une arête de coupe montrait à tort un point flottant.
+- Si une pièce se termine en haut par une arête que le slicer n'imprime pas, Solidon ne signale plus de modèle tronqué après le tranchage.
+- Si la première couche d'une pièce est plus étroite qu'une ligne, le message après le tranchage propose les lignes de paroi et le radeau comme issue.
+- SuperSlicer garde la disposition de Solidon et ne pousse plus les pièces jusqu'au bord du plateau ; la jupe reste sur le plateau.
+- Si une pièce ne tient sur le plateau qu'en biais, elle part tournée vers OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
+- Si la bordure autour d'une pièce entre dans une zone interdite du plateau, le contrôle avant l'export le signale.
+- Si les trajets de deux pièces, ou d'une pièce et de la tour de purge, se croisent dans le slicer, le message le dit et propose des issues.
+- Si la bordure est en automatique, Solidon prévient avant l'export quand elle peut déborder du plateau ou entrer dans une zone interdite, et propose une largeur fixe.
+- Les supports et la jupe au bord du plateau comptent dans le contrôle avant l'export, avec l'élargissement de la première couche de support indiqué par le profil du slicer.
 
 ### Perçages, trous oblongs et découpe
 
@@ -148,6 +156,9 @@ dans `website/version.json`.
 - Une paire de filetages imprimés réussit son contrôle d'ajustement : les deux filetages indiquent la cote construite, et le contrôle attend le jeu des deux moitiés.
 - Avec « Vérifier le chemin d'assemblage », les pièces peuvent aussi tourner, ou être insérées puis tournées comme une baïonnette.
 - Une pièce de « Créer une éprouvette » découpe la même fenêtre dans les deux pièces d'un ajustement et indique le jeu.
+- Un perçage fraisé qui finit entièrement dans la matière après duplication, déplacement ou répétition ne signale plus qu'il dépasse du bord.
+- Si la fraisure d'une copie dépasse d'un côté, Solidon retrouve la copie de la même façon sur les pièces STL et STEP.
+- Si vous dupliquez un perçage le long de son propre axe dans le vide, l'original garde son nom sur les pièces STL, et la copie est dite perdue comme sur les pièces STEP.
 
 ### Congés et chanfreins
 
@@ -235,6 +246,7 @@ dans `website/version.json`.
 - Après Ctrl+Y, la ligne d'état nomme l'étape rétablie, comme après Ctrl+Z.
 - Les vignettes des exemples et des blocs montrent la hauteur vers le haut. Jusqu'ici, les pièces hautes y pointaient vers le bas.
 - Si Solidon ne peut pas enregistrer le choix « Inclure les valeurs », la remarque s'affiche directement à côté de l'interrupteur.
+- Si d'autres programmes occupent tous les cœurs sous Windows, un calcul sur un grand modèle ne reste plus bloqué pendant des minutes.
 
 ## 0.5.1
 

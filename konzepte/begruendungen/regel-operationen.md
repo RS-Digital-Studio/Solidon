@@ -1235,7 +1235,26 @@ und tut dasselbe — beim Verdoppeln einzeln und als Kette und im Muster.
 Wiedergefunden heißt: seitlich auf der Achse, auf die sie gesetzt wurde, bis
 zur Facettengrenze. Die Messung am Netz nimmt sonst auch einen
 angeschnittenen Zylinder über einer Seite als Bohrung, mit seiner Mitte bis
-1,25 mm daneben, und die Auswertung verwarf ihn danach still.
+1,25 mm daneben, und die Auswertung verwarf ihn danach still. **Und neu**
+(RM-226, Nachtrag 04.10.2026): Eine Durchgangsbohrung darf entlang ihrer
+Achse wandern, und längs dieser Achse verdoppelt liegt die Vorlage auf ihr.
+An `pegboard-gs-100-v2` fiel die 12 mm verschobene Kette in einen Durchbruch,
+nichts wurde abgetragen; der exakte Kern nannte alle drei Kopien verloren, das
+Netz zwei — die Kopie der Bohrung Ø 6 fand es in der Vorlage, deren Dreiecke
+danach den Namen der Kopie trugen. Die Ketten waren an beiden Kernen gleich.
+Der exakte Kern nimmt nur Merkmale mit neuem Namen; am Netz ist kein Fund eine
+Kopie, der in Art, Mitte und Durchmesser bis zur Facettengrenze auf einem
+Merkmal der Quelle liegt (`_already_there`) — ohne Freiheit entlang der Achse,
+damit eine Kopie in eine zweite Wand Kandidat bleibt
+(`test_a_copy_along_its_own_axis_into_the_air_is_lost_on_both_kernels`, vorher
+am Netz alle sechs Fälle rot). **Und eine Senkung findet sich an beiden Kernen
+über ihre Spitze wieder** (`_same_cone`): Mitte und Durchmesser beschreiben
+ihren weitesten Rand, und den schneidet an der neuen Stelle eine Seite ab. Eine
+Senkbohrung, 25 mm längs der schrägen Platte über die Stirn verdoppelt oder
+vervielfacht, maß dort Ø 12,54 bei z = 11,27 statt 13,33 bei 11,67; das Netz
+fand sie über die Spitze, der exakte Kern suchte an der Mitte und nannte sie
+verloren (`test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels`,
+ohne die Spitzensuche in `_exact_copy_result` acht von zwölf Fällen rot).
 
 **Und eine Bohrung, in deren Zylinder Material steht, ist keine** —
 `hole_is_clear` fragt die Dreiecksmitten des Körpers zwischen den Mündungen
@@ -1286,6 +1305,28 @@ tief im Material und reißt 2,3 mm hinter ihrem unteren Austritt trotzdem auf
 geschlossen (`test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
 `test_every_way_that_sets_a_bore_anew_asks_about_the_edge`,
 `test_a_widened_countersink_over_the_edge_says_so`).
+
+**Eine starr gesetzte Senkung unter einer Haut ragt nicht über die Kante**
+(RM-226, Nachtrag 04.10.2026). Am Austritt setzt `mouth_over_the_edge` den
+Kegel von der Spitze bis in die Fläche fort; liegt das weite Ende darunter,
+wächst der Kranz mit jedem Millimeter Haut. Eine Senkbohrung, 20 mm längs der
+60 mm langen schrägen Platte verdoppelt, versetzt oder als dritter Platz eines
+Musters, endet 5 mm unter der Oberseite mit dem weiten Ende bei x = 26,7; ihr
+gedachter Kranz reichte bis x = 33,3 über die Stirn bei x = 30, und beide Kerne
+sagten „über die Kante“. Jetzt fragt `_sink_under_a_skin` vorher, ob der Kreis
+des weiten Endes ringsum mindestens eine Facettengrenze unter der nächsten
+Fläche liegt (`prepare.ring_in_material`). Die Tiefe zählt: Der Kreis einer
+bündigen Senkung liegt in ihrer Mündungsfläche, ein Punkt neben der Kante hat
+dort zur Deckfläche den Abstand null längs ihrer Normale, und die über die
+Kante versetzte Senkung schwieg
+(`test_a_moved_countersink_over_the_edge_is_reported_once`). Und nur starr
+(`rigid`): Gekippt schneidet ein größerer Kegel bis zur alten Randebene, über
+den Kreis hinaus — die vergrabene Senkung der Rippenplatte läuft so aus der
+Seite. Plansenkung und Langloch fragen mit ihrem eigenen Durchmesser und
+meldeten an derselben Stelle nichts; reicht der Kreis seitlich hinaus (24 mm
+statt 20), bleibt es an beiden Kernen bei „über die Kante“
+(`test_a_copy_under_the_top_is_not_over_the_edge_on_both_kernels`,
+`test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels`).
 
 **Den Zerfall zählt derselbe Weg gegen den Körper vor dem Schritt**
 (30.09.2026). `drill`, `slot_bore` und `resize_bore` zählen die Teile gegen den

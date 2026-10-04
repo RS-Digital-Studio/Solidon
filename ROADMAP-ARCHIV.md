@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-04 | [RM-380: Der Hilfsprozess verhungert nicht auf ausgelasteten Kernen, und seine Tests teilen keinen Plattencache (04.10.2026)](#rm-380-der-hilfsprozess-verhungert-nicht-auf-ausgelasteten-kernen-und-seine-tests-teilen-keinen-plattencache-04102026) |
 | 2026-10-04 | [RM-411: Langlöcher an schrägen und gestuften Trägern melden an beiden Kernen dasselbe (04.10.2026)](#rm-411-langlöcher-an-schrägen-und-gestuften-trägern-melden-an-beiden-kernen-dasselbe-04102026) |
 | 2026-10-04 | [RM-422: Langlöcher an ±X sind gedreht geprüft, und alte Projekte rechnen sie wie gespeichert (04.10.2026)](#rm-422-langlöcher-an-x-sind-gedreht-geprüft-und-alte-projekte-rechnen-sie-wie-gespeichert-04102026) |
 | 2026-10-04 | [RM-388: Schlüsselloch nach Bohrung und Drehdeckel am Randring sind als Originalwege geprüft (04.10.2026)](#rm-388-schlüsselloch-nach-bohrung-und-drehdeckel-am-randring-sind-als-originalwege-geprüft-04102026) |
@@ -40198,6 +40199,42 @@ Bohrerhalter versetzt mit denselben Sätzen. Cacheversionen: `move_feature` 12,
 Entwicklungstor am Endstand 23 552 bestanden, 122 übersprungen, Exit 0. Belege
 unter `F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
 
+**Zweiter Nachtrag 04.10.2026 (Claude, Zweig `claude/kopie-schraeg`):** Drei
+Brüche, gefunden beim ersten Nachtrag. (1) *Eine starr gesetzte Senkung unter
+einer Haut ragt nicht über die Kante:* `mouth_over_the_edge` setzte den Kegel am
+Austritt der Achse bis in die Oberfläche fort; an der 60 mm langen schrägen
+Platte endet eine 20 mm bergauf verdoppelte, versetzte oder vervielfachte
+Senkbohrung 5 mm unter der Oberseite, ihr gedachter Kranz reichte bis x = 33,3
+über die Stirn bei x = 30 — „über die Kante“ an beiden Kernen (auch v0.5.1).
+Jetzt fragt `prepare_ops._sink_under_a_skin`, ob der Kreis des weiten Endes
+ringsum mindestens eine Facettengrenze unter der nächsten Fläche liegt
+(`prepare.ring_in_material`), nur bei starr gesetzten Hohlräumen (`rigid`;
+gekippt schneidet ein größerer Kegel über den Kreis hinaus). Plansenkung und
+Langloch fragen mit ihrem eigenen Durchmesser und meldeten nie. (2) *Eine Kopie
+längs ihrer eigenen Achse findet am Netz nicht ihre Vorlage:* Die Ketten von
+`pegboard-gs-100-v2` waren an beiden Kernen gleich (drei Glieder); das Netz fand
+die Kopie der durchgehenden Bohrung Ø 6 in der Vorlage auf derselben Achse, die
+Vorlage hieß danach wie die Kopie (auch v0.5.1). `_copies_found` nimmt jetzt wie
+der exakte Kern nur Neues (`_already_there`: Art, Mitte, Durchmesser bis zur
+Facettengrenze, ohne Freiheit längs der Achse). (3) *Eine angeschnittene Senkung
+findet sich an beiden Kernen:* Um 25 oder 26 mm verdoppelt schneidet die Stirn
+den Kegel ab, die Erkennung misst seinen Rand tiefer (Ø 12,54 bei z = 11,27
+statt 13,33 bei 11,67); das Netz fand die Kopie über ihre Spitze, der exakte
+Kern suchte an der Mitte und nannte sie verloren (auch v0.5.1). Jetzt sucht
+`_exact_copy_result` eine Senkung, die nicht an ihrer Mitte sitzt, über die
+Spitze (`_same_cone`). Abnahme in `tests/test_exact_body_parity.py`: Kopie unter
+der Oberseite 10 Fälle (vorher die 6 Senkungsfälle rot), Senkung über die Stirn
+12 (vorher 8 rot), längs der Achse in die Luft 6 (vorher am Netz 6 rot), in eine
+zweite Wand 2; die drei Plätze des Musters jetzt auf der 60-mm-Platte.
+Gegenproben: ohne die Frage nach der Haut 8 rot, ohne den Kreis 2, ohne
+Mindesttiefe 2 bestehende Tests, überall starr der bestehende gekippte Fall, ohne
+Abgleich mit der Quelle 6, mit Freiheit längs der Achse 2, ohne Spitzensuche 8.
+Echtes Modell gs-100: am Netz jetzt drei `feature_lost` wie exakt, sonst gleiche
+Korpusausgabe. Cacheversionen: `move_feature` 13, `duplicate_feature` 12,
+`pattern_feature` 10. Commits `c9304999f`, `f9e92d428`, `8ffccf0da`;
+Entwicklungstor am Endstand 23 582 bestanden, 122 übersprungen, Exit 0. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
+
 ## RM-254: Splinestücke bestätigen einander nur noch mit festgelegtem Radius (04.10.2026)
 
 <a id="rm-254-splinestücke-bestätigen-einander-nur-noch-mit-festgelegtem-radius-04102026"></a>
@@ -40845,3 +40882,50 @@ Mindestdrucktempo in der Herstellerkette nennt, dass nicht verglichen wurde.
 
 Changelog: **ja** — der Zeitvergleich schlug seit der Slicer-Rückkopplung
 `d2efb2577` (ab v0.1.1) bei fast jedem Lauf an.
+
+## RM-380: Der Hilfsprozess verhungert nicht auf ausgelasteten Kernen, und seine Tests teilen keinen Plattencache (04.10.2026)
+
+<a id="rm-380-der-hilfsprozess-verhungert-nicht-auf-ausgelasteten-kernen-und-seine-tests-teilen-keinen-plattencache-04102026"></a>
+<a id="rm-380"></a>
+
+**RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei.**
+  Review 02.10.2026, Registerabgleich Geometrie, am HEAD `3fd3b1ace`. Beide Tests stammen aus
+  `a55e844ad`.
+  **Fehlerfall:** `pytest tests/test_kernel_process.py` am Stück: 1 failed, 79 passed, Exit 1 —
+  `KeyError: 'helper:display_simplify'` (`tests/test_kernel_process.py:1309`). Allein gefahren ist
+  der Test grün (Exit 0); direkt nach `test_the_coarse_preview_reduces_and_drills_in_the_helper`
+  (`:1183`) rot (1 failed, 1 passed, Exit 1). Der Vorschautest ruft `kernel_process.shutdown()`
+  und rechnet danach dieselbe Vorschau im Prozess (`:1216–1218`); der Fenstertest findet
+  anschließend keine `display_simplify`-Zählung — vermutlich weil die verkleinerte Vorschau aus
+  einem prozessweiten Speicher kommt oder die Zählung nach `shutdown` nicht neu angelegt wird.
+  Weil der Fenstertest (`qt_app`) nur beim Release läuft, fällt das im Entwicklungstor nicht auf.
+  **Fix:** Ursache am Zustand festmachen (Vorschau-Cache bzw. `statistics()` nach `shutdown`) und
+  im Fixture `offloaded` zurücksetzen; nicht die Zusicherung lockern. `.get(...)` statt `[...]`
+  allein wäre keine Behebung.
+  **Abnahme:** `tests/test_kernel_process.py` am Stück und in umgekehrter Reihenfolge grün; die
+  Zusicherung `>= 1` bleibt. Belege: `F:\solidon-review-reports\kp_order.txt`, `kp_file.txt`,
+  `register-geometrie.md`.
+
+**Abschluss 04.10.2026** (`claude/rm380-helfer`, `d7c9b8f37`, `d8b34c63e`). Zwei Ursachen.
+**Zustand zwischen den Fällen** war der prozessweite Plattencache der Suite: `Session()` baut
+`disk_backed_cache()`, und nach `test_applying_a_large_refinement_refines_in_the_helper` holte der
+Fenstertest dieselbe Verfeinerung von der Platte (drei Plattentreffer, gemessen) — am Ausgang
+`KeyError: 'helper:refine_conforming'`, im Befund vom 02.10. derselbe Mechanismus nach dem
+Vorschaufall. `tests/test_kernel_process.py::_ellipsoid_session` gibt der Sitzung vor dem Import
+einen Cache nur im Speicher; der Vorschaufall rechnet seinen Hauptfadenvergleich mit eigenem
+Cache, statt Bohrung und Verkleinerung aus dem Cache des Nebenfadens mit sich selbst zu
+vergleichen. **Die 120-s-Abbrüche im Tor waren ein Verhungern, keine Rechenzeit:**
+`component_labels` lud `trimesh.graph` (987 Module, knapp eine CPU-Sekunde) erst, nachdem sich der
+Hilfsprozess unter Windows auf BELOW_NORMAL gestellt hatte; auf zwei ausgelasteten Kernen nach
+301 s nicht fertig (CPU 0,36 → 0,92 s), mit `kernel_jobs.PREPARATIONS` (Nachladen in normaler
+Klasse vor dem Zurückstellen) nach 6,2 s. Die Zeitgrenze bleibt. Der Fehler lag in v0.5.1
+(`575841694`, `a55e844ad`). Wächter: `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
+verlangt für jede der zwölf Rechnungen, dass sie zurückgestellt kein Modul nachlädt
+(`tests/kernel_helper_probe.py`); Regel in `.claude/rules/kern.md`. Vorher rot: Datei allein
+1 failed/144 passed; Sitzungsfälle umgekehrt zwei rot; `[component_labels]` auf zwei ausgelasteten
+Kernen 120-s-Abbruch; Gegenprobe ohne Vorbereitung rot mit Modulliste. Nachher grün: Datei 20×
+allein je 145 passed, umgekehrt grün, 18 Nachbardateien unter `-n 10 --dist worksteal` 2× 2042
+passed, ganze Datei auf zwei ausgelasteten Kernen 145 passed (langsamster Fall 35,5 s),
+Entwicklungstor (`-n 5`) 23 658 passed, Exit 0. Belege: `F:\solidon-review-reports\claude-2026-10-04\rm380-helfer\`,
+Sonde und Messung im Repository unter
+`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/hunger.py`. Changelog: **ja**, der Fehler lag in v0.5.1.

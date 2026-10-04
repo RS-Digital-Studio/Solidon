@@ -331,10 +331,13 @@ def surface_index_of(mesh: MeshData) -> Any:
     return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
 
 
-def inside_material(body: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def inside_material(
+    body: MeshData, points: np.ndarray, depth: float = 0.0
+) -> tuple[np.ndarray, np.ndarray]:
     """Welche Punkte im Material liegen oder auf seiner Oberfläche — dieselbe
     Probe wie in :func:`_flank_is_open`, mit dem gemerkten Suchbaum. Dazu je
-    Punkt die Normale der nächsten Fläche."""
+    Punkt die Normale der nächsten Fläche. Mit ``depth`` zählt nur, was
+    mindestens so tief unter der nächsten Fläche liegt."""
     from app.core.geom.mesh import on_surface
 
     closest, _distance, triangle = on_surface(body.raw, points, index=surface_index_of(body))
@@ -343,7 +346,7 @@ def inside_material(body: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.
     outward = (
         offset[:, 0] * normals[:, 0] + offset[:, 1] * normals[:, 1] + offset[:, 2] * normals[:, 2]
     )
-    return np.asarray(outward <= EPS_GEOM), normals
+    return np.asarray(outward <= EPS_GEOM - depth), normals
 
 
 def _open_to_the_outside(body: MeshData, points: np.ndarray, across: np.ndarray) -> list[str]:
@@ -622,6 +625,30 @@ def mouth_over_the_edge(
     if bool(inside.all(axis=1).any()):
         return []
     return [_edge_finding(diameter, over)]
+
+
+def ring_in_material(
+    body: MeshData, position: Vec3, axis: Vec3, diameter: float, *, depth: float = 0.0
+) -> bool:
+    """Ob der Kreis vom Durchmesser ``diameter`` um ``position``, quer zu
+    ``axis``, ganz im Material liegt — jeder Punkt mindestens ``depth`` unter
+    der nächsten Fläche, ohne ``depth`` die Oberfläche eingeschlossen.
+
+    Dieselbe Probe wie in :func:`_flank_is_open`, mit :data:`_RIM_POINTS`
+    Punkten. Die Kantenprüfung fragt damit, ob das weite Ende einer starr
+    gesetzten Senkung unter einer Haut liegt (``prepare_ops._sink_under_a_skin``):
+    Dann reißt sie keine Seite auf, und der Kranz an der Oberfläche, den
+    :func:`mouth_over_the_edge` aus dem fortgesetzten Kegel rechnet, gehört zu
+    keinem Hohlraum.
+    """
+    vector = np.asarray(axis, dtype=float)
+    length = math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
+    radius = diameter / 2.0
+    if length <= EPS_GEOM or radius <= EPS_GEOM:
+        return False
+    points = np.asarray(position, dtype=float) + _rim_around(vector / length, radius)
+    inside, _normals = inside_material(body, points, depth)
+    return bool(inside.all())
 
 
 def ray_hits_along(

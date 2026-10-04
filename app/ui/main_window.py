@@ -8591,7 +8591,7 @@ class MainWindow(QMainWindow):
             return
         self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(current))
 
-    def action_print_settings(self) -> None:
+    def action_print_settings(self, *, field: str = "") -> None:
         """Der Dialog prüft seinen vollständigen Druckauftrag selbst im Arbeiter (§29).
 
         Die Schichtansicht des ausgewählten Körpers beschreibt weder weitere
@@ -8614,6 +8614,10 @@ class MainWindow(QMainWindow):
         # (``_SlicerWorker``) und hält weder das Öffnen noch das Schließen auf.
         with waiting():
             dialog = PrintSettingsDialog(self.session, self.settings, self)
+        if field:
+            # Ein Befund mit Feld (*Brim-Breite festlegen …*, RM-312) öffnet
+            # den Dialog an seiner Zeile.
+            dialog.show_setting(field)
         dialog.sliced.connect(
             lambda outcomes: self._gcode_returned(outcomes, dialog.slice_comparison)
         )
@@ -24192,7 +24196,9 @@ class MainWindow(QMainWindow):
             "calibrate_material": lambda _error: self.action_calibrate(),
             "show_output": lambda error: show_details(error, self),
             "check_profile": lambda _error: self.action_print_settings(),
-            "open_print_settings": lambda _error: self.action_print_settings(),
+            "open_print_settings": lambda error: self.action_print_settings(
+                field=str(error.values.get("field") or "")
+            ),
             "show_feature": self._show_feature_after_error,
             # **Zwei verschenkte Klickwege, gefunden beim Release-Durchgang.**
             # Beide standen als Satz da — ehrlich, aber an diesen Stellen zu

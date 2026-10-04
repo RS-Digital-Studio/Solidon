@@ -130,6 +130,14 @@ Nutzen da und sonst nichts.
 - Die Kommandozeile nennt bei Druckwerten für einzelne Teile, welche Teile es sind und welchen Wert sie bekommen.
 - Übernehmen Sie Stützen für eine lange Brücke über dem Teil selbst, kommen sie jetzt auch dort an. Bisher kam „Nur vom Bett“ dazu, und mehrere Slicer druckten die Brücke ohne Stütze.
 - Kleine liegende Teile wie Schrauben bekommen keine Stützen mehr vorgeschlagen, wo eine Schnittkante fälschlich eine schwebende Stelle ergab.
+- Läuft ein Teil oben in eine Kante aus, die der Slicer nicht druckt, meldet Solidon nach dem Slicen kein abgeschnittenes Modell mehr.
+- Ist die erste Schicht eines Teils schmaler als eine Bahn, nennt die Meldung nach dem Slicen die Wandbahnen und den Raft als Ausweg.
+- SuperSlicer behält die Anordnung aus Solidon und schiebt die Teile nicht mehr bis an den Bettrand; der Skirt bleibt auf dem Bett.
+- Passt ein Teil nur schräg gestellt auf das Druckbett, geht es gedreht an OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print.
+- Reicht der Rand um ein Teil in eine Sperrfläche des Druckbetts, sagt das die Prüfung vor dem Export.
+- Kreuzen sich im Slicer die Bahnen zweier Teile oder eines Teils und des Reinigungsturms, sagt die Meldung das und bietet Auswege an.
+- Steht der Brim auf automatisch, warnt Solidon vor dem Export, wenn er über das Bett oder in eine Sperrfläche wachsen kann, und bietet eine feste Brimbreite an.
+- Stützen und Skirt am Bettrand zählen in der Prüfung vor dem Export mit der Verbreiterung der ersten Stützschicht, die das Slicerprofil nennt.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -172,6 +180,9 @@ Nutzen da und sonst nichts.
 - Ein gedrucktes Gewindepaar besteht seine Passungsprüfung: Beide Gewinde nennen ihr gebautes Maß, und die Prüfung erwartet das Spiel beider Hälften.
 - Beim *Fügeweg prüfen* drehen Teile auch, oder sie werden erst eingesetzt und dann gedreht wie ein Bajonett.
 - Ein Stück aus *Prüfstück erzeugen* schneidet dasselbe Fenster aus beiden Teilen einer Passung und nennt das Spiel.
+- Eine Senkbohrung, die nach dem Verdoppeln, Versetzen oder Vervielfachen ganz im Material endet, meldet nicht mehr, sie rage über die Kante.
+- Reicht die Senkung einer Kopie über eine Seite hinaus, findet Solidon die Kopie an STL- und STEP-Teilen gleich wieder.
+- Verdoppeln Sie eine Bohrung entlang ihrer eigenen Achse ins Leere, behält das Original an STL-Teilen seinen Namen, und die Kopie heißt verloren wie an STEP-Teilen.
 
 ### Verrunden und Fasen
 
@@ -259,6 +270,7 @@ Nutzen da und sonst nichts.
 - Nach Strg+Y nennt die Statuszeile den Schritt, der wieder angewendet wurde, wie nach Strg+Z.
 - Vorschaubilder von Beispielen und Bausteinen zeigen die Höhe nach oben. Bisher wiesen hohe Teile darin nach unten.
 - Kann Solidon die Wahl *Werte mitgeben* nicht speichern, steht der Hinweis direkt am Schalter.
+- Lasten andere Programme den Rechner unter Windows voll aus, bleibt eine Rechnung an einem großen Modell nicht mehr minutenlang stehen.
 
 ## 0.5.1
 
