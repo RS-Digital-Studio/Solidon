@@ -391,7 +391,9 @@ def test_the_remembered_slicer_suggests_its_printer_and_done_waits_for_it(
     assert not dialog.inventory_button.isEnabled()
     gate.set()
     assert dialog.wait_for_survey()
-    assert dialog.result() == QDialog.DialogCode.Accepted, "der gemerkte Klick läuft nach der Antwort"
+    assert dialog.result() == QDialog.DialogCode.Accepted, (
+        "der gemerkte Klick läuft nach der Antwort"
+    )
     assert dialog.start.isEnabled()
     dialog.apply_to(settings)
     assert settings.printer == "centauri-carbon-2"
