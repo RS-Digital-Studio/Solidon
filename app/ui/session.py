@@ -2472,6 +2472,22 @@ class Session(QObject):
         self._changed()
         return True
 
+    def coupled_change(self, op_id: int, params: Mapping[str, Any]) -> Any:
+        """Was am Gegengewinde mitgeht, wenn sich ein gespeicherter Gewindeschritt ändert.
+
+        ``counterpart.coupled_step_change`` an der zuletzt gerechneten Szene;
+        mit Einfügemarke gibt es am gezeigten Stand keine Passungen und nichts
+        zu koppeln (:meth:`displayed_document`).
+        """
+        result = self.last_result
+        if result is None:
+            return None
+        from app.core.counterpart import coupled_step_change
+
+        return coupled_step_change(
+            self.displayed_document(), result.scene, self.evaluation_profile, op_id, params
+        )
+
     def with_coupled_threads(self, drafts: list[OperationDraft]) -> list[OperationDraft]:
         """Die Entwürfe, ergänzt um das Gegengewinde jedes geänderten Gewindes (RM-184).
 
@@ -2958,9 +2974,21 @@ class Session(QObject):
         Absage kommt über ``failed``. Wer sich etwas für die folgende
         Auswertung merkt, tut es nur bei ``True``: Nach einer Absage kommt
         keine, und der Merker träfe die nächste beliebige.
+
+        **Ein gespeicherter Gewindeschritt nimmt sein Gegengewinde mit**
+        (:meth:`coupled_change`) — jeder Weg, der einen bestehenden Schritt
+        ändert (Verlauf, *Diesen Schritt ändern*, Merkmalfenster), kommt hier
+        vorbei, die Vorschau fragt dieselbe Stelle.
         """
+        coupled = self.coupled_change(op_id, params)
         try:
-            self.history.change_params(op_id, params, changes)
+            self.history.change_params(
+                op_id,
+                params,
+                changes,
+                also=coupled.edits if coupled is not None else None,
+                appended=coupled.drafts if coupled is not None else (),
+            )
         except AppError as error:
             self.failed.emit(error)
             return False
@@ -4293,6 +4321,11 @@ class Session(QObject):
         # niemand mehr sehen will.
         cancel = CancelSignal()
         snapshot = _Snapshot.of(self, change_op)
+        coupled = (
+            self.coupled_change(change_op, dict(change_values or {}))
+            if change_op is not None and change_name is None
+            else None
+        )
 
         def compute() -> tuple[Any, SceneDifference | None, str]:
             # ``worker`` steht unten und ist beim **Aufruf** gebunden — die
@@ -4307,6 +4340,7 @@ class Session(QObject):
                 change_values=change_values,
                 change_name=change_name,
                 changes=changes,
+                coupled=coupled,
                 cancelled=cancel,
                 coarsened=(
                     None
@@ -4347,6 +4381,7 @@ class Session(QObject):
                 change_values=change_values,
                 change_name=change_name,
                 changes=changes,
+                coupled=coupled,
                 cancelled=cancel,
                 snapshot=snapshot,
                 progress=lambda fraction, text: worker.progressed.emit(generation, fraction, text),
@@ -5598,8 +5633,13 @@ class Session(QObject):
         unseen: CancelSignal | None = None,
         review_print: bool = False,
         review_settings: PrintSettings | None = None,
+        coupled: Any = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
+
+        ``coupled`` ist, was am Gegengewinde mitgeht, wenn ``change_op`` ein
+        Gewindeschritt ist (:meth:`coupled_change`, im Hauptfaden bestimmt) —
+        die Vorschau zeigt dieselbe Transaktion wie das Übernehmen.
 
         ``change_op`` mit ``change_values`` zeigt statt neuer Schritte eine
         geänderte Operation des Stapels (§15.4). ``change_name`` verwendet
@@ -5703,7 +5743,13 @@ class Session(QObject):
         if change_op is not None:
             history = History(working)
             if change_name is None:
-                history.change_params(change_op, dict(change_values or {}), changes)
+                history.change_params(
+                    change_op,
+                    dict(change_values or {}),
+                    changes,
+                    also=coupled.edits if coupled is not None else None,
+                    appended=coupled.drafts if coupled is not None else (),
+                )
             else:
                 history.change_kernel(change_op, change_name, dict(change_values or {}))
             changed_index = next(
@@ -5767,6 +5813,7 @@ class Session(QObject):
                     change_values=change_values,
                     change_name=change_name,
                     changes=changes,
+                    coupled=coupled,
                     cancelled=cancelled,
                     counselled=counselled,
                     detect_features=detect_features,
@@ -5819,6 +5866,7 @@ class Session(QObject):
                 change_values=change_values,
                 change_name=change_name,
                 changes=changes,
+                coupled=coupled,
                 cancelled=cancelled,
                 counselled=counselled,
                 detect_features=detect_features,

@@ -311,3 +311,129 @@ def test_a_thread_without_a_fit_has_no_counterpart_to_carry(profile: Profile) ->
         {"at_feature": "thread_1", "diameter": 8.0, "pitch": 1.25},
     )
     assert drafts == ()
+
+
+# --- Ein gespeicherter Gewindeschritt, nachträglich geändert ------------------------
+#
+# *Diesen Schritt ändern*, der Verlauf, das Merkmalfenster an einem Schritt —
+# jeder Weg, der die Werte eines bestehenden Schritts ändert, endet in
+# ``Session.change_params`` (Vorschau: ``preview_async(change_op=…)``). Dort
+# geht das Gegengewinde mit, wie beim neuen Schritt; sonst entstünde still eine
+# Passung, die nicht mehr passt (Regel 21).
+
+
+def _session_with_a_pair() -> tuple[object, Document, Feature]:
+    from app.ui.session import Session
+
+    session = Session()
+    document = session.project.document
+    feature = _with_a_paired_thread(document, lambda: session.evaluate_now().scene)
+    session.evaluate_now()
+    return session, document, feature
+
+
+def _thread_step(document: Document, op: str, body: str) -> int:
+    return next(entry.id for entry in document.ops if entry.op == op and entry.inputs == (body,))
+
+
+def _no_violated_fit(session: object, document: Document) -> None:
+    result = session.evaluate_now()  # type: ignore[attr-defined]
+    assert result.stopped_at is None
+    violated = [
+        finding.code
+        for finding in check(result.scene, session.evaluation_profile, document=document)  # type: ignore[attr-defined]
+        if finding.code in {"fit.violated", "fit.pitch_mismatch", "fit.missing_feature"}
+    ]
+    assert not violated, violated
+
+
+def test_changing_the_saved_thread_size_changes_the_counterpart_step_too() -> None:
+    """Das Gewinde M6 aus *Gewinde drucken* wird nachträglich M8: Das Gegengewinde auch."""
+    session, document, _feature = _session_with_a_pair()
+    own = _thread_step(document, "insert_printed_thread", "obj_1")
+    partner = _thread_step(document, "insert_printed_thread", "obj_2")
+    transactions, steps = len(document.transactions), len(document.ops)
+
+    params = {**History(document).operation(own).params, "size": "M8"}
+    assert session.change_params(own, params)  # type: ignore[attr-defined]
+
+    assert History(document).operation(partner).params["size"] == "M8"
+    assert len(document.transactions) == transactions + 1, "eine Transaktion"
+    assert len(document.ops) == steps, "kein Schritt dazu"
+    # Beide Hälften tragen wieder dieselbe Größe und Steigung. Die
+    # Passungsprüfung selbst steht hier nicht im Satz: Das gedruckte Paar meldet
+    # seine Nennmaße ohne das eingebaute Spiel (``fasteners._printed_thread``),
+    # bei M6 wie bei M8 — dieselbe Auskunft vor und nach der Änderung.
+    result = session.evaluate_now()  # type: ignore[attr-defined]
+    fit = active_fits(document)[0]
+    first, second = (
+        result.scene.objects[ref.object_id].features[ref.feature_id] for ref in (fit.a, fit.b)
+    )
+    assert first.params["diameter"] == pytest.approx(8.0)
+    assert second.params["diameter"] == pytest.approx(8.0)
+    assert first.params["pitch"] == pytest.approx(second.params["pitch"])
+
+    assert session.history.undo()  # type: ignore[attr-defined]
+    assert History(document).operation(own).params["size"] == "M6"
+    assert History(document).operation(partner).params["size"] == "M6", "Strg+Z nimmt beide"
+
+
+def test_changing_a_saved_resize_changes_the_coupled_resize_of_the_counterpart() -> None:
+    """Gekoppelt geändert (Ø 8 × 1,25), dann im Verlauf auf Ø 10 × 1,5: Der Partnerschritt folgt."""
+    session, document, feature = _session_with_a_pair()
+    own = OperationDraft(
+        op="resize_feature",
+        inputs=("obj_1",),
+        params={"at_feature": feature.id, "diameter": 8.0, "pitch": 1.25},
+    )
+    assert session.apply("Merkmal ändern", [own])  # type: ignore[attr-defined]
+    resize, partner = document.ops[-2].id, document.ops[-1].id
+    result = session.evaluate_now()  # type: ignore[attr-defined]
+    fit = active_fits(document)[0]
+    wanted, _names = target(result.scene, fit, session.evaluation_profile)  # type: ignore[attr-defined]
+    transactions, steps = len(document.transactions), len(document.ops)
+
+    params = {**History(document).operation(resize).params, "diameter": 10.0, "pitch": 1.5}
+    assert session.change_params(resize, params)  # type: ignore[attr-defined]
+
+    followed = History(document).operation(partner).params
+    assert followed["diameter"] == pytest.approx(10.0 - wanted)
+    assert followed["pitch"] == pytest.approx(1.5)
+    assert len(document.transactions) == transactions + 1
+    assert len(document.ops) == steps
+    _no_violated_fit(session, document)
+
+    assert session.history.undo()  # type: ignore[attr-defined]
+    assert History(document).operation(partner).params["diameter"] == pytest.approx(8.0 - wanted)
+
+
+def test_a_saved_resize_without_a_partner_step_brings_one() -> None:
+    """Ein alter Schritt ohne gekoppelten Partner: Die Änderung setzt ihn in derselben
+    Transaktion ans Ende, ein Strg+Z nimmt beides."""
+    session, document, feature = _session_with_a_pair()
+    History(document).apply(
+        "Altes Projekt",
+        [
+            OperationDraft(
+                op="resize_feature",
+                inputs=("obj_1",),
+                params={"at_feature": feature.id, "diameter": 6.0, "pitch": 1.0},
+            )
+        ],
+    )
+    session.evaluate_now()  # type: ignore[attr-defined]
+    resize = document.ops[-1].id
+    steps = len(document.ops)
+
+    params = {**History(document).operation(resize).params, "diameter": 8.0, "pitch": 1.25}
+    assert session.change_params(resize, params)  # type: ignore[attr-defined]
+
+    assert len(document.ops) == steps + 1
+    added = document.ops[-1]
+    assert (added.op, added.inputs) == ("resize_feature", ("obj_2",))
+    assert added.params["pitch"] == pytest.approx(1.25)
+    _no_violated_fit(session, document)
+
+    assert session.history.undo()  # type: ignore[attr-defined]
+    assert len(document.ops) == steps
+    assert History(document).operation(resize).params["diameter"] == pytest.approx(6.0)

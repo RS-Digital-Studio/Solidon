@@ -112,6 +112,10 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
   um den Schritt am anderen Teil (gleiche Steigung, Durchmesser aus
   `fits.target`) — gefragt von `Session.apply`/`preview_async`, der
   Kommandozeile `run` und dem Agentenzug, damit jeder Weg dieselbe Transaktion baut.
+  Ändert sich ein **gespeicherter** Gewindeschritt, liefert `coupled_step_change`
+  die Partnerschritte (`StepCoupling`: geänderte Werte, neue Schritte am Ende),
+  `History.change_params(also=, appended=)` schreibt sie in dieselbe
+  Transaktion; `Session.change_params` und die Vorschau fragen dort.
 
 **Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten,
 Bildanleitungen und Referenz aus dem Register, gegliedert in fünf Teile über
