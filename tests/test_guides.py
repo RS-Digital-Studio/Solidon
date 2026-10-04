@@ -490,6 +490,12 @@ def test_a_film_picture_is_cut_at_least_as_large_as_its_place_in_the_film() -> N
             )
     small = QRect(0, 0, 900, 600)
     assert film_cut(QRect(100, 100, 50, 50), small, (2400, 987)) == small
+    # Ein Gezeigtes, das höher ist als das breite Filmformat im Fenster (der
+    # offene Dialog in „Gehäuse mit Deckel“, Schritt 10): Der Ausschnitt fasst
+    # es ganz, und der Film verkleinert ihn.
+    tall = QRect(305, 62, 2070, 1216)
+    cut = film_cut(tall, window, make_guide_video.picture_size(False))
+    assert cut.contains(tall) and window.contains(cut)
 
 
 def test_the_film_draws_a_picture_in_its_own_pixels_and_never_enlarges_it(qt_app) -> None:

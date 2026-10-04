@@ -199,23 +199,24 @@ QUALITY: Final = 86
 
 
 def film_cut(focus: QRect, bounds: QRect, size: tuple[int, int]) -> QRect:
-    """Der Ausschnitt eines Filmbilds um ``focus``: so groß wie die Bildfläche des Films.
+    """Der Ausschnitt eines Filmbilds um ``focus``: mindestens so groß wie die Bildfläche des Films.
 
-    Gegen das Handbuchbild hat er dasselbe Verhältnis wie die Fläche, die der
-    Film für ihn freihält, und mindestens deren Größe abzüglich des Rands, den
-    :func:`annotate` anlegt — der Film verkleinert dann höchstens (Robert,
-    04.10.2026: „wenn wir kleinere Bilder benötigen, davon herunterskalieren").
-    Wo das Fenster kleiner ist als die Fläche, bleibt es beim ganzen Fenster.
+    Mindestens die Fläche, die der Film für ihn freihält, abzüglich des Rands,
+    den :func:`annotate` anlegt, und immer das Gezeigte samt :data:`MARGIN` —
+    der Film verkleinert dann höchstens (Robert, 04.10.2026: „wenn wir kleinere
+    Bilder benötigen, davon herunterskalieren"). Ein Gezeigtes, das höher ist
+    als das breite Filmformat, bekommt seinen ganzen Ausschnitt, und der Film
+    setzt ihn kleiner hinein; wo das Fenster kleiner ist als die Fläche,
+    bleibt es beim ganzen Fenster.
     """
-    width, height = size[0] - 2 * BORDER, size[1] - 2 * BORDER
-    cut = framed(focus, width / height, bounds, MARGIN)
-    if cut.width() < width or cut.height() < height:
-        width, height = min(width, bounds.width()), min(height, bounds.height())
-        left = cut.left() + (cut.width() - width) // 2
-        top = cut.top() + (cut.height() - height) // 2
-        left = min(max(left, bounds.left()), bounds.right() + 1 - width)
-        top = min(max(top, bounds.top()), bounds.bottom() + 1 - height)
-        cut = QRect(left, top, width, height)
+    reach = focus.adjusted(-MARGIN, -MARGIN, MARGIN, MARGIN).intersected(bounds)
+    width = min(max(size[0] - 2 * BORDER, reach.width()), bounds.width())
+    height = min(max(size[1] - 2 * BORDER, reach.height()), bounds.height())
+    left = reach.left() + (reach.width() - width) // 2
+    top = reach.top() + (reach.height() - height) // 2
+    left = min(max(left, bounds.left()), bounds.right() + 1 - width)
+    top = min(max(top, bounds.top()), bounds.bottom() + 1 - height)
+    cut = QRect(left, top, width, height)
     if not cut.contains(focus):
         raise SystemExit(
             f"Der Filmausschnitt {cut.getRect()} fasst das Gezeigte {focus.getRect()} nicht."
