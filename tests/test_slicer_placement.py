@@ -129,6 +129,67 @@ def test_rotation_finds_an_actual_pose_and_keeps_source(subject, case):
     np.testing.assert_array_equal(planned[entry.id].raw.vertices, second[entry.id].raw.vertices)
 
 
+@pytest.mark.parametrize(
+    "program", ["orca-slicer.exe", "bambu-studio.exe", "ElegooSlicer.exe", "CrealityPrint.exe"]
+)
+def test_programs_that_arrange_themselves_get_a_part_that_fits_only_turned_turned(subject, program):
+    """Die Orca-Familie verschiebt beim Anordnen, sie dreht nicht.
+
+    In der Slicer-Matrix (RM-312) passte die Waschschüssel (240 mal 200 mm) auf
+    das 220er-Bett des K1 und des Kobra 2 nur um 14,5° gedreht; Solidons
+    Vorprüfung ließ sie deshalb durch, Creality Print und OrcaSlicer sagten
+    mit -50 ab. Hier passt ein 200-mm-Stab nur schräg aufs 180er-Bett. Was
+    ungedreht irgendwo Platz hat, bleibt unberührt — die Lage gehört dort dem
+    Slicer.
+    """
+    writer, profile, _setup = subject
+    setup = handover.SlicerSetup(Path(program), "orca")
+    rod = body("rod", (200, 20, 10))
+    assert not build_area.fits_on_bed(rod.mesh, profile.printer)
+    planned, changed = writer.prepare_slicer_meshes([rod], profile, setup)
+    assert changed and build_area.fits_on_bed(planned[rod.id], profile.printer)
+    assert rod.mesh.volume == pytest.approx(planned[rod.id].volume, rel=1e-10)
+
+    shifted = body("shifted", (100, 20, 10))
+    shifted.mesh = transform.apply(shifted.mesh, transform.translation((150, 0, 0)))
+    assert not build_area.fits_on_bed(shifted.mesh, profile.printer)
+    planned, changed = writer.prepare_slicer_meshes([shifted], profile, setup)
+    assert not changed and planned[shifted.id] is shifted.mesh
+
+
+@pytest.mark.parametrize(
+    ("program", "flavour"), [("superslicer.exe", "prusa"), ("orca-slicer.exe", "orca")]
+)
+def test_a_turned_part_keeps_room_for_its_rim(subject, program, flavour):
+    """Eine Drehung, die das Teil gerade eben aufs Bett bringt, ist nicht die beste.
+
+    In der Slicer-Matrix (RM-312) drehte Solidon drill-holder.3mf (185 mal
+    34,6 mm) für den MINI so, dass es 1,4 mm vom Rand lag; SuperSlicer legte
+    die Skirt 2 mm daneben und 0,4 mm breit, also 2,2 mm über den Bettrand,
+    obwohl schräg gestellt 12 mm Platz waren. Gesucht wird zuerst eine Lage
+    mit dem Rand der Haftung (``rim``), erst dann eine ohne.
+    """
+    writer, profile, _setup = subject
+    setup = handover.SlicerSetup(Path(program), flavour)
+    rod = body("rod", (185, 34.6, 10))
+    rim = 2.55
+    assert not build_area.fits_on_bed(rod.mesh, profile.printer)
+    plain, _ = writer.prepare_slicer_meshes([rod], profile, setup)
+    assert not build_area.fits_on_bed(plain[rod.id], profile.printer, margin=rim), (
+        "ohne Rand nimmt die Suche die erste, knappe Lage"
+    )
+
+    planned, changed = writer.prepare_slicer_meshes([rod], profile, setup, rim=rim)
+
+    assert changed
+    assert build_area.fits_on_bed(planned[rod.id], profile.printer, margin=rim)
+    # Ohne Platz für den Rand bleibt die Lage ohne ihn erlaubt.
+    tight = body("tight", (230, 10, 10))
+    planned, changed = writer.prepare_slicer_meshes([tight], profile, setup, rim=20.0)
+    assert changed and build_area.fits_on_bed(planned[tight.id], profile.printer)
+    assert not build_area.fits_on_bed(planned[tight.id], profile.printer, margin=20.0)
+
+
 def test_valid_diagonal_pose_is_unchanged(subject):
     writer, profile, setup = subject
     entry = body("turn", (200, 20, 10), angle=45)

@@ -138,6 +138,10 @@ class Foundation:
     gelesen (RM-465): Mindestdrucktempo, getrennte Erstschichttempi,
     Beschleunigung je Bahnart, Maschinengrenzen. ``None`` ohne belegtes
     Mindestdrucktempo — dann behauptet die Gegenprobe keine Zeit."""
+    support_foot: float | None = None
+    """Wie weit die erste Stützschicht über die Stütze hinausreicht, in mm
+    (``raft_first_layer_expansion``, :func:`support_foot`). ``None`` heißt
+    unbekannt: Cura, Bambu Studios ``-1`` und Solidons Tabelle ohne Slicer."""
 
     @property
     def has_profile(self) -> bool:
@@ -481,6 +485,39 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
         "wall_sequence": "inner wall/outer wall",
     },
 }
+
+#: ``raft_first_layer_expansion`` der Programme, wenn die Kette ihn nicht
+#: nennt: Er verbreitert die erste Raft- **und** Stützschicht. Gemessen wie
+#: :data:`PROGRAM_DEFAULTS` im Konfigurationsblock der Druckdatei
+#: (04.10.2026; ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2, Creality Print
+#: 7.3.0.6149: je 2) und für PrusaSlicer 2.9.6 und SuperSlicer 2.5.59.13 über
+#: ``--save`` (je 3). An garden-hose-holder.3mf lag SuperSlicers Stütze in
+#: Schicht 1 2,9 mm vor dem Teil (Slicer-Matrix RM-312). Bambu Studio
+#: 02.08.02.61 schreibt ``-1`` — eine Automatik ohne belegte Breite, also
+#: unbekannt; Cura führt den Schlüssel nicht.
+SUPPORT_FOOT_DEFAULTS: Final[Mapping[str, float]] = {
+    "elegooslicer": 2.0,
+    "orcaslicer": 2.0,
+    "crealityprint": 2.0,
+    "prusaslicer": 3.0,
+    "superslicer": 3.0,
+}
+
+
+def support_foot(values: Mapping[str, Any], program_name: str) -> float | None:
+    """Die Verbreiterung der ersten Stützschicht in mm, aus Kette oder Programm.
+
+    Ein negativer oder unlesbarer Wert ist keine Breite, sondern unbekannt
+    (Regel 21); ohne Eintrag gilt die gemessene Programmvorgabe.
+    """
+    text = _prusa_first(values.get("raft_first_layer_expansion"))
+    if text is None:
+        return SUPPORT_FOOT_DEFAULTS.get(program_name)
+    amount = _float(text)
+    if amount is None or amount < 0.0:
+        return None
+    return amount
+
 
 #: Welche Temperatur zu welcher Druckplatte gehört, wie die Orca-Familie sie
 #: nennt. Creality Print kennt zusätzlich die Epoxidplatte.
@@ -2225,6 +2262,7 @@ def base_settings(
             profile.printer.nozzle_diameter,
         ),
         brim_foot_offset=brim_foot_offset(process_values, program(setup)),
+        support_foot=support_foot({**defaults, **process_values}, program(setup)),
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
         measured=measured,
@@ -2288,6 +2326,9 @@ def _prusa_foundation(
     return Foundation(
         replace(base, chosen=frozenset(), accepted=frozenset()),
         motion=prusa_motion({**defaults, **chain.values}, profile.printer.nozzle_diameter),
+        support_foot=support_foot(
+            {**defaults, **chain.values}, slicer_keys.program_of(setup.executable)
+        ),
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
         measured=measured,

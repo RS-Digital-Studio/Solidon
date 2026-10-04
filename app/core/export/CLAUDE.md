@@ -134,10 +134,13 @@ Importleser; Stützsperren zählen nicht als Druckteile. Ein Bauraumgrund hält
 vor dem Prozessstart mit Handlung an.
 
 `prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
-Ohne eigene Konsolenanordnung (`arranges_on_cli`) oder wenn ein Teil nur
-gedreht passt, wird die Platte exportlokal gepackt; Creality Print braucht dann
-`CREALITY_ARRANGE_EDGE` Rand (`_check_creality_edge`). `arrangement_holds`
-prüft Druckkontur, Sperrzonen und Höhe, auch für die Lageübernahme im Fenster.
+Ohne Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf gepackt
+(Prusa: `--dont-arrange`), sonst nur gedreht, was ungedreht nicht passt; findet
+sich keine Lage, hält es an, und Creality Print braucht `CREALITY_ARRANGE_EDGE`
+Rand (`_check_creality_edge`). `arrangement_holds` prüft Kontur, Sperrzonen und
+Höhe, auch im Fenster. Die Außenkante der ersten Schicht rechnet
+`build_area.rim_of` (Orca-Auto-Brim bis `ORCA_AUTO_BRIM_MAX`, Stützfuß aus
+`Foundation.support_foot`, unbekannt: Befund, Skirt), auch für den Rat.
 
 | Prüfung | Frage |
 |---|---|
@@ -150,10 +153,6 @@ prüft Druckkontur, Sperrzonen und Höhe, auch für die Lageübernahme im Fenste
 vollständige Blöcke, fehlende Druckwerte sind deshalb Befunde. Belegte
 Umbenennungen werden vor dem Vergleich übersetzt; reine `nil`-Overrides
 bleiben Vererbung. Randart, Wandfolge und Stützart werden ebenfalls verglichen.
-
-`verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
-Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
-ein wörtlicher Backslash erhalten.
 
 Die vierte fragt `expected_tools` aus `threemf.tools_in_use`; ohne sie entfällt
 der Vergleich, ohne Filamentprofile je Spule sagt es `unreachable_overrides`
@@ -291,10 +290,9 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
   `--cli` ablehnt, bekommt den alten Aufruf. Das Fenster fragt nach dem
   Drucker und nimmt dessen Profile (`window_findings`).
 - **Reinigungsturm:** Die vier Orca-Konsolen ergänzen fehlende Koordinaten
-  nach Crealitys bekanntem Modus oder ohne Modus unten mit Rand für Breite und Brim
-  (rechteckiges Bett, 0 oder 90 Grad). Kundenkoordinaten bleiben erhalten;
-  Unbekanntes wird nicht geraten. Erst die G-Code-Gegenprobe prüft die
-  tatsächliche Turmfläche. Herleitung: `konzepte/begruendungen/karte-app-core-export.md`.
+  nach Crealitys bekanntem Modus oder ohne Modus unten mit Rand für Breite und Brim,
+  neben Sperrflächen (rechteckiges Bett, 0 oder 90 Grad). Kundenkoordinaten
+  bleiben; Unbekanntes wird nicht geraten. Die Turmfläche prüft der G-Code.
 
 ### Die Prüfung vor dem Export
 
@@ -325,7 +323,9 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
 ## Grenzen
 
 Prusas Erstschichtabsage wird vor der Ausgabekürzung gelesen
-(`handover._empty_first_layer_error`). Der native Name bleibt wörtlich und
+(`_empty_first_layer_error`); eine erste Schicht unter anderthalb Bahnen
+nennt die Wandbahnen, auch für Orca (`_first_layer_narrower_than_a_line`).
+Der native Name bleibt wörtlich und
 muss eindeutig zur vorbereiteten Platte gehören; ungebundene Meldungen
 bieten keine Handlung an einer zufällig gewählten Szeneauswahl.
 
@@ -336,5 +336,5 @@ bieten keine Handlung an einer zufällig gewählten Szeneauswahl.
 ## Der Raftkontakt
 
 `adhesion.raft_gap` bleibt vom Stützabstand getrennt; `None` bewahrt die
-Slicer-Vorgabe, null ist ein Wert. `raft_gap_active` entscheidet je Familie.
-Native Herkunft und Cura-Kopplung stehen in der oben verknüpften Langkarte.
+Slicer-Vorgabe, null ist ein Wert. `raft_gap_active` entscheidet je Familie;
+native Herkunft und Cura-Kopplung: Herleitung.

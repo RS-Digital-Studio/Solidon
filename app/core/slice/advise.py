@@ -1014,13 +1014,14 @@ def _from_geometry(
     unanchored = _unanchored(settings, flavour)
     # Zuerst ohne Skirt, wo er keinen Platz hat; ein schmaler Brim danach
     # überstimmt das (:func:`_merged`, die spätere Regel gewinnt).
-    advice += _skirt_where_it_fits(settings, profile, result)
+    advice += _skirt_where_it_fits(settings, profile, result, flavour)
     if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and unanchored:
         advice += _brim_where_it_fits(
             settings,
             profile,
             result,
             _("Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt."),
+            flavour=flavour,
         )
 
     # **Und auf vielen kleinen Füßen.** Die Frage oben liest die Summe: Die
@@ -1040,6 +1041,7 @@ def _from_geometry(
                 "Das Teil steht auf kleinen Füßen, und keiner hält allein. "
                 "Ein Brim gibt jedem Fuß Halt."
             ),
+            flavour=flavour,
         )
 
     if bounds is not None and _slender(bounds) and unanchored:
@@ -1048,6 +1050,7 @@ def _from_geometry(
             profile,
             result,
             _("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen."),
+            flavour=flavour,
         )
 
     # **Ein Brim hält den Fuß, nicht die Stange darüber.** Roberts Fahnenstangen
@@ -1606,7 +1609,9 @@ def for_part(
         else:
             reason = None
         if reason is not None:
-            advice += _brim_where_it_fits(settings, profile, result, reason, narrower=False)
+            advice += _brim_where_it_fits(
+                settings, profile, result, reason, narrower=False, flavour=flavour
+            )
     return _merged(settings, advice)
 
 
@@ -1693,17 +1698,11 @@ def brim_room(result: SliceResult, profile: Profile) -> float | None:
     return build_area.free_margin(np.concatenate(rings), profile.printer)
 
 
-def skirt_reach(settings: PrintSettings) -> float:
-    """Wie weit ein Skirt über das äußerste Teil hinausreicht, in mm: sein
-    Abstand und so viele Bahnen der ersten Schicht, wie er Runden hat
-    (auch :func:`app.core.export.writer.rim_reach`)."""
-    adhesion = settings.adhesion
-    line = settings.layers.first_layer_line_width or settings.layers.line_width
-    return adhesion.skirt_distance + adhesion.skirt_loops * line
-
-
 def _skirt_where_it_fits(
-    settings: PrintSettings, profile: Profile, result: SliceResult
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult,
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Ohne Skirt, wo neben dem Teil auf dem Bett kein Platz für ihn ist.
 
@@ -1715,7 +1714,7 @@ def _skirt_where_it_fits(
     if settings.adhesion.kind != "skirt":
         return []
     room = brim_room(result, profile)
-    if room is None or room >= skirt_reach(settings) - EPS_GEOM:
+    if room is None or room >= build_area.rim_of(settings, flavour or "other").reach - EPS_GEOM:
         return []
     return [
         _advice(
@@ -1735,6 +1734,7 @@ def _brim_where_it_fits(
     reason: TranslatableText,
     *,
     narrower: bool = True,
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Den Brim vorschlagen, aber nicht über den Bettrand hinaus.
 
@@ -1750,11 +1750,15 @@ def _brim_where_it_fits(
     if profile is None or result is None:
         return [brim]
     room = brim_room(result, profile)
-    gap = max(settings.adhesion.brim_gap, 0.0)
-    if room is None or room >= settings.adhesion.brim_width + gap - EPS_GEOM:
+    # Wie weit der übernommene Brim reicht, sagt dieselbe Rechnung wie bei der
+    # Übergabe (:func:`build_area.rim_of`): Brim des Profils, eine Art, die
+    # Solidon schreibt.
+    suggested = settings_table.with_accepted(settings, "adhesion.kind", "brim")
+    reach = build_area.rim_of(suggested, flavour or "other").reach
+    if room is None or room >= reach - EPS_GEOM:
         return [brim]
     line = settings.layers.first_layer_line_width or settings.layers.line_width
-    width = math.floor((room - gap) * 10.0) / 10.0
+    width = math.floor((room - (reach - settings.adhesion.brim_width)) * 10.0) / 10.0
     if not narrower or width < BRIM_LEAST_LINES * line:
         return []
     return [

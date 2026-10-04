@@ -103,6 +103,16 @@ it into `website/version.json`.
 - After an export or *Open in slicer …*, Solidon reads the file back in. The record in the report names files, print target, material, print settings and whether the file matches the job.
 - Exported as 3MF from the command line, a single-colour body keeps its filament when the file is opened again.
 - For print settings on individual parts, the command line names which parts they are and which value they get.
+- If you accept supports for a long bridge over the part itself, they now reach it there. Before, “From the bed only” came along, and several slicers printed the bridge without support.
+- Small parts lying flat, such as screws, no longer get supports suggested where a cut edge wrongly showed a floating spot.
+- If a part runs out at the top into an edge the slicer does not print, Solidon no longer reports a cut-off model after slicing.
+- If a part's first layer is narrower than one line, the message after slicing names wall lines and a raft as ways out.
+- SuperSlicer keeps Solidon's arrangement and no longer pushes parts to the bed edge; the skirt stays on the bed.
+- If a part only fits the bed turned at an angle, it goes turned to OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print.
+- If the rim around a part reaches into an exclusion area of the bed, the check before export says so.
+- If the paths of two parts, or of a part and the wipe tower, cross in the slicer, the message says so and offers ways out.
+- If the brim is set to automatic, Solidon warns before export when it could grow past the bed or into an exclusion area, and offers a fixed brim width.
+- Supports and skirt at the bed edge count in the check before export, with the first support layer expansion the slicer profile gives.
 
 ### Holes, slots and splitting
 
@@ -145,6 +155,9 @@ it into `website/version.json`.
 - A printed thread pair passes its fit check: both threads name the size they are built with, and the check expects the clearance of both halves.
 - With *Check the assembly path*, parts can also turn, or be inserted first and then turned like a bayonet.
 - For a fit, Solidon cuts the same window from both parts as a small sample print and names the clearance.
+- A countersunk hole that ends fully inside the material after duplicating, moving or repeating no longer reports that it sticks out over the edge.
+- If a copy's countersink reaches past a side, Solidon finds the copy again the same way on STL and STEP parts.
+- If you duplicate a hole along its own axis into empty space, the original keeps its name on STL parts, and the copy is called lost as on STEP parts.
 
 ### Fillets and chamfers
 
@@ -232,6 +245,7 @@ it into `website/version.json`.
 - After Ctrl+Y, the status line names the step that was redone, as it does after Ctrl+Z.
 - Preview images of examples and catalogue parts show height pointing up. Until now tall parts pointed downwards in them.
 - If Solidon cannot save the *Include values* choice, the note appears right at the switch.
+- If other programs keep every core busy under Windows, a calculation on a large model no longer stalls for minutes.
 
 ## 0.5.1
 

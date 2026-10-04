@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Final
 
 import numpy as np
@@ -26,7 +27,7 @@ from shapely.geometry import MultiPoint, Polygon, box
 from shapely.geometry.base import BaseGeometry
 
 from app.core.errors import CHOOSE_PRINTER, ValidationError
-from app.core.types import BoundingBox, Mesh, PrinterProfile, Vec3
+from app.core.types import BoundingBox, Mesh, PrinterProfile, PrintSettings, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -488,3 +489,75 @@ def size_excess_uncertainty(mesh: Mesh) -> float:
     """
     diameter = math.hypot(*mesh.bounds.size[:2])
     return 2.0 * diameter * math.sin(math.radians(SIZE_ANGLE_STEP_DEGREES / 4.0))
+
+
+#: Die größte Breite, die der Auto-Brim der Orca-Familie wählt, in mm.
+#: OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups`` (aus Bambu Studio
+#: übernommen, ``BBS``): Die Breite folgt aus Höhe, Flächenträgheit und
+#: Wärmelänge der ersten Schicht und wird bei 18 mm gekappt („large brims are
+#: omitted"), unabhängig von ``brim_width``. Gemessen in der Slicer-Matrix
+#: (RM-312): ElegooSlicer legte am Rack 14,7 mm statt der 5 mm des Profils.
+ORCA_AUTO_BRIM_MAX: Final = 18.0
+
+
+@dataclass(frozen=True, slots=True)
+class RimReach:
+    """Wie weit die erste Schicht über ein Teil hinausreicht, und woraus."""
+
+    reach: float
+    """In mm über die Aufsicht des Teils hinaus."""
+    auto_brim: bool = False
+    """Der Auto-Brim der Orca-Familie zählt mit seiner Höchstbreite."""
+    support_foot: bool = False
+    """Die verbreiterte erste Stützschicht reicht weiter als der Brim."""
+    support_foot_unknown: bool = False
+    """Stützen sind an, ihre Verbreiterung nennt das Profil nicht."""
+
+
+def rim_of(
+    settings: PrintSettings,
+    flavour: str = "other",
+    support_foot: float | None = None,
+) -> RimReach:
+    """Die belegte Außenkante der ersten Schicht um ein Teil (RM-312).
+
+    Von innen nach außen: Brim (bei der Orca-Familie mit ``auto`` bis
+    :data:`ORCA_AUTO_BRIM_MAX`) oder, mit Stützen, die verbreiterte erste
+    Stützschicht (``support_foot``, ``manufacturer.Foundation.support_foot``),
+    je nachdem, was weiter reicht; darum der Skirt mit Abstand und Bahnen.
+    Der Skirt zählt bei Haftungsart Skirt und bei Prusa und Orca neben einem
+    Brim, solange Solidon die Haftungsart nicht schreibt — dann drucken sie
+    beides, wie das Profil es sagt; schreibt Solidon eine Art, nullt die
+    Übergabe die übrigen (``handover._only_chosen_adhesion``). Cura druckt
+    nur eine Art. Die eine Rechnung für Übergabe (``writer.rim_reach``,
+    ``check_adhesion_on_bed``) und Druckvorschläge (``advise``: Brim und Skirt
+    nur, wo das Bett Platz lässt).
+    """
+    adhesion = settings.adhesion
+    auto = adhesion.kind == "auto" and flavour == "orca"
+    if auto:
+        band = ORCA_AUTO_BRIM_MAX + max(0.0, adhesion.brim_gap)
+    elif adhesion.kind in ("brim", "auto", "raft"):
+        band = adhesion.brim_width
+    else:
+        band = 0.0
+    supported = settings.support.style != "none"
+    foot = False
+    if supported and support_foot is not None and support_foot > band:
+        band = support_foot
+        foot = True
+    written = "adhesion.kind" in settings.chosen or "adhesion.kind" in settings.accepted
+    skirt = adhesion.skirt_loops > 0 and (
+        adhesion.kind == "skirt"
+        or (flavour in ("prusa", "orca") and not written and adhesion.kind != "raft")
+    )
+    reach = band
+    if skirt:
+        line = settings.layers.first_layer_line_width or settings.layers.line_width
+        reach += adhesion.skirt_distance + adhesion.skirt_loops * line
+    return RimReach(
+        reach,
+        auto_brim=auto,
+        support_foot=foot,
+        support_foot_unknown=supported and support_foot is None,
+    )

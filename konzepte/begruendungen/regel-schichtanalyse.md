@@ -253,8 +253,8 @@ Drehung (`build_area.free_margin`, dasselbe Winkelraster wie `size_excess`):
 Reicht er für den Brim des Profils, bleibt es beim Vorschlag; reicht er für
 mindestens drei Bahnen, wird die Breite mitvorgeschlagen; sonst entfällt der
 Vorschlag, und der Prüfbericht sagt `settings.brim_no_room` mit der Handlung
-„Anderes Druckerprofil wählen“. Ebenso der Skirt (`advise.skirt_reach`, mit
-`writer.rim_reach` geteilt): Curas Skirt lief an der schrägen Schüssel über den
+„Anderes Druckerprofil wählen“. Ebenso der Skirt; beide fragen dieselbe
+Randrechnung wie die Übergabe (`build_area.rim_of`, RM-312): Curas Skirt lief an der schrägen Schüssel über den
 Bettrand und riss in 23 Züge; fehlt ihm der Platz, heißt der Vorschlag „keine“.
 Am Schnitt des Druckdialogs misst die Schüssel −0,06 mm statt 0,14 mm am Netz;
 knapp unter null gilt deshalb als „kein Platz“, nicht als „passt nicht“.

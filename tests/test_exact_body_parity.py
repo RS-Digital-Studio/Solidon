@@ -2584,10 +2584,9 @@ def test_every_place_of_a_sunk_bore_pattern_along_a_slope_gets_its_own_finding(
     Erkennung durchgehend, auch wo der Kegel unter Material liegt; exakt fragt
     deshalb je Kopie die Säule (``_exact_through_checked``). Sie schwieg, sobald
     irgendein Satz desselben Codes dastand: Platz 3 blieb am exakten Kern
-    durchgehend und ohne Satz, das Netz nannte ihn. 70 mm lang, weil die
-    Kantenprüfung den Kegel bis an die Oberseite denkt, auch wo er unter einer
-    Haut endet — an 60 mm reichte er beim dritten Platz über die Stirn, und
-    beide Kerne sagten „über die Kante“.
+    durchgehend und ohne Satz, das Netz nannte ihn. Platz 3 liegt 5 mm unter der
+    Oberseite und 3,3 mm vor der Stirn — ohne „über die Kante“
+    (:func:`test_a_copy_under_the_top_is_not_over_the_edge_on_both_kernels`).
     """
     exact_kernel()
     load_operations()
@@ -2595,10 +2594,10 @@ def test_every_place_of_a_sunk_bore_pattern_along_a_slope_gets_its_own_finding(
     from tests.helpers import slanted_plate
 
     lift = FEATURE_OVERLAP * math.sqrt(1.0 + 1.0 / 16.0)
-    body = _sunk_bore(slanted_plate(length=70.0))
-    # 70 x 20 bei mittlerer Höhe 10, die Quelle bis zur Oberseite, zwei Kopien
+    body = _sunk_bore(slanted_plate(length=60.0))
+    # 60 x 20 bei mittlerer Höhe 10, die Quelle bis zur Oberseite, zwei Kopien
     # bis zur gehobenen Randebene.
-    expected = 14000.0 - _sunk_cavity(0.0) - 2.0 * _sunk_cavity(lift)
+    expected = 12000.0 - _sunk_cavity(0.0) - 2.0 * _sunk_cavity(lift)
     codes = ["pattern_feature.done", *["pattern_feature.no_longer_through"] * 2]
     _placed_alike_on_both_kernels(
         "three_places",
@@ -2611,3 +2610,287 @@ def test_every_place_of_a_sunk_bore_pattern_along_a_slope_gets_its_own_finding(
         profile,
         count=3,
     )
+
+
+def _buried_source(shape: str) -> Any:
+    """Die schräge Platte 60 x 20 mit einem Hohlraum bei x = 0, für eine Kopie unter Material.
+
+    ``sink`` ist die Senkbohrung aus :func:`_sunk_cavity`, ``counterbore`` eine
+    Bohrung Ø 6 mit Plansenkung Ø 10 ab z = 7, ``slot`` ein Langloch der Breite 6
+    längs X mit 8 mm zwischen den Bogenmitten. Alle drei reichen durch.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+    from tests.helpers import slanted_plate
+
+    plate = slanted_plate(length=60.0)
+    if shape == "sink":
+        return _sunk_bore(plate)
+    if shape == "counterbore":
+        outline = [
+            (0.0, -1.0),
+            (3.0, -1.0),
+            (3.0, 7.0),
+            (5.0, 7.0),
+            (5.0, 13.0),
+            (0.0, 13.0),
+            (0.0, -1.0),
+        ]
+        return edit.bore_profile(plate, outline, frame_of((0.0, 0.0, 1.0), (0, 0, 0)))
+    return edit.slot_bore(
+        plate,
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=60.0,
+        length=8.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+
+
+def _buried_copy_on_both_kernels(
+    shape: str, op: str, travel: float, quality: Quality, profile: Profile
+) -> tuple[dict[str, list[str]], dict[str, float]]:
+    """Sätze und Volumen je Kern, wenn ``op`` den Hohlraum von :func:`_buried_source`
+    um ``travel`` längs X setzt — ein Muster mit drei Plätzen im Abstand ``travel / 2``.
+    """
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    body = _buried_source(shape)
+    said: dict[str, list[str]] = {}
+    volumes: dict[str, float] = {}
+    for kind in ("mesh", "brep"):
+        mesh = body if kind == "brep" else as_mesh_data(body)
+        features = dict(features_of(body) if kind == "brep" else detect(mesh))
+        entry = SceneObject(
+            id="obj_1", name="Schräge Platte", mesh=mesh, kind=kind, features=features
+        )
+        wanted = "slot" if shape == "slot" else "hole"
+        source = min(
+            (feature for feature in features.values() if feature.kind == wanted),
+            key=lambda feature: float(feature.params["diameter"]),
+        )
+        x, y, z = (float(value) for value in source.params["centre"])
+        params: dict[str, Any] = (
+            {
+                "at_features": (source.id,),
+                "kind": "linear",
+                "count": 3,
+                "spacing": travel / 2.0,
+                "dx": 1.0,
+                "dy": 0.0,
+                "dz": 0.0,
+            }
+            if op == "pattern_feature"
+            else {"at_feature": source.id, "x": x + travel, "y": y, "z": z}
+        )
+        result, step = _evaluation(op, params, [entry], profile, quality=quality)
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        volumes[kind] = as_mesh_data(output.mesh).volume
+    return said, volumes
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(
+    ("shape", "op"),
+    [
+        ("sink", "duplicate_feature"),
+        ("sink", "move_feature"),
+        ("sink", "pattern_feature"),
+        ("counterbore", "duplicate_feature"),
+        ("slot", "duplicate_feature"),
+    ],
+)
+def test_a_copy_under_the_top_is_not_over_the_edge_on_both_kernels(
+    shape: str, op: str, quality: Quality, profile: Profile
+) -> None:
+    """Ein Hohlraum, der ganz im Material liegt, ragt nicht über die Kante (RM-226, Nachtrag).
+
+    Die Quelle sitzt bei x = 0 der 60 mm langen schrägen Platte (z = 10 + x/4),
+    die Kopie 20 mm bergauf: Ihre mitbewegte Mündung liegt 5 mm unter der
+    Oberseite, und ihr Hohlraum endet vor der Stirn bei x = 30 — als Senkung mit
+    dem weiten Ende bei x = 26,7, als Plansenkung bei x = 25, als Langloch bei
+    x = 27. Die Kantenprüfung dachte den Kegel einer Senkung bis an die
+    Oberseite, auch wo er unter der Haut endet, und sein Kranz reichte dort bis
+    x = 33,3: Beide Kerne sagten „über die Kante“. Plansenkung und Langloch sind
+    die Zwillinge der Prüfung (sie fragen mit ihrem eigenen Durchmesser und
+    sagten es nie), Versetzen und Vervielfachen die der Operation. Gefragt:
+    dieselben Sätze an beiden Kernen, keiner davon „über die Kante“, das Volumen
+    am Netz auf 0,1 mm³ wie am Netz-Zwilling des exakten Ergebnisses.
+    """
+    exact_kernel()
+    load_operations()
+    said, volumes = _buried_copy_on_both_kernels(shape, op, 20.0, quality, profile)
+    copies = 2 if op == "pattern_feature" else 1
+    expected = [f"{op}.no_longer_through"] * copies
+    if op == "pattern_feature":
+        expected = [f"{op}.done", *expected]
+    assert said["mesh"] == said["brep"] == expected, (shape, op, said)
+    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), (shape, op, volumes)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("travel", [24.0, 25.0, 26.0])
+@pytest.mark.parametrize("op", ["duplicate_feature", "pattern_feature"])
+def test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels(
+    op: str, travel: float, quality: Quality, profile: Profile
+) -> None:
+    """Die Gegenrichtung: Unter der Haut, aber seitlich hinaus, bleibt „über die Kante“.
+
+    Um 24 mm verdoppelt reicht das weite Ende der vergrabenen Senkung bis
+    x = 30,7 über die Stirn bei x = 30 und schneidet sie an: Die Kopie trägt
+    0,48 mm³ weniger ab als ganz im Material. Die Frage nach der Haut
+    (``_sink_under_a_skin``) gibt die Senkung nur frei, wenn ihr weites Ende
+    ringsum im Material liegt; sonst fragt sie wie zuvor am Austritt.
+
+    **Und die angeschnittene Kopie gibt es an beiden Kernen.** Ab 25 mm misst
+    die Erkennung den weitesten Rand der Senkung tiefer, wo die Stirn sie
+    abschneidet (Mitte z = 11,27 statt 11,67, Ø 12,54 statt 13,33). Der exakte
+    Kern suchte die Kopie an ihrer Mitte und nannte sie verloren, das Netz fand
+    sie über ihre Spitze (``_same_cone``); jetzt sucht auch der exakte Kern eine
+    Senkung, die nicht an ihrer Mitte sitzt, über die Spitze. Das Muster endet
+    exakt im selben Weg (``_exact_copy_result``), sein dritter Platz liegt dort,
+    wo die Kopie liegt.
+    """
+    exact_kernel()
+    load_operations()
+    said, volumes = _buried_copy_on_both_kernels("sink", op, travel, quality, profile)
+    expected = ["bore.over_the_edge", f"{op}.no_longer_through"]
+    if op == "pattern_feature":
+        expected = ["bore.over_the_edge", f"{op}.done", *[f"{op}.no_longer_through"] * 2]
+    assert said["mesh"] == said["brep"] == expected, (op, said)
+    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), (op, volumes)
+
+
+def _bored_flat_plate(shape: str) -> Any:
+    """Platte 40 x 20 x 10 mit einer Bohrung Ø 6 durch bei x = y = 0, Achse Z.
+
+    ``counterbore`` trägt oben eine Plansenkung Ø 10 ab z = 7, ``sink`` eine
+    Senkung 90° bis Ø 10 an der Oberseite; ``bore`` ist die Bohrung allein.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    plate = edit.box(40.0, 20.0, 10.0)
+    if shape == "bore":
+        return edit.cut_bore(
+            plate, position=(0.0, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=60.0
+        )
+    head = (
+        [(3.0, 7.0), (5.0, 7.0), (5.0, 11.0)]
+        if shape == "counterbore"
+        else [(3.0, 8.0), (6.0, 11.0)]
+    )
+    outline = [(0.0, -1.0), (3.0, -1.0), *head, (0.0, 11.0), (0.0, -1.0)]
+    return edit.bore_profile(plate, outline, frame_of((0.0, 0.0, 1.0), (0, 0, 0)))
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(("shape", "members"), [("bore", 1), ("counterbore", 2), ("sink", 2)])
+def test_a_copy_along_its_own_axis_into_the_air_is_lost_on_both_kernels(
+    shape: str, members: int, quality: Quality, profile: Profile
+) -> None:
+    """Eine Kopie längs der eigenen Achse findet nicht ihre Vorlage (RM-226, Nachtrag).
+
+    An der Lochplatte ``pegboard-gs-100-v2`` lag eine 12 mm verdoppelte
+    Schraubbohrung samt Kette ganz in einem Durchbruch: Nichts wurde
+    abgetragen. Der exakte Kern nannte alle drei Kopien verloren, das Netz nur
+    zwei — es fand die Kopie der durchgehenden Bohrung Ø 6 in der Vorlage selbst
+    wieder, denn eine Durchgangsbohrung darf entlang ihrer Achse wandern
+    (``_copies_found``), und die Vorlage liegt auf derselben Achse. Ihre Dreiecke
+    trugen danach den Namen der Kopie. Der exakte Kern nimmt nur frische
+    Merkmale (``_exact_copy_result``); jetzt auch das Netz. Nachgebaut an einer
+    Platte, die Kopie 12 mm über ihr in der Luft: an beiden Kernen „ohne
+    Wirkung“ und jede Kopie verloren, die Vorlage unter ihrem Namen.
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    body = _bored_flat_plate(shape)
+    said: dict[str, list[str]] = {}
+    for kind in ("mesh", "brep"):
+        mesh = body if kind == "brep" else as_mesh_data(body)
+        features = dict(features_of(body) if kind == "brep" else detect(mesh))
+        entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, kind=kind, features=features)
+        bore = min(
+            (feature for feature in features.values() if feature.kind == "hole"),
+            key=lambda feature: float(feature.params["diameter"]),
+        )
+        x, y, z = (float(value) for value in bore.params["centre"])
+        params = {"at_feature": bore.id, "x": x, "y": y, "z": z + 12.0}
+        result, step = _evaluation("duplicate_feature", params, [entry], profile, quality=quality)
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        source = sorted(name for name, found in features.items() if found.kind in ("hole", "cone"))
+        after = sorted(
+            name for name, found in output.features.items() if found.kind in ("hole", "cone")
+        )
+        assert after == source, (kind, after, source)
+    expected = ["boolean.without_effect", *["duplicate_feature.feature_lost"] * members]
+    assert said["mesh"] == said["brep"] == expected, said
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_copy_along_its_own_axis_into_a_second_wall_is_found_on_both_kernels(
+    quality: Quality, profile: Profile
+) -> None:
+    """Die Gegenrichtung: Längs der Achse in eine zweite Wand ist die Kopie neu.
+
+    Zwei Wände 40 x 20 x 5 übereinander (z 0 … 5 und 12 … 17), seitlich
+    verbunden; die Bohrung Ø 6 durch die untere, 12 mm längs ihrer Achse in die
+    obere verdoppelt. Die Vorlage liegt auf derselben Achse, die Kopie aber an
+    einer anderen Mitte — ``_already_there`` vergleicht ohne Freiheit entlang
+    der Achse und lässt sie Kandidat. An beiden Kernen kein Satz, beide Wände
+    durchbohrt (``9π · 5`` je Wand).
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    walls = edit.unified(
+        edit.boolean(
+            "union",
+            [
+                edit.box(40.0, 20.0, 5.0),
+                edit.moved(edit.box(40.0, 20.0, 5.0), (0.0, 0.0, 12.0)),
+                edit.moved(edit.box(5.0, 20.0, 17.0), (17.5, 0.0, 0.0)),
+            ],
+        )
+    )
+    body = edit.cut_bore(
+        walls, position=(0.0, 0.0, 2.5), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=8.0
+    )
+    said: dict[str, list[str]] = {}
+    volumes: dict[str, float] = {}
+    for kind in ("mesh", "brep"):
+        mesh = body if kind == "brep" else as_mesh_data(body)
+        features = dict(features_of(body) if kind == "brep" else detect(mesh))
+        entry = SceneObject(id="obj_1", name="Wände", mesh=mesh, kind=kind, features=features)
+        bore = next(feature for feature in features.values() if feature.kind == "hole")
+        x, y, z = (float(value) for value in bore.params["centre"])
+        params = {"at_feature": bore.id, "x": x, "y": y, "z": z + 12.0}
+        result, step = _evaluation("duplicate_feature", params, [entry], profile, quality=quality)
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        holes = sorted(
+            round(float(found.params["centre"][2]), 2)
+            for found in output.features.values()
+            if found.kind == "hole"
+        )
+        assert holes == [2.5, 14.5], (kind, holes)
+        volumes[kind] = as_mesh_data(output.mesh).volume
+        if kind == "brep":
+            # Zwei Wände und die Verbindung, abzüglich ihrer zwei Überlappungen
+            # 5 x 20 x 5, abzüglich zweier Bohrungen 9π · 5.
+            assert output.mesh.volume == pytest.approx(
+                2.0 * 4000.0 + 1700.0 - 2.0 * 500.0 - 2.0 * 45.0 * math.pi, abs=1e-3
+            )
+    assert said["mesh"] == said["brep"] == [], said
+    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), volumes
