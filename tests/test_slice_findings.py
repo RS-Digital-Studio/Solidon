@@ -246,6 +246,46 @@ def test_the_cantilever_may_stay_on_the_plate() -> None:
     assert placement_advice(bracket()) == "build_plate"
 
 
+def beam_over_a_plate() -> MeshData:
+    """Ein Balken 30 auf 4 über zwei Pfosten, 22 mm frei über einer Bodenplatte.
+
+    Die Decke ist schmal — 88 mm², unter den Flächengrenzen —, verlangt die
+    Stütze also allein über die Brückenregel; ihre Säule endet auf der
+    Bodenplatte. Die Wand weit dahinter macht den Raum unter dem Balken
+    weiter als einen Kanal (``CHANNEL_WIDTH``), wie am Wedge-Lock.
+    """
+    return on_bed(
+        brick(50.0, 70.0, 2.0, (25.0, 35.0, 1.0)),
+        brick(4.0, 4.0, 8.0, (12.0, 25.0, 6.0)),
+        brick(4.0, 4.0, 8.0, (38.0, 25.0, 6.0)),
+        brick(30.0, 4.0, 2.0, (25.0, 25.0, 11.0)),
+        brick(50.0, 10.0, 10.0, (25.0, 65.0, 7.0)),
+    )
+
+
+def test_a_long_bridge_over_the_model_lets_its_supports_start_there() -> None:
+    """Stützen nötig wegen einer Brücke, aber „nur vom Bett“ dazu: Das hob sich auf.
+
+    Am Wedge-Lock (``F:\\3D Dateien``, 04.10.2026) verlangte die Brückenregel
+    Stützen für eine Decke von 25,7 mm, deren Säule auf dem Modell endet, und
+    weil die Decke unter den Flächengrenzen blieb, schlug derselbe Rat „nur vom
+    Bett“ vor. Creality Print und Kobra 2 stützen mit „normal(auto)“ dann gar
+    nichts mehr (0,0 m statt 2,9 m im G-Code), Elegoos Bäume nur noch die
+    Hälfte. Was gestützt werden muss, muss die Stütze auch erreichen.
+    """
+    result = slice_body(beam_over_a_plate(), 0.2)
+    need = advise.support_need(result)
+    assert need.needed, "die Brücke von 22 mm verlangt Stützen"
+    assert need.patch < advise.OVERHANG_LAYER_WORTH_SUPPORT, "allein über die Brückenregel"
+    assert not need.model.channels, "der Raum unter dem Balken ist kein Kanal"
+
+    assert placement_advice(beam_over_a_plate()) is None, "everywhere bleibt stehen"
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "auto")
+    settings = print_settings.with_path(settings, "support.placement", "build_plate")
+    changed = advise.apply(settings, advise.advise(settings, petg(), result))
+    assert changed.support.placement == "everywhere"
+
+
 # --- Eine Decke im Kanal verlangt keine Stütze auf dem Modell -------------------
 
 
@@ -881,3 +921,29 @@ def test_the_channel_space_stays_inside_the_tunnel() -> None:
     # zugesagt ist, dass sie in die Decke ragt, und nicht weiter als das.
     top = max(high for _low, high, _region in slabs)
     assert 28.0 < top <= 28.0 + 0.5 + 1.0
+
+
+def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
+    """Die Sperre hält Stützen aus dem Kanal fern, nicht von einer Decke, die sie braucht.
+
+    Am Wedge-Lock (04.10.2026) lag im Cura-Raster ein Kanalstück von 7 mm²
+    unter einer Brücke von 25 mm, deren Säule auf dem Modell aufsetzt. Die
+    Sperre um das Kanalstück füllte denselben Raum, und Cura stützte die
+    Brücke gar nicht (0,0 statt 2,0 m Stützbahn). Hier steht dieselbe Lage im
+    Tunnel: eine Säule auf dem Tunnelboden neben der Kanaldecke.
+    """
+    from app.core.types import Polygon
+
+    result = slice_body(tunnel_block(20.0), 0.5)
+    model = model_support(result)
+    column = ((2.0, -2.0), (6.0, -2.0), (6.0, 2.0), (2.0, 2.0))
+    footprint = box(2.0, -2.0, 6.0, 2.0)
+    blocked = unary_union([region for _low, _high, region in channel_space(result, model)])
+    assert blocked.intersection(footprint).area > 15.0, "ohne die Säule sperrt der Tunnel sie mit"
+
+    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    slabs = channel_space(result, beside)
+
+    assert slabs, "der Kanal bleibt gesperrt"
+    for _low, _high, region in slabs:
+        assert region.intersection(footprint).area == pytest.approx(0.0, abs=1e-6)

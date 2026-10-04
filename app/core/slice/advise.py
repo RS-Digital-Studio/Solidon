@@ -932,10 +932,22 @@ def _from_geometry(
     # 26.09.2026 bekam jedes Teil mit einer Insel „überall", auch wenn alle
     # Säulen das Bett erreichten oder im Kanal endeten, und der Kanal füllte
     # sich wieder.
+    #
+    # **Und eine lange Brücke über dem Modell verlangt es auch.** Sie ist
+    # selbst ein Grund für Stützen (:func:`_may_need_support`), bleibt aber oft
+    # unter den Flächengrenzen: Am Wedge-Lock (04.10.2026) hing eine Decke von
+    # 25,7 mm auf 65 mm² über dem Modell, der Rat verlangte Stützen und schlug
+    # zugleich „nur vom Bett“ vor. Creality Print, Kobra 2, PrusaSlicer und
+    # Cura stützten dann gar nichts, Elegoos Bäume die Hälfte.
+    long_bridge_on_model = any(
+        layer.bridge_width > SPAN_INTERESTING and index in model.open_layers
+        for index, layer in enumerate(result.layers)
+    )
     on_model = needs_support and (
         model.island_on_model
         or model.open_patch > OVERHANG_LAYER_WORTH_SUPPORT
         or (model.open_area > OVERHANG_WORTH_SUPPORT and model.open_patch > OVERHANG_LAYER_MINIMUM)
+        or long_bridge_on_model
     )
     if needs_support and on_model and settings.support.placement == "build_plate":
         advice.append(

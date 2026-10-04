@@ -209,6 +209,20 @@ Slicer bekommt").
 **Vorschlag, nicht Automatik:** Was ohne „Vorschläge übernehmen" zum Slicer
 geht, sind die Standardeinstellungen (Entscheidung Robert, 26.09.2026).
 
+**Eine lange Brücke über dem Modell braucht ihre Stütze dort** (04.10.2026,
+RM-281 Paket 3). Der Wedge-Lock (`F:\3D Dateien`) verlangt Stützen allein
+über die Brückenregel: eine Decke von 25,7 mm auf 65 mm², deren Säule auf dem
+Modell aufsetzt. Weil die Decke unter den Flächengrenzen blieb, schlug derselbe
+Rat „nur vom Bett“ vor, und die beiden Vorschläge hoben sich auf: Übernommen
+lieferten Creality Print, OrcaSlicer (Kobra 2), PrusaSlicer und Cura null
+Stützbahn, ElegooSlicer 1,1 statt 2,6 m, Bambu Studio 0,8 statt 1,8 m.
+Seitdem zählt eine lange Brücke in einer Schicht mit einer Säule auf dem
+Modell (`ModelSupport.open_layers`) wie ein großes Stück dort. **Und die
+Kanalsperre spart die Säulen der übrigen Stücke auf dem Modell aus**
+(`open_columns`): Im Cura-Raster lag am Wedge-Lock ein Kanalstück von 7 mm²
+unter derselben Brücke, die Sperre darum füllte deren Raum, und Cura stützte
+mit „Stützen automatisch“ und Sperre gar nicht, ohne Sperre 2,0 m.
+
 **Die kleine Standfläche wird auch je Fuß gefragt** (26.09.2026). Die
 Brim-Regel las die Summe, und die Waschschüssel steht in Drucklage auf zwölf
 Füßen zu je rund 108 mm², zusammen 1417 mm² — kein Vorschlag, und Nutzer des

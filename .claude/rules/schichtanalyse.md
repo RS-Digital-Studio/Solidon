@@ -96,8 +96,7 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   aus einem gespeicherten Satz gilt die Schwelle nur als eigene Wahl.
   **Wer einen Winkel einführt, reicht ihn bis in jede Vorauswahl durch.**
 - **Ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen**
-  (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft, wo sich Sinus
-  und Kosinus unterscheiden
+  (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft
   (`test_orient.py::test_the_preselection_counts_overhangs_against_the_printers_limit`).
 - **Eine Decke im Kanal verlangt keine Stütze auf dem Modell**
   (`analysis.model_support`): Fasst der freie Raum unmittelbar **unter** ihr
@@ -107,13 +106,14 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `OVERHANG_WORTH_SUPPORT`. Wer die Grenze anfasst, misst die Gegenfälle an der
   Konstante nach und fährt die Waschschüssel im Slicer.
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
-  gleich wie klein (`ModelSupport.island_on_model`); über dem Bett verhindert
-  sie „nur vom Bett“ nicht.
+  gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
+  Brücke dort (`open_layers`); über dem Bett bleibt „nur vom Bett“.
 - **`support.block_channels`**, weil „nur vom Bett“ nicht in jedem Slicer den
   Kanal freihält: eine Stützsperre aus `analysis.channel_space` — freie Fläche
   um die Kanalsäulen **innerhalb der konvexen Hülle** der Schicht, jede Scheibe
   eine Scheibenhöhe in die Decke, weil der Slicer an der Überhangfläche
-  fragt. Je Familie: `dateiformat.md`, „Was welcher Slicer bekommt“.
+  fragt, ohne die Säulen der Stücke auf dem Modell (`open_columns`). Je
+  Familie: `dateiformat.md`, „Was welcher Slicer bekommt“.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
@@ -256,10 +256,8 @@ ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
 - **`taper_length` misst Außenkontur auf einem Keil** — einer Wand, deren
   Stärke stetig über mehrere Bahnen läuft (Band und Längen: `TAPER_*` in
   `slice/analysis.py`). Ab einem Fünftel der Schichten mit Keil, variablem
-  Wandgenerator und ohne Stütze schlägt `advise.py` „Außenwand zuerst“ vor.
-  Gemessen wird an jeder fünften Schicht (`TAPER_SAMPLE`); einen kürzeren Keil
-  verfehlt die Stichprobe (`test_slice.py`), je Schicht fragt
-  `taper_length(shape)`.
+  Wandgenerator und ohne Stütze schlägt `advise.py` „Außenwand zuerst“ vor;
+  die Stichprobe je `TAPER_SAMPLE` beschreibt die Karte `slice/CLAUDE.md`.
 
 ## Die Öffnung zählt, was der Form fehlt
 

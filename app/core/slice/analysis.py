@@ -3095,6 +3095,13 @@ class ModelSupport:
     island_on_model: bool = False
     """Setzt eine **Insel** auf dem Modell auf? Sie druckt ohne Stütze in die
     Luft, gleich wie klein sie ist, und ist deshalb nie eine Kanaldecke."""
+    open_layers: frozenset[int] = frozenset()
+    """Schichten mit einem Stück, dessen Säule außerhalb eines Kanals auf dem
+    Modell aufsetzt — daran fragt der Rat, ob eine lange Brücke ihre Stütze
+    auf dem Modell braucht (``advise._from_geometry``)."""
+    open_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    """Diese Stücke wie ``channel_columns``: Grundriss, Höhe der Auflage, Höhe
+    des Stücks. Die Stützsperre spart ihre Säulen aus (:func:`channel_space`)."""
 
 
 def support_on_model(result: SliceResult) -> bool:
@@ -3327,6 +3334,16 @@ def _model_support(
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
+        open_layers=frozenset(names[owner][0] for owner in landed if owner not in channels),
+        open_columns=tuple(
+            (
+                layers[names[owner][0]].overhangs[names[owner][1]],
+                float(layers[landed[owner][0]].z),
+                float(layers[names[owner][0]].z),
+            )
+            for owner in sorted(landed, key=lambda owner: names[owner])
+            if owner not in channels
+        ),
     )
 
 
@@ -3373,6 +3390,18 @@ def channel_space(
     reaches = shapely.buffer(footprints, CHANNEL_WIDTH / 2.0, quad_segs=CHANNEL_QUAD_SEGMENTS)
     lows = np.array([low for _outline, low, _high in columns])
     highs = np.array([high for _outline, _low, high in columns])
+    # **Die Sperre hält Stützen aus dem Kanal fern, nicht von einer Decke, die
+    # sie braucht.** Am Wedge-Lock (04.10.2026, Cura-Raster) lag ein Kanalstück
+    # von 7 mm² unter einer Brücke von 25 mm, deren Säule auf dem Modell
+    # aufsetzt; die Sperre um das Kanalstück füllte denselben Raum, und Cura
+    # stützte die Brücke gar nicht (0,0 statt 2,0 m). Die Säulen der übrigen
+    # Stücke auf dem Modell bleiben deshalb frei.
+    others = np.asarray(
+        [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in model.open_columns],
+        dtype=object,
+    )
+    other_lows = np.array([low for _outline, low, _high in model.open_columns])
+    other_highs = np.array([high for _outline, _low, high in model.open_columns])
     bottom = float(lows.min())
     top = float(highs.max())
     indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
@@ -3402,6 +3431,15 @@ def channel_space(
         kept = [part for part in _areas_of(free) if part.intersects(seeds)]
         if not kept:
             return None
+        crossing = (
+            (other_lows <= z_high + CHANNEL_SLAB) & (other_highs >= z_low)
+            if len(others)
+            else np.zeros(0, dtype=bool)
+        )
+        if crossing.any():
+            kept = _areas_of(unary_union(kept).difference(shapely.union_all(others[crossing])))
+            if not kept:
+                return None
         # **Eine Scheibe höher, in die Decke hinein.** Der Slicer fragt die
         # Sperre an der Überhangfläche, in deren eigener Schicht — und dort ist
         # die Decke Material, also kein freier Raum. Endete die Sperre unter
