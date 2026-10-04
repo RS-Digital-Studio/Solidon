@@ -26,6 +26,15 @@ Steckaufnahme und Schrift (Dateiaudit §7, RM-184). Erkannt in
 - **Gemerkt wird je Netz und Merkmalsliste** (`features.remembered`, geteilt):
   Baum, Merkmalfenster und Operation fragen dieselbe Antwort; gerechnet wird
   im Auswertungsarbeiter (`session._warm_metrics`).
+- **Die Toleranz eines Verschlusses misst sich an seinem Rundkörper, nicht
+  an der Platte** (`_closures`: `match_tolerance(2 · größter Radius)`): Auf
+  einem Druckbett mit vielen Teilen fielen sonst Rastfedern nahe der Achse
+  weg, und gestaffelte Klötze galten als ein Ring. Ein Teil auf der Platte
+  bekommt dieselbe Gruppe wie allein
+  (`test_a_print_plate_does_not_change_the_closures_of_its_parts`). Und er
+  sitzt am Rundkörper: Was entlang der Achse weiter von ihm entfernt liegt
+  als zwei Flächen einer Nocke voneinander (`_lumps`), gehört nicht dazu
+  (`test_struts_far_along_the_axis_of_a_bore_are_no_closure`).
 - **Je Körper einmal nachschlagen, je Boden nur den Bereich rechnen**
   (`groups._Lookup`): Eine Rechnung über alle Dreiecke je Kandidat kostete am
   Korpus Minuten. Eine Beschleunigung gibt dieselben Gruppen zurück wie vorher —

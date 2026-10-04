@@ -1110,11 +1110,31 @@ def _closures(features: Mapping[FeatureId, Feature], tolerance: float) -> list[F
         coaxial = [other for other in axes if other.collinear(axis, tolerance)]
         largest = max(other.diameter for other in coaxial) / 2.0
         smallest = min(other.diameter for other in coaxial) / 2.0
-        pieces = _pieces_around(axis, planes, used, largest, tolerance)
-        group = _rotational_group(axis, pieces, smallest, largest, tolerance)
+        # **Die Toleranz eines Rings misst sich an seinem Rundkörper, nicht an
+        # der Platte**: Auf einem Druckbett mit zwölf Deckeln (300 mm
+        # Diagonale) lagen Rastfedern 5 mm neben der Achse unter viermal der
+        # Plattentoleranz, und Klötze auf 6,5 bis 14 mm galten als „ein
+        # Radius“. Allein gelesen hatte dasselbe Teil die richtige Rastung.
+        near = min(tolerance, match_tolerance(2.0 * largest))
+        # **Und ein Verschluss sitzt am Rundkörper, nicht irgendwo auf seiner
+        # Achse**: Was entlang der Achse weiter vom Körper entfernt liegt, als
+        # zwei Flächen einer Nocke auseinander sein dürfen (``_lumps``), gehört
+        # nicht dazu — am Eiffelturm hätten sonst die vier Streben 10 mm unter
+        # der Spitzenbohrung eine Rastung ergeben.
+        reach = max(4.0 * near, 0.2 * largest)
+        spans = [
+            (
+                axis.along(other.point) - other.depth / 2.0,
+                axis.along(other.point) + other.depth / 2.0,
+            )
+            for other in coaxial
+        ]
+        span = (min(low for low, _high in spans) - reach, max(high for _low, high in spans) + reach)
+        pieces = _pieces_around(axis, planes, used, largest, near, span)
+        group = _rotational_group(axis, pieces, smallest, largest, near)
         if group is None:
             mantles = [other.diameter / 2.0 for other in coaxial]
-            group = _round_notches(axis, fillets, used, mantles, tolerance)
+            group = _round_notches(axis, fillets, used, mantles, near, span)
         if group is not None:
             used.update(group.members)
             groups.append(group)
@@ -1166,12 +1186,13 @@ def _pieces_around(
     used: set[FeatureId],
     largest: float,
     tolerance: float,
+    span: tuple[float, float],
 ) -> list[_Piece]:
     """Die kleinen ebenen Flächen neben der Achse, in Zylinderkoordinaten.
 
     Klein heißt: höchstens ein Zwanzigstel der Mantelfläche des größten
     Rundkörpers auf der Achse — Nocken, Wege und Mulden, nicht Boden und
-    Deckel.
+    Deckel. Neben heißt auch: innerhalb ``span`` entlang der Achse.
     """
     reference = plane_axes(axis.direction)
     if reference is None:
@@ -1195,11 +1216,13 @@ def _pieces_around(
         + across_all[:, 1] * across_all[:, 1]
         + across_all[:, 2] * across_all[:, 2]
     )
-    slack = 1e-9 * max(1.0, largest)
+    slack = 1e-9 * max(1.0, largest, abs(span[0]), abs(span[1]))
     near = np.flatnonzero(
         (planes.area_array <= biggest * (1.0 + 1e-12))
         & (radius_all > 4.0 * tolerance - slack)
         & (radius_all <= largest * 1.25 + tolerance + slack)
+        & (along_all >= span[0] - slack)
+        & (along_all <= span[1] + slack)
     )
     for position in near.tolist():
         name = planes.names[position]
@@ -1215,6 +1238,8 @@ def _pieces_around(
         across = _sub(relative, _scaled(axis.direction, height))
         radius = _length(across)
         if radius <= 4.0 * tolerance or radius > largest * 1.25 + tolerance:
+            continue
+        if not span[0] <= height <= span[1]:
             continue
         outward = _scaled(across, 1.0 / radius)
         sideways = (
@@ -1326,6 +1351,7 @@ def _round_notches(
     used: set[FeatureId],
     mantles: Sequence[float],
     tolerance: float,
+    span: tuple[float, float],
 ) -> FunctionalGroup | None:
     """Gleiche runde Rastmulden in einem Mantel der Achse — eine Rastung.
 
@@ -1354,7 +1380,10 @@ def _round_notches(
         if abs(_dot(direction, axis.direction)) < FLOOR_ALIGNED:
             continue
         relative = _sub(centre, axis.point)
-        across = _sub(relative, _scaled(axis.direction, _dot(relative, axis.direction)))
+        height = _dot(relative, axis.direction)
+        if not span[0] <= height <= span[1]:
+            continue
+        across = _sub(relative, _scaled(axis.direction, height))
         radius = _length(across)
         if radius <= 4.0 * tolerance:
             continue

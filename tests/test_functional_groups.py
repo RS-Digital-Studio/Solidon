@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -226,6 +227,38 @@ def test_two_eyes_on_one_axis_are_a_hinge_with_their_gap() -> None:
     assert hinge.measure("gap") == pytest.approx(6.0, abs=1e-6)
 
 
+def _two_sockets() -> MeshData:
+    return _minus(
+        _box((60.0, 30.0, 30.0), (0.0, 0.0, 15.0)),
+        _cylinder(4.0, 20.0, (-15.0, 0.0, 20.0)),
+        _cylinder(4.0, 20.0, (15.0, 0.0, 20.0)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("build", "kind"), [(lambda: _eyes(6.0), "hinge"), (_two_sockets, "socket")]
+)
+def test_the_bores_of_a_hinge_or_a_socket_change_together(
+    build: Callable[[], MeshData], kind: str
+) -> None:
+    """§7: Scharnier „Größe gemeinsam ändern“, Steckaufnahme „Gegenstückmaß gemeinsam einstellen“.
+
+    Die Bohrungen einer solchen Gruppe sind für *Bohrung ändern* und
+    *Verschieben* gleichartig — das Merkmalfenster bietet „Auf alle
+    gleichartigen anwenden“ an, und eine Handlung ändert sie zusammen.
+    """
+    from app.core.perceive.relations import alike_for_actions
+
+    mesh = build()
+    features = detect(mesh)
+    group = _only(functional_groups(features, mesh), kind)
+    bores = sorted(member for member in group.members if features[member].kind == "hole")
+    assert len(bores) == 2
+    for action in ("resize_hole", "move_feature"):
+        alike = alike_for_actions([action], bores[0], features, mesh)[0]
+        assert {member.target for member in alike.members} >= set(bores), action
+
+
 def test_a_bolt_hole_through_two_walls_is_no_hinge() -> None:
     """Ein U-Bügel, die Schraube durch beide Schenkel: zwei Löcher auf einer Achse, kein Knöchel.
 
@@ -301,6 +334,115 @@ def test_two_mirrored_halves_are_no_closure() -> None:
     lug = _box((4.0, 6.0, 3.0), (21.5, 0.0, 6.0))
     body = _plus(_ring(), lug, _around(lug, 180.0))
     assert all(group.kind != "closure" for group in _groups(body))
+
+
+def test_struts_far_along_the_axis_of_a_bore_are_no_closure() -> None:
+    """Ein Verschluss sitzt am Rundkörper, nicht irgendwo auf seiner Achse.
+
+    Am Eiffelturm aus dem Korpus steht unter der Spitzenbohrung Ø 3,4 ein
+    Kreuz aus vier dünnen Streben: je zwei Flächen auf r ≈ 1,3, um 90 Grad
+    versetzt. An der Bohrung wären sie eine Rastung; 10 mm darunter sind
+    sie keine. Gebaut aus Merkmalen, damit nur die Lage entlang der Achse
+    sich ändert.
+    """
+    from app.core.types import Feature
+
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"axis": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 30.0), "diameter": 3.4, "depth": 4.0},
+    )
+
+    def struts(height: float) -> dict[str, Feature]:
+        found: dict[str, Feature] = {"hole_1": bore}
+        for index, angle in enumerate((0.0, 90.0, 180.0, 270.0)):
+            turn = math.radians(angle)
+            out = (math.cos(turn), math.sin(turn))
+            side = (-out[1], out[0])
+            for sign in (1.0, -1.0):
+                name = f"face_{2 * index + (1 if sign > 0 else 2)}"
+                found[name] = Feature(
+                    id=name,
+                    kind="face",
+                    provenance="detected",
+                    params={
+                        "centre": (
+                            1.3 * out[0] + 0.15 * sign * side[0],
+                            1.3 * out[1] + 0.15 * sign * side[1],
+                            height,
+                        ),
+                        "normal": (sign * side[0], sign * side[1], 0.0),
+                        "area": 1.5,
+                    },
+                )
+        return found
+
+    at_the_bore = [g for g in functional_groups(struts(30.0), None) if g.kind == "closure"]
+    assert [(group.variant, group.count) for group in at_the_bore] == [("detent", 4)]
+    below = [g for g in functional_groups(struts(18.0), None) if g.kind == "closure"]
+    assert below == []
+
+
+def _disc_with_blocks(places: tuple[tuple[float, float], ...]) -> MeshData:
+    """Eine Scheibe r 16, 3 hoch, mit Mittelloch r 3 und Klötzen 2 × 2 × 1 oben auf.
+
+    ``places`` nennt je Klotz den Abstand seiner Mitte zur Achse und den Winkel.
+    """
+    disc = _minus(
+        _cylinder(16.0, 3.0, (0.0, 0.0, 1.5), sections=96),
+        _cylinder(3.0, 5.0, (0.0, 0.0, 1.5), sections=48),
+    )
+    blocks = [_around(_box((2.0, 2.0, 1.0), (radius, 0.0, 3.5)), angle) for radius, angle in places]
+    return _plus(disc, *blocks)
+
+
+def _closures_by_part(mesh: MeshData) -> list[tuple[int, str, int, float]]:
+    """Je Verschluss: das Teil (nach x in 60er-Schritten), Variante, Stellungen, Radius."""
+    features = detect(mesh)
+    found = []
+    for group in functional_groups(features, mesh):
+        if group.kind != "closure":
+            continue
+        centre = features[group.anchor].params["centre"]
+        found.append(
+            (
+                round(float(centre[0]) / 60.0),
+                group.variant,
+                group.count,
+                round(group.measure("radius") or 0.0, 1),
+            )
+        )
+    return sorted(found)
+
+
+def test_a_print_plate_does_not_change_the_closures_of_its_parts() -> None:
+    """Ein Teil auf einer großen Platte bekommt denselben Verschluss wie allein.
+
+    Die Toleranz eines Rings misst sich an seinem Rundkörper, nicht an der
+    Platte: Auf dem Gewürzdeckel-Druckbett (zwölf Deckel, 300 mm Diagonale)
+    standen die Rastfedern der Drehscheibe 5 mm neben der Achse unter der
+    Plattentoleranz und fielen weg, und Klötze auf 6,5 bis 14 mm Abstand
+    lagen innerhalb von viermal 2,2 mm „auf einem Radius“ — eine erfundene
+    Rastung. Allein: die Federn eine Rastung, die gestaffelten Klötze keine.
+    """
+    springs = _disc_with_blocks(((5.0, 0.0), (5.0, 120.0), (5.0, 240.0)))
+    staggered = _disc_with_blocks(((6.5, 0.0), (9.0, 90.0), (11.5, 180.0), (14.0, 270.0)))
+    alone = [
+        (index, *entry[1:])
+        for index, part in enumerate((springs, staggered))
+        for entry in _closures_by_part(part)
+    ]
+    assert alone == [(0, "detent", 3, 5.0)]
+
+    pieces = [springs.raw.copy(), staggered.raw.copy()]
+    pieces[1].apply_translation((60.0, 0.0, 0.0))
+    # Ein drittes Teil weit draußen macht die Platte groß, ohne Verschluss.
+    far = trimesh.creation.box(extents=(20.0, 20.0, 2.0))
+    far.apply_translation((300.0, 280.0, 1.0))
+    plate = MeshData.of(trimesh.util.concatenate([*pieces, far]))
+    assert float(np.linalg.norm(plate.bounds.size)) > 400.0
+    assert _closures_by_part(plate) == alone
 
 
 # --- Schrift ------------------------------------------------------------------
