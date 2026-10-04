@@ -3182,6 +3182,47 @@ def test_an_orca_refusal_for_parts_off_the_plate_says_so(
     assert handover.signed_exit_code(4294967246) == -50
 
 
+@pytest.mark.parametrize(
+    ("program", "log"),
+    [
+        ("orca-slicer.exe", b"Slic3r::CLI::run found error, exit\n"),
+        (
+            "CrealityPrint.exe",
+            b"[error]   gcode path conflicts found between WipeTower and \xe7\x99\xbd\xe8\x89\xb2\n"
+            b"[error]   plate 1: found slicing result conflict!\n"
+            b"[error]   CLI command failed with error code -101\n",
+        ),
+    ],
+)
+def test_an_orca_refusal_for_crossing_paths_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, log: bytes
+) -> None:
+    """In der Slicer-Matrix (RM-312) endete chufang.3mf, Platte 2 (sieben Teile,
+    sechs Farben), an OrcaSlicer und Creality Print mit -101: Der Reinigungsturm
+    des Slicers stieß nach dessen eigener Anordnung an ein Teil
+    (``CLI_GCODE_PATH_CONFLICTS``). OrcaSlicer sagt auf der Konsole nur „found
+    error“, der Kunde las „Der Slicer hat keine Druckdatei geschrieben“."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    finished = _Finished(log)
+    finished.returncode = 4294967195
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    problem = raised.value
+    assert handover.signed_exit_code(4294967195) == -101
+    assert "kreuzen" in str(problem.detail)
+    assert "keine Druckdatei" not in str(problem.detail)
+    assert {action.id for action in problem.suggestions} >= {"export_only", "show_output"}
+    assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
+
+
 def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -6467,6 +6467,25 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
+            if (
+                setup.flavour == "orca"
+                and signed_exit_code(completed.returncode) == ORCA_PATHS_CROSS
+            ):
+                # OrcaSlicer sagt dazu auf der Konsole nur „found error“, Creality
+                # Print nennt im Protokoll Turm und Teil, Bambu Studio den Turm in
+                # ``result.json``. Der Turm ist der häufigste Fall, nicht der
+                # einzige; der Satz nennt beide, die Ausgabe sagt welcher.
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Im Slicer kreuzen sich die Bahnen zweier Teile oder eines Teils "
+                        "und des Reinigungsturms. Geben Sie den Teilen mehr Platz, etwa auf "
+                        "einer weiteren Platte, oder verschieben Sie den Turm im Slicer."
+                    ),
+                    values={"output": output},
+                    suggestions=(ARRANGE_ON_BED, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
+                )
             if setup.flavour == "cura" and "failed to load model" in output.casefold():
                 raise ExternalToolError(
                     tool=setup.name,
@@ -7178,6 +7197,11 @@ NO_LAYERS: Final[tuple[str, ...]] = ("no layers were detected",)
 #: Teile nicht ganz auf der Platte liegen (Bambus ``CLI_NO_SUITABLE_OBJECTS``),
 #: gemessen am ElegooSlicer 1.5 mit halb, ganz daneben und zu groß.
 ORCA_OFF_THE_PLATE: Final = -50
+#: Der Rückgabewert, mit dem die Orca-Familie eine fertig geschnittene Platte
+#: verwirft, weil sich Bahnen kreuzen (Bambus ``CLI_GCODE_PATH_CONFLICTS``).
+#: Gemessen an chufang.3mf (Slicer-Matrix RM-312): OrcaSlicer 2.4 und Creality
+#: Print 7.3 nach eigener Anordnung, Reinigungsturm gegen ein Teil.
+ORCA_PATHS_CROSS: Final = -101
 #: Der Titel, wenn der Slicer gelaufen ist und keine brauchbare Druckdatei
 #: hinterließ. ``ExternalToolError`` sagt sonst „hat nicht geantwortet" — der
 #: Slicer hat aber geantwortet, nur mit einem Fehler.

@@ -643,6 +643,14 @@ Erstschichtbahn versetzt; die Meldung nennt die Wandbahnen und den Raft statt
 *Auf das Bett legen*, und *Druckeinstellungen öffnen* hebt die Zeile der
 Wandbahnen hervor. Bei veränderlicher Bahnbreite bleibt die Absage aus RM-483.
 
+**-101 heißt: Bahnen kreuzen sich** (`ORCA_PATHS_CROSS`, Bambus
+`CLI_GCODE_PATH_CONFLICTS`). Die Orca-Familie verwirft damit eine fertig
+geschnittene Platte; an `chufang.3mf` (Slicer-Matrix RM-312) stieß nach der
+eigenen Anordnung des Slicers der Reinigungsturm an ein Teil. OrcaSlicer sagt
+auf der Konsole nur „found error“, Creality Print nennt Turm und Teil im
+Protokoll, Bambu Studio den Turm in `result.json`. Der Satz nennt beide
+Möglichkeiten und lässt die Ausgabe sagen, welche es war.
+
 
 
 ## Der Raftkontakt hat eine eigene Herkunft
