@@ -290,13 +290,12 @@ ihr (`actions._carried_by`).
   ganze Mündung, nicht die Achse.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
-  Schnittlänge; den Zerfall gegen den Körper vor dem Schritt,
-  `_split_counted_from`): Mitte, beide Enden eines Langlochs
-  (`prepare.slot_ends`), Austritte der Achse (erster Durchstoß, nicht der
-  Hüllquader) — einmal, an beiden Kernen; eine Senkung nur am weiten Ende, am
-  Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`). Eine
-  ungeschlossen überdeckte alte Öffnung zählt als Material
-  (`prepare.OpeningSpace`).
+  Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
+  Mitte, beide Enden eines Langlochs (`prepare.slot_ends`), Austritte der Achse
+  (erster Durchstoß) — einmal, an beiden Kernen; eine Senkung nur am weiten
+  Ende, am Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`),
+  starr unter einer Haut nie. Eine ungeschlossen überdeckte alte Öffnung zählt
+  als Material (`prepare.OpeningSpace`).
 
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 

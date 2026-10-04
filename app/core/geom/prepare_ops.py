@@ -104,6 +104,7 @@ from app.core.geom.prepare import (
     plug_placement,
     ray_hits_along,
     resize_bore,
+    ring_in_material,
     shell,
     shortest_slot,
     sink_placement,
@@ -2010,7 +2011,9 @@ def _behind_the_cut(remaining: Any, tool: MeshData, centre: Vec3, direction: Vec
     return True
 
 
-def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
+def _edge_findings(
+    body: MeshData, placed: Iterable[Feature], *, rigid: bool = False
+) -> list[Finding]:
     """Ob eine gesetzte Bohrung seitlich über den Körper hinausragt — für
     Versetzen und Verdoppeln dieselbe Frage wie beim Bohren.
 
@@ -2024,7 +2027,10 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
     neuen Mitte, mit seinem Durchmesser und seiner Achse; gemeldet wird
     höchstens einmal, wie an einem Langloch. ``body`` ist der Körper **vor**
     dem Schnitt an der neuen Stelle — beim Versetzen der gefüllte, damit die
-    alte Stelle keine offene Flanke vortäuscht.
+    alte Stelle keine offene Flanke vortäuscht. ``rigid`` sagt, dass die
+    Merkmale der starr bewegte Hohlraum der Quelle sind (Versetzen, Verdoppeln,
+    Muster): Dann endet eine Senkung an ihrem weiten Ende
+    (:func:`_sink_under_a_skin`).
     """
     for feature in placed:
         if not is_a_cavity(feature) or feature.kind not in ("hole", "cone", "slot"):
@@ -2033,6 +2039,8 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
         if diameter <= EPS_GEOM:
             continue
         centre = np.asarray(feature.params["centre"], dtype=np.float64)
+        if rigid and feature.kind == "cone" and _sink_under_a_skin(body, feature, centre):
+            continue
         # Gefragt wird an der Mitte **und** an beiden Austritten: Wo die Achse
         # den Hüllquader verlässt, liegt die Mündung einer gekippten Bohrung,
         # und die Vorprüfung am Hüllquader sieht nur die Scheibe an dem Punkt,
@@ -2100,6 +2108,42 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
             if found:
                 return found
     return []
+
+
+def _sink_under_a_skin(body: MeshData, feature: Feature, centre: NDArray[np.float64]) -> bool:
+    """Ob das weite Ende einer starr gesetzten Senkung unter einer Haut liegt —
+    dann reißt sie nirgends über die Kante auf, und ihre Mündung fragt niemand.
+
+    **Der Kranz einer vergrabenen Senkung ist der eines Kegels, den es nicht
+    gibt** (RM-226, Nachtrag 04.10.2026). :func:`mouth_over_the_edge` setzt den
+    Kegel von der Spitze bis in die Fläche am Austritt der Achse fort. Liegt das
+    weite Ende darunter, wächst der Kranz mit jedem Millimeter Haut: Eine
+    Senkbohrung, 20 mm längs der schrägen Platte z = 10 + x/4 verdoppelt, endet
+    5 mm unter der Oberseite mit dem weiten Ende bei x = 26,7, ihr gedachter
+    Kranz reichte bis x = 33,3 über die Stirn bei x = 30 — „über die Kante“ an
+    beiden Kernen, bei Versetzen, Verdoppeln und Muster. Starr gesetzt endet der
+    Kegel an seinem weiten Kreis; er liegt in der Hülle aus Kreis und Spitze,
+    und liegt der Kreis im Material, reißt er keine Seite auf.
+
+    **Unter einer Haut heißt: jeder Punkt des Kreises mindestens eine
+    Facettengrenze unter der nächsten Fläche**
+    (:func:`~app.core.geom.prepare.ring_in_material` mit ``depth``). Auf der
+    Oberfläche genügt nicht: Der Kreis einer bündigen Senkung liegt in ihrer
+    Mündungsfläche, und ein Punkt neben der Kante hat in Höhe der Fläche zur
+    Deckfläche den Abstand null längs ihrer Normale — eine über die Kante
+    versetzte Senkung hieß sonst vergraben und schwieg. **Und nur starr**: Eine
+    gekippte Senkung schneidet mit einem größeren Kegel bis zur alten Randebene,
+    über ihren weiten Kreis hinaus; an der Rippenplatte lief ihre Flanke unter
+    2 mm Deckel aus der Seite (``tests/test_feature_moves_keep_shape.py``,
+    „vergrabene Senkung“).
+    """
+    return ring_in_material(
+        body,
+        cast(Vec3, tuple(float(value) for value in centre)),
+        _feature_direction(feature),
+        float(feature.params.get("diameter", 0.0)),
+        depth=MAX_FACET_SAG,
+    )
 
 
 def _sink_cone(feature: Feature) -> tuple[Vec3, float] | None:
@@ -4371,7 +4415,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
     # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
-    cache_version="12",
+    # 13: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
+    cache_version="13",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4596,7 +4641,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         set_features = [moved]
 
     findings = [*closed.findings, *placed.findings]
-    findings += _edge_findings(closed.mesh, set_features)
+    findings += _edge_findings(closed.mesh, set_features, rigid=True)
     # Auch quer kann die Wand dicker werden. Die tatsächliche Zielgeometrie
     # entscheidet; die Bewegungsrichtung allein beweist keinen Durchgang.
     lost = _throughness_lost(
@@ -4744,7 +4789,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 8: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
     # 9: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
-    cache_version="9",
+    # 10: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
+    cache_version="10",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4880,7 +4926,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         face_indices=(),
         surface_patches=(),
     )
-    findings += _edge_findings(body, [copy])
+    findings += _edge_findings(body, [copy], rigid=True)
     kept: dict[FeatureId, Feature] = {copy.id: copy}
     if cavity:
         kept, missing = _copies_found(
@@ -4985,7 +5031,7 @@ def _duplicate_cavity_chain(
             face_indices=(),
             surface_patches=(),
         )
-    findings += _edge_findings(body, list(copies.values()))
+    findings += _edge_findings(body, list(copies.values()), rigid=True)
     bore = next(iter(copies.values()))
     bore_centre = cast(Vec3, tuple(float(value) for value in bore.params["centre"]))
     lost = _throughness_lost(
@@ -5162,7 +5208,8 @@ class _PatternPlace:
     # 6: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
     # 7: exakt endet eine Durchgangsbohrung an ihren mitbewegten Randebenen, und
     # jede Kopie fragt die Säule; am Netz im Werkzeug ihres Platzes (RM-226).
-    cache_version="7",
+    # 8: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
+    cache_version="8",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -5603,7 +5650,7 @@ def _mesh_pattern_result(
     through_lost: dict[FeatureId, list[Finding]] = {}
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
-        findings.extend(_edge_findings(body, place.copies))
+        findings.extend(_edge_findings(body, place.copies, rigid=True))
         for copy in place.copies:
             if copy.params.get("through"):
                 # Die Säule im Werkzeug des Platzes, wie beim Verdoppeln (RM-133):
@@ -5696,7 +5743,7 @@ def _exact_pattern_result(
             ),
         )
     copies = [copy for place in kept for copy in place.copies]
-    findings.extend(_edge_findings(as_mesh_data(solid), copies))
+    findings.extend(_edge_findings(as_mesh_data(solid), copies, rigid=True))
     # Die Kopien stehen in der Reihenfolge der Glieder (:func:`_name_copies`);
     # die äußeren Zylinder einer Kette sind entlang der Achse frei.
     mouths = frozenset(
@@ -12777,7 +12824,7 @@ def _exact_move_cavity(
     expected = dataclasses.replace(
         feature, params={**feature.params, "centre": target}, provenance="generated"
     )
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [expected])]
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [expected], rigid=True)]
     findings += _without_opened_twice(
         _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
     )
@@ -12812,7 +12859,7 @@ def _exact_duplicate_cavity(
         params={**feature.params, "centre": target},
         provenance="generated",
     )
-    findings = _edge_findings(as_mesh_data(solid), [copy])
+    findings = _edge_findings(as_mesh_data(solid), [copy], rigid=True)
     findings += _without_opened_twice(
         _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True, copy=True),
         findings,
@@ -13492,7 +13539,7 @@ def _exact_move_chain(
         )
         for related in chain
     ]
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), expected)]
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), expected, rigid=True)]
     findings += _without_opened_twice(
         _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
     )
@@ -13544,7 +13591,7 @@ def _exact_duplicate_chain(
                 provenance="generated",
             )
         )
-    findings = _edge_findings(as_mesh_data(solid), copies)
+    findings = _edge_findings(as_mesh_data(solid), copies, rigid=True)
     findings += _without_opened_twice(
         _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True, copy=True),
         findings,
@@ -14318,7 +14365,7 @@ def _exact_move_by_faces(
     # Dieselbe Frage wie am Netz (``move_feature`` mit ``_edge_findings``): Eine
     # Senkung, die über die Kante wandert, sagt es — bis zum 22.09.2026 gab der
     # Weg aus den Flächen hier keinen Befund zurück.
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(cleared), [expected])]
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(cleared), [expected], rigid=True)]
     return _exact_cavity_result(
         ctx, source, placed, op="move_feature", expected=expected, findings=findings
     )
@@ -14348,7 +14395,7 @@ def _exact_duplicate_by_faces(
         params={**feature.params, "centre": target},
         provenance="generated",
     )
-    findings: list[Finding] = _edge_findings(as_mesh_data(solid), [copy])
+    findings: list[Finding] = _edge_findings(as_mesh_data(solid), [copy], rigid=True)
     nothing = without_effect(solid, placed, change, ctx.profile)
     if nothing is not None:
         findings.append(nothing)

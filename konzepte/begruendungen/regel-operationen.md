@@ -1287,6 +1287,28 @@ geschlossen (`test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
 `test_every_way_that_sets_a_bore_anew_asks_about_the_edge`,
 `test_a_widened_countersink_over_the_edge_says_so`).
 
+**Eine starr gesetzte Senkung unter einer Haut ragt nicht über die Kante**
+(RM-226, Nachtrag 04.10.2026). Am Austritt setzt `mouth_over_the_edge` den
+Kegel von der Spitze bis in die Fläche fort; liegt das weite Ende darunter,
+wächst der Kranz mit jedem Millimeter Haut. Eine Senkbohrung, 20 mm längs der
+60 mm langen schrägen Platte verdoppelt, versetzt oder als dritter Platz eines
+Musters, endet 5 mm unter der Oberseite mit dem weiten Ende bei x = 26,7; ihr
+gedachter Kranz reichte bis x = 33,3 über die Stirn bei x = 30, und beide Kerne
+sagten „über die Kante“. Jetzt fragt `_sink_under_a_skin` vorher, ob der Kreis
+des weiten Endes ringsum mindestens eine Facettengrenze unter der nächsten
+Fläche liegt (`prepare.ring_in_material`). Die Tiefe zählt: Der Kreis einer
+bündigen Senkung liegt in ihrer Mündungsfläche, ein Punkt neben der Kante hat
+dort zur Deckfläche den Abstand null längs ihrer Normale, und die über die
+Kante versetzte Senkung schwieg
+(`test_a_moved_countersink_over_the_edge_is_reported_once`). Und nur starr
+(`rigid`): Gekippt schneidet ein größerer Kegel bis zur alten Randebene, über
+den Kreis hinaus — die vergrabene Senkung der Rippenplatte läuft so aus der
+Seite. Plansenkung und Langloch fragen mit ihrem eigenen Durchmesser und
+meldeten an derselben Stelle nichts; reicht der Kreis seitlich hinaus (24 mm
+statt 20), bleibt es an beiden Kernen bei „über die Kante“
+(`test_a_copy_under_the_top_is_not_over_the_edge_on_both_kernels`,
+`test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels`).
+
 **Den Zerfall zählt derselbe Weg gegen den Körper vor dem Schritt**
 (30.09.2026). `drill`, `slot_bore` und `resize_bore` zählen die Teile gegen den
 Körper, den sie bekommen, und nach dem Schließen der alten Öffnung ist das der
