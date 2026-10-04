@@ -467,6 +467,13 @@ ordnet auf der Konsole selbst neu an und verlangt dabei gemessen gut einen
 Millimeter Rand je Seite (0,9 mm reichten nicht, 1,25 mm schon); ein Teil,
 das das Bett bis auf weniger füllt, sagt es weiter mit -50 ab.
 
+Eine Drehung sucht zuerst eine Lage, um die der Rand der Haftung
+(`rim_reach`) noch auf dem Bett liegt, erst dann eine ohne ihn. Die erste
+passende Drehung lag sonst knapp am Rand: drill-holder.3mf (185 mal 34,6 mm)
+stand am MINI 1,4 mm davor, SuperSlicers Skirt lief 2,2 mm über das Bett,
+obwohl schräg gestellt 12 mm frei waren (RM-312). Druckdialog und Schreiber
+geben denselben Rand mit, sonst planten sie zwei Netzsätze.
+
 Eine erfolglose Suche beweist keine mathematische Unmöglichkeit. Die Meldung
 sagt daher, dass keine Anordnung gefunden wurde, und bietet die vorhandene
 projektweite Anordnung oder die Druckerwahl an. Der Abbruch wird vor und nach

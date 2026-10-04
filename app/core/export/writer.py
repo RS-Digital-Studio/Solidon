@@ -1841,8 +1841,13 @@ def prepare_slicer_meshes(
     *,
     for_window: bool = False,
     cancelled: CancelToken | None = None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
-    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben."""
+    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben.
+
+    ``rim`` ist der Rand der Haftung (:func:`rim_reach`), für den eine
+    gedrehte Lage zuerst Platz sucht (:func:`_fit_cli_mesh`).
+    """
     from app.core.export import handover
 
     exported: dict[str, MeshData] = {}
@@ -1864,8 +1869,8 @@ def prepare_slicer_meshes(
             raise
     program = slicer_keys.program_of(setup.executable)
     if slicer_keys.arranges_on_cli(setup.flavour, program):
-        return _turned_for_cli(chosen, exported, profile, cancelled)
-    return _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+        return _turned_for_cli(chosen, exported, profile, cancelled, rim)
+    return _arrange_for_cli(chosen, exported, profile, setup, cancelled, rim)
 
 
 def _turned_for_cli(
@@ -1873,6 +1878,7 @@ def _turned_for_cli(
     exported: dict[str, MeshData],
     profile: Profile,
     cancelled: CancelToken | None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
     """Ein Teil, das nur gedreht aufs Bett passt, geht gedreht hinaus.
 
@@ -1889,7 +1895,7 @@ def _turned_for_cli(
         mesh = exported[entry.id]
         if _fit_cli_mesh(mesh, profile, cancelled, turns=(np.eye(4),)) is not None:
             continue
-        fitted = _fit_cli_mesh(mesh, profile, cancelled)
+        fitted = _fit_cli_mesh(mesh, profile, cancelled, rim=rim)
         if fitted is not None:
             turned[entry.id] = fitted
             changed = True
@@ -1933,36 +1939,45 @@ def _fit_cli_mesh(
     mesh: MeshData,
     profile: Profile,
     cancelled: CancelToken | None,
-    turns: Iterable[np.ndarray] | None = None,
+    turns: Sequence[np.ndarray] | None = None,
+    rim: float = 0.0,
 ) -> MeshData | None:
     """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt.
 
-    ``turns`` beschränkt die Drehungen (ohne: :func:`_cli_turns`).
+    ``turns`` beschränkt die Drehungen (ohne: :func:`_cli_turns`). ``rim``
+    ist der Rand der Haftung (:func:`rim_reach`): Gesucht wird zuerst eine
+    Lage, um die er noch auf dem Bett liegt, erst dann eine ohne ihn. Die
+    erste passende Drehung lag sonst knapp am Rand — drill-holder.3mf am MINI
+    1,4 mm davor, die Skirt 2,2 mm darüber hinaus, schräg wären 12 mm frei
+    gewesen (RM-312).
     """
     from app.core.geom.orient import _Placed, extreme_points, turned_extents
 
     if build_area.fits_on_bed(mesh, profile.printer) and mesh.bounds.minimum[2] <= EPS_DISPLAY:
         return mesh
     points = extreme_points(mesh)
-    for turn in _cli_turns(mesh) if turns is None else turns:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        low, high = turned_extents(points, turn)
-        bounds = BoundingBox(
-            (float(low[0]), float(low[1]), float(low[2])),
-            (float(high[0]), float(high[1]), float(high[2])),
-        )
-        placed = _Placed(mesh, turn, bounds)
+    for margin in (rim, 0.0) if rim > EPS_GEOM else (0.0,):
+        for turn in _cli_turns(mesh) if turns is None else turns:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            low, high = turned_extents(points, turn)
+            bounds = BoundingBox(
+                (float(low[0]), float(low[1]), float(low[2])),
+                (float(high[0]), float(high[1]), float(high[2])),
+            )
+            placed = _Placed(mesh, turn, bounds)
 
-        def outline(matrix: np.ndarray = turn) -> np.ndarray:
-            return transform.moved_points(points, matrix)[:, :2]
+            def outline(matrix: np.ndarray = turn) -> np.ndarray:
+                return transform.moved_points(points, matrix)[:, :2]
 
-        offset = build_area.placement_offset(placed, profile.printer, outline=outline)
-        if offset is None:
-            continue
-        result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
-        if build_area.fits_on_bed(result, profile.printer):
-            return result
+            offset = build_area.placement_offset(
+                placed, profile.printer, margin=margin, outline=outline
+            )
+            if offset is None:
+                continue
+            result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
+            if build_area.fits_on_bed(result, profile.printer, margin=margin):
+                return result
     return None
 
 
@@ -1972,6 +1987,7 @@ def _arrange_for_cli(
     profile: Profile,
     setup: SlicerSetup,
     cancelled: CancelToken | None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
     """Nur Ausgabenetze ihrer Platte bewegen; die Szene bleibt unverändert."""
     from app.core.export import handover
@@ -1985,7 +2001,7 @@ def _arrange_for_cli(
         meshes = [exported[entry.id] for entry in entries]
         if arrangement_holds(meshes, profile):
             continue
-        fitted = [_fit_cli_mesh(mesh, profile, cancelled) for mesh in meshes]
+        fitted = [_fit_cli_mesh(mesh, profile, cancelled, rim=rim) for mesh in meshes]
         ready = [mesh for mesh in fitted if mesh is not None]
         if len(ready) == len(meshes) and not arrangement_holds(ready, profile):
             if cancelled is not None:
@@ -2128,7 +2144,12 @@ def write_assembly(
 
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             mesh_plan = prepare_slicer_meshes(
-                chosen, profile, known, for_window=for_window, cancelled=cancelled
+                chosen,
+                profile,
+                known,
+                for_window=for_window,
+                cancelled=cancelled,
+                rim=rim_reach(settings) if settings is not None else 0.0,
             )
         else:
             mesh_plan = (
