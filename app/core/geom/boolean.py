@@ -1056,7 +1056,8 @@ def _findings_for(
                 code="boolean.jittered",
                 severity="warning",
                 message=_(
-                    "Die Eingangsgeometrie wurde minimal gestört, um die Operation zu lösen."
+                    "Die Operation gelang erst, nachdem die Ecken der Körper um einen winzigen "
+                    "Betrag verschoben waren, weit unter der Druckgenauigkeit."
                 ),
             )
         ]
