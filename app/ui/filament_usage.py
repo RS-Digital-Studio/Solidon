@@ -414,7 +414,9 @@ class UsageDialog(QDialog):
         button_layout = buttons.layout()
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
-        self.book_button = buttons.addButton(tr("Abziehen"), QDialogButtonBox.ButtonRole.AcceptRole)
+        self.book_button = buttons.addButton(
+            tr("Abziehen", context="Lagerbestand"), QDialogButtonBox.ButtonRole.AcceptRole
+        )
         self.correct_button = buttons.addButton(
             tr("Mengenaufteilung korrigieren"), QDialogButtonBox.ButtonRole.ActionRole
         )
@@ -795,7 +797,7 @@ class UsageDialog(QDialog):
             if self._legacy_bookings
             else tr("G-Code-Angabe übernehmen")
             if existing
-            else tr("Abziehen")
+            else tr("Abziehen", context="Lagerbestand")
         )
         self.book_button.setEnabled(not reason)
         self.repeat_button.setVisible(bool(self._bookings))

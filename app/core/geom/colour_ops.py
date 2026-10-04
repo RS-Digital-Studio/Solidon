@@ -171,8 +171,8 @@ def clear_filament(ctx: OpContext) -> OpResult:
                 field=field_name,
                 constraint="unknown_feature",
                 detail=_(
-                    "Wählen Sie eine vorhandene Fläche oder wählen Sie das Filament "
-                    "am ganzen Körper ab."
+                    "Wählen Sie eine vorhandene Fläche oder entfernen Sie das Filament "
+                    "vom ganzen Körper."
                 ),
             )
         reason = reason_against("clear_filament", feature.kind)
@@ -188,8 +188,8 @@ def clear_filament(ctx: OpContext) -> OpResult:
                 field=field_name,
                 constraint="empty_feature",
                 detail=_(
-                    "Wählen Sie eine vorhandene Fläche oder wählen Sie das Filament "
-                    "am ganzen Körper ab."
+                    "Wählen Sie eine vorhandene Fläche oder entfernen Sie das Filament "
+                    "vom ganzen Körper."
                 ),
             )
         selected.update(indices)
@@ -219,9 +219,8 @@ def clear_filament(ctx: OpContext) -> OpResult:
                 field=field_name,
                 constraint="slots_full",
                 detail=_(
-                    "Alle acht Filamentplätze bleiben belegt. Wählen Sie sämtliche Flächen eines "
-                    "Filaments oder den ganzen Körper ab, damit die übrigen Flächen "
-                    "ihr Filament behalten."
+                    "Alle acht Filamentplätze bleiben belegt. Entfernen Sie ein Filament "
+                    "von allen Flächen, die es tragen, oder vom ganzen Körper."
                 ),
             )
         definitions[replacement] = dataclasses.replace(zero, index=replacement)

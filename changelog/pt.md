@@ -200,6 +200,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No projeto de exemplo do segundo caminho, os furos dos parafusos seguem a largura e a espessura.
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
 - Todas as traduções usam as mesmas palavras para características, botões e termos de impressão, e as mensagens seguem a pontuação de cada língua.
+- O botão que desconta o consumo do inventário de filamentos chama-se agora «Deduzir», e as indicações nomeiam as ações como a janela, por exemplo «Uniformizar os triângulos».
 - A forma de tratamento é uniforme: espanhol, português e francês usam a forma de cortesia, o italiano trata por tu. Foram corrigidas três mensagens em espanhol e português que diziam o contrário.
 - Enquanto um diálogo mostra a pré-visualização, os espaços chegam a todos os campos de texto, também ao questionário e ao chat, e caixas e botões aceitam a barra de espaço.
 - Ao «Escalar», um corpo fica assente na mesa em vez de se afundar sob a placa, e a vista volta a enquadrá-lo quando cresce.

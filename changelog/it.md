@@ -200,6 +200,7 @@ scrive in `website/version.json`.
 - Nel progetto di esempio della seconda via, i fori per le viti seguono larghezza e spessore.
 - La finestra «Novità» e il sito mostrano le evidenziazioni come testo marcato invece che con asterischi.
 - Tutte le traduzioni usano le stesse parole per caratteristiche, pulsanti e termini di stampa, e i messaggi seguono la punteggiatura di ogni lingua.
+- Il pulsante che scala il consumo dal magazzino filamenti ora si chiama «Detrai», e i suggerimenti nominano le azioni come la finestra, per esempio «Uniforma i triangoli».
 - Il modo di rivolgersi è coerente: spagnolo, portoghese e francese usano la forma di cortesia, l'italiano il tu. Tre messaggi in spagnolo e portoghese che dicevano il contrario sono corretti.
 - Mentre una finestra mostra l'anteprima, gli spazi arrivano in ogni campo di testo, anche nel questionario e nella chat, e caselle e pulsanti accettano la barra spaziatrice.
 - Con «Scala» un corpo resta appoggiato sul piano invece di affondare sotto la piastra, e la vista lo reinquadra quando cresce.

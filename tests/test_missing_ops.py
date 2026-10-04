@@ -632,7 +632,7 @@ def test_smoothing_says_how_much_body_it_cost(profile: Profile) -> None:
     warning = next(f for f in result.findings if f.code == "mesh.smooth_shrank")
     assert warning.severity == "warning"
     assert float(warning.values["lost"]) > 0.5
-    # „Erst neu vernetzen, dann glätten." ist seit der Durchsicht 0.5.1 ein
+    # „Erst die Kanten verfeinern, dann glätten." ist seit der Durchsicht 0.5.1 ein
     # Knopf mit durchgespielter Länge — und die Länge trägt.
     assert [action.id for action in warning.suggestions] == ["remesh_and_retry"]
     edge = float(warning.values["remesh_to_mm"])

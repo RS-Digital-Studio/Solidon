@@ -1369,8 +1369,8 @@ def _not_a_solid(mesh: MeshData) -> NotManifoldError:
     """
     return NotManifoldError(
         detail=_(
-            "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig "
-            "vernetzen noch unterteilen. Erst reparieren, dann noch einmal."
+            "Dieser Körper umschließt kein Volumen, deshalb lassen sich seine Dreiecke "
+            "nicht neu aufteilen. Erst reparieren, dann noch einmal."
         ),
         # Jede innere Kante trägt zwei Halbkanten, jede offene eine: aus
         # 3F = 2·E_innen + E_offen und E = E_innen + E_offen folgt
@@ -1876,7 +1876,7 @@ def _smoothing_cost(
             severity="warning",
             message=_(
                 "Das Glätten hat den Körper deutlich verkleinert — an einem groben Netz "
-                "zieht es die Ecken zusammen. Erst neu vernetzen, dann glätten."
+                "zieht es die Ecken zusammen. Erst die Kanten verfeinern, dann glätten."
             ),
             object_id=object_id,
             values=values,

@@ -201,6 +201,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el proyecto de ejemplo del segundo camino, los agujeros de los tornillos siguen el ancho y el grosor.
 - La ventana «Novedades» y el sitio web muestran el resaltado como texto destacado en vez de asteriscos.
 - Todas las traducciones usan las mismas palabras para características, botones y términos de impresión, y los mensajes ponen la puntuación que pide cada idioma.
+- El botón que descuenta el consumo del inventario de filamentos se llama ahora «Descontar», y los avisos nombran las acciones como la ventana, por ejemplo «Igualar los triángulos».
 - El tratamiento es uniforme: español, portugués y francés tratan de usted, el italiano de tú. Se corrigieron tres mensajes en español y portugués que decían lo contrario.
 - Mientras un diálogo muestra su vista previa, los espacios llegan a todos los campos de texto, también al cuestionario y al chat, y casillas y botones aceptan la barra espaciadora.
 - Al «Escalar», un cuerpo sigue sobre la placa en vez de hundirse bajo ella, y la vista lo vuelve a encuadrar cuando crece.

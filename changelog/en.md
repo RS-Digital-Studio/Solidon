@@ -200,6 +200,7 @@ it into `website/version.json`.
 - In the example project for the second way, the screw holes follow width and thickness.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - All translations use the same words for features, buttons and print terms throughout, and messages use punctuation as each language requires.
+- The button that deducts usage from the filament inventory is now called *Deduct*, and hints name actions the way the window does, such as *Even out the triangles*.
 - The form of address is consistent: Spanish, Portuguese and French are formal, Italian is informal. Three Spanish and Portuguese messages that said the opposite are corrected.
 - While a dialog shows its preview, spaces reach every text field, including the feedback questionnaire and the chat, and ticks and buttons accept the space bar.
 - With *Scale*, a body stays standing on the bed instead of sinking below the plate, and the view reframes it when it grows.

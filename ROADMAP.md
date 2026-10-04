@@ -91,7 +91,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut: `make_guides` meidet Text in Fenster, Menüs und Dialogen und setzt die Nummer bei vollem Dialog in den Bildrand; offen: Feldabnahme nach §11 mit einem Kunden ohne CAD, dazu die Anleitungsbilder beim Release neu erzeugen und Schritt 3 beider Anleitungen ansehen |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Rampe der 3D-Maus am echten Gerät; ob dieser Rest in RM-070 aufgeht und der Punkt damit schließt, entscheidet Robert |
-| [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge EN/ES/PT/FR/IT vollständig durchgesehen (04.10.); offen: Handbuch und Assetstempel beim Release, Fensterabnahme der längeren Knopfnamen (RM-213), 13 gemeldete Fehler der deutschen Quelle (Liste im Teilstand) |
+| [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge EN/ES/PT/FR/IT durchgesehen (04.10.), die gemeldeten Fehler der deutschen Quelle behoben (871cc29e6); offen: Handbuch und Assetstempel beim Release, Fensterabnahme der längeren Knopfnamen (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Bündel enthaltener Teile, Dialogabbruch, *Modell einfügen*, abgelehnte Erkennungsfrage und Gestensperre ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
@@ -3395,6 +3395,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Changelog: ja — die Sinnfehler in ES/PT und die uneinheitlichen Knopfnamen in FR/IT (seit
   `6949b869d`, v0.3.1 bis v0.5.1) lagen in Tags; im Abschnitt 0.5.2 ist der Punkt zu Englisch und
   Spanisch auf alle Übersetzungen erweitert, ein Punkt zu Anrede und Sinnfehlern kommt dazu.
+
+  **Teilstand 04.10.2026 (Claude, Q quelltexte-de, `871cc29e6`):** Die zwölf offenen Fehler der
+  deutschen Quelle sind behoben, der dreizehnte (`boolean.jittered`) war es schon. Zwei Schlüssel
+  mit zwei Bedeutungen tragen einen Übersetzungskontext: *Abziehen* im Filamentverbrauch
+  (`Lagerbestand`, EN *Deduct* statt *Subtract*, samt dem Satz, der den Knopf zitiert) und
+  *Bereich* an der Texturfläche (`Musterfeld`, EN *Area* statt *Range*; die Handbuchspalte bleibt
+  *Range*). Dazu: Modell aus dem Netz ohne „Bett“, die Quittung nach *Zug zurücknehmen* („Zug
+  entfernt. Strg+Z holt ihn zurück.“; Strg+Z ist dort richtig, weil das Entfernen eine
+  Parameteränderung ist), Bildbeschreibung ohne „Stapel“, Kreis-Tour ohne „Kern“, Schlüsselloch
+  nennt das Feld *Spiel*, Bohrungshilfe den Baustein *Schraubenloch mit Senkung*, die Abbildung
+  der vier Wege die Überschriften ihres Handbuchkapitels, „Erst gleichmäßig vernetzen“ wird „Erst
+  die Dreiecke angleichen“ (Relief, Formen, Tour, Knopf *Dreiecke jetzt angleichen*), das Glätten
+  verweist auf *Kanten verfeinern* wie sein Knopf, im Zeichnungsimport und am Lochfeld heißt eine
+  gezeichnete Fläche *Kontur* bzw. *Umriss*, *Filament entfernen* sagt „Entfernen Sie …“ statt des
+  zweideutigen „wählen Sie … ab“. 27 Quellschlüssel ersetzt, 29 neue Schlüssel und ein
+  berichtigter Wert je Katalog (numstat je Sprache 30/28, keine fremde Zeile entfernt), alle fünf
+  Sprachen neu übersetzt (es Sie-Form, it „tu“, fr Imperativ, pt europäisch). `test_wording`
+  kennt Zitate eines Knopfs mit Kontext (`ZITAT_KONTEXT`); Gegenprobe mit «Sustraer» im
+  spanischen Satz rot, mit «Descontar» grün. Der Bereichsnachweis der elf Bausteine aus
+  `mounting.py` ist neu gefahren, alle bestanden. Text-, Wortlaut- und Sprachtests 666 grün;
+  betroffene Tests (402 von 423 Dateien, ohne Fenster und Renderer) 22 655 grün, 115 übersprungen,
+  die vier Roten erklärt und einzeln grün (`F:\solidon-review-reports\claude-2026-10-04\quelltexte-de\`).
 
 <a id="rm-090"></a>
 
