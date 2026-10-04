@@ -23,10 +23,19 @@ Schicht, was jeder Slicer selbst rechnet, bevor er G-Code schreibt:
   7,03 s Stielschicht trotz 15 s Vorgabe. Die Beschleunigung kommt danach,
   bei den gebremsten Tempi, wie in den Slicern selbst.
 - **Leerfahrt, Rückzug und Z-Hub** je Zugbeginn.
+- **Stützen**: die Säulen unter den Überhängen je Schicht
+  (:func:`_support_columns`), geschlossen wie im Slicer und ohne Krümel,
+  darin das Muster mit der Dichte des Profils und die Kontaktschichten mit
+  ihrer eigenen; ein Baum als Zug kurzer Stücke. Tempo, Beschleunigung und
+  Art aus dem Herstellerprofil (:class:`Motion`). Die Mindestschichtzeit bremst
+  und zählt sie nicht — gemessen am Pilz in fünf Slicern (04.10.2026): mit
+  Abbremsen bis 28 % zu wenig, ohne höchstens 14 %.
 
-Was sie nicht kennt: Stützen, Haftungsränder, Lückenfüllung, die genaue
-Reihenfolge der Bahnen. Sie trägt ``source="internal"`` und wird mit der Zeit
-aus der Druckdatei verglichen, nie vermischt (Regel 14). Ohne belegtes
+Was sie nicht kennt: Haftungsränder, Lückenfüllung, die genaue Reihenfolge
+der Bahnen, und welche Decke ein Profil ohne Brückenstützen als Brücke liest
+(:func:`app.core.slice.estimate.plate_comparison`). Sie trägt
+``source="internal"`` und wird mit der Zeit aus der Druckdatei verglichen, nie
+vermischt (Regel 14). Ohne belegtes
 Mindestdrucktempo gibt es keine :class:`Motion` und damit keine Zahl —
 eine Mindestdauer, die niemand belegt, wird nicht behauptet.
 """
@@ -36,7 +45,9 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Final
 
+import manifold3d
 import numpy as np
 import shapely
 from shapely.geometry import LineString
@@ -44,6 +55,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+from app.core.slice.analysis import _material_cross
 from app.core.types import CancelToken, PrintSettings, SliceResult
 
 
@@ -81,6 +93,21 @@ class Motion:
     z_acceleration: float | None = None
     retraction_speed: float | None = None
     deretraction_speed: float | None = None
+    support_speed: float | None = None
+    support_interface_speed: float | None = None
+    support_acceleration: float | None = None
+    support_interface_density: float | None = None
+    """Bahnanteil der Kontaktschichten unter dem Überhang, aus dem Abstand des Profils."""
+    support_tree: bool = False
+    """Stützt das Herstellerprofil mit Bäumen, wenn Solidon „automatisch“ übergibt?"""
+    support_closing: float | None = None
+    """Wie weit der Slicer benachbarte Stützflächen zusammenschließt, in mm
+    (Prusa ``support_material_closing_radius``, Cura ``support_join_distance``,
+    Orca fest 2 mm in ``SupportMaterial.cpp``); Bäume schließen nicht."""
+    support_skips_bridges: bool = False
+    """Stützt das Profil keine Brücken (Orca ``bridge_no_support``, Prusa
+    ``dont_support_bridges``)? Welche Decke der Slicer als Brücke liest, rechnet
+    nur er; die Gegenprobe mit Stützen ist dann unvollständig."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +142,9 @@ class _Roles:
     retract_speed: float
     deretract_speed: float
     z_hop: float
+    support: float
+    support_interface: float
+    a_support: float
 
 
 def _roles(settings: PrintSettings, motion: Motion) -> _Roles:
@@ -172,6 +202,13 @@ def _roles(settings: PrintSettings, motion: Motion) -> _Roles:
         retract_speed=motion.retraction_speed or retract.speed,
         deretract_speed=motion.deretraction_speed or motion.retraction_speed or retract.speed,
         z_hop=max(retract.z_hop, 0.0),
+        # Ohne Herstellerwert das Tempo, das Solidon Cura als ``speed_print``
+        # schreibt (``slicer_keys``); dort folgt ``speed_support`` ihm, und die
+        # Kontaktschichten laufen mit zwei Dritteln (``fdmprinter``).
+        support=motion.support_speed or speed.inner_wall,
+        support_interface=motion.support_interface_speed
+        or (motion.support_speed or speed.inner_wall) / 1.5,
+        a_support=accel(motion.support_acceleration),
     )
 
 
@@ -232,12 +269,17 @@ class _Lines:
     length: float
     speed: float
     acceleration: float
+    turn: float = math.pi / 2.0
+    """Der Knick zwischen zwei Bahnen: neunzig Grad im Zickzack, wenig im Baum."""
 
 
 @dataclass(slots=True)
 class _Layer:
     loops: list[_Loop] = field(default_factory=list)
     lines: list[_Lines] = field(default_factory=list)
+    support: list[_Lines] = field(default_factory=list)
+    """Stützbahnen: Sie laufen mit, aber die Mindestschichtzeit bremst sie nicht
+    und zählt sie nicht (:func:`_layer_seconds`)."""
     starts: int = 0
     travel: float = 0.0
 
@@ -286,12 +328,14 @@ def _layers(
     cancelled: CancelToken | None,
 ) -> list[_Layer]:
     """Die Bahnen jeder Schicht dieses Körpers, noch ohne Zeit."""
-    regions = []
+    materials: list[BaseGeometry] = []
     for info in result.layers:
-        if info.area <= 1e-6:
-            continue
         shapes = [ShapelyPolygon(contour.outline, list(contour.holes)) for contour in info.contours]
-        regions.append(unary_union(shapes).buffer(0) if shapes else ShapelyPolygon())
+        materials.append(unary_union(shapes).buffer(0) if shapes else ShapelyPolygon())
+    kept = [index for index, info in enumerate(result.layers) if info.area > 1e-6]
+    regions = [materials[index] for index in kept]
+    columns = _support_columns(result, materials, settings, motion, cancelled)
+    supports = [columns[index] for index in kept]
     layers = settings.layers
     shell = settings.shell
     width = layers.line_width
@@ -408,9 +452,169 @@ def _layers(
             number = max(1, round(path / chord))
             layer.lines.append(_Lines(number, path / number, speed, min(accel, roles.a_limit)))
             layer.starts += _pieces(area)
+        if not supports[index].is_empty():
+            _support_lines(layer, supports, index, settings, roles, motion, height)
         layer.travel = math.sqrt(region.area) / 2.0 if region.area > 0.0 else 0.0
         built.append(layer)
     return built
+
+
+#: Ein Baum ist ein Zug aus kurzen Stücken: Die Orca-Familie schreibt seine
+#: Äste als Vieleck, im Mittel 0,38 bis 0,41 mm je Stück (Pilz und
+#: Waschschüssel, ElegooSlicer und Bambu Studio, 04.10.2026).
+TREE_SEGMENT: Final = 0.4
+
+#: Der Knick zwischen zwei Stücken eines Astes. Gemessen an denselben Läufen:
+#: Mit diesem Winkel trifft das Ecktempo aus dem Ruck der Maschine das, was
+#: die Slicer für ihre Bäume rechnen (rund 35 mm/s im Mittel).
+TREE_TURN: Final = 0.25
+
+
+#: Wie genau die Säulen ihren Umriss behalten, in mm: ein Hundertstel der
+#: Düse; sonst sammeln sie über hunderte Schichten Ecken (Waschschüssel).
+SUPPORT_SIMPLIFY: Final = 0.005
+
+
+def _support_columns(
+    result: SliceResult,
+    materials: Sequence[BaseGeometry],
+    settings: PrintSettings,
+    motion: Motion,
+    cancelled: CancelToken | None,
+) -> list[manifold3d.CrossSection]:
+    """Der Raum, den die Stützen je Schicht füllen — von oben nach unten.
+
+    Jedes Überhangstück steigt ab, bis es auf Material trifft: „überall“ setzt
+    dort auf und trägt den Rest weiter, „nur vom Bett“ verwirft eine Säule,
+    sobald sie Material berührt. Gefüllt wird mit dem seitlichen Abstand zum
+    Modell (``support.xy_gap``), wie die Slicer ihn halten. Gerechnet wird in
+    Clipper, nicht in GEOS: An der Waschschüssel (575 Schichten, 401
+    Überhangstücke) kosteten Vereinigung, Differenz und das Zurückwandeln in
+    GEOS-Flächen 27 s.
+
+    **Ein Muster schließt seine Flächen**, bevor es sie füllt: Wo eine
+    gewölbte Wand je Schicht nur einen Streifen überhängen lässt (Waschschüssel,
+    Arbeitsplattenreiniger aus dem Korpus), legt der Slicer keine hundert
+    Splitter an, sondern eine Fläche — ohne das rechnete die Gegenprobe am
+    Reiniger 695 statt 73 Minuten Stütze, fast alles Anfahrten.
+    """
+    tree = settings.support.style == "tree" or (
+        settings.support.style == "auto" and motion.support_tree
+    )
+    closing = 0.0 if tree else max(motion.support_closing or 0.0, 0.0)
+    count = len(materials)
+    columns = [manifold3d.CrossSection() for _ in range(count)]
+    if settings.support.style == "none" or count < 2:
+        return columns
+    only_bed = settings.support.placement == "build_plate"
+    gap = max(settings.support.xy_gap, 0.0)
+    carried = manifold3d.CrossSection()
+    for index in range(count - 1, 0, -1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        for piece in result.layers[index].overhangs:
+            carried = carried + _material_cross(ShapelyPolygon(piece.outline, list(piece.holes)))
+        if carried.is_empty():
+            continue
+        if closing > 0.0:
+            carried = carried.offset(closing, manifold3d.JoinType.Miter).offset(
+                -closing, manifold3d.JoinType.Miter
+            )
+        carried = carried.simplify(SUPPORT_SIMPLIFY)
+        shape = materials[index - 1]
+        if shape.is_empty:
+            columns[index - 1] = carried
+            continue
+        material = _material_cross(shape)
+        if only_bed:
+            free = [part for part in carried.decompose() if (part ^ material).is_empty()]
+            carried = (
+                manifold3d.CrossSection.batch_boolean(free, manifold3d.OpType.Add)
+                if free
+                else manifold3d.CrossSection()
+            )
+        else:
+            carried = carried - material
+        if carried.is_empty():
+            continue
+        filled = carried - material.offset(gap, manifold3d.JoinType.Miter) if gap > 0.0 else carried
+        columns[index - 1] = _without_crumbs(filled, settings.layers.line_width)
+    return columns
+
+
+def _without_crumbs(section: manifold3d.CrossSection, width: float) -> manifold3d.CrossSection:
+    """Ohne Stücke unter zwei Bahnen im Quadrat: Die druckt kein Slicer als
+    Stütze (Orca ``support_remove_small_overhang``), und als eigene Anfahrt
+    mit Rückzug und Z-Hub kosteten sie am Arbeitsplattenreiniger aus dem Korpus
+    181 596 Anfahrten und 15 Stunden, die keine Druckdatei hat."""
+    parts = section.decompose()
+    smallest = 4.0 * width * width
+    kept = [part for part in parts if part.area() >= smallest]
+    if len(kept) == len(parts):
+        return section
+    if not kept:
+        return manifold3d.CrossSection()
+    return manifold3d.CrossSection.batch_boolean(kept, manifold3d.OpType.Add)
+
+
+def _outline_length(section: manifold3d.CrossSection) -> float:
+    """Der Umfang aller Ringe eines Clipper-Querschnitts."""
+    total = 0.0
+    for ring in section.to_polygons():
+        points = np.asarray(ring, dtype=float)
+        if len(points) < 2:
+            continue
+        step = np.roll(points, -1, axis=0) - points
+        total += float(np.hypot(step[:, 0], step[:, 1]).sum())
+    return total
+
+
+def _support_lines(
+    layer: _Layer,
+    supports: Sequence[manifold3d.CrossSection],
+    index: int,
+    settings: PrintSettings,
+    roles: _Roles,
+    motion: Motion,
+    height: float,
+) -> None:
+    """Die Stützbahnen einer Schicht: Kontaktschichten unter dem Überhang,
+    darunter das Muster mit der Dichte des Profils; ein Baum als Zug kurzer
+    Stücke (:data:`TREE_SEGMENT`, :data:`TREE_TURN`)."""
+    support = supports[index]
+    width = settings.layers.line_width
+    flow = settings.filament.max_flow
+    layers = max(settings.support.interface_layers, 0)
+    if layers == 0:
+        contact = manifold3d.CrossSection()
+    elif index + layers < len(supports):
+        contact = support - supports[index + layers]
+    else:
+        contact = support
+    body = support - contact if not contact.is_empty() else support
+    style = settings.support.style
+    tree = style == "tree" or (style == "auto" and motion.support_tree)
+    density = max(settings.support.density, 0.0)
+    contact_density = motion.support_interface_density or 1.0
+    for area, share, speed in (
+        (body, density, roles.support),
+        (contact, contact_density, roles.support_interface),
+    ):
+        surface = float(area.area())
+        if surface <= 1e-6 or share <= 0.0:
+            continue
+        speed = _capped(speed, width, height, flow)
+        accel = min(roles.a_support, roles.a_limit)
+        path = surface * share / width
+        if tree:
+            number = max(1, round(path / TREE_SEGMENT))
+            layer.support.append(_Lines(number, path / number, speed, accel, TREE_TURN))
+        else:
+            boundary = _outline_length(area)
+            chord = max(math.pi * surface / boundary, width) if boundary > 0.0 else width
+            number = max(1, round(path / chord))
+            layer.support.append(_Lines(number, path / number, speed, accel))
+        layer.starts += len(area.decompose())
 
 
 def _nominal(layer: _Layer, roles: _Roles, scale: float, floor: float) -> float:
@@ -439,7 +643,7 @@ def _actual(layer: _Layer, roles: _Roles, scale: float, floor: float) -> float:
         speed = max(lines.speed * scale, min(lines.speed, floor))
         # Bahnen hängen im Zickzack aneinander: an jedem Ende zwei Ecken um
         # neunzig Grad, dort das Ecktempo der Maschine statt eines Halts.
-        corner = corner_speed(speed, lines.acceleration, math.pi / 2.0, roles)
+        corner = corner_speed(speed, lines.acceleration, lines.turn, roles)
         total += lines.count * trapezoid(lines.length, speed, lines.acceleration, corner, corner)
     return total
 
@@ -529,7 +733,18 @@ def _layer_seconds(layer: _Layer, roles: _Roles, minimum_time: float, floor: flo
             else:
                 high = middle
         scale = high
-    return _actual(layer, roles, scale, floor) + _fixed(layer, roles, nominal=False)
+    support = sum(
+        lines.count
+        * trapezoid(
+            lines.length,
+            lines.speed,
+            lines.acceleration,
+            corner_speed(lines.speed, lines.acceleration, lines.turn, roles),
+            corner_speed(lines.speed, lines.acceleration, lines.turn, roles),
+        )
+        for lines in layer.support
+    )
+    return _actual(layer, roles, scale, floor) + support + _fixed(layer, roles, nominal=False)
 
 
 def plate_seconds(
@@ -564,6 +779,7 @@ def plate_seconds(
                 own = layers[index]
                 together.loops.extend(own.loops)
                 together.lines.extend(own.lines)
+                together.support.extend(own.support)
                 together.starts += own.starts
                 together.travel = max(together.travel, own.travel)
         total += _layer_seconds(

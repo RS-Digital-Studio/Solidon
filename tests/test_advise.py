@@ -1204,3 +1204,51 @@ def test_the_nozzle_limit_compares_the_material_request(maximum: float, expected
     if expected:
         assert matches[0].values["wanted"] == pytest.approx(240.0)
         assert matches[0].values["possible"] == pytest.approx(maximum)
+
+
+def _table_on_a_foot(top: float):
+    """Ein Fuß 10 × 10 mm (kleine Standfläche), darauf eine Platte ``top`` mm im Quadrat."""
+    foot = trimesh.creation.box(extents=(10.0, 10.0, 2.0))
+    foot.apply_translation((0.0, 0.0, 1.0))
+    plate = trimesh.creation.box(extents=(top, top, 2.0))
+    plate.apply_translation((0.0, 0.0, 3.0))
+    mesh = MeshData.of(trimesh.boolean.union([foot, plate]))
+    return mesh, slice_body(mesh, 0.2)
+
+
+@pytest.mark.parametrize(
+    ("top", "width"),
+    [
+        (120.0, None),  # 30 mm Rand: der Brim des Profils (5 mm) passt
+        (172.0, "schmaler"),  # 4 mm Rand: ein schmalerer Brim
+        (179.6, "keiner"),  # 0,2 mm: kein Brim, dafür ein Befund
+    ],
+)
+def test_a_brim_is_suggested_only_as_wide_as_the_bed_allows(top, width) -> None:
+    """Auf 180 × 180 mm (MINI): Die Waschschüssel bekam auf 220 × 220 mm einen
+    Brim von 5 mm vorgeschlagen und passte nur schräg mit 0,15 mm Rand —
+    CuraEngine druckte den Rand neben das Bett (04.10.2026)."""
+    profile = profiles.make_profile("prusa-mini", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "skirt")
+    mesh, result = _table_on_a_foot(top)
+
+    entries = advise.advise(settings, profile, result, bounds=mesh.bounds)
+    kinds = [entry.value for entry in entries if entry.path == "adhesion.kind"]
+    widths = [entry.value for entry in entries if entry.path == "adhesion.brim_width"]
+    findings = [item.code for item in advise.located_warnings(result, profile)]
+    room = (180.0 - top) / 2.0
+
+    assert advise.brim_room(result, profile) == pytest.approx(room, abs=0.01)
+    if width is None:
+        assert kinds == ["brim"] and not widths
+        assert "settings.brim_no_room" not in findings
+    elif width == "keiner":
+        # Auch der Skirt des Profils hätte keinen Platz: ohne ihn.
+        assert kinds == ["none"] and not widths
+        assert "settings.brim_no_room" in findings
+    else:
+        measured = advise.brim_room(result, profile)
+        assert measured is not None
+        assert kinds == ["brim"] and widths == [pytest.approx(math.floor(measured * 10.0) / 10.0)]
+        assert 3.5 < widths[0] <= measured
+        assert "settings.brim_no_room" not in findings

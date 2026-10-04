@@ -129,15 +129,15 @@ oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
 
 Vor dem Konsolenlauf prüft `slice_model` die Exportnetze der gewählten Platte
 auf Höhe, drehbare Grundfläche und eine Anordnung auf einer Platte.
-`PlateRun.meshes` hält den vorbereiteten Netzsatz; ohne ihn lesen begrenzte
-Importleser die Dateien. Stützsperren zählen nicht als Druckteile. Ein
-bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
-die normale Datei- und Fensterübergabe behält ihren Berichtweg.
+`PlateRun.meshes` hält den vorbereiteten Netzsatz, sonst lesen begrenzte
+Importleser; Stützsperren zählen nicht als Druckteile. Ein Bauraumgrund hält
+vor dem Prozessstart mit Handlung an.
 
 `prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
-Ohne eigene Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf
-exportlokal gepackt. `arrangement_holds` prüft auch tatsächliche Druckkontur,
-Sperrzonen und nutzbare Höhe; dies gilt ebenso für die Lageübernahme im Fenster.
+Ohne eigene Konsolenanordnung (`arranges_on_cli`) oder wenn ein Teil nur
+gedreht passt, wird die Platte exportlokal gepackt; Creality Print braucht dann
+`CREALITY_ARRANGE_EDGE` Rand (`_check_creality_edge`). `arrangement_holds`
+prüft Druckkontur, Sperrzonen und Höhe, auch für die Lageübernahme im Fenster.
 
 | Prüfung | Frage |
 |---|---|

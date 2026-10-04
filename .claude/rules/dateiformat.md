@@ -239,19 +239,19 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein
-  Fünftel Bett Luft (`plate_origin`, `SLICER_PLATE_GAP`, aus `PartPlate.cpp`).
-  Die Blöcke zählen durch (Rang, nicht Solidons Plattennummer). *Im Slicer
-  öffnen* gibt alle gewählten Platten in einer Datei, ein Fenster. PrusaSlicer
-  und Cura bekommen je Platte eine Datei, der Konsolenlauf (*Slicen*) je
-  Platte eine Druckdatei. Solidons Anordnung reist nur mit, wenn sie auf
+  Fünftel Bett Luft (`plate_origin`, `SLICER_PLATE_GAP`, aus `PartPlate.cpp`),
+  Blöcke nach Rang; *Im Slicer öffnen* gibt eine Datei. PrusaSlicer und Cura
+  bekommen je Platte eine Datei, *Slicen* je Platte eine Druckdatei. Solidons Anordnung reist nur mit, wenn sie auf
   **jeder** gewählten Platte hält (`arrangement_holds`).
 - **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`): Teile um
   `build_area.machine_shift` verschoben **und** ein Bett um denselben
   Nullpunkt (`PrinterProfile.bed_origin`, sonst die Ecke), in derselben
   Übergabe — beides fragt dasselbe Prädikat. Eine Cura-Definition behält
   ihren Ursprung (`CuraMachine.shift`).
-- **Ohne Familie STL um den Ursprung** (`other`): nichts übersetzt, nichts
-  gerechnet; der Konsolenweg sagt ab, das Öffnen läuft.
+- **Ohne Familie STL um den Ursprung** (`other`): nichts übersetzt; der
+  Konsolenweg sagt ab, das Öffnen läuft.
+- **Was nur gedreht passt, dreht Solidon**, auch für die Orca-Familie
+  (`writer.prepare_slicer_meshes`).
 - **Ein exakter Körper geht so fein hinaus, wie der Drucker es braucht**:
   `writer.mesh_for_export` vernetzt neu, wenn `Profile.export_deflection` (ein
   Achtel des kleinsten Details, gedeckelt von der Zahl des Kerns) feiner

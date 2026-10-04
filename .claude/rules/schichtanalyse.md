@@ -96,15 +96,14 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   aus einem gespeicherten Satz gilt die Schwelle nur als eigene Wahl.
   **Wer einen Winkel einführt, reicht ihn bis in jede Vorauswahl durch.**
 - **Ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen**
-  (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft
-  (`test_orient.py::test_the_preselection_counts_overhangs_against_the_printers_limit`).
+  (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft (`test_orient.py`).
 - **Eine Decke im Kanal verlangt keine Stütze auf dem Modell**
   (`analysis.model_support`): Fasst der freie Raum unmittelbar **unter** ihr
   keinen Kreis von `CHANNEL_WIDTH` um das Stück, schließt sie sich als Brücke
   oder Gewölbe und fällt aus dem Stützbedarf. Außen auf dem Modell zählt nur
   ein Stück über `OVERHANG_LAYER_WORTH_SUPPORT` oder die Summe über
-  `OVERHANG_WORTH_SUPPORT`. Wer die Grenze anfasst, misst die Gegenfälle an der
-  Konstante nach und fährt die Waschschüssel im Slicer.
+  `OVERHANG_WORTH_SUPPORT`; wer die Grenze anfasst, fährt die Waschschüssel
+  im Slicer.
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
@@ -134,10 +133,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Mindestzeit je Schicht nur ohne eine, kein Brim über Orcas Auto-Brim
   (`AUTO_BRIM_FLAVOURS`) — gebremst wird dort trotzdem: `_calm_walls` für
   schlanke Körper unter `SMALL_FOOTPRINT`, je Teil.
-- **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`), auch
-  passende — ein Würfel schaltet die Stützen eines anderen nicht ab.
-  Filamentwerte werden je tatsächlichem Slot aufgelöst und nur darin
-  zusammengeführt, Prozesswerte passen für alle gewählten Körper; Abgewähltes
+- **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`) — ein
+  Würfel schaltet die Stützen eines anderen nicht ab. Filamentwerte je
+  tatsächlichem Slot, Prozesswerte für alle gewählten Körper; Abgewähltes
   bleibt bei Neuberechnung abgewählt.
 - **Die Druckanalyse benutzt das Druckraster**: `slice_body` bekommt normale
   und erste Schichthöhe aus den effektiven Einstellungen; der Dialog misst den
@@ -227,6 +225,9 @@ rechnet aus der Schichtanalyse** (`slice/print_time.py`): Mindestschichtzeit,
 belegtes Mindesttempo und Beschleunigung aus dem Herstellerprofil (`Motion`;
 ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
 (`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`.
+**Stützen zählen außerhalb der Mindestschichtzeit**; stützt der Slicer ganz
+anders oder das Profil keine Brücken, bleibt die Zeit offen
+(`estimate.time_comparison_blocked`).
 
 ## Was die Analyse liefert
 

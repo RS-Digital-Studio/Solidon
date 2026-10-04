@@ -24,6 +24,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
+import numpy as np
+
+from app.core import build_area
 from app.core.errors import (
     CALIBRATE_MATERIAL,
     CHOOSE_PRINTER,
@@ -59,7 +62,7 @@ from app.core.types import (
     Severity,
     SliceResult,
 )
-from app.core.units import EPS_GEOM, is_close, is_zero
+from app.core.units import EPS_GEOM, format_length, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -1009,15 +1012,15 @@ def _from_geometry(
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
     # und hält mehr als Solidons Brim fester Breite.
     unanchored = _unanchored(settings, flavour)
+    # Zuerst ohne Skirt, wo er keinen Platz hat; ein schmaler Brim danach
+    # überstimmt das (:func:`_merged`, die spätere Regel gewinnt).
+    advice += _skirt_where_it_fits(settings, profile, result)
     if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and unanchored:
-        advice.append(
-            _advice(
-                settings,
-                path="adhesion.kind",
-                value="brim",
-                reason=_("Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt."),
-                severity="warning",
-            )
+        advice += _brim_where_it_fits(
+            settings,
+            profile,
+            result,
+            _("Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt."),
         )
 
     # **Und auf vielen kleinen Füßen.** Die Frage oben liest die Summe: Die
@@ -1029,28 +1032,22 @@ def _from_geometry(
     # Eiffelturm auf vier Beinen, eine Katze auf drei Pfoten, einen Schaber
     # auf zwei Auflagen.
     if unanchored and result.first_layer_area >= SMALL_FOOTPRINT and _on_small_feet(result):
-        advice.append(
-            _advice(
-                settings,
-                path="adhesion.kind",
-                value="brim",
-                reason=_(
-                    "Das Teil steht auf kleinen Füßen, und keiner hält allein. "
-                    "Ein Brim gibt jedem Fuß Halt."
-                ),
-                severity="warning",
-            )
+        advice += _brim_where_it_fits(
+            settings,
+            profile,
+            result,
+            _(
+                "Das Teil steht auf kleinen Füßen, und keiner hält allein. "
+                "Ein Brim gibt jedem Fuß Halt."
+            ),
         )
 
     if bounds is not None and _slender(bounds) and unanchored:
-        advice.append(
-            _advice(
-                settings,
-                path="adhesion.kind",
-                value="brim",
-                reason=_("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen."),
-                severity="warning",
-            )
+        advice += _brim_where_it_fits(
+            settings,
+            profile,
+            result,
+            _("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen."),
         )
 
     # **Ein Brim hält den Fuß, nicht die Stange darüber.** Roberts Fahnenstangen
@@ -1609,15 +1606,7 @@ def for_part(
         else:
             reason = None
         if reason is not None:
-            advice.append(
-                _advice(
-                    settings,
-                    path="adhesion.kind",
-                    value="brim",
-                    reason=reason,
-                    severity="warning",
-                )
-            )
+            advice += _brim_where_it_fits(settings, profile, result, reason, narrower=False)
     return _merged(settings, advice)
 
 
@@ -1679,6 +1668,105 @@ def _calm_walls(settings: PrintSettings) -> list[SettingAdvice]:
 
 def _slender(bounds: BoundingBox) -> bool:
     return settings_table.is_slender(bounds)
+
+
+#: Ein Brim unter so vielen Bahnen der ersten Schicht hält nichts; schmaler
+#: wird keiner vorgeschlagen.
+BRIM_LEAST_LINES: Final = 3
+
+
+def brim_room(result: SliceResult, profile: Profile) -> float | None:
+    """Wie breit ein Rand um dieses Teil auf dem Bett des Druckers höchstens
+    sein kann, gedreht wie es am besten passt, in mm (:func:`build_area.free_margin`).
+
+    Gefragt am Umriss aller Schichten. ``None`` ohne Schicht. Knapp unter null
+    heißt nicht „passt nicht“: Die Waschschüssel hat am Schnitt des Druckdialogs
+    minus 0,06 mm, an ihrem Netz 0,14 mm — ein Brim passt in beiden Fällen nicht."""
+    rings = [
+        np.asarray(contour.outline, dtype=float)
+        for layer in result.layers
+        for contour in layer.contours
+        if len(contour.outline) >= 3
+    ]
+    if not rings:
+        return None
+    return build_area.free_margin(np.concatenate(rings), profile.printer)
+
+
+def skirt_reach(settings: PrintSettings) -> float:
+    """Wie weit ein Skirt über das äußerste Teil hinausreicht, in mm: sein
+    Abstand und so viele Bahnen der ersten Schicht, wie er Runden hat
+    (auch :func:`app.core.export.writer.rim_reach`)."""
+    adhesion = settings.adhesion
+    line = settings.layers.first_layer_line_width or settings.layers.line_width
+    return adhesion.skirt_distance + adhesion.skirt_loops * line
+
+
+def _skirt_where_it_fits(
+    settings: PrintSettings, profile: Profile, result: SliceResult
+) -> list[SettingAdvice]:
+    """Ohne Skirt, wo neben dem Teil auf dem Bett kein Platz für ihn ist.
+
+    Die Waschschüssel liegt auf 220 auf 220 mm schräg mit 0,15 mm Rand; Curas
+    Skirt (3 mm Abstand, zwei Runden) lief über den Bettrand und riss in der
+    ersten Schicht in 23 Züge (04.10.2026). Ein Skirt hält nichts fest, er
+    spült nur die Düse; fehlt der Platz, ist ohne ihn besser als daneben.
+    """
+    if settings.adhesion.kind != "skirt":
+        return []
+    room = brim_room(result, profile)
+    if room is None or room >= skirt_reach(settings) - EPS_GEOM:
+        return []
+    return [
+        _advice(
+            settings,
+            path="adhesion.kind",
+            value="none",
+            reason=_("Für den Skirt ist neben diesem Teil auf dem Bett kein Platz."),
+            severity="warning",
+        )
+    ]
+
+
+def _brim_where_it_fits(
+    settings: PrintSettings,
+    profile: Profile | None,
+    result: SliceResult | None,
+    reason: TranslatableText,
+    *,
+    narrower: bool = True,
+) -> list[SettingAdvice]:
+    """Den Brim vorschlagen, aber nicht über den Bettrand hinaus.
+
+    Die Waschschüssel steht auf zwölf kleinen Füßen und bekam einen Brim von
+    5 mm vorgeschlagen; auf 220 auf 220 mm passt sie nur schräg, mit 0,15 mm
+    Luft. Übernommen druckte CuraEngine den Rand neben das Bett (04.10.2026).
+    Reicht der Platz für einen schmaleren Rand, wird der vorgeschlagen
+    (``narrower``, nur plattenweit — die Breite ist kein Teilwert); reicht er
+    nicht einmal dafür, bleibt der Vorschlag weg, und der Prüfbericht sagt
+    warum (:func:`located_warnings`, ``settings.brim_no_room``).
+    """
+    brim = _advice(settings, path="adhesion.kind", value="brim", reason=reason, severity="warning")
+    if profile is None or result is None:
+        return [brim]
+    room = brim_room(result, profile)
+    gap = max(settings.adhesion.brim_gap, 0.0)
+    if room is None or room >= settings.adhesion.brim_width + gap - EPS_GEOM:
+        return [brim]
+    line = settings.layers.first_layer_line_width or settings.layers.line_width
+    width = math.floor((room - gap) * 10.0) / 10.0
+    if not narrower or width < BRIM_LEAST_LINES * line:
+        return []
+    return [
+        brim,
+        _advice(
+            settings,
+            path="adhesion.brim_width",
+            value=width,
+            reason=_("Breiter passt der Brim nicht auf das Bett dieses Druckers."),
+            severity="warning",
+        ),
+    ]
 
 
 def _has_thin_layers(result: SliceResult) -> bool:
@@ -1927,6 +2015,28 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
             )
         )
     findings += _from_spans(result)
+    # **Ein Brim, der nicht aufs Bett passt, wird nicht vorgeschlagen — aber
+    # gesagt** (:func:`_brim_where_it_fits`). Gefragt wie dort: kleine
+    # Standfläche oder kleine Füße.
+    wants_brim = 0.0 < result.first_layer_area < SMALL_FOOTPRINT or (
+        result.first_layer_area >= SMALL_FOOTPRINT and _on_small_feet(result)
+    )
+    room = brim_room(result, profile) if wants_brim else None
+    least = BRIM_LEAST_LINES * profile.printer.nozzle_diameter
+    if room is not None and room < least:
+        findings.append(
+            Finding(
+                code="settings.brim_no_room",
+                severity="warning",
+                message=_(
+                    "Dieses Teil steht auf wenig Fläche, doch für einen Brim ist auf dem "
+                    "Bett dieses Druckers kein Platz."
+                ),
+                values={"room": format_length(max(room, 0.0)), "least": format_length(least)},
+                # Regel 17: Ein größeres Bett hat Platz für den Rand.
+                suggestions=(CHOOSE_PRINTER,),
+            )
+        )
     return findings
 
 

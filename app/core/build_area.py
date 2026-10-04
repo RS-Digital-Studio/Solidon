@@ -427,8 +427,6 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     Größenabsage muss :func:`size_excess_uncertainty` abgezogen werden;
     das Winkelraster kann eine tatsächlich passende Drehung verfehlen.
     """
-    from shapely.affinity import rotate
-
     from app.core.geom.mesh import as_mesh_data
 
     if placement_offset(mesh, printer) is not None:
@@ -438,12 +436,7 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     left, front, right, back = printable_area(printer).bounds
     width, depth = right - left, back - front
     points = np.asarray(as_mesh_data(mesh).raw.vertices, dtype=float)[:, :2]
-    hull = MultiPoint(points).convex_hull
-    flat = float("inf")
-    for degrees in range(0, 90, SIZE_ANGLE_STEP_DEGREES):
-        low_x, low_y, high_x, high_y = rotate(hull, degrees, origin="centroid").bounds
-        over = max(high_x - low_x - width, high_y - low_y - depth)
-        flat = min(flat, over, max(high_x - low_x - depth, high_y - low_y - width))
+    flat = _turned_overhang(MultiPoint(points).convex_hull, width, depth)
     if max(flat, height) > EPS_GEOM:
         return max(flat, height)
     # Er passt in einer Drehung. Liegt er achsparallel schon im Rechteck und
@@ -451,6 +444,38 @@ def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
     # ihn der Slicer beim Anordnen selbst.
     square = bounds.size[0] <= width + EPS_GEOM and bounds.size[1] <= depth + EPS_GEOM
     return EPS_GEOM if square else 0.0
+
+
+def _turned_overhang(hull: BaseGeometry, width: float, depth: float) -> float:
+    """Der kleinste Überstand einer Hülle über ein Rechteck ``width`` mal ``depth``
+    über alle Drehungen im Winkelraster, in mm; negativ heißt so viel Luft auf
+    der knapperen Achse. Eine Messung wie :func:`size_excess`."""
+    from shapely.affinity import rotate
+
+    least = float("inf")
+    for degrees in range(0, 90, SIZE_ANGLE_STEP_DEGREES):
+        low_x, low_y, high_x, high_y = rotate(hull, degrees, origin="centroid").bounds
+        least = min(
+            least,
+            max(high_x - low_x - width, high_y - low_y - depth),
+            max(high_x - low_x - depth, high_y - low_y - width),
+        )
+    return least
+
+
+def free_margin(points: np.ndarray, printer: PrinterProfile) -> float:
+    """Wie breit ein Rand rundum um diesen Umriss höchstens sein darf, damit
+    Umriss und Rand in einer Drehung noch auf die Druckfläche passen, in mm.
+
+    ``points`` sind Punkte in XY, deren konvexe Hülle die der Projektion ist.
+    Negativ heißt: Schon der Umriss passt nicht. Die Waschschüssel aus dem
+    Korpus (240 auf 200 mm) hat auf 220 auf 220 mm schräg gelegt 0,15 mm —
+    kein Brim, kein Skirt, und Creality Print wie OrcaSlicer legten sie gerade
+    und lehnten ab (04.10.2026). Gleiches Winkelraster wie :func:`size_excess`.
+    """
+    left, front, right, back = printable_area(printer).bounds
+    hull = MultiPoint(np.asarray(points, dtype=float)[:, :2]).convex_hull
+    return -_turned_overhang(hull, right - left, back - front) / 2.0
 
 
 def size_excess_uncertainty(mesh: Mesh) -> float:

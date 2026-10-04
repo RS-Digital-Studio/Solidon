@@ -788,13 +788,16 @@ def test_a_small_footprint_asks_for_a_brim() -> None:
 def _standing_on(*feet: float) -> SliceResult:
     """Ein Körper, dessen erste Schicht aus getrennten Quadraten der
     genannten Flächen besteht — darüber eine geschlossene Schicht."""
+    # Zwanzig Millimeter Teilung: Neun Füße und die Schicht darüber passen auf
+    # das Bett des Druckers — ein Brim wird nur so breit vorgeschlagen, wie es
+    # dort Platz hat (``advise.brim_room``).
     contours = tuple(
         Polygon(
             outline=(
-                (100.0 * index, 0.0),
-                (100.0 * index + area**0.5, 0.0),
-                (100.0 * index + area**0.5, area**0.5),
-                (100.0 * index, area**0.5),
+                (20.0 * index, 0.0),
+                (20.0 * index + area**0.5, 0.0),
+                (20.0 * index + area**0.5, area**0.5),
+                (20.0 * index, area**0.5),
             )
         )
         for index, area in enumerate(feet)
@@ -810,7 +813,7 @@ def _standing_on(*feet: float) -> SliceResult:
     above = replace(
         first,
         z=0.3,
-        contours=(Polygon(outline=((0.0, 0.0), (900.0, 0.0), (900.0, 50.0), (0.0, 50.0))),),
+        contours=(Polygon(outline=((0.0, 0.0), (200.0, 0.0), (200.0, 50.0), (0.0, 50.0))),),
     )
     return SliceResult(
         layers=(first, above), support_volume=0.0, first_layer_area=sum(feet), source="internal"

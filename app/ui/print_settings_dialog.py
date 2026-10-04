@@ -1120,6 +1120,8 @@ class SliceComparison:
     grams: float | None
     seconds: float | None
     plates: tuple[PlateComparison, ...] = ()
+    seconds_reason: TranslatableText | str = ""
+    """Warum die Zeit fehlt, wenn eine Platte es sagt (:attr:`PlateComparison.seconds_reason`)."""
 
 
 def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceComparison:
@@ -1187,6 +1189,14 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
     return SliceComparison(
         grams=grams,
         seconds=seconds,
+        seconds_reason=next(
+            (
+                run.comparison.seconds_reason
+                for run in runs
+                if run.comparison is not None and run.comparison.seconds_reason
+            ),
+            "",
+        ),
         plates=tuple(
             run.comparison
             or PlateComparison(

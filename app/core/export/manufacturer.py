@@ -775,7 +775,49 @@ def orca_motion(
         z_acceleration=_amount(machine.get("machine_max_acceleration_z")),
         retraction_speed=retraction,
         deretraction_speed=_amount(machine.get("deretraction_speed")) or retraction,
+        **_orca_support_motion(process, default, nozzle),
     )
+
+
+#: Was OrcaSlicer 2.4.2 für ``support_interface_speed`` fährt, wenn der Prozess
+#: dort einen Anteil nennt: Den verwirft es und schreibt seine Vorgabe in den
+#: Konfigurationsblock (Kobra 2: „100%“ → 80, 04.10.2026; ``PrintConfig.cpp``).
+ORCA_SUPPORT_INTERFACE_SPEED: Final = 80.0
+
+#: Wie weit die Normalstützen der Orca-Familie ihre Flächen schließen, in mm:
+#: im Quelltext fest, kein Profilschlüssel (``SupportMaterial.cpp``).
+ORCA_SUPPORT_CLOSING: Final = 2.0
+
+
+def _orca_support_motion(
+    process: Mapping[str, Any], default: float | None, nozzle: float
+) -> dict[str, Any]:
+    """Tempo, Beschleunigung, Kontaktdichte und Art der Stützen der Orca-Familie.
+
+    Stützen fahren mit ``default_acceleration`` (es gibt keinen eigenen
+    Schlüssel); die Kontaktschichten liegen ``support_interface_spacing``
+    auseinander, die Bahnbreite ``support_line_width``, ohne sie
+    ``line_width``. „Automatisch“ stützt mit der Art des Prozesses
+    (``support_type``), Bäume schreiben ihre Äste anders als ein Muster.
+    """
+    speed = _amount(process.get("support_speed"))
+    text = _text(process.get("support_interface_speed")) or ""
+    interface = ORCA_SUPPORT_INTERFACE_SPEED if text.endswith("%") else _amount(text, speed)
+    width = _amount(process.get("support_line_width")) or _amount(process.get("line_width"))
+    width = width or nozzle
+    spacing = _float(_text(process.get("support_interface_spacing")) or "")
+    return {
+        "support_speed": speed,
+        "support_interface_speed": interface,
+        "support_acceleration": default,
+        "support_interface_density": width / (width + spacing)
+        if spacing is not None and spacing >= 0.0
+        else None,
+        "support_tree": (_text(process.get("support_type")) or "").startswith("tree"),
+        # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
+        "support_closing": ORCA_SUPPORT_CLOSING,
+        "support_skips_bridges": (_text(process.get("bridge_no_support")) or "0") in ("1", "true"),
+    }
 
 
 #: Wann PrusaSlicer die Maschinengrenzen in seine Zeitrechnung nimmt.
@@ -833,7 +875,33 @@ def prusa_motion(values: Mapping[str, Any], nozzle: float) -> Motion | None:
         deretraction_speed=_amount(values.get("filament_deretract_speed"))
         or _amount(values.get("deretract_speed"))
         or retraction,
+        **_prusa_support_motion(values, nozzle),
     )
+
+
+def _prusa_support_motion(values: Mapping[str, Any], nozzle: float) -> dict[str, Any]:
+    """Stützen in einem Prusa-Bündel: ``support_material_speed``, die
+    Kontaktschichten in mm/s oder als Anteil davon, Beschleunigung
+    ``default_acceleration``; „organic“ sind Bäume."""
+    speed = _amount(values.get("support_material_speed"))
+    width = (
+        _amount(values.get("support_material_extrusion_width"))
+        or _amount(values.get("extrusion_width"))
+        or nozzle
+    )
+    spacing = _float(_text(values.get("support_material_interface_spacing")) or "")
+    return {
+        "support_speed": speed,
+        "support_interface_speed": _amount(values.get("support_material_interface_speed"), speed),
+        "support_acceleration": _amount(values.get("default_acceleration")),
+        "support_interface_density": width / (width + spacing)
+        if spacing is not None and spacing >= 0.0
+        else None,
+        "support_tree": (_text(values.get("support_material_style")) or "") == "organic",
+        "support_closing": _float(_text(values.get("support_material_closing_radius")) or ""),
+        "support_skips_bridges": (_text(values.get("dont_support_bridges")) or "0")
+        in ("1", "true"),
+    }
 
 
 def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
@@ -851,11 +919,19 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
         return None
     jerk = _cura_number(chain.get("machine_max_jerk_xy"))
     limit = _cura_number(chain.get("machine_max_acceleration_x"))
+    interface = _cura_number(chain.get("support_interface_density"))
     return Motion(
         nozzle=profile.printer.nozzle_diameter,
         minimum_speed=minimum,
         jerk=jerk if jerk is not None and jerk > 0.0 else None,
         acceleration_limit=limit if limit is not None and limit > 0.0 else None,
+        # Stütztempo und Beschleunigung folgen dem, was Solidon schreibt
+        # (``speed_print``, ``print_time._roles``); die Kontaktdichte steht in
+        # der Definition, in Prozent.
+        support_interface_density=interface / 100.0
+        if interface is not None and interface > 0.0
+        else None,
+        support_closing=_cura_number(chain.get("support_join_distance")),
     )
 
 

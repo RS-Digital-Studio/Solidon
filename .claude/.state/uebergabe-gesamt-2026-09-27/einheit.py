@@ -107,7 +107,7 @@ from app.core.scene.project import (  # noqa: E402
     next_source_id,
 )
 from app.core.slice import advise  # noqa: E402
-from app.core.slice.estimate import plates_findings  # noqa: E402
+from app.core.slice.estimate import plates_findings, time_comparison_blocked  # noqa: E402
 from app.core.slice.gcode import DEVIATION_LIMIT as TIME_DEVIATION  # noqa: E402
 from app.core.types import Source  # noqa: E402
 from app.ui.print_settings_dialog import (  # noqa: E402
@@ -681,6 +681,16 @@ def plate_run(
             estimated_minutes=round(run.comparison.seconds / 60.0, 1)
             if run.comparison is not None and run.comparison.seconds
             else None,
+            # Wie das Hauptfenster: Stützt der Slicer deutlich anders oder ist
+            # die Zeit aus einem genannten Grund offen, gibt es keinen Vergleich.
+            time_blocked=str(
+                (run.comparison.seconds_reason if run.comparison is not None else "")
+                or (time_comparison_blocked([run.comparison], metrics) if run.comparison else "")
+            ),
+            support_estimated_mm3=run.comparison.support_material_mm3
+            if run.comparison is not None
+            else None,
+            support_gcode_mm3=metrics.support_mm3,
             filament_g=metrics.filament_grams,
             slice_findings=sorted(
                 {f"{f.severity}:{f.code}" for f in findings if f.severity != "info"}
@@ -900,7 +910,7 @@ def flags_for(
     # derselben Grenze wie ``gcode.compare``; hier für jede Platte, damit die
     # Gesamtabnahme zählt, wo der Kunde „Druckzeit weicht ab“ liest (RM-465).
     printing, estimated = row.get("printing_minutes"), row.get("estimated_minutes")
-    if row.get("ok") and printing and estimated:
+    if row.get("ok") and printing and estimated and not row.get("time_blocked"):
         deviation = (estimated - printing) / printing
         if abs(deviation) > TIME_DEVIATION:
             found.append(f"Zeit ab Schicht 1 weicht ab ({deviation:+.0%})")

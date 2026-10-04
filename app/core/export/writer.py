@@ -28,8 +28,11 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
+    CHOOSE_SLICER,
     CONVERT_TO_EXACT,
     EXPORT_AS_MESH,
+    OPEN_PRINT_SETTINGS,
+    SCALE_TO_FIT,
     SHOW_HISTORY,
     ExternalToolError,
     FileWriteError,
@@ -517,11 +520,10 @@ def rim_reach(settings: PrintSettings) -> float:
     Zwischen zwei Teilen läuft er nicht, am Bettrand liegt er ganz außen —
     ``skirt_distance`` weit weg und so viele Bahnen breit, wie er Runden hat.
     """
-    adhesion = settings.adhesion
-    if adhesion.kind == "skirt":
-        return (
-            adhesion.skirt_distance + adhesion.skirt_loops * settings.layers.first_layer_line_width
-        )
+    from app.core.slice import advise
+
+    if settings.adhesion.kind == "skirt":
+        return advise.skirt_reach(settings)
     return adhesion_margin(settings)
 
 
@@ -574,8 +576,11 @@ def check_adhesion_on_bed(
                 object_id=object_ids[index] if index < len(object_ids) else None,
                 values={"distance": format_length(over)},
                 # Regel 17: Anordnen hält zum Bettrand den Abstand der Haftung
-                # (``split.bed_margin``).
-                suggestions=(ARRANGE_ON_BED,),
+                # (``split.bed_margin``). Liegt das Teil schon schräg so knapp,
+                # dass auch Anordnen nichts frei macht (Waschschüssel auf
+                # 220 auf 220 mm: 0,15 mm), hilft nur ein schmalerer Rand oder
+                # ein größeres Bett.
+                suggestions=(ARRANGE_ON_BED, OPEN_PRINT_SETTINGS, CHOOSE_PRINTER),
             )
         )
     return findings
@@ -1830,9 +1835,20 @@ def prepare_slicer_meshes(
                 problem.values["part_index"] = index
             raise
     program = slicer_keys.program_of(setup.executable)
-    if slicer_keys.arranges_on_cli(setup.flavour, program):
+    if slicer_keys.arranges_on_cli(setup.flavour, program) and all(
+        build_area.placement_offset(exported[entry.id], profile.printer) is not None
+        for entry in chosen
+    ):
         return exported, False
-    return _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+    # **Die Orca-Familie ordnet an, aber sie dreht nicht.** Die Waschschüssel
+    # aus dem Korpus (240 auf 200 mm) passt auf 220 auf 220 mm nur schräg;
+    # gerade übergeben lehnten Creality Print (K1) und OrcaSlicer (Kobra 2) ab
+    # (04.10.2026), schräg übergeben rechnete OrcaSlicer sie. Passt ein Teil
+    # nur gedreht, dreht Solidon es selbst und gibt die Lage vor.
+    arranged, changed = _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+    if changed and handover._creality_cli(setup):
+        _check_creality_edge(chosen, arranged, profile, setup)
+    return arranged, changed
 
 
 def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
@@ -1897,6 +1913,53 @@ def _fit_cli_mesh(
         if build_area.fits_on_bed(result, profile.printer):
             return result
     return None
+
+
+#: Wie viel Rand Creality Print zum Bettrand braucht, wenn es eine Platte über
+#: die Konsole selbst anordnet, in mm. Gemessen an der schräg gelegten
+#: Waschschüssel auf dem K1 (220 auf 220 mm, 04.10.2026): mit 0,15, 0,53 und
+#: 0,79 mm Rand abgelehnt („Nicht jedes Teil liegt ganz auf der Druckplatte“),
+#: mit 1,04 und 1,25 mm gerechnet. OrcaSlicer übernimmt die Lage mit
+#: ``--arrange 0`` und rechnete schon 0,15 mm.
+CREALITY_ARRANGE_EDGE: Final = 1.04
+
+
+def _check_creality_edge(
+    chosen: Sequence[SceneObject],
+    arranged: dict[str, MeshData],
+    profile: Profile,
+    setup: SlicerSetup,
+) -> None:
+    """Sagt vor dem Lauf ab, was Creality Print beim eigenen Anordnen ablehnt.
+
+    Creality Print nimmt über die Konsole keine Lage an (:func:`handover._creality_cli`)
+    und legt jede Platte selbst — mit Abstand zum Bettrand. Ein Teil, das nur
+    schräg und knapper passt, ginge sonst hinaus und käme als Absage zurück.
+    """
+    from app.core.export import handover
+
+    for entry in chosen:
+        mesh = arranged[entry.id]
+        room = build_area.free_margin(
+            np.asarray(mesh.raw.vertices, dtype=float)[:, :2], profile.printer
+        )
+        if room >= CREALITY_ARRANGE_EDGE:
+            continue
+        raise ExternalToolError(
+            tool=setup.name,
+            title=handover.SLICER_FAILED,
+            detail=_(
+                "Dieses Teil passt nur schräg und sehr knapp auf das Bett. Creality Print legt "
+                "die Teile selbst auf das Bett und lässt dabei mehr Abstand zum Rand."
+            ),
+            values={
+                "constraint": "slicer_build_volume",
+                "room": format_length(max(room, 0.0)),
+                "needed": format_length(CREALITY_ARRANGE_EDGE),
+            },
+            object_id=entry.id,
+            suggestions=(SCALE_TO_FIT, CHOOSE_SLICER, CHOOSE_PRINTER),
+        )
 
 
 def _arrange_for_cli(

@@ -274,6 +274,8 @@ class PlateComparison:
     """Druckzeit ab der ersten Schicht aus der Schichtanalyse
     (:func:`app.core.slice.print_time.plate_seconds`); ``None`` ohne belegtes
     Mindestdrucktempo oder ohne gemeinsames Raster."""
+    seconds_reason: TranslatableText | str = ""
+    """Warum ``seconds`` fehlt, wenn es nicht am Mindesttempo liegt."""
 
 
 def plate_comparison(
@@ -346,7 +348,24 @@ def plate_comparison(
     all_indices = tuple(range(len(known)))
     arranged_apart = separate_objects and not keep_arrangement and len(known) > 1
     seconds: float | None = None
-    if motion is not None and same_grid:
+    seconds_reason: TranslatableText | str = ""
+    # **Ein Profil, das keine Brücken stützt, entscheidet selbst, was gestützt
+    # wird.** Am Kobra 2 (``bridge_no_support = 1``) las OrcaSlicer die
+    # Unterseite des Pilzhuts als Brücke und stützte nur ihren Rand: 39 m Bahn
+    # statt rund 60 in den anderen Slicern, 4 144 statt 19 218 mm³ geschätzt
+    # (04.10.2026). Welche Decke das ist, rechnet nur der Slicer; mit Stützen
+    # bleiben Zeit und Stützmenge deshalb ungeprüft, statt falsch zu warnen.
+    skipped_bridges = (
+        motion is not None
+        and motion.support_skips_bridges
+        and any(settings.support.style != "none" for _entry, _mesh, settings in known)
+    )
+    if skipped_bridges:
+        seconds_reason = _(
+            "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer "
+            "als Brücke liest, rechnet nur er."
+        )
+    elif motion is not None and same_grid:
         from app.core.slice.print_time import plate_seconds
 
         # Je Teil sein eigener Schnitt mit seinen eigenen Werten; gleiche
@@ -391,6 +410,15 @@ def plate_comparison(
 
     if all(settings.support.style == "none" for _entry, _mesh, settings in known):
         return PlateComparison(plate, 0.0, model_layers, seconds=seconds)
+    if skipped_bridges:
+        return PlateComparison(
+            plate,
+            None,
+            model_layers,
+            seconds_reason,
+            seconds=None,
+            seconds_reason=seconds_reason,
+        )
     if arranged_apart:
         return PlateComparison(
             plate,
@@ -551,6 +579,53 @@ def plate_findings(
             )
         )
     return found
+
+
+#: Um welchen Faktor Stützmenge der Schätzung und der Druckdatei höchstens
+#: auseinanderliegen, damit der Zeitvergleich mit Stützen etwas sagt. Gemessen
+#: (04.10.2026, Stand ohne Kanten- und Brückenfälle): Pilz in fünf Slicern
+#: 0,75 bis 1,77, Seitenablage bis 0,53; die Waschschüssel 0,24 bis 0,37 und
+#: der Arbeitsplattenreiniger 0,08 — dort stützt der Slicer gewölbte Flächen,
+#: die die Schichtanalyse als schmale Bänder liest, und eine Zeitwarnung hieße
+#: nur, dass die Stützen andere sind.
+SUPPORT_TIME_AGREEMENT = 2.0
+
+
+def time_comparison_blocked(
+    expected: Sequence[PlateComparison], measured: GcodeMetrics
+) -> TranslatableText | str:
+    """Warum die Druckzeit mit Stützen nicht gegengeprüft wird — leer, wenn sie es wird.
+
+    Die Zeit aus der Schichtanalyse rechnet die Stützen mit, die sie selbst
+    schätzt (:mod:`app.core.slice.print_time`). Stützt der Slicer deutlich
+    anders, wäre eine Zeitwarnung nur die Stützwarnung ein zweites Mal; die
+    steht mit beiden Mengen schon im Bericht (:func:`plate_findings`).
+    Verglichen werden die Mengen nur als Bedingung, nie verrechnet (Regel 14).
+    """
+    if not expected:
+        return ""
+    if all(
+        entry.support_material_mm3 is not None and entry.support_material_mm3 <= EPS_GEOM
+        for entry in expected
+    ) and (measured.support_mm3 is None or measured.support_mm3 <= EPS_GEOM):
+        return ""
+    missing = next(
+        (entry.support_reason for entry in expected if entry.support_material_mm3 is None),
+        None,
+    )
+    if missing is not None:
+        return missing or _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.")
+    if measured.support_mm3 is None or "support" in measured.uncertain_material_roles:
+        return _("Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.")
+    estimated = sum(entry.support_material_mm3 or 0.0 for entry in expected)
+    printed = measured.support_mm3
+    if (
+        estimated <= EPS_GEOM
+        or printed <= EPS_GEOM
+        or not 1.0 / SUPPORT_TIME_AGREEMENT <= printed / estimated <= SUPPORT_TIME_AGREEMENT
+    ):
+        return _("Der Slicer stützt deutlich anders, als die Schichtanalyse schätzt.")
+    return ""
 
 
 def plates_findings(

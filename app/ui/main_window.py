@@ -218,7 +218,7 @@ from app.core.sketch.planes import (
 from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.slice import gcode
-from app.core.slice.estimate import plates_findings, support_material
+from app.core.slice.estimate import plates_findings, support_material, time_comparison_blocked
 from app.core.slice.estimate import total as estimate_total
 from app.core.slice.findings import analysed
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
@@ -8903,7 +8903,17 @@ class MainWindow(QMainWindow):
         if grams is not None and comparison.grams is not None and comparison.grams > 0.0:
             findings += gcode.compare(comparison.grams, grams, "material").findings
         printing = metrics.printing_seconds
-        if printing is not None and comparison.seconds is not None and comparison.seconds > 0.0:
+        blocked = comparison.seconds_reason or (
+            time_comparison_blocked(comparison.plates, metrics)
+            if comparison.seconds is not None
+            else ""
+        )
+        if (
+            printing is not None
+            and comparison.seconds is not None
+            and comparison.seconds > 0.0
+            and not blocked
+        ):
             # Verglichen wird ab der ersten Schicht: Startcode und Aufheizen
             # stehen in keiner Schicht, und der Slicer weist sie selbst aus
             # (``GcodeMetrics.start_seconds``, RM-465).
@@ -8916,6 +8926,11 @@ class MainWindow(QMainWindow):
                     code="gcode.printing_time_not_compared",
                     severity="info",
                     message=_(
+                        "Die Druckzeit wird nicht gegengeprüft: {reason}",
+                        reason=blocked,
+                    )
+                    if blocked
+                    else _(
                         "Die Druckzeit wird nicht gegengeprüft: Für diesen Auftrag fehlt eine "
                         "Schätzung aus der Schichtanalyse mit belegtem Mindesttempo."
                     ),
