@@ -129,6 +129,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
 from app.core.perceive.actions import measure_explanation, measure_qualifier
+from app.core.perceive.groups import FunctionalGroup
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
@@ -140,6 +141,7 @@ from app.core.scene.history import (
     repair_is_available,
     step_titles,
 )
+from app.core.scene.parameter_binding import BindingSpot
 from app.core.scene.parameter_usage import field_bounds
 from app.core.types import (
     CancelToken,
@@ -173,6 +175,8 @@ from app.ui.labels import (
     feature_measure_tip,
     feature_name,
     fill_parameter_units,
+    group_measure_text,
+    group_summary,
     kind_requirement,
     length,
     limit_sentence,
@@ -2330,9 +2334,58 @@ class ObjectTree(QWidget):
             cavity_names = {
                 chain[0].id: cavity_name(chain[0].id, chain[0], chain) for chain in chains
             }
+            # **Und was gemeinsam eine Aufgabe trägt, hängt an seinem Anker**
+            # (RM-184, Dateiaudit §7): Boden und Wände einer Kammer, Gewinde
+            # mit Schulter, die Nocken eines Bajonetts, die Augen eines
+            # Scharniers, die Buchstaben einer Schrift. Die Zeile des Ankers
+            # heißt wie die Gruppe und trägt ihr Maß; ein Klick auf sie wählt,
+            # was darunter hängt — derselbe Weg wie die Senkung unter ihrer
+            # Bohrung. Die Zuordnung kommt aus dem Kern, gerechnet im
+            # Auswertungsarbeiter (``session._warm_metrics``).
+            from app.core.perceive.groups import evidence_texts, functional_groups
+            from app.core.perceive.groups import numbered_titles as group_titles
+
+            functional = (
+                functional_groups(entry.features, as_mesh_data(entry.mesh))
+                if len(entry.features) > 1
+                else ()
+            )
+            group_names = group_titles(functional)
+            sentences = evidence_texts() if functional else {}
+            grouped: dict[str, tuple[str, str, str]] = {}
+            for unit in functional:
+                anchor_id = unit.anchor
+                # Was aus einem Baustein kam, steht schon unter seinem Schritt;
+                # ein zweites Dach risse es dort heraus.
+                if anchor_id not in entry.features or any(
+                    member not in entry.features
+                    or _part_group(entry.features[member].created_by, document) is not None
+                    for member in unit.members
+                ):
+                    continue
+                grouped[anchor_id] = (
+                    group_names[unit.key],
+                    group_summary(unit),
+                    sentences[unit.evidence],
+                )
+                for member in unit.members:
+                    if member == anchor_id or member in under:
+                        continue
+                    # Hängt der Anker selbst schon (über eine Senkenkette) an
+                    # diesem Mitglied, bliebe es dort — ein Kreis nähme beide
+                    # Zeilen aus dem Baum.
+                    above = under.get(anchor_id)
+                    while above is not None and above != member:
+                        above = under.get(above)
+                    if above is None:
+                        under[member] = anchor_id
             alike: dict[tuple[str, str], int] = {}
             for other_id, other in entry.features.items():
-                if other_id not in under and _part_group(other.created_by, document) is None:
+                if (
+                    other_id not in under
+                    and other_id not in grouped
+                    and _part_group(other.created_by, document) is None
+                ):
                     group_key = (
                         cavity_names.get(other_id, feature_name(other_id, other)),
                         feature_measure(other, marked=True),
@@ -2349,18 +2402,31 @@ class ObjectTree(QWidget):
                 # Wort dahinter endete die Spalte in jeder Breite in
                 # „Ø5,20 mm · ein…“. Das Wort hört der Bildschirmleser, und der
                 # Tooltip nennt es samt Satz (Regel 18).
+                unit_name = grouped.get(feature_id)
                 child = QTreeWidgetItem(
                     [
-                        cavity_names.get(feature_id, feature_name(feature_id, feature)),
-                        feature_measure(feature, marked=True),
+                        unit_name[0]
+                        if unit_name is not None
+                        else cavity_names.get(feature_id, feature_name(feature_id, feature)),
+                        unit_name[1]
+                        if unit_name is not None and unit_name[1]
+                        else feature_measure(feature, marked=True),
                     ]
                 )
-                child.setData(1, Qt.ItemDataRole.AccessibleTextRole, feature_measure(feature))
+                child.setData(
+                    1,
+                    Qt.ItemDataRole.AccessibleTextRole,
+                    unit_name[1]
+                    if unit_name is not None and unit_name[1]
+                    else feature_measure(feature),
+                )
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 tip = _feature_tip(feature_id, feature, document)
                 if feature_id in cavity_names:
                     tip = f"{cavity_names[feature_id]}\n{tip}"
+                if unit_name is not None:
+                    tip = f"{unit_name[0]} — {unit_name[2]}\n{tip}"
                 # An beiden Spalten, wie der Regelsatz es für Zeilen verlangt:
                 # Wer eine Zeile nicht versteht, zeigt auf das unverständliche
                 # Wort und nicht auf die Zahl daneben.
@@ -2399,7 +2465,7 @@ class ObjectTree(QWidget):
                 part = _part_group(feature.created_by, document)
                 if part is None:
                     label = (child.text(0), child.text(1))
-                    if alike[label] < BUNDLE_FROM:
+                    if feature_id in grouped or alike.get(label, 0) < BUNDLE_FROM:
                         item.addChild(child)
                         continue
                     roof = by_kind.get(label)
@@ -3295,6 +3361,8 @@ class ParameterPanel(QWidget):
     """Die frei gesetzte Seitenkarte soll ihre Geometrie neu verteilen."""
     addRequested = Signal()
     """Der Nutzer will ein Maß benennen — das Fenster öffnet den Dialog."""
+    bindRequested = Signal()
+    """Feste Zahlen, die zu Maßen passen, binden — das Fenster öffnet die Wahl (RM-184)."""
     limitsRequested = Signal(str)
     """Grenzen, Einheit oder Ausdruck eines vorhandenen Maßes ändern.
 
@@ -3371,23 +3439,42 @@ class ParameterPanel(QWidget):
         # ohne Sprachmodell arbeitet, brauchte einen Weg mit der Maus.
         self.add_button = QPushButton(tr("Parameter anlegen …"), self)
         self.add_button.clicked.connect(self.addRequested)
+        # **Und der Weg zu den Maßen, die nur halb wirken** (Dateiaudit §4):
+        # Steht im Stapel eine feste Zahl, die genau zu einem Maß passt, folgt
+        # sie ihm nicht. Der Knopf steht nur, wenn es solche Zahlen gibt
+        # (``scene.parameter_binding``); die Wahl trifft der Dialog.
+        self.bind_button = QPushButton(tr("Feste Zahlen binden …"), self)
+        self.bind_button.clicked.connect(self.bindRequested)
+        _set_shown(self.bind_button, False)
         outer.addWidget(self._scroll)
+        outer.addWidget(self.bind_button, alignment=Qt.AlignmentFlag.AlignLeft)
         outer.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self._outer = outer
         self._fit()
 
     def _around_the_rows(self) -> int:
-        """Was fest um die Zeilen herum steht: Knopf, Ränder, Abstände.
+        """Was fest um die Zeilen herum steht: Knöpfe, Ränder, Abstände.
 
         Aus den Wunschhöhen gerechnet und nicht aus den gelegten — dieselbe
         Bedingung, unter der die ganze Verteilung stillsteht
         (``OverlayHost._share_room``). Wortgleich mit
         ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
-        Hinweis und drei Knöpfe, hier einer.
+        Hinweis und drei Knöpfe, hier einer — zwei, solange *Feste Zahlen
+        binden* dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
         """
         margins = self._outer.contentsMargins()
-        gaps = max(self._outer.count() - 1, 0) * self._outer.spacing()
-        return margins.top() + margins.bottom() + gaps + self.add_button.sizeHint().height()
+        shown = [
+            widget
+            for index in range(self._outer.count())
+            if (item := self._outer.itemAt(index)) is not None
+            and (widget := item.widget()) is not None
+            and not widget.isHidden()
+        ]
+        gaps = max(len(shown) - 1, 0) * self._outer.spacing()
+        buttons = self.add_button.sizeHint().height()
+        if not self.bind_button.isHidden():
+            buttons += self.bind_button.sizeHint().height()
+        return margins.top() + margins.bottom() + gaps + buttons
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jede Zeile zu sehen wäre.
@@ -3726,8 +3813,28 @@ class ParameterPanel(QWidget):
         """Beschriftung und Kurzhilfe einer Zeile nach dem jüngsten Ergebnis."""
         label = self._titles[name]
         uses = self._usage_result.parameter_usage if self._usage_result is not None else None
-        if uses is not None and name in uses and not uses[name]:
+        fitting = len(self._spots_for(name))
+        unused = uses is not None and name in uses and not uses[name]
+        if unused and fitting:
+            label.setText(
+                f"{title}\n"
+                + (
+                    tr("Nicht verwendet — eine feste Zahl passt")
+                    if fitting == 1
+                    else tr("Nicht verwendet — {count} feste Zahlen passen", count=fitting)
+                )
+            )
+        elif unused:
             label.setText(f"{title}\n{tr('Nicht verwendet')}")
+        elif fitting:
+            label.setText(
+                f"{title}\n"
+                + (
+                    tr("Eine feste Zahl passt")
+                    if fitting == 1
+                    else tr("{count} feste Zahlen passen", count=fitting)
+                )
+            )
         else:
             label.setText(title)
         note = self._usage_note(name)
@@ -3764,7 +3871,51 @@ class ParameterPanel(QWidget):
             )
         if len(uses) > 8:
             lines.append(tr("Weitere Verwendungen: {count}").format(count=len(uses) - 8))
-        return "\n".join(lines)
+        return "\n".join([*lines, *self._spot_lines(name)])
+
+    def _spots_for(self, name: str) -> tuple[BindingSpot, ...]:
+        """Die festen Zahlen, deren erster Vorschlag dieses Maß liest."""
+        result = self._usage_result
+        if result is None:
+            return ()
+        return tuple(spot for spot in result.binding_spots if name in spot.choices[0].parameters)
+
+    def _spot_lines(self, name: str) -> list[str]:
+        """Wo eine feste Zahl zu diesem Maß passt — für die Kurzhilfe der Zeile."""
+        from app.ui.binding_dialog import spot_title
+
+        spots = self._spots_for(name)
+        if not spots or self._document is None:
+            return []
+        lines = [
+            tr(
+                "{place} passt zu {expression}",
+                place=spot_title(self._document, spot),
+                expression=spot.choices[0].expression.removeprefix("="),
+            )
+            for spot in spots[:8]
+        ]
+        if len(spots) > 8:
+            lines.append(tr("Weitere feste Zahlen: {count}", count=len(spots) - 8))
+        return lines
+
+    def _show_binding(self) -> None:
+        """*Feste Zahlen binden …* nur, wenn es eine gibt — mit ihrer Zahl am Knopf."""
+        result = self._usage_result
+        spots = result.binding_spots if result is not None else ()
+        shown = bool(spots)
+        if shown:
+            note = tr(
+                "{count} feste Zahlen passen zu Projektmaßen. Gebunden folgen sie dem Maß, "
+                "wenn Sie es ändern.",
+                count=len(spots),
+            )
+            self.bind_button.setToolTip(note)
+            self.bind_button.setStatusTip(note)
+            self.bind_button.setAccessibleDescription(note)
+        if shown != (not self.bind_button.isHidden()):
+            _set_shown(self.bind_button, shown)
+            self._fit()
 
     def show_document(self, document: Document, result: EvaluationResult | None = None) -> None:
         """Zeigt die Maße des Dokuments — **bestehende Zeilen behalten ihr Feld** (RM-355).
@@ -3806,6 +3957,7 @@ class ParameterPanel(QWidget):
             if editor is not None:
                 editor.setFocus(Qt.FocusReason.OtherFocusReason)
         self._mark_stored_beyond()
+        self._show_binding()
 
     def _mark_stored_beyond(self) -> None:
         """Eine gespeicherte Zahl jenseits ihrer Grenze bekommt ihren Satz (RM-447).
@@ -7237,6 +7389,10 @@ class _FeatureAnswers(NamedTuple):
     cavity: tuple[Feature, ...]
     actions: tuple[Any, ...]
     groups: Mapping[str, FeatureActionGroup]
+    unit: FunctionalGroup | None = None
+    """Die funktionale Gruppe, in der das Merkmal steht (RM-184)."""
+    unit_name: str = ""
+    """Ihr Name im Baum, mit Nummer, wenn es mehrere gleiche gibt."""
 
 
 def _nothing() -> None:
@@ -7296,9 +7452,20 @@ def feature_answers(
                 mesh,
             )
         }
+    # Die Gruppe kommt aus demselben Merker wie *Kammer ändern* in den
+    # Handlungen darüber — gerechnet einmal je Netz und Merkmalsliste.
+    unit: FunctionalGroup | None = None
+    unit_name = ""
+    if features is not None and mesh is not None and len(features) > 1:
+        from app.core.perceive.groups import functional_groups, group_of, numbered_titles
+
+        functional = functional_groups(features, mesh, cancelled=cancelled)
+        unit = group_of(feature_id, functional)
+        if unit is not None:
+            unit_name = numbered_titles(functional)[unit.key]
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    return _FeatureAnswers(cavity, tuple(actions), groups)
+    return _FeatureAnswers(cavity, tuple(actions), groups, unit, unit_name)
 
 
 #: Der Merker des Merkmalfensters: der Körper (schwach), die Merkmalsliste,
@@ -8076,6 +8243,44 @@ class FeaturePanel(QWidget):
         self._built.append(heading)
         self.show_note(tr("Die Handlungen werden ermittelt …"))
 
+    def _show_unit(self, unit: FunctionalGroup, name: str) -> None:
+        """Die Gruppe, zu der das Merkmal gehört: Name, Nachweis, gemessene Maße.
+
+        Dateiaudit §7 (RM-184): Wer eine Wand der Kammer anklickt, soll lesen,
+        dass sie zu „Kammer 1“ gehört und woran Solidon das erkannt hat — ein
+        Verdacht sagt, dass er einer ist. Die Maße sind gemessen, nicht
+        vorgegeben; ändern lässt sich die Gruppe über die Handlung darunter,
+        wo es eine gibt (*Kammer ändern*).
+        """
+        from app.core.perceive.groups import evidence_texts, measure_titles
+
+        box = QWidget(self)
+        form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        said = evidence_texts()[unit.evidence]
+        if unit.suggested:
+            said = tr("{sentence} Ein Verdacht, kein Befund.", sentence=said)
+        heading = QLabel(tr("Teil von {group}", group=name), box)
+        heading.setWordWrap(True)
+        set_level(heading, "section")
+        reason = QLabel(said, box)
+        reason.setWordWrap(True)
+        reason.setStatusTip(said)
+        fit_wrapped(reason)
+        form.addRow(heading)
+        form.addRow(reason)
+        titles = measure_titles()
+        for measure in unit.measures:
+            label = titles.get(measure.name, measure.name)
+            field = QLabel(group_measure_text(measure), box)
+            field.setAccessibleName(label)
+            form.addRow(label, field)
+        box.setAccessibleName(tr("Teil von {group}", group=name))
+        box.setAccessibleDescription(said)
+        self._rows.insertWidget(self._rows.count() - 1, box)
+        self._built.append(box)
+
     def _show_feature_rows(
         self,
         feature_id: str,
@@ -8125,6 +8330,9 @@ class FeaturePanel(QWidget):
                     form.addRow(label, field)
                 self._rows.insertWidget(self._rows.count() - 1, box)
                 self._built.append(box)
+
+        if answers.unit is not None:
+            self._show_unit(answers.unit, answers.unit_name)
 
         # **Ein Gegenstück gibt es nur neben einem zweiten Körper.** Im
         # Einzelkörperprojekt wies der Satz auf einen Klick, der nichts findet.

@@ -54,6 +54,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
+| `parameter_binding.py` | Feste Zahlen, die zu Projektmaßen passen, und ihre Bindung (`projektmasse.md`) |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 | `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
@@ -263,9 +264,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   `bundling.stays_exact` beendet ein Bündel, das nicht mehr der Summe der
   Schritte entspräche (Fälle im Docstring).
 - **Ein Startwert ohne Vorgabe folgt aus dem Entwurf** (`history._seed_of`:
-  Operation, Eingänge, Werte), nie aus dem Zufall: Vorschau und Übernehmen
-  desselben Schritts teilen sonst keinen Cache-Schlüssel, und die Auswertung
-  rechnet die Änderung doppelt (RM-493).
+  Operation, Eingänge, Werte), nie aus dem Zufall (RM-493).
 - **Umbau** (Regel in `kern.md`): `plan_insert`, `plan_move`, `plan_suppress`,
   `plan_reactivate` → `RevisionPlan` → `revise` (`ReferenceSight`, `sights`,
   `fit_sights`; `verdict` fragt Herkunft, Abdruck, Lage) → `commit`. Neu

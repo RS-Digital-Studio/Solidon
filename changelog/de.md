@@ -186,6 +186,7 @@ Nutzen da und sonst nichts.
 - Verdoppeln Sie eine Bohrung entlang ihrer eigenen Achse ins Leere, behält das Original an STL-Teilen seinen Namen, und die Kopie heißt verloren wie an STEP-Teilen.
 - Eine Kehle oder ein Wulst, den ein Durchbruch in zwei Bögen teilt, steht an STEP-Teilen als ein Ring im Baum, wie an STL- und 3MF-Teilen.
 - Gleiche Merkmale an STEP-Teilen, etwa zwei Stücke einer Kegelfläche, behalten ihre Namen, wenn Sie anderswo bohren, verdoppeln, eine Bohrung ändern oder einen Baustein einsetzen.
+- Zusammengehörige Merkmale stehen im Objektbaum als Gruppe, und Kammern und Verschlüsse ändern sich als Ganzes: Innenmaß, Tiefe, Spiel und Drehweg.
 
 ### Verrunden und Fasen
 
@@ -277,6 +278,7 @@ Nutzen da und sonst nichts.
 - Längen in Meldungen stehen mit dem Dezimalzeichen Ihrer Sprache.
 - Nach dem Laden eines großen Modells bleibt die Ladeanzeige stehen, bis die Ansicht das Modell zeigt.
 - Ein Klick auf eine Zeile im Prüfbericht wählt ihre Körper auch dann, wenn sich die Liste dabei verschiebt.
+- Feste Zahlen lassen sich mit einem Klick an ein Projektmaß binden, und der Plattenwähler nennt die Körper je Platte und zeigt die gewählte ganz.
 
 ## 0.5.1
 

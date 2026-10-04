@@ -16,6 +16,7 @@ dort nichts, und die Maße erscheinen erst, wenn es etwas zu messen gibt.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from PySide6.QtCore import QSignalBlocker, QSize, Qt, Signal
@@ -148,6 +149,19 @@ MAXIMUM_TAIL_CHARACTERS = 10
 #: klare Filamentanzahl; wird es enger, kürzt die Hauptwerkzeugleiste ihre
 #: Wörter und lässt der Projektauskunft den Raum.
 READABLE_HEADER_WIDTH = 660
+
+
+def plate_label(index: int, counts: Sequence[int] = ()) -> str:
+    """Der Eintrag einer Platte im Wähler: Nummer und, wo bekannt, ihre Körper."""
+    number = index + 1
+    if index >= len(counts):
+        return tr("Platte {number}", number=number)
+    count = counts[index]
+    if count == 0:
+        return tr("Platte {number} · leer", number=number)
+    if count == 1:
+        return tr("Platte {number} · ein Körper", number=number)
+    return tr("Platte {number} · {count} Körper", number=number, count=count)
 
 
 class _EphemeralLabel(QLabel):
@@ -519,11 +533,16 @@ class HeaderBar(QWidget):
         value = self.plates.currentData()
         return ALL_PLATES if value is None else int(value)
 
-    def show_plates(self, plates: int) -> None:
+    def show_plates(self, plates: int, counts: Sequence[int] = ()) -> None:
         """Baut den Wähler neu und behält die Platte, die betrachtet wurde.
 
         Sichtbar ab zwei Platten: Ein Element, das immer dasteht und meistens
         nichts tut, bringt Leuten bei, es zu ignorieren.
+
+        ``counts`` nennt je Platte die Zahl ihrer Körper — die Übersicht, die
+        der Dateiaudit (§5) an Mehrplatten-3MF vermisste: Wer zwischen
+        Montageanordnung und Druckplatten wechselt, sieht vor der Wahl, wo
+        etwas liegt und welche Platte leer ist.
         """
         previous = self.plate
         # Fünfundzwanzig Zeilen zwischen Stummschalten und Aufheben, darunter
@@ -534,7 +553,7 @@ class HeaderBar(QWidget):
             self.plates.clear()
             self.plates.addItem(tr("Alle Platten"), ALL_PLATES)
             for index in range(plates):
-                self.plates.addItem(tr("Platte {number}", number=index + 1), index)
+                self.plates.addItem(plate_label(index, counts), index)
             # Zweck **und Zustand** bleiben vollständig sichtbar. Nur „Platte“ zu
             # zeigen verbarg nach der Wahl, ob alle oder eine einzelne Platte gilt.
             # Der aktive Qt-Stil liefert Innenabstand, Rahmen und Pfeil. Qts

@@ -131,6 +131,99 @@ def open_box() -> Any:
     return Solid(sewing.SewedShape())
 
 
+def walled_bin() -> MeshData:
+    """Ein Kasten 40 × 30 × 20 mit 2 mm Wand und Boden, oben offen: innen 36 × 26 × 18.
+
+    Die Kammer der Gruppentests (RM-184) — Erkennung, *Kammer ändern*, Baum und
+    Merkmalfenster fragen denselben Körper.
+    """
+    from app.core.geom.boolean import boolean
+
+    outer = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    inner = trimesh.creation.box(extents=(36.0, 26.0, 20.0))
+    inner.apply_translation((0.0, 0.0, 12.0))
+    return boolean("difference", [MeshData.of(outer), MeshData.of(inner)]).mesh
+
+
+#: Die Maße des Puppenhauses aus dem Dateiaudit (§4): Länge und Breite lasen nur den Boden.
+DOLLHOUSE: dict[str, float] = {
+    "haus_laenge": 180.0,
+    "haus_breite": 120.0,
+    "wand": 3.0,
+    "etage": 90.0,
+    "boden": 4.0,
+    "fenster": 30.0,
+    "tuer_breite": 34.0,
+    "tuer_hoehe": 60.0,
+}
+
+
+def rectangle_ring(outer: tuple[float, float], inner: tuple[float, float]) -> str:
+    """Zwei achsparallele Rechtecke um den Ursprung als freie Linien — der Wandring des Audits.
+
+    ``outer`` und ``inner`` sind halbe Breite und halbe Höhe.
+    """
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import Sketch, SketchElement
+
+    elements = []
+    for half_x, half_y in (outer, inner):
+        corners = [(-half_x, -half_y), (half_x, -half_y), (half_x, half_y), (-half_x, half_y)]
+        for index, corner in enumerate(corners):
+            elements.append(SketchElement("line", (corner, corners[(index + 1) % 4])))
+    return sketch_to_text(Sketch(plane="plane:xy", elements=tuple(elements)))
+
+
+def dollhouse_document(document: Any) -> Any:
+    """Das Puppenhaus des Dateiaudits als Stapel: Boden gebunden, Wandring und Fenster fest."""
+    from app.core.types import Operation, Parameter
+
+    document.parameters = {
+        name: Parameter(name=name, value=value) for name, value in DOLLHOUSE.items()
+    }
+    document.ops = [
+        Operation(
+            id=1,
+            op="sketch_extrude",
+            params={
+                "shape": "rectangle",
+                "length": "@haus_laenge",
+                "width": "@haus_breite",
+                "height": "@boden",
+                "name": "Boden",
+            },
+            outputs=("obj_1",),
+        ),
+        Operation(
+            id=2,
+            op="sketch_extrude",
+            params={
+                "sketch": rectangle_ring((90.0, 60.0), (87.0, 57.0)),
+                "height": "@etage",
+                "name": "Wandring",
+            },
+            outputs=("obj_2",),
+        ),
+        Operation(
+            id=3,
+            op="sketch_pocket",
+            inputs=("obj_2",),
+            outputs=("obj_2",),
+            params={
+                "shape": "rectangle",
+                "length": 30.0,
+                "width": 30.0,
+                "through": True,
+                "x": -50.0,
+                "y": -58.5,
+                "z": 45.0,
+            },
+        ),
+    ]
+    return document
+
+
 # --- Platzhalter für Szene und Cache ------------------------------------------------
 
 

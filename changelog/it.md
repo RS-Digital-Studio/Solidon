@@ -161,6 +161,7 @@ scrive in `website/version.json`.
 - Se duplichi un foro lungo il suo asse nel vuoto, l'originale mantiene il suo nome sui pezzi STL, e la copia risulta persa come sui pezzi STEP.
 - Una gola o un cordone diviso in due archi da un'apertura compare nei pezzi STEP come un unico anello nell'albero, come nei pezzi STL e 3MF.
 - Le caratteristiche uguali nei pezzi STEP, come due parti di una superficie conica, mantengono il loro nome quando fori, duplichi, cambi un foro o inserisci un componente altrove.
+- Le caratteristiche che vanno insieme compaiono come gruppo nell'albero degli oggetti, e camere e chiusure cambiano in blocco: misura interna, profondità, gioco e corsa di rotazione.
 
 ### Raccordi e smussi
 
@@ -252,6 +253,7 @@ scrive in `website/version.json`.
 - Le lunghezze nei messaggi usano il separatore decimale della tua lingua.
 - Dopo il caricamento di un modello grande, l'indicatore di caricamento resta finché la vista mostra il modello.
 - Un clic su una riga del rapporto di verifica seleziona i suoi corpi anche se l'elenco si sposta durante il clic.
+- I numeri fissi si collegano con un clic a una misura del progetto, e il selettore dei piani nomina i corpi di ogni piano e mostra intero quello scelto.
 
 ## 0.5.1
 

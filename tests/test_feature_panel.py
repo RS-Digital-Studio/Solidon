@@ -4147,3 +4147,123 @@ def test_a_fresh_row_that_is_hidden_stays_hidden_after_qt_lays_it_out(
     assert not row.isHidden()
     host.close()
     host.deleteLater()
+
+
+def test_a_chamber_stands_in_the_tree_as_one_row_with_its_walls_beneath(
+    qt_app: QApplication,
+) -> None:
+    """Die funktionale Gruppe im Baum (RM-184, Dateiaudit §7).
+
+    Ein Kasten 40 × 30 × 20 mit 2 mm Wand hat innen 36 × 26 × 18: Die Zeile
+    des Bodens heißt „Kammer“ und trägt dieses Innenmaß, die vier Wände
+    hängen darunter, und wer die Zeile wählt, hat die ganze Kammer gewählt —
+    derselbe Weg wie die Senkung unter ihrer Bohrung.
+    """
+    from app.core.perceive.groups import functional_groups
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.labels import length
+    from app.ui.panels import ObjectTree, _feature_item
+    from tests.helpers import walled_bin
+
+    mesh = walled_bin()
+    found = features.detect(mesh)
+    chamber = next(group for group in functional_groups(found, mesh) if group.kind == "chamber")
+    entry = SceneObject(id="obj_1", name="Kasten", mesh=mesh, features=found)
+    tree = ObjectTree()
+    tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})))
+    body = tree.tree.topLevelItem(0)
+    assert body is not None
+    anchor = _feature_item(body, chamber.anchor)
+    assert anchor is not None and anchor.parent() is body
+    assert anchor.text(0) == "Kammer"
+    across, along, deep = (
+        length(36.0, with_unit=False),
+        length(26.0, with_unit=False),
+        length(18.0),
+    )
+    assert anchor.text(1) in {f"{across} × {along} × {deep}", f"{along} × {across} × {deep}"}
+    walls = [member for member, role in chamber.roles if role == "wall"]
+    assert len(walls) == 4
+    for wall in walls:
+        row = _feature_item(body, wall)
+        assert row is not None and row.parent() is anchor, wall
+    assert "Boden und Wände umschließen eine Öffnung." in anchor.toolTip(0)
+    tree.select_feature(entry.id, chamber.anchor)
+    assert set(tree.selected_features()) == {(entry.id, member) for member in chamber.members}
+    tree.close()
+
+
+def test_a_wall_says_which_chamber_it_belongs_to_and_offers_to_change_it(
+    qt_app: QApplication,
+) -> None:
+    """Das Merkmalfenster an einer Wand: Gruppe, Nachweis, Innenmaß — und *Kammer ändern*.
+
+    Die Felder der Handlung tragen die Maße der Kammer, nicht die der Wand:
+    Wer an einer Wand klickt, ändert das Innenmaß (RM-184).
+    """
+    from app.core.perceive.groups import functional_groups
+    from app.ui.labels import length
+    from tests.helpers import walled_bin
+
+    load_operations()
+    mesh = walled_bin()
+    found = features.detect(mesh)
+    chamber = next(group for group in functional_groups(found, mesh) if group.kind == "chamber")
+    wall = next(member for member, role in chamber.roles if role == "wall")
+    panel = FeaturePanel()
+    panel.show_feature(wall, found[wall], features=found, mesh=mesh)
+    labels = [label for row in panel._built for label in row.findChildren(QLabel)]
+    labels += [row for row in panel._built if isinstance(row, QLabel)]
+    texts = [label.text() for label in labels]
+    assert "Teil von Kammer" in texts
+    assert "Boden und Wände umschließen eine Öffnung." in texts
+    values = {label.accessibleName(): label.text() for label in labels if label.accessibleName()}
+    assert values["Tiefe"] == length(18.0)
+    assert sorted((values["Breite innen"], values["Länge innen"])) == sorted(
+        (length(36.0), length(26.0))
+    )
+    assert "Kammer ändern" in buttons(panel)
+    action = next(entry for entry in panel._runs.values() if entry.title == "Kammer ändern")
+    offered = action.values()
+    assert offered["depth"] == pytest.approx(18.0, abs=1e-6)
+    assert sorted((offered["width"], offered["length"])) == pytest.approx([26.0, 36.0], abs=1e-6)
+    panel.close()
+
+
+def test_a_lug_offers_to_change_the_closure_by_its_play(qt_app: QApplication) -> None:
+    """Das Merkmalfenster an einer Nocke: *Verschluss ändern* mit dem Spiel, vorbelegt mit null.
+
+    Den Drehweg trägt das Gegenstück — sein Feld fehlt, und die Notiz sagt
+    warum (RM-184). Ein Verschluss trägt kein Spiel, das sich an ihm allein
+    messen ließe; deshalb steht dort null und nicht ein Maß.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.perceive.groups import functional_groups
+
+    load_operations()
+    path = Path(__file__).parent / "data" / "meshes" / "recognition_bayonet_lid.npz"
+    with np.load(path, allow_pickle=False) as data:
+        mesh = MeshData(raw=trimesh.Trimesh(data["vertices"], data["faces"], process=False))
+    found = features.detect(mesh)
+    closure = next(group for group in functional_groups(found, mesh) if group.kind == "closure")
+    lug = next(member for member in closure.members if member != closure.anchor)
+    panel = FeaturePanel()
+    panel.show_feature(lug, found[lug], features=found, mesh=mesh)
+    assert "Verschluss ändern" in buttons(panel)
+    action = next(entry for entry in panel._runs.values() if entry.title == "Verschluss ändern")
+    offered = action.values()
+    assert offered["play"] == pytest.approx(0.0)
+    assert "turn" not in offered
+    built = panel.measure_fields("resize_closure", None)
+    assert built is not None
+    _action, group, editors = built
+    try:
+        assert set(editors) == {"play"}
+        notes = [label.text() for label in group.findChildren(QLabel)]
+        assert any("Anschlag" in text for text in notes), notes
+    finally:
+        group.deleteLater()
+        panel.deleteLater()

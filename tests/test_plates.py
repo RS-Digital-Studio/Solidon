@@ -22,6 +22,9 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, PlaneFrame, Profile, Scene, SceneObject
 from app.ui.header import ALL_PLATES, HeaderBar
+from app.ui.main_window import MainWindow
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 
 def slab(size: float = 120.0) -> MeshData:
@@ -849,6 +852,110 @@ def test_a_plate_that_survives_is_kept_without_a_word(qt_app: QApplication) -> N
 
     assert bar.plate == 1, "die zweite Platte ist noch da"
     assert seen == [], "wo sich nichts ändert, wird nichts gemeldet"
+
+
+def test_each_plate_says_how_many_bodies_lie_on_it(qt_app: QApplication) -> None:
+    """Die Plattenübersicht, die der Dateiaudit (§5) an Mehrplatten-3MF vermisste.
+
+    Wer zwischen Montageanordnung und Druckplatten wechselt, sieht vor der Wahl,
+    wo etwas liegt und welche Platte leer ist. Ohne Zählung bleibt der Eintrag,
+    wie er war.
+    """
+    bar = HeaderBar()
+
+    bar.show_plates(3, [2, 0, 1])
+
+    assert [bar.plates.itemText(index) for index in range(bar.plates.count())] == [
+        "Alle Platten",
+        "Platte 1 · 2 Körper",
+        "Platte 2 · leer",
+        "Platte 3 · ein Körper",
+    ]
+    bar.show_plates(2)
+    assert bar.plates.itemText(1) == "Platte 1"
+
+
+def test_the_window_counts_the_bodies_of_the_picture_it_shows(window: MainWindow) -> None:
+    """Gezählt wird, wo der Wähler entsteht: am Bild der Auswertung (Regel „Anschluss“).
+
+    Zwei Körper auf Platte 1, keiner auf Platte 2, einer auf Platte 3 — die
+    Zahlen folgen aus der Szene im Test.
+    """
+    from app.core.scene import EvaluationResult
+
+    result = EvaluationResult(
+        scene=Scene(
+            objects={
+                "obj_1": SceneObject(id="obj_1", name="A", mesh=slab(), plate=0),
+                "obj_2": SceneObject(id="obj_2", name="B", mesh=slab(), plate=0),
+                "obj_3": SceneObject(id="obj_3", name="C", mesh=slab(), plate=2),
+            }
+        )
+    )
+
+    window._show_scene(result)
+
+    plates = window.header.plates
+    assert [plates.itemText(index) for index in range(plates.count())] == [
+        "Alle Platten",
+        "Platte 1 · 2 Körper",
+        "Platte 2 · leer",
+        "Platte 3 · ein Körper",
+    ]
+
+
+def test_choosing_a_plate_frames_it_once_and_moves_nothing(
+    profile: Profile, qt_app: QApplication
+) -> None:
+    """Die Wahl einer Platte rahmt, was jetzt zu sehen ist (Dateiaudit §5).
+
+    Bei „Alle Platten" steht Platte 2 auf dem zweiten Bett, eine einzelne
+    Platte im Nullpunkt: Ohne neuen Rahmen blickte die Kamera nach der Wahl
+    dorthin, wo die Platte vorher lag. Gerahmt wird einmal — der nächste
+    Aufbau lässt die Kamera wieder in Ruhe —, und kein Körper ändert seine
+    gespeicherte Lage oder Platte.
+    """
+    from app.ui.viewport import PLATE_GAP, Viewport
+    from tests.render_fakes import RecordingRenderer
+
+    viewport = Viewport()
+    try:
+        renderer = RecordingRenderer(size=(900, 600))
+        viewport.renderer = renderer
+        viewport.show_build_volume(profile)
+        result = two_plates()
+        before = {
+            key: (entry.plate, entry.mesh.bounds.minimum, entry.mesh.bounds.maximum)
+            for key, entry in result.scene.objects.items()
+        }
+        viewport.show_scene(result)
+        both = renderer.reset_bounds[-1]
+        assert both is not None
+        pitch = profile.printer.build_volume[0] + PLATE_GAP
+        assert (both[0] + both[1]) / 2.0 == pytest.approx(pitch / 2.0), "beide Betten im Bild"
+        renderer.reset_bounds.clear()
+
+        viewport.set_plate(1)
+
+        assert renderer.reset_bounds, "die gewählte Platte steht im Bild"
+        framed = renderer.reset_bounds[-1]
+        assert framed is not None
+        # Die Platte allein im Nullpunkt, 120 breit und 10 hoch, mit dem Rand
+        # der Ansicht drumherum — nicht mehr beim zweiten Bett.
+        centre = [(framed[index] + framed[index + 1]) / 2.0 for index in (0, 2, 4)]
+        assert centre == pytest.approx([0.0, 0.0, 5.0])
+        assert framed[0] <= -60.0 and framed[1] >= 60.0
+        assert framed[1] - framed[0] < 240.0
+        renderer.reset_bounds.clear()
+        viewport.show_scene(result)
+        viewport.set_plate(1)
+        assert renderer.reset_bounds == [], "einmal, nicht bei jedem weiteren Aufbau"
+        assert {
+            key: (entry.plate, entry.mesh.bounds.minimum, entry.mesh.bounds.maximum)
+            for key, entry in result.scene.objects.items()
+        } == before
+    finally:
+        viewport.deleteLater()
 
 
 # --- die Kulisse wird nur gebaut, wenn sie sich ändert (RM-124) -------------------

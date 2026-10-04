@@ -585,6 +585,11 @@ CASES = [
         "pushed",
         (3840.0, (192.0, 192.0, 240.0, 240.0, 320.0, 320.0)),
     ),
+    # Kasten 40 x 30 x 20, innen 36 x 26 ab z = 2: Tiefe 18 -> 19 trägt
+    # 36 x 26 x 1 = 936 mm³ vom Boden ab, 24000 - 16848 - 936 = 6216.
+    Case("resize_chamber", "bin", {"depth": 19.0}, MESH, "volume", 6216.0),
+    # Vier Nocken, je zwei Flanken 6 x 2 mm², jede um 0,25 mm: 4 x 2 x 12 x 0,25.
+    Case("resize_closure", "bayonet_disc", {"play": 0.5}, MESH, "removed", 24.0),
     Case("remesh_mesh", "box", {"edge": 4.0}, MESH, "refined", 3200.0),
     Case("remesh_uniform", "box", {"edge": 4.0, "deviation": 0.0}, MESH, "refined", 3200.0),
     Case(
@@ -1184,6 +1189,41 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
             _native_box(60.0, 40.0, 30.0), _native_box(54.0, 34.0, 28.0, (0.0, 0.0, 3.0))
         )
         return [_object(body, kind)]
+    if source == "bin":
+        # Mit den Namen der Erkennung: Boden und Rand zeigen beide nach oben
+        # und hießen in ``_object`` beide „top“ — die Kammer verlöre ihren Boden.
+        from app.core.brep.features import features_of
+        from app.core.perceive.features import detect
+
+        body = _native_difference(
+            _native_box(40.0, 30.0, 20.0), _native_box(36.0, 26.0, 20.0, (0.0, 0.0, 2.0))
+        )
+        entry = _object(body, kind, recognise=False)
+        found = features_of(body) if kind == "brep" else detect(as_mesh_data(body))
+        return [dataclasses.replace(entry, features=dict(found))]
+    if source == "bayonet_disc":
+        # Eine Scheibe r = 40 mit vier Nocken 6 x 4 x 2 auf der Oberseite, an den
+        # Achsen ausgerichtet — mit den Namen der Erkennung wie beim Kasten.
+        from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
+
+        from app.core.brep.features import features_of
+        from app.core.brep.kernel import Solid
+        from app.core.perceive.features import detect
+
+        shape = _native_cylinder(40.0, 5.0).shape
+        for width, depth, x, y in (
+            (6.0, 4.0, 35.0, 0.0),
+            (6.0, 4.0, -35.0, 0.0),
+            (4.0, 6.0, 0.0, 35.0),
+            (4.0, 6.0, 0.0, -35.0),
+        ):
+            shape = BRepAlgoAPI_Fuse(
+                shape, _native_box(width, depth, 2.0, (x, y, 5.0)).shape
+            ).Shape()
+        body = Solid(shape)
+        entry = _object(body, kind, recognise=False)
+        found = features_of(body) if kind == "brep" else detect(as_mesh_data(body))
+        return [dataclasses.replace(entry, features=dict(found))]
     if source == "closed_cavity":
         body = _native_difference(
             _native_box(20.0, 20.0, 20.0), _native_box(16.0, 16.0, 16.0, (0.0, 0.0, 2.0))
@@ -1332,6 +1372,23 @@ def _parameters(case: Case, inputs: list[SceneObject]) -> dict[str, Any]:
             nz=float(normal[2]),
             seed_face=face,
         )
+    if case.name == "resize_chamber":
+        # Der Boden der Kammer: die nach oben zeigende Fläche auf halber Höhe
+        # unter dem Rand (z = 2), nicht die Oberkante des Rands (z = 20).
+        params["at_feature"] = min(
+            (
+                name
+                for name, feature in inputs[0].features.items()
+                if feature.kind == "face" and float(feature.params["normal"][2]) > 0.99
+            ),
+            key=lambda name: float(inputs[0].features[name].params["centre"][2]),
+        )
+    if case.name == "resize_closure":
+        # Die Achse des Verschlusses: der Mantel der Scheibe, der größte Zapfen.
+        params["at_feature"] = max(
+            (name for name, feature in inputs[0].features.items() if feature.kind == "pin"),
+            key=lambda name: float(inputs[0].features[name].params["diameter"]),
+        )
     if case.name == "group_pattern":
         # Die zwölf Wände der drei Löcher: senkrecht und kleiner als jede Seite.
         params["at_features"] = sorted(
@@ -1401,6 +1458,11 @@ def _assert_invariant(
         assert kinds == ["face"] * len(expected_areas), kinds
         areas = sorted(feature.params["area"] for feature in first.features.values())
         assert areas == pytest.approx(expected_areas, abs=1e-6)
+    elif rule == "removed":
+        # Gemessen am Netz, das die Operation bekam — am exakten Körper an seiner
+        # Vernetzung: Deren Rundung gehört nicht zur Wirkung.
+        assert mesh.is_watertight
+        assert volume == pytest.approx(as_mesh_data(inputs[0].mesh).volume - expected, abs=1e-6)
     elif rule == "greater":
         assert volume > expected + 0.1
         if case.name == "lattice_fill":

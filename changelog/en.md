@@ -161,6 +161,7 @@ it into `website/version.json`.
 - If you duplicate a hole along its own axis into empty space, the original keeps its name on STL parts, and the copy is called lost as on STEP parts.
 - A groove or bead split into two arcs by an opening shows as one ring in the tree on STEP parts, as on STL and 3MF parts.
 - Identical features on STEP parts, such as two pieces of one cone surface, keep their names when you drill, duplicate, change a hole or insert a part elsewhere.
+- Features that belong together show as a group in the object tree, and chambers and closures change as a whole: inner size, depth, clearance and turning travel.
 
 ### Fillets and chamfers
 
@@ -252,6 +253,7 @@ it into `website/version.json`.
 - Lengths in messages use the decimal separator of your language.
 - After loading a large model, the loading indicator stays until the view shows the model.
 - Clicking a line in the report selects its bodies even if the list shifts while you click.
+- Fixed numbers can be bound to a project dimension with one click, and the plate picker names the bodies on each plate and shows the chosen one in full.
 
 ## 0.5.1
 

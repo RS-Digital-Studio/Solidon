@@ -1018,7 +1018,12 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "hundertachtundfünfzig": 158,
     "hundertzweiundsiebzig": 172,
     "achtundsechzig": 68,
+    "neunundsechzig": 69,
     "hundertdreiundsiebzig": 173,
+    "zweiundsiebzig": 72,
+    "hundertsiebenundsiebzig": 177,
+    "dreiundsiebzig": 73,
+    "hundertachtundsiebzig": 178,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
 }

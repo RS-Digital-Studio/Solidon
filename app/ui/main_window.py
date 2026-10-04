@@ -568,6 +568,10 @@ MAP_CACHE_KEPT: Final = 8
 #: (§14, §15.1).
 LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
 
+#: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
+#: einem Merkmal einer passenden Gruppe etwas rechnen (RM-184).
+GROUP_OPS: Final = frozenset({"resize_chamber", "resize_closure"})
+
 #: Ab welchem Kosinus der Ring des Griffs um die eigene Achse eines Bausteins
 #: dreht — ein Grad. Es ist kein Erkennungsmaß wie ``PARALLEL_FACE_COSINE``
 #: (acht Grad, für Flächen, die einander gegenüberliegen), sondern die Frage,
@@ -2931,6 +2935,10 @@ class MainWindow(QMainWindow):
         """Warum an einer gewählten Fläche kein Deckel entsteht — je Merkmal und
         Auswertung einmal gerechnet, denn die Antwort kostet einen Schnitt
         (:meth:`_lid_reason`)."""
+        self._group_reasons: tuple[int, dict[tuple[str, ObjectId, str], str | None]] = (-1, {})
+        """Warum am gewählten Merkmal *Kammer ändern* oder *Verschluss ändern* nichts
+        tut — je Operation, Merkmal und Auswertung einmal; die Gruppen selbst
+        wärmt der Auswertungsarbeiter."""
         self._difference_standing = False
         """Ob im Bild eine Differenz liegt — dann lohnt ``show_difference(None)``.
 
@@ -3749,6 +3757,7 @@ class MainWindow(QMainWindow):
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
         self.parameters.parameterUnitEdited.connect(self._on_parameter_unit_edited)
         self.parameters.addRequested.connect(self.action_add_parameter)
+        self.parameters.bindRequested.connect(self.action_bind_parameters)
         self.parameters.limitsRequested.connect(self.action_edit_parameter)
         self.right_column.setVisible(self.settings.right_panel_visible)
 
@@ -5729,6 +5738,15 @@ class MainWindow(QMainWindow):
             reason = self._lid_reason()
             if reason is not None:
                 return reason
+        # Und die Gruppe: *Kammer ändern* gilt nur den Flächen einer erkannten
+        # Kammer, einer Nut oder eines Kanals, *Verschluss ändern* nur den
+        # Merkmalen eines Bajonetts oder einer Rastung (RM-184) — an jedem
+        # anderen Merkmal stand der Eintrag sonst bedienbar da und konnte nur
+        # scheitern.
+        if spec.name in GROUP_OPS:
+            reason = self._group_reason(spec.name)
+            if reason is not None:
+                return reason
         # Und zuletzt der Zustand des Körpers (RM-168): *Offene Fläche
         # schließen* an einem geschlossenen, *Zerlegen* an einem Stück, *Gitter
         # füllen* ohne Hohlraum — jede öffnete bis zum 14.09.2026 einen Dialog,
@@ -5822,6 +5840,51 @@ class MainWindow(QMainWindow):
             from app.core.geom.lid import reason_against
 
             known[key] = reason_against(entry, feature)
+        return known[key]
+
+    def _group_reason(self, operation: str) -> str | None:
+        """Warum das gewählte Merkmal keine änderbare Gruppe trägt — oder ``None``.
+
+        Derselbe Satz, den die Operation beim Rechnen würfe
+        (``groups.reason_against_group`` für die Kammer,
+        ``groups.reason_against_closure_change`` für den Verschluss). Die
+        Gruppen liegen nach der Auswertung im Merker des Netzes
+        (``session._warm_metrics``); ohne gewähltes Merkmal bleibt die Antwort
+        offen, und offen sperrt nie.
+        """
+        result = self.session.last_result
+        chosen = self._first_chosen()
+        feature = self.object_tree.selected_feature()
+        if result is None or chosen is None or not feature:
+            return None
+        entry = result.scene.objects.get(chosen)
+        if entry is None or feature not in entry.features:
+            return None
+        generation, known = self._group_reasons
+        if generation != self.session.result_generation:
+            known = {}
+            self._group_reasons = (self.session.result_generation, known)
+        key = (operation, chosen, feature)
+        if key not in known:
+            from app.core.geom.mesh import as_mesh_data
+            from app.core.perceive.groups import (
+                NOT_A_CHAMBER,
+                functional_groups,
+                group_of,
+                reason_against_closure_change,
+                reason_against_group,
+            )
+
+            mesh = as_mesh_data(entry.mesh)
+            group = group_of(feature, functional_groups(entry.features, mesh))
+            if operation == "resize_closure":
+                known[key] = reason_against_closure_change(group, entry.features, mesh)
+            else:
+                known[key] = (
+                    str(NOT_A_CHAMBER)
+                    if group is None or group.kind not in ("chamber", "channel")
+                    else reason_against_group(group, entry.features)
+                )
         return known[key]
 
     def _halt_reason(self) -> str | None:
@@ -10889,6 +10952,11 @@ class MainWindow(QMainWindow):
                 tr("Parameter anlegen …"),
                 "",
                 self.action_add_parameter,
+            ),
+            "edit.bind_parameters": (
+                tr("Feste Zahlen binden …"),
+                "",
+                self.action_bind_parameters,
             ),
             "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
             # Jede Einzeloption der Einstellungen, auch die hinter „Weitere
@@ -22832,11 +22900,12 @@ class MainWindow(QMainWindow):
         self.object_tree.show_scene(result, self.session.project.document)
         effective_settings = self.effective_print_settings()
         self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
-        plates = {entry.plate for entry in picture.scene.objects.values()}
+        plates = [entry.plate for entry in picture.scene.objects.values()]
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
         # unter einem Werkzeug, das Teile auseinanderzieht.
-        self.header.show_plates(max(plates, default=0) + 1)
+        count = max(plates, default=0) + 1
+        self.header.show_plates(count, [plates.count(index) for index in range(count)])
         # Die Leiste bereitet sich vor und setzt ihren Schieber zurück, wenn es
         # nichts auseinanderzuziehen gibt; ob ihr Knopf geht, sagt
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
@@ -25124,6 +25193,34 @@ class MainWindow(QMainWindow):
         if dialog.exec() != ParameterDialog.DialogCode.Accepted:
             return
         self.session.add_parameter(dialog.parameter())
+
+    def action_bind_parameters(self) -> None:
+        """Feste Zahlen an Projektmaße binden (Dateiaudit §4): wählen, dann eine Transaktion.
+
+        Der Kern findet die Zahlen (``scene.parameter_binding``); vorgewählt ist
+        nur, was ohne Zweifel ist. Keine Rückfrage danach: Die Bindung ist eine
+        Transaktion, Strg+Z nimmt sie ganz zurück (Regel 19).
+        """
+        from app.core.scene.parameter_binding import binding_spots, bound_params
+        from app.ui.binding_dialog import BindingDialog
+
+        document = self.session.project.document
+        result = self.session.last_result
+        spots = result.binding_spots if result is not None else ()
+        if not spots:
+            spots = binding_spots(document)
+        if not spots:
+            self.announce(tr("Keine feste Zahl im Projekt passt zu einem Projektmaß."))
+            return
+        dialog = BindingDialog(document, spots, self)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            chosen = dialog.chosen()
+        finally:
+            dialog.deleteLater()
+        if chosen:
+            self.session.bind_parameters(bound_params(document, chosen))
 
     def action_edit_parameter(self, name: str) -> None:
         """§13: die Grenzen eines vorhandenen Maßes ändern — derselbe Dialog.

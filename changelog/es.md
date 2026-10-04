@@ -162,6 +162,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si duplica un taladro a lo largo de su propio eje hacia el vacío, el original conserva su nombre en piezas STL, y la copia se da por perdida como en piezas STEP.
 - Una garganta o un cordón que una abertura divide en dos arcos aparece en piezas STEP como un solo anillo en el árbol, igual que en piezas STL y 3MF.
 - Las características iguales en piezas STEP, como dos trozos de una superficie cónica, conservan su nombre cuando taladra, duplica, cambia un taladro o inserta una pieza en otro sitio.
+- Las características que van juntas aparecen como grupo en el árbol de objetos, y cámaras y cierres cambian en conjunto: medida interior, profundidad, holgura y giro.
 
 ### Redondear y achaflanar
 
@@ -253,6 +254,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las longitudes en los avisos usan el separador decimal de su idioma.
 - Tras cargar un modelo grande, el indicador de carga permanece hasta que la vista muestra el modelo.
 - Un clic en una línea del informe de comprobación selecciona sus cuerpos aunque la lista se desplace al hacer clic.
+- Los números fijos se vinculan con un clic a una medida del proyecto, y el selector de placas nombra los cuerpos de cada placa y muestra entera la elegida.
 
 ## 0.5.1
 

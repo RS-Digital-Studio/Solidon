@@ -701,6 +701,28 @@ macOS/arm64 darf eine gültige Öffnung nicht unbrauchbar machen. Kantenrichtung
 kommen aus den ursprünglichen Randpunkten, die Projektionen aus dem lokalen
 Maßrahmen, damit nahe Randpunkte beim Verschieben nicht zu Nullkanten werden.
 
+*Verschluss ändern (`closure_ops.py`, RM-184).*
+
+Drei Wege wurden an den Bajonettdateien aus dem Dateiaudit gemessen
+(Pool-Filterball-Einsatz: Kartuschendeckel mit drei Nocken, Kartuschenkäfig
+mit drei L-Wegen). *Fläche versetzen* je Flanke hintereinander traf am Deckel
+drei von sechs Flanken schief — das Volumen wuchs um 28 %, die Flanken waren
+im neuen Netz nicht wiederzufinden. Wandernde Ecken der Flanken hielten das
+Spiel am Deckel, klappten am Käfig aber schon bei 0,6 mm Spiel und bei einem
+halben Grad Drehweg Dreiecke um: Der Mantel hat zwischen zwei Ecken keine,
+die mitwandern könnten. Werkzeuge aus dem Umriss der Flanke — ein Prisma für
+das Spiel, um die Achse geschwenkt für den Drehweg — treffen das erwartete
+Volumen am Käfig auf Hundertstel Prozent (2° Drehweg: 36,275 statt 36,269 mm³).
+
+Drei Einzelheiten tragen das: Wo Material an einer Kante anliegt, gleitet
+die Ecke an dessen Fläche entlang — sonst schnitt das Prisma am Deckel, dessen
+Nocken auf der Rundung der Platte stehen, eine Kerbe von 0,02 mm in die
+Platte. Wo Luft dahinter liegt, reicht das abziehende Werkzeug einen
+Millimeter hinaus, damit an einem facettierten Mantel keine Haut stehen
+bleibt. Und jedes Werkzeug beginnt um `BOOLEAN_OVERLAP` vor der Flanke: Bündig
+blieb an einer STL eine Haut von einem Zehntelmikrometer als eigenes Stück
+stehen, und die Operation sagte ab.
+
 ### Druckvorbereitung
 
 *HEAD-Fassung.*
@@ -1855,6 +1877,14 @@ werden), und die **gemeldete Matrix** trägt Bewegung und Rückholung zusammen
 — sonst zeigte die Vorschau dorthin, wohin die Zahlen weisen, und der Körper
 läge woanders. Auch diese drei lesen die übrigen Körper, also tragen auch sie
 `reads_other_bodies=True`.
+
+*Früher in der Karte unter „Druckvorbereitung“.*
+
+Die schnelle Orientierung bewertet die genaue Rangfolge und prüft Passung
+und Stand nur bis zur ersten brauchbaren Lage. Gleiche Formen teilen die
+Suche; ohne Stand bleibt die beste passende Lage mit `orient.no_footing`.
+Orientierung und Anordnung belegen mitgeführte Merkmale je Ausgang durch
+`FeatureContinuation`.
 
 ### Kanten und Flächen
 

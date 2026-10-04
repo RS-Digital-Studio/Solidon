@@ -7410,6 +7410,8 @@ DERIVED_BODY_ANSWERS: Final[frozenset[str]] = frozenset({"one_body", "merged_cop
 SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
     {
         "a_sliver",
+        # Funktionale Gruppen (``perceive.groups``): unveränderliche Namen und Zahlen.
+        "functional_groups",
         "_sphere_is_recognisable",
         "_torus_is_recognisable",
         "_cone_is_recognisable",

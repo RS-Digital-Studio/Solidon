@@ -573,6 +573,12 @@ Wechselt ein Schritt seine Ausgabekörper, behält nur seine Vorher-Fassung
 die Gruppen weggefallener Körper. Verbleibende Gruppen und Altantworten
 werden weder umbenannt noch auf neue Körper übertragen.
 
+*Früher unter „Verlauf“ der Karte.*
+
+**Ein Startwert ohne Vorgabe folgt aus dem Entwurf** (`history._seed_of`,
+RM-493): Vorschau und Übernehmen desselben Schritts teilen sonst keinen
+Cache-Schlüssel, und die Auswertung rechnet die Änderung doppelt.
+
 *Früher unter „Die Karte“.*
 
 `History.apply` führt während der Planung die lebenden Objektkennungen nach

@@ -169,6 +169,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |
 | `seal_dialog.py` | Dichtweg als Zeichnung oder Öffnung wählen (§19.2); schreibt keine Operation |
+| `binding_dialog.py` | feste Zahlen wählen, die an Projektmaße gebunden werden (§13) |
 | `seal_flow.py` | bindet die Dichtwegwahl an den normalen Operationsdialog |
 | `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27); nichtmodal, der Lauf steht in der Statusleiste |
 | `variants_dialog.py` | Variantengenerator (§28.3, §25) |
@@ -243,7 +244,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18) |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
-| `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
+| `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
 
 ### Hilfe und Bedienung
 
@@ -336,7 +337,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   den Befund aus `_MEMBERS_ROLE`.
 - Baum: Bündel nach Name/Maß (`BUNDLE_FROM`); `relations.cavity_chains` einmal
   je `SceneObject`, als vollständiger Ast. Eine einzelne Bausteinzeile trägt
-  selbst den Namen statt eines zusätzlichen Dachs.
+  selbst den Namen statt eines zusätzlichen Dachs; eine funktionale Gruppe
+  hängt unter der Zeile ihres Ankers.
 - Warnungsmarken sind Zustand; Ring/Text nur Darstellung. Neuaufbau nutzt
   Punkt/Text/Körper, verlängert keine Frist. Andere Platte/verborgener Körper
   versteckt beide; ein neues Ergebnis verwirft beide.
@@ -349,9 +351,6 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 - Kartenbewegung endet mit `DeleteWhenStopped`, auch beim Ersetzen.
 - `overlay.is_room_taker` prüft vier Methoden; kein `runtime_checkable Protocol`
   beim Shiboken-Resize mit unvollständigen Typdaten.
-- Flatpak-Mail: `Email.ComposeEmail` per QtDBus, sonst `mailto:` per
-  `QDesktopServices`. Betreff/Inhalt unkodiert; Qt 6.11 dekodiert Prozentfolgen
-  erneut (`PrettyDecoded`).
 
 ## Druckbewertung und Übergabe
 

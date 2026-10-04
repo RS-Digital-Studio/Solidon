@@ -36,7 +36,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt; die neue Aufteilung ist im erfolgreichen Taglauf 36454861126 von 0.5.1 gelaufen. Offen bleiben CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung des Testbestands und der Laufzeiten sowie das Blättern in `tools/windows_signed_installer.py` |
-| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Acht Bausteine und sieben Abläufe aus dem Audit gebaut (04.10.); offen: funktionale Gruppen, Projektmaße und das Werkzeug für die native Einzeldateiabnahme (in Arbeit), danach die Abnahme der 187 Fälle und die Fensterabnahme beim Release |
+| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Bausteine, Abläufe, funktionale Gruppen, Projektmaße und das Abnahmewerkzeug gebaut (04.10.); offen: der echte Lauf der Einzeldateiabnahme über 187 Fälle am Fenster, die Fensterabnahmen der neuen Abläufe und Gruppen, Leistungsreihe |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`), die Wandmessung verwendet den eigenen Strahltest. Matplotlib ist seit `9bb1542b` wieder Laufzeitabhängigkeit; die Windows-Lizenzbeilage enthält 50 Komponenten. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster; die Bereichsprüfungsreste sind mit RM-214 geschlossen (Durchsicht 0.5.1) |
@@ -1193,6 +1193,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   jetzt das gebaute Maß samt `nominal`, die Gewindepassung erwartet das Spiel beider Hälften (PETG
   gemessen 0,50 = Soll 0,50 mm; `72f68db6b`, Regel in `.claude/rules/kern.md`). Belege unter
   `F:\solidon-review-reports\claude-2026-10-04\rm184-ablaeufe\`.
+
+  **Teilstand 04.10.2026 (Claude, R3 `claude/rm184-gruppen`):** Funktionale Gruppen aus dem Audit
+  (§7) werden erkannt und stehen im Objektbaum als Gruppe — Kammer, Nut, Kanal, Bajonett, Rastung —;
+  Kammern und Verschlüsse ändern sich als Ganzes (Innenmaß, Tiefe, Spiel, Drehweg), Fenster, Menü
+  und Operation fragen dieselbe Prüfung. Zwei Scheinrastungen (Mini-Golf-Schläger, Besenhalter) sind
+  weg, im Korpus (226 Dateien) ändert sich sonst nichts. Projektmaße steuern alle abhängigen Teile:
+  feste Zahlen lassen sich mit einem Klick an ein Projektmaß binden (§4, §5).
+  `tools/file_acceptance.py` fährt die native Einzeldateiabnahme (Import, Erkennung, Maßänderung,
+  Vorschau, Übernehmen, Undo, Redo, Bild je Schritt; Aufruf mit `--manifest …\manifest.json`); der
+  echte Lauf über die 187 Fälle am Fenster steht aus. Tor 23 887 bestanden. Beleg und Befunde
+  außerhalb des Auftrags (Hänger beim Abräumen von Qt-Objekten im Befundarbeiter; *Merkmal ändern*
+  an Eckwülsten bietet an, was die Operation absagt) unter
+  `F:\solidon-review-reports\claude-2026-10-04\rm184-gruppen\`.
 
 <a id="rm-188"></a>
 

@@ -341,6 +341,36 @@ def test_answers_to_questions_of_the_evaluation_stay_free(
     assert history.reopen_recognition(("obj_1",)), "das erneute Fragen bleibt frei"
 
 
+def test_binding_fixed_numbers_is_a_change_and_finding_them_is_reading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``bind_parameters`` schreibt mehrere Schritte (RM-184) und holt die Grenze selbst.
+
+    Beide Richtungen: Abgelaufen lehnt das Binden ab und schreibt nichts, die
+    Suche nach passenden Zahlen liest nur und bleibt frei; mit Schlüssel geht
+    das Binden.
+    """
+    from app.core.scene.parameter_binding import binding_spots, bound_params
+    from tests.helpers import dollhouse_document
+
+    document = dollhouse_document(_project().document)
+    history = History(document)
+    before = [dict(operation.params) for operation in document.ops]
+    set_test_license(monkeypatch, active=False)
+
+    spots = binding_spots(document)
+    assert spots, "die Suche liest und bleibt frei"
+    chosen = bound_params(document, {spot.key: spot.choices[0].expression for spot in spots})
+    with pytest.raises(LicenceRequired) as raised:
+        history.bind_parameters(chosen)
+    assert raised.value.action == activation.CHANGE
+    assert [dict(operation.params) for operation in document.ops] == before
+
+    set_test_license(monkeypatch, active=True)
+    history.bind_parameters(chosen)
+    assert document.ops[2].params["length"] == "@fenster"
+
+
 def test_a_licence_lets_a_step_be_reparametrised(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die Gegenrichtung: mit Schlüssel geht das Nachbearbeiten wie heute — die
     Grenze sperrt nur den abgelaufenen Testlauf, nie den Käufer."""

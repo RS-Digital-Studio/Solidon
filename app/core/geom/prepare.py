@@ -331,7 +331,7 @@ def surface_index_of(mesh: MeshData) -> Any:
     return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
 
 
-def _inside_material(
+def inside_material(
     body: MeshData, points: np.ndarray, depth: float = 0.0
 ) -> tuple[np.ndarray, np.ndarray]:
     """Welche Punkte im Material liegen oder auf seiner Oberfläche — dieselbe
@@ -421,7 +421,7 @@ def _flank_opens_within(
     centres = np.asarray(position, dtype=float) + depths[:, None] * axis
     samples = centres[:, None, :] + rim[None, :, :]
     probes = np.vstack([centres, samples.reshape(-1, 3)])
-    inside, normals = _inside_material(body, probes)
+    inside, normals = inside_material(body, probes)
     if old_opening is not None:
         inside = inside | old_opening.holds(probes)
     ring = inside[len(depths) :].reshape(len(depths), _RIM_POINTS)
@@ -647,7 +647,7 @@ def ring_in_material(
     if length <= EPS_GEOM or radius <= EPS_GEOM:
         return False
     points = np.asarray(position, dtype=float) + _rim_around(vector / length, radius)
-    inside, _normals = _inside_material(body, points, depth)
+    inside, _normals = inside_material(body, points, depth)
     return bool(inside.all())
 
 

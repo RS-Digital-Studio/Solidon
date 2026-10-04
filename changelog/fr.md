@@ -162,6 +162,7 @@ dans `website/version.json`.
 - Si vous dupliquez un perçage le long de son propre axe dans le vide, l'original garde son nom sur les pièces STL, et la copie est dite perdue comme sur les pièces STEP.
 - Une gorge ou un bourrelet coupé en deux arcs par une ouverture apparaît sur les pièces STEP comme un seul anneau dans l'arbre, comme sur les pièces STL et 3MF.
 - Les caractéristiques identiques des pièces STEP, comme deux morceaux d'une surface conique, gardent leur nom quand vous percez, dupliquez, modifiez un perçage ou insérez une pièce ailleurs.
+- Les caractéristiques qui vont ensemble apparaissent en groupe dans l'arbre des objets, et chambres et fermetures se modifient d'un bloc : cote intérieure, profondeur, jeu et course de rotation.
 
 ### Congés et chanfreins
 
@@ -253,6 +254,7 @@ dans `website/version.json`.
 - Les longueurs dans les messages utilisent le séparateur décimal de votre langue.
 - Après le chargement d'un grand modèle, l'indicateur de chargement reste affiché jusqu'à ce que la vue montre le modèle.
 - Un clic sur une ligne du rapport de contrôle sélectionne ses corps même si la liste se décale pendant le clic.
+- Les nombres fixes se lient d'un clic à une cote du projet, et le sélecteur de plateaux nomme les corps de chaque plateau et montre en entier celui choisi.
 
 ## 0.5.1
 

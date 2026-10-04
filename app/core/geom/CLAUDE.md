@@ -143,7 +143,9 @@ Bohrungen aus) · `seal.py`, `seal_ops.py` (`match_opening` nur eindeutig, sonst
 `profile_clamp_ops.py` (vier Rollen in einem Rahmen, Schale mit `lift`; der
 Ersatzweg prüft Geometrie, nie Metadaten)
 
-**Wandungen** — `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
+**Wandungen** — `chamber_ops.py` (*Kammer ändern*; `rims_of`, `flat_cap`) ·
+`closure_ops.py` (*Verschluss ändern*: Spiel und Drehweg, Werkzeuge aus dem
+Flankenumriss) · `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
 GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
 Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
@@ -157,12 +159,6 @@ Nullnormalenrichtung am BRep teilt `drill_outward_axis_from_bounds` mit
 `mouth_cap.py` (Deckel einer gekrümmten Mündung als Höhenfeld, `None` ohne
 glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 (`mirror_plane`) · `pins.py` (Passstifte, `first_pin`)
-
-Die schnelle Orientierung bewertet die genaue Rangfolge und prüft Passung
-und Stand nur bis zur ersten brauchbaren Lage. Gleiche Formen teilen die
-Suche; ohne Stand bleibt die beste passende Lage mit `orient.no_footing`.
-Orientierung und Anordnung belegen mitgeführte Merkmale je Ausgang durch
-`FeatureContinuation`.
 
 **Kanten und Flächen** — `edge_ops.py`, `face_ops.py` (der Körper wählt den
 Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `choose` für die Gruppen
@@ -311,7 +307,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 - Die schnelle FDM-Ausrichtung nimmt die erste passende Lage, die
   `slice.orientation.standing_check` am Original trägt. Ohne stehende Lage
   sagt `NoStandingOrientationError` vor jeder Bewegung ab; Resin braucht
-  diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split.
+  diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split;
+  `orient.no_footing` und `FeatureContinuation` erklären die Begründungen.
 - `arrange_on_bed` packt in der Ecke, `_into_the_middle` zentriert nur freie
   Flächen (`occupied`, `arrange.narrow_margin`). Erste angefangene Platte mit
   Platz, sonst neue; leere nehmen auch Übergröße (`settle`). `_fits_alone`

@@ -161,6 +161,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se duplicar um furo ao longo do seu próprio eixo para o vazio, o original mantém o nome em peças STL, e a cópia é dada como perdida como em peças STEP.
 - Uma garganta ou um cordão que uma abertura divide em dois arcos aparece nas peças STEP como um único anel na árvore, como nas peças STL e 3MF.
 - Características iguais em peças STEP, como dois troços de uma superfície cónica, mantêm o nome quando fura, duplica, altera um furo ou insere uma peça noutro sítio.
+- As características que pertencem juntas aparecem como grupo na árvore de objetos, e câmaras e fechos mudam como um todo: medida interior, profundidade, folga e curso de rotação.
 
 ### Arredondar e chanfrar
 
@@ -252,6 +253,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os comprimentos nas mensagens usam o separador decimal do seu idioma.
 - Depois de carregar um modelo grande, o indicador de carregamento fica até a vista mostrar o modelo.
 - Um clique numa linha do relatório de verificação seleciona os seus corpos mesmo que a lista se desloque durante o clique.
+- Os números fixos ligam-se com um clique a uma medida do projeto, e o seletor de mesas indica os corpos de cada mesa e mostra inteira a escolhida.
 
 ## 0.5.1
 

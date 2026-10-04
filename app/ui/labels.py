@@ -33,6 +33,7 @@ from app import i18n
 from app.core.activation import Activation
 from app.core.geom.mesh import MeshData, face_components
 from app.core.perceive.actions import measure_explanation, measure_qualifier
+from app.core.perceive.groups import FunctionalGroup, GroupMeasure
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
@@ -2378,6 +2379,58 @@ _INNER_SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = (
 #: Ab wann eine Normale als achsparallel gilt. Darunter ist die Fläche schräg,
 #: und ein Seitenname wäre eine Behauptung.
 _AXIS_ALIGNED = 0.9
+
+
+def group_summary(group: FunctionalGroup) -> str:
+    """Das Maß einer funktionalen Gruppe für die Maßspalte des Baums (RM-184).
+
+    Eine Kammer nennt ihr Innenmaß, eine Nut und ein Kanal Breite und Tiefe, ein
+    Gewinde Durchmesser und Steigung, Aufnahmen und Augen ihre Zahl und Weite,
+    ein Verschluss seine Stellungen, eine Schrift ihre Teile. Die Zahlen sind
+    gemessen (``perceive.groups``), die Einheit folgt der Anzeige.
+    """
+    width = group.measure("width")
+    across = group.measure("length")
+    depth = group.measure("depth")
+    diameter = group.measure("diameter")
+    if group.kind == "chamber" and group.variant != "ring" and width and across and depth:
+        return tr(
+            "{width} × {length} × {depth}",
+            width=length(width, with_unit=False),
+            length=length(across, with_unit=False),
+            depth=length(depth),
+        )
+    if group.kind in ("chamber", "channel") and group.variant != "passage" and width and depth:
+        return tr("{width} breit, {depth} tief", width=length(width), depth=length(depth))
+    if group.kind == "channel" and diameter:
+        return tr("Ø{diameter} · {count} Rippen", diameter=length(diameter), count=group.count)
+    if group.kind == "thread" and diameter:
+        pitch = group.measure("pitch") or 0.0
+        return tr(
+            "Ø{diameter} × {pitch}",
+            diameter=length(diameter, with_unit=False),
+            pitch=length(pitch),
+        )
+    if group.kind in ("socket", "hinge") and diameter:
+        return tr("{count} × Ø{diameter}", count=group.count, diameter=length(diameter))
+    if group.kind == "closure":
+        return tr("{count} Stellungen", count=group.count)
+    if group.kind == "lettering":
+        return tr("{count} Teile", count=group.count)
+    return ""
+
+
+def group_measure_text(measure: GroupMeasure) -> str:
+    """Ein Maß einer funktionalen Gruppe, wie es im Merkmalfenster steht (RM-184).
+
+    Längen folgen der Anzeigeeinheit, Winkel tragen ihr Gradzeichen, und eine
+    Anzahl bleibt eine Zahl — auch eine gebrochene wie 4,45 Windungen.
+    """
+    if measure.unit == "mm":
+        return length(measure.value)
+    if measure.unit == DEGREE_UNIT:
+        return f"{plain_number(measure.value)}{DEGREE_UNIT}"
+    return plain_number(round(measure.value, 2))
 
 
 def cavity_name(feature_id: FeatureId, feature: Feature, cavity: Sequence[Feature] = ()) -> str:
