@@ -8,7 +8,7 @@ und ob der Dialog nur vorwählt, was ohne Zweifel ist (Regel 21).
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFormLayout
 
 from app.core.bootstrap import load_operations
 from app.core.scene.parameter_binding import binding_spots
@@ -34,14 +34,32 @@ def test_the_parameter_card_names_fitting_numbers_and_offers_to_bind(
     assert not panel.bind_button.isHidden()
     assert "feste Zahlen passen zu Projektmaßen" in panel.bind_button.toolTip()
     title = panel._titles["haus_laenge"]
-    # Außen 180 = Länge, innen 174 = Länge - 2 * Wand: zwei Stellen.
-    assert title.text() == "haus_laenge\n2 feste Zahlen passen"
+    hint = panel._hints["haus_laenge"]
+    # Außen 180 = Länge, innen 174 = Länge - 2 * Wand: zwei Stellen. **Der
+    # Hinweis steht unter der Zeile, nicht in ihrer Beschriftung**: In der
+    # schmalen Beschriftungsspalte brach er in vier Zeilen um, und die letzte
+    # stand unter der nächsten Zeile.
+    assert title.text() == "haus_laenge"
+    assert hint.text() == "2 feste Zahlen passen"
     assert "passt zu @haus_laenge" in title.toolTip()
-    # Ein Maß, das wirkt und zu dem keine feste Zahl passt, behält seine eine
-    # Zeile: Die Bodenstärke 4 liest der Boden, sonst steht sie nirgends.
+    assert "2 feste Zahlen passen" in title.accessibleDescription()
+    # Ein Maß, das wirkt und zu dem keine feste Zahl passt, bleibt eine Zeile:
+    # Die Bodenstärke 4 liest der Boden, sonst steht sie nirgends.
     assert panel._titles["boden"].text() == "boden"
+    assert not panel._form.isRowVisible(panel._hints["boden"])
     # Ungenutzt bleibt ungenutzt, auch ohne passende Zahl.
-    assert panel._titles["tuer_breite"].text() == "tuer_breite\nNicht verwendet"
+    assert panel._hints["tuer_breite"].text() == "Nicht verwendet"
+    panel.resize(260, 900)
+    panel.show()
+    for _ in range(10):
+        QApplication.processEvents()
+    row = panel._form.itemAt(
+        panel._form.getWidgetPosition(title)[0], QFormLayout.ItemRole.FieldRole
+    ).widget()
+    assert hint.isVisible()
+    assert hint.geometry().top() >= row.geometry().bottom(), "der Hinweis steht unter der Zeile"
+    assert hint.width() > title.width(), "über die ganze Breite der Karte"
+    assert hint.height() >= hint.heightForWidth(hint.width()) - 1, "nichts abgeschnitten"
     panel.close()
 
 

@@ -3407,7 +3407,12 @@ class ParameterPanel(QWidget):
         self._derived: dict[str, QLabel] = {}
         """Die Anzeige je abgeleitetem Maß — sein Ausdruck besitzt den Wert."""
         self._titles: dict[str, QLabel] = {}
-        """Die Beschriftung je Zeile, die auch „Nicht verwendet“ sagt."""
+        """Die Beschriftung je Zeile."""
+        self._hints: dict[str, QLabel] = {}
+        """Was unter der Zeile über ihre Verwendung steht („Nicht verwendet“,
+        „2 feste Zahlen passen“) — über die ganze Kartenbreite. In der schmalen
+        Beschriftungsspalte brach es in vier Zeilen um, und die letzte stand
+        unter der nächsten Zeile."""
         self._sliders: dict[str, QSlider] = {}
         """Der Regler je Maß mit eigener Unter- und Obergrenze (§13, RM-359 F8)."""
         self._layout: tuple[object, ...] | None = None
@@ -3807,6 +3812,13 @@ class ParameterPanel(QWidget):
         self._titles[name] = label
         self._form.addRow(label, row)
         self._remember_row(name, row)
+        hint = QLabel(self)
+        hint.setWordWrap(True)
+        set_level(hint, "caption")
+        fit_wrapped(hint)
+        self._form.addRow(hint)
+        self._hints[name] = hint
+        self._rows[hint] = name
         self._show_usage(name, title, row)
 
     def _show_usage(self, name: str, title: str, row: QWidget) -> None:
@@ -3816,30 +3828,31 @@ class ParameterPanel(QWidget):
         fitting = len(self._spots_for(name))
         unused = uses is not None and name in uses and not uses[name]
         if unused and fitting:
-            label.setText(
-                f"{title}\n"
-                + (
-                    tr("Nicht verwendet — eine feste Zahl passt")
-                    if fitting == 1
-                    else tr("Nicht verwendet — {count} feste Zahlen passen", count=fitting)
-                )
+            usage = (
+                tr("Nicht verwendet — eine feste Zahl passt")
+                if fitting == 1
+                else tr("Nicht verwendet — {count} feste Zahlen passen", count=fitting)
             )
         elif unused:
-            label.setText(f"{title}\n{tr('Nicht verwendet')}")
+            usage = tr("Nicht verwendet")
         elif fitting:
-            label.setText(
-                f"{title}\n"
-                + (
-                    tr("Eine feste Zahl passt")
-                    if fitting == 1
-                    else tr("{count} feste Zahlen passen", count=fitting)
-                )
+            usage = (
+                tr("Eine feste Zahl passt")
+                if fitting == 1
+                else tr("{count} feste Zahlen passen", count=fitting)
             )
         else:
-            label.setText(title)
+            usage = ""
+        label.setText(title)
         note = self._usage_note(name)
+        hint = self._hints.get(name)
+        if hint is not None:
+            hint.setText(usage)
+            hint.setToolTip(note)
+            self._form.setRowVisible(hint, bool(usage))
         label.setToolTip(note)
-        label.setAccessibleDescription(note)
+        # Der Vorleser hört den Hinweis an der Beschriftung, wie er ihn vorher las.
+        label.setAccessibleDescription("\n".join(part for part in (usage, note) if part))
         row.setToolTip(note)
 
     def _usage_note(self, name: str) -> str:
@@ -4091,6 +4104,7 @@ class ParameterPanel(QWidget):
         self._detail_buttons.clear()
         self._derived.clear()
         self._titles.clear()
+        self._hints.clear()
         self._sliders.clear()
         self._layout = self._layout_of(document)
         # Die Zeile der Ablehnung geht mit den Zeilen (``removeRow``); der neue
