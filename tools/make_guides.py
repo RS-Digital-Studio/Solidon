@@ -1,7 +1,7 @@
 """Die Bildanleitungen des Handbuchs aufnehmen — aus der echten Oberfläche.
 
     .venv\\Scripts\\python.exe tools/make_guides.py [sprachen …] [--nur ANLEITUNG]
-        [--ziel ORDNER] [--schirm N]
+        [--ziel ORDNER] [--film-ziel ORDNER] [--schirm N]
 
 Jede Anleitung aus :mod:`app.core.guides` hat hier eine **Geschichte**: eine
 Funktion, die den Weg der Anleitung durch die Oberfläche geht, jeden Schritt
@@ -39,6 +39,13 @@ Je Sprache schreibt der Lauf neben die Bilder ``guides.json``: je Anleitung
 die Version, in der sie aufgenommen wurde, und den Abdruck ihrer
 Beschreibung (:func:`app.core.guides.fingerprint`). Ein Test mit Marker
 ``rendered`` vergleicht beides mit dem heutigen Stand.
+
+**Aus derselben Aufnahme entsteht je Schritt ein zweites Bild für den Film**
+(``--film-ziel``, lokal unter ``marketing/``): in nativen Bildpunkten und so
+groß wie die Fläche des 2K-Films (:func:`film_cut`), mit eigenem
+``guides.json``. Das Handbuchbild bleibt der engere Ausschnitt, höchstens
+:data:`MAX_WIDTH` breit — kleinere Bilder entstehen durch Verkleinern, nie
+durch Hochrechnen.
 """
 
 from __future__ import annotations
@@ -92,6 +99,7 @@ from app.core.bootstrap import load_operations
 from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import read_catalog
 from tools import make_figures as shots
+from tools import make_guide_video as film
 from tools import make_web_images as web
 from tools.make_web_images import ISOLATED_VARIABLES, framed, grab
 
@@ -188,6 +196,31 @@ PATH_SHARES: Final = (0.25, 0.4, 0.55, 0.7, 0.82)
 #: (``make_web_images``): Die Schrift der Oberfläche bleibt scharf, und das
 #: Übersichtsbild misst 85 statt 408 KB als PNG.
 QUALITY: Final = 86
+
+
+def film_cut(focus: QRect, bounds: QRect, size: tuple[int, int]) -> QRect:
+    """Der Ausschnitt eines Filmbilds um ``focus``: so groß wie die Bildfläche des Films.
+
+    Gegen das Handbuchbild hat er dasselbe Verhältnis wie die Fläche, die der
+    Film für ihn freihält, und mindestens deren Größe abzüglich des Rands, den
+    :func:`annotate` anlegt — der Film verkleinert dann höchstens (Robert,
+    04.10.2026: „wenn wir kleinere Bilder benötigen, davon herunterskalieren").
+    Wo das Fenster kleiner ist als die Fläche, bleibt es beim ganzen Fenster.
+    """
+    width, height = size[0] - 2 * BORDER, size[1] - 2 * BORDER
+    cut = framed(focus, width / height, bounds, MARGIN)
+    if cut.width() < width or cut.height() < height:
+        width, height = min(width, bounds.width()), min(height, bounds.height())
+        left = cut.left() + (cut.width() - width) // 2
+        top = cut.top() + (cut.height() - height) // 2
+        left = min(max(left, bounds.left()), bounds.right() + 1 - width)
+        top = min(max(top, bounds.top()), bounds.bottom() + 1 - height)
+        cut = QRect(left, top, width, height)
+    if not cut.contains(focus):
+        raise SystemExit(
+            f"Der Filmausschnitt {cut.getRect()} fasst das Gezeigte {focus.getRect()} nicht."
+        )
+    return cut
 
 
 def _picture_path(folder: Path, key: str) -> Path:
@@ -601,12 +634,15 @@ def _pointer(image: QImage, spot: QPoint) -> None:
 class GuideRun:
     """Was eine Geschichte braucht: das Fenster, und wie man einen Schritt aufnimmt."""
 
-    def __init__(self, app: QApplication, window: Any, guide: guides.Guide, folder: Path) -> None:
+    def __init__(
+        self, app: QApplication, window: Any, guide: guides.Guide, folder: Path, frames: Path
+    ) -> None:
         self.app = app
         self.window = window
         self.session = window.session
         self.guide = guide
         self.folder = folder
+        self.frames = frames
         self.taken = 0
 
     def settle(self, rounds: int = 12) -> None:
@@ -664,10 +700,10 @@ class GuideRun:
         self.settle(8)
         spots = located()
         image = self._grab(number)
+        focus = QRect()
         if step.whole_window:
             crop = image.rect()
         else:
-            focus = QRect()
             for spot in spots:
                 focus = focus.united(_reach(spot))
             # Ein offenes Menü steht ganz im Bild, mit seinem Titel im
@@ -677,25 +713,46 @@ class GuideRun:
             if not menus.isNull():
                 focus = focus.united(menus.translated(-origin))
             crop = framed(focus.intersected(image.rect()), RATIO, image.rect(), MARGIN)
-        corner = crop.topLeft()
-        inside = [Spot(spot.rect.translated(-corner), spot.point, spot.pointer) for spot in spots]
-        picture = annotate(
-            image.copy(crop),
-            inside,
-            legend=step.is_legend,
-            number=number,
-            protected=tuple(area.translated(-corner) for area in _text_areas(self.window)),
-        )
+        protected = _text_areas(self.window)
+
+        def marked(cut: QRect) -> QImage:
+            corner = cut.topLeft()
+            return annotate(
+                image.copy(cut),
+                [Spot(spot.rect.translated(-corner), spot.point, spot.pointer) for spot in spots],
+                legend=step.is_legend,
+                number=number,
+                protected=tuple(area.translated(-corner) for area in protected),
+            )
+
+        picture = marked(crop)
         if picture.width() > MAX_WIDTH:
             picture = picture.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
-        target = _picture_path(self.folder, self.guide.figure_key(number))
+        key = self.guide.figure_key(number)
+        self._write(picture, _picture_path(self.folder, key))
+        # **Das Filmbild aus derselben Aufnahme**, in nativen Bildpunkten und
+        # so groß wie die Fläche im 2K-Film; ein ganzes Fenster bleibt ganz.
+        cut = (
+            image.rect()
+            if step.whole_window
+            else film_cut(
+                focus.intersected(image.rect()),
+                image.rect(),
+                film.picture_size(step.is_legend),
+            )
+        )
+        self._write(marked(cut), _picture_path(self.frames, key))
+        self.taken = number
+
+    @staticmethod
+    def _write(picture: QImage, target: Path) -> None:
         writer = QImageWriter(str(target), target.suffix.lstrip(".").encode("ascii"))
         writer.setQuality(QUALITY)
         if not writer.write(picture):
             raise SystemExit(f"{target} ließ sich nicht schreiben: {writer.errorString()}")
         size = target.stat().st_size // 1024
-        print(f"  {target.name:<36} {picture.width()}x{picture.height()}  {size} KB")
-        self.taken = number
+        shown = f"{target.parent.name}/{target.name}"
+        print(f"  {shown:<44} {picture.width()}x{picture.height()}  {size} KB")
 
     def _grab(self, number: int) -> QImage:
         """Das Fenster vom Schirm, und nur, wenn darauf wirklich das Fenster steht.
@@ -1751,7 +1808,7 @@ def _depth(widget: Any) -> int:
     return depth
 
 
-def _child(language: str, keys: list[str], target: Path) -> int:
+def _child(language: str, keys: list[str], target: Path, film_target: Path) -> int:
     """Die Kindseite: ein Fenster, alle gewählten Anleitungen einer Sprache."""
     from app.core.paths import user_config_dir
 
@@ -1777,6 +1834,8 @@ def _child(language: str, keys: list[str], target: Path) -> int:
 
     folder = target / language
     folder.mkdir(parents=True, exist_ok=True)
+    frames = film.frames_folder(film_target, language)
+    frames.mkdir(parents=True, exist_ok=True)
     chosen = [guide for guide in guides.GUIDES if guide.key in keys]
     # Der Stand eines Kunden, der den Druckdialog schon einmal geöffnet hat:
     # ein gewählter Slicer und der gelesene Hinweis zu den Druckeinstellungen,
@@ -1805,7 +1864,7 @@ def _child(language: str, keys: list[str], target: Path) -> int:
     print(f"{language}:")
     try:
         for guide in chosen:
-            run = GuideRun(app, window, guide, folder)
+            run = GuideRun(app, window, guide, folder, frames)
             STORIES[guide.key](run)
             run.finish()
     finally:
@@ -1813,10 +1872,11 @@ def _child(language: str, keys: list[str], target: Path) -> int:
         window.close()
         shots.release_viewport(window)
     _write_stamp(folder, chosen)
+    _write_stamp(frames, chosen)
     return 0
 
 
-def _take(language: str, keys: list[str], target: Path) -> None:
+def _take(language: str, keys: list[str], target: Path, film_target: Path) -> None:
     """Eine Sprache in einem eigenen Prozess mit eigenen Nutzerverzeichnissen."""
     with tempfile.TemporaryDirectory(prefix="solidon-anleitungen-") as room:
         environment = dict(os.environ)
@@ -1826,12 +1886,14 @@ def _take(language: str, keys: list[str], target: Path) -> None:
         environment.pop("QT_QPA_PLATFORM", None)
         environment.pop("QT_SCALE_FACTOR", None)
         arguments = [sys.executable, str(Path(__file__).resolve()), "--kind", language]
-        arguments += ["--ziel", str(target), "--schirm", str(shots.SCREEN_INDEX)]
+        arguments += ["--ziel", str(target), "--film-ziel", str(film_target)]
+        arguments += ["--schirm", str(shots.SCREEN_INDEX)]
         for key in keys:
             arguments += ["--nur", key]
         run = subprocess.run(arguments, env=environment, check=False)
     expected = [
-        _picture_path(target / language, key)
+        _picture_path(folder, key)
+        for folder in (target / language, film.frames_folder(film_target, language))
         for guide in guides.GUIDES
         if guide.key in keys
         for key in guide.figure_keys()
@@ -1870,6 +1932,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Ordner für die Bilder, je Sprache ein Unterordner (Vorgabe: app/images/manual)",
     )
     parser.add_argument(
+        "--film-ziel",
+        dest="film_target",
+        type=Path,
+        default=film.OUTPUT,
+        metavar="ORDNER",
+        help=(
+            "Ordner für die 2K-Filmbilder, je Sprache unter <sprache>/frames "
+            "(Vorgabe: marketing/video/guides)"
+        ),
+    )
+    parser.add_argument(
         "--schirm",
         dest="screen",
         type=int,
@@ -1894,9 +1967,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"Ohne Geschichte: {', '.join(missing)}")
 
     if arguments.child is not None:
-        return _child(arguments.child, keys, arguments.target)
+        return _child(arguments.child, keys, arguments.target, arguments.film_target)
     for language in shots.chosen_languages(tuple(arguments.languages)):
-        _take(language, keys, arguments.target)
+        _take(language, keys, arguments.target, arguments.film_target)
     return 0
 
 

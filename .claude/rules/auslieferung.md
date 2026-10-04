@@ -168,6 +168,9 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
 
 ## Erzeugtes läuft nicht in der CI
 
+**Aufgenommen wird in 2K** auf dem Aufnahmeschirm; kleinere Bilder und die
+Filme entstehen daraus durch Verkleinern, nie durch Hochrechnen (Robert).
+
 Bilder, Handbuch, Website-Bilder, SEO-Dateien und PDFs entstehen beim
 Paketbau, nicht nach jedem Schritt — und nur für die Sprachen und Bilder, deren
 Grundlage sich geändert hat. Ein Test, dessen Grün an einem Erzeugerlauf

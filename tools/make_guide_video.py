@@ -7,7 +7,9 @@ Der Kunde, der den Umbau des Handbuchs anstieß, fragte nach einem
 Video-Tutorial. Es entsteht aus denselben Geschichten wie die Bildanleitungen:
 aus den Schrittbildern, die ``make_guides.py`` beim Release in der echten
 Oberfläche aufnimmt, und aus den Sätzen der Anleitungen in der jeweiligen
-Sprache. Ohne Angabe entstehen je Sprache zwei Filme, geordnet wie auf „Wo
+Sprache. Die Bilder des Films sind eigene Ausschnitte derselben Aufnahme, in
+2K und nativen Bildpunkten (:data:`FRAMES`); der Film verkleinert sie
+höchstens, wie das Handbuch seine. Ohne Angabe entstehen je Sprache zwei Filme, geordnet wie auf „Wo
 fange ich an?“: *Vom Start bis zum Druck* und *Einzelne Aufgaben*, jeder mit
 Kapitelmarken je Anleitung. ``--nur`` macht aus einzelnen Anleitungen je einen
 eigenen Film.
@@ -63,9 +65,25 @@ from app.i18n.catalog import available_languages, install_language
 #: lokal (Entscheidung Robert, 26.09.2026).
 OUTPUT: Final = Path(__file__).resolve().parent.parent / "marketing" / "video" / "guides"
 
-WIDTH: Final = 1920
-HEIGHT: Final = 1080
+#: Die Größe des Films: 2K wie der Aufnahmeschirm. Robert, 04.10.2026:
+#: „mindestens Full HD, besser 2K … wenn wir kleinere Bilder benötigen, davon
+#: herunterskalieren" — hochgerechnet wird nichts.
+WIDTH: Final = 2560
+HEIGHT: Final = 1440
 FPS: Final = 30
+
+#: Gesetzt wird in einem Raster von 1920 x 1080 Punkten; :meth:`_Painter.canvas`
+#: bildet es auf die Filmgröße ab. Schrift und Linien bleiben dabei Vektoren,
+#: Schrittbilder setzt :meth:`_Painter.picture` in Bildpunkten des Films.
+LAYOUT_WIDTH: Final = 1920
+LAYOUT_HEIGHT: Final = 1080
+SCALE: Final = WIDTH / LAYOUT_WIDTH
+
+#: Die eigenen Filmbilder liegen neben den Filmen: ``make_guides.py`` schneidet
+#: sie aus derselben Aufnahme wie die Handbuchbilder, in nativen Bildpunkten und
+#: mindestens so groß wie die Bildfläche (:func:`picture_size`). Sie reisen
+#: nicht mit der Anwendung.
+FRAMES: Final = "frames"
 
 #: Rand links und rechts, wie groß ein Satz unter dem Bild höchstens steht und
 #: wie klein er werden darf, bevor das Werkzeug abbricht, statt ihn unlesbar
@@ -73,6 +91,27 @@ FPS: Final = 30
 SIDE: Final = 60
 CAPTION_PIXELS: Final = 46
 SMALLEST_PIXELS: Final = 24
+
+#: Wo das Schrittbild steht, im Raster: über dem Satz eines Schritts, links
+#: neben den Zeilen einer Legende.
+STEP_PICTURE: Final = QRectF(SIDE, 90, LAYOUT_WIDTH - 2 * SIDE, 740)
+LEGEND_PICTURE: Final = QRectF(SIDE, 90, 1180, 940)
+
+
+def picture_size(legend: bool) -> tuple[int, int]:
+    """Die Bildfläche eines Schritts in Bildpunkten des Films.
+
+    So groß schneidet ``make_guides.py`` ein Filmbild mindestens zu — der Film
+    verkleinert dann höchstens und rechnet nie hoch.
+    """
+    area = LEGEND_PICTURE if legend else STEP_PICTURE
+    return round(area.width() * SCALE), round(area.height() * SCALE)
+
+
+def frames_folder(root: Path, language: str) -> Path:
+    """Wo die Filmbilder einer Sprache liegen."""
+    return root / language / FRAMES
+
 
 #: Standzeit: ein Blick auf das Bild, dann Lesezeit je Wort. Gemessen an der
 #: Lesegeschwindigkeit für Untertitel (rund drei Wörter je Sekunde), etwas
@@ -222,12 +261,14 @@ class _Painter:
         self.family = QApplication.font().family()
 
     def canvas(self) -> tuple[QImage, QPainter]:
+        """Ein leeres Standbild in Filmgröße, gezeichnet wird im Raster (:data:`SCALE`)."""
         image = QImage(WIDTH, HEIGHT, QImage.Format.Format_RGB32)
         image.fill(self.base)
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.scale(SCALE, SCALE)
         return image, painter
 
     def document(self, body: str, pixels: int, width: float, colour: QColor) -> QTextDocument:
@@ -337,23 +378,36 @@ class _Painter:
         )
 
     def picture(self, painter: QPainter, picture: QImage, area: QRectF) -> None:
-        """Das Schrittbild ganz und unverzerrt, mittig in ``area``."""
-        fitted = picture.scaled(
-            area.size().toSize(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+        """Das Schrittbild ganz und unverzerrt, mittig in ``area`` — verkleinert, nie vergrößert.
+
+        Gesetzt in Bildpunkten des Films, an der Rasterskalierung vorbei: Sonst
+        rechnete der Maler ein auf das Raster verkleinertes Bild wieder hoch,
+        und die Schrift der Oberfläche würde weich.
+        """
+        target = QRectF(
+            area.left() * SCALE, area.top() * SCALE, area.width() * SCALE, area.height() * SCALE
         )
-        left = area.left() + (area.width() - fitted.width()) / 2
-        top = area.top() + (area.height() - fitted.height()) / 2
-        painter.drawImage(QPointF(left, top), fitted)
+        fitted = picture
+        if picture.width() > target.width() or picture.height() > target.height():
+            fitted = picture.scaled(
+                target.size().toSize(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        left = target.left() + (target.width() - fitted.width()) / 2
+        top = target.top() + (target.height() - fitted.height()) / 2
+        painter.save()
+        painter.resetTransform()
+        painter.drawImage(QPointF(round(left), round(top)), fitted)
+        painter.restore()
 
     def progress(self, painter: QPainter, share: float) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(self.card)
-        painter.drawRoundedRect(QRectF(SIDE, HEIGHT - 26, WIDTH - 2 * SIDE, 6), 3, 3)
+        painter.drawRoundedRect(QRectF(SIDE, LAYOUT_HEIGHT - 26, LAYOUT_WIDTH - 2 * SIDE, 6), 3, 3)
         painter.setBrush(self.accent)
-        filled = (WIDTH - 2 * SIDE) * max(0.0, min(1.0, share))
-        painter.drawRoundedRect(QRectF(SIDE, HEIGHT - 26, filled, 6), 3, 3)
+        filled = (LAYOUT_WIDTH - 2 * SIDE) * max(0.0, min(1.0, share))
+        painter.drawRoundedRect(QRectF(SIDE, LAYOUT_HEIGHT - 26, filled, 6), 3, 3)
 
 
 def _opening(draw: _Painter, film: Film) -> QImage:
@@ -408,26 +462,26 @@ def _step(
             counter = tr("Schritt {number} von {count}", number=number, count=count)
             draw.plain(
                 painter,
-                QRectF(WIDTH - SIDE - 600, 22, 600, 48),
+                QRectF(LAYOUT_WIDTH - SIDE - 600, 22, 600, 48),
                 counter,
                 30,
                 draw.muted,
                 align=Qt.AlignmentFlag.AlignRight,
             )
         if one.is_legend:
-            draw.picture(painter, picture, QRectF(SIDE, 90, 1180, 940))
+            draw.picture(painter, picture, LEGEND_PICTURE)
             draw.legend(
                 painter,
-                QRectF(1280, 110, WIDTH - SIDE - 1280, 900),
+                QRectF(1280, 110, LAYOUT_WIDTH - SIDE - 1280, 900),
                 caption_html(str(one.text), draw.accent.name()),
                 [html.escape(str(mark.label)) for mark in one.marks],
             )
         else:
-            draw.picture(painter, picture, QRectF(SIDE, 90, WIDTH - 2 * SIDE, 740))
+            draw.picture(painter, picture, STEP_PICTURE)
             draw.badge(painter, QPointF(SIDE + 34, 928), 34, str(number))
             draw.rich(
                 painter,
-                QRectF(SIDE + 96, 852, WIDTH - 2 * SIDE - 96, 152),
+                QRectF(SIDE + 96, 852, LAYOUT_WIDTH - 2 * SIDE - 96, 152),
                 caption_html(str(one.text), draw.accent.name()),
                 CAPTION_PIXELS,
                 centred=True,
@@ -664,9 +718,12 @@ def main(argv: list[str] | None = None) -> int:
         "--quelle",
         dest="source",
         type=Path,
-        default=figures.IMAGE_ROOT,
+        default=OUTPUT,
         metavar="ORDNER",
-        help="Bilder der Anleitungen, je Sprache ein Unterordner (Vorgabe: app/images/manual)",
+        help=(
+            "Filmbilder der Anleitungen, je Sprache unter <sprache>/frames "
+            "(Vorgabe: marketing/video/guides, geschrieben von make_guides.py)"
+        ),
     )
     parser.add_argument(
         "--ziel",
@@ -698,7 +755,12 @@ def main(argv: list[str] | None = None) -> int:
         set_language(language)
         print(f"{language}:", flush=True)
         for film in films(arguments.only):
-            make_film(film, language, arguments.source / language, arguments.target / language)
+            make_film(
+                film,
+                language,
+                frames_folder(arguments.source, language),
+                arguments.target / language,
+            )
     app.processEvents()
     return 0
 

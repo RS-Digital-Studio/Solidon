@@ -460,6 +460,78 @@ def test_a_film_stops_at_pictures_that_no_longer_fit_their_guide(tmp_path: Path)
         make_guide_video.check_pictures(tmp_path, (drill,))
 
 
+def test_a_film_picture_is_cut_at_least_as_large_as_its_place_in_the_film() -> None:
+    """Der 2K-Film verkleinert seine Bilder höchstens, er rechnet nie hoch.
+
+    Robert, 04.10.2026: „wenn wir kleinere Bilder benötigen, davon
+    herunterskalieren". Ein Ausschnitt um ein kleines Ziel ist deshalb so groß
+    wie die Fläche im Film (abzüglich des Rands, den ``annotate`` anlegt),
+    enthält das Ziel und bleibt im Fenster; ist das Fenster kleiner, bleibt
+    es beim ganzen Fenster.
+    """
+    from PySide6.QtCore import QRect
+
+    from tools import make_guide_video
+    from tools.make_guides import BORDER, film_cut
+
+    # Die Flächen im Raster mal 2560 / 1920: 1800 x 740 und 1180 x 940.
+    assert make_guide_video.picture_size(False) == (2400, 987)
+    assert make_guide_video.picture_size(True) == (1573, 1253)
+    window = QRect(0, 0, 2560, 1369)
+    for legend in (False, True):
+        width, height = make_guide_video.picture_size(legend)
+        for focus in (QRect(10, 10, 40, 30), QRect(1200, 600, 80, 40), QRect(2500, 1330, 50, 30)):
+            cut = film_cut(focus, window, (width, height))
+            assert cut.contains(focus)
+            assert window.contains(cut)
+            assert (cut.width(), cut.height()) == (
+                min(width - 2 * BORDER, window.width()),
+                min(height - 2 * BORDER, window.height()),
+            )
+    small = QRect(0, 0, 900, 600)
+    assert film_cut(QRect(100, 100, 50, 50), small, (2400, 987)) == small
+
+
+def test_the_film_draws_a_picture_in_its_own_pixels_and_never_enlarges_it(qt_app) -> None:
+    """Ein kleineres Bild steht 1:1 im Film, ein größeres wird auf die Fläche verkleinert."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QColor, QImage
+
+    from tools import make_guide_video
+
+    draw = make_guide_video._Painter()
+    area = make_guide_video.STEP_PICTURE
+    width, height = make_guide_video.picture_size(False)
+    for size, expected in (((400, 300), (400, 300)), ((4000, 1000), (width, round(width / 4)))):
+        picture = QImage(*size, QImage.Format.Format_RGB32)
+        picture.fill(QColor("#ff0000"))
+        image, painter = draw.canvas()
+        try:
+            draw.picture(painter, picture, area)
+        finally:
+            painter.end()
+        assert (image.width(), image.height()) == (make_guide_video.WIDTH, make_guide_video.HEIGHT)
+        red = [
+            (x, y)
+            for y in range(0, image.height(), 2)
+            for x in range(0, image.width(), 2)
+            if image.pixelColor(x, y) == QColor("#ff0000")
+        ]
+        columns = max(x for x, _ in red) - min(x for x, _ in red) + 2
+        rows = max(y for _, y in red) - min(y for _, y in red) + 2
+        assert abs(columns - expected[0]) <= 2 and abs(rows - expected[1]) <= 2, (
+            size,
+            columns,
+            rows,
+        )
+        assert QRectF(
+            area.left() * make_guide_video.SCALE,
+            area.top() * make_guide_video.SCALE,
+            width,
+            height,
+        ).contains(QRectF(min(x for x, _ in red), min(y for _, y in red), columns - 2, rows - 2))
+
+
 def test_a_caption_colours_the_names_and_keeps_a_link_as_its_text() -> None:
     """Im Film ist nichts anklickbar; der Name, den der Kunde sucht, steht in der
     Farbe der Markierung, der Titel eines Verweises kursiv, und nichts aus dem
