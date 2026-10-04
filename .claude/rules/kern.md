@@ -1,5 +1,5 @@
 ---
-description: "Der Kern ohne Qt — Grenze nach oben, Absagen, plattformgleiche Rechnung, stabile Merkmalsnummern, teure Bibliotheksaufrufe, Fehler, Transaktionen, Lizenzgrenze, externe Programme"
+description: "Der Kern ohne Qt — Grenze nach oben, Absagen, plattformgleiche Rechnung, stabile Merkmalsnummern, teure Bibliotheksaufrufe, Fehler, Transaktionen, Lizenzgrenze, externe Programme, gebaute Maße"
 paths:
   - "app/core/**/*.py"
 ---
@@ -426,3 +426,14 @@ selbst kann.
 Kante oder Punkten (RM-400): Ein gemeinsames Feld behielt beim Umschalten einen
 Wert, der dort etwas anderes hieß. Eine Ebene aus Punkten richtet ihre Normale
 aus (`prepare_ops._upward`), damit „Kleinere Seite“ nicht an der Klickfolge hängt.
+
+## Ein erzeugtes Merkmal nennt, was gebaut ist
+
+Ein Erzeuger nennt das gebaute Maß, wie die Erkennung es an einem eingelesenen
+Teil mäße; ein Nennmaß steht daneben (`nominal` am gedruckten Gewinde,
+`fasteners._thread_feature`; das Kappengewinde des Drehdeckels). Passungen
+prüfen gebaut gegen gebaut, sonst meldet ein frisch gebautes Paar „0,00 mm“.
+Das Soll einer Gewindepassung ist die Summe ihrer Hälften
+(`fits._thread_wanted`): eine gedruckte trägt das Spiel ihres Materials, sonst
+das Loch die Lochkorrektur; `target(as_stated=True)` gilt zwei Gewinden ohne
+Spiel daneben, wie *Merkmal ändern* sie setzt.

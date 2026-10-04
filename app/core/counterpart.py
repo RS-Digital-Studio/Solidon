@@ -32,7 +32,7 @@ und hängt die Passung an dieselbe Transaktion.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -49,13 +49,16 @@ from app.core.types import (
     Fit,
     FitKind,
     ObjectId,
+    Operation,
     OpId,
     Origin,
+    Profile,
     Scene,
     TransactionId,
     thread_is_left_handed,
     thread_is_tapered,
 )
+from app.core.units import is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -373,7 +376,14 @@ def thread_size_for(feature: Feature) -> str:
     kein Gegenstück, sondern ein Loch, durch das er fällt. Liegt das Gewinde
     über der größten Tabellengröße, nennt der Satz sie als Grenze.
     """
-    diameter = float(feature.params.get("diameter", 0.0))
+    # Ein gedrucktes Gewinde nennt sein Nennmaß neben dem gebauten
+    # (``build.thread``); das gebaute liegt um das Spiel daneben, bei TPU weiter
+    # als die Erkennungsgrenze.
+    named = feature.params.get("nominal")
+    if isinstance(named, int | float) and not isinstance(named, bool) and named > 0.0:
+        diameter = float(named)
+    else:
+        diameter = float(feature.params.get("diameter", 0.0))
     pitch = float(feature.params.get("pitch", 0.0))
     sizes = standards.screw_sizes()
     largest = max(sizes, key=lambda size: standards.screw(size).nominal)
@@ -593,6 +603,231 @@ def attach_thread_fit(
     )
     _log.info("thread counterpart: %s ↔ %s as fit %s", feature.id, made, fit.name)
     return applied
+
+
+def coupled_thread_drafts(
+    document: Document,
+    scene: Scene,
+    profile: Profile,
+    object_id: ObjectId,
+    params: Mapping[str, Any],
+) -> tuple[OperationDraft, ...]:
+    """Die Schritte am Gegengewinde, wenn ein Gewinde in einer Passung sein Maß ändert.
+
+    *Merkmal ändern* an einem Gewinde (``resize_feature``) ändert genau ein
+    Teil. Steht das Gewinde in einer aktiven Gewindepassung, passt die andere
+    Hälfte danach nicht mehr — die Schraube greift nicht in die größere Mutter,
+    und der Prüfbericht meldet es erst hinterher. Deshalb geht die andere
+    Hälfte mit, **in derselben Transaktion**: dieselbe Steigung, und der
+    Durchmesser, den die Passung verlangt (``fits.target`` — das Spiel aus dem
+    Material des Lochs, §12). Innen das Spiel weiter, außen enger. Gefragt
+    wird das Spiel für zwei Gewinde, die so gebaut sind, wie sie dastehen
+    (``as_stated``): Genau so setzt *Merkmal ändern* beide Hälften.
+
+    Kein Schritt, wo nichts gekoppelt ist: kein Gewinde, keine Passung, eine
+    Passung, die sich nicht messen lässt (die meldet der Prüfbericht selbst),
+    oder ein Gegenstück, das schon das verlangte Maß hat.
+    """
+    from app.core.scene.fits import resolve, target
+
+    entry = scene.objects.get(object_id)
+    feature_id = str(params.get("at_feature", ""))
+    feature = entry.features.get(feature_id) if entry is not None else None
+    if feature is None or feature.kind != "thread":
+        return ()
+    # Ein Ausdruck (``=@gewinde``) steht erst nach der Auswertung fest; dann
+    # koppelt nichts, und die Passungsprüfung meldet, was nicht mehr passt.
+    named_diameter, named_pitch = params.get("diameter"), params.get("pitch", 0.0)
+    if not isinstance(named_diameter, int | float) or not isinstance(named_pitch, int | float):
+        return ()
+    diameter = float(named_diameter)
+    pitch = float(named_pitch) or float(feature.params.get("pitch", 0.0))
+    if diameter <= 0.0 or pitch <= 0.0:
+        return ()
+    own = FeatureRef(object_id, feature_id)
+    drafts: list[OperationDraft] = []
+    for fit in active_fits(document):
+        if fit.kind != "thread" or own not in (fit.a, fit.b):
+            continue
+        other_ref = fit.b if fit.a == own else fit.a
+        other = resolve(scene, other_ref)
+        if other is None or other.kind != "thread" or other_ref.object_id == object_id:
+            continue
+        try:
+            wanted, _materials = target(scene, fit, profile, as_stated=True)
+        except ValueError:
+            continue
+        inner = bool(feature.params.get("internal", False))
+        partner = diameter - wanted if inner else diameter + wanted
+        if is_close(partner, float(other.params.get("diameter", 0.0))) and is_close(
+            pitch, float(other.params.get("pitch", 0.0))
+        ):
+            continue
+        drafts.append(
+            OperationDraft(
+                op="resize_feature",
+                inputs=(other_ref.object_id,),
+                params={"at_feature": other_ref.feature_id, "diameter": partner, "pitch": pitch},
+            )
+        )
+    return tuple(drafts)
+
+
+def with_coupled_threads(
+    document: Document, scene: Scene, profile: Profile, drafts: Sequence[OperationDraft]
+) -> list[OperationDraft]:
+    """Die Entwürfe, ergänzt um das Gegengewinde jedes geänderten Gewindes.
+
+    Die eine Stelle für Fenster (Vorschau und Übernehmen) und Kommandozeile.
+    Ein Gegenstück, das schon ein eigener Entwurf ändert, bleibt bei dessen
+    Werten; keines kommt zweimal.
+    """
+    targeted = {
+        (draft.inputs[0], draft.params.get("at_feature"))
+        for draft in drafts
+        if draft.op == "resize_feature" and draft.inputs
+    }
+    coupled: list[OperationDraft] = []
+    for draft in drafts:
+        if draft.op != "resize_feature" or len(draft.inputs) != 1:
+            continue
+        for partner in coupled_thread_drafts(
+            document, scene, profile, draft.inputs[0], draft.params
+        ):
+            key = (partner.inputs[0], partner.params.get("at_feature"))
+            if key not in targeted:
+                targeted.add(key)
+                coupled.append(partner)
+    return [*drafts, *coupled]
+
+
+@dataclass(frozen=True, slots=True)
+class StepCoupling:
+    """Was am Gegengewinde mitgeht, wenn ein gespeicherter Gewindeschritt sich ändert.
+
+    ``edits`` nennt je Schritt des Gegenstücks seine vollständigen neuen Werte,
+    ``drafts`` die Schritte, die neu ans Ende kommen — beides geht mit der
+    Änderung in **eine** Transaktion (``History.change_params``).
+    """
+
+    edits: dict[OpId, dict[str, Any]]
+    drafts: tuple[OperationDraft, ...] = ()
+
+
+def coupled_step_change(
+    document: Document,
+    scene: Scene,
+    profile: Profile,
+    op_id: OpId,
+    params: Mapping[str, Any],
+) -> StepCoupling | None:
+    """Das Gegengewinde einer Gewindepassung, wenn ein bestehender Gewindeschritt sich ändert.
+
+    Das Gegenstück zu :func:`with_coupled_threads` für den gespeicherten
+    Schritt (*Diesen Schritt ändern*, Verlauf, Merkmalfenster): Ohne es
+    entstünde still eine Passung, die nicht mehr passt (Regel 21). Zwei Arten
+    von Gewindeschritten:
+
+    * **Gedrucktes Gewinde** (``insert_printed_thread``) mit neuer Größe: Ist
+      das Gegengewinde ebenfalls ein gedrucktes Gewinde und danach nicht mehr
+      geändert worden, bekommt es dieselbe Größe — die Tabelle hält beide
+      Hälften zusammen.
+    * **Merkmal ändern** am Gewinde: Der Partnerschritt am Gegenstück (der
+      zuletzt gesetzte, bevorzugt aus derselben Transaktion) bekommt die
+      Steigung und den Durchmesser, den die Passung verlangt; gibt es keinen,
+      kommt einer ans Ende.
+
+    Gekoppelt wird nur, wo der geänderte Schritt das Gewinde am Ende bestimmt —
+    ändert ein späterer Schritt es noch einmal, gälte die Kopplung einem Maß,
+    das es so nicht gibt. Gefragt wird an der zuletzt gerechneten Szene, denn
+    Passungen nennen die Merkmale des Endstands.
+    """
+    from app.core.scene.fits import resolve, target
+
+    entry = next((step for step in document.ops if step.id == op_id), None)
+    if entry is None or len(entry.inputs) != 1:
+        return None
+    new = {**entry.params, **params}
+    body = entry.inputs[0]
+    if entry.op == "resize_feature":
+        own = FeatureRef(body, str(new.get("at_feature", "")))
+    elif entry.op == "insert_printed_thread" and new.get("size") != entry.params.get("size"):
+        made = scene.objects.get(body)
+        name = next(
+            (
+                key
+                for key, feature in (made.features.items() if made is not None else ())
+                if feature.kind == "thread" and feature.created_by == op_id
+            ),
+            None,
+        )
+        if name is None:
+            return None
+        own = FeatureRef(body, name)
+    else:
+        return None
+    if _later_resizes(document, own, after=op_id):
+        return None
+    own_feature = resolve(scene, own)
+    if own_feature is None or own_feature.kind != "thread":
+        return None
+
+    edits: dict[OpId, dict[str, Any]] = {}
+    drafts: list[OperationDraft] = []
+    for fit in active_fits(document):
+        if fit.kind != "thread" or own not in (fit.a, fit.b):
+            continue
+        other = fit.b if fit.a == own else fit.a
+        partner = resolve(scene, other)
+        if partner is None or partner.kind != "thread":
+            continue
+        resizes = _later_resizes(document, other, after=0)
+        if entry.op == "insert_printed_thread":
+            creator = next((step for step in document.ops if step.id == partner.created_by), None)
+            if not resizes and creator is not None and creator.op == entry.op:
+                edits[creator.id] = {**creator.params, "size": new["size"]}
+            continue
+        diameter, pitch = new.get("diameter"), new.get("pitch", 0.0)
+        if not isinstance(diameter, int | float) or not isinstance(pitch, int | float):
+            continue
+        pitch = float(pitch) or float(own_feature.params.get("pitch", 0.0))
+        try:
+            wanted, _materials = target(scene, fit, profile, as_stated=True)
+        except ValueError:
+            continue
+        inner = bool(own_feature.params.get("internal", False))
+        values = {
+            "at_feature": other.feature_id,
+            "diameter": float(diameter) - wanted if inner else float(diameter) + wanted,
+            "pitch": pitch,
+        }
+        if resizes:
+            together = _transaction_of(document, op_id)
+            chosen = next((step for step in resizes if step.id in together), resizes[-1])
+            edits[chosen.id] = {**chosen.params, **values}
+        else:
+            drafts.append(
+                OperationDraft(op="resize_feature", inputs=(other.object_id,), params=values)
+            )
+    return StepCoupling(edits, tuple(drafts)) if edits or drafts else None
+
+
+def _later_resizes(document: Document, ref: FeatureRef, *, after: OpId) -> list[Operation]:
+    """Die *Merkmal ändern*-Schritte an diesem Gewinde nach ``after``, in Stapelfolge."""
+    return [
+        step
+        for step in document.ops
+        if step.id > after
+        and step.op == "resize_feature"
+        and step.suppressed is None
+        and step.inputs == (ref.object_id,)
+        and step.params.get("at_feature") == ref.feature_id
+    ]
+
+
+def _transaction_of(document: Document, op_id: OpId) -> tuple[OpId, ...]:
+    """Die Schritte der Transaktion, die diesen Schritt angelegt hat."""
+    return next((entry.ops for entry in document.transactions if op_id in entry.ops), (op_id,))
 
 
 def _made_feature(

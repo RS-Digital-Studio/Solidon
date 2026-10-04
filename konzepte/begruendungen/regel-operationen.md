@@ -2189,3 +2189,7 @@ Durchmessers, weil ein Feld, das mit einer Absage begrüßt, keine Vorgabe ist.
 **Gedrehtes Langloch:** Wer eine Geste einlöst, baut die Wirkung, nicht den
 Hinweis auf die andere — ein Zug in neuer Richtung dreht das Langloch
 (`slot_hole.turned`), statt auf *Merkmal drehen* zu verweisen.
+
+**Langloch ohne Zugabe:** `slot_hole` schneidet ohne `FEATURE_OVERLAP`
+(`overlap=0.0`), damit beide Wege — Ziehen und Ändern — und beide Kerne
+dasselbe Langloch schneiden.

@@ -190,6 +190,7 @@ MEINT_DEN_SCHRITT: dict[str, str | None] = {
     "lattice.filled": "cell",
     "displace.applied": "strength",
     "hollow.done": "wall",
+    "thread.thin_wall": "diameter",
 }
 
 

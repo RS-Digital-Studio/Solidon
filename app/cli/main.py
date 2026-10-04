@@ -654,8 +654,16 @@ def command_run(args: argparse.Namespace) -> int:
             path,
             lambda history, _context: history.plan_insert(args.before, spec.title, [draft]),
         )
+    drafts = [draft]
+    if spec.name == "resize_feature" and len(inputs) == 1:
+        # Ein Gewinde in einer Gewindepassung nimmt sein Gegenstück mit, wie im
+        # Fenster (``Session.with_coupled_threads``) — in derselben Transaktion.
+        from app.core.counterpart import with_coupled_threads
+
+        before = run_evaluation(project, path, quiet=True)
+        drafts = with_coupled_threads(project.document, before.scene, profile_of(project), drafts)
     history = History(project.document)
-    history.apply(spec.title, [draft])
+    history.apply(spec.title, drafts)
     result = run_evaluation(project, path)
     print_report(result)
     if not result.complete:

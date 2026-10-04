@@ -224,6 +224,8 @@ Stellen halten das, beide sind nötig:
 - **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
   die Mindestbreite des Inhalts; Auswahlfelder baut `column_choice`, sonst
   verlangt ihr längster Eintrag die Spalte.
+- **Ein Feld einer Merkmalsart steht nur an ihr** (`perceive.actions._carried_by`):
+  die Steigung am Gewinde, nicht an der Bohrung.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):
   `perceive.actions._kind_of` nennt `int` `count`, das Fenster baut ein
   Ganzzahlfeld und gibt `int` zurück; eine neue Feldart in `ActionField.kind`
