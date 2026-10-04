@@ -8,6 +8,8 @@ Pläne:
              Waschschüssel) über jede Kombination aus Slicer und Drucker
 ``modelle``  jedes Modell aus ``F:\\3D Dateien`` (ohne „3D Drucker“, Dubletten
              nach Prüfsumme gestrichen) über die Heimkombinationen, klein zuerst
+``probe``    die drei Modelle von ``drucker`` über die Heimkombinationen —
+             der Probelauf des Werkzeugs vor einem Gesamtlauf
 
 Wieder aufnehmbar: Ein Modell, dessen Ergebnis ``done`` trägt, läuft nicht
 noch einmal; ein halbes setzt bei der nächsten Kombination fort. Liegt die
@@ -80,6 +82,10 @@ def corpus() -> list[Path]:
 def units() -> list[tuple[Path, str]]:
     if PLAN == "drucker":
         return [(model, "alle") for model in PRINTER_PLAN]
+    if PLAN == "probe":
+        # Die drei Modelle der Abnahme über die sieben Heimkombinationen: der
+        # Probelauf, bevor ein Gesamtlauf Stunden kostet.
+        return [(model, "heim") for model in PRINTER_PLAN]
     if PLAN == "modelle":
         return [(model, "heim") for model in corpus()]
     raise SystemExit(f"unbekannter Plan: {PLAN}")

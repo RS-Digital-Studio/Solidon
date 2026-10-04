@@ -103,6 +103,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Após exportar ou «Abrir no slicer …», o Solidon volta a ler o ficheiro. O registo no relatório indica ficheiros, destino de impressão, material, definições e se o ficheiro corresponde ao pedido.
 - Exportado como 3MF na linha de comandos, um corpo de uma só cor mantém o seu filamento ao ser reaberto.
 - Para definições de peças individuais, a linha de comandos indica que peças são e que valor recebem.
+- Se aceitar suportes para uma ponte longa sobre a própria peça, eles chegam agora também aí. Antes juntava-se «Só da mesa», e vários slicers imprimiam a ponte sem suporte.
+- As peças pequenas deitadas, como parafusos, já não recebem suportes propostos onde uma aresta de corte mostrava por engano um ponto a flutuar.
 
 ### Furos, furos oblongos e divisão
 

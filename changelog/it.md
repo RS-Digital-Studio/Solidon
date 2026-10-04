@@ -103,6 +103,8 @@ scrive in `website/version.json`.
 - Dopo l'esportazione o «Apri nello slicer …» Solidon rilegge il file. Il resoconto nel rapporto indica file, destinazione di stampa, materiale, impostazioni e se il file corrisponde alla richiesta.
 - Esportato in 3MF dalla riga di comando, un corpo di un solo colore mantiene il suo filamento quando lo riapri.
 - Per le impostazioni dei singoli pezzi, la riga di comando indica quali pezzi sono e quale valore ricevono.
+- Se accetti i supporti per un ponte lungo sopra il pezzo stesso, ora arrivano anche lì. Prima si aggiungeva «Solo dal piano», e diversi slicer stampavano il ponte senza supporto.
+- I pezzi piccoli distesi, come le viti, non ricevono più supporti proposti dove un bordo di taglio mostrava per errore un punto sospeso.
 
 ### Fori, asole e divisione
 

@@ -128,6 +128,8 @@ Nutzen da und sonst nichts.
 - Nach Export oder *Im Slicer öffnen …* liest Solidon die Datei noch einmal ein. Der Beleg im Prüfbericht nennt Dateien, Druckziel, Material, Druckwerte und ob die Datei dem Auftrag entspricht.
 - Auf der Kommandozeile als 3MF exportiert, behält ein einfarbiger Körper beim erneuten Öffnen sein Filament.
 - Die Kommandozeile nennt bei Druckwerten für einzelne Teile, welche Teile es sind und welchen Wert sie bekommen.
+- Übernehmen Sie Stützen für eine lange Brücke über dem Teil selbst, kommen sie jetzt auch dort an. Bisher kam „Nur vom Bett“ dazu, und mehrere Slicer druckten die Brücke ohne Stütze.
+- Kleine liegende Teile wie Schrauben bekommen keine Stützen mehr vorgeschlagen, wo eine Schnittkante fälschlich eine schwebende Stelle ergab.
 
 ### Bohrungen, Langlöcher und Teilen
 
