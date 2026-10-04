@@ -17,6 +17,7 @@ from app.ui.selection_operations import (
     QUICK_BODIES,
     QUICK_BODY,
     QUICK_FEATURES,
+    QUICK_SEVERAL_FEATURES,
     SelectionOperationsPanel,
     all_quick_names,
     body_operations,
@@ -153,6 +154,23 @@ def test_what_the_feature_does_not_offer_leaves_the_front_row() -> None:
     assert quick_names(1, "cone")[0] == "countersink_hole"
     assert quick_names(1, "cone", left_out=narrowing) == ("pattern_feature",)
     assert quick_names(1, "", left_out=narrowing) == QUICK_BODY
+
+
+def test_several_marked_features_offer_the_grouping_first() -> None:
+    """Mehrere markierte Merkmalszeilen eines Körpers: vorn *Als Muster zusammenfassen*.
+
+    Unter den Schwellen der Erkennung bleibt ein kleines Feld Einzelmerkmale
+    (RM-504); wer mehrere davon markiert, findet den Weg zur Zusammenfassung
+    oben, nicht in der Suchliste. Ein einzelnes Merkmal und mehrere Körper
+    bleiben bei ihren Zeilen.
+    """
+    load_operations()
+    assert REGISTRY.get("group_pattern").consumes == 1
+    assert quick_names(1, "", features=2) == QUICK_SEVERAL_FEATURES == ("group_pattern",)
+    assert quick_names(1, "", features=1) == QUICK_BODY
+    assert quick_names(2, "", features=4) == QUICK_BODIES
+    assert quick_names(1, "hole", features=2) == quick_names(1, "hole")
+    assert "group_pattern" in all_quick_names()
 
 
 def test_the_panel_leaves_out_what_the_feature_does_not_offer(qt_app: QApplication) -> None:

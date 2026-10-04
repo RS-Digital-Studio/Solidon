@@ -122,6 +122,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una dirección que introduce a la derecha para una ranura pasa también a la tarjeta de cotas de la vista, y «Aplicar» sigue disponible. Hasta ahora allí volvía a 0°.
 - Solidon reconoce conos, redondeos y caras estrechas de la misma forma en más modelos, da igual si el modelo está desplazado, girado o escalado.
 - Solidon reconoce cada campo de nervios, panal u hoyuelos de un archivo importado como un solo patrón, y «Detectar detalles aquí» agrupa las celdas de un campo.
+- Un campo pequeño que Solidon solo lee como elementos sueltos se convierte en un patrón con «Agrupar como patrón». Los patrones de archivos STEP se reconocen directamente.
 - Las piezas de una división automática también se numeran en proyectos de versiones anteriores, y un corte eliminado o desactivado ya no cuenta.
 
 ### Redondear y achaflanar

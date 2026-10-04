@@ -121,6 +121,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma direção que introduz à direita para um furo oblongo passa também para o cartão de cotas na vista, e «Aplicar» continua disponível. Até agora voltava ali a 0°.
 - O Solidon reconhece cones, arredondamentos e faces estreitas da mesma forma em mais modelos, quer o modelo esteja deslocado, rodado ou escalado.
 - O Solidon reconhece cada campo de nervuras, favo de mel ou saliências de um ficheiro importado como um só padrão, e «Detetar elementos neste local» junta as células de um campo.
+- Um campo pequeno que o Solidon só lê como elementos soltos passa a ser um padrão com «Agrupar como padrão». Os padrões em ficheiros STEP são reconhecidos diretamente.
 - As peças de uma divisão automática também são numeradas em projetos de versões anteriores, e um corte apagado ou desativado deixa de contar.
 
 ### Arredondar e chanfrar

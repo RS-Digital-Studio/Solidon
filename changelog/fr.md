@@ -122,6 +122,7 @@ dans `website/version.json`.
 - Une direction saisie à droite pour un trou oblong passe aussi dans la carte des cotes de la vue, et « Appliquer » reste disponible. Jusqu'ici, elle y revenait à 0°.
 - Solidon reconnaît cônes, congés et faces étroites de la même façon sur davantage de modèles, que le modèle soit déplacé, pivoté ou mis à l'échelle.
 - Solidon reconnaît chaque champ de nervures, de nid d'abeille ou de picots d'un fichier importé comme un seul motif, et « Détecter les éléments ici » regroupe les cellules d'un champ.
+- Un petit champ que Solidon ne lit que comme éléments isolés devient un motif avec « Regrouper en motif ». Les motifs des fichiers STEP sont reconnus directement.
 - Les morceaux d'une division automatique sont aussi numérotés dans les projets d'anciennes versions, et une coupe supprimée ou désactivée ne compte plus.
 
 ### Congés et chanfreins

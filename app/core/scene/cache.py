@@ -160,7 +160,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Nachbauten, Folgeschritte oder Merkmalsbindungen mehr steuern.
 #: - 42 (RM-226): Kugelige Eckrundungen tragen ebenfalls den Trägermittelpunkt
 #:   statt des Flächenschwerpunkts; Nachbau und Folgeoperationen lesen ihn.
-CACHE_FORMAT_VERSION: Final = 42
+#: - 43 (RM-504): Der exakte Körper liest Muster an seiner Tessellierung; ein
+#:   gespeicherter STEP-Import trüge sonst weiter Einzelflächen. Ausdrücklich
+#:   zusammengefasste Zellen binden sich wie Texturen an ihre Oberfläche.
+CACHE_FORMAT_VERSION: Final = 43
 
 
 @dataclass(frozen=True, slots=True)

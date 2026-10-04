@@ -95,7 +95,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Materialteil umgesetzt und geprüft; Zeitabnahme nach drei gemessenen Ansätzen offen. Nächster Schritt: Mindesttempo, Erstschichttempi und unabhängig belegte Startzeit |
-| [RM-504 — Importierte Texturen als gemeinsame Auswahl](#rm-504) | Geometrie, Erkennung und Druckvorbereitung | Getrennte Netzfelder und örtliche Zusammenfassung geprüft; offen: ausdrückliche Zuordnung kleiner/mehrdeutiger Felder, direkte STEP-Mustererkennung und Fensterabnahme beim Release |
+| [RM-504 — Importierte Texturen als gemeinsame Auswahl](#rm-504) | Geometrie, Erkennung und Druckvorbereitung | Zusammenfassung kleiner Felder und STEP-Muster gebaut und belegt (04.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
@@ -696,6 +696,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   statt falscher Wellen, die Grenze von 5 000 Merkmalen greift nicht mehr. Unabhängige Durchsicht
   ohne P1/P2. Belege unter `F:\solidon-review-reports\codex-2026-10-03\texture-import\`:
   `pruefbericht.md`, `review\README.md`.
+
+  **Teilstand 04.10.2026 (Claude, Zweig `claude/rm-texturen-zuordnung`):** Beide offenen Teile
+  sind gebaut, die Erkennungsschwellen bleiben. *Als Muster zusammenfassen*
+  (`perceive.ops.group_pattern`) fasst markierte Einzelmerkmale als Schritt ohne
+  Geometrieänderung zusammen, mit derselben Zellenlesung wie die Erkennung
+  (`patterns._read_cells`, `grouped_pattern`): gewählte Merkmale sind Zellmaterial, ungewählte
+  Wände einer gewählten Zelle gehören dazu, ab zwei Zellen; deckungsgleiche Zellen im Gitter
+  bekommen Stil und Teilung, sonst `other`. Durchgehende und tiefe Bohrungen (`_a_bore`), zwei
+  Träger, erhabene neben vertieften Zellen, eine einzelne Zelle und Merkmale ohne Zelle sagen mit
+  Weg ab (`group_refusal`). Das Muster heißt `grouped_<Schritt>` (`evaluate._named_after_the_step`,
+  beide Kerne) und bindet sich in jedem Folgeschritt wie eine Textur
+  (`patterns.bound_to_its_surface`); die Zellnamen bleiben reserviert, ein alter Zellbezug hält mit
+  Rückweg an. *Merkmal ändern* bindet die neu gezeichneten Zellen, eine reine Tiefenänderung behält
+  die Umrisse. Vorn in der Auswahlkarte bei mehreren markierten Merkmalszeilen
+  (`QUICK_SEVERAL_FEATURES`); der Dialog übernimmt die markierten Zeilen. Der exakte Körper fragt
+  dieselbe Mustersuche an seiner Tessellierung (`brep.features.features_of`): Eine Wabenplatte
+  aus STEP war 90 Flächen und ist jetzt dasselbe Muster wie ihr STL-Zwilling; Entfernen bleibt
+  exakt; `CACHE_FORMAT_VERSION` 43. Tests: `tests/test_pattern_grouping.py` 13,
+  `tests/test_exact_patterns.py` 7, `tests/test_exact_body_parity.py` +2 (beide Kerne),
+  `tests/test_selection_operations.py` +1. Vorher rot, nachher grün: ohne Oberflächenbindung
+  Verlaufs- und Schnittfall (2/2), ohne STEP-Suche alle vier Zwillingsfälle (4/4), ohne Neubindung
+  in `_resize_pattern` die Tiefenänderung („die Teilung passt nicht ins Feld“). Entwicklungstor
+  23 089 bestanden, 122 übersprungen, Exit 0; ruff, Format, mypy (342 Dateien) grün. Korpus:
+  13 Netzkörper (Gewürzdeckel, Wabenhalter, Magnetschaber, Schriftdekor, Kumiko-Schale und
+  -Organizer, Carcassonne-Gitter, Topfdeckel, Würfel, `plate_holes.stl`, M6-STEP) und 14 STEP-Körper
+  aus `F:\3D Dateien` behalten jeden Merkmalsabdruck; gewählt werden die fünf Magnettaschen des
+  Schabers ein fremdes Muster, die Pips zweier Würfelseiten Muster ihrer Seite, Bohrungen sagen ab.
+  Prompt neu gezählt: 7 825 Token bei 169 Werkzeugen. Belege:
+  `F:\solidon-review-reports\claude-2026-10-04\texturen-zuordnung\`.
 
 <a id="rm-017"></a>
 

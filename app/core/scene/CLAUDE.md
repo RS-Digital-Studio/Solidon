@@ -76,12 +76,13 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   Einzelmerkmale auch nach dem Zusammenführen mit dem Vorgängerbestand.
   Deren frühere Kennungen bleiben reserviert; ein späterer Bezug auf eine
   Zelle wird nicht zum Bezug auf das ganze Muster.
-- **Erzeugte Texturen** werden in `_with_features` an ihre wirkliche
-  Oberfläche gebunden. `_textures_from_other_inputs` übernimmt belegte Reste
-  weiterer Eingänge bei Vereinigung und Schnitt sowie beim Zerlegen loser
-  Teile. Die Herkunft bleibt Teil der Kennung, damit das Entfernen einer
-  anderen Textur keinen gespeicherten Folgebezug verschiebt. Ausdrücklich
-  entfernte Texturen werden aus numerischen Restflächen nicht erneut gebunden.
+- **Erzeugte Texturen** (auch `grouped`, `bound_to_its_surface`) werden in
+  `_with_features` an ihre wirkliche Oberfläche gebunden.
+  `_textures_from_other_inputs` übernimmt belegte Reste weiterer Eingänge
+  (Vereinigung, Schnitt, Zerlegen loser Teile). Die Herkunft bleibt Teil der
+  Kennung, damit das Entfernen einer anderen Textur keinen gespeicherten
+  Folgebezug verschiebt. Ausdrücklich entfernte Texturen bindet keine
+  Restfläche neu.
 - **`SceneObject.frame`** trägt den dauerhaften Ausgangsrahmen als affine
   Matrix. Ohne Eingang beginnt er mit `IDENTITY_FRAME`; eindeutige Vorfahren
   und `dataclasses.replace` führen ihn fort, `moved_object` bildet ihn mit

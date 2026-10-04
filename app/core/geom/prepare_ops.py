@@ -15725,7 +15725,7 @@ def _resize_pattern(
         flat_tool,
         wrap_pitch,
     )
-    from app.core.perceive.patterns import GENERATOR_OF, field_outline
+    from app.core.perceive.patterns import GENERATOR_OF, bound_to_its_surface, field_outline
 
     read_style = str(feature.params.get("style", "other"))
     wanted_style = style if style and style != "other" else read_style
@@ -15832,8 +15832,11 @@ def _resize_pattern(
     # des Körpers. Wer an einem durchgehenden Muster eine Tiefe setzt, macht
     # es blind, und das Merkmal sagt das danach auch.
     still_through = through and cell_depth <= 0.0
+    # Eine reine Tiefenänderung behält die belegten Umrisse — an einer eigenen
+    # Textur wie an ausdrücklich zusammengefassten Zellen (RM-504), die kein
+    # Generator so gezeichnet hat, wie sie dastehen.
     depth_only = (
-        feature.params.get("texture")
+        bound_to_its_surface(feature)
         and not restyled
         and is_close(new_pitch, measured_pitch)
         and is_close(new_width or 0.0, measured_width)
@@ -15918,7 +15921,11 @@ def _resize_pattern(
         face_indices=(),
         surface_patches=(),
     )
-    if feature.params.get("texture"):
+    # Was ein Schritt belegt — eine eigene Textur, eine ausdrückliche
+    # Zusammenfassung (RM-504) —, bindet sich an die neu gezeichneten Zellen;
+    # eine Zusammenfassung unter den Schwellen fände die Erkennung sonst nicht
+    # wieder, und ihr Name verlöre seine Zellen.
+    if bound_to_its_surface(feature):
         from app.core.perceive.patterns import bound_texture, surface_triangles
 
         indices = set(
@@ -18321,13 +18328,13 @@ def _features_after_split(
     Fläche diesseits lag (RM-217, Durchsicht 0.5.1). Verbinder behalten ihre
     eigene Regel; was die Ebene quert, entscheidet weiter der Mittelpunkt.
     """
+    from app.core.perceive.patterns import bound_to_its_surface
+
     first: dict[str, Feature] = {}
     second: dict[str, Feature] = {}
     for feature_id, feature in features.items():
         connector = feature_id.startswith(("pin_", "bore_"))
-        shared_surface = feature.kind == "face" or (
-            feature.kind == "pattern" and feature.params.get("texture")
-        )
+        shared_surface = feature.kind == "face" or bound_to_its_surface(feature)
         if not connector and shared_surface and _crosses(feature, plane, mesh):
             # **Eine Fläche, durch die die Ebene geht, reist mit beiden Hälften**
             # (R4): Jede Hälfte trägt ein Stück von ihr, und die Auswertung gibt

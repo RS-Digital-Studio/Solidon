@@ -479,6 +479,16 @@ CASES = [
         3,
     ),
     Case(
+        "group_pattern",
+        "square_holes",
+        # RM-504: drei durchgehende Vierkantlöcher (unter jeder Erkennungsschwelle)
+        # werden an beiden Kernen ausdrücklich ein Muster; die Geometrie bleibt.
+        {},
+        KEEP,
+        "grouped_cells",
+        3,
+    ),
+    Case(
         "pattern_feature",
         "hole",
         # P6.7: das Merkmalsmuster bleibt am exakten Körper exakt.
@@ -1080,6 +1090,11 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
             _native_box(40.0, 30.0, 10.0), _native_cylinder(3.0, 12.0, (-8.0, 0.0, -1.0))
         )
         return [_object(body, kind, recognise=source != "unrecognised_hole")]
+    if source == "square_holes":
+        body = _native_box(40.0, 30.0, 10.0)
+        for x in (-10.0, 0.0, 10.0):
+            body = _native_difference(body, _native_box(4.0, 4.0, 12.0, (x, 0.0, -1.0)))
+        return [_object(body, kind)]
     if source == "housing":
         body = _native_difference(
             _native_box(60.0, 40.0, 30.0), _native_box(54.0, 34.0, 28.0, (0.0, 0.0, 3.0))
@@ -1233,6 +1248,16 @@ def _parameters(case: Case, inputs: list[SceneObject]) -> dict[str, Any]:
             nz=float(normal[2]),
             seed_face=face,
         )
+    if case.name == "group_pattern":
+        # Die zwölf Wände der drei Löcher: senkrecht und kleiner als jede Seite.
+        params["at_features"] = sorted(
+            name
+            for name, feature in inputs[0].features.items()
+            if feature.kind == "face"
+            and abs(float(feature.params["normal"][2])) < 0.5
+            and float(feature.params["area"]) < 50.0
+        )
+        assert len(params["at_features"]) == 12
     if case.name == "pose_armature":
         from app.core.geom.pose import armature_to_text, pose_to_text
         from app.core.types import Bone, Pose
@@ -1447,6 +1472,11 @@ def _assert_invariant(
                 assert holes[0].params["diameter"] == pytest.approx(expected, abs=0.03)
             else:
                 assert abs(holes[0].params["axis"][0]) > 0.2
+    elif rule == "grouped_cells":
+        grouped = [f for f in first.features.values() if f.kind == "pattern"]
+        assert len(grouped) == 1 and grouped[0].params["grouped"] is True
+        assert grouped[0].params["count"] == expected
+        assert volume == pytest.approx(12000.0 - 3 * 16.0 * 10.0, rel=1e-6)
     elif rule == "detected_hole":
         assert not inputs[0].features
         holes = [feature for feature in first.features.values() if feature.kind == "hole"]
