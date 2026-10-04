@@ -276,6 +276,137 @@ def _unrecognised_bound_box():
     return source, spec, placement.bound_surface_values(spec, source, hit)
 
 
+def _a_top_that_is_flat_only_from_its_middle():
+    """Oberseite aus drei Feldern, die nur von der Mitte aus eine Ebene bilden.
+
+    Die Höhen der vier Eckreihen liegen 0,8 µm auseinander, unter der
+    Ebenengrenze ``EPS_GEOM`` (1 µm) von der Mitte, darüber von einem Ende aus
+    — wie die Gleitkommaspuren einer eingelesenen STL. Vom mittleren Feld B
+    gewachsen umfasst die Fläche A, B und C, von A aus nur A und B, von C aus
+    nur B und C. Die Dreiecke von A und C stehen vor denen von B. Nur die
+    Oberseite: Gefragt wird die Fläche, nicht der Körper darunter.
+    """
+    lift = 0.8e-6
+    xs = (0.0, 10.0, 20.0, 30.0)
+    heights = (lift, 0.0, 0.0, lift)
+    vertices = [(x, y, h) for x, h in zip(xs, heights, strict=True) for y in (0.0, 10.0)]
+
+    def at(column, row):
+        return column * 2 + row
+
+    faces = []
+    for column in (0, 2, 1):  # A, C, dann B
+        a, b = at(column, 0), at(column + 1, 0)
+        c, d = at(column + 1, 1), at(column, 1)
+        faces += [(a, b, c), (a, c, d)]
+    mesh = trimesh.Trimesh(np.asarray(vertices), np.asarray(faces), process=False)
+    return MeshData.of(mesh)
+
+
+def test_surface_binding_finds_the_face_it_was_saved_on_and_does_not_ask():
+    """Die Bindung wächst die Fläche vom gespeicherten Punkt aus, wie das Setzen.
+
+    Am echten Fenster (Fensterabnahme 04.10.2026, RM-396) fragte ein an die
+    Schrägfläche des *Wedge-Lock* angesetzter Quader schon bei der ersten
+    Auswertung „Mehrere Kanten passen zum gespeicherten Bezug“ — und jede Wahl
+    endete mit „Diese Bezüge fehlen oder liegen zu parallel“. Gesetzt war von
+    dem Dreieck unter dem Punkt aus; gebunden wurde vom ersten Dreieck der
+    Liste aus, dessen Fläche den Punkt enthielt, aber nicht die ganze war.
+    """
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import IDENTITY_FRAME, SceneObject
+
+    load_operations()
+    mesh = _a_top_that_is_flat_only_from_its_middle()
+    source = SceneObject(id="obj_1", name="Träger", mesh=mesh, frame=IDENTITY_FRAME)
+    middle = 5  # das zweite Dreieck von B
+    prepared = placement.prepare_surface(mesh, middle, {})
+    assert len(prepared.face_indices) == 6, "die mittlere Fläche umfasst alle drei Felder"
+    hit = placement.at_point(prepared, (15.0, 4.0, 0.0))
+    spec = REGISTRY.get("create_box")
+    values = placement.bound_surface_values(spec, source, hit)
+    binding = placement.bind_surface(
+        spec,
+        values,
+        {source.id: source},
+        {source.id: "same"},
+        ask=lambda *_: pytest.fail("Am unveränderten Träger ist der Bezug eindeutig"),
+        announce=None,
+        cancelled=NeverCancelled(),
+    )
+    assert binding.placed is not None
+    assert binding.placed.point == pytest.approx(hit.point)
+    assert [edge.distance for edge in binding.placed.edges] == pytest.approx(
+        [edge.distance for edge in hit.edges]
+    )
+    assert not binding.answers
+
+
+def test_a_reference_on_one_of_two_collinear_edges_binds_without_asking():
+    """Zwei Kantenstücke auf einer Geraden sind zwei Kanten, keine Wahl.
+
+    Am *Wedge-Lock* (Fensterabnahme 04.10.2026, RM-403) lag der zweite Bezug
+    eines Schraublochs auf einem von zwei kurzen Randstücken derselben Geraden
+    links und rechts der Aussparung. Die Bindung prüfte nur den Abstand quer zur
+    Kante und fragte beim ersten Auswerten „Mehrere Kanten passen zum
+    gespeicherten Bezug“ — gespeichert war aber genau eines.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import IDENTITY_FRAME, SceneObject
+
+    load_operations()
+    notched = Polygon([(0, 0), (10, 0), (10, 10), (20, 10), (20, 0), (30, 0), (30, 20), (0, 20)])
+    mesh = MeshData.of(trimesh.creation.extrude_polygon(notched, 5.0))
+    source = SceneObject(id="obj_1", name="Träger", mesh=mesh, frame=IDENTITY_FRAME)
+    prepared = placement.prepare_surface(mesh, _top(mesh), {})
+    hit = placement.at_point(prepared, (25.0, 2.0, 5.0))
+    front = [
+        edge for edge in prepared.edges if abs(edge.start[1]) < 1e-9 and abs(edge.end[1]) < 1e-9
+    ]
+    assert len(front) == 2, "links und rechts der Aussparung je ein Stück der Vorderkante"
+    assert any(abs(edge.inward[1] - 1.0) < 1e-9 for edge in hit.edges), (
+        "ein Bezug ist die Vorderkante"
+    )
+    spec = REGISTRY.get("create_box")
+    values = placement.bound_surface_values(spec, source, hit)
+    binding = placement.bind_surface(
+        spec,
+        values,
+        {source.id: source},
+        {source.id: "same"},
+        ask=lambda *_: pytest.fail("Gespeichert ist genau ein Stück der Vorderkante"),
+        announce=None,
+        cancelled=NeverCancelled(),
+    )
+    assert binding.placed is not None
+    assert binding.placed.point == pytest.approx(hit.point)
+    assert not binding.answers
+
+
+def test_the_second_reference_is_the_side_across_not_a_facet_of_the_rounded_corner():
+    """An einer Platte mit gerundeten Ecken stehen die Maße links und unten.
+
+    Am echten Fenster (Fensterabnahme 04.10.2026, RM-403) standen beim
+    Magnet am Tray und beim Schraubloch am Wedge-Lock beide Felder an
+    derselben Kante: Die nächste unabhängige Kante war ein Facettenstück der
+    Rundung, „Außenkante 4“ oder „Außenkante 56“, nicht die Seite quer dazu.
+    """
+    from shapely.geometry import box
+
+    rounded = box(5.0, 5.0, 35.0, 25.0).buffer(5.0, quad_segs=8)
+    plate = trimesh.creation.extrude_polygon(rounded, 5.0)
+    mesh = MeshData.of(plate)
+    top = _top(mesh)
+    prepared = placement.prepare_surface(mesh, top, {})
+    hit = placement.at_point(prepared, (1.0, 12.0, 5.0))
+    inward = [np.round(np.asarray(edge.inward), 6).tolist() for edge in hit.edges]
+    assert inward[0] == pytest.approx([1.0, 0.0, 0.0]), "erst die nahe linke Kante"
+    assert inward[1] == pytest.approx([0.0, 1.0, 0.0]), f"dann die Unterkante, nicht {inward[1]}"
+    assert hit.edges[1].distance == pytest.approx(12.0)
+
+
 def test_surface_binding_saves_an_explicit_new_face_and_asks_only_once():
     """Zwei neue parallele Flächen verlangen eine Wahl; der gewählte Träger bleibt gespeichert."""
     from dataclasses import replace

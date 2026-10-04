@@ -451,7 +451,8 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   Randtopologie einmal, und alle Punktabfragen (`at_point()`,
   `point_with_distances()`, `point_with_centre()`) teilen seine Prüfung samt
   Aussparungen; lineare Maße nur zu zwei unabhängigen geraden Kanten, nie zu
-  Diagonalen oder Kreisfacetten, gekrümmt nur Punkt und Normale;
+  Diagonalen oder Kreisfacetten, die zweite quer (`CROSSING_STEP`),
+  gekrümmt nur Punkt und Normale;
   Mittelpunkt-Offsets zeigen von der Bohrungsmitte zum Ziel entlang U/V.
 - **Ohne Tiefe und Achse keine Mitte** — die Mündung wandert nie als Mitte
   weiter (Regel 21); das Vorzeichen kommt aus der gezielten Fläche.
