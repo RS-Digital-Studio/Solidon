@@ -10,6 +10,7 @@ den fachlichen ``test_ui_*.py``-Modulen; ihre Fenster-Fixtures in ``ui_helpers``
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import logging
 import re
 import threading
@@ -6438,10 +6439,20 @@ def test_a_double_click_on_a_folded_step_says_where_the_single_ones_are(
     Was ein Doppelklick auslöst, entscheidet die Verbindung, und die ist Teil
     der Zusage.
     """
-    from app.core.types import Document, Transaction
+    from app.core.types import Document, Operation, Transaction
     from app.ui.panels import HistoryPanel
 
-    document = Document(format_version=7, app_version="0.0.1")
+    # Die Schritte stehen im Stapel, wie in jedem Dokument: Eine Transaktion,
+    # deren Schritt fehlt, ist ein gelöschter, und der trägt keine Nummer mehr
+    # (RM-368).
+    document = Document(
+        format_version=7,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="drill_hole"),
+            *(Operation(id=number, op="split_bodies") for number in (2, 3, 4, 5)),
+        ],
+    )
     document.transactions.append(Transaction(id=1, title="Bohrung setzen", ops=(1,)))
     document.transactions.append(Transaction(id=2, title="Teilung in vier", ops=(2, 3, 4, 5)))
 
@@ -6582,10 +6593,16 @@ def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:
     „(Nutzer)" an jeder Zeile ist in einem Projekt ohne Agenten an jeder
     Zeile — und was überall steht, liest niemand. Der Agent wird genannt.
     """
-    from app.core.types import Document, Origin, Transaction
+    from app.core.types import Document, Operation, Origin, Transaction
     from app.ui.panels import HistoryPanel
 
-    document = Document(format_version=7, app_version="0.0.1")
+    # Beide Schritte stehen im Stapel; ohne ihn wären sie gelöscht und
+    # trügen keine Nummer (RM-368).
+    document = Document(
+        format_version=7,
+        app_version="0.0.1",
+        ops=[Operation(id=1, op="drill_hole"), Operation(id=2, op="create_lid")],
+    )
     document.transactions.append(Transaction(id=1, title="Bohrung setzen", ops=(1,)))
     document.transactions.append(
         Transaction(id=2, title="Deckel erzeugen", ops=(2,), origin=Origin(by="agent"))
@@ -6637,12 +6654,23 @@ def test_the_history_keeps_the_title_of_a_deleted_child(qt_app: QApplication) ->
     panel = HistoryPanel()
     panel.show_document(document)
 
-    deleted = next(
-        panel.list.item(row).text()
+    from app.ui.panels import GROUP_ROLE
+
+    children = [
+        item.text()
         for row in range(panel.list.count())
-        if tr("gelöscht") in panel.list.item(row).text() and "1" in panel.list.item(row).text()
-    )
+        if (item := panel.list.item(row)).data(GROUP_ROLE) == "t1"
+        and not item.text().lstrip().startswith(("▸", "▾"))
+    ]
+    deleted = next(text for text in children if tr("gelöscht") in text)
+    kept = next(text for text in children if tr("gelöscht") not in text)
     assert _op_title(removed.op) in deleted, "die Zeile zeigte nur eine Nummer"
+    # Ein gelöschter Schritt hat keine Stelle mehr: Seine Kennung stünde sonst
+    # als Nummer neben den Stellen der übrigen (RM-368). Er steht eingerückt
+    # wie sein Geschwister, nicht um die fehlende Nummer weiter.
+    assert not deleted.strip()[0].isdigit(), deleted
+    indent = len(kept) - len(kept.lstrip())
+    assert len(deleted) - len(deleted.lstrip()) == indent, (deleted, kept)
 
 
 def test_history_context_delete_uses_the_visible_multiple_selection(
@@ -7926,6 +7954,22 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
             "Bericht und Filter dürfen nicht übereinanderliegen: "
             f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
         )
+    # **Und keine Zeile des Berichts über einer anderen.** Seit Prüfumfang,
+    # Nachbau, Befundkontext und Nebenfolge dazukamen, will der Bericht bei
+    # 1024 x 720 mehr Höhe, als die Spalte hat; Qt staucht dann unter die
+    # Mindesthöhe, und *An den Slicer übergeben …* lag über *Modell
+    # nachbauen*. Gelesen wird die Folge aus dem Layout selbst, damit eine
+    # neue Zeile mitgeprüft wird; knapp ist die Karte, dann rollt sie.
+    rows = [
+        item.geometry()
+        for index in range(report._rows.count())
+        if (item := report._rows.itemAt(index)) is not None
+        and item.spacerItem() is None
+        and not item.isEmpty()
+    ]
+    assert len(rows) >= 5, rows
+    for upper, lower in itertools.pairwise(rows):
+        assert upper.bottom() < lower.top(), (upper, lower)
     assert report.list.geometry().bottom() <= report.height(), "die Liste bleibt in der Karte"
     assert report.search.height() >= 32
     assert report.severity.height() >= 32
@@ -11432,8 +11476,8 @@ def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window)
     notice._expiry.start(1000)
     window.session.evaluationCancelled.emit()
     expected = tr(
-        "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
-        "eine Änderung am Stapel rechnet weiter."
+        "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand; "
+        "die nächste Änderung rechnet weiter."
     )
     assert window._announcement == expected
     assert window.status_message.text() == expected
@@ -14339,12 +14383,22 @@ def test_a_finding_says_which_body_it_means(qt_app: QApplication) -> None:
         values={"wall_mm": 2.0, "removed_cm3": 14.3},
     )
 
-    plain = _line_for(finding)
-    assert "obj_2" in plain, "ohne Namensliste bleibt die Kennung stehen"
-
     named = _line_for(finding, {"obj_2": "Klotz B"})
     assert "Klotz B" in named, "mit Namensliste der Name"
     assert "obj_2" not in named
+
+    # **Zwei Körper, zwei Zeilen** — die Zusage dieses Tests, gelesen an den
+    # Namen, unter denen der Bericht sie kennt (``ReportPanel._names`` trägt
+    # auch die verbrauchter Körper).
+    other = dataclasses.replace(finding, object_id="obj_1")
+    names = {"obj_1": "Klotz A", "obj_2": "Klotz B"}
+    assert _line_for(other, names) != _line_for(finding, names)
+
+    # **Eine Kennung ist kein Name** (RM-396): Ohne Namen steht sie nicht im
+    # Kundensatz, sondern bleibt in den Befunddaten — „Ausgehöhlt. — obj_2“
+    # lehrte den Kunden ein Wort aus dem Code.
+    for unnamed in ({}, {"obj_2": "obj_2"}):
+        assert "obj_2" not in _line_for(finding, unnamed), unnamed
 
 
 def test_a_finding_writes_its_numbers_with_their_unit(qt_app: QApplication) -> None:
@@ -17929,7 +17983,7 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
 
 
 def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
-    """Vier Paare tragen denselben Titel; die Palette zeigt beide mit ihrem Satz.
+    """Jedes Zwillingspaar trägt denselben Titel; die Palette zeigt beide mit ihrem Satz.
 
     Wer „quader" tippte, sah zweimal „Quader anlegen", und der Unterschied
     stand nur im Tooltip (Review 02.09.2026).
@@ -17950,6 +18004,34 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert len(both) >= 2, (hidden, visible, rows[:6])
         assert len(set(both)) == len(both), both
         assert all(chr(10) in row for row in both), both
+
+
+def test_twins_differ_in_the_sentence_the_palette_shows() -> None:
+    """Ein Zwillingspaar trennt nur sein erster Satz — in jeder Sprache.
+
+    Beide Partner heißen gleich (``grenzen.md``, „Zwillinge“), die Palette
+    zeigt unter dem Titel ``first_sentence`` des ``doc``. Fünf Grundkörper
+    standen zum Release 0.5.2 wortgleich da, nachdem ihre exakten Sätze den
+    Vorteil verloren hatten; gesehen hat es nur der Fenstertest oben, der
+    erst beim Release läuft. Diese Prüfung braucht kein Fenster und liest alle
+    Paare in beiden Kernlagen (``PRIMITIVE_TWINS`` und ``menu_twins``).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import PRIMITIVE_TWINS, menu_twins
+    from app.i18n.catalog import available_languages, read_catalog
+    from app.ui.command_palette import first_sentence
+
+    load_operations()
+    pairs = {tuple(sorted(pair)) for pair in (*PRIMITIVE_TWINS, *menu_twins().items())}
+    assert len(pairs) >= len(PRIMITIVE_TWINS) + 2, pairs
+    for language in available_languages():
+        catalog = read_catalog(language)
+        for one, other in sorted(pairs):
+            shown = [
+                first_sentence(catalog.get(str(spec.doc), str(spec.doc))).strip()
+                for spec in (REGISTRY.get(one), REGISTRY.get(other))
+            ]
+            assert shown[0] != shown[1], (language, one, other, shown[0])
 
 
 def test_the_palette_finds_every_setting_behind_the_closed_section(

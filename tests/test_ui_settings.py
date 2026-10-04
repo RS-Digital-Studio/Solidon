@@ -393,9 +393,17 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
 
     from app.ui import settings_dialog as module
     from app.ui.settings import UiSettings
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
 
     monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
     monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    # **Gemessen in der Lage des Kunden** (``tests.md``): Mit Stylesheet sind
+    # Zeilen und Abstände andere; ohne hing das Ergebnis daran, ob ein Test
+    # davor ein Thema gesetzt hatte.
+    before = qt_app.styleSheet()
+    apply_theme(qt_app, "dark")
+    apply_style(qt_app, "dark")
     dialog = module.SettingsDialog(UiSettings())
 
     def settle():
@@ -408,12 +416,6 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
         settle()
         compact = dialog.height()
         compact_width = dialog.width()
-        # Was der zugeklappte Inhalt braucht. Die Aufmachgröße kann darüber
-        # liegen, wenn der Inhalt danach passiv schrumpft (Slicer- und
-        # Druckersuche melden sich nach dem Aufmachen); der Rahmen bleibt dann
-        # stehen (``fenster.md``). Das ausdrückliche Zuklappen gibt zurück,
-        # was der Inhalt nicht mehr braucht.
-        collapsed = min(compact, dialog.sizeHint().height())
         heading = dialog.advanced.findChild(QToolButton)
         assert heading is not None
         heading.click()
@@ -424,10 +426,33 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
             "Zusatzzeilen dürfen das Fenster nicht seitlich springen lassen"
         )
         assert not dialog._scroll.isAncestorOf(dialog.save)
+        opened = dialog.height()
         heading.click()
         settle()
-        assert dialog.height() == collapsed, "Zuklappen gibt die Höhe der Zusatzzeilen zurück"
+        # **Der Wunsch des zugeklappten Inhalts, gelesen nach dem Zuklappen.**
+        # Die Aufmachgröße kann über dem Bedarf liegen, wenn der Inhalt danach
+        # passiv schrumpft (Slicer- und Druckersuche melden sich nach dem
+        # Aufmachen); der Rahmen bleibt dann stehen (``fenster.md``). Das
+        # ausdrückliche Zuklappen gibt zurück, was der Inhalt nicht mehr
+        # braucht. Hier stand ``min(compact, dialog.sizeHint())`` vor dem
+        # Aufklappen — ``DialogScrollArea.sizeHint`` rechnet an der Breite des
+        # gerade gezeigten Ausschnitts, und im höheren Aufmachrahmen meldete
+        # Qt 14 Punkte weniger (470 statt 484), als der Inhalt danach wollte.
+        assert dialog.height() < opened, "Zuklappen gibt die Höhe der Zusatzzeilen zurück"
+        assert dialog.height() == min(compact, dialog.sizeHint().height())
+        # Und es nimmt nicht mehr, als der Inhalt hergibt: Umgebrochen wird an
+        # der Breite des Inhalts, nicht an der des Ausschnitts.
+        content = dialog._scroll.widget()
+        layout = content.layout()
+        width = max(content.width(), dialog._scroll.viewport().width())
+        needed = (
+            max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
+            if layout.hasHeightForWidth()
+            else content.sizeHint().height()
+        )
+        assert dialog._scroll.viewport().height() >= needed, "zugeklappt ist nichts verdeckt"
         assert dialog.width() == compact_width
+        collapsed = dialog.height()
         dialog.resize(dialog.width(), collapsed + 80)
         drawn = dialog.height()
         heading.click()
@@ -439,6 +464,7 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
         dialog.close()
         dialog.release()
         dialog.deleteLater()
+        qt_app.setStyleSheet(before)
 
 
 def test_settings_slicer_choice_and_program_button_share_one_row(qt_app, monkeypatch) -> None:

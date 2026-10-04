@@ -284,17 +284,11 @@ wird genau gerechnet.
   (`_warning_of` reicht auch `info` durch; `OperationSpec.unchanged_effect`);
   „am Volumen ändert sich nichts" nur, wenn niemand Besseres weiß.
 * **Die Druckprüfung der Vorschau folgt nur einer gerechneten Antwort**
-  (`Session.preview_async`, `review_print`, RM-090): Nach dem schnellen Bild
-  prüft sie beide Stände fein samt Schichtanalyse. Eine geschätzte
-  Dreieckszahl und ein Übernehmen, das nur noch auf die Rechnung wartet
-  (`drop_preview_picture`), lassen sie aus; ohne Bildpflicht hält sie keinen
-  Klick, dort entscheidet RM-493 (`_preview_can_apply`). Wo das Bild Pflicht
-  ist oder noch nicht feststeht, hält sie ihn bis zum Ende: Bestätigt wird das
-  Bild samt Druckfolgen, und die Auswertung danach nimmt die Rechnung aus dem
-  Cache. Nachweis (Release):
-  `test_print_contract_ui.py::test_a_waiting_apply_skips_the_print_review_of_the_preview`,
-  `test_operation_ui.py::test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise`,
-  `test_print_contract_ui.py::test_picture_does_not_approve_a_pending_print_review`.
+  (`Session.preview_async`, RM-090): Geschätzte Dreieckszahl und ein
+  Übernehmen, das nur auf die Rechnung wartet, lassen sie aus. Einen Klick
+  hält sie nur, wo das Bild Pflicht ist oder noch nicht feststeht; sonst
+  entscheidet RM-493 (`_preview_can_apply`). Warum und Nachweise:
+  `konzepte/begruendungen/regel-wartezeit.md`.
 * **Gehört eine Handlung vor das Übernehmen, sperrt das Band den Knopf**
   (`block_apply`, bei `repair_and_retry`, `split_and_retry`,
   `recount_and_retry`) — sonst endet sie als angehaltener Schritt (Regel 19).

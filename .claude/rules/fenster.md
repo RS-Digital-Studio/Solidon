@@ -416,6 +416,11 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 - **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`; aus `fit_to_rows`
   mit drei Mindestzeilen und aus dem leeren Zustand über `fit_wrapped`), nie
   höher als ihr Wunsch; verteilt wird nur, was darüber liegt.
+- **Eine Karte aus vielen festen Zeilen rollt, statt sich zu stauchen**
+  (`overlay.FittedScroller`, der Prüfbericht): Erst gibt die Liste bis zu ihrer
+  Mindesthöhe nach, dann rollt der Inhalt; die rechte Zone rechnet ihren
+  Wunsch an der Kartenbreite (`natural_height(zone, width=)`). Warum:
+  `konzepte/begruendungen/regel-fenster.md`.
 
 `tests/test_overlay.py` hält alle drei („settles on one answer“, „moves a card
 once“, „no card is pushed outside its section“). `fit_to_rows` rechnet mit

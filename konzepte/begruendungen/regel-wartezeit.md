@@ -703,6 +703,21 @@ vorrangigen Handlung über `preview_async(advised=…)` voraus, und bei
 reparieren, dann aushöhlen" drei Klicks später als angehaltener Schritt im
 Verlauf (Regel 19). Das nächste Bild gibt ihn über `block_apply(None)` frei.
 
+**Die Druckprüfung der Vorschau** (`review_print`, RM-090) prüft nach dem
+schnellen Bild beide Stände fein samt Schichtanalyse. Mit der Übernahme der
+Codex-Linien stand ihre Warteweiche vor der von RM-493: Jeder Klick auf
+*Übernehmen* wartete an einem Netz auf diese Prüfung, auch hinter einer groben
+Vorschau, und *Kanten verfeinern* rechnete hinter einer bloßen Dreieckszählung
+die ganze Verfeinerung (am Spielwürfel über zehn Minuten). Seitdem lassen eine
+geschätzte Zahl und ein Klick, der nur noch auf die Rechnung wartet
+(`drop_preview_picture`), die Prüfung aus. Wo das Bild Pflicht ist oder noch
+nicht feststeht, hält sie den Klick bis zum Ende: Bestätigt wird das Bild samt
+Druckfolgen, und die Auswertung danach nimmt die Rechnung aus dem Cache — die
+Wartezeit ist keine verschenkte Arbeit (Entscheidung beim Release 0.5.2).
+Nachweise (Release): `test_print_contract_ui.py::test_a_waiting_apply_skips_the_print_review_of_the_preview`,
+`test_operation_ui.py::test_a_mesh_apply_does_not_wait_for_a_preview_that_computes_otherwise`,
+`test_print_contract_ui.py::test_picture_does_not_approve_a_pending_print_review`.
+
 ## Arbeiter und ihr Abbau
 
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`

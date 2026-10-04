@@ -729,6 +729,19 @@ volle steht im Tooltip. `rows_height` zählt einen sichtbaren waagrechten
 Balken auch dann, wenn die Liste noch nicht angezeigt ist — vorher las es eine
 Differenz aus dem Bau (eine Liste von null Punkten über einem Sichtfeld von 28).
 
+**Der Prüfbericht rollt** (`overlay.FittedScroller`): Mit Prüfumfang, Übergabe,
+Nachbau, Befundkontext und Handlungen braucht er an seiner Breite mindestens
+718 Punkte; im Fenster von 1024 × 720 bekam er 425, und Qt legte unter der
+Mindesthöhe Knöpfe übereinander (*An den Slicer übergeben …* über *Modell
+nachbauen*, das Suchfeld über der Liste). Der Rollbereich reicht Wunsch,
+Mindesthöhe und Höhe-für-Breite weiter, denn der Reiter rechts steht
+senkrecht auf `Ignored` — ohne fiel der Wunsch der rechten Spalte von 741 auf
+122 Punkte. `natural_height` rechnete den Wunsch an der Wunschbreite statt an
+der schmaleren Kartenbreite, wo Text in mehr Zeilen umbricht; der Bericht
+blieb so auch im hohen Fenster bei 654 Punkten stehen.
+`test_selected_bodies_reveal_their_operations_in_the_window_on_the_right`
+prüft jede Zeile des Berichts aus dem Layout gegen ihre Nachbarn.
+
 ## Klappen nennen ihren Inhalt
 
 Hinter „Weitere Einstellungen" lagen seit v0.5.2 Navigation, Tastenbelegung,

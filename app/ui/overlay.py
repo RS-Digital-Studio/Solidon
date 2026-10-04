@@ -24,7 +24,7 @@ schwebenden Karten hätte nichts zu teilen: sie nehmen einander nichts weg.
 
 from __future__ import annotations
 
-from typing import Protocol, TypeGuard
+from typing import Protocol, TypeGuard, override
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -40,11 +40,13 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
 )
-from PySide6.QtGui import QPainterPath, QRegion
+from PySide6.QtGui import QPainterPath, QRegion, QResizeEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QFrame,
     QScrollArea,
+    QSizePolicy,
     QTabWidget,
     QTreeView,
     QVBoxLayout,
@@ -536,14 +538,139 @@ def rows_height(view: QAbstractItemView) -> int:
     return wanted + chrome
 
 
-def natural_height(zone: QWidget) -> int:
+class FittedScroller(QScrollArea):
+    """Ein Rollbereich, der seinen ganzen Inhalt wünscht und erst rollt, wenn die Zone knapp ist.
+
+    Für eine Karte aus vielen festen Zeilen, deren Höhe die Überlagerung
+    zuteilt, nicht ein Layout: Der Prüfbericht trägt Prüfumfang, Übergabe,
+    Nachbau, Filter, Liste, Befundkontext und Handlungen untereinander und
+    braucht an seiner Breite mindestens 718 Punkte; im Fenster von
+    1024 x 720 bekam er 425. Qt staucht dann jede Zeile unter ihre
+    Mindesthöhe, und *An den Slicer übergeben …* lag über *Modell
+    nachbauen*, das Suchfeld über der Liste.
+    Hier rollt stattdessen der Inhalt; wo Platz ist, sieht man keinen
+    Unterschied, denn der Wunsch ist der des Inhalts.
+
+    Der Wunsch wird bei jeder Frage neu gelesen (``QScrollArea`` merkt sich
+    den ersten, siehe ``selection_operations._ListScroller``), und jede
+    Layoutänderung des Inhalts meldet ihn weiter. ``natural_height`` zählt
+    diesen Rollbereich deshalb nicht ein zweites Mal.
+
+    **Erst gibt nach, was nachgeben kann, dann wird gerollt.** Die Höhe des
+    Inhalts setzt :meth:`_fit_content` selbst: so hoch wie der Ausschnitt,
+    mindestens aber ``minimumHeightForWidth`` an der echten Breite — die Liste
+    auf ihrer Mindesthöhe, umbrechender Text mit allen Zeilen. Qts eigene
+    Größenwahl (``widgetResizable``) gibt einem umbrechenden Inhalt seine
+    Wunschhöhe und rollte deshalb auch im hohen Fenster.
+    """
+
+    def __init__(self, content: QWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWidgetResizable(False)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # **Die Breite gehört der Spalte.** Ohne waagrechten Balken schnitt die
+        # Karte einen Inhalt in seiner Mindestbreite rechts ab (326 statt 226
+        # Punkte breit); gestaucht wird quer wie ohne Rollbereich.
+        content.setSizePolicy(QSizePolicy.Policy.Ignored, content.sizePolicy().verticalPolicy())
+        self.setWidget(content)
+
+    def _least_height(self, content: QWidget, width: int) -> int:
+        """Die kleinste Höhe, in der der Inhalt bei dieser Breite nichts staucht."""
+        layout = content.layout()
+        if layout is not None and layout.hasHeightForWidth():
+            return layout.minimumHeightForWidth(width)
+        return content.minimumSizeHint().height()
+
+    def _fit_content(self) -> None:
+        """Breite des Ausschnitts, Höhe des Ausschnitts oder mehr — dann mit Balken.
+
+        Entschieden wird an der Breite ohne Balken; braucht der Inhalt dort
+        mehr Höhe, als da ist, gilt die Breite mit Balken. So entscheidet
+        die Breite nie über den Balken, der sie ändert.
+        """
+        content = self.widget()
+        if content is None:
+            return
+        frame = 2 * self.frameWidth()
+        width = max(self.width() - frame, 0)
+        height = max(self.height() - frame, 0)
+        least = self._least_height(content, width)
+        if least > height:
+            width = max(width - self.verticalScrollBar().sizeHint().width(), 0)
+            least = self._least_height(content, width)
+        wanted = QSize(width, max(height, least))
+        if content.size() != wanted:
+            content.resize(wanted)
+
+    @override
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_content()
+
+    @override
+    def sizeHint(self) -> QSize:
+        content = self.widget()
+        if content is None:
+            return super().sizeHint()
+        frame = 2 * self.frameWidth()
+        return content.sizeHint() + QSize(frame, frame)
+
+    @override
+    def minimumSizeHint(self) -> QSize:
+        # Die Mindesthöhe des Inhalts, wie ohne Rollbereich. Unterschreitet die
+        # Zone sie, staucht das Layout den Rollbereich trotzdem — dann rollt
+        # der Inhalt, statt sich zu stauchen.
+        content = self.widget()
+        if content is None:
+            return super().minimumSizeHint()
+        frame = 2 * self.frameWidth()
+        return content.minimumSizeHint() + QSize(frame, frame)
+
+    @override
+    def hasHeightForWidth(self) -> bool:
+        # **Der Wunsch der Karte reist über Höhe-für-Breite.** Der Reiter rechts
+        # steht senkrecht auf ``Ignored``; sein ``sizeHint`` zählt in der Karte
+        # nicht, ``QLayout.totalSizeHint`` fragt aber ``heightForWidth``, wenn
+        # ein Kind sie hat. Ein ``QScrollArea`` hat keine — ohne diese beiden
+        # Methoden fiel der Wunsch der rechten Spalte von 741 auf 122 Punkte.
+        content = self.widget()
+        return content is not None and content.hasHeightForWidth()
+
+    @override
+    def heightForWidth(self, width: int) -> int:
+        content = self.widget()
+        if content is None or not content.hasHeightForWidth():
+            return super().heightForWidth(width)
+        frame = 2 * self.frameWidth()
+        return content.heightForWidth(width - frame) + frame
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # ``setWidget`` trägt den Rollbereich als Filter am Inhalt ein; ein neu
+        # gelegter Inhalt heißt ein neuer Wunsch.
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            self.updateGeometry()
+            self._fit_content()
+        return super().eventFilter(watched, event)
+
+
+def natural_height(zone: QWidget, width: int | None = None) -> int:
     """Die Höhe, bei der der Inhalt einer Zone genau hineinpasst.
 
     Qts eigene Wunschhöhe taugt dafür nicht, weil die Listen darin ihre
     beisteuern (siehe ``rows_height``). Gerechnet wird deshalb: was die Zone
     ohne ihre Listen bräuchte, plus das, was die Listen wirklich brauchen.
+
+    ``width`` ist die Breite, auf die die Zone gleich gesetzt wird. Qt rechnet
+    umbrechenden Text im ``sizeHint`` an der Wunschbreite; in der schmaleren
+    Karte bricht er in mehr Zeilen um. Der Prüfbericht verlangte so 654 Punkte
+    statt der 718, die er an seiner Breite mindestens braucht, und rollte auch
+    im hohen Fenster.
     """
     wanted = zone.sizeHint().height()
+    if width is not None and zone.hasHeightForWidth():
+        wanted = max(wanted, zone.heightForWidth(width))
     # Ein direkt gemessener Reiter reserviert den größten Seitenwunsch.
     # Elternlayouts berücksichtigen schon die aktuelle Seite über ihre
     # Breitenhöhe; dort darf dieselbe Differenz nicht noch einmal abgezogen werden.
@@ -583,7 +710,9 @@ def natural_height(zone: QWidget) -> int:
         contributed = min(max(view.sizeHint().height(), view.minimumHeight()), view.maximumHeight())
         wanted += needs - contributed
     for area in living(zone, QScrollArea):
-        if isinstance(area, QAbstractItemView) or not area.isVisibleTo(zone):
+        # Ein ``FittedScroller`` wünscht schon seinen ganzen Inhalt; der steht
+        # damit in ``zone.sizeHint()`` und zählte hier ein zweites Mal.
+        if isinstance(area, (QAbstractItemView, FittedScroller)) or not area.isVisibleTo(zone):
             continue
         inner = area.widget()
         viewport = area.viewport()
@@ -931,8 +1060,8 @@ class OverlayHost(QWidget):
 
         if self.right.isVisibleTo(self):
             self._share_room(self.right, room)
-            wanted = min(natural_height(self.right), room)
             card = card_width(RIGHT_WIDTH, RIGHT_MAX, width)
+            wanted = min(natural_height(self.right, width=card), room)
             self._move(
                 self.right,
                 QRect(width - card - MARGIN, MARGIN, card, wanted),
