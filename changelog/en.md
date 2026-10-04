@@ -147,6 +147,9 @@ it into `website/version.json`.
 - A printed thread pair passes its fit check: both threads name the size they are built with, and the check expects the clearance of both halves.
 - With *Check the assembly path*, parts can also turn, or be inserted first and then turned like a bayonet.
 - For a fit, Solidon cuts the same window from both parts as a small sample print and names the clearance.
+- A countersunk hole that ends fully inside the material after duplicating, moving or repeating no longer reports that it sticks out over the edge.
+- If a copy's countersink reaches past a side, Solidon finds the copy again the same way on STL and STEP parts.
+- If you duplicate a hole along its own axis into empty space, the original keeps its name on STL parts, and the copy is called lost as on STEP parts.
 
 ### Fillets and chamfers
 

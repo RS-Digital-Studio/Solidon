@@ -147,6 +147,9 @@ scrive in `website/version.json`.
 - Una coppia di filettature stampate supera la verifica dell'accoppiamento: entrambe indicano la misura con cui sono costruite, e la verifica si aspetta il gioco di entrambe le metà.
 - Con «Verifica il percorso di montaggio», i pezzi possono anche ruotare, oppure essere inseriti e poi ruotati come una baionetta.
 - Un pezzo da «Crea pezzo di prova» ritaglia la stessa finestra da entrambe le parti di un accoppiamento e indica il gioco.
+- Un foro svasato che dopo la duplicazione, lo spostamento o la ripetizione finisce tutto nel materiale non segnala più di sporgere oltre il bordo.
+- Se la svasatura di una copia supera un lato, Solidon ritrova la copia allo stesso modo su pezzi STL e STEP.
+- Se duplichi un foro lungo il suo asse nel vuoto, l'originale mantiene il suo nome sui pezzi STL, e la copia risulta persa come sui pezzi STEP.
 
 ### Raccordi e smussi
 

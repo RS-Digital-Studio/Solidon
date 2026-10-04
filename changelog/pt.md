@@ -147,6 +147,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um par de roscas impressas passa a verificação de ajuste: as duas roscas indicam a medida com que são construídas, e a verificação espera a folga das duas metades.
 - Com «Verificar o percurso de montagem», as peças também podem rodar, ou ser inseridas e depois rodadas como uma baioneta.
 - Uma peça de «Criar peça de ensaio» recorta a mesma janela das duas partes de um ajuste e indica a folga.
+- Um furo escareado que, depois de duplicar, deslocar ou repetir, termina todo dentro do material já não avisa que sai pela aresta.
+- Se o escareado de uma cópia passa de um lado, o Solidon volta a encontrar a cópia da mesma forma em peças STL e STEP.
+- Se duplicar um furo ao longo do seu próprio eixo para o vazio, o original mantém o nome em peças STL, e a cópia é dada como perdida como em peças STEP.
 
 ### Arredondar e chanfrar
 

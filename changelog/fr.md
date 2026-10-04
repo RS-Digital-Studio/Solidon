@@ -148,6 +148,9 @@ dans `website/version.json`.
 - Une paire de filetages imprimés réussit son contrôle d'ajustement : les deux filetages indiquent la cote construite, et le contrôle attend le jeu des deux moitiés.
 - Avec « Vérifier le chemin d'assemblage », les pièces peuvent aussi tourner, ou être insérées puis tournées comme une baïonnette.
 - Une pièce de « Créer une éprouvette » découpe la même fenêtre dans les deux pièces d'un ajustement et indique le jeu.
+- Un perçage fraisé qui finit entièrement dans la matière après duplication, déplacement ou répétition ne signale plus qu'il dépasse du bord.
+- Si la fraisure d'une copie dépasse d'un côté, Solidon retrouve la copie de la même façon sur les pièces STL et STEP.
+- Si vous dupliquez un perçage le long de son propre axe dans le vide, l'original garde son nom sur les pièces STL, et la copie est dite perdue comme sur les pièces STEP.
 
 ### Congés et chanfreins
 

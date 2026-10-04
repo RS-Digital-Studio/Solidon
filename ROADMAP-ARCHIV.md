@@ -40198,6 +40198,42 @@ Bohrerhalter versetzt mit denselben Sätzen. Cacheversionen: `move_feature` 12,
 Entwicklungstor am Endstand 23 552 bestanden, 122 übersprungen, Exit 0. Belege
 unter `F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
 
+**Zweiter Nachtrag 04.10.2026 (Claude, Zweig `claude/kopie-schraeg`):** Drei
+Brüche, gefunden beim ersten Nachtrag. (1) *Eine starr gesetzte Senkung unter
+einer Haut ragt nicht über die Kante:* `mouth_over_the_edge` setzte den Kegel am
+Austritt der Achse bis in die Oberfläche fort; an der 60 mm langen schrägen
+Platte endet eine 20 mm bergauf verdoppelte, versetzte oder vervielfachte
+Senkbohrung 5 mm unter der Oberseite, ihr gedachter Kranz reichte bis x = 33,3
+über die Stirn bei x = 30 — „über die Kante“ an beiden Kernen (auch v0.5.1).
+Jetzt fragt `prepare_ops._sink_under_a_skin`, ob der Kreis des weiten Endes
+ringsum mindestens eine Facettengrenze unter der nächsten Fläche liegt
+(`prepare.ring_in_material`), nur bei starr gesetzten Hohlräumen (`rigid`;
+gekippt schneidet ein größerer Kegel über den Kreis hinaus). Plansenkung und
+Langloch fragen mit ihrem eigenen Durchmesser und meldeten nie. (2) *Eine Kopie
+längs ihrer eigenen Achse findet am Netz nicht ihre Vorlage:* Die Ketten von
+`pegboard-gs-100-v2` waren an beiden Kernen gleich (drei Glieder); das Netz fand
+die Kopie der durchgehenden Bohrung Ø 6 in der Vorlage auf derselben Achse, die
+Vorlage hieß danach wie die Kopie (auch v0.5.1). `_copies_found` nimmt jetzt wie
+der exakte Kern nur Neues (`_already_there`: Art, Mitte, Durchmesser bis zur
+Facettengrenze, ohne Freiheit längs der Achse). (3) *Eine angeschnittene Senkung
+findet sich an beiden Kernen:* Um 25 oder 26 mm verdoppelt schneidet die Stirn
+den Kegel ab, die Erkennung misst seinen Rand tiefer (Ø 12,54 bei z = 11,27
+statt 13,33 bei 11,67); das Netz fand die Kopie über ihre Spitze, der exakte
+Kern suchte an der Mitte und nannte sie verloren (auch v0.5.1). Jetzt sucht
+`_exact_copy_result` eine Senkung, die nicht an ihrer Mitte sitzt, über die
+Spitze (`_same_cone`). Abnahme in `tests/test_exact_body_parity.py`: Kopie unter
+der Oberseite 10 Fälle (vorher die 6 Senkungsfälle rot), Senkung über die Stirn
+12 (vorher 8 rot), längs der Achse in die Luft 6 (vorher am Netz 6 rot), in eine
+zweite Wand 2; die drei Plätze des Musters jetzt auf der 60-mm-Platte.
+Gegenproben: ohne die Frage nach der Haut 8 rot, ohne den Kreis 2, ohne
+Mindesttiefe 2 bestehende Tests, überall starr der bestehende gekippte Fall, ohne
+Abgleich mit der Quelle 6, mit Freiheit längs der Achse 2, ohne Spitzensuche 8.
+Echtes Modell gs-100: am Netz jetzt drei `feature_lost` wie exakt, sonst gleiche
+Korpusausgabe. Cacheversionen: `move_feature` 13, `duplicate_feature` 12,
+`pattern_feature` 10. Commits `c9304999f`, `f9e92d428`, `8ffccf0da`;
+Entwicklungstor am Endstand 23 582 bestanden, 122 übersprungen, Exit 0. Belege unter
+`F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
+
 ## RM-254: Splinestücke bestätigen einander nur noch mit festgelegtem Radius (04.10.2026)
 
 <a id="rm-254-splinestücke-bestätigen-einander-nur-noch-mit-festgelegtem-radius-04102026"></a>

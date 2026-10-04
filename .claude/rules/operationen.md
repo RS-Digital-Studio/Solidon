@@ -283,20 +283,19 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 - **Eine Mündung unter Material** (`{op}.mouth_covered`: ab der Hälfte des
   Rands, `COVERED_SHARE`, nie nach einer Kantenprobe; exakt zusätzlich die Säule
   im Werkzeug).
-- **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt
-  seitlich auf der gesetzten Achse bis zur Facettengrenze.
+- **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
+  und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung, nicht die Achse.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
-  Schnittlänge; den Zerfall gegen den Körper vor dem Schritt,
-  `_split_counted_from`): Mitte, beide Enden eines Langlochs
-  (`prepare.slot_ends`), Austritte der Achse (erster Durchstoß, nicht der
-  Hüllquader) — einmal, an beiden Kernen; eine Senkung nur am weiten Ende, am
-  Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`). Eine
-  ungeschlossen überdeckte alte Öffnung zählt als Material
-  (`prepare.OpeningSpace`).
+  Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
+  Mitte, beide Enden eines Langlochs (`prepare.slot_ends`), Austritte der Achse
+  (erster Durchstoß) — einmal, an beiden Kernen; eine Senkung nur am weiten
+  Ende, am Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`),
+  starr unter einer Haut nie. Eine ungeschlossen überdeckte alte Öffnung zählt
+  als Material (`prepare.OpeningSpace`).
 
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
