@@ -1497,36 +1497,17 @@ class _ExportWorker(Worker):
                 self.usageReady.emit(request)
 
     def _profiles_for_selection(self, settings: PrintSettings | None) -> PrintSettings | None:
-        """Projektweite Profilplätze folgen der Identität in den kleineren Exportauftrag."""
-        if (
-            settings is None
-            or settings.slot_profile_bindings is not None
-            or not settings.slot_profiles
-        ):
-            return settings
-        from app.core.export import threemf
+        """Projektweite Profilplätze folgen der Identität in den kleineren Exportauftrag.
 
-        def slots(objects: Sequence[Any]) -> list[MaterialSlot]:
-            return threemf.merge_slots(
-                [
-                    threemf.AssemblyPart(
-                        as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
-                    )
-                    for body in objects
-                ]
-            )
-
-        chosen = {
-            threemf.slot_identity(slot): settings.slot_profiles[slot.index]
-            for slot in slots(self._all_objects)
-            if slot.index < len(settings.slot_profiles)
-        }
-        return replace(
-            settings,
-            slot_profiles=tuple(
-                chosen.get(threemf.slot_identity(slot), "") for slot in slots(self._objects)
-            ),
-        )
+        Gebunden wird gegen den ganzen Auftrag, an derselben Stelle wie im
+        Schreiber und im Bedarf (``handover.bind_object_profiles``). Eine
+        eigene Umzählung auf die Auswahl zählte der Schreiber ein zweites Mal
+        gegen den Auftrag: Die Datei bekam dann das Profil einer nicht
+        exportierten Spule, die Buchung das richtige.
+        """
+        if settings is None:
+            return None
+        return handover.bind_object_profiles(settings, self._all_objects)
 
     def _assembly(self) -> tuple[list[Path], list[Finding]]:
         """Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen

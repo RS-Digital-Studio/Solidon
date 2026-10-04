@@ -576,8 +576,10 @@ Platten und Lagen wieder her.
 Option `include_unused=True` rekonstruiert ausschließlich die alte vollständige
 Reihenfolge für `handover.bind_object_profiles`. Diese Bindung geschieht vor
 Plattenwahl und Werkzeugneunummerierung, auch am unveränderlichen Auftrag des
-Druckdialogs. Session, Dialog, Writer und Verbrauchsvorbereitung benutzen
-denselben Helfer. Bereits vorbereitete Verbrauchsaufträge behalten ihre
+Druckdialogs. Session, Dialog, Auswahl-Export, Writer und
+Verbrauchsvorbereitung benutzen denselben Helfer, jeweils gegen den ganzen
+Auftrag; eine eigene Umzählung auf die Auswahl verschöbe die Plätze ein
+zweites Mal. Bereits vorbereitete Verbrauchsaufträge behalten ihre
 damaligen Werkzeugnummern für das Rücklesen ihrer Druckdatei. Ein
 gespeichertes Profil folgt danach seiner Identität; eine unbenutzte Deklaration
 wird dadurch nicht zu einem benutzten Filament. Notwendige Werkzeuglücken eines
