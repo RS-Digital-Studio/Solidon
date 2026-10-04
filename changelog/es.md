@@ -106,6 +106,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Para los ajustes de piezas concretas, la línea de comandos indica qué piezas son y qué valor reciben.
 - Si acepta soportes para un puente largo sobre la propia pieza, ahora llegan también ahí. Antes se añadía «Solo desde la placa», y varios slicers imprimían el puente sin soporte.
 - Las piezas pequeñas tumbadas, como tornillos, ya no reciben soportes propuestos donde un borde de corte mostraba por error un punto flotante.
+- Si una pieza termina arriba en una arista que el slicer no imprime, Solidon ya no avisa tras el laminado de un modelo cortado.
+- Si la primera capa de una pieza es más estrecha que una línea, el aviso tras el laminado propone las líneas de pared y la balsa como salida.
+- SuperSlicer conserva la disposición de Solidon y ya no empuja las piezas hasta el borde de la placa; la falda queda sobre la placa.
+- Si una pieza solo cabe girada en la placa, llega girada a OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
+- Si el borde alrededor de una pieza entra en una zona prohibida de la placa, la comprobación antes de exportar lo dice.
+- Si en el slicer se cruzan las trayectorias de dos piezas, o de una pieza y la torre de purga, el aviso lo dice y ofrece salidas.
 
 ### Taladros, ranuras y división
 

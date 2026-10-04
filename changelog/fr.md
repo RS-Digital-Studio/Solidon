@@ -106,6 +106,12 @@ dans `website/version.json`.
 - Pour les réglages de pièces individuelles, la ligne de commande indique de quelles pièces il s'agit et quelle valeur elles reçoivent.
 - Les supports acceptés pour un long pont au-dessus de la pièce y arrivent maintenant. Avant, « Depuis le plateau uniquement » s'ajoutait et plusieurs slicers imprimaient le pont sans support.
 - Les petites pièces couchées, comme les vis, ne reçoivent plus de supports proposés là où une arête de coupe montrait à tort un point flottant.
+- Si une pièce se termine en haut par une arête que le slicer n'imprime pas, Solidon ne signale plus de modèle tronqué après le tranchage.
+- Si la première couche d'une pièce est plus étroite qu'une ligne, le message après le tranchage propose les lignes de paroi et le radeau comme issue.
+- SuperSlicer garde la disposition de Solidon et ne pousse plus les pièces jusqu'au bord du plateau ; la jupe reste sur le plateau.
+- Si une pièce ne tient sur le plateau qu'en biais, elle part tournée vers OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
+- Si la bordure autour d'une pièce entre dans une zone interdite du plateau, le contrôle avant l'export le signale.
+- Si les trajets de deux pièces, ou d'une pièce et de la tour de purge, se croisent dans le slicer, le message le dit et propose des issues.
 
 ### Perçages, trous oblongs et découpe
 

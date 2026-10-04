@@ -4430,9 +4430,15 @@ def _command(
     files = [str(entry) for entry in models]
 
     if setup.flavour == "prusa":
+        # SuperSlicer ordnet auf der Konsole ohne ``--dont-arrange`` selbst an,
+        # bis an den Bettrand und ohne Platz für die Skirt (RM-312: MINI,
+        # Skirt bei y = -1,4 mm). PrusaSlicer hält die Lage auch so und nimmt
+        # den Schalter an. Gesetzt wie ``--arrange 0`` nur bei haltender
+        # Anordnung (:func:`app.core.export.writer.arrangement_holds`).
         return [
             binary,
             "--export-gcode",
+            *(["--dont-arrange"] if keep_arrangement else []),
             "--load",
             str(config.process),
             "--output",
@@ -5470,8 +5476,17 @@ def _creality_cli(setup: SlicerSetup) -> bool:
     return _is_creality_print(setup) and setup.executable not in _REFUSES_THE_CLI_FLAG
 
 
+#: So viele Ebenen fragt :func:`_printable_above` je Teil höchstens ab. Fehlt
+#: mehr Höhe, liegt Material von Bahnbreite fast immer schon an der untersten.
+TOP_PROBE_LAYERS: Final = 64
+
+
 def too_short(
-    payload: str | gcode.GcodeAnalysis, model_height: float, settings: PrintSettings
+    payload: str | gcode.GcodeAnalysis,
+    model_height: float,
+    settings: PrintSettings,
+    *,
+    meshes: Sequence[Mesh] = (),
 ) -> Finding | None:
     """Ist die Druckdatei niedriger als das Modell? (§28.2, Regel 14)
 
@@ -5487,6 +5502,15 @@ def too_short(
     höchsten Teils. Zwei Schichthöhen Luft, weil die oberste Schicht auf das
     Raster gerundet wird und die erste dicker sein darf; ein Raft macht die
     Datei höher, nie niedriger, und stört den Vergleich darum nicht.
+
+    **Was schmaler als eine Bahn ist, fehlt nicht.** Läuft ein Teil oben als
+    Schneide aus, legt ein Slicer mit festen Bahnbreiten dort keine Bahn — an
+    ``bottom-single.stl`` (Slicer-Matrix, RM-312) endeten ElegooSlicer, Bambu
+    Studio und SuperSlicer bei 78,0 statt 78,49 mm, und dieser Befund schickte
+    den Kunden mit *Auf das Bett legen* zu einem Teil, das auf dem Bett lag.
+    Mit den Netzen der Platte (``meshes``) zählt deshalb nur, was über der
+    gedruckten Höhe noch eine Bahnbreite trägt (:func:`_printable_above`);
+    ohne sie bleibt der Vergleich der Höhen.
     """
     analysis = payload if isinstance(payload, gcode.GcodeAnalysis) else gcode.analyze(payload)
     extent = analysis.extent
@@ -5494,7 +5518,12 @@ def too_short(
         return None
     printed_height = float(extent.maximum[2])
     allowance = 2.0 * settings.layers.layer_height
-    if printed_height >= model_height - allowance:
+    # Die Grenze zählt mit (Regel 6): An „Rack system for Filament.3mf“ stand
+    # 21,6 mm Druck gegen 22,000000000000014 mm Modell, und der Befund kam aus
+    # der letzten Stelle der Netzhöhe.
+    if printed_height >= model_height - allowance - EPS_GEOM:
+        return None
+    if meshes and not _printable_above(meshes, printed_height + allowance, settings):
         return None
     return Finding(
         code="gcode.shorter_than_model",
@@ -5511,6 +5540,36 @@ def too_short(
         },
         source="gcode",
     )
+
+
+def _printable_above(meshes: Sequence[Mesh], height: float, settings: PrintSettings) -> bool:
+    """Trägt ein Teil über ``height`` (gemessen von seinem Fuß) noch eine Bahnbreite?
+
+    Gefragt wird am Querschnitt, ob nach innen um eine halbe Bahnbreite
+    versetzt etwas übrig bleibt — dann passt dort eine ganze Bahn. Die Ebenen
+    stehen im Schichtabstand von ``height`` aufwärts, je Teil höchstens
+    :data:`TOP_PROBE_LAYERS`; die unterste mit Material von Bahnbreite beendet
+    die Frage. Jedes Teil steht im Slicer auf dem Bett, darum zählt die Höhe
+    von seinem eigenen Fuß.
+    """
+    from app.core.slice.analysis import cross_sections
+
+    inset = settings.layers.line_width / 2.0
+    step = settings.layers.layer_height
+    for mesh in meshes:
+        data = as_mesh_data(mesh)
+        bottom = float(data.bounds.minimum[2])
+        top = float(data.bounds.maximum[2])
+        start = bottom + height
+        if start >= top:
+            continue
+        count = min(TOP_PROBE_LAYERS, max(1, math.ceil((top - start) / step)))
+        spacing = (top - start) / count
+        heights = [start + spacing * index for index in range(count)]
+        for section in cross_sections(data, heights):
+            if section is not None and not section.buffer(-inset).is_empty:
+                return True
+    return False
 
 
 def fan_in_off_layers(
@@ -5762,7 +5821,8 @@ def _orca_cli_tower_position(
 
     Crealitys bekannter Platzierungsmodus bleibt maßgeblich. Ohne Modus
     beginnt der Turm unten mit Abstand zum Rand, statt bei der festen
-    Konsolenvorgabe 15/220. Bei 90 Grad wächst seine Tiefe nach links.
+    Konsolenvorgabe 15/220, und neben den Sperrflächen der Maschine
+    (:func:`_beside_the_exclusions`). Bei 90 Grad wächst seine Tiefe nach links.
     Gespeicherte Koordinaten gewinnen immer, auch aus einer 3MF-Beilage.
     Native Breite und Brim begrenzen den Start; erst die G-Code-Gegenprobe
     kennt die wirkliche Fläche einschließlich Rippen und Reinigungsvolumen.
@@ -5833,8 +5893,24 @@ def _orca_cli_tower_position(
                 across, along = along, across
             if width + 2 * margin > across or 2 * margin >= along:
                 return config
-            x = left + margin if is_zero(rotation) else right - margin
-            placed = dict(zip(coordinates, (str(x), str(bottom + margin)), strict=True))
+            start = _beside_the_exclusions(
+                values.get("bed_exclude_area"),
+                left + margin if is_zero(rotation) else bottom + margin,
+                width,
+                margin,
+                vertical=not is_zero(rotation),
+            )
+            if start is None:
+                return config
+            if is_zero(rotation):
+                if start + width + margin > right:
+                    return config
+                x, y = start, bottom + margin
+            else:
+                if start + width + margin > top:
+                    return config
+                x, y = right - margin, start
+            placed = dict(zip(coordinates, (str(x), str(y)), strict=True))
         elif is_zero(rotation):
             xs = {
                 "Left": left + side,
@@ -5861,6 +5937,49 @@ def _orca_cli_tower_position(
             detail=str(problem.strerror or problem),
         ) from problem
     return replace(config, written={**config.written, **placed})
+
+
+def _beside_the_exclusions(
+    raw: object, start: float, width: float, margin: float, *, vertical: bool
+) -> float | None:
+    """Wo der Turm quer zu seiner Tiefe beginnt, ohne eine Sperrfläche zu berühren.
+
+    Bambu P1S, P1P, X1 und X1 Carbon sperren vorn links 18 mal 28 mm
+    (``bed_exclude_area``); dort begann der Turm aus RM-476 und reichte in
+    die Sperrfläche (Slicer-Matrix RM-312, P1S mit Bambu Studio). Die Tiefe
+    des Turms kennt erst der Slicer — sie wächst mit der Spülmenge —, deshalb
+    gilt jede Sperrfläche, deren Ausdehnung quer zur Tiefe die Turmbreite samt
+    Rand (``margin``, Herstellerabstand und Brim) überlappt, gleich wo sie in
+    der Tiefe liegt: Der Anfang rückt hinter sie, mit demselben Rand wie am
+    Bettrand. ``vertical`` heißt, die Breite läuft entlang y (90 Grad).
+    Unlesbare Sperrflächen sind keine Auskunft: dann ``None``, und die Lage
+    bleibt beim Slicer.
+    """
+    if isinstance(raw, list) and all(isinstance(point, str) for point in raw):
+        raw = ",".join(raw)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return start
+    if not isinstance(raw, str):
+        return None
+    contours = [part for part in raw.split(";") if part.strip()]
+    areas = gcode.analyze(f"; bed_exclude_area = {raw}\n").excluded_areas
+    if len(areas) != len(contours):
+        return None
+    spans: list[tuple[float, float]] = []
+    for contour in areas:
+        shape = _usable_area(contour)
+        if shape is None:
+            return None
+        low_x, low_y, high_x, high_y = shape.bounds
+        spans.append((low_y, high_y) if vertical else (low_x, high_x))
+    for _round in range(len(spans) + 1):
+        blocking = [
+            high for low, high in spans if low < start + width + margin and high > start - margin
+        ]
+        if not blocking:
+            return start
+        start = max(blocking) + margin
+    return None
 
 
 def _meshes_from_files(models: Sequence[Path], setup: SlicerSetup) -> tuple[MeshData, ...]:
@@ -6285,6 +6404,8 @@ def slice_model(
         if produced is None:
             first_layer_error = _empty_first_layer_error(setup, completed.stdout, completed.stderr)
             if first_layer_error is not None:
+                if _first_layer_narrower_than_a_line(meshes, settings):
+                    raise _narrow_first_layer_error(setup, first_layer_error.values)
                 raise first_layer_error
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
@@ -6346,6 +6467,25 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
+            if (
+                setup.flavour == "orca"
+                and signed_exit_code(completed.returncode) == ORCA_PATHS_CROSS
+            ):
+                # OrcaSlicer sagt dazu auf der Konsole nur „found error“, Creality
+                # Print nennt im Protokoll Turm und Teil, Bambu Studio den Turm in
+                # ``result.json``. Der Turm ist der häufigste Fall, nicht der
+                # einzige; der Satz nennt beide, die Ausgabe sagt welcher.
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Im Slicer kreuzen sich die Bahnen zweier Teile oder eines Teils "
+                        "und des Reinigungsturms. Geben Sie den Teilen mehr Platz, etwa auf "
+                        "einer weiteren Platte, oder verschieben Sie den Turm im Slicer."
+                    ),
+                    values={"output": output},
+                    suggestions=(ARRANGE_ON_BED, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
+                )
             if setup.flavour == "cura" and "failed to load model" in output.casefold():
                 raise ExternalToolError(
                     tool=setup.name,
@@ -6368,6 +6508,11 @@ def slice_model(
                     values={"output": output},
                     suggestions=(REPAIR_AND_RETRY, SHOW_LOCATIONS, SHOW_SLICER_OUTPUT),
                 )
+            # Die Orca-Familie nennt eine leere erste Schicht nicht, sie endet
+            # mit -100 und „found error“. Die Geometrie belegt die Ursache:
+            # ElegooSlicer an ``Cat_2.stp`` (RM-312), mit Arachne druckte er.
+            if setup.flavour == "orca" and _first_layer_narrower_than_a_line(meshes, settings):
+                raise _narrow_first_layer_error(setup, {"output": output})
             # ``CHOOSE_SLICER`` zuerst: Auf einem Rechner mit mehreren Slicern
             # ist der Wechsel der kürzeste Ausweg — genau dieser Fall stand
             # als Sackgasse da, mit zwei arbeitenden Slicern neben dem einen,
@@ -6392,6 +6537,8 @@ def slice_model(
         if not analysis.extrudes:
             first_layer_error = _empty_first_layer_error(setup, completed.stdout, completed.stderr)
             if first_layer_error is not None:
+                if _first_layer_narrower_than_a_line(meshes, settings):
+                    raise _narrow_first_layer_error(setup, first_layer_error.values)
                 raise first_layer_error
             # Eine große Datei ohne eine einzige Förderbewegung. Der Slicer ist
             # durchgelaufen und hat den Rückgabewert 0 gemeldet, aber das
@@ -6439,7 +6586,11 @@ def slice_model(
         # Die dritte: Ist überhaupt das ganze Modell darin? ``None`` heißt
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
         # er wird nie geraten.
-        short = too_short(analysis, model_height, settings) if model_height is not None else None
+        short = (
+            too_short(analysis, model_height, settings, meshes=meshes)
+            if model_height is not None
+            else None
+        )
         fan = fan_in_off_layers(analysis, settings, setup.flavour)
         # Die vierte: Sind alle übergebenen Spulen darin? Die drei darüber
         # sehen eine Datei, der ein ganzes Filament fehlt, nicht an — sie hat
@@ -7046,6 +7197,11 @@ NO_LAYERS: Final[tuple[str, ...]] = ("no layers were detected",)
 #: Teile nicht ganz auf der Platte liegen (Bambus ``CLI_NO_SUITABLE_OBJECTS``),
 #: gemessen am ElegooSlicer 1.5 mit halb, ganz daneben und zu groß.
 ORCA_OFF_THE_PLATE: Final = -50
+#: Der Rückgabewert, mit dem die Orca-Familie eine fertig geschnittene Platte
+#: verwirft, weil sich Bahnen kreuzen (Bambus ``CLI_GCODE_PATH_CONFLICTS``).
+#: Gemessen an chufang.3mf (Slicer-Matrix RM-312): OrcaSlicer 2.4 und Creality
+#: Print 7.3 nach eigener Anordnung, Reinigungsturm gegen ein Teil.
+ORCA_PATHS_CROSS: Final = -101
 #: Der Titel, wenn der Slicer gelaufen ist und keine brauchbare Druckdatei
 #: hinterließ. ``ExternalToolError`` sagt sonst „hat nicht geantwortet" — der
 #: Slicer hat aber geantwortet, nur mit einem Fehler.
@@ -7153,6 +7309,70 @@ def _empty_first_layer_error(setup: SlicerSetup, *streams: bytes) -> ExternalToo
             SHOW_LOCATIONS,
             PLACE_ON_BED,
             replace(OPEN_PRINT_SETTINGS, label=_("Brim oder Raft prüfen …")),
+            SHOW_SLICER_OUTPUT,
+        ),
+    )
+
+
+def _first_layer_narrower_than_a_line(meshes: Sequence[Mesh], settings: PrintSettings) -> bool:
+    """Trägt die erste Schicht eines Teils keine Bahn fester Breite?
+
+    Gefragt am Querschnitt auf halber Höhe der ersten Schicht: Ist das Teil
+    dort nirgends anderthalb Erstschichtbahnen breit (nach innen um drei
+    Viertel einer Bahn versetzt bleibt nichts), schließen Wände mit fester
+    Bahnbreite (``classic``) keine Schleife, und der Slicer sagt ab. Gemessen
+    an ``Cat_2.stp`` (Slicer-Matrix RM-312): bei 0,1 mm 79 mm² Fläche in
+    Stegen von höchstens 0,6 mm; ElegooSlicer (Erstschichtbahn 0,5 mm) endete
+    mit -100, SuperSlicer (0,42 mm) mit „no extrusions in the first layer“,
+    beide druckten mit Arachne. Mit veränderlicher Bahnbreite ist das keine
+    belegte Ursache. Gefragt wird erst nach einer Absage.
+    """
+    if settings.shell.wall_generator != "classic":
+        return False
+    from app.core.slice.analysis import cross_sections
+
+    inset = 0.75 * settings.layers.first_layer_line_width
+    for mesh in meshes:
+        data = as_mesh_data(mesh)
+        if not data.triangle_count:
+            continue
+        height = float(data.bounds.minimum[2]) + settings.layers.first_layer_height / 2.0
+        section = cross_sections(data, [height])[0]
+        if section is None or section.buffer(-inset).is_empty:
+            return True
+    return False
+
+
+def _narrow_first_layer_error(setup: SlicerSetup, values: Mapping[str, Any]) -> ExternalToolError:
+    """Die Absage einer ersten Schicht, die schmaler ist als eine Bahn — mit dem Weg dorthin.
+
+    Dieselbe Bindung wie :func:`_empty_first_layer_error` (``constraint``,
+    ``part_name``), aber das Feld ist die Wandbahn: Auf das Bett legen hilft
+    einem Teil nicht, das darauf liegt.
+    """
+    part_name = values.get("part_name")
+    detail = (
+        _(
+            "Die erste Schicht des Teils „{name}“ ist schmaler als eine Bahn; mit fester "
+            "Bahnbreite legt der Slicer dort nichts. Stellen Sie die Wandbahnen auf Arachne "
+            "oder geben Sie dem Teil einen Raft.",
+            name=part_name,
+        )
+        if isinstance(part_name, str)
+        else _(
+            "Die erste Schicht eines Teils ist schmaler als eine Bahn; mit fester Bahnbreite "
+            "legt der Slicer dort nichts. Stellen Sie die Wandbahnen auf Arachne oder geben "
+            "Sie dem Teil einen Raft."
+        )
+    )
+    return ExternalToolError(
+        tool=setup.name,
+        title=SLICER_FAILED,
+        detail=detail,
+        values={**values, "constraint": "empty_first_layer", "field": "shell.wall_generator"},
+        suggestions=(
+            SHOW_LOCATIONS,
+            replace(OPEN_PRINT_SETTINGS, label=_("Wandbahnen prüfen …")),
             SHOW_SLICER_OUTPUT,
         ),
     )

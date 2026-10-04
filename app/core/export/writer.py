@@ -59,6 +59,7 @@ from app.core.types import (
     MaterialSlot,
     Mesh,
     ObjectId,
+    PrinterProfile,
     PrintSettings,
     Profile,
     Scene,
@@ -564,13 +565,19 @@ def check_adhesion_on_bed(
             max(-half[axis] - (box.minimum[axis] - reach), box.maximum[axis] + reach - half[axis])
             for axis in (0, 1)
         )
+        message = _("Der Rand um ein Teil reicht über das Bett hinaus.")
+        if over <= EPS_GEOM:
+            over = _rim_into_blocked_area(mesh, reach, profile.printer)
+            message = _(
+                "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus."
+            )
         if over <= EPS_GEOM:
             continue
         findings.append(
             Finding(
                 code="arrange.adhesion_off_bed",
                 severity="warning",
-                message=_("Der Rand um ein Teil reicht über das Bett hinaus."),
+                message=message,
                 object_id=object_ids[index] if index < len(object_ids) else None,
                 values={"distance": format_length(over)},
                 # Regel 17: Anordnen hält zum Bettrand den Abstand der Haftung
@@ -579,6 +586,32 @@ def check_adhesion_on_bed(
             )
         )
     return findings
+
+
+def _rim_into_blocked_area(mesh: MeshData, reach: float, printer: PrinterProfile) -> float:
+    """Wie weit der Rand eines Teils in eine Sperrfläche oder über die Kontur reicht.
+
+    Der Bettrand allein genügt nicht: Der Centauri Carbon 2 sperrt vorn rechts
+    eine Ecke, und in der Slicer-Matrix (RM-312) lief der Auto-Brim des
+    ElegooSlicers dort hinein, ohne dass die Prüfung vor dem Export etwas
+    sagte. Gemessen wird an der Aufsicht des Teils gegen das Bettrechteck ohne
+    die freigegebene Fläche (:func:`build_area.printable_area`).
+    """
+    from shapely.geometry import box as rectangle
+
+    if not printer.bed_exclusions and not printer.printable_area:
+        return 0.0
+    width, depth, _height = printer.build_volume
+    blocked = rectangle(-width / 2.0, -depth / 2.0, width / 2.0, depth / 2.0).difference(
+        build_area.printable_area(printer)
+    )
+    if blocked.is_empty:
+        return 0.0
+    bounds = mesh.bounds
+    reached = rectangle(*bounds.minimum[:2], *bounds.maximum[:2]).buffer(reach)
+    if not reached.intersects(blocked):
+        return 0.0
+    return reach - float(build_area.footprint(mesh).distance(blocked))
 
 
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
@@ -1808,8 +1841,13 @@ def prepare_slicer_meshes(
     *,
     for_window: bool = False,
     cancelled: CancelToken | None = None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
-    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben."""
+    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben.
+
+    ``rim`` ist der Rand der Haftung (:func:`rim_reach`), für den eine
+    gedrehte Lage zuerst Platz sucht (:func:`_fit_cli_mesh`).
+    """
     from app.core.export import handover
 
     exported: dict[str, MeshData] = {}
@@ -1831,8 +1869,37 @@ def prepare_slicer_meshes(
             raise
     program = slicer_keys.program_of(setup.executable)
     if slicer_keys.arranges_on_cli(setup.flavour, program):
-        return exported, False
-    return _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+        return _turned_for_cli(chosen, exported, profile, cancelled, rim)
+    return _arrange_for_cli(chosen, exported, profile, setup, cancelled, rim)
+
+
+def _turned_for_cli(
+    chosen: Sequence[SceneObject],
+    exported: dict[str, MeshData],
+    profile: Profile,
+    cancelled: CancelToken | None,
+    rim: float = 0.0,
+) -> tuple[dict[str, MeshData], bool]:
+    """Ein Teil, das nur gedreht aufs Bett passt, geht gedreht hinaus.
+
+    Die Orca-Familie ordnet auf der Konsole selbst an, verschiebt dabei aber
+    nur. Die Größenprüfung davor (:func:`handover._check_plate`) lässt ein
+    Teil durch, das gedreht passt; ungedreht sagte der Slicer dann mit -50
+    ab (RM-312: eine Schüssel von 240 mal 200 mm am 220er-Bett von K1 und
+    Kobra 2, die nur um 14,5° gedreht Platz hat). Was ungedreht irgendwo
+    passt, bleibt unberührt — die Lage gehört dort dem Slicer.
+    """
+    turned = dict(exported)
+    changed = False
+    for entry in chosen:
+        mesh = exported[entry.id]
+        if _fit_cli_mesh(mesh, profile, cancelled, turns=(np.eye(4),)) is not None:
+            continue
+        fitted = _fit_cli_mesh(mesh, profile, cancelled, rim=rim)
+        if fitted is not None:
+            turned[entry.id] = fitted
+            changed = True
+    return turned, changed
 
 
 def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
@@ -1869,33 +1936,48 @@ def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
 
 
 def _fit_cli_mesh(
-    mesh: MeshData, profile: Profile, cancelled: CancelToken | None
+    mesh: MeshData,
+    profile: Profile,
+    cancelled: CancelToken | None,
+    turns: Sequence[np.ndarray] | None = None,
+    rim: float = 0.0,
 ) -> MeshData | None:
-    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt."""
+    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt.
+
+    ``turns`` beschränkt die Drehungen (ohne: :func:`_cli_turns`). ``rim``
+    ist der Rand der Haftung (:func:`rim_reach`): Gesucht wird zuerst eine
+    Lage, um die er noch auf dem Bett liegt, erst dann eine ohne ihn. Die
+    erste passende Drehung lag sonst knapp am Rand — drill-holder.3mf am MINI
+    1,4 mm davor, die Skirt 2,2 mm darüber hinaus, schräg wären 12 mm frei
+    gewesen (RM-312).
+    """
     from app.core.geom.orient import _Placed, extreme_points, turned_extents
 
     if build_area.fits_on_bed(mesh, profile.printer) and mesh.bounds.minimum[2] <= EPS_DISPLAY:
         return mesh
     points = extreme_points(mesh)
-    for turn in _cli_turns(mesh):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        low, high = turned_extents(points, turn)
-        bounds = BoundingBox(
-            (float(low[0]), float(low[1]), float(low[2])),
-            (float(high[0]), float(high[1]), float(high[2])),
-        )
-        placed = _Placed(mesh, turn, bounds)
+    for margin in (rim, 0.0) if rim > EPS_GEOM else (0.0,):
+        for turn in _cli_turns(mesh) if turns is None else turns:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            low, high = turned_extents(points, turn)
+            bounds = BoundingBox(
+                (float(low[0]), float(low[1]), float(low[2])),
+                (float(high[0]), float(high[1]), float(high[2])),
+            )
+            placed = _Placed(mesh, turn, bounds)
 
-        def outline(matrix: np.ndarray = turn) -> np.ndarray:
-            return transform.moved_points(points, matrix)[:, :2]
+            def outline(matrix: np.ndarray = turn) -> np.ndarray:
+                return transform.moved_points(points, matrix)[:, :2]
 
-        offset = build_area.placement_offset(placed, profile.printer, outline=outline)
-        if offset is None:
-            continue
-        result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
-        if build_area.fits_on_bed(result, profile.printer):
-            return result
+            offset = build_area.placement_offset(
+                placed, profile.printer, margin=margin, outline=outline
+            )
+            if offset is None:
+                continue
+            result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
+            if build_area.fits_on_bed(result, profile.printer, margin=margin):
+                return result
     return None
 
 
@@ -1905,6 +1987,7 @@ def _arrange_for_cli(
     profile: Profile,
     setup: SlicerSetup,
     cancelled: CancelToken | None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
     """Nur Ausgabenetze ihrer Platte bewegen; die Szene bleibt unverändert."""
     from app.core.export import handover
@@ -1918,7 +2001,7 @@ def _arrange_for_cli(
         meshes = [exported[entry.id] for entry in entries]
         if arrangement_holds(meshes, profile):
             continue
-        fitted = [_fit_cli_mesh(mesh, profile, cancelled) for mesh in meshes]
+        fitted = [_fit_cli_mesh(mesh, profile, cancelled, rim=rim) for mesh in meshes]
         ready = [mesh for mesh in fitted if mesh is not None]
         if len(ready) == len(meshes) and not arrangement_holds(ready, profile):
             if cancelled is not None:
@@ -2061,7 +2144,12 @@ def write_assembly(
 
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             mesh_plan = prepare_slicer_meshes(
-                chosen, profile, known, for_window=for_window, cancelled=cancelled
+                chosen,
+                profile,
+                known,
+                for_window=for_window,
+                cancelled=cancelled,
+                rim=rim_reach(settings) if settings is not None else 0.0,
             )
         else:
             mesh_plan = (

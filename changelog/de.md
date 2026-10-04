@@ -130,6 +130,12 @@ Nutzen da und sonst nichts.
 - Die Kommandozeile nennt bei Druckwerten für einzelne Teile, welche Teile es sind und welchen Wert sie bekommen.
 - Übernehmen Sie Stützen für eine lange Brücke über dem Teil selbst, kommen sie jetzt auch dort an. Bisher kam „Nur vom Bett“ dazu, und mehrere Slicer druckten die Brücke ohne Stütze.
 - Kleine liegende Teile wie Schrauben bekommen keine Stützen mehr vorgeschlagen, wo eine Schnittkante fälschlich eine schwebende Stelle ergab.
+- Läuft ein Teil oben in eine Kante aus, die der Slicer nicht druckt, meldet Solidon nach dem Slicen kein abgeschnittenes Modell mehr.
+- Ist die erste Schicht eines Teils schmaler als eine Bahn, nennt die Meldung nach dem Slicen die Wandbahnen und den Raft als Ausweg.
+- SuperSlicer behält die Anordnung aus Solidon und schiebt die Teile nicht mehr bis an den Bettrand; der Skirt bleibt auf dem Bett.
+- Passt ein Teil nur schräg gestellt auf das Druckbett, geht es gedreht an OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print.
+- Reicht der Rand um ein Teil in eine Sperrfläche des Druckbetts, sagt das die Prüfung vor dem Export.
+- Kreuzen sich im Slicer die Bahnen zweier Teile oder eines Teils und des Reinigungsturms, sagt die Meldung das und bietet Auswege an.
 
 ### Bohrungen, Langlöcher und Teilen
 

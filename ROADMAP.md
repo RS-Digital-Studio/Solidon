@@ -104,7 +104,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen am heutigen Stand eingeordnet, neun Produktfehler behoben und im echten Slicer belegt (04.10.); in Arbeit: ausdrückliche Brimbreite statt Orca-Auto-Brim und Warnung für Skirt und Stützfuß am Bettrand; danach der Gesamtlauf (RM-281) und die Fensterabnahme der Düsenwahl beim Release |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | Vorschau je Klick nur mit dem neuen Zug auf main (`8440db6f7`), große Netze rechnen im Arbeiter; die 40. Vorschau ist nicht länger als die erste, UI-Aufruf 0,6 ms; offen: Messung am echten Fenster auf ruhiger Maschine beim Release (RM-213) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | „vor Schritt 3“ und alle Schrittsätze sprechen in sichtbaren Stellen statt Kennungen (Absage beim Verschieben, Löschnachfrage, Löschtitel, Umbauabsagen, Merkmalsfrage); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Formen, Skelett und Zeichnen öffnen ihren Schritt wieder, ein Zug ist eine ganze Geste mit lokalem Undo; an Figur und Pilz am Fenster geprüft; offen: drittes Modell (Drache), Themen, schmale Fenster und Projektwechsel am Fenster beim Release (RM-213) |
@@ -4027,6 +4027,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   integrierten Stand: abgewiesen, drei Handlungen, vorhandene fremde Datei
   bytegleich). Ursache: die jüngste Datei als Rückfall stammt aus der Zeit vor
   v0.5.1; ein Kundenpunkt in allen sechs Sprachen.
+
+  **Teilstand 04.10.2026 (Claude, G2 `claude/rm312-matrix`):** Alle 575 auffälligen Zeilen der
+  Matrix vom 02.10. (426 Variantenfehler, 149 Ausgaben mit Fehlerbefund) liefen am heutigen Stand
+  noch einmal über den Kundenweg mit denselben Slicer- und Druckerpaaren: 235 drucken ohne Befund,
+  276 sagt Solidon vor dem Slicerstart mit Grund ab (zu groß, zu hoch, keine Anordnung), 8 hält
+  Solidon bei mehreren Druckdateien an, 6 enden mit der Meldung zur ersten Schicht; benannte
+  Slicer-Eigenheiten sind `chufang.3mf` (Turm gegen Teil, −101), Creality Print 7.3 (gut 1 mm Rand
+  je Seite) und ein SuperSlicer-Absturz beim Stützen. Kein Lauf endet mehr mit Absturz,
+  `gcode.shorter_than_model` oder `gcode.spool_left_out`. `image_00001_.glb` war ein Fehler des
+  Matrixwerkzeugs (Einheitenfrage), `carpet-corner-clip.step` war mit `783f62d2a` behoben; die 770
+  Markierungen sind Artefakte des Vergleichers oder erwartbar; der Creality-Zeitunterschied ist bis
+  auf 0,7 s zugeordnet (11 900 s Ladezeit, 1 357 s Reinigungsturm von 7.3). Neun Produktfehler
+  behoben und im echten Slicer belegt: Höhenprobe an Schneiden und letzter Stelle (`1e112c8af`,
+  `b4cdc2717`), Turm neben der Sperrfläche von P1S/P1P/X1/X1C (`f24e321f3`), schmale erste Schicht
+  (`f9b861cc1`), SuperSlicer mit `--dont-arrange` (`d44e712b3`), gedrehte Übergabe an die
+  Orca-Familie (`949b1bbd6`), Rand in einer Sperrfläche vor dem Export (`acab16345`), Drehung mit
+  Platz für den Rand (`2f939825a`), kreuzende Bahnen −101 (`08f15274b`). Entwicklungstor vor jedem
+  Commit grün. Grenze: Die tatsächliche Druckdauer am K1 lässt sich ohne Gerät nicht messen. Belege
+  unter `F:\solidon-review-reports\claude-2026-10-04\rm312-matrix\`.
 
 <a id="rm-366"></a>
 

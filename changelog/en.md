@@ -105,6 +105,12 @@ it into `website/version.json`.
 - For print settings on individual parts, the command line names which parts they are and which value they get.
 - If you accept supports for a long bridge over the part itself, they now reach it there. Before, “From the bed only” came along, and several slicers printed the bridge without support.
 - Small parts lying flat, such as screws, no longer get supports suggested where a cut edge wrongly showed a floating spot.
+- If a part runs out at the top into an edge the slicer does not print, Solidon no longer reports a cut-off model after slicing.
+- If a part's first layer is narrower than one line, the message after slicing names wall lines and a raft as ways out.
+- SuperSlicer keeps Solidon's arrangement and no longer pushes parts to the bed edge; the skirt stays on the bed.
+- If a part only fits the bed turned at an angle, it goes turned to OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print.
+- If the rim around a part reaches into an exclusion area of the bed, the check before export says so.
+- If the paths of two parts, or of a part and the wipe tower, cross in the slicer, the message says so and offers ways out.
 
 ### Holes, slots and splitting
 

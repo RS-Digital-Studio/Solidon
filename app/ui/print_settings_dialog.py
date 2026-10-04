@@ -85,6 +85,7 @@ from app.core.export.writer import (
     arrangement_holds,
     part_advice,
     prepare_slicer_meshes,
+    rim_reach,
     write_assembly,
 )
 from app.core.filament_usage import UsageRequest, from_gcode
@@ -1278,8 +1279,14 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     # müssen dieselbe lokale Nummerierung tragen. Die projektweite Profilwahl
     # wird vor dem Schreiben über ihre vollständige Materialidentität aufgelöst.
     local_settings = replace(job.settings, slot_profiles=chosen)
+    # Derselbe Rand wie im Schreiber, der sonst denselben Netzsatz plante.
     mesh_plan = prepare_slicer_meshes(
-        on_plate, job.profile, job.setup, for_window=job.for_window, cancelled=job.cancelled
+        on_plate,
+        job.profile,
+        job.setup,
+        for_window=job.for_window,
+        cancelled=job.cancelled,
+        rim=rim_reach(local_settings) if job.with_settings else 0.0,
     )
     meshes = tuple(mesh_plan[0][entry.id] for entry in on_plate)
     keep = arrangement_holds(meshes, job.profile)
@@ -4265,7 +4272,9 @@ class PrintSettingsDialog(QDialog):
         def open_print_settings(error: AppError) -> None:
             if error.values.get("constraint") == "empty_first_layer":
                 if context is not None and context == self._print_context():
-                    self._lift("adhesion.kind")
+                    # Haftung bei einer leeren ersten Schicht, Wandbahnen bei
+                    # einer, die schmaler ist als eine Bahn (RM-312).
+                    self._lift(str(error.values.get("field") or "adhesion.kind"))
             elif parent_print_settings is not None:
                 parent_print_settings(error)
 
