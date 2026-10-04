@@ -115,7 +115,7 @@
           <b>Sin modo y sin un segundo diálogo</b>: la vista previa en la
           imagen sigue mientras aún escribes.</p>
           <p>Mover, girar, duplicar, quitar, cambiar de medida: estas acciones
-          se aplican directamente al elemento reconocido. Hasta ahora, correr
+          se aplican directamente a la característica reconocida. Hasta ahora, correr
           un taladro tres milímetros significaba taparlo y perforar otro en
           coordenadas nuevas — dos pasos, seis números a mano, y la identidad
           se perdía. Ahora es un paso, y los ajustes siguen referenciando ese taladro. Las referencias que ya no puedan resolverse se señalan.</p>
@@ -131,7 +131,7 @@
           cambiar el radio o quitarlos; una transición que se funde suavemente con
           sus caras vecinas, no. <b>Solidon3D explica
           qué acciones están disponibles en el punto elegido y por qué.</b></p>
-          <p>Puedes repetir agujeros reconocidos y otros rasgos compatibles en
+          <p>Puedes repetir agujeros reconocidos y otras características compatibles en
           una fila, alrededor de un círculo o como copias reflejadas. Así, un
           agujero se convierte en un patrón de agujeros espaciados
           regularmente. Si cambias la medida del original en un paso anterior
@@ -140,7 +140,7 @@
         <figure class="shot">
           <div class="stage">
             <a href="../bilder/beleg-merkmal-es.webp?v=5c92ba93"><img src="../bilder/beleg-merkmal-es.webp?v=5c92ba93" width="2560" height="1369" loading="lazy" decoding="async"
-                 alt="Un soporte importado con cinco taladros reconocidos; el taladro 4 está seleccionado. En la vista, sus distancias a los bordes y el grupo «Cambiar orificio» con diámetro, posición y profundidad; a la derecha, en el panel Selección, la línea «Probablemente corresponde a M5» y debajo Mover elemento, Estirar a ranura, Girar elemento, Duplicar elemento, Quitar elemento, Avellanar y Cerrar un taladro."></a>
+                 alt="Un soporte importado con cinco taladros reconocidos; el taladro 4 está seleccionado. En la vista, sus distancias a los bordes y el grupo «Cambiar orificio» con diámetro, posición y profundidad; a la derecha, en el panel Selección, la línea «Probablemente corresponde a M5» y debajo Mover característica, Estirar a ranura, Girar característica, Duplicar característica, Quitar característica, Avellanar y Cerrar un taladro."></a>
           </div>
           <figcaption>Un taladro seleccionado: sus cotas en la vista, sus acciones a la derecha en el panel Selección.</figcaption>
         </figure>
@@ -212,11 +212,11 @@
           dibujo — horizontal, perpendicular, tangente, simétrica, distancia, ángulo,
           mismo tamaño (longitudes y radios) y punto medio —, y abajo se lee en todo momento qué sigue
           libre. Qué sale del contorno lo decides después: extruirlo, cortarlo como
-          bolsillo, revolucionarlo, barrerlo a lo largo de un arco o tenderlo entre
+          cavidad, hacerlo girar, barrerlo a lo largo de un arco o tenderlo entre
           dos contornos.</p>
           <p class="note">En un cuerpo exacto, el contorno conserva su curva. <b>Un círculo dibujado se convierte en un cilindro
           redondo, no en un polígono de muchos vértices.</b></p>
-          <p>La cuadrícula muestra a qué se ajusta el imán, y su paso se
+          <p>La cuadrícula muestra dónde se engancha el cursor, y su paso se
           puede escribir. La cota aparece junto al puntero, y la barra de
           abajo nombra la cara sobre la que se dibuja. Una línea auxiliar
           sigue siendo auxiliar — también tras recortar, alargar,
@@ -225,7 +225,7 @@
           seleccionado. Para quitar material, gira una sección alrededor de un
           eje, por ejemplo para hacer una ranura anular. Una transición entre
           dos contornos corta un embudo o un canal de sección cuadrada a
-          circular. Siguiendo un arco o una trayectoria dibujada se corta un
+          circular. Siguiendo un arco o un trayecto dibujado se corta un
           canal guiado que también puede salir por un lateral.</p>
         </div>
         <figure class="shot">
@@ -356,9 +356,9 @@
           capa se rechazan</b>, no se calculan.</p>
           <p>Una imagen en escala de grises también puede convertirse en una superficie que se
           nota al tacto: <b>Aplicar relieve</b> transforma las zonas claras y oscuras
-          en altura. <b>Rellenar con retícula</b> crea una retícula espacial en la
+          en altura. <b>Rellenar con celosía</b> crea una celosía espacial en la
           cavidad de un sólido vaciado, con estructura, tamaño de celda y grosor de
-          barras a elegir. La geometría de la retícula se incluye en el modelo
+          barras a elegir. La geometría de la celosía se incluye en el modelo
           exportado.</p>
         </div>
         <figure class="shot">
@@ -376,7 +376,7 @@
           <span class="kicker">Informe de comprobación</span>
           <h3>Detecta riesgos de impresión y corrígelos antes de laminar</h3>
           <p>Cada modelo abierto recibe un informe: zonas abiertas,
-          triángulos mal orientados, paredes por debajo de dos cordones de
+          triángulos mal orientados, paredes por debajo de dos líneas de
           extrusión, unidades ausentes. Ordenado en errores, advertencias y
           avisos — y las entradas con una ubicación señalan ese lugar en el modelo.</p>
           <p class="note">Cada hallazgo lleva una propuesta de acción.
@@ -397,7 +397,7 @@
           <h3>Ver lo que verá la impresora</h3>
           <p>Solidon3D corta el modelo en capas y mide lo que se sigue de
           ello: áreas sin soporte, islas en el aire, paredes por debajo de
-          dos cordones, luces de puente y el volumen de soportes. La
+          dos líneas, luces de puente y el volumen de soportes. La
           búsqueda de orientación busca una posición con menor necesidad de soportes entre las orientaciones evaluadas.</p>
           <p class="note">Sin slicer propio — y sin números mezclados:
           <b>lo que viene del análisis y lo que viene del G-code, siempre
@@ -405,7 +405,7 @@
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Un dibujo: una línea de análisis sube desde la placa de impresión atravesando una pieza; uno tras otro aparecen tres hallazgos — voladizo de 90 grados, isla en el aire y una pared por debajo de dos cordones.">
+               aria-label="Un dibujo: una línea de análisis sube desde la placa de impresión atravesando una pieza; uno tras otro aparecen tres hallazgos — voladizo de 90 grados, isla en el aire y una pared por debajo de dos líneas.">
             <text class="ink" x="24" y="30" font-weight="600">Análisis de capas</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -430,7 +430,7 @@
             </g>
             <g class="anim fig-find-3">
               <path class="warn" d="M368 168 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="183" font-size="12">Pared &lt; 2 cordones</text>
+              <text class="ink" x="386" y="183" font-size="12">Pared &lt; 2 líneas</text>
             </g>
           </svg>
           <figcaption>Tres hallazgos que puedes revisar antes de laminar.</figcaption>
@@ -527,7 +527,7 @@
           <span class="kicker">Inventario de filamentos</span>
           <h3>Lo que queda en la bobina está en el inventario — no en la memoria</h3>
           <p>Cada bobina es una entrada: nombre, tipo de material, hasta cuatro
-          colores, ubicación, carga nominal y cantidad restante, además de la
+          colores, ubicación, contenido nominal y cantidad restante, además de la
           fecha de compra, la de apertura y el precio. Dos bobinas iguales
           siguen siendo dos entradas, cada una con sus propias existencias. Si
           ya tienes tus filamentos configurados en el slicer, los importas desde
@@ -677,7 +677,7 @@
         <div>
           <span class="kicker">Primer arranque</span>
           <h3>No empiezas de cero</h3>
-          <p>Se incluyen doce proyectos de ejemplo terminados — para los cuatro caminos, croquis,
+          <p>Se incluyen doce proyectos de ejemplo terminados — para los cuatro caminos, bocetos,
           bloques, rotulación a dos colores, calibración y preparación de la
           impresión, además de una caja con tapa y el cambio de material de un
           ajuste. Cada uno es un proyecto de verdad con historial, no una imagen en
@@ -784,7 +784,7 @@
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Distribuir la placa y comprobar la impresión</summary>
-          <div class="tool-content"><p>Coloca piezas sobre la cama —un conjunto importado también entero,
+          <div class="tool-content"><p>Coloca piezas sobre la placa —un conjunto importado también entero,
         con la posición de sus piezas entre sí—, busca una orientación
         favorable, distribúyelas en la placa y comprueba solapamientos. El envío directo al slicer incluye los ajustes adecuados;
         después, el G-code importado permite contrastar el resultado con su origen
@@ -936,19 +936,19 @@
 
 <footer class="site">
   <div class="wrap">
-    © 2026 RS Digital ·
-    <a href="/es/">Inicio</a> ·
-    <a href="/es/#ways">Cuatro caminos</a> ·
-    <a href="/es/ai-models.html">Modelos de IA</a> ·
-    <a href="/es/manual.html">Manual</a> ·
-    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
-    <a href="/impressum.html">Aviso legal</a> ·
+    © 2026 RS Digital&nbsp;·
+    <a href="/es/">Inicio</a>&nbsp;·
+    <a href="/es/#ways">Cuatro caminos</a>&nbsp;·
+    <a href="/es/ai-models.html">Modelos de IA</a>&nbsp;·
+    <a href="/es/manual.html">Manual</a>&nbsp;·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a>&nbsp;·
+    <a href="/impressum.html">Aviso legal</a>&nbsp;·
     <a href="/datenschutz.html">Privacidad</a>
-    <em>(textos legales en alemán — única versión vinculante)</em> ·
-    <a href="/">Deutsch</a> ·
-    <a href="/en/">English</a> ·
-    <a href="/fr/">Français</a> ·
-    <a href="/it/">Italiano</a> ·
+    <em>(textos legales en alemán — única versión vinculante)</em>&nbsp;·
+    <a href="/">Deutsch</a>&nbsp;·
+    <a href="/en/">English</a>&nbsp;·
+    <a href="/fr/">Français</a>&nbsp;·
+    <a href="/it/">Italiano</a>&nbsp;·
     <a href="/pt/">Português</a>
   </div>
 </footer>
