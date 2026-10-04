@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 import shiboken6
-from PySide6.QtCore import QCoreApplication, QEvent, QPropertyAnimation, Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPropertyAnimation, Qt
 from PySide6.QtGui import QAccessible, QAccessibleActionInterface, QDesktopServices
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QWidget
@@ -231,6 +231,50 @@ def test_comfy_notice_translations_fit_at_large_text(qt_app: QApplication, langu
         set_language("de")
 
 
+def test_a_notice_taller_than_the_screen_comes_to_rest(qt_app: QApplication) -> None:
+    """Ein Hinweis, der nicht auf den Bildschirm passt, rollt, statt zu schaukeln.
+
+    Die Anpassung bat um die volle Inhaltshöhe, die Bildschirmgrenze nahm sie
+    zurück, und jede der beiden Größenänderungen stieß die nächste Anpassung
+    an: Die Zahl der Durchläufe verdoppelte sich jede Sekunde, bis das
+    Programm stand. Große Schrift oder ein kleiner Bildschirm genügten.
+    """
+    from app.ui.ai_disclosure import target_for_comfy
+
+    class ResizeCounter(QObject):
+        def __init__(self) -> None:
+            super().__init__()
+            self.count = 0
+
+        def eventFilter(self, _watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+            if event.type() == QEvent.Type.Resize:
+                self.count += 1
+            return False
+
+    dialog = AiDisclosureDialog(target_for_comfy("https://comfy.example"))
+    counter = ResizeCounter()
+    try:
+        font = dialog.font()
+        font.setPointSizeF(max(font.pointSizeF(), 9.0) * 3)
+        dialog.setFont(font)
+        _show_until_ready(dialog, qt_app)
+        screen = dialog.screen()
+        assert screen is not None
+        assert dialog.content.minimumHeight() > screen.availableGeometry().height(), (
+            "der Inhalt ist höher als der Bildschirm"
+        )
+        assert dialog.scroll_area.verticalScrollBar().maximum() > 0, "der Überschuss rollt"
+        dialog.installEventFilter(counter)
+        for _ in range(10):
+            qt_app.processEvents()
+            QTest.qWait(10)
+        assert counter.count == 0, "der Dialog hat seine Größe gefunden"
+    finally:
+        dialog.removeEventFilter(counter)
+        dialog.deleteLater()
+        _flush_deletes(qt_app)
+
+
 def test_a_tall_notice_reads_as_one_piece(qt_app: QApplication) -> None:
     """In einem hohen Fenster stand der Hinweis in Stücken.
 
@@ -245,8 +289,12 @@ def test_a_tall_notice_reads_as_one_piece(qt_app: QApplication) -> None:
 
     dialog = AiDisclosureDialog(target_for_comfy("http://127.0.0.1:8188"))
     try:
+        # Der Hinweis öffnet so hoch, wie sein Inhalt ist; ein hohes Fenster
+        # entsteht erst, wenn der Kunde es aufzieht.
+        _show_until_ready(dialog, qt_app)
         dialog.resize(960, 850)
         _show_until_ready(dialog, qt_app)
+        assert dialog.height() > dialog.content.minimumHeight() * 3 // 2, "das Fenster ist hoch"
         column = dialog.content.layout()
         assert column is not None
         assert dialog.scroll_area.verticalScrollBar().maximum() == 0, "alles passt, nichts rollt"

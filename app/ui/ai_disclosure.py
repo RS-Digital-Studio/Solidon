@@ -363,6 +363,7 @@ class AiDisclosureDialog(QDialog):
         self._reading_position: int | None = None
         self._required_heights: dict[QWidget, int] = {}
         self._fitted_height: int | None = None
+        self._wanted_height: int | None = None
         self._fitting = False
         self.setWindowTitle(_title_text())
         self.setAccessibleName(_title_text())
@@ -564,7 +565,12 @@ class AiDisclosureDialog(QDialog):
                 + layout.spacing()
                 + self.buttons.sizeHint().height()
             )
-            self.resize(self.width(), wanted)
+            # Dieselbe Bitte ein zweites Mal hieße: Der Bildschirm nimmt die
+            # Höhe wieder zurück, und jede der beiden Größenänderungen stößt
+            # die nächste Anpassung an — ohne Ende.
+            if wanted != self._wanted_height:
+                self._wanted_height = wanted
+                self.resize(self.width(), wanted)
         fit_dialog_to_screen(self)
         if own:
             self._fitted_height = self.height()
