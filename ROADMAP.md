@@ -1396,6 +1396,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ausgenommen.
   Registerabgleich 02.10.: Die tragenden Belege liegen nur im gitignorierten `Releases/0.5.0/Nachweise/` auf einer Maschine — ins Repository holen oder als Aussage in den Punkt (wie RM-347).
 
+  **Teilstand 04.10.2026 (Zwillingsbrüche aus RM-226, nach 0.5.2):** Drei Stellen, an denen Netz und
+  exakter Körper verschieden erkennen, sind gemessen und noch nicht gebaut. (1) Kegelstücke
+  desselben Trägers (gleiche Achse, Spitze und Öffnung) sollen wie Ringe ein Merkmal sein; am
+  exakten Kern fehlt das Gegenstück zu `_joined_tori`, das Netz legt sie schon zusammen. (2) Die
+  Mündung der Bohrung Ø 9 am Teppichclip (zweiter Körper) ist eine Freiformfläche: Das Netz liest
+  sie als Kegel, der exakte Kern nicht, *Merkmal verdoppeln* lehnt dort mit `NO_OWN_BODY` ab. (3) Am
+  Netzzwilling der STEP-Vernetzung von gs-100 trennt die Erkennung über Krümmungssprünge: Eckkegel
+  verlieren ihre Randdreiecke, die Kehle hängt mit tangentialen Freiformflächen zusammen; Wege: an
+  den Flächengrenzen trennen, die die Vernetzung mitträgt (`face_sources`), oder die
+  Krümmungstrennung schärfen. Beleg:
+  `F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\bericht.md` (Vierter Nachtrag).
+
 <a id="rm-191"></a>
 
 - [ ] **RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr
