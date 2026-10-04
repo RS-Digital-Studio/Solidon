@@ -587,16 +587,66 @@ def with_choice(settings: PrintSettings, path: str, value: Any) -> PrintSettings
     der ihn verlangt (Entscheidung G, gebaut mit Stufe E).
     """
     changed = with_path(settings, path, value)
-    changed = replace(changed, chosen=changed.chosen | {path}, accepted=changed.accepted - {path})
+    changed = replace(
+        changed,
+        chosen=changed.chosen | {path},
+        accepted=changed.accepted - {path},
+        plate_choices=_without_plate_choice(changed, path),
+    )
     return _with_a_measure(changed, path, with_choice)
 
 
 def with_accepted(settings: PrintSettings, path: str, value: Any) -> PrintSettings:
     """Ein Wert aus einem übernommenen Vorschlag — er geht zum Slicer. Gelten
     soll er dem Körper, der ihn verlangt; bis Stufe E gilt er der Platte."""
+    plate = _without_plate_choice(settings, path)
+    if path in settings.chosen:
+        # Die eigene Wahl bleibt der Wert der Platte (RM-289, B2).
+        plate = tuple(sorted((*plate, (path, read_path(settings, path)))))
+    elif (own := plate_choice(settings, path)) is not None:
+        plate = tuple(sorted((*plate, (path, own[0]))))
     changed = with_path(settings, path, value)
-    changed = replace(changed, accepted=changed.accepted | {path}, chosen=changed.chosen - {path})
+    changed = replace(
+        changed,
+        accepted=changed.accepted | {path},
+        chosen=changed.chosen - {path},
+        plate_choices=plate,
+    )
     return _with_a_measure(changed, path, with_accepted)
+
+
+def plate_choice(settings: PrintSettings, path: str) -> tuple[object] | None:
+    """Die eigene Wahl der Platte unter einem übernommenen Pfad — als Einertupel,
+    damit auch ``None`` und ``False`` als Wert erkennbar bleiben."""
+    for own, value in settings.plate_choices:
+        if own == path:
+            return (value,)
+    return None
+
+
+def _without_plate_choice(settings: PrintSettings, path: str) -> tuple[tuple[str, object], ...]:
+    return tuple(entry for entry in settings.plate_choices if entry[0] != path)
+
+
+def reset(settings: PrintSettings, path: str, base: PrintSettings) -> PrintSettings:
+    """*Zurücksetzen* am Feld: Ein übernommener Vorschlag über einer eigenen
+    Wahl kehrt zu dieser Wahl zurück, alles andere zur Grundlage (RM-289, B2)."""
+    own = plate_choice(settings, path)
+    if path in settings.accepted and own is not None:
+        return with_choice(settings, path, own[0])
+    return without_choice(settings, path, base)
+
+
+def for_the_plate(settings: PrintSettings, path: str, base: PrintSettings) -> PrintSettings:
+    """Was die Platte unter einem Vorschlag je Teil bekommt (RM-289, B2).
+
+    Die eigene Wahl, die vor der Übernahme galt, sonst die Grundlage. Die
+    Trennung je Teil (``handover.split_for_parts``) fragt nur hier.
+    """
+    own = plate_choice(settings, path)
+    if own is None:
+        return without_choice(settings, path, base)
+    return with_choice(settings, path, own[0])
 
 
 #: Die Haftungsmaße je Art — **die eine Tabelle** für Maß, Sichtbarkeit und
@@ -696,7 +746,12 @@ def _with_a_measure(
 def without_choice(settings: PrintSettings, path: str, base: PrintSettings) -> PrintSettings:
     """Zurück zur Grundlage: der Wert aus ``base``, keine Herkunft mehr."""
     changed = with_path(settings, path, read_path(base, path))
-    return replace(changed, chosen=changed.chosen - {path}, accepted=changed.accepted - {path})
+    return replace(
+        changed,
+        chosen=changed.chosen - {path},
+        accepted=changed.accepted - {path},
+        plate_choices=_without_plate_choice(changed, path),
+    )
 
 
 def on_base(stored: PrintSettings, base: PrintSettings) -> PrintSettings:

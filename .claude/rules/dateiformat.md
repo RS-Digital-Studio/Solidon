@@ -302,7 +302,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Übernahme (`PartSplit.base`), und wer sie nur mitbekommt, erfährt es
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
-  den das Teil bekommt. Eine eigene Wahl gilt der Platte. Ein Objektwert
+  den das Teil bekommt. Eine eigene Wahl gilt der Platte, auch unter einem
+  Vorschlag je Teil (`PrintSettings.plate_choices`). Ein Objektwert
   trägt die Pfade seines Rats und deren Partner (`COUPLED_PATHS`), nie die
   ganze Gruppe (`handover.object_keys`). **Ein übernommener Vorschlag
   verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
@@ -313,7 +314,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   wenn nur einer gewählt ist.
 - **Die Druckplatte ist eine Angabe, keine Vermutung**: die im Druckdialog
   gewählte (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
-  Modells (Elegoos `default_bed_type = 4` = texturierte PEI). Nur ohne
+  Modells. Nur ohne
   Plattenwahl (`support_multi_bed_types` fehlt) gilt die eine Temperatur
   `hot_plate_temp` (`manufacturer.SINGLE_PLATE`); mit Wahl und ohne
   Standardplatte keine geratene, sondern `slicer.plate_unknown`. Die
@@ -370,7 +371,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   nicht. Unklare Spulen: Projektwerte; Befund zum Druckdialog.
 - **Die Abnahme ist der Konfigurationsblock**: Ohne Vorschläge gleicht
   Solidons G-Code-Konfiguration der des Herstellerprofils allein, bis auf
-  Namen, Objektmarken und `filament_self_index` (Messstand in `ROADMAP.md`).
+  Namen, Objektmarken und `filament_self_index`.
 - **Ältere Dateien ordnet die Migration gegen jede Auflösung ein, mit der eine
   Version schrieb** (`print_settings.legacy_choices`: heutige und 0.5.0,
   `resolve(..., legacy=True)`); wer die Auflösung ändert, prüft an einer von

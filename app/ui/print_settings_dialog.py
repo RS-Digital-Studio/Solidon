@@ -1407,6 +1407,10 @@ class _AdviceWorker(Worker):
         """Für welchen Geometriestand dieser Arbeiter misst (``_analysis_context``)."""
         self.rules_wanted = True
         """Ob nach dem Messen noch die Regeln laufen sollen (:meth:`measure_only`)."""
+        self.accepted_parts: dict[str, tuple[str, ...]] = {}
+        """Je übernommenem Vorschlag, der je Teil geschrieben wird, die Teile, die
+        ihn bekommen — leer heißt: keines verlangt ihn, er gilt allen
+        (``writer._unserved``). Der Dialog nennt sie am Feld (RM-289, B6)."""
 
     def cancel(self) -> None:
         """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
@@ -1531,6 +1535,8 @@ class _AdviceWorker(Worker):
                     )
                 )
         entries = self._with_parts(advise.combine(self.settings, common), results)
+        if self.rules_wanted:
+            self.accepted_parts = self._accepted_targets(results)
         for slot, groups in materials.values():
             for entry in advise.combine(groups[0][0], groups):
                 entries.append(
@@ -1581,6 +1587,40 @@ class _AdviceWorker(Worker):
             ]
         self.cancelled.raise_if_cancelled()
         self.done.emit(entries, results)
+
+    def _accepted_targets(
+        self, results: Mapping[str, tuple[float, float, SliceResult]]
+    ) -> dict[str, tuple[str, ...]]:
+        """Welche Teile einen schon übernommenen Vorschlag je Teil bekommen (B6).
+
+        Dieselbe Frage wie der Export (:func:`handover.split_for_parts`,
+        :func:`writer.part_advice`), an den hier gemessenen Schichten: Nach dem
+        Übernehmen stand im Feld der Wert eines Teils, als gälte er der Platte.
+        """
+        split = handover.split_for_parts(self.settings, self.profile, self.setup, self.flavour)
+        if not split.per_part:
+            return {}
+        chain = split.accepted_per_part()
+        wanted: dict[str, list[str]] = {path: [] for path in split.per_part}
+        for body in self.objects:
+            self.cancelled.raise_if_cancelled()
+            for entry in part_advice(
+                body,
+                as_mesh_data(body.mesh),
+                split.base,
+                self.profile,
+                self.setup,
+                self.slot_profiles,
+                result=results[body.id][2],
+                fit_kinds=self.part_fits.get(body.id, ()),
+                flavour=self.flavour,
+                accepted=chain,
+            ):
+                if entry.path in wanted and print_settings.same_value(
+                    entry.value, print_settings.read_path(self.settings, entry.path)
+                ):
+                    wanted[entry.path].append(str(body.name))
+        return {path: tuple(names) for path, names in wanted.items()}
 
     def _with_parts(
         self,
@@ -2319,6 +2359,11 @@ class PrintSettingsDialog(QDialog):
         """Der Knopf *Zurücksetzen* je Feld — sichtbar bei eigener Wahl."""
         self._foreign_notes: dict[str, QLabel] = {}
         """Der Herstellerwert je Feld, den Solidon nicht übersetzen kann."""
+        self._part_notes: dict[str, QLabel] = {}
+        """Wem ein übernommener Vorschlag je Teil gilt, und was die übrigen Teile
+        drucken (RM-289, B6)."""
+        self._accepted_parts: dict[str, tuple[str, ...]] = {}
+        """Aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`)."""
         #: Wo die Suche gerade steht — Begriff, Trefferliste, Platz darin.
         self._search_term = ""
         self._search_hits: list[str] = []
@@ -6430,9 +6475,16 @@ class PrintSettingsDialog(QDialog):
         foreign = QLabel(holder)
         foreign.hide()
         line.addWidget(foreign)
+        # Ein Vorschlag je Teil sagt am Feld, wem er gilt (RM-289, B6).
+        parts = QLabel(holder)
+        parts.setWordWrap(True)
+        set_level(parts, "caption")
+        parts.hide()
+        line.addWidget(parts, 1)
         line.addStretch(1)
         self._resets[field.path] = reset
         self._foreign_notes[field.path] = foreign
+        self._part_notes[field.path] = parts
         form.addRow(label, holder)
         if isinstance(editor, BoundedSpin):
             refusal = _make_refusal_label(editor, form.parentWidget() or self)
@@ -6615,19 +6667,66 @@ class PrintSettingsDialog(QDialog):
                 if field is not None
                 else str(print_settings.read_path(base, path))
             )
-            what = (
-                (
-                    str(tr("Übernommener Vorschlag. Zurücksetzen auf {value} aus {source}."))
-                    if path in self.settings.accepted
-                    else str(tr("Ihre Einstellung. Zurücksetzen auf {value} aus {source}."))
+            own_plate = print_settings.plate_choice(self.settings, path)
+            if path in self.settings.accepted and own_plate is not None:
+                what = str(
+                    tr("Übernommener Vorschlag. Zurücksetzen auf Ihre Einstellung {value}.")
+                ).replace("{value}", self._shown(path, own_plate[0]))
+            else:
+                what = (
+                    (
+                        str(tr("Übernommener Vorschlag. Zurücksetzen auf {value} aus {source}."))
+                        if path in self.settings.accepted
+                        else str(tr("Ihre Einstellung. Zurücksetzen auf {value} aus {source}."))
+                    )
+                    .replace("{value}", shown)
+                    .replace("{source}", source)
                 )
-                .replace("{value}", shown)
-                .replace("{source}", source)
-            )
             reset.setToolTip(what)
             reset.setStatusTip(what)
             reset.setAccessibleDescription(what)
+        self._mark_parts(base, source)
         self._mark_foreign()
+
+    def _mark_parts(self, base: PrintSettings, source: str) -> None:
+        """Ein übernommener Vorschlag je Teil nennt am Feld die Teile, denen er
+        gilt, und den Wert der übrigen (RM-289, B6).
+
+        Nach dem Übernehmen stand „Stützen: Automatisch“ fett im Feld, als
+        drucke die Platte so — gedruckt bekam es nur der Pilz. Die Teile kommen
+        aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`), der Wert der
+        übrigen aus der eigenen Wahl unter dem Vorschlag oder der Grundlage.
+        """
+        for path, label in self._part_notes.items():
+            parts = self._accepted_parts.get(path)
+            if path not in self.settings.accepted or parts is None:
+                label.hide()
+                continue
+            if not parts:
+                text = str(tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich."))
+            elif len(parts) >= len(self._plate_bodies()):
+                label.hide()
+                continue
+            else:
+                own = print_settings.plate_choice(self.settings, path)
+                rest = (
+                    str(tr("{value} (Ihre Einstellung)")).replace(
+                        "{value}", self._shown(path, own[0])
+                    )
+                    if own is not None
+                    else str(tr("{value} aus {source}"))
+                    .replace("{value}", self._shown(path, print_settings.read_path(base, path)))
+                    .replace("{source}", source)
+                )
+                text = (
+                    str(tr("Nur für {parts}. Die übrigen Teile drucken mit {value}."))
+                    .replace("{parts}", ", ".join(parts))
+                    .replace("{value}", rest)
+                )
+            label.setText(text)
+            label.setToolTip(text)
+            label.setAccessibleDescription(text)
+            label.show()
 
     def _mark_foreign(self) -> None:
         """Zeigt am Feld, was der Hersteller dort sagt und Solidon nicht
@@ -6719,7 +6818,7 @@ class PrintSettingsDialog(QDialog):
         """Eine eigene Wahl zurücknehmen: der Wert des Profils gilt wieder."""
         if path not in self.settings.explicit:
             return
-        self.settings = print_settings.without_choice(self.settings, path, self._base())
+        self.settings = print_settings.reset(self.settings, path, self._base())
         self._load_into_editors()
         self._mark_origins()
         self._mark_fields_this_slicer_ignores()
@@ -7286,6 +7385,8 @@ class PrintSettingsDialog(QDialog):
         ):
             return
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
+        self._accepted_parts = dict(worker.accepted_parts)
+        self._mark_origins()
         self._advice_entries = entries
         self._advice_pending = False
         self._advice_problem = ""

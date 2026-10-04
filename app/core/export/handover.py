@@ -1477,8 +1477,10 @@ def split_for_parts(
     origin = manufacturer.base_settings(profile, settings.quality, setup)
     foundation = origin.settings
     base = settings
+    # Die Platte bekommt die eigene Wahl unter dem Vorschlag, sonst die
+    # Grundlage (RM-289, B2).
     for path in sorted(wanted):
-        base = print_settings.without_choice(base, path, foundation)
+        base = print_settings.for_the_plate(base, path, foundation)
     wanted -= advise.plate_paths(
         base, profiles.for_process(profile, base, effective=True), flavour=flavour
     )
@@ -1486,14 +1488,14 @@ def split_for_parts(
     unavailable = wanted - per_part
     trimmed = settings
     for path in sorted(per_part):
-        trimmed = print_settings.without_choice(trimmed, path, foundation)
+        trimmed = print_settings.for_the_plate(trimmed, path, foundation)
     # **Der Rat je Teil wird ohne jede Übernahme je Teil gefragt**, auch ohne
     # die, die der Slicer nur plattenweit annimmt. Trug die Grundlage sie
     # schon, schwieg der Rat an der Stange, und am Block stand bei Cura das
     # ruhige Innenwandtempo der Stange, ohne dass ein Befund es sagte (RM-430).
     untouched = trimmed
     for path in sorted(unavailable):
-        untouched = print_settings.without_choice(untouched, path, foundation)
+        untouched = print_settings.for_the_plate(untouched, path, foundation)
     if flavour == "cura":
         return PartSplit(
             settings, untouched, per_part, revert=True, unavailable=unavailable, accepted=settings

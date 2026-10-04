@@ -10313,3 +10313,84 @@ def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_
         ("select", "large"),
         ("actual-dialog", "scale_object", ("large",), {"about": "bed"}),
     ]
+
+
+# --- Ein Vorschlag je Teil am Feld (RM-289, B6) ---------------------------------------
+
+
+def _tower_and_plate() -> tuple[SceneObject, SceneObject]:
+    tower = trimesh.creation.box(extents=(4.0, 4.0, 80.0))
+    tower.apply_translation((0.0, 0.0, 40.0))
+    wide = trimesh.creation.box(extents=(60.0, 60.0, 10.0))
+    wide.apply_translation((50.0, 0.0, 5.0))
+    return (
+        SceneObject(id="obj_1", name="Turm", mesh=MeshData.of(tower)),
+        SceneObject(id="obj_2", name="Platte", mesh=MeshData.of(wide)),
+    )
+
+
+def test_the_advice_worker_names_who_gets_an_accepted_suggestion(qt_app: QApplication) -> None:
+    """Nach dem Übernehmen fragt der Rat, welchen Teilen der Brim gilt — dieselbe
+    Frage wie der Export (``split_for_parts``, ``part_advice``)."""
+    from app.core.slice.analysis import slice_body
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "adhesion.kind", "brim"
+    )
+    objects = _tower_and_plate()
+    worker = print_dialog._AdviceWorker(objects, settings, profile, None, {}, (), (), {})
+    results = {
+        body.id: (
+            45.0,
+            0.8,
+            slice_body(
+                body.mesh,
+                settings.layers.layer_height,
+                first_layer_height=settings.layers.first_layer_height,
+                support_volume=False,
+            ),
+        )
+        for body in objects
+    }
+
+    assert worker._accepted_targets(results) == {"adhesion.kind": ("Turm",)}
+
+
+def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B6: Im Feld stand „Brim“ fett, als gälte er der Platte. Daneben steht jetzt,
+    dass nur der Turm ihn bekommt und die übrigen Teile die eigene Wahl drucken;
+    *Zurücksetzen* führt zu dieser Wahl zurück (B2)."""
+    chosen = print_settings.with_choice(dialog.settings, "adhesion.kind", "none")
+    dialog.settings = print_settings.with_accepted(chosen, "adhesion.kind", "brim")
+    monkeypatch.setattr(dialog, "_plate_bodies", lambda: list(_tower_and_plate()))
+    dialog._accepted_parts = {"adhesion.kind": ("Turm",)}
+
+    dialog._mark_origins()
+
+    note = dialog._part_notes["adhesion.kind"]
+    assert not note.isHidden()
+    assert "Turm" in note.text() and "Ihre Einstellung" in note.text(), note.text()
+    assert "Ihre Einstellung" in dialog._resets["adhesion.kind"].toolTip()
+
+    dialog._reset_field("adhesion.kind")
+
+    assert dialog.settings.adhesion.kind == "none"
+    assert "adhesion.kind" in dialog.settings.chosen
+    assert dialog._part_notes["adhesion.kind"].isHidden()
+
+
+def test_a_suggestion_no_part_asks_for_says_it_applies_to_all(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dialog.settings = print_settings.with_accepted(dialog.settings, "adhesion.kind", "brim")
+    monkeypatch.setattr(dialog, "_plate_bodies", lambda: list(_tower_and_plate()))
+    dialog._accepted_parts = {"adhesion.kind": ()}
+
+    dialog._mark_origins()
+
+    note = dialog._part_notes["adhesion.kind"]
+    assert not note.isHidden()
+    assert note.text() == str(tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich."))

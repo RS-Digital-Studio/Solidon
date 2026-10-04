@@ -1550,6 +1550,19 @@ class PrintSettings:
     übernommenen Wert von Hand ändert, macht ihn zu seiner Wahl.
     """
 
+    plate_choices: tuple[tuple[str, object], ...] = ()
+    """Die eigene Wahl der Platte unter einem übernommenen Vorschlag je Teil.
+
+    Wer im Dialog „Skirt“ wählt und danach den Brim für den schlanken Turm
+    übernimmt, meint: der Turm mit Brim, die übrigen Teile mit Skirt. Ein Pfad
+    hat aber nur einen Wert, und die Übernahme löschte die Wahl; die Platte
+    fiel auf das Herstellerprofil zurück (Durchsicht 0.5.1, B2; RM-289). Hier
+    bleibt der Wert der eigenen Wahl stehen, solange der Pfad übernommen ist
+    (:func:`app.core.knowledge.print_settings.with_accepted`); die Trennung je
+    Teil schreibt ihn der Platte (``handover.split_for_parts``). Paare aus
+    Punktpfad und Wert, nach Pfad geordnet.
+    """
+
     @property
     def explicit(self) -> frozenset[str]:
         """Was von der Grundlage abweichen soll: eigene Wahl und Vorschläge."""

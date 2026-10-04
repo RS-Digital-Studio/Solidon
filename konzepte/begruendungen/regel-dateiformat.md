@@ -368,6 +368,17 @@ und Schwelle kommen deshalb aus der Druckerdefinition (`fdmprinter`: Formel
 Konsole kein Cura-Materialprofil bekommt und `fdmprinter` jedem Material
 100 % gibt.
 
+**Die eigene Wahl unter einem Vorschlag je Teil (RM-289, B2, 04.10.2026).**
+Ein Pfad hat einen Wert. Wer „Keine Haftung“ wählte und danach den Brim für
+einen schlanken Turm übernahm, verlor die Wahl, und die Platte druckte den
+Skirt der Grundlage. `PrintSettings.plate_choices` hält den Wert der eigenen
+Wahl, solange der Pfad übernommen ist; `split_for_parts` gibt ihn der Platte
+(`print_settings.for_the_plate`), *Zurücksetzen* kehrt zu ihm zurück. Ein
+älteres Programm übergeht den Schlüssel und druckt die Platte wie bisher,
+deshalb kein Formatsprung. Beispiel einer Standardplatte ohne Namen: Elegoos
+`default_bed_type = 4` ist die texturierte PEI. Der Messstand zur Abnahme des
+Konfigurationsblocks steht in `ROADMAP.md`.
+
 ## CuraEngine rechnet keine Formeln
 
 Was ein geschriebener Wert nicht erreicht, und die Messung:
