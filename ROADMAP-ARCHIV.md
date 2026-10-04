@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-04 | [RM-287: Alte Teilungsläufe zählen durch, und gelöschte Schnitte zählen nicht mehr mit (04.10.2026)](#rm-287-alte-teilungsläufe-zählen-durch-und-gelöschte-schnitte-zählen-nicht-mehr-mit-04102026) |
 | 2026-10-03 | [RM-175: Der Bauplan nennt alle 18 Bedingungsarten und die Zweiklick-Werkzeuge (03.10.2026)](#rm-175-der-bauplan-nennt-alle-18-bedingungsarten-und-die-zweiklick-werkzeuge-03102026) |
 | 2026-10-03 | [RM-278: Ein Zug in der Öffnung einer Senkbohrung lässt den Körper stehen und nennt den nächsten Schritt (03.10.2026)](#rm-278-ein-zug-in-der-öffnung-einer-senkbohrung-lässt-den-körper-stehen-und-nennt-den-nächsten-schritt-03102026) |
 | 2026-10-03 | [RM-291: Das Fadenkreuz der Stellenwahl zeichnet der Renderer (03.10.2026)](#rm-291-das-fadenkreuz-der-stellenwahl-zeichnet-der-renderer-03102026) |
@@ -33253,7 +33254,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   `test_autosplit.py::test_auto_split_numbers_three_or_more_pieces_and_names_what_each_carries`,
   `::test_a_run_with_a_tilted_seam_numbers_its_pieces_too` (ohne den Fix rot).
   `49ced8d81`, `5d61f668a`; auf main mit `5a8475c9f` und `f74ce7f81`. Reste:
-  [RM-287](ROADMAP.md#rm-287).
+  [RM-287](#rm-287).
 
 <a id="rm-274"></a>
 
@@ -39759,3 +39760,46 @@ mit Lebenslauf
 (`F:\solidon-review-reports\codex-2026-10-03\geometrie\erkennung\bericht.md`).
 Changelog: **nein** — die Fortführung kam mit `c2ed098ec` (02.10.2026) und
 liegt in keinem Tag.
+
+## RM-287: Alte Teilungsläufe zählen durch, und gelöschte Schnitte zählen nicht mehr mit (04.10.2026)
+
+<a id="rm-287-alte-teilungsläufe-zählen-durch-und-gelöschte-schnitte-zählen-nicht-mehr-mit-04102026"></a>
+<a id="rm-287"></a>
+
+**RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte.** Aus dem Release 0.5.1 (Paket texte, Code-Review T-2;
+  Abschluss von [RM-229](ROADMAP-ARCHIV.md#rm-229)). Seit 0.5.1 zählt *Automatisch teilen*
+  ab drei Stücken durch. Zwei Ränder: (a) Läufe aus älteren Projekten tragen `piece_count`,
+  `number_a` und `number_b` nicht und behalten den Buchstabenpfad mit richtigem Zusatz; aus
+  einem einzelnen Schritt lässt sich der Lauf nicht ablesen, eine Nummerierung bräuchte
+  eine Migration (`format_version`) — Rückfrage. (b) Wird ein Schnitt des Laufs gelöscht
+  oder ausgeschaltet, bleibt die gespeicherte Zählung stehen: Leiste 600 mm, drei Stücke,
+  letzter Schnitt gelöscht → „Leiste 1 von 3 · Stifte“ neben „Leiste · Löcher“
+  (`prepare_ops.stem_of`, Beleg `konzepte/nachweise-release-0.5.1/laeufe/rev-code-t11.txt`). Weg für
+  (b): die Zählung beim Löschen und Ausschalten nachführen oder bei Nummer 0 ohne weiteren
+  Schnitt auf A/B zurückfallen. Abnahme: nach dem Löschen eines Schnitts stimmen Nummern
+  und Zahl der Stücke; zu (a) eine Entscheidung.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die Migration 43→44 belegt
+  zusammenhängende ursprüngliche Transaktionen aus `split_pinned` und `split_line` mit Stücknummern,
+  auch in gespeicherten Revisionsseiten; übersetzte Titel werden nicht geraten, unabhängige Schnitte
+  bleiben unabhängig. Die Auswertung zählt bei Löschen, Ausschalten und Klonen nur aktive Stücke.
+  Altdatei `tests/data/projects/auto_split_unnumbered_v42.p3d` (Leiste 600 mm, zwei Schnitte,
+  letzter gelöscht): Laden A/B, Undo 1/2/3 von 3, Redo A/B; beide Güten, Cache kalt und warm,
+  Volumensumme 360 000 mm³, Speichern und Laden. Formatkette im Hauptbaum 306 Fälle grün. Claude hat
+  den Schritt von 42→43 auf 43→44 verschoben, weil main 42→43 für `centre_slender` belegt. Beleg:
+  `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM-287).
+
+**Abschluss:** (b) Die Auswertung zählt bei Löschen, Ausschalten und Klonen
+nur aktive Stücke. (a) Entscheidung vom 04.10.2026 als Produktabwägung der
+koordinierenden Sitzung, Robert kann vor dem Release widersprechen: Alte Läufe
+werden durchnummeriert, weil ein Kunde in alten und neuen Projekten dieselbe
+Zählung sehen soll; was sich aus den gespeicherten Schritten nicht belegen
+lässt, behält den Buchstabenpfad. Die Migration 43→44
+(`scene/migrations.py::_number_old_split_runs`) belegt zusammenhängende
+ursprüngliche Transaktionen aus `split_pinned` und `split_line` mit
+Stücknummern, auch in gespeicherten Revisionsseiten; übersetzte Titel werden
+nicht geraten, unabhängige Schnitte bleiben unabhängig. Nachweis an
+`tests/data/projects/auto_split_unnumbered_v42.p3d` und in der Formatkette
+(`tests/test_project.py`); der Integrationsstand `91a2514ac` besteht das
+Entwicklungstor mit 23 146 Fällen. Changelog: **ja** — die stehengebliebene
+Zählung lag in v0.5.1, die Altprojekte stammen aus Versionen davor.

@@ -20,7 +20,7 @@
 <meta property="og:title" content="Features: edit STL files, check printability — Solidon3D">
 <meta property="og:description" content="Solidon3D at a glance: edit STL and STEP, sketch, sculpt, build reliefs and lattices, check fits and prepare prints. With examples and images.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/en/catalog.png">
-<meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions">
+<meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut trap, thread, screw hole with countersink, dowel pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -284,14 +284,13 @@
       <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Building blocks</span>
-          <h3>Insert a nut pocket with editable dimensions</h3>
+          <h3>Insert a nut trap with editable dimensions</h3>
           <p>The face you click is the one that counts: a building block
-          lands where you pointed in the model — every operation on a face
-          used to cost two clicks. The catalogue on the right now also knows
-          wall mount, rib, tongue and groove, snap tab, snap fit and living
-          hinge.</p>
-          <p>Tested building blocks in six groups — counterbored screw hole,
-          nut pocket, heat-set insert, thread, alignment pin, hinge eye,
+          lands where you pointed in the model. The catalogue also holds the
+          wall mount, stiffening rib, T-slot tongue, latch, snap fit and
+          living hinge.</p>
+          <p>Tested building blocks in six groups — screw hole with countersink,
+          nut trap, heat-set insert, thread, dowel pin, hinge eye,
           living hinge, snap fit, magnet pocket, plus wall mount, pegboard
           hook, cable clip, corner gusset and foot. Their dimensions come
           from a standard-parts table, not from a feeling.</p>
@@ -375,7 +374,7 @@
           <span class="kicker">Inspection report</span>
           <h3>Find printing risks and address them before slicing</h3>
           <p>Every file you open gets a report: open shells, inverted
-          triangles, walls under two extrusion widths, missing units. Sorted
+          triangles, walls under two line widths, missing units. Sorted
           into errors, warnings and hints — and findings with a location show the affected place in the model.</p>
           <p class="note">Every finding carries something you can do about it.
           <b>An error never ends in “failed” here.</b></p>
@@ -395,7 +394,7 @@
           <h3>See what the printer is going to see</h3>
           <p>Solidon3D slices the model into layers and measures what follows
           from that: unsupported areas, floating islands, walls under two
-          extrusion widths, bridge spans and support volume. The orientation
+          line widths, bridge spans and support volume. The orientation
           search proposes the position that produces the least of it.</p>
           <p class="note">No slicer of its own — and no mixed numbers:
           <b>what came from the analysis and what came from G-code is always
@@ -403,7 +402,7 @@
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="A drawing: an analysis line travels from the build plate up through a part; three findings appear one after the other — a 90 degree overhang, a floating island and a wall under two extrusion widths.">
+               aria-label="A drawing: an analysis line travels from the build plate up through a part; three findings appear one after the other — a 90 degree overhang, a floating island and a wall under two line widths.">
             <text class="ink" x="24" y="30" font-weight="600">Layer analysis</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -428,7 +427,7 @@
             </g>
             <g class="anim fig-find-3">
               <path class="warn" d="M368 168 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="183" font-size="12">Wall &lt; 2 widths</text>
+              <text class="ink" x="386" y="183" font-size="12">Wall &lt; 2 lines</text>
             </g>
           </svg>
           <figcaption>Three findings the slicer only knows after slicing.</figcaption>

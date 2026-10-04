@@ -30,6 +30,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A «Lingueta para perfil de alumínio» serve no Motedis 20 × 20 tipo B ranhura 6 e 30 × 30 tipo B ranhura 8, com a cabeça à forma da ranhura. Os três tamanhos anteriores ficam como medidas antigas.
 - No relatório, «Reconstruir modelo» refaz uma peça importada a partir de formas base, furos e arredondamentos, compara-a com o original dentro do limite escolhido e aplica-a num só passo.
 - A «Abraçadeira com insertos» começa com o material do projeto nos dois campos de material. Até agora ambos ficavam vazios.
+- A pesquisa de peças encontra a «Lingueta para perfil de alumínio» também como porca em T, e a sua descrição diz em que se distingue de uma porca em T com rosca.
 
 ### Imprimir e entregar ao slicer
 
@@ -120,6 +121,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma direção que introduz à direita para um furo oblongo passa também para o cartão de cotas na vista, e «Aplicar» continua disponível. Até agora voltava ali a 0°.
 - O Solidon reconhece cones, arredondamentos e faces estreitas da mesma forma em mais modelos, quer o modelo esteja deslocado, rodado ou escalado.
 - O Solidon reconhece cada campo de nervuras, favo de mel ou saliências de um ficheiro importado como um só padrão, e «Detetar elementos neste local» junta as células de um campo.
+- As peças de uma divisão automática também são numeradas em projetos de versões anteriores, e um corte apagado ou desativado deixa de contar.
 
 ### Arredondar e chanfrar
 

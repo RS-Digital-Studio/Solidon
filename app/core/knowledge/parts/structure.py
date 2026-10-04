@@ -496,9 +496,11 @@ def _profile_tongue_feasible(raw: BaseParams) -> TranslatableText | None:
     features=["tongue"],
     feasible=_profile_tongue_feasible,
     doc=_(
-        "Ein T-förmiger Fuß, der von der Stirnseite in die Nut einer Aluschiene "
-        "geschoben wird und dort hält. Hals und Kopf kommen aus der "
-        "Normteiltabelle. Zum Drucken liegt die Feder am besten mit der "
+        "Ein T-förmiger Fuß, der von der Stirnseite in die T-Nut eines Aluprofils "
+        "geschoben wird und dort hält. Anders als ein Nutenstein hat er kein "
+        "Gewinde: Er gehört zum gedruckten Teil und hält es ohne Schraube in der "
+        "Nut. Hals und Kopf kommen aus der Normteiltabelle. Zum Drucken liegt die "
+        "Feder am besten mit der "
         "Nutrichtung flach — steht sie senkrecht, ist die Schulter unter dem "
         "Kopf ein Überhang."
     ),

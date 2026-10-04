@@ -17874,11 +17874,9 @@ class SplitBodiesParams(BaseParams):
         minimum=2,
         maximum=64,
         doc=_(
-            "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht "
-            "erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge "
-            "vergibt, bevor gerechnet wird. Wie viele Teile der Körper "
-            "tatsächlich hat, sagt der Prüfbericht — und diese Operation "
-            "nennt die Zahl, wenn sie nicht passt."
+            "In wie viele Objekte zerlegt wird. Wie viele Teile der Körper "
+            "tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, "
+            "nennt diese Operation die richtige."
         ),
     )
     keep_tiny: bool = param(

@@ -30,6 +30,7 @@ scrive in `website/version.json`.
 - La «Linguetta per profilato di alluminio» va su Motedis 20 × 20 tipo B cava 6 e 30 × 30 tipo B cava 8, con la testa sagomata sulla cava. Le tre misure precedenti restano come misure vecchie.
 - Nel rapporto, «Ricostruisci modello» ricrea un pezzo importato con forme di base, fori e raccordi, lo confronta con l'originale entro il limite scelto e lo applica in un solo passaggio.
 - Il «Morsetto con inserti» parte con il materiale del progetto in entrambi i campi del materiale. Finora erano vuoti.
+- La ricerca dei componenti trova la «Linguetta per profilato di alluminio» anche come dado a T, e la sua descrizione dice in cosa si distingue da un dado a T filettato.
 
 ### Stampare e passare allo slicer
 
@@ -120,6 +121,7 @@ scrive in `website/version.json`.
 - Una direzione che inserisci a destra per un'asola passa anche alla scheda delle quote nella vista, e «Applica» resta disponibile. Finora lì tornava a 0°.
 - Solidon riconosce coni, raccordi e facce strette allo stesso modo su più modelli, che il modello sia spostato, ruotato o scalato.
 - Solidon riconosce ogni campo di nervature, nido d'ape o bugne di un file importato come un solo motivo, e «Riconosci elementi qui» raggruppa le celle di un campo.
+- Anche nei progetti di versioni precedenti i pezzi di una divisione automatica vengono numerati, e un taglio eliminato o disattivato non conta più.
 
 ### Raccordi e smussi
 

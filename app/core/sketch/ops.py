@@ -582,9 +582,8 @@ class SketchExtrudeParams(RaisedOutlineParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Zieht eine Grundform senkrecht hoch, bis ein Körper daraus wird. Der Umriss kommt "
-        "aus einer gelösten Skizze und geht als exakte Kurve in den Kern "
-        "— ein Kreis ist wirklich rund."
+        "Zieht eine Grundform oder eine Zeichnung senkrecht zu einem Körper hoch. "
+        "Rundungen bleiben echte Kurven — ein Kreis ist wirklich rund."
     ),
 )
 def sketch_extrude(ctx: OpContext) -> OpResult:

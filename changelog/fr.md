@@ -31,6 +31,7 @@ dans `website/version.json`.
 - La « Languette pour profilé aluminium » va aux Motedis 20 × 20 type B rainure 6 et 30 × 30 type B rainure 8, tête à la forme de la rainure. Les trois tailles précédentes restent comme anciennes cotes.
 - Dans le rapport, « Reconstruire le modèle » refait une pièce importée à partir de formes de base, perçages et congés, la compare à l'original dans la limite choisie et l'applique en une étape.
 - Le « Collier avec garnitures » démarre avec le matériau du projet dans les deux champs de matériau. Jusqu'ici, les deux étaient vides.
+- La recherche de pièces trouve la « Languette pour profilé aluminium » aussi sous écrou en T, et sa description dit en quoi elle diffère d'un écrou en T fileté.
 
 ### Imprimer et transmettre au slicer
 
@@ -121,6 +122,7 @@ dans `website/version.json`.
 - Une direction saisie à droite pour un trou oblong passe aussi dans la carte des cotes de la vue, et « Appliquer » reste disponible. Jusqu'ici, elle y revenait à 0°.
 - Solidon reconnaît cônes, congés et faces étroites de la même façon sur davantage de modèles, que le modèle soit déplacé, pivoté ou mis à l'échelle.
 - Solidon reconnaît chaque champ de nervures, de nid d'abeille ou de picots d'un fichier importé comme un seul motif, et « Détecter les éléments ici » regroupe les cellules d'un champ.
+- Les morceaux d'une division automatique sont aussi numérotés dans les projets d'anciennes versions, et une coupe supprimée ou désactivée ne compte plus.
 
 ### Congés et chanfreins
 

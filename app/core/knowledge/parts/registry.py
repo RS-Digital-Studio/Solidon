@@ -603,12 +603,19 @@ class PartRegistry:
         sonst jeden Baustein, dessen Beschreibung „mit" enthält — und eine
         Bibliothek, die auf alles antwortet, ist so nutzlos wie eine, die auf
         nichts antwortet.
+
+        **Ein Wort mit Bindestrich zählt auch als Ganzes.** „T-Nut“ und „T-nut“
+        zerfielen sonst in zwei Wörter unter der Mindestlänge, und das Wort,
+        unter dem Kunden die Nut eines Aluprofils suchen, fand nichts
+        (RM-017). Seine Teile zählen weiter einzeln, „Alu-Profil“ findet über
+        „profil“.
         """
-        words = [
-            word
-            for word in re.split(r"\W+", text.casefold())
-            if len(word) >= MIN_SEARCH_WORD and word not in STOP_WORDS
-        ]
+        words = []
+        for token in re.split(r"[^\w-]+", text.casefold()):
+            whole = token.strip("-")
+            for word in (whole, *whole.split("-")) if "-" in whole else (whole,):
+                if len(word) >= MIN_SEARCH_WORD and word not in STOP_WORDS:
+                    words.append(word)
         if not words:
             return ()
         found = []

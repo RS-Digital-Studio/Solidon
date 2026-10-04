@@ -468,7 +468,7 @@ class ProfileClampLinerParams(BaseParams):
         maximum=4.0,
         unit="mm",
         placement="advanced",
-        doc=_("Axiale Stärke des vorderen Anschlagbundes."),
+        doc=_("Dicke des vorderen Anschlagbunds, entlang des Profils gemessen."),
     )
     rear_relief: float = param(
         title=_("Freiraum hinten"),
@@ -510,8 +510,8 @@ class ProfileClampLinerParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_(
-            "Gesamte Verengung für den beabsichtigten elastischen Eingriff; "
-            "null verwendet das Materialprofil."
+            "Um wie viel die Einlage insgesamt enger ist als das Profil, damit sie "
+            "es federnd klemmt; null nimmt den Wert aus dem Materialprofil."
         ),
     )
 
@@ -538,8 +538,8 @@ def _liner_reason(raw: BaseParams) -> TranslatableText | None:
     grip_from_profile=True,
     wall=WallRequirement.from_parameter("liner_thickness"),
     doc=_(
-        "Eine separat wechselbare Profil-Einlagenhälfte mit vorderem Anschlagbund "
-        "und freiem axialem Einschub."
+        "Eine einzeln wechselbare Einlagenhälfte mit Anschlagbund vorn, die sich "
+        "längs in die Schale schieben lässt."
     ),
 )
 def profile_clamp_liner(raw: BaseParams) -> PartResult:

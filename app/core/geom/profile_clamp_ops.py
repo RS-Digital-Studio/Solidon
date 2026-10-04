@@ -153,7 +153,7 @@ class ProfileClampSetParams(CounterProfileParams):
         maximum=4.0,
         unit="mm",
         placement="advanced",
-        doc=_("Axiale Stärke des vorderen Anschlagbundes."),
+        doc=_("Dicke des vorderen Anschlagbunds, entlang des Profils gemessen."),
     )
     rear_relief: float = param(
         title=_("Freiraum hinten"),

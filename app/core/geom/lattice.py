@@ -321,7 +321,7 @@ def check_printable(wall: float, cell: float, profile: Profile) -> None:
             # Der Mindestwert steht in den Einzelheiten; „steht in
             # „minimum_mm"" verwies auf einen Schlüssel, den dort niemand liest
             # (Durchsicht 0.5.0, ``test_customer_texts_quote_no_internal_keys``).
-            _("Diese Stege sind dünner als zwei Extrusionsbahnen und werden nicht gedruckt."),
+            _("Diese Stege sind dünner als zwei Bahnen und werden nicht gedruckt."),
             value=wall,
             constraint="minimum_wall",
             values={"minimum_mm": round(minimum, 2)},
@@ -368,9 +368,8 @@ class LatticeParams(BaseParams):
         unit="mm",
         minimum=0.1,
         doc=_(
-            "Wie dick die Stege werden. Unter zwei Extrusionsbahnen druckt sie "
-            "die Maschine nicht — dann sagt die Operation es, statt es zu "
-            "versuchen."
+            "Wie dick die Stege werden. Unter zwei Bahnen druckt sie der Drucker "
+            "nicht — dann sagt die Operation es, statt es zu versuchen."
         ),
     )
 

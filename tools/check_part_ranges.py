@@ -44,9 +44,22 @@ from typing import Any, Final
 ROOT: Final = Path(__file__).resolve().parent.parent
 
 
+def _this_tree() -> None:
+    """``app`` aus dem Baum dieses Werkzeugs, nicht aus der Editierinstallation.
+
+    Die ``.venv`` installiert das Projekt editierbar auf den Hauptklon. Ohne
+    diesen Pfad holte ``_isolate`` das Paket ``app`` von dort, bevor
+    ``_registry`` den eigenen Baum vorn eintrug: In einem Worktree prüfte und
+    schrieb der Lauf den Nachweis des Hauptklons.
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+
+
 @contextmanager
 def _isolate(parent: Path | None = None) -> Iterator[Path]:
     """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38)."""
+    _this_tree()
     from app.core.paths import PROFILE_VARIABLES
 
     before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}

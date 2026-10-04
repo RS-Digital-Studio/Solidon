@@ -251,7 +251,7 @@ class MapTooLarge(UserError):
         der Dreieckszahl erkennbar sind.
         """
         super().__init__(
-            detail=_("Die Karte läuft jedes Dreieck ab, und ihr Budget ist begrenzt."),
+            detail=_("Die Karte prüft jedes Dreieck einzeln; bei so vielen bräuchte sie zu lange."),
             values={"triangles": triangles, "limit": limit},
         )
         self.triangles = triangles
