@@ -1332,7 +1332,8 @@ das Feld *Richtung* zeigte für dasselbe Langloch, in der Welt 90°, -168,5°,
 geänderten Feinheit um rund 100°, ragte über die Kante, zerteilte das Teil und
 verlor das Merkmal; ein getippter Winkel 90 tat dasselbe schon beim ersten
 Mal. Am Besenhalter lagen sechs Bohrungen 3e-6° neben Z, und Winkel 0 zeigte
-auf 53,1° bis 126,9°. `prepare.slot_frame` gibt innerhalb `SLOT_ACROSS_LIMIT`
+auf 53,1° bis 126,9°. `prepare.slot_frame` gibt innerhalb `SLOT_FRAME_CONE`
+(bis RM-325 hieß der Kegel wie die Drehschwelle `SLOT_ACROSS_LIMIT`)
 den Rahmen der Hauptachse, gegen die gemessene Achse gestellt; eine genau
 liegende oder wirklich geneigte Achse behält `frame_of`. Danach, am selben
 Lauf: Feld 90,000°, 90,000°, 90,000° und 89,982° (Spanne 0,018°), der Zug

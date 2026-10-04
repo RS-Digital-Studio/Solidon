@@ -4258,7 +4258,7 @@ def _along_world_y(axis: tuple[float, float, float]) -> Feature:
 #: Wie weit eine gemessene Achse in den Fällen unten neben +Z steht, in Grad:
 #: das Rauschen eines float32-Netzes (Besenhalter, 4e-8 rad), die vernetzte
 #: Teppichecke bei Feinheit 0,01 und 0,05 (0,023° und 0,071°), und knapp
-#: innerhalb von ``SLOT_ACROSS_LIMIT``.
+#: innerhalb von ``SLOT_FRAME_CONE``.
 MEASURED_NOISE = (math.degrees(4e-8), 0.023, 0.071, 0.45)
 
 
@@ -4273,7 +4273,7 @@ def test_a_slot_angle_counts_against_the_main_axis_despite_measurement_noise(
     Langloch (in der Welt 90°) zeigte bei Feinheit 0,01 −168,5°, bei 0,02
     132,0°, bei 0,05 91,8°; exakt 90°. ``frame_of`` nimmt Z × Achse als erste
     Rahmenachse bis 1e-9 neben Z, und deren Richtung bestimmte das Rauschen.
-    Innerhalb von ``SLOT_ACROSS_LIMIT`` neben einer Hauptachse zählt der Winkel
+    Innerhalb von ``SLOT_FRAME_CONE`` neben einer Hauptachse zählt der Winkel
     jetzt gegen die Hauptachse (Entscheidung 30.09.2026).
     """
     from app.core.geom.prepare_ops import slot_angle_of
@@ -4340,7 +4340,7 @@ def test_the_slot_frame_keeps_the_frame_of_exact_and_really_tilted_axes(
 
     Gespeicherte Winkel an exakten Körpern und an gekippten Bohrungen (17,5°)
     bedeuten damit dasselbe wie vorher — geändert hat sich nur, was im Kegel
-    von ``SLOT_ACROSS_LIMIT`` um eine Hauptachse liegt, ohne auf ihr zu liegen.
+    von ``SLOT_FRAME_CONE`` um eine Hauptachse liegt, ohne auf ihr zu liegen.
     """
     from app.core.geom.prepare import slot_frame
     from app.core.sketch.planes import frame_of
@@ -4498,31 +4498,32 @@ def test_bores_with_their_own_noise_all_pull_to_the_same_world_direction(
         assert min(angle, 180.0 - angle) == pytest.approx(0.0, abs=0.5), angles
 
 
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
-def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, side: str) -> None:
-    """Das Werkzeug aus den Kennzahlen drehte das Profil mit ``rotation_between``
-    statt im Rahmen von ``slot_frame``: An einer Seitenwand mit Normale ±X lag
-    es um 90° verdreht, *Zum Langloch ziehen* schloss den alten Umriss nicht,
-    und es blieb ``slot_hole.feature_lost`` (RM-325). +Y war schon richtig."""
-    exact = kernel == "brep"
-    sign = -1.0 if side.startswith("-") else 1.0
-    along_x = side.endswith("x")
-    if exact:
-        exact_kernel()
-        from app.core.brep import edit
+def _recognised_in(kernel: str, mesh: object) -> dict[str, Feature]:
+    """Frisch erkannt, wie die Auswertung es je Kern tut."""
+    if kernel == "brep":
         from app.core.brep.features import features_of
 
-        body = edit.box(60.0, 100.0, 60.0)
+        return features_of(mesh)
+    return detect(as_mesh_data(mesh))
+
+
+def _side_wall_slot(profile: Profile, kernel: str, side: str) -> tuple[SceneObject, Feature, float]:
+    """Klotz 60 x 100 x 60, durch die Wand ``side`` ein Langloch Ø 6 auf 20 mm bei 30°.
+
+    Zurück kommen der Körper mit seinen Merkmalen, das Langloch und die Wanddicke
+    entlang der Bohrachse.
+    """
+    sign = -1.0 if side.startswith("-") else 1.0
+    along_x = side.endswith("x")
+    if kernel == "brep":
+        exact_kernel()
+        from app.core.brep import edit
+
+        body: object = edit.box(60.0, 100.0, 60.0)
     else:
         body = MeshData.of(trimesh.creation.box(extents=(60.0, 100.0, 60.0)))
-        body.raw.apply_translation((0.0, 0.0, 30.0))
-    wall = 60.0 if along_x else 100.0
-
-    def recognised(result: SceneObject) -> dict[str, Feature]:
-        return features_of(result.mesh) if exact else detect(as_mesh_data(result.mesh))
-
-    entry = SceneObject(id="obj_1", name="Klotz", mesh=body, kind=kernel)
+        body.raw.apply_translation((0.0, 0.0, 30.0))  # type: ignore[attr-defined]
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=body, kind=kernel)  # type: ignore[arg-type]
     drilled = run_op(
         "drill_hole",
         entry,
@@ -4541,8 +4542,82 @@ def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, s
         depth=0.0,
         compensate=False,
     )
-    drilled = dataclasses.replace(drilled, features=recognised(drilled))
+    drilled = dataclasses.replace(drilled, features=_recognised_in(kernel, drilled.mesh))
     before = next(feature for feature in drilled.features.values() if feature.kind == "slot")
+    return drilled, before, 60.0 if along_x else 100.0
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
+@pytest.mark.parametrize("way", ["pull", "rotate"])
+def test_a_slot_in_a_side_wall_can_be_turned(
+    profile: Profile, kernel: str, side: str, way: str
+) -> None:
+    """Drehen an einer Seitenwand ±X wie an +Y, an beiden Kernen (RM-325, RM-422).
+
+    Vor RM-325 lag das Werkzeug aus den Kennzahlen an einer Wand mit Normale ±X um
+    90° verdreht: *Zum Langloch ziehen* auf 0° ließ am Netz zwei Rundflächen und
+    vier Verrundungen statt eines Langlochs stehen, und *Merkmal drehen* um 45°
+    ergab dort −15° statt +75°. Gedreht wird hier beides: der Zug auf einen neuen
+    Winkel und das Drehen um die Wandachse. Das Langloch bleibt gleich groß, also
+    bleibt das Volumen; die neue Richtung kommt von außen — der Rahmen von
+    ``slot_frame`` bzw. die alte Richtung, rechtshändig um 45° gedreht.
+    """
+    from app.core.geom.prepare import slot_frame
+
+    exact = kernel == "brep"
+    drilled, before, wall = _side_wall_slot(profile, kernel, side)
+    axis = tuple(float(value) for value in before.params["axis"])
+    if way == "pull":
+        result, findings = run_op_with_findings(
+            "slot_hole",
+            drilled,
+            profile,
+            at_feature=before.id,
+            slot_length=20.0,
+            slot_angle=0.0,
+            diameter=6.0,
+            compensate=False,
+        )
+        wanted = np.asarray(slot_frame(axis, (0.0, 0.0, 0.0)).x_axis, dtype=float)
+    else:
+        turn_axis = side[1]
+        result, findings = run_op_with_findings(
+            "rotate_feature", drilled, profile, at_feature=before.id, axis=turn_axis, angle=45.0
+        )
+        old = np.asarray(before.params["direction"], dtype=float)
+        unit = np.zeros(3)
+        unit["xyz".index(turn_axis)] = 1.0
+        # Rodrigues mit 45 Grad: v cos + (k x v) sin + k (k . v)(1 - cos).
+        half = math.sqrt(0.5)
+        wanted = old * half + np.cross(unit, old) * half + unit * float(unit @ old) * (1 - half)
+
+    solid = 60.0 * 100.0 * 60.0
+    # Am Netz sind die Bögen Sehnenzüge; die Abweichung wächst mit der Wandlänge.
+    assert result.mesh.volume == pytest.approx(
+        solid - (math.pi * 9.0 + 6.0 * 14.0) * wall, abs=1e-6 if exact else 0.05 * wall
+    )
+    slots = [
+        feature
+        for feature in _recognised_in(kernel, result.mesh).values()
+        if feature.kind == "slot"
+    ]
+    assert len(slots) == 1, "genau ein Langloch, keine Reste des alten Umrisses"
+    assert slots[0].params["length"] == pytest.approx(20.0, abs=1e-6 if exact else 0.01)
+    direction = np.asarray(slots[0].params["direction"], dtype=float)
+    assert abs(float(direction @ wanted)) == pytest.approx(1.0, abs=1e-4), (direction, wanted)
+    assert not any(finding.code.endswith("feature_lost") for finding in findings)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
+def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, side: str) -> None:
+    """Das Werkzeug aus den Kennzahlen drehte das Profil mit ``rotation_between``
+    statt im Rahmen von ``slot_frame``: An einer Seitenwand mit Normale ±X lag
+    es um 90° verdreht, *Zum Langloch ziehen* schloss den alten Umriss nicht,
+    und es blieb ``slot_hole.feature_lost`` (RM-325). +Y war schon richtig."""
+    exact = kernel == "brep"
+    drilled, before, wall = _side_wall_slot(profile, kernel, side)
 
     result, findings = run_op_with_findings(
         "slot_hole",
@@ -4560,7 +4635,11 @@ def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, s
     assert result.mesh.volume == pytest.approx(
         solid - (math.pi * 9.0 + 6.0 * 8.0) * wall, abs=1e-6 if exact else 0.05 * wall
     )
-    slots = [feature for feature in recognised(result).values() if feature.kind == "slot"]
+    slots = [
+        feature
+        for feature in _recognised_in(kernel, result.mesh).values()
+        if feature.kind == "slot"
+    ]
     assert len(slots) == 1, "genau ein Langloch, keine Reste des alten Umrisses"
     assert slots[0].params["length"] == pytest.approx(14.0, abs=1e-6 if exact else 0.01)
     assert not any(finding.code == "slot_hole.feature_lost" for finding in findings)

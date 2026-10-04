@@ -943,9 +943,10 @@ def _feature_solid(
         # **Ein Langloch ist eine Bohrung mit zwei Bogenmittelpunkten.** Der
         # Umriss kommt aus derselben Funktion, die auch schneidet
         # (`prepare.slot_profile`), und wird aufgezogen statt rotiert — ein
-        # Zylinder träfe seine geraden Flanken nicht. Aufgezogen wird in der
-        # **lokalen** Ebene; die Drehung in die Achse macht der gemeinsame
-        # Schluss unten, wie bei Zylinder und Kegel auch.
+        # Zylinder träfe seine geraden Flanken nicht. Mit Weg wird er gleich im
+        # Rahmen von ``slot_frame`` aufgezogen und kehrt dort zurück; nur ohne
+        # Weg — dann ist er rund — dreht ihn der gemeinsame Schluss unten in die
+        # Achse, wie Zylinder und Kegel.
         from app.core.geom.prepare import slot_frame, slot_profile
         from app.core.geom.sketch_solid import extrude_profile
 
