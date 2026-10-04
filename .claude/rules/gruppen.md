@@ -24,9 +24,15 @@ Nut, Kanal) und `geom/closure_ops.py` (Spiel und Drehweg eines Verschlusses).
   Verdacht ist, heißt `suggested` und sagt es im Merkmalfenster.
 - **Ob eine Gruppe sich als Ganzes ändern lässt, sagt ein Satz für beide**:
   `reason_against_group` sperrt die Zeile im Merkmalfenster und die
-  Operation mit demselben Wortlaut, beim Verschluss je Feld
-  `reason_against_play` und `reason_against_turn`, für Menü und Zeile
-  zusammen `reason_against_closure_change`.
+  Operation mit demselben Wortlaut — mit der Merkmalsliste, denn ob ein Kanal
+  genau zwei ebene Wände hat (`trough_walls`), steht in den Merkmalen —, beim
+  Verschluss je Feld `reason_against_play` und `reason_against_turn`, für
+  Menü und Zeile zusammen `reason_against_closure_change`.
+- **Eine Stellung ist ein Winkel mit verschieden gerichteten Flächen**: Ein
+  Stück aus Flächen zählt nur, wenn der Kosinus zweier Normalen höchstens
+  `STATION_FACES_APART` ist — zwei Facetten derselben Wand sind keine
+  Nocke —, und runde Mulden übereinander am selben Winkel sind eine Stellung
+  (`_notch_reach`). Beides kam als falscher Verschluss aus dem Korpus.
 - **Gemerkt wird je Netz und Merkmalsliste** (`features.remembered`, geteilt):
   Baum, Merkmalfenster und Operation fragen dieselbe Antwort; gerechnet wird
   im Auswertungsarbeiter (`session._warm_metrics`).

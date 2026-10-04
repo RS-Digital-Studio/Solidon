@@ -896,7 +896,7 @@ def chamber_action(
     group = group_of(feature.id, functional_groups(features, mesh, cancelled=cancelled))
     if group is None or group.kind not in ("chamber", "channel") or group.variant == "passage":
         return None
-    refusal = reason_against_group(group)
+    refusal = reason_against_group(group, features)
     if refusal is not None:
         return FeatureAction(title=spec.title, op=None, reason=refusal)
     wanted = _CHAMBER_FIELDS.get(group.variant, ("width", "length", "depth"))

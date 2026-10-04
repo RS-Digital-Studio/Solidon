@@ -122,6 +122,31 @@ def test_a_u_profile_open_at_both_ends_is_a_channel() -> None:
     assert channel.measure("length") == pytest.approx(100.0, abs=1e-6)
 
 
+def test_a_trough_changes_only_over_two_flat_walls_and_says_so_beforehand() -> None:
+    """Ein offener Kanal ändert sich über genau zwei ebene Wände — und das Fenster weiß es vorher.
+
+    Am 1x1-tray aus dem Audit hat der Kanal eine dritte, kleine Wand am Ende;
+    das Merkmalfenster bot *Kammer ändern* an, und erst die Operation sagte ab
+    (``chamber_ops._trough``). Dieselbe Frage steht jetzt in
+    ``reason_against_group``: an der U-Rinne frei, mit einer dritten Wand oder
+    einer gekrümmten Wand die Absage der Operation.
+    """
+    from app.core.perceive.groups import TROUGH_WALLS, reason_against_group
+
+    trough = _minus(
+        _box((100.0, 30.0, 20.0), (0.0, 0.0, 10.0)), _box((120.0, 26.0, 20.0), (0.0, 0.0, 12.0))
+    )
+    features = detect(trough)
+    channel = _only(_groups(trough), "channel")
+    assert reason_against_group(channel, features) is None
+    third = next(name for name in features if name not in channel.members)
+    stepped = dataclasses.replace(channel, roles=(*channel.roles, (third, "wall")))
+    assert reason_against_group(stepped, features) == str(TROUGH_WALLS)
+    wall = next(member for member, role in channel.roles if role == "wall")
+    curved = {**features, wall: dataclasses.replace(features[wall], kind="curved_face")}
+    assert reason_against_group(channel, curved) == str(TROUGH_WALLS)
+
+
 def test_a_ring_groove_is_a_groove_with_its_width() -> None:
     """Eine umlaufende Nut, Ring 20 bis 24 mm, 3 mm tief: Breite 2A/U = 4."""
     plate = _box((60.0, 60.0, 10.0), (0.0, 0.0, 5.0))
@@ -382,6 +407,91 @@ def test_struts_far_along_the_axis_of_a_bore_are_no_closure() -> None:
     assert [(group.variant, group.count) for group in at_the_bore] == [("detent", 4)]
     below = [g for g in functional_groups(struts(18.0), None) if g.kind == "closure"]
     assert below == []
+
+
+def test_two_facets_of_one_wall_are_no_station() -> None:
+    """Eine Stellung trägt verschieden gerichtete Flächen, nicht zwei Facetten einer Wand.
+
+    Am Mini-Golf-Schläger aus dem Korpus lagen an vier Stellen je zwei
+    benachbarte Streifen derselben 200 mm langen Wand, 3,2 Grad gegeneinander
+    geneigt (Kosinus 0,9985), auf r ≈ 11,1 um den Zapfen Ø 25 — und galten
+    als Rastung. Gebaut aus Merkmalen, damit sich nur die Richtung der
+    zweiten Fläche ändert: um 90 Grad weiter gedreht ist sie eine Flanke, und
+    dieselben vier Stellungen sind eine Rastung.
+    """
+    from app.core.types import Feature
+
+    pin = Feature(
+        id="pin_1",
+        kind="pin",
+        provenance="detected",
+        params={
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (0.0, 0.0, 10.0),
+            "diameter": 25.0,
+            "depth": 20.0,
+        },
+    )
+
+    def stations(turn: float) -> dict[str, Feature]:
+        found: dict[str, Feature] = {"pin_1": pin}
+        for index, angle in enumerate((0.0, 90.0, 180.0, 270.0)):
+            # Je Stellung zwei Flächen 3,2 Grad auseinander, ihre Normalen
+            # 120 Grad gegen die eigene Lage gedreht wie am Schläger.
+            for second, (offset, facing) in enumerate(((0.0, 120.0), (3.2, 120.0 + turn))):
+                where = math.radians(angle + offset)
+                towards = math.radians(angle + offset + facing)
+                name = f"face_{2 * index + second + 1}"
+                found[name] = Feature(
+                    id=name,
+                    kind="face",
+                    provenance="detected",
+                    params={
+                        "centre": (11.14 * math.cos(where), 11.14 * math.sin(where), 10.0),
+                        "normal": (math.cos(towards), math.sin(towards), 0.0),
+                        "area": 40.0,
+                    },
+                )
+        return found
+
+    facets = [g for g in functional_groups(stations(0.0), None) if g.kind == "closure"]
+    assert facets == []
+    flanks = [g for g in functional_groups(stations(90.0), None) if g.kind == "closure"]
+    assert [(group.variant, group.count) for group in flanks] == [("detent", 4)]
+
+
+def _tube_with_round_notches(spots: tuple[tuple[float, float, float], ...]) -> MeshData:
+    """Ein Rohr r 22 / 16,4, 18 hoch, mit Mulden R 1,1 im Innenmantel.
+
+    ``spots`` nennt je Mulde Winkel, Höhe ihrer Mitte und Länge entlang der Achse.
+    """
+    tube = _minus(
+        _cylinder(22.0, 18.0, (0.0, 0.0, 9.0), sections=192),
+        _cylinder(16.4, 20.0, (0.0, 0.0, 9.0), sections=192),
+    )
+    notches = [
+        _cylinder(
+            1.1,
+            length,
+            (16.4 * math.cos(math.radians(angle)), 16.4 * math.sin(math.radians(angle)), height),
+        )
+        for angle, height, length in spots
+    ]
+    return _minus(tube, *notches)
+
+
+def test_round_notches_above_each_other_are_one_position_and_no_detent() -> None:
+    """Eine Stellung ist ein Winkel: Mulden übereinander am selben Winkel zählen einmal.
+
+    Am Besenhalter aus dem Korpus standen drei Rundungen bei 90 Grad
+    übereinander und galten als Rastung mit drei Stellungen. Dieselben drei
+    Mulden auf drei Winkel verteilt bleiben eine (Gegenprobe).
+    """
+    stacked = _tube_with_round_notches(((90.0, 3.0, 4.0), (90.0, 9.0, 4.0), (90.0, 15.0, 4.0)))
+    assert all(group.kind != "closure" for group in _groups(stacked))
+    spread = _tube_with_round_notches(((0.0, 9.0, 18.0), (120.0, 9.0, 18.0), (240.0, 9.0, 18.0)))
+    closure = _only(_groups(spread), "closure")
+    assert (closure.variant, closure.count) == ("detent", 3)
 
 
 def _disc_with_blocks(places: tuple[tuple[float, float], ...]) -> MeshData:

@@ -117,7 +117,7 @@ def resize_chamber(ctx: OpContext) -> OpResult:
     if region is None:
         raise not_a_chamber()
     group = region.group
-    refusal = reason_against_group(group)
+    refusal = reason_against_group(group, source.features)
     if refusal is not None:
         raise GeometryError(detail=refusal, suggestions=(CHANGE_SELECTION, CANCEL))
     changes = _changes(group, params)
@@ -480,18 +480,12 @@ def _trough(
 ) -> tuple[MeshData, SolverInfo, list[Finding]]:
     """Ein offener Kanal mit genau zwei ebenen Wänden: Wände und Boden versetzen."""
     from app.core.geom.faces import push_face
+    from app.core.perceive.groups import TROUGH_WALLS, trough_walls
 
     features = getattr(source, "features", {})
-    walls = [member for member, role in group.roles if role == "wall"]
-    if len(walls) != 2 or any(features[wall].kind != "face" for wall in walls):
-        raise GeometryError(
-            detail=_(
-                "Dieser Kanal hat mehr als zwei Wände (ein Steckende, eine Stufe) — als "
-                "Ganzes lässt er sich nicht strecken. Ändern Sie eine Wand über „Fläche "
-                "versetzen“."
-            ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+    walls = trough_walls(group, features)
+    if not walls:
+        raise GeometryError(detail=TROUGH_WALLS, suggestions=(CHANGE_SELECTION, CANCEL))
     if abs(changes["length"]) > EPS_GEOM:
         raise GeometryError(
             detail=_(

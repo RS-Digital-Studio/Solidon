@@ -5872,7 +5872,7 @@ class MainWindow(QMainWindow):
                 known[key] = (
                     str(NOT_A_CHAMBER)
                     if group is None or group.kind not in ("chamber", "channel")
-                    else reason_against_group(group)
+                    else reason_against_group(group, entry.features)
                 )
         return known[key]
 

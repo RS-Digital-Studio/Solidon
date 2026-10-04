@@ -32,7 +32,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from itertools import pairwise
+from itertools import combinations, pairwise
 from typing import Final, Literal, get_args
 
 import numpy as np
@@ -145,6 +145,13 @@ STATION_AREA_SPREAD: Final[float] = 0.25
 #: Rastungen haben zwei bis sechs Stellungen; mehr gleiche Stücke um eine Achse
 #: sind ein Gitter, ein Rändel oder ein Lochkreis (51 Schlitze am Filterkäfig).
 MOST_CLOSURE_POSITIONS: Final[int] = 6
+
+#: Ab wann zwei Flächen einer Stellung verschieden gerichtet sind (Kosinus
+#: ihrer Normalen in Zylinderkoordinaten): Eine Nocke hat Oberseite und Flanken,
+#: eine Mulde Grund und Seiten. Zwei fast gleich gerichtete Flächen
+#: nebeneinander sind zwei Facetten derselben Wand — am Mini-Golf-Schläger aus
+#: dem Korpus vier solche Paare auf r 11,1, Kosinus 0,999, und keine Rastung.
+STATION_FACES_APART: Final[float] = 0.9
 
 #: Wie viel tiefer als weit eine Sackbohrung sein muss, um eine Steckaufnahme
 #: zu sein. Eine Magnettasche ist flacher als breit, ein Schraubenloch am
@@ -491,14 +498,21 @@ def chamber_region(
     return ChamberRegion(group, region.triangles, triangles, region.normal, region.origin, axes)
 
 
-def reason_against_group(group: FunctionalGroup) -> str | None:
+def reason_against_group(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature] | None = None
+) -> str | None:
     """Warum diese Gruppe sich nicht als Ganzes ändern lässt — oder ``None``.
 
-    Dieselbe Frage für Merkmalfenster und Operation: Was das Fenster anbietet,
-    rechnet die Operation auch.
+    Dieselbe Frage für Merkmalfenster, Menü und Operation: Was das Fenster
+    anbietet, rechnet die Operation auch. Ein offener Kanal ändert sich über
+    genau zwei ebene Wände (:func:`trough_walls`); mit ``features`` wird auch
+    ihre Art gefragt — am 1x1-tray bot das Fenster den Kanal an, und die
+    Operation sagte erst danach ab.
     """
     if group.kind not in ("chamber", "channel") or group.variant == "passage":
         return str(NOT_A_CHAMBER)
+    if group.kind == "channel" and group.variant == "trough" and not trough_walls(group, features):
+        return str(TROUGH_WALLS)
     if group.shared:
         return str(
             _(
@@ -524,9 +538,32 @@ def reason_against_group(group: FunctionalGroup) -> str | None:
     return None
 
 
+def trough_walls(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature] | None = None
+) -> tuple[FeatureId, ...]:
+    """Die zwei ebenen Wände eines offenen Kanals — leer, wenn er andere hat.
+
+    *Kammer ändern* versetzt genau diese zwei (``chamber_ops._trough``); ohne
+    ``features`` zählt nur ihre Zahl.
+    """
+    walls = tuple(member for member, role in group.roles if role == "wall")
+    if len(walls) != 2:
+        return ()
+    if features is not None and any(
+        wall not in features or features[wall].kind != "face" for wall in walls
+    ):
+        return ()
+    return walls
+
+
 NOT_A_CHAMBER = _(
     "Dieses Merkmal gehört weder zu einer erkannten Kammer noch zu einer Nut oder einem "
     "Kanal. Wählen Sie den Boden oder eine Wand einer Kammer."
+)
+
+TROUGH_WALLS = _(
+    "Dieser Kanal hat mehr als zwei Wände (ein Steckende, eine Stufe) — als Ganzes lässt er "
+    "sich nicht strecken. Ändern Sie eine Wand über „Fläche versetzen“."
 )
 
 NOT_A_CLOSURE = _(
@@ -1652,7 +1689,7 @@ def _rotational_group(
     lumps = [
         lump
         for lump in _lumps(_without_patterns(pieces, tolerance), largest, tolerance)
-        if len(lump.pieces) >= 2 and lump.span <= 90.0
+        if len(lump.pieces) >= 2 and lump.span <= 90.0 and _faces_apart(lump)
     ]
     ring = _largest_ring(lumps, tolerance)
     count = len(ring)
@@ -1714,6 +1751,17 @@ def _rotational_group(
     )
 
 
+def _faces_apart(lump: _Lump) -> bool:
+    """Trägt das Stück zwei verschieden gerichtete Flächen (:data:`STATION_FACES_APART`)?"""
+    return any(
+        first.radial * second.radial
+        + first.tangential * second.tangential
+        + first.axial * second.axial
+        <= STATION_FACES_APART
+        for first, second in combinations(lump.pieces, 2)
+    )
+
+
 def _round_notches(
     axis: _Axis,
     fillets: Sequence[tuple[FeatureId, Feature]],
@@ -1770,17 +1818,31 @@ def _round_notches(
         ]
         if len(alike) > len(best):
             best = alike
-    count = len(best)
+    # **Eine Stellung ist ein Winkel, keine Mulde**: Mulden, die übereinander
+    # am selben Winkel liegen, sind eine Stellung — am Besenhalter aus dem
+    # Korpus standen drei Rundungen bei 90° übereinander und galten als drei.
+    ordered = sorted(best, key=lambda entry: entry[1])
+    positions: list[list[tuple[FeatureId, float, float, float]]] = []
+    for entry in ordered:
+        if positions and entry[1] - positions[-1][0][1] <= _notch_reach(entry):
+            positions[-1].append(entry)
+        else:
+            positions.append([entry])
+    if len(positions) > 1 and (
+        positions[0][0][1] + 360.0 - positions[-1][0][1] <= _notch_reach(positions[0][0])
+    ):
+        positions[0] = [*positions.pop(), *positions[0]]
+    count = len(positions)
     if not MIN_CLOSURE_POSITIONS <= count <= MOST_CLOSURE_POSITIONS:
         return None
-    ordered = sorted(best, key=lambda entry: entry[1])
+    angles = sorted(position[0][1] for position in positions)
     pitch = 360.0 / count
-    steps = [later[1] - earlier[1] for earlier, later in pairwise(ordered)]
-    steps.append(ordered[0][1] + 360.0 - ordered[-1][1])
+    steps = [later - earlier for earlier, later in pairwise(angles)]
+    steps.append(angles[0] + 360.0 - angles[-1])
     even = all(abs(step - pitch) <= STATION_SPACING_DEGREES for step in steps)
     measures = [
         GroupMeasure("count", float(count), ""),
-        GroupMeasure("radius", sum(entry[2] for entry in ordered) / count, "mm"),
+        GroupMeasure("radius", sum(entry[2] for entry in ordered) / len(ordered), "mm"),
     ]
     if even:
         measures.insert(1, GroupMeasure("spacing", pitch, "°"))
@@ -1795,6 +1857,16 @@ def _round_notches(
         evidence="rotational_notches",
         count=count,
     )
+
+
+def _notch_reach(entry: tuple[FeatureId, float, float, float]) -> float:
+    """Wie weit um den Winkel einer Mulde eine zweite noch dieselbe Stellung ist, in Grad.
+
+    Ihr eigener Bogen — der Radius der Mulde auf ihrem Abstand zur Achse —,
+    mindestens :data:`STATION_SPACING_DEGREES`.
+    """
+    _name, _angle, radius, size = entry
+    return max(STATION_SPACING_DEGREES, size / max(radius, EPS_GEOM) * (180.0 / math.pi))
 
 
 def _without_patterns(pieces: Sequence[_Piece], tolerance: float) -> list[_Piece]:
@@ -3099,18 +3171,31 @@ def _lettering(
 __all__ = [
     "GROUP_KINDS",
     "NOT_A_CHAMBER",
+    "NOT_A_CLOSURE",
+    "TROUGH_WALLS",
     "ChamberRegion",
+    "ClosureStop",
+    "FlankPair",
     "FunctionalGroup",
     "GroupEvidence",
     "GroupKind",
     "GroupMeasure",
     "GroupRole",
     "chamber_region",
+    "closure_axis",
+    "closure_flanks",
+    "closure_pairs",
+    "closure_stops",
     "evidence_texts",
     "functional_groups",
     "functional_title",
     "group_of",
     "measure_titles",
     "numbered_titles",
+    "reason_against_closure",
+    "reason_against_closure_change",
     "reason_against_group",
+    "reason_against_play",
+    "reason_against_turn",
+    "trough_walls",
 ]
