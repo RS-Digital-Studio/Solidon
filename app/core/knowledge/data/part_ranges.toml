@@ -22,7 +22,7 @@ date = "2026-10-04"
 [[parts]]
 name = "bayonet"
 version = "1"
-fingerprint = "9818b7470e7ac9ed56e0953d7cd83c18ecef42d876cdef4408bdb9d367f92b7a"
+fingerprint = "226ed635ffabdfac9607ca1afe6e8f89c5c53de947f5b715ff6228b73c464fc7"
 corners = 512
 checked = 512
 excluded = 160
@@ -66,7 +66,7 @@ date = "2026-10-04"
 [[parts]]
 name = "channel_joint"
 version = "1"
-fingerprint = "f0ce992aa20959bcdd8b759eeef1d4f99695fb964f4839ab5ec5faa4ad463a6e"
+fingerprint = "00e94ebac0ed011f5a0bdce7b93544a236e7d6c137315e4b7b951c35f42edef6"
 corners = 256
 checked = 256
 excluded = 120
@@ -77,7 +77,7 @@ date = "2026-10-04"
 [[parts]]
 name = "detent_disc"
 version = "1"
-fingerprint = "bab5449b5e6d5984dc1ab15b59e29c4ef18d4136b3648cd83afcd8367ad59b92"
+fingerprint = "ae994868a5894c3b04a0bf98d47be18167dc377080898a83325829bf02406bf6"
 corners = 256
 checked = 256
 excluded = 172
@@ -198,7 +198,7 @@ date = "2026-10-04"
 [[parts]]
 name = "hose_barb"
 version = "1"
-fingerprint = "0c1d883eb752d2ff0ba2539aecc315384fe9a6307bdca7a58187e97ddc4915f2"
+fingerprint = "f39c79cf37aa008f2a05d82be429ea2f89aad9d04d84002ffb474e28975ccf03"
 corners = 128
 checked = 128
 excluded = 68
@@ -429,7 +429,7 @@ date = "2026-10-04"
 [[parts]]
 name = "rod_connector"
 version = "1"
-fingerprint = "61eece58561673da992c8f650ea6bcee15ed322077ac0ad6edb5418116fc8a98"
+fingerprint = "01731a4d83b262b70064a4ce4add60f469abe7dd04746dcf24ef2d27bb28de0d"
 corners = 384
 checked = 384
 excluded = 48
@@ -440,7 +440,7 @@ date = "2026-10-04"
 [[parts]]
 name = "room_floor"
 version = "1"
-fingerprint = "e783d5d9b31dcc67a245e49718d4c3fd34988a8c81718d9978813eee2b53dbd0"
+fingerprint = "308250cd330891723457982a74329ccbedce43de7b909463bd8b19c186553664"
 corners = 512
 checked = 512
 excluded = 312
@@ -451,7 +451,7 @@ date = "2026-10-04"
 [[parts]]
 name = "room_pane"
 version = "1"
-fingerprint = "5e9e596c1ec12bb2781d9d54248db7e1fa795bdc9d2b452b043148b13770e95f"
+fingerprint = "ee2b1ad921aa9addd07c6403aea0b16e44dfe4faa96ef21ae855900996dc4e5e"
 corners = 16
 checked = 16
 excluded = 0
@@ -462,7 +462,7 @@ date = "2026-10-04"
 [[parts]]
 name = "room_wall"
 version = "1"
-fingerprint = "047244c1baea28a5607015a0ca31139d62d9e260b2d7b66b58e51df5e9adf84f"
+fingerprint = "51bbdb0848f4d09f2a407700192be89cbb4e3705d379b8aa251c435d27695d7b"
 corners = 256
 checked = 256
 excluded = 84

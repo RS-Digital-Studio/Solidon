@@ -626,3 +626,10 @@ Druckreihenfolge beurteilt: Bahnhöhe abzüglich ihrer Schichthöhe und der
 Raftoberkante. Die niedrigste spätere Körperbahn ist dafür ungeeignet, weil
 ein Slicer die Folgeschicht absenken kann. Native Schichtrundung und eine
 unabhängige Stützschichthöhe bleiben Eigenschaften des gewählten Slicerprofils.
+
+## Curas Lüfterkurve
+
+Bei Cura kommen unteres Ende und Schwelle der Lüfterkurve aus der
+Druckerdefinition (`manufacturer.cura_fan_curve`), nicht aus Solidons
+Materialkurve: Deren PLA-Schwelle von 80 s hob den Lüfter schon in der ersten
+Schicht an (RM-228).

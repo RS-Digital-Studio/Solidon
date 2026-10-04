@@ -2139,3 +2139,20 @@ Dreiecken knapp unter dem Punktebudget dauerte der Entwurf 3,8 s statt 0,9 s.
 Kegel und Ring halbierten ihre Segmente ohne Befund und sparten nichts, was
 zählt; sie haben keine Entwurfsstufe mehr. Export und Slicer nehmen ohnehin die
 feine Rechnung (RM-426, `wartezeit.md`).
+
+## Füllkörper, Toleranzen, Langlochvorgabe — die Gründe zu drei Regeln
+
+**Füllkörper:** Wer statt des breiteren Werkzeugkörpers die Wand des Hohlraums
+nachbaut, lässt zwei Flächen stehen, mit Zugabe an den Enden. Was danach wieder
+ausgeschnitten wird, ist exakt das Merkmal — jede Zugabe dort wäre ein Maßfehler.
+
+**Toleranzen:** Keine Konstante als Fertigungszugabe, weil das Gleitspiel des
+Materialprofils diese Aufgabe leistet; eine zweite Zugabe verfälschte die
+Kalibrierung (§28.3).
+
+**Langlochvorgabe:** Die Länge steht auf dem Doppelten des vorgegebenen
+Durchmessers, weil ein Feld, das mit einer Absage begrüßt, keine Vorgabe ist.
+
+**Gedrehtes Langloch:** Wer eine Geste einlöst, baut die Wirkung, nicht den
+Hinweis auf die andere — ein Zug in neuer Richtung dreht das Langloch
+(`slot_hole.turned`), statt auf *Merkmal drehen* zu verweisen.

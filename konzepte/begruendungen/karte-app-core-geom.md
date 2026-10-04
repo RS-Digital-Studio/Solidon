@@ -2167,3 +2167,9 @@ Nachweis. Fehler bleiben Fehler, Abbruch wird vor und nach nativen Aufrufen
 geprüft. Ein gemischtes Ergebnis beschreibt ausschließlich den Netzzwilling;
 die Passungsprüfung in `scene.fits` benennt diese Grenze sowie Einbaulage und
 Fertigungsspiel getrennt vom gemessenen Überdeckungsvolumen.
+
+## Formvergleich in Zellen
+
+`difference.surface_distance_bound` gibt Tochterzellen die Eckwerte der
+Mutterzelle mit, statt sie neu zu rechnen; so wird der Formvergleich des
+Nachbaus (RM-022) gut doppelt so schnell bei gleichem Ergebnis.

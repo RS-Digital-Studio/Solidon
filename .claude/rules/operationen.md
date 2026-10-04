@@ -317,10 +317,8 @@ Langloch.
 
 ## Ein Füllkörper hat die Form des Werkzeugs, nicht die des Hohlraums
 
-Er ist überall breiter als der Hohlraum, mit Zugabe an den Enden, an der
-Körpergrenze gekappt (`_closed_at`); wer die Wand nachbaut, lässt zwei Flächen
-stehen. Was danach wieder ausgeschnitten wird, ist exakt das Merkmal — jede
-Zugabe dort ist ein Maßfehler.
+Überall breiter als der Hohlraum, an der Körpergrenze gekappt (`_closed_at`);
+wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 ## Ein Vieleck aus einem gemessenen Durchmesser ist enger als er
 
@@ -332,14 +330,12 @@ Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Stolperfalle:
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
 `hole_diameter - pin_diameter`); wer radial einzieht, nimmt die Hälfte. Keine
-Konstante als Fertigungszugabe (Regel 7) — das Gleitspiel des Profils leistet
-es, sonst leidet die Kalibrierung (§28.3).
+Konstante als Fertigungszugabe (Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 
 `slot_hole` schließt die alte Öffnung und schneidet die neue, bei anderem Winkel
-wie bei kürzerer Länge (`slot_hole.turned`). **Wer eine Geste einlöst, baut die
-Wirkung, nicht den Hinweis auf die andere.** Auf genau die Breite gezogen wird
+wie bei kürzerer Länge (`slot_hole.turned`). Auf genau die Breite gezogen wird
 es wieder rund (Entscheidung Robert; `slot_hole.round_again`,
 `slot_hole.already_round`); `prepare.is_round_length` entscheidet das für alle
 Wege, auf die halbe Anzeigestufe, gegen eingetragene und geschnittene Breite,
@@ -352,9 +348,8 @@ Durchmesser — das Doppelte der Kippgrenze der Erkennung, mindestens 0,3 mm.
 Kein Langloch mit Senkung (Entscheidung Robert; Regel 21), auf drei Ebenen:
 Dialog (`depends_on=("slotted", (False,))`), `prepare_ops.bore_shape` nullt die
 beiden Maße, `prepare.slot_travel` weist sie ab; `transition_angle` bleibt. Ein
-gesetzter Haken ohne Länge ist eine Absage; die Vorgabe der Länge ist das
-Doppelte des vorgegebenen Durchmessers — ein Feld, das mit einer Absage begrüßt,
-ist keine Vorgabe. Die Materialtoleranz weitet überall, auf dem Radius:
+Haken ohne Länge ist eine Absage; Vorgabelänge ist der doppelte Durchmesser.
+Die Materialtoleranz weitet überall, auf dem Radius:
 `Mittellinie = Länge − nominaler Durchmesser`, der Verschiebeweg bleibt.
 
 ## Ein Langloch ist an beiden Kernen ein Merkmal und ein Hohlraum

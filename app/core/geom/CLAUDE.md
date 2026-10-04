@@ -176,8 +176,7 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`; große Vergleichsnetze durchlaufen zuerst die bestehende
 koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
-Eingängen und denselben Dichtheits-/Volumenprüfungen; `surface_distance_bound`
-gibt Tochterzellen die Eckwerte der Mutter mit) · `mesh_ops.py` · `colour_ops.py` ·
+Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
 `label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen
