@@ -190,12 +190,19 @@ def test_the_window_wires_the_header_to_the_session(window: MainWindow) -> None:
     steht in ``test_ui.py``. Hier zählt, dass ``_update_header`` liest, was die
     Sitzung sagt — und dass es an den beiden Stellen hängt, an denen sich das
     ändert (Projektwechsel und Auswertung).
+
+    Rechts steht das Druckziel der Sitzung (RM-090, ``Session.review_target``):
+    Drucker und Verfahren, „unvollständig“, wo eine Grundlage fehlt, die
+    Einzelheiten im Tooltip — derselbe Drucker wie im Profil der Sitzung.
     """
     window._update_header()
 
     title, _bounds, printer = window.header.state()
     assert title == project_name(window.session.title)
-    assert printer == str(window.session.profile.printer.title)
+    target = window.session.review_target()
+    assert printer == target.title
+    assert printer.startswith(str(window.session.profile.printer.title)), printer
+    assert window.header.printer.toolTip() == target.details
 
 
 def test_the_header_lists_multiple_project_filaments_instead_of_one_global_material(

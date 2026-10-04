@@ -135,6 +135,8 @@ def test_incomplete_bounds_explain_unknown_distance_and_reserved_tessellation(
     from dataclasses import replace
 
     from app.core.geom.difference import SurfaceDistanceBound
+    from app.i18n import tr
+    from app.ui.labels import length
 
     dialog, _session, proposal, _application, _calls = rebuilt
     candidate = replace(
@@ -146,11 +148,23 @@ def test_incomplete_bounds_explain_unknown_distance_and_reserved_tessellation(
     monkeypatch.setattr(
         rebuild, "propose", lambda *args, **kwargs: replace(proposal, candidates=(candidate,))
     )
-    dialog._start()
+    dialog.start.click()
     wait_for(qt_app, lambda: dialog.proposal is not None)
-    assert "unbekannt" in dialog.details.text()
-    assert "Vernetzung" in dialog.details.text()
-    assert "Facetten" in dialog.details.text()
+    lines = dialog.details.text().splitlines()
+    # Die obere Schranke ist unbekannt — gesagt, nicht als Zahl erfunden.
+    assert any(str(tr("unbekannt")) in line for line in lines), lines
+    # Der Vorbehalt für die Vernetzung, als ganzer Satz: Er nennt den
+    # reservierten Teil der Formgrenze und dass die flachen Dreiecke des
+    # Originals zur Abweichung zählen („Facetten“ ist ein Konstrukteurswort,
+    # ``test_wording``).
+    reserved = str(
+        tr(
+            "Von Ihrer Formgrenze bleiben {value} für die Vernetzung des Nachbaus "
+            "reserviert. Die flachen Dreiecke des ursprünglichen Modells zählen zur "
+            "Abweichung."
+        )
+    ).format(value=length(dialog.proposal.budget.tessellation_mm))
+    assert reserved in lines, lines
     assert not dialog.take.isEnabled()
 
 

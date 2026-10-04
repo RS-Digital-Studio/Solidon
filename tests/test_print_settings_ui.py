@@ -7538,6 +7538,10 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [1])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     expected = estimate(selected.mesh.volume, selected.mesh.area, settings)
+    # Eine Platte ohne Stützen, wie ``plate_comparison`` sie bei Stützart
+    # „keine“ liefert: Stützmenge 0,0. Eine unbekannte Stützmenge (``None``)
+    # hält die Zeitgegenprobe seit der Stützrechnung an
+    # (``estimate.time_comparison_blocked``) — dann prüfte der Test die Zeit nicht.
     monkeypatch.setattr(
         module,
         "_prepare_plate",
@@ -7545,7 +7549,7 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
             plate,
             tmp_path / "plate.3mf",
             slots=(MaterialSlot(0, ""),),
-            comparison=PlateComparison(plate, None, None, seconds=expected.seconds),
+            comparison=PlateComparison(plate, 0.0, None, seconds=expected.seconds),
         ),
     )
     monkeypatch.setattr(
