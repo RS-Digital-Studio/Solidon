@@ -253,7 +253,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # **Die Druckeinstellungen waren die zweite Feldquelle, und sie stand hier
     # nicht drin.** ``tests/test_translations.py`` prüft Regel 20 für
     # Auswahlwerte am Operationsregister; die sechsundfünfzig Felder des
-    # Druckdialogs (``print_settings_dialog.FIELDS``) sind eine eigene Liste
+    # Druckdialogs (``knowledge.print_fields.FIELDS``) sind eine eigene Liste
     # und liefen an der Prüfung vorbei. Im deutschen Fenster stand deshalb
     # „Naht: aligned", „Wandbahnen: arachne", „Druckbetthaftung: brim" — und im
     # Füllmuster englische Schlüssel **neben** deutschen Namen: grid, lines,

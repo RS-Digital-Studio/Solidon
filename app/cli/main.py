@@ -225,22 +225,51 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
     return result
 
 
-def print_findings(findings: Any) -> None:
-    # Gleiche Sätze einmal, mit ihrer Zahl davor — wie im Prüfbericht
-    # (``panels._bundled``). Der Export meldet eine Einstellung je Teil, und
-    # zwölf Behälter auf zu kleiner Fläche ergäben sonst zwölf gleiche Zeilen.
-    counted: dict[tuple[str, str], int] = {}
+def print_findings(findings: Any, names: Mapping[str, str] | None = None) -> None:
+    """Die Befunde, gleiche Sätze einmal mit ihrer Zahl davor.
+
+    Wie im Prüfbericht (``panels._bundled``): Der Export meldet eine
+    Einstellung je Teil, und zwölf Behälter auf zu kleiner Fläche ergäben
+    sonst zwölf gleiche Zeilen. **Eine Einstellung je Teil nennt Teil und
+    Wert** (RM-289, N4): Feldname und Wert kommen aus derselben Tabelle wie im
+    Druckdialog (``knowledge.print_fields``), die Teile beim Namen. Bis 0.5.1
+    stand nur der Satz da — „(3) Nur für dieses Teil: …“, ohne zu sagen,
+    welche Teile welche Einstellung bekommen.
+    """
+    from app.core.export.writer import PART_SETTING_CODES
+    from app.core.knowledge.print_fields import setting_title, shown_value
+
+    counted: dict[tuple[str, str, str], list[str]] = {}
     for finding in findings:
-        key = (finding.severity, str(finding.message))
-        counted[key] = counted.get(key, 0) + 1
-    for (severity, message), count in counted.items():
+        detail = ""
+        values = finding.values or {}
+        if finding.code in PART_SETTING_CODES and "setting" in values:
+            path = str(values["setting"])
+            detail = tr(
+                "{name}: {value}",
+                name=setting_title(path),
+                value=shown_value(path, values.get("value")),
+            )
+        key = (finding.severity, str(finding.message), detail)
+        part = str(finding.object_id) if finding.object_id else ""
+        counted.setdefault(key, []).append((names or {}).get(part, part))
+    for (severity, message, detail), parts in counted.items():
         # Nie Farbe allein (§19.1) — im Terminal trägt das Zeichen die Bedeutung.
         marker = {"info": "-", "warning": "!", "error": "X"}[severity]
-        print(f"  {marker} {f'({count}) ' if count > 1 else ''}{message}")
+        count = len(parts)
+        named = sorted({part for part in parts if part})
+        extra = " · ".join(filter(None, (", ".join(named), detail)))
+        line = f"{message} — {extra}" if extra else message
+        print(f"  {marker} {f'({count}) ' if count > 1 else ''}{line}")
+
+
+def _object_names(scene: Any) -> dict[str, str]:
+    """Kennung → Name der Körper, wie der Objektbaum sie zeigt."""
+    return {str(key): str(entry.name or key) for key, entry in scene.objects.items()}
 
 
 def print_report(result: Any) -> None:
-    print_findings(result.scene.report.findings)
+    print_findings(result.scene.report.findings, _object_names(result.scene))
     if result.stopped_at is not None:
         print(tr("Die Kette hält bei Operation {op} an.").replace("{op}", str(result.stopped_at)))
 
@@ -783,7 +812,7 @@ def command_export(args: argparse.Namespace) -> int:
     # Die Prüfung spricht, bevor die Dateien existieren — eine Warnung ist
     # also eine Warnung über das, was geschrieben wird, nicht über das, was
     # geschrieben wurde (§29).
-    print_findings(plan.findings)
+    print_findings(plan.findings, _object_names(result.scene))
 
     written = write_plan(plan, Path(args.directory), args.export_format)
     for target in written:
