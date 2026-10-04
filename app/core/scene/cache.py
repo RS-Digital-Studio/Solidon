@@ -160,7 +160,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Nachbauten, Folgeschritte oder Merkmalsbindungen mehr steuern.
 #: - 42 (RM-226): Kugelige Eckrundungen tragen ebenfalls den Trägermittelpunkt
 #:   statt des Flächenschwerpunkts; Nachbau und Folgeoperationen lesen ihn.
-CACHE_FORMAT_VERSION: Final = 42
+#: - 43 (RM-411): Ein exaktes Langloch verlangt den geschlossenen Mantel wie am
+#:   Netz; zwei Bögen, deren Mantel über eine weitere Wand läuft, sind keines.
+#:   Gespeicherte Merkmale nannten dort ein Langloch, und ein exakter Stopfen,
+#:   der den Körper verlöre, ist jetzt eine Absage statt eines Ergebnisses.
+CACHE_FORMAT_VERSION: Final = 43
 
 
 @dataclass(frozen=True, slots=True)

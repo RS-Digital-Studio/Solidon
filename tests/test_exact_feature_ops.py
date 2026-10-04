@@ -1040,6 +1040,51 @@ def test_closing_a_tilted_bore_keeps_the_plate_flat(profile: Profile) -> None:
     assert not any(finding.code == "bore.over_the_edge" for finding in result.findings)
 
 
+def test_a_fill_that_loses_the_body_is_refused() -> None:
+    """Ein Stopfen fügt Material hinzu; kommt weniger heraus, sagt der Kern ab (RM-411).
+
+    Gemessen am 04.10.2026: Ein Langloch Ø 6 x 12, dessen Ende in den Aufsatz einer
+    Stufenplatte geschnitten ist, an der konvexen Hülle begrenzt gefüllt. OpenCASCADE
+    gab als Vereinigung von Platte (9 326,28 mm³) und Stopfen nur den Stopfen zurück —
+    1 156,44 mm³, gültig und geschlossen, ohne einen Befund. Eine Vereinigung kann ihren
+    Körper nicht kleiner machen; ein solches Ergebnis ist ein Fehler mit Ausweg, kein Teil.
+    """
+    edit = _kernel()
+    from app.core.errors import GeometryError
+
+    stepped = edit.boolean(
+        "union",
+        [edit.box(40.0, 20.0, 10.0), edit.moved(edit.box(10.0, 20.0, 10.0), (10.0, 0.0, 10.0))],
+    )
+    slotted = edit.slot_bore(
+        stepped,
+        position=(0.0, 0.0, 10.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=30.0,
+        length=12.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    # Grundplatte und Aufsatz ohne Langloch: der Umriss 36 + 9π mm² über 10 mm, dazu
+    # das Kreissegment jenseits von x = 5 über weitere 10 mm.
+    segment = 9.0 * math.acos(2.0 / 3.0) - 2.0 * math.sqrt(5.0)
+    assert slotted.volume == pytest.approx(
+        10_000.0 - (36.0 + 9.0 * math.pi) * 10.0 - segment * 10.0, rel=1e-9
+    )
+    with pytest.raises(GeometryError) as caught:
+        edit.fill_bore(
+            slotted,
+            position=(0.0, 0.0, 10.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=44.0,
+            length=12.0,
+            within=edit.convex_hull(slotted),
+        )
+    assert caught.value.suggestions
+
+
 @pytest.mark.parametrize(
     ("kind", "diameter", "expected"),
     [

@@ -82,6 +82,7 @@ from app.core.geom.prepare import (
     Arrangement,
     BoreAnchor,
     BoreResult,
+    OpeningSpace,
     arrange_on_bed,
     bore_diameter,
     bore_geometry_error,
@@ -8096,7 +8097,8 @@ OPEN_BODY_DETAIL: Final = _(
     # 13: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="15",
+    # 16: exakt fragt die Kante am gefüllten Körper, wo gefüllt wurde (RM-411).
+    cache_version="16",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -8304,15 +8306,20 @@ def resize_hole(ctx: OpContext) -> OpResult:
             nothing = without_effect(source.mesh, solid, change, ctx.profile)
             if nothing is not None:
                 findings.append(nothing)
+        # Am gefüllten Körper, wo gefüllt wurde — wie am Netz (``_closed_at`` vor
+        # ``slot_bore``): Die alte Öffnung im Kranz eines verbreiterten
+        # Langlochs sah an einer schrägen Platte unter der tiefen Seite der
+        # Mündung hindurch ins Freie und hieß „über die Kante" (RM-411).
+        asked = filled if filled is not None else source.mesh
         findings.extend(
             edge_findings(
-                source.mesh,
+                asked,
                 position=centre,
                 frame=slot_frame(axis, centre),
                 diameter=cut,
                 travel=slot_travel_now,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
-                body=as_mesh_data(source.mesh),
+                body=as_mesh_data(asked),
                 reach=depth / 2.0,
             )
         )
@@ -8805,7 +8812,10 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 15: Baugruppen enden an der Bohrung; getrennte Stifte sind auch beidseitig schneidbar.
     # 16: Der Langlochzug schneidet die Trägerhülle und fremde Teile getrennt.
-    cache_version="16",
+    # 17: exakt fragt die Kante am gefüllten Körper über die Schnittlänge, und ein
+    #     Zug ohne Schließen zählt die alte Öffnung für die Kantenfrage als Material
+    #     (RM-411).
+    cache_version="17",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -9000,6 +9010,9 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # die runde Wand nicht mehr, und das Werkzeug schneidet ohne Zugabe in
     # volles Material — dasselbe Loch wie beim Bohren.
     closes_the_old = moved or turning is not None or widened or shortened or feature.kind == "hole"
+    # Ein Langloch, das an derselben Stelle weiterwächst, geht nicht erst zu; die
+    # Kantenfrage gilt trotzdem dem Körper ohne seine alte Öffnung (RM-411).
+    old_opening = None if closes_the_old else _opening_space(feature)
     if rounded and feature.kind == "hole" and not moved and not widened:
         # Eine runde Bohrung auf ihre eigene Breite gezogen: Geschnitten und
         # gefüllt würde dasselbe Loch, und der Satz sagt, dass nichts geschah.
@@ -9096,17 +9109,25 @@ def slot_hole(ctx: OpContext) -> OpResult:
         nothing = without_effect(started, solid, "difference", ctx.profile)
         if nothing is not None:
             findings.append(nothing)
-        # Die Kantenfrage gilt beiden Bogenmittelpunkten, wie beim Verbreitern.
+        # Die Kantenfrage gilt beiden Bogenmittelpunkten, wie beim Verbreitern —
+        # **am gefüllten Körper und über die Länge des Schnitts**, wie am Netz
+        # (``prepare.slot_bore`` fragt den geschlossenen Körper über die halbe
+        # Schnitttiefe). Am Original lag die alte Bohrung als Luft im Kranz und sah an
+        # einer schrägen Platte unter der tiefen Seite der Mündung hindurch ins Freie:
+        # „über die Kante" an einem Langloch mitten in der Fläche. Über die
+        # Bohrungstiefe gefragt, sah der Kranz an einer Stufenplatte nur die
+        # Grundplatte, nicht die Wand des Aufsatzes, die der Durchzug aufreißt (RM-411).
         findings.extend(
             edge_findings(
-                source.mesh,
+                started,
                 position=centre,
                 frame=slot_frame(axis, centre),
                 diameter=diameter,
                 travel=0.0 if rounded else slot_travel(diameter=diameter, length=cut_length),
                 angle_deg=angle,
-                body=as_mesh_data(source.mesh),
-                reach=_depth_of(feature) / 2.0,
+                body=as_mesh_data(started),
+                reach=cut_depth / 2.0,
+                old_opening=old_opening,
             )
         )
         findings.extend(split_findings(source.mesh, solid))
@@ -9231,6 +9252,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         overlap=overlap,
         cancelled=ctx.cancelled,
         object_id=source.id,
+        old_opening=old_opening,
     )
     # Zerfallen ist, was mehr Teile hat als vor dem Schritt — nicht mehr als der Stopfen.
     result = _split_counted_from(as_mesh_data(source.mesh), result)
@@ -16325,6 +16347,42 @@ def _free_along_the_axis(candidate: Feature, expected: Feature, *, mouth: bool =
     )
     reach = (_depth_of(expected) + _depth_of(candidate)) / 2.0
     return abs(along) <= reach
+
+
+def _opening_space(feature: Feature) -> OpeningSpace | None:
+    """Der Raum, den eine erkannte Bohrung oder ein Langloch einnimmt — ``None``
+    ohne Achse, Maß oder Tiefe.
+
+    Für die Kantenfrage eines Zugs, der die Öffnung überdeckt, ohne sie vorher
+    zu schließen (:class:`prepare.OpeningSpace`): Mitte, Achse, Durchmesser und
+    Tiefe wie gemessen, beim Langloch dazu Richtung und Weg.
+    """
+    radius = _bore_number(feature, "diameter") / 2.0
+    depth = _depth_of(feature)
+    raw_axis = _bore_vector(feature, "axis")
+    span = math.hypot(*raw_axis)
+    if radius <= EPS_GEOM or depth <= EPS_GEOM or span <= EPS_GEOM:
+        return None
+    axis = cast(Vec3, tuple(value / span for value in raw_axis))
+    travel = 0.0
+    direction: Vec3 = slot_frame(axis, (0.0, 0.0, 0.0)).x_axis
+    if feature.kind == "slot":
+        given = feature.params.get("direction")
+        if given is not None:
+            sideways = np.asarray(given, dtype=float)
+            sideways = sideways - units.dot3(sideways, axis) * np.asarray(axis, dtype=float)
+            length = math.hypot(*(float(value) for value in sideways))
+            if length > EPS_GEOM:
+                direction = cast(Vec3, tuple(float(value) / length for value in sideways))
+                travel = max(0.0, _bore_number(feature, "length") - 2.0 * radius)
+    return OpeningSpace(
+        centre=_bore_vector(feature, "centre"),
+        axis=axis,
+        direction=direction,
+        travel=travel,
+        radius=radius,
+        half_depth=depth / 2.0,
+    )
 
 
 def _depth_of(feature: Feature) -> float:

@@ -216,8 +216,62 @@ _RIM_POINTS: Final = 12
 _RIM_STEPS: Final = 16
 
 
-def _flank_is_open(body: MeshData, position: Vec3, unit: Any, radius: float) -> bool:
+@dataclass(frozen=True, slots=True)
+class OpeningSpace:
+    """Der Raum einer Öffnung, die ein Zug überdeckt, ohne sie vorher zu schließen.
+
+    **Gefragt wird nach der Kante am Körper ohne die alte Öffnung**
+    (``prepare_ops._edge_findings``: am gefüllten Körper vor dem Schnitt). Wer ein
+    Langloch an derselben Stelle weiterzieht, schließt es nicht erst — der neue
+    Umriss enthält den alten (``prepare_ops.slot_hole``, ``closes_the_old``).
+    Der Kranz um ein Bogenende liegt dann zur Hälfte in der alten Öffnung, und
+    an einer schrägen Platte sah diese Luft unter der tiefen Seite der Mündung
+    hindurch ins Freie: „über die Kante" an einem Langloch mitten in der
+    Fläche, an beiden Kernen (RM-411). Was in diesem Raum liegt, zählt für die
+    Frage als Material, wie am gefüllten Körper, ohne einen Stopfen zu rechnen.
+
+    ``axis`` und ``direction`` sind Einheitsvektoren, ``direction`` quer zu
+    ``axis``; ``travel`` ist der Weg zwischen den Bogenmitten, null für eine
+    runde Bohrung; ``half_depth`` die halbe Länge entlang der Achse.
+    """
+
+    centre: Vec3
+    axis: Vec3
+    direction: Vec3
+    travel: float
+    radius: float
+    half_depth: float
+
+    def holds(self, points: np.ndarray) -> np.ndarray:
+        """Welche Punkte im Raum der Öffnung liegen, ihre Wand eingeschlossen.
+
+        Elementweise, ohne BLAS (RM-187): Die Antwort entscheidet, welche Proben
+        der Kantenfrage zählen.
+        """
+        relative = np.asarray(points, dtype=float) - np.asarray(self.centre, dtype=float)
+        height = transform.along(relative, self.axis)
+        across = relative - height[:, None] * np.asarray(self.axis, dtype=float)
+        sideways = np.clip(
+            transform.along(across, self.direction), -self.travel / 2.0, self.travel / 2.0
+        )
+        apart = across - sideways[:, None] * np.asarray(self.direction, dtype=float)
+        distance = apart[:, 0] * apart[:, 0] + apart[:, 1] * apart[:, 1] + apart[:, 2] * apart[:, 2]
+        reach = self.radius + EPS_GEOM
+        return np.asarray(
+            (np.abs(height) <= self.half_depth + EPS_GEOM) & (distance <= reach * reach)
+        )
+
+
+def _flank_is_open(
+    body: MeshData,
+    position: Vec3,
+    unit: Any,
+    radius: float,
+    old_opening: OpeningSpace | None = None,
+) -> bool:
     """Ob die Bohrung wirklich eine offene Flanke hinterlässt.
+
+    Was in ``old_opening`` liegt, zählt als Material (:class:`OpeningSpace`).
 
     Gefragt wird an der Sache und nicht am Hüllquader: Eine Bohrung, die
     irgendwo auf ihrer Länge **ringsum** Material hat, reißt dort nicht auf.
@@ -255,7 +309,10 @@ def _flank_is_open(body: MeshData, position: Vec3, unit: Any, radius: float) -> 
     closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
     normals = np.asarray(body.raw.face_normals)[triangle]
     outward = np.einsum("ij,ij->i", flat - closest, normals)
-    inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)
+    solid = outward <= EPS_GEOM
+    if old_opening is not None:
+        solid = solid | old_opening.holds(flat)
+    inside = solid.reshape(len(depths), _RIM_POINTS)
     return not bool(inside.all(axis=1).any())
 
 
@@ -311,7 +368,12 @@ def _open_to_the_outside(body: MeshData, points: np.ndarray, across: np.ndarray)
 
 
 def _flank_opens_within(
-    body: MeshData, position: Vec3, unit: Any, radius: float, reach: float
+    body: MeshData,
+    position: Vec3,
+    unit: Any,
+    radius: float,
+    reach: float,
+    old_opening: OpeningSpace | None = None,
 ) -> list[str]:
     """Die Achsen, zu denen eine Bohrung **innerhalb der Hülle** seitlich aus dem
     Körper tritt — leer, wo sie das nicht tut.
@@ -344,7 +406,8 @@ def _flank_opens_within(
     die Seitenfläche umläuft die Achse nicht (:data:`_AROUND_THE_AXIS`), sonst
     liegt der Punkt in einer weiteren Aussparung um die Bohrung. Die
     Aufrufer geben ``position`` als Mitte der Bohrung und ``reach`` als halbe
-    Länge, damit keine Tiefe vor der Mündung liegt.
+    Länge, damit keine Tiefe vor der Mündung liegt. Was in ``old_opening``
+    liegt, zählt als Material (:class:`OpeningSpace`).
     """
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return []
@@ -354,7 +417,10 @@ def _flank_opens_within(
     depths = reach * np.asarray(_WITHIN_DEPTHS, dtype=float)
     centres = np.asarray(position, dtype=float) + depths[:, None] * axis
     samples = centres[:, None, :] + rim[None, :, :]
-    inside, normals = _inside_material(body, np.vstack([centres, samples.reshape(-1, 3)]))
+    probes = np.vstack([centres, samples.reshape(-1, 3)])
+    inside, normals = _inside_material(body, probes)
+    if old_opening is not None:
+        inside = inside | old_opening.holds(probes)
     ring = inside[len(depths) :].reshape(len(depths), _RIM_POINTS)
     facing = normals[len(depths) :].reshape(len(depths), _RIM_POINTS, 3)
     cutting = inside[: len(depths)] | ring.any(axis=1)
@@ -408,6 +474,7 @@ def over_the_edge_along(
     body: MeshData | None = None,
     reach: float | None = None,
     along: float = 0.0,
+    old_opening: OpeningSpace | None = None,
 ) -> list[Finding]:
     """Die Kantenprüfung für eine freie Bohrungsrichtung.
 
@@ -441,7 +508,9 @@ def over_the_edge_along(
     ``direction``: Wer an der Mündung fragt, gibt die halbe Tiefe ins Material
     mit, und ``reach`` ist dann die halbe Länge. Sonst lägen die Tiefen vor der
     Mündung in der Luft davor, wo neben einer Wand Material steht, das die
-    Bohrung nie berührt (Durchsicht 0.5.1, BOHRUNG-01).
+    Bohrung nie berührt (Durchsicht 0.5.1, BOHRUNG-01). ``old_opening`` ist der
+    Raum einer alten Öffnung, die der Schnitt überdeckt, ohne dass sie vorher
+    geschlossen wurde (:class:`OpeningSpace`).
     """
     vector = np.asarray(direction, dtype=float)
     # ``math.hypot`` statt ``np.linalg.norm``: Letzteres geht durch BLAS, und
@@ -463,9 +532,10 @@ def over_the_edge_along(
             unit,
             radius,
             reach,
+            old_opening,
         )
         return [_edge_finding(diameter, within)] if within else []
-    if body is not None and not _flank_is_open(body, position, unit, radius):
+    if body is not None and not _flank_is_open(body, position, unit, radius, old_opening):
         return []
     return [_edge_finding(diameter, over)]
 
@@ -988,6 +1058,7 @@ def slot_bore(
     seed: int | None = None,
     cancelled: CancelToken | None = None,
     object_id: ObjectId | None = None,
+    old_opening: OpeningSpace | None = None,
 ) -> BoreResult:
     """Zieht eine erkannte Bohrung zu einem Langloch auseinander.
 
@@ -1119,6 +1190,7 @@ def slot_bore(
             travel=travel,
             angle_deg=angle_deg,
             reach=depth / 2.0,
+            old_opening=old_opening,
         )
     )
     findings.extend(split_findings(mesh, slotted))
@@ -1542,12 +1614,15 @@ def edge_findings(
     body: MeshData | None = None,
     reach: float | None = None,
     along: float = 0.0,
+    old_opening: OpeningSpace | None = None,
 ) -> list[Finding]:
     """Die Kantenwarnung für eine runde Bohrung — und für beide Enden eines Langlochs.
 
     ``reach`` ist die Länge der Bohrung von ``position`` aus, in beide
     Richtungen (:func:`over_the_edge_along`, RM-249); ``along`` der Weg von
-    ``position`` zu ihrer Mitte entlang der Normalen des Rahmens.
+    ``position`` zu ihrer Mitte entlang der Normalen des Rahmens;
+    ``old_opening`` eine alte Öffnung, die der Schnitt überdeckt, ohne dass sie
+    geschlossen wurde (:class:`OpeningSpace`).
 
     Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem an
     einem Ende auf; wer nur die Mitte fragt, hört davon nichts. Gemeldet wird
@@ -1558,11 +1633,25 @@ def edge_findings(
         body = mesh
     if travel <= EPS_GEOM:
         return over_the_edge_along(
-            mesh, position, frame.normal, diameter, body=body, reach=reach, along=along
+            mesh,
+            position,
+            frame.normal,
+            diameter,
+            body=body,
+            reach=reach,
+            along=along,
+            old_opening=old_opening,
         )
     for end in slot_ends(position, frame, travel, angle_deg):
         found = over_the_edge_along(
-            mesh, end, frame.normal, diameter, body=body, reach=reach, along=along
+            mesh,
+            end,
+            frame.normal,
+            diameter,
+            body=body,
+            reach=reach,
+            along=along,
+            old_opening=old_opening,
         )
         if found:
             return found

@@ -18,6 +18,7 @@ import dataclasses
 import math
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -33,7 +34,16 @@ from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
 from app.core.registry import REGISTRY
-from app.core.types import Feature, Finding, OpContext, Profile, Quality, Scene, SceneObject
+from app.core.types import (
+    Feature,
+    Finding,
+    OpContext,
+    Profile,
+    Quality,
+    Scene,
+    SceneObject,
+    Vec3,
+)
 from tests.helpers import exact_kernel, inside
 
 
@@ -3065,22 +3075,22 @@ def test_an_inner_void_does_not_shorten_a_single_body_slot(
     assert output.mesh.volume == pytest.approx(expected, abs=1e-6 if kernel == "brep" else 2.0)
 
 
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-@pytest.mark.parametrize("quality", ["draft", "fine"])
-@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
-def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
-    profile: Profile, kernel: str, quality: Quality, slope: bool
-) -> None:
-    """Ein unbeteiligter Würfel darf an den Langlochenden kein Material stehen lassen."""
+def _raised_carrier(slope: bool) -> tuple[Any, float, Vec3]:
+    """Platte 40 x 20 mit Bohrung Ø 6 in der Mitte, deren Oberseite nicht eben bleibt.
+
+    ``slope``: Oberseite schräg, z = 10 + x/4 — ein Langloch von 16 mm liegt ganz in
+    ihr. Sonst eine Stufe: Grundplatte 10 mm, Aufsatz x 5 … 15 bis z = 20 — das Ende
+    eines Langlochs von 12 mm reicht bis x = 6 in den Aufsatz. Zurück kommen der
+    exakte Träger, die Langlochlänge und ein Punkt im neuen Ende, der vorher im
+    Material liegt und nachher frei sein muss.
+    """
     exact_kernel()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
     from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
 
     from app.core.brep import edit
-    from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid, boolean_builder
-    from app.core.knowledge.parts.exact import compound
 
     if slope:
         base = edit.box(40.0, 20.0, 20.0)
@@ -3103,6 +3113,22 @@ def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
     carrier = edit.cut_bore(
         carrier, position=(0.0, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6, depth=40
     )
+    return carrier, length, probe
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
+def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
+    profile: Profile, kernel: str, quality: Quality, slope: bool
+) -> None:
+    """Ein unbeteiligter Würfel darf an den Langlochenden kein Material stehen lassen."""
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.knowledge.parts.exact import compound
+
+    carrier, length, probe = _raised_carrier(slope)
     spare = edit.moved(edit.box(10, 10, 10), (60, 0, 0))
     volumes = []
     for assembled in (False, True):
@@ -3124,6 +3150,160 @@ def test_a_second_body_does_not_shorten_the_slot_in_its_own_carrier(
         assert output.mesh.component_count == (2 if assembled else 1)
         volumes.append(output.mesh.volume - (1000.0 if assembled else 0.0))
     assert volumes[1] == pytest.approx(volumes[0], abs=0.1)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(
+    "change", [{}, {"x": 2.0}, {"diameter": 4.0}], ids=["straight", "moved", "narrow"]
+)
+@pytest.mark.parametrize("slope", [False, True], ids=["step", "slope"])
+def test_both_kernels_report_the_same_at_a_slanted_and_a_stepped_carrier(
+    profile: Profile, quality: Quality, change: dict[str, float], slope: bool
+) -> None:
+    """Dieselben Befunde an beiden Kernen, allein und neben einem fremden Körper (RM-411).
+
+    **Die schräge Platte trägt das Langloch ganz in ihrer Oberseite** — keine offene
+    Flanke. Der exakte Zweig fragte die Kante am ungefüllten Körper: Punkte in der alten
+    Bohrung sahen unter der schrägen Mündung hindurch ins Freie, und es hieß „über die
+    Kante". Gefragt wird am gefüllten Körper, wie am Netz (``_edge_findings``).
+
+    **An der Stufe läuft das Ende des Langlochs in den Aufsatz** und reißt dessen Wand bei
+    x = 5 auf: über die Kante, und der Mantel ist kein geschlossenes Langloch mehr — er
+    läuft über die Stufenwand. Das Netz sagte beides; der exakte Kern fragte die Kante nur
+    über die Bohrungstiefe statt über die Schnittlänge und las zwei Bögen mit zwei
+    gemeinsamen Flanken als Langloch, gleich, woran der Bogen sonst grenzt.
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.knowledge.parts.exact import compound
+
+    carrier, length, _probe = _raised_carrier(slope)
+    spare = edit.moved(edit.box(10, 10, 10), (60, 0, 0))
+    said: dict[tuple[str, bool], set[str]] = {}
+    for assembled in (False, True):
+        solid = compound(carrier, spare) if assembled else carrier
+        for kernel in ("mesh", "brep"):
+            if kernel == "brep":
+                entry = SceneObject(
+                    id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+                )
+            else:
+                mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+                entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+            _output, findings = run_op_with_findings(
+                "slot_hole",
+                entry,
+                profile,
+                quality=quality,
+                at_feature=_bore_in(entry, "hole"),
+                slot_length=length,
+                **change,
+            )
+            said[(kernel, assembled)] = {finding.code for finding in findings}
+    for assembled in (False, True):
+        assert said[("mesh", assembled)] == said[("brep", assembled)], said
+    assert said[("mesh", False)] == said[("mesh", True)], said
+    codes = said[("mesh", False)]
+    assert ("bore.over_the_edge" in codes) is not slope, said
+    assert ("slot_hole.feature_lost" in codes) is not slope, said
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("operation", "values"),
+    [
+        ("slot_hole", {"slot_length": 18.0}),
+        ("slot_hole", {"slot_length": 12.0}),
+        ("resize_hole", {"diameter": 8.0}),
+        ("resize_hole", {"diameter": 4.0}),
+    ],
+    ids=["longer", "shorter", "wider", "narrower"],
+)
+def test_a_slot_changed_inside_a_slanted_plate_is_not_over_the_edge(
+    profile: Profile, kernel: str, operation: str, values: dict[str, float]
+) -> None:
+    """Ein Langloch mitten in der schrägen Oberseite reißt nirgends seitlich auf (RM-411).
+
+    Gefragt wurde an jedem Bogenende mit dem ganzen Kranz. Seine innere Hälfte liegt
+    im Langloch selbst, und wo die alte Öffnung noch Luft war — beim Weiterziehen
+    ohne Schließen, am exakten Kern beim Verbreitern am ungefüllten Körper —, sah sie
+    unter der tiefen Seite der schrägen Mündung hindurch ins Freie: „über die Kante".
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    carrier, _length, _probe = _raised_carrier(True)
+    slotted = edit.slot_bore(
+        carrier,
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=40.0,
+        length=16.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    if kernel == "brep":
+        entry = SceneObject(
+            id="obj_1", name="Platte", mesh=slotted, kind="brep", features=features_of(slotted)
+        )
+    else:
+        mesh = MeshData.of(as_mesh_data(slotted).raw.copy())
+        entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    slot = next(feature for feature in entry.features.values() if feature.kind == "slot")
+
+    output, findings = run_op_with_findings(operation, entry, profile, at_feature=slot.id, **values)
+
+    assert "bore.over_the_edge" not in {finding.code for finding in findings}
+    assert output.mesh.is_watertight
+    assert [feature.kind for feature in output.features.values()].count("slot") == 1
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("into_the_step", [True, False], ids=["step-wall", "flat"])
+def test_a_slot_whose_end_opens_into_a_step_wall_is_no_slot_on_either_kernel(
+    kernel: str, into_the_step: bool
+) -> None:
+    """Zwei Bögen und zwei Flanken sind erst mit geschlossenem Mantel ein Langloch.
+
+    Läuft ein Bogen weiter in eine Wand längs der Achse — hier die Stufe eines Aufsatzes,
+    in die das Langlochende geschnitten ist —, ist der Mantel offen: Das Netz flutet ihn
+    über die Stufenwand bis an die Außenseiten und findet keines. Der exakte Kern las
+    dasselbe als Langloch der Tiefe 20, und ein späterer Zug füllte dessen Umriss bis an
+    die konvexe Hülle — aus 9 327 mm³ wurden 431. Dasselbe Langloch ganz in der
+    Grundplatte bleibt an beiden Kernen eines.
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    stepped = edit.boolean(
+        "union",
+        [edit.box(40.0, 20.0, 10.0), edit.moved(edit.box(10.0, 20.0, 10.0), (10, 0, 10))],
+    )
+    slotted = edit.slot_bore(
+        stepped,
+        position=(0.0 if into_the_step else -10.0, 0.0, 10.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=30.0,
+        length=12.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    if kernel == "brep":
+        found = features_of(slotted)
+    else:
+        found = detect(MeshData.of(as_mesh_data(slotted).raw.copy()))
+    slots = [feature for feature in found.values() if feature.kind == "slot"]
+    if into_the_step:
+        assert slots == [], [feature.params for feature in slots]
+    else:
+        assert len(slots) == 1
+        assert float(slots[0].params["length"]) == pytest.approx(12.0, abs=0.01)
+        assert float(slots[0].params["depth"]) == pytest.approx(10.0, abs=0.01)
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
