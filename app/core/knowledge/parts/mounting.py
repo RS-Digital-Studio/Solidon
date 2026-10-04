@@ -1380,7 +1380,7 @@ class PegboardHookParams(BaseParams):
         doc=_(
             "Null heißt: keine. Das Teil, an dem die Haken sitzen, verbindet sie "
             "schon — eine Platte dazwischen wäre Material, das niemand braucht. "
-            "Wer trotzdem eine will, bekommt sie **im** Teil liegend, nicht darauf."
+            "Wer trotzdem eine will, bekommt sie ins Teil eingelassen, nicht aufgesetzt."
         ),
     )
     play: float = play_param(maximum=1.5)
@@ -1428,9 +1428,9 @@ class PegboardHookParams(BaseParams):
         "Zum Abnehmen muss die Rastzunge durch den Schlitz niedergedrückt werden "
         "— ohne Werkzeug geht das nur, wenn man vor der Wand steht. Wer ein Teil "
         "oft abnimmt, schaltet sie ab; dann löst sich der Einhänger auf "
-        "demselben Weg, auf dem er eingehängt wird. Schlitzmaße und Raster sind "
-        "gegen eine bemaßte Zeichnung geprüft; die Plattendicke ist mit 5 mm am "
-        "28.08.2026 gemessen — daraus folgen Tiefe von Nase und Zunge."
+        "demselben Weg, auf dem er eingehängt wird. Schlitzmaße und Raster stammen "
+        "aus einer bemaßten Zeichnung, die Plattendicke von 5 mm ist nachgemessen; "
+        "daraus folgt, wie tief Nase und Zunge greifen."
     ),
     changes=[
         PEGBOARD_HOOK_ADDED,
@@ -1754,7 +1754,7 @@ class FootParams(BaseParams):
         maximum=10.0,
         placement="advanced",
         doc=_(
-            "Schräge am Rand. Null heißt beim Fuß: ein Fünftel der Höhe, genug "
+            "Schräge am Rand. Null heißt beim Fuß: ein Fünftel der Höhe, genug, "
             "damit die erste Schicht nicht als Grat vorsteht. Bei der Tasche ist "
             "es eine Fase zum Einfädeln."
         ),
@@ -1782,7 +1782,7 @@ class FootParams(BaseParams):
     caveat=_(
         "Nicht für Teile, die auf der Fläche aufliegen sollen — ein Fuß hebt sie ab. "
         "Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine "
-        "hineingesetzt stünde die Schraube auf dem Tisch."
+        "Schraube darin stünde auf dem Tisch."
     ),
     changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE, FOOT_PROFILE_FIXED, MATERIAL_OF_TARGET],
 )

@@ -163,12 +163,17 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 43 (RM-226): Ein Zylinder, der quer zu seiner Achse nicht in seinen
 #:   Körper passt, ist auch am exakten Kern keine Verrundung, sondern eine
 #:   gekrümmte Fläche wie am Netz; gespeicherte exakte Merkmale nennen ihn noch
-#:   ``fillet``.
+#:   ``fillet``. Auf ``main`` stand die 43 zugleich für RM-504 (unten).
 #: - 44 (RM-226): Das Netz trennt tangential verbundene Rundungen an ihren
 #:   Zylindern, nennt Kugelecken zwischen verrundeten Kanten Verrundung und die
 #:   Ebenen dazwischen Fläche; gespeicherte Netzmerkmale führen dort noch eine
 #:   einzige gekrümmte Fläche.
-CACHE_FORMAT_VERSION: Final = 44
+#: - 45: Zusammenführung beider Linien. RM-504 (auf ``main`` die 43): Der
+#:   exakte Körper liest Muster an seiner Tessellierung; ein gespeicherter
+#:   STEP-Import trüge sonst weiter Einzelflächen. Ausdrücklich
+#:   zusammengefasste Zellen binden sich wie Texturen an ihre Oberfläche. Ein
+#:   Eintrag aus nur einer der beiden Linien kennt die andere Änderung nicht.
+CACHE_FORMAT_VERSION: Final = 45
 
 
 @dataclass(frozen=True, slots=True)

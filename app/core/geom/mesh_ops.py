@@ -2367,7 +2367,7 @@ class ThickenParams(BaseParams):
         # und eine Zahl im Schema wüsste es nicht.
         maximum=50.0,
         doc=_(
-            "Wie dick die Wand wird. Unter zwei Extrusionsbahnen ist sie fragil — "
+            "Wie dick die Wand wird. Unter zwei Bahnen bricht sie leicht — "
             "was das für dieses Material heißt, sagt der Prüfbericht."
         ),
     )

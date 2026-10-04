@@ -281,6 +281,19 @@ def features_of(
 
     found = _joined_tori(found, mesh, cancelled=cancelled)
 
+    # **Viele gleiche Zellen sind auch am exakten Körper ein Muster** (RM-504).
+    # Dieselbe Frage wie am Netz (``perceive.patterns``), an denselben
+    # Dreiecken der Tessellierung und mit denselben Schwellen: Eine Wabenplatte
+    # aus STEP hatte sonst 90 Flächen, ihr Netzzwilling ein Muster, und der Weg
+    # zu den Musterhandlungen führte über *Flächenbearbeitung beenden*. Wie am
+    # Netz nach dem Langloch und vor den freien Rundungen — deren Dreiecke
+    # wären sonst vergeben, bevor die Zellwände einer Welle gezählt sind.
+    from app.core.perceive.patterns import patterns_instead_of_cells
+
+    found = patterns_instead_of_cells(
+        mesh, found, check_cancelled=cancelled.raise_if_cancelled if cancelled else None
+    )
+
     from app.core.perceive.features import detect_curved_faces, voids_instead_of_phantom_bores
 
     # Die Restflächen teilen die fachliche Glättungs- und Innenseitenprüfung

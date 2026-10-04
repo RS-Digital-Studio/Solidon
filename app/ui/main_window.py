@@ -5420,6 +5420,9 @@ class MainWindow(QMainWindow):
             # Magnettasche —, tut *Senken* nichts Sinnvolles (R3); die Karte
             # bietet es dort nicht an.
             left_out=not_offered_at(picked) if picked is not None else frozenset(),
+            # Mehrere markierte Merkmalszeilen eines Körpers bieten vorn das
+            # Zusammenfassen als Muster an (RM-504).
+            features=self._several_features_chosen(),
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
@@ -10943,6 +10946,20 @@ class MainWindow(QMainWindow):
         if hint and hint != action.text().replace("&", "").strip():
             return False, hint
         return False, tr("Das geht gerade nicht.")
+
+    def _several_features_chosen(self) -> int:
+        """Wie viele Merkmale des gewählten Körpers markiert sind — null bei einem.
+
+        Eine Zeile kann zwei Merkmale tragen (Bohrung mit Senkung); gefragt
+        wird deshalb wie in :meth:`_from_selection` nach der Zeile:
+        Nur ohne einzeln gewähltes Merkmal zählt die Menge.
+        """
+        selected = self.object_tree.selected()
+        if selected is None or self.object_tree.selected_feature() is not None:
+            return 0
+        return sum(
+            1 for owner, _feature in self.object_tree.selected_features() if owner == selected
+        )
 
     def selected_feature_kind(self) -> str | None:
         """Die Art des gerade ausgewählten Merkmals — ``hole``, ``face`` und
@@ -23588,8 +23605,8 @@ class MainWindow(QMainWindow):
         else:
             self.announce(
                 tr(
-                    "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
-                    "eine Änderung am Stapel rechnet weiter."
+                    "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand; "
+                    "die nächste Änderung rechnet weiter."
                 )
             )
         if self.session.recognition_interrupted():

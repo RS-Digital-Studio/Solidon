@@ -30,6 +30,7 @@ it into `website/version.json`.
 - The *T-slot tongue for extrusion* fits Motedis 20 × 20 B-type slot 6 and 30 × 30 B-type slot 8, with a head shaped like the slot. The three previous sizes remain available as older dimensions.
 - In the report, *Rebuild model* rebuilds an imported part from basic shapes, holes and fillets, compares it with the original within the limit you set and applies it in one step.
 - The *Profile clamp with liners* starts with the project material in both material fields. Until now both were empty.
+- The part search finds the *T-slot tongue for extrusion* under T-nut as well, and its description says how it differs from a threaded T-nut.
 
 ### Printing and slicer handover
 
@@ -120,6 +121,8 @@ it into `website/version.json`.
 - A direction you enter on the right for a slot also reaches the dimension card in the view, and *Apply* stays available. Until now it fell back to 0° there.
 - Solidon recognises cones, fillets and narrow faces the same way on more models, whether the model is moved, rotated or scaled.
 - Solidon recognises each rib, honeycomb or dimple field in an imported file as one pattern, and *Detect features here* combines the cells of a field.
+- A small field that Solidon reads only as separate features becomes one pattern with *Combine into a pattern*. Patterns in STEP files are now recognised directly.
+- Pieces of an automatic split are numbered in projects from older versions too, and a deleted or disabled cut no longer counts.
 
 ### Fillets and chamfers
 

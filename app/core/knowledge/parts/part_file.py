@@ -1208,7 +1208,7 @@ class PartFileIO:
             or len(attempted) > shared.MAX_OPERATION_OUTPUTS
         ):
             raise self._recipe_error(
-                _("Die Löserversuche eines Rezeptschritts ist ungültig."),
+                _("Die Löserversuche eines Rezeptschritts sind ungültig."),
                 field=f"{step}.solver.attempted",
             )
         seed = solver.get("seed")

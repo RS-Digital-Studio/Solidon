@@ -98,8 +98,8 @@ class DuplicateObjectParams(BaseParams):
         minimum=1,
         maximum=MAX_COPIES,
         doc=_(
-            "Wie viele Ausfertigungen es danach gibt. Zwei ist eine Kopie — die "
-            "Stückzahl steht damit im Stapel und nicht im Dateinamen."
+            "Wie viele Ausfertigungen es danach gibt, das Original mitgezählt. "
+            "Zwei heißt: eine Kopie."
         ),
     )
     name: str = param(
@@ -121,8 +121,8 @@ class DuplicateObjectParams(BaseParams):
     produces_from="count",
     shortcut="Ctrl+D",
     doc=_(
-        "Legt weitere Ausfertigungen des Objekts an. Alle bleiben getrennt, und "
-        "die Stückzahl steht als Zahl im Stapel."
+        "Legt weitere Ausfertigungen des Objekts an. Jede bleibt ein eigenes "
+        "Objekt, und die Stückzahl lässt sich im Verlauf ändern."
     ),
 )
 def duplicate_object(ctx: OpContext) -> OpResult:
@@ -185,7 +185,7 @@ class PatternParams(BaseParams):
         choices=("linear", "circular"),
         doc=_(
             "Linear reiht die Kopien entlang einer Richtung auf, kreisförmig legt "
-            "sie um eine Achse. Eine Operation, zwei Arten — nicht zwei Einträge."
+            "sie um eine Achse."
         ),
     )
     count: int = param(
@@ -269,8 +269,8 @@ class PatternParams(BaseParams):
     produces_from="count",
     doc=_(
         "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein "
-        "Kranz Schraubdome, eine Reihe Clips. Ein Schritt mit einer Zahl darin "
-        "statt neun gleicher Schritte im Stapel."
+        "Kranz Schraubdome, eine Reihe Clips. Ein einziger Schritt im Verlauf, "
+        "und die Anzahl bleibt änderbar."
     ),
 )
 def pattern(ctx: OpContext) -> OpResult:

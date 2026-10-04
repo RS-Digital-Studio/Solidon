@@ -15,7 +15,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 | `profiles.py` | Vom Skizzenumriss zum Körper (§30.1): Gewinde, Formschräge, Bahn, Übergang, Querschnitte für Profilklemmen und Dichtnuten (`face_of`, `offset_face`, `face_boolean`, `prism`), `round_cord`, `shell_open_at`, `top_faces_of` |
 | `ops.py` | Die Operationen (§25, §10): `mesh_to_exact`, `brep_to_mesh`, `thread_exact`, `create_brep_box` …; `drill_brep_hole`, `shell_exact` versteckt, `prepare_ops.drill_hole` und `hollow_object` rufen sie |
 | `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet_group` rundet eine belegte Gruppe und lässt je Kontur aus, was OpenCASCADE nicht baut (`GroupFillet`, Suche `_GroupSearch`, Kandidat `_group_candidate`, Ortung `_RoundsOf`); `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
-| `features.py` | Merkmale aus der Topologie (§21), `features_of`; „durchgehend?" erst nach dem Gewinde (`_ThroughQuestion`) |
+| `features.py` | Merkmale aus der Topologie (§21), `features_of`; „durchgehend?" erst nach dem Gewinde (`_ThroughQuestion`); Muster mit der Netzsuche `perceive.patterns` an der Tessellierung |
 | `canonical.py` | Geprüfte Träger mit wirklichen Grenzen (`surface_sample`, `horizontal_area`); Kegel bis in die Spitze (`_apart_from_the_apex`), gespiegelte Ebene über die Pole (`_pole_plane`) |
 | `thread.py` | Gewinde an importierter Geometrie (§21.1) |
 | `properties.py` | Volumen, Fläche, Schwerpunkt (§11); `estimated_volume` nur zur Plausibilität, nie veröffentlicht |

@@ -104,8 +104,8 @@ class PushFaceParams(BaseParams):
         "Modell gibt es keine."
     ),
     caveat=_(
-        "Nur an einer ebenen Fläche. Eine gewölbte hat keine eine Richtung, "
-        "entlang der sie wandern könnte; dort hilft, das Merkmal über seine "
+        "Nur an einer ebenen Fläche. Eine gewölbte hat keine einzelne Richtung, "
+        "in die sie wandern könnte; dort hilft es, das Merkmal über seine "
         "Maße zu ändern."
     ),
     shortcut="Q",

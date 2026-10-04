@@ -31,7 +31,7 @@ absichtlich mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
   Werkzeugaufruf, nicht als Gewohnheit in einer Liste**: drei Prüfungen, jede
   einzeln hinreichend für eine Rückfrage — Ziel eindeutig, Maß genannt, Bezug
   vorhanden —, dazu der Satz, der das Herumprobieren abstellt („und sonst
-  nichts"). Anleitend in einer Liste hielt sie nicht; heute sind es 157
+  nichts"). Anleitend in einer Liste hielt sie nicht; heute sind es 158
   Operationen und elf Zusatzwerkzeuge, und wer genug Angebote hat, findet
   immer eines, das plausibel aussieht.
 - **Allgemein formulieren, nicht nach den Testanfragen** — eine auf die Suite
@@ -94,7 +94,7 @@ samt Messreihe.
   Fenster plus `TRUNCATION_KEEPS`) bei einer Anfrage, die größer sein kann als
   das Fenster. Die Werkzeugzahl sagt nichts über die Größe. Die Messwerkzeuge
   fragen dieselbe Funktion.
-- **157 Operationen, 168 Werkzeuge** — die Zahlen hält
+- **158 Operationen, 169 Werkzeuge** — die Zahlen hält
   `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
   Werkzeug- und Tokenzahl in `backends/llm.py` gehören zur selben Zählung
   (`test_the_measured_prompt_matches_the_current_tool_count`; die Chronik

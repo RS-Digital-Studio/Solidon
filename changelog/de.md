@@ -55,6 +55,7 @@ Nutzen da und sonst nichts.
 - Die *Nutfeder für Aluprofil* passt zu Motedis 20 × 20 B-Typ Nut 6 und 30 × 30 B-Typ Nut 8, ihr Kopf folgt der Form der Nut. Die drei bisherigen Größen bleiben als ältere Maße wählbar.
 - Im Prüfbericht baut *Modell nachbauen* ein eingelesenes Teil aus Grundformen, Bohrungen und Rundungen nach, vergleicht es in der gewählten Grenze mit dem Original und übernimmt es in einem Schritt.
 - Die *Profilklemme mit Einlagen* beginnt mit dem Material des Projekts in beiden Materialfeldern. Bisher waren beide leer.
+- Die Bausteinsuche findet die *Nutfeder für Aluprofil* auch unter Nutenstein und T-Nut, und ihre Beschreibung sagt, worin sie sich von einem Nutenstein mit Gewinde unterscheidet.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -145,6 +146,8 @@ Nutzen da und sonst nichts.
 - Eine Richtung, die Sie rechts für ein Langloch eintragen, übernimmt auch die Maßkarte im Bild, und *Übernehmen* bleibt frei. Bisher fiel sie dort auf 0° zurück.
 - Kegel, Rundungen und schmale Flächen erkennt Solidon an mehr Modellen gleich, ob das Modell verschoben, gedreht oder skaliert ist.
 - Rippen-, Waben- und Noppenfelder einer eingelesenen Datei erkennt Solidon je als ein Muster, und *Merkmale an dieser Stelle erkennen* fasst die Zellen eines Felds zusammen.
+- Ein kleines Feld, das Solidon nur als einzelne Merkmale liest, fassen Sie mit *Als Muster zusammenfassen* zu einem Muster zusammen. Muster in STEP-Dateien erkennt Solidon direkt.
+- Auch in Projekten aus älteren Versionen zählen die Stücke einer automatischen Teilung durch, und ein gelöschter oder ausgeschalteter Schnitt zählt nicht mehr mit.
 
 ### Verrunden und Fasen
 
