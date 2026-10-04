@@ -1247,7 +1247,14 @@ Kopie, der in Art, Mitte und Durchmesser bis zur Facettengrenze auf einem
 Merkmal der Quelle liegt (`_already_there`) — ohne Freiheit entlang der Achse,
 damit eine Kopie in eine zweite Wand Kandidat bleibt
 (`test_a_copy_along_its_own_axis_into_the_air_is_lost_on_both_kernels`, vorher
-am Netz alle sechs Fälle rot).
+am Netz alle sechs Fälle rot). **Und eine Senkung findet sich an beiden Kernen
+über ihre Spitze wieder** (`_same_cone`): Mitte und Durchmesser beschreiben
+ihren weitesten Rand, und den schneidet an der neuen Stelle eine Seite ab. Eine
+Senkbohrung, 25 mm längs der schrägen Platte über die Stirn verdoppelt oder
+vervielfacht, maß dort Ø 12,54 bei z = 11,27 statt 13,33 bei 11,67; das Netz
+fand sie über die Spitze, der exakte Kern suchte an der Mitte und nannte sie
+verloren (`test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels`,
+ohne die Spitzensuche in `_exact_copy_result` acht von zwölf Fällen rot).
 
 **Und eine Bohrung, in deren Zylinder Material steht, ist keine** —
 `hole_is_clear` fragt die Dreiecksmitten des Körpers zwischen den Mündungen

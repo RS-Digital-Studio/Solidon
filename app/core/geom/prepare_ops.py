@@ -4791,7 +4791,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 9: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
     # 10: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 11: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
-    cache_version="11",
+    # 12: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
+    cache_version="12",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5219,7 +5220,8 @@ class _PatternPlace:
     # jede Kopie fragt die Säule; am Netz im Werkzeug ihres Platzes (RM-226).
     # 8: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 9: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
-    cache_version="9",
+    # 10: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
+    cache_version="10",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -12998,6 +13000,19 @@ def _exact_copy_result(
                 if abs(float(fresh[name].params.get("diameter") or 0.0) - wanted)
                 <= max(FEATURE_OVERLAP, wanted * _SAME_LENGTH)
             ]
+        if not found and copy.kind == "cone":
+            # **Eine Senkung über ihre Spitze, wie am Netz** (``_measured_among``
+            # mit ``_same_cone``; RM-226, Nachtrag 04.10.2026): Mitte und
+            # Durchmesser beschreiben ihren weitesten Rand, und den schneidet an
+            # der neuen Stelle eine Seite ab. Eine Senkbohrung, 25 mm längs der
+            # schrägen Platte über die Stirn verdoppelt, maß dort Ø 12,54 bei
+            # z = 11,27 statt 13,33 bei 11,67 — exakt verloren, am Netz gefunden.
+            cone = _same_cone(
+                {name: entry for name, entry in fresh.items() if name not in claimed},
+                copy,
+                diagonal,
+            )
+            found = [] if cone is None else [cone]
         if len(found) == 1:
             claimed[found[0]] = copy.id
         elif not found:

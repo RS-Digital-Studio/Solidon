@@ -2685,8 +2685,10 @@ def test_a_copy_under_the_top_is_not_over_the_edge_on_both_kernels(
 
 
 @pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("travel", [24.0, 25.0, 26.0])
+@pytest.mark.parametrize("op", ["duplicate_feature", "pattern_feature"])
 def test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels(
-    quality: Quality, profile: Profile
+    op: str, travel: float, quality: Quality, profile: Profile
 ) -> None:
     """Die Gegenrichtung: Unter der Haut, aber seitlich hinaus, bleibt „über die Kante“.
 
@@ -2695,15 +2697,24 @@ def test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels(
     0,48 mm³ weniger ab als ganz im Material. Die Frage nach der Haut
     (``_sink_under_a_skin``) gibt die Senkung nur frei, wenn ihr weites Ende
     ringsum im Material liegt; sonst fragt sie wie zuvor am Austritt.
+
+    **Und die angeschnittene Kopie gibt es an beiden Kernen.** Ab 25 mm misst
+    die Erkennung den weitesten Rand der Senkung tiefer, wo die Stirn sie
+    abschneidet (Mitte z = 11,27 statt 11,67, Ø 12,54 statt 13,33). Der exakte
+    Kern suchte die Kopie an ihrer Mitte und nannte sie verloren, das Netz fand
+    sie über ihre Spitze (``_same_cone``); jetzt sucht auch der exakte Kern eine
+    Senkung, die nicht an ihrer Mitte sitzt, über die Spitze. Das Muster endet
+    exakt im selben Weg (``_exact_copy_result``), sein dritter Platz liegt dort,
+    wo die Kopie liegt.
     """
     exact_kernel()
     load_operations()
-    said, volumes = _buried_copy_on_both_kernels(
-        "sink", "duplicate_feature", 24.0, quality, profile
-    )
-    expected = ["bore.over_the_edge", "duplicate_feature.no_longer_through"]
-    assert said["mesh"] == said["brep"] == expected, said
-    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), volumes
+    said, volumes = _buried_copy_on_both_kernels("sink", op, travel, quality, profile)
+    expected = ["bore.over_the_edge", f"{op}.no_longer_through"]
+    if op == "pattern_feature":
+        expected = ["bore.over_the_edge", f"{op}.done", *[f"{op}.no_longer_through"] * 2]
+    assert said["mesh"] == said["brep"] == expected, (op, said)
+    assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), (op, volumes)
 
 
 def _bored_flat_plate(shape: str) -> Any:
