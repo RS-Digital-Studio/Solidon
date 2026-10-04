@@ -60,6 +60,7 @@ from app.core.scene.history import (
     OperationDraft,
     RevisionPlan,
     StepNeed,
+    step_position,
 )
 from app.core.scene.orphans import Reference, fit_name_from_key, references, with_reference
 from app.core.types import (
@@ -442,6 +443,19 @@ def _old_number(plan: RevisionPlan, step: OpId | None) -> OpId | None:
     return None if step in plan.subjects and plan.kind == "insert" else step
 
 
+def _shown_number(document: Document, plan: RevisionPlan, step: OpId) -> int:
+    """Die Nummer, unter der der Kunde einen Schritt des Vorschlags im Verlauf sieht.
+
+    Ein vorhandener Schritt steht heute an seiner Stelle; ein neuer an der,
+    die er nach dem Vorschlag hätte (RM-368: Nummern sind Stellen, keine
+    Kennungen).
+    """
+    old = _old_number(plan, step)
+    if old is not None:
+        return step_position(document.ops, old)
+    return step_position(plan.document(document).ops, step)
+
+
 def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) -> UserError:
     """Die Absage, wenn der Vorschlag anhält — mit dem Grund aus dem Halt."""
     halt = next(
@@ -463,7 +477,7 @@ def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) ->
             title=_("Das würde die Kette anhalten — geändert wurde nichts."),
             detail=_(
                 "Ohne diesen Schritt hielte Schritt {number} an: {reason}",
-                number=shown,
+                number=step_position(document.ops, shown),
                 reason=reason,
             ),
             values={
@@ -478,7 +492,11 @@ def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) ->
     return UserError(
         title=_("Das würde die Kette anhalten — geändert wurde nichts."),
         detail=(
-            _("Danach hielte Schritt {number} an: {reason}", number=shown, reason=reason)
+            _(
+                "Danach hielte Schritt {number} an: {reason}",
+                number=step_position(document.ops, shown),
+                reason=reason,
+            )
             if shown is not None
             else _("Danach hielte der neue Schritt an: {reason}", reason=reason)
         ),
@@ -497,7 +515,10 @@ def _lost(document: Document, drift: Drift, plan: RevisionPlan) -> UserError:
     known = {entry.id for entry in document.ops}
     return AmbiguityError(
         (
-            _("Danach fände Schritt {number} sein Merkmal nicht mehr.", number=number)
+            _(
+                "Danach fände Schritt {number} sein Merkmal nicht mehr.",
+                number=step_position(document.ops, number),
+            )
             if drift.fit is None and number is not None
             else _("Danach fände eine Passung ihr Merkmal nicht mehr.")
         ),
@@ -514,14 +535,15 @@ def _lost(document: Document, drift: Drift, plan: RevisionPlan) -> UserError:
     )
 
 
-def _question(drift: Drift) -> tuple[str, list[str]]:
+def _question(drift: Drift, document: Document, plan: RevisionPlan) -> tuple[str, list[str]]:
     """Die Frage an den Kunden: welches Merkmal gemeint ist (§21.3)."""
     from app.i18n import tr
 
     if drift.fit is not None:
         text = tr("Welches Merkmal meint die Passung {name}?").replace("{name}", drift.fit)
     else:
-        text = tr("Welches Merkmal meint Schritt {number}?").replace("{number}", str(drift.step))
+        shown = _shown_number(document, plan, drift.step) if drift.step is not None else "?"
+        text = tr("Welches Merkmal meint Schritt {number}?").replace("{number}", str(shown))
     return text, list(drift.verdict.candidates)
 
 
@@ -778,7 +800,7 @@ def revise(
         for drift in lost:
             if ask is None or not drift.verdict.candidates:
                 raise _lost(history.document, drift, plan)
-            question, choices = _question(drift)
+            question, choices = _question(drift, history.document, plan)
             if announce is not None:
                 announce(
                     seen_at, tuple((drift.object_id, name) for name in drift.verdict.candidates)
