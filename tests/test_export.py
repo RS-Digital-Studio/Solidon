@@ -15,7 +15,7 @@ import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
-from app.core.export import handover, slicer_keys, threemf
+from app.core.export import handover, manufacturer, slicer_keys, threemf, writer
 from app.core.export.handover import with_slot_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
@@ -1834,6 +1834,115 @@ def test_a_rim_reaching_into_a_bed_exclusion_is_said() -> None:
     assert found.suggestions, "Regel 17: Anordnen"
     none = print_settings.with_path(settings, "adhesion.kind", "none")
     assert check_adhesion_on_bed([near], none, profile) == []
+
+
+def _near_the_edge(profile: Profile, gap: float) -> MeshData:
+    """Ein Quader, dessen rechte Kante ``gap`` mm vor dem Bettrand liegt."""
+    half = profile.printer.build_volume[0] / 2.0
+    return _boxed("Rand", (10.0, 10.0, 5.0), (half - gap - 5.0, 0.0)).mesh
+
+
+def test_the_orca_auto_brim_is_warned_at_its_largest_width() -> None:
+    """Entscheidung zu RM-312 (J): Der Auto-Brim der Orca-Familie wählt seine
+    Breite selbst, bis :data:`writer.ORCA_AUTO_BRIM_MAX` (OrcaSlicer
+    ``Brim.cpp``); am Rack legte ElegooSlicer 14,7 mm statt der 5 mm des
+    Profils und lief über das Bett. Ein Teil näher am Rand bekommt die Warnung
+    mit *Brim-Breite festlegen*; eine gewählte Brimbreite geht ausdrücklich
+    hinaus und gilt so, wie sie ist."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    auto = print_settings.with_path(settings, "adhesion.kind", "auto")
+    auto = print_settings.with_path(auto, "adhesion.brim_width", 5.0)
+    auto = print_settings.with_path(auto, "adhesion.brim_gap", 0.0)
+    auto = print_settings.with_path(auto, "adhesion.skirt_loops", 0)
+    near = _near_the_edge(profile, 10.0)
+    far = _near_the_edge(profile, writer.ORCA_AUTO_BRIM_MAX + 1.0)
+
+    [found] = check_adhesion_on_bed([near], auto, profile, ["Rand"], flavour="orca")
+
+    assert found.code == "arrange.adhesion_off_bed"
+    assert found.values["distance"] == format_length(writer.ORCA_AUTO_BRIM_MAX - 10.0)
+    assert found.values["field"] == "adhesion.kind"
+    assert found.suggestions[0] is writer.FIX_BRIM_WIDTH
+    assert found.suggestions[0].id == "open_print_settings"
+    assert check_adhesion_on_bed([far], auto, profile, flavour="orca") == []
+    assert check_adhesion_on_bed([near], auto, profile, flavour="prusa") == [], (
+        "nur die Orca-Familie kennt den Auto-Brim"
+    )
+    chosen = print_settings.with_choice(auto, "adhesion.kind", "brim")
+    assert check_adhesion_on_bed([near], chosen, profile, flavour="orca") == [], (
+        "ein gewählter Brim hat seine Breite"
+    )
+
+
+def test_the_support_foot_and_its_skirt_are_warned_at_the_bed_edge() -> None:
+    """RM-312: SuperSlicer verbreitert die erste Stützschicht um
+    ``raft_first_layer_expansion`` (3 mm) und legt den Skirt darum; an
+    garden-hose-holder.3mf (2,4 mm vor dem Rand des MINI) lief beides 2,5 mm
+    über das Bett, gewarnt hatte Solidon 0,01 mm."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    skirt = print_settings.with_path(settings, "adhesion.kind", "skirt")
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_loops", 1)
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_distance", 2.0)
+    supported = print_settings.with_path(skirt, "support.style", "grid")
+    unsupported = print_settings.with_path(skirt, "support.style", "none")
+    line = supported.layers.first_layer_line_width
+    near = _near_the_edge(profile, 4.0)
+
+    [found] = check_adhesion_on_bed(
+        [near], supported, profile, ["Rand"], flavour="prusa", support_foot=3.0
+    )
+
+    assert found.values["distance"] == format_length(3.0 + 2.0 + line - 4.0)
+    assert found.values["field"] == "adhesion.skirt_loops"
+    assert writer.SMALLER_SKIRT in found.suggestions
+    assert check_adhesion_on_bed([near], unsupported, profile, flavour="prusa") == []
+    # Ein Vorschlag je Teil schaltet die Stütze am Objekt ein, die Platte bleibt ohne.
+    [per_part] = check_adhesion_on_bed(
+        [near], unsupported, profile, per_part=[supported], flavour="prusa", support_foot=3.0
+    )
+    assert per_part.values["field"] == "adhesion.skirt_loops"
+    unknown = check_adhesion_on_bed([near], supported, profile, flavour="cura")
+    assert [entry.code for entry in unknown] == ["arrange.support_foot_unknown"], (
+        "ohne Wert im Profil wird nichts geschätzt, sondern gesagt"
+    )
+
+
+def test_the_profiles_skirt_beside_a_brim_counts_until_solidon_writes_the_kind() -> None:
+    """Prusa und Orca drucken Skirt und Brim nebeneinander, wenn das Profil
+    beide nennt; schreibt Solidon eine Haftungsart, nullt die Übergabe die
+    übrigen (``handover._only_chosen_adhesion``)."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    both = print_settings.with_path(settings, "adhesion.kind", "brim")
+    both = print_settings.with_path(both, "adhesion.brim_width", 3.0)
+    both = print_settings.with_path(both, "adhesion.skirt_loops", 1)
+    both = print_settings.with_path(both, "adhesion.skirt_distance", 6.0)
+    line = both.layers.first_layer_line_width
+
+    assert writer.rim_reach(both, "prusa") == pytest.approx(3.0 + 6.0 + line)
+    assert writer.rim_reach(both, "cura") == pytest.approx(3.0)
+    chosen = print_settings.with_choice(both, "adhesion.kind", "brim")
+    assert writer.rim_reach(chosen, "prusa") == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize(
+    ("values", "program", "expected"),
+    [
+        ({"raft_first_layer_expansion": "1.5"}, "orcaslicer", 1.5),
+        ({}, "elegooslicer", 2.0),
+        ({}, "superslicer", 3.0),
+        ({"raft_first_layer_expansion": "-1"}, "bambustudio", None),
+        ({}, "bambustudio", None),
+        ({}, "cura", None),
+    ],
+)
+def test_the_support_foot_comes_from_the_chain_or_the_measured_program(
+    values: dict[str, str], program: str, expected: float | None
+) -> None:
+    """Eine Breite nur, wo Kette oder gemessene Programmvorgabe sie nennen."""
+    assert manufacturer.support_foot(values, program) == expected
 
 
 def test_a_part_too_tall_for_the_printer_is_named_as_such() -> None:
