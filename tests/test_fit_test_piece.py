@@ -78,7 +78,11 @@ def test_both_halves_of_a_fit_come_out_of_one_window(profile: Profile) -> None:
 
     gap = next(finding for finding in result.findings if finding.code == "prepare.test_piece_gap")
     assert gap.values["gap_mm"] == pytest.approx((BORE - PIN) / 2.0, abs=0.03)
-    assert "0.2" in str(gap.message), "das Spiel steht im Satz"
+    # Eine Länge aus dem Kern schreibt sich im Satz mit dem Dezimalzeichen der
+    # Sprache (``app.i18n.Figure``).
+    from app.i18n import decimal_separator
+
+    assert f"0{decimal_separator()}2" in str(gap.message), "das Spiel steht im Satz"
 
     # Beide aufs Bett, nebeneinander, ohne sich zu berühren.
     assert first.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)

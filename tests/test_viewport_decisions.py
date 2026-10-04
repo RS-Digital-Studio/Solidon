@@ -7536,6 +7536,53 @@ def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplicati
         viewport.deleteLater()
 
 
+def test_a_body_under_an_analysis_map_keeps_its_colours_when_selected() -> None:
+    """Die Karte besitzt die Farbe ihres Körpers, auch wenn er gewählt ist (§19.1).
+
+    Die Auswahl schaltete die Dreiecksfarben jedes gewählten Körpers ab — auch
+    die der Karte. In der Formsitzung ist der Körper immer gewählt, und die
+    Überhangkarte zeigte statt ihrer Werte Flecken (Fensterabnahme RM-366).
+    Ohne Fenster an der Entscheidung selbst; der Weg durch die Ansicht steht
+    im Fenstertest darunter.
+    """
+    from app.ui.viewport import shows_face_colours
+
+    assert shows_face_colours("obj_1", highlighted=(), map_owner=None)
+    assert not shows_face_colours("obj_1", highlighted=("obj_1",), map_owner=None), (
+        "ein gewählter Körper mit Filament zeigt die eine Auswahlfarbe"
+    )
+    assert shows_face_colours("obj_1", highlighted=("obj_1",), map_owner="obj_1")
+    assert not shows_face_colours("obj_2", highlighted=("obj_2",), map_owner="obj_1"), (
+        "die Karte des einen Körpers gibt dem anderen keine Ausnahme"
+    )
+
+
+def test_selecting_the_body_of_an_analysis_map_leaves_the_map_visible(qt_app: QApplication) -> None:
+    """Der Weg durch die Ansicht: Karte setzen, Körper wählen, Karte bleibt sichtbar."""
+    from app.core.perceive.maps import overhang_map
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    mesh = MeshData.of(body)
+    entry = SceneObject(id="obj_1", name="Quader", mesh=mesh)
+    result = EvaluationResult(scene=Scene(objects={"obj_1": entry}), object_hashes={"obj_1": "h"})
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    try:
+        viewport.show_scene(result)
+        viewport.set_analysis_map(overhang_map(mesh), "obj_1")
+        viewport.select("obj_1")
+        actor = viewport._actors.get("obj_1")
+        assert isinstance(actor, RecordingItem), "der Körper wurde gezeichnet"
+        assert actor.face_colours_visible, "gewählt bleibt die Karte die Farbe des Körpers"
+    finally:
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
 def test_the_grip_on_a_preview_is_asked_before_the_camera(qt_app: QApplication) -> None:
     """Ein Griff, der in der Vorfahrt fehlt, steht im Bild und nimmt nichts an.
 

@@ -250,6 +250,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las miniaturas de ejemplos y bloques muestran la altura hacia arriba. Hasta ahora las piezas altas apuntaban hacia abajo en ellas.
 - Si Solidon no puede guardar la opción «Incluir valores», el aviso aparece junto al interruptor.
 - Si otros programas ocupan todos los núcleos en Windows, un cálculo con un modelo grande ya no se queda parado durante minutos.
+- Las longitudes en los avisos usan el separador decimal de su idioma.
+- Tras cargar un modelo grande, el indicador de carga permanece hasta que la vista muestra el modelo.
+- Un clic en una línea del informe de comprobación selecciona sus cuerpos aunque la lista se desplace al hacer clic.
 
 ## 0.5.1
 

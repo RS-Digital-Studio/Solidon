@@ -250,6 +250,9 @@ dans `website/version.json`.
 - Les vignettes des exemples et des blocs montrent la hauteur vers le haut. Jusqu'ici, les pièces hautes y pointaient vers le bas.
 - Si Solidon ne peut pas enregistrer le choix « Inclure les valeurs », la remarque s'affiche directement à côté de l'interrupteur.
 - Si d'autres programmes occupent tous les cœurs sous Windows, un calcul sur un grand modèle ne reste plus bloqué pendant des minutes.
+- Les longueurs dans les messages utilisent le séparateur décimal de votre langue.
+- Après le chargement d'un grand modèle, l'indicateur de chargement reste affiché jusqu'à ce que la vue montre le modèle.
+- Un clic sur une ligne du rapport de contrôle sélectionne ses corps même si la liste se décale pendant le clic.
 
 ## 0.5.1
 

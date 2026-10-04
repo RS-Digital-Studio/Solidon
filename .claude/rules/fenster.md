@@ -79,7 +79,9 @@ werden:
 
 - **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte beim
   Namen, mit Nummer und Titel wie im Verlauf (`history.named_steps`: bis vier
-  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z.
+  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z. Titel
+  aus `history.step_titles`, derselben Quelle wie die Zeilen und der
+  Löschtitel; ein gelöschter Schritt trägt keine Nummer mehr.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
   Alternative — auch das Schließen — lädt mit begrenzter Erkennung. Das ist
@@ -173,7 +175,8 @@ Stellen halten das, beide sind nötig:
   nicht *Modell teilen*.
 - Gleiche Meldungen bündeln ab zwei nach Satz, Kennung, Schwere, Schritt und
   Handlungen; Anzahl davor in Klammern. Klick wählt alle Körper, Handlung fragt
-  die Teilmenge. Nur gemeinsame Merkmale, aber alle Umrissorte eines Körpers
+  die Teilmenge. Gewählt wird beim Drücken (`_ReportList.leftPressed`): Die
+  Karte ändert ihre Höhe, und beim Loslassen läge die Zeile woanders. Nur gemeinsame Merkmale, aber alle Umrissorte eines Körpers
   werden mitgeführt.
 - `actions_for(finding)` speist sichtbare Knopfzeile und Kontextmenü (§2.7).
   Jeder Befund bekommt `suggestions` oder begründetes `OHNE_KNOPF`

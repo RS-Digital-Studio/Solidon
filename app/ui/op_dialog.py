@@ -62,6 +62,7 @@ from app.ui.labels import (
     display_unit,
     explain_choices,
     feature_label,
+    length,
     limit_sentence,
     localised,
     set_circle_measure,
@@ -161,6 +162,21 @@ NUMBER_AIR = 24
 #: Eine Zeile soll eine Zeile bleiben — wer zwanzig Parameter führt, bekommt
 #: die ersten vier und die Vervollständigung im Feld, die alle kennt.
 _HINT_NAMES = 4
+
+
+def expression_hint(value: float, unit: str) -> str:
+    """Was ein Ausdruck im Feld ergibt, geschrieben wie jede andere Zahl.
+
+    Eine Länge über :func:`labels.length` (Anzeigeeinheit, Dezimalzeichen,
+    keine negative Null), alles andere auf sechs Stellen gerundet. Mit ``:g``
+    stand unter einer nachgebauten Lage „= -4.81259e-17 mm“ (Fensterabnahme
+    RM-022): Rechenrauschen als Exponent, mit Punkt.
+    """
+    if unit == "mm":
+        return f"= {length(value)}"
+    tidy = round(float(value), 6) + 0.0
+    shown = localised(f"{tidy:g}")
+    return f"= {shown} {unit}" if unit else f"= {shown}"
 
 
 class ValueField(QWidget):
@@ -867,8 +883,7 @@ class ValueField(QWidget):
         if self._entry.kind == "int" and not float(value).is_integer():
             self.hint.setText(tr("Der Ausdruck muss eine ganze Zahl ergeben. Passen Sie ihn an."))
             return
-        unit = f" {self._entry.unit}" if self._entry.unit else ""
-        self.hint.setText(self.refusal() or f"= {value:g}{unit}")
+        self.hint.setText(self.refusal() or expression_hint(value, self._entry.unit or ""))
 
 
 class CountField(ValueField):

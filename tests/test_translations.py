@@ -400,8 +400,42 @@ def test_a_numeric_value_keeps_its_format_specification() -> None:
         },
     )
 
-    assert str(text) == "12.3 GB frei, 8 gebraucht"
+    assert str(text) == "12,3 GB frei, 8 gebraucht"
     assert source_text(text) == "12.3 GB frei, 8 gebraucht"
+
+
+def test_a_number_in_a_value_takes_the_decimal_mark_of_the_language() -> None:
+    """Eine Länge aus dem Kern steht im Satz so, wie die Sprache sie schreibt.
+
+    ``format_length`` lässt den Punkt stehen, und der Kern reicht die Zahl als
+    Platzhalterwert in seine Sätze. Am Fenster stand so im deutschen
+    *Verrunden* „Wählen Sie einen Radius unter 15.00 mm“ — im Vorschauband und
+    in der Absage, zwei Zeilen über einem Feld mit „40,00 mm“
+    (Fensterabnahme 04.10.2026, RM-395). Pfade, Versionen und Adressen in einem
+    Wert bleiben, wie sie sind; die Quellsprache für Dateinamen auch.
+    """
+    from app.core.units import format_length
+    from app.i18n import source_text
+
+    install_language("en")
+    text = TranslatableText(
+        "Wählen Sie einen Radius unter {largest}.", None, {"largest": format_length(15.0)}
+    )
+    assert text.translate("de") == "Wählen Sie einen Radius unter 15,00 mm."
+    assert "15.00 mm" in text.translate("en")
+    assert source_text(text) == "Wählen Sie einen Radius unter 15.00 mm."
+
+    signed = TranslatableText("{x} bis {y}", None, {"x": format_length(-25.0), "y": 2.5})
+    assert signed.translate("de") == "-25,00 mm bis 2,5"
+
+    kept = TranslatableText(
+        "{printer} {part} {version}",
+        None,
+        {"printer": "Snapmaker 2.0 A350", "part": "1.2", "version": "0.5.1"},
+    )
+    assert kept.translate("de") == "Snapmaker 2.0 A350 1.2 0.5.1", "Namen sind keine Zahlen"
+    count = TranslatableText("{count} Teile", None, {"count": 3})
+    assert count.translate("de") == "3 Teile", "eine ganze Zahl bleibt, wie sie ist"
 
 
 def test_qt_standard_buttons_speak_the_application_language(qt_app: object) -> None:

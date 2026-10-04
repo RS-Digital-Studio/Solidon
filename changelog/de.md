@@ -274,6 +274,9 @@ Nutzen da und sonst nichts.
 - Vorschaubilder von Beispielen und Bausteinen zeigen die Höhe nach oben. Bisher wiesen hohe Teile darin nach unten.
 - Kann Solidon die Wahl *Werte mitgeben* nicht speichern, steht der Hinweis direkt am Schalter.
 - Lasten andere Programme den Rechner unter Windows voll aus, bleibt eine Rechnung an einem großen Modell nicht mehr minutenlang stehen.
+- Längen in Meldungen stehen mit dem Dezimalzeichen Ihrer Sprache.
+- Nach dem Laden eines großen Modells bleibt die Ladeanzeige stehen, bis die Ansicht das Modell zeigt.
+- Ein Klick auf eine Zeile im Prüfbericht wählt ihre Körper auch dann, wenn sich die Liste dabei verschiebt.
 
 ## 0.5.1
 

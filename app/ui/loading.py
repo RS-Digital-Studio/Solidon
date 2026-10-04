@@ -31,6 +31,7 @@ Schicht um Schicht, mit dem Druckkopf an der Aufbaukante
 from __future__ import annotations
 
 import time
+from typing import Literal
 
 from PySide6.QtCore import QByteArray, QObject, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter
@@ -158,6 +159,21 @@ def elapsed_time(started: float, *, now: float | None = None) -> str:
             minutes=format_decimal(minutes, 0), seconds=format_decimal(seconds, 0)
         )
     return tr("Verstrichen: {seconds} s").format(seconds=format_decimal(seconds, 0))
+
+
+def veil_reason(*, busy: bool, bodies: bool, preparing: bool) -> Literal["", "view", "run"]:
+    """Wofür die Ladeanzeige steht: für einen Lauf, für das Bild oder gar nicht.
+
+    ``bodies`` heißt, das Ergebnis hat Körper; ``preparing``, dass die Ansicht
+    noch nichts zeigt und ihr Arbeiter das erste Bild vorbereitet. **Gelesen
+    ist nicht gezeigt:** Am Mausoleum-Drachen stand die Ansicht sonst
+    sechseinhalb Sekunden leer und ohne Wort (Fensterabnahme RM-366).
+    """
+    if preparing and (bodies or not busy):
+        return "view"
+    if busy and not bodies:
+        return "run"
+    return ""
 
 
 class ProgressTiming(QObject):
@@ -336,6 +352,8 @@ class LoadingVeil(QWidget):
         self._theme: Theme = "dark"
         self._headline = ""
         self._detail = ""
+        #: Ob ein Lauf hinter der Anzeige steht (``begin(running=…)``).
+        self._running = True
         self._owns_timing = timing is None
         self.timing = timing if timing is not None else ProgressTiming(self)
         self.timing.changed.connect(self._timing_changed)
@@ -380,7 +398,7 @@ class LoadingVeil(QWidget):
             self._theme = theme
             self.update()
 
-    def begin(self, headline: str, at_once: bool = False) -> None:
+    def begin(self, headline: str, at_once: bool = False, *, running: bool = True) -> None:
         """Ein Lauf hat begonnen — die Anzeige kommt, wenn er dauert.
 
         Mehrfach aufzurufen ist gefahrlos: der zweite Aufruf schreibt nur die
@@ -392,11 +410,19 @@ class LoadingVeil(QWidget):
         Millisekunde gehört dem nativen Ansichtsfenster mit seinen alten
         Pixeln (siehe ``appeared``). Dort muss die Anzeige vor dem ersten
         Bild stehen, nicht 200 ms danach.
+
+        ``running=False``: Hinter der Anzeige rechnet kein Lauf mehr, die
+        Ansicht bereitet nur ihr erstes Bild vor. Dann gibt es nichts
+        abzubrechen und keinen Anteil zu zeigen — Linie, Schrittzeile und
+        *Abbrechen* fallen weg, statt den letzten Stand des Laufs stehen zu
+        lassen („Merkmale erkennen 0 %“).
         """
         self._headline = headline
         # Was ein Bildschirmleser vorliest. Der Text hier ist gemalt und kein
         # Label — ohne das wäre die Fläche für ihn stumm.
         self.setAccessibleName(headline)
+        self._running = running
+        self.cancel.setVisible(running)
         if self.showing:
             self.update()
             return
@@ -541,6 +567,9 @@ class LoadingVeil(QWidget):
         self._paint_headline(painter, QRectF(column.left(), line, column.width(), HEADLINE_HEIGHT))
 
         line += HEADLINE_HEIGHT + GAP
+        if not self._running:
+            painter.end()
+            return
         self._paint_rail(painter, QRectF(column.left(), line, column.width(), RAIL_HEIGHT), text)
 
         line += RAIL_HEIGHT + ROOMY

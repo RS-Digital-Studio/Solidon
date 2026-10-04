@@ -46,6 +46,61 @@ _catalogs: dict[str, dict[str, str]] = {}
 _language: str = SOURCE_LANGUAGE
 
 
+class Figure(str):
+    """Eine fertig formatierte Zahl mit Punkt, die in jeder Sprache deren Zeichen trägt.
+
+    ``units.format_length`` und seine Geschwister liefern sie: ein
+    gewöhnlicher Text („15.00 mm“), der überall wie bisher rechnet, vergleicht
+    und gespeichert wird. Erst als Platzhalterwert eines
+    :class:`TranslatableText` schreibt er sich mit dem Dezimalzeichen der
+    Anzeigesprache. Ausdrücklich markiert und nicht erraten: „Snapmaker 2.0“
+    oder ein Teil namens „1.2“ sehen aus wie Zahlen und sind Namen.
+    """
+
+    __slots__ = ()
+
+    def spoken(self, mark: str) -> str:
+        """Der Text mit ``mark`` statt des Dezimalpunkts."""
+        return str.__str__(self).replace(".", mark)
+
+
+class _SpokenFloat(float):
+    """Eine Kommazahl, die beim Einsetzen das Dezimalzeichen der Sprache nimmt.
+
+    Auch mit Formatangabe (``{free:.1f}``): Gerechnet wird mit der Zahl,
+    geschrieben mit dem Zeichen, das :meth:`TranslatableText.translate`
+    mitgibt.
+    """
+
+    mark: str = "."
+
+    def __format__(self, spec: str) -> str:
+        return format(float(self), spec).replace(".", self.mark)
+
+
+def _spoken_value(value: object, mark: str) -> object:
+    """Ein Platzhalterwert so, wie die Sprache ihn schreibt (Fensterabnahme 04.10.2026).
+
+    Der Kern schreibt Zahlen mit Punkt (``units.format_length``) und reicht
+    sie als Werte in seine Sätze; im deutschen *Verrunden* stand so „unter
+    15.00 mm“ neben einem Feld mit „40,00 mm“. Hier, wo jeder Satz des Kerns
+    zur Anzeige wird, bekommt die Zahl das Zeichen der Sprache: eine
+    :class:`Figure` und eine Kommazahl. Texte bleiben, wie sie sind, die
+    Vorlage, wie der Katalog sie schreibt, und ganze Zahlen ganz.
+    :func:`source_text` geht nicht hier durch: Dateinamen und Schlüssel
+    behalten den Punkt.
+    """
+    if mark == "." and not isinstance(value, Figure):
+        return value
+    if isinstance(value, Figure):
+        return value.spoken(mark)
+    if isinstance(value, float):
+        spoken = _SpokenFloat(value)
+        spoken.mark = mark
+        return spoken
+    return value
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class TranslatableText:
     """Ein Text, der seinen Übersetzungsschlüssel selbst trägt.
@@ -112,8 +167,11 @@ class TranslatableText:
         text = catalog.get(self._key(), self.msgid)
         if not self.values:
             return text
+        mark = "," if "," in catalog.get("0,1", "0,1") else "."
         values = {
-            key: value.translate(language) if isinstance(value, TranslatableText) else value
+            key: value.translate(language)
+            if isinstance(value, TranslatableText)
+            else _spoken_value(value, mark)
             for key, value in self.values.items()
         }
         return text.format(**values)

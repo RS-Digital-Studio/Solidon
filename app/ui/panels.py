@@ -134,7 +134,12 @@ from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
+from app.core.scene.history import (
+    StepNeed,
+    recognition_reopenable,
+    repair_is_available,
+    step_titles,
+)
 from app.core.scene.parameter_usage import field_bounds
 from app.core.types import (
     CancelToken,
@@ -4112,24 +4117,12 @@ MARKER_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 
 
 def history_step_titles(document: Document) -> dict[int, str]:
-    """Benutzertitel folgen ausschließlich gespeicherter Herkunft durch jeden Umbau."""
-    titles = {entry.id: _op_title(entry.op) for entry in document.ops}
-    for transaction in document.transactions:
-        if transaction.changes is not None:
-            for op_id, previous in (transaction.changes.before.edited_ops or {}).items():
-                if previous is not None:
-                    titles.setdefault(op_id, _op_title(previous.op))
-        if transaction.revision is None and len(transaction.ops) == 1:
-            titles[transaction.ops[0]] = str(transaction.title)
-        elif transaction.revision == "insert" and isinstance(transaction.title, TranslatableText):
-            born = set(transaction.ops) - set(transaction.renumbered.values())
-            inserted_title = (transaction.title.values or {}).get("step")
-            if len(born) == 1 and inserted_title is not None:
-                titles[next(iter(born))] = str(inserted_title)
-        for old, new in transaction.renumbered.items():
-            if old in titles:
-                titles[new] = titles[old]
-    return titles
+    """Benutzertitel folgen ausschließlich gespeicherter Herkunft durch jeden Umbau.
+
+    Die Quelle ist ``history.step_titles``; Löschnachfrage und Löschtitel
+    lesen dieselbe, damit sie den Schritt so nennen wie seine Zeile hier.
+    """
+    return {op_id: str(title) for op_id, title in step_titles(document).items()}
 
 
 def replanned_steps(document: Document) -> frozenset[int]:
@@ -4650,7 +4643,13 @@ class HistoryPanel(QWidget):
             # Eine Transaktion aus mehreren Schritten bekommt keine: Sie
             # *vertritt* keinen einzelnen, und ihre Kinder tragen ihre eigenen.
             single = transaction.ops[0] if len(transaction.ops) == 1 else None
-            number = f"{self._positions.get(single, single)}  " if single is not None else ""
+            # Ein gelöschter Schritt hat keine Stelle mehr — seine Kennung
+            # stünde sonst als Nummer neben den Stellen der übrigen (RM-368).
+            number = (
+                f"{self._positions[single]}  "
+                if single is not None and single in self._positions
+                else ""
+            )
             item = QListWidgetItem(f"{number}{transaction.title}{by}")
             halted = stopped_at is not None and stopped_at in transaction.ops
             if halted:
@@ -4734,7 +4733,7 @@ class HistoryPanel(QWidget):
                     if op_id in replanned:
                         continue
                     child = QListWidgetItem(
-                        f"    {self._positions.get(op_id, op_id)}  {titles.get(op_id, '')}"
+                        f"    {self._positions.get(op_id, '')}  {titles.get(op_id, '')}"
                     )
                     child.setData(GROUP_ROLE, transaction.id)
                     child_symbol = _op_icon_name(
@@ -4816,7 +4815,18 @@ class HistoryPanel(QWidget):
         for op_id in transaction.ops:
             if op_id in replanned:
                 continue
-            position = self._positions.get(op_id, op_id)
+            position = self._positions.get(op_id)
+            if position is None:
+                # **Später gelöscht:** keine Stelle, keine Kennung als Nummer,
+                # durchgestrichen wie jede gelöschte Zeile (RM-368).
+                row = QListWidgetItem(f"{titles.get(op_id, '')}  ({tr('gelöscht')})")
+                font = QFont(row.font())
+                font.setStrikeOut(True)
+                row.setFont(font)
+                row.setForeground(QColor(UNDONE_COLOUR))
+                row.setData(OPS_ROLE, ())
+                self.list.addItem(row)
+                continue
             row = QListWidgetItem(f"{position}  {titles.get(op_id, '')}")
             symbol = _op_icon_name(
                 next((entry.op for entry in document.ops if entry.id == op_id), "")
@@ -5356,6 +5366,23 @@ class BodyChoiceDialog(QDialog):
             dialog.deleteLater()
 
 
+class _ReportList(QListWidget):
+    """Die Befundliste: meldet das Drücken der linken Taste auf einer Zeile.
+
+    ``itemClicked`` verlangt Drücken und Loslassen auf derselben Zeile; rollt
+    die Liste dazwischen, weil die Karte ihre Höhe ändert, kommt kein Klick
+    an (siehe ``ReportPanel``). Die rechte Taste gehört dem Kontextmenü.
+    """
+
+    leftPressed = Signal(QListWidgetItem)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Schnittstelle
+        item = self.itemAt(event.position().toPoint())
+        super().mousePressEvent(event)
+        if item is not None and event.button() == Qt.MouseButton.LeftButton:
+            self.leftPressed.emit(item)
+
+
 class ReportPanel(QWidget):
     """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
@@ -5424,7 +5451,7 @@ class ReportPanel(QWidget):
         Genau das tat ``_resort`` nach dem ersten ``add_findings``."""
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
-        self.list = QListWidget(self)
+        self.list = _ReportList(self)
         self.list.setObjectName("reportFindings")
         self.list.setAccessibleName(tr("Befunde"))
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
@@ -5439,7 +5466,12 @@ class ReportPanel(QWidget):
         # ``itemActivated`` allein hieß aber Doppelklick oder Eingabetaste,
         # und wer einmal klickte, bekam nichts. Beide Wege führen zum Ort;
         # dass ein Doppelklick dann zweimal fährt, ist dasselbe Ziel.
-        self.list.itemClicked.connect(self._on_activated)
+        # **Gewählt wird beim Drücken, nicht beim Loslassen.** Das Drücken
+        # macht die Zeile zur aktuellen, die Karte darunter ändert ihre Höhe,
+        # und die Liste rollt: Am Piratenschiff lag die letzte Zeile beim
+        # Loslassen 90 Punkte tiefer, Qt meldete keinen Klick, und die
+        # Sammelzeile über 17 Körper wählte nichts (Fensterabnahme RM-131).
+        self.list.leftPressed.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
         # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -6569,7 +6601,14 @@ class ReportPanel(QWidget):
             for key, value in finding.values.items()
             if key not in ("count", "object", "objects", "entries", "name")
         }
-        parts.extend(_value_lines(dataclasses.replace(finding, values=shown)))
+        values = _value_lines(dataclasses.replace(finding, values=shown))
+        # **Die Werte in Klammern hinter dem Namen**, nicht mit „ · “ daneben:
+        # Die Einzelheiten brechen dort um, und in der Liste „Objekte: …“
+        # stand dann „Komponenten: 2, obj_8“ in einer Zeile — Wert des einen,
+        # Name des nächsten (Fensterabnahme RM-131).
+        if parts and values:
+            return f"{parts[0]} ({'; '.join(values)})"
+        parts.extend(values)
         return " · ".join(parts) if parts else "?"
 
     def _on_menu(self, position: QPoint) -> None:

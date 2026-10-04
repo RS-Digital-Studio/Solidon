@@ -201,7 +201,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.history import change_for, repair_is_available
+from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
@@ -259,7 +259,7 @@ from app.ui.ai_disclosure import (
     ensure_ai_disclosure,
     target_for_backend,
 )
-from app.ui.analysis_bar import AnalysisBar, LayerBar
+from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette, fold
@@ -323,7 +323,14 @@ from app.ui.labels import (
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, wait_for_all, weak_slot
-from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, ProgressTiming, remaining_time
+from app.ui.loading import (
+    BAR_AFTER_MS,
+    DELAY_MS,
+    LoadingVeil,
+    ProgressTiming,
+    remaining_time,
+    veil_reason,
+)
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -3690,6 +3697,10 @@ class MainWindow(QMainWindow):
         self.veil.appeared.connect(self._on_veil_appeared)
         self.veil.ended.connect(self._on_veil_ended)
         self.overlay.set_veil(self.veil)
+        # Das erste Bild eines großen Modells bereitet ein Arbeiter vor; erst
+        # mit ihm (oder seinem Scheitern) weicht der Schleier.
+        self.viewport.sceneApplied.connect(self._veil_after_the_picture)
+        self.viewport.sceneFailed.connect(self._veil_after_the_picture)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -6406,6 +6417,9 @@ class MainWindow(QMainWindow):
         #: und die Anzeige steht danach weiter, solange ausgewertet und erkannt
         #: wird. Zurückgesetzt wird deshalb erst, wenn die Anzeige endet.
         self._loading_model = False
+        #: Ob der Schleier gerade dem ersten Bild gilt (``veil_reason`` „view“)
+        #: — dann gehört ihm die Uhr, die er dafür begonnen hat.
+        self._veil_for_view = False
         self.session.importFailed.connect(self._on_import_failed)
         self.session.importFinished.connect(self._on_import_finished)
         self.session.importRejected.connect(self._on_import_rejected)
@@ -7955,7 +7969,8 @@ class MainWindow(QMainWindow):
                     "Mit dem gewählten Schritt werden auch diese abhängigen Schritte gelöscht:"
                 )
                 back = tr("Strg+Z stellt alle gemeinsam wieder her.")
-            names, rest = named_steps(dependents, order=self.session.project.document.ops)
+            document = self.session.project.document
+            names, rest = named_steps(dependents, order=document.ops, titles=step_titles(document))
             lines = [f"· {name}" for name in names]
             if rest:
                 lines.append("· " + tr("und {count} weitere").format(count=rest))
@@ -12814,6 +12829,8 @@ class MainWindow(QMainWindow):
         self.sculpt_bar.setVisible(True)
         self.sculpt_bar.show_count(0, 0)
         self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
+        # Der Befund der vorigen Sitzung gehört ihrem Körper und ihren Zügen.
+        self.sculpt_bar.analysis.show_note("")
         self._update_actions()
         if step is not None or self._sculpt_needs_worker(mesh):
             self._show_sculpt_preview(mesh)
@@ -13396,18 +13413,17 @@ class MainWindow(QMainWindow):
         self._drop_wall_check_note()
         if card is None:
             notes.append(tr("Die Analysekarte ließ sich nicht berechnen."))
-        elif card.kind == "wall":
+        elif card.kind == "wall" and not (bar is self.sculpt_bar and card.highlighted):
+            # Zu dünne Stellen nennt in der Formsitzung schon die Warnzeile
+            # darüber (``_sculpt_walls_checked``); derselbe Satz stand sonst
+            # zweimal in der Leiste.
             notes.append(
                 tr("{count} Stellen dünner als {minimum}").format(
                     count=len(card.highlighted), minimum=length(card.threshold)
                 )
             )
         if card is not None and card.kind == "overhang":
-            notes.append(
-                tr("{count} Flächen brauchen möglicherweise Stützen.").format(
-                    count=len(card.highlighted)
-                )
-            )
+            notes.append(support_note(len(card.highlighted)))
         if self._sculpt_target is None:
             result = self.session.last_result
             if result is not None:
@@ -22742,9 +22758,9 @@ class MainWindow(QMainWindow):
         """Das Modell vor seiner Erkennung ins Bild bringen (KUNDE-14).
 
         Derselbe Aufbau wie für ein Ergebnis — Ansicht, Baum, Bericht —, und
-        danach weicht die Ladeanzeige: Sie gilt dem leeren Bild, und das ist
-        jetzt keines mehr. Balken, Uhr und *Abbrechen* bleiben, denn die
-        Erkennung rechnet weiter.
+        danach weicht die Ladeanzeige, sobald die Ansicht das Modell zeigt
+        (``veil_reason``): Sie gilt dem leeren Bild. Balken, Uhr und
+        *Abbrechen* bleiben, denn die Erkennung rechnet weiter.
         """
         self._on_scene(picture)
         self._update_veil(self.session.busy)
@@ -23695,9 +23711,27 @@ class MainWindow(QMainWindow):
         dass der letzte Fall nichts aufblitzen lässt.
         """
         result = self.session.last_result
-        if not busy or (result is not None and result.scene.objects):
+        reason = veil_reason(
+            busy=busy,
+            bodies=result is not None and bool(result.scene.objects),
+            preparing=self.viewport.preparing_an_empty_view(),
+        )
+        if reason != "view" and self._veil_for_view:
+            self._veil_for_view = False
+            if not busy:
+                # Die Wartezeit des Bildes hatte ihre eigene Uhr.
+                self._run_timing.end()
+        if not reason:
             self.veil.end()
             self._loading_model = False
+            return
+        if reason == "view":
+            # **Gelesen ist nicht gezeigt.** Der Ansichtsarbeiter bereitet
+            # Kanten, Hüllen und Normalen vor; bis dahin bliebe die Fläche
+            # leer und ohne Wort. Abzubrechen gibt es nur, solange die
+            # Erkennung noch rechnet.
+            self._veil_for_view = True
+            self.veil.begin(tr("Das Modell wird angezeigt …"), running=busy)
             return
         # Ein Projekt ohne Ergebnis wird geladen; eines mit leerem Ergebnis
         # rechnet an etwas, das noch keinen Körper hat. Beim Laden eines
@@ -23727,6 +23761,10 @@ class MainWindow(QMainWindow):
             headline,
             at_once=result is None and bool(self.session.project.document.ops),
         )
+
+    def _veil_after_the_picture(self, *_detail: object) -> None:
+        """Die Ansicht hat ihr Bild übernommen oder aufgegeben — der Schleier fragt neu."""
+        self._update_veil(self.session.busy)
 
     def _on_veil_appeared(self) -> None:
         """Die Ansicht ist weg, solange der Schleier steht — nicht nur verdeckt.

@@ -512,6 +512,47 @@ def test_the_brush_strength_is_not_named_like_a_wall_thickness(
         set_language("de")
 
 
+def test_a_narrow_sculpt_bar_moves_its_tail_into_a_second_row(qt_app: QApplication) -> None:
+    """Ist die Leiste zu schmal, rücken Zustand und *Fertig* in eine zweite Zeile.
+
+    Am echten Fenster (1 100 Punkte breit, Fensterabnahme 04.10.2026, RM-366)
+    stand die Leiste in einer Zeile und kürzte jedes Wort: „Auftrage“,
+    „Neu ansetze“, „2 Züge, eine Eta“. Ein halbes Wort ist schlechter als eine
+    zweite Zeile. Breit wird sie wieder eine Zeile, und ihre Wunschbreite bleibt
+    die der einen Zeile — sonst wüchse sie nie zurück (``ansicht.md``).
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.sculpt_bar import SculptBar
+
+    # Im Fenster ist die Leiste ein Kind und bekommt die Breite, die die
+    # untere Zone hat — auch weniger als ihr Mindestmaß. Ein Fenster der
+    # obersten Ebene klemmte sie dagegen an ihr Mindestmaß.
+    host = QWidget()
+    bar = SculptBar(host)
+    try:
+        bar.show_count(2, 1)
+        host.resize(3000, 400)
+        host.show()
+        QApplication.processEvents()
+        roomy = bar.sizeHint().width()
+        bar.setGeometry(0, 0, roomy + 40, 200)
+        QApplication.processEvents()
+        assert abs(bar.done.y() - bar.tool.y()) < bar.tool.height(), "breit eine Zeile"
+        bar.setGeometry(0, 0, int(roomy * 0.6), 200)
+        QApplication.processEvents()
+        assert bar.done.y() > bar.tool.y() + bar.tool.height() // 2, (
+            "Fertig steht in der zweiten Zeile"
+        )
+        assert bar.state.y() > bar.tool.y() + bar.tool.height() // 2
+        assert bar.sizeHint().width() >= roomy, "die Wunschbreite bleibt die einer Zeile"
+        bar.setGeometry(0, 0, roomy + 40, 200)
+        QApplication.processEvents()
+        assert abs(bar.done.y() - bar.tool.y()) < bar.tool.height(), "breit wieder eine Zeile"
+    finally:
+        host.deleteLater()
+
+
 # --- der Pinselring -------------------------------------------------------------
 
 
@@ -1442,6 +1483,42 @@ def test_a_sculpt_preview_outside_the_printer_is_reported(
         word in window.sculpt_bar.analysis.note.text()
         for word in ("Bauraum", "Druckfläche", "Bett")
     )
+
+
+def test_a_new_sculpt_session_does_not_inherit_the_last_note(window: MainWindow) -> None:
+    """Der Befund der vorigen Sitzung gehört ihrem Körper und ihren Zügen.
+
+    Am Mausoleum-Drachen stand nach dem Wiederöffnen des Schritts noch
+    „3863 Stellen dünner als 0,84 mm“ aus der Sitzung davor, bevor eine
+    Prüfung gelaufen war (Fensterabnahme RM-366).
+    """
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window.sculpt_bar.analysis.show_note("12 Stellen dünner als 0,84 mm")
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+    window.start_sculpt(object_id)
+    assert window.sculpt_bar.analysis.note.text() == ""
+
+
+def test_thin_walls_are_named_once_in_the_sculpt_bar(window: MainWindow) -> None:
+    """Die Warnzeile nennt zu dünne Stellen; die Kartenzeile wiederholt sie nicht."""
+    from dataclasses import replace
+
+    from app.core.perceive import maps
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    mesh = window._sculpt_preview_for(window._sculpt_mesh(object_id)).shown
+    card = maps.wall_thickness_map(mesh, 1.0)
+    thin = replace(card, highlighted=(0, 1, 2))
+    window._sculpt_wall_number += 1
+    number = window._sculpt_wall_number
+    window._sculpt_walls_checked(number, 3)
+    window._gesture_analysis_ready(number, thin, [])
+    warning = window.sculpt_bar.warning.text()
+    assert "3" in warning
+    assert warning not in window.sculpt_bar.analysis.note.text()
 
 
 def test_cancelling_a_gesture_check_rejects_its_late_answer(window: MainWindow) -> None:

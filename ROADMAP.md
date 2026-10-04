@@ -48,8 +48,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
 | [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
-| [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Robert 04.10.: Der STEP-Nachweis genügt, eine gedruckte Probe entfällt; Suche nach Nutenstein und T-Nut gebaut. Offen allein das Wiederöffnen am Fenster beim Release (RM-213) |
-| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Zapfen mit Kehle am Netz, Winkel mit Querbohrungen, Kehlen, runde Ecken und Senkungen als Skizze plus Extrusion und Bohrung nachgebaut, Formvergleich je Teilung sieben statt sechzehn Punkte (Lochplatte 13,2 → 5,7 s); offen allein die Fensterabnahme beim Release (RM-213) |
+| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Am echten Fenster abgenommen (04.10.); offen allein die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände) — ob Solidon dort Vorgaben setzt, entscheidet Robert |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
@@ -76,7 +75,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-382 — Ein Mehrschaler mit einer selbstkreuzenden Schale lässt sich seit `eab5f4f47` gar nicht mehr bearbeiten](#rm-382) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10.: Entscheidung Robert, ob nur gehalten wird, wenn das Werkzeug die kaputte Schale berührt; Kennung und Satz mit Grund |
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
-| [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Drehmitte für Kreismuster, Merkmalsmuster und Spiegeln aus Körper, Merkmal, Punkt oder Ursprung gebaut, im Schritt gespeichert, Altprojekte per Migration unverändert; offen: drei Modelle am Fenster beim Release (RM-213), zwölf Sollprojekte liegen bereit |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | (a) `cuts_along` im Cythonkern, (b) mit RM-486 und unabhängigen Säulen, (c) Kanalfrage und Schichtansicht über den Merker gebaut; F0FF je zweimal bitgleich, Screen-Cover 0,7–0,9 statt 3,4–3,8 s, CC2-Box 5,1–5,5 statt 40,7–41,5 s; offen: Schichtansicht am Fenster beim Release (RM-213) |
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Schnelle Ausrichtung prüft den Bauraum erst am betrachteten Kandidaten und teilt gleiche Formen, Gewinner unverändert; chufang schnell 65–68 statt 161 s, gründlich 150 s, beide unter Fremdlast; offen: lastfreie Vergleichsmessung an chufang und zwei Baugruppen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
@@ -93,27 +91,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Rampe der 3D-Maus am echten Gerät; ob dieser Rest in RM-070 aufgeht und der Punkt damit schließt, entscheidet Robert |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge EN/ES/PT/FR/IT durchgesehen (04.10.), die gemeldeten Fehler der deutschen Quelle behoben (871cc29e6); offen: Handbuch und Assetstempel beim Release, Fensterabnahme der längeren Knopfnamen (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Bündel enthaltener Teile, Dialogabbruch, *Modell einfügen*, abgelehnte Erkennungsfrage und Gestensperre ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema in sechs Sprachen gegen Generator und Alttexte geprüft, lange Berichtstitel brechen jetzt um (12 SVG neu); offen: Handbuchseiten und PDFs beim Release neu erzeugen |
-| [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Große Fachkarte verdrängt die Maße nicht mehr, der Griff sitzt an der Mündung, beides am Fenster gesehen (64 Fälle); offen: der übrige Abnahmeweg am Fenster beim Release (RM-213): Langlochknöpfe, Zug mit Kamera, verschluckte Maßlinie, Stufe an der Grenze |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Probe über den echten Startweg beim nächsten Release (RM-213); D3D12 als Backend ist eine eigene Entscheidung |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Beim ursprünglichen Bohrschritt weichen auch *Bohrung ändern* und *Zum Langloch ziehen* (7 Fälle); am Fenster steht der Durchmesser nur noch in der Maßkarte; offen: Rückkehr der Felder nach dem Ende der Maßgruppe am Fenster beim Release (RM-213) |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; Fensterwache an jedem Bildgriff und C14 im Code gebaut, ihre Fensterproben gehören dazu; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
-| [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | Vorschau je Klick nur mit dem neuen Zug auf main (`8440db6f7`), große Netze rechnen im Arbeiter; die 40. Vorschau ist nicht länger als die erste, UI-Aufruf 0,6 ms; offen: Messung am echten Fenster auf ruhiger Maschine beim Release (RM-213) |
-| [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | „vor Schritt 3“ und alle Schrittsätze sprechen in sichtbaren Stellen statt Kennungen (Absage beim Verschieben, Löschnachfrage, Löschtitel, Umbauabsagen, Merkmalsfrage); offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Formen, Skelett und Zeichnen öffnen ihren Schritt wieder, ein Zug ist eine ganze Geste mit lokalem Undo; an Figur und Pilz am Fenster geprüft; offen: drittes Modell (Drache), Themen, schmale Fenster und Projektwechsel am Fenster beim Release (RM-213) |
-| [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Wand- und Überhangkarte mit Legende, Bauraumhinweis und Druckbefund nach dem Posieren in beiden Gestenleisten gebaut, Überhangkarte an der Figur am Fenster gesehen; offen: drittes Modell (Drache) und die Einschnürung am Fenster beim Release (RM-213) |
-| [RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD](#rm-395) | Bedienung und Darstellung | Alle sechs Lücken gebaut, je mit Test: Sperrgrund im Dialog, Projektmaterial in der Profilklemme, *Aus Skizze erzeugen* zeichnet sofort, Vereinigen meldet zugedeckte Bohrungen, Langlochrichtung erklärt, Nullring auf der Zeichenebene; offen: Fensterabnahme beim Release (RM-213) |
-| [RM-396 — Grundkörper „an die gewählte Fläche ansetzen und verbinden“ in einem Schritt](#rm-396) | Bedienung und Darstellung | Umwandlungshinweis nennt keine Kennung mehr, auch nicht über `values["object"]`; offen allein die Fensterabnahme beim Release (RM-213): 45°-Schräge, gekrümmte Fläche, drittes Modell und Wiederöffnen |
-| [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Parametertab und unveränderte Vorschau nach ihren Fixes als Test belegt; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Verschieben und Drehen „nach“ gebaut: Bodenmitte, Mitte, acht Ecken oder Merkmal als Bezug, Gruppen starr, Rahmen `SceneObject.frame` ab Import, Griff im selben Bezug; offen: die Matrix an drei Baugruppen (Wasserfall, Sieb, Auffangrinne) am Fenster beim Release (RM-213) |
-| [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Flächenbausteine sitzen am Klickpunkt, zwei Kantenabstände werden gespeichert und bleiben bei Trägeränderungen, Wiederöffnen bindet dieselben Kanten; offen: Schlüsselloch und zwei weitere Bausteine an drei Modellen am Fenster beim Release (RM-213) |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -715,33 +701,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Prompt neu gezählt: 7 825 Token bei 169 Werkzeugen. Belege:
   `F:\solidon-review-reports\claude-2026-10-04\texturen-zuordnung\`.
 
-<a id="rm-017"></a>
-
-- [~] **RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen.** Stegdicke und Kammertiefe an je
-  einem konkret benannten 2020-/Nut-6- und 3030-/Nut-8-Profil nachmessen und die Nutfeder daran
-  prüfen. Abnahme: Hersteller/Profil und beide Messwerte samt Passungsprobe dokumentiert;
-  Abweichungen herstellerspezifisch einordnen, nicht aus zwei Proben allgemeine Normmaße ableiten.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-nutfeder-und-zwei-fehler-auf-dem-weg-dorthin-20082026).
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die Normteiltabelle führt Motedis
-  20×20 B-Typ Nut 6 (Steg 1,5 mm, Kammer 4 mm) und 30×30 B-Typ Nut 8 (2,2/6,8 mm); der Kopf folgt
-  der sich verengenden Kammer, `taper_to_slot` ist als Wahrheitswert geprüft, die drei alten Größen
-  bleiben als ältere Maße. Bibliotheksversion 23; die Migration 43→44 trägt `size=2020` nur nach, wo
-  es fehlt. 53 Fälle an beiden Kernen, 360 Einschubfälle gegen die Hersteller-STEP mit 0,0 mm³
-  Überschneidung (alte 2020-Kontur 115,4 mm³), Bereichsnachweis 41/41. Am Fenster eingefügt,
-  2020→3030, Undo/Redo, Speichern. „Nut 8 wie 3030“ ist gestrichen, 40×40 I-Typ hat 4,5 mm Steg.
-  Offen: gedruckte Probe, Wiederöffnen; die Suche „Profilzunge“ findet den Baustein nicht. Beleg:
-  `konzepte/nachweise-release-0.5.1/reports/rm017-herstellerprofile-2026-10-03.md`.
-
-  **Teilstand 04.10.2026:** Robert entschied, dass der Nachweis gegen die Hersteller-STEP
-  (360 Einschubfälle ohne Überschneidung) als Passungsprobe genügt; eine gedruckte Probe entfällt.
-  Die Bausteinsuche findet die Nutfeder jetzt unter „Nutenstein“, „T-Nut“, „Aluprofil“ und in den
-  fünf Sprachen unter der Mutter in T-Form; der `doc`-Satz nennt den Unterschied zum Nutenstein
-  (`registry.PartRegistry.search` zählt Wörter mit Bindestrich auch als Ganzes, 18 Fälle in
-  `tests/test_parts.py`). „Profilzunge“ ist kein Kundenwort. Offen allein das Wiederöffnen eines
-  gespeicherten 30×30-Projekts am Fenster beim Release.
-
 <a id="rm-022"></a>
 
 - [~] **RM-022 — Nachbau als Operationsfolge.** Robert hat den Umfang am
@@ -807,6 +766,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   *Abbrechen* während der Prüfung, Winkel mit Bohrungen in beiden Schenkeln mit Strg+Z nach der
   Übernahme und Stufenplatte mit Senkung Ø 8 ohne Kompensation. Changelog: ja, im vorhandenen Punkt
   zu *Modell nachbauen* ergänzt.
+
+  **Teilstand 04.10.2026:** Fensterabnahme 04.10.2026: Lochplatte mit *Abbrechen* während der Prüfung (Verlauf unverändert) und Vorschlag Quader plus vier Bohrungen; Winkel mit Bohrungen in beiden Schenkeln deckt sich mit dem Original, Übernahme und Strg+Z stellen das Netz her; Stufenplatte mit Senkung Ø 8 ohne Kompensation. Der Wert eines Ausdrucks steht seit `61baf9d2c` ohne Exponent da. Belege `F:\solidon-review-reports\claude-2026-10-04\fensterabnahme\rm022-*\`. Die Zahlenanzeige unter einem Ausdrucksfeld ist behoben, aber am Fenster noch nicht wiederholt (Bildnachweise unter `F:\solidon-review-reports\claude-2026-10-04\fensterabnahme\`).
 
 <a id="rm-209"></a>
 
@@ -1319,7 +1280,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   * **P0.3 und P0.4** — offen: die Abnahme des Maßeditors über Felder, Griffe,
     Gruppen und Merkmale, die Achsen- und Symmetriebezüge gegen den
     Merkmalsvertrag aus P1.5 und dauerhafte Bezüge mit P3.2. Die Bedienreste am
-    Etikett stehen unter [RM-197](#rm-197), [RM-199](#rm-199) und
+    Etikett stehen unter [RM-197](ROADMAP-ARCHIV.md#rm-197), [RM-199](ROADMAP-ARCHIV.md#rm-199) und
     [RM-200](#rm-200). Nächster Schritt: diese Abnahme am Bohrungsweg als Tests je
     Kern; danach führt P5.1 die übrigen Maßfamilien auf denselben Editor.
   * **P2.3** — offen: die vollständige Semantik- und Teilflächenparität gegen die
@@ -2634,30 +2595,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   grün. Beleg: `F:\solidon-review-reports\review-3fd3b1ace.md`.
   Review 02.10. (`7f0de659d`): Wiederholt sich — `ROADMAP.md` sagt im integrierenden Commit selbst „Zentrales Tor und Integration stehen aus“; der neue Absatz in `app/core/geom/CLAUDE.md` trägt wieder Implementierungsdetails. Dazu `ROADMAP-ARCHIV.md:34158–34160` (aus `0eccbe952`): ein „weiterhin“ offener Solverfehler bei Weltverschiebung 1e7 ohne Registerpunkt; ein Nachbau rechnet richtig (`sonden\r2_boolean_weltversatz.txt`) — Fall benennen und registrieren oder die Aussage streichen.
 
-<a id="rm-402"></a>
-
-- [~] **RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 7).
-  Das Kreismuster (`pattern`, `app/core/scene/ops.py:245`; am Merkmal `pattern_feature`,
-  `app/core/geom/prepare_ops.py:4542`) dreht immer um den Weltursprung; die Laschen am Deckel
-  trafen im Nachbau nur, weil der Deckel dort stand (`nachbau\sonden\v1_kreismuster_klemme.txt`).
-  **Ablauf:** Feld *Drehmitte*: *Körper ‹…›* (Vorgabe: der gewählte bzw. einzige Körper),
-  *Merkmal ‹…›* (z. B. Bohrungsachse) oder *Ursprung*; gespeichert wird die aufgelöste Mitte
-  reproduzierbar (Regel 2), alte Projekte behalten den Ursprung.
-  **Abnahme:** Test: Körper versetzt, Kreismuster mit *Drehmitte Körper* → Kopien um dessen Achse;
-  altes Projekt unverändert. Bauplan §2.4, Regel 2.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Drehmitte für alle Muster (Kreis an Körper und Merkmal, Spiegeln) aus Körper, Merkmal oder Punkt, überall dieselbe Auswahl. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 15 Teile mit Lochkreisen oder Rundmustern (Deckel mit Streulöchern, Filterball, Sieb, Düsen, Wabenhalter). Abnahme an mindestens drei unterschiedlichen Fällen.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `pattern`, `pattern_feature` und
-  `mirror_object` tragen `cx`, `cy` und `cz`: drei leere Felder speichern die Körpermitte einmal als
-  Antwort, drei Zahlen bleiben fest, Teilangaben werden mit Vorschlag abgelehnt;
-  `follow_anchor=True` erhält alte Spiegel. Die Migration 43→44 setzt alte Kreise auf den Ursprung.
-  Analytisch: Platte 60 × 40 × 10, Bohrung bei (65, 20), nach 180° um die Körpermitte bei (35, 20).
-  448 Kernfälle, 12 Lebensläufe beider Kerne und Güten; der Dialog hat den Drehmittenwähler (14, 10
-  und 6 Fälle, sechs Sprachen), dabei behoben: halbe Anzeigestellen wie 9,125 mm rundeten beim
-  Wiederöffnen. Belege unter `F:\solidon-review-reports\codex-2026-10-03\`:
-  `geometrie\druckvorbereitung\bericht.md` (RM-402), `bedienung\import-history-move.md`.
-
 <a id="rm-405"></a>
 
 - [~] **RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen.**
@@ -2891,258 +2828,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Hand ist keiner geändert. Belege unter `F:\solidon-review-reports\codex-2026-10-03\bedienung\`:
   `import-history-move.md` (RM-283/299), `construction-ui.md`.
 
-<a id="rm-197"></a>
-
-- [~] **RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett,
-  Beschriftungen mit Abstand zum Modell.** Robert, 21.09.2026, nach dem Klick
-  auf eine Bohrung an Weg 1 mit dem Maßeditor aus P0.3/P0.4 (RM-188): „das
-  wollte ich übersichtlicher, also das mit bezug ändern hintendran brauche ich
-  garnicht, außerdem wollte ich von den ganzen anzeigen einen weiteren abstand
-  zum modell und linien haben, damit es nicht stört und ich auch weiß wo etwas
-  hingeht."
-
-  Zwei Entscheidungen daraus:
-
-  1. **Das Auswahlfeld *Bezug ändern* hinter jeder Maßbeschriftung fällt
-     weg.** Der Bezugswechsel aus P0.4 bleibt über den Modellklick erreichbar;
-     ein Feld je Etikett verdoppelt die Breite jeder Beschriftung und steht
-     im Bild, wo das Modell steht.
-  2. **Die Beschriftungen rücken vom Modell und von den Maßlinien ab** und
-     zeigen eindeutig, zu welcher Linie und Kante sie gehören — Abstand zum
-     Körper und eine erkennbare Zuordnung, keine Etiketten quer über der
-     Platte und übereinander (am 21.09. lagen *Außenkante 2* und *Mitte 2*
-     auf der Kante und aufeinander, *Bohrung 4 – Abstand* auf der Platte).
-
-  **Umgesetzt in `ebba075e`** (21.09.2026): Das Auswahlfeld ist weg, der
-  Bezugswechsel hängt als Kontextmenü am Maß (Rechtsklick oder Menütaste,
-  `PlacementFlow._reference_menu`), und die projizierte Hülle des Trägers
-  zählt beim Verteilen der Felder als belegt (`_body_on_screen`) — die
-  Felder rücken daneben, die Verbindungslinie bleibt. Entwicklungstor im
-  Arbeitsbaum am HEAD mit nur diesen Dateien grün (13.421 bestanden, 48
-  übersprungen, Ruff, Format und mypy je 0); `test_surface_placement_ui`
-  und `test_placement_dimensions` grün, der neue Test wird ohne die
-  Körpersperre rot.
-
-  **Und `ebba075e` riss an Weg 1 beim Wählen einer Bohrung** — nicht die
-  Commits der CAD-Sitzung, wie zuerst gemeldet: Die Felder neben dem Körper
-  machen die Verbindungslinien lang, die Fenstermaske der Maßfläche bekommt
-  1682 Rechtecke, und der Vulkan-Treiber verliert das Gerät (RM-198, dort
-  die Messung). Ein gerasterter Deckel darüber kostete graue Treppen an
-  jeder schrägen Linie und je Bild vier Durchläufe über alle Rechtecke
-  (Robert: „performancetechnisch auch ganz schlecht") und ist nicht
-  eingecheckt. `ad3deadd` zieht die Maßtinte in den Renderer
-  (`_Dimensions` ohne Widget und Maske) und führt die Verbindung zur
-  **Mitte** der Maßlinie (Robert, 21.09.2026: „schöner wäre noch wenn die
-  linien von den maßen zu den mittellinien jeweils gehen"); die Probe über
-  den echten Startweg (Weg 1 laden, Bohrung über den Baum wählen) überlebt
-  seither, vorher riss sie dreimal von drei.
-
-  **Zwei Nachträge vom selben Nachmittag:** Die Zuordnungslinien kreuzen sich
-  nicht mehr (Robert: „aufpassen dass sich die maßlinien nicht kreuzen") —
-  `_untangle` tauscht paarweise die Plätze zweier Felder, solange das
-  Kreuzungen spart und beide an den fremden Plätzen frei stehen. Und die
-  **Langlochknöpfe stehen wieder am gewählten Loch** (Robert: „wo sind
-  eigentlich die markierungen um es zum langloch zu ziehen?"): Seit dem
-  Maßeditor sperrte die stille Platzierung den Merkmalsgriff und nahm die
-  Knöpfe mit — am Stand `89a0de3a` fehlten sie genauso, geprüft mit zwei
-  Bildern derselben Lage. Seit `bd310fa5` lässt `Viewport.set_gizmo` in diesen Lagen nur
-  Pfeile, Ringe und Würfel weg (`only_knobs`); Flächenscheibe und Knöpfe
-  bleiben, und `grip_placement` baut sie nach dem ersten Griff wieder auf.
-  Dazu zeichnet der Langlochknopf während des Zugs nicht mehr selbst
-  (RM-200).
-
-  Abnahme: Weg 1 öffnen, eine Bohrung anklicken — kein *Bezug ändern* im
-  Bild; jede Beschriftung steht frei neben dem Körper, ihre Verbindung endet
-  in der Mitte der Maßlinie, Verbindungen kreuzen sich nicht, soweit ein
-  Tausch es löst, und am
-  Loch stehen die zwei Knöpfe zum Langloch; nach einem Zug zum Langloch
-  bleiben Maße und Felder stehen und folgen der Kamera (Robert, 21.09.2026
-  abends: „wenn wir das langloch ziehen und dann die ansicht drehen sind die
-  maße weg" — der wartende Zug blendete die gebundene Maßgruppe beim nächsten
-  Aufbau aus; `test_the_measures_stay_in_the_view_while_a_pulled_slot_waits`),
-  und eine Maßlinie, die ganz in der Aussparung des Griffs läge, kommt ganz
-  („manche maßlinien fehlen aber": Nach dem Zug greift der Griff über Knöpfe
-  und Umriss hinaus, die 10 mm zur Außenkante lagen ganz darin;
-  `test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole`).
-  **Review der fünf Commits am Abend des 21.09.2026** (elf Befunde, alle
-  eingearbeitet): ein Stück Maßlinie kürzer als ein Pfeil zählt wie
-  verschluckt (`LEAST_PIECE`, sonst ein Stummel ohne Pfeil bei anderem Zoom);
-  die Kreuzungsprüfung kommt aus dem Kern (`profile.strictly_crossing`, der
-  Zwilling in der Oberfläche rechnete ohne Toleranz); das Geräteverhältnis vom
-  Renderer statt vom Widget, und `placement_flow.py` lädt seither
-  `ansicht.md`; die Langlochknöpfe stehen bei gesperrtem Griff nur, wo der
-  Aufrufer es sagt (`set_feature_gizmo_blocked(..., knobs=True)` — der
-  Erkennungsdialog und die Ganzflächentextur sperren denselben Griff und
-  bekamen sonst Knöpfe, deren Zug im Merkmalfenster endete); die Tinte liegt
-  über `draw_order` unter Griff und Knöpfen, statt dass der Weltursprung
-  entscheidet (Vertrag `SurfaceStyle.draw_order`, `add_lines(draw_order=)`,
-  am echten Renderer gemessen: ohne Ordnung kippt die ferne Lage); je Aufbau
-  drei `display_to_world`-Aufrufe statt 1760 (affin in fester Tiefe, am
-  Renderer geprüft; vorher 15 ms je Radraste); der Anker der Verbindungslinie
-  steht einmal in `pending`; der Rand der Marke kommt nach den Linien; ein
-  toter Zweig in `set_gizmo`, das wirkungslose `area`, ein Test mit
-  Selbstvergleich und zwei deutsche Bezeichner (`platz`, `unten`, seit dem
-  09.09. in der Notlage der Platzsuche) sind weg; `gizmo_reach` kennt den
-  Platzierungsgriff.
-
-  **Review vom 21./22.09.2026 (Paket E), eingearbeitet:** Ein Bild mitten im
-  Zug — Radraste, Vorschau, Overlay — nahm den Griff weg, und aus dem Zug
-  wurde ein Kameraschwenk (`grip_placement` hält einen Griff mit `pressing`);
-  eine Radraste über einem schwebenden Maßfeld zoomte nicht, sie verstellte
-  das Maß und band den Entwurf (`wheel_needs_focus`); ein Druck zwischen die
-  Knöpfe des gewählten Lochs zog ein Langloch statt den Baustein zu setzen;
-  bei gewählter Bohrung fehlte der Tooltip, und der Merkmalstext der Auswahl
-  verdrängte die Statuszeile; ein Zug am Bausteingriff verschob auch den
-  stillen Bohrungsfluss; das erste Escape in der Bezugswahl nimmt nur den
-  Pickmodus zurück, der Entwurf bleibt („Bezugswahl abgebrochen; der bisherige
-  Bezug bleibt."); ein Abschlussklick vor der fertigen Vorschau wartet auf sie
-  und übernimmt einmal (`preview_defer`). Die Fensterdateien der Ansicht
-  liefen dabei grün (456 Fälle), jeder neue Test am Stand davor rot.
-
-  **Der Halter, 22.09.2026** (`d3e7fc30`, `85f7f86b`, `5c315044`,
-  `c93b918d`): Roberts Schraubendreherhalter mit Wabenmuster — 1 213
-  Merkmale, und die Auswertung hängte nichts ein: `FEATURE_LIMIT_COUNT` steht
-  seither bei fünftausend (gemessen: Zuordnung 5 000 Merkmale 0,9 s). Am
-  Maßeditor: Versetzen mit „Senkung und Stufen mitnehmen" ist ein Schritt
-  (`_moved_after_resizing`); der Grund des Kerns steht über der Vorschau
-  statt „konnte nicht berechnet werden"; die Felder bleiben stehen
-  (`_field_slots`); sie stehen an ihrer Maßlinie, sobald der Körper über das
-  Bild ragt, und nie unter dem Vorschauband; das Maß mit dem Fokus leuchtet;
-  und Übernehmen der Maßgruppe zieht das Langloch, wenn ein Zug wartet.
-  **Review der vier Commits am selben Tag (zwei Prüfer, Kern und
-  Oberfläche), eingearbeitet:** Der Doppelschritt bewegt um die Differenz zur
-  alten Mitte (die schräge Mündung ließ die Kette 0,245 mm wandern), verlangt
-  die ganze Kette, misst die Nachbarwand am neuen Ort und reicht die
-  Übergänge des exakten Kerns durch — der Einlauf-Neuschnitt belegt sie
-  jetzt selbst (`NativeReferenceLost` bei jedem späteren Bezug auf die
-  Bohrung); die Rohrpaarung wählt ihre Kandidaten über einen Baum vor (halb
-  Hohlraum, halb Materie bei 5 000: 22 s → 0,03 s); die Stehregel entscheidet
-  je Feld (ein getroffener Platz löste alle, +1,2 mm am Setzpunkt sprangen
-  zwei Felder 391 und 409 Punkte); gemieden werden fremde Maßlinien und
-  Verbindungen, nicht Bezugskanten, und nur bis `STICKY_FIELDS` Feldhöhen
-  weiter (208 und 336 Punkte vom Maß, um einen Strich nicht zu decken); ein
-  Körper, der gerade so ins Bild passt, schickt die Felder nicht mehr in die
-  Notreihe; die Langlochroute filtert ihre Werte auf die Parameter der
-  Operation (`nx`/`ny`/`nz` ließen den Schritt am Kern scheitern), das
-  Fenster beantwortet „meint Übernehmen das Langloch" an einer Stelle
-  (`slot_drag_takes_the_accept`, mit der Durchmesserfrage des Kerns
-  `bore_is_unchanged`), und bei neuem Durchmesser sagt die Statuszeile die
-  Wahrheit — der Zug ist danach zu wiederholen, der Szenenaufbau verwirft
-  ihn; das Tiefenfeld leuchtet mit; Portugiesisch sagt „furo oblongo" wie
-  am Knopf — auch im Changelog. Zwei Nebenbefunde außerhalb der vier
-  Commits, beide behoben: Nach dem Einlauf-Neuschnitt am exakten Körper
-  fehlten die Flächen des Körpers im Baum (`_exact_rest_carried`), und eine
-  ohne Einlauf versetzte Bohrung meldete die aufgerissene Nachbarwand nicht
-  (`drill` gibt sein Werkzeug heraus; am Halter und am Bohrerhalter aus
-  `F:\3D Dateien` nachgestellt — ein STEP mit Senkbohrung liegt dort nicht,
-  der exakte Fall bleibt am gebauten Körper geprüft). Jeder neue Test am
-  Stand davor rot. Offen: die Abnahme am
-  echten Fenster beim nächsten Release (RM-213) — dazu die Stufe an der Grenze „ganz
-  sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite).
-  **Zug und Durchmesser sind ein Schritt** (Entscheidung Robert am selben
-  Tag: „Ja eine transaktion"): `slot_hole` nimmt die Breite selbst
-  (`diameter`, `compensate`), die stille Platzierung baut daraus den einen
-  Auftrag (`_slot_with_width`); zwei Schritte in einer Transaktion gingen
-  nicht, weil das Langloch nach dem Zug neu heißt und der zweite Schritt
-  seinen Namen erst nach der Auswertung kennte. Tests an beiden Kernen,
-  breiter und schmaler, und im Fenster mit Strg+Z. Gehört zur laufenden
-  Arbeit an P0.3/P0.4.
-
-  **Langlochzug und Maßpanel nachgezogen, 24.09.2026:** Auch eingelesene
-  Langlöcher öffnen ihre Längen-, Breiten- und Lagefelder im Bild. Beim Zug
-  an einer Bohrung wechseln diese Felder gemeinsam zum Langloch; eingetragene
-  Breite und Zielmitte bleiben erhalten. Eine noch offene Tiefenänderung
-  bleibt beim Bohrungsentwurf und verlangt zuerst dessen Abschluss.
-  Umriss, Schnittvorschau und Griff lesen dieselbe wirksame Breite;
-  *Abbrechen* im Merkmalfenster stellt die Istwerte wieder her. Bestehende Langlöcher lassen
-  sich an beiden Kernen verkürzen, auch mit neuer Breite und Richtung:
-  Die Operation schließt die alte Öffnung vor dem neuen Schnitt. Die
-  Mindestlänge bleibt an die neue Breite gebunden. Geometrie, Vorschau und
-  Signalanschlüsse sind ohne Fenster geprüft; die ergänzten Fensterfälle
-  für Auswahl, Übernahme und Undo gehören zur nächsten Release-Abnahme.
-
-  **Gemeinsame Bedienwege im Code geprüft:** Berichtsklicks, direkte Einstiege
-  in Skizze, Formen und Skelett, Trennen sowie lokale Erkennung respektieren denselben
-  begonnenen Maßentwurf wie Menüoperationen. Dokument-Undo/Redo greift erst
-  nach dessen Übernahme oder Abbruch; lokales Gesten-Undo behält Vorrang.
-  Ein abgelehnter Drehring aktiviert keine fremde Panelhandlung mehr.
-  Ungültige Außen- oder Mittenabstände zeigen den Grund an der sichtbaren
-  Maßgruppe und sperren Übernehmen sofort; die Korrektur macht den Weg frei.
-  Nach Roberts Vorgabe erfolgt dieser Nachweis über Code und fensterlose
-  Zustandsregressionen; eine durchgängige native Bedienabnahme ist damit
-  nicht behauptet.
-
-  **Review des Langlochzugs, 24.09.2026** (Robert: „noch ein bisschen buggy
-  vor allem mit dem merkmalpanel nebenan und dass man es nicht kleiner
-  schieben kann, die maße fehlen auch beim langloch"). Ein Druck in das Ende
-  eines Langlochs trifft das Langloch — die Zielhilfe rechnet gegen seinen
-  Umriss (`bore_span` mit `travel`/`heading`, `_feature_inside` gegen die
-  Mittellinie); vorher fiel er in der Draufsicht durch das Loch, und die
-  linke Taste zog den Körper. Der Knopf wandert um den Weg der Hand
-  (`SlotHandle._grab`); am Wedge-Lock drehte ein Griff neben der Knopfmitte
-  das Langloch vor der ersten Bewegung um 16 Grad. **Unter der kürzesten
-  Länge rastet der Zug auf die runde Bohrung** (Entscheidung Robert am selben
-  Tag: „sollte es kurz einrasten"): `settled_length`, Kreis im Umriss,
-  „Bohrung" am Zeiger; `slot_hole` mit Länge = Breite
-  (`prepare.is_round_length`) schneidet an beiden Kernen wieder eine runde
-  Bohrung (`slot_hole.round_again`), eine runde Bohrung auf ihre eigene
-  Breite bleibt unangetastet (`slot_hole.already_round`), dazwischen nennt
-  `NEITHER_ROUND_NOR_SLOT` beide Auswege. Übernehmen ist danach nicht mehr
-  grau (`placement.prepare_tool`), und ein aus einem Schritt gezogenes
-  Langloch, das auf genau seine Bohrung zurückrastet, nimmt den Schritt
-  heraus, statt einen ohne Wirkung stehen zu lassen (`_commit_slot_change`).
-  Ein Klick ins Zwillingsfeld rechts wechselt die Maßgruppe, statt sie zu
-  schließen (`_hand_the_measures_over`), und der Zwilling zeigt nur, was er
-  allein hat (`FeaturePanel._in_the_view`: an einer Bohrung Länge und
-  Richtung, an einem Langloch Tiefe und Änderungsumfang). Eine gefaste
-  Mündung findet ihre Trägerfläche (`seat_of`, `mouth_reach`, Korpus
-  `plate_chamfered_mouths.stl`) — vorher hatte ein solches Loch keine Maße
-  im Bild. *Abbrechen* in der Maßgruppe verwirft den Entwurf und hebt die
-  Auswahl auf (Entscheidung Robert: „abbrechen = deselektieren"); vorher
-  blieb das Merkmal ohne Maße und Knöpfe gewählt, und rechts stand die
-  Handlung des verworfenen Entwurfs scharf. Ein Review derselben Nacht
-  (20 Befunde) ist eingearbeitet: der linke Knopf dreht beim Einrasten nicht
-  mehr um 180 Grad, was an einer runden Bohrung rund endet, schlägt nichts
-  vor, eine eingetragene Zahl rastet nicht, der Netzkern meldet die
-  Materialtoleranz wie der exakte, rund und breiter prüft die Nachbarwand wie
-  *Bohrung ändern*, der exakte Kern misst „nichts abgetragen" am gefüllten
-  Körper, der Schritt fällt nicht, wenn ein späterer sein Langloch nennt, Tab
-  bleibt im Merkmalfenster, und `make_corpus.py` baut die neue Korpusdatei.
-  Escape tut seit dem 25.09.2026 dasselbe wie *Abbrechen* (Robert: „wie
-  abbrechen zurücknehmen und abwählen") — vorher blieb der verworfene
-  Entwurf im Merkmalfenster scharf —, und beim Übernehmen liest die
-  Maßgruppe nur die getippten Felder neu: Das Zurücklesen einer feineren
-  Zahl, als das Feld zeigt, baute das Werkzeug neu, und der Klick verfiel
-  still. Die Mündungskorrektur in `surface_values` gilt seit dem
-  25.09.2026 nur der eigenen Fläche (G5): Der Fluss reicht die eigene
-  Mündung mit — vom Sitz, oder nach einem Zielen von `placement.mouth_on` an
-  der frisch vorbereiteten Fläche —, und eine fremde parallele Fläche im
-  Radius setzt die Mündung auf sich, statt die Mitte in der Höhe zu halten.
-  Im Fenster tritt der Fall nur auf, wo gezielt wird (im Dialog an einem
-  Loch ohne Sitz); am gewählten Merkmal gehört ein Klick der Auswahl.
-  Dabei gefunden: Wer in der Maßgruppe eine Koordinate tippte, verlor die
-  Gruppe nach der zweiten Ziffer — die Mitte wanderte an der um Rauschen
-  schiefen Achse mit dem Versatz in der Höhe (Schaber: 2,9 µm auf 43 mm),
-  und `move_to` las das als getippte Tiefe. Gemessen wird seither an der
-  Mündung; am Schaber hält die Gruppe über „-47,00“, und Enter übernimmt
-  mit unveränderter Höhe. Am echten Fenster gefahren an `plate_coarse_slots`,
-  `plate_holes` und aus `F:\3D Dateien` an Scraper und Wedge-Lock:
-  Einrasten, Übernehmen, Rücknahme des Schritts, Zwillingsfelder in beiden
-  Richtungen. Die neuen Tests ohne Fenster waren am Stand davor rot; die
-  neuen Fenstertests (`test_slot_handle.py`, `test_feature_panel.py`) laufen
-  mit der Release-Abnahme.
-  Registerabgleich 02.10.: offen, nur am Fenster; „Release 0.5.0“ in der Registerzeile ist veraltet, der Rest „Stufe an der Grenze ganz sichtbar“ steht nur im Eintrag, nicht im Register.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Am Fenster reproduziert: Eine
-  große Fachkarte drängte alle Abstandsmaße in eine Notreihe mit gekreuzten Linien. Jetzt darf nur
-  die Fachkarte den Körper überdecken; Maße, Setzpunkt, Griff und andere Felder bleiben frei,
-  `_untangle` prüft beim Tausch erneut. Folgefund: Der Platzierungsgriff saß an der Mitte des langen
-  Bohrwerkzeugs, jetzt an der Mündung aus der Matrix. 64 Fälle in `test_placement_dimensions.py`,
-  drei Grifffälle, unabhängige Durchsicht ohne Befund. Am Fenster nach Neustart (Weg 1, mittlere
-  Bohrung): Karte über dem Modell, Maße verteilt, Zug am Griff um 6,44 mm, Strg+Z und Strg+Y. Belege
-  unter `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `root-evidence.md` (RM-197),
-  `root-independent-review.md`.
-
 <a id="rm-198"></a>
 
 - [~] **RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das
@@ -3186,48 +2871,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den
   echten Startweg beim nächsten Release noch einmal fahren, und ob Windows D3D12 als Backend
   bekommt, bleibt eine eigene Entscheidung
-
-<a id="rm-199"></a>
-
-- [~] **RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im
-  Auswahlfenster.** Robert, 21.09.2026, mit dem Maßeditor an Weg 1:
-  „durchmesser ist ja im viewport kann im merkmalpanel/auswahlpanel entfernt
-  werden". Die Maßgruppe im Bild trägt Durchmesser, Änderungsumfang, X, Y, Z
-  und Materialtoleranz; rechts im Auswahlfenster stehen dieselben Felder als
-  gesperrte Zwillinge (`FeaturePanel`, „Panelgegenstücke sind gesperrt"). Was
-  im Bild steht, fällt rechts weg, solange die Maße im Bild stehen; kommt der
-  Editor zu, kommen die Felder zurück. `panels.py` und `main_window.py` liegen
-  bei der CAD-Sitzung (P0.3, RM-188) — dort eingelöst, in `b25167fd`: Das
-  Merkmalfenster merkt sich je Handlung ihren Block aus Strich und Zeile
-  (`FeaturePanel._blocks`); `set_measuring(True, op=…)` nimmt den Block der
-  Handlung weg, deren Maße im Bild stehen, `set_measuring(False)` bringt ihn
-  zurück, die übrigen Handlungen des Merkmals bleiben. Gemessen an Weg 1 mit
-  `plate_holes.stl`: nach dem Wählen der Bohrung steht rechts kein Feld von
-  *Bohrung ändern* mehr, *Merkmal verschieben* schon; nach
-  `end_quiet_placement` stehen Durchmesser und Koordinaten wieder
-  (`test_ui.py::test_the_measures_in_the_view_take_their_twins_out_of_the_panel`).
-  Das Review vom 21.09.2026 fand den Rest: Der Block des historischen
-  Bohrschritts (`offer_bore_step`) blieb neben der Maßgruppe stehen; er trägt
-  sich seither in `_blocks` ein und weicht mit den übrigen. Abnahme, offen
-  beim nächsten Release (RM-213): Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
-  Koordinaten; endet die Maßgruppe, stehen sie wieder. Escape und Abbrechen
-  wählen dabei seit dem 25.09.2026 ab (Entscheidung Robert), rechts steht
-  danach nichts mehr.
-
-  **Stand laut Register bis 29.09.2026:** Eingelöst in `b25167fd`, und im Review ganz: Auch der
-  Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step`
-  trägt `_blocks`). Abnahme beim nächsten Release: Bohrung an Weg 1 wählen, rechts kein
-  Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem
-  25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`)
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Am Fenster gefunden: Beim
-  ursprünglichen Bohrschritt standen Ø 4,20 im Bild und der gemessene Ø 4,35 rechts zugleich als
-  Eingabe. `FeaturePanel.set_measuring` verbirgt nun auch die beiden alternativen Maßhandlungen samt
-  Feldern und bringt sie beim Ende zurück; Operationen und gespeicherte Werte bleiben unberührt.
-  Beide Kerne, Test erst rot, dann sieben Fälle grün, unabhängige Durchsicht ohne Befund. Am Fenster
-  nach Neustart: Durchmesser nur in der Maßkarte, Verschieben, Drehen und Verdoppeln bleiben rechts.
-  Belege unter `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `root-evidence.md` (RM-199),
-  `root-independent-review.md`.
 
 <a id="rm-200"></a>
 
@@ -3545,42 +3188,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   unbekanntes Druckerprofil mit Strg+Z, Behälterschritt unverändert und mit Steckdeckel. Changelog:
   ja, der vorhandene Beleg-Punkt ist neu gefasst, ein Punkt zur Folge je Befund kommt dazu (alles
   neu seit v0.5.1).
-
-<a id="rm-131"></a>
-
-- [~] **RM-131 — Zurückgestellten Mehrfachimport entscheiden.** Mehrfachimport bewusst
-  zurückgestellt lassen. Bei Wiederaufnahme: mehrere Dateien in einem Vorgang übernehmen, die
-  gemeinsame Baugruppenlage erhalten und gleichartige Importbefunde bündeln. Abnahme:
-  Piratenschiff-Ordner ohne siebzehn Dialoge, ohne still verworfene Dateien und mit
-  nachvollziehbarer Platzierung.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `Session.import_models_async`
-  liest im abbrechbaren `_BatchReadWorker`; alle Dateien kommen als eine Transaktion in ihrer
-  Dateilage, eine Einheiten- und eine Erkennungsfrage gelten für die ganze Auswahl, ein Abbruch
-  zieht alle Quellen zurück. Gleiche Importbefunde bündelt der Prüfbericht je Transaktion, die
-  Details behalten jede Originalmeldung. Am Fenster: 17 STL des Piratenschiffs,
-  373,15 × 351,07 × 115 mm wie die Quellen, ein Verlaufseintrag, Erkennungsabbruch, Undo/Redo,
-  Speichern und Öffnen mit gleichen SHA256, vier Lochreparaturen gebündelt. Nach dem Fix nicht mehr
-  am Fenster gesehen: das Bündel `ingest.multiple_components` und NM 1–4. Belege unter
-  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `root-evidence.md`,
-  `import-history-native-matrix.md`.
-
-  **Teilstand 04.10.2026 (Claude, Zweig `claude/rm-druckvertrag-oberflaeche`, zusammengeführt in
-  `b94f899e9`):** NM 1–4 als Tests ohne Codeänderung grün:
-  `test_print_contract_ui.py::test_nested_part_notes_bundle_per_wording_and_select_exactly_their_bodies`
-  (je Wortlaut ein Bündel, Aufklappen nennt jeden Körpernamen, Klick wählt genau die Gruppe, keine
-  Originalmeldung geht verloren); `test_batch_import_ui.py` 6 Fälle: Dateidialog abbrechen auf
-  Startseite und im Projekt, abgelehnte Vollerkennungsfrage lädt alle drei Dateien mit einer Frage
-  und einer Transaktion, *Modell einfügen* erhält den vorhandenen Körper und die Lage zueinander,
-  Undo nimmt nur die Gruppe, Speichern/Öffnen gleich, offene Form- und Skelettsitzung weist den
-  Import mit Rückweg ab. Späte Antworten belegen
-  `test_ui.py::test_batch_import_discards_late_reads[cancel/project]`. Commit `25a9484f7`. Belege
-  unter `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
-  Fensterabnahme beim Release (RM-213) am Piratenschiff: Bündel und Auswahl, 17 STL mit
-  Dialogabbruch und geschlossener Erkennungsfrage, *Modell einfügen* mit Strg+Z/Strg+Y und
-  Speichern, Abbruch während des Lesens. Changelog: nein, nur Nachweis.
 
 <a id="rm-135"></a>
 
@@ -4077,296 +3684,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `‹B›\matrixwerkzeug\uebernahme\` (einheit.py, bericht.py, dazu die Diffs und `LISTE.txt` mit Ziel,
   Basis-SHA und Inhalt), eingepflegt auf den Stand von G1 (13:03) und an `image_00001_.glb` und
   `1x1-bin.stl` erprobt (`‹B›\werkzeugprobe\`).
-
-<a id="rm-366"></a>
-
-- [~] **RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug.**
-  Review 02.10.2026, Gebietsprüfung Weg 4 (W4-4), am HEAD `6ce767031`.
-  `app/ui/main_window.py:11504–11531` rechnet nach jedem Klick und Ziehschritt alle Etappen der
-  Sitzung neu, im Oberflächen-Thread.
-  **Fehlerfall:** Netz mit 145 742 Ecken: 0,03 / 1,3 / 2,9 / 5,8 s Vorschau bei 1 / 10 / 20 / 40
-  Etappen, ohne Fortschritt und ohne Abbrechen — die Oberfläche steht, je länger geformt wird.
-  **Fix:** Die Vorschau wendet nur den neuen Zug auf das zuletzt gezeigte Netz an (das Ergebnis
-  entsteht weiter erst bei der Auswertung, Regel 2) oder rechnet im Arbeiter mit Fortschritt und
-  *Abbrechen*.
-  **Abnahme:** Messung: Vorschau nach dem 40. Zug höchstens so lang wie nach dem ersten (Budget
-  §31), Oberfläche bleibt bedienbar. Bauplan §2.8, §31.
-  Belege: `gebiet-weg4.md`, Sonde `w4_vorschau_hauptfaden.py`.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Auf main setzt `SculptPreview`
-  seit `8440db6f7` nur den neuen Zug auf (Kugel mit 145 742 Ecken, F0FF: Vorschau nach Klick 1/39 je
-  0,011 s, nach 2/40 0,161/0,145 s). Der Hauptbaum rechnet Netze über 20 000 Dreiecke in
-  `_SculptPreviewWorker` weiter; schnelle Klicks kommen in Reihenfolge, frühes *Fertig* wartet auf
-  den letzten Zug, Projektwechsel und Abbruch entwerten alte Antworten. Offscreen an echten Netzen
-  (325 244 und 452 316 Flächen) über 40 Etappen: UI-Aufruf median 0,57 ms, Ereignislücke höchstens
-  23 ms; mit *Glätten* erste/40. Vorschau 0,396/0,369 und 0,546/0,497 s. 101 und 230 Fensterfälle
-  grün. Beleg: `F:\solidon-review-reports\codex-2026-10-03\bedienung\sculpt-session.md`.
-
-<a id="rm-368"></a>
-
-- [~] **RM-368 — Schieberegler über den Verlauf (§18.7).**
-  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 1, I-1).
-  §18.7 verlangt „Schieberegler über den Verlauf. Bezugsgröße ist die Transaktion, nicht die
-  Einzel-Op.“ In `app/ui` gibt es keinen (`QSlider` nur in Filament, Einstellungen, Stil);
-  vorhanden ist die Einfügemarke im Verlauf.
-  **Ablauf:** In der Vorher/Nachher-Ansicht (bzw. über dem Verlauf) ein Regler mit einer Raste je
-  Transaktion; Ziehen zeigt den Stand nach dieser Transaktion als Vorschau (Geist + Differenz,
-  §18.7), ohne das Dokument zu ändern (Kamera/Darstellung, §2.1); Loslassen lässt den aktuellen
-  Stand stehen, ein eigener Knopf setzt bei Bedarf die Einfügemarke dorthin.
-  **Stellen:** Verlaufsleiste und Einfügemarke in `app/ui/panels.py` (Verlauf) und
-  `app/ui/main_window.py`; Vorschau über den vorhandenen Auswertungs-Cache (`scene/cache.py`),
-  Differenzdarstellung `Viewport._redraw_difference` (trägt seit RM-358 W1-3 ihr Muster, `_add_body`).
-  **Abnahme:** Test: Regler hat so viele Rasten wie Transaktionen; Ziehen ändert weder Dokument
-  noch Verlauf; jede Raste zeigt die Objekt-Hashes des Stands nach dieser Transaktion; Tastatur
-  (Pfeile) bedient ihn, zugänglicher Name gesetzt. Bauplan §18.7, §2.1, §2.8 (Vorschau aus dem
-  Cache, sonst Fortschritt).
-  **Vorgabe Robert 02.10.2026 — allgemein:** Regler für jedes Projekt mit beliebig vielen Transaktionen, auch bei Mehrkörper-Szenen; Abnahme an mindestens drei unterschiedlichen Projekten (Beispiele aus `app/examples` und `F:\3D Dateien\*.p3d`).
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** *Vorher/Nachher* über dem Verlauf
-  trägt einen Regler mit einer Raste je Transaktion, Pfeiltasten und zugänglichem Namen; historische
-  Stände rechnet der Vorschauarbeiter auf einer Dokumentkopie, die Kamera bleibt. *Hier
-  weiterarbeiten* setzt die Einfügemarke. Format 45 speichert `Transaction.renumbered` (Claude:
-  Schritt 44→45 statt 43→44), sichtbare Nummern sind von Kennungen getrennt. 452 Kern-, 30
-  Verlaufs-, 36 Texturfälle grün. Am Fenster an `native-sculpt-grouped.p3d`: Stand 1 behält die
-  Kamera, Einfügen vor *Kopf* erhält alle Namen nach Speichern und Öffnen. Die Prüfprojekte des
-  Hauptbaums tragen noch die alte Formatnummer 44. Belege unter
-  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `import-history-move.md`,
-  `root-evidence.md`.
-
-  **Teilstand 04.10.2026 (Claude, Zweig `claude/rm-druckvertrag-oberflaeche`, zusammengeführt in
-  `b94f899e9`):** Die Rückprüfung „vor Schritt 3“ ist belegt
-  (`test_history_revision_ui.py::test_inserted_history_uses_positions_in_report_status_and_dependency_tips`).
-  Gefunden und behoben: Nach einem Einfügen nannten weitere Sätze die internen Kennungen statt der
-  sichtbaren Nummern — die Absage beim Verschieben (`history._order_problem`), die Absage beim
-  Einfügen, die Nachfrage vor dem Löschen (`named_steps`), die Titel von Löschen, Verschieben, Aus-
-  und Einschalten und die Umbauabsagen und Merkmalsfrage in `scene/revision.py`.
-  `history.step_position` ist die eine Quelle, `ui.labels.step_number` fragt dort (vorher ein
-  Zwilling); Werte und Klickziele behalten die Kennungen. Test
-  `test_sentences_about_steps_name_positions_after_an_early_insert`, vorher rot („8 Verschieben“
-  statt „4 Verschieben“). Commit `9dc2842e5`. Belege unter
-  `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
-  Fensterabnahme beim Release (RM-213): „vor Schritt 3“ an `native-sculpt-grouped.p3d`,
-  Verschiebeabsage und Löschnachfrage mit sichtbaren Nummern, Regler über zwei weitere Projekte.
-  Changelog: nein — die getrennten Kennungen kamen mit `27c7a29e9`, in keinem Tag.
-
-<a id="rm-375"></a>
-
-- [~] **RM-375 — Eine Formsitzung lässt sich wieder öffnen.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 4).
-  Doppelklick auf einen Schritt *Formen* öffnet heute den Rohdialog mit dem JSON-Feld *Striche*
-  (Eingang zu RM-367 W4-3); das Skelett macht es vor (`app/ui/main_window.py:11811`,
-  `_armature_of`: ein wieder geöffnetes Skelett ändert seinen Schritt).
-  **Ablauf:** Doppelklick bzw. *Diesen Schritt ändern* auf *Formen* öffnet dieselbe Formsitzung
-  mit ihren Zügen; Züge lassen sich zurücknehmen oder ergänzen; *Fertig* ändert denselben Schritt
-  (eine Transaktion). Im Rohdialog steht statt des Textfelds eine Zusammenfassung („12 Züge,
-  Symmetrie X“).
-  **Stellen:** `main_window.py` (Formsitzung, Vorschau `:11504–11531`, `edit_operation`
-  `:17835ff.`), `app/core/geom/sculpt.py` (Strichtext `:294ff.`), Parameterschema des Feldes
-  *Striche* (Darstellung statt Texteingabe).
-  **Abnahme:** Test: Sitzung mit drei Zügen fertig → wieder öffnen → ein Zug zurück, *Fertig* →
-  derselbe Schritt hat zwei Züge, Verlauf hat keinen zweiten *Formen*-Schritt; Strg+Z stellt drei
-  Züge her. Bauplan §2.2 (Weg 4), §2.1, Regel 2.
-  **Vorgabe Robert 02.10.2026 — allgemein:** Wiederöffnen für jede Sitzung, die Gesten sammelt (Formen, Skelett, Zeichnen), gleich bedient; Abnahme an mindestens drei unterschiedlichen Modellen aus `F:\3D Dateien` (z. B. Figur, Pilz, Drache).
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Doppelklick oder *Diesen Schritt
-  ändern* lädt den Eingang vor genau diesem Schritt im Hintergrund und zeigt dieselbe Leiste mit den
-  gespeicherten Zügen; *Fertig* ändert denselben Schritt. Ein Zug ist eine Geste (`Stroke.gesture`),
-  Strg+Z nimmt sie ganz zurück, alte Werte ohne Kennung bleiben einzeln rücknehmbar. Eine Zeichnung
-  öffnet direkt im Zeichenmodus, `_DiscardedSketch` holt Verworfenes nur ins eigene Projekt zurück.
-  Der Rohdialog zeigt eine Zusammenfassung statt JSON. Test 3 → 2 Züge, Undo 3, ein Schritt; 230
-  Fensterfälle grün. Am Fenster: Figur mit drei Zügen, Undo/Redo, Speichern und Öffnen, dazu der
-  Pilz. Belege unter `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `sculpt-session.md`,
-  `construction-ui.md` (RM-375), `root-evidence.md`.
-
-<a id="rm-377"></a>
-
-- [~] **RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit.**
-  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 4).
-  In der Formsitzung läuft nur die Wandstärkenkarte; Überhangkarte und Bauraumprüfung nicht
-  (Formkonzept §12). Nach dem Posieren soll laut Konzept §7.5 „in der Leiste stehen, was der
-  Druck davon hält“ — es gibt keinen Befund in der Posierleiste (`app/ui/pose_bar.py`).
-  **Ablauf:** In der Formsitzung umschaltbar Wandstärke/Überhang (vorhandene Analysekarten,
-  verzögert im Hintergrund, §18.9); ein Hinweis, sobald der Körper den Bauraum verlässt; nach
-  *Fertig* beim Skelett eine Zeile in der Leiste mit dem Druckbefund (Überhang, Einschnürung
-  `pose.pinched`).
-  **Stellen:** `app/ui/sculpt_bar.py`, `app/ui/pose_bar.py`, Formsitzung in
-  `main_window.py:11504ff.`/`:11755ff.`, Analysekarten aus `app/core/perceive/`.
-  **Abnahme:** Test: Kartenwahl in der Sitzung wechselt die Karte; ein Zug über den Bauraum hinaus
-  meldet; Posieren mit Einschnürung zeigt die Zeile in der Leiste. Bauplan §2.2 (Weg 4), §18.9,
-  §2.8.
-  **Vorgabe Robert 02.10.2026 — allgemein:** dieselben Karten und Befunde in jeder Gestensitzung (Formen, Skelett); Abnahme an mindestens drei unterschiedlichen organischen Modellen aus `F:\3D Dateien`.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Beide Gestenleisten tragen in der
-  zweiten Zeile dieselbe Kartenwahl (keine, Wandstärke, Überhang) mit `MapLegend`; die Analyse
-  rechnet nach Ruhe im Hintergrund, ein Wechsel räumt den alten Wartehinweis ab, eine verspätete
-  Antwort ändert die gewählte Karte nicht. Ein Zug über den Bauraum meldet sich in der Leiste; nach
-  dem Skelett steht der Kernbefund, etwa `pose.pinched`, mit Kartenwahl und Schließen. Gegenproben
-  für Bauraum, Abbruch, späte Antwort und Kartenwechsel grün, Formsitzung und Skelett mit 230
-  Fällen. Am Fenster: Überhangkarte 0–90° mit Richtwert 45° und Herkunft „intern geschätzt“ an Weg
-  4. Belege unter `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `sculpt-session.md`,
-  `root-evidence.md`.
-
-<a id="rm-395"></a>
-
-- [~] **RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD.**
-  Review 02.10.2026, Nachbau-Test (b), am HEAD `4449e3370`. Je Rest ein Test.
-  - **Sperrgrund nur im Vorschauband:** Bei *Drehdeckel* („massiv“), *Profilklemme mit Einlagen*
-    („Wählen Sie das Material …“) und *Verrunden* („Radius zu groß“) ist *Einsetzen* grau,
-    `_refusal` im Dialog leer. Der Satz gehört auch in den Dialog. §2.7.
-  - **Profilklemme ohne Materialvorgabe:** beide Materialfelder leer und sperrend; Vorgabe aus dem
-    Projektmaterial. §2.4.
-  - **Menü *Aus Skizze erzeugen …* zeichnet nicht:** öffnet *Grundform hochziehen* mit Rechteck
-    40 × 20 × 10; gezeichnet wird erst über „Zeichnen …“. Der Eintrag soll die Zeichnung starten.
-  - **Vereinigen deckt eine Bohrung still zu:** Steg über die halbe Bohrung Ø 9, nach *Vereinigen*
-    ist das Merkmal weg, kein Satz. Hinweis „Bohrung ‹…› wurde verschlossen“. §17.3.
-  - **„Richtung des Langlochs“ in Grad ohne Bezug:** welche Achse 0° ist, sagt weder Feld noch
-    Kurzhilfe. §2.6.
-  - **Skizzenursprung auf einer Fläche** liegt unsichtbar in deren Mitte; Ursprung im Zeichenmodus
-    anzeigen. §30.1.
-  Beleg: `F:\solidon-review-reports\nachbau\bericht.md` (Liste b) mit den dort genannten Läufen
-  und Sonden.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `OperationDialog.show_refusal`
-  zeigt den Grund bei den Feldern; leere Materialrollen übernehmen das Projektmaterial; *Aus Skizze
-  erzeugen* startet über `launch_operation` sofort die Zeichnung; jede Zeichenebene trägt Nullring
-  und 0. `union_objects` meldet `union.bore_filled`, `_partial`, `_blind`, `_enclosed` und
-  `_unchecked` mit Ursprungskörper und Ort, gemessen an exakten bzw. verschweißten Differenzen
-  (Cache 2). `slot_angle` sagt: „Dreht die Längsrichtung um die Bohrachse.“ 186 Boolean-, 4 Dialog-,
-  12 Ursprungs-, 4 Fensterfälle grün; Teppichclip ganz gefüllt 0 mm³, halb 174,96/175,28 mm³
-  (Netz/exakt), 16 Projekte. Belege unter `F:\solidon-review-reports\codex-2026-10-03\`:
-  `bedienung\construction-ui.md`, `geometrie\geometrie\RM395.md`.
-
-<a id="rm-396"></a>
-
-- [~] **RM-396 — Grundkörper „an die gewählte Fläche ansetzen und verbinden“ in einem Schritt.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“ auf die Vorschläge aus dem Nachbau-Test, Nr. 1).
-  Im Nachbau kam in 8 von 12 Modellen ein zweiter Körper dazu; je 5–15 Klicks und 2–6 Zahlen ohne
-  Bezug (Grundkörper anlegen, Weg ausrechnen, *Verschieben*, *Vereinigen*). Die Bausteine dafür
-  gibt es (`sketch_join`, `app/core/sketch/ops.py:598`; `align_to_feature`,
-  `app/core/geom/ops.py:1167`), aber nicht am Weg aus *Quader anlegen*.
-  **Ablauf:** Ist eine Fläche gewählt, bietet der Grundkörper-Dialog vorn die Wahl *frei auf dem
-  Bett* oder *an ‹Fläche› ansetzen* (bündig, mittig, *verbinden* an); Übernehmen legt Grundkörper,
-  Ausrichtung und Vereinigung als **eine** Transaktion an (Regel 16 sinngemäß, §15.5). Ohne
-  Flächenwahl unverändert auf dem Bett.
-  **Stellen:** `app/core/geom/primitive_ops.py:294` (`create_box`), `:347` (`create_cylinder`)
-  und Geschwister, Vorbelegung `app/ui/main_window.py:17254`/`:19575`, Dialog `app/ui/op_dialog.py`.
-  Zusammen mit RM-390 umsetzen (dort die stille Vorbelegung abschaffen).
-  **Abnahme:** Test: Quader, Seitenfläche gewählt, *Zylinder anlegen* mit *an Fläche ansetzen* →
-  ein Körper, Zylinder bündig und mittig auf der Fläche, eine Transaktion, Strg+Z nimmt alles
-  zurück. Bauplan §2.2 (Weg 2), §2.4, §2.6. Beleg: `F:\solidon-review-reports\nachbau\bericht.md` (c1).
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Ansetzen gilt für jeden Grundkörper, jeden Baustein und jede gewählte Fläche (eben, schräg, gekrümmt über die Tangentialebene), an Netz und exaktem Kern. Nutzen: alle Teile aus mehreren Körpern — im Nachbau 8 von 12, in `F:\3D Dateien` nach Dateinamen geschätzt rund 60 Funktionsteile (Halter, Behälter, Verbinder, Adapter). Abnahme an mindestens drei unterschiedlichen Fällen aus `F:\3D Dateien` (etwa Rankenclip, Rohrschelle, Wandhalterung), nicht nur am Nachbau-Fall.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Kern: `surface_at_feature` liefert
-  die Lage auf ebenen, schrägen und gekrümmten Originalflächen, `bound_surface_values` speichert
-  Ziel, Anker und zwei Kantenabstände, `surface_seat` kennt `point_on_surface` und `centred`; der
-  Arbeiter erhält mit `surface_object_for_worker` eine Kopie samt nativer Flächen. Erzeugen und
-  `union_objects` sind eine Vorschau und eine Transaktion, *Verbinden* aus lässt zwei Körper. 433
-  Kern-, 157 Fenster-, 7 Folgefälle grün. Am Fenster an `1x1-tray.stl`: Quader 8 × 12 × 20 an der
-  Innenfläche, ein Körper mit 12,9 cm³, ein Undo nimmt alles samt drei Parametern zurück. Claude:
-  `panels._line_for` hängt `obj_1` nicht mehr an. Belege unter
-  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `construction-ui.md`,
-  `geometry-contracts.md`, `root-evidence.md`.
-
-  **Teilstand 04.10.2026 (Claude, Zweig `claude/rm-druckvertrag-oberflaeche`, zusammengeführt in
-  `b94f899e9`):** Die Berichtszeile des Umwandlungsbefunds hängte über `values["object"]` die
-  Kennung der Ausgabe an („… wieder her. — obj_0“, Sonde `sonde-rm396-vorher.txt`).
-  `panels._line_for` löst sie jetzt über die Körpernamen auf oder lässt sie weg; Test
-  `test_the_conversion_note_names_no_identifier`, vorher rot. Commit `87d2cb69f`. Belege unter
-  `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
-  Fensterabnahme beim Release (RM-213): `1x1-tray.stl` mit Quader *An Oberseite ansetzen* und
-  *Verbinden* ohne „obj_…“ im Prüfbericht, danach 45°-Schräge eines Keils und eine
-  Zylindermantelfläche, je mit Strg+Z, Speichern und Wiederöffnen. Changelog: nein — Ursprung
-  `27c7a29e9`, in keinem Tag.
-
-<a id="rm-397"></a>
-
-- [~] **RM-397 — Assistent „Dose mit Schraubdeckel“.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 2).
-  Zwei der zwölf Nachbauten (Nozzle-Box, Gewürzset) sind genau das; heute kostet der Weg drei
-  Operationen (*Zylinder anlegen*, *Aushöhlen*, *Drehdeckel erzeugen*), eine Sackgasse (RM-388)
-  und eine Fehlwarnung (RM-393). Der Docstring von `screw_lid` (`app/core/geom/lid.py:1286ff.`,
-  Beispiele um `:1309`) nennt genau diese Paare.
-  **Ablauf:** Ein Eintrag *Dose mit Schraubdeckel …* fragt vorn Durchmesser, Höhe, Wandstärke;
-  hinten Gewinde, Deckelhöhe, Streulöcher ja/nein. Übernehmen legt Dose, Hals, Deckel und Passung
-  als eine Transaktion an; alle Maße als Projektparameter (§13), damit die Parameterleiste sie
-  dreht.
-  **Abnahme:** Test: Assistent mit Vorgaben → zwei Körper, dicht, Passung ohne Warnung, Spiel aus
-  dem Materialprofil (Regel 7); Durchmesser in der Leiste ändern → Deckel folgt. Nach RM-388 und
-  RM-393 umsetzen. Bauplan §2.2, §13, §25.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird ein parametrischer Assistent **„Behälter mit Deckel“**: Grundform rund oder eckig, Deckel als Schraub-, Steck- oder Klappdeckel, optional Fächer/Einsätze und Streulöcher, jede Größe im Bauraum; Gewinde- und Passungsmaße aus Normteiltabelle und Materialprofil, alle Hauptmaße als Projektparameter. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 35 Dateien (Deckel rund/eckig, Gewürzset, Filterball, Wasserfall, Nozzle-Box, Kartusche, Mini-Pot, Taschentuchbox, Werkzeugbox). Abnahme an mindestens drei unterschiedlichen Behältern (rund mit Schraubdeckel, eckig mit Steckdeckel, mit Klappdeckel).
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `create_container` und
-  `add_container_insert` (`geom/container_ops.py`) mit `lid_flow.plan_container` und
-  `plan_container_edit`: benannte aktive Hauptmaße, Passung, fester Startwert und Kern in einer
-  Transaktion; der Deckelwechsel im Verlauf führt Passung und Einsatz mit. Behoben: breite
-  Schraubdeckel überschnitten den Hals (0,44 mm³ bei Ø 100), die Scharnierlasche drang in den
-  Einsatz (119,9 mm³), `_swap_operations` verwarf Passungen, Plattformrauschen. 397 Kern-, 84
-  Behälter-, 39 Fensterfälle grün, 24 Prüfprojekte. Am Fenster: rund mit Schraubdeckel 60→70 mm,
-  Steckdeckel, Rechteck mit Fächern, Klappdeckel, Haltkarte bei Wand 40, Reload v8. Belege unter
-  `F:\solidon-review-reports\codex-2026-10-03\`: `geometrie\geometrie\RM397.md`,
-  `bedienung\root-evidence.md`.
-
-  **Teilstand 04.10.2026 (Claude, Zweig `claude/rm-druckvertrag-oberflaeche`, zusammengeführt in
-  `b94f899e9`):** Parametertab:
-  `test_ui.py::test_parameter_tab_keeps_titles_and_details_inside_the_scroll_area` (bestehend,
-  grün). Unveränderte Vorschau neu über den echten Weg aus Vorschauauftrag, Arbeiter und Band:
-  `test_print_contract_ui.py::test_reopened_container_step_previews_unchanged_or_the_new_lid` —
-  unverändert geöffnet „ändert sich nichts“ statt „Keine Vorschau“, mit Steckdeckel „Körperzahl: 2 →
-  2“ und beide Außenmaße; das Dokument bleibt. Belege unter
-  `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
-  Fensterabnahme beim Release (RM-213): Behälterschritt doppelklicken ohne Änderung und mit
-  Steckdeckel, Wandstärke 3 → 40 über die Parameterleiste mit sichtbaren Beschriftungen. Changelog:
-  nein.
-
-<a id="rm-401"></a>
-
-- [~] **RM-401 — Verschieben auf eine absolute Lage.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 6).
-  *Verschieben* (`translate_object`, `app/core/geom/ops.py:314`) geht nur relativ; für jeden
-  Anbauteil rechnete der Kunde die Differenz aus der heutigen Lage (Modelle 2, 4, 6–10, je ein bis
-  drei Zahlen ohne Bezug).
-  **Ablauf:** Umschalter *um* / *nach*: bei *nach* stehen „Mitte bei X/Y“ und „Boden auf Z“ (bzw.
-  Bezugspunkt wählbar) mit der aktuellen Lage vorbelegt; gespeichert wird der reproduzierbare
-  Zielwert (Regel 2), alte Schritte bleiben relativ.
-  **Abnahme:** Test: Körper per *nach* auf Mitte (0, 0), Boden 0 → Lage stimmt, auch nach einer
-  Maßänderung davor; Strg+Z. Bauplan §2.4, §18.5.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Absolute Lage für jeden Körper, mehrere gewählte Körper und jeden Bezugspunkt (Mitte, Boden, Ecke, Merkmal); dieselbe Logik in *Drehen* und im Bewegungsgriff. Nutzen: jede Baugruppe — in `F:\3D Dateien` nach Dateinamen rund 40 Dateien aus mehreren Teilen (Screen-Cover, Gewürzset, Wasserfall, Organizer, Besteckkorb, Rinnensegmente). Abnahme an mindestens drei unterschiedlichen Baugruppen.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Kern: `SceneObject.frame` und
-  `IDENTITY_FRAME`; `moved_object` führt den Rahmen mit der echten Matrix fort, Spiegelung und
-  Skalierung bleiben sichtbar, Unbekanntes bleibt unbekannt; Kopien, Muster und beide Booleschen
-  Kerne tragen ihn, Altprojekte rekonstruieren ihn aus dem Stack (456 Fälle, drei Altprojekte aus
-  Format 6/18/41). Oberfläche: Verschieben und Drehen mit *um* und *nach*, absolute Ziele gelten
-  auch nach vorgelagerten Maßänderungen, unklare Rahmen bieten nur relatives Drehen an;
-  `translate_object` mit `minimum_inputs=1`. 115 Register-, 38 Leisten-, 35 Lagefälle grün. Belege
-  unter `F:\solidon-review-reports\codex-2026-10-03\`: `bedienung\import-history-move.md`,
-  `bedienung\import-history-native-matrix.md` (RM401), `geometrie\erkennung\bericht.md`.
-
-<a id="rm-403"></a>
-
-- [~] **RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 8).
-  Schlüsselloch und andere Flächenbausteine sitzen immer in der Flächenmitte; höher oder seitlich
-  nur über Position X/Y/Z in Weltkoordinaten hinter *Weitere Einstellungen* (Nachbau Modell 1;
-  Schlüsselloch `keyhole`, `app/core/knowledge/parts/mounting.py:584`).
-  **Ablauf:** Beim Einsetzen an einer Fläche setzt der Klickpunkt die Lage; vorn stehen „Abstand
-  zur oberen/linken Kante“ in Flächenkoordinaten, gespeichert reproduzierbar relativ zur Fläche
-  (Regel 2); die Vorschau zeigt, ob der Baustein ganz auf der Fläche liegt (verbindet sich mit
-  RM-392).
-  **Abnahme:** Test: Schlüsselloch per Klick 10 mm unter der Oberkante → Lage stimmt, liegt ganz
-  in der Fläche, nach einer Maßänderung der Fläche bleibt der Kantenabstand. Bauplan §2.6, §24.3.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Freie Lage für alle Bausteine an einer Fläche (Schlüsselloch, Einpressbuchse, Mutternfalle, Schraubloch, Wandhalter …) auf ebenen und einfach gekrümmten Flächen, Kantenabstände in Flächenkoordinaten. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 25 Teile mit Befestigungen (Wandhalterungen, Lochwand, Filamenthalter M6, Screen-Cover). Abnahme an mindestens drei unterschiedlichen Bausteinen und Modellen.
-
-  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `PlacementFlow._set_values`
-  übernimmt `bound_surface_values` mit qualifiziertem Ziel, Anker und beiden Kantenabständen; eine
-  Maßänderung ohne Geste bewahrt Ausdrücke, ein freier Zug oder eine eigene Weltkoordinate löst den
-  Bezug. Wiederöffnen bindet über `bind_surface` am historischen Eingang dieselben Kanten. Kern:
-  acht Maßänderungsfälle (Grundkörper und Magnettasche, beide Kerne und Güten) halten die
-  Kantenabstände. Fenster: 18 Dialogfälle, drei Rundreisen mit Magnettasche, Schraubloch und
-  Einpressbuchse samt Speichern, Undo/Redo und Wiederöffnen, 157 Platzierungs- und Dialogfälle grün.
-  Das Schlüsselloch der Abnahme ist nicht eigens nachgestellt. Belege unter
-  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `construction-ui.md` (RM-403),
-  `geometry-contracts.md`.
 
 <a id="rm-502"></a>
 
