@@ -129,6 +129,34 @@ def test_rotation_finds_an_actual_pose_and_keeps_source(subject, case):
     np.testing.assert_array_equal(planned[entry.id].raw.vertices, second[entry.id].raw.vertices)
 
 
+@pytest.mark.parametrize(
+    "program", ["orca-slicer.exe", "bambu-studio.exe", "ElegooSlicer.exe", "CrealityPrint.exe"]
+)
+def test_programs_that_arrange_themselves_get_a_part_that_fits_only_turned_turned(subject, program):
+    """Die Orca-Familie verschiebt beim Anordnen, sie dreht nicht.
+
+    In der Slicer-Matrix (RM-312) passte die Waschschüssel (240 mal 200 mm) auf
+    das 220er-Bett des K1 und des Kobra 2 nur um 14,5° gedreht; Solidons
+    Vorprüfung ließ sie deshalb durch, Creality Print und OrcaSlicer sagten
+    mit -50 ab. Hier passt ein 200-mm-Stab nur schräg aufs 180er-Bett. Was
+    ungedreht irgendwo Platz hat, bleibt unberührt — die Lage gehört dort dem
+    Slicer.
+    """
+    writer, profile, _setup = subject
+    setup = handover.SlicerSetup(Path(program), "orca")
+    rod = body("rod", (200, 20, 10))
+    assert not build_area.fits_on_bed(rod.mesh, profile.printer)
+    planned, changed = writer.prepare_slicer_meshes([rod], profile, setup)
+    assert changed and build_area.fits_on_bed(planned[rod.id], profile.printer)
+    assert rod.mesh.volume == pytest.approx(planned[rod.id].volume, rel=1e-10)
+
+    shifted = body("shifted", (100, 20, 10))
+    shifted.mesh = transform.apply(shifted.mesh, transform.translation((150, 0, 0)))
+    assert not build_area.fits_on_bed(shifted.mesh, profile.printer)
+    planned, changed = writer.prepare_slicer_meshes([shifted], profile, setup)
+    assert not changed and planned[shifted.id] is shifted.mesh
+
+
 def test_valid_diagonal_pose_is_unchanged(subject):
     writer, profile, setup = subject
     entry = body("turn", (200, 20, 10), angle=45)

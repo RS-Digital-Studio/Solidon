@@ -135,8 +135,8 @@ bekannter Bauraumgrund hält vor dem Prozessstart mit passender Handlung an;
 Datei- und Fensterübergabe behalten ihren Berichtweg.
 
 `prepare_slicer_meshes` liefert Writer und Vorprüfung denselben Exportnetzsatz.
-Ohne eigene Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf
-exportlokal gepackt, die Prusa-Familie hält es mit `--dont-arrange`.
+Ohne Konsolenanordnung (`arranges_on_cli`) wird jede Platte bei Bedarf gepackt
+(Prusa: `--dont-arrange`), sonst nur gedreht, was ungedreht nicht passt.
 `arrangement_holds` prüft Druckkontur, Sperrzonen und nutzbare Höhe,
 auch für die Lageübernahme im Fenster.
 

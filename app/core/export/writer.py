@@ -1831,8 +1831,36 @@ def prepare_slicer_meshes(
             raise
     program = slicer_keys.program_of(setup.executable)
     if slicer_keys.arranges_on_cli(setup.flavour, program):
-        return exported, False
+        return _turned_for_cli(chosen, exported, profile, cancelled)
     return _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+
+
+def _turned_for_cli(
+    chosen: Sequence[SceneObject],
+    exported: dict[str, MeshData],
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> tuple[dict[str, MeshData], bool]:
+    """Ein Teil, das nur gedreht aufs Bett passt, geht gedreht hinaus.
+
+    Die Orca-Familie ordnet auf der Konsole selbst an, verschiebt dabei aber
+    nur. Die Größenprüfung davor (:func:`handover._check_plate`) lässt ein
+    Teil durch, das gedreht passt; ungedreht sagte der Slicer dann mit -50
+    ab (RM-312: eine Schüssel von 240 mal 200 mm am 220er-Bett von K1 und
+    Kobra 2, die nur um 14,5° gedreht Platz hat). Was ungedreht irgendwo
+    passt, bleibt unberührt — die Lage gehört dort dem Slicer.
+    """
+    turned = dict(exported)
+    changed = False
+    for entry in chosen:
+        mesh = exported[entry.id]
+        if _fit_cli_mesh(mesh, profile, cancelled, turns=(np.eye(4),)) is not None:
+            continue
+        fitted = _fit_cli_mesh(mesh, profile, cancelled)
+        if fitted is not None:
+            turned[entry.id] = fitted
+            changed = True
+    return turned, changed
 
 
 def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
@@ -1869,15 +1897,21 @@ def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
 
 
 def _fit_cli_mesh(
-    mesh: MeshData, profile: Profile, cancelled: CancelToken | None
+    mesh: MeshData,
+    profile: Profile,
+    cancelled: CancelToken | None,
+    turns: Iterable[np.ndarray] | None = None,
 ) -> MeshData | None:
-    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt."""
+    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt.
+
+    ``turns`` beschränkt die Drehungen (ohne: :func:`_cli_turns`).
+    """
     from app.core.geom.orient import _Placed, extreme_points, turned_extents
 
     if build_area.fits_on_bed(mesh, profile.printer) and mesh.bounds.minimum[2] <= EPS_DISPLAY:
         return mesh
     points = extreme_points(mesh)
-    for turn in _cli_turns(mesh):
+    for turn in _cli_turns(mesh) if turns is None else turns:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         low, high = turned_extents(points, turn)

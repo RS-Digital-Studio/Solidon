@@ -455,6 +455,18 @@ y = -1,41 mm vom Bett, obwohl Solidons Anordnung 8,7 mm Rand ließ. PrusaSlicer
 2.9 hielt die Lage auch ohne den Schalter und nimmt ihn an. Gesetzt wird er
 wie `--arrange 0` der Orca-Familie nur bei haltender Anordnung.
 
+Die Orca-Familie ordnet auf der Konsole selbst an, verschiebt dabei aber nur.
+Die Größenprüfung vor dem Lauf lässt ein Teil durch, das gedreht auf das Bett
+passt; ungedreht sagte der Slicer dann mit -50 ab. In der Slicer-Matrix
+(RM-312) war das eine Schüssel von 240 mal 200 mm, die auf das 220er-Bett von
+K1 und Kobra 2 nur um rund 14,5° gedreht passt. Deshalb dreht
+`_turned_for_cli` die Exportkopie eines solchen Teils mit denselben
+Kandidaten wie die Packung (`_cli_turns`); was ungedreht irgendwo Platz hat,
+bleibt unberührt, denn die Lage gehört dort dem Slicer. Creality Print 7.3
+ordnet auf der Konsole selbst neu an und verlangt dabei gemessen gut einen
+Millimeter Rand je Seite (0,9 mm reichten nicht, 1,25 mm schon); ein Teil,
+das das Bett bis auf weniger füllt, sagt es weiter mit -50 ab.
+
 Eine erfolglose Suche beweist keine mathematische Unmöglichkeit. Die Meldung
 sagt daher, dass keine Anordnung gefunden wurde, und bietet die vorhandene
 projektweite Anordnung oder die Druckerwahl an. Der Abbruch wird vor und nach
