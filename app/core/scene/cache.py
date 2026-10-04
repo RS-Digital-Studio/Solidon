@@ -195,7 +195,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Neubau und in der Auswertung des exakten Körpers ihre Namen nach der Lage
 #:   ihrer Oberfläche (``matching.settled_twins``). Gespeicherte exakte
 #:   Erkennungen und Ergebnisse trügen zwei Ringe und neue Namen für Zwillinge.
-CACHE_FORMAT_VERSION: Final = 50
+#: - 51 (RM-226, Nachtrag 04.10.2026): Die Tessellierung eines exakten Körpers
+#:   trägt keine Dreiecke ohne Fläche mehr. Ein gespeicherter Netzzwilling trüge
+#:   sie noch und läse nach der ersten Booleschen andere Merkmale als vorher.
+CACHE_FORMAT_VERSION: Final = 51
 
 
 @dataclass(frozen=True, slots=True)
