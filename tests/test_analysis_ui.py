@@ -2247,6 +2247,77 @@ def test_the_same_finding_is_not_listed_twice(qt_app: QApplication) -> None:
         panel.deleteLater()
 
 
+def test_a_finding_answers_the_press_before_the_card_moves_the_row(qt_app: QApplication) -> None:
+    """Gewählt wird beim Drücken der linken Taste, nicht erst beim Loslassen.
+
+    Das Drücken macht die Zeile zur aktuellen, und die Karte darunter ändert
+    ihre Höhe; die Liste rollt, und am Piratenschiff lag die letzte Zeile
+    beim Loslassen 90 Punkte tiefer. Qt meldet dann keinen Klick, und die
+    Sammelzeile über 17 Körper wählte nichts (Fensterabnahme RM-131,
+    04.10.2026). Die rechte Taste bleibt beim Kontextmenü.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.panels import ReportPanel
+
+    finding = Finding(
+        code="arrange.out_of_build_volume",
+        severity="warning",
+        message="Ein Objekt steht über den Bauraum hinaus.",
+        object_id="obj_1",
+        values={"object": "Halter", "excess": "15,00 mm"},
+    )
+    panel = ReportPanel()
+    try:
+        panel.add_findings([finding])
+        panel.resize(400, 300)
+        panel.show()
+        QApplication.processEvents()
+        heard: list[Finding] = []
+        panel.findingActivated.connect(heard.append)
+        item = panel.list.item(0)
+        centre = panel.list.visualItemRect(item).center()
+        QTest.mousePress(panel.list.viewport(), Qt.MouseButton.LeftButton, pos=centre)
+        assert [one.code for one in heard] == [finding.code], "schon das Drücken wählt"
+        QTest.mouseRelease(panel.list.viewport(), Qt.MouseButton.LeftButton, pos=centre)
+        assert len(heard) == 1, "das Loslassen wählt nicht ein zweites Mal"
+    finally:
+        panel.hide()
+        panel.deleteLater()
+
+
+def test_a_bundle_names_each_body_with_its_values_in_brackets(qt_app: QApplication) -> None:
+    """In den Einzelheiten steht kein Wert des einen neben dem Namen des nächsten.
+
+    Die Einzelheiten brechen an „ · “ um; mit „ · “ zwischen Name und Wert stand
+    in „Objekte: …“ die Zeile „Komponenten: 2, obj_8_Cylinder_B“ (Fensterabnahme
+    RM-131, Piratenschiff).
+    """
+    from app.ui.panels import ReportPanel
+
+    findings = [
+        Finding(
+            code="arrange.out_of_build_volume",
+            severity="warning",
+            message="Ein Objekt steht über den Bauraum hinaus.",
+            object_id=body,
+            values={"excess": excess},
+        )
+        for body, excess in (("obj_1", "15,00 mm"), ("obj_2", "7,00 mm"))
+    ]
+    panel = ReportPanel()
+    try:
+        panel.add_findings(findings)
+        assert panel.list.count() == 1, "die beiden Befunde bilden eine Sammelzeile"
+        lines = panel.list.item(0).toolTip().split(" · ")
+        listed = next(line for line in lines if "obj_1" in line and "obj_2" in line)
+        assert "obj_1 (" in listed and "15,00 mm" in listed, listed
+        assert "), obj_2 (" in listed, listed
+    finally:
+        panel.deleteLater()
+
+
 def test_a_new_slicer_run_replaces_the_gcode_findings(qt_app: QApplication) -> None:
     """Die G-Code-Befunde beschreiben die jeweils letzte Druckdatei (Regel 14).
 

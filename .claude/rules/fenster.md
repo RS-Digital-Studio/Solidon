@@ -175,7 +175,8 @@ Stellen halten das, beide sind nötig:
   nicht *Modell teilen*.
 - Gleiche Meldungen bündeln ab zwei nach Satz, Kennung, Schwere, Schritt und
   Handlungen; Anzahl davor in Klammern. Klick wählt alle Körper, Handlung fragt
-  die Teilmenge. Nur gemeinsame Merkmale, aber alle Umrissorte eines Körpers
+  die Teilmenge. Gewählt wird beim Drücken (`_ReportList.leftPressed`): Die
+  Karte ändert ihre Höhe, und beim Loslassen läge die Zeile woanders. Nur gemeinsame Merkmale, aber alle Umrissorte eines Körpers
   werden mitgeführt.
 - `actions_for(finding)` speist sichtbare Knopfzeile und Kontextmenü (§2.7).
   Jeder Befund bekommt `suggestions` oder begründetes `OHNE_KNOPF`

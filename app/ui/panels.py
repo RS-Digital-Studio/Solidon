@@ -5366,6 +5366,23 @@ class BodyChoiceDialog(QDialog):
             dialog.deleteLater()
 
 
+class _ReportList(QListWidget):
+    """Die Befundliste: meldet das Drücken der linken Taste auf einer Zeile.
+
+    ``itemClicked`` verlangt Drücken und Loslassen auf derselben Zeile; rollt
+    die Liste dazwischen, weil die Karte ihre Höhe ändert, kommt kein Klick
+    an (siehe ``ReportPanel``). Die rechte Taste gehört dem Kontextmenü.
+    """
+
+    leftPressed = Signal(QListWidgetItem)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Schnittstelle
+        item = self.itemAt(event.position().toPoint())
+        super().mousePressEvent(event)
+        if item is not None and event.button() == Qt.MouseButton.LeftButton:
+            self.leftPressed.emit(item)
+
+
 class ReportPanel(QWidget):
     """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
@@ -5434,7 +5451,7 @@ class ReportPanel(QWidget):
         Genau das tat ``_resort`` nach dem ersten ``add_findings``."""
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
-        self.list = QListWidget(self)
+        self.list = _ReportList(self)
         self.list.setObjectName("reportFindings")
         self.list.setAccessibleName(tr("Befunde"))
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
@@ -5449,7 +5466,12 @@ class ReportPanel(QWidget):
         # ``itemActivated`` allein hieß aber Doppelklick oder Eingabetaste,
         # und wer einmal klickte, bekam nichts. Beide Wege führen zum Ort;
         # dass ein Doppelklick dann zweimal fährt, ist dasselbe Ziel.
-        self.list.itemClicked.connect(self._on_activated)
+        # **Gewählt wird beim Drücken, nicht beim Loslassen.** Das Drücken
+        # macht die Zeile zur aktuellen, die Karte darunter ändert ihre Höhe,
+        # und die Liste rollt: Am Piratenschiff lag die letzte Zeile beim
+        # Loslassen 90 Punkte tiefer, Qt meldete keinen Klick, und die
+        # Sammelzeile über 17 Körper wählte nichts (Fensterabnahme RM-131).
+        self.list.leftPressed.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
         # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -6579,7 +6601,14 @@ class ReportPanel(QWidget):
             for key, value in finding.values.items()
             if key not in ("count", "object", "objects", "entries", "name")
         }
-        parts.extend(_value_lines(dataclasses.replace(finding, values=shown)))
+        values = _value_lines(dataclasses.replace(finding, values=shown))
+        # **Die Werte in Klammern hinter dem Namen**, nicht mit „ · “ daneben:
+        # Die Einzelheiten brechen dort um, und in der Liste „Objekte: …“
+        # stand dann „Komponenten: 2, obj_8“ in einer Zeile — Wert des einen,
+        # Name des nächsten (Fensterabnahme RM-131).
+        if parts and values:
+            return f"{parts[0]} ({'; '.join(values)})"
+        parts.extend(values)
         return " · ".join(parts) if parts else "?"
 
     def _on_menu(self, position: QPoint) -> None:
