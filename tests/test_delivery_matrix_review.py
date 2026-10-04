@@ -73,6 +73,32 @@ def test_an_advice_failure_is_reported_even_when_the_standard_run_succeeds(
     assert "Vorschläge nicht geprüft: RuntimeError: Profilrat nicht berechenbar" in output
 
 
+@pytest.mark.parametrize(
+    "run",
+    [
+        {"detail": "Ein Teil ist höher, als dieser Drucker drucken kann."},
+        {"detail": "Bauraumfehler", "constraint": "slicer_build_volume"},
+    ],
+)
+def test_a_part_too_tall_for_the_printer_does_not_fit_instead_of_failing(
+    run: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Höhenabsage der Übergabe ist „passt nicht“, kein Fehler der Übergabe.
+
+    Im Probelauf scheiterte der Minigolf-Satz am MINI (180 mm Bauhöhe) an
+    ``_check_plate``; der Bericht zählte das als „kein Druck“.
+    """
+    report = _load_module(DELIVERY / "bericht.py", "delivery_matrix_fit_review", monkeypatch, [])
+    entry = {
+        "slicer": "superslicer",
+        "printer": "prusa-mini",
+        "complete": True,
+        "variants": {"standard": [{"ok": False, "title": "Slicerfehler", **run}]},
+    }
+
+    assert report.state_of(entry) == ("passt nicht", [])
+
+
 @pytest.mark.parametrize("key", ["machine_start_gcode", "start_gcode"])
 def test_missing_startcode_is_not_attributed_to_the_manufacturer(
     key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

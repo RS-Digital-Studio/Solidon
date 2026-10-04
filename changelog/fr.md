@@ -104,6 +104,8 @@ dans `website/version.json`.
 - Après export ou « Ouvrir dans le slicer … », Solidon relit le fichier. Le compte rendu du rapport donne fichiers, cible d'impression, matériau, réglages et si le fichier correspond à la demande.
 - Exporté en 3MF depuis la ligne de commande, un corps d'une seule couleur garde son filament à la réouverture.
 - Pour les réglages de pièces individuelles, la ligne de commande indique de quelles pièces il s'agit et quelle valeur elles reçoivent.
+- Les supports acceptés pour un long pont au-dessus de la pièce y arrivent maintenant. Avant, « Depuis le plateau uniquement » s'ajoutait et plusieurs slicers imprimaient le pont sans support.
+- Les petites pièces couchées, comme les vis, ne reçoivent plus de supports proposés là où une arête de coupe montrait à tort un point flottant.
 
 ### Perçages, trous oblongs et découpe
 

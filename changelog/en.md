@@ -103,6 +103,8 @@ it into `website/version.json`.
 - After an export or *Open in slicer …*, Solidon reads the file back in. The record in the report names files, print target, material, print settings and whether the file matches the job.
 - Exported as 3MF from the command line, a single-colour body keeps its filament when the file is opened again.
 - For print settings on individual parts, the command line names which parts they are and which value they get.
+- If you accept supports for a long bridge over the part itself, they now reach it there. Before, “From the bed only” came along, and several slicers printed the bridge without support.
+- Small parts lying flat, such as screws, no longer get supports suggested where a cut edge wrongly showed a floating spot.
 
 ### Holes, slots and splitting
 

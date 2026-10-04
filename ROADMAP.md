@@ -62,7 +62,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Sicherheitskorrektur: Eine notwendige Vorvereinigung, die an einer selbstkreuzenden Schale scheitert, hält jetzt vor dem Solver an und bindet den Fehler an den betroffenen Körper. Am Original sind 1 243 aktuelle Schnittpaare belegt. Blenders exakter Boolean verschlechtert die Topologie; der 0,2-mm-Voxelremesh überschreitet `MAX_FACET_SAG`. Geometriereparatur und ursprüngliche Abnahme bleiben offen. |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); offen nur die Gesamtabnahme jedes Modell × jeder Slicer |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | (b) Eigenkreuzung endet beim ersten Gegenbeleg (Besenhalter 18,4 → 14,6–15,1 s, Laptop 26–28,6 → 20,1–20,9 s unter Last, Paare bitgleich), (c) ohne zweite Vereinigung gebaut; offen: (a) beim Öffnen am Fenster zuordnen, (b) lastfrei messen und mit Ziel führen |
@@ -2086,6 +2086,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aber nur 8,6 % — gegen den Anteil allein blieb die Regel dort stumm. Die Fläche ist an
   186 Körpern des Korpus geeicht (`NARROW_WEB_AREA`).
   Registerabgleich 02.10.: Der Offen-Block beginnt mit „Danach“; es fehlen die offenen Befunde der abgeschlossenen Slicer-Matrix (`konzepte/nachweise-release-0.5.1/reports/rm312-slicer-matrix-2026-10-02.md`, 125 Aufträge, 124 Modelle mit Varianten; Restarbeit RM-312) und die Reste unter D (SV06-Startcode, Tempi des MINI+).
+
+  **Teilstand 04.10.2026 (Claude, G1 `claude/rm281-paket3`):** Paket 3 am echten Slicer (04.10.2026,
+  `claude/rm281-paket3`): **Mindestschichtzeit und Keilspitzen** — der alte Vorschlag „15 s je
+  Schicht“ verlängerte den Golfschlägerkopf in ElegooSlicer um 111 %, in PrusaSlicer um 87 %, ohne
+  die Spitzenschichten zu ändern; seit `3018613e6` (v0.5.1) kommt er nur ohne Mindestzeit im Profil
+  und heute an keinem der drei. **Inseln an Schrauben** — die Insel der liegenden Schraube „Vida“
+  war eine verlorene Schnittfläche, behoben mit `206dca76d` (RM-308); heute kein Stützvorschlag, die
+  Slicer stützen dort 0,1–0,8 m. **Stützbedarf gegen das Urteil des Herstellers** — in 312 von 340
+  Matrixläufen mit Solidons Stützbedarf stützt auch der Slicer; die 28 übrigen sind eingeordnet
+  (unverteilte Platte, Decken unter 1,1 mm, Slicer-Eigenheiten, Kobra-2-Profil ohne Brückenstütze),
+  keine Schwelle geändert. **Brückenregel** — 15 mm ist milder als jedes Profil außer Kobra 2 und
+  bleibt; behoben, dass eine lange Brücke über dem Modell „nur vom Bett“ bekam (`131edad7f`,
+  Nachtrag `6a7cc361c`: nur die Brücke über dem offenen Stück zählt): Wedge-Lock übernommen vorher
+  0,0/0,0/1,1/0,0/0,0 m Stütze in Creality Print, Kobra 2, Elegoo, Prusa, Cura, nachher
+  2,9/3,0/2,6/1,8/1,8 m; die Waschschüssel hält ihren Kanal in Elegoo und Cura frei (0,0 m). Beim
+  Prüfen behoben: Absturz der Schichtanalyse am Wizard Tower (`8ca9b136b`, nur nach v0.5.1). **Reste
+  D** — Startcode des SV06 seit RM-482 (`c0e7eab7d`), im Druck nur noch `M204 S500`; Tempi des MINI+
+  seit `884b88b0a` (v0.5.1) aus „0.20mm SPEED @MINIIS 0.4“, Pilz in PrusaSlicer 31,2 → 25,5 min,
+  Cura 34,5 → 25,7 min. Das Matrixwerkzeug rechnet mit dem Code des Druckdialogs und meldet
+  Stützvorschläge ohne Stütze und abweichende Druckzeiten. Tests
+  `test_a_crossing_mitre_needle_is_measured_instead_of_breaking_the_analysis`,
+  `test_a_long_bridge_over_the_model_lets_its_supports_start_there`,
+  `test_a_long_bridge_counts_on_the_model_only_where_it_hangs_there`,
+  `test_the_channel_space_leaves_a_column_on_the_model_free`,
+  `test_a_part_too_tall_for_the_printer_does_not_fit_instead_of_failing`. Belege
+  `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`; Konzept Herstellerprofil, Abschnitt
+  7.
 
 <a id="rm-259"></a>
 

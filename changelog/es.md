@@ -104,6 +104,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras exportar o «Abrir en el slicer …», Solidon vuelve a leer el archivo. El registro del informe indica archivos, destino de impresión, material, ajustes y si el archivo coincide con el encargo.
 - Exportado como 3MF desde la línea de comandos, un cuerpo de un solo color conserva su filamento al volver a abrirlo.
 - Para los ajustes de piezas concretas, la línea de comandos indica qué piezas son y qué valor reciben.
+- Si acepta soportes para un puente largo sobre la propia pieza, ahora llegan también ahí. Antes se añadía «Solo desde la placa», y varios slicers imprimían el puente sin soporte.
+- Las piezas pequeñas tumbadas, como tornillos, ya no reciben soportes propuestos donde un borde de corte mostraba por error un punto flotante.
 
 ### Taladros, ranuras y división
 
