@@ -221,7 +221,7 @@ class FieldCutParams(BaseParams):
         default="",
         kind="sketch",
         required=True,
-        doc=_("Zeichnen Sie die Fläche für die Öffnungen. Innenringe bleiben ausgespart."),
+        doc=_("Zeichnen Sie den Umriss, in dem die Öffnungen entstehen. Innenringe bleiben frei."),
     )
     shape: str = param(
         title=_("Öffnungsform"),
@@ -359,7 +359,7 @@ class FieldCutParams(BaseParams):
     produces=1,
     reads_other_bodies=True,
     doc=_(
-        "Schneidet ein regelmäßiges Loch-, Langloch- oder Wabenfeld in die gezeichnete Fläche. "
+        "Schneidet ein regelmäßiges Loch-, Langloch- oder Wabenfeld in den gezeichneten Umriss. "
         "Ränder, Innenringe und Ausschlüsse bleiben erhalten."
     ),
 )

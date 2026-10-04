@@ -568,7 +568,7 @@ def check_printable(
 @op_params
 class TextureParams(BaseParams):
     coverage: str = param(
-        title=_("Bereich"),
+        title=_("Bereich", context="Musterfeld"),
         default="rectangle",
         choices=("rectangle", "whole_face"),
         doc=_(

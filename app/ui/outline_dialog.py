@@ -252,7 +252,7 @@ class OutlineDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(ROOMY)
-        note = QLabel(tr("Wählen Sie die Flächen für Ihr Teil. Innenringe bleiben Löcher."), self)
+        note = QLabel(tr("Wählen Sie die Konturen für Ihr Teil. Innenringe bleiben Löcher."), self)
         note.setWordWrap(True)
         layout.addWidget(note)
         middle = QHBoxLayout()
@@ -502,7 +502,7 @@ class OutlineDialog(QDialog):
             entry = self._profiles[row]
             self.detail.setText(
                 entry.reason
-                or tr("Fläche: {area} · Innenringe: {count}").format(
+                or tr("Flächeninhalt: {area} · Innenringe: {count}").format(
                     area=area(entry.area), count=len(entry.profile.polygon.interiors)
                 )
             )

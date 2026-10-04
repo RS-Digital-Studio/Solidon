@@ -24,24 +24,27 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Nova é a «Abraçadeira de tubo» para tubos comuns de 15 a 40 mm ou qualquer medida própria até 110 mm, com parafuso de aperto M3 a M6 e a folga do seu material.
 - Novo assistente «Recipiente com tampa»: redondo ou retangular, tampa de rosca, de encaixe ou articulada e, se quiser, compartimentos, inserto e furos de polvilhar. As cotas principais são parâmetros.
 - Quatro suportes nascem num passo com faces e arestas verdadeiras: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, furos para parafusos, gancho de painel ou grampo.
+- Novos são «Fecho de baioneta» e «Disco giratório com retenção», cada um como par a condizer, e «Manga de encaixe e conector de varetas» para duas a quatro varetas.
+- Novos também «Espigão para mangueira», cuja passagem atravessa a parede, «Junta de calha» para calhas, e «Piso da divisão», «Parede da divisão» e «Vidro da janela» para divisões encaixadas.
 - Uma cena vazia mostra como começar: paralelepípedo, cilindro, desenho, blocos ou um ficheiro que arraste para dentro.
 - Os corpos novos aparecem na mesa em vez de num corpo selecionado, e ficam selecionados. Numa face escolhida assentam no ponto clicado ou ao centro e, se quiser, unem-se à peça no mesmo passo.
 - Blocos como um alojamento de íman ou um furo para parafuso ficam onde clica na face. A sua distância a duas arestas mantém-se se a peça mudar depois.
 - A «Lingueta para perfil de alumínio» serve no Motedis 20 × 20 tipo B ranhura 6 e 30 × 30 tipo B ranhura 8, com a cabeça à forma da ranhura. Os três tamanhos anteriores ficam como medidas antigas.
-- No relatório, «Reconstruir modelo» refaz uma peça importada a partir de formas base, furos e arredondamentos, compara-a com o original dentro do limite escolhido e aplica-a num só passo.
+- No relatório, «Reconstruir modelo» refaz uma peça importada, também esquadros, gargantas e escareamentos, compara-a com o original dentro do limite escolhido e aplica-a num só passo.
 - A «Abraçadeira com insertos» começa com o material do projeto nos dois campos de material. Até agora ambos ficavam vazios.
 - A pesquisa de peças encontra a «Lingueta para perfil de alumínio» também como porca em T, e a sua descrição diz em que se distingue de uma porca em T com rosca.
 
 ### Imprimir e entregar ao slicer
 
 - A preparação da exportação 3MF pode ser cancelada. Em trabalhos com várias placas, o Solidon reutiliza as camadas e sugestões já calculadas.
-- Os filamentos não utilizados de projetos antigos deixam de ser enviados ao fatiador. Os perfis continuam associados aos filamentos em uso.
+- Os filamentos não utilizados de projetos antigos deixam de ser enviados ao slicer. Os perfis continuam associados aos filamentos em uso.
 - Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.
 - Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes.
-- Ao mudar de impressora ou fatiador, a mesa de impressão escolhida anteriormente deixa de ser transferida para o novo perfil.
+- Ao mudar de impressora ou de slicer, a mesa de impressão escolhida anteriormente deixa de ser transferida para o novo perfil.
 - As peças esguias ficam mais perto do centro ao serem dispostas. O espaço da aba é ajustável; para bases pequenas é sugerida uma aba em contacto com a peça.
 - Os perfis danificados no PrusaSlicer e no SuperSlicer são assinalados. O Solidon utiliza então o seu conjunto completo de definições de impressão.
-- As definições de cada peça chegam ao fatiador com mais fiabilidade. As que se aplicam a toda a placa são explicadas na peça afetada.
+- As definições de cada peça chegam ao slicer com mais fiabilidade. As que se aplicam a toda a placa são explicadas na peça afetada.
+- Se aceitar um brim só para uma peça esguia, as restantes peças mantêm a sua própria escolha de aderência, e o campo indica as peças a que o brim se aplica.
 - Com Orca e Prusa, aceitar uma sugestão de velocidade para um encaixe abranda apenas as peças afetadas.
 - Mesmo pequenas alterações aceites nas definições de impressão são preservadas na exportação.
 - O Cura usa os limites de jerk do perfil, com valores separados para paredes, enchimento e primeira camada.
@@ -49,15 +52,17 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Corrigida uma falha do ElegooSlicer e do OrcaSlicer ao preparar modelos multicoloridos com suportes em grelha.
 - Após fatiar, Solidon também compara o material de suporte e as camadas do modelo por placa. O relatório mostra a estimativa interna e os valores do ficheiro de impressão.
 - A comparação de material considera apenas o modelo impresso. A purga aparece separadamente, com indicação quando a quantidade não pode ser lida por completo.
+- A comparação do tempo de impressão conta a partir da primeira camada com as velocidades da sua impressora e já não aponta um grande desvio em quase todas as impressões.
 - A análise de camadas é várias vezes mais rápida em modelos ocos e em modelos com muitos tetos, e preserva os contornos finos. A vista de camadas aproveita o que o relatório já calculou.
 - Nas peças sobrepostas, a análise de impressão deixa de contar o ar fechado como material. Também melhora a deteção de saliências e dos suportes necessários.
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
+- Se no primeiro arranque clicar em «Guardar e iniciar» enquanto o Solidon ainda procura as impressoras do slicer, a aplicação já não bloqueia.
 - O bico escolhe-se nas definições de impressão entre os tamanhos que a sua impressora conhece, e o slicer recebe o perfil correspondente.
 - As definições de impressão perguntam pela ordem em que uma coisa depende da outra: slicer, impressora, bico, placa, filamentos e qualidade, e depois os valores.
 - Agora pode gerar ficheiros de impressão diretamente a partir do Solidon com o Creality Print 7.2 e 7.3.
 - Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
 - O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
-- As impressoras com a origem fora do canto da mesa, como delta, BIBO ou Dremel, recebem as peças onde o Solidon as põe. Antes ficavam na borda ou o fatiador reorganizava-as.
+- As impressoras com a origem fora do canto da mesa, como delta, BIBO ou Dremel, recebem as peças onde o Solidon as põe. Antes ficavam na borda ou o slicer reorganizava-as.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
 - Se escolher brim, skirt, raft ou «Automático» nas definições de impressão, só aparecem as medidas que o seu slicer recebe, sem campos que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
@@ -75,6 +80,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O SuperSlicer recebe suportes em grelha com um aviso se foram escolhidos suportes em árvore. A costura mais próxima é aplicada sem avisos falsos.
 - O TPU encontra o perfil de filamento e os valores de arranque no PrusaSlicer e no SuperSlicer. Se faltar um perfil, o Solidon indica que usa a sua própria tabela de materiais.
 - O Cura respeita os limites de aceleração e indica os valores escolhidos reduzidos. O preenchimento sólido usa a sua velocidade; só a face superior usa a velocidade de superfície.
+- O Cura usa a velocidade mínima do ventilador e o limiar de tempo de camada do perfil da sua impressora. Até agora o ventilador ligava já na primeira camada, onde devia ficar parado.
 - A temperatura da câmara chega ao campo correto do slicer. Os perfis sem aquecimento regulável da câmara explicam por que o valor não tem efeito.
 - O preenchimento Linhas chega ao Bambu Studio e ao Creality Print como linhas, sem ser substituído por Grelha ou Cúbico.
 - Após o corte, o Solidon assinala definições descartadas pelo PrusaSlicer ou pelos slicers Orca, além de alterações à borda, ordem das paredes e tipo de suporte.
@@ -91,12 +97,18 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os avisos do PrusaSlicer e do SuperSlicer aparecem no relatório mesmo quando o slicer conclui, e uma camada vazia como erro. A distância ao raft ajusta-se à parte.
 - Se o slicer dividir uma placa em vários ficheiros de impressão, o Solidon indica-o e propõe dispor ou exportar. Antes ficava em silêncio só com um deles.
 - No topo do relatório vê se a transferência está pronta, precisa de uma decisão ou não é recomendada, e o que falta verificar. Sem constatações, uma peça já não conta por si só como pronta a imprimir.
-- Após exportar ou «Abrir no slicer …», o relatório mostra um registo: ficheiros, destino de impressão, material e se as definições seguiram. Indica ainda que o ficheiro não foi relido nem comparado.
+- Uma constatação selecionada indica a sua consequência para a impressão, e cada ação proposta diz o que muda além disso.
+- Após exportar ou «Abrir no slicer …», o Solidon volta a ler o ficheiro. O registo no relatório indica ficheiros, destino de impressão, material, definições e se o ficheiro corresponde ao pedido.
 - Exportado como 3MF na linha de comandos, um corpo de uma só cor mantém o seu filamento ao ser reaberto.
+- Para definições de peças individuais, a linha de comandos indica que peças são e que valor recebem.
 
 ### Furos, furos oblongos e divisão
 
 - O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura.
+- Um furo oblongo numa parede lateral virada para a esquerda ou para a direita pode ser encurtado, estreitado e rodado. Projetos de versões anteriores mantêm os furos oblongos até alterar o passo.
+- Em corpos STEP, um furo oblongo numa face inclinada já não conta como saliente de lado, e um segundo arrasto num furo oblongo que entra num degrau já não enche o corpo.
+- Um furo oblongo através de uma chapa inclinada ou chanfrada mostra toda a profundidade em corpos STEP, e a sua cópia para lá da borda dá a mesma mensagem em peças STL e STEP.
+- Num corpo com faces e arestas verdadeiras, um bloco colocado depois de um furo fica na face escolhida, e «Criar tampa de rosca» também funciona na borda de uma caixa esvaziada.
 - Duas placas que se tocam continuam um só corpo num furo e mantêm o material, quer o estique, altere, desloque ou feche. Um pino por cima fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
@@ -119,9 +131,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quando o cartão de cotas de um furo fica alto, as outras cotas ficam junto ao corpo, e a pega para deslocar fica na boca em vez de dentro da peça.
 - Se selecionar um furo feito no Solidon, o seu diâmetro aparece só no cartão de cotas na vista. Até agora aparecia uma segunda vez à direita.
 - Uma direção que introduz à direita para um furo oblongo passa também para o cartão de cotas na vista, e «Aplicar» continua disponível. Até agora voltava ali a 0°.
-- O Solidon reconhece cones, arredondamentos e faces estreitas da mesma forma em mais modelos, quer o modelo esteja deslocado, rodado ou escalado.
-- O Solidon reconhece cada campo de nervuras, favo de mel ou saliências de um ficheiro importado como um só padrão, e «Detetar elementos neste local» junta as células de um campo.
-- Um campo pequeno que o Solidon só lê como elementos soltos passa a ser um padrão com «Agrupar como padrão». Os padrões em ficheiros STEP são reconhecidos diretamente.
+- O Solidon reconhece cones, também planos e curtos, arredondamentos e faces estreitas da mesma forma em mais modelos, quer o modelo esteja deslocado, rodado ou escalado.
+- Um topo abaulado chama-se também em corpos STEP «Face curva» em vez de «Arredondamento», e peças STL arredondadas em toda a volta mostram cada arredondamento, como a mesma peça em STEP.
+- Letras e contornos curvos de modelos importados já não mostram arredondamentos falsos.
+- O Solidon reconhece cada campo de nervuras, favo de mel ou saliências de um ficheiro importado como um só padrão, e «Reconhecer características neste local» junta as células de um campo.
+- Um campo pequeno que o Solidon só lê como características soltas passa a ser um padrão com «Agrupar como padrão». Os padrões em ficheiros STEP são reconhecidos diretamente.
 - As peças de uma divisão automática também são numeradas em projetos de versões anteriores, e um corte apagado ou desativado deixa de contar.
 
 ### Arredondar e chanfrar
@@ -140,7 +154,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um traço sobre o plano de simetria atua uma vez em vez de duas, e logo ao lado o traço e o seu reflexo fundem-se suavemente.
 - O editor de esqueleto mostra ossos e articulação na vista, e uma articulação fica no meio do corpo em vez de na pele, assim a figura dobra de forma uniforme.
 - A barra de modelação chama agora «Intensidade» ao valor do pincel, em vez de «Espessura», que fazia pensar numa parede.
-- Se um traço de modelação fura a parede ou a deixa fina demais, o relatório e a exportação indicam-no, com «Mostrar o ponto» e «Retirar o traço».
+- Se um traço de modelação fura a parede ou a deixa fina demais, o relatório e a exportação indicam-no, com «Mostrar o ponto» e «Desfazer o traço».
 - Na janela, «Fundir suavemente» calcula agora fino, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, mesmo que só com o escareamento ou o chanfro, ou entra numa parede atrás, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
@@ -185,7 +199,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se a gravação de uma calibração falhar, os valores anteriores mantêm-se.
 - No projeto de exemplo do segundo caminho, os furos dos parafusos seguem a largura e a espessura.
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
-- O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
+- Todas as traduções usam as mesmas palavras para características, botões e termos de impressão, e as mensagens seguem a pontuação de cada língua.
+- O botão que desconta o consumo do inventário de filamentos chama-se agora «Deduzir», e as indicações nomeiam as ações como a janela, por exemplo «Uniformizar os triângulos».
+- A forma de tratamento é uniforme: espanhol, português e francês usam a forma de cortesia, o italiano trata por tu. Foram corrigidas três mensagens em espanhol e português que diziam o contrário.
 - Enquanto um diálogo mostra a pré-visualização, os espaços chegam a todos os campos de texto, também ao questionário e ao chat, e caixas e botões aceitam a barra de espaço.
 - Ao «Escalar», um corpo fica assente na mesa em vez de se afundar sob a placa, e a vista volta a enquadrá-lo quando cresce.
 - Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
@@ -194,7 +210,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quando outros programas ocupam o computador, «Cancelar» para um cálculo longo em menos de um segundo, em vez de pedir um reinício após vários segundos.
 - Um modelo de linguagem local pode dar doze passos em vez de oito por pedido no chat e resolve assim mais pedidos com várias partes.
 - O painel de seleção volta a caber na sua coluna, e a coluna de medidas da árvore mostra a medida inteira, como «Ø5,19 mm» em vez de «…».
-- Num furo, «Alterar elemento» abre diretamente «Alterar furo» com pré-visualização, em vez de só remeter para ele.
+- Num furo, «Alterar característica» abre diretamente «Alterar furo» com pré-visualização, em vez de só remeter para ele.
 - Ao clicar em «Aplicar» durante uma pré-visualização em curso, o Solidon calcula a alteração uma só vez. Antes calculava-a depois uma segunda vez.
 - A vista de diferenças traceja o que foi acrescentado e o que foi removido em duas direções, para os distinguir também sem cor.
 - Quando o Solidon pergunta a unidade de um ficheiro ao abrir, as medidas aparecem na sua unidade de exibição e com o separador decimal da sua língua.

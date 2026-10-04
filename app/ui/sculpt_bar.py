@@ -145,7 +145,7 @@ class SculptBar(QWidget):
         #: er dabei raten müsste, folgt aus dem Pinselradius und steht dem
         #: Fenster zur Verfügung (§2.7: ein Hinweis endet nicht mit sich
         #: selbst). Sichtbar nur mit der Warnung, zu der er gehört.
-        self.refine = QPushButton(tr("Jetzt vernetzen"), self)
+        self.refine = QPushButton(tr("Dreiecke jetzt angleichen"), self)
         self.refine.setVisible(False)
         self.refine.clicked.connect(self.refineRequested)
 
