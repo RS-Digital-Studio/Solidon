@@ -131,6 +131,21 @@ def open_box() -> Any:
     return Solid(sewing.SewedShape())
 
 
+def walled_bin() -> MeshData:
+    """Ein Kasten 40 × 30 × 20 mit 2 mm Wand und Boden, oben offen: innen 36 × 26 × 18.
+
+    Die Kammer der Gruppentests (RM-184) — Erkennung, *Kammer ändern*, Baum und
+    Merkmalfenster fragen denselben Körper.
+    """
+    from app.core.geom.boolean import boolean
+
+    outer = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    inner = trimesh.creation.box(extents=(36.0, 26.0, 20.0))
+    inner.apply_translation((0.0, 0.0, 12.0))
+    return boolean("difference", [MeshData.of(outer), MeshData.of(inner)]).mesh
+
+
 # --- Platzhalter für Szene und Cache ------------------------------------------------
 
 

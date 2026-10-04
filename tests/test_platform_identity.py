@@ -357,6 +357,33 @@ def _registered(name: str, source: Any, **params: object) -> Any:
     return result.outputs[0].mesh
 
 
+def _changed_chamber() -> str:
+    """*Kammer ändern* (RM-184): ein offener Kasten innen breiter und tiefer.
+
+    Gruppe, Luftraum, Streckung und Differenz zusammen — die Lücke, in der
+    gestreckt wird, und die Deckel des Luftraums dürfen an keiner letzten
+    Stelle hängen.
+    """
+    from app.core.knowledge import profiles
+    from app.core.perceive.features import detect
+    from app.core.perceive.groups import functional_groups
+    from tests.helpers import feature_operation, walled_bin
+
+    mesh = walled_bin()
+    features = detect(mesh)
+    chamber = next(group for group in functional_groups(features, mesh) if group.kind == "chamber")
+    result = feature_operation(
+        "resize_chamber",
+        mesh,
+        dict(features),
+        features[chamber.anchor],
+        profiles.make_profile("centauri-carbon-2", "petg"),
+        width=float(chamber.measure("width") or 0.0) + 1.0,
+        depth=float(chamber.measure("depth") or 0.0) + 1.0,
+    )
+    return _mesh_print(result.outputs[0].mesh)
+
+
 def _changed_bore() -> str:
     """Der Änderungsweg aus RM-187: Senkbohrung mit Nachbarloch, auf Ø 6 verkleinert."""
     from app.core.knowledge import profiles
@@ -916,6 +943,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "turned_closures": _turned_closures,
     "prusa_support_angle": _automatic_support_angle,
     "remesh_mesh": _refined_plate,
+    "resize_chamber": _changed_chamber,
     "rebuild_box": _rebuilt_box,
     "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,

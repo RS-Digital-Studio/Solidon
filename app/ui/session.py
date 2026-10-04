@@ -227,6 +227,8 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
     mit kaltem Gedächtnis; wo er sie nicht vorwärmt, tut es diese Schleife —
     ein zweites Mal kostet sie nichts.
     """
+    from app.core.errors import OperationCancelled
+    from app.core.perceive.groups import functional_groups
     from app.core.perceive.relations import cavity_chains
 
     for entry in result.scene.objects.values():
@@ -252,6 +254,15 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
                 cavity_chains(entry.features, as_mesh_data(mesh))
             except Exception as problem:  # die Ketten sagen es später am Ort
                 _log.info("cavity chains of %s not available: %s", entry.id, problem)
+            # **Und die funktionalen Gruppen** (RM-184): Baum, Merkmalfenster und
+            # die Sperre von *Kammer ändern* lesen sie im Hauptthread; gerechnet
+            # wird hier, gemerkt am Netz (``perceive.groups.functional_groups``).
+            try:
+                functional_groups(entry.features, as_mesh_data(mesh), cancelled=cancelled)
+            except OperationCancelled:
+                raise
+            except Exception as problem:  # die Gruppen sagen es später am Ort
+                _log.info("functional groups of %s not available: %s", entry.id, problem)
 
 
 #: Ab so vielen Dreiecken zeigt der Ladeweg einen Körper vor seiner

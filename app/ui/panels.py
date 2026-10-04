@@ -129,6 +129,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
 from app.core.perceive.actions import measure_explanation, measure_qualifier
+from app.core.perceive.groups import FunctionalGroup
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
@@ -168,6 +169,8 @@ from app.ui.labels import (
     feature_measure_tip,
     feature_name,
     fill_parameter_units,
+    group_measure_text,
+    group_summary,
     kind_requirement,
     length,
     limit_sentence,
@@ -2325,9 +2328,58 @@ class ObjectTree(QWidget):
             cavity_names = {
                 chain[0].id: cavity_name(chain[0].id, chain[0], chain) for chain in chains
             }
+            # **Und was gemeinsam eine Aufgabe trägt, hängt an seinem Anker**
+            # (RM-184, Dateiaudit §7): Boden und Wände einer Kammer, Gewinde
+            # mit Schulter, die Nocken eines Bajonetts, die Augen eines
+            # Scharniers, die Buchstaben einer Schrift. Die Zeile des Ankers
+            # heißt wie die Gruppe und trägt ihr Maß; ein Klick auf sie wählt,
+            # was darunter hängt — derselbe Weg wie die Senkung unter ihrer
+            # Bohrung. Die Zuordnung kommt aus dem Kern, gerechnet im
+            # Auswertungsarbeiter (``session._warm_metrics``).
+            from app.core.perceive.groups import evidence_texts, functional_groups
+            from app.core.perceive.groups import numbered_titles as group_titles
+
+            functional = (
+                functional_groups(entry.features, as_mesh_data(entry.mesh))
+                if len(entry.features) > 1
+                else ()
+            )
+            group_names = group_titles(functional)
+            sentences = evidence_texts() if functional else {}
+            grouped: dict[str, tuple[str, str, str]] = {}
+            for unit in functional:
+                anchor_id = unit.anchor
+                # Was aus einem Baustein kam, steht schon unter seinem Schritt;
+                # ein zweites Dach risse es dort heraus.
+                if anchor_id not in entry.features or any(
+                    member not in entry.features
+                    or _part_group(entry.features[member].created_by, document) is not None
+                    for member in unit.members
+                ):
+                    continue
+                grouped[anchor_id] = (
+                    group_names[unit.key],
+                    group_summary(unit),
+                    sentences[unit.evidence],
+                )
+                for member in unit.members:
+                    if member == anchor_id or member in under:
+                        continue
+                    # Hängt der Anker selbst schon (über eine Senkenkette) an
+                    # diesem Mitglied, bliebe es dort — ein Kreis nähme beide
+                    # Zeilen aus dem Baum.
+                    above = under.get(anchor_id)
+                    while above is not None and above != member:
+                        above = under.get(above)
+                    if above is None:
+                        under[member] = anchor_id
             alike: dict[tuple[str, str], int] = {}
             for other_id, other in entry.features.items():
-                if other_id not in under and _part_group(other.created_by, document) is None:
+                if (
+                    other_id not in under
+                    and other_id not in grouped
+                    and _part_group(other.created_by, document) is None
+                ):
                     group_key = (
                         cavity_names.get(other_id, feature_name(other_id, other)),
                         feature_measure(other, marked=True),
@@ -2344,18 +2396,31 @@ class ObjectTree(QWidget):
                 # Wort dahinter endete die Spalte in jeder Breite in
                 # „Ø5,20 mm · ein…“. Das Wort hört der Bildschirmleser, und der
                 # Tooltip nennt es samt Satz (Regel 18).
+                unit_name = grouped.get(feature_id)
                 child = QTreeWidgetItem(
                     [
-                        cavity_names.get(feature_id, feature_name(feature_id, feature)),
-                        feature_measure(feature, marked=True),
+                        unit_name[0]
+                        if unit_name is not None
+                        else cavity_names.get(feature_id, feature_name(feature_id, feature)),
+                        unit_name[1]
+                        if unit_name is not None and unit_name[1]
+                        else feature_measure(feature, marked=True),
                     ]
                 )
-                child.setData(1, Qt.ItemDataRole.AccessibleTextRole, feature_measure(feature))
+                child.setData(
+                    1,
+                    Qt.ItemDataRole.AccessibleTextRole,
+                    unit_name[1]
+                    if unit_name is not None and unit_name[1]
+                    else feature_measure(feature),
+                )
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 tip = _feature_tip(feature_id, feature, document)
                 if feature_id in cavity_names:
                     tip = f"{cavity_names[feature_id]}\n{tip}"
+                if unit_name is not None:
+                    tip = f"{unit_name[0]} — {unit_name[2]}\n{tip}"
                 # An beiden Spalten, wie der Regelsatz es für Zeilen verlangt:
                 # Wer eine Zeile nicht versteht, zeigt auf das unverständliche
                 # Wort und nicht auf die Zahl daneben.
@@ -2394,7 +2459,7 @@ class ObjectTree(QWidget):
                 part = _part_group(feature.created_by, document)
                 if part is None:
                     label = (child.text(0), child.text(1))
-                    if alike[label] < BUNDLE_FROM:
+                    if feature_id in grouped or alike.get(label, 0) < BUNDLE_FROM:
                         item.addChild(child)
                         continue
                     roof = by_kind.get(label)
@@ -7198,6 +7263,10 @@ class _FeatureAnswers(NamedTuple):
     cavity: tuple[Feature, ...]
     actions: tuple[Any, ...]
     groups: Mapping[str, FeatureActionGroup]
+    unit: FunctionalGroup | None = None
+    """Die funktionale Gruppe, in der das Merkmal steht (RM-184)."""
+    unit_name: str = ""
+    """Ihr Name im Baum, mit Nummer, wenn es mehrere gleiche gibt."""
 
 
 def _nothing() -> None:
@@ -7257,9 +7326,20 @@ def feature_answers(
                 mesh,
             )
         }
+    # Die Gruppe kommt aus demselben Merker wie *Kammer ändern* in den
+    # Handlungen darüber — gerechnet einmal je Netz und Merkmalsliste.
+    unit: FunctionalGroup | None = None
+    unit_name = ""
+    if features is not None and mesh is not None and len(features) > 1:
+        from app.core.perceive.groups import functional_groups, group_of, numbered_titles
+
+        functional = functional_groups(features, mesh, cancelled=cancelled)
+        unit = group_of(feature_id, functional)
+        if unit is not None:
+            unit_name = numbered_titles(functional)[unit.key]
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    return _FeatureAnswers(cavity, tuple(actions), groups)
+    return _FeatureAnswers(cavity, tuple(actions), groups, unit, unit_name)
 
 
 #: Der Merker des Merkmalfensters: der Körper (schwach), die Merkmalsliste,
@@ -8037,6 +8117,44 @@ class FeaturePanel(QWidget):
         self._built.append(heading)
         self.show_note(tr("Die Handlungen werden ermittelt …"))
 
+    def _show_unit(self, unit: FunctionalGroup, name: str) -> None:
+        """Die Gruppe, zu der das Merkmal gehört: Name, Nachweis, gemessene Maße.
+
+        Dateiaudit §7 (RM-184): Wer eine Wand der Kammer anklickt, soll lesen,
+        dass sie zu „Kammer 1“ gehört und woran Solidon das erkannt hat — ein
+        Verdacht sagt, dass er einer ist. Die Maße sind gemessen, nicht
+        vorgegeben; ändern lässt sich die Gruppe über die Handlung darunter,
+        wo es eine gibt (*Kammer ändern*).
+        """
+        from app.core.perceive.groups import evidence_texts, measure_titles
+
+        box = QWidget(self)
+        form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        said = evidence_texts()[unit.evidence]
+        if unit.suggested:
+            said = tr("{sentence} Ein Verdacht, kein Befund.", sentence=said)
+        heading = QLabel(tr("Teil von {group}", group=name), box)
+        heading.setWordWrap(True)
+        set_level(heading, "section")
+        reason = QLabel(said, box)
+        reason.setWordWrap(True)
+        reason.setStatusTip(said)
+        fit_wrapped(reason)
+        form.addRow(heading)
+        form.addRow(reason)
+        titles = measure_titles()
+        for measure in unit.measures:
+            label = titles.get(measure.name, measure.name)
+            field = QLabel(group_measure_text(measure), box)
+            field.setAccessibleName(label)
+            form.addRow(label, field)
+        box.setAccessibleName(tr("Teil von {group}", group=name))
+        box.setAccessibleDescription(said)
+        self._rows.insertWidget(self._rows.count() - 1, box)
+        self._built.append(box)
+
     def _show_feature_rows(
         self,
         feature_id: str,
@@ -8086,6 +8204,9 @@ class FeaturePanel(QWidget):
                     form.addRow(label, field)
                 self._rows.insertWidget(self._rows.count() - 1, box)
                 self._built.append(box)
+
+        if answers.unit is not None:
+            self._show_unit(answers.unit, answers.unit_name)
 
         # **Ein Gegenstück gibt es nur neben einem zweiten Körper.** Im
         # Einzelkörperprojekt wies der Satz auf einen Klick, der nichts findet.

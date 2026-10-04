@@ -2911,6 +2911,9 @@ class MainWindow(QMainWindow):
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
         Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
         self._lid_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
+        self._chamber_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
+        """Warum an einer gewählten Fläche *Kammer ändern* nichts tut — je Merkmal und
+        Auswertung einmal; die Gruppen selbst wärmt der Auswertungsarbeiter."""
         """Warum an einer gewählten Fläche kein Deckel entsteht — je Merkmal und
         Auswertung einmal gerechnet, denn die Antwort kostet einen Schnitt
         (:meth:`_lid_reason`)."""
@@ -5709,6 +5712,13 @@ class MainWindow(QMainWindow):
             reason = self._lid_reason()
             if reason is not None:
                 return reason
+        # Und die Kammer: *Kammer ändern* gilt Flächen, aber nur denen einer
+        # erkannten Kammer, einer Nut oder eines Kanals (RM-184) — an jeder anderen Fläche
+        # stand der Eintrag sonst bedienbar da und konnte nur scheitern.
+        if spec.name == "resize_chamber":
+            reason = self._chamber_reason()
+            if reason is not None:
+                return reason
         # Und zuletzt der Zustand des Körpers (RM-168): *Offene Fläche
         # schließen* an einem geschlossenen, *Zerlegen* an einem Stück, *Gitter
         # füllen* ohne Hohlraum — jede öffnete bis zum 14.09.2026 einen Dialog,
@@ -5802,6 +5812,44 @@ class MainWindow(QMainWindow):
             from app.core.geom.lid import reason_against
 
             known[key] = reason_against(entry, feature)
+        return known[key]
+
+    def _chamber_reason(self) -> str | None:
+        """Warum die gewählte Fläche keine änderbare Kammer trägt — oder ``None``.
+
+        Derselbe Satz, den die Operation beim Rechnen würfe
+        (``groups.reason_against_group``). Die Gruppen liegen nach der
+        Auswertung im Merker des Netzes (``session._warm_metrics``); ohne
+        gewählte Fläche bleibt die Antwort offen, und offen sperrt nie.
+        """
+        result = self.session.last_result
+        chosen = self._first_chosen()
+        feature = self.object_tree.selected_feature()
+        if result is None or chosen is None or not feature:
+            return None
+        entry = result.scene.objects.get(chosen)
+        if entry is None or feature not in entry.features:
+            return None
+        generation, known = self._chamber_reasons
+        if generation != self.session.result_generation:
+            known = {}
+            self._chamber_reasons = (self.session.result_generation, known)
+        key = (chosen, feature)
+        if key not in known:
+            from app.core.geom.mesh import as_mesh_data
+            from app.core.perceive.groups import (
+                NOT_A_CHAMBER,
+                functional_groups,
+                group_of,
+                reason_against_group,
+            )
+
+            group = group_of(feature, functional_groups(entry.features, as_mesh_data(entry.mesh)))
+            known[key] = (
+                str(NOT_A_CHAMBER)
+                if group is None or group.kind not in ("chamber", "channel")
+                else reason_against_group(group)
+            )
         return known[key]
 
     def _halt_reason(self) -> str | None:

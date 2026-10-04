@@ -42,6 +42,8 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     # Fläche versetzen und Formschräge, aus demselben Grund und in derselben
     # Bauart: der Körper wählt den Kern, nicht der Kunde.
     "app.core.geom.face_ops",
+    # Kammer, Nut und Kanal als Ganzes ändern (RM-184, funktionale Gruppen).
+    "app.core.geom.chamber_ops",
     # §30: der zweite Kern deklariert seine Operationen wie jedes andere Modul.
     # Ohne OpenCASCADE verweigern sie den Lauf, aber im Menü stehen sie immer —
     # ein Eintrag, der sagt, warum er ausgegraut ist, schlägt einen, den es

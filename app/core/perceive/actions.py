@@ -852,7 +852,77 @@ def actions_for(
                     title=known[0].title, op=None, reason=_no_way(known[0].name, feature.kind)
                 )
             )
+    chamber = chamber_action(feature, features, mesh, cancelled=cancelled)
+    if chamber is not None:
+        actions.append(chamber)
     return actions
+
+
+#: Welche Maße *Kammer ändern* an welcher Bauart anbietet: Eine Nut, eine
+#: Ringkammer und ein offener Kanal haben keine Länge innen.
+_CHAMBER_FIELDS: Final[dict[str, tuple[str, ...]]] = {
+    "closed": ("width", "length", "depth"),
+    "groove": ("width", "depth"),
+    "ring": ("width", "depth"),
+    "trough": ("width", "depth"),
+}
+
+
+def chamber_action(
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    mesh: MeshData | None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> FeatureAction | None:
+    """*Kammer ändern* an jedem Merkmal einer Kammer, einer Nut oder eines Kanals (RM-184).
+
+    Die Felder tragen die Maße der **Gruppe**, nicht die des gewählten Merkmals:
+    Wer an einer Wand klickt, ändert das Innenmaß der Kammer. Was sich nicht als
+    Ganzes ändern lässt (geteilte Wände, unterbrochener Rand), steht mit dem Satz
+    der Operation da (``groups.reason_against_group``) — dieselbe Frage wie im
+    Kern, keine zweite Fassung.
+    """
+    if features is None or mesh is None or feature.kind not in ("face", "fillet", "curved_face"):
+        return None
+    spec = _spec_or_none("resize_chamber")
+    if spec is None:
+        return None
+    from app.core.perceive.groups import functional_groups, group_of, reason_against_group
+
+    group = group_of(feature.id, functional_groups(features, mesh, cancelled=cancelled))
+    if group is None or group.kind not in ("chamber", "channel") or group.variant == "passage":
+        return None
+    refusal = reason_against_group(group)
+    if refusal is not None:
+        return FeatureAction(title=spec.title, op=None, reason=refusal)
+    wanted = _CHAMBER_FIELDS.get(group.variant, ("width", "length", "depth"))
+    fields = []
+    for entry in spec.params.spec():
+        value = group.measure(entry.name)
+        if entry.name not in wanted or value is None:
+            continue
+        fields.append(
+            ActionField(
+                name=entry.name,
+                label=entry.title,
+                unit=str(entry.unit or ""),
+                value=float(value),
+                kind="length",
+                minimum=entry.minimum,
+                maximum=entry.maximum,
+                measurement=MeasureStatus("exact", "facets", available=True),
+            )
+        )
+    return FeatureAction(
+        title=spec.title,
+        op=spec.name,
+        note=_(
+            "Ändert die ganze Kammer: Boden, Wände und Rundungen wandern gemeinsam, "
+            "außen bleibt sie gleich."
+        ),
+        fields=tuple(fields),
+    )
 
 
 #: Die zwei Handlungen an einer Rundung, die eine Kante unter ihr brauchen

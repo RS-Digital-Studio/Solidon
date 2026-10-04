@@ -142,7 +142,8 @@ Bohrungen aus) · `seal.py`, `seal_ops.py` (`match_opening` nur eindeutig, sonst
 `profile_clamp_ops.py` (vier Rollen in einem Rahmen, Schale mit `lift`; der
 Ersatzweg prüft Geometrie, nie Metadaten)
 
-**Wandungen** — `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
+**Wandungen** — `chamber_ops.py` (*Kammer ändern*) · `hollow.py` (Aushöhlen mit
+Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
 GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen) · `container_ops.py`
 (Behälter, Deckel und Einsätze; Transaktionsentwurf in `core/lid_flow.py`)
