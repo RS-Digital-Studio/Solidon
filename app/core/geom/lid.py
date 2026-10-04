@@ -28,6 +28,7 @@ from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationErro
 from app.core.geom import lathe, transform
 from app.core.geom.autosplit import upright_normal
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, shared_volume
+from app.core.geom.lid_hinge import HINGE_SIDES, HINGES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import RIDGE_SHARE, mesh_only, moved, thread_body
@@ -578,6 +579,7 @@ def exact_build(
     lift: float,
     housing: Any,
     cancelled: CancelToken | None = None,
+    keeps: list[Any | None] | None = None,
 ) -> Any:
     """Platte plus Kragen als exakter Körper — dieselbe Bauweise wie :func:`build`.
 
@@ -589,16 +591,25 @@ def exact_build(
     Bogen um sie herum, wo die Gehrung des Netzwegs etwas mehr wegnimmt. Ragt
     ein Kragen trotzdem in das Gehäuse, entsteht kein Deckel, sondern die
     Absage mit der freien Tiefe.
+
+    ``keeps`` schneidet jeden Kragen eines Scharnierdeckels auf den Raum, in
+    dem er beim Öffnen frei bleibt (``lid_hinge.collar_keep``), je Grundriss.
     """
     from app.core.brep import edit, profiles
 
     plates = [profiles.prism(face, thickness, bottom=lift) for face in outlines]
     collars = []
-    for footprint in footprints if collar > EPS_GEOM else []:
+    for index, footprint in enumerate(footprints if collar > EPS_GEOM else []):
+        keep = keeps[index] if keeps else None
         for piece in profiles.shrunk_faces(footprint.face, clearance / 2.0):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            collars.append(profiles.prism(piece, collar, bottom=lift - collar))
+            body = profiles.prism(piece, collar, bottom=lift - collar)
+            if keep is not None:
+                body = edit.boolean("intersection", [body, keep])
+                if body.volume <= EPS_GEOM:
+                    continue
+            collars.append(body)
     top = collar_collision(collars, housing, cancelled=cancelled)
     if top is not None:
         raise _collar_hits_wall(z - top, collar)
@@ -790,6 +801,7 @@ def build(
     housing: MeshData | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    keeps: list[Any | None] | None = None,
 ) -> tuple[MeshData, SolverInfo | None]:
     """Platte plus Kragen, stehend auf dem Rand der Öffnung.
 
@@ -809,14 +821,26 @@ def build(
         transform.moved(plate, transform.translation((0.0, 0.0, z)))
 
     collars = []
-    for footprint in footprints if collar > EPS_GEOM else []:
+    stages: list[SolverInfo | None] = []
+    for index, footprint in enumerate(footprints if collar > EPS_GEOM else []):
         # Halbes Spiel je Seite, denn ``clearance`` ist ein Durchmessermaß.
         shrunk = footprint.buffer(-clearance / 2.0, join_style=2)
         if shrunk.is_empty or shrunk.area <= EPS_GEOM:
             continue
+        keep = keeps[index] if keeps else None
         for piece in getattr(shrunk, "geoms", [shrunk]):
             body = trimesh.creation.extrude_polygon(piece, height=collar)
             transform.moved(body, transform.translation((0.0, 0.0, z - collar)))
+            if keep is not None:
+                # Der Kragen eines Scharnierdeckels endet, wo er beim Öffnen
+                # an die Gegenwand käme (``lid_hinge.collar_keep``).
+                trimmed = boolean(
+                    "intersection", [MeshData.of(body), keep], quality=quality, cancelled=cancelled
+                )
+                stages.append(trimmed.solver)
+                if not trimmed.mesh.triangle_count:
+                    continue
+                body = trimmed.mesh.raw
             collars.append(body)
     if housing is not None:
         top = _mesh_collar_collision(collars, housing, quality=quality, cancelled=cancelled)
@@ -825,9 +849,8 @@ def build(
 
     bodies = [*plates, *collars]
     if len(bodies) == 1:
-        return MeshData.of(bodies[0]), None
+        return MeshData.of(bodies[0]), deepest(stages) if stages else None
     joined = MeshData.of(bodies[0])
-    stages: list[SolverInfo | None] = []
     for entry in bodies[1:]:
         outcome = boolean(
             "union", [joined, MeshData.of(entry)], quality=quality, cancelled=cancelled
@@ -914,6 +937,67 @@ class LidParams(BaseParams):
         maximum=2.0,
         placement="advanced",
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
+    )
+    hinge: str = param(
+        title=_("Scharnier"),
+        default="none",
+        choices=HINGES,
+        doc=_(
+            "Ohne Scharnier liegt der Deckel lose auf. Mitgedruckt kommt er schon "
+            "beweglich aus dem Drucker; mit Stift bekommen Gehäuse und Deckel Augen "
+            "für einen Stift, der eigens entsteht."
+        ),
+    )
+    hinge_side: str = param(
+        title=_("Scharnierseite"),
+        default="hinge_back",
+        choices=HINGE_SIDES,
+        placement="advanced",
+        depends_on=("hinge", ("barrel", "loose_pin")),
+        doc=_("An welcher Seite der Öffnung die Achse liegt, von der Öffnung aus gesehen."),
+    )
+    hinge_width: float = param(
+        title=_("Scharnierbreite"),
+        default=27.0,
+        unit="mm",
+        minimum=8.0,
+        maximum=120.0,
+        placement="advanced",
+        depends_on=("hinge", ("barrel", "loose_pin")),
+        doc=_("Gesamtbreite über alle Augen, längs der Achse gemessen."),
+    )
+    hinge_pin: float = param(
+        title=_("Scharnierstift"),
+        default=3.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=20.0,
+        placement="advanced",
+        depends_on=("hinge", ("barrel", "loose_pin")),
+        doc=_("Durchmesser der Achse. Die Bohrungen darum sind um das Spiel weiter."),
+    )
+    hinge_wall: float = param(
+        title=_("Scharnierwand"),
+        default=2.5,
+        unit="mm",
+        minimum=1.0,
+        maximum=15.0,
+        placement="advanced",
+        depends_on=("hinge", ("barrel", "loose_pin")),
+        doc=_("Materialdicke um die Bohrung jedes Auges."),
+    )
+    opening_angle: float = param(
+        title=_("Öffnungswinkel"),
+        default=180.0,
+        unit="°",
+        minimum=0.0,
+        maximum=180.0,
+        placement="advanced",
+        depends_on=("hinge", ("barrel",)),
+        doc=_(
+            "Wie weit der mitgedruckte Deckel aufgeklappt entsteht. Bei null liegt er "
+            "auf dem Rand und verschweißt beim Drucken mit ihm."
+        ),
     )
     name: str = param(
         title=_("Name"),
@@ -1003,6 +1087,23 @@ def create_lid(ctx: OpContext) -> OpResult:
             )
         clearance = for_object(ctx.profile, source).material.clearance
 
+    # **Mit Scharnier** (RM-184, Audit §6): Achse, Augen und der Raum, in dem
+    # jeder Kragen beim Öffnen frei bleibt, entstehen vor dem Deckel — der
+    # Kragen wird gleich beim Bauen darauf geschnitten.
+    plan = (
+        _hinge_plan(
+            as_mesh_data(upright) if exact else mesh,
+            z,
+            footprints,
+            params,
+            clearance,
+            kernel="brep" if exact else "mesh",
+            cancelled=ctx.cancelled,
+        )
+        if params.hinge != "none"
+        else None
+    )
+    keeps = plan.keeps if plan is not None else None
     body: Any
     solver: SolverInfo | None = None
     if exact:
@@ -1016,6 +1117,7 @@ def create_lid(ctx: OpContext) -> OpResult:
             lift=BELOW_RIM,
             housing=upright,
             cancelled=ctx.cancelled,
+            keeps=keeps,
         )
     else:
         body, solver = build(
@@ -1028,6 +1130,7 @@ def create_lid(ctx: OpContext) -> OpResult:
             housing=mesh,
             quality=ctx.quality,
             cancelled=ctx.cancelled,
+            keeps=keeps,
         )
 
     _log.info("lid over %d cavities at z=%.2f, clearance %.2f", len(cavities), z, clearance)
@@ -1035,6 +1138,22 @@ def create_lid(ctx: OpContext) -> OpResult:
     # Das Kragenmerkmal beschreibt den Kragen, der entstanden ist: Wo die
     # Öffnung darunter enger wird, ist er schmaler als der Hohlraum am Rand.
     collar_features = _collar_feature(footprints, z, params.collar, clearance) if footprints else {}
+    housing_mesh: Any = source.mesh
+    housing_features: dict[str, Feature] = {}
+    if plan is not None:
+        body, collar_features, housing_mesh, housing_features, joined = _hinged(
+            plan,
+            body,
+            collar_features,
+            source,
+            turned_back,
+            direction,
+            exact=exact,
+            opening_angle=params.opening_angle if params.hinge == "barrel" else 0.0,
+            quality=ctx.quality,
+            cancelled=ctx.cancelled,
+        )
+        solver = deepest([solver, *joined])
     if direction != _UP:
         # Träge, weil ``geom`` die Wahrnehmung nicht eifrig laden darf
         # (Paketrichtung, ``test_core_package_direction``).
@@ -1064,10 +1183,15 @@ def create_lid(ctx: OpContext) -> OpResult:
     # Stapel ihre Eingabe durch ihre Ausgaben — mit nur dem Deckel als Ausgang
     # fraß „Deckel erzeugen" das Gehäuse. Die Op-Tests riefen die Funktion
     # direkt auf und sahen es nie; der Ende-zu-Ende-Weg von P13 sah es sofort.
+    housing = dataclasses.replace(source, features=cavity_features)
+    if plan is not None:
+        housing = _hinged_housing(
+            source, housing_mesh, cavity_features, housing_features, exact, ctx.cancelled
+        )
     return OpResult(
         solver=solver,
         outputs=[
-            dataclasses.replace(source, features=cavity_features),
+            housing,
             SceneObject(
                 id="",
                 # **Kein Quellname und kein `.translate()`.** Beides war
@@ -1099,9 +1223,274 @@ def create_lid(ctx: OpContext) -> OpResult:
                     # „-y" die Vorderseite eines Puppenhauses.
                     "opening": _direction_name(direction),
                 },
-            )
+            ),
+            *(_hinge_findings(plan, params) if plan is not None else ()),
         ],
     )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _HingePlan:
+    """Was ein Scharnierdeckel vor dem Bauen weiß: Lage, Kragenraum, Augen."""
+
+    kind: str
+    side: str
+    layout: Any
+    keeps: list[Any | None]
+    housing_parts: list[Any]
+    lid_parts: list[Any]
+    housing_features: dict[str, Feature]
+    lid_features: dict[str, Feature]
+
+
+def _hinge_plan(
+    tessellated: MeshData,
+    z: float,
+    footprints: list[Any],
+    params: LidParams,
+    clearance: float,
+    *,
+    kernel: str,
+    cancelled: CancelToken | None = None,
+) -> _HingePlan:
+    """Lage und Teile des Scharniers, im aufgerichteten Rahmen (RM-184, Audit §6).
+
+    Gemessen wird an der Vernetzung des aufgerichteten Gehäuses, an beiden
+    Kernen gleich: Umriss und Hohlräume am Rand, dieselben Kragengrundrisse wie
+    beim Netzdeckel. Ein exakter Kragen findet seinen Raum über den
+    Grundriss, in dem seine Mitte liegt. Gebaut wird im Scharnierrahmen
+    (``lid_hinge.spin_of``) und um dieselbe Vierteldrehung zurück.
+    """
+    from shapely.geometry import Point
+
+    from app.core.geom import lid_hinge
+    from app.core.knowledge.parts import shapes
+
+    angle = lid_hinge.spin_of(params.hinge_side)
+    outline, cavities = opening(tessellated, z - BELOW_RIM)
+    floor = z - params.collar + BELOW_RIM
+    measured = collar_footprints(
+        cavities,
+        cross_section(tessellated, floor) if params.collar > 2.0 * BELOW_RIM else None,
+    )
+    hinge = lid_hinge.layout(
+        lid_hinge.spun(outline, angle),
+        [lid_hinge.spun(cavity, angle) for cavity in cavities],
+        z=z,
+        bottom=float(tessellated.bounds.minimum[2]),
+        width=params.hinge_width,
+        pin_diameter=params.hinge_pin,
+        wall=params.hinge_wall,
+        clearance=clearance,
+    )
+
+    def back(form: Any) -> Any:
+        return shapes.turned(form, -angle, (0.0, 0.0, 1.0)) if angle else form
+
+    with shapes.building(cast(Any, kernel)):
+        spaces = [
+            back(lid_hinge.collar_keep(lid_hinge.spun(footprint, angle), hinge))
+            for footprint in measured
+        ]
+        housing_parts, lid_parts = lid_hinge.hinge_parts(
+            params.hinge,
+            hinge,
+            pin_diameter=params.hinge_pin,
+            wall=params.hinge_wall,
+            clearance=clearance,
+            cancelled=cancelled,
+        )
+        housing_parts = [back(part) for part in housing_parts]
+        lid_parts = [back(part) for part in lid_parts]
+    keeps: list[Any | None]
+    if kernel == "brep":
+        keeps = []
+        for footprint in footprints:
+            centre = Point(float(footprint.centroid.x), float(footprint.centroid.y))
+            owner = next(
+                (index for index, shape in enumerate(measured) if shape.contains(centre)), None
+            )
+            keeps.append(spaces[owner] if owner is not None else None)
+    else:
+        keeps = list(spaces)
+    housing_features, lid_features = lid_hinge.hinge_features(
+        params.hinge, hinge, pin_diameter=params.hinge_pin, clearance=clearance
+    )
+    if angle:
+        from app.core.perceive.matching import moved_features
+
+        spin_back = _rows(transform.rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), -angle))
+        housing_features = moved_features(housing_features, spin_back)
+        lid_features = moved_features(lid_features, spin_back)
+    return _HingePlan(
+        kind=params.hinge,
+        side=params.hinge_side,
+        layout=hinge,
+        keeps=keeps,
+        housing_parts=housing_parts,
+        lid_parts=lid_parts,
+        housing_features=housing_features,
+        lid_features=lid_features,
+    )
+
+
+def _hinged(
+    plan: _HingePlan,
+    body: Any,
+    collar_features: dict[str, Feature],
+    source: SceneObject,
+    turned_back: Any,
+    direction: Vec3,
+    *,
+    exact: bool,
+    opening_angle: float,
+    quality: Quality,
+    cancelled: CancelToken | None,
+) -> tuple[Any, dict[str, Feature], Any, dict[str, Feature], list[SolverInfo | None]]:
+    """Augen an Deckel und Gehäuse, der Deckel aufgeklappt, wo er mitgedruckt wird.
+
+    Zurück kommen Deckelkörper und -merkmale im aufgerichteten Rahmen (das
+    Zurückdrehen vor die Öffnung macht :func:`create_lid` wie bisher) und das
+    Gehäuse samt seinen Scharniermerkmalen schon im Raum der Szene.
+    """
+    from app.core.perceive.matching import moved_features
+
+    stages: list[SolverInfo | None] = []
+    body = _united(
+        body, plan.lid_parts, exact=exact, quality=quality, cancelled=cancelled, stages=stages
+    )
+    features = {**collar_features, **plan.lid_features}
+    if opening_angle:
+        # Aufgeklappt um die Achse, im aufgerichteten Rahmen: dieselbe
+        # Vierteldrehung zurück wie die Teile, dieselbe Richtung wie am
+        # Klappdeckel des Behälters (der Deckel liegt auf der -y-Seite der Achse).
+        from app.core.geom import lid_hinge
+
+        spin = lid_hinge.spin_of(plan.side)
+        axis_point = _quarter(plan.layout.axis, -spin)
+        axis_direction = _quarter((1.0, 0.0, 0.0), -spin)
+        opened = transform.rotation_about(axis_direction, axis_point, -opening_angle)
+        body = (
+            _edited(body, opened, cancelled=cancelled) if exact else transform.apply(body, opened)
+        )
+        features = moved_features(features, _rows(opened))
+    parts = list(plan.housing_parts)
+    housing_features = dict(plan.housing_features)
+    if direction != _UP:
+        parts = [
+            _edited(part, turned_back, cancelled=cancelled)
+            if exact
+            else transform.apply(as_mesh_data(part), turned_back)
+            for part in parts
+        ]
+        housing_features = moved_features(housing_features, _rows(turned_back))
+    housing = _united(
+        source.mesh, parts, exact=exact, quality=quality, cancelled=cancelled, stages=stages
+    )
+    return body, features, housing, housing_features, stages
+
+
+def _quarter(point: Vec3, degrees: float) -> Vec3:
+    """Einen Punkt um Z drehen, um ganze Vierteldrehungen ohne Rundungsfehler."""
+    quarter = round(degrees / 90.0) % 4
+    x, y, z = point
+    turned = ((x, y), (-y, x), (-x, -y), (y, -x))[quarter]
+    return (turned[0], turned[1], z)
+
+
+def _edited(solid: Any, matrix: Any, *, cancelled: CancelToken | None) -> Any:
+    from app.core.brep import edit
+
+    return edit.transformed(solid, _rows(matrix), cancelled=cancelled)
+
+
+def _united(
+    body: Any,
+    parts: list[Any],
+    *,
+    exact: bool,
+    quality: Quality,
+    cancelled: CancelToken | None,
+    stages: list[SolverInfo | None],
+) -> Any:
+    """Den Körper mit seinen Scharnierteilen vereinigen, je Kern."""
+    if not parts:
+        return body
+    if exact:
+        from app.core.brep import edit
+
+        return edit.unified(edit.boolean("union", [body, *parts]))
+    outcome = boolean(
+        "union",
+        [as_mesh_data(body), *(as_mesh_data(part) for part in parts)],
+        quality=quality,
+        cancelled=cancelled,
+    )
+    stages.append(outcome.solver)
+    return outcome.mesh
+
+
+def _hinged_housing(
+    source: SceneObject,
+    mesh: Any,
+    cavity_features: dict[str, Feature],
+    hinge_features: dict[str, Feature],
+    exact: bool,
+    cancelled: CancelToken | None,
+) -> SceneObject:
+    """Das Gehäuse mit seinen Augen — die benannten Merkmale bleiben, der Rest wird neu erkannt.
+
+    Am Netz tragen die alten Merkmale Dreiecke eines Körpers, den es so nicht
+    mehr gibt; die Auswertung erkennt sie am neuen wieder und behält ihre
+    Namen. Benannt und ohne Dreiecke reisen nur Öffnung und Scharnier.
+    """
+    carried = {
+        name: dataclasses.replace(feature, face_indices=(), surface_patches=())
+        for name, feature in {
+            CAVITY_FEATURE: cavity_features[CAVITY_FEATURE],
+            **hinge_features,
+        }.items()
+    }
+    features = carried
+    if exact:
+        from app.core.brep.features import features_of
+
+        features = {**features_of(mesh, cancelled=cancelled), **carried}
+    return dataclasses.replace(source, mesh=mesh, features=features)
+
+
+def _hinge_findings(plan: _HingePlan, params: LidParams) -> list[Finding]:
+    """Was der Kunde über das Scharnier wissen muss, bevor er druckt."""
+    if plan.kind == "barrel":
+        return [
+            Finding(
+                code="parts.lid_hinge",
+                severity="info",
+                message=_(
+                    "Das Scharnier wird mitgedruckt und kommt beweglich aus dem Drucker. "
+                    "Der Kragen ist dort gekürzt, wo er beim Öffnen an die Wand käme."
+                ),
+                values={
+                    "pin_mm": round(params.hinge_pin, 3),
+                    "width_mm": round(plan.layout.width, 3),
+                    "opening_deg": round(params.opening_angle, 1),
+                },
+            )
+        ]
+    return [
+        Finding(
+            code="parts.lid_hinge",
+            severity="info",
+            message=_(
+                "Gehäuse und Deckel tragen Augen für einen Stift. *Stift für Bohrung* baut "
+                "ihn passend; ein Stück Filament oder ein Nagel tut es auch."
+            ),
+            values={
+                "pin_mm": round(params.hinge_pin, 3),
+                "width_mm": round(plan.layout.width, 3),
+            },
+        )
+    ]
 
 
 def _turned(

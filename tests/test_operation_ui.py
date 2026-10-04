@@ -7215,6 +7215,55 @@ def test_rotation_centre_uses_chosen_body_feature_origin_and_explicit_point(qt_a
         dialog.deleteLater()
 
 
+def test_join_path_offers_the_rotation_centre_only_while_it_turns(qt_app):
+    """Der drehende Fügeweg (RM-184) wählt seine Mitte wie Muster und Spiegeln.
+
+    Ein Bajonett dreht um die Achse seiner Aufnahme: Das Merkmal des zweiten
+    Teils liefert die Mitte. Beim geraden Schub steht die Wahl nicht da.
+    """
+    from app.core.types import Feature, SceneObject
+    from tests.helpers import FakeMesh
+
+    bootstrap.load_operations()
+    collar = SceneObject(id="obj_1", name="Kragen", mesh=FakeMesh(size=(30.0, 28.0, 10.0)))
+    socket = SceneObject(
+        id="obj_2",
+        name="Aufnahme",
+        mesh=FakeMesh(size=(40.0, 40.0, 12.0)),
+        features={
+            "socket_1": Feature(
+                id="socket_1",
+                kind="hole",
+                provenance="generated",
+                params={"centre": (0.0, 0.0, 6.0), "axis": (0, 0, 1), "diameter": 30.0},
+            )
+        },
+    )
+    dialog = OperationDialog(
+        REGISTRY.get("check_join_path"),
+        {body.id: body.name for body in (collar, socket)},
+        values={"motion": "slide_turn", "axis": "z", "angle": 13.0},
+        source_objects=("obj_1", "obj_2"),
+        centre_objects=[collar, socket],
+    )
+    try:
+        mode, target = dialog.centre_mode, dialog.centre_target
+        assert mode is not None and target is not None
+        assert not dialog._centre_row.isHidden()
+        mode.setCurrentIndex(mode.findData("feature"))
+        target.setCurrentIndex(target.findText("Aufnahme", Qt.MatchFlag.MatchStartsWith))
+        assert tuple(dialog.values()[axis] for axis in ("cx", "cy", "cz")) == pytest.approx(
+            (0.0, 0.0, 6.0)
+        )
+        motion = dialog._editors["motion"]
+        motion.setCurrentIndex(motion.findData("slide"))
+        assert dialog._centre_row.isHidden(), "ein gerader Schub dreht um nichts"
+        motion.setCurrentIndex(motion.findData("turn"))
+        assert not dialog._centre_row.isHidden()
+    finally:
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize("name", ["pattern", "pattern_feature", "mirror_object"])
 def test_rotation_centre_reopens_saved_expressions_without_replacing_them(qt_app, name):
     """Ein früher gewählter Mittelpunkt folgt beim Wiederöffnen keinem anderen Körper."""

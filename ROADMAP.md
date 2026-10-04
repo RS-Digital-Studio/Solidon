@@ -36,7 +36,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt; die neue Aufteilung ist im erfolgreichen Taglauf 36454861126 von 0.5.1 gelaufen. Offen bleiben CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung des Testbestands und der Laufzeiten sowie das Blättern in `tools/windows_signed_installer.py` |
-| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Acht Bausteine aus dem Audit gebaut (Bajonett, Rastdrehscheibe, Stangenverbinder, Schlauchtülle, Kanalnaht, Raumvorlage); offen: Abläufe, funktionale Gruppen, Projektmaße und Mehrdateien, Leistungsreihe, native Dichtnut- und Einzeldateiabnahme aller 187 Fälle (eigene Aufträge laufen), Fensterabnahme der Bausteine beim Release (RM-213) |
+| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Acht Bausteine und sieben Abläufe aus dem Audit gebaut (04.10.); offen: funktionale Gruppen, Projektmaße und das Werkzeug für die native Einzeldateiabnahme (in Arbeit), danach die Abnahme der 187 Fälle und die Fensterabnahme beim Release |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`), die Wandmessung verwendet den eigenen Strahltest. Matplotlib ist seit `9bb1542b` wieder Laufzeitabhängigkeit; die Windows-Lizenzbeilage enthält 50 Komponenten. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster; die Bereichsprüfungsreste sind mit RM-214 geschlossen (Durchsicht 0.5.1) |
@@ -1195,6 +1195,44 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bajonett- und Rastscheibenpaar mit Undo/Redo, Stangenverbinder mit Projektparameter 16 → 20, Tülle
   mit offenem Durchgang im Schnitt, Kanalnaht-Einlage mit Verengungssatz, Raumplatten mit Raumlänge
   und *Auf dem Bett anordnen*. Changelog: ja, zwei Punkte unter den neuen Bausteinen.
+
+  **Teilstand 04.10.2026 (Claude, R2 Abläufe, `claude/rm184-ablaeufe`):** Sieben Abläufe aus
+  `bericht.md` §9 und `ancillary-analysis.md` §§3, 6, 9, 10 sind umgesetzt, wo möglich als
+  Erweiterung vorhandener Operationen: *Fügeweg prüfen* (`motion`: geschoben, gedreht, geschoben und
+  gedreht; Drehmitte wie bei Muster und Spiegeln), *Prüfstück erzeugen* (nimmt jedes gewählte Teil,
+  Fenster an der genannten oder engsten Stelle, Spiel im Ausschnitt gemessen, Stücke nebeneinander
+  auf dem Bett, `cache_version` 2 → 3), *Text aufbringen* (Bogen `arc_radius`, Rundung `wrap` mit
+  Radius aus dem Merkmal), *Merkmal ändern* am Gewinde (Wandmessung, Absage `thread_wall`, Befund
+  `thread.thin_wall`, `cache_version` 16 → 17; Gegengewinde einer Gewindepassung geht in derselben
+  Transaktion mit, an Fenster, Kommandozeile und Agent über `counterpart.with_coupled_threads`),
+  *Deckel erzeugen* (`hinge`: ohne, mitgedruckt, mit Stift; Kragenbeschnitt für freies Öffnen). Neu,
+  weil keine vorhandene Operation passt: *Schrift einlegen* (`inlay_text`), *Gegenform einlassen*
+  (`cut_counter_form`), *Stift für Bohrung* (`pin_for_bore`). Nebenbei behoben: `History` vergab
+  nach einem Entwurf mit eigenen Ausgangskennungen dieselbe Kennung ein zweites Mal (gefunden am
+  Deckel mit Stift, Test `test_history.py::test_a_named_new_body_moves_the_numbering_past_it`). Neue
+  Tests: `tests/test_join_motion.py`, `test_fit_test_piece.py`, `test_label_layout.py`,
+  `test_counter_form.py`, `test_thread_replace.py`, `test_hinged_lid.py`, dazu Fälle in
+  `test_exact_body_parity.py` (`inlay_text`, `cut_counter_form`, `pin_for_bore`),
+  `test_platform_identity.py` (Wege `bent_lettering`, `fit_pieces`, `counter_form`, `hinged_lid`),
+  `test_history.py`, `test_operation_ui.py` (Fenstertest, Release). **Vorher rot / nachher grün:**
+  Am Basisstand `7b3d8057e` (Schnappschuss per `git archive`, neue Testdateien hineinkopiert) sind
+  29 Tests rot und zwei Testmodule scheitern am Import (`rot-am-basisstand.txt`); die Wand- und
+  Scharniertests einzeln ohne die neuen Importe: 22 rot, 3 grün (`rot-am-basisstand-2.txt`) — die
+  drei grünen sind gewollte Gegenschutztests (kein Wandbefund am massiven Bolzen, Deckel ohne
+  Scharnier unverändert). Am Stand `1e85ac079` sind alle grün (Läufe unten). Belegpfade:
+  `F:\solidon-review-reports\claude-2026-10-04\rm184-ablaeufe\rot-am-basisstand.txt`,
+  `…\rot-am-basisstand-2.txt`, `…\f_run2.txt` (3231 passed), `…\g_run3.txt` (3729 passed vor zwei
+  behobenen Zuordnungen), `…\g_run4.txt`, `…\g_run5.txt`, `…\tor-1.txt` (Entwicklungstor),
+  `…\vergleich-gewinde.txt`, `…\vergleich-konturdeckel.txt`, `…\probe-keep.txt`,
+  `…\probe-nokeep.txt`, `…\probe-brep.txt`, `…\prompt-tokens-3.txt`.
+
+  **Nachtrag Gewindepaar:** Ein gespeicherter Gewindeschritt koppelt beim Ändern sein Gegengewinde
+  in derselben Transaktion (`counterpart.coupled_step_change`, `482fd788a`). Das gedruckte
+  Gewindepaar aus *Gegenstück zum Gewinde* meldete seine Passung beim Anlegen als verletzt, weil
+  beide Merkmale das Nennmaß nannten (seit `d92f33ddf`, v0.5.0 und v0.5.1); gedruckte Gewinde nennen
+  jetzt das gebaute Maß samt `nominal`, die Gewindepassung erwartet das Spiel beider Hälften (PETG
+  gemessen 0,50 = Soll 0,50 mm; `72f68db6b`, Regel in `.claude/rules/kern.md`). Belege unter
+  `F:\solidon-review-reports\claude-2026-10-04\rm184-ablaeufe\`.
 
 <a id="rm-188"></a>
 

@@ -33,6 +33,8 @@ it into `website/version.json`.
 - In the report, *Rebuild model* rebuilds an imported part, including brackets, coves and countersinks, compares it with the original within the limit you set and applies it in one step.
 - The *Profile clamp with liners* starts with the project material in both material fields. Until now both were empty.
 - The part search finds the *T-slot tongue for extrusion* under T-nut as well, and its description says how it differs from a threaded T-nut.
+- A lid from *Create lid* can get a hinge, printed in place or with a pin from *Pin for hole*, and its collar is trimmed so it opens freely.
+- With *Cut counter-form*, an insert gets pockets for tools that lift straight back out.
 
 ### Printing and slicer handover
 
@@ -139,6 +141,10 @@ it into `website/version.json`.
 - Pieces of an automatic split are numbered in projects from older versions too, and a deleted or disabled cut no longer counts.
 - A hole you duplicate, move or repeat along a sloped face stays the same hole on STL and STEP parts, with the same dimensions and messages.
 - After *Repeat feature*, a copy on a STEP part no longer drills through to the top, and a coarsely faceted STL hole still counts as going through.
+- A thread grows or shrinks with *Change feature* without breaking through the wall, and the mating thread of a thread fit changes with it.
+- A printed thread pair passes its fit check: both threads name the size they are built with, and the check expects the clearance of both halves.
+- With *Check the assembly path*, parts can also turn, or be inserted first and then turned like a bayonet.
+- For a fit, Solidon cuts the same window from both parts as a small sample print and names the clearance.
 
 ### Fillets and chamfers
 
@@ -170,6 +176,7 @@ it into `website/version.json`.
 - The menu entry *Create from sketch …* starts drawing straight away, the drawing plane shows its origin, and a double-click in the history reopens a sketch in drawing mode.
 - In *Sculpt* and in the skeleton editor, the bar shows wall thickness or overhang as a map with a legend and reports a stroke beyond the build volume. After bending, it says how it will print.
 - An applied texture is selected as a whole. The selection panel then offers *Change texture* and *Remove texture*.
+- Text follows an arc or wraps around a rounded face, and *Inlay text* sets it flush in its own colour.
 
 ### Generating with AI
 

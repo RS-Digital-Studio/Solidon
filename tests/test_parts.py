@@ -4082,7 +4082,11 @@ def test_an_external_thread_post_and_an_internal_bore_are_a_matching_pair(
         if feature.kind == "thread"
     )
     assert not outer.params["internal"] and inner.params["internal"]
-    assert outer.params["diameter"] == inner.params["diameter"] == 6.0
+    assert outer.params["nominal"] == inner.params["nominal"] == 6.0
+    # Gebaut je um das Spiel des Materials daneben, und so nennen es die Merkmale.
+    play = profile.material.clearance
+    assert outer.params["diameter"] == pytest.approx(6.0 - play)
+    assert inner.params["diameter"] == pytest.approx(6.0 + play)
     assert outer.params["pitch"] == inner.params["pitch"]
 
 
@@ -6775,8 +6779,9 @@ def test_the_same_part_three_times_keeps_three_named_features() -> None:
     )
     entry = next(iter(result.scene.objects.values()))
 
+    # Die Tabellengröße: Gebaut ist jedes um das Spiel aus PLA enger.
     threads = {
-        name: round(float(feature.params["diameter"]), 2)
+        name: round(float(feature.params["nominal"]), 2)
         for name, feature in entry.features.items()
         if feature.kind == "thread"
     }

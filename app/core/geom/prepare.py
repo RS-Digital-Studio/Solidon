@@ -4146,6 +4146,9 @@ def check_join_path(
     distance: float,
     *,
     steps: int = 24,
+    turn: float = 0.0,
+    turn_axis: Vec3 | None = None,
+    pivot: Vec3 | None = None,
 ) -> list[Finding]:
     """Kommt das Teil dorthin, wo es hingehört — oder nur die Endlage stimmt?
 
@@ -4188,35 +4191,53 @@ def check_join_path(
     Offene Körper haben kein Innen: Wo :func:`shared_volume` nichts entscheiden
     kann, bleibt die Prüfung stumm, statt eine Zahl zu erfinden — dort gilt
     der ``caveat`` der Operation.
+
+    **Gedreht und erst geschoben, dann gedreht** (RM-184, Audit §9): Ein
+    Bajonett kommt geradeaus nicht in seine Endlage — seine Nocken stoßen
+    durch die Wand —, ein Klappdeckel schwenkt. ``turn`` ist der Winkel in
+    Grad, um den das Teil zuletzt um ``turn_axis`` durch ``pivot`` dreht
+    (rechte Hand um die Achse). Mit ``distance`` null ist es nur die Drehung,
+    mit beidem zuerst der Schub bis in die Einsetzstellung, dann die Drehung
+    in die Endlage. Die Einsetzstellung und, bei der reinen Drehung, die
+    Ausgangsstellung werden mitgemessen: Dort greifen die Teile schon
+    ineinander, anders als am Anfang eines Schubs. ``at_deg`` sagt, wie viel
+    Drehung vor der Endlage es eng wird, ``at`` dasselbe für den Schub.
     """
     if not (moving.is_watertight and fixed.is_watertight):
         return []
-    if steps < 1 or distance <= EPS_GEOM:
+    rotating = abs(turn) > EPS_GEOM and turn_axis is not None
+    pushing = distance > EPS_GEOM
+    if steps < 1 or not (pushing or rotating):
         return []
 
     way = np.asarray(direction, dtype=float)
     length = float(np.linalg.norm(way))
-    if length <= EPS_GEOM:
+    if pushing and length <= EPS_GEOM:
         return []
-    way = way / length
+    if pushing:
+        way = way / length
+    centre: Vec3 = pivot if pivot is not None else (0.0, 0.0, 0.0)
+    spin = np.asarray(turn_axis if turn_axis is not None else (0.0, 0.0, 1.0), dtype=float)
+
+    def turned_back(degrees: float) -> Any:
+        """Das bewegte Teil, um ``degrees`` vor seine Endlage zurückgedreht."""
+        probe = moving.raw.copy()
+        if abs(degrees) > EPS_GEOM:
+            transform.moved(
+                probe,
+                transform.rotation_about(
+                    (float(spin[0]), float(spin[1]), float(spin[2])), centre, -degrees
+                ),
+            )
+        return probe
+
+    if rotating:
+        return _turning_join(moving, fixed, turned_back, way, distance, turn, spin, steps)
 
     findings: list[Finding] = []
     end = shared_volume(moving.raw, fixed.raw)
     if end > EPS_GEOM:
-        return [
-            Finding(
-                code="join.blocked",
-                severity="error",
-                message=_(
-                    "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie "
-                    "einem der beiden Spiel, dann prüft Solidon den Weg dorthin."
-                ),
-                values={"shared": format_volume(end)},
-                # Regel 17: Das Maß, das Spiel gibt, steht in einem früheren
-                # Schritt — der Verlauf zeigt ihn.
-                suggestions=(SHOW_HISTORY,),
-            )
-        ]
+        return [_join_blocked(end)]
 
     # Rückwärts vom Ziel: Schritt ``steps`` ist die Endlage, Schritt 0 der
     # Anfang. Der Anfang selbst wird nicht gemessen — dort stehen die Teile
@@ -4259,6 +4280,142 @@ def check_join_path(
             )
         )
     return findings
+
+
+def _join_blocked(end: float) -> Finding:
+    """Die Endlage ist besetzt — für jede Bewegungsart dieselbe Sperre.
+
+    Regel 17: Das Maß, das Spiel gibt, steht in einem früheren Schritt — der
+    Verlauf zeigt ihn.
+    """
+    return Finding(
+        code="join.blocked",
+        severity="error",
+        message=_(
+            "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie "
+            "einem der beiden Spiel, dann prüft Solidon den Weg dorthin."
+        ),
+        values={"shared": format_volume(end)},
+        suggestions=(SHOW_HISTORY,),
+    )
+
+
+def _degrees_text(value: float) -> str:
+    """Ein Winkel, wie der Kunde ihn liest — ohne Vorzeichen, auf Zehntel."""
+    text = f"{round(abs(value), 1):g}"
+    return f"{text}°"
+
+
+def _turning_join(
+    moving: MeshData,
+    fixed: MeshData,
+    turned_back: Any,
+    way: np.ndarray,
+    distance: float,
+    turn: float,
+    spin: np.ndarray,
+    steps: int,
+) -> list[Finding]:
+    """Der Fügeweg mit Drehung: erst der Schub bis zur Einsetzstellung, dann die Drehung.
+
+    Die Einsetzstellung ist die Endlage, um den ganzen Winkel zurückgedreht.
+    Der Schub wird wie beim geraden Weg ohne seinen Anfang gemessen, seine
+    Einsetzstellung aber mit — dort steckt das Teil schon. Die Drehung wird
+    von der Einsetzstellung bis kurz vor die Endlage gemessen.
+    """
+    end = shared_volume(moving.raw, fixed.raw)
+    if end > EPS_GEOM:
+        return [_join_blocked(end)]
+    pushing = distance > EPS_GEOM
+    worst = 0.0
+    worst_at = 0.0
+    worst_phase = ""
+    if pushing:
+        for step in range(1, steps + 1):
+            back = distance * (steps - step) / steps
+            probe = turned_back(turn)
+            if back > EPS_GEOM:
+                transform.moved(probe, translation(tuple(-way * back)))
+            shared = shared_volume(probe, fixed.raw)
+            if shared > worst:
+                worst, worst_at, worst_phase = shared, back, "push"
+    for step in range(0 if not pushing else 1, steps):
+        remaining = turn * (steps - step) / steps
+        shared = shared_volume(turned_back(remaining), fixed.raw)
+        if shared > worst:
+            worst, worst_at, worst_phase = shared, abs(remaining), "turn"
+
+    motion = "slide_turn" if pushing else "turn"
+    turn_axis = _axis_name(spin / math.hypot(float(spin[0]), float(spin[1]), float(spin[2])))
+    if worst > EPS_GEOM:
+        if worst_phase == "push":
+            return [
+                Finding(
+                    code="join.interference",
+                    severity="info",
+                    message=_("Auf dem Fügeweg müssen sich die Teile aneinander vorbeidrücken."),
+                    values={
+                        "shared": format_volume(worst),
+                        "at": round(worst_at, 2),
+                        "motion": motion,
+                    },
+                )
+            ]
+        return [
+            Finding(
+                code="join.interference",
+                severity="info",
+                message=_(
+                    "Auf dem Drehweg müssen sich die Teile {angle} vor der Endlage "
+                    "aneinander vorbeidrücken.",
+                    angle=_degrees_text(worst_at),
+                ),
+                values={
+                    "shared": format_volume(worst),
+                    "at_deg": round(worst_at, 2),
+                    "motion": motion,
+                },
+            )
+        ]
+    if pushing:
+        axis = _axis_name(way)
+        return [
+            Finding(
+                code="join.clear",
+                severity="info",
+                message=_(
+                    "Der Fügeweg ist frei: {length} entlang {axis}, dann {angle} um "
+                    "{turn_axis}, in je {steps} Schritten keine Überschneidung.",
+                    length=format_length(distance),
+                    axis=axis,
+                    angle=_degrees_text(turn),
+                    turn_axis=turn_axis,
+                    steps=steps,
+                ),
+                values={
+                    "length_mm": distance,
+                    "axis": axis,
+                    "angle_deg": turn,
+                    "turn_axis": turn_axis,
+                    "steps": steps,
+                    "motion": motion,
+                },
+            )
+        ]
+    return [
+        Finding(
+            code="join.clear",
+            severity="info",
+            message=_(
+                "Der Drehweg ist frei: {angle} um {turn_axis}, in {steps} Schritten "
+                "keine Überschneidung.",
+                angle=_degrees_text(turn),
+                turn_axis=turn_axis,
+                steps=steps,
+            ),
+            values={"angle_deg": turn, "turn_axis": turn_axis, "steps": steps, "motion": motion},
+        )
+    ]
 
 
 def _axis_name(way: np.ndarray) -> str:

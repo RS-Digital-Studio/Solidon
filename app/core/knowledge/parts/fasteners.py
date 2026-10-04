@@ -13,6 +13,7 @@ Dokumentation, statt es in einer Zahl zu verstecken.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import Any, cast
 
 from app.core.errors import ValidationError
@@ -931,14 +932,39 @@ def _printed_thread(
     body = threaded(diameter, screw.pitch, built, internal=internal, bottom=bottom)
     return result(
         body,
-        thread(
-            "thread_1",
-            screw.nominal,
-            screw.pitch,
-            (0.0, 0.0, bottom + length / 2.0),
-            internal=internal,
-            length=length,
-        ),
+        _thread_feature(size, play, (0.0, 0.0, bottom + length / 2.0), internal, length),
+    )
+
+
+def _thread_feature(
+    size: str, play: float, centre: tuple[float, float, float], internal: bool, length: float
+) -> tuple[str, Feature]:
+    """Das Merkmal eines gedruckten Gewindes: das gebaute Maß und das Nennmaß daneben.
+
+    Jede Hälfte steht um das Spiel neben dem Nennmaß — die Mutter weiter, der
+    Bolzen enger (:func:`_printed_thread`), ein gedrucktes Paar hat es also
+    zweimal. Nannte das Merkmal das Nennmaß, maß die Gewindepassung eines
+    frischen Paars 0,00 mm und meldete es als zu eng; ein eingelesenes
+    Gewinde nennt ohnehin, was gebaut ist.
+
+    Das Nennmaß steht als ``nominal`` daneben: Die Passungsprüfung weiß daran,
+    dass diese Hälfte das Spiel des Materials trägt (``fits._thread_wanted``),
+    und das Gegenstück findet seine Tabellengröße
+    (``counterpart.thread_size_for``).
+    """
+    screw = standards.screw(size)
+    identifier, feature = thread(
+        "thread_1",
+        screw.nominal + play if internal else screw.nominal - play,
+        screw.pitch,
+        centre,
+        internal=internal,
+        length=length,
+    )
+    return identifier, replace(
+        feature,
+        params={**feature.params, "nominal": screw.nominal},
+        measure_sources={**feature.measure_sources, "nominal": "parameter"},
     )
 
 
@@ -1071,12 +1097,12 @@ def printed_screw(raw: BaseParams) -> PartResult:
     body = joined(head, shank)
     return result(
         body,
-        thread(
-            "thread_1",
-            screw.nominal,
-            screw.pitch,
+        _thread_feature(
+            params.size,
+            params.play,
             (0.0, 0.0, thread_top - params.length / 2.0),
-            length=params.length,
+            False,
+            params.length,
         ),
     )
 
@@ -1139,7 +1165,6 @@ class PrintedNutParams(BaseParams):
 def printed_nut(raw: BaseParams) -> PartResult:
     """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt."""
     params = cast(PrintedNutParams, raw)
-    screw = standards.screw(params.size)
     nut = standards.nut(params.size)
     depth = nut.height + 2.0 * BOOLEAN_OVERLAP
     # Wie der Schraubenkopf steht die Mutter um das Spiel über der Fläche, auf
@@ -1155,12 +1180,7 @@ def printed_nut(raw: BaseParams) -> PartResult:
     body = subtract(shapes.moved(shapes.hexagon(nut.width, nut.height), (0.0, 0.0, lift)), cutter)
     return result(
         body,
-        thread(
-            "thread_1",
-            screw.nominal,
-            screw.pitch,
-            (0.0, 0.0, lift + nut.height / 2.0),
-            length=nut.height,
-            internal=True,
+        _thread_feature(
+            params.size, params.play, (0.0, 0.0, lift + nut.height / 2.0), True, nut.height
         ),
     )

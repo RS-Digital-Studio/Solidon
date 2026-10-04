@@ -142,6 +142,16 @@ CASES = [
         "collision",
         None,
     ),
+    # Gegenform (RM-184): die Tasche für den versetzten Quader, durch den Boden;
+    # das Werkzeug bleibt. 3200 - 16 · 10 · (10 + Spiel/2), Spiel unter 1 mm.
+    Case(
+        "cut_counter_form",
+        "overlapping",
+        {"axis": "z"},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "counter_form",
+        (1520.0, 1600.0),
+    ),
     Case(
         "check_join_path",
         "separated",
@@ -412,6 +422,26 @@ CASES = [
         1664.0,
     ),
     Case("intersect_objects", "overlapping", {}, KEEP, "volume", 1600.0),
+    # Stift für Bohrung (RM-184): ein loser Stift in der Bohrung Ø 6 der 10 mm
+    # dicken Platte; der Träger bleibt, der Stift ist ein Körper seiner Art.
+    Case(
+        "pin_for_bore",
+        "hole",
+        {"at_feature": "hole"},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "loose_pin",
+        (6.0, 10.0),
+    ),
+    # Bündige Einlage (RM-184): Träger und Einlage aus demselben Werkzeug, in
+    # beiden Kernen; zusammen genau das Volumen von vorher, die Einlage bündig.
+    Case(
+        "inlay_text",
+        "box",
+        {"text": "H", "size": 6.0, "depth": 0.8, "z": 10.0, "slot": 1},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "inlay",
+        (3200.0, 10.0),
+    ),
     Case(
         "label_text",
         "box",
@@ -1586,6 +1616,24 @@ def _assert_invariant(
         lid = outputs[1]
         assert lid.mesh.bounds.size[:2] == pytest.approx(expected, abs=0.03)
         assert lid.mesh.volume > expected[0] * expected[1] * 2.4
+    elif rule == "counter_form":
+        low, high = expected
+        insert, tool = outputs
+        assert tool.mesh.volume == pytest.approx(inputs[1].mesh.volume, rel=1e-9)
+        assert low < insert.mesh.volume < high
+    elif rule == "loose_pin":
+        diameter, length = expected
+        carrier, pin = outputs
+        assert carrier.mesh.volume == pytest.approx(inputs[0].mesh.volume, rel=1e-9)
+        assert pin.mesh.bounds.size[2] == pytest.approx(length, rel=0.02)
+        assert pin.mesh.bounds.size[0] < diameter
+        assert pin.mesh.is_watertight
+    elif rule == "inlay":
+        before, top = expected
+        carrier, inlay = outputs
+        assert carrier.mesh.volume + inlay.mesh.volume == pytest.approx(before, rel=1e-6)
+        assert 0.0 < inlay.mesh.volume < before
+        assert inlay.mesh.bounds.maximum[2] == pytest.approx(top, abs=1e-6)
     elif rule == "screw_cap":
         assert outputs[1].mesh.volume > 1000.0
         assert any(

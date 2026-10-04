@@ -244,8 +244,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   mit `fan_caps`: die fortgesetzte Fläche (`_continued_cap`), zuletzt der
   Fächer (`_fan_cap`); als Werkzeug mit Kragen (`collared`).
 - **`cone_extent`**/`_oriented_cone` bauen den Kegelstumpf an freier Achse;
-  `convex_hull` näht die Hülle des Netzzwillings, `void_body` die Luft ganz
-  gewählter Schalen. **Wulst**: `torus` als Werkzeug, `defeatured` als Rückweg
+  `convex_hull` näht die Hülle des Netzzwillings, `faceted` ein geschlossenes
+  Netz aus Facetten (um eine Rundung gebogene Schrift, RM-184), `void_body`
+  die Luft ganz gewählter Schalen. **Wulst**: `torus` als Werkzeug, `defeatured` als Rückweg
   auf einer Kopie mit Historie (§21.2), `None`, wo es nicht geht; ein Gewinde
   nicht (`_remove_thread`).
 

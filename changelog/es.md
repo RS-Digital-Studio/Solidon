@@ -34,6 +34,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el informe, «Reconstruir modelo» rehace una pieza importada, también escuadras, gargantas y avellanados, la compara con el original dentro del límite elegido y la aplica en un solo paso.
 - La «Abrazadera con revestimientos» empieza con el material del proyecto en los dos campos de material. Hasta ahora ambos estaban vacíos.
 - La búsqueda de piezas encuentra la «Lengüeta para perfil de aluminio» también como tuerca en T, y su descripción dice en qué se diferencia de una tuerca en T con rosca.
+- Una tapa de «Generar tapa» puede llevar bisagra, impresa en su sitio o con un pasador de «Pasador para taladro», y su collar queda recortado para abrirse sin tropezar.
+- Con «Rebajar contraforma», un inserto recibe alojamientos para herramientas que vuelven a salir en línea recta.
 
 ### Imprimir y entregar al slicer
 
@@ -140,6 +142,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las piezas de una división automática también se numeran en proyectos de versiones anteriores, y un corte eliminado o desactivado ya no cuenta.
 - Un taladro que duplica, desplaza o repite a lo largo de una cara inclinada sigue siendo el mismo taladro en piezas STL y STEP, con las mismas medidas y avisos.
 - Tras «Repetir característica», una copia en una pieza STEP ya no perfora hasta la cara superior, y un taladro STL de facetas gruesas sigue contando como pasante.
+- Una rosca crece o mengua con «Cambiar característica» sin romper la pared, y la rosca contraria de un ajuste roscado cambia con ella.
+- Un par de roscas impresas supera su comprobación de ajuste: ambas roscas indican la medida con la que se construyen, y la comprobación espera la holgura de ambas mitades.
+- Con «Comprobar la trayectoria de montaje», las piezas también pueden girar, o insertarse primero y luego girar como una bayoneta.
+- Para un ajuste, Solidon recorta la misma ventana de ambas piezas como pequeña muestra impresa e indica la holgura.
 
 ### Redondear y achaflanar
 
@@ -171,6 +177,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La entrada «Crear a partir de un boceto …» empieza a dibujar enseguida, el plano de dibujo muestra su origen, y un doble clic en el historial reabre un dibujo en modo de dibujo.
 - Al «Modelar» y en el editor de esqueleto, la barra muestra espesor de pared o voladizo como mapa con leyenda y avisa de un trazo fuera del volumen de impresión. Tras doblar, dice cómo se imprimirá.
 - Una textura aplicada se selecciona entera. El panel de selección ofrece entonces «Modificar textura» y «Quitar textura».
+- El texto sigue un arco o rodea una superficie redondeada, y «Incrustar texto» lo coloca enrasado en su propio color.
 
 ### Generar con IA
 

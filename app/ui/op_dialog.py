@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from app.core import expressions, manual
 from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line, inactive_dependency
-from app.core.registry.surfaces import normal_fields_of
+from app.core.registry.surfaces import chooses_a_centre, normal_fields_of
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
@@ -2824,6 +2824,19 @@ class OperationDialog(QDialog):
         self._couplings.append(follow)
         follow()
 
+    def _centre_in_use(self) -> bool:
+        """Ob die Drehmitte gerade gilt — die Bedingung ihres Feldes, nicht ein Name.
+
+        Ein lineares Muster und ein gerader Fügeweg drehen nicht; Spiegeln
+        braucht seine Mitte immer. Gefragt wird ``cx``, wie das Schema es sagt
+        (``ParamSpec.depends_on``).
+        """
+        from app.core.registry import inactive_dependency
+
+        schema = self.spec.params.spec()
+        entry = next(item for item in schema if item.name == "cx")
+        return inactive_dependency(entry, schema, self.values()) is None
+
     def _install_rotation_centre(self, given: Mapping[str, Any]) -> None:
         """Körper, Merkmal und Ursprung werden zu einem gespeicherten Punkt (RM-402)."""
         from app.core.geom.transform import reference_point
@@ -2834,7 +2847,7 @@ class OperationDialog(QDialog):
             self._centre_row = None
             self.centre_mode = None
             self.centre_target = None
-        if self.spec.name not in {"pattern", "pattern_feature", "mirror_object"} or not all(
+        if not chooses_a_centre(self.spec) or not all(
             name in self._editors for name in ("cx", "cy", "cz")
         ):
             return
@@ -2891,7 +2904,7 @@ class OperationDialog(QDialog):
         mode.setCurrentIndex(mode.findData(default))
 
         def follow() -> None:
-            active = self.spec.name == "mirror_object" or self.values().get("kind") != "linear"
+            active = self._centre_in_use()
             self._front.setRowVisible(row, active)
             for name in ("cx", "cy", "cz"):
                 editor = self._editors[name]
