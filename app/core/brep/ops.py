@@ -198,7 +198,10 @@ class BrepCylinderParams(PositionedPrimitiveParams):
     # **Der Vorteil gehört in den Satz, nicht in die Abkürzung.** „B-Rep" sagt
     # einem Kunden nichts; was er wissen will, ist, was er damit kann. Der
     # Quader nebenan sagte es, der Zylinder nicht.
-    doc=_("Legt einen Zylinder auf dem Druckbett oder auf einer gewählten Fläche an."),
+    doc=_(
+        "Legt einen Zylinder mit echten Kanten auf dem Druckbett oder auf einer gewählten "
+        "Fläche an."
+    ),
 )
 def create_brep_cylinder(ctx: OpContext) -> OpResult:
     params = cast(BrepCylinderParams, ctx.params)
@@ -258,7 +261,8 @@ class BrepConeParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt einen Kegel oder Kegelstumpf auf dem Druckbett oder auf einer gewählten Fläche an."
+        "Legt einen Kegel oder Kegelstumpf mit echter Kegelfläche auf dem Druckbett oder auf "
+        "einer gewählten Fläche an."
     ),
 )
 def create_brep_cone(ctx: OpContext) -> OpResult:
@@ -314,7 +318,10 @@ class BrepSphereParams(PositionedPrimitiveParams):
     params=BrepSphereParams,
     consumes=0,
     produces=1,
-    doc=_("Legt eine Kugel auf dem Druckbett oder auf einer gewählten Fläche an."),
+    doc=_(
+        "Legt eine Kugel mit echter Kugelfläche auf dem Druckbett oder auf einer gewählten "
+        "Fläche an."
+    ),
 )
 def create_brep_sphere(ctx: OpContext) -> OpResult:
     params = cast(BrepSphereParams, ctx.params)
@@ -363,7 +370,8 @@ class BrepTorusParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt einen geschlossenen runden Ring auf dem Druckbett oder auf einer gewählten Fläche an."
+        "Legt einen geschlossenen runden Ring mit echter Ringfläche auf dem Druckbett oder auf "
+        "einer gewählten Fläche an."
     ),
 )
 def create_brep_torus(ctx: OpContext) -> OpResult:
@@ -446,8 +454,8 @@ class BrepTubeParams(PositionedPrimitiveParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt ein Rohr auf dem Druckbett oder auf einer gewählten Fläche an, bemaßt über die "
-        "Wandstärke oder den Innendurchmesser."
+        "Legt ein Rohr mit echten Kreisflächen auf dem Druckbett oder auf einer gewählten "
+        "Fläche an, bemaßt über die Wandstärke oder den Innendurchmesser."
     ),
 )
 def create_brep_tube(ctx: OpContext) -> OpResult:

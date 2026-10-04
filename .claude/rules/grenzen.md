@@ -260,7 +260,11 @@ Der Kunde sucht das Substantiv, die Palette sortiert nach Titel, und ein Wort
 davor läse sich wie eine Qualitätsstufe. Wo der versteckte steht, sagt
 `TWIN_WAYS` („über die Befehlspalette“ bzw. „im selben Dialog — der Körper
 entscheidet“); im Menü steht er nicht (`hidden_from_the_menu`), und weggelassen
-wird er nur, wenn sein Partner angeboten wird.
+wird er nur, wenn sein Partner angeboten wird. **Was die beiden trennt, ist der
+erste Satz ihres `doc`** — die Palette zeigt ihn unter dem gleichen Titel, beim
+exakten Erzeuger mit dem Vorteil („mit echten Kanten“).
+`tests/test_ui.py::test_twins_differ_in_the_sentence_the_palette_shows` prüft
+jedes Paar in jeder Sprache ohne Fenster.
 
 **Es gibt keinen Kernwahl-Haken** (Entscheidung Robert; CAD-Konzept Abschnitt
 10.1): Ein Grundkörper entsteht exakt, wo der exakte Kern da ist

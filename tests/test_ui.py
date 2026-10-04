@@ -17946,7 +17946,7 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
 
 
 def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
-    """Vier Paare tragen denselben Titel; die Palette zeigt beide mit ihrem Satz.
+    """Jedes Zwillingspaar trägt denselben Titel; die Palette zeigt beide mit ihrem Satz.
 
     Wer „quader" tippte, sah zweimal „Quader anlegen", und der Unterschied
     stand nur im Tooltip (Review 02.09.2026).
@@ -17967,6 +17967,34 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert len(both) >= 2, (hidden, visible, rows[:6])
         assert len(set(both)) == len(both), both
         assert all(chr(10) in row for row in both), both
+
+
+def test_twins_differ_in_the_sentence_the_palette_shows() -> None:
+    """Ein Zwillingspaar trennt nur sein erster Satz — in jeder Sprache.
+
+    Beide Partner heißen gleich (``grenzen.md``, „Zwillinge“), die Palette
+    zeigt unter dem Titel ``first_sentence`` des ``doc``. Fünf Grundkörper
+    standen zum Release 0.5.2 wortgleich da, nachdem ihre exakten Sätze den
+    Vorteil verloren hatten; gesehen hat es nur der Fenstertest oben, der
+    erst beim Release läuft. Diese Prüfung braucht kein Fenster und liest alle
+    Paare in beiden Kernlagen (``PRIMITIVE_TWINS`` und ``menu_twins``).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import PRIMITIVE_TWINS, menu_twins
+    from app.i18n.catalog import available_languages, read_catalog
+    from app.ui.command_palette import first_sentence
+
+    load_operations()
+    pairs = {tuple(sorted(pair)) for pair in (*PRIMITIVE_TWINS, *menu_twins().items())}
+    assert len(pairs) >= len(PRIMITIVE_TWINS) + 2, pairs
+    for language in available_languages():
+        catalog = read_catalog(language)
+        for one, other in sorted(pairs):
+            shown = [
+                first_sentence(catalog.get(str(spec.doc), str(spec.doc))).strip()
+                for spec in (REGISTRY.get(one), REGISTRY.get(other))
+            ]
+            assert shown[0] != shown[1], (language, one, other, shown[0])
 
 
 def test_the_palette_finds_every_setting_behind_the_closed_section(
