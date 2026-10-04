@@ -2229,7 +2229,10 @@ def test_automatic_adhesion_rows_follow_the_selected_slicer_family(
     def visible_paths() -> set[str]:
         return {path for path in adhesion_paths if not dialog._labels[path].isHidden()}
 
-    assert visible_paths() == {"adhesion.brim_width"}
+    # Der Auto-Brim der Orca-Familie zeigt Breite und Abstand zum Teil: Der
+    # Abstand gehört seit RM-318 zum Brim (anliegender Brim am schlanken Teil).
+    brim = {"adhesion.brim_width", "adhesion.brim_gap"}
+    assert visible_paths() == brim
     assert dialog.settings.adhesion.skirt_loops == 0
     assert skirt_loops.value() == 0
 
@@ -2262,7 +2265,7 @@ def test_automatic_adhesion_rows_follow_the_selected_slicer_family(
     assert handover.values_for(dialog.settings, dialog.session.profile, "prusa")["skirts"] == "0"
 
     dialog._slicer_chosen(1)
-    assert visible_paths() == {"adhesion.brim_width"}
+    assert visible_paths() == brim
     assert dialog._search_requirement_target == target
     assert not dialog.search_requirement.isHidden()
 
@@ -4535,10 +4538,12 @@ def test_the_chosen_slot_profile_reaches_the_run(
 
     mesh = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     mesh.apply_translation((0.0, 0.0, 10.0))
+    # Beide Slots tragen Flächen: Ein deklarierter Slot ohne Dreieck ist eine
+    # alte unbenutzte Spule und geht nicht mehr in die Übergabe (e06d57cef).
     slotted = SceneObject(
         id="A",
         name="A",
-        mesh=MeshData.of(mesh),
+        mesh=MeshData(mesh, slots=(0,) * 6 + (1,) * 6),
         material_slots=[
             MaterialSlot(index=0, name="Gehäuse"),
             MaterialSlot(index=1, name="Schrift"),
@@ -5186,6 +5191,11 @@ def test_no_profiles_found_says_what_that_means(dialog: PrintSettingsDialog) -> 
     assert not dialog.machine_choice.isEnabled()
 
 
+#: Der Slicer, aus dem die Profile der Merkfälle stammen — ein anderer als der
+#: vermerkte ``C:/Anderswo/OrcaSlicer.exe``.
+_FOUND_SLICER = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
+
+
 def test_a_remembered_choice_wins_over_the_match(qt_app: QApplication) -> None:
     """Wer einmal abgewichen ist, meinte es so."""
     session = Session()
@@ -5200,10 +5210,37 @@ def test_a_remembered_choice_wins_over_the_match(qt_app: QApplication) -> None:
     other = _profile("Etwas anderes", "machine", printer_model="Etwas anderes", nozzle=0.4)
     settings.slicer_machine_profile = str(other.path)
     dialog = PrintSettingsDialog(session, settings)
+    # Profile kommen nur aus einem gefundenen Slicer; ohne Programm gilt keine
+    # gemerkte Wahl (RM-289 B11, ``_remembered_profiles_match``).
+    dialog._slicer_path = _FOUND_SLICER
 
     dialog._profiles_found([machine, other])
 
     assert dialog.machine_choice.currentData() == str(other.path)
+
+
+def test_a_remembered_machine_waits_for_its_slicer(qt_app: QApplication) -> None:
+    """Ohne gefundenes Programm gilt die gemerkte Maschine nicht — der
+    Bestand, aus dem sie stammt, ist nicht da (RM-289 B11)."""
+    session = Session()
+    session.project.document.printer = "centauri-carbon-2"
+    settings = UiSettings()
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+    )
+    other = _profile("Etwas anderes", "machine", printer_model="Etwas anderes", nozzle=0.4)
+    settings.slicer_machine_profile = str(other.path)
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        dialog._slicer_path = None
+        dialog._profiles_found([machine, other])
+
+        assert dialog.machine_choice.currentData() == str(machine.path)
+    finally:
+        dialog.deleteLater()
 
 
 @pytest.mark.parametrize(
@@ -5237,6 +5274,7 @@ def test_a_remembered_machine_belongs_to_its_printer_and_slicer(
     settings.slicer_profile_slicer = slicer
     dialog = PrintSettingsDialog(session, settings)
     try:
+        dialog._slicer_path = _FOUND_SLICER
         dialog._profiles_found([machine, other])
 
         expected = other if wins == "gemerkt" else machine
@@ -7032,11 +7070,13 @@ def test_the_search_also_knows_the_name_from_the_slicer(
 
     # Ein Schlüssel darf nicht das halbe Fenster treffen — dieselbe Grenze, an
     # der die Einheit „mm" gescheitert ist (22 von 56). Gemessen ist der
-    # breiteste `support_material` mit sechs.
+    # breiteste `support_material` mit sieben: sechs Stützzeilen und die
+    # Bahnbreite, die seit den Rollenbreiten auch
+    # `support_material_extrusion_width` schreibt (3e501baaf).
     breiteste = max(
         len(dialog.search_hits(schluessel)) for feld in FIELDS for schluessel in keys_for(feld.path)
     )
-    assert breiteste <= 6, f"ein Schlüssel trifft {breiteste} von {len(FIELDS)} Zeilen"
+    assert breiteste <= 7, f"ein Schlüssel trifft {breiteste} von {len(FIELDS)} Zeilen"
 
     # Und die Abdeckung: Ohne sie wäre der Test grün, wenn die Tabelle
     # zusammenschrumpft — ein Filter über eine leere Menge findet nie etwas.
@@ -7104,12 +7144,14 @@ def test_the_search_walks_through_its_hits_and_counts_them(
     """
     dialog = PrintSettingsDialog(session, UiSettings())
 
-    hits = dialog.search_hits("Linienbreite")
+    # „Bahnbreite“ ist der Feldname in Einstellungen, Befunden und Handbuch
+    # (oberflaeche.md); er steht in mehreren Zeilen.
+    hits = dialog.search_hits("Bahnbreite")
     assert len(hits) >= 2, hits
 
-    dialog.jump_to("Linienbreite")
+    dialog.jump_to("Bahnbreite")
     first = dialog.highlighted()
-    dialog.jump_to("Linienbreite")
+    dialog.jump_to("Bahnbreite")
     second = dialog.highlighted()
 
     assert first != second, "das zweite Drücken führt weiter"
@@ -8221,15 +8263,28 @@ def _print_advice_dialog(qt_app, objects, *, settings=None):
 
 
 def _print_advice_cube(name="Würfel", *, plate=0, slots=()):
-    """Kleine vollständige Testgeometrie für den Druckdialog."""
+    """Kleine vollständige Testgeometrie für den Druckdialog.
+
+    Mehrere Slots bekommen je eigene Dreiecke: Ein deklarierter Slot ohne
+    Fläche ist eine alte unbenutzte Spule und erscheint weder in der Übergabe
+    noch als Filamentzeile (e06d57cef).
+    """
     import trimesh
 
     from app.core.geom.mesh import MeshData
 
     mesh = trimesh.creation.box((10, 10, 10))
     mesh.apply_translation((0, 0, 5))
+    painted: tuple[int, ...] = ()
+    if len(slots) > 1:
+        indices = [int(slot.index) for slot in slots]
+        painted = tuple(indices[face % len(indices)] for face in range(len(mesh.faces)))
     return SceneObject(
-        id=name, name=name, mesh=MeshData.of(mesh), plate=plate, material_slots=list(slots)
+        id=name,
+        name=name,
+        mesh=MeshData.of(mesh, painted),
+        plate=plate,
+        material_slots=list(slots),
     )
 
 
