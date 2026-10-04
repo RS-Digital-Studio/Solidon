@@ -344,6 +344,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-ein-kunde-beim-öffnen-der-beispiele-sieht-23082026).
 
+  **Teilstand 04.10.2026 (Hänger, nach 0.5.2 zu beheben, Entscheidung Robert):** Die Anwendung stand
+  einmal still, als der Speicherbereiniger im Arbeiter der Druckbefunde (`print_findings_flow` →
+  `slice_body`) ein Qt-Objekt mit Kindern zerstörte: Dessen Destruktor hielt Qts Verbindungssperre
+  und wartete auf den GIL, während der Hauptfaden mit dem GIL in `overlay._move` ein Signal
+  verbinden wollte (`py-spy dump --native`, Beleg
+  `F:\solidon-review-reports\claude-2026-10-04\rm184-gruppen\haenger-gc-im-arbeiter.txt`). Betrifft
+  jedes Fenster mit Arbeitern; `leash.undisturbed` schützt nur einzelne Stellen. Zu entscheiden und
+  zu bauen: Speicherbereinigung von Qt-Objekten nur im Hauptfaden. Der Fenstertest
+  `test_a_case_runs_in_its_own_process_from_inventory_to_report` kann daran rot werden.
+
 <a id="rm-050"></a>
 
 - [~] **RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen.** pygfx ist der einzige
