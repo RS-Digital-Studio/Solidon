@@ -11,25 +11,31 @@ Drucker, für den sein Hersteller ihn baut) oder ``alle`` (je Slicer jeder
 Drucker, den er mit einem Herstellerprofil bedient; PrusaSlicer und Cura jeder
 FDM-Drucker, weil Solidon dort seinen eigenen Satz schreibt).
 
-Der Weg ist der des Druckdialogs (``print_settings_dialog``):
+Der Weg ist der des Druckdialogs (``print_settings_dialog``), und zwar mit
+dessen eigenem Code, nicht nachgebaut — ein Nachbau lief seit 27.09. dreimal
+auseinander (Stufe F, Rat je Spule, Zeitgegenprobe):
 
 1. Vorwahl wie der Dialog: Maschine, Standardprozess und Filament des
-   Herstellers (``slicer_profiles.match``/``match_filament``).
+   Herstellers (``slicer_profiles.match``/``match_filament``), danach der
+   Prozess der Stufe (``manufacturer.for_stage``, Entscheidung I).
 2. Grundlage ``manufacturer.base_settings`` und die wirksamen Werte
    ``manufacturer.effective`` — ein neues Projekt hat keine eigene Wahl.
-3. Vorschläge wie ``_AdviceWorker._calculate``: je Körper und Spule
-   ``settings_for_slot``, Winkel und Wand des strengsten Materials,
-   ``slice_body``, ``advise.advise``, ``advise.combine``. Filamentvorschläge
-   gelten hier der ganzen Platte (der Dialog legt sie auf die Spule; bei einer
-   Spule ist das dasselbe).
-4. Je Platte ``_prepare_plate`` und ``_SliceWorker``: ``arrangement_holds``,
-   ``write_assembly`` mit Platte, ``handover.slice_model``.
+3. Vorschläge über ``_AdviceWorker._calculate`` selbst (je Körper und Spule,
+   ``handover.slot_processes``), gezeigt wie ``_current_advice``
+   (Volumenstromdeckel, Kammer, ``slicer_keys.takes``/``offered`` je Programm).
+   Filamentvorschläge gelten hier der ganzen Platte (der Dialog legt sie auf
+   die Spule; bei einer Spule ist das dasselbe).
+4. Je Platte ``_prepare_plate`` mit Zeitgegenprobe und der Aufruf aus
+   ``_SliceWorker`` (``handover.slice_model`` mit Netzen und Werkzeugen),
+   danach ``plates_findings`` wie das Hauptfenster.
 
 Varianten: ``standard`` (ohne Vorschläge), ``vorschlaege`` (alle übernommen) und
 ``stuetzen_auto`` (nur wenn Solidon Stützen vorschlägt: Stützen an, Art und
-Grenze vom Profil — das Urteil des Slicers zum Vergleich).
+Grenze vom Profil — das Urteil des Slicers zum Vergleich). Je Körper steht
+dazu, auf welchem Weg ``advise.support_need`` Stützen verlangt.
 
-Gemessen je Platte: Ergebnis und Befunde, Zeit und Material, was der G-Code tut
+Gemessen je Platte: Ergebnis und Befunde, Zeit und Material, die Zeit ab der
+ersten Schicht gegen die Schichtanalyse (RM-465), was der G-Code tut
 (``gcode_lesen``), das Tempo der ersten Schicht je Bahnart, und in der
 Orca-Familie der ganze Konfigurationsblock gegen die aufgelöste Kette aus
 Maschine, Prozess und Filament des Herstellers. Wo Creality Print über die
@@ -87,10 +93,12 @@ load_operations()
 
 import gcode_lesen  # noqa: E402
 
+# Der Weg des Druckdialogs ohne Fenster: Arbeiter und Plattenvorbereitung sind
+# Kerncode in Qt-Hüllen und brauchen nur eine Anwendungsinstanz.
+from PySide6.QtCore import QCoreApplication  # noqa: E402
+
 from app.core.errors import AppError  # noqa: E402
-from app.core.export import handover, manufacturer, slicer_profiles, threemf  # noqa: E402
-from app.core.export.writer import arrangement_holds, write_assembly  # noqa: E402
-from app.core.geom.attributes import used_slots  # noqa: E402
+from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles  # noqa: E402
 from app.core.geom.mesh import as_mesh_data  # noqa: E402
 from app.core.ingest.loader import detect_unit, read_local_payload, read_model  # noqa: E402
 from app.core.ingest.plan import import_plan, names_in_use  # noqa: E402
@@ -103,10 +111,20 @@ from app.core.scene.project import (  # noqa: E402
     next_source_id,
 )
 from app.core.slice import advise  # noqa: E402
-from app.core.slice.analysis import slice_body  # noqa: E402
+from app.core.slice.estimate import plates_findings  # noqa: E402
 from app.core.types import Source  # noqa: E402
+from app.ui.print_settings_dialog import (  # noqa: E402
+    _AdviceWorker,
+    _PlateJob,
+    _prepare_plate,
+)
 
+QT = QCoreApplication.instance() or QCoreApplication([])
 MATERIAL = "pla"
+#: Weniger Stützbahn als das in Metern heißt im Lauf ``stuetzen_auto``: Der
+#: Slicer stützt nichts Nennenswertes (ein halber Meter ist ein Stützfleck von
+#: rund einem Quadratzentimeter über wenige Schichten).
+SUPPORT_WORTH_METRES = 0.5
 SLICE_TIMEOUT = float(os.environ.get("GESAMT_ZEITLIMIT", str(45 * 60)))
 FILAMENT_GROUPS = ("temperature", "cooling", "retraction", "filament")
 
@@ -173,7 +191,61 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
         {f"{f.severity}:{f.code}" for f in result.scene.report.findings if f.severity != "info"}
     )
     LOADED["turned"] = turned
+    LOADED["project"] = project
+    LOADED["sources"] = sources
     return objects, findings
+
+
+def arranged_for(objects: list[Any], profile: Any, settings: Any) -> tuple[list[Any], dict]:
+    """Die Körper so, wie der Kunde sie nach der Absage „keine Anordnung“ hätte.
+
+    Passen die Teile einer Platte nicht auf das Bett dieses Druckers, sagt die
+    Übergabe vor dem Slicer ab und bietet *Auf dem Bett anordnen* an
+    (``handover``/``writer``, ``ARRANGE_ON_BED``). Der Knopf legt die ganze
+    Szene über Platten aus, mit dem Abstand aus Haftung und Stützen
+    (``MainWindow._arrange_after_error``, ``_spacing_for``). Ohne diesen
+    Schritt maß die Matrix an solchen Modellen nur die Absage.
+    """
+    from copy import deepcopy
+
+    from app.core.export.writer import clearance_margin
+    from app.core.geom.prepare import arrange_on_bed
+    from app.core.registry import REGISTRY
+
+    plates = sorted({int(getattr(o, "plate", 0) or 0) for o in objects})
+    crowded = []
+    for plate in plates:
+        meshes = [as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate]
+        if len(meshes) < 2:
+            continue
+        planned = arrange_on_bed(meshes, profile)
+        if any(f.code == "arrange.needs_more_plates" for f in planned.findings):
+            crowded.append(plate)
+    if not crowded:
+        return objects, {}
+    spec = REGISTRY.get("arrange_bed")
+    default = next((e.default for e in spec.params.spec() if e.name == "spacing"), 0.0)
+    spacing = max(float(default or 0.0), 2.0 * clearance_margin(settings))
+    project = LOADED["project"]
+    document = deepcopy(project.document)  # type: ignore[attr-defined]
+    History(document).apply(
+        spec.title,
+        [
+            OperationDraft(
+                op=spec.name, inputs=tuple(o.id for o in objects), params={"spacing": spacing}
+            )
+        ],
+    )
+    scene_profile = profiles.scene_profile(profile.printer.id, MATERIAL)
+    result = evaluate(document, scene_profile, sources=LOADED["sources"])
+    moved = [
+        entry for entry in result.scene.objects.values() if as_mesh_data(entry.mesh).triangle_count
+    ]
+    return moved, {
+        "crowded_plates": crowded,
+        "spacing": round(spacing, 2),
+        "plates_after": sorted({int(getattr(o, "plate", 0) or 0) for o in moved}),
+    }
 
 
 def narrow_webs(objects: list[Any]) -> dict[str, Any]:
@@ -241,10 +313,9 @@ def prepared(slicer: str, profile: Any) -> tuple[Any, dict[str, Any]]:
     if not exe.exists():
         return None, {"skip": "Slicer nicht installiert"}
     setup = handover.detect(exe)
-    info: dict[str, Any] = {"flavour": setup.flavour}
-    # PrusaSlicer wählt wie die Orca-Familie, sobald der Code die Prusa-Kette kennt
-    # (Stufe C); ein älterer Stand bekommt es wie bisher ohne Profile.
-    on_bundle = setup.flavour == "prusa" and hasattr(manufacturer, "prusa_chain")
+    info: dict[str, Any] = {"flavour": setup.flavour, "program": slicer_keys.program_of(exe)}
+    # PrusaSlicer wählt wie die Orca-Familie (Stufe C).
+    on_bundle = setup.flavour == "prusa"
     if setup.flavour != "orca" and not on_bundle:
         return setup, info
     machine, process = slicer_profiles.match(
@@ -259,13 +330,19 @@ def prepared(slicer: str, profile: Any) -> tuple[Any, dict[str, Any]]:
     filament = slicer_profiles.match_filament(
         found_profiles(exe, setup.flavour, ("filament",)), machine, "PLA", roots
     )
-    identity = getattr(slicer_profiles, "identity", lambda entry: str(entry.path))
     setup = replace(
         setup,
         machine_profile=machine.name,
         base_process=process.name if process else "",
-        base_filament=identity(filament) if filament else "",
+        base_filament=slicer_profiles.identity(filament) if filament else "",
     )
+    # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), wie im
+    # Grundlagen- und Exportarbeiter des Hauptfensters; an „Standard“ bleibt
+    # es der Standardprozess, die Kette unten liest dann denselben.
+    staged = manufacturer.for_stage(setup, profile, print_settings.resolve(profile).quality)
+    if staged is not None and staged.base_process != setup.base_process:
+        info["stage_process"] = staged.base_process
+        setup = staged
     info.update(
         machine=machine.name,
         process=process.name if process else "",
@@ -425,161 +502,170 @@ def project_block(threemf_path: Path) -> dict[str, str]:
 # --- Vorschläge wie der Druckdialog ------------------------------------------------------
 
 
-def _for_process(profile: Any, settings: Any) -> Any:
-    """Wie der Druckdialog: mit den wirksamen Einstellungen (Stufe L), wo der Code das kennt."""
-    try:
-        return profiles.for_process(profile, settings, effective=True)
-    except TypeError:
-        return profiles.for_process(profile, settings)
+def advised(objects: list[Any], settings: Any, profile: Any, setup: Any) -> tuple[list[Any], dict]:
+    """Der Rat des Druckdialogs, gerechnet von dessen Arbeiter (``_AdviceWorker._calculate``).
+
+    Synchron im Hauptthread: Der Arbeiter ist ein ``QThread``, rechnet aber in
+    ``_calculate`` reinen Kerncode und meldet über ``done`` (Rat, Messungen je
+    Körper). Kein Nachbau mehr — der lief dreimal auseinander.
+    """
+    worker = _AdviceWorker(
+        tuple(objects),
+        settings,
+        profile,
+        setup,
+        {},
+        (),
+        (),
+        {},
+        flavour=setup.flavour,
+    )
+    answer: dict[str, Any] = {}
+
+    def done(entries: Any, results: Any) -> None:
+        answer["entries"], answer["results"] = list(entries), dict(results)
+
+    def failed(problem: Any) -> None:
+        answer["failed"] = problem
+
+    worker.done.connect(done)
+    worker.failed.connect(failed)
+    worker._calculate()
+    if "failed" in answer:
+        raise answer["failed"]
+    return answer["entries"], answer["results"]
 
 
-def advised(
-    objects: list[Any], settings: Any, profile: Any, setup: Any, cache: dict
-) -> tuple[list[Any], list[Any]]:
-    """``_AdviceWorker._calculate``: je Körper und Spule, dann zusammengeführt."""
-    common: list[tuple[Any, list[Any]]] = []
-    materials: dict[Any, tuple[Any, list[tuple[Any, list[Any]]]]] = {}
-    for body in objects:
-        mesh = as_mesh_data(body.mesh)
-        own_profile = profiles.for_object(profile, body)
-        slots = threemf.assembly_slots(
-            threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
-        )
-        present = set(used_slots(mesh))
-        processes: list[tuple[Any, Any, Any]] = []
-        for slot in slots:
-            if slot.index not in present:
-                continue
-            material = profiles.material_id_for_type(slot.material_type or "")
-            material_profile = (
-                replace(own_profile, material=profiles.material(material))
-                if material
-                else own_profile
-            )
-            effective = handover.settings_for_slot(settings, profile, slot, setup)
-            processes.append((slot, _for_process(material_profile, effective), effective))
-        fallback = _for_process(own_profile, settings)
-        angle = min(
-            (p.overhang_limit_degrees for _s, p, _e in processes),
-            default=fallback.overhang_limit_degrees,
-        )
-        wall = max(
-            (p.minimum_wall_thickness for _s, p, _e in processes),
-            default=fallback.minimum_wall_thickness,
-        )
-        key = (
-            body.id,
-            settings.layers.layer_height,
-            settings.layers.first_layer_height,
-            round(angle, 3),
-            round(wall, 3),
-        )
-        if key not in cache:
-            cache[key] = slice_body(
-                mesh,
-                settings.layers.layer_height,
-                first_layer_height=settings.layers.first_layer_height,
-                overhang_angle=angle,
-                bridge_from=wall,
-                support_volume=False,
-            )
-        result = cache[key]
-        for slot, material_profile, effective in processes:
-            # Mit der Slicerfamilie wie der Dialog (``_AdviceWorker``): Über Orcas
-            # Auto-Brim schlägt Solidon keinen Brim vor (83a8e3de1).
-            entries = advise.advise(
-                effective, material_profile, result, bounds=mesh.bounds, flavour=setup.flavour
-            )
-            common.append(
-                (effective, [e for e in entries if e.path.partition(".")[0] not in FILAMENT_GROUPS])
-            )
-            identity = threemf.slot_identity(slot)
-            materials.setdefault(identity, (slot, []))[1].append(
-                (effective, [e for e in entries if e.path.partition(".")[0] in FILAMENT_GROUPS])
-            )
-    plate_wide = advise.combine(settings, common)
-    per_spool: list[Any] = []
-    for _slot, groups in materials.values():
-        per_spool.extend(advise.combine(groups[0][0], groups))
-    return plate_wide, per_spool
+def support_ways(results: dict) -> dict[str, Any]:
+    """Je Körper, auf welchem Weg ``advise.support_need`` Stützen verlangt.
+
+    Für die Gesamtabnahme „Stützbedarf gegen das Urteil des Herstellers“: Der
+    Lauf ``stuetzen_auto`` zeigt, was der Slicer stützt, das hier, warum Solidon
+    es verlangt.
+    """
+    from app.core.slice.analysis import largest_overhang_patch, total_overhang
+
+    ways: dict[str, Any] = {}
+    for body_id, (angle, wall, result) in results.items():
+        need = advise.support_need(result)
+        bridges = [
+            round(layer.bridge_width, 1)
+            for index, layer in enumerate(result.layers)
+            if layer.bridge_width > advise.SPAN_INTERESTING
+            and index not in need.model.channel_layers
+        ]
+        ways[str(body_id)] = {
+            "needed": need.needed,
+            "angle": angle,
+            "wall": wall,
+            "island_layers": len(need.islands),
+            "patch": round(need.patch, 1),
+            "overhang": round(need.overhang, 1),
+            "patch_all": round(largest_overhang_patch(result), 1),
+            "overhang_all": round(total_overhang(result), 1),
+            "bridges_over": len(bridges),
+            "bridge_max": max(bridges, default=0.0),
+        }
+    return ways
 
 
-def offered(entry: Any, flavour: str) -> bool:
+def offered(entries: list[Any], setup: Any, info: dict[str, Any], foundation: Any) -> list[Any]:
     """``PrintSettingsDialog._current_advice``: nur, was beim Slicer ankommt und dort etwas ändert."""
-    from app.core.export import slicer_keys
-
-    caps = getattr(slicer_keys, "caps_volumetric_speed", None)
-    limits = getattr(advise, "limits_flow", None)
-    if caps is not None and limits is not None and caps(flavour) and limits(entry):
-        return False
-    return slicer_keys.takes(flavour, entry.path)  # type: ignore[arg-type]
+    flavour = setup.flavour
+    caps = slicer_keys.caps_volumetric_speed(flavour)
+    program = str(info.get("program", ""))
+    chamber_unavailable = (
+        flavour == "orca" and manufacturer.chamber_limitation(foundation) is not None
+    )
+    shown = [
+        entry
+        for entry in entries
+        if not (caps and advise.limits_flow(entry))
+        and not (entry.path == "temperature.chamber" and chamber_unavailable)
+        and slicer_keys.takes(flavour, entry.path, program)
+    ]
+    return slicer_keys.offered(shown, program)
 
 
 # --- Eine Platte in den Slicer ----------------------------------------------------------------
 
 
 def plate_run(
-    on_plate: list[Any],
+    objects: list[Any],
     plate: int,
+    plates: tuple[int, ...],
     settings: Any,
     profile: Any,
     setup: Any,
     folder: Path,
     name: str,
 ) -> dict[str, Any]:
-    """``_prepare_plate`` und ``_SliceWorker`` für eine Platte."""
+    """``_prepare_plate`` und der Aufruf aus ``_SliceWorker`` für eine Platte.
+
+    Mit der Zeitgegenprobe des Dialogs (``with_comparison``): Die Schätzung aus
+    der Schichtanalyse steht neben der Zeit der Druckdatei ab der ersten
+    Schicht, und ``plates_findings`` sagt, was das Hauptfenster melden würde.
+    """
     folder.mkdir(parents=True, exist_ok=True)
+    on_plate = [o for o in objects if int(getattr(o, "plate", 0) or 0) == plate]
     row: dict[str, Any] = {"plate": plate, "bodies": len(on_plate)}
     started = time.perf_counter()
-    parts = [
-        threemf.AssemblyPart(mesh=as_mesh_data(o.mesh), slots=threemf.slots_for_object(o))
-        for o in on_plate
-    ]
-    slots = threemf.merge_slots(parts)
-    chosen = tuple("" for _ in slots)
-    local = replace(settings, slot_profiles=chosen)
-    keep = arrangement_holds([as_mesh_data(o.mesh) for o in on_plate], profile)
-    row["keep_arrangement"] = keep
+    job = _PlateJob(
+        objects=tuple(objects),
+        plates=plates,
+        folder=folder,
+        name=name,
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+        with_comparison=True,
+    )
     try:
-        written, findings = write_assembly(
-            on_plate,
-            folder,
-            project_name=name,
-            profile=profile,
-            plate=plate,
-            settings=local,
-            flavour=setup.flavour,
-            place_on_bed=keep,
-            setup=setup,
-        )
-        row["written"] = str(written)
+        run = _prepare_plate(job, plate)
+        row["keep_arrangement"] = run.keep_arrangement
+        row["written"] = str(run.model)
         row["export_findings"] = sorted(
-            {f"{f.severity}:{f.code}" for f in findings if f.severity != "info"}
+            {f"{f.severity}:{f.code}" for f in run.findings if f.severity != "info"}
         )
         outcome = handover.slice_model(
-            [written],
+            [run.model],
             settings,
             profile,
             setup,
             output_dir=folder,
             timeout=SLICE_TIMEOUT,
-            keep_arrangement=keep,
-            slots=handover.with_slot_profiles(slots, chosen),
-            model_height=max((as_mesh_data(o.mesh).bounds.size[2] for o in on_plate), default=None),
-            expected_tools=threemf.tools_in_use(parts),
+            keep_arrangement=run.keep_arrangement,
+            slots=run.slots,
+            model_height=run.model_height,
+            model_meshes=run.meshes,
+            expected_tools=run.used_tools,
         )
+        findings = [*run.findings, *outcome.findings]
+        if run.comparison is not None:
+            findings += plates_findings(
+                [run.comparison],
+                [outcome.metrics],
+                [any(f.code == "slicer.arranged_itself" for f in outcome.findings)],
+            )
         metrics = outcome.metrics
         row.update(
             ok=True,
             gcode=str(outcome.gcode_path),
             print_minutes=round((metrics.print_seconds or 0) / 60.0, 1),
+            printing_minutes=round(metrics.printing_seconds / 60.0, 1)
+            if metrics.printing_seconds
+            else None,
+            estimated_minutes=round(run.comparison.seconds / 60.0, 1)
+            if run.comparison is not None and run.comparison.seconds
+            else None,
             filament_g=metrics.filament_grams,
             slice_findings=sorted(
-                {f"{f.severity}:{f.code}" for f in outcome.findings if f.severity != "info"}
+                {f"{f.severity}:{f.code}" for f in findings if f.severity != "info"}
             ),
             warnings=[
                 {"code": f.code, "text": str(f.message)[:240]}
-                for f in [*findings, *outcome.findings]
+                for f in findings
                 if f.severity in ("warning", "error")
             ][:12],
         )
@@ -589,6 +675,7 @@ def plate_run(
             error=type(problem).__name__,
             title=str(getattr(problem, "title", ""))[:160],
             detail=str(problem)[:400],
+            constraint=str(problem.values.get("constraint", "")),
             suggestions=[
                 str(getattr(s, "label", s))[:60] for s in getattr(problem, "suggestions", ())
             ],
@@ -807,6 +894,10 @@ def flags_for(
         if row.get("start_purge_mm", 0) < 1:
             found.append(f"{vendor}keine Spüllinie")
     share = row.get("first_layer_support_share", 0)
+    if variant == "stuetzen_auto" and (row.get("support_m") or 0.0) < SUPPORT_WORTH_METRES:
+        # Solidon verlangt Stützen, der Slicer findet mit seiner eigenen Schwelle
+        # nichts zu stützen — das Urteil des Herstellers widerspricht (Paket 3).
+        found.append(f"Slicer stützt nicht ({row.get('support_m') or 0.0:.2f} m)")
     if base is not None and base.get("ok"):
         if share > 0.15 and base.get("first_layer_support_share", 0) < 0.05:
             found.append(f"Stütze in Schicht 1 ({share:.0%})")
@@ -845,31 +936,35 @@ def significant(flags: list[str]) -> bool:
 
 
 def picture(rows: list[tuple[str, dict[str, Any]]], target: Path, bed: tuple[float, float]) -> None:
-    """Die erste Schicht der Läufe nebeneinander."""
-    import matplotlib
+    """Die erste Schicht der Läufe nebeneinander, gezeichnet mit Pillow.
 
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    matplotlib gehört nicht zu Solidons Abhängigkeiten und ist in der .venv
+    nur noch als Rest vorhanden (04.10.2026: ``matplotlib.use`` fehlt) — die
+    Bilder fielen seitdem still in ``picture_errors``.
+    """
+    from PIL import Image, ImageDraw
 
-    fig, axes = plt.subplots(1, len(rows), figsize=(8 * len(rows), 8))
-    if len(rows) == 1:
-        axes = [axes]
+    side = 600
+    scale = (side - 20) / max(bed[0], bed[1], 1.0)
+    image = Image.new("RGB", (side * len(rows), side + 24), "white")
+    draw = ImageDraw.Draw(image)
     colours = {"model": "#1c7ed6", "support": "#e8590c", "rim": "#862e9c", "other": "#aaaaaa"}
-    for ax, (title, row) in zip(axes, rows, strict=True):
+    for column, (title, row) in enumerate(rows):
+        left = column * side + 10
+
+        def point(x: float, y: float, left: float = left) -> tuple[float, float]:
+            return (left + x * scale, side + 14 - y * scale)
+
+        draw.rectangle((*point(0.0, bed[1]), *point(bed[0], 0.0)), outline="#dddddd")
         path = row.get("gcode")
         if not path or not Path(path).exists():
-            ax.set_title(f"{title}: keine Datei")
+            draw.text((left, 2), f"{title}: keine Datei", fill="black")
             continue
         for kind, lines in first_layer_segments(Path(path)).items():
             for x0, y0, x1, y1 in lines:
-                ax.plot([x0, x1], [y0, y1], color=colours[kind], lw=0.6)
-        ax.set_aspect("equal")
-        ax.set_xlim(0, bed[0])
-        ax.set_ylim(0, bed[1])
-        ax.set_title(f"{title}: Schicht 1")
-    plt.tight_layout()
-    plt.savefig(target, dpi=55)
-    plt.close(fig)
+                draw.line((*point(x0, y0), *point(x1, y1)), fill=colours[kind], width=1)
+        draw.text((left, 2), f"{title}: Schicht 1", fill="black")
+    image.save(target)
 
 
 def first_layer_segments(path: Path) -> dict[str, list[tuple[float, float, float, float]]]:
@@ -1011,7 +1106,6 @@ def main() -> int:
         except Exception as problem:  # noqa: BLE001
             result["narrow"] = {"error": f"{type(problem).__name__}: {problem}"}
     save()
-    cache: dict = {}
     for slicer, printer in combos(SPEC):
         if (slicer, printer) in finished:
             continue
@@ -1027,7 +1121,7 @@ def main() -> int:
         try:
             profile = profiles.make_profile(printer, MATERIAL)
             setup, info = prepared(slicer, profile)
-            entries = info.pop("_entries", None)
+            chain_entries = info.pop("_entries", None)
             entry.update(info)
             if setup is None:
                 entry["complete"] = True
@@ -1045,14 +1139,23 @@ def main() -> int:
                 "findings": [f"{f.severity}:{f.code}" for f in manufacturer.findings(foundation)],
             }
             standard = manufacturer.effective(None, foundation)
+            # Was nicht auf ein Bett dieses Druckers passt, legt der Kunde nach
+            # der Absage über Platten aus (``arranged_for``).
+            combo_objects, arranged = arranged_for(objects, profile, standard)
+            if arranged:
+                entry["arranged"] = arranged
+            combo_plates = sorted({int(getattr(o, "plate", 0) or 0) for o in combo_objects})
             try:
-                plate_wide, per_spool = advised(objects, standard, profile, setup, cache)
-                everything = [*plate_wide, *per_spool]
-                shown = [e for e in everything if offered(e, setup.flavour)]
-                entry["advice"] = [[e.path, str(e.value), str(e.reason)[:140]] for e in shown]
+                everything, measured_bodies = advised(combo_objects, standard, profile, setup)
+                shown = offered(everything, setup, info, foundation)
+                entry["advice"] = [
+                    [e.path, str(e.value), str(e.reason)[:140], list(getattr(e, "parts", ()))]
+                    for e in shown
+                ]
                 entry["advice_hidden"] = [
                     [e.path, str(e.value), str(e.reason)[:80]] for e in everything if e not in shown
                 ]
+                entry["support_ways"] = support_ways(measured_bodies)
                 taken = advise.apply(standard, shown) if shown else None
             except Exception as problem:  # noqa: BLE001
                 entry["advice_error"] = f"{type(problem).__name__}: {str(problem)[:300]}"
@@ -1068,17 +1171,17 @@ def main() -> int:
                             print_settings.with_choice(standard, "support.style", "auto"),
                         )
                     )
-            wanted = chain({"_entries": entries}) if entries is not None else None
+            wanted = chain({"_entries": chain_entries}) if chain_entries is not None else None
             folder = work / f"{slicer}__{printer}"
             entry["variants"] = {}
             for variant, settings in variants:
                 runs = []
-                for plate in plates:
-                    on_plate = [o for o in objects if int(getattr(o, "plate", 0) or 0) == plate]
+                for plate in combo_plates:
                     row = measured(
                         plate_run(
-                            on_plate,
+                            combo_objects,
                             plate,
+                            tuple(combo_plates),
                             settings,
                             profile,
                             setup,
@@ -1115,7 +1218,7 @@ def main() -> int:
                         flagged.append((variant, row))
             if flagged:
                 (OUT / "bilder").mkdir(exist_ok=True)
-                for plate in plates:
+                for plate in combo_plates:
                     rows = [
                         (v, r)
                         for v, runs in entry["variants"].items()

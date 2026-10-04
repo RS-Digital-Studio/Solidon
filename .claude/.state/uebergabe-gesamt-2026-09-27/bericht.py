@@ -52,7 +52,11 @@ def state_of(entry: dict[str, Any]) -> tuple[str, list[str]]:
         return "kein Druck", flags
     details = " ".join(str(r.get("detail", "")) for r in runs)
     if any(not r.get("ok") for r in runs):
-        if "größer als der Bauraum" in details or "außerhalb seines Bauraums" in details:
+        if (
+            "größer als der Bauraum" in details
+            or "außerhalb seines Bauraums" in details
+            or "größer als die Druckfläche" in details
+        ):
             return "passt nicht", [advice_flag] if advice_flag else []
         if "nur in seinem Fenster" in details:
             flags = [f for r in runs for f in r.get("flags", []) if not f.startswith(FOREIGN)]
@@ -372,9 +376,10 @@ def main() -> int:
     hidden: Counter[str] = Counter()
     for result in results:
         for entry in result.get("combos", []):
-            for path, value, _reason in entry.get("advice", []):
+            # Seit 04.10.2026 trägt ein Vorschlag auch die Teile, denen er gilt.
+            for path, value, *_rest in entry.get("advice", []):
                 advice[f"{path} = {value}"] += 1
-            for path, value, _reason in entry.get("advice_hidden", []):
+            for path, _value, *_rest in entry.get("advice_hidden", []):
                 hidden[path] += 1
     lines += ["## Vorschläge", "", "| Vorschlag | Anzahl |", "|---|---|"]
     lines += [f"| `{key}` | {count} |" for key, count in advice.most_common(40)]
@@ -411,6 +416,38 @@ def main() -> int:
     for narrow, model, speeds in sorted(rows, key=lambda row: -row[0])[:60]:
         lines.append(f"| {model} | {narrow:.0%} | {', '.join(speeds[:6])} |")
     lines.append("")
+
+    # --- Stützbedarf gegen das Urteil des Slicers ------------------------------------------
+    # ``stuetzen_auto`` schaltet nur die Stützen an; Art, Schwelle und
+    # Brückenregel bleiben die des Herstellerprofils. Stützt der Slicer dann
+    # nichts Nennenswertes, widerspricht er Solidons „Stützen nötig“ — der Weg
+    # aus ``support_ways`` sagt, welche Regel es verlangte (Paket 3).
+    lines += [
+        "## Stützbedarf gegen das Urteil des Slicers",
+        "",
+        "| Modell | Slicer/Drucker | Stütze m | Solidons Weg |",
+        "|---|---|---|---|",
+    ]
+    agreeing = disagreeing = 0
+    for result in results:
+        for entry in result.get("combos", []):
+            for run in entry.get("variants", {}).get("stuetzen_auto", []):
+                if not run.get("ok"):
+                    continue
+                if not any(f.startswith("Slicer stützt nicht") for f in run.get("flags", [])):
+                    agreeing += 1
+                    continue
+                disagreeing += 1
+                ways = [
+                    f"{body}: Inseln {w['island_layers']}, Stück {w['patch']}, Summe {w['overhang']}, Brücke {w['bridge_max']}"
+                    for body, w in (entry.get("support_ways") or {}).items()
+                    if w.get("needed")
+                ]
+                lines.append(
+                    f"| {Path(result.get('model', '?')).name} | {entry['slicer']}/{entry['printer']} "
+                    f"| {run.get('support_m') or 0.0:.2f} | {'; '.join(ways)[:200]} |"
+                )
+    lines += ["", f"Der Slicer stützt, wo Solidon Stützen verlangt: {agreeing}; er stützt nicht: {disagreeing}.", ""]
     print("\n".join(lines))
     return 0
 
