@@ -98,8 +98,8 @@ def test_concurrent_automatic_offers_book_the_same_result_only_once(monkeypatch)
     barrier = Barrier(2)
     original = usage_ui._previous
 
-    def simultaneous_snapshot(value):
-        previous = original(value)
+    def simultaneous_snapshot(value, snapshot=None):
+        previous = original(value, snapshot)
         assert not previous
         barrier.wait(timeout=3)
         return previous
