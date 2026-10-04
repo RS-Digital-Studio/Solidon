@@ -200,7 +200,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.history import change_for, repair_is_available
+from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
@@ -7959,7 +7959,8 @@ class MainWindow(QMainWindow):
                     "Mit dem gewählten Schritt werden auch diese abhängigen Schritte gelöscht:"
                 )
                 back = tr("Strg+Z stellt alle gemeinsam wieder her.")
-            names, rest = named_steps(dependents, order=self.session.project.document.ops)
+            document = self.session.project.document
+            names, rest = named_steps(dependents, order=document.ops, titles=step_titles(document))
             lines = [f"· {name}" for name in names]
             if rest:
                 lines.append("· " + tr("und {count} weitere").format(count=rest))

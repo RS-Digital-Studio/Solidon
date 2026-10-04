@@ -1866,8 +1866,15 @@ def test_a_deleted_step_of_an_unknown_operation_keeps_its_number() -> None:
 
 
 def test_a_deletion_uses_the_historys_own_registry(history: History) -> None:
-    """Ein Ablauf mit eigenem Register verliert die dort bekannten Namen nicht."""
-    create(history)
+    """Ein Ablauf mit eigenem Register verliert die dort bekannten Namen nicht.
+
+    Der Titel einer Zeile ist der des Verlaufs (``step_titles``): Ein Schritt
+    aus einer Sammeltransaktion heißt nach seinem Register, einer mit eigener
+    Transaktion nach ihr.
+    """
+    history.apply(
+        _("Zwei Objekte"), [OperationDraft(op="make_object"), OperationDraft(op="make_object")]
+    )
 
     transaction = history.remove_operations([history.operations[0].id])
 
@@ -1878,7 +1885,11 @@ def test_a_deletion_uses_the_historys_own_registry(history: History) -> None:
 def test_saved_deletion_titles_follow_the_selected_language(
     document: Document, tmp_path: Path, count: int
 ) -> None:
-    """Auch die Namen innerhalb einer gespeicherten Löschzeile wechseln die Sprache."""
+    """Auch die Namen innerhalb einer gespeicherten Löschzeile wechseln die Sprache.
+
+    Die Löschzeile nennt die Schritte wie ihre Zeilen im Verlauf; das Menü
+    gibt ihnen den übersetzbaren Titel der Operation (``spec.title``).
+    """
     from app.core.registry import REGISTRY
     from app.i18n import TranslatableText
     from app.i18n.catalog import install_language
@@ -1886,7 +1897,7 @@ def test_saved_deletion_titles_follow_the_selected_language(
     install_language("en")
     history = History(document)
     for _index in range(count):
-        history.apply("Quader", [OperationDraft(op="create_box")])
+        history.apply(REGISTRY.get("create_box").title, [OperationDraft(op="create_box")])
     history.remove_operations([step.id for step in history.operations])
     target = save(Project(document=document), tmp_path / "deletion.p3d")
 
