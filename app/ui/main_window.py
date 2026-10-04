@@ -8852,7 +8852,9 @@ class MainWindow(QMainWindow):
                 (entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()
             ]
             estimate = estimate_total(bodies, settings)
-            comparison = SliceComparison(grams=estimate.grams, seconds=estimate.seconds)
+            # Eine Zeit gibt es hier nicht: Ohne den Auftrag sind Raster,
+            # Herstellerprofil und Mindesttempo der Datei unbekannt (RM-465).
+            comparison = SliceComparison(grams=estimate.grams, seconds=None)
             grams = metrics.model_grams(settings.filament.density)
         else:
             grams = metrics.model_grams()
@@ -8872,14 +8874,27 @@ class MainWindow(QMainWindow):
             )
         if grams is not None and comparison.grams is not None and comparison.grams > 0.0:
             findings += gcode.compare(comparison.grams, grams, "material").findings
-        if (
-            metrics.print_minutes is not None
-            and comparison.seconds is not None
-            and comparison.seconds > 0.0
-        ):
+        printing = metrics.printing_seconds
+        if printing is not None and comparison.seconds is not None and comparison.seconds > 0.0:
+            # Verglichen wird ab der ersten Schicht: Startcode und Aufheizen
+            # stehen in keiner Schicht, und der Slicer weist sie selbst aus
+            # (``GcodeMetrics.start_seconds``, RM-465).
             findings += gcode.compare(
-                comparison.seconds / 60.0, metrics.print_minutes, "time"
+                comparison.seconds / 60.0, printing / 60.0, "printing_time"
             ).findings
+        elif printing is not None:
+            findings.append(
+                Finding(
+                    code="gcode.printing_time_not_compared",
+                    severity="info",
+                    message=_(
+                        "Die Druckzeit wird nicht gegengeprüft: Für diesen Auftrag fehlt eine "
+                        "Schätzung aus der Schichtanalyse mit belegtem Mindesttempo."
+                    ),
+                    values={"what": gcode.QUANTITY_TITLES["printing_time"]},
+                    source="internal",
+                )
+            )
         self.report.add_findings(findings)
 
     def action_export(self) -> None:

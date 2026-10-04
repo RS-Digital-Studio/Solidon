@@ -420,6 +420,20 @@ aus einem Element gegen dieses Element.
 
 ## Die Schätzung ist eine Näherung mit Herkunft, keine Rechnung
 
+**Zwei Schätzungen, zwei Fragen (RM-465, 04.10.2026).** `estimate.py` steht
+neben dem Konstruieren und muss beim Ziehen an einem Parameter antworten; die
+Fläche mal Dicke zählte Kanten doppelt. Für die Zeitgegenprobe nach dem
+Slicen lag sie an Würfel und Pilz in vier Slicern 60 bis 80 Prozent unter der
+Druckdatei, weil kleine Teile fast nur aus Mindestschichtzeit bestehen und die
+Slicer dort nur bis zum Mindestdrucktempo bremsen. `print_time.py` rechnet
+deshalb aus den Schichten der Plattengegenprobe; gemessen −0,9 bis −11,0 % an
+den acht Standardläufen (Creality K1, ElegooSlicer CC2, PrusaSlicer MK4S,
+SuperSlicer MINI). Verglichen wird ab der ersten Schicht, weil Startcode und
+Aufheizen in keiner Schicht stehen und der Slicer ihren Anteil über `M73 P`
+selbst ausweist. Die Herstellertempi gelten dem schnellsten Filament des
+Herstellers — deshalb deckelt die Volumenstromregel.
+
+
 `slice/estimate.py` beantwortet „was kostet das" in Mikrosekunden, damit die
 Zahl beim Ziehen an einem Parameter stehen bleiben kann. Zwei Dinge daran sind
 teuer erkauft:

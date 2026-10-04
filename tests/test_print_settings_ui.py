@@ -7361,7 +7361,7 @@ def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
 ) -> None:
     """Die Gegenprobe enthält weder die übrige Platte noch alte Projektvorgaben."""
     from app.core.export import threemf
-    from app.core.slice.estimate import estimate
+    from app.core.slice.estimate import PlateComparison, estimate
     from app.ui import print_settings_dialog as module
 
     profile = profiles.make_profile()
@@ -7388,7 +7388,14 @@ def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
             ]
         )
     )
-    run = module.PlateRun(1, tmp_path / "plate.3mf", slots=merged)
+    # Die Zeit kommt aus der Schichtanalyse der Platte (RM-465), nicht aus
+    # Volumen und Oberfläche der Teile.
+    run = module.PlateRun(
+        1,
+        tmp_path / "plate.3mf",
+        slots=merged,
+        comparison=PlateComparison(1, None, None, seconds=321.0),
+    )
 
     actual = module._comparison_for_job(job, [run])
 
@@ -7401,13 +7408,12 @@ def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
         for entry, own in zip(selected, choices, strict=True)
     ]
     assert actual.grams == pytest.approx(sum(item.grams for item in expected))
-    assert actual.seconds == pytest.approx(sum(item.seconds for item in expected))
-    old = estimate(objects[0].mesh.volume, objects[0].mesh.area, print_settings.resolve(profile))
-    assert actual.seconds != pytest.approx(old.seconds * len(objects))
+    assert actual.seconds == pytest.approx(321.0)
 
 
 def test_slice_comparison_keeps_unknown_material_distribution_unknown(tmp_path: Path) -> None:
     """Oberflächenanteile beweisen keine Volumenanteile verschiedener Filamente."""
+    from app.core.slice.estimate import PlateComparison
     from app.ui import print_settings_dialog as module
 
     profile = profiles.make_profile()
@@ -7423,12 +7429,17 @@ def test_slice_comparison_keeps_unknown_material_distribution_unknown(tmp_path: 
     body = replace(body, mesh=replace(body.mesh, slots=(0, 1) * 6), material_slots=[first, second])
     setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
     job = module._PlateJob((body,), (0,), tmp_path, "Teil", setup, settings, profile, {})
-    run = module.PlateRun(0, tmp_path / "plate.3mf", slots=(first, second))
+    run = module.PlateRun(
+        0,
+        tmp_path / "plate.3mf",
+        slots=(first, second),
+        comparison=PlateComparison(0, None, None, seconds=99.0),
+    )
 
     actual = module._comparison_for_job(job, [run])
 
     assert actual.grams is None
-    assert actual.seconds is not None, "gleicher Volumenstrom erlaubt weiterhin die Zeitschätzung"
+    assert actual.seconds == pytest.approx(99.0), "die Zeit der Platte hängt nicht am Material"
 
 
 def test_slice_comparison_resolves_the_profile_bound_to_the_plate(tmp_path: Path) -> None:
@@ -7457,7 +7468,7 @@ def test_slice_comparison_resolves_the_profile_bound_to_the_plate(tmp_path: Path
         replace(settings, filament=replace(settings.filament, density=2.4, max_flow=2.0)),
     )
     assert actual.grams == pytest.approx(expected.grams)
-    assert actual.seconds == pytest.approx(expected.seconds)
+    assert actual.seconds is None, "ohne Schichtanalyse der Platte keine Zeit (RM-465)"
 
 
 def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_scene(
@@ -7466,7 +7477,7 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     """Arbeiter, Ergebnisannahme und Prüfbericht reichen denselben Vergleichskontext weiter."""
     from types import SimpleNamespace
 
-    from app.core.slice.estimate import estimate
+    from app.core.slice.estimate import PlateComparison, estimate
     from app.ui import print_settings_dialog as module
     from app.ui.main_window import MainWindow
 
@@ -7484,14 +7495,17 @@ def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [1])
     monkeypatch.setattr(dialog, "_plate_slots", list)
+    expected = estimate(selected.mesh.volume, selected.mesh.area, settings)
     monkeypatch.setattr(
         module,
         "_prepare_plate",
         lambda _job, plate: module.PlateRun(
-            plate, tmp_path / "plate.3mf", slots=(MaterialSlot(0, ""),)
+            plate,
+            tmp_path / "plate.3mf",
+            slots=(MaterialSlot(0, ""),),
+            comparison=PlateComparison(plate, None, None, seconds=expected.seconds),
         ),
     )
-    expected = estimate(selected.mesh.volume, selected.mesh.area, settings)
     monkeypatch.setattr(
         module.handover,
         "slice_model",
@@ -9628,6 +9642,7 @@ def test_unknown_material_does_not_discard_independent_plate_comparisons(tmp_pat
     run = module.PlateRun(0, tmp_path / "actual.3mf", comparison=PlateComparison(0, 0.0, 100))
     actual = module._comparison_for_job(job, [run])
     assert actual.grams is None
+    assert actual.seconds is None, "die Platte nennt keine Zeit"
     assert actual.plates == (run.comparison,)
 
 

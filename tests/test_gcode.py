@@ -1636,3 +1636,59 @@ def test_conditional_unknown_path_cannot_hide_missing_support_behind_zero_consum
     assert metrics.model_grams() is None
     assert metrics.model_layer_count is None
     assert "support" in metrics.uncertain_material_roles
+
+
+# --- Die Zeit ab der ersten Schicht (RM-465) ------------------------------------------
+
+#: Ein Elegoo-Kopf: Fortschritt 17 % beim Beginn der ersten Schicht, wie der
+#: Würfellauf am Centauri Carbon 2 (M73 P17 R8 bei 637 s).
+_STARTED = (
+    "; estimated printing time (normal mode) = 10m 37s\n"
+    "M73 P0 R10\n"
+    "G28\n"
+    "M73 P17 R8\n"
+    ";LAYER_CHANGE\n"
+    ";Z:0.2\n"
+    "G1 X10 Y10 E1 F1200\n"
+    "M73 P50 R5\n"
+    ";LAYER_CHANGE\n"
+    ";Z:0.4\n"
+    "G1 X20 Y10 E1\n"
+)
+
+
+def test_the_slicer_states_how_long_the_start_takes() -> None:
+    """Der Startanteil ist der letzte Fortschritt vor der ersten Schicht mal die
+    Gesamtzeit — eine Angabe des Slicers, keine Schätzung Solidons."""
+    metrics = gcode.analyze(_STARTED).metrics
+
+    assert metrics.print_seconds == pytest.approx(637.0)
+    assert metrics.start_seconds == pytest.approx(0.17 * 637.0)
+    assert metrics.printing_seconds == pytest.approx(0.83 * 637.0)
+
+
+def test_progress_inside_the_layers_is_not_a_start() -> None:
+    """Spätere Fortschrittsangaben gehören den Schichten; ohne eine vor der
+    ersten Schicht gibt es keinen Startanteil, und die Gesamtzeit gilt."""
+    text = _STARTED.replace("M73 P0 R10\n", "").replace("M73 P17 R8\n", "")
+    metrics = gcode.analyze(text).metrics
+
+    assert metrics.start_seconds is None
+    assert metrics.printing_seconds == pytest.approx(637.0)
+
+
+def test_a_stated_model_time_comes_first() -> None:
+    """Nennt der Slicer die Modellzeit selbst (Bambu), gilt sie."""
+    text = "; model printing time: 8m; total estimated time: 10m 37s\n" + _STARTED
+    metrics = gcode.analyze(text).metrics
+
+    assert metrics.model_print_seconds == pytest.approx(480.0)
+    assert metrics.printing_seconds == pytest.approx(480.0)
+
+
+def test_the_start_of_several_plates_adds_up() -> None:
+    first = gcode.analyze(_STARTED).metrics
+    both = gcode.combine([first, first])
+
+    assert both.start_seconds == pytest.approx(2 * 0.17 * 637.0)
+    assert both.printing_seconds == pytest.approx(2 * 0.83 * 637.0)

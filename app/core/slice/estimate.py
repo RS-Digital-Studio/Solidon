@@ -75,6 +75,7 @@ from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from app.core.slice.gcode import GcodeMetrics
+    from app.core.slice.print_time import Motion
 
 #: Anteil der Zeit, der nicht auf Materialauftrag entfällt — Fahrwege,
 #: Rückzüge, Beschleunigung, Schichtwechsel.
@@ -269,6 +270,10 @@ class PlateComparison:
     support_reason: TranslatableText | str = ""
     layers_reason: TranslatableText | str = ""
     arrangement_dependent: bool = False
+    seconds: float | None = None
+    """Druckzeit ab der ersten Schicht aus der Schichtanalyse
+    (:func:`app.core.slice.print_time.plate_seconds`); ``None`` ohne belegtes
+    Mindestdrucktempo oder ohne gemeinsames Raster."""
 
 
 def plate_comparison(
@@ -279,6 +284,7 @@ def plate_comparison(
     keep_arrangement: bool,
     separate_objects: bool,
     cancelled: CancelToken | None = None,
+    motion: Motion | None = None,
 ) -> PlateComparison:
     """Vollständige Analyse der exportierten Netze mit deren wirksamen Teilwerten.
 
@@ -339,6 +345,21 @@ def plate_comparison(
 
     all_indices = tuple(range(len(known)))
     arranged_apart = separate_objects and not keep_arrangement and len(known) > 1
+    seconds: float | None = None
+    if motion is not None and same_grid:
+        from app.core.slice.print_time import plate_seconds
+
+        # Je Teil sein eigener Schnitt mit seinen eigenen Werten; gleiche
+        # Schichtnummern laufen zusammen (vom Bett an, auch wenn der Slicer
+        # die Teile anders anordnet: Die Schichtzeit hängt nicht an der Lage).
+        seconds = plate_seconds(
+            [
+                (measure((index,), settings), settings)
+                for index, (_e, _m, settings) in enumerate(known)
+            ],
+            motion,
+            cancelled=cancelled,
+        )
     if same_grid and not arranged_apart:
         shared = measure(all_indices, first)
         model_layers = sum(layer.area > EPS_GEOM * EPS_GEOM for layer in shared.layers)
@@ -369,13 +390,14 @@ def plate_comparison(
                 previous = height
 
     if all(settings.support.style == "none" for _entry, _mesh, settings in known):
-        return PlateComparison(plate, 0.0, model_layers)
+        return PlateComparison(plate, 0.0, model_layers, seconds=seconds)
     if arranged_apart:
         return PlateComparison(
             plate,
             None,
             model_layers,
             _("Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen."),
+            seconds=seconds,
         )
 
     # Gleicher Vertrag heißt gleiches Raster und gleiche Stützparameter, nicht
@@ -409,6 +431,7 @@ def plate_comparison(
                         None,
                         model_layers,
                         _("Überlappende Teile haben unterschiedliche Stützeinstellungen."),
+                        seconds=seconds,
                     )
         groups = [
             (measure((index,), settings), settings)
@@ -433,9 +456,12 @@ def plate_comparison(
                     None,
                     model_layers,
                     _("Die gemeinsame Stützmenge mit diesen Stützbegrenzungen ist unbekannt."),
+                    seconds=seconds,
                 )
         support += support_material(result.support_volume, settings)
-    return PlateComparison(plate, support, model_layers, arrangement_dependent=len(known) > 1)
+    return PlateComparison(
+        plate, support, model_layers, arrangement_dependent=len(known) > 1, seconds=seconds
+    )
 
 
 def plate_findings(

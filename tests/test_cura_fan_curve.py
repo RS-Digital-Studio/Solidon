@@ -42,6 +42,7 @@ def _cura(tmp_path: Path, *, printer_threshold: float | None = None) -> Path:
         "cool_fan_speed_max": {"default_value": 100, "value": "cool_fan_speed"},
         "cool_min_layer_time_fan_speed_max": {"default_value": 10},
         "cool_min_layer_time": {"default_value": 5},
+        "cool_min_speed": {"default_value": 10},
     }
     (definitions / "fdmprinter.def.json").write_text(
         json.dumps(
@@ -136,6 +137,18 @@ def test_an_unreadable_installation_falls_back_to_curas_documented_values(
     cooling = _foundation(engine).settings.cooling
     assert cooling.fan_below_layer_time == pytest.approx(manufacturer.CURA_FAN_THRESHOLD)
     assert cooling.minimum_fan_speed == pytest.approx(cooling.fan_speed)
+
+
+def test_curas_minimum_speed_comes_from_its_definition(tmp_path: Path) -> None:
+    """Für die Zeitgegenprobe (RM-465): Curas Mindesttempo ``cool_min_speed``
+    steht in ``fdmprinter``; ohne lesbare Definition gibt es keines."""
+    motion = _foundation(_cura(tmp_path)).motion
+    assert motion is not None and motion.minimum_speed == pytest.approx(10.0)
+
+    engine = tmp_path / "Leer" / "CuraEngine.exe"
+    engine.parent.mkdir()
+    engine.write_bytes(b"")
+    assert _foundation(engine).motion is None
 
 
 def test_a_second_material_on_cura_follows_the_same_rule(tmp_path: Path) -> None:

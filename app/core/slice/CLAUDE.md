@@ -21,7 +21,8 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 | `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt, Konturverkettung, Abtastspannen und bitgleiche Orientierungsprojektionen (`tools/build_slice_core.py`, Budget §31); ohne ihn gerichtete Verkettung über NumPy |
 | `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29): Stützort über `analysis.model_support` (außen, Kanal, Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße, ruhige Wände und Beschleunigung für schlanke Körper auf kleinem Fuß (`_calm_walls`), langsame erste Schicht über schmalen Stegen (`analysis.narrow_share`), Schrägnaht an runden Außenwänden (`analysis.smooth_outline_height`), Volumenstrom über `knowledge.print_settings.flow_speed_limit` (vor der Zusammenführung nach Slicerfähigkeit gefiltert, `limits_flow`); `combine` vereint den Ausgabeumfang, ohne benötigte Stützen zu verlieren; Bremsen auf Tempo und Beschleunigung lockern keine frühere Regel (`_merged`, `_BRAKING_PATHS`); `for_part` gibt mit Profil den Rat je Körper für `PART_PATHS`, `SLICED_PATHS` sagt, welche davon den Schnitt des Körpers brauchen (danach schneidet der Export), `plate_paths` die plattenweiten Gründe, `connector_diameters` die Verbinder eines Körpers |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2) in einem Durchlauf, auch die erste Schicht mit Bauteillüfter (`fan_start`) |
-| `estimate.py` | Kostenschätzung sowie eingefrorene Plattengegenprobe aus tatsächlich exportierten Netzen und Teilwerten (`plate_comparison`); vollständige gemeinsame Stützanalyse, belegte Modelllagen, beide Herkünfte je Platte (`plates_findings`) |
+| `estimate.py` | Kostenschätzung sowie eingefrorene Plattengegenprobe aus tatsächlich exportierten Netzen und Teilwerten (`plate_comparison`); vollständige gemeinsame Stützanalyse, belegte Modelllagen, Druckzeit mit `Motion`, beide Herkünfte je Platte (`plates_findings`) |
+| `print_time.py` | Druckzeit ab der ersten Schicht aus den Schichten der Plattengegenprobe (`plate_seconds`): Wände mit Ecken, Deck/Boden/Brücken, Bahnzahl über die mittlere Sehne, Abbremsen auf die Mindestschichtzeit bis zum Mindesttempo, danach Beschleunigung; `Motion` trägt, was das Herstellerprofil dazu sagt (`manufacturer.orca_motion`, `prusa_motion`, `cura_motion`) |
 | `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort, größter frei hängender Überhang außerhalb der Kanäle (`model_support(..., only=)` nur über der Meldeschwelle), lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage; gemerkt im Netzcache, gerufen von `ui/print_findings_flow.py`. `remembered_analysis` gibt die Messung heraus, ohne zu rechnen — Druckdialog (`_AdviceWorker`) und Stützsperre (`export.writer._support_blocker`) fragen dort zuerst |
 | `orientation.py` | Die Suche nach einer Druckorientierung (§28.2); dazu eine kleine Grundflächen-Vorauswahl für Auto Split mit demselben Stützvolumen und derselben Fünf-Prozent-Grenze (§22.3) |
 
@@ -175,6 +176,8 @@ Ausführung der nachgelagerten Befund- und Orientierungssuche.
   Spülabschnittssummen bleiben bei ungeklärter Bilanz ausdrücklich unvollständig
   belegt; Gesamtverbrauch und Buchung übernehmen sie nicht. Explizite Modellzeit
   ersetzt keine Gesamtzeit; deren Differenz ist nur ein Zusatzanteil.
+  `start_seconds` ist der Fortschritt `M73 P` vor der ersten Schicht mal die
+  Gesamtzeit; `printing_seconds` ist, womit die Zeitgegenprobe vergleicht.
 - **Stützmenge braucht vollständige Rollen.** Bedingte Stützextrusion oder eine
   unbekannte bewegte Druckrolle macht `support_mm3` unbekannt; gelesene
   Rollenanteile und Gesamtverbrauch bleiben erhalten. Auch die Gegenprobe

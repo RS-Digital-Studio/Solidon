@@ -38,6 +38,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Meldet die Übergabe-Gegenprobe verworfene Schlüssel und geänderte Aufzählungen, während belegte Umbenennungen still bleiben? | `test_slicer_verify.py` — Prusa-/Orca-Konfigurationsblöcke und Anschluss beim Schneiden |
 | Folgen Objektwerte den gemessenen Fähigkeiten des Zielprogramms und bleiben andere Teile unverändert? | `test_slicer_part_settings.py` — Rollen, Familiengrenzen, Cura-Erstschichtbreite und fehlende Herstellerketten |
 | Bleibt Curas Lüfterkurve (unteres Ende, Schwelle) bei seiner Definition, in Dialog, Konsole, Spule und Fensterprofil? | `test_cura_fan_curve.py` |
+| Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`; der Startanteil aus `M73 P` in `test_gcode.py` |
 | Behalten innere Vollschichten, sichtbare Oberseite und Bügeln ihre Tempi in Cura? | `test_cura_skin_speeds.py` — Engine-Ebenen; `test_export.py` — importierbares Profil, mit und ohne obere Schichten |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |

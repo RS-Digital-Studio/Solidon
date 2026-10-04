@@ -1999,9 +1999,14 @@ class SliceComparison:
 
 
 def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceComparison:
-    """Nur geslicete Körper und die tatsächlich übergebenen Filamentwerte schätzen."""
+    """Nur geslicete Körper und die tatsächlich übergebenen Filamentwerte schätzen.
+
+    Die Zeit kommt aus der Schichtanalyse jeder Platte
+    (:attr:`PlateComparison.seconds`), nicht aus Volumen und Oberfläche: Die
+    lagen an Würfel und Pilz in vier Slicern 60 bis 80 Prozent unter der
+    Druckdatei (RM-465). Fehlt sie an einer Platte, fehlt die Summe.
+    """
     grams: float | None = 0.0
-    seconds: float | None = 0.0
     for run in runs:
         objects = [entry for entry in job.objects if entry.plate == run.plate]
         parts = [
@@ -2036,7 +2041,7 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
                 # Prusa und Cura bekommen genau einen Satz für die ganze Platte.
                 choices = [shared]
             if not choices or any(choice is None for choice in choices):
-                grams = seconds = None
+                grams = None
                 continue
             values = [
                 estimate(entry.mesh.volume, entry.mesh.area, choice)
@@ -2049,12 +2054,12 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
                 if grams is not None and all(is_close(value.grams, first.grams) for value in values)
                 else None
             )
-            seconds = (
-                seconds + first.seconds
-                if seconds is not None
-                and all(is_close(value.seconds, first.seconds) for value in values)
-                else None
-            )
+    plate_seconds = [run.comparison.seconds if run.comparison else None for run in runs]
+    seconds = (
+        sum(value for value in plate_seconds if value is not None)
+        if plate_seconds and all(value is not None for value in plate_seconds)
+        else None
+    )
     return SliceComparison(
         grams=grams,
         seconds=seconds,
@@ -2164,6 +2169,9 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
     ) -> None:
         nonlocal comparison
+        # Die Zeitgegenprobe rechnet mit dem, was das Herstellerprofil über
+        # Mindesttempo und Beschleunigung sagt (RM-465), aus derselben Kette.
+        motion = manufacturer.base_settings(job.profile, job.settings.quality, job.setup).motion
         comparison = plate_comparison(
             plate,
             parts,
@@ -2171,6 +2179,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             keep_arrangement=keep,
             separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
             cancelled=job.cancelled,
+            motion=motion,
         )
 
     written, findings = write_assembly(

@@ -98,6 +98,11 @@ class GcodeMetrics:
     resolved_material_cm3: float | None = None
     #: Nur ein ausdrücklich genannter Modellzeitwert, keine interne Schätzung.
     model_print_seconds: float | None = None
+    #: Die Zeit vor der ersten Schicht, wie der Slicer sie selbst ausweist: sein
+    #: Fortschritt ``M73 P`` beim Beginn der ersten Schicht mal die Gesamtzeit,
+    #: auf ein Prozent genau (RM-465). Startcode, Aufheizen, Bettvermessung —
+    #: was keine Schicht ist. ``None`` ohne Fortschrittsangabe.
+    start_seconds: float | None = None
     #: Aus tatsächlich extrudierten Modellrollen; Gesamtzahl bleibt separat.
     model_layer_count: int | None = None
     support_only_layer_count: int | None = None
@@ -123,6 +128,22 @@ class GcodeMetrics:
             return None
         difference = self.print_seconds - self.model_print_seconds
         return difference if difference >= 0.0 else None
+
+    @property
+    def printing_seconds(self) -> float | None:
+        """Die Zeit ab der ersten Schicht: ausdrücklich genannte Modellzeit,
+        sonst Gesamtzeit ohne den ausgewiesenen Startanteil, sonst die Gesamtzeit.
+
+        Das ist, was eine Schätzung aus der Schichtanalyse vorhersagen kann; der
+        Startcode einer Maschine steht in keiner Schicht.
+        """
+        if self.model_print_seconds is not None:
+            return self.model_print_seconds
+        if self.print_seconds is None:
+            return None
+        if self.start_seconds is None:
+            return self.print_seconds
+        return max(self.print_seconds - self.start_seconds, 0.0)
 
     @property
     def print_minutes(self) -> float | None:
@@ -794,6 +815,7 @@ def analyze_lines(
     bed_invalid = False
     bed_height: float | None = None
     last_elapsed: float | None = None
+    start_progress: float | None = None
     layer_changes = 0
     stated_material: dict[str, tuple[float | None, ...]] = {}
     volumetric = False
@@ -938,6 +960,10 @@ def analyze_lines(
             found.group("name").upper(): float(found.group("value"))
             for found in _WORD.finditer(command_text)
         }
+        if family == "M" and code == 73 and not has_first_layer and "P" in words:
+            # Der letzte Fortschritt vor der ersten Schicht ist der Startanteil.
+            start_progress = words["P"]
+            continue
         if bambu_commands and family == "M" and code in (622, 623):
             conditional_depth = (
                 conditional_depth + 1 if code == 622 else max(0, conditional_depth - 1)
@@ -1210,6 +1236,12 @@ def analyze_lines(
             _set(metrics, name, *captured)
     if last_elapsed is not None:
         metrics.print_seconds = last_elapsed
+    if (
+        start_progress is not None
+        and 0.0 <= start_progress <= 100.0
+        and metrics.print_seconds is not None
+    ):
+        metrics.start_seconds = start_progress / 100.0 * metrics.print_seconds
     if metrics.layer_count is None:
         metrics.layer_count = layer_changes or None
     dialect = settings.get("gcode_flavor", firmware or "").casefold().strip()
@@ -1699,6 +1731,7 @@ QUANTITY_TITLES: Final[dict[str, TranslatableText]] = {
     "support": _("Stützen"),
     "material": _("Material"),
     "time": _("Zeit"),
+    "printing_time": _("Druckzeit ab der ersten Schicht"),
 }
 
 
@@ -1794,6 +1827,7 @@ def combine(parts: Sequence[GcodeMetrics]) -> GcodeMetrics:
         slicer=parts[0].slicer,
         print_seconds=total(lambda entry: entry.print_seconds),
         model_print_seconds=total(lambda entry: entry.model_print_seconds),
+        start_seconds=total(lambda entry: entry.start_seconds),
         model_material_cm3=total(lambda entry: entry.model_material_cm3),
         purge_material_cm3=total(lambda entry: entry.purge_material_cm3),
         unclassified_material_cm3=total(lambda entry: entry.unclassified_material_cm3),
