@@ -232,7 +232,7 @@ def chamber_air(
     raw = body.raw
     vertices = np.asarray(raw.vertices, dtype=np.float64)
     faces = np.asarray(raw.faces, dtype=np.int64)[region.triangles]
-    loops = _boundary_loops(faces)
+    loops = rims_of(faces)
     if not loops:
         return None
     normal = np.asarray(region.normal, dtype=np.float64)
@@ -257,7 +257,7 @@ def chamber_air(
     triangles: list[np.ndarray] = [np.vectorize(index.__getitem__)(faces[:, ::-1])]
     first, second = (np.asarray(axis, dtype=np.float64) for axis in region.axes)
     for loop in floors:
-        cap = _cap(
+        cap = flat_cap(
             [[index[int(vertex)] for vertex in loop]], np.vstack(points), origin, first, second
         )
         if cap is None:
@@ -279,7 +279,7 @@ def chamber_air(
             top_loops.append(copies)
         else:
             top_loops.append(local)
-    cap = _cap(top_loops, np.vstack(points), origin, first, second)
+    cap = flat_cap(top_loops, np.vstack(points), origin, first, second)
     if cap is None:
         return None
     triangles.append(cap)
@@ -299,7 +299,7 @@ def _heights(points: np.ndarray, origin: np.ndarray, normal: np.ndarray) -> np.n
     )
 
 
-def _boundary_loops(faces: np.ndarray) -> list[list[int]]:
+def rims_of(faces: np.ndarray) -> list[list[int]]:
     """Die Randringe einer Dreiecksmenge als Eckenfolgen, in Umlaufrichtung."""
     directed = np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
     forward = {(int(a), int(b)) for a, b in directed.tolist()}
@@ -327,7 +327,7 @@ def _boundary_loops(faces: np.ndarray) -> list[list[int]]:
     return loops
 
 
-def _cap(
+def flat_cap(
     loops: list[list[int]],
     points: np.ndarray,
     origin: np.ndarray,
@@ -559,6 +559,8 @@ def _plane_again(before: MeshData, after: MeshData, feature: Feature) -> Feature
 __all__ = [
     "ResizeChamberParams",
     "chamber_air",
+    "flat_cap",
     "not_a_chamber",
     "resize_chamber",
+    "rims_of",
 ]

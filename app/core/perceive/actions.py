@@ -855,6 +855,9 @@ def actions_for(
     chamber = chamber_action(feature, features, mesh, cancelled=cancelled)
     if chamber is not None:
         actions.append(chamber)
+    closure = closure_action(feature, features, mesh, cancelled=cancelled)
+    if closure is not None:
+        actions.append(closure)
     return actions
 
 
@@ -922,6 +925,75 @@ def chamber_action(
             "außen bleibt sie gleich."
         ),
         fields=tuple(fields),
+    )
+
+
+def closure_action(
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    mesh: MeshData | None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> FeatureAction | None:
+    """*Verschluss ändern* an jedem Merkmal eines Bajonetts oder einer Rastung (RM-184).
+
+    Zwei Felder, vorbelegt mit null: um wie viel mehr Spiel und um wie viel
+    Grad mehr Drehweg — ein Verschluss trägt kein Spiel, das sich an ihm allein
+    messen ließe, die Gegenseite gehört einem anderen Teil. Ein Feld steht nur
+    da, wo die Operation es rechnet (``groups.reason_against_play``,
+    ``reason_against_turn``), und der Satz zum fehlenden steht darunter. Geht
+    keines, steht die Zeile grau mit dem Satz der Operation
+    (``groups.reason_against_closure_change``).
+    """
+    if features is None or mesh is None:
+        return None
+    spec = _spec_or_none("resize_closure")
+    if spec is None:
+        return None
+    from app.core.perceive.groups import (
+        functional_groups,
+        group_of,
+        reason_against_closure_change,
+        reason_against_play,
+        reason_against_turn,
+    )
+
+    group = group_of(feature.id, functional_groups(features, mesh, cancelled=cancelled))
+    if group is None or group.kind != "closure":
+        return None
+    refusal = reason_against_closure_change(group, features, mesh)
+    if refusal is not None:
+        return FeatureAction(title=spec.title, op=None, reason=refusal)
+    missing = {
+        "play": reason_against_play(group, features, mesh),
+        "turn": reason_against_turn(group, features, mesh),
+    }
+    fields = tuple(
+        ActionField(
+            name=entry.name,
+            label=entry.title,
+            unit=str(entry.unit or ""),
+            value=0.0,
+            kind="length" if entry.name == "play" else "angle",
+            minimum=entry.minimum,
+            maximum=entry.maximum,
+            measurement=MeasureStatus("exact", "parameter", available=True),
+        )
+        for entry in spec.params.spec()
+        if entry.name in missing and missing[entry.name] is None
+    )
+    note = str(
+        _(
+            "Ändert alle Stellungen zugleich: Nocken schmaler, Mulden und Wege breiter, der "
+            "Anschlag weiter — ein negativer Wert umgekehrt."
+        )
+    )
+    absent = [reason for reason in missing.values() if reason is not None]
+    return FeatureAction(
+        title=spec.title,
+        op=spec.name,
+        note=" ".join([note, *absent]),
+        fields=fields,
     )
 
 

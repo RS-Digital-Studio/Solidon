@@ -1214,6 +1214,52 @@ def test_a_body_without_the_needed_feature_says_so(window: MainWindow) -> None:
     assert window._op_actions["resize_hole"].isEnabled(), "mit Bohrung geht es"
 
 
+def test_changing_a_closure_is_grey_away_from_a_closure(window: MainWindow, tmp_path: Path) -> None:
+    """*Verschluss ändern* steht nur an einem Merkmal eines Verschlusses bedienbar da (RM-184).
+
+    Der Bajonettdeckel des Korpus als STL: An einer Nocke ist der Eintrag frei,
+    an einer Fläche außerhalb des Verschlusses grau mit dem Satz der Operation
+    (``groups.NOT_A_CLOSURE``) — Grund und Freigabe, nicht nur der Grund.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.perceive.groups import NOT_A_CLOSURE, functional_groups
+
+    with np.load(MESHES / "recognition_bayonet_lid.npz", allow_pickle=False) as data:
+        lid = trimesh.Trimesh(data["vertices"], data["faces"], process=False)
+    path = tmp_path / "bajonettdeckel.stl"
+    lid.export(path)
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    window.open_path(path)
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    identifier, entry = next(iter(result.scene.objects.items()))
+    from app.core.geom.mesh import as_mesh_data
+
+    groups = functional_groups(entry.features, as_mesh_data(entry.mesh))
+    closure = next(group for group in groups if group.kind == "closure")
+    lug = next(member for member in closure.members if member != closure.anchor)
+    outside = next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == "face" and all(name not in group.members for group in groups)
+    )
+    spec = REGISTRY.get("resize_closure")
+
+    window.object_tree.select_feature(identifier, lug)
+    assert window._reason_locked(spec, window.object_tree.kinds_of_selection(), 1, 1) is None
+    window._update_actions()
+    assert window._op_actions["resize_closure"].isEnabled()
+
+    window.object_tree.select_feature(identifier, outside)
+    reason = window._reason_locked(spec, window.object_tree.kinds_of_selection(), 1, 1)
+    assert reason == str(NOT_A_CLOSURE)
+    window._update_actions()
+    assert not window._op_actions["resize_closure"].isEnabled()
+
+
 def test_the_feature_list_only_offers_what_the_operation_takes(window: MainWindow) -> None:
     """Die Auswahl eines Dialogs zeigt die Merkmalsarten, die er nimmt (§18.5).
 

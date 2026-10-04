@@ -2357,7 +2357,10 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Gruppen dazu, derselbe Aufruf an qwen3:14b: **8 424 Token bei 188
 #: Werkzeugen**, 25,7 % des Fensters; SHA-256
 #: ``14d6b51c937fcc064e37f5b12bfb24f8e04e9a2859d19d919f7be1b404746c9d``.
-PROMPT_TOKENS: Final = 8424
+#: Mit *Verschluss ändern* (RM-184, Spiel und Drehweg) derselbe Aufruf:
+#: **8 453 Token bei 189 Werkzeugen**, 25,8 % des Fensters; SHA-256
+#: ``bb36dc9645bc5e70ab4f401b5172ce70c1db4e60904b63617f0995a1391625b2``.
+PROMPT_TOKENS: Final = 8453
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2384,9 +2387,9 @@ TURN_TOKENS: Final = 9061
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die Zählung vom 04.10.2026 mit *Kammer ändern* enthält genau diese 188
+#: Die Zählung vom 04.10.2026 mit *Verschluss ändern* enthält genau diese 189
 #: Werkzeuge; Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 188
+PROMPT_TOOL_COUNT: Final = 189
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

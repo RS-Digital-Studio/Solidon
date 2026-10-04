@@ -225,6 +225,9 @@ class FunctionalGroup:
     """Die Wände gehören auch einer Nachbarkammer — gemeinsam ändern geht nicht."""
     planar_rim: bool = False
     """Die Kammer endet oben an einem ebenen Rand — Bedingung fürs Ändern."""
+    stations: tuple[tuple[FeatureId, ...], ...] = ()
+    """Die Flächen je Stellung eines Verschlusses aus Nocken, Wegen oder Mulden,
+    in Winkelfolge — leer bei allen anderen Gruppen und bei runden Mulden."""
 
     @property
     def key(self) -> str:
@@ -525,6 +528,368 @@ NOT_A_CHAMBER = _(
     "Dieses Merkmal gehört weder zu einer erkannten Kammer noch zu einer Nut oder einem "
     "Kanal. Wählen Sie den Boden oder eine Wand einer Kammer."
 )
+
+NOT_A_CLOSURE = _(
+    "Dieses Merkmal gehört zu keinem erkannten Bajonett und keiner Rastung. Wählen Sie die "
+    "Achse, eine Nocke oder eine Mulde eines Verschlusses."
+)
+
+#: Ab wann eine Fläche einer Stellung ihre Flanke ist: Ihre Normale zeigt so
+#: weit in Umfangsrichtung — wie eine Außenseite ab 0,9 nach außen zeigt
+#: (:func:`_rotational_group`).
+FLANK_TANGENTIAL: Final[float] = 0.9
+
+
+def closure_flanks(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature]
+) -> tuple[FeatureId, ...]:
+    """Die ebenen Flanken eines Verschlusses — für *Verschluss ändern* (RM-184).
+
+    Eine Flanke ist eine Fläche einer Stellung, deren Normale in
+    Umfangsrichtung zeigt: die Seiten einer Nocke, die Wände einer Mulde, der
+    Anschlag eines Wegs. Gelesen an der Achse des Ankers, wie die Gruppe selbst.
+    """
+    anchor = features.get(group.anchor)
+    axis = _axis(group.anchor, anchor) if anchor is not None else None
+    if group.kind != "closure" or axis is None:
+        return ()
+    found: list[FeatureId] = []
+    for member in group.members:
+        feature = features.get(member)
+        if member == group.anchor or feature is None or feature.kind != "face":
+            continue
+        sideways = _sideways(axis, feature)
+        normal = _unit(feature.params.get("normal"))
+        if sideways is None or normal is None:
+            continue
+        if abs(_dot(normal, sideways)) >= FLANK_TANGENTIAL:
+            found.append(member)
+    return tuple(sorted(found, key=_id_key))
+
+
+def _sideways(axis: _Axis, feature: Feature) -> Vec | None:
+    """Die Umfangsrichtung an der Mitte einer Fläche: rechtsherum um die Achse."""
+    centre = _vector(feature.params.get("centre"))
+    if centre is None:
+        return None
+    relative = _sub(centre, axis.point)
+    across = _sub(relative, _scaled(axis.direction, _dot(relative, axis.direction)))
+    radius = _length(across)
+    if radius <= EPS_GEOM:
+        return None
+    outward = _scaled(across, 1.0 / radius)
+    return (
+        axis.direction[1] * outward[2] - axis.direction[2] * outward[1],
+        axis.direction[2] * outward[0] - axis.direction[0] * outward[2],
+        axis.direction[0] * outward[1] - axis.direction[1] * outward[0],
+    )
+
+
+def reason_against_closure(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature]
+) -> str | None:
+    """Warum sich an diesem Verschluss gar nichts ändern lässt — oder ``None``.
+
+    Dieselbe Frage für Merkmalfenster, Menü und Operation (*Verschluss
+    ändern*); was nur Spiel oder Drehweg betrifft, sagen
+    :func:`reason_against_play` und :func:`reason_against_turn`.
+    """
+    if group.kind != "closure":
+        return str(NOT_A_CLOSURE)
+    if not closure_flanks(group, features):
+        return str(
+            _(
+                "Diese Rastung hat runde Mulden und keine ebenen Seiten. Ändern Sie den "
+                "Radius einer Mulde über „Merkmal ändern“ — für alle gleichartigen zugleich."
+            )
+        )
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class FlankPair:
+    """Zwei Flanken einer Stellung, die einander gegenüberstehen."""
+
+    first: FeatureId
+    second: FeatureId
+    gap: float
+    """Abstand der zweiten längs der Normalen der ersten: negativ mit Material
+    dazwischen (eine Nocke), positiv mit Luft (ein Weg, eine Mulde)."""
+
+
+def closure_pairs(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature], mesh: MeshData
+) -> tuple[FlankPair, ...]:
+    """Je Stellung die Flanken, die einander gegenüberstehen.
+
+    Ein Paar steht in derselben Stellung, seine Normalen zeigen gegeneinander,
+    und es überdeckt sich entlang der Achse — die zwei Seiten einer Nocke oder
+    eines Wegs. Wer das Spiel ändert, ändert beide (:func:`reason_against_play`).
+    """
+    anchor = features.get(group.anchor)
+    axis = _axis(group.anchor, anchor) if anchor is not None else None
+    reference = plane_axes(axis.direction) if axis is not None else None
+    if group.kind != "closure" or axis is None or reference is None:
+        return ()
+    flanks = set(closure_flanks(group, features))
+    vertices = np.asarray(mesh.raw.vertices, dtype=np.float64)
+    faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    pairs: list[FlankPair] = []
+    for station in group.stations:
+        sides = [
+            side
+            for side in _station_faces(station, features, axis, reference, vertices, faces)
+            if side.name in flanks
+        ]
+        for position, one in enumerate(sides):
+            for two in sides[position + 1 :]:
+                first, second = features[one.name], features[two.name]
+                normal = _unit(first.params.get("normal"))
+                other = _unit(second.params.get("normal"))
+                start = _vector(first.params.get("centre"))
+                end = _vector(second.params.get("centre"))
+                if normal is None or other is None or start is None or end is None:
+                    continue
+                if _dot(normal, other) > -FLANK_TANGENTIAL:
+                    continue
+                if min(one.top, two.top) - max(one.bottom, two.bottom) <= EPS_GEOM:
+                    continue
+                pairs.append(FlankPair(one.name, two.name, _dot(_sub(end, start), normal)))
+    return tuple(pairs)
+
+
+def reason_against_play(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature], mesh: MeshData
+) -> str | None:
+    """Warum sich das Spiel dieses Verschlusses nicht ändern lässt — oder ``None``.
+
+    Jede Flanke braucht ihr Gegenüber: Fehlt es, ist die andere Seite keine
+    erkannte Fläche, und das Spiel änderte sich nur einseitig — an der
+    Aufnahme des Bajonettbausteins geht eine Einführwand bündig in den
+    Drehschlitz über und ist keine eigene Fläche.
+    """
+    refusal = reason_against_closure(group, features)
+    if refusal is not None:
+        return refusal
+    paired = {
+        name for pair in closure_pairs(group, features, mesh) for name in (pair.first, pair.second)
+    }
+    if set(closure_flanks(group, features)) - paired:
+        return str(
+            _(
+                "An einer Stellung fehlt einer Seite ihr Gegenüber — das Spiel änderte sich "
+                "nur einseitig. Ändern Sie die Seiten einzeln über „Fläche versetzen“."
+            )
+        )
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class ClosureStop:
+    """Der Anschlag einer Stellung: die Flanke am geschlossenen Ende ihres Drehwegs."""
+
+    flank: FeatureId
+    sense: float
+    """``+1.0``, wenn der Weg länger wird, sobald die Flanke rechtsherum um die
+    Achse wandert (Rechte-Hand-Regel um ihre Richtung), sonst ``-1.0``."""
+
+
+@dataclass(frozen=True, slots=True)
+class _StationFace:
+    """Eine Fläche einer Stellung in Zylinderkoordinaten um die Achse."""
+
+    name: FeatureId
+    angle: float
+    """Winkel der Mitte gegen die Mitte der Stellung, in Grad."""
+    low: float
+    high: float
+    """Kleinster und größter Winkel ihrer Ecken, ebenso gemessen."""
+    bottom: float
+    top: float
+    """Kleinste und größte Lage ihrer Ecken entlang der Achse."""
+    radius: float
+    tangential: float
+    axial: float
+
+
+def closure_stops(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature], mesh: MeshData
+) -> tuple[ClosureStop, ...]:
+    """Je Stellung der Anschlag des Drehwegs — leer, wenn es keinen eindeutigen gibt.
+
+    Ein Drehweg liegt **in** einem Teil: Seine äußerste Flanke zeigt in die
+    Stellung hinein. Eine Nocke zeigt ihre nach außen — ihr Drehweg steht am
+    Gegenstück. Und sie steht an einem **geschlossenen** Ende: Boden und Dach
+    des Wegs reichen über sie. Am offenen Ende kommt der Einführweg vom Rand;
+    eine Rastmulde ist an beiden offen. Der Anschlag ist das eine Ende, das
+    beides erfüllt — am Filterkäfig aus dem Audit die Flanke am Ende des
+    Drehschlitzes. Erfüllen es beide Enden, gibt es keinen eindeutigen.
+    Gefragt wird je Ende für sich: An der Aufnahme des Bajonettbausteins ist
+    die Einführwand, die bündig in den Drehschlitz übergeht, keine eigene
+    Fläche, und der Anschlag am anderen Ende bleibt trotzdem eindeutig.
+    """
+    anchor = features.get(group.anchor)
+    axis = _axis(group.anchor, anchor) if anchor is not None else None
+    reference = plane_axes(axis.direction) if axis is not None else None
+    if group.kind != "closure" or axis is None or reference is None or not group.stations:
+        return ()
+    flanks = set(closure_flanks(group, features))
+    vertices = np.asarray(mesh.raw.vertices, dtype=np.float64)
+    faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    stops: list[ClosureStop] = []
+    for station in group.stations:
+        sides = _station_faces(station, features, axis, reference, vertices, faces)
+        ends = [side for side in sides if side.name in flanks]
+        if not ends:
+            return ()
+        first = min(ends, key=lambda side: (side.angle, _id_key(side.name)))
+        last = max(ends, key=lambda side: (side.angle, _id_key(side.name)))
+        # In die Stellung hinein heißt am kleinsten Winkel rechtsherum, am
+        # größten linksherum; wächst der Weg, wandert der Anschlag nach außen.
+        found = []
+        if first.tangential > 0.0 and _closed_end(first, sides):
+            found.append(ClosureStop(first.name, -1.0))
+        if last.tangential < 0.0 and _closed_end(last, sides):
+            found.append(ClosureStop(last.name, 1.0))
+        if len(found) != 1:
+            return ()
+        stops.append(found[0])
+    return tuple(stops)
+
+
+def reason_against_closure_change(
+    group: FunctionalGroup | None, features: Mapping[FeatureId, Feature], mesh: MeshData
+) -> str | None:
+    """Warum sich an diesem Verschluss weder Spiel noch Drehweg ändern lassen — oder ``None``.
+
+    Die eine Frage für Menü und Merkmalfenster: Grau steht *Verschluss ändern*
+    nur, wo die Operation nichts rechnen kann, und dann mit ihrem Satz.
+    """
+    if group is None or group.kind != "closure":
+        return str(NOT_A_CLOSURE)
+    general = reason_against_closure(group, features)
+    if general is not None:
+        return general
+    play = reason_against_play(group, features, mesh)
+    if play is not None and reason_against_turn(group, features, mesh) is not None:
+        return play
+    return None
+
+
+def closure_axis(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature]
+) -> tuple[Vec, Vec] | None:
+    """Punkt und Richtung der Achse eines Verschlusses — die, an der er gelesen wurde."""
+    anchor = features.get(group.anchor)
+    axis = _axis(group.anchor, anchor) if anchor is not None else None
+    if group.kind != "closure" or axis is None:
+        return None
+    return axis.point, axis.direction
+
+
+def reason_against_turn(
+    group: FunctionalGroup, features: Mapping[FeatureId, Feature], mesh: MeshData
+) -> str | None:
+    """Warum sich der Drehweg dieses Verschlusses nicht ändern lässt — oder ``None``."""
+    refusal = reason_against_closure(group, features)
+    if refusal is not None:
+        return refusal
+    if not closure_stops(group, features, mesh):
+        return str(
+            _(
+                "An diesem Teil endet kein Weg an einem Anschlag: Nocken tragen ihren Drehweg "
+                "am Gegenstück, und eine Rastmulde hat keinen. Ändern Sie den Drehweg am Teil "
+                "mit den Wegen."
+            )
+        )
+    return None
+
+
+def _station_faces(
+    station: Sequence[FeatureId],
+    features: Mapping[FeatureId, Feature],
+    axis: _Axis,
+    reference: tuple[Vec, Vec],
+    vertices: np.ndarray,
+    faces: np.ndarray,
+) -> list[_StationFace]:
+    """Die ebenen Flächen einer Stellung, ihre Winkel gegen die Mitte der Stellung."""
+    first, second = reference
+    rows: list[tuple[FeatureId, Feature, float, float, list[float], list[float]]] = []
+    for name in station:
+        feature = features.get(name)
+        if feature is None or feature.kind != "face" or not feature.face_indices:
+            continue
+        centre = _vector(feature.params.get("centre"))
+        if centre is None:
+            continue
+        relative = _sub(centre, axis.point)
+        across = _sub(relative, _scaled(axis.direction, _dot(relative, axis.direction)))
+        angle = exact_atan2_degrees(_dot(across, second), _dot(across, first))
+        corners = np.unique(faces[np.asarray(feature.face_indices, dtype=np.int64)].reshape(-1))
+        angles: list[float] = []
+        heights: list[float] = []
+        for point in vertices[corners].tolist():
+            offset = _sub((point[0], point[1], point[2]), axis.point)
+            height = _dot(offset, axis.direction)
+            beside = _sub(offset, _scaled(axis.direction, height))
+            angles.append(exact_atan2_degrees(_dot(beside, second), _dot(beside, first)))
+            heights.append(height)
+        rows.append((name, feature, angle, _length(across), angles, heights))
+    if not rows:
+        return []
+    reference_angle = rows[0][2]
+    weights = [_number(row[1], "area") or 0.0 for row in rows]
+    total = sum(weights)
+    middle = reference_angle
+    if total > 0.0:
+        offsets = [_signed_angle(row[2], reference_angle) for row in rows]
+        middle = reference_angle + sum(o * w for o, w in zip(offsets, weights, strict=True)) / total
+    found: list[_StationFace] = []
+    for name, feature, angle, radius, angles, heights in rows:
+        normal = _unit(feature.params.get("normal"))
+        sideways = _sideways(axis, feature)
+        if normal is None or sideways is None:
+            continue
+        spread = [_signed_angle(value, middle) for value in angles]
+        found.append(
+            _StationFace(
+                name=name,
+                angle=_signed_angle(angle, middle),
+                low=min(spread),
+                high=max(spread),
+                bottom=min(heights),
+                top=max(heights),
+                radius=radius,
+                tangential=_dot(normal, sideways),
+                axial=_dot(normal, axis.direction),
+            )
+        )
+    return found
+
+
+def _closed_end(flank: _StationFace, sides: Sequence[_StationFace]) -> bool:
+    """Boden und Dach reichen über die Flanke: Querflächen unter und über ihr.
+
+    Unter ihr zeigt der Boden zur Achsrichtung hin (in den Weg hinein), über
+    ihr das Dach dagegen; beide decken den Winkel der Flanke. Verglichen wird
+    auf die Modelltoleranz ihres Radius.
+    """
+    near = match_tolerance(2.0 * max(flank.radius, EPS_GEOM))
+    spread = near / max(flank.radius, EPS_GEOM) * (180.0 / math.pi)
+
+    def covers(side: _StationFace) -> bool:
+        return side.low - spread <= flank.angle <= side.high + spread
+
+    floor = any(
+        side.axial >= FLOOR_ALIGNED and abs(side.top - flank.bottom) <= near and covers(side)
+        for side in sides
+    )
+    roof = any(
+        side.axial <= -FLOOR_ALIGNED and abs(side.bottom - flank.top) <= near and covers(side)
+        for side in sides
+    )
+    return floor and roof
 
 
 def group_of(feature_id: FeatureId, groups: Sequence[FunctionalGroup]) -> FunctionalGroup | None:
@@ -1342,6 +1707,10 @@ def _rotational_group(
         measures=tuple(measures),
         evidence="rotational_lugs" if bayonet else "rotational_notches",
         count=count,
+        stations=tuple(
+            tuple(piece.feature for piece in sorted(lump.pieces, key=lambda e: _id_key(e.feature)))
+            for lump in ordered
+        ),
     )
 
 

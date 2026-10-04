@@ -561,6 +561,10 @@ MAP_CACHE_KEPT: Final = 8
 #: (§14, §15.1).
 LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
 
+#: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
+#: einem Merkmal einer passenden Gruppe etwas rechnen (RM-184).
+GROUP_OPS: Final = frozenset({"resize_chamber", "resize_closure"})
+
 #: Ab welchem Kosinus der Ring des Griffs um die eigene Achse eines Bausteins
 #: dreht — ein Grad. Es ist kein Erkennungsmaß wie ``PARALLEL_FACE_COSINE``
 #: (acht Grad, für Flächen, die einander gegenüberliegen), sondern die Frage,
@@ -2921,12 +2925,13 @@ class MainWindow(QMainWindow):
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
         Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
         self._lid_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
-        self._chamber_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
-        """Warum an einer gewählten Fläche *Kammer ändern* nichts tut — je Merkmal und
-        Auswertung einmal; die Gruppen selbst wärmt der Auswertungsarbeiter."""
         """Warum an einer gewählten Fläche kein Deckel entsteht — je Merkmal und
         Auswertung einmal gerechnet, denn die Antwort kostet einen Schnitt
         (:meth:`_lid_reason`)."""
+        self._group_reasons: tuple[int, dict[tuple[str, ObjectId, str], str | None]] = (-1, {})
+        """Warum am gewählten Merkmal *Kammer ändern* oder *Verschluss ändern* nichts
+        tut — je Operation, Merkmal und Auswertung einmal; die Gruppen selbst
+        wärmt der Auswertungsarbeiter."""
         self._difference_standing = False
         """Ob im Bild eine Differenz liegt — dann lohnt ``show_difference(None)``.
 
@@ -5722,11 +5727,13 @@ class MainWindow(QMainWindow):
             reason = self._lid_reason()
             if reason is not None:
                 return reason
-        # Und die Kammer: *Kammer ändern* gilt Flächen, aber nur denen einer
-        # erkannten Kammer, einer Nut oder eines Kanals (RM-184) — an jeder anderen Fläche
-        # stand der Eintrag sonst bedienbar da und konnte nur scheitern.
-        if spec.name == "resize_chamber":
-            reason = self._chamber_reason()
+        # Und die Gruppe: *Kammer ändern* gilt nur den Flächen einer erkannten
+        # Kammer, einer Nut oder eines Kanals, *Verschluss ändern* nur den
+        # Merkmalen eines Bajonetts oder einer Rastung (RM-184) — an jedem
+        # anderen Merkmal stand der Eintrag sonst bedienbar da und konnte nur
+        # scheitern.
+        if spec.name in GROUP_OPS:
+            reason = self._group_reason(spec.name)
             if reason is not None:
                 return reason
         # Und zuletzt der Zustand des Körpers (RM-168): *Offene Fläche
@@ -5824,13 +5831,15 @@ class MainWindow(QMainWindow):
             known[key] = reason_against(entry, feature)
         return known[key]
 
-    def _chamber_reason(self) -> str | None:
-        """Warum die gewählte Fläche keine änderbare Kammer trägt — oder ``None``.
+    def _group_reason(self, operation: str) -> str | None:
+        """Warum das gewählte Merkmal keine änderbare Gruppe trägt — oder ``None``.
 
         Derselbe Satz, den die Operation beim Rechnen würfe
-        (``groups.reason_against_group``). Die Gruppen liegen nach der
-        Auswertung im Merker des Netzes (``session._warm_metrics``); ohne
-        gewählte Fläche bleibt die Antwort offen, und offen sperrt nie.
+        (``groups.reason_against_group`` für die Kammer,
+        ``groups.reason_against_closure_change`` für den Verschluss). Die
+        Gruppen liegen nach der Auswertung im Merker des Netzes
+        (``session._warm_metrics``); ohne gewähltes Merkmal bleibt die Antwort
+        offen, und offen sperrt nie.
         """
         result = self.session.last_result
         chosen = self._first_chosen()
@@ -5840,26 +5849,31 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(chosen)
         if entry is None or feature not in entry.features:
             return None
-        generation, known = self._chamber_reasons
+        generation, known = self._group_reasons
         if generation != self.session.result_generation:
             known = {}
-            self._chamber_reasons = (self.session.result_generation, known)
-        key = (chosen, feature)
+            self._group_reasons = (self.session.result_generation, known)
+        key = (operation, chosen, feature)
         if key not in known:
             from app.core.geom.mesh import as_mesh_data
             from app.core.perceive.groups import (
                 NOT_A_CHAMBER,
                 functional_groups,
                 group_of,
+                reason_against_closure_change,
                 reason_against_group,
             )
 
-            group = group_of(feature, functional_groups(entry.features, as_mesh_data(entry.mesh)))
-            known[key] = (
-                str(NOT_A_CHAMBER)
-                if group is None or group.kind not in ("chamber", "channel")
-                else reason_against_group(group)
-            )
+            mesh = as_mesh_data(entry.mesh)
+            group = group_of(feature, functional_groups(entry.features, mesh))
+            if operation == "resize_closure":
+                known[key] = reason_against_closure_change(group, entry.features, mesh)
+            else:
+                known[key] = (
+                    str(NOT_A_CHAMBER)
+                    if group is None or group.kind not in ("chamber", "channel")
+                    else reason_against_group(group)
+                )
         return known[key]
 
     def _halt_reason(self) -> str | None:

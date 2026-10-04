@@ -3,13 +3,15 @@ description: "Funktionale Gruppen — eine Auskunft über Merkmale, kein Merkmal
 paths:
   - "app/core/perceive/groups.py"
   - "app/core/geom/chamber_ops.py"
+  - "app/core/geom/closure_ops.py"
 ---
 
 # Regeln für funktionale Gruppen
 
 Kammer, Nut, Kanal, Gewinde mit Einlauf, Bajonett und Rastung, Scharnier,
 Steckaufnahme und Schrift (Dateiaudit §7, RM-184). Erkannt in
-`perceive/groups.py`, gemeinsam geändert in `geom/chamber_ops.py`.
+`perceive/groups.py`, gemeinsam geändert in `geom/chamber_ops.py` (Kammer,
+Nut, Kanal) und `geom/closure_ops.py` (Spiel und Drehweg eines Verschlusses).
 `schichtanalyse.md` gilt zusätzlich.
 
 - **Eine Gruppe ist eine Auskunft, kein Merkmal**: Sie ändert weder Merkmale
@@ -22,7 +24,9 @@ Steckaufnahme und Schrift (Dateiaudit §7, RM-184). Erkannt in
   Verdacht ist, heißt `suggested` und sagt es im Merkmalfenster.
 - **Ob eine Gruppe sich als Ganzes ändern lässt, sagt ein Satz für beide**:
   `reason_against_group` sperrt die Zeile im Merkmalfenster und die
-  Operation mit demselben Wortlaut.
+  Operation mit demselben Wortlaut, beim Verschluss je Feld
+  `reason_against_play` und `reason_against_turn`, für Menü und Zeile
+  zusammen `reason_against_closure_change`.
 - **Gemerkt wird je Netz und Merkmalsliste** (`features.remembered`, geteilt):
   Baum, Merkmalfenster und Operation fragen dieselbe Antwort; gerechnet wird
   im Auswertungsarbeiter (`session._warm_metrics`).
@@ -39,3 +43,13 @@ Steckaufnahme und Schrift (Dateiaudit §7, RM-184). Erkannt in
   (`groups._Lookup`): Eine Rechnung über alle Dreiecke je Kandidat kostete am
   Korpus Minuten. Eine Beschleunigung gibt dieselben Gruppen zurück wie vorher —
   verglichen an Korpusdateien, nicht behauptet.
+- **Ein Verschluss ändert sich über Werkzeuge aus dem Umriss seiner Flanken,
+  nicht über wandernde Ecken**: Ecken klappten am Filterkäfig ab einem halben
+  Grad Drehweg Dreiecke um. Wo Material an eine Kante grenzt, gleitet die
+  Ecke an dessen Fläche (`closure_ops._slides`), sonst schnitte das Werkzeug
+  eine Kerbe in den Rundkörper unter einer Nocke; wo Luft dahinter liegt,
+  reicht ein abziehendes hinaus; jedes beginnt um `BOOLEAN_OVERLAP` vor der
+  Flanke. Spiel nur, wo jede Flanke ihr Gegenüber hat — sonst änderte es sich
+  einseitig —, Drehweg nur an einem Anschlag (`closure_stops`); die Wirkung
+  muss die Rechnung treffen (`VOLUME_SHARE`), sonst lief ein Werkzeug in eine
+  Nachbarstellung.

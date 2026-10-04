@@ -385,6 +385,47 @@ def _changed_chamber() -> str:
     return _mesh_print(result.outputs[0].mesh)
 
 
+def _changed_closure() -> str:
+    """*Verschluss ändern* (RM-184): Spiel am Deckel des Korpus, Drehweg an der Bausteinaufnahme.
+
+    Umriss, Gleiten an den Nachbarn, Zugabe in die Luft und das um die Achse
+    geschwenkte Werkzeug — jede Ecke geht durch Kreuzprodukte und die
+    Winkelfunktionen des Kerns, keine darf an der letzten Stelle hängen.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData, as_mesh_data
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts import builtin
+    from app.core.perceive.features import detect
+    from app.core.perceive.groups import functional_groups
+    from tests.helpers import feature_operation
+
+    prints = []
+    corpus = Path(__file__).parent / "data" / "meshes" / "recognition_bayonet_lid.npz"
+    with np.load(corpus, allow_pickle=False) as data:
+        lid = MeshData(raw=trimesh.Trimesh(data["vertices"], data["faces"], process=False))
+    bayonet = builtin.load().get("bayonet")
+    socket = as_mesh_data(
+        bayonet.fn(bayonet.params(kind="socket", diameter=75.0, turn=13.0, play=0.25)).mesh
+    )
+    for body, params in ((lid, {"play": 0.5}), (socket, {"turn": 2.0})):
+        features = detect(body)
+        closure = next(
+            group for group in functional_groups(features, body) if group.kind == "closure"
+        )
+        result = feature_operation(
+            "resize_closure",
+            body,
+            dict(features),
+            features[closure.anchor],
+            profiles.make_profile("centauri-carbon-2", "petg"),
+            **params,
+        )
+        prints.append(_mesh_print(result.outputs[0].mesh))
+    return "|".join(prints)
+
+
 def _bent_lettering() -> str:
     """Schrift auf dem Bogen und um die Rundung, dazu eine Einlage (RM-184).
 
@@ -1161,6 +1202,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "prusa_support_angle": _automatic_support_angle,
     "remesh_mesh": _refined_plate,
     "resize_chamber": _changed_chamber,
+    "resize_closure": _changed_closure,
     "rebuild_box": _rebuilt_box,
     "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,

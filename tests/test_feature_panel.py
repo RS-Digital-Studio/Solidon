@@ -4229,3 +4229,41 @@ def test_a_wall_says_which_chamber_it_belongs_to_and_offers_to_change_it(
     assert offered["depth"] == pytest.approx(18.0, abs=1e-6)
     assert sorted((offered["width"], offered["length"])) == pytest.approx([26.0, 36.0], abs=1e-6)
     panel.close()
+
+
+def test_a_lug_offers_to_change_the_closure_by_its_play(qt_app: QApplication) -> None:
+    """Das Merkmalfenster an einer Nocke: *Verschluss ändern* mit dem Spiel, vorbelegt mit null.
+
+    Den Drehweg trägt das Gegenstück — sein Feld fehlt, und die Notiz sagt
+    warum (RM-184). Ein Verschluss trägt kein Spiel, das sich an ihm allein
+    messen ließe; deshalb steht dort null und nicht ein Maß.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.perceive.groups import functional_groups
+
+    load_operations()
+    path = Path(__file__).parent / "data" / "meshes" / "recognition_bayonet_lid.npz"
+    with np.load(path, allow_pickle=False) as data:
+        mesh = MeshData(raw=trimesh.Trimesh(data["vertices"], data["faces"], process=False))
+    found = features.detect(mesh)
+    closure = next(group for group in functional_groups(found, mesh) if group.kind == "closure")
+    lug = next(member for member in closure.members if member != closure.anchor)
+    panel = FeaturePanel()
+    panel.show_feature(lug, found[lug], features=found, mesh=mesh)
+    assert "Verschluss ändern" in buttons(panel)
+    action = next(entry for entry in panel._runs.values() if entry.title == "Verschluss ändern")
+    offered = action.values()
+    assert offered["play"] == pytest.approx(0.0)
+    assert "turn" not in offered
+    built = panel.measure_fields("resize_closure", None)
+    assert built is not None
+    _action, group, editors = built
+    try:
+        assert set(editors) == {"play"}
+        notes = [label.text() for label in group.findChildren(QLabel)]
+        assert any("Anschlag" in text for text in notes), notes
+    finally:
+        group.deleteLater()
+        panel.deleteLater()
