@@ -399,6 +399,8 @@ Volumen beweisen keine Parität.
   beiden Kernen keine Rundform, sondern Oberfläche
   (`perceive.features.cylinder_fits_in_the_body`); ob eine Rundung eine Kante
   ersetzt (`replaces_an_edge`), fragen Panel und Bearbeitung, nicht der Name.
+- Eine Kugel an Rundungen ihres Radius (`perceive.features.rounds_the_corner`)
+  heißt an beiden Kernen Eckverrundung, ohne Achse.
 - `native` heißt belegt: am offenen Langloch Durchmesser, Achse, Bogenmitte,
   Richtung, nie Mündung und Weg.
 

@@ -1752,6 +1752,18 @@ def _evaluated(
     op: str, params: dict[str, Any], inputs: list[SceneObject], profile: Profile
 ) -> list[SceneObject]:
     """Vorbereitete Eingaben durch Verlauf und Auswertung, wie im Falltest oben."""
+    result, operation = _evaluation(op, params, inputs, profile)
+    assert result.complete, [
+        (finding.code, str(finding.message), finding.values)
+        for finding in result.scene.report.findings
+    ]
+    return [result.scene.objects[identifier] for identifier in operation.outputs]
+
+
+def _evaluation(
+    op: str, params: dict[str, Any], inputs: list[SceneObject], profile: Profile
+) -> tuple[Any, Any]:
+    """Auswertung und geprüfter Schritt, ohne Urteil — auch für eine erwartete Absage."""
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
     registry = Registry()
@@ -1791,11 +1803,7 @@ def _evaluated(
         sources=ProjectSources(project),
         ask=_unexpected_question,
     )
-    assert result.complete, [
-        (finding.code, str(finding.message), finding.values)
-        for finding in result.scene.report.findings
-    ]
-    return [result.scene.objects[identifier] for identifier in operation.outputs]
+    return result, operation
 
 
 @pytest.mark.parametrize("arc", [6.0, 12.0, 30.0])
@@ -1835,3 +1843,252 @@ def test_an_arched_top_is_one_curved_face_on_both_kernels(arc: float, profile: P
         assert pushed.mesh.volume == pytest.approx(_arched_section(arc) * 9.0, rel=2e-3)
     # Die Vernetzung des exakten Körpers ist der Netzzwilling: dieselben Dreiecke.
     assert tops["brep"] == tops["mesh"]
+
+
+def _rounded_all_over(shape: str, radius: float) -> Any:
+    """Ein Körper, dessen Kanten alle mit ``radius`` verrundet sind (RM-226).
+
+    ``box``: Quader 40 x 30 x 20 — zwölf Kanten, acht Ecken. ``tee``: Balken
+    40 x 10 x 10 und Steg 10 x 10 x 40, vereinigt — 24 Kanten, davon die zwei
+    Innenkanten als Kehlen, zwölf Ecken. ``unified`` legt die koplanaren
+    Teilflächen der Vereinigung zusammen, die das Netz ohnehin als eine
+    Facette liest; ohne es führte der exakte Kern die Vorderseite des T als
+    vier Flächen.
+    """
+    from app.core.brep import edit
+
+    if shape == "box":
+        return edit.fillet(edit.box(40.0, 30.0, 20.0), radius, "all")
+    joined = edit.unified(
+        edit.boolean("union", [edit.box(40.0, 10.0, 10.0), edit.box(10.0, 10.0, 40.0)])
+    )
+    return edit.fillet(joined, radius, "all")
+
+
+def _through_stl(mesh: MeshData) -> MeshData:
+    """Dasselbe Netz als binäre STL hinaus und wie ein Import herein — Ecken in float32."""
+    from app.core.geom.mesh import read_mesh
+
+    stream = io.BytesIO()
+    trimesh.Trimesh(
+        vertices=np.asarray(mesh.raw.vertices), faces=np.asarray(mesh.raw.faces), process=False
+    ).export(stream, file_type="stl")
+    imported = read_mesh(stream.getvalue(), ".stl")
+    # Die Dreiecksfolge bleibt beim Rundlauf, sonst wären die Nummern nicht vergleichbar.
+    assert imported.triangle_count == mesh.triangle_count
+    assert np.allclose(imported.raw.triangles_center, mesh.raw.triangles_center, atol=1e-4)
+    return imported
+
+
+@pytest.mark.parametrize("form", ["twin", "stl"])
+@pytest.mark.parametrize(
+    ("shape", "radius", "edges", "corners"),
+    [("box", 3.0, 12, 8), ("box", 8.0, 12, 8), ("tee", 3.0, 24, 12), ("tee", 1.0, 24, 12)],
+)
+def test_a_body_rounded_all_over_carries_the_same_features_on_both_kernels(
+    shape: str, radius: float, edges: int, corners: int, form: str
+) -> None:
+    """Rundungen, die tangential ineinander übergehen, trennt auch das Netz (RM-226).
+
+    Kanten, Kugelecken und die ebenen Flächen zwischen ihnen gehen ohne Knick
+    und mit demselben Radius ineinander über; am Netz stand der ganze Verbund
+    deshalb als eine gekrümmte Fläche da — am gerundeten T 2 750 von 2 820
+    Dreiecken —, am exakten Kern als 24 Kantenrundungen, zwölf Ecken und die
+    Flächen dazwischen. Jetzt trennt das Netz an den Dreiecken, deren Ecken auf
+    einem Zylinder liegen, und nennt jede Kugelecke, an der verrundete Kanten
+    zusammenlaufen, wie der exakte Kern eine Verrundung.
+
+    Geprüft wird die volle Parität: jedes Merkmal mit derselben Art auf
+    denselben Dreiecken — die Vernetzung des exakten Körpers ist der
+    Netzzwilling, einmal so und einmal nach dem Weg durch eine binäre STL wie
+    beim Import — und jede Rundung mit dem gebauten Radius. Die Zahl der
+    Kanten und Ecken folgt aus der Konstruktion.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _rounded_all_over(shape, radius)
+    exact = features_of(solid)
+    mesh = as_mesh_data(solid)
+    found = detect(mesh if form == "twin" else _through_stl(mesh))
+
+    def table(features: dict[str, Feature]) -> dict[tuple[str, frozenset[int]], Feature]:
+        return {
+            (feature.kind, frozenset(int(index) for index in feature.face_indices)): feature
+            for feature in features.values()
+        }
+
+    native, twin = table(exact), table(found)
+    only_twin = sorted((kind, len(faces)) for kind, faces in twin.keys() - native.keys())
+    only_native = sorted((kind, len(faces)) for kind, faces in native.keys() - twin.keys())
+    assert (only_twin, only_native) == ([], [])
+    rounds = [key for key in native if key[0] == "fillet"]
+    assert sum(1 for key in rounds if "axis" in native[key].params) == edges
+    assert sum(1 for key in rounds if "axis" not in native[key].params) == corners
+    for key in rounds:
+        # Am Zwilling bis 1e-6 mm, nach der STL auf das float32-Raster der Ecken.
+        assert twin[key].params["radius"] == pytest.approx(
+            radius, abs=1e-6 if form == "twin" else 1e-4
+        )
+        assert ("axis" in twin[key].params) == ("axis" in native[key].params)
+
+
+def _dome_between_rounded_edges() -> Any:
+    """Quader 40 x 30 x 30, die vier senkrechten Kanten R 3, oben eine Kuppel R 60 (RM-226).
+
+    Die Kugel um (0, 0, −32) schneidet jede Seite unter der Deckfläche — an den
+    Ecken bei Z 22,5, mitten an der langen Seite bei 26,1, oben bei 28 —, die
+    Kuppel ersetzt also die ganze Deckfläche und grenzt an die vier Seiten und
+    an die vier verrundeten Kanten.
+    """
+    from app.core.brep import edit
+
+    box = edit.box(40.0, 30.0, 30.0)
+    upright = [
+        edit.edge_key(item) for item in edit.edges_of(box) if abs(item.middle[2] - 15.0) <= EPS_GEOM
+    ]
+    assert len(upright) == 4
+    rounded = edit.fillet(box, 3.0, "named", upright)
+    ball = edit.moved(edit.sphere(120.0), (0.0, 0.0, -32.0))
+    return edit.boolean("intersection", [rounded, ball])
+
+
+def test_a_dome_between_rounded_edges_stays_a_sphere_on_both_kernels() -> None:
+    """Eine Kuppel, an die verrundete Kanten stoßen, ist keine Ecke (RM-226).
+
+    Eine Kugelecke entsteht, wo Kanten mit **demselben** Radius zusammenlaufen,
+    und trägt deren Radius. Beide Kerne zählten nur, wie viele Zylinderstücke
+    an einer Kugel liegen: Am Minigolfteil Gövde75 aus dem Korpus hieß so eine
+    Kuppel Ø 178,6 zwischen Rundungen R 3 und R 7 „Verrundung R 89,3“. Hier
+    stoßen vier Rundungen R 3 an eine Kuppel R 60 — sie bleibt an beiden
+    Kernen die Kugel Ø 120, die Rundungen bleiben Kantenrundungen, und keine
+    Ecke entsteht.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _dome_between_rounded_edges()
+    for kind, found in (("brep", features_of(solid)), ("mesh", detect(as_mesh_data(solid)))):
+        domes = [feature for feature in found.values() if feature.kind == "sphere"]
+        assert [dome.params["diameter"] for dome in domes] == [pytest.approx(120.0, abs=1e-3)], kind
+        rounds = [feature for feature in found.values() if feature.kind == "fillet"]
+        assert [("axis" in item.params, item.params["radius"]) for item in rounds] == [
+            (True, pytest.approx(3.0, abs=1e-3))
+        ] * 4, kind
+
+
+def _pin_with_a_cove(cove: float) -> Any:
+    """Platte 60 x 60 x 6 mit Zapfen Ø 12 x 30, sein Fuß mit ``cove`` ausgekehlt (RM-022)."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Circle
+
+    from app.core.brep import edit
+
+    plate = edit.moved(edit.box(60.0, 60.0, 6.0), (0.0, 0.0, -6.0))
+    joined = edit.boolean("union", [plate, edit.cylinder(12.0, 30.0)])
+    foot = []
+    for item in edit.edges_of(joined):
+        curve = BRepAdaptor_Curve(item.edge)
+        if curve.GetType() != GeomAbs_Circle:
+            continue
+        circle = curve.Circle()
+        if abs(circle.Radius() - 6.0) <= EPS_GEOM and abs(circle.Location().Z()) <= EPS_GEOM:
+            foot.append(edit.edge_key(item))
+    assert foot
+    return edit.fillet(joined, cove, "named", foot)
+
+
+@pytest.mark.parametrize("cove", [2.0, 3.0, 4.0])
+def test_a_pin_with_a_cove_is_a_pin_and_a_ring_on_both_kernels(cove: float) -> None:
+    """Ein Zapfen mit Hohlkehle am Fuß heißt am Netz Zapfen und Kehle (RM-226, RM-022).
+
+    Mantel und Kehle gehen tangential ineinander über; am Netz lagen beide bei
+    R 3 und R 4 in einer gekrümmten Fläche, und der Nachbau fand keinen
+    Zapfen. Zapfen und Kehle tragen jetzt an beiden Kernen dieselben Maße aus
+    der Konstruktion: Ø 12 und Ring Ø 12 + 2·R aus einer Röhre Ø 2·R. Die
+    Kehle reicht am Netz nicht ganz bis an die Platte; ihre unterste Reihe
+    liest die Ebenenregel als Facette — sie darf fehlen, aber nichts
+    hinzunehmen.
+    """
+    exact_kernel()
+    from collections import Counter
+
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _pin_with_a_cove(cove)
+    exact = features_of(solid)
+    found = detect(as_mesh_data(solid))
+    assert Counter(feature.kind for feature in found.values()) == Counter(
+        feature.kind for feature in exact.values()
+    )
+    ((native_pin, twin_pin),) = [
+        (left, right)
+        for left in exact.values()
+        if left.kind == "pin"
+        for right in found.values()
+        if right.kind == "pin"
+    ]
+    assert set(twin_pin.face_indices) == set(native_pin.face_indices)
+    assert twin_pin.params["diameter"] == pytest.approx(12.0, abs=1e-6)
+    ((native_ring, twin_ring),) = [
+        (left, right)
+        for left in exact.values()
+        if left.kind == "torus"
+        for right in found.values()
+        if right.kind == "torus"
+    ]
+    assert set(twin_ring.face_indices) <= set(native_ring.face_indices)
+    for ring in (native_ring, twin_ring):
+        assert ring.params["diameter"] == pytest.approx(12.0 + 2.0 * cove, abs=1e-6)
+        assert ring.params["tube_diameter"] == pytest.approx(2.0 * cove, abs=1e-6)
+        assert ring.params["recess"] is True
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_corner_round_refuses_on_both_kernels_with_the_sentence_of_the_panel(
+    kind: str, profile: Profile
+) -> None:
+    """An einer Kugelecke gibt es keine Kante zurückzurechnen — an beiden Kernen gleich gesagt.
+
+    Die Ecke eines rundum verrundeten Quaders heißt an beiden Kernen
+    Verrundung, hat aber keine Achse und keine zwei Ebenen neben sich. Das
+    Merkmalfenster stellte *Entfernen* und *Radius ändern* trotzdem bereit;
+    danach sagte der exakte Kern „Wählen Sie genau eine vollständige
+    Rundungsfläche …“, und das Netz wäre an der fehlenden Achse gescheitert.
+    Jetzt stehen beide Zeilen grau mit ``edges.NOT_BETWEEN_TWO_PLANES``, und
+    die Operation sagt denselben Satz.
+    """
+    exact_kernel()
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry = _object(_rounded_all_over("box", 3.0), kind)
+    corner = next(
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "fillet" and "axis" not in feature.params
+    )
+    rows = {
+        action.title: action
+        for action in actions_for(corner, entry.features, mesh=as_mesh_data(entry.mesh))
+    }
+    for name in ("remove_feature", "resize_feature"):
+        title = REGISTRY.get(name).title
+        assert rows[title].op is None, name
+        assert str(rows[title].reason) == str(NOT_BETWEEN_TWO_PLANES), name
+    for operation, params in (
+        ("remove_feature", {"at_feature": corner.id}),
+        ("resize_feature", {"at_feature": corner.id, "diameter": 8.0}),
+    ):
+        result, _step = _evaluation(operation, params, [entry], profile)
+        assert not result.complete, operation
+        refusals = [
+            str(finding.message)
+            for finding in result.scene.report.findings
+            if finding.code == f"op.{operation}.GeometryError"
+        ]
+        assert refusals == [str(NOT_BETWEEN_TWO_PLANES)], operation

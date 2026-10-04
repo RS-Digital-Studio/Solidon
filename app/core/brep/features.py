@@ -111,18 +111,6 @@ class _ThroughQuestion:
     last: float
 
 
-#: Wie viele Nachbarflächen einer kugeligen Fläche selbst Kantenverrundungen
-#: sein müssen, damit sie als Ecke gilt — die Stelle, an der verrundete Kanten
-#: zusammenlaufen. Zwei, weil eine Ecke aus mindestens zwei Kanten entsteht.
-#:
-#: **Nicht über die Größe.** Der erste Versuch maß den Anteil an der Vollkugel
-#: (Eckverrundung 0,125, volle Kugel 1,000) und trennte damit falsch: Eine
-#: Pfanne ist nie mehr als eine Halbkugel, eine flache Kalotte — eine
-#: Magnettasche etwa — kann selbst 0,1 abdecken. Gemessen an einer aus einem
-#: Quader geschnittenen Kugel: 1 Nachbar, 0 Verrundungen; an der Ecke eines
-#: rundum verrundeten Quaders: 3 Nachbarn, 3 Verrundungen.
-CORNER_NEIGHBOURS = 2
-
 # Die drei Toleranzen des Langlochs kommen von der Netzseite und stehen nur
 # dort: Wie parallel zwei Bogenachsen sein müssen, wie gleich zwei Radien und
 # ab welchem Winkel eine Fläche zum Mantel gehört. Dieselbe Frage, dieselbe
@@ -1639,7 +1627,7 @@ def _describe(
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_REVERSED
 
-    from app.core.perceive.features import MIN_ROUND_ARC
+    from app.core.perceive.features import CORNER_NEIGHBOURS, MIN_ROUND_ARC
 
     # **Dieselbe Schranke wie am Netz** (RM-210, :func:`_short_arcs_dropped`):
     # Torus- und Kegelstücke unter dem Mindestbogen sind schon hier keine
@@ -1820,7 +1808,10 @@ def _describe(
         ball = surface.sphere
         radius = float(ball.Radius())
         hollow = surface.inward
-        if _rounded_neighbours(solid, neighbours, face, cancelled=cancelled) >= CORNER_NEIGHBOURS:
+        if (
+            _rounded_neighbours(solid, neighbours, face, radius, cancelled=cancelled)
+            >= CORNER_NEIGHBOURS
+        ):
             # **Als Verrundung, nicht als Kugel.** Was hier steht, ist die
             # Ecke, an der drei verrundete Kanten zusammentreffen. Sie ist
             # gerechnet ein Kugelstück und benannt eine Verrundung: „Kuppel
@@ -2042,10 +2033,17 @@ def _point_in_material(inside: Any, point: Any) -> bool:
 
 
 def _rounded_neighbours(
-    solid: Solid, neighbours: Any, face: Any, *, cancelled: CancelToken | None = None
+    solid: Solid,
+    neighbours: Any,
+    face: Any,
+    radius: float,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> int:
     """Wie viele Flächen an dieser hier grenzen und selbst Kantenverrundungen
-    sind — zylindrisch und weniger als eine volle Umdrehung.
+    mit ihrem ``radius`` sind — zylindrisch, weniger als eine volle Umdrehung
+    und mit dem Radius einer Kugelecke (``perceive.features.rounds_the_corner``,
+    dieselbe Frage wie am Netz).
 
     Eine Fläche wird nur einmal gezählt, auch wenn sie über zwei Kanten
     anstößt; die Nachbarkarte gibt sie als nacktes Handle zurück, und
@@ -2054,6 +2052,8 @@ def _rounded_neighbours(
     """
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
+
+    from app.core.perceive.features import rounds_the_corner
 
     seen: set[int] = set()
     walk = TopExp_Explorer(face, TopAbs_EDGE)
@@ -2074,6 +2074,8 @@ def _rounded_neighbours(
         surface = solid.surface(number, cancelled=cancelled)
         if not isinstance(surface, CylinderSurface):
             continue
-        if surface.turn < _full_turn():
+        if surface.turn < _full_turn() and rounds_the_corner(
+            radius, float(surface.cylinder.Radius())
+        ):
             rounded += 1
     return rounded

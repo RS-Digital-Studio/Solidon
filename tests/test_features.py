@@ -3968,17 +3968,137 @@ def test_a_smooth_body_over_half_its_surface_is_no_skin_without_splinters() -> N
     """Die Gegenrichtung: Kapsel, Ellipsoid und der Bogen eines Buchstabens
     liegen mit ihrem gekrümmten Fleck über der Hälfte, zerfallen aber in ein
     bis fünf Stücke von Gewicht — keine Haut, kein Freiformurteil, und ihre
-    gerundeten Seiten bleiben, was sie waren."""
-    for name, mesh in (
-        ("Kapsel", MeshData.of(trimesh.creation.capsule(radius=8.0, height=30.0, count=(48, 48)))),
-        ("Ellipsoid", _curvature_patch_family(1)),
-        ("Buchstabe S", _letter("S")),
+    gerundeten Seiten bleiben im Baum. Ellipsoid und Buchstabe als gerundete
+    Seite; die Kapsel seit der tangentialen Trennung (RM-226) als das, woraus
+    sie gebaut ist — ein Zapfen Ø 16 mit zwei Halbkugeln, wie der exakte Kern
+    sie nennt. Vorher stand sie als eine gerundete Seite da."""
+    from collections import Counter
+
+    for name, mesh, kinds in (
+        (
+            "Kapsel",
+            MeshData.of(trimesh.creation.capsule(radius=8.0, height=30.0, count=(48, 48))),
+            {"pin": 1, "sphere": 2},
+        ),
+        ("Ellipsoid", _curvature_patch_family(1), None),
+        ("Buchstabe S", _letter("S"), None),
     ):
         forget_cache()
         found = detect(mesh)
         assert not features_module._fitted(mesh).freeform_skin, name
         assert not features_module.recognised_as_freeform(mesh), name
-        assert any(f.kind == "curved_face" for f in found.values()), name
+        if kinds is None:
+            assert any(f.kind == "curved_face" for f in found.values()), name
+        else:
+            assert Counter(f.kind for f in found.values()) == kinds, name
+            assert all(
+                f.params["diameter"] == pytest.approx(16.0, abs=1e-6) for f in found.values()
+            ), name
+
+
+def _swept_body(rings: list[np.ndarray], first: np.ndarray, last: np.ndarray) -> MeshData:
+    """Ein geschlossener Körper aus gleich langen Eckenringen, die Enden als ebene Fächer.
+
+    Jeder Ring läuft gegen den Uhrzeigersinn um die Wegrichtung; zwei
+    aufeinanderfolgende Ringe spannen je Ecke zwei Dreiecke auf, ``first`` und
+    ``last`` sind die Mitten der Endfächer.
+    """
+    around = len(rings[0])
+    vertices = np.vstack([*rings, first[None, :], last[None, :]])
+    faces: list[tuple[int, int, int]] = []
+    for ring in range(len(rings) - 1):
+        for corner in range(around):
+            a, b = ring * around + corner, ring * around + (corner + 1) % around
+            faces += [(a, b, a + around), (b, b + around, a + around)]
+    start, end = len(rings) * around, len(rings) * around + 1
+    closing = (len(rings) - 1) * around
+    for corner in range(around):
+        faces.append((start, (corner + 1) % around, corner))
+        faces.append((end, closing + corner, closing + (corner + 1) % around))
+    body = trimesh.Trimesh(vertices, np.asarray(faces), process=False)
+    assert body.is_watertight and body.is_winding_consistent and body.volume > 0.0
+    return MeshData.of(body)
+
+
+def _mitred_tube(path: np.ndarray, radius: float, around: int) -> MeshData:
+    """Ein Rohr als Gehrungszug durch die Punkte ``path`` in der XY-Ebene.
+
+    Je Wegstück ein Zylinder; an jedem Knick liegen die Ecken auf der
+    Ellipse, in der sich die beiden Nachbarzylinder in der Winkelhalbierenden
+    schneiden. Jede Scheibe ist damit bis auf die Rechnung ein Zylinder — so
+    setzt OpenSCAD ein Rohr aus Stücken zusammen, und so liegen die Scheiben
+    einer Rundung entlang eines geschwungenen Umrisses im Netz.
+    """
+    up = np.array([0.0, 0.0, 1.0])
+    steps = np.diff(path, axis=0)
+    ways = steps / np.linalg.norm(steps, axis=1)[:, None]
+    turns = np.linspace(0.0, 2.0 * np.pi, around, endpoint=False)
+    rings = []
+    for index, point in enumerate(path):
+        before = ways[max(index - 1, 0)]
+        mitre = before + ways[min(index, len(ways) - 1)]
+        mitre = mitre / np.linalg.norm(mitre)
+        side = np.cross(up, before)
+        circle = radius * (np.cos(turns)[:, None] * side + np.sin(turns)[:, None] * up)
+        # Entlang des vorigen Stücks bis in die Gehrungsebene geschoben.
+        shift = -(circle @ mitre) / float(before @ mitre)
+        rings.append(point + circle + shift[:, None] * before)
+    return _swept_body(rings, path[0], path[-1])
+
+
+def test_a_tube_along_a_curve_is_one_surface_not_a_row_of_cylinders() -> None:
+    """Ein Rohr, das als Gehrungszug um eine Kurve läuft, ist eine Fläche (RM-226).
+
+    Jede Scheibe zwischen zwei Gehrungen ist bis auf die Rechnung ein
+    Zylinder, die nächste um 1,3 bis 3 Grad gedreht — so liegt eine Rundung
+    entlang eines geschwungenen Umrisses im Netz (am Elegoo-Fettwerkzeug 342
+    Scheiben R 0,5). Die tangentiale Trennung las jede Scheibe als eigenes
+    Merkmal. Als Zug gefragt passt auf das Ganze — einen halben Ellipsenbogen
+    30 x 20 um ein Rohr Ø 2 — keine Form, und es bleibt die eine gekrümmte
+    Fläche.
+    """
+    from collections import Counter
+
+    along = np.linspace(0.0, np.pi, 91)
+    path = np.column_stack((30.0 * np.cos(along), 20.0 * np.sin(along), np.zeros_like(along)))
+    tube = _mitred_tube(path, 1.0, 24).raw
+    # Daneben ein Klotz, damit das Rohr nicht den Großteil der Oberfläche
+    # stellt: Allein wäre der Körper eine Haut, und auf einer Haut fragt die
+    # tangentiale Trennung gar nicht.
+    block = trimesh.creation.box(extents=(80.0, 60.0, 10.0))
+    block.apply_translation((0.0, 10.0, -15.0))
+    forget_cache()
+    found = detect(MeshData.of(trimesh.util.concatenate([tube, block])))
+    kinds = Counter(feature.kind for feature in found.values())
+    assert not kinds.keys() & {"pin", "hole", "fillet", "slot", "cone", "sphere", "torus"}, kinds
+    assert kinds["curved_face"] == 1, kinds
+
+
+def test_a_round_that_borders_only_the_rest_of_its_target_does_not_stand() -> None:
+    """Eine Rundform endet an etwas — die Einschlussregel der tangentialen Trennung (RM-226).
+
+    Am Baum mit Tablett aus dem Korpus fand die Trennung sechs
+    Zylinderstücke von sechs bis sieben Dreiecken mitten in einem glatten
+    Krümmungsstück aus 172 356 Dreiecken, jedes mit eigenem Radius — genug,
+    um das Freiformurteil zu kippen. Ein Stück steht nur, solange es an den
+    Rand seines Ziels (``-1``), an ein ebenes Reststück oder an ein stehendes
+    Stück grenzt; was fällt, nimmt anderen den Halt.
+
+    Geometrisch ließ sich ein solcher Rest nicht nachbauen: Ein Zylinder, der
+    knickfrei in eine Platte mit Mulde ausläuft, wurde in 18 Varianten
+    (Übergang linear, einmal und zweimal stetig differenzierbar, drei Breiten,
+    zwei Mulden) schon vorher getrennt oder von der lockeren Stufe in den
+    Rest gezogen. Deshalb steht die Regel hier an der Nachbarschaft, wie die
+    Trennung sie liefert: Stück 0 grenzt nur an den Rest 1 und fällt; Stück 9
+    hielt sich nur an 0 und fällt danach; 3 und 4 halten einander, 2 hält der
+    Rand, 5 das ebene Stück 6.
+    """
+    from app.core.perceive.features import _enclosed_rounds
+
+    touching = [{1}, {0, 4, 8}, {-1}, {4}, {1, 3}, {6}, {5}, {8}, {1, 7}, {0}]
+    settled = [True, False, True, True, True, True, False, True, True, True]
+    flat = [False, False, False, False, False, False, True, False, False, False]
+    assert _enclosed_rounds(touching, settled, flat) == {0, 9}
 
 
 def test_a_freeform_keeps_the_countersink_that_hangs_on_a_bore() -> None:

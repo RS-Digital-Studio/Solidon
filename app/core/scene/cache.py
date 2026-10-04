@@ -164,7 +164,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Körper passt, ist auch am exakten Kern keine Verrundung, sondern eine
 #:   gekrümmte Fläche wie am Netz; gespeicherte exakte Merkmale nennen ihn noch
 #:   ``fillet``.
-CACHE_FORMAT_VERSION: Final = 43
+#: - 44 (RM-226): Das Netz trennt tangential verbundene Rundungen an ihren
+#:   Zylindern, nennt Kugelecken zwischen verrundeten Kanten Verrundung und die
+#:   Ebenen dazwischen Fläche; gespeicherte Netzmerkmale führen dort noch eine
+#:   einzige gekrümmte Fläche.
+CACHE_FORMAT_VERSION: Final = 44
 
 
 @dataclass(frozen=True, slots=True)

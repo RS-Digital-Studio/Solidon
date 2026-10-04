@@ -18,12 +18,18 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def imported(name: str):
+    return imported_payload(name, (MESHES / name).read_bytes())
+
+
+def imported_payload(name: str, payload: bytes):
+    """Ein Projekt, das ``payload`` als Datei ``name`` in Millimetern einliest."""
     from dataclasses import replace
 
+    from app.core.bootstrap import load_operations
     from app.core.ingest.plan import import_plan
 
+    load_operations()
     project = new_project("centauri-carbon-2", "petg")
-    payload = (MESHES / name).read_bytes()
     project.sources["src_1"] = payload
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path=f"sources/{name}", sha256=""
@@ -307,6 +313,66 @@ def test_a_post_with_fillet_is_extended_to_its_support_plane(profile: Profile, r
     ]
     assert chosen.drafts[1].params["height"] == pytest.approx(30.0, abs=1e-6)
     assert chosen.result.mesh.volume == pytest.approx(source.volume, abs=1e-6)
+
+
+def test_a_post_with_a_cove_from_a_mesh_is_rebuilt_like_the_exact_one(profile: Profile):
+    """Derselbe Zapfen mit Hohlkehle, als STL eingelesen, wird gleich nachgebaut (RM-022).
+
+    Mantel und Kehle gehen tangential ineinander über; am Netz lagen beide bis
+    zur tangentialen Trennung (RM-226) in einer gekrümmten Fläche, und der
+    Nachbau fand keinen Zapfen — jeder Kandidat blieb mit unerklärten Flächen
+    stehen. Jetzt liest das Netz Zapfen und Kehle wie der exakte Kern, und der
+    Nachbau nimmt dieselbe Folge wie aus der STEP-Datei. Sollwert aus der
+    Konstruktion: das Volumen des exakten Körpers.
+    """
+    import io
+    import math
+
+    import numpy as np
+    import trimesh
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Circle
+
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.rebuild import RebuildBudget, propose
+
+    plate = edit.moved(edit.box(60.0, 60.0, 6.0), (0.0, 0.0, -6.0))
+    sharp = edit.boolean("union", [plate, edit.cylinder(12.0, 30.0)])
+    foot = [
+        edge
+        for edge in edit.edges_of(sharp)
+        if BRepAdaptor_Curve(edge.edge).GetType() == GeomAbs_Circle
+        and math.dist(edge.middle, (0.0, 0.0, 0.0)) < 1e-6
+    ]
+    assert len(foot) == 1
+    solid = edit.fillet(sharp, 3.0, "named", (edit.edge_key(foot[0]),))
+    twin = as_mesh_data(solid)
+    stream = io.BytesIO()
+    trimesh.Trimesh(
+        vertices=np.asarray(twin.raw.vertices), faces=np.asarray(twin.raw.faces), process=False
+    ).export(stream, file_type="stl")
+    project = imported_payload("post_with_a_cove.stl", stream.getvalue())
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+    kinds = sorted(feature.kind for feature in proposal.source.features.values())
+    assert kinds == ["face"] * 7 + ["pin", "torus"]
+    assert proposal.accepted, [
+        (entry.check.reason, entry.check.unexplained) for entry in proposal.candidates
+    ]
+    chosen = proposal.accepted[0]
+    assert [draft.op for draft in chosen.drafts] == [
+        "create_brep_box",
+        "create_brep_cylinder",
+        "union_objects",
+        "fillet_edges",
+    ]
+    assert chosen.result.mesh.volume == pytest.approx(solid.volume, abs=1e-3)
 
 
 def test_rebuild_is_one_transaction_with_parameters_sources_and_disk_round_trip(

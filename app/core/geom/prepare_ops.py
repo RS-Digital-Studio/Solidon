@@ -20037,6 +20037,7 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
     Und wieder zwei Kerne: Der exakte nimmt die Rundungsfläche als Ding
     (``BRepAlgoAPI_Defeaturing``), das Netz legt den Zwickel dazu.
     """
+    _refuse_a_corner(source.features[name])
     if source.features[name].params.get("tangent", False):
         from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS
 
@@ -20070,6 +20071,7 @@ def _reshape_the_fillet(
     radius: float,
 ) -> OpResult:
     """Den Radius einer erkannten Rundung ändern."""
+    _refuse_a_corner(source.features[name])
     if is_close(radius, float(source.features[name].params["radius"])):
         return OpResult(
             outputs=[source],
@@ -20099,6 +20101,23 @@ def _reshape_the_fillet(
         cancelled=ctx.cancelled,
     )
     return _after_the_fillet(source, name, outcome, radius=radius, ctx=ctx)
+
+
+def _refuse_a_corner(feature: Feature) -> None:
+    """Eine Eckrundung wird weder entfernt noch geändert — an beiden Kernen derselbe Satz.
+
+    Wo verrundete Kanten zusammenlaufen, ist die Rundung eine Kugel ohne
+    Achse (RM-226); unter ihr liegt keine Kante, auf die sie sich
+    zurückführen ließe. Das Merkmalfenster stellt beide Zeilen mit diesem Satz
+    grau (``perceive.actions.fillet_blocked``), und die Operation sagt ihn,
+    wenn Chat oder Kommandozeile sie trotzdem rufen. Vorher sagte der exakte
+    Kern „Wählen Sie genau eine vollständige Rundungsfläche …“, und das Netz
+    scheiterte an der fehlenden Achse.
+    """
+    if "axis" not in feature.params:
+        from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
 
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:
