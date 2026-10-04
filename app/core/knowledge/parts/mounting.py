@@ -943,7 +943,7 @@ class KeyholeParams(BaseParams):
 
 KEYHOLE_DROP_TOO_SHORT = _(
     "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg "
-    "vergrößern oder das Kopfspiel verkleinern."
+    "vergrößern oder das Spiel verkleinern."
 )
 KEYHOLE_HEAD_ROOM_TOO_DEEP = _(
     "Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt."

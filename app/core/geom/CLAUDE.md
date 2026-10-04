@@ -22,6 +22,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
 | Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
 | Arkuskosinus (Knickwinkel, Bogenspanne) | `mesh.stable_arccos` |
+| Sinus und Kosinus vieler Winkel | `mesh.stable_sin_cos` |
 | Ausgleichsebene, symmetrische 3x3-Eigenwerte | `units.plane_fit`, `units.symmetric_eigen3` |
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
@@ -144,8 +145,10 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 
 **Wandungen** — `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
-GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen) · `container_ops.py`
-(Behälter, Deckel und Einsätze; Transaktionsentwurf in `core/lid_flow.py`)
+GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
+Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
+Einsätze; Entwurf in `core/lid_flow.py`) · `counter_form_ops.py` (Taschen aus
+dem Schatten der Teile)
 
 **Druckvorbereitung** — `prepare.py`, `prepare_ops.py` (Bohrungen, Teilen,
 Anordnen, Kollisionen, §18.6; Merkmalshandlungen, `pattern_feature`; die
@@ -182,7 +185,8 @@ Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `col
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen
 der Richtung, `opposite_side`; negative Innenhäute und die belegte, nicht
 offene Höhlung (`MeshData.cavity_open`) werden übersprungen, auch wenn eine
-Entlüftung die Häute verbindet)
+Entlüftung die Häute verbindet) · `label_layout.py` (Schrift auf Bogen und
+Rundung, Radius aus `measured_radius`)
 
 ## Stolperfallen
 
@@ -393,7 +397,3 @@ Grundoperationen/IntegerGrid-Raster und liefern je Richtung bitgleiche Werte.
 Der Reserveplatz prüft Stand vor Bauraumpassung. Eigenkreuzungen prüfen alle
 koplanaren Überlagerungen; gemeinsame Kanten und widerlegte Kollinearität
 ersparen nur bereits entschiedene Restfragen.
-
-`IntegerGrid.of(count=...)` darf bekannte Nullen auslassen: Die ursprüngliche
-Gesamtzahl bestimmt den Rasterexponenten und muss mindestens der Wertzahl
-entsprechen. Ohne Angabe gilt der bisherige Vertrag.

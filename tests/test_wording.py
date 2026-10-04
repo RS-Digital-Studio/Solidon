@@ -584,6 +584,14 @@ ZITAT_DARF_ABWEICHEN: dict[tuple[str, str], str] = {
     ): "Begriff im Satz, nicht der Feldname; klein im Satz.",
 }
 
+#: (Anfang des Schlüssels, Zitat) → Übersetzungskontext des zitierten Knopfs.
+#: Ein deutsches Wort für zwei Knöpfe trennt ein Kontext (*Abziehen* als
+#: Boolesche Operation und als Buchung im Filamentlager); ohne Eintrag hier
+#: meint ein Zitat den Schlüssel ohne Kontext.
+ZITAT_KONTEXT: dict[tuple[str, str], str] = {
+    ("Vorschlag: {spool}.", "Abziehen"): "Lagerbestand",
+}
+
 
 def test_a_quoted_control_is_named_as_the_control_says() -> None:
     """Ein Satz, der „Werkzeuge prüfen“ zitiert, zitiert in jeder Sprache den Knopf.
@@ -602,8 +610,22 @@ def test_a_quoted_control_is_named_as_the_control_says() -> None:
     }
     source = catalogs[languages[0]]
     assert len(source) > 500, "keine Katalogschlüssel gelesen — dann prüft das nichts"
+    contexts_used: set[tuple[str, str]] = set()
 
-    def control(name: str) -> str | None:
+    def control(sentence: str, name: str) -> str | None:
+        entry = next(
+            (
+                entry
+                for entry in ZITAT_KONTEXT
+                if sentence.startswith(entry[0]) and name == entry[1]
+            ),
+            None,
+        )
+        if entry is not None:
+            contexts_used.add(entry)
+            key = f"{ZITAT_KONTEXT[entry]}\x04{name}"
+            assert key in source, f"Kontextschlüssel {key!r} fehlt im Katalog"
+            return key
         if name in source:
             return name
         return next((key for key in source if key.rstrip(" …") == name), None)
@@ -614,7 +636,7 @@ def test_a_quoted_control_is_named_as_the_control_says() -> None:
     for key in source:
         for quote in re.findall(r"„([^“]+)“", key):
             parts = [part.strip() for part in quote.split("→")]
-            keys = [control(part) for part in parts]
+            keys = [control(key, part) for part in parts]
             if any(entry is None for entry in keys):
                 continue  # kein Knopf, sondern ein Beispielsatz oder ein Begriff
             exempt = next(
@@ -636,6 +658,7 @@ def test_a_quoted_control_is_named_as_the_control_says() -> None:
                         used.add(exempt)
                         continue
                     wrong.append(f"[{language}] „{part}“ = {wanted!r} fehlt in {key[:60]!r}")
+    assert sorted(set(ZITAT_KONTEXT) - contexts_used) == [], "Kontextangabe ohne Zitat"
     assert checked > 100, f"nur {checked} Zitate geprüft — dann prüft das nichts"
     assert not wrong, "Knopf anders zitiert, als er heißt:\n" + "\n".join(wrong)
     unused = sorted(set(ZITAT_DARF_ABWEICHEN) - used)

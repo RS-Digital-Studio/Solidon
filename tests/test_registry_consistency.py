@@ -957,6 +957,11 @@ def test_the_slot_limit_is_one_number_not_three() -> None:
 
 #: Zahlwörter, wie die Regeldateien sie schreiben — Ziffern stehen dort nicht.
 _ZAHLWORT: Final[dict[str, int]] = {
+    "hundertsechsundsiebzig": 176,
+    "hundertfünfundsiebzig": 175,
+    "einundsiebzig": 71,
+    "hundertvierundsiebzig": 174,
+    "siebzig": 70,
     "elf": 11,
     "zwölf": 12,
     "zwanzig": 20,

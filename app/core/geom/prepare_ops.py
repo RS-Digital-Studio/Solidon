@@ -23,12 +23,14 @@ from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
     CHANGE_SELECTION,
+    CHANGE_SIZE,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
     RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
     SHOW_FEATURE,
+    SHOW_HISTORY,
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
@@ -117,7 +119,15 @@ from app.core.geom.prepare import (
     surface_index_of,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
-from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, translation
+from app.core.geom.transform import (
+    Axis,
+    composed,
+    moved_object,
+    pattern_centre,
+    pattern_centre_param,
+    place_on_bed,
+    translation,
+)
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.scene.placement import SIDE_KEYS, side_of
@@ -160,6 +170,7 @@ from app.core.units import (
     FEATURE_REACH,
     MAX_FACET_SAG,
     format_length,
+    format_volume,
     is_close,
     is_zero,
 )
@@ -422,8 +433,8 @@ class DrillParams(BaseParams):
         minimum=0.2,
         maximum=200.0,
         doc=_(
-            "Nenndurchmesser der Bohrung. Für eine Schraube gibt es *Schraubenloch* "
-            "in den Bausteinen — dort kommen die Maße aus der Normteiltabelle."
+            "Nenndurchmesser der Bohrung. Für eine Schraube gibt es den Baustein "
+            "„Schraubenloch mit Senkung“, dort kommen die Maße aus der Normteiltabelle."
         ),
     )
     x: float = param(
@@ -2662,7 +2673,15 @@ def _tool_for(
         travel = np.asarray(centre, dtype=np.float64) - np.asarray(
             feature.params["centre"], dtype=np.float64
         )
-        built = _past_the_mouths(mesh, built, travel=travel if rigid else None)
+        # Die Bohrung starr bewegt wächst als Zylinder in die verschobene
+        # Randebene, wie ``_exact_rigid_cut`` sie schneidet; die Tasche mit Lippe
+        # hebt der exakte Kern längs der Normale an (``_exact_own_cut``).
+        built = _past_the_mouths(
+            mesh,
+            built,
+            travel=travel if rigid else None,
+            walls=rigid and air is None and feature.kind == "hole",
+        )
     if feature.kind == "pin" and rooted:
         # **Ein gesetzter Zapfen ist so hoch wie der gemessene** (22.09.2026).
         # Unverändert kommt er aus seinen Flächen und bekommt unten einen
@@ -4362,7 +4381,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
-    cache_version="11",
+    # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="12",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4734,7 +4754,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
     # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 8: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
-    cache_version="8",
+    # 9: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    cache_version="9",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5149,7 +5170,10 @@ class _PatternPlace:
     # 3: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 4: jede Instanz einer Kette trägt ihre gerundete Mündungskante (RM-259).
-    cache_version="5",
+    # 6: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
+    # 7: exakt endet eine Durchgangsbohrung an ihren mitbewegten Randebenen, und
+    # jede Kopie fragt die Säule; am Netz im Werkzeug ihres Platzes (RM-226).
+    cache_version="7",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -5587,11 +5611,15 @@ def _mesh_pattern_result(
         findings.extend(outcome.findings)
         stages.append(outcome.solver)
     copies: dict[FeatureId, Feature] = {}
+    through_lost: dict[FeatureId, list[Finding]] = {}
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
         findings.extend(_edge_findings(body, place.copies))
         for copy in place.copies:
             if copy.params.get("through"):
+                # Die Säule im Werkzeug des Platzes, wie beim Verdoppeln (RM-133):
+                # Was erst hinter seinem Ende steht, liegt hinter Luft.
+                tool = place.probe if is_a_cavity(place.unit.feature) else None
                 lost = _throughness_lost(
                     placed,
                     copy,
@@ -5600,15 +5628,26 @@ def _mesh_pattern_result(
                     quality=ctx.quality,
                     seed=seed,
                     cancelled=ctx.cancelled,
+                    tool=tool,
                 )
-                findings.extend(lost)
                 if lost:
-                    copy = dataclasses.replace(copy, params={**copy.params, "through": False})
+                    through_lost[copy.id] = lost
             copies[copy.id] = copy
     copies, missing = _copies_found(
         "pattern_feature", placed, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
     )
     findings.extend(missing)
+    for name, lost in through_lost.items():
+        # **Erst nachgemessen, dann nicht mehr durchgehend** — wie beim
+        # Verdoppeln (RM-220): Die Messung am Ergebnis nannte die Bohrung einer
+        # vervielfachten Senkbohrung wieder durchgehend, während der Satz „geht
+        # nicht mehr durch“ dastand. Und was es nicht gibt, geht auch nicht mehr
+        # durch (RM-226): Eine verlorene Kopie trägt nur ihren eigenen Satz.
+        if name in copies:
+            findings.extend(lost)
+            copies[name] = dataclasses.replace(
+                copies[name], params={**copies[name].params, "through": False}
+            )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -5645,24 +5684,26 @@ def _exact_pattern_result(
 
     solid = _exact_body(source)
     faces_bodies: dict[str, Any] = {}
+    rims: dict[str, tuple[_Rim, ...]] = {}
     material: list[Any] = []
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
         if not is_a_cavity(place.unit.feature):
-            material.append(_exact_place_tool(source, solid, place, faces_bodies))
+            material.append(_exact_place_tool(source, solid, place, faces_bodies, rims))
     placed = solid
     if material:
         placed = edit.unified(edit.boolean("union", [placed, *material]))
     hollow = [place for place in kept if is_a_cavity(place.unit.feature)]
+    tools = None
     if hollow:
         # Alle Hohlräume in einer Differenz, wie bisher — und wie beim
         # Verdoppeln wiederholt, wenn sie still scheitert
         # (:func:`_exact_chain_cut_holding`).
         base = placed
-        placed, _tools = _exact_chain_cut_holding(
+        placed, tools = _exact_chain_cut_holding(
             base,
             lambda overlap: _pattern_hollow_tool(
-                source, solid, hollow, faces_bodies, overlap=overlap
+                source, solid, hollow, faces_bodies, rims, overlap=overlap
             ),
         )
     copies = [copy for place in kept for copy in place.copies]
@@ -5679,6 +5720,16 @@ def _exact_pattern_result(
     result = _exact_copy_result(
         ctx, source, placed, copies, findings, op="pattern_feature", mouths=mouths
     )
+    if tools is not None:
+        # **Dieselbe Säule je Kopie wie beim Verdoppeln** (RM-226, Nachtrag):
+        # Die Bohrung einer Senkbohrung, längs der Schräge vervielfacht, mündet
+        # in ihren Kegel und heißt für die Erkennung durchgehend; das Netz sagte
+        # „geht nicht mehr durch“ (``_mesh_pattern_result``), der exakte Kern
+        # nichts.
+        for place in hollow:
+            for copy in place.copies:
+                if copy.params.get("through"):
+                    result = _exact_through_checked(ctx, result, copy.id, tools, "pattern_feature")
     result.findings = [dataclasses.replace(entry, object_id=source.id) for entry in result.findings]
     return result
 
@@ -5688,6 +5739,7 @@ def _pattern_hollow_tool(
     solid: Any,
     places: Sequence[_PatternPlace],
     faces_bodies: dict[str, Any],
+    rims: dict[str, tuple[_Rim, ...]],
     *,
     overlap: float,
 ) -> Any:
@@ -5695,7 +5747,8 @@ def _pattern_hollow_tool(
     from app.core.brep import edit
 
     tools = [
-        _exact_place_tool(source, solid, place, faces_bodies, overlap=overlap) for place in places
+        _exact_place_tool(source, solid, place, faces_bodies, rims, overlap=overlap)
+        for place in places
     ]
     return edit.boolean("union", tools) if len(tools) > 1 else tools[0]
 
@@ -5705,10 +5758,16 @@ def _exact_place_tool(
     solid: Any,
     place: _PatternPlace,
     faces_bodies: dict[str, Any],
+    rims: dict[str, tuple[_Rim, ...]],
     *,
     overlap: float = FEATURE_OVERLAP,
 ) -> Any:
-    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung."""
+    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung.
+
+    ``faces_bodies`` und ``rims`` merken je Merkmal, was an der Quelle gelesen
+    wird: Flächenkörper und Endringe sind an jedem Platz und in jedem Versuch
+    dieselben (die Endringe kosten je Lesung einige Millisekunden).
+    """
     from app.core.brep import edit
 
     feature = place.unit.feature
@@ -5729,8 +5788,21 @@ def _exact_place_tool(
         own = _exact_own_cavity(source, feature)
         if own is not None:
             return _own_placed(own, place.matrix, overlap)
+        # **Und starr wie beim Verdoppeln** (RM-226, Nachtrag 04.10.2026): Die
+        # Durchgangsbohrung endet an ihren mitbewegten Randebenen
+        # (:func:`_exact_rigid_cut`). Mit der ganzen Zielhülle als Tiefe bohrte
+        # sie längs einer schrägen Platte bis an die höhere Oberseite durch —
+        # 69,9 mm³ mehr und durchgehend, wo das Netz „geht nicht mehr durch“ sagt.
+        if feature.id not in rims:
+            rims[feature.id] = _through_rims(source, feature)
         axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
-        return _exact_cavity_tool(solid, copy, centre, axis)
+        tool = _exact_cavity_tool(solid, copy, centre, axis, reach=overlap)
+        return _clipped_at_moved_rims(
+            tool,
+            rims[feature.id],
+            lambda plane: _plane_placed(plane, place.matrix),
+            overlap,
+        )
     if feature.id not in faces_bodies:
         faces_bodies[feature.id] = _exact_body_from_faces(source, feature)
     return edit.transformed(faces_bodies[feature.id], as_transform(place.matrix))
@@ -5763,11 +5835,18 @@ def _chain_copy_tool(
     # Kennzahlen mit anderer Teilung schnitt an der neuen Stelle mehr ab, als
     # er zurückgab — an der Platte mit Zylinder R 40 1,1 mm³ je Versetzen.
     # Die Kopie nimmt die gerundete Mündungskante mit (RM-259).
+    from app.core.perceive.relations import cavity_blend_indices
+
     exact = _paired_cavity_body(body, *chain, mouth_blends=True) or _past_curved_mouths(
         body, chain, mouth_blends=True
     )
+    # Die Wand trägt den Kragen, wo der exakte Kern die Kette als Drehkörper an
+    # den mitbewegten Randebenen schneidet (``_exact_chain_tool_placed``); eine
+    # Kette mit Lippe oder gerundeter Mündungskante hebt er aus ihren Flächen
+    # längs der Normale an (``_exact_chain_own_cavity``, ``edit.collared``).
+    walls = not _narrows_outward(chain) and not cavity_blend_indices(body, tuple(chain))
     tool = (
-        _past_the_mouths(body, exact)
+        _past_the_mouths(body, exact, walls=walls)
         if exact is not None
         else _chain_tool(body, chain, pivot=measured, tilt=0.0)
         or _cavity_tool(
@@ -6964,7 +7043,11 @@ def _shares_in_material(
 
 
 def _past_the_mouths(
-    mesh: MeshData, cavity: MeshData, *, travel: NDArray[np.float64] | None = None
+    mesh: MeshData,
+    cavity: MeshData,
+    *,
+    travel: NDArray[np.float64] | None = None,
+    walls: bool = False,
 ) -> MeshData:
     """Der exakte Hohlraumkörper, an seinen Mündungen um ``FEATURE_OVERLAP``
     über die Oberfläche hinaus verlängert — das Werkzeug für die Differenz (§39).
@@ -6976,6 +7059,16 @@ def _past_the_mouths(
     0,5 mm gegen seine schräge Unterseite versetzt, sonst unter einer Haut von
     0,03 mm stehen und hieß „geht nicht mehr durch" — der exakte Kern sagte am
     Teppichclip mit derselben Zunge nichts (Durchsicht 0.5.1, BOHRUNG-05).
+
+    ``walls`` lässt die Wand den Deckel tragen (:func:`_continued_walls`): Die
+    Bohrung wächst als Zylinder, die Senkung als Kegel bis in die verschobene
+    Randebene, wie der exakte Kern sie schneidet (``clipped_bore_tool``,
+    ``_exact_chain_tool_placed``). Längs der Deckelnormale angehoben stand an
+    einer schrägen Mündung ein um 14° gescherter Ring — liegt sie an der neuen
+    Stelle im Material, wurde er Wand der Kopie, und die Erkennung las diese
+    nicht mehr als Bohrung (RM-226, Nachtrag 04.10.2026). Ohne ``walls`` bleibt
+    es beim Kragen längs der Normale — für Langloch und Tasche mit Lippe, die der
+    exakte Kern ebenso anhebt (``edit.collared``).
 
     Ein Hohlraum aus seinen Flächen (:func:`_body_from_faces`) endet bündig
     in der Oberfläche, und eine bündige Differenz lässt eine Haut stehen. Das
@@ -7025,7 +7118,7 @@ def _past_the_mouths(
     shares = _shares_in_material(
         mesh, [(points[rim[:, 0]], normal) for _facet, _cap, normal, _members, rim in candidates]
     )
-    for (facet, _cap, normal, _members, _rim), share in zip(candidates, shares, strict=True):
+    for (facet, _cap, normal, members, rim), share in zip(candidates, shares, strict=True):
         if share > 0.0:
             continue
         reach = FEATURE_OVERLAP
@@ -7033,7 +7126,11 @@ def _past_the_mouths(
             along = units.dot3(normal, travel)
             if -MAX_FACET_SAG <= along < 0.0:
                 reach -= along
-        lifts.append((facet, normal, reach))
+        carried = _continued_walls(raw, facet, members, rim, reach) if walls else None
+        if carried is not None:
+            lifts.append((facet, carried, 1.0))
+        else:
+            lifts.append((facet, normal, reach))
     if not lifts:
         return cavity
     # Anheben und Wand ergänzen: der Netz-Zwilling von ``edit.collared``.
@@ -7041,6 +7138,107 @@ def _past_the_mouths(
     if not widened.is_watertight or widened.volume <= raw.volume - EPS_GEOM:
         return cavity
     return MeshData.of(widened)
+
+
+def _continued_walls(
+    raw: Any,
+    facet: NDArray[np.int64],
+    members: NDArray[np.int64],
+    rim: NDArray[np.int64],
+    reach: float,
+) -> NDArray[np.float64] | None:
+    """Wohin jede Ecke eines Deckels rückt, wenn ihn seine Wand um ``reach``
+    hinausträgt — je Ecke in der Folge von ``members`` (``np.unique`` seiner
+    Dreiecke), wie :func:`~app.core.geom.mesh.lifted_caps` sie liest.
+
+    Der Deckel wandert in seine um ``reach`` längs der Normale verschobene
+    Ebene, jede Randecke dorthin, wo sich die Ebenen ihrer zwei Wanddreiecke
+    mit ihr schneiden: ``reach · c / (n · c)`` mit ``c`` dem Kreuzprodukt der
+    Wandnormalen. Am Facettenmantel einer Bohrung ist ``c`` die Achse, an einer
+    Senkung ihre Mantellinie — die Wand läuft weiter, wie der exakte Kern sie
+    schneidet, und das Band zwischen altem und neuem Rand liegt in den Ebenen
+    der Facetten. Liegen beide Wanddreiecke einer Ecke in einer Ebene (eine
+    feiner geteilte Facette, :data:`~app.core.units.SAME_PLANE_AT_A_CORNER`),
+    teilt sie den Weg ihrer Nachbarn längs des Rands, nach der Bogenlänge.
+    Innere Ecken nehmen die Mitte der Randwege; so bleibt der Deckel eben.
+
+    ``None`` heißt: Kragen längs der Normale wie bisher — wo eine Ecke weiter
+    als :data:`~app.core.units.GRAZING_SLIDE`-mal die Zugabe rutschte (die Wand
+    läuft fast parallel aus, eine gerundete Mündungskante), wo der Rand kein
+    Ring ist oder keine Ecke eine Richtung hat.
+    """
+    from app.core.geom.mesh import stable_normals
+
+    loop = _rim_loop(rim)
+    if loop is None:
+        return None
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    wall_normals = stable_normals(raw)[0]
+    normal = wall_normals[int(facet[0])]
+    # Je Randkante das Dreieck außerhalb des Deckels, über eine Nummer je Kante.
+    width = len(points)
+    sides = faces[:, [[0, 1], [1, 2], [2, 0]]]
+    codes = np.minimum(sides[..., 0], sides[..., 1]) * width + np.maximum(
+        sides[..., 0], sides[..., 1]
+    )
+    outside = np.ones(len(faces), dtype=bool)
+    outside[np.asarray(facet, dtype=np.int64)] = False
+    ring = np.asarray(loop, dtype=np.int64)
+    following = np.roll(ring, -1)
+    rim_codes = np.minimum(ring, following) * width + np.maximum(ring, following)
+    owner: dict[int, int] = {}
+    for face, side in zip(*np.nonzero(np.isin(codes, rim_codes) & outside[:, None]), strict=True):
+        owner[int(codes[face, side])] = int(face)
+    walls_at = [owner.get(int(code)) for code in rim_codes]
+    if any(face is None for face in walls_at):
+        return None
+    count = len(ring)
+    shifts = np.full((count, 3), np.nan, dtype=np.float64)
+    for position in range(count):
+        before = wall_normals[cast(int, walls_at[position - 1])]
+        after = wall_normals[cast(int, walls_at[position])]
+        if 1.0 - units.dot3(before, after) <= units.SAME_PLANE_AT_A_CORNER:
+            continue
+        line = np.cross(before, after)
+        rise = units.dot3(normal, line)
+        if abs(rise) <= EPS_GEOM:
+            return None
+        step = line * (reach / rise)
+        if math.hypot(*(float(value) for value in step)) > units.GRAZING_SLIDE * reach:
+            return None
+        shifts[position] = step
+    known = np.flatnonzero(np.isfinite(shifts[:, 0]))
+    if not len(known):
+        return None
+    if len(known) < count:
+        # Bogenlänge längs des Rands; jede Ecke ohne eigene Richtung liegt
+        # zwischen zwei Ecken mit einer und teilt deren Wege linear.
+        lengths = [
+            math.hypot(
+                *(float(value) for value in points[ring[(index + 1) % count]] - points[node])
+            )
+            for index, node in enumerate(ring)
+        ]
+        total = math.fsum(lengths)
+        along = [0.0] * count
+        for index in range(1, count):
+            along[index] = along[index - 1] + lengths[index - 1]
+        for position in np.flatnonzero(~np.isfinite(shifts[:, 0])).tolist():
+            later = int(known[np.searchsorted(known, position) % len(known)])
+            earlier = int(known[np.searchsorted(known, position) - 1])
+            gap = (along[later] - along[earlier]) % total or total
+            share = ((along[position] - along[earlier]) % total) / gap
+            shifts[position] = shifts[earlier] * (1.0 - share) + shifts[later] * share
+    moved = np.zeros((len(members), 3), dtype=np.float64)
+    slot = {int(node): index for index, node in enumerate(np.asarray(members).tolist())}
+    on_the_rim = set(ring.tolist())
+    for position, node in enumerate(ring.tolist()):
+        moved[slot[int(node)]] = shifts[position]
+    inner = [index for node, index in slot.items() if node not in on_the_rim]
+    if inner:
+        moved[inner] = np.asarray(units.exact_centre(shifts.tolist()), dtype=np.float64)
+    return moved
 
 
 def _chain_tool(
@@ -7341,7 +7539,11 @@ class ResizeFeatureParams(BaseParams):
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: Mantel und Musterstopfen teilen achsparallele Facetten samt ihrer
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
-    cache_version="16",
+    # 17: Ein geändertes Gewinde misst die Wand, die es lässt — Absage beim
+    # Durchbruch, Befund ``thread.thin_wall`` unter der Mindestwand (RM-184).
+    # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
+    # gebaut, wie es dasteht, ohne Spiel daneben.
+    cache_version="18",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -13465,10 +13667,13 @@ def _exact_through_checked(
     output = result.outputs[0]
     bore = output.features.get(bore_id)
     code = f"{op}.no_longer_through"
+    # Je Bohrung gefragt: Im Muster stehen mehrere Kopien, jede mit eigenem Satz.
     if (
         bore is None
         or not bore.params.get("through")
-        or any(finding.code == code for finding in result.findings)
+        or any(
+            finding.code == code and bore_id in finding.feature_ids for finding in result.findings
+        )
     ):
         return result
     slim = dataclasses.replace(
@@ -13542,34 +13747,19 @@ def _exact_rigid_cut(
     dickeres Material (RM-220, 25.09.2026). Ohne flache Ränder bleibt es beim
     Hüllschnitt.
     """
-    from app.core.brep import edit
-
     own = _exact_own_cavity(source, feature)
     if own is not None:
         return _exact_own_cut(solid, own, travel)
-    rims = (
-        _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
-        if feature.params.get("through")
-        else ()
-    )
-    if len(rims) != 2:
-        rims = ()
+    rims = _through_rims(source, feature)
+
+    def seated(plane: SectionPlane) -> SectionPlane:
+        normal = np.asarray(plane.normal, dtype=np.float64)
+        shift = units.dot3(normal, _seated(travel, normal))
+        return dataclasses.replace(plane, position=plane.position + shift)
 
     def tool_with(overlap: float) -> Any:
         tool = _exact_cavity_tool(solid, feature, target, axis, reach=overlap)
-        if not rims:
-            return tool
-        planes = []
-        for rim in rims:
-            normal = np.asarray(rim.plane.normal, dtype=np.float64)
-            shift = units.dot3(normal, _seated(travel, normal))
-            # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
-            # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
-            extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
-            planes.append(
-                dataclasses.replace(rim.plane, position=rim.plane.position + shift + extra)
-            )
-        return edit.clipped_bore_tool(tool, tuple(planes))
+        return _clipped_at_moved_rims(tool, rims, seated, overlap)
 
     # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken,
     # ihre Teilungsnähte gehören nicht zum Mantel (``slot_bore``) — deshalb
@@ -13581,6 +13771,40 @@ def _exact_rigid_cut(
         overlaps=CUT_OVERLAPS if rims else (1.0,),
         unify=feature.kind == "slot",
     )
+
+
+def _through_rims(source: SceneObject, feature: Feature) -> tuple[_Rim, ...]:
+    """Die zwei Endringe einer Durchgangsbohrung oder eines Langlochs, an denen
+    ihr starr bewegtes Werkzeug endet — leer an einem Sackloch oder ohne zwei
+    flache Ränder; dann bleibt es beim Hüllschnitt (:func:`_exact_rigid_cut`,
+    :func:`_exact_place_tool`)."""
+    if not feature.params.get("through"):
+        return ()
+    rims = _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+    return rims if len(rims) == 2 else ()
+
+
+def _clipped_at_moved_rims(
+    tool: Any,
+    rims: Sequence[_Rim],
+    moved: Callable[[SectionPlane], SectionPlane],
+    overlap: float,
+) -> Any:
+    """``tool`` an den Randebenen ``rims`` begrenzt, nachdem ``moved`` sie an den
+    neuen Platz gebracht hat — das starre Werkzeug einer Bohrung, die versetzt,
+    verdoppelt oder vervielfacht wird."""
+    from app.core.brep import edit
+
+    if not rims:
+        return tool
+    planes = []
+    for rim in rims:
+        plane = moved(rim.plane)
+        # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
+        # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
+        extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
+        planes.append(dataclasses.replace(plane, position=plane.position + extra))
+    return edit.clipped_bore_tool(tool, tuple(planes))
 
 
 def _exact_slot_body(source: SceneObject, feature: Feature) -> Any | None:
@@ -14998,6 +15222,119 @@ def _thread_checked(feature: Feature, diameter: float, pitch: float) -> tuple[fl
     return diameter, wanted_pitch
 
 
+#: Wie viele Strahlen je Messring und an welchen Stellen der Strecke die Wand
+#: um ein Gewinde gemessen wird: 24 Richtungen treffen die Seitenwände eines
+#: Quaders senkrecht, fünf Ringe die Mitte und beide Enden innerhalb der Gänge.
+_WALL_RAYS: Final = 24
+_WALL_RINGS: Final = (-0.4, -0.2, 0.0, 0.2, 0.4)
+
+
+def _thread_wall(
+    source: SceneObject, feature: Feature, diameter: float, pitch: float, profile: Profile
+) -> list[Finding]:
+    """Die Wand, die das neue Gewinde übrig lässt — Absage, wenn es durchbricht (RM-184).
+
+    Ein Innengewinde, das wächst, frisst die Wand um sich; ein Außengewinde,
+    das schrumpft, den Kern über einer Bohrung in seiner Achse. Gemessen wird
+    mit Strahlen quer zur Achse an der Tessellation, an beiden Kernen gleich:
+    innen der erste Austritt aus dem Material jenseits der alten Gänge, außen
+    der letzte Eintritt diesseits von ihnen. Das neue Gewinde reicht innen bis
+    zu seinem Nenn-Ø, außen bis zu seinem Kern (``shapes.RIDGE_SHARE``).
+
+    Gemeldet wird nur, was diese Änderung dünner macht als das Profil verlangt
+    (``Profile.minimum_wall_thickness``) — wie bei der Nachbarwand einer
+    Bohrung. Die Zahl entscheidet über einen Satz, nicht über Geometrie; die
+    Tessellation weicht höchstens um ``MAX_FACET_SAG`` ab.
+    """
+    from app.core.knowledge.parts import shapes
+    from app.core.sketch.planes import frame_of
+
+    internal = bool(feature.params.get("internal", False))
+    centre, axis, length = _thread_frame(feature)
+    inner, outer = _thread_bounds(feature, source)
+    mesh = as_mesh_data(source.mesh)
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    frame = frame_of((float(axis[0]), float(axis[1]), float(axis[2])), (0.0, 0.0, 0.0))
+    across = np.asarray(frame.x_axis, dtype=np.float64), np.asarray(frame.y_axis, dtype=np.float64)
+    reach: float | None = None
+    for share in _WALL_RINGS:
+        origin = centre + axis * (share * length)
+        for index in range(_WALL_RAYS):
+            cosine, sine = units.circle_point(_WALL_RAYS, index)
+            way = across[0] * cosine + across[1] * sine
+            distances, hit = ray_hits_along(triangles, origin, way)
+            facing = (normals[hit] * way).sum(axis=1)
+            if internal:
+                # Der erste Austritt hinter den alten Gängen ist die Außenwand.
+                exits = distances[(facing > 0.0) & (distances > outer - MAX_FACET_SAG)]
+                if len(exits):
+                    found = float(exits.min())
+                    reach = found if reach is None else min(reach, found)
+            else:
+                # Der letzte Eintritt vor dem Kern ist der Rand einer Bohrung darin.
+                entries = distances[(facing < 0.0) & (distances < inner + MAX_FACET_SAG)]
+                if len(entries):
+                    found = float(entries.max())
+                    reach = found if reach is None else max(reach, found)
+    if reach is None:
+        return []
+    minimum = profile.minimum_wall_thickness
+    if internal:
+        wall, before = reach - diameter / 2.0, reach - outer
+        largest = 2.0 * (reach - minimum)
+    else:
+        core = diameter / 2.0 - pitch * shapes.RIDGE_SHARE
+        wall, before = core - reach, inner - reach
+        largest = 2.0 * (reach + minimum + pitch * shapes.RIDGE_SHARE)
+    if wall <= EPS_GEOM:
+        raise ValidationError(
+            field="diameter",
+            detail=(
+                _(
+                    "So groß bricht das Gewinde durch die Wand des Teils. Mit der "
+                    "Mindestwand des Materials geht es bis {largest}.",
+                    largest=format_length(largest),
+                )
+                if internal
+                else _(
+                    "So klein bricht das Gewinde in die Bohrung in seiner Mitte durch. Mit "
+                    "der Mindestwand des Materials geht es ab {largest}.",
+                    largest=format_length(largest),
+                )
+            ),
+            values={
+                "feature": feature.id,
+                "diameter": diameter,
+                "largest": largest,
+                "minimum": minimum,
+            },
+            constraint="thread_wall",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if wall >= minimum - EPS_GEOM or wall >= before - EPS_GEOM:
+        return []
+    return [
+        Finding(
+            code="thread.thin_wall",
+            severity="warning",
+            message=_(
+                "Um das neue Gewinde bleiben {wall} Wand, das Material braucht {minimum}. "
+                "Die Wand kann beim Drucken offen bleiben oder beim Schrauben reißen.",
+                wall=format_length(wall),
+                minimum=format_length(minimum),
+            ),
+            feature_ids=(feature.id,),
+            values={
+                "wall_mm": round(wall, 3),
+                "minimum_mm": round(minimum, 3),
+                "field": "diameter",
+            },
+            suggestions=(CHANGE_SIZE,),
+        )
+    ]
+
+
 def _material_at(source: SceneObject, point: np.ndarray) -> bool:
     """Liegt dieser Punkt im Material des Körpers — je Kern gefragt.
 
@@ -16142,6 +16479,7 @@ def _resize_thread(
                 )
             ],
         )
+    walls = _thread_wall(source, feature, diameter, pitch, ctx.profile)
     centre, axis, low, high, start, stop = _thread_span(
         source, feature, outside=not internal, internal=internal
     )
@@ -16212,7 +16550,18 @@ def _resize_thread(
                 "lead": pitch,
                 "handedness": "right",
             }.items()
-            if key not in ("root_radius", "crest_radius", "depth", "turns", "uncertainty", "starts")
+            # Das Nennmaß eines gedruckten Gewindes gilt nicht mehr: Das neue
+            # Gewinde ist gebaut, wie es dasteht (``fits._thread_wanted``).
+            if key
+            not in (
+                "root_radius",
+                "crest_radius",
+                "depth",
+                "turns",
+                "uncertainty",
+                "starts",
+                "nominal",
+            )
         },
         measure_sources={
             **dict.fromkeys(("diameter", "pitch", "centre", "axis", "length"), "parameter")
@@ -16221,7 +16570,7 @@ def _resize_thread(
         face_indices=(),
         surface_patches=(),
     )
-    findings: list[Finding] = []
+    findings: list[Finding] = list(walls)
     if source.kind != "brep":
         findings.extend(cleared.findings)
     return _thread_result(ctx, source, body, feature, changed, findings)
@@ -17802,6 +18151,16 @@ def set_material(ctx: OpContext) -> OpResult:
     )
 
 
+#: Wo das Fenster eines Prüfstücks sitzt (RM-184): an der genannten Stelle oder
+#: dort, wo sich die ersten beiden gewählten Teile am nächsten kommen.
+TEST_PIECE_SPOTS: Final = ("point", "closest")
+
+#: Wie viele Ecken eines Körpers die Suche nach der engsten Stelle höchstens
+#: fragt. Darüber wird jede n-te genommen, in fester Folge — die Stelle ist ein
+#: Fensterort und kein Maß, und das Maß misst danach der Kern am Stück.
+CLOSEST_SPOT_PROBES: Final = 20000
+
+
 @op_params
 class TestPieceParams(BaseParams):
     size: float = param(
@@ -17811,6 +18170,18 @@ class TestPieceParams(BaseParams):
         minimum=2.0,
         maximum=200.0,
         doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
+    )
+    spot: str = param(
+        title=_("Stelle"),
+        # Vorgabe die genannte Stelle: Ein Schritt von vor diesem Feld bleibt,
+        # was er war.
+        default="point",
+        choices=TEST_PIECE_SPOTS,
+        doc=_(
+            "Wo der Würfel sitzt: an der Position unten oder, bei zwei gewählten Teilen "
+            "einer Passung, dort, wo sie sich am nächsten kommen. Die gefundene Stelle "
+            "wird als Position festgehalten."
+        ),
     )
     x: float = param(
         title=_("Position X"),
@@ -17829,8 +18200,8 @@ class TestPieceParams(BaseParams):
         title=_("Auf das Bett setzen"),
         default=True,
         doc=_(
-            "Legt das Prüfstück auf das Druckbett. Prüfen Sie den Stützbedarf in der "
-            "Druckvorbereitung."
+            "Legt das Prüfstück auf das Druckbett, mehrere nebeneinander. Prüfen Sie den "
+            "Stützbedarf in der Druckvorbereitung."
         ),
     )
 
@@ -17840,16 +18211,27 @@ class TestPieceParams(BaseParams):
     result_kind="mesh",
     # 2 seit dem 22.09.2026: Der Name bleibt übersetzbar (``Scene.unused_name``)
     # statt in der Sprache der Rechnung im Ergebnis-Cache zu stehen.
-    cache_version="2",
+    # 3 (RM-184): Das Fenster wird plattformgleich verschoben; ein Stück aus
+    # einem Schritt davor könnte die letzte Stelle einer anderen Maschine tragen.
+    cache_version="3",
     title=_("Prüfstück erzeugen"),
     category="prepare",
     params=TestPieceParams,
-    consumes=1,
-    produces=1,
+    # **Jedes gewählte Teil** (RM-184): Eine Passung hat zwei Hälften, und ihr
+    # Prüfstück ist erst eines, wenn beide aus demselben Fenster kommen. Ein
+    # einzelnes Teil bleibt der Fall von vorher, mit derselben Kennung.
+    consumes=VARIABLE,
+    minimum_inputs=1,
+    produces=VARIABLE,
     applies_to=["hole", "pin", "face"],
     doc=_(
         "Schneidet einen Würfel um eine Stelle heraus, um die Passung vor dem ganzen Teil "
-        "auszuprobieren."
+        "auszuprobieren. Mit beiden Teilen einer Passung gewählt, kommen beide Hälften "
+        "aus demselben Würfel."
+    ),
+    caveat=_(
+        "Das Stück ersetzt das Teil im Verlauf. Wer danach am ganzen Teil weiterarbeitet, "
+        "schaltet diesen Schritt nach dem Probedruck aus."
     ),
 )
 def test_piece(ctx: OpContext) -> OpResult:
@@ -17859,55 +18241,210 @@ def test_piece(ctx: OpContext) -> OpResult:
     die echte Geometrie mit den echten Toleranzen, keine nachgebaute Näherung
     davon. Ein Prüfstück, das anders druckt als das Teil, für das es steht,
     wäre schlechter als gar kein Test.
+
+    **Mit zwei Teilen ist es der Prüfausschnitt einer Passung** (RM-184, Audit
+    §8): dasselbe Fenster durch beide, das Spiel zwischen den Stücken
+    gemessen, solange sie noch ineinanderstecken, und erst danach
+    nebeneinander aufs Bett gelegt.
     """
     params = cast(TestPieceParams, ctx.params)
-    source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    answered: dict[str, Any] = {}
+    centre: Vec3 = (params.x, params.y, params.z)
+    if params.spot == "closest":
+        if len(meshes) < 2:
+            raise ValidationError(
+                field="spot",
+                detail=_(
+                    "Die engste Stelle gibt es nur zwischen zwei Teilen. Wählen Sie beide "
+                    "Teile der Passung oder nennen Sie die Stelle."
+                ),
+                constraint="one_part",
+                suggestions=(CHANGE_SELECTION, CORRECT_INPUT),
+            )
+        centre = _closest_spot(meshes[0], meshes[1], ctx)
+        answered = {"spot": "point", "x": centre[0], "y": centre[1], "z": centre[2]}
 
     window = trimesh.creation.box(extents=(params.size, params.size, params.size))
-    window.apply_translation((params.x, params.y, params.z))
-    # Ein Fenster über leerem Raum ist eine Antwort, keine gescheiterte
-    # Operation: ohne ``allow_empty`` probierte die Kette drei weitere Stufen
-    # und würfe dann — und der Nutzer läse etwas über den Voxel-Solver statt
-    # über das Loch, auf das er gezielt hat.
-    outcome = boolean(
-        "intersection", [mesh, mesh.replacing(window)], quality=ctx.quality, allow_empty=True
-    )
-
-    piece = outcome.mesh
-    if not piece.triangle_count or is_zero(piece.volume):
-        raise ValidationError(
-            field="size",
-            detail=_("An dieser Stelle ist kein Material — der Ausschnitt bleibt leer."),
-            constraint="empty",
-            values={"size_mm": round(params.size, 2)},
+    # Verschoben über ``transform.moved``, nicht ``apply_translation``: Das
+    # ginge durch ein Matrixprodukt, und das Fenster trüge die letzte Stelle
+    # der Maschine (``tests/test_platform_identity.py``, ``fit_pieces``).
+    transform.moved(window, translation(centre))
+    pieces: list[MeshData] = []
+    solvers: list[SolverInfo | None] = []
+    findings: list[Finding] = []
+    for entry, mesh in zip(ctx.inputs, meshes, strict=True):
+        ctx.cancelled.raise_if_cancelled()
+        # Ein Fenster über leerem Raum ist eine Antwort, keine gescheiterte
+        # Operation: ohne ``allow_empty`` probierte die Kette drei weitere
+        # Stufen und würfe dann — und der Nutzer läse etwas über den
+        # Voxel-Solver statt über das Loch, auf das er gezielt hat.
+        outcome = boolean(
+            "intersection",
+            [mesh, mesh.replacing(window)],
+            quality=ctx.quality,
+            allow_empty=True,
+            cancelled=ctx.cancelled,
         )
-    if params.on_bed:
-        piece = place_on_bed(piece)
-
-    share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
-    return OpResult(
-        outputs=[
-            dataclasses.replace(
-                source,
-                mesh=piece,
-                # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort.
-                name=ctx.scene.unused_name(_("Prüfstück")),
-                features={},
+        piece = outcome.mesh
+        if not piece.triangle_count or is_zero(piece.volume):
+            raise ValidationError(
+                field="size",
+                detail=_("An dieser Stelle ist kein Material — der Ausschnitt bleibt leer."),
+                constraint="empty",
+                values={"size_mm": round(params.size, 2), "object": entry.name},
+                suggestions=(CORRECT_INPUT,),
             )
-        ],
-        solver=outcome.solver,
-        findings=[
-            *outcome.findings,
+        pieces.append(piece)
+        solvers.append(outcome.solver)
+        findings.extend(outcome.findings)
+
+    for index in range(1, len(pieces)):
+        findings.extend(_fit_in_the_piece(pieces[0], pieces[index], params.size, ctx))
+    if params.on_bed:
+        pieces = _side_by_side([place_on_bed(piece) for piece in pieces])
+
+    outputs: list[SceneObject] = []
+    for entry, mesh, piece in zip(ctx.inputs, meshes, pieces, strict=True):
+        share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
+        # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort. Mehrere
+        # Stücke tragen den Namen ihres Teils, sonst hießen sie gleich.
+        name = (
+            ctx.scene.unused_name(_("Prüfstück"))
+            if len(pieces) == 1
+            else _("Prüfstück {name}", name=entry.name)
+        )
+        outputs.append(dataclasses.replace(entry, mesh=piece, name=name, features={}))
+        findings.append(
             Finding(
                 code="prepare.test_piece",
                 severity="info",
                 message=_("Ein Ausschnitt zum Ausprobieren — die Maße sind die des Teils."),
-                object_id=source.id,
+                object_id=entry.id,
                 values={"share_percent": round(share * 100.0, 1), "size_mm": params.size},
-            ),
-        ],
+            )
+        )
+    return OpResult(outputs=outputs, solver=deepest(solvers), findings=findings, answered=answered)
+
+
+def _closest_spot(first: MeshData, second: MeshData, ctx: OpContext) -> Vec3:
+    """Wo sich zwei Teile am nächsten kommen — die Mitte zwischen ihnen, auf die Anzeigestufe.
+
+    Stecken sie ineinander, die Mitte ihres gemeinsamen Volumens. Sonst die
+    Ecke des einen, die der Oberfläche des anderen am nächsten liegt, und die
+    Mitte zwischen beiden; gefragt wird in beide Richtungen. Gerundet, weil der
+    Ort ein Fenster setzt und kein Maß: Er wird festgehalten, und auf jeder
+    Maschine soll dasselbe Fenster entstehen.
+    """
+    from app.core.geom.mesh import on_surface
+
+    if shared_volume(first.raw, second.raw) > EPS_GEOM:
+        common = boolean(
+            "intersection",
+            [first, second],
+            quality=ctx.quality,
+            allow_empty=True,
+            cancelled=ctx.cancelled,
+        ).mesh
+        if common.triangle_count:
+            middle = common.bounds.centre
+            return _rounded_spot((float(middle[0]), float(middle[1]), float(middle[2])))
+    best: tuple[float, Vec3] | None = None
+    for here, there in ((first, second), (second, first)):
+        ctx.cancelled.raise_if_cancelled()
+        corners = np.asarray(here.raw.vertices, dtype=float)
+        stride = max(1, -(-len(corners) // CLOSEST_SPOT_PROBES))
+        probes = corners[::stride]
+        closest, distance, _faces = on_surface(there.raw, probes, index=surface_index_of(there))
+        index = int(np.argmin(distance))
+        spot = (probes[index] + np.asarray(closest[index], dtype=float)) / 2.0
+        candidate = (float(distance[index]), (float(spot[0]), float(spot[1]), float(spot[2])))
+        if best is None or candidate[0] < best[0]:
+            best = candidate
+    if best is None:
+        raise InternalError(detail="no corner was asked for the closest spot")
+    return _rounded_spot(best[1])
+
+
+def _rounded_spot(point: Vec3) -> Vec3:
+    """Auf die Anzeigestufe, wie jede festgehaltene Stelle (``EPS_DISPLAY``)."""
+    return (
+        round(point[0] / EPS_DISPLAY) * EPS_DISPLAY + 0.0,
+        round(point[1] / EPS_DISPLAY) * EPS_DISPLAY + 0.0,
+        round(point[2] / EPS_DISPLAY) * EPS_DISPLAY + 0.0,
     )
+
+
+def _fit_in_the_piece(
+    first: MeshData, second: MeshData, size: float, ctx: OpContext
+) -> list[Finding]:
+    """Was im Ausschnitt zwischen den beiden Stücken steht: Spiel oder Überschneidung.
+
+    Gemessen, solange sie noch ineinanderstecken — nach dem Auflegen aufs Bett
+    liegen sie nebeneinander und sagen nichts mehr übereinander.
+    """
+    from app.core.geom.measure import surface_gap
+
+    shared = shared_volume(first.raw, second.raw)
+    if shared > EPS_GEOM:
+        return [
+            Finding(
+                code="prepare.test_piece_overlap",
+                severity="warning",
+                message=_(
+                    "Im Ausschnitt überschneiden sich die Teile um {volume} — so gesteckt "
+                    "klemmt die Passung oder geht gar nicht zusammen.",
+                    volume=format_volume(shared),
+                ),
+                values={"shared": format_volume(shared)},
+                suggestions=(SHOW_HISTORY,),
+            )
+        ]
+    ctx.cancelled.raise_if_cancelled()
+    gap = surface_gap(first, second, size)
+    if gap is None:
+        return [
+            Finding(
+                code="prepare.test_piece_apart",
+                severity="info",
+                message=_(
+                    "Im Ausschnitt kommen sich die Teile nirgends näher als {size}.",
+                    size=format_length(size),
+                ),
+                values={"size_mm": size},
+            )
+        ]
+    return [
+        Finding(
+            code="prepare.test_piece_gap",
+            severity="info",
+            message=_(
+                "Im Ausschnitt stehen die Teile an der engsten Stelle {gap} auseinander — "
+                "so viel Spiel hat die Passung, bevor der Drucker etwas dazutut.",
+                gap=format_length(gap),
+            ),
+            values={"gap_mm": round(gap, 3)},
+        )
+    ]
+
+
+def _side_by_side(pieces: list[MeshData]) -> list[MeshData]:
+    """Mehrere Stücke nebeneinander entlang X, im Abstand des Anordnens.
+
+    Das erste bleibt, wo es ist; jedes weitere rückt hinter das vorige, auf
+    dessen Höhe in Y. So stehen sie auf dem Bett, ohne sich zu berühren, und
+    in der Reihenfolge, in der sie gewählt wurden.
+    """
+    placed = pieces[:1]
+    for piece in pieces[1:]:
+        before = placed[-1].bounds
+        offset = (
+            float(before.maximum[0]) + ARRANGE_SPACING - float(piece.bounds.minimum[0]),
+            float(before.centre[1]) - float(piece.bounds.centre[1]),
+            0.0,
+        )
+        placed.append(transform.apply(piece, translation(offset)))
+    return placed
 
 
 @op_params
@@ -20102,17 +20639,37 @@ def check_collisions_op(ctx: OpContext) -> OpResult:
     return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))
 
 
+#: Wie das erste Teil in seine Endlage kommt (RM-184): geschoben, gedreht, oder
+#: erst geschoben und dann gedreht wie ein Bajonett.
+JOIN_MOTIONS: Final = ("slide", "turn", "slide_turn")
+
+
 @op_params
 class JoinPathParams(BaseParams):
+    motion: str = param(
+        title=_("Bewegung"),
+        # Vorgabe der gerade Schub: Ein Schritt von vor diesem Feld bleibt,
+        # was er war.
+        default="slide",
+        choices=JOIN_MOTIONS,
+        doc=_(
+            "Geschoben, gedreht oder erst geschoben und dann gedreht — wie ein "
+            "Bajonett eingesetzt und verriegelt wird."
+        ),
+    )
     axis: str = param(
         title=_("Richtung"),
         default="x",
         choices=("x", "y", "z"),
-        doc=_("Die Achse, entlang der das erste Teil in das zweite geschoben wird."),
+        doc=_(
+            "Die Achse, entlang der das erste Teil in das zweite geschoben wird — "
+            "und um die es sich dreht."
+        ),
     )
     reverse: bool = param(
         title=_("Entgegengesetzt"),
         default=False,
+        depends_on=("motion", ("slide", "slide_turn")),
         doc=_("Schiebt entgegen der Achsrichtung, also von der anderen Seite her."),
     )
     distance: float = param(
@@ -20121,11 +20678,27 @@ class JoinPathParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=500.0,
+        depends_on=("motion", ("slide", "slide_turn")),
         doc=_(
             "Wie weit vor der Endlage geprüft wird. So lang wie die Stelle, an der "
             "die Teile ineinandergreifen, plus etwas Anlauf."
         ),
     )
+    angle: float = param(
+        title=_("Drehweg"),
+        default=90.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        depends_on=("motion", ("turn", "slide_turn")),
+        doc=_(
+            "Um wie viel Grad sich das erste Teil zuletzt in seine Endlage dreht — gegen "
+            "den Uhrzeigersinn, wenn die Achse auf Sie zeigt. Negativ dreht es andersherum."
+        ),
+    )
+    cx: float | None = pattern_centre_param("x", ("motion", ("turn", "slide_turn")))
+    cy: float | None = pattern_centre_param("y", ("motion", ("turn", "slide_turn")))
+    cz: float | None = pattern_centre_param("z", ("motion", ("turn", "slide_turn")))
     steps: int = param(
         title=_("Schritte"),
         default=24,
@@ -20149,7 +20722,8 @@ class JoinPathParams(BaseParams):
     reversible=True,
     doc=_(
         "Prüft, ob zwei Teile in ihre Lage gelangen — nicht nur, ob sie dort "
-        "zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben."
+        "zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben, "
+        "gedreht oder erst geschoben und dann gedreht."
     ),
     caveat=_(
         "Beide Teile stehen dabei in ihrer Endlage; geprüft wird der Weg davor. "
@@ -20172,19 +20746,41 @@ def check_join_path_op(ctx: OpContext) -> OpResult:
     params = cast(JoinPathParams, ctx.params)
     moving = as_mesh_data(ctx.inputs[0].mesh)
     fixed = as_mesh_data(ctx.inputs[1].mesh)
-    vector = list(AXIS_NORMALS[cast(Axis, params.axis)])
+    axis_vector = AXIS_NORMALS[cast(Axis, params.axis)]
+    vector = list(axis_vector)
     if params.reverse:
         vector = [-value for value in vector]
+    # Drehen braucht eine Mitte. Drei leere Koordinaten nehmen einmal die Mitte
+    # des bewegten Teils und halten sie im Schritt fest — wie Kreismuster und
+    # Spiegeln (``transform.pattern_centre``); das Fenster bietet daneben ein
+    # Merkmal an, etwa die Bohrung eines Bajonetts.
+    turning = params.motion != "slide"
+    if turning and is_zero(params.angle):
+        raise ValidationError(
+            field="angle",
+            detail=_("Ohne Drehweg gibt es nichts zu drehen. Geben Sie den Winkel an."),
+            constraint="no_turn",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    answered: dict[str, float] = {}
+    pivot: Vec3 | None = None
+    if turning:
+        pivot, answered = pattern_centre(ctx.inputs[0], params.cx, params.cy, params.cz)
     findings = check_join_path(
         moving,
         fixed,
         (vector[0], vector[1], vector[2]),
-        params.distance,
+        params.distance if params.motion != "turn" else 0.0,
         steps=params.steps,
+        turn=params.angle if turning else 0.0,
+        turn_axis=axis_vector if turning else None,
+        pivot=pivot,
     )
     # Wie „Überschneidungen prüfen": Die Körper gehen unberührt hindurch, die
     # Befunde sind das Ergebnis.
-    return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))
+    return OpResult(
+        outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs), answered=answered
+    )
 
 
 def _is_a_fillet(source: SceneObject, name: str) -> bool:

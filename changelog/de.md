@@ -49,13 +49,17 @@ Nutzen da und sonst nichts.
 - Neu ist die *Rohrschelle* für gängige Rohre von 15 bis 40 mm oder jedes eigene Maß bis 110 mm, mit Klemmschraube M3 bis M6 und dem Spiel aus Ihrem Material.
 - Neu ist der Assistent *Behälter mit Deckel*: rund oder eckig, mit Schraub-, Steck- oder Klappdeckel, auf Wunsch mit Fächern, Einsatz und Streulöchern. Alle Hauptmaße stehen als Parameter bereit.
 - Vier Halter entstehen in einem Schritt mit echten Flächen und Kanten: U-Form, rund, Gabel und Ablage, befestigt mit Schlüsselloch, Schraublöchern, Lochwand-Haken oder Klemme.
+- Neu sind *Bajonettverschluss* und *Rastdrehscheibe*, je als passendes Paar, und *Steckhülse und Stangenverbinder* für zwei bis vier Stangen.
+- Neu sind die *Schlauchtülle*, deren Durchgang gleich durch die Wand geht, die *Kanalnaht* für Rinnen sowie *Raumboden*, *Raumwand* und *Fensterscheibe* für gesteckte Räume.
 - Eine leere Szene zeigt, wie Sie anfangen: Quader, Zylinder, Zeichnen, Bausteine oder eine Datei, die Sie hineinziehen.
 - Neue Körper entstehen auf dem Bett statt an einem gewählten Körper und sind danach gewählt. An einer gewählten Fläche setzen sie am Klickpunkt oder mittig an, auf Wunsch gleich mit dem Teil verbunden.
 - Bausteine wie Magnettasche oder Schraubenloch sitzen dort, wo Sie auf die Fläche klicken. Ihr Abstand zu zwei Kanten bleibt, wenn sich das Teil später ändert.
 - Die *Nutfeder für Aluprofil* passt zu Motedis 20 × 20 B-Typ Nut 6 und 30 × 30 B-Typ Nut 8, ihr Kopf folgt der Form der Nut. Die drei bisherigen Größen bleiben als ältere Maße wählbar.
-- Im Prüfbericht baut *Modell nachbauen* ein eingelesenes Teil aus Grundformen, Bohrungen und Rundungen nach, vergleicht es in der gewählten Grenze mit dem Original und übernimmt es in einem Schritt.
+- Im Prüfbericht baut *Modell nachbauen* ein eingelesenes Teil nach, auch Winkel, Kehlen und Senkungen, vergleicht es in der gewählten Grenze mit dem Original und übernimmt es in einem Schritt.
 - Die *Profilklemme mit Einlagen* beginnt mit dem Material des Projekts in beiden Materialfeldern. Bisher waren beide leer.
 - Die Bausteinsuche findet die *Nutfeder für Aluprofil* auch unter Nutenstein und T-Nut, und ihre Beschreibung sagt, worin sie sich von einem Nutenstein mit Gewinde unterscheidet.
+- Ein Deckel aus *Deckel erzeugen* bekommt auf Wunsch ein Scharnier, mitgedruckt oder mit Stift aus *Stift für Bohrung*, und sein Kragen ist zum Aufklappen gekürzt.
+- Mit *Gegenform einlassen* bekommt ein Einsatz Taschen für Werkzeuge, aus denen sie gerade wieder herauskommen.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -67,6 +71,7 @@ Nutzen da und sonst nichts.
 - Schlanke Teile rücken beim Anordnen näher zur Mitte. Der Brim-Abstand lässt sich einstellen; für kleine Standflächen wird ein direkt anschließender Brim vorgeschlagen.
 - Beschädigte Profile in PrusaSlicer und SuperSlicer werden gemeldet. Solidon verwendet dann seine vollständigen Druckwerte.
 - Druckwerte für einzelne Teile kommen zuverlässiger im Slicer an. Werte, die nur für die ganze Platte gelten, werden am betroffenen Teil erklärt.
+- Übernehmen Sie einen Brim nur für ein schlankes Teil, behalten die übrigen Teile Ihre eigene Wahl der Haftung, und das Feld nennt die Teile, für die der Brim gilt.
 - Bei Orca und Prusa bremst ein übernommener Vorschlag für eine Passung nur noch die betroffenen Teile.
 - Auch kleine übernommene Änderungen der Druckeinstellungen bleiben beim Export erhalten.
 - Cura übernimmt die Profilwerte für abrupte Geschwindigkeitsänderungen, auch getrennt für Wände, Füllung und die erste Schicht.
@@ -74,9 +79,11 @@ Nutzen da und sonst nichts.
 - Ein Absturz von ElegooSlicer und OrcaSlicer beim Schneiden mehrfarbiger Modelle mit Gitterstützen ist behoben.
 - Nach dem Slicen vergleicht Solidon auch Stützmaterial und Modellschichten je Druckplatte. Der Prüfbericht zeigt die interne Schätzung und die Werte aus der Druckdatei.
 - Die Material-Gegenprobe vergleicht nur das gedruckte Modell. Spülmaterial wird getrennt gezeigt; unvollständig lesbare Mengen werden kenntlich gemacht.
+- Die Gegenprobe der Druckzeit rechnet ab der ersten Schicht mit den Tempi Ihres Druckers und meldet nicht mehr bei fast jedem Druck eine starke Abweichung.
 - Die Schichtanalyse rechnet an Hohlkörpern und Modellen mit vielen Decken mehrfach schneller und erhält feine Konturen. Die Ansicht der Schichten nutzt, was der Prüfbericht schon gerechnet hat.
 - Bei ineinandergesteckten Teilen zählt die Druckanalyse eingeschlossene Luft nicht mehr als Material. Das verbessert auch die Erkennung von Überhängen und nötigen Stützen.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
+- Klicken Sie beim ersten Start auf *Speichern und starten*, während Solidon noch die Drucker des Slicers sucht, friert die Anwendung nicht mehr ein.
 - Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
 - Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.
 - Mit Creality Print 7.2 und 7.3 können Sie die Druckdatei jetzt direkt aus Solidon erzeugen.
@@ -100,6 +107,7 @@ Nutzen da und sonst nichts.
 - SuperSlicer erhält Gitterstützen mit Hinweis, wenn Baumstützen gewählt waren. Die Nahtwahl „Nächstgelegen“ kommt ohne falsche Warnung an.
 - TPU findet in PrusaSlicer und SuperSlicer das passende Filamentprofil samt Startwerten. Fehlt ein Profil, nennt Solidon die eigene Materialtabelle als Grundlage.
 - Cura beachtet die Beschleunigungsgrenzen und meldet begrenzte eigene Werte. Volle Füllschichten drucken mit dem Fülltempo; nur die Oberseite erhält das Oberflächentempo.
+- Cura nimmt die kleinste Lüfterleistung und die Schichtzeitschwelle aus dem Profil Ihres Druckers. Bisher lief der Lüfter schon in der ersten Schicht an, wo er ruhen sollte.
 - Kammertemperaturen kommen im richtigen Slicerfeld an. Druckerprofile ohne regelbare Kammerheizung erklären jetzt, warum der Wert nicht wirkt.
 - Das Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als Linien an und wird nicht mehr durch Gitter oder Würfel ersetzt.
 - Solidon meldet nach dem Schneiden auch Einstellungen, die PrusaSlicer oder die Orca-Slicer verworfen haben. Abweichende Rand-, Wand- und Stützarten werden ebenfalls erkannt.
@@ -116,12 +124,18 @@ Nutzen da und sonst nichts.
 - Warnungen von PrusaSlicer und SuperSlicer stehen auch nach gelungenem Slicen im Prüfbericht, eine leere Schicht als Fehler. Der Abstand zum Raft ist eigens einstellbar.
 - Teilt der Slicer eine Platte auf mehrere Druckdateien auf, meldet Solidon das und bietet Anordnen oder den Export an. Bisher übernahm es still nur eine der Dateien.
 - Oben im Prüfbericht steht, ob die Übergabe bereit ist, eine Entscheidung braucht oder nicht empfohlen wird, und was ungeprüft ist. Ohne Befunde gilt ein Teil nicht mehr von selbst als druckbereit.
-- Nach Export oder *Im Slicer öffnen …* steht im Prüfbericht ein Beleg: Dateien, Druckziel, Material und ob Druckwerte mitgingen. Er sagt auch, dass die Datei nicht neu eingelesen und verglichen wurde.
+- Ein gewählter Befund nennt seine Folge für den Druck, und jede angebotene Handlung sagt, was sie außerdem verändert.
+- Nach Export oder *Im Slicer öffnen …* liest Solidon die Datei noch einmal ein. Der Beleg im Prüfbericht nennt Dateien, Druckziel, Material, Druckwerte und ob die Datei dem Auftrag entspricht.
 - Auf der Kommandozeile als 3MF exportiert, behält ein einfarbiger Körper beim erneuten Öffnen sein Filament.
+- Die Kommandozeile nennt bei Druckwerten für einzelne Teile, welche Teile es sind und welchen Wert sie bekommen.
 
 ### Bohrungen, Langlöcher und Teilen
 
 - Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern.
+- Ein Langloch in einer Seitenwand, die nach links oder rechts zeigt, lässt sich kürzen, schmaler ziehen und drehen. Ältere Projekte behalten ihre Langlöcher, bis Sie den Schritt ändern.
+- An STEP-Körpern gilt ein Langloch in einer schrägen Fläche nicht mehr als seitlich überstehend, und ein zweiter Zug an einem Langloch, das in eine Stufe läuft, füllt den Körper nicht mehr auf.
+- Ein Langloch durch eine schräge oder gefaste Platte zeigt an STEP-Körpern seine ganze Tiefe, und seine Kopie über den Rand hinaus meldet an STL- und STEP-Teilen dasselbe.
+- An einem Körper mit echten Flächen und Kanten sitzt ein Baustein nach einer Bohrung auf der gewählten Fläche, und *Drehdeckel erzeugen* gelingt auch am Rand einer ausgehöhlten Dose.
 - Zwei Platten, die sich berühren, bleiben an einer Bohrung ein Körper und behalten ihr Material, ob Sie sie ziehen, ändern, versetzen oder schließen. Ein Stift darüber bleibt stehen.
 - Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
@@ -144,10 +158,18 @@ Nutzen da und sonst nichts.
 - Wird die Maßkarte einer Bohrung hoch, bleiben die übrigen Maße neben dem Körper, und der Griff zum Verschieben sitzt an der Mündung statt mitten im Teil.
 - Wählen Sie eine Bohrung, die Sie in Solidon gesetzt haben, steht ihr Durchmesser nur noch in der Maßkarte im Bild. Bisher stand er rechts ein zweites Mal.
 - Eine Richtung, die Sie rechts für ein Langloch eintragen, übernimmt auch die Maßkarte im Bild, und *Übernehmen* bleibt frei. Bisher fiel sie dort auf 0° zurück.
-- Kegel, Rundungen und schmale Flächen erkennt Solidon an mehr Modellen gleich, ob das Modell verschoben, gedreht oder skaliert ist.
+- Kegel, auch flache und kurze, Rundungen und schmale Flächen erkennt Solidon an mehr Modellen gleich, ob das Modell verschoben, gedreht oder skaliert ist.
+- Eine gewölbte Oberseite heißt auch an STEP-Körpern *Gerundete Seite* statt *Verrundung*, und rundum verrundete STL-Teile zeigen ihre Rundungen einzeln wie dasselbe Teil aus STEP.
+- An Buchstaben und geschwungenen Umrissen eingelesener Modelle erscheinen keine falschen Verrundungen mehr.
 - Rippen-, Waben- und Noppenfelder einer eingelesenen Datei erkennt Solidon je als ein Muster, und *Merkmale an dieser Stelle erkennen* fasst die Zellen eines Felds zusammen.
 - Ein kleines Feld, das Solidon nur als einzelne Merkmale liest, fassen Sie mit *Als Muster zusammenfassen* zu einem Muster zusammen. Muster in STEP-Dateien erkennt Solidon direkt.
 - Auch in Projekten aus älteren Versionen zählen die Stücke einer automatischen Teilung durch, und ein gelöschter oder ausgeschalteter Schnitt zählt nicht mehr mit.
+- Eine Bohrung, die Sie längs einer schrägen Fläche verdoppeln, versetzen oder vervielfachen, bleibt an STL- und STEP-Teilen dieselbe Bohrung mit denselben Maßen und Meldungen.
+- Nach *Merkmal vervielfachen* bohrt eine Kopie an STEP-Teilen nicht mehr bis an die Oberseite durch, und eine grob facettierte STL-Bohrung gilt weiter als durchgehend.
+- Ein Gewinde wird mit *Merkmal ändern* größer oder kleiner, ohne durch die Wand zu brechen, und das Gegengewinde einer Gewindepassung ändert sich mit.
+- Ein gedrucktes Gewindepaar besteht seine Passungsprüfung: Beide Gewinde nennen ihr gebautes Maß, und die Prüfung erwartet das Spiel beider Hälften.
+- Beim *Fügeweg prüfen* drehen Teile auch, oder sie werden erst eingesetzt und dann gedreht wie ein Bajonett.
+- Ein Stück aus *Prüfstück erzeugen* schneidet dasselbe Fenster aus beiden Teilen einer Passung und nennt das Spiel.
 
 ### Verrunden und Fasen
 
@@ -179,6 +201,7 @@ Nutzen da und sonst nichts.
 - Der Eintrag *Aus Skizze erzeugen …* beginnt sofort zu zeichnen, die Zeichenebene zeigt ihren Nullpunkt, und ein Doppelklick im Verlauf öffnet eine Zeichnung wieder im Zeichenmodus.
 - Beim *Formen* und im Skeletteditor zeigt die Leiste Wandstärke oder Überhang als Karte mit Legende und meldet einen Zug über den Bauraum. Nach dem Beugen sagt sie, wie es sich druckt.
 - Eine aufgebrachte Textur wählen Sie als Ganzes. Im Auswahlfenster stehen dann *Textur ändern* und *Textur entfernen*.
+- Schrift folgt einem Bogen oder läuft um eine Rundung, und *Schrift einlegen* setzt sie bündig in eigener Farbe ein.
 
 ### Erzeugen mit KI
 
@@ -210,7 +233,9 @@ Nutzen da und sonst nichts.
 - Scheitert das Speichern einer Kalibrierung, bleiben die bisherigen Werte erhalten.
 - Im Beispielprojekt zum zweiten Weg folgen die Schraubenlöcher Breite und Stärke.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
-- Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
+- In allen Übersetzungen heißen Merkmale, Knöpfe und Druckbegriffe überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
+- Der Knopf, der den Verbrauch vom Filamentlager abbucht, heißt in den Übersetzungen jetzt wie eine Buchung, und Hinweise nennen Handlungen wie das Fenster, etwa *Dreiecke angleichen*.
+- Die Anrede ist einheitlich: Spanisch, Portugiesisch und Französisch siezen, Italienisch duzt. Drei spanische und portugiesische Meldungen, die das Gegenteil sagten, sind berichtigt.
 - Während ein Dialog seine Vorschau zeigt, kommen Leerzeichen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, und Haken und Knöpfe nehmen die Leertaste an.
 - Beim *Skalieren* bleibt ein Körper auf dem Bett stehen, statt unter die Platte zu sinken, und die Ansicht rahmt ihn nach, wenn er größer wird.
 - Einige Befunde, die einen Schritt meinen, öffnen ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.

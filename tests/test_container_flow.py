@@ -248,7 +248,7 @@ def test_hinged_lid_has_clearance_through_the_whole_motion(kernel: str, shape: s
     assert result.complete, result.scene.report.findings
     body, cap = result.scene.objects.values()
     assert body.mesh.component_count == cap.mesh.component_count == 1
-    from app.core.geom.container_ops import HINGE_PIN_FEATURE
+    from app.core.geom.lid_hinge import HINGE_PIN_FEATURE
 
     axis = body.features[HINGE_PIN_FEATURE].params["centre"]
     body_mesh, closed = as_mesh_data(body.mesh), as_mesh_data(cap.mesh)
