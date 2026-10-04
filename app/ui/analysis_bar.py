@@ -76,6 +76,18 @@ MAP_ORDER: tuple[MapKind, ...] = (
 )
 
 
+def support_note(count: int) -> str:
+    """Der Satz zur Überhangkarte einer Geste: wie viele Flächen Stützen brauchen.
+
+    Null ist der häufigste Fall — der Boden auf der Platte zählt nicht
+    (``maps.overhang_map``) —, und „0 Flächen brauchen …“ las sich wie eine
+    halbe Warnung.
+    """
+    if count == 0:
+        return tr("Keine Fläche braucht eine Stütze.")
+    return tr("{count} Flächen brauchen möglicherweise Stützen.").format(count=count)
+
+
 class GestureAnalysis(QWidget):
     """Kartenwahl und Druckbefund, gemeinsam für Formen und Skelett."""
 

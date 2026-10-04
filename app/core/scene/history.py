@@ -1851,6 +1851,7 @@ class History:
 
         versions = {op_id: _copy_operation_matches(self.operation(op_id)) for op_id in removed_ids}
         shown_order = tuple(self.document.ops)
+        shown_titles = step_titles(self.document, self._registry)
         removed_set = set(removed_ids)
         # **Nach Kennungen, nicht nach dem, was gerade rechnet** (P7.3): Eine
         # Passung an einem Körper, den ein ausgeschalteter Schritt anlegt, ruht
@@ -1880,7 +1881,7 @@ class History:
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=_deletion_title(versions, self._registry, order=shown_order),
+            title=_deletion_title(versions, self._registry, order=shown_order, titles=shown_titles),
             ops=(),
             changes=changes,
         )
@@ -3286,16 +3287,69 @@ def step_position(operations: Sequence[Operation], op_id: OpId) -> int:
     return op_id
 
 
+def step_titles(
+    document: Document, registry: Registry = REGISTRY
+) -> dict[OpId, TranslatableText | str]:
+    """Der Titel jedes Schritts, wie seine Zeile im Verlauf ihn zeigt.
+
+    Ein Schritt aus einer eigenen Transaktion heißt wie sie („Kopf setzen“),
+    sonst wie seine Operation („Verschieben“). Die Namen folgen der
+    gespeicherten Herkunft durch jedes Einfügen und Verschieben
+    (``Transaction.renumbered``); gelöschte Schritte behalten den Titel ihrer
+    letzten Fassung. Die eine Quelle für Verlauf, Löschnachfrage und Löschtitel
+    — sonst nannte die Nachfrage „4 Verschieben“ neben der Zeile „4  Kopf
+    setzen“ (Fensterabnahme RM-368).
+    """
+
+    def operation_title(name: str) -> TranslatableText | str:
+        try:
+            return registry.get(name).title
+        except AppError:
+            return name
+
+    titles: dict[OpId, TranslatableText | str] = {
+        entry.id: operation_title(entry.op) for entry in document.ops
+    }
+    for transaction in document.transactions:
+        if transaction.changes is not None:
+            for op_id, previous in (transaction.changes.before.edited_ops or {}).items():
+                if previous is not None:
+                    titles.setdefault(op_id, operation_title(previous.op))
+        if transaction.revision is None and len(transaction.ops) == 1:
+            titles[transaction.ops[0]] = transaction.title
+        elif transaction.revision == "insert" and isinstance(transaction.title, TranslatableText):
+            born = set(transaction.ops) - set(transaction.renumbered.values())
+            inserted_title = (transaction.title.values or {}).get("step")
+            if len(born) == 1 and inserted_title is not None:
+                titles[next(iter(born))] = (
+                    inserted_title
+                    if isinstance(inserted_title, (TranslatableText, str))
+                    else str(inserted_title)
+                )
+        for old, new in transaction.renumbered.items():
+            if old in titles:
+                titles[new] = titles[old]
+    return titles
+
+
 def step_name(
-    entry: Operation, registry: Registry = REGISTRY, *, number: int | None = None
+    entry: Operation,
+    registry: Registry = REGISTRY,
+    *,
+    number: int | None = None,
+    title: TranslatableText | str | None = None,
 ) -> TranslatableText | str:
     """Ein Schritt beim Namen, wie der Verlauf ihn zeigt: Nummer und Titel.
 
     Die Nummer ist das, wonach der Kunde im Verlauf sucht — seine Stelle
     (:func:`step_position`), nicht die Kennung; ohne sie bleibt die Kennung.
-    Ein Schritt, dessen Operation das Register nicht kennt, behält sie allein.
+    ``title`` ist der Titel seiner Zeile (:func:`step_titles`); ohne ihn steht
+    der der Operation. Ein Schritt, dessen Operation das Register nicht kennt,
+    behält die Nummer allein.
     """
     shown = entry.id if number is None else number
+    if title is not None:
+        return _("{number} {title}", number=shown, title=title)
     try:
         return _("{number} {title}", number=shown, title=registry.get(entry.op).title)
     except AppError:
@@ -3307,6 +3361,7 @@ def named_steps(
     registry: Registry = REGISTRY,
     *,
     order: Sequence[Operation] | None = None,
+    titles: Mapping[OpId, TranslatableText | str] | None = None,
 ) -> tuple[tuple[TranslatableText | str, ...], int]:
     """Welche Schritte beim Namen genannt werden, und wie viele danach nur als Zahl.
 
@@ -3317,20 +3372,25 @@ def named_steps(
     auch er da, denn „und 1 weitere“ ist länger als sein Name.
 
     ``order`` ist der Verlauf, in dem der Kunde die Schritte sieht; seine
-    Stellen sind die Nummern (:func:`step_position`).
+    Stellen sind die Nummern (:func:`step_position`). ``titles`` sind die
+    Titel seiner Zeilen (:func:`step_titles`).
     """
-    named = tuple(_named(entry, registry, order) for entry in entries)
+    named = tuple(_named(entry, registry, order, titles) for entry in entries)
     if len(named) <= _NAMED_IN_TITLE + 1:
         return named, 0
     return named[:_NAMED_IN_TITLE], len(named) - _NAMED_IN_TITLE
 
 
 def _named(
-    entry: Operation, registry: Registry, order: Sequence[Operation] | None
+    entry: Operation,
+    registry: Registry,
+    order: Sequence[Operation] | None,
+    titles: Mapping[OpId, TranslatableText | str] | None = None,
 ) -> TranslatableText | str:
     """Nummer und Titel eines Schritts, die Nummer als Stelle in ``order``."""
     number = step_position(order, entry.id) if order is not None else None
-    return step_name(entry, registry, number=number)
+    title = titles.get(entry.id) if titles is not None else None
+    return step_name(entry, registry, number=number, title=title)
 
 
 def _steps_title(
@@ -3365,6 +3425,7 @@ def _deletion_title(
     registry: Registry = REGISTRY,
     *,
     order: Sequence[Operation] | None = None,
+    titles: Mapping[OpId, TranslatableText | str] | None = None,
 ) -> TranslatableText:
     """Was gelöscht wurde, steht im Titel — nicht nur, dass gelöscht wurde.
 
@@ -3388,15 +3449,18 @@ def _deletion_title(
     Ein Schritt, dessen Operation das Register nicht kennt, behält seine
     Nummer: Sie ist das, wonach der Kunde im Verlauf sucht, und sie stimmt
     auch dann. Die Nummer ist die Stelle im Verlauf vor dem Löschen
-    (``order``, :func:`step_position`), nicht die Kennung.
+    (``order``, :func:`step_position`), nicht die Kennung; der Titel der seiner
+    Zeile (``titles``, :func:`step_titles`).
     """
-    named: list[TranslatableText | str] = []
-    for op_id, entry in versions.items():
-        number = step_position(order, op_id) if order is not None else op_id
-        try:
-            named.append(_("{number} {title}", number=number, title=registry.get(entry.op).title))
-        except AppError:
-            named.append(str(number))
+    named = [
+        step_name(
+            entry,
+            registry,
+            number=step_position(order, op_id) if order is not None else op_id,
+            title=titles.get(op_id) if titles is not None else None,
+        )
+        for op_id, entry in versions.items()
+    ]
 
     if len(named) == 1:
         return _("Schritt löschen: {step}", step=named[0])

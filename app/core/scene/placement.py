@@ -1272,6 +1272,44 @@ def _surface_record(text: Any) -> dict[str, Any]:
         raise _reference_error() from error
 
 
+def _triangle_under(
+    mesh: MeshData, indices: np.ndarray, point: np.ndarray, cancelled: CancelToken
+) -> int | None:
+    """Das Dreieck aus ``indices``, auf dem ``point`` liegt — ``None``, wenn keines.
+
+    „Liegt“ mit derselben Grenze wie ein angeklickter Punkt in
+    :func:`surface_at_feature`: höchstens ``MAX_FACET_SAG`` daneben.
+    """
+    if not len(indices):
+        return None
+    from trimesh.triangles import closest_point
+
+    closest = cast(Callable[[np.ndarray, np.ndarray], np.ndarray], closest_point)
+    triangles = np.asarray(mesh.raw.triangles)[np.asarray(indices, dtype=np.int64)]
+    best, found = float("inf"), None
+    for offset in range(0, len(triangles), PICK_TRIANGLE_BLOCK):
+        cancelled.raise_if_cancelled()
+        block = triangles[offset : offset + PICK_TRIANGLE_BLOCK]
+        candidates = closest(block, np.broadcast_to(point, (len(block), 3)))
+        distances = np.linalg.norm(candidates - point, axis=1)
+        chosen = int(np.argmin(distances))
+        if distances[chosen] < best:
+            best, found = float(distances[chosen]), int(indices[offset + chosen])
+    return found if best <= MAX_FACET_SAG + EPS_GEOM else None
+
+
+def _shares_its_span(edge: EdgeReference, start: np.ndarray, end: np.ndarray) -> bool:
+    """Ob ``edge`` entlang ihrer Richtung die Strecke von ``start`` bis ``end`` überdeckt."""
+    along = np.asarray(edge.end, dtype=np.float64) - np.asarray(edge.start, dtype=np.float64)
+    length = math.hypot(*along)
+    if length <= EPS_GEOM:
+        return False
+    along /= length
+    low, high = sorted((dot3(edge.start, along), dot3(edge.end, along)))
+    first, second = sorted((dot3(start, along), dot3(end, along)))
+    return min(high, second) - max(low, first) > -EPS_GEOM
+
+
 def _bound_choice(
     source: SceneObject,
     candidates: Sequence[EdgeReference],
@@ -1380,6 +1418,18 @@ def bind_surface(
         ]
         patches: list[PreparedSurface] = []
         covered: set[int] = set()
+        # **Gewachsen wird vom gespeicherten Punkt aus, wie beim Setzen**
+        # (Fensterabnahme 04.10.2026). Eine eingelesene Fläche ist nur bis auf
+        # Gleitkommaspuren eben, und welche Dreiecke dazugehören, hängt dann am
+        # Dreieck, von dem aus gewachsen wird. Vom ersten der Liste aus fand die
+        # Bindung am *Wedge-Lock* zwei Teilflächen statt der gesetzten, fragte
+        # nach einer Kante und scheiterte an jeder Antwort.
+        start = _triangle_under(mesh, parallel, previous_point, cancelled)
+        if start is not None:
+            under = prepare_surface(mesh, start, source.features)
+            if under.planar:
+                patches.append(under)
+                covered.update(int(index) for index in parallel)
         for triangle in parallel:
             cancelled.raise_if_cancelled()
             if int(triangle) not in covered:
@@ -1431,6 +1481,17 @@ def bind_surface(
                 for edge in candidates
                 if abs(dot3(np.asarray(edge.start) - point(saved["start"]), inward)) <= EPS_GEOM
             ]
+            if len(coincident) > 1:
+                # **Zwei Stücke derselben Geraden sind zwei Kanten**
+                # (Fensterabnahme 04.10.2026): Links und rechts einer
+                # Aussparung liegt die Vorderkante zweimal auf einer Linie.
+                # Gespeichert ist eines — das, dessen Strecke die
+                # gespeicherte überdeckt.
+                coincident = [
+                    edge
+                    for edge in coincident
+                    if _shares_its_span(edge, point(saved["start"]), point(saved["end"]))
+                ]
             if len(coincident) == 1:
                 candidates = coincident
             changed_reference = changed_reference or len(candidates) > 1
@@ -2547,6 +2608,14 @@ def _vec2(values: Any) -> Point2:
 #: Drehen und Skalieren gleich; schlechtere Paare brauchen einen anderen Bezug.
 MAX_REFERENCE_CONDITION: Final = 10.0
 
+#: In welchen Stufen :func:`_nearest_references` vergleicht, wie quer ein
+#: zweiter Randbezug zum ersten steht: als Kosinus zwischen den
+#: Einwärtsrichtungen, 0,05 je Stufe (rund drei Grad um die Senkrechte). So
+#: gelten die Gleitkommaspuren einer eingelesenen STL nicht als „weniger quer“,
+#: und unter gleich queren entscheidet der Abstand. Eine Bedienentscheidung,
+#: keine Geometrietoleranz.
+CROSSING_STEP: Final = 0.05
+
 
 def _reference_rows(frame: PlaneFrame, edges: Sequence[EdgeReference]) -> np.ndarray:
     return np.asarray(
@@ -2692,8 +2761,10 @@ def reference_extension(edge: EdgeReference, point: Vec3) -> tuple[Vec3, Vec3] |
 
 
 def _nearest_references(prepared: PreparedSurface, point: Vec3) -> list[EdgeReference]:
-    """Die zwei nächsten unabhängigen Randkanten, Außenkanten vor inneren und Achsen.
+    """Zwei unabhängige Randkanten, Außenkanten vor inneren und Achsen.
 
+    Die erste ist die nächste, die zweite die am meisten querstehende, bei
+    gleicher Lage die nächste davon (:data:`CROSSING_STEP`).
     Gerechnet wird je Kante derselbe Abstand wie immer; nur der Lotabstand,
     der mit der Kante weiterreist, entsteht erst für die, die gewählt wird —
     nicht als Kopie jeder Kante der Fläche.
@@ -2707,14 +2778,31 @@ def _nearest_references(prepared: PreparedSurface, point: Vec3) -> list[EdgeRefe
         share = float(np.clip(dot3(here - start, step) / dot3(step, step), 0.0, 1.0))
         distance = math.hypot(*(here - (start + share * step)))
         ranked.append(((order[edge.kind], distance), edge.id, index))
-    chosen: list[EdgeReference] = []
-    for _rank, _name, index in sorted(ranked):
+    if not ranked:
+        return []
+    ranked.sort()
+    _rank, _name, first_index = ranked[0]
+    first = prepared.edges[first_index]
+    chosen = [replace(first, distance=dot3(here - np.asarray(first.start), first.inward))]
+    # **Der zweite Bezug ist die Seite, die am meisten quer steht — bei gleicher
+    # Lage die nähere.** Bis zum 04.10.2026 war es die nächste unabhängige
+    # Kante. An einer eingelesenen Fläche mit gerundeten Ecken ist das ein
+    # Facettenstück der Rundung: Am Wedge-Lock und am Tray standen beide Maße an
+    # derselben Kante, „Außenkante 56“ und „Außenkante 50“ (Fensterabnahme
+    # 04.10.2026). An Quader und Platte wählt die neue Folge dieselbe Kante wie
+    # die alte: Dort ist die nächste unabhängige zugleich die querste.
+    best: tuple[tuple[int, int, float], EdgeReference] | None = None
+    for (kind, distance), _name, index in ranked[1:]:
         edge = prepared.edges[index]
+        across = round(abs(dot3(first.inward, edge.inward)) / CROSSING_STEP)
+        key = (kind, across, distance)
+        if best is not None and key >= best[0]:
+            continue
         edge = replace(edge, distance=dot3(here - np.asarray(edge.start), edge.inward))
         if _independent(prepared.frame, [*chosen, edge]):
-            chosen.append(edge)
-        if len(chosen) == 2:
-            break
+            best = (key, edge)
+    if best is not None:
+        chosen.append(best[1])
     return chosen
 
 

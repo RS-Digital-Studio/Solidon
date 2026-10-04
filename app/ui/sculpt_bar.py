@@ -13,9 +13,9 @@ nicht angehoben.
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -170,15 +170,64 @@ class SculptBar(QWidget):
         layout.addWidget(self.strength)
         layout.addWidget(QLabel(tr("Symmetrie"), self))
         layout.addWidget(self.symmetry)
-        layout.addWidget(self.cut)
-        layout.addWidget(self.state)
-        layout.addWidget(self.warning, stretch=1)
-        layout.addWidget(self.refine)
-        layout.addWidget(self.done)
+        self._row = layout
+        #: Die zweite Zeile für Zustand und Abschluss, solange die erste nicht
+        #: passt (:meth:`_fit`). Leer, wo Platz ist.
+        self._tail = QHBoxLayout()
+        self._tail.setContentsMargins(NORMAL, 0, NORMAL, 0)
+        outer.addLayout(self._tail)
+        #: Wie breit die Leiste in einer Zeile sein will — gemerkt, solange sie
+        #: eine Zeile ist, wie ``TransformBar._roomy_width``.
+        self._roomy_width = 0
+        self._wrapped = False
+        self._place_tail(self._row)
         self.analysis = GestureAnalysis(self)
         outer.addWidget(self.analysis)
 
     # --- Ablesen ---------------------------------------------------------------
+
+    # --- Breite ------------------------------------------------------------------
+
+    def _place_tail(self, row: QHBoxLayout) -> None:
+        """Neu ansetzen, Zustand, Warnung, Angleichen und *Fertig* in diese Zeile."""
+        for widget in (self.cut, self.state, self.warning, self.refine, self.done):
+            self._row.removeWidget(widget)
+            self._tail.removeWidget(widget)
+        row.addWidget(self.cut)
+        row.addWidget(self.state)
+        row.addWidget(self.warning, stretch=1)
+        row.addWidget(self.refine)
+        row.addWidget(self.done)
+
+    def _fit(self) -> None:
+        """Passt die Leiste nicht in eine Zeile, rückt ihr Ende in eine zweite.
+
+        Am echten Fenster (1 100 Punkte breit, Fensterabnahme 04.10.2026)
+        kürzte die eine Zeile jedes Wort — „Auftrage“, „Neu ansetze“, „2 Züge,
+        eine Eta“. Gemessen wird gegen die im einzeiligen Zustand gemerkte
+        Breite, nicht gegen die aktuelle: Sonst flackert die Leiste an der
+        Grenze (dieselbe Regel wie ``TransformBar._fit_roles``).
+        """
+        if not self._wrapped:
+            self._roomy_width = super().sizeHint().width()
+            if self.width() < self._roomy_width:
+                self._wrapped = True
+                self._place_tail(self._tail)
+        elif self.width() >= self._roomy_width:
+            self._wrapped = False
+            self._place_tail(self._row)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        """Immer der Platz für eine Zeile — sonst wüchse die Leiste nie zurück."""
+        hint = super().sizeHint()
+        if self._roomy_width:
+            hint.setWidth(max(hint.width(), self._roomy_width))
+        return hint
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Wird es eng, rückt das Ende in die zweite Zeile."""
+        super().resizeEvent(event)
+        self._fit()
 
     def values(self) -> StrokeValues:
         """Was der nächste Zug mitbekommt.

@@ -92,6 +92,9 @@ def localised(text: str) -> str:
     nächsten Stelle wieder.
     """
     separator = QLocale().decimalPoint()
+    # Ein schlichter Text: Eine ``Figure`` des Kerns, hier schon lokalisiert,
+    # schriebe sich als Platzhalterwert sonst ein zweites Mal um.
+    text = str(text)
     return text.replace(".", separator) if separator != "." else text
 
 

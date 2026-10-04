@@ -975,8 +975,8 @@ def test_the_fit_and_mounting_notes_show_numbers_a_customer_reads():
     for text in texts:
         assert "0000000" not in text, text
         assert "-0" not in text, text
-    assert "Sitzspiel 0.30 mm" in texts[0], texts[0]
-    assert "Übermaß am Gegenprofil 0.00 mm" in texts[0], texts[0]
+    assert "Sitzspiel 0,30 mm" in texts[0], texts[0]
+    assert "Übermaß am Gegenprofil 0,00 mm" in texts[0], texts[0]
     for finding in _findings(settings, hard, soft):
         for value in finding.values.values():
             if isinstance(value, float):

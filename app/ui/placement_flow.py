@@ -26,6 +26,7 @@ from PySide6.QtCore import (
     QRect,
     QRectF,
     QSignalBlocker,
+    QSize,
     Qt,
     QTimer,
     Signal,
@@ -34,6 +35,7 @@ from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -41,6 +43,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QScrollArea,
+    QStyle,
+    QStyleOptionComboBox,
     QVBoxLayout,
     QWidget,
 )
@@ -446,6 +450,32 @@ def _forget_parked(key: int) -> None:
     """Die Ansicht ist weg — und mit ihr jedes ihrer Widgets."""
     _PARKED.pop(key, None)
     _PARKED_WATCHED.discard(key)
+
+
+def _choice_shortfall(group: QWidget) -> int:
+    """Wie viel breiter die Gruppe sein müsste, damit jede Auswahl ganz steht.
+
+    ``panels.column_choice`` hält eine Auswahl in der Spalte rechts schmal
+    (RM-488); ihr ``sizeHint`` nennt dann nur zwölf Zeichen. In der Karte im
+    Bild ist Platz, und dort stand am echten Fenster „Nur Bohrungsdurchm…“
+    (Fensterabnahme 04.10.2026). Gerechnet wird gegen den **längsten** Eintrag:
+    Eine Karte, die mit jeder Wahl ihre Breite wechselt, springt unter der Maus.
+    Wo das Bild die Breite nicht hat, kürzt :meth:`_size_measure_fields` wie
+    bisher auf den freien Raum.
+    """
+    shortfall = 0
+    for combo in group.findChildren(QComboBox):
+        if combo.isHidden() or not combo.count():
+            continue
+        metrics = combo.fontMetrics()
+        longest = max(metrics.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+        option = QStyleOptionComboBox()
+        combo.initStyleOption(option)
+        needed = combo.style().sizeFromContents(
+            QStyle.ContentsType.CT_ComboBox, option, QSize(longest, metrics.height()), combo
+        )
+        shortfall = max(shortfall, needed.width() - combo.sizeHint().width())
+    return shortfall
 
 
 def _release_measure_group(group: QWidget, release: Callable[[QWidget], bool] | None) -> None:
@@ -1821,7 +1851,7 @@ class PlacementFlow(QObject):
         width = min(
             max(room.width(), 1),
             max(
-                group.sizeHint().width() + 4 * NORMAL,
+                group.sizeHint().width() + _choice_shortfall(group) + 4 * NORMAL,
                 self._measure_accept.sizeHint().width()
                 + self._measure_cancel.sizeHint().width()
                 + 3 * NORMAL,
@@ -1843,8 +1873,23 @@ class PlacementFlow(QObject):
             chrome += self._measure_scope.sizeHint().height() + NORMAL
         # Eine weitere Zeile bleibt für die vorhandenen Kantenabstände frei.
         distances = self._measures[0].sizeHint().height() + SPACE
-        self._measure_scroll.setFixedHeight(max(1, min(height, room.height() - chrome - distances)))
+        available = room.height() - chrome - distances
+        # **Was passt, rollt nicht** (Fensterabnahme 04.10.2026). Die Höhe gilt
+        # der vollen Breite; ein Rollbalken nimmt Breite weg, die umbrechenden
+        # Beschriftungen werden höher, und Qt hält den Balken dann für nötig —
+        # er begründete sich selbst. Am Fenster stand *Bohrung ändern* so mit
+        # halb abgeschnittener Materialtoleranz über einem halb leeren Bild.
+        # Der Balken kommt nur, wo die Gruppe wirklich nicht passt.
+        self._measure_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if height <= available
+            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._measure_scroll.setFixedHeight(max(1, min(height, available)))
         self._measure_box.setMaximumSize(max(width, 1), max(room.height(), 1))
+        # Die gerechnete Breite gilt auch nach unten: ``adjustSize`` nähme sonst
+        # den ``sizeHint`` des Rollbereichs, der die gekürzte Auswahl meint.
+        self._measure_box.setMinimumWidth(max(width, 1))
         self._measure_box.adjustSize()
         # **Gezeigt wird erst an ihrem Platz** (Durchsicht 0.5.1). Die Karte
         # ist ein eigenes Fenster über der Grafikfläche; hier eingeblendet,

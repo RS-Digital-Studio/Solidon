@@ -18,7 +18,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, Final, Literal, Protocol
 
-from app.i18n import TranslatableText, _
+from app.i18n import Figure, TranslatableText, _
 
 # --- Die drei benannten Toleranzen (§11.2) -------------------------------------
 
@@ -323,8 +323,8 @@ def _format_with_bound(value: float, decimals: int, suffix: str) -> str:
     smallest = 10.0**-decimals
     if 0.0 < abs(value) < smallest:
         bound = f"{smallest:.{decimals}f}"
-        return f"<{bound} {suffix}" if value > 0.0 else f">-{bound} {suffix}"
-    return f"{value:.{decimals}f} {suffix}"
+        return Figure(f"<{bound} {suffix}" if value > 0.0 else f">-{bound} {suffix}")
+    return Figure(f"{value:.{decimals}f} {suffix}")
 
 
 def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
@@ -373,7 +373,7 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     cubic_centimetres = value_mm3 / 1000.0
     if abs(cubic_centimetres) >= 1000.0:
         return f"{cubic_centimetres:.0f} cm³"
-    return f"{cubic_centimetres:.1f} cm³"
+    return Figure(f"{cubic_centimetres:.1f} cm³")
 
 
 def format_area(value_mm2: float, unit: LengthUnit = "mm") -> str:
@@ -404,14 +404,16 @@ def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = Tr
     """Formatiert eine Kernlänge für die Anzeige in der gewünschten Einheit.
 
     Das Dezimaltrennzeichen bleibt hier ein Punkt; lokalisiert wird in der
-    Oberfläche, nicht im Kern.
+    Oberfläche, nicht im Kern. Als :class:`~app.i18n.Figure` markiert,
+    schreibt sich die Zahl in einem Satz des Kerns mit dem Zeichen der
+    Anzeigesprache (Fensterabnahme 04.10.2026).
     """
     decimals = _UNIT_DECIMALS[unit]
     converted = from_mm(value_mm, unit)
     text = f"{converted:.{decimals}f}"
     if text.startswith("-") and float(text) == 0.0:
         text = text[1:]
-    return f"{text} {unit}" if with_unit else text
+    return Figure(f"{text} {unit}" if with_unit else text)
 
 
 def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool) -> str:
@@ -440,7 +442,7 @@ def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool
         if rounded.is_zero():
             rounded = rounded.copy_abs()
         text = format(rounded, "f")
-    return f"{text} {unit}"
+    return Figure(f"{text} {unit}")
 
 
 #: Unter welcher Länge ein Kreuzprodukt als parallel gilt — dieselbe Zahl,

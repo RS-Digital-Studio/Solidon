@@ -840,6 +840,12 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
     Eine Wand parallel zu Z ist 0°, eine Decke, die gerade nach unten schaut,
     90°. Nach oben schauende Dreiecke sind gar keine Überhänge — sie bleiben
     also bei null, statt negativ zu werden.
+
+    **Hervorgehoben wird nur, was über der Platte hängt.** Ein Dreieck, dessen
+    drei Ecken auf der tiefsten Höhe des Körpers liegen, ist sein Boden; es
+    behält seinen Winkel, braucht aber keine Stütze. Sonst zählte ein Quader
+    nach *Dreiecke angleichen* jedes Bodendreieck als Stützenfall
+    (Fensterabnahme RM-366).
     """
     body = mesh.raw
     if not len(body.faces):
@@ -856,6 +862,9 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
     downward = -np.asarray(body.face_normals, dtype=float)[:, 2]
     angles = np.degrees(np.arcsin(np.clip(downward, -1.0, 1.0)))
     angles = np.maximum(angles, 0.0)
+    heights = np.asarray(body.vertices, dtype=float)[:, 2]
+    corners = heights[np.asarray(body.faces)]
+    resting = np.all(np.abs(corners - heights.min()) <= EPS_GEOM, axis=1)
     return AnalysisMap(
         kind="overhang",
         title=TITLES["overhang"],
@@ -863,7 +872,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
         unit=DEGREE_UNIT,
         low=0.0,
         high=90.0,
-        highlighted=tuple(int(index) for index in np.nonzero(angles > limit)[0]),
+        highlighted=tuple(int(index) for index in np.nonzero((angles > limit) & ~resting)[0]),
         threshold=limit,
         # Die Grenze, nach der die Karte wirklich hervorhebt — ein kalibriertes
         # Material trägt seinen gemessenen Winkel (``analysis_limits``), und

@@ -759,7 +759,7 @@ def test_sentences_about_steps_name_positions_after_an_early_insert():
     und Löschtitel nannten die Kennungen (7, 8 …) der umnummerierten Schritte,
     während der Verlauf 3 und 4 zeigte.
     """
-    from app.core.scene.history import named_steps, step_position
+    from app.core.scene.history import named_steps, step_position, step_titles
 
     history = History(new_project("centauri-carbon-2", "petg").document)
     history.apply("Rumpf", [OperationDraft(op="create_box")])
@@ -775,8 +775,13 @@ def test_sentences_about_steps_name_positions_after_an_early_insert():
     order = history.document.ops
     assert step_position(order, head) == 3 and step_position(order, placed) == 4
 
-    names, rest = named_steps([history.operation(placed)], order=order)
-    assert [str(name) for name in names] == ["4 Verschieben"] and rest == 0
+    # **Nummer und Titel wie im Verlauf** (fenster.md, „Rückfragen“): Die
+    # Zeile heißt „4  Kopf setzen“; „4 Verschieben“ war der Registertitel und
+    # ließ den Kunden eine Zeile suchen, die es so nicht gibt (Fensterabnahme
+    # RM-368, 04.10.2026).
+    titles = step_titles(history.document)
+    names, rest = named_steps([history.operation(placed)], order=order, titles=titles)
+    assert [str(name) for name in names] == ["4 Kopf setzen"] and rest == 0
 
     with pytest.raises(UserError) as refused:
         history.plan_move([placed], head)
@@ -785,7 +790,40 @@ def test_sentences_about_steps_name_positions_after_an_early_insert():
     assert str(placed) not in detail.replace("Schritt 4", "").replace("Schritt 3", "")
 
     removed = history.remove_operations([placed])
-    assert str(removed.title) == "Schritt löschen: 4 Verschieben"
+    assert str(removed.title) == "Schritt löschen: 4 Kopf setzen"
+
+
+def test_a_deleted_replanned_step_keeps_no_identifier_as_its_number(qt_app):
+    """Ein gelöschter Schritt hat keine Stelle mehr — er zeigt keine Kennung als Nummer.
+
+    Nach einem Einfügen vor Schritt 2 und dem Löschen von „Kopf“ standen dessen
+    Zeilen als „9  Kopf“, „10  Kopf setzen“ im Verlauf, nicht durchgestrichen
+    (Fensterabnahme RM-368, 04.10.2026).
+    """
+    from app.ui.panels import HistoryPanel
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply("Rumpf", [OperationDraft(op="create_box")])
+    history.apply("Kopf", [OperationDraft(op="create_sphere")])
+    history.apply(
+        "Kopf setzen",
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dz": 25.0})],
+    )
+    plan = history.plan_insert(2, "Halter", [OperationDraft(op="create_box")])
+    history.commit(plan)
+    head, placed = plan.new_id(2), plan.new_id(3)
+    history.remove_operations([head, placed])
+    panel = HistoryPanel()
+    try:
+        panel.show_document(history.document)
+        texts = [panel.list.item(i).text() for i in range(panel.list.count())]
+        gone = [text for text in texts if "Kopf" in text and "löschen" not in text]
+        assert gone, texts
+        for text in gone:
+            assert not text.strip()[0].isdigit(), f"Kennung als Nummer: {text!r}"
+            assert "gelöscht" in text, text
+    finally:
+        panel.deleteLater()
 
 
 def test_revision_rows_show_positions_and_keep_stable_ids(qt_app):

@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QCoreApplication, QEvent, QLocale, QPointF, QThread
+from PySide6.QtCore import QCoreApplication, QEvent, QLocale, QPointF, QSize, QThread
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.geom.mesh import MeshData
@@ -2845,6 +2845,84 @@ def test_measure_group_keeps_scope_below_its_controls_and_inside_the_view(
     assert scope in controller._field_targets
     controller.dispose()
     assert scope not in controller._watched
+
+
+def test_a_measure_group_that_fits_shows_every_row_without_a_scroll_bar(
+    quiet_measure_flow: Any,
+) -> None:
+    """Passt die Gruppe ins Bild, rollt sie nicht (Fensterabnahme 04.10.2026, RM-197).
+
+    Am echten Fenster stand die Karte *Bohrung ändern* mit Rollbalken, die Zeile
+    *Materialtoleranz* halb abgeschnitten und „Nur Bohrungsdurchmesser“ gekürzt,
+    obwohl darunter das halbe Bild frei war: Die Höhe war für die volle Breite
+    gerechnet, der Rollbalken nahm die Breite weg, die umbrechenden Beschriftungen
+    wurden höher — und der Balken blieb, weil er sich selbst begründete.
+    """
+    from PySide6.QtWidgets import QFormLayout, QLabel
+
+    controller, _session, viewport, _host, _group, _fields, _during = quiet_measure_flow
+    group = QWidget()
+    layout = QFormLayout(group)
+    editors = []
+    for index in range(7):
+        label = QLabel(f"Beschriftung {index}, die umbricht, sobald es eng wird", group)
+        label.setWordWrap(True)
+        field = LengthSpin(group)
+        field.set_value_mm(float(index))
+        layout.addRow(label, field)
+        editors.append(field)
+    controller.set_measure_fields(
+        group,
+        editors=editors,
+        interpret=lambda: True,
+        refresh=lambda _values: None,
+    )
+    viewport.resize(1600, 1000)
+    for _round in range(5):
+        QApplication.processEvents()
+        controller.redraw()
+    scroll = controller._measure_scroll
+    assert controller._measure_box.isVisibleTo(viewport)
+    assert not scroll.verticalScrollBar().isVisibleTo(scroll), "die Gruppe passt und rollt doch"
+    assert group.height() <= scroll.viewport().height(), (group.height(), scroll.viewport().size())
+
+
+def test_a_measure_group_with_room_shows_its_choices_whole(quiet_measure_flow: Any) -> None:
+    """Eine schmal gehaltene Auswahl zeigt in der Karte ihren ganzen Eintrag.
+
+    ``panels.column_choice`` hält die Auswahl in der Spalte rechts schmal
+    (RM-488); in der Karte im Bild ist dafür Platz, und dort stand am echten
+    Fenster „Nur Bohrungsdurchm…“ (Fensterabnahme 04.10.2026). Die Karte nimmt
+    die Breite, die der längste Eintrag braucht, solange das Bild sie hat.
+    """
+    from PySide6.QtWidgets import QComboBox, QFormLayout, QStyle, QStyleOptionComboBox
+
+    from app.ui.panels import column_choice
+
+    controller, _session, viewport, _host, _group, _fields, _during = quiet_measure_flow
+    group = QWidget()
+    layout = QFormLayout(group)
+    field = LengthSpin(group)
+    layout.addRow("Durchmesser", field)
+    combo = column_choice(QComboBox(group))
+    for text in ("Nur Bohrungsdurchmesser", "Senkung, Stufen und Verengung mitnehmen"):
+        combo.addItem(text)
+    layout.addRow("Änderungsumfang", combo)
+    controller.set_measure_fields(
+        group, editors=[field], interpret=lambda: True, refresh=lambda _values: None
+    )
+    viewport.resize(1600, 1000)
+    for _round in range(5):
+        QApplication.processEvents()
+        controller.redraw()
+    option = QStyleOptionComboBox()
+    combo.initStyleOption(option)
+    metrics = combo.fontMetrics()
+    longest = max(metrics.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+    needed = combo.style().sizeFromContents(
+        QStyle.ContentsType.CT_ComboBox, option, QSize(longest, metrics.height()), combo
+    )
+    assert combo.width() >= needed.width(), (combo.width(), needed.width())
 
 
 def test_quiet_host_keeps_permission_for_identical_known_values(qt_app: QApplication) -> None:

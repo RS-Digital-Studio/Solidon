@@ -197,6 +197,8 @@ Rückkehrziel (`action_projection`).
   `FEATURE_PATCH_LIFT` hebt entlang der Normalen.
 * **Analysekarten verdrängen Umgebungsverdeckung und Kontaktschatten** über
   `ambient_occlusion`/`contact_shadows`, offscreen prüfbar ohne Renderer.
+* **Eine Karte behält ihre Farben am gewählten Körper** (`shows_face_colours`);
+  nur Filamentfarben weichen der Auswahl.
 
 ## Schatten und Licht
 

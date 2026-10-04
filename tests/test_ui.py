@@ -14663,6 +14663,32 @@ def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow
     assert not window.veil.showing, "über einem Körper bleibt die Ansicht die Ansicht"
 
 
+def test_the_veil_waits_for_the_first_picture_of_a_large_model(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gelesen ist nicht gezeigt: Der Schleier steht, bis die Ansicht ihr Bild hat.
+
+    Offscreen gibt es keinen Ansichtsarbeiter; gestellt wird deshalb die
+    Auskunft der Ansicht, geprüft der Anschluss an ``sceneApplied``.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+    preparing = [True]
+    monkeypatch.setattr(window.viewport, "preparing_an_empty_view", lambda: preparing[0])
+
+    window._update_veil(False)
+    assert window.veil.showing, "das Modell ist gelesen, das Bild fehlt noch"
+    assert window.veil._headline == str(tr("Das Modell wird angezeigt …"))
+    assert window.veil.cancel.isHidden(), (
+        "an der Vorbereitung des Bildes gibt es nichts abzubrechen"
+    )
+
+    preparing[0] = False
+    window.viewport.sceneApplied.emit()
+    assert not window.veil.showing, "mit dem Bild weicht die Anzeige"
+
+
 def test_the_veil_hides_the_native_view_while_it_stands(window: MainWindow) -> None:
     """Verborgen, nicht nur verdeckt (§2.8).
 

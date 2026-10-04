@@ -249,6 +249,9 @@ scrive in `website/version.json`.
 - Le anteprime di esempi e blocchi mostrano l'altezza verso l'alto. Finora i pezzi alti vi puntavano verso il basso.
 - Se Solidon non riesce a salvare la scelta «Includi i valori», l'avviso compare direttamente accanto all'interruttore.
 - Se altri programmi occupano tutti i core su Windows, un calcolo su un modello grande non resta più fermo per minuti.
+- Le lunghezze nei messaggi usano il separatore decimale della tua lingua.
+- Dopo il caricamento di un modello grande, l'indicatore di caricamento resta finché la vista mostra il modello.
+- Un clic su una riga del rapporto di verifica seleziona i suoi corpi anche se l'elenco si sposta durante il clic.
 
 ## 0.5.1
 

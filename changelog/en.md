@@ -249,6 +249,9 @@ it into `website/version.json`.
 - Preview images of examples and catalogue parts show height pointing up. Until now tall parts pointed downwards in them.
 - If Solidon cannot save the *Include values* choice, the note appears right at the switch.
 - If other programs keep every core busy under Windows, a calculation on a large model no longer stalls for minutes.
+- Lengths in messages use the decimal separator of your language.
+- After loading a large model, the loading indicator stays until the view shows the model.
+- Clicking a line in the report selects its bodies even if the list shifts while you click.
 
 ## 0.5.1
 

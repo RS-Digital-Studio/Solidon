@@ -62,6 +62,12 @@ Zahlen wie die Oberfläche: `format_decimal` bzw. `decimal_separator()` und
 Längen in `app.i18n.display_unit()` — sonst liest der Kunde „177.80 mm“ in
 einem auf Zoll gestellten deutschen Fenster (`unit_question`).
 
+Eine Zahl als **Platzhalterwert** eines Satzes (`_("… unter {largest}", largest=…)`)
+geht als `format_length`/`format_volume`/`format_area` (sie liefern eine
+`app.i18n.Figure`) oder als `float` hinein, nie selbst mit Punkt formatiert:
+Nur so bekommt sie beim Übersetzen das Dezimalzeichen der Sprache. Texte
+bleiben unangetastet — „Snapmaker 2.0“ ist ein Name.
+
 ## Dieselbe Datei, dasselbe Teil — auf jeder Maschine
 
 Was zu Geometrie wird oder zwischen Lagen, Flächen oder Kandidaten
