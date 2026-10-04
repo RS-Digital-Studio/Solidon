@@ -138,6 +138,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Solidon reconoce cada campo de nervios, panal u hoyuelos de un archivo importado como un solo patrón, y «Reconocer características aquí» agrupa las celdas de un campo.
 - Un campo pequeño que Solidon solo lee como características sueltas se convierte en un patrón con «Agrupar como patrón». Los patrones de archivos STEP se reconocen directamente.
 - Las piezas de una división automática también se numeran en proyectos de versiones anteriores, y un corte eliminado o desactivado ya no cuenta.
+- Un taladro que duplica, desplaza o repite a lo largo de una cara inclinada sigue siendo el mismo taladro en piezas STL y STEP, con las mismas medidas y avisos.
+- Tras «Repetir característica», una copia en una pieza STEP ya no perfora hasta la cara superior, y un taladro STL de facetas gruesas sigue contando como pasante.
 
 ### Redondear y achaflanar
 

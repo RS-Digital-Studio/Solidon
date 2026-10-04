@@ -40159,6 +40159,45 @@ Eckregel am Netz seit `25163ffc2` (beide ab v0.2.0), Langlochtiefe über einen
 Bogen seit `9c4e55f37` (v0.4.1), Nachprüfung nur für Bohrungskopien seit
 `48453904d` (v0.5.1); im Abschnitt 0.5.2 zu zwei Punkten zusammengefasst.
 
+**Nachtrag 04.10.2026 (Claude, Zweig `claude/kopie-schraeg`):** Übergabe aus
+RM-411 — *Merkmal verdoppeln* einer Bohrung 10 mm längs der schrägen Platte
+verlor am Netz die Kopie. Ursache: `prepare_ops._past_the_mouths` hob den Deckel
+einer offenen Mündung längs seiner Normale um `FEATURE_OVERLAP`; an der
+Mündung in z = 10 + x/4 entstand ein um 14,04° gescherter Ring, der am Ziel im
+Material zur Wand der Kopie wurde. Bis zur tangentialen Trennung (Teil 2) las
+die Erkennung diese Wand als gekrümmte Fläche (`feature_lost`, so auch in
+v0.5.1), danach maß sie Tiefe 10,750 statt 10,771 mm und die Senkung Ø 13,333
+statt 13,388 mm. Jetzt trägt die Wand den Kragen (`_continued_walls`: jede
+Randecke im Schnitt ihrer zwei Wandebenen mit der verschobenen Deckelebene;
+Bohrung als Zylinder, Senkung als Kegel wie `edit.clipped_bore_tool` und
+`_exact_chain_tool_placed`), Langloch und Lippentasche behalten den Kragen längs
+der Normale wie `edit.collared`. Am Geschwister *Merkmal vervielfachen* bohrte
+der exakte Kern bis an die höhere Oberseite durch (69,9 mm³ mehr, durchgehend,
+ohne Satz); jetzt endet die Kopie starr an den mitbewegten Randebenen
+(`_clipped_at_moved_rims`, mit `_exact_rigid_cut` geteilt), und jede Kopie fragt
+die Säule (`_exact_through_checked`, je Bohrung — nach dem ersten Satz blieb
+Platz 3 sonst durchgehend). Am Netz liegt die Säule im Werkzeug des Platzes wie
+bei allen Geschwistern (ohne meldete ein 32-Eck Ø 6,1 „geht nicht mehr durch“,
+auch in v0.5.1), und „nicht mehr durchgehend“ gilt erst nach dem Nachmessen.
+Abnahme: `tests/test_exact_body_parity.py` — Kopie längs und quer zur Schräge,
+mit Senkung, über und von der Stufe je Güte 10 Fälle (am unveränderten Stand 4
+rot), Versetzen und Muster längs der Schräge 8 (Versetzen ohne Wandkragen 4 rot,
+Muster vor der zweiten Einheit 4 rot), drei Plätze einer Senkbohrung 2 (mit der
+alten Frage rot); `tests/test_prepare.py` grobes Vieleck als Muster 1 (ohne
+Werkzeug rot); Plattformweg `carried_collar` (ohne Wandkragen rot). Echtes
+Modell Teppichclip (`carpet-corner-clip.step`, Langloch zur Bohrung Ø 9
+gerundet, 10,5 mm verdoppelt): Netzkopie Mitte z −1,5309 → −1,5330 mm (exakt
+−1,5334), Ø 9,0009 → 9,0000, Tiefe 3,0663 → 3,0668 (exakt 3,0667), gekippte
+Wanddreiecke 92 → 3; Sätze und Volumenabstand (0,042 mm³) unverändert gleich.
+Furnierplatte (`hirnmod_scura_workshop_furnier.stl`, 0,6 mm): Bohrungen Ø 6,1
+und Ø 8,3 als Muster um Ø + 3 mm vervielfacht hießen „geht nicht mehr durch“ bei
+durchgehender Kopie (auch v0.5.1), jetzt kein Satz, Volumen gleich.
+Korpusgegenprobe (gs-100, Teppichclip, pb3041, Crimper) mit gleicher Ausgabe,
+Bohrerhalter versetzt mit denselben Sätzen. Cacheversionen: `move_feature` 12,
+`duplicate_feature` 9, `pattern_feature` 7. Commits `115d912d8`, `1e6301fcb`;
+Entwicklungstor am Endstand 23 552 bestanden, 122 übersprungen, Exit 0. Belege
+unter `F:\solidon-review-reports\claude-2026-10-04\kopie-schraeg\`.
+
 ## RM-254: Splinestücke bestätigen einander nur noch mit festgelegtem Radius (04.10.2026)
 
 <a id="rm-254-splinestücke-bestätigen-einander-nur-noch-mit-festgelegtem-radius-04102026"></a>

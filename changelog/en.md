@@ -137,6 +137,8 @@ it into `website/version.json`.
 - Solidon recognises each rib, honeycomb or dimple field in an imported file as one pattern, and *Detect features here* combines the cells of a field.
 - A small field that Solidon reads only as separate features becomes one pattern with *Combine into a pattern*. Patterns in STEP files are now recognised directly.
 - Pieces of an automatic split are numbered in projects from older versions too, and a deleted or disabled cut no longer counts.
+- A hole you duplicate, move or repeat along a sloped face stays the same hole on STL and STEP parts, with the same dimensions and messages.
+- After *Repeat feature*, a copy on a STEP part no longer drills through to the top, and a coarsely faceted STL hole still counts as going through.
 
 ### Fillets and chamfers
 

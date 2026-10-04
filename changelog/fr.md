@@ -138,6 +138,8 @@ dans `website/version.json`.
 - Solidon reconnaît chaque champ de nervures, de nid d'abeille ou de picots d'un fichier importé comme un seul motif, et « Détecter les caractéristiques ici » regroupe les cellules d'un champ.
 - Un petit champ que Solidon ne lit que comme caractéristiques isolées devient un motif avec « Regrouper en motif ». Les motifs des fichiers STEP sont reconnus directement.
 - Les morceaux d'une division automatique sont aussi numérotés dans les projets d'anciennes versions, et une coupe supprimée ou désactivée ne compte plus.
+- Un perçage dupliqué, déplacé ou répété le long d'une face inclinée reste le même perçage sur les pièces STL et STEP, avec les mêmes cotes et messages.
+- Après « Répéter la caractéristique », une copie sur une pièce STEP ne perce plus jusqu'au dessus, et un perçage STL grossièrement facetté reste débouchant.
 
 ### Congés et chanfreins
 
