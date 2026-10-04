@@ -379,6 +379,37 @@ def test_a_cube_has_no_overhang_worth_the_name() -> None:
     # The underside faces straight down, everything else stands vertical.
     assert {round(value) for value in analysis.values} <= {0, 90}
     assert analysis.threshold == 45.0
+    assert analysis.highlighted == (), "der Boden liegt auf der Platte und braucht keine Stütze"
+
+
+def test_a_finely_meshed_box_on_the_bed_needs_no_support_but_a_shelf_does() -> None:
+    """Ein Boden aus vielen Dreiecken zählt so wenig wie einer aus zwei.
+
+    Nach *Dreiecke angleichen* meldete die Formsitzung an einem schlichten
+    Quader „454 Flächen brauchen möglicherweise Stützen“ — gezählt waren die
+    Dreiecke seines Bodens (Fensterabnahme RM-366). Die Unterseite eines
+    Kragarms über der Platte bleibt markiert.
+    """
+    import shapely.geometry
+
+    box = trimesh.creation.box(extents=(200.0, 60.0, 20.0))
+    box.apply_translation((0.0, 0.0, 10.0))
+    for _ in range(4):
+        box = box.subdivide()
+    fine = maps.overhang_map(MeshData.of(box))
+    bottom = np.isclose(np.asarray(box.triangles_center)[:, 2], 0.0)
+    assert int(bottom.sum()) > 100, "der Boden besteht aus vielen Dreiecken"
+    assert fine.highlighted == ()
+
+    profile = shapely.geometry.Polygon(
+        [(-5, 0), (5, 0), (5, 10), (20, 10), (20, 15), (-20, 15), (-20, 10), (-5, 10)]
+    )
+    tee = trimesh.creation.extrude_polygon(profile, 10.0)
+    tee.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, (1, 0, 0)))
+    shelf = maps.overhang_map(MeshData.of(tee))
+    centres = np.asarray(tee.triangles_center)[list(shelf.highlighted)]
+    assert shelf.highlighted, "die Unterseite des Kragarms hängt über"
+    assert np.allclose(centres[:, 2], 10.0), "markiert ist nur, was über der Platte hängt"
 
 
 def test_the_overhang_legend_names_the_limit_it_highlights() -> None:

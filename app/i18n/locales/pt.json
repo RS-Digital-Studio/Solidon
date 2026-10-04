@@ -4492,6 +4492,7 @@
   "Keine Drucker gefunden. Ändern Sie den Suchtext.": "Nenhuma impressora encontrada. Altere o texto da pesquisa.",
   "Keine Einpressbuchse der Normteiltabelle hat ein so weites Loch.": "Nenhuma bucha da tabela de peças normalizadas tem um furo tão largo.",
   "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter Bearbeiten → Einstellungen.": "Não foram encontrados perfis de filamento. Verifique o slicer em Editar → Definições.",
+  "Keine Fläche braucht eine Stütze.": "Nenhuma superfície precisa de suporte.",
   "Keine Fläche konnte mit einem eindeutigen Formbezug ausgewertet werden.": "Não foi possível avaliar nenhuma face com uma referência de forma inequívoca.",
   "Keine Gegenfläche prüfen": "Não verificar uma face oposta",
   "Keine Kante dieser Auswahl lässt sich mit diesem Maß bearbeiten. Bei {narrow} Kanten sind die angrenzenden Flächen zu schmal; dort muss das Maß unter {largest} liegen. An {unmapped} weiteren Stellen hat der exakte Körper keine eigene Kante, etwa weil der Knick innerhalb einer Fläche liegt. Verkleinern Sie das Maß, oder beenden Sie die Flächenbearbeitung: Am Dreiecksmodell lassen sich diese Stellen bearbeiten.": "Nenhuma aresta desta seleção pode ser modificada com esta cota. Em {narrow} arestas, as faces adjacentes são demasiado estreitas; nesses locais, a cota deve ser inferior a {largest}. Em outros {unmapped} locais, o corpo exato não tem aresta própria, por exemplo porque a quebra fica dentro de uma face. Reduza a cota ou termine a edição de faces: no modelo de triângulos estes locais podem ser editados.",

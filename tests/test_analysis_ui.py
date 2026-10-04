@@ -47,6 +47,18 @@ def _activate_report_navigation(state: Any, route: str, object_id: str) -> None:
         MainWindow._show_support_need(state, AppError(object_id=object_id))
 
 
+def test_a_gesture_without_overhang_says_so_instead_of_counting_zero() -> None:
+    """„Keine Fläche braucht eine Stütze“ statt „0 Flächen brauchen …“.
+
+    Seit der Boden nicht mehr als Überhang zählt, ist null der häufigste Fall;
+    die Zählzeile las sich dann wie eine halbe Warnung (Fensterabnahme RM-366).
+    """
+    from app.ui.analysis_bar import support_note
+
+    assert support_note(0) == tr("Keine Fläche braucht eine Stütze.")
+    assert support_note(7) == tr("{count} Flächen brauchen möglicherweise Stützen.").format(count=7)
+
+
 @pytest.mark.parametrize("route", ["finding", "bundle", "locations", "support"])
 @pytest.mark.parametrize("phase", ["absent", "passive", "editing", "committing"])
 def test_report_navigation_preserves_a_started_draft_before_any_side_effect(

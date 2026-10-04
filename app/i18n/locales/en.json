@@ -4492,6 +4492,7 @@
   "Keine Drucker gefunden. Ändern Sie den Suchtext.": "No printers found. Change the search text.",
   "Keine Einpressbuchse der Normteiltabelle hat ein so weites Loch.": "No insert in the standard parts table has a hole this wide.",
   "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter Bearbeiten → Einstellungen.": "No filament profiles found. Check the slicer under Edit → Settings.",
+  "Keine Fläche braucht eine Stütze.": "No surface needs a support.",
   "Keine Fläche konnte mit einem eindeutigen Formbezug ausgewertet werden.": "No face could be evaluated with an unambiguous shape reference.",
   "Keine Gegenfläche prüfen": "Do not check a mating face",
   "Keine Kante dieser Auswahl lässt sich mit diesem Maß bearbeiten. Bei {narrow} Kanten sind die angrenzenden Flächen zu schmal; dort muss das Maß unter {largest} liegen. An {unmapped} weiteren Stellen hat der exakte Körper keine eigene Kante, etwa weil der Knick innerhalb einer Fläche liegt. Verkleinern Sie das Maß, oder beenden Sie die Flächenbearbeitung: Am Dreiecksmodell lassen sich diese Stellen bearbeiten.": "None of the selected edges can be modified with this dimension. At {narrow} edges, the adjacent faces are too narrow; the dimension must be below {largest} there. At {unmapped} other locations the exact body has no edge of its own, for example because the kink lies inside a face. Reduce the dimension, or end face editing: these locations can be edited on the triangle model.",

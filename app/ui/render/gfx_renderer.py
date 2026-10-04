@@ -398,15 +398,18 @@ class GfxItem(Item):
         """Zwischen Dreiecksfarben und der einen Körperfarbe umschalten.
 
         pygfx entscheidet das über ``material.color_mode``: ``"face"`` liest
-        ``geometry.colors``, ``"auto"`` nimmt ``material.color``. Nur Körper,
-        die beim Anlegen Zellfarben bekamen, tragen die Marke — bei allen
-        anderen tut der Aufruf nichts, und das ist auch richtig so: Sie hätten
-        keine Dreiecksfarben, zu denen sie zurückkehren könnten.
+        ``geometry.colors`` je Dreieck, ``"uniform"`` nur ``material.color``.
+        **Nicht ``"auto"``:** Das multipliziert die Körperfarbe mit
+        ``geometry.colors``, gelesen je Ecke — ein Puffer je Dreieck lag dann
+        über den Eckennummern. Nur Körper, die beim Anlegen Zellfarben
+        bekamen, tragen die Marke — bei allen anderen tut der Aufruf nichts,
+        und das ist auch richtig so: Sie hätten keine Dreiecksfarben, zu denen
+        sie zurückkehren könnten.
         """
         for obj in self._coloured():
             if not getattr(obj, "_solidon_face_colours", False):
                 continue
-            obj.material.color_mode = "face" if visible else "auto"
+            obj.material.color_mode = "face" if visible else "uniform"
             self.restyled = True
         self._changed()
 

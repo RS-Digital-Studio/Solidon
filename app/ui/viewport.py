@@ -2101,6 +2101,20 @@ def source_colours(mesh: Any, face_count: int) -> Any | None:
     return np.clip(np.rint(colours * 255.0), 0.0, 255.0).astype(np.uint8)
 
 
+def shows_face_colours(
+    object_id: ObjectId, highlighted: Sequence[ObjectId], map_owner: ObjectId | None
+) -> bool:
+    """Ob ein Körper seine Farben je Dreieck zeigt oder die eine Farbe.
+
+    Gewählt gilt die Auswahlfarbe, sonst sähe man die Auswahl an einem Teil
+    mit Filament nicht. **Eine Analysekarte besitzt die Farbe ihres Körpers
+    trotzdem** (§19.1) — dieselbe Ausnahme, die die Auswahlfarbe schon
+    beachtete; ohne sie verschwand die Karte am gewählten Körper, und in der
+    Formsitzung ist er immer gewählt.
+    """
+    return object_id == map_owner or object_id not in highlighted
+
+
 MeasureMode = Literal["off", "distance", "thickness", "angle"]
 
 MEASURE_COLOUR = ROLES["measure"]
@@ -8854,12 +8868,13 @@ class Viewport(QWidget):
         if self.renderer is None:
             return
         highlighted = () if self._sketch_frame is not None else self.highlighted_objects()
+        map_owner = self._map_object if self._map is not None else None
         wanted = {
             identifier: SELECTED_COLOUR if identifier in highlighted else self._object_colour
             for identifier in self._actors
             # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
             # stattdessen im Objektbaum und in der Statusleiste (§19.1).
-            if not (self._map is not None and identifier == self._map_object)
+            if identifier != map_owner
         }
         changed = {
             identifier: colour
@@ -8874,7 +8889,7 @@ class Viewport(QWidget):
         # Dauer der Auswahl gilt deshalb die eine Farbe, danach wieder der
         # Werkstoff je Dreieck.
         for identifier, actor in self._actors.items():
-            actor.set_face_colours_visible(identifier not in highlighted)
+            actor.set_face_colours_visible(shows_face_colours(identifier, highlighted, map_owner))
         if not changed:
             return
         # Die neue Blende löst die ganze laufende Animation ab. Deren noch

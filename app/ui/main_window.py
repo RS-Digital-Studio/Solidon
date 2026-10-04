@@ -258,7 +258,7 @@ from app.ui.ai_disclosure import (
     ensure_ai_disclosure,
     target_for_backend,
 )
-from app.ui.analysis_bar import AnalysisBar, LayerBar
+from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette, fold
@@ -13389,11 +13389,7 @@ class MainWindow(QMainWindow):
                 )
             )
         if card is not None and card.kind == "overhang":
-            notes.append(
-                tr("{count} Flächen brauchen möglicherweise Stützen.").format(
-                    count=len(card.highlighted)
-                )
-            )
+            notes.append(support_note(len(card.highlighted)))
         if self._sculpt_target is None:
             result = self.session.last_result
             if result is not None:
