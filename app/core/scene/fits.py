@@ -28,7 +28,7 @@ from app.core.errors import (
 )
 from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
-from app.core.knowledge.profiles import for_object, resolve_tolerance
+from app.core.knowledge.profiles import for_object, resolve_tolerance, thread_share
 from app.core.log import get_logger
 from app.core.perceive.features import EPS_ANGLE
 from app.core.scene.cancel import NeverCancelled
@@ -201,17 +201,26 @@ def pair_kinds(first: Feature, second: Feature) -> tuple[FitKind, ...]:
     return tuple(kind for kind in candidates if pair_problem(kind, first, second) is None)
 
 
-def target(scene: Scene, fit: Fit, profile: Profile) -> tuple[float, tuple[str, ...]]:
-    """Sollmaß und tatsächlich verwendete Materialtitel für die sichtbare Anlegeauskunft."""
+def target(
+    scene: Scene, fit: Fit, profile: Profile, *, as_stated: bool = False
+) -> tuple[float, tuple[str, ...]]:
+    """Sollmaß und tatsächlich verwendete Materialtitel für die sichtbare Anlegeauskunft.
+
+    ``as_stated`` gilt der Gewindepassung: das Sollmaß, wenn beide Gewinde so
+    gebaut werden, wie sie dastehen (:func:`_thread_wanted`).
+    """
     if fit.kind == "flush":
         return 0.0, ()
     first, second = resolve(scene, fit.a), resolve(scene, fit.b)
     if first is None or second is None or pair_problem(fit.kind, first, second) is not None:
         raise ValueError("fit_not_measurable")
-    hole, _pin = _sort_by_kind(first, second)
+    hole, pin = _sort_by_kind(first, second)
     hole_ref, pin_ref = (fit.a, fit.b) if hole is first else (fit.b, fit.a)
-    wanted, _ = _wanted(scene, fit, hole_ref, pin_ref, profile)
-    references = (hole_ref,) if fit.kind == "thread" else (hole_ref, pin_ref)
+    wanted, _ = _wanted(scene, fit, hole_ref, pin_ref, profile, as_stated=as_stated)
+    # Ein Bolzen ohne eigenes Spiel trägt zum Gewinde nichts bei, sein Material
+    # also auch nicht.
+    pin_counts = fit.kind != "thread" or (not as_stated and _positive(pin, "nominal") is not None)
+    references = (hole_ref, pin_ref) if pin_counts else (hole_ref,)
     names = tuple(
         dict.fromkeys(_profile_of(scene, ref, profile).material.title for ref in references)
     )
@@ -844,7 +853,13 @@ def _mesh_clearance(
 
 
 def _wanted(
-    scene: Scene, fit: Fit, hole: FeatureRef, pin: FeatureRef, profile: Profile
+    scene: Scene,
+    fit: Fit,
+    hole: FeatureRef,
+    pin: FeatureRef,
+    profile: Profile,
+    *,
+    as_stated: bool = False,
 ) -> tuple[float, str]:
     """Das Spiel, das diese Passung haben soll, in den Materialien, aus denen
     sie besteht (§12).
@@ -863,18 +878,59 @@ def _wanted(
     kann man kleben; ein Gehäuse, das beim Zusammenbau gerissen ist, ist
     Ausschuss.
 
-    Ein Gewinde ist eine Eigenschaft des Lochs und liest nur dessen Material.
+    Ein Gewinde ist die Summe seiner zwei Hälften (:func:`_thread_wanted`).
     """
+    if fit.kind == "thread" and isinstance(fit.tolerance, str):
+        return _thread_wanted(scene, fit.tolerance, hole, pin, profile, as_stated=as_stated)
     if not isinstance(fit.tolerance, str) or fit.tolerance != AUTO_TOLERANCE_PREFIX:
         return resolve_tolerance(fit.tolerance, fit.kind, profile), ""
 
     both = [_profile_of(scene, hole, profile), _profile_of(scene, pin, profile)]
-    if fit.kind == "thread":
-        both = both[:1]
     chosen = max(resolve_tolerance(fit.tolerance, fit.kind, entry) for entry in both)
 
     names = {entry.material.id for entry in both}
     return chosen, ", ".join(sorted(names)) if len(names) > 1 else ""
+
+
+def _thread_wanted(
+    scene: Scene,
+    tolerance: str,
+    hole: FeatureRef,
+    pin: FeatureRef,
+    profile: Profile,
+    *,
+    as_stated: bool,
+) -> tuple[float, str]:
+    """Das Spiel einer Gewindepassung: was jede Hälfte in ihrem Material trägt.
+
+    Verglichen wird gebaut gegen gebaut — ein eingelesenes Gewinde nennt sein
+    gemessenes Maß, ein gedrucktes sein gebautes. Ein gedrucktes Gewinde aus
+    der Bibliothek (es nennt sein Nennmaß, ``nominal``) ist um das Spiel
+    seines Materials daneben gebaut; ein Gewinde ohne Nennmaß trägt als Loch
+    die Lochkorrektur, als Bolzen nichts (``profiles.thread_share``). Ein
+    gedrucktes Paar soll also zweimal das Spiel haben, ein gedruckter Bolzen
+    in einer eingelesenen Mutter Spiel plus Lochkorrektur.
+
+    ``as_stated`` fragt, was die Passung verlangt, wenn beide Hälften so
+    gebaut werden, wie sie dastehen — so setzt *Merkmal ändern* ein Gewinde,
+    und so rechnet die Kopplung das Gegengewinde (``counterpart``).
+    """
+    shares: list[tuple[str, float]] = []
+    for reference, inner in ((hole, True), (pin, False)):
+        feature = resolve(scene, reference)
+        printed = (
+            not as_stated and feature is not None and _positive(feature, "nominal") is not None
+        )
+        own = _profile_of(scene, reference, profile)
+        share = thread_share(tolerance, own, inner=inner, printed=printed)
+        if share > 0.0:
+            shares.append((own.material.id, share))
+    names = {name for name, _share in shares}
+    explicit = tolerance != AUTO_TOLERANCE_PREFIX
+    return (
+        sum(share for _name, share in shares),
+        ", ".join(sorted(names)) if len(names) > 1 and not explicit else "",
+    )
 
 
 def _profile_of(scene: Scene, reference: FeatureRef, profile: Profile) -> Profile:

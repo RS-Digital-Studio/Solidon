@@ -292,6 +292,16 @@ Freiraum zuzüglich der nativen Brimbreite. Passt bereits die bekannte Breite
 mit beiden Rändern nicht oder verbrauchen die Ränder die andere Bettachse,
 bleiben die Koordinaten aus; ein geklemmter Wert würde keinen Platz schaffen.
 
+Sperrflächen der Maschine (`bed_exclude_area`) rücken den Anfang quer zur
+Tiefe hinter sich, mit demselben Rand (`_beside_the_exclusions`): Bambu P1S,
+P1P, X1 und X1 Carbon sperren vorn links 18 mal 28 mm, genau dort, wo der Turm
+sonst begann. In der Slicer-Matrix (RM-312) reichte er am P1S mit Bambu Studio
+bis x = 17,2 mm hinein, und Solidons G-Code-Prüfung meldete den eigenen Turm
+als `gcode.off_the_bed`; nach der Regel beginnt er bei x = 36. Weil die Tiefe
+erst der Slicer kennt, zählt jede Sperrfläche, die quer zur Tiefe die
+Turmbreite samt Rand überlappt. Eine unlesbare Sperrfläche oder ein Turm, der
+neben keiner passt, lässt die Lage beim Slicer.
+
 Fehlt `prime_tower_brim_width`, gilt der Herstellerstandard **3 mm** aus
 `PrintConfig.cpp`: [OrcaSlicer v2.4.0](https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/v2.4.0/src/libslic3r/PrintConfig.cpp),
 [ElegooSlicer](https://raw.githubusercontent.com/elegooofficial/ElegooSlicer/main/src/libslic3r/PrintConfig.cpp),
@@ -307,8 +317,8 @@ Explizite Koordinaten aus Maschinen-, Prozess- oder eingebetteten 3MF-Profilen
 bleiben erhalten, auch wenn nur eine Achse vorgegeben ist. Unbekannte Modi und
 andere Konturen oder Winkel werden nicht geraten. Die Initialposition ist
 keine Platzgarantie: Tiefe, Rippen und Reinigungsvolumen bestimmen die
-tatsächliche Turmfläche erst beim Slicen; auch Sperrflächen prüft weiterhin
-die G-Code-Bauraumprüfung. Die geschriebenen Koordinaten gehen bei tatsächlich
+tatsächliche Turmfläche erst beim Slicen; Bauraum und Sperrflächen prüft
+danach weiterhin die G-Code-Bauraumprüfung. Die geschriebenen Koordinaten gehen bei tatsächlich
 mehreren im G-Code verwendeten Werkzeugen in die
 Einstellungsgegenprobe ein: Creality nullt den inaktiven Einfilament-Turm. Dabei
 zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen oder
@@ -353,6 +363,10 @@ Qualitätsstufe gelten (RM-228).
 
 ## Die vier Gegenproben nach dem Lauf
 
+**Maskierte Anführungszeichen.** `verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
+Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
+ein wörtlicher Backslash erhalten.
+
 `slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.
 
 Vor dem Prozessstart prüft es den unveränderten Netzsatz der einzelnen Platte.
@@ -382,6 +396,13 @@ Jede sieht etwas, das die anderen durchlassen:
 | `too_short` | Ist das ganze Modell darin, oder wurde unten abgeschnitten? |
 | `verify_settings` | Hat der Slicer die geschriebenen Werte übernommen? |
 | `spools_left_out` | Sind **alle übergebenen Spulen** gedruckt worden? |
+
+`too_short` zählt mit den Netzen der Platte nur, was über der gedruckten
+Höhe noch eine Bahnbreite trägt (`_printable_above`): Eine Oberkante, die als
+Schneide ausläuft, druckt ein Slicer mit festen Bahnbreiten nicht. An
+`bottom-single.stl` (Slicer-Matrix, RM-312) endeten ElegooSlicer, Bambu
+Studio und SuperSlicer bei 78,0 statt 78,49 mm, und der Befund schickte den
+Kunden mit *Auf das Bett legen* zu einem Teil, das auf dem Bett lag.
 
 Die vierte fragt gegen `expected_tools`, und das kommt aus
 `threemf.tools_in_use` — den Werkzeugen, die die **Flächen** einer Platte
@@ -429,6 +450,33 @@ entscheiden. Verschoben werden nur Exportkopien; Szenenobjekte, Materialslots
 und benannte Merkmale bleiben erhalten. Jede Projektplatte wird getrennt
 behandelt. Curas Stützsperren folgen derselben exportierten Lage und erhalten
 den Maschinenversatz genau einmal.
+
+Die gepackte Lage hält nur, wenn der Slicer sie nicht wieder verwirft.
+SuperSlicer 2.5 ordnet auf der Konsole ohne `--dont-arrange` jede Eingabe
+selbst an, auch eine 3MF mit gültiger Lage, und zwar bis an den Bettrand ohne
+Platz für die Skirt: In der Slicer-Matrix (RM-312) lief sie am MINI bei
+y = -1,41 mm vom Bett, obwohl Solidons Anordnung 8,7 mm Rand ließ. PrusaSlicer
+2.9 hielt die Lage auch ohne den Schalter und nimmt ihn an. Gesetzt wird er
+wie `--arrange 0` der Orca-Familie nur bei haltender Anordnung.
+
+Die Orca-Familie ordnet auf der Konsole selbst an, verschiebt dabei aber nur.
+Die Größenprüfung vor dem Lauf lässt ein Teil durch, das gedreht auf das Bett
+passt; ungedreht sagte der Slicer dann mit -50 ab. In der Slicer-Matrix
+(RM-312) war das eine Schüssel von 240 mal 200 mm, die auf das 220er-Bett von
+K1 und Kobra 2 nur um rund 14,5° gedreht passt. Deshalb dreht
+`_turned_for_cli` die Exportkopie eines solchen Teils mit denselben
+Kandidaten wie die Packung (`_cli_turns`); was ungedreht irgendwo Platz hat,
+bleibt unberührt, denn die Lage gehört dort dem Slicer. Creality Print 7.3
+ordnet auf der Konsole selbst neu an und verlangt dabei gemessen gut einen
+Millimeter Rand je Seite (0,9 mm reichten nicht, 1,25 mm schon); ein Teil,
+das das Bett bis auf weniger füllt, sagt es weiter mit -50 ab.
+
+Eine Drehung sucht zuerst eine Lage, um die der Rand der Haftung
+(`rim_reach`) noch auf dem Bett liegt, erst dann eine ohne ihn. Die erste
+passende Drehung lag sonst knapp am Rand: drill-holder.3mf (185 mal 34,6 mm)
+stand am MINI 1,4 mm davor, SuperSlicers Skirt lief 2,2 mm über das Bett,
+obwohl schräg gestellt 12 mm frei waren (RM-312). Druckdialog und Schreiber
+geben denselben Rand mit, sonst planten sie zwei Netzsätze.
 
 Eine erfolglose Suche beweist keine mathematische Unmöglichkeit. Die Meldung
 sagt daher, dass keine Anordnung gefunden wurde, und bietet die vorhandene
@@ -587,6 +635,26 @@ CLI-Kopie eine eindeutige Kennzeichnung. `PlateRun.name_bindings` verbindet
 genau diese ausgegebenen Namen mit den eingefrorenen Szenenkennungen. Das
 Projekt und seine Materialzuordnung bleiben unverändert.
 
+**Eine erste Schicht, schmaler als anderthalb Bahnen, ist eine eigene
+Ursache** (`_first_layer_narrower_than_a_line`, Slicer-Matrix RM-312):
+`Cat_2.stp` steht auf Stegen von höchstens 0,6 mm. Mit fester Bahnbreite
+(Herstellerprozess des Centauri Carbon 2, MINI-Profil von SuperSlicer) legt der
+Slicer dort keine Schleife; ElegooSlicer endet mit -100 und „found error“ ohne
+Grund, SuperSlicer mit „no extrusions in the first layer“. Mit Arachne druckten
+beide, ein Brim änderte nichts. Gefragt wird erst nach einer Absage, am
+Querschnitt auf halber Höhe der ersten Schicht, nach innen um drei Viertel einer
+Erstschichtbahn versetzt; die Meldung nennt die Wandbahnen und den Raft statt
+*Auf das Bett legen*, und *Druckeinstellungen öffnen* hebt die Zeile der
+Wandbahnen hervor. Bei veränderlicher Bahnbreite bleibt die Absage aus RM-483.
+
+**-101 heißt: Bahnen kreuzen sich** (`ORCA_PATHS_CROSS`, Bambus
+`CLI_GCODE_PATH_CONFLICTS`). Die Orca-Familie verwirft damit eine fertig
+geschnittene Platte; an `chufang.3mf` (Slicer-Matrix RM-312) stieß nach der
+eigenen Anordnung des Slicers der Reinigungsturm an ein Teil. OrcaSlicer sagt
+auf der Konsole nur „found error“, Creality Print nennt Turm und Teil im
+Protokoll, Bambu Studio den Turm in `result.json`. Der Satz nennt beide
+Möglichkeiten und lässt die Ausgabe sagen, welche es war.
+
 
 
 ## Der Raftkontakt hat eine eigene Herkunft
@@ -633,3 +701,34 @@ Bei Cura kommen unteres Ende und Schwelle der Lüfterkurve aus der
 Druckerdefinition (`manufacturer.cura_fan_curve`), nicht aus Solidons
 Materialkurve: Deren PLA-Schwelle von 80 s hob den Lüfter schon in der ersten
 Schicht an (RM-228).
+
+## Die Außenkante der ersten Schicht (RM-312)
+
+`writer.rim_of` rechnet, wie weit die erste Schicht über ein Teil
+hinausreicht, und `check_adhesion_on_bed` warnt, wenn das über den Bettrand
+oder in eine Sperrfläche geht. Drei Bausteine, jeder belegt:
+
+- **Auto-Brim der Orca-Familie.** `configBrimWidthByVolumeGroups` in
+  OrcaSlicers `Brim.cpp` (aus Bambu Studio übernommen) rechnet die Breite aus
+  Höhe, Flächenträgheit und Wärmelänge der ersten Schicht und kappt bei
+  18 mm, unabhängig von `brim_width`. ElegooSlicer legte am Rack 14,7 mm statt
+  5 mm. Entscheidung zu RM-312: Steht der Brim beim Herstellerprofil auf
+  „automatisch“, rechnet die Warnung mit 18 mm und bietet *Brim-Breite
+  festlegen* an; wählt der Kunde „Brim“ oder übernimmt einen Vorschlag,
+  schreibt Solidon `outer_only` mit Breite, und der Slicer wählt nichts mehr
+  selbst. Zwischen zwei Teilen bleibt es bei der Brimbreite des Profils
+  (`adhesion_margin`, Entscheidung J).
+- **Stützfuß.** `raft_first_layer_expansion` verbreitert die erste Raft- und
+  Stützschicht. Gelesen aus der Kette, sonst die gemessene Programmvorgabe
+  (`manufacturer.SUPPORT_FOOT_DEFAULTS`: Orca, Elegoo, Creality 2 mm, Prusa
+  und SuperSlicer 3 mm). Bambu Studio schreibt `-1`, Cura führt den Schlüssel
+  nicht: unbekannt, und `arrange.support_foot_unknown` sagt das, statt eine
+  Zahl zu schätzen. Gezählt wird der Fuß, sobald Stützen an sind — wo die
+  Stütze das Bett berührt, weiß erst der Slicer.
+- **Skirt.** Abstand und Bahnen aus dem Profil, außen um Brim oder Stützfuß.
+  Prusa und Orca drucken ihn neben einem Brim, solange Solidon die
+  Haftungsart nicht schreibt; schreibt es eine, nullt
+  `handover._only_chosen_adhesion` die übrigen. Cura druckt nur eine Art.
+
+Dieselbe Außenkante gibt `slicer_rim` der Drehung für die Konsole
+(`_fit_cli_mesh`) als Rand mit, in Druckdialog und Schreiber gleich.

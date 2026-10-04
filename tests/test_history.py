@@ -462,6 +462,18 @@ def test_operations_and_objects_are_numbered_in_order(history: History) -> None:
     assert history.operations[-1].id == 2
 
 
+def test_a_named_new_body_moves_the_numbering_past_it(history: History) -> None:
+    """Ein Ablauf nennt seinen ersten neuen Körper (``next_object_id``); der nächste
+    Entwurf ohne eigene Kennung bekommt die folgende, nicht dieselbe (RM-184)."""
+    named = history.next_object_id()
+    history.apply(
+        "Zwei Körper",
+        [OperationDraft(op="make_object", outputs=(named,)), OperationDraft(op="make_object")],
+    )
+    made = [entry.outputs[0] for entry in history.operations[-2:]]
+    assert made == [named, f"obj_{int(named.removeprefix('obj_')) + 1}"]
+
+
 def test_a_second_history_over_the_same_document_keeps_numbering(
     document: Document, registry: Registry
 ) -> None:

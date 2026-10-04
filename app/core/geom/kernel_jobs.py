@@ -24,7 +24,7 @@ sie nichts kennt außer ihren Feldern und Zahlen:
   ein Test an ``mesh_ops`` umstellt, gilt damit auch im Hilfsprozess, und das
   Modul zieht außer ``numpy`` und ``manifold3d`` nichts nach, was den Start
   des Hilfsprozesses verlängert (``component_labels`` lädt trimesh erst, wenn
-  es gefragt wird).
+  es gefragt wird — im Hilfsprozess vor dem Rechnen, :data:`PREPARATIONS`).
 * ``check`` steht zwischen zwei Kernaufrufen. Im Prozess wirft es den Abbruch
   (``CancelToken.raise_if_cancelled``), im Hilfsprozess beendet es ihn, wenn
   sein Elternprozess nicht mehr lebt. Einen laufenden Kernaufruf hält keines
@@ -424,14 +424,20 @@ def component_labels(arrays: Mapping[str, np.ndarray], values: Values, check: Ch
     der Kern: an den 5,8 Mio. Dreiecken des verfeinerten Spielwürfels 0,22 bis
     0,26 s am Stück (RM-212,
     ``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/buchhaltung.py``).
-    trimesh wird erst hier geladen — der Hilfsprozess startet ohne es.
+    trimesh wird erst hier geladen — der Hilfsprozess startet ohne es und lädt
+    es vor der Rechnung (:func:`_graph`, :data:`PREPARATIONS`).
     """
-    from trimesh import graph
-
     # trimesh trägt hier keine Typen; die Antwort ist ein Feld ganzer Zahlen.
-    labelled: Any = graph.connected_component_labels
+    labelled: Any = _graph().connected_component_labels
     labels = labelled(arrays["edges"], node_count=int(values["count"]))
     return {"labels": np.ascontiguousarray(labels)}, {}
+
+
+def _graph() -> Any:
+    """``trimesh.graph`` für :func:`component_labels`, geladen beim ersten Bedarf."""
+    from trimesh import graph
+
+    return graph
 
 
 def slice_sections(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
@@ -483,6 +489,22 @@ JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcom
     "min_gap": min_gap,
     "component_labels": component_labels,
 }
+
+#: Was eine Rechnung nachlädt, bevor sie rechnet — der Hilfsprozess ruft es nach
+#: der Annahme und **vor** dem Zurückstellen (:func:`_yield_to_the_window`), in
+#: normaler Klasse (RM-380). Ein Import ist kein Rechnen, und zurückgestellt
+#: verhungerte er unter Windows: ``trimesh.graph`` zieht rund tausend Module nach
+#: (``scipy``, ``PIL``), knapp eine CPU-Sekunde. Auf zwei Kernen, die vier
+#: Schleifen normaler Priorität auslasteten, kam ein Hilfsprozess, der erst
+#: zurückgestellt nachlud, in 300 s von 0,36 auf 0,92 CPU-Sekunden und wurde
+#: nicht fertig; mit Vorbereitung war er nach 6,2 s fertig, ganz ohne
+#: Zurückstellen nach 2,9 s, ``simplify_closed``, das nichts nachlädt, nach
+#: 3,2 s (04.10.2026, ``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/``
+#: ``hunger.py`` und ``hunger-last.txt``). Im Prozess der Anwendung ist es dann
+#: schon geladen.
+#: ``test_a_job_gives_the_same_bytes_in_the_helper_as_here`` verlangt von jeder
+#: Rechnung, dass sie zurückgestellt kein Modul mehr nachlädt.
+PREPARATIONS: Final[dict[str, Callable[[], object]]] = {"component_labels": _graph}
 
 
 # --- Felder im gemeinsamen Speicher -------------------------------------------------
@@ -658,7 +680,8 @@ def _yield_to_the_window() -> None:
     **Unter Windows nur, solange er rechnet** (RM-474): Dort teilt der Planer
     die Zeit streng nach Klasse zu, und unter fremder Volllast kam auch die
     Bereitschaft erst nach 3 s statt 0,6 s. Annehmen, Quittieren und Warten
-    laufen deshalb in normaler Klasse (:func:`_answer_promptly`); ``nice``
+    laufen deshalb in normaler Klasse (:func:`_answer_promptly`), ebenso das
+    Nachladen vor einer Rechnung (:data:`PREPARATIONS`, RM-380); ``nice``
     unter POSIX lässt sich ohne Recht nicht zurücknehmen und gilt ab dem Start.
     """
     try:
@@ -780,6 +803,9 @@ def _serve(connection: Any) -> None:
         arrays: Arrays = {}
         try:
             arrays = views(segment, layout)
+            prepare = PREPARATIONS.get(job)
+            if prepare is not None:
+                prepare()
             if lowered_per_job:
                 _yield_to_the_window()
             outcome = JOBS[job](arrays, values, check)

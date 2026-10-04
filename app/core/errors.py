@@ -459,6 +459,12 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "torus_tube",
         # Die Gangtiefe einer Steigung muss unter dem Radius bleiben (P2.6).
         "thread_pitch",
+        # Ein geändertes Gewinde muss in seiner Wand bleiben (RM-184).
+        "thread_wall",
+        # Ein Deckelscharnier muss auf seine Seite passen und unter den Rand
+        # reichen können (RM-184).
+        "hinge_width",
+        "hinge_size",
         # Boden, Radius und Einsatz eines Behälters an seinen Außenmaßen.
         "container_dimensions",
         # Ein Winkelmaß der Skizze: „zwischen null und 180 Grad" nennt beide

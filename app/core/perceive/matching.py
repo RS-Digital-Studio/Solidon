@@ -1405,6 +1405,12 @@ def transformed_features(
         valid = rigid or uniform
         if "local_search_radius" in params:
             params["local_search_radius"] *= float(factors[0])
+        if not rigid:
+            # Ein vergrößertes gedrucktes Gewinde ist keines aus der Tabelle mehr:
+            # Sein Spiel ist mitgewachsen, es ist gebaut, wie es dasteht
+            # (``fits._thread_wanted``).
+            params.pop("nominal", None)
+            sources.pop("nominal", None)
         if uniform:
             for key in lengths:
                 if key in params:

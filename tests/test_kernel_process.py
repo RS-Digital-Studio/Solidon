@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import errno
+import json
 import os
 import subprocess
 import sys
@@ -43,6 +44,7 @@ from app.core.geom import kernel_jobs, kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.scene.cancel import CancelSignal
 from app.i18n.catalog import available_languages
+from tests.kernel_helper_probe import LOADED_MARK, serve_and_note_loads
 
 ROOT = Path(__file__).resolve().parent.parent
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -212,13 +214,26 @@ def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
     job: str,
     case: Callable[[], tuple[dict[str, np.ndarray], dict[str, Any]]],
     offloaded: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Dieselbe Rechnung, dieselben Eingänge, dieselbe ``manifold3d``-Fassung: dieselben Bytes.
 
     Das ist die Zusage, unter der der Hilfsprozess überhaupt rechnen darf —
     Cache, Determinismus (Regel 6) und jede Zahl im Prüfbericht hängen daran.
     Verglichen wird Byte für Byte, nicht auf eine Toleranz.
+
+    **Und zurückgestellt lädt sie nichts nach** (RM-380): Was eine Rechnung an
+    Modulen braucht, lädt der Hilfsprozess vorher in normaler Klasse
+    (``kernel_jobs.PREPARATIONS``). Unter Windows rechnet er eine Klasse tiefer,
+    und auf ausgelasteten Kernen verhungerte dort das Nachladen von
+    ``trimesh.graph`` — im Entwicklungstor kam ``component_labels`` in 120 s
+    nicht zurück, allein gefahren in einer Sekunde. Gemessen wird im
+    Hilfsprozess um den Aufruf aus ``JOBS`` (``tests/kernel_helper_probe.py``).
     """
+    mark = tmp_path / "geladen.jsonl"
+    monkeypatch.setenv(LOADED_MARK, str(mark))
+    monkeypatch.setattr(kernel_process, "_SERVE", serve_and_note_loads)
     arrays, values = case()
     here = kernel_jobs.JOBS[job](arrays, dict(values), lambda: None)
 
@@ -228,6 +243,8 @@ def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
     assert here[1] == there[1]
     assert kernel_process.statistics().get(f"helper:{job}") == 1, "im Hilfsprozess gerechnet"
     assert here[0] or here[1].get("gap") is not None, "der Fall tut etwas"
+    noted = [json.loads(line) for line in mark.read_text(encoding="utf-8").splitlines()]
+    assert noted == [{"job": job, "loaded": []}], "zurückgestellt nichts nachgeladen"
 
 
 def test_the_public_ways_give_the_same_mesh_through_the_helper(offloaded: None) -> None:
@@ -1201,10 +1218,21 @@ def _ellipsoid_session() -> tuple[Any, str, MeshData]:
     Ergebnis im Cache
     (``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/zweimal_verfeinert.py``). Die
     Frist von ``wait_all`` (2 s) reichte dafür unter Last nicht.
+
+    **Die Sitzung rechnet mit einem Cache nur im Speicher** (RM-380). Die Fälle
+    zählen, was im Hilfsprozess gerechnet wurde, und der Plattencache der Suite
+    ist prozessweit: Nach ``test_applying_a_large_refinement_refines_in_the_helper``
+    holte der Fenstertest dieselbe Verfeinerung von der Platte, und
+    ``helper:refine_conforming`` fehlte — vorher ebenso die Verkleinerung nach
+    dem Vorschaufall. Ein eigener Cache von Anfang an liest keinen Vorgänger und
+    hinterlässt keinem Nachfolger etwas, auch nicht in anderen Dateien desselben
+    Arbeiters.
     """
+    from app.core.scene.cache import ResultCache
     from app.ui.session import Session
 
     session = Session()
+    session.cache = ResultCache()
     assert session.import_model(MESHES / "near_sphere_ellipsoid.stl", unit="mm")
     session._leash.wait_all(timeout_ms=120_000)
     assert not any(worker.isRunning() for worker in session._leash.pending())
@@ -1230,9 +1258,6 @@ def test_the_coarse_preview_reduces_and_drills_in_the_helper(
     from app.ui import session as session_module
 
     session, body, _mesh = _ellipsoid_session()
-    # Der Fall misst die Helferaufrufe, nicht einen früheren Plattentreffer.
-    # Die bereits fertig geladene Sitzung bekommt dafür einen eigenen Cache.
-    session.cache = ResultCache()
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
     draft = OperationDraft(
@@ -1252,6 +1277,11 @@ def test_the_coarse_preview_reduces_and_drills_in_the_helper(
     counts = kernel_process.statistics()
     kernel_process.shutdown()
     session.cancel_preview()
+    # Der Hauptfaden rechnet selbst nach: Aus dem Cache des Nebenfadens kämen
+    # Verkleinerung und Bohrung unverändert zurück, und der Vergleich unten
+    # verglich ein Ergebnis mit sich selbst.
+    session.cache = ResultCache()
+    session._coarse_scene = None
     here, seen_here = preview()
 
     assert seen_there and seen_here, "grob gerechnet"

@@ -4167,16 +4167,17 @@ def test_a_through_bore_moved_along_its_axis_says_it_no_longer_goes_through(
     assert along.outputs[0].mesh.raw.volume > bored.raw.volume, "Material ist stehengeblieben"
 
 
-@pytest.mark.parametrize("op", ["move_feature", "duplicate_feature"])
+@pytest.mark.parametrize("op", ["move_feature", "duplicate_feature", "pattern_feature"])
 def test_a_coarse_bore_set_across_stays_through(profile: Profile, op: str) -> None:
-    """Eine Bohrung als 32-Eck, quer versetzt oder verdoppelt, geht weiter durch.
+    """Eine Bohrung als 32-Eck, quer versetzt, verdoppelt oder vervielfacht, geht weiter durch.
 
     Versetzt wird der Flächenkörper der Bohrung, und dessen Wand ist das
     Vieleck der Datei. Die Säule der Durchgangsprüfung war 0,02 mm dünner als
     der Durchmesser, also dicker als der Innenkreis eines 32-Ecks Ø 6,1: An
     einer Furnierplatte aus ``F:\\3D Dateien`` blieb an jeder Sehne ein Splitter
     von 0,0001 mm³ in ihr, und der Schritt sagte „geht nicht mehr durch"
-    (25.09.2026). Jetzt liegt die Säule im Innenkreis des Werkzeugs.
+    (25.09.2026). Jetzt liegt die Säule im Innenkreis des Werkzeugs — auch im
+    Muster, das sie bis zum Nachtrag 04.10.2026 zu RM-226 ohne Werkzeug fragte.
     """
     plate = trimesh.creation.box(extents=(40.0, 40.0, 0.6))
     plate.apply_translation((0.0, 0.0, 0.3))
@@ -4188,9 +4189,33 @@ def test_a_coarse_bore_set_across_stays_through(profile: Profile, op: str) -> No
     assert entry.features[hole].params.get("through"), "sonst prüft dieser Test nichts"
     x, y, z = (float(value) for value in entry.features[hole].params["centre"])
 
-    result = _run_op(op, entry, profile, at_feature=hole, x=x, y=y + 9.1, z=z)
+    if op == "pattern_feature":
+        result = _run_op(
+            op,
+            entry,
+            profile,
+            at_features=(hole,),
+            kind="linear",
+            count=2,
+            spacing=9.1,
+            dx=0.0,
+            dy=1.0,
+            dz=0.0,
+        )
+    else:
+        result = _run_op(op, entry, profile, at_feature=hole, x=x, y=y + 9.1, z=z)
 
     assert f"{op}.no_longer_through" not in [found.code for found in result.findings]
+    # Und es gibt sie dort, durchgehend — ein Schritt ohne Bohrung sagte auch nichts.
+    from app.core.units import MAX_FACET_SAG
+
+    placed = [
+        feature.params.get("through")
+        for feature in result.outputs[0].features.values()
+        if feature.kind == "hole"
+        and abs(float(feature.params["centre"][1]) - (y + 9.1)) <= MAX_FACET_SAG
+    ]
+    assert placed == [True], placed
 
 
 def test_a_recognised_feature_can_be_duplicated(profile: Profile) -> None:

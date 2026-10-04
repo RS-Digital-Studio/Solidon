@@ -33,6 +33,8 @@ scrive in `website/version.json`.
 - Nel rapporto, «Ricostruisci modello» ricrea un pezzo importato, anche squadre, gole e svasature, lo confronta con l'originale entro il limite scelto e lo applica in un solo passaggio.
 - Il «Morsetto con inserti» parte con il materiale del progetto in entrambi i campi del materiale. Finora erano vuoti.
 - La ricerca dei blocchi trova la «Linguetta per profilato di alluminio» anche come dado a T, e la sua descrizione dice in cosa si distingue da un dado a T filettato.
+- Un coperchio da «Crea coperchio» può avere una cerniera, stampata in posizione o con un perno da «Perno per foro», e il suo collare è accorciato per aprirsi liberamente.
+- Con «Ricava controforma», un inserto riceve sedi per utensili che ne escono di nuovo dritti.
 
 ### Stampare e passare allo slicer
 
@@ -101,6 +103,16 @@ scrive in `website/version.json`.
 - Dopo l'esportazione o «Apri nello slicer …» Solidon rilegge il file. Il resoconto nel rapporto indica file, destinazione di stampa, materiale, impostazioni e se il file corrisponde alla richiesta.
 - Esportato in 3MF dalla riga di comando, un corpo di un solo colore mantiene il suo filamento quando lo riapri.
 - Per le impostazioni dei singoli pezzi, la riga di comando indica quali pezzi sono e quale valore ricevono.
+- Se accetti i supporti per un ponte lungo sopra il pezzo stesso, ora arrivano anche lì. Prima si aggiungeva «Solo dal piano», e diversi slicer stampavano il ponte senza supporto.
+- I pezzi piccoli distesi, come le viti, non ricevono più supporti proposti dove un bordo di taglio mostrava per errore un punto sospeso.
+- Se un pezzo termina in alto in uno spigolo che lo slicer non stampa, dopo lo slicing Solidon non segnala più un modello tagliato.
+- Se il primo strato di un pezzo è più stretto di una linea, il messaggio dopo lo slicing propone le linee di parete e il raft come via d'uscita.
+- SuperSlicer mantiene la disposizione di Solidon e non spinge più i pezzi fino al bordo del piano; lo skirt resta sul piano.
+- Se un pezzo entra nel piano solo ruotato, arriva ruotato a OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Se il bordo attorno a un pezzo entra in una zona esclusa del piano, il controllo prima dell'esportazione lo segnala.
+- Se nello slicer si incrociano i percorsi di due pezzi, o di un pezzo e della torre di spurgo, il messaggio lo dice e propone vie d'uscita.
+- Se il brim è su automatico, Solidon avvisa prima dell'esportazione quando può uscire dal piano o entrare in una zona esclusa, e propone una larghezza fissa.
+- I supporti e lo skirt al bordo del piano contano nel controllo prima dell'esportazione, con l'allargamento del primo strato di supporto indicato dal profilo dello slicer.
 
 ### Fori, asole e divisione
 
@@ -137,6 +149,15 @@ scrive in `website/version.json`.
 - Solidon riconosce ogni campo di nervature, nido d'ape o bugne di un file importato come un solo motivo, e «Riconosci caratteristiche qui» raggruppa le celle di un campo.
 - Un campo piccolo che Solidon legge solo come caratteristiche singole diventa un motivo con «Raggruppa come motivo». I motivi nei file STEP vengono riconosciuti direttamente.
 - Anche nei progetti di versioni precedenti i pezzi di una divisione automatica vengono numerati, e un taglio eliminato o disattivato non conta più.
+- Un foro duplicato, spostato o ripetuto lungo una faccia inclinata resta lo stesso foro su pezzi STL e STEP, con le stesse misure e gli stessi messaggi.
+- Dopo «Ripeti caratteristica», una copia su un pezzo STEP non fora più fino alla faccia superiore, e un foro STL a sfaccettature grossolane resta passante.
+- Una filettatura si allarga o si stringe con «Cambia caratteristica» senza sfondare la parete, e la filettatura opposta di un accoppiamento filettato cambia con essa.
+- Una coppia di filettature stampate supera la verifica dell'accoppiamento: entrambe indicano la misura con cui sono costruite, e la verifica si aspetta il gioco di entrambe le metà.
+- Con «Verifica il percorso di montaggio», i pezzi possono anche ruotare, oppure essere inseriti e poi ruotati come una baionetta.
+- Un pezzo da «Crea pezzo di prova» ritaglia la stessa finestra da entrambe le parti di un accoppiamento e indica il gioco.
+- Un foro svasato che dopo la duplicazione, lo spostamento o la ripetizione finisce tutto nel materiale non segnala più di sporgere oltre il bordo.
+- Se la svasatura di una copia supera un lato, Solidon ritrova la copia allo stesso modo su pezzi STL e STEP.
+- Se duplichi un foro lungo il suo asse nel vuoto, l'originale mantiene il suo nome sui pezzi STL, e la copia risulta persa come sui pezzi STEP.
 
 ### Raccordi e smussi
 
@@ -168,6 +189,7 @@ scrive in `website/version.json`.
 - La voce «Crea da uno schizzo …» inizia subito a disegnare, il piano di disegno mostra la sua origine, e un doppio clic nella cronologia riapre un disegno in modalità disegno.
 - In «Modella» e nell'editor dello scheletro, la barra mostra spessore di parete o sbalzo come mappa con legenda e segnala un tratto oltre il volume di stampa. Dopo la piegatura dice come si stampa.
 - Una texture applicata si seleziona per intero. Il pannello di selezione offre allora «Cambia texture» e «Rimuovi texture».
+- Il testo segue un arco o avvolge una superficie arrotondata, e «Intarsia testo» lo inserisce a filo nel suo colore.
 
 ### Generare con l'IA
 
@@ -223,6 +245,7 @@ scrive in `website/version.json`.
 - Dopo Ctrl+Y, la riga di stato indica il passaggio ripristinato, come dopo Ctrl+Z.
 - Le anteprime di esempi e blocchi mostrano l'altezza verso l'alto. Finora i pezzi alti vi puntavano verso il basso.
 - Se Solidon non riesce a salvare la scelta «Includi i valori», l'avviso compare direttamente accanto all'interruttore.
+- Se altri programmi occupano tutti i core su Windows, un calcolo su un modello grande non resta più fermo per minuti.
 
 ## 0.5.1
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 
+import numpy as np
 import pytest
 
 from app.core.bootstrap import load_operations
@@ -212,7 +213,9 @@ def test_the_counterpart_lands_in_one_step_and_its_fit_names_both_threads(
     assert applied.fit.b.object_id == "obj_2"
     made = result.scene.objects["obj_2"].features[applied.fit.b.feature_id]
     assert made.kind == "thread" and made.params["internal"] is True
-    assert made.params["diameter"] == pytest.approx(6.0)
+    # Das Nennmaß der Tabelle, und gebaut um das Spiel des Materials weiter.
+    assert made.params["nominal"] == pytest.approx(6.0)
+    assert made.params["diameter"] == pytest.approx(6.0 + profile.material.clearance)
     assert made.params["pitch"] == pytest.approx(1.0)
     assert str(applied.fit.tolerance) == "auto:", "die Toleranz ist ein Verweis (Regel 7)"
     assert applied.fit in active_fits(document)
@@ -223,6 +226,69 @@ def test_the_counterpart_lands_in_one_step_and_its_fit_names_both_threads(
     assert checked.stopped_at is None
     codes = {finding.code for finding in checked.scene.report.findings}
     assert "fit.not_measurable" not in codes
+
+
+def _built_diameter(scene: Scene, object_id: str, feature: Feature) -> float:
+    """Der Außendurchmesser der Gänge, am gebauten Körper gemessen.
+
+    Außen ist es der Kamm, innen der Grund der Nut — beides der größte Abstand
+    einer Ecke von der Achse, eine Steigung weg von den Enden (dort laufen
+    die Gänge aus) und nahe an der Achse (die Ecken der Platte zählen nicht).
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    vertices = np.asarray(as_mesh_data(scene.objects[object_id].mesh).raw.vertices)
+    centre = np.asarray(feature.params["centre"], dtype=float)
+    along = vertices[:, 2] - centre[2]
+    radial = np.hypot(vertices[:, 0] - centre[0], vertices[:, 1] - centre[1])
+    reach = float(feature.params["length"]) / 2.0 - float(feature.params["pitch"])
+    near = radial < float(feature.params["diameter"]) / 2.0 + 1.0
+    return 2.0 * float(radial[(np.abs(along) < reach) & near].max())
+
+
+@pytest.mark.parametrize("internal", [False, True])
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_printed_pair_fits_with_the_play_it_is_built_with(
+    profile: Profile, kind: str, internal: bool
+) -> None:
+    """Das Paar aus *Gegenstück zum Gewinde* passt, und beide Merkmale nennen ihr gebautes Maß.
+
+    Jede Hälfte eines gedruckten Gewindes ist um das Spiel des Materials neben
+    ihr gebaut: die Mutter um das Spiel weiter, der Bolzen um das Spiel enger.
+    Beide Merkmale nannten aber das Nennmaß, und die Passung maß „0,00 mm
+    statt 0,20 mm“ — an jedem frisch angelegten Paar, seit 0.5.0.
+    """
+    from app.core.scene.fits import check, resolve, target
+    from app.core.units import round_display
+
+    _kernel_or_skip(kind)
+    document, cache = _two_plates(profile, kind)
+    thread, _scene = _with_thread(document, cache, profile, internal=internal)
+    applied = apply_thread_counterpart(document, thread, "obj_1", "obj_2", {"x": 60.0, "z": 10.0})
+    result = evaluate(document, profile, cache=cache)
+    applied = attach_thread_fit(document, applied, thread, result.scene)
+    assert applied.fit is not None
+
+    checked = evaluate(document, profile, cache=cache)
+    assert checked.stopped_at is None
+    findings = check(checked.scene, profile, document=document)
+    assert not [entry for entry in findings if entry.code.startswith("fit.")], [
+        (entry.code, dict(entry.values)) for entry in findings
+    ]
+
+    halves = [
+        (ref.object_id, resolve(checked.scene, ref)) for ref in (applied.fit.a, applied.fit.b)
+    ]
+    for object_id, feature in halves:
+        assert feature is not None
+        assert round_display(float(feature.params["diameter"])) == round_display(
+            _built_diameter(checked.scene, object_id, feature)
+        ), "das Merkmal nennt den Durchmesser, der gebaut ist"
+    by_role = {bool(feature.params["internal"]): feature for _id, feature in halves if feature}
+    gap = float(by_role[True].params["diameter"]) - float(by_role[False].params["diameter"])
+    play = profile.material.clearance
+    assert round_display(gap) == round_display(2.0 * play), "jede Hälfte trägt das Spiel einmal"
+    assert round_display(target(checked.scene, applied.fit, profile)[0]) == round_display(gap)
 
 
 def test_an_internal_thread_gets_a_bolt(profile: Profile) -> None:
@@ -379,6 +445,13 @@ def test_an_imported_thread_gets_its_counterpart_and_a_measurable_fit(
     codes = {finding.code for finding in checked.scene.report.findings}
     assert "fit.not_measurable" not in codes
     assert "fit.missing_feature" not in codes
+    # Und sie passt: Die gedruckte Hälfte trägt ihr Spiel, die eingelesene,
+    # was sie gemessen hat — innen die Lochkorrektur (Ø 8,2 im Korpus).
+    assert "fit.violated" not in codes, [
+        dict(finding.values)
+        for finding in checked.scene.report.findings
+        if finding.code == "fit.violated"
+    ]
 
 
 def test_a_multi_start_thread_is_refused_with_a_sentence() -> None:

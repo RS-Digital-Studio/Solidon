@@ -580,9 +580,18 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         return _read_exactly(ctx, OpResult(outputs=[made], findings=findings))
 
 
+#: Bausteine, deren Gewindemerkmal das gebaute Maß und das Nennmaß nennt statt
+#: nur das Nennmaß — die Geometrie blieb gleich, ein Ergebnis aus dem Cache
+#: trüge aber das alte Merkmal, und die Gewindepassung maß dort 0,00 mm.
+PRINTED_THREADS: Final = frozenset({"printed_thread", "printed_screw", "printed_nut"})
+
+
 def _result_version(spec: PartSpec) -> str:
-    """Der Bausteinstand einschließlich der materialabhängigen Federprüfung."""
-    return f"{spec.version}:spring:2" if spec.name in SPRING_ARMS else spec.version
+    """Der Bausteinstand einschließlich der materialabhängigen Federprüfung
+    und des Gewindemerkmals (:data:`PRINTED_THREADS`)."""
+    if spec.name in SPRING_ARMS:
+        return f"{spec.version}:spring:2"
+    return f"{spec.version}:thread:2" if spec.name in PRINTED_THREADS else spec.version
 
 
 def _title_for(spec: PartSpec) -> TranslatableText | str:

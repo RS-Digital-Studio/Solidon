@@ -64,7 +64,7 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   Griffzug; der erste gewählte Körper liefert den Drehrahmen der Gruppe.
   Nicht belegte, gespiegelte oder gescherte Achsen bieten relatives Drehen an.
 - **Drehmitte** — `OperationDialog` bietet Körper, Merkmal, Punkt und Ursprung
-  für Kreis-/Spiegelmuster und Spiegeln gemeinsam an. `reference_point` löst
+  für Kreis-/Spiegelmuster, Spiegeln und Fügeweg gemeinsam an. `reference_point` löst
   Körper-/Merkmalbezüge vor Vorschau und Übernahme in gespeicherte cx/cy/cz auf.
   Vorhandene Koordinaten und Ausdrücke bleiben beim Wiederöffnen unverändert.
 - **Startansicht** — Die Vorwahl ersetzt kein Projekt und erhält dessen Tour.

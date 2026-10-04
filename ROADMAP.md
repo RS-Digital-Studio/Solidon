@@ -36,7 +36,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt; die neue Aufteilung ist im erfolgreichen Taglauf 36454861126 von 0.5.1 gelaufen. Offen bleiben CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung des Testbestands und der Laufzeiten sowie das Blättern in `tools/windows_signed_installer.py` |
-| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Acht Bausteine aus dem Audit gebaut (Bajonett, Rastdrehscheibe, Stangenverbinder, Schlauchtülle, Kanalnaht, Raumvorlage); offen: Abläufe, funktionale Gruppen, Projektmaße und Mehrdateien, Leistungsreihe, native Dichtnut- und Einzeldateiabnahme aller 187 Fälle (eigene Aufträge laufen), Fensterabnahme der Bausteine beim Release (RM-213) |
+| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Acht Bausteine und sieben Abläufe aus dem Audit gebaut (04.10.); offen: funktionale Gruppen, Projektmaße und das Werkzeug für die native Einzeldateiabnahme (in Arbeit), danach die Abnahme der 187 Fälle und die Fensterabnahme beim Release |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`), die Wandmessung verwendet den eigenen Strahltest. Matplotlib ist seit `9bb1542b` wieder Laufzeitabhängigkeit; die Windows-Lizenzbeilage enthält 50 Komponenten. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster; die Bereichsprüfungsreste sind mit RM-214 geschlossen (Durchsicht 0.5.1) |
@@ -62,7 +62,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Sicherheitskorrektur: Eine notwendige Vorvereinigung, die an einer selbstkreuzenden Schale scheitert, hält jetzt vor dem Solver an und bindet den Fehler an den betroffenen Körper. Am Original sind 1 243 aktuelle Schnittpaare belegt. Blenders exakter Boolean verschlechtert die Topologie; der 0,2-mm-Voxelremesh überschreitet `MAX_FACET_SAG`. Geometriereparatur und ursprüngliche Abnahme bleiben offen. |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); offen nur die Gesamtabnahme jedes Modell × jeder Slicer |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | (b) Eigenkreuzung endet beim ersten Gegenbeleg (Besenhalter 18,4 → 14,6–15,1 s, Laptop 26–28,6 → 20,1–20,9 s unter Last, Paare bitgleich), (c) ohne zweite Vereinigung gebaut; offen: (a) beim Öffnen am Fenster zuordnen, (b) lastfrei messen und mit Ziel führen |
@@ -104,7 +104,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | Vorschau je Klick nur mit dem neuen Zug auf main (`8440db6f7`), große Netze rechnen im Arbeiter; die 40. Vorschau ist nicht länger als die erste, UI-Aufruf 0,6 ms; offen: Messung am echten Fenster auf ruhiger Maschine beim Release (RM-213) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | „vor Schritt 3“ und alle Schrittsätze sprechen in sichtbaren Stellen statt Kennungen (Absage beim Verschieben, Löschnachfrage, Löschtitel, Umbauabsagen, Merkmalsfrage); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Formen, Skelett und Zeichnen öffnen ihren Schritt wieder, ein Zug ist eine ganze Geste mit lokalem Undo; an Figur und Pilz am Fenster geprüft; offen: drittes Modell (Drache), Themen, schmale Fenster und Projektwechsel am Fenster beim Release (RM-213) |
@@ -135,7 +135,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `rendering`-Fälle in der Release-CI auf Linux und macOS und in `latest` fahren — oder Roberts Entscheidung festhalten und Wächter nachziehen |
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, Regel mit Datum, veraltete Regeln und Registerzellen |
 | [RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung](#rm-350) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `continue-on-error: true` am Job `latest` oder eigener Workflow; Wächter in `test_packaging.py` |
-| [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
@@ -1196,6 +1195,44 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   mit offenem Durchgang im Schnitt, Kanalnaht-Einlage mit Verengungssatz, Raumplatten mit Raumlänge
   und *Auf dem Bett anordnen*. Changelog: ja, zwei Punkte unter den neuen Bausteinen.
 
+  **Teilstand 04.10.2026 (Claude, R2 Abläufe, `claude/rm184-ablaeufe`):** Sieben Abläufe aus
+  `bericht.md` §9 und `ancillary-analysis.md` §§3, 6, 9, 10 sind umgesetzt, wo möglich als
+  Erweiterung vorhandener Operationen: *Fügeweg prüfen* (`motion`: geschoben, gedreht, geschoben und
+  gedreht; Drehmitte wie bei Muster und Spiegeln), *Prüfstück erzeugen* (nimmt jedes gewählte Teil,
+  Fenster an der genannten oder engsten Stelle, Spiel im Ausschnitt gemessen, Stücke nebeneinander
+  auf dem Bett, `cache_version` 2 → 3), *Text aufbringen* (Bogen `arc_radius`, Rundung `wrap` mit
+  Radius aus dem Merkmal), *Merkmal ändern* am Gewinde (Wandmessung, Absage `thread_wall`, Befund
+  `thread.thin_wall`, `cache_version` 16 → 17; Gegengewinde einer Gewindepassung geht in derselben
+  Transaktion mit, an Fenster, Kommandozeile und Agent über `counterpart.with_coupled_threads`),
+  *Deckel erzeugen* (`hinge`: ohne, mitgedruckt, mit Stift; Kragenbeschnitt für freies Öffnen). Neu,
+  weil keine vorhandene Operation passt: *Schrift einlegen* (`inlay_text`), *Gegenform einlassen*
+  (`cut_counter_form`), *Stift für Bohrung* (`pin_for_bore`). Nebenbei behoben: `History` vergab
+  nach einem Entwurf mit eigenen Ausgangskennungen dieselbe Kennung ein zweites Mal (gefunden am
+  Deckel mit Stift, Test `test_history.py::test_a_named_new_body_moves_the_numbering_past_it`). Neue
+  Tests: `tests/test_join_motion.py`, `test_fit_test_piece.py`, `test_label_layout.py`,
+  `test_counter_form.py`, `test_thread_replace.py`, `test_hinged_lid.py`, dazu Fälle in
+  `test_exact_body_parity.py` (`inlay_text`, `cut_counter_form`, `pin_for_bore`),
+  `test_platform_identity.py` (Wege `bent_lettering`, `fit_pieces`, `counter_form`, `hinged_lid`),
+  `test_history.py`, `test_operation_ui.py` (Fenstertest, Release). **Vorher rot / nachher grün:**
+  Am Basisstand `7b3d8057e` (Schnappschuss per `git archive`, neue Testdateien hineinkopiert) sind
+  29 Tests rot und zwei Testmodule scheitern am Import (`rot-am-basisstand.txt`); die Wand- und
+  Scharniertests einzeln ohne die neuen Importe: 22 rot, 3 grün (`rot-am-basisstand-2.txt`) — die
+  drei grünen sind gewollte Gegenschutztests (kein Wandbefund am massiven Bolzen, Deckel ohne
+  Scharnier unverändert). Am Stand `1e85ac079` sind alle grün (Läufe unten). Belegpfade:
+  `F:\solidon-review-reports\claude-2026-10-04\rm184-ablaeufe\rot-am-basisstand.txt`,
+  `…\rot-am-basisstand-2.txt`, `…\f_run2.txt` (3231 passed), `…\g_run3.txt` (3729 passed vor zwei
+  behobenen Zuordnungen), `…\g_run4.txt`, `…\g_run5.txt`, `…\tor-1.txt` (Entwicklungstor),
+  `…\vergleich-gewinde.txt`, `…\vergleich-konturdeckel.txt`, `…\probe-keep.txt`,
+  `…\probe-nokeep.txt`, `…\probe-brep.txt`, `…\prompt-tokens-3.txt`.
+
+  **Nachtrag Gewindepaar:** Ein gespeicherter Gewindeschritt koppelt beim Ändern sein Gegengewinde
+  in derselben Transaktion (`counterpart.coupled_step_change`, `482fd788a`). Das gedruckte
+  Gewindepaar aus *Gegenstück zum Gewinde* meldete seine Passung beim Anlegen als verletzt, weil
+  beide Merkmale das Nennmaß nannten (seit `d92f33ddf`, v0.5.0 und v0.5.1); gedruckte Gewinde nennen
+  jetzt das gebaute Maß samt `nominal`, die Gewindepassung erwartet das Spiel beider Hälften (PETG
+  gemessen 0,50 = Soll 0,50 mm; `72f68db6b`, Regel in `.claude/rules/kern.md`). Belege unter
+  `F:\solidon-review-reports\claude-2026-10-04\rm184-ablaeufe\`.
+
 <a id="rm-188"></a>
 
 - [ ] **RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x.** Netz und exakter
@@ -2048,6 +2085,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aber nur 8,6 % — gegen den Anteil allein blieb die Regel dort stumm. Die Fläche ist an
   186 Körpern des Korpus geeicht (`NARROW_WEB_AREA`).
   Registerabgleich 02.10.: Der Offen-Block beginnt mit „Danach“; es fehlen die offenen Befunde der abgeschlossenen Slicer-Matrix (`konzepte/nachweise-release-0.5.1/reports/rm312-slicer-matrix-2026-10-02.md`, 125 Aufträge, 124 Modelle mit Varianten; Restarbeit RM-312) und die Reste unter D (SV06-Startcode, Tempi des MINI+).
+
+  **Teilstand 04.10.2026 (Claude, G1 `claude/rm281-paket3`):** Paket 3 am echten Slicer (04.10.2026,
+  `claude/rm281-paket3`): **Mindestschichtzeit und Keilspitzen** — der alte Vorschlag „15 s je
+  Schicht“ verlängerte den Golfschlägerkopf in ElegooSlicer um 111 %, in PrusaSlicer um 87 %, ohne
+  die Spitzenschichten zu ändern; seit `3018613e6` (v0.5.1) kommt er nur ohne Mindestzeit im Profil
+  und heute an keinem der drei. **Inseln an Schrauben** — die Insel der liegenden Schraube „Vida“
+  war eine verlorene Schnittfläche, behoben mit `206dca76d` (RM-308); heute kein Stützvorschlag, die
+  Slicer stützen dort 0,1–0,8 m. **Stützbedarf gegen das Urteil des Herstellers** — in 312 von 340
+  Matrixläufen mit Solidons Stützbedarf stützt auch der Slicer; die 28 übrigen sind eingeordnet
+  (unverteilte Platte, Decken unter 1,1 mm, Slicer-Eigenheiten, Kobra-2-Profil ohne Brückenstütze),
+  keine Schwelle geändert. **Brückenregel** — 15 mm ist milder als jedes Profil außer Kobra 2 und
+  bleibt; behoben, dass eine lange Brücke über dem Modell „nur vom Bett“ bekam (`131edad7f`,
+  Nachtrag `6a7cc361c`: nur die Brücke über dem offenen Stück zählt): Wedge-Lock übernommen vorher
+  0,0/0,0/1,1/0,0/0,0 m Stütze in Creality Print, Kobra 2, Elegoo, Prusa, Cura, nachher
+  2,9/3,0/2,6/1,8/1,8 m; die Waschschüssel hält ihren Kanal in Elegoo und Cura frei (0,0 m). Beim
+  Prüfen behoben: Absturz der Schichtanalyse am Wizard Tower (`8ca9b136b`, nur nach v0.5.1). **Reste
+  D** — Startcode des SV06 seit RM-482 (`c0e7eab7d`), im Druck nur noch `M204 S500`; Tempi des MINI+
+  seit `884b88b0a` (v0.5.1) aus „0.20mm SPEED @MINIIS 0.4“, Pilz in PrusaSlicer 31,2 → 25,5 min,
+  Cura 34,5 → 25,7 min. Das Matrixwerkzeug rechnet mit dem Code des Druckdialogs und meldet
+  Stützvorschläge ohne Stütze und abweichende Druckzeiten. Tests
+  `test_a_crossing_mitre_needle_is_measured_instead_of_breaking_the_analysis`,
+  `test_a_long_bridge_over_the_model_lets_its_supports_start_there`,
+  `test_a_long_bridge_counts_on_the_model_only_where_it_hangs_there`,
+  `test_the_channel_space_leaves_a_column_on_the_model_free`,
+  `test_a_part_too_tall_for_the_printer_does_not_fit_instead_of_failing`. Belege
+  `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`; Konzept Herstellerprofil, Abschnitt
+  7.
 
 <a id="rm-259"></a>
 
@@ -3964,6 +4028,56 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bytegleich). Ursache: die jüngste Datei als Rückfall stammt aus der Zeit vor
   v0.5.1; ein Kundenpunkt in allen sechs Sprachen.
 
+  **Teilstand 04.10.2026 (Claude, G2 `claude/rm312-matrix`):** Alle 575 auffälligen Zeilen der
+  Matrix vom 02.10. (426 Variantenfehler, 149 Ausgaben mit Fehlerbefund) liefen am heutigen Stand
+  noch einmal über den Kundenweg mit denselben Slicer- und Druckerpaaren: 235 drucken ohne Befund,
+  276 sagt Solidon vor dem Slicerstart mit Grund ab (zu groß, zu hoch, keine Anordnung), 8 hält
+  Solidon bei mehreren Druckdateien an, 6 enden mit der Meldung zur ersten Schicht; benannte
+  Slicer-Eigenheiten sind `chufang.3mf` (Turm gegen Teil, −101), Creality Print 7.3 (gut 1 mm Rand
+  je Seite) und ein SuperSlicer-Absturz beim Stützen. Kein Lauf endet mehr mit Absturz,
+  `gcode.shorter_than_model` oder `gcode.spool_left_out`. `image_00001_.glb` war ein Fehler des
+  Matrixwerkzeugs (Einheitenfrage), `carpet-corner-clip.step` war mit `783f62d2a` behoben; die 770
+  Markierungen sind Artefakte des Vergleichers oder erwartbar; der Creality-Zeitunterschied ist bis
+  auf 0,7 s zugeordnet (11 900 s Ladezeit, 1 357 s Reinigungsturm von 7.3). Neun Produktfehler
+  behoben und im echten Slicer belegt: Höhenprobe an Schneiden und letzter Stelle (`1e112c8af`,
+  `b4cdc2717`), Turm neben der Sperrfläche von P1S/P1P/X1/X1C (`f24e321f3`), schmale erste Schicht
+  (`f9b861cc1`), SuperSlicer mit `--dont-arrange` (`d44e712b3`), gedrehte Übergabe an die
+  Orca-Familie (`949b1bbd6`), Rand in einer Sperrfläche vor dem Export (`acab16345`), Drehung mit
+  Platz für den Rand (`2f939825a`), kreuzende Bahnen −101 (`08f15274b`). Entwicklungstor vor jedem
+  Commit grün. Grenze: Die tatsächliche Druckdauer am K1 lässt sich ohne Gerät nicht messen. Belege
+  unter `F:\solidon-review-reports\claude-2026-10-04\rm312-matrix\`.
+
+  Die Prüfung vor dem Export rechnet die Außenkante der ersten Schicht jetzt aus dem, was der Slicer
+  tatsächlich legt (`writer.rim_of`, Commit `9e35c0115`): Steht der Brim beim Herstellerprofil der
+  Orca-Familie auf „automatisch“, mit der größten Breite, die OrcaSlicer wählt (`ORCA_AUTO_BRIM_MAX`
+  = 18 mm, belegt in `Brim.cpp`, `configBrimWidthByVolumeGroups`), und die Warnung bietet
+  *Brim-Breite festlegen …* an; wählt der Kunde einen Brim oder übernimmt einen Vorschlag, schreibt
+  Solidon `outer_only` mit Breite, und der Slicer wählt nichts mehr selbst. Mit Stützen zählt die
+  Verbreiterung der ersten Stützschicht (`raft_first_layer_expansion` aus der Kette, sonst die
+  gemessene Programmvorgabe: Orca, Elegoo, Creality 2 mm, PrusaSlicer und SuperSlicer 3 mm;
+  `manufacturer.SUPPORT_FOOT_DEFAULTS`, `Foundation.support_foot`), außen darum der Skirt aus Profil
+  oder Wahl; die Warnung bietet *Auf dem Bett anordnen* und *Skirt verkleinern …*. Wo das Profil die
+  Verbreiterung nicht nennt (Cura; Bambu Studio schreibt `-1`), sagt `arrange.support_foot_unknown`
+  das, statt eine Zahl zu schätzen. Beide Handlungen öffnen die Druckeinstellungen an ihrer Zeile
+  (`MainWindow.action_print_settings(field=…)`, `PrintSettingsDialog.show_setting`). Echte Läufe
+  über den Kundenweg (`‹B›\nachtrag-j\`, `nachtrag-j2\`): Rack system for Filament.3mf an
+  ElegooSlicer/Centauri Carbon 2, vorher (Stand `acab16345`) Platten 9–14 mit Auto-Brim bis y =
+  −1,27 mm ohne Vorwarnung, nachher dieselbe Druckdatei mit Warnung (7,70 mm) vor dem Export, und
+  mit gewähltem Brim `brim_type = outer_only`, Brim 4,56 mm vom Rand, alle 14 Platten bis auf die
+  zwei an der Sperrecke ohne `gcode.off_the_bed` (die zwei mit 2,00 mm vorher gewarnt);
+  garden-hose-holder.3mf am MINI mit SuperSlicer vorher 0,01 mm gewarnt, Skirt 2,46 mm über dem
+  Rand, nachher 3,01 mm Warnung mit beiden Handlungen, auch wenn die Stütze nur am Objekt
+  eingeschaltet ist (Vorschlag je Teil); obj_15_Assembly 2,97 mm; Wizard Tower an Cura mit Stützen
+  nennt die unbekannte Verbreiterung. Tests: sechs neue Fälle in `test_export.py` (Auto-Brim nur bei
+  der Orca-Familie und ohne gewählten Brim, Stützfuß mit Skirt auch je Teil, unbekannter Fuß, Skirt
+  neben einem Brim, Lesen der Verbreiterung), vorher rot; die Gegenprobe der Messung steht in
+  `‹B›\vorgaben\` (`--save` von PrusaSlicer und SuperSlicer, Konfigurationsblöcke von ElegooSlicer,
+  OrcaSlicer, Creality Print und Bambu Studio). Die Druckdauer am K1 bleibt ohne K1 eine Grenze
+  (Abschnitt 1). Die Dateien des Matrixwerkzeugs liegen vollständig unter
+  `‹B›\matrixwerkzeug\uebernahme\` (einheit.py, bericht.py, dazu die Diffs und `LISTE.txt` mit Ziel,
+  Basis-SHA und Inhalt), eingepflegt auf den Stand von G1 (13:03) und an `image_00001_.glb` und
+  `1x1-bin.stl` erprobt (`‹B›\werkzeugprobe\`).
+
 <a id="rm-366"></a>
 
 - [~] **RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug.**
@@ -4830,26 +4944,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   kann; vor dem nächsten Release-Tag. Bauplan §37.2. Beleg: `bericht-E.md` (H1),
   `sonden\e_sign_conclusion.txt`.
   Nachprüfung am Stand `6ce767031`: besteht noch. Im Arbeitsbaum nur entschärft, solange das Repository privat ist; `continue-on-error` fehlt weiter.
-
-<a id="rm-380"></a>
-
-- [ ] **RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei.**
-  Review 02.10.2026, Registerabgleich Geometrie, am HEAD `3fd3b1ace`. Beide Tests stammen aus
-  `a55e844ad`.
-  **Fehlerfall:** `pytest tests/test_kernel_process.py` am Stück: 1 failed, 79 passed, Exit 1 —
-  `KeyError: 'helper:display_simplify'` (`tests/test_kernel_process.py:1309`). Allein gefahren ist
-  der Test grün (Exit 0); direkt nach `test_the_coarse_preview_reduces_and_drills_in_the_helper`
-  (`:1183`) rot (1 failed, 1 passed, Exit 1). Der Vorschautest ruft `kernel_process.shutdown()`
-  und rechnet danach dieselbe Vorschau im Prozess (`:1216–1218`); der Fenstertest findet
-  anschließend keine `display_simplify`-Zählung — vermutlich weil die verkleinerte Vorschau aus
-  einem prozessweiten Speicher kommt oder die Zählung nach `shutdown` nicht neu angelegt wird.
-  Weil der Fenstertest (`qt_app`) nur beim Release läuft, fällt das im Entwicklungstor nicht auf.
-  **Fix:** Ursache am Zustand festmachen (Vorschau-Cache bzw. `statistics()` nach `shutdown`) und
-  im Fixture `offloaded` zurücksetzen; nicht die Zusicherung lockern. `.get(...)` statt `[...]`
-  allein wäre keine Behebung.
-  **Abnahme:** `tests/test_kernel_process.py` am Stück und in umgekehrter Reihenfolge grün; die
-  Zusicherung `>= 1` bleibt. Belege: `F:\solidon-review-reports\kp_order.txt`, `kp_file.txt`,
-  `register-geometrie.md`.
 
 <a id="rm-387"></a>
 

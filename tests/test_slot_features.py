@@ -44,7 +44,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from tests.helpers import exact_kernel, inside
+from tests.helpers import exact_kernel, inside, slanted_plate, stepped_plate
 
 
 def plate() -> MeshData:
@@ -3085,29 +3085,14 @@ def _raised_carrier(slope: bool) -> tuple[Any, float, Vec3]:
     Material liegt und nachher frei sein muss.
     """
     exact_kernel()
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-    from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
-    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
-
     from app.core.brep import edit
-    from app.core.brep.kernel import Solid, boolean_builder
 
     if slope:
-        base = edit.box(40.0, 20.0, 20.0)
-        plane = BRepBuilderAPI_MakeFace(
-            gp_Pln(gp_Pnt(0.0, 0.0, 10.0), gp_Dir(-0.25, 0.0, 1.0))
-        ).Face()
-        below = BRepPrimAPI_MakeHalfSpace(plane, gp_Pnt(0.0, 0.0, 0.0)).Solid()
-        builder = boolean_builder("intersection", base.shape, below)
-        builder.Build()
-        carrier = Solid(builder.Shape())
+        carrier = slanted_plate()
         length = 16.0
         probe = (7.5, 0.0, 11.5)
     else:
-        carrier = edit.boolean(
-            "union",
-            [edit.box(40.0, 20.0, 10.0), edit.moved(edit.box(10.0, 20.0, 10.0), (10, 0, 10))],
-        )
+        carrier = stepped_plate()
         length = 12.0
         probe = (5.5, 0.0, 15.0)
     carrier = edit.cut_bore(

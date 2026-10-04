@@ -1,5 +1,5 @@
 ---
-description: "Der Kern ohne Qt — Grenze nach oben, Absagen, plattformgleiche Rechnung, stabile Merkmalsnummern, teure Bibliotheksaufrufe, Fehler, Transaktionen, Lizenzgrenze, externe Programme"
+description: "Der Kern ohne Qt — Grenze nach oben, Absagen, plattformgleiche Rechnung, stabile Merkmalsnummern, teure Bibliotheksaufrufe, Fehler, Transaktionen, Lizenzgrenze, externe Programme, gebaute Maße"
 paths:
   - "app/core/**/*.py"
 ---
@@ -163,6 +163,11 @@ ihn ruft, hält das Fenster an (RM-212).
   BLAS-Faden (`HELPER_ENVIRONMENT`, spart je Bibliothek einen Puffer je
   Rechenkern), und über BLAS hinge das Ergebnis an der Fadenzahl.
   `test_the_jobs_call_no_blas` hält es.
+- **Eine Rechnung lädt zurückgestellt nichts nach**: Was sie an Modulen
+  braucht, steht in `kernel_jobs.PREPARATIONS` und lädt vorher in normaler
+  Klasse — unter Windows verhungert ein Import eine Klasse tiefer auf
+  ausgelasteten Kernen (RM-380). `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
+  misst es je Rechnung im Hilfsprozess.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
   Verfeinerung die erwartete des Ergebnisses.
 - **Ein voller Datenträger pausiert, er schaltet nicht ab** (RM-436): ENOSPC
@@ -432,3 +437,14 @@ selbst kann.
 Kante oder Punkten (RM-400): Ein gemeinsames Feld behielt beim Umschalten einen
 Wert, der dort etwas anderes hieß. Eine Ebene aus Punkten richtet ihre Normale
 aus (`prepare_ops._upward`), damit „Kleinere Seite“ nicht an der Klickfolge hängt.
+
+## Ein erzeugtes Merkmal nennt, was gebaut ist
+
+Ein Erzeuger nennt das gebaute Maß, wie die Erkennung es an einem eingelesenen
+Teil mäße; ein Nennmaß steht daneben (`nominal` am gedruckten Gewinde,
+`fasteners._thread_feature`; das Kappengewinde des Drehdeckels). Passungen
+prüfen gebaut gegen gebaut, sonst meldet ein frisch gebautes Paar „0,00 mm“.
+Das Soll einer Gewindepassung ist die Summe ihrer Hälften
+(`fits._thread_wanted`): eine gedruckte trägt das Spiel ihres Materials, sonst
+das Loch die Lochkorrektur; `target(as_stated=True)` gilt zwei Gewinden ohne
+Spiel daneben, wie *Merkmal ändern* sie setzt.

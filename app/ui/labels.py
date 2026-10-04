@@ -1365,6 +1365,29 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "room_side": _("Eine Wand links oder rechts, mit Feder in die Nut der Rückwand."),
     "window": _("Mittig in der Wand, innen mit Falz für die Scheibe."),
     "door": _("Vom Boden aus nach oben, ohne Schwelle."),
+    # Die Bewegungen des Fügewegs.
+    "slide": _("Geradeaus entlang der Achse in die Endlage geschoben."),
+    "turn": _("Um die Achse in die Endlage gedreht — ein Klappdeckel, ein Drehverschluss."),
+    "slide_turn": _("Erst geradeaus eingesetzt, dann um die Achse gedreht — wie ein Bajonett."),
+    "closest": _(
+        "Wo sich die ersten beiden gewählten Teile am nächsten kommen — dort sitzt die Passung."
+    ),
+    "around": _(
+        "Die Zeile läuft um eine Rundung herum, deren Achse quer zur Schrift steht — "
+        "ein Becher, eine Dose."
+    ),
+    "along": _(
+        "Die Zeile läuft an einer Rundung entlang, die Buchstaben biegen sich über ihre "
+        "Höhe — ein Rohr, ein Griff."
+    ),
+    "barrel": _("Das Scharnier kommt beweglich aus dem Drucker; der Deckel entsteht aufgeklappt."),
+    "loose_pin": _(
+        "Gehäuse und Deckel bekommen Augen mit Bohrung, der Stift entsteht als eigenes Teil."
+    ),
+    "hinge_back": _("Die Achse liegt an der hinteren Seite der Öffnung."),
+    "hinge_front": _("Die Achse liegt an der vorderen Seite der Öffnung."),
+    "hinge_left": _("Die Achse liegt an der linken Seite der Öffnung."),
+    "hinge_right": _("Die Achse liegt an der rechten Seite der Öffnung."),
 }
 
 
@@ -1579,6 +1602,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    "floor": _("Boden"),
     "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),
     "excess": _("Überstand"),
@@ -1650,6 +1674,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "megabytes": _("Megabyte"),
     "minimum": _("Mindestwert"),
     "minutes": _("Minuten"),
+    "motion": _("Bewegung"),
     "missed": _("Nicht getroffene Züge"),
     "missing": _("Fehlt"),
     "most": _("Höchstmaß"),
@@ -1681,6 +1706,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "part_name": _("Teil"),
     "parts": _("Teile"),
     "path": _("Pfad"),
+    # ``geom.lid``: der Durchmesser des Scharnierstifts.
+    "pin": _("Stift"),
     "pitch": _("Steigung"),
     "pixels": _("Bildpunkte"),
     "plate": _("Platte"),
@@ -1766,6 +1793,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "triangles": _("Dreiecke"),
     # ``geom.prepare_ops``: die Schnurstärke eines Rings, die nicht in ihn passt.
     "tube_diameter": _("Schnurstärke"),
+    "turn_axis": _("Drehachse"),
     "type": _("Art"),
     "unit": _("Einheit"),
     "unknown": _("Unbekannt"),

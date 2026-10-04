@@ -30,6 +30,7 @@ from app.core.errors import (
     CHOOSE_PRINTER,
     CONVERT_TO_EXACT,
     EXPORT_AS_MESH,
+    OPEN_PRINT_SETTINGS,
     SHOW_HISTORY,
     ExternalToolError,
     FileWriteError,
@@ -51,6 +52,7 @@ from app.core.geom.prepare import arrange_on_bed, check_build_volume
 from app.core.knowledge.print_settings import read_path, same_value
 from app.core.log import get_logger
 from app.core.types import (
+    Action,
     BoundingBox,
     BRepBody,
     CancelToken,
@@ -59,6 +61,7 @@ from app.core.types import (
     MaterialSlot,
     Mesh,
     ObjectId,
+    PrinterProfile,
     PrintSettings,
     Profile,
     Scene,
@@ -412,9 +415,9 @@ def adhesion_margin(settings: PrintSettings) -> float:
     tragen und der zwischen zwei Nachbarn zweimal zählt.
     """
     kind = settings.adhesion.kind
-    # Der Auto-Brim des Slicers legt höchstens die Brimbreite seines Profils —
-    # ob er es tut, weiß erst der Slicer. Der Abstand rechnet mit dem Fall,
-    # in dem er es tut (Entscheidung J, 27.09.2026).
+    # Zwischen zwei Teilen rechnet der Auto-Brim mit der Brimbreite des
+    # Profils (Entscheidung J, 27.09.2026). Zum Bettrand reicht er bei der
+    # Orca-Familie weiter: :func:`rim_of`, :data:`ORCA_AUTO_BRIM_MAX`.
     if kind in ("brim", "auto"):
         return settings.adhesion.brim_width
     if kind == "skirt":
@@ -510,19 +513,124 @@ def check_adhesion_clearance(
     return findings
 
 
-def rim_reach(settings: PrintSettings) -> float:
-    """Wie weit Brim, Skirt oder Raft über den Rand des äußersten Teils reichen.
+#: Die größte Breite, die der Auto-Brim der Orca-Familie wählt, in mm.
+#: OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups`` (aus Bambu Studio
+#: übernommen, ``BBS``): Die Breite folgt aus Höhe, Flächenträgheit und
+#: Wärmelänge der ersten Schicht und wird bei 18 mm gekappt („large brims are
+#: omitted"), unabhängig von ``brim_width``. Gemessen in der Slicer-Matrix
+#: (RM-312): ElegooSlicer legte am Rack 14,7 mm statt der 5 mm des Profils.
+ORCA_AUTO_BRIM_MAX: Final = 18.0
+
+
+@dataclass(frozen=True, slots=True)
+class RimReach:
+    """Wie weit die erste Schicht über ein Teil hinausreicht, und woraus."""
+
+    reach: float
+    """In mm über die Aufsicht des Teils hinaus."""
+    auto_brim: bool = False
+    """Der Auto-Brim der Orca-Familie zählt mit seiner Höchstbreite."""
+    support_foot: bool = False
+    """Die verbreiterte erste Stützschicht reicht weiter als der Brim."""
+    support_foot_unknown: bool = False
+    """Stützen sind an, ihre Verbreiterung nennt das Profil nicht."""
+
+
+def rim_of(
+    settings: PrintSettings,
+    flavour: SlicerFlavour = "other",
+    support_foot: float | None = None,
+) -> RimReach:
+    """Die belegte Außenkante der ersten Schicht um ein Teil (RM-312).
+
+    Von innen nach außen: Brim (bei der Orca-Familie mit ``auto`` bis
+    :data:`ORCA_AUTO_BRIM_MAX`) oder, mit Stützen, die verbreiterte erste
+    Stützschicht (``support_foot``, ``manufacturer.Foundation.support_foot``),
+    je nachdem, was weiter reicht; darum der Skirt mit Abstand und Bahnen.
+    Der Skirt zählt bei Haftungsart Skirt und bei Prusa und Orca neben einem
+    Brim, solange Solidon die Haftungsart nicht schreibt — dann drucken sie
+    beides, wie das Profil es sagt; schreibt Solidon eine Art, nullt die
+    Übergabe die übrigen (``handover._only_chosen_adhesion``). Cura druckt
+    nur eine Art.
+    """
+    adhesion = settings.adhesion
+    auto = adhesion.kind == "auto" and flavour == "orca"
+    if auto:
+        band = ORCA_AUTO_BRIM_MAX + max(0.0, adhesion.brim_gap)
+    elif adhesion.kind in ("brim", "auto", "raft"):
+        band = adhesion.brim_width
+    else:
+        band = 0.0
+    supported = settings.support.style != "none"
+    foot = False
+    if supported and support_foot is not None and support_foot > band:
+        band = support_foot
+        foot = True
+    written = "adhesion.kind" in settings.chosen or "adhesion.kind" in settings.accepted
+    skirt = adhesion.skirt_loops > 0 and (
+        adhesion.kind == "skirt"
+        or (flavour in ("prusa", "orca") and not written and adhesion.kind != "raft")
+    )
+    reach = band
+    if skirt:
+        reach += adhesion.skirt_distance + (
+            adhesion.skirt_loops * settings.layers.first_layer_line_width
+        )
+    return RimReach(
+        reach,
+        auto_brim=auto,
+        support_foot=foot,
+        support_foot_unknown=supported and support_foot is None,
+    )
+
+
+def rim_reach(
+    settings: PrintSettings,
+    flavour: SlicerFlavour = "other",
+    support_foot: float | None = None,
+) -> float:
+    """Wie weit Brim, Skirt, Raft oder Stützfuß über den Rand des Teils reichen.
 
     Anders als :func:`adhesion_margin` zählt beim Skirt auch seine Breite:
     Zwischen zwei Teilen läuft er nicht, am Bettrand liegt er ganz außen —
     ``skirt_distance`` weit weg und so viele Bahnen breit, wie er Runden hat.
+    Die Teile der Rechnung: :func:`rim_of`.
     """
-    adhesion = settings.adhesion
-    if adhesion.kind == "skirt":
-        return (
-            adhesion.skirt_distance + adhesion.skirt_loops * settings.layers.first_layer_line_width
-        )
-    return adhesion_margin(settings)
+    return rim_of(settings, flavour, support_foot).reach
+
+
+def support_foot_for(
+    settings: PrintSettings, profile: Profile, setup: SlicerSetup | None
+) -> float | None:
+    """Die Verbreiterung der ersten Stützschicht beim gewählten Slicer, sonst unbekannt.
+
+    Auch ohne Stützen auf der Platte: Ein Vorschlag je Teil schaltet sie am
+    Objekt ein (garden-hose-holder.3mf, RM-312), und :func:`rim_of` fragt den
+    Wert je Teil.
+    """
+    if setup is None:
+        return None
+    from app.core.export import manufacturer
+
+    return manufacturer.base_settings(profile, settings.quality, setup).support_foot
+
+
+def slicer_rim(settings: PrintSettings, profile: Profile, setup: SlicerSetup | None) -> float:
+    """Der Rand, den eine gedrehte Lage zuerst freihält (:func:`_fit_cli_mesh`).
+
+    Eine Rechnung für Druckdialog und Schreiber, sonst planten beide zwei
+    verschiedene Netzsätze.
+    """
+    flavour: SlicerFlavour = setup.flavour if setup is not None else "other"
+    return rim_reach(settings, flavour, support_foot_for(settings, profile, setup))
+
+
+#: Zur Haftung in den Druckeinstellungen: Mit „Brim" statt „Automatisch"
+#: schreibt Solidon Art und Breite ausdrücklich (``outer_only``), und der
+#: Slicer wählt keine eigene Breite mehr.
+FIX_BRIM_WIDTH: Final = replace(OPEN_PRINT_SETTINGS, label=_("Brim-Breite festlegen …"))
+#: Zum Skirt in den Druckeinstellungen, wenn Stützfuß und Skirt nicht aufs Bett passen.
+SMALLER_SKIRT: Final = replace(OPEN_PRINT_SETTINGS, label=_("Skirt verkleinern …"))
 
 
 def check_adhesion_on_bed(
@@ -532,6 +640,8 @@ def check_adhesion_on_bed(
     object_ids: Sequence[str] = (),
     *,
     per_part: Sequence[PrintSettings] | None = None,
+    flavour: SlicerFlavour = "other",
+    support_foot: float | None = None,
 ) -> list[Finding]:
     """Liegt der Rand um jedes Teil noch auf dem Bett?
 
@@ -541,17 +651,21 @@ def check_adhesion_on_bed(
     des ElegooSlicers am Neptune 4 210 Züge neben das Bett, PrusaSlicers Skirt
     am SV06 24 (27.09.2026). Kein Slicer widersprach, die Druckdatei verließ
     den Bauraum. Ein Teil, das selbst neben dem Bett liegt, meldet die Prüfung
-    des Bauraums; hier geht es nur um den Rand.
+    des Bauraums; hier geht es nur um den Rand. Wie weit er reicht, sagt
+    :func:`rim_of` — mit Orca-Auto-Brim und Stützfuß (RM-312); eine
+    Stützverbreiterung, die das Profil nicht nennt, wird als unbekannt
+    gemeldet, nicht geschätzt.
     """
-    reaches = [
-        rim_reach(per_part[index] if per_part is not None else settings)
+    rims = [
+        rim_of(per_part[index] if per_part is not None else settings, flavour, support_foot)
         for index in range(len(meshes))
     ]
     width, depth, _height = profile.printer.build_volume
     half = (width / 2.0, depth / 2.0)
     findings: list[Finding] = []
     for index, mesh in enumerate(meshes):
-        reach = reaches[index]
+        rim = rims[index]
+        reach = rim.reach
         if reach <= 0.0:
             continue
         box = mesh.bounds
@@ -564,21 +678,84 @@ def check_adhesion_on_bed(
             max(-half[axis] - (box.minimum[axis] - reach), box.maximum[axis] + reach - half[axis])
             for axis in (0, 1)
         )
+        message = _("Der Rand um ein Teil reicht über das Bett hinaus.")
+        if over <= EPS_GEOM:
+            over = _rim_into_blocked_area(mesh, reach, profile.printer)
+            message = _(
+                "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus."
+            )
         if over <= EPS_GEOM:
             continue
+        values: dict[str, float | str | TranslatableText] = {"distance": format_length(over)}
+        suggestions: tuple[Action, ...] = (ARRANGE_ON_BED,)
+        if rim.auto_brim:
+            # Ob der Slicer die Höchstbreite wirklich wählt, weiß erst er —
+            # gewarnt wird vor dem, was er wählen darf; der Kunde entscheidet
+            # zwischen fester Breite und mehr Abstand.
+            message = _(
+                "Der automatische Brim des Slicers kann bis {width} breit werden und reicht "
+                "dann über das Bett oder in eine Sperrfläche.",
+                width=format_length(ORCA_AUTO_BRIM_MAX),
+            )
+            values["field"] = "adhesion.kind"
+            suggestions = (FIX_BRIM_WIDTH, ARRANGE_ON_BED)
+        elif rim.support_foot:
+            message = _(
+                "Die erste Stützschicht und der Skirt um sie reichen über das Bett oder in "
+                "eine Sperrfläche."
+            )
+            values["field"] = "adhesion.skirt_loops"
+            suggestions = (ARRANGE_ON_BED, SMALLER_SKIRT)
         findings.append(
             Finding(
                 code="arrange.adhesion_off_bed",
                 severity="warning",
-                message=_("Der Rand um ein Teil reicht über das Bett hinaus."),
+                message=message,
                 object_id=object_ids[index] if index < len(object_ids) else None,
-                values={"distance": format_length(over)},
+                values=values,
                 # Regel 17: Anordnen hält zum Bettrand den Abstand der Haftung
                 # (``split.bed_margin``).
-                suggestions=(ARRANGE_ON_BED,),
+                suggestions=suggestions,
+            )
+        )
+    if any(rim.support_foot_unknown for rim in rims):
+        findings.append(
+            Finding(
+                code="arrange.support_foot_unknown",
+                severity="info",
+                message=_(
+                    "Wie weit dieser Slicer die erste Stützschicht verbreitert, steht nicht in "
+                    "seinem Profil; der Rand zum Bett ist ohne sie geprüft."
+                ),
             )
         )
     return findings
+
+
+def _rim_into_blocked_area(mesh: MeshData, reach: float, printer: PrinterProfile) -> float:
+    """Wie weit der Rand eines Teils in eine Sperrfläche oder über die Kontur reicht.
+
+    Der Bettrand allein genügt nicht: Der Centauri Carbon 2 sperrt vorn rechts
+    eine Ecke, und in der Slicer-Matrix (RM-312) lief der Auto-Brim des
+    ElegooSlicers dort hinein, ohne dass die Prüfung vor dem Export etwas
+    sagte. Gemessen wird an der Aufsicht des Teils gegen das Bettrechteck ohne
+    die freigegebene Fläche (:func:`build_area.printable_area`).
+    """
+    from shapely.geometry import box as rectangle
+
+    if not printer.bed_exclusions and not printer.printable_area:
+        return 0.0
+    width, depth, _height = printer.build_volume
+    blocked = rectangle(-width / 2.0, -depth / 2.0, width / 2.0, depth / 2.0).difference(
+        build_area.printable_area(printer)
+    )
+    if blocked.is_empty:
+        return 0.0
+    bounds = mesh.bounds
+    reached = rectangle(*bounds.minimum[:2], *bounds.maximum[:2]).buffer(reach)
+    if not reached.intersects(blocked):
+        return 0.0
+    return reach - float(build_area.footprint(mesh).distance(blocked))
 
 
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
@@ -1808,8 +1985,13 @@ def prepare_slicer_meshes(
     *,
     for_window: bool = False,
     cancelled: CancelToken | None = None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
-    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben."""
+    """Ein Exportnetzsatz für Vorprüfung, Platzierung und Schreiben.
+
+    ``rim`` ist der Rand der Haftung (:func:`rim_reach`), für den eine
+    gedrehte Lage zuerst Platz sucht (:func:`_fit_cli_mesh`).
+    """
     from app.core.export import handover
 
     exported: dict[str, MeshData] = {}
@@ -1831,8 +2013,37 @@ def prepare_slicer_meshes(
             raise
     program = slicer_keys.program_of(setup.executable)
     if slicer_keys.arranges_on_cli(setup.flavour, program):
-        return exported, False
-    return _arrange_for_cli(chosen, exported, profile, setup, cancelled)
+        return _turned_for_cli(chosen, exported, profile, cancelled, rim)
+    return _arrange_for_cli(chosen, exported, profile, setup, cancelled, rim)
+
+
+def _turned_for_cli(
+    chosen: Sequence[SceneObject],
+    exported: dict[str, MeshData],
+    profile: Profile,
+    cancelled: CancelToken | None,
+    rim: float = 0.0,
+) -> tuple[dict[str, MeshData], bool]:
+    """Ein Teil, das nur gedreht aufs Bett passt, geht gedreht hinaus.
+
+    Die Orca-Familie ordnet auf der Konsole selbst an, verschiebt dabei aber
+    nur. Die Größenprüfung davor (:func:`handover._check_plate`) lässt ein
+    Teil durch, das gedreht passt; ungedreht sagte der Slicer dann mit -50
+    ab (RM-312: eine Schüssel von 240 mal 200 mm am 220er-Bett von K1 und
+    Kobra 2, die nur um 14,5° gedreht Platz hat). Was ungedreht irgendwo
+    passt, bleibt unberührt — die Lage gehört dort dem Slicer.
+    """
+    turned = dict(exported)
+    changed = False
+    for entry in chosen:
+        mesh = exported[entry.id]
+        if _fit_cli_mesh(mesh, profile, cancelled, turns=(np.eye(4),)) is not None:
+            continue
+        fitted = _fit_cli_mesh(mesh, profile, cancelled, rim=rim)
+        if fitted is not None:
+            turned[entry.id] = fitted
+            changed = True
+    return turned, changed
 
 
 def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
@@ -1869,33 +2080,48 @@ def _cli_turns(mesh: MeshData) -> Iterable[np.ndarray]:
 
 
 def _fit_cli_mesh(
-    mesh: MeshData, profile: Profile, cancelled: CancelToken | None
+    mesh: MeshData,
+    profile: Profile,
+    cancelled: CancelToken | None,
+    turns: Sequence[np.ndarray] | None = None,
+    rim: float = 0.0,
 ) -> MeshData | None:
-    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt."""
+    """Eine belegte Bettlage finden; die vollständige Kopie entsteht zuletzt.
+
+    ``turns`` beschränkt die Drehungen (ohne: :func:`_cli_turns`). ``rim``
+    ist der Rand der Haftung (:func:`rim_reach`): Gesucht wird zuerst eine
+    Lage, um die er noch auf dem Bett liegt, erst dann eine ohne ihn. Die
+    erste passende Drehung lag sonst knapp am Rand — drill-holder.3mf am MINI
+    1,4 mm davor, die Skirt 2,2 mm darüber hinaus, schräg wären 12 mm frei
+    gewesen (RM-312).
+    """
     from app.core.geom.orient import _Placed, extreme_points, turned_extents
 
     if build_area.fits_on_bed(mesh, profile.printer) and mesh.bounds.minimum[2] <= EPS_DISPLAY:
         return mesh
     points = extreme_points(mesh)
-    for turn in _cli_turns(mesh):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        low, high = turned_extents(points, turn)
-        bounds = BoundingBox(
-            (float(low[0]), float(low[1]), float(low[2])),
-            (float(high[0]), float(high[1]), float(high[2])),
-        )
-        placed = _Placed(mesh, turn, bounds)
+    for margin in (rim, 0.0) if rim > EPS_GEOM else (0.0,):
+        for turn in _cli_turns(mesh) if turns is None else turns:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            low, high = turned_extents(points, turn)
+            bounds = BoundingBox(
+                (float(low[0]), float(low[1]), float(low[2])),
+                (float(high[0]), float(high[1]), float(high[2])),
+            )
+            placed = _Placed(mesh, turn, bounds)
 
-        def outline(matrix: np.ndarray = turn) -> np.ndarray:
-            return transform.moved_points(points, matrix)[:, :2]
+            def outline(matrix: np.ndarray = turn) -> np.ndarray:
+                return transform.moved_points(points, matrix)[:, :2]
 
-        offset = build_area.placement_offset(placed, profile.printer, outline=outline)
-        if offset is None:
-            continue
-        result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
-        if build_area.fits_on_bed(result, profile.printer):
-            return result
+            offset = build_area.placement_offset(
+                placed, profile.printer, margin=margin, outline=outline
+            )
+            if offset is None:
+                continue
+            result = transform.apply(mesh, transform.composed(transform.translation(offset), turn))
+            if build_area.fits_on_bed(result, profile.printer, margin=margin):
+                return result
     return None
 
 
@@ -1905,6 +2131,7 @@ def _arrange_for_cli(
     profile: Profile,
     setup: SlicerSetup,
     cancelled: CancelToken | None,
+    rim: float = 0.0,
 ) -> tuple[dict[str, MeshData], bool]:
     """Nur Ausgabenetze ihrer Platte bewegen; die Szene bleibt unverändert."""
     from app.core.export import handover
@@ -1918,7 +2145,7 @@ def _arrange_for_cli(
         meshes = [exported[entry.id] for entry in entries]
         if arrangement_holds(meshes, profile):
             continue
-        fitted = [_fit_cli_mesh(mesh, profile, cancelled) for mesh in meshes]
+        fitted = [_fit_cli_mesh(mesh, profile, cancelled, rim=rim) for mesh in meshes]
         ready = [mesh for mesh in fitted if mesh is not None]
         if len(ready) == len(meshes) and not arrangement_holds(ready, profile):
             if cancelled is not None:
@@ -2061,7 +2288,12 @@ def write_assembly(
 
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             mesh_plan = prepare_slicer_meshes(
-                chosen, profile, known, for_window=for_window, cancelled=cancelled
+                chosen,
+                profile,
+                known,
+                for_window=for_window,
+                cancelled=cancelled,
+                rim=slicer_rim(settings, profile, setup) if settings is not None else 0.0,
             )
         else:
             mesh_plan = (
@@ -2226,7 +2458,13 @@ def write_assembly(
             meshes, settings, [entry.plate for entry in chosen], per_part=own
         )
         findings += check_adhesion_on_bed(
-            meshes, settings, profile, [entry.id for entry in chosen], per_part=own
+            meshes,
+            settings,
+            profile,
+            [entry.id for entry in chosen],
+            per_part=own,
+            flavour=flavour,
+            support_foot=support_foot_for(settings, profile, setup),
         )
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume

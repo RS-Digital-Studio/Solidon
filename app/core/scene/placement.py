@@ -2942,6 +2942,8 @@ def supports_surface_placement(spec: OperationSpec) -> bool:
         in {
             "label_text",
             "create_label",
+            # Die bündige Einlage sitzt wie die Beschriftung (RM-184).
+            "inlay_text",
             "move_feature",
             "duplicate_feature",
             # **Ein Langloch wird gesetzt wie eine Bohrung** (Robert,
@@ -3365,24 +3367,34 @@ def _creation_tool(
             ),
             angle=angle if length > EPS_GEOM else None,
         )
-    if spec.name in {"label_text", "create_label"}:
+    if spec.name in {"label_text", "create_label", "inlay_text"}:
+        from app.core.geom.label_layout import wrapped
         from app.core.geom.label_ops import local_text_body
 
         values = validate(spec.params, entered_values)
-        return PlacementTool(
-            local_text_body(
-                values.text,
-                values.size,
-                values.font,
-                values.depth,
-                # Der Schnitt gehört zur Form, nicht zur Farbe: Fett ist rund
-                # anderthalbmal so breit wie normal. Ohne ihn zeigte die Vorschau
-                # den normalen und die Operation baute den gewählten.
-                style=values.style,
-                mode=values.mode if spec.name == "label_text" else "body",
-                angle=getattr(values, "angle", 0.0),
-            )
+        modes = {
+            "label_text": values.mode if spec.name == "label_text" else "",
+            "inlay_text": "engraved",
+        }
+        letters = local_text_body(
+            values.text,
+            values.size,
+            values.font,
+            values.depth,
+            # Der Schnitt gehört zur Form, nicht zur Farbe: Fett ist rund
+            # anderthalbmal so breit wie normal. Ohne ihn zeigte die Vorschau
+            # den normalen und die Operation baute den gewählten.
+            style=values.style,
+            mode=cast(Literal["raised", "engraved", "body"], modes.get(spec.name) or "body"),
+            angle=getattr(values, "angle", 0.0),
+            # Bogen und Rundung gehören zur Form wie der Schnitt (RM-184).
+            arc_radius=getattr(values, "arc_radius", 0.0),
         )
+        # Eine genannte Rundung biegt auch die Vorschau; eine erst zu messende
+        # zeigt sie flach, bis der Schritt den Radius festhält.
+        if getattr(values, "wrap", "flat") != "flat" and getattr(values, "wrap_radius", 0.0):
+            letters = wrapped(letters, float(values.wrap_radius), values.wrap)
+        return PlacementTool(letters)
     raise _reject(
         "operation",
         tr(

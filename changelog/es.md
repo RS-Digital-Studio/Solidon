@@ -34,6 +34,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el informe, «Reconstruir modelo» rehace una pieza importada, también escuadras, gargantas y avellanados, la compara con el original dentro del límite elegido y la aplica en un solo paso.
 - La «Abrazadera con revestimientos» empieza con el material del proyecto en los dos campos de material. Hasta ahora ambos estaban vacíos.
 - La búsqueda de piezas encuentra la «Lengüeta para perfil de aluminio» también como tuerca en T, y su descripción dice en qué se diferencia de una tuerca en T con rosca.
+- Una tapa de «Generar tapa» puede llevar bisagra, impresa en su sitio o con un pasador de «Pasador para taladro», y su collar queda recortado para abrirse sin tropezar.
+- Con «Rebajar contraforma», un inserto recibe alojamientos para herramientas que vuelven a salir en línea recta.
 
 ### Imprimir y entregar al slicer
 
@@ -102,6 +104,16 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras exportar o «Abrir en el slicer …», Solidon vuelve a leer el archivo. El registro del informe indica archivos, destino de impresión, material, ajustes y si el archivo coincide con el encargo.
 - Exportado como 3MF desde la línea de comandos, un cuerpo de un solo color conserva su filamento al volver a abrirlo.
 - Para los ajustes de piezas concretas, la línea de comandos indica qué piezas son y qué valor reciben.
+- Si acepta soportes para un puente largo sobre la propia pieza, ahora llegan también ahí. Antes se añadía «Solo desde la placa», y varios slicers imprimían el puente sin soporte.
+- Las piezas pequeñas tumbadas, como tornillos, ya no reciben soportes propuestos donde un borde de corte mostraba por error un punto flotante.
+- Si una pieza termina arriba en una arista que el slicer no imprime, Solidon ya no avisa tras el laminado de un modelo cortado.
+- Si la primera capa de una pieza es más estrecha que una línea, el aviso tras el laminado propone las líneas de pared y la balsa como salida.
+- SuperSlicer conserva la disposición de Solidon y ya no empuja las piezas hasta el borde de la placa; la falda queda sobre la placa.
+- Si una pieza solo cabe girada en la placa, llega girada a OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
+- Si el borde alrededor de una pieza entra en una zona prohibida de la placa, la comprobación antes de exportar lo dice.
+- Si en el slicer se cruzan las trayectorias de dos piezas, o de una pieza y la torre de purga, el aviso lo dice y ofrece salidas.
+- Si el borde de adherencia está en automático, Solidon avisa antes de exportar cuando puede crecer fuera de la placa o en una zona prohibida, y propone un ancho fijo.
+- Los soportes y la falda junto al borde de la placa cuentan en la comprobación antes de exportar, con el ensanche de la primera capa de soporte que indica el perfil del slicer.
 
 ### Taladros, ranuras y división
 
@@ -138,6 +150,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Solidon reconoce cada campo de nervios, panal u hoyuelos de un archivo importado como un solo patrón, y «Reconocer características aquí» agrupa las celdas de un campo.
 - Un campo pequeño que Solidon solo lee como características sueltas se convierte en un patrón con «Agrupar como patrón». Los patrones de archivos STEP se reconocen directamente.
 - Las piezas de una división automática también se numeran en proyectos de versiones anteriores, y un corte eliminado o desactivado ya no cuenta.
+- Un taladro que duplica, desplaza o repite a lo largo de una cara inclinada sigue siendo el mismo taladro en piezas STL y STEP, con las mismas medidas y avisos.
+- Tras «Repetir característica», una copia en una pieza STEP ya no perfora hasta la cara superior, y un taladro STL de facetas gruesas sigue contando como pasante.
+- Una rosca crece o mengua con «Cambiar característica» sin romper la pared, y la rosca contraria de un ajuste roscado cambia con ella.
+- Un par de roscas impresas supera su comprobación de ajuste: ambas roscas indican la medida con la que se construyen, y la comprobación espera la holgura de ambas mitades.
+- Con «Comprobar la trayectoria de montaje», las piezas también pueden girar, o insertarse primero y luego girar como una bayoneta.
+- Para un ajuste, Solidon recorta la misma ventana de ambas piezas como pequeña muestra impresa e indica la holgura.
+- Un taladro avellanado que tras duplicar, desplazar o repetir termina por completo dentro del material ya no avisa de que sobresale del borde.
+- Si el avellanado de una copia sobrepasa un lado, Solidon vuelve a encontrar la copia igual en piezas STL y STEP.
+- Si duplica un taladro a lo largo de su propio eje hacia el vacío, el original conserva su nombre en piezas STL, y la copia se da por perdida como en piezas STEP.
 
 ### Redondear y achaflanar
 
@@ -169,6 +190,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La entrada «Crear a partir de un boceto …» empieza a dibujar enseguida, el plano de dibujo muestra su origen, y un doble clic en el historial reabre un dibujo en modo de dibujo.
 - Al «Modelar» y en el editor de esqueleto, la barra muestra espesor de pared o voladizo como mapa con leyenda y avisa de un trazo fuera del volumen de impresión. Tras doblar, dice cómo se imprimirá.
 - Una textura aplicada se selecciona entera. El panel de selección ofrece entonces «Modificar textura» y «Quitar textura».
+- El texto sigue un arco o rodea una superficie redondeada, y «Incrustar texto» lo coloca enrasado en su propio color.
 
 ### Generar con IA
 
@@ -224,6 +246,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras Ctrl+Y, la línea de estado nombra el paso que se ha rehecho, igual que tras Ctrl+Z.
 - Las miniaturas de ejemplos y bloques muestran la altura hacia arriba. Hasta ahora las piezas altas apuntaban hacia abajo en ellas.
 - Si Solidon no puede guardar la opción «Incluir valores», el aviso aparece junto al interruptor.
+- Si otros programas ocupan todos los núcleos en Windows, un cálculo con un modelo grande ya no se queda parado durante minutos.
 
 ## 0.5.1
 

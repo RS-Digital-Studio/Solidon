@@ -2899,6 +2899,68 @@ def void_body(solid: Solid, face_indices: Sequence[int]) -> Solid | None:
     return air if air.volume > EPS_GEOM else None
 
 
+def faceted(mesh: MeshData, *, cancelled: CancelToken | None = None) -> Solid:
+    """Ein geschlossenes Dreiecksnetz als exakter Körper aus ebenen Facetten.
+
+    Für Werkzeuge, deren Form der exakte Kern nicht aus Kurven baut — eine
+    Schrift, die um eine Rundung gebogen ist (RM-184). Jede Schale wird aus
+    ihren Dreiecken genäht wie :func:`convex_hull`, ebene Nachbarn legt
+    :func:`unified` zusammen; mehrere Schalen (Buchstaben) bleiben ein Verbund.
+    Die Abweichung zur gemeinten Form ist die des Netzes, nicht mehr.
+    """
+    require()
+    import numpy as np
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakePolygon,
+        BRepBuilderAPI_MakeSolid,
+        BRepBuilderAPI_Sewing,
+    )
+    from OCP.BRepLib import BRepLib
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS, TopoDS_Compound
+
+    builder = BRep_Builder()
+    joined = TopoDS_Compound()
+    builder.MakeCompound(joined)
+    count = 0
+    for shell_mesh in mesh.raw.split(only_watertight=False):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+        corners = np.asarray(shell_mesh.vertices, dtype=float)[
+            np.asarray(shell_mesh.faces, dtype=np.int64)
+        ]
+        for triangle in corners:
+            polygon = BRepBuilderAPI_MakePolygon(
+                gp_Pnt(float(triangle[0][0]), float(triangle[0][1]), float(triangle[0][2])),
+                gp_Pnt(float(triangle[1][0]), float(triangle[1][1]), float(triangle[1][2])),
+                gp_Pnt(float(triangle[2][0]), float(triangle[2][1]), float(triangle[2][2])),
+                True,
+            )
+            sewing.Add(BRepBuilderAPI_MakeFace(polygon.Wire(), True).Face())
+        sewing.Perform()
+        shells = TopExp_Explorer(sewing.SewedShape(), TopAbs_SHELL)
+        if not shells.More() or sewing.NbFreeEdges() != 0:
+            raise GeometryError(
+                detail=_("Diese Form ließ sich nicht zu einem geschlossenen Körper nähen."),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        body = BRepBuilderAPI_MakeSolid(TopoDS.Shell(shells.Current())).Solid()
+        BRepLib.OrientClosedSolid_s(body)
+        builder.Add(joined, body)
+        count += 1
+    if not count:
+        raise GeometryError(
+            detail=_("Diese Form ließ sich nicht zu einem geschlossenen Körper nähen."),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return unified(Solid(joined))
+
+
 def convex_hull(solid: Solid) -> Solid:
     """Die konvexe Hülle des Körpers als exakter Vielflächner — zum Beschneiden eines Stopfens.
 
