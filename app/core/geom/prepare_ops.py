@@ -17166,7 +17166,8 @@ class HollowParams(BaseParams):
     # 2: gewählte Öffnungsflächen, Wand außen, erfragter Rückfall; an den
     # bisherigen Wegen neu der Befund ``hollow.closed_cavities`` (P6.3,
     # 23.09.2026). Die Geometrie gespeicherter Schritte ist unverändert.
-    cache_version="2",
+    # 3: Der Körper sagt, ob sein Innenraum offen ist (``MeshData.cavity_open``).
+    cache_version="3",
     title=_("Aushöhlen"),
     category="prepare",
     params=HollowParams,

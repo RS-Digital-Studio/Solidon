@@ -744,8 +744,11 @@ def opposite_side(mesh: MeshData, position: Vec3, normal: Vec3) -> Vec3 | None:
     leaving &= ~_cavity_faces(mesh)[hit]
     # Eine Entlüftung verbindet Innen- und Außenhaut zu derselben Schale.
     # Der beim Aushöhlen belegte Innenraum bleibt trotzdem bekannt: Treffen
-    # auf dessen Haut sind keine äußere Rückseite (RM-422).
-    if mesh.cavity is not None:
+    # auf dessen Haut sind keine äußere Rückseite (RM-422). **Nur solange er
+    # geschlossen ist**: Eine oben offene Dose hat an jeder Wand zwei Seiten,
+    # und dort tritt die Richtung an der Innenseite aus — wie am exakten Kern,
+    # der seine Dose ohne Innenraum zurückgibt.
+    if mesh.cavity is not None and not mesh.cavity_open:
         from app.core.units import weld_tolerance
 
         cavity = mesh.cavity.raw
@@ -940,7 +943,8 @@ class _Letters:
     # variablen Schrift bleiben voll —, vertieft trägt die Schrift ihren Slot in
     # den Rillen, und am exakten Körper bleibt der Körper exakt (P2.8).
     # 4: Die Rückseite überspringt belegte Innenhaut auch bei einer Entlüftung.
-    cache_version="4",
+    # 5: … aber nicht die einer offenen Dose (RM-422).
+    cache_version="5",
     title=_("Text aufbringen"),
     category="label",
     params=LabelParams,

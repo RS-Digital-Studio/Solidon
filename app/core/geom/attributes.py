@@ -335,7 +335,10 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
 def with_slot(mesh: MeshData, slot: int) -> MeshData:
     """Ein Slot für den ganzen Körper — wo eine Farbe von Hand zugewiesen wird."""
     return MeshData(
-        raw=mesh.raw, slots=tuple([int(slot)] * len(mesh.raw.faces)), cavity=mesh.cavity
+        raw=mesh.raw,
+        slots=tuple([int(slot)] * len(mesh.raw.faces)),
+        cavity=mesh.cavity,
+        cavity_open=mesh.cavity_open,
     )
 
 

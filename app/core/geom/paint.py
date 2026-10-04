@@ -126,7 +126,10 @@ def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushRe
         slots[index] = int(slot)
     _log.info("filled %d of %d faces into slot %d", len(reached), faces, slot)
     return BrushResult(
-        mesh=MeshData(raw=body, slots=tuple(slots), cavity=mesh.cavity), painted=len(reached)
+        mesh=MeshData(
+            raw=body, slots=tuple(slots), cavity=mesh.cavity, cavity_open=mesh.cavity_open
+        ),
+        painted=len(reached),
     )
 
 

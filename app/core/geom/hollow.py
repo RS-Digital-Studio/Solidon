@@ -271,6 +271,9 @@ def _hollow_inward(
     findings = [*outcome.findings, *enclosed.findings]
     stages: list[SolverInfo | None] = [outcome.solver, enclosed.solver]
 
+    # Ob der Hohlraum danach frei liegt: nur, wenn die Öffnung wirklich geschnitten
+    # ist — eine ausgefallene lässt ihn geschlossen, ohne Entlüftung.
+    open_now = False
     if direction is not None and field is not None:
         opening = _mouth(field[0], direction)
         tool = _meshed(opening, field[1], field[2], mesh) if opening is not None else None
@@ -292,6 +295,7 @@ def _hollow_inward(
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
+            open_now = True
 
     placed: tuple[Vec3, ...] = ()
     # Eine offene Dose ist ihre eigene Entlüftung. Ein Loch im Boden wäre dort
@@ -316,7 +320,9 @@ def _hollow_inward(
         _raster_findings(wall, values, opened=body if vents > 0 or direction is not None else None)
     )
     return HollowResult(
-        mesh=replace(body, cavity=enclosed.mesh),
+        mesh=replace(
+            body, cavity=enclosed.mesh, cavity_open=open_now and enclosed.mesh is not None
+        ),
         removed=removed,
         vents=placed,
         findings=findings,
@@ -377,6 +383,7 @@ def _hollow_outward(
     body = outcome.mesh
     findings = list(outcome.findings)
     stages: list[SolverInfo | None] = [outcome.solver]
+    open_now = False
     if direction is not None:
         steps, _pitch = erosion_steps(wall)
         opening = _outward_mouth(inner, direction, steps)
@@ -386,6 +393,7 @@ def _hollow_outward(
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
+            open_now = True
     placed: tuple[Vec3, ...] = ()
     if vents > 0 and direction is None:
         body, placed, drilled, said = _drill_vents(
@@ -410,7 +418,7 @@ def _hollow_outward(
     )
     _log.info("hollowed %.1f mm³ outwards behind a %.2f mm wall", before, wall)
     return HollowResult(
-        mesh=replace(body, cavity=MeshData.of(mesh.raw.copy())),
+        mesh=replace(body, cavity=MeshData.of(mesh.raw.copy()), cavity_open=open_now),
         removed=before - body.volume,
         vents=placed,
         findings=findings,
@@ -513,7 +521,7 @@ def _hollow_with_openings(
         values["removed_cm3"] = round((before - body.volume) / 1000.0, 1)
     findings.extend(_raster_findings(wall, values, opened=body))
     return HollowResult(
-        mesh=replace(body, cavity=cavity),
+        mesh=replace(body, cavity=cavity, cavity_open=opened > 0),
         removed=before - body.volume,
         findings=findings,
         solver=deepest(stages),

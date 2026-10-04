@@ -3304,6 +3304,7 @@ def test_both_sides_after_hollowing_with_a_vent_use_the_outer_back(
     entry = hollowed.outputs[0]
     body = as_mesh_data(entry.mesh)
     assert body.cavity is not None
+    assert not body.cavity_open, "eine Entlüftung öffnet den Hohlraum nicht"
     assert len(body.raw.split(only_watertight=False)) == 1, "die Entlüftung verbindet beide Häute"
     assert opposite_side(body, (20.0, 0.0, 10.0), (1.0, 0.0, 0.0)) == pytest.approx(
         (-20.0, 0.0, 10.0), abs=0.01
@@ -3327,6 +3328,92 @@ def test_both_sides_after_hollowing_with_a_vent_use_the_outer_back(
     assert labelled.bounds.maximum[0] == pytest.approx(20.6, abs=0.01)
     assert labelled.is_watertight
     assert "label.no_back_side" not in {finding.code for finding in result.findings}
+
+
+@pytest.mark.parametrize("quality", ("draft", "fine"))
+@pytest.mark.parametrize("kernel", ("mesh", "brep"))
+def test_both_sides_on_an_open_box_put_the_back_on_its_inner_wall(
+    profile: Profile, kernel: str, quality: Quality
+) -> None:
+    """Eine oben offene Dose hat keinen eingeschlossenen Hohlraum (RM-332 N3, RM-422).
+
+    Ihre Vorderwand hat zwei Seiten, und die Richtung tritt an der Innenseite aus
+    dem Material: Dort steht die Rückseite, an beiden Kernen. Der exakte Kern höhlt
+    die Dose selbst aus und kennt keinen Innenraum; am Netz trägt das Aushöhlen ihn
+    mit. Die Ausnahme für die Entlüftung übersprang dort jede Haut dieses
+    Innenraums, auch die einer offenen Dose, und setzte die Schrift außen auf die
+    Hinterwand — x = -20,6 statt an die Innenseite der Vorderwand.
+    """
+    from app.core.geom.label_ops import opposite_side
+
+    def apply(name: str, entry: SceneObject, **params: object):
+        spec = REGISTRY.get(name)
+        return spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(**params),
+                profile=profile,
+                quality=quality,
+                seed=0,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    if kernel == "brep":
+        exact_kernel()
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+
+        solid = edit.box(40.0, 30.0, 20.0)
+        source = SceneObject(
+            id="obj_1", name="Dose", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    else:
+        source = SceneObject(id="obj_1", name="Dose", mesh=block(40.0, 30.0, 20.0))
+    opened = apply("hollow_object", source, wall=4.0, open_top=True, vents=0)
+    entry = opened.outputs[0]
+    assert entry.kind == kernel, "oben offen ohne Entlüftung bleibt exakt"
+    body = as_mesh_data(entry.mesh)
+    # Die Innenseite der Vorderwand: exakt 20 - 4, am Netz die Außenhaut des
+    # Rasterhohlraums, die das Aushöhlen aus dem Körper geschnitten hat.
+    inner = 16.0 if kernel == "brep" else body.cavity.bounds.maximum[0]
+    back = opposite_side(body, (20.0, 0.0, 10.0), (1.0, 0.0, 0.0))
+    assert back is not None
+    assert back[0] == pytest.approx(inner, abs=1e-3), "die Rückseite steht innen an der Wand"
+    if kernel == "mesh":
+        # Die Offenheit reist durch den Plattencache: Ohne sie läse ein Treffer
+        # dort die Dose wie einen entlüfteten Hohlraum.
+        assert body.cavity_open
+        restored = MeshData.from_bytes(body.to_bytes())
+        assert restored.cavity_open
+        assert opposite_side(restored, (20.0, 0.0, 10.0), (1.0, 0.0, 0.0)) == back
+
+    label = {
+        "text": "L",
+        "size": 8.0,
+        "depth": 0.6,
+        "x": 20.0,
+        "y": 0.0,
+        "z": 10.0,
+        "nx": 1.0,
+        "ny": 0.0,
+        "nz": 0.0,
+    }
+    one = apply("label_text", entry, **label)
+    both = apply("label_text", entry, **label, both_sides=True)
+    labelled = as_mesh_data(both.outputs[0].mesh)
+    assert labelled.bounds.minimum[0] == pytest.approx(-20.0, abs=0.01), (
+        "die Hinterwand bleibt leer"
+    )
+    assert labelled.bounds.maximum[0] == pytest.approx(20.6, abs=0.01)
+    gained = labelled.volume - body.volume
+    assert gained == pytest.approx(
+        2.0 * (as_mesh_data(one.outputs[0].mesh).volume - body.volume), rel=1e-3
+    ), "dieselbe Schrift steht innen ein zweites Mal"
+    assert "label.no_back_side" not in {finding.code for finding in both.findings}
 
 
 @pytest.mark.parametrize("quality", ("draft", "fine"))

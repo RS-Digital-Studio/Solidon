@@ -462,6 +462,7 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     result = replace(
         mesh.replacing(body),
         cavity=apply(mesh.cavity, matrix) if mesh.cavity is not None else None,
+        cavity_open=mesh.cavity_open,
     )
     cells = np.asarray(matrix, dtype=np.float64)
     if is_rigid(cells) and float(np.linalg.det(cells[:3, :3])) > 0.0:
