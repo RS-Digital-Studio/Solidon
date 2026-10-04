@@ -6817,7 +6817,7 @@ class MainWindow(QMainWindow):
         try:
             if project_file:
                 with waiting():
-                    self.session.open_project(path)
+                    self.session.open_project(path, self.settings.printer, self.settings.material)
                     self.settings.remember(path)
                     self._store_settings()
                 # Beide fragen etwas, und beide erst außerhalb des

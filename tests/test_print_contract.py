@@ -207,3 +207,45 @@ def test_review_names_only_what_changes_and_counts_the_rest():
     assert sum("nicht mehr vorhanden" in line for line in lines) == 4
     assert lines.count("… und 2 weitere.") == 2
     assert not any("Insel" in line for line in lines), "Unverändertes wird nicht wiederholt"
+
+
+def test_a_project_without_its_own_printer_opens_with_the_customers_defaults(tmp_path, monkeypatch):
+    """Ein Beispiel trägt keinen Drucker: Es öffnet mit den Vorgaben des Kunden, wie ein neues.
+
+    Seit das Druckziel streng aus dem Projekt liest, stand über jedem
+    mitgelieferten Beispiel „Druckziel fehlt · Verfahren unbekannt ·
+    unvollständig“, und der Prüfbericht meldete „Bewertung unvollständig“ —
+    obwohl der Kunde beim ersten Start einen Drucker gewählt hatte; gerechnet
+    wurde mit dem allgemeinen Drucker statt mit seinem. Ein Projekt mit eigenem
+    Drucker behält ihn, und geändert ist nach dem Öffnen keines.
+    """
+    from app.core import examples
+    from app.core.scene.project import load, save
+    from app.ui.session import Session
+
+    example = examples.directory() / "dose-mit-deckel.p3d"
+    assert load(example).document.printer == "", "die Probe braucht ein Beispiel ohne Drucker"
+    session = Session()
+    monkeypatch.setattr(session, "evaluate_async", lambda *_args, **_kwargs: None)
+
+    session.open_project(example, "centauri-carbon-2", "petg")
+    document = session.project.document
+    assert (document.printer, document.material) == ("centauri-carbon-2", "petg")
+    assert not session.modified
+    target = session.review_target()
+    assert not target.missing, target.missing
+    assert target.title.startswith(profiles.printer_profiles()["centauri-carbon-2"].title)
+
+    session.open_project(example)
+    document = session.project.document
+    assert (document.printer, document.material) == (
+        profiles.DEFAULT_PRINTER,
+        profiles.DEFAULT_MATERIAL,
+    )
+
+    own = new_project("bambu-a1", "abs")
+    path = tmp_path / "eigen.p3d"
+    save(own, path)
+    session.open_project(path, "centauri-carbon-2", "petg")
+    document = session.project.document
+    assert (document.printer, document.material) == ("bambu-a1", "abs")

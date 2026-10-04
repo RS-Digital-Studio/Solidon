@@ -2154,8 +2154,21 @@ class Session(QObject):
         )
         self._reset_for(None)
 
-    def open_project(self, path: Path) -> None:
-        self.project = _load_beside_the_window(path)
+    def open_project(self, path: Path, printer: str = "", material: str = "") -> None:
+        """Ein Projekt öffnen; fehlen ihm Drucker oder Material, gelten die Vorgaben.
+
+        ``printer`` und ``material`` sind die Vorgaben für neue Projekte, wie in
+        :meth:`start_new`. Die mitgelieferten Beispiele tragen keinen Drucker,
+        damit sie für jeden passen: Ohne diese Vorgaben stand über ihnen
+        „Druckziel fehlt“, und gerechnet wurde mit dem allgemeinen Drucker statt
+        mit dem des Kunden. Was ein Projekt selbst nennt, bleibt; geändert ist
+        es dadurch nicht — erst ein Speichern schreibt die Vorgabe hinein.
+        """
+        project = _load_beside_the_window(path)
+        document = project.document
+        document.printer = document.printer or printer or profiles.DEFAULT_PRINTER
+        document.material = document.material or material or profiles.DEFAULT_MATERIAL
+        self.project = project
         self.pending_orphan_check = True
         self.pending_part_check = True
         self.pending_foreign_check = True
