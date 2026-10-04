@@ -1362,6 +1362,21 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "room_side": _("Eine Wand links oder rechts, mit Feder in die Nut der Rückwand."),
     "window": _("Mittig in der Wand, innen mit Falz für die Scheibe."),
     "door": _("Vom Boden aus nach oben, ohne Schwelle."),
+    # Die Bewegungen des Fügewegs.
+    "slide": _("Geradeaus entlang der Achse in die Endlage geschoben."),
+    "turn": _("Um die Achse in die Endlage gedreht — ein Klappdeckel, ein Drehverschluss."),
+    "slide_turn": _("Erst geradeaus eingesetzt, dann um die Achse gedreht — wie ein Bajonett."),
+    "closest": _(
+        "Wo sich die ersten beiden gewählten Teile am nächsten kommen — dort sitzt die Passung."
+    ),
+    "around": _(
+        "Die Zeile läuft um eine Rundung herum, deren Achse quer zur Schrift steht — "
+        "ein Becher, eine Dose."
+    ),
+    "along": _(
+        "Die Zeile läuft an einer Rundung entlang, die Buchstaben biegen sich über ihre "
+        "Höhe — ein Rohr, ein Griff."
+    ),
 }
 
 
@@ -1647,6 +1662,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "megabytes": _("Megabyte"),
     "minimum": _("Mindestwert"),
     "minutes": _("Minuten"),
+    "motion": _("Bewegung"),
     "missed": _("Nicht getroffene Züge"),
     "missing": _("Fehlt"),
     "most": _("Höchstmaß"),
@@ -1763,6 +1779,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "triangles": _("Dreiecke"),
     # ``geom.prepare_ops``: die Schnurstärke eines Rings, die nicht in ihn passt.
     "tube_diameter": _("Schnurstärke"),
+    "turn_axis": _("Drehachse"),
     "type": _("Art"),
     "unit": _("Einheit"),
     "unknown": _("Unbekannt"),

@@ -357,6 +357,95 @@ def _registered(name: str, source: Any, **params: object) -> Any:
     return result.outputs[0].mesh
 
 
+def _bent_lettering() -> str:
+    """Schrift auf dem Bogen und um die Rundung, dazu eine Einlage (RM-184).
+
+    Bogen und Biegung gehen über Sinus und Kosinus in jede Ecke der Buchstaben
+    (``label_layout``); die Dose ist ein ``lathe``-Zylinder, damit nicht schon
+    der Eingang die Plattform trägt.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Feature
+
+    arced = _registered("label_text", _plate(), text="RS 7", size=6.0, z=8.0, arc_radius=27.5)
+    drum = lathe.cylinder(radius=20.0, height=40.0, sections=180)
+    drum.vertices = np.asarray(drum.vertices) + np.array([0.0, 0.0, 20.0])
+    features = {
+        "pin_1": Feature(
+            id="pin_1",
+            kind="pin",
+            provenance="detected",
+            params={"centre": (0.0, 0.0, 20.0), "axis": (0.0, 0.0, 1.0), "diameter": 40.0},
+        )
+    }
+    wrapped = _registered_outputs(
+        "inlay_text",
+        MeshData.of(drum),
+        features,
+        text="SALZ",
+        size=9.0,
+        depth=0.7,
+        wrap="around",
+        x=20.0,
+        z=21.5,
+        nx=1.0,
+        nz=0.0,
+        angle=7.5,
+    )
+    return "|".join(_mesh_print(mesh) for mesh in (arced, *wrapped))
+
+
+def _fit_pieces() -> str:
+    """Der Prüfausschnitt einer Passung an der engsten Stelle (RM-184)."""
+    from app.core.geom.mesh import MeshData
+
+    pin = lathe.cylinder(radius=3.0, height=20.0, sections=64)
+    pin.vertices = np.asarray(pin.vertices) + np.array([-12.0, 4.0, 6.0])
+    pieces = _registered_outputs(
+        "test_piece", _plate(), {}, others=[MeshData.of(pin)], size=9.0, spot="closest"
+    )
+    return "|".join(_mesh_print(mesh) for mesh in pieces)
+
+
+def _registered_outputs(
+    name: str,
+    source: Any,
+    features: dict[str, Any],
+    *,
+    others: list[Any] | None = None,
+    **params: object,
+) -> list[Any]:
+    """Wie :func:`_registered`, mit Merkmalen am ersten Eingang und allen Ausgängen."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    entries = [SceneObject(id="obj_1", name="Teil", mesh=source, features=features)]
+    entries += [
+        SceneObject(id=f"obj_{index}", name=f"Teil {index}", mesh=mesh)
+        for index, mesh in enumerate(others or [], start=2)
+    ]
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    spec = REGISTRY.get(name)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in entries}, profile=profile),
+            inputs=entries,
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=20260922,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return [entry.mesh for entry in result.outputs]
+
+
 def _changed_bore() -> str:
     """Der Änderungsweg aus RM-187: Senkbohrung mit Nachbarloch, auf Ø 6 verkleinert."""
     from app.core.knowledge import profiles
@@ -895,6 +984,7 @@ def _tangential_rounds() -> str:
 
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
+    "bent_lettering": _bent_lettering,
     "bound_surface": _bound_surface,
     "container_hinge": lambda: _container("hinged"),
     "container_screw": lambda: _container("screw"),
@@ -906,6 +996,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "drill_hole": _drilled_along_the_face,
     "fill_band": _bore_wall_band,
     "fill_bridged": _top_with_holes,
+    "fit_pieces": _fit_pieces,
     "import_repair": _mended_import,
     "inverted_hollow": _inverted_hollow,
     "orient_for_print": lambda: _oriented_plate(True),

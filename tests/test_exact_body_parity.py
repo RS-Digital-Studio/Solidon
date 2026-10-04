@@ -403,6 +403,16 @@ CASES = [
         1664.0,
     ),
     Case("intersect_objects", "overlapping", {}, KEEP, "volume", 1600.0),
+    # Bündige Einlage (RM-184): Träger und Einlage aus demselben Werkzeug, in
+    # beiden Kernen; zusammen genau das Volumen von vorher, die Einlage bündig.
+    Case(
+        "inlay_text",
+        "box",
+        {"text": "H", "size": 6.0, "depth": 0.8, "z": 10.0, "slot": 1},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "inlay",
+        (3200.0, 10.0),
+    ),
     Case(
         "label_text",
         "box",
@@ -1577,6 +1587,12 @@ def _assert_invariant(
         lid = outputs[1]
         assert lid.mesh.bounds.size[:2] == pytest.approx(expected, abs=0.03)
         assert lid.mesh.volume > expected[0] * expected[1] * 2.4
+    elif rule == "inlay":
+        before, top = expected
+        carrier, inlay = outputs
+        assert carrier.mesh.volume + inlay.mesh.volume == pytest.approx(before, rel=1e-6)
+        assert 0.0 < inlay.mesh.volume < before
+        assert inlay.mesh.bounds.maximum[2] == pytest.approx(top, abs=1e-6)
     elif rule == "screw_cap":
         assert outputs[1].mesh.volume > 1000.0
         assert any(

@@ -188,6 +188,7 @@ from app.core.registry import (
     variant_members,
 )
 from app.core.registry.params import body_keys, inactive_dependency
+from app.core.registry.surfaces import chooses_a_centre
 from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
@@ -2016,6 +2017,15 @@ def _has_stroke_param(spec: OperationSpec) -> bool:
     Zahlen, die niemand tippt.
     """
     return any(entry.kind == "strokes" for entry in spec.params.spec())
+
+
+def _offers_the_closest_spot(spec: OperationSpec) -> bool:
+    """Ob die Operation eine Stelle „wo sich die Teile am nächsten kommen“ kennt.
+
+    Gefragt am Feld, nicht am Namen (RM-184): *Prüfstück erzeugen* trägt es
+    für den Prüfausschnitt einer Passung.
+    """
+    return any(entry.name == "spot" and "closest" in entry.choices for entry in spec.params.spec())
 
 
 def _carries_a_drawing(spec: OperationSpec, given: Mapping[str, Any] | None) -> bool:
@@ -19559,6 +19569,11 @@ class MainWindow(QMainWindow):
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
+        # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
+        # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
+        # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
+        if len(chosen) >= 2 and _offers_the_closest_spot(spec):
+            values["spot"] = "closest"
         if spec.name == "translate_object" and chosen and self.session.last_result is not None:
             from app.core.geom.transform import reference_point
 
@@ -19801,8 +19816,7 @@ class MainWindow(QMainWindow):
                 source_objects=inputs,
                 centre_objects=(
                     tuple(result.scene.objects.values())
-                    if result is not None
-                    and spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                    if result is not None and chooses_a_centre(spec)
                     else ()
                 ),
                 extra=variant,
@@ -20312,8 +20326,7 @@ class MainWindow(QMainWindow):
             source_objects=entry.inputs,
             centre_objects=(
                 tuple(self.session.last_result.scene.objects.values())
-                if self.session.last_result is not None
-                and spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                if self.session.last_result is not None and chooses_a_centre(spec)
                 else ()
             ),
             extra=None,

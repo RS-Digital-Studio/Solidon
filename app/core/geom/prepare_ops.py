@@ -29,6 +29,7 @@ from app.core.errors import (
     REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
     SHOW_FEATURE,
+    SHOW_HISTORY,
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
@@ -117,7 +118,15 @@ from app.core.geom.prepare import (
     surface_index_of,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
-from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, translation
+from app.core.geom.transform import (
+    Axis,
+    composed,
+    moved_object,
+    pattern_centre,
+    pattern_centre_param,
+    place_on_bed,
+    translation,
+)
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.scene.placement import SIDE_KEYS, side_of
@@ -160,6 +169,7 @@ from app.core.units import (
     FEATURE_REACH,
     MAX_FACET_SAG,
     format_length,
+    format_volume,
     is_close,
     is_zero,
 )
@@ -17802,6 +17812,16 @@ def set_material(ctx: OpContext) -> OpResult:
     )
 
 
+#: Wo das Fenster eines Prüfstücks sitzt (RM-184): an der genannten Stelle oder
+#: dort, wo sich die ersten beiden gewählten Teile am nächsten kommen.
+TEST_PIECE_SPOTS: Final = ("point", "closest")
+
+#: Wie viele Ecken eines Körpers die Suche nach der engsten Stelle höchstens
+#: fragt. Darüber wird jede n-te genommen, in fester Folge — die Stelle ist ein
+#: Fensterort und kein Maß, und das Maß misst danach der Kern am Stück.
+CLOSEST_SPOT_PROBES: Final = 20000
+
+
 @op_params
 class TestPieceParams(BaseParams):
     size: float = param(
@@ -17811,6 +17831,18 @@ class TestPieceParams(BaseParams):
         minimum=2.0,
         maximum=200.0,
         doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
+    )
+    spot: str = param(
+        title=_("Stelle"),
+        # Vorgabe die genannte Stelle: Ein Schritt von vor diesem Feld bleibt,
+        # was er war.
+        default="point",
+        choices=TEST_PIECE_SPOTS,
+        doc=_(
+            "Wo der Würfel sitzt: an der Position unten oder, bei zwei gewählten Teilen "
+            "einer Passung, dort, wo sie sich am nächsten kommen. Die gefundene Stelle "
+            "wird als Position festgehalten."
+        ),
     )
     x: float = param(
         title=_("Position X"),
@@ -17829,8 +17861,8 @@ class TestPieceParams(BaseParams):
         title=_("Auf das Bett setzen"),
         default=True,
         doc=_(
-            "Legt das Prüfstück auf das Druckbett. Prüfen Sie den Stützbedarf in der "
-            "Druckvorbereitung."
+            "Legt das Prüfstück auf das Druckbett, mehrere nebeneinander. Prüfen Sie den "
+            "Stützbedarf in der Druckvorbereitung."
         ),
     )
 
@@ -17840,16 +17872,27 @@ class TestPieceParams(BaseParams):
     result_kind="mesh",
     # 2 seit dem 22.09.2026: Der Name bleibt übersetzbar (``Scene.unused_name``)
     # statt in der Sprache der Rechnung im Ergebnis-Cache zu stehen.
-    cache_version="2",
+    # 3 (RM-184): Das Fenster wird plattformgleich verschoben; ein Stück aus
+    # einem Schritt davor könnte die letzte Stelle einer anderen Maschine tragen.
+    cache_version="3",
     title=_("Prüfstück erzeugen"),
     category="prepare",
     params=TestPieceParams,
-    consumes=1,
-    produces=1,
+    # **Jedes gewählte Teil** (RM-184): Eine Passung hat zwei Hälften, und ihr
+    # Prüfstück ist erst eines, wenn beide aus demselben Fenster kommen. Ein
+    # einzelnes Teil bleibt der Fall von vorher, mit derselben Kennung.
+    consumes=VARIABLE,
+    minimum_inputs=1,
+    produces=VARIABLE,
     applies_to=["hole", "pin", "face"],
     doc=_(
         "Schneidet einen Würfel um eine Stelle heraus, um die Passung vor dem ganzen Teil "
-        "auszuprobieren."
+        "auszuprobieren. Mit beiden Teilen einer Passung gewählt, kommen beide Hälften "
+        "aus demselben Würfel."
+    ),
+    caveat=_(
+        "Das Stück ersetzt das Teil im Verlauf. Wer danach am ganzen Teil weiterarbeitet, "
+        "schaltet diesen Schritt nach dem Probedruck aus."
     ),
 )
 def test_piece(ctx: OpContext) -> OpResult:
@@ -17859,55 +17902,210 @@ def test_piece(ctx: OpContext) -> OpResult:
     die echte Geometrie mit den echten Toleranzen, keine nachgebaute Näherung
     davon. Ein Prüfstück, das anders druckt als das Teil, für das es steht,
     wäre schlechter als gar kein Test.
+
+    **Mit zwei Teilen ist es der Prüfausschnitt einer Passung** (RM-184, Audit
+    §8): dasselbe Fenster durch beide, das Spiel zwischen den Stücken
+    gemessen, solange sie noch ineinanderstecken, und erst danach
+    nebeneinander aufs Bett gelegt.
     """
     params = cast(TestPieceParams, ctx.params)
-    source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    answered: dict[str, Any] = {}
+    centre: Vec3 = (params.x, params.y, params.z)
+    if params.spot == "closest":
+        if len(meshes) < 2:
+            raise ValidationError(
+                field="spot",
+                detail=_(
+                    "Die engste Stelle gibt es nur zwischen zwei Teilen. Wählen Sie beide "
+                    "Teile der Passung oder nennen Sie die Stelle."
+                ),
+                constraint="one_part",
+                suggestions=(CHANGE_SELECTION, CORRECT_INPUT),
+            )
+        centre = _closest_spot(meshes[0], meshes[1], ctx)
+        answered = {"spot": "point", "x": centre[0], "y": centre[1], "z": centre[2]}
 
     window = trimesh.creation.box(extents=(params.size, params.size, params.size))
-    window.apply_translation((params.x, params.y, params.z))
-    # Ein Fenster über leerem Raum ist eine Antwort, keine gescheiterte
-    # Operation: ohne ``allow_empty`` probierte die Kette drei weitere Stufen
-    # und würfe dann — und der Nutzer läse etwas über den Voxel-Solver statt
-    # über das Loch, auf das er gezielt hat.
-    outcome = boolean(
-        "intersection", [mesh, mesh.replacing(window)], quality=ctx.quality, allow_empty=True
-    )
-
-    piece = outcome.mesh
-    if not piece.triangle_count or is_zero(piece.volume):
-        raise ValidationError(
-            field="size",
-            detail=_("An dieser Stelle ist kein Material — der Ausschnitt bleibt leer."),
-            constraint="empty",
-            values={"size_mm": round(params.size, 2)},
+    # Verschoben über ``transform.moved``, nicht ``apply_translation``: Das
+    # ginge durch ein Matrixprodukt, und das Fenster trüge die letzte Stelle
+    # der Maschine (``tests/test_platform_identity.py``, ``fit_pieces``).
+    transform.moved(window, translation(centre))
+    pieces: list[MeshData] = []
+    solvers: list[SolverInfo | None] = []
+    findings: list[Finding] = []
+    for entry, mesh in zip(ctx.inputs, meshes, strict=True):
+        ctx.cancelled.raise_if_cancelled()
+        # Ein Fenster über leerem Raum ist eine Antwort, keine gescheiterte
+        # Operation: ohne ``allow_empty`` probierte die Kette drei weitere
+        # Stufen und würfe dann — und der Nutzer läse etwas über den
+        # Voxel-Solver statt über das Loch, auf das er gezielt hat.
+        outcome = boolean(
+            "intersection",
+            [mesh, mesh.replacing(window)],
+            quality=ctx.quality,
+            allow_empty=True,
+            cancelled=ctx.cancelled,
         )
-    if params.on_bed:
-        piece = place_on_bed(piece)
-
-    share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
-    return OpResult(
-        outputs=[
-            dataclasses.replace(
-                source,
-                mesh=piece,
-                # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort.
-                name=ctx.scene.unused_name(_("Prüfstück")),
-                features={},
+        piece = outcome.mesh
+        if not piece.triangle_count or is_zero(piece.volume):
+            raise ValidationError(
+                field="size",
+                detail=_("An dieser Stelle ist kein Material — der Ausschnitt bleibt leer."),
+                constraint="empty",
+                values={"size_mm": round(params.size, 2), "object": entry.name},
+                suggestions=(CORRECT_INPUT,),
             )
-        ],
-        solver=outcome.solver,
-        findings=[
-            *outcome.findings,
+        pieces.append(piece)
+        solvers.append(outcome.solver)
+        findings.extend(outcome.findings)
+
+    for index in range(1, len(pieces)):
+        findings.extend(_fit_in_the_piece(pieces[0], pieces[index], params.size, ctx))
+    if params.on_bed:
+        pieces = _side_by_side([place_on_bed(piece) for piece in pieces])
+
+    outputs: list[SceneObject] = []
+    for entry, mesh, piece in zip(ctx.inputs, meshes, pieces, strict=True):
+        share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
+        # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort. Mehrere
+        # Stücke tragen den Namen ihres Teils, sonst hießen sie gleich.
+        name = (
+            ctx.scene.unused_name(_("Prüfstück"))
+            if len(pieces) == 1
+            else _("Prüfstück {name}", name=entry.name)
+        )
+        outputs.append(dataclasses.replace(entry, mesh=piece, name=name, features={}))
+        findings.append(
             Finding(
                 code="prepare.test_piece",
                 severity="info",
                 message=_("Ein Ausschnitt zum Ausprobieren — die Maße sind die des Teils."),
-                object_id=source.id,
+                object_id=entry.id,
                 values={"share_percent": round(share * 100.0, 1), "size_mm": params.size},
-            ),
-        ],
+            )
+        )
+    return OpResult(outputs=outputs, solver=deepest(solvers), findings=findings, answered=answered)
+
+
+def _closest_spot(first: MeshData, second: MeshData, ctx: OpContext) -> Vec3:
+    """Wo sich zwei Teile am nächsten kommen — die Mitte zwischen ihnen, auf die Anzeigestufe.
+
+    Stecken sie ineinander, die Mitte ihres gemeinsamen Volumens. Sonst die
+    Ecke des einen, die der Oberfläche des anderen am nächsten liegt, und die
+    Mitte zwischen beiden; gefragt wird in beide Richtungen. Gerundet, weil der
+    Ort ein Fenster setzt und kein Maß: Er wird festgehalten, und auf jeder
+    Maschine soll dasselbe Fenster entstehen.
+    """
+    from app.core.geom.mesh import on_surface
+
+    if shared_volume(first.raw, second.raw) > EPS_GEOM:
+        common = boolean(
+            "intersection",
+            [first, second],
+            quality=ctx.quality,
+            allow_empty=True,
+            cancelled=ctx.cancelled,
+        ).mesh
+        if common.triangle_count:
+            middle = common.bounds.centre
+            return _rounded_spot((float(middle[0]), float(middle[1]), float(middle[2])))
+    best: tuple[float, Vec3] | None = None
+    for here, there in ((first, second), (second, first)):
+        ctx.cancelled.raise_if_cancelled()
+        corners = np.asarray(here.raw.vertices, dtype=float)
+        stride = max(1, -(-len(corners) // CLOSEST_SPOT_PROBES))
+        probes = corners[::stride]
+        closest, distance, _faces = on_surface(there.raw, probes, index=surface_index_of(there))
+        index = int(np.argmin(distance))
+        spot = (probes[index] + np.asarray(closest[index], dtype=float)) / 2.0
+        candidate = (float(distance[index]), (float(spot[0]), float(spot[1]), float(spot[2])))
+        if best is None or candidate[0] < best[0]:
+            best = candidate
+    if best is None:
+        raise InternalError(detail="no corner was asked for the closest spot")
+    return _rounded_spot(best[1])
+
+
+def _rounded_spot(point: Vec3) -> Vec3:
+    """Auf die Anzeigestufe, wie jede festgehaltene Stelle (``EPS_DISPLAY``)."""
+    return (
+        round(point[0] / EPS_DISPLAY) * EPS_DISPLAY + 0.0,
+        round(point[1] / EPS_DISPLAY) * EPS_DISPLAY + 0.0,
+        round(point[2] / EPS_DISPLAY) * EPS_DISPLAY + 0.0,
     )
+
+
+def _fit_in_the_piece(
+    first: MeshData, second: MeshData, size: float, ctx: OpContext
+) -> list[Finding]:
+    """Was im Ausschnitt zwischen den beiden Stücken steht: Spiel oder Überschneidung.
+
+    Gemessen, solange sie noch ineinanderstecken — nach dem Auflegen aufs Bett
+    liegen sie nebeneinander und sagen nichts mehr übereinander.
+    """
+    from app.core.geom.measure import surface_gap
+
+    shared = shared_volume(first.raw, second.raw)
+    if shared > EPS_GEOM:
+        return [
+            Finding(
+                code="prepare.test_piece_overlap",
+                severity="warning",
+                message=_(
+                    "Im Ausschnitt überschneiden sich die Teile um {volume} — so gesteckt "
+                    "klemmt die Passung oder geht gar nicht zusammen.",
+                    volume=format_volume(shared),
+                ),
+                values={"shared": format_volume(shared)},
+                suggestions=(SHOW_HISTORY,),
+            )
+        ]
+    ctx.cancelled.raise_if_cancelled()
+    gap = surface_gap(first, second, size)
+    if gap is None:
+        return [
+            Finding(
+                code="prepare.test_piece_apart",
+                severity="info",
+                message=_(
+                    "Im Ausschnitt kommen sich die Teile nirgends näher als {size}.",
+                    size=format_length(size),
+                ),
+                values={"size_mm": size},
+            )
+        ]
+    return [
+        Finding(
+            code="prepare.test_piece_gap",
+            severity="info",
+            message=_(
+                "Im Ausschnitt stehen die Teile an der engsten Stelle {gap} auseinander — "
+                "so viel Spiel hat die Passung, bevor der Drucker etwas dazutut.",
+                gap=format_length(gap),
+            ),
+            values={"gap_mm": round(gap, 3)},
+        )
+    ]
+
+
+def _side_by_side(pieces: list[MeshData]) -> list[MeshData]:
+    """Mehrere Stücke nebeneinander entlang X, im Abstand des Anordnens.
+
+    Das erste bleibt, wo es ist; jedes weitere rückt hinter das vorige, auf
+    dessen Höhe in Y. So stehen sie auf dem Bett, ohne sich zu berühren, und
+    in der Reihenfolge, in der sie gewählt wurden.
+    """
+    placed = pieces[:1]
+    for piece in pieces[1:]:
+        before = placed[-1].bounds
+        offset = (
+            float(before.maximum[0]) + ARRANGE_SPACING - float(piece.bounds.minimum[0]),
+            float(before.centre[1]) - float(piece.bounds.centre[1]),
+            0.0,
+        )
+        placed.append(transform.apply(piece, translation(offset)))
+    return placed
 
 
 @op_params
@@ -20102,17 +20300,37 @@ def check_collisions_op(ctx: OpContext) -> OpResult:
     return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))
 
 
+#: Wie das erste Teil in seine Endlage kommt (RM-184): geschoben, gedreht, oder
+#: erst geschoben und dann gedreht wie ein Bajonett.
+JOIN_MOTIONS: Final = ("slide", "turn", "slide_turn")
+
+
 @op_params
 class JoinPathParams(BaseParams):
+    motion: str = param(
+        title=_("Bewegung"),
+        # Vorgabe der gerade Schub: Ein Schritt von vor diesem Feld bleibt,
+        # was er war.
+        default="slide",
+        choices=JOIN_MOTIONS,
+        doc=_(
+            "Geschoben, gedreht oder erst geschoben und dann gedreht — wie ein "
+            "Bajonett eingesetzt und verriegelt wird."
+        ),
+    )
     axis: str = param(
         title=_("Richtung"),
         default="x",
         choices=("x", "y", "z"),
-        doc=_("Die Achse, entlang der das erste Teil in das zweite geschoben wird."),
+        doc=_(
+            "Die Achse, entlang der das erste Teil in das zweite geschoben wird — "
+            "und um die es sich dreht."
+        ),
     )
     reverse: bool = param(
         title=_("Entgegengesetzt"),
         default=False,
+        depends_on=("motion", ("slide", "slide_turn")),
         doc=_("Schiebt entgegen der Achsrichtung, also von der anderen Seite her."),
     )
     distance: float = param(
@@ -20121,11 +20339,27 @@ class JoinPathParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=500.0,
+        depends_on=("motion", ("slide", "slide_turn")),
         doc=_(
             "Wie weit vor der Endlage geprüft wird. So lang wie die Stelle, an der "
             "die Teile ineinandergreifen, plus etwas Anlauf."
         ),
     )
+    angle: float = param(
+        title=_("Drehweg"),
+        default=90.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        depends_on=("motion", ("turn", "slide_turn")),
+        doc=_(
+            "Um wie viel Grad sich das erste Teil zuletzt in seine Endlage dreht — gegen "
+            "den Uhrzeigersinn, wenn die Achse auf Sie zeigt. Negativ dreht es andersherum."
+        ),
+    )
+    cx: float | None = pattern_centre_param("x", ("motion", ("turn", "slide_turn")))
+    cy: float | None = pattern_centre_param("y", ("motion", ("turn", "slide_turn")))
+    cz: float | None = pattern_centre_param("z", ("motion", ("turn", "slide_turn")))
     steps: int = param(
         title=_("Schritte"),
         default=24,
@@ -20149,7 +20383,8 @@ class JoinPathParams(BaseParams):
     reversible=True,
     doc=_(
         "Prüft, ob zwei Teile in ihre Lage gelangen — nicht nur, ob sie dort "
-        "zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben."
+        "zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben, "
+        "gedreht oder erst geschoben und dann gedreht."
     ),
     caveat=_(
         "Beide Teile stehen dabei in ihrer Endlage; geprüft wird der Weg davor. "
@@ -20172,19 +20407,41 @@ def check_join_path_op(ctx: OpContext) -> OpResult:
     params = cast(JoinPathParams, ctx.params)
     moving = as_mesh_data(ctx.inputs[0].mesh)
     fixed = as_mesh_data(ctx.inputs[1].mesh)
-    vector = list(AXIS_NORMALS[cast(Axis, params.axis)])
+    axis_vector = AXIS_NORMALS[cast(Axis, params.axis)]
+    vector = list(axis_vector)
     if params.reverse:
         vector = [-value for value in vector]
+    # Drehen braucht eine Mitte. Drei leere Koordinaten nehmen einmal die Mitte
+    # des bewegten Teils und halten sie im Schritt fest — wie Kreismuster und
+    # Spiegeln (``transform.pattern_centre``); das Fenster bietet daneben ein
+    # Merkmal an, etwa die Bohrung eines Bajonetts.
+    turning = params.motion != "slide"
+    if turning and is_zero(params.angle):
+        raise ValidationError(
+            field="angle",
+            detail=_("Ohne Drehweg gibt es nichts zu drehen. Geben Sie den Winkel an."),
+            constraint="no_turn",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    answered: dict[str, float] = {}
+    pivot: Vec3 | None = None
+    if turning:
+        pivot, answered = pattern_centre(ctx.inputs[0], params.cx, params.cy, params.cz)
     findings = check_join_path(
         moving,
         fixed,
         (vector[0], vector[1], vector[2]),
-        params.distance,
+        params.distance if params.motion != "turn" else 0.0,
         steps=params.steps,
+        turn=params.angle if turning else 0.0,
+        turn_axis=axis_vector if turning else None,
+        pivot=pivot,
     )
     # Wie „Überschneidungen prüfen": Die Körper gehen unberührt hindurch, die
     # Befunde sind das Ergebnis.
-    return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))
+    return OpResult(
+        outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs), answered=answered
+    )
 
 
 def _is_a_fillet(source: SceneObject, name: str) -> bool:

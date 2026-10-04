@@ -317,6 +317,16 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "room_side": _("Seitenwand"),
     "window": _("Fenster"),
     "door": _("Tür"),
+    # Wie *Fügeweg prüfen* das erste Teil bewegt (RM-184). Eigene Schlüssel:
+    # „linear“ meint beim Muster eine Reihe, „push“ beim Deckel einen Kragen.
+    "slide": _("Geschoben"),
+    "turn": _("Gedreht"),
+    "slide_turn": _("Geschoben, dann gedreht"),
+    # Wo ein Prüfstück zweier Teile sitzt (RM-184).
+    "closest": _("Engste Stelle"),
+    # Wie eine Beschriftung zur Rundung ihres Trägers liegt (RM-184).
+    "around": _("Um die Rundung"),
+    "along": _("Längs der Rundung"),
 }
 
 
@@ -937,6 +947,17 @@ PART_PLACEMENT_PARAMS: Final = (
     "at_feature",
     "at_features",
 )
+
+
+def chooses_a_centre(spec: OperationSpec) -> bool:
+    """Ob diese Operation eine Dreh- oder Spiegelmitte als ``cx``/``cy``/``cz`` trägt.
+
+    Gefragt wird nach den Feldern, nicht nach dem Namen: Kreismuster,
+    Merkmalsmuster, Spiegeln und der drehende Fügeweg (RM-184) bieten im
+    Dialog dieselbe Wahl aus Körper, Merkmal, Punkt und Ursprung an, und eine
+    Namensliste an drei Stellen der Oberfläche hätte den vierten vergessen.
+    """
+    return {"cx", "cy", "cz"} <= {entry.name for entry in spec.params.spec()}
 
 
 def normal_fields_of(spec: OperationSpec) -> tuple[str, str, str]:
