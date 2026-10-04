@@ -416,6 +416,15 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 - **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`; aus `fit_to_rows`
   mit drei Mindestzeilen und aus dem leeren Zustand über `fit_wrapped`), nie
   höher als ihr Wunsch; verteilt wird nur, was darüber liegt.
+- **Eine Karte aus vielen festen Zeilen rollt, statt sich zu stauchen**
+  (`overlay.FittedScroller`, der Prüfbericht): Unter ihrer Mindesthöhe legt Qt
+  Knöpfe übereinander. Erst gibt die Liste bis zu ihrer Mindesthöhe nach, dann
+  rollt der Inhalt; Wunsch, Mindesthöhe und Höhe-für-Breite reicht der
+  Rollbereich weiter, denn der Reiter rechts steht senkrecht auf `Ignored`.
+  Die rechte Zone rechnet ihren Wunsch an der Kartenbreite
+  (`natural_height(zone, width=)`), sonst bricht Text dort in mehr Zeilen um,
+  als gerechnet. `test_selected_bodies_reveal_their_operations_in_the_window_on_the_right`
+  prüft jede Zeile des Berichts aus dem Layout gegen ihre Nachbarn.
 
 `tests/test_overlay.py` hält alle drei („settles on one answer“, „moves a card
 once“, „no card is pushed outside its section“). `fit_to_rows` rechnet mit

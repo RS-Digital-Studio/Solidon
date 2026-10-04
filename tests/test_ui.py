@@ -10,6 +10,7 @@ den fachlichen ``test_ui_*.py``-Modulen; ihre Fenster-Fixtures in ``ui_helpers``
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import logging
 import re
 import threading
@@ -7926,6 +7927,22 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
             "Bericht und Filter dürfen nicht übereinanderliegen: "
             f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
         )
+    # **Und keine Zeile des Berichts über einer anderen.** Seit Prüfumfang,
+    # Nachbau, Befundkontext und Nebenfolge dazukamen, will der Bericht bei
+    # 1024 x 720 mehr Höhe, als die Spalte hat; Qt staucht dann unter die
+    # Mindesthöhe, und *An den Slicer übergeben …* lag über *Modell
+    # nachbauen*. Gelesen wird die Folge aus dem Layout selbst, damit eine
+    # neue Zeile mitgeprüft wird; knapp ist die Karte, dann rollt sie.
+    rows = [
+        item.geometry()
+        for index in range(report._rows.count())
+        if (item := report._rows.itemAt(index)) is not None
+        and item.spacerItem() is None
+        and not item.isEmpty()
+    ]
+    assert len(rows) >= 5, rows
+    for upper, lower in itertools.pairwise(rows):
+        assert upper.bottom() < lower.top(), (upper, lower)
     assert report.list.geometry().bottom() <= report.height(), "die Liste bleibt in der Karte"
     assert report.search.height() >= 32
     assert report.severity.height() >= 32

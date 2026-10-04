@@ -190,7 +190,7 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
-from app.ui.overlay import LEFT_WIDTH, rows_height
+from app.ui.overlay import LEFT_WIDTH, FittedScroller, rows_height
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import (
     NORMAL,
@@ -5704,7 +5704,15 @@ class ReportPanel(QWidget):
         # für nichts, und der Satz „Keine Befunde." dazwischen. Was es nicht zu
         # filtern gibt, bekommt keinen Filter (siehe ``_show_controls``).
 
-        layout = QVBoxLayout(self)
+        # **Der Inhalt rollt, statt sich zu stauchen** (``overlay.FittedScroller``):
+        # Im knappen Fenster lagen sonst Knöpfe und Filter übereinander.
+        body = QWidget(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(FittedScroller(body, self))
+        layout = QVBoxLayout(body)
+        self._rows = layout
+        """Die Zeilen des Berichts, im Rollbereich — die letzte ist der Stretch."""
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         summary_row = QHBoxLayout()
         summary_row.addWidget(self.review_symbol)
@@ -6090,7 +6098,7 @@ class ReportPanel(QWidget):
         """
         count = self.list.count()
         self.list.setVisible(bool(count))
-        layout = cast(QVBoxLayout, self.layout())
+        layout = self._rows
         layout.setStretch(layout.count() - 1, 0 if count else 1)
         for widget in (self.search, self.severity):
             widget.setVisible(count >= FILTER_FROM)

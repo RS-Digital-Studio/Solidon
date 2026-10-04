@@ -244,7 +244,7 @@ def test_placing_the_zones_never_runs_into_itself(
     """
     seen: list[object] = []
 
-    def alternating(zone: object) -> int:
+    def alternating(zone: object, width: int | None = None) -> int:
         seen.append(zone)
         return 200 if len(seen) % 2 else 400
 
