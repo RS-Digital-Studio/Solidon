@@ -2347,7 +2347,10 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: des Fensters — qwen3:14b, Ollama 0.35.1, ``num_ctx`` 32 768,
 #: ``num_predict`` 1, ``keep_alive`` 0, ein Ausgabetoken. SHA-256 der Anfrage:
 #: ``fde40c864e0c61de6949d749a3de15523ea8e4b0efa9020c863df44f81f8a0cf``.
-PROMPT_TOKENS: Final = 8330
+#: Mit *Gegenform einlassen* (RM-184) derselbe Aufruf: **8 361 Token bei 186
+#: Werkzeugen**, 25,5 % des Fensters; SHA-256
+#: ``0414aa80760535459915458d4f30f50233b0c4ad520e6eebe8782ec55685e97a``.
+PROMPT_TOKENS: Final = 8361
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2374,9 +2377,9 @@ TURN_TOKENS: Final = 9061
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die funktionale Zählung vom 04.10.2026 enthält genau diese 185 Werkzeuge;
+#: Die funktionale Zählung vom 04.10.2026 enthält genau diese 186 Werkzeuge;
 #: Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 185
+PROMPT_TOOL_COUNT: Final = 186
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

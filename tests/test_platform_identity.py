@@ -407,6 +407,20 @@ def _fit_pieces() -> str:
     return "|".join(_mesh_print(mesh) for mesh in pieces)
 
 
+def _counter_form() -> str:
+    """Gegenform mit Griffmulde (RM-184): ein schräg liegender Zapfen in der Platte."""
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import moved, rotation
+
+    tool = lathe.cylinder(radius=4.5, height=18.0, sections=72)
+    moved(tool, rotation("y", 17.5))
+    tool.vertices = np.asarray(tool.vertices) + np.array([-3.0, 1.5, 7.0])
+    outputs = _registered_outputs(
+        "cut_counter_form", _plate(), {}, others=[MeshData.of(tool)], grip=9.0
+    )
+    return _mesh_print(outputs[0])
+
+
 def _registered_outputs(
     name: str,
     source: Any,
@@ -989,6 +1003,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "container_hinge": lambda: _container("hinged"),
     "container_screw": lambda: _container("screw"),
     "container_rectangular": lambda: _container("push", "rectangular"),
+    "counter_form": _counter_form,
     "corner_chamfer": lambda: _worked_corner(False),
     "corner_fillet": lambda: _worked_corner(True),
     "curved_mouth": _curved_mouth,

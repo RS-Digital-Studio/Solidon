@@ -133,6 +133,16 @@ CASES = [
         "collision",
         None,
     ),
+    # Gegenform (RM-184): die Tasche für den versetzten Quader, durch den Boden;
+    # das Werkzeug bleibt. 3200 - 16 · 10 · (10 + Spiel/2), Spiel unter 1 mm.
+    Case(
+        "cut_counter_form",
+        "overlapping",
+        {"axis": "z"},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "counter_form",
+        (1520.0, 1600.0),
+    ),
     Case(
         "check_join_path",
         "separated",
@@ -1587,6 +1597,11 @@ def _assert_invariant(
         lid = outputs[1]
         assert lid.mesh.bounds.size[:2] == pytest.approx(expected, abs=0.03)
         assert lid.mesh.volume > expected[0] * expected[1] * 2.4
+    elif rule == "counter_form":
+        low, high = expected
+        insert, tool = outputs
+        assert tool.mesh.volume == pytest.approx(inputs[1].mesh.volume, rel=1e-9)
+        assert low < insert.mesh.volume < high
     elif rule == "inlay":
         before, top = expected
         carrier, inlay = outputs

@@ -346,7 +346,8 @@ _NOT_A_RANGE = frozenset(
         # RM-184: Schrift, die nicht auf ihren Bogen passt; keine Rundung an der
         # Stelle; ein Drehweg ohne Winkel; die engste Stelle mit einem Teil.
         # Jede ist ein Verhältnis oder eine Lage, keine Grenze eines Feldes.
-        "bend", "no_round", "no_turn", "one_part",
+        # Ein Teil, das nicht im Einsatz liegt (Gegenform).
+        "bend", "no_round", "no_turn", "one_part", "outside",
         "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme",
         # Eine Verbrauchsbuchung, die sich seit dem Druckauftrag geändert hat
         # (knowledge/filaments.py): ein Zustand des Bestands, keine Zahl.
