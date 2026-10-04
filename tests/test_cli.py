@@ -93,7 +93,7 @@ def test_french_cli_recovery_keeps_raw_paths_and_commands(
         assert capsys.readouterr().err == (
             "\nCeci est un chemin de fichier, pas une opération : "
             + path
-            + "\n  - Avec «run», l'opération vient d'abord, le chemin ensuite : "
+            + "\n  - Avec « run », l'opération vient d'abord, le chemin ensuite : "
             "solidon3d run create_box <pfad>\n"
         )
         assert cli._mistyped_operation(["run", "zz_unregistered:12.5"]) == 1
