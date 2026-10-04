@@ -12,7 +12,7 @@ import trimesh
 from app.core import activation, build_area
 from app.core.brep import edit
 from app.core.errors import AppError
-from app.core.export import handover, writer
+from app.core.export import handover, manufacturer, writer
 from app.core.geom.mesh import MeshData
 from app.core.ingest import loader, threemf
 from app.core.knowledge import print_settings, profiles
@@ -287,6 +287,9 @@ def test_prepared_plate_and_writer_share_one_arranged_export_snapshot(
             "keep_arrangement": True,
             "separate_objects": True,
             "cancelled": job.cancelled,
+            # Die Zeitgegenprobe rechnet mit den Bewegungswerten derselben
+            # Herstellergrundlage wie die Übergabe (RM-465).
+            "motion": manufacturer.base_settings(profile, settings.quality, job.setup).motion,
         }
         assert tuple(entry.id for entry, _mesh, _settings in parts) == run.object_ids
         for (entry, mesh, effective), prepared, original in zip(
