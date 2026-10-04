@@ -148,6 +148,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un par de roscas impresas supera su comprobación de ajuste: ambas roscas indican la medida con la que se construyen, y la comprobación espera la holgura de ambas mitades.
 - Con «Comprobar la trayectoria de montaje», las piezas también pueden girar, o insertarse primero y luego girar como una bayoneta.
 - Para un ajuste, Solidon recorta la misma ventana de ambas piezas como pequeña muestra impresa e indica la holgura.
+- Un taladro avellanado que tras duplicar, desplazar o repetir termina por completo dentro del material ya no avisa de que sobresale del borde.
+- Si el avellanado de una copia sobrepasa un lado, Solidon vuelve a encontrar la copia igual en piezas STL y STEP.
+- Si duplica un taladro a lo largo de su propio eje hacia el vacío, el original conserva su nombre en piezas STL, y la copia se da por perdida como en piezas STEP.
 
 ### Redondear y achaflanar
 

@@ -172,6 +172,9 @@ Nutzen da und sonst nichts.
 - Ein gedrucktes Gewindepaar besteht seine Passungsprüfung: Beide Gewinde nennen ihr gebautes Maß, und die Prüfung erwartet das Spiel beider Hälften.
 - Beim *Fügeweg prüfen* drehen Teile auch, oder sie werden erst eingesetzt und dann gedreht wie ein Bajonett.
 - Ein Stück aus *Prüfstück erzeugen* schneidet dasselbe Fenster aus beiden Teilen einer Passung und nennt das Spiel.
+- Eine Senkbohrung, die nach dem Verdoppeln, Versetzen oder Vervielfachen ganz im Material endet, meldet nicht mehr, sie rage über die Kante.
+- Reicht die Senkung einer Kopie über eine Seite hinaus, findet Solidon die Kopie an STL- und STEP-Teilen gleich wieder.
+- Verdoppeln Sie eine Bohrung entlang ihrer eigenen Achse ins Leere, behält das Original an STL-Teilen seinen Namen, und die Kopie heißt verloren wie an STEP-Teilen.
 
 ### Verrunden und Fasen
 
