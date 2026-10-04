@@ -105,6 +105,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Para definições de peças individuais, a linha de comandos indica que peças são e que valor recebem.
 - Se aceitar suportes para uma ponte longa sobre a própria peça, eles chegam agora também aí. Antes juntava-se «Só da mesa», e vários slicers imprimiam a ponte sem suporte.
 - As peças pequenas deitadas, como parafusos, já não recebem suportes propostos onde uma aresta de corte mostrava por engano um ponto a flutuar.
+- Se uma peça acaba no topo numa aresta que o slicer não imprime, o Solidon já não avisa de um modelo cortado depois do fatiamento.
+- Se a primeira camada de uma peça for mais estreita que uma linha, a mensagem depois do fatiamento propõe as linhas de parede e o raft como saída.
+- O SuperSlicer mantém a disposição do Solidon e já não empurra as peças até à borda da mesa; a saia fica na mesa.
+- Se uma peça só cabe na mesa rodada, segue rodada para OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Se a borda em volta de uma peça entra numa zona de exclusão da mesa, a verificação antes da exportação avisa.
+- Se no slicer se cruzam os percursos de duas peças, ou de uma peça e da torre de purga, a mensagem diz isso e propõe saídas.
 
 ### Furos, furos oblongos e divisão
 
@@ -237,6 +243,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de Ctrl+Y, a linha de estado indica o passo refeito, como depois de Ctrl+Z.
 - As miniaturas dos exemplos e dos blocos mostram a altura para cima. Até agora as peças altas apontavam nelas para baixo.
 - Se o Solidon não conseguir guardar a opção «Incluir valores», o aviso aparece junto ao interruptor.
+- Se outros programas ocuparem todos os núcleos no Windows, um cálculo num modelo grande já não fica parado durante minutos.
 
 ## 0.5.1
 

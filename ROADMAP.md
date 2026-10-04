@@ -104,7 +104,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen am heutigen Stand eingeordnet, neun Produktfehler behoben und im echten Slicer belegt (04.10.); in Arbeit: ausdrückliche Brimbreite statt Orca-Auto-Brim und Warnung für Skirt und Stützfuß am Bettrand; danach der Gesamtlauf (RM-281) und die Fensterabnahme der Düsenwahl beim Release |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | Vorschau je Klick nur mit dem neuen Zug auf main (`8440db6f7`), große Netze rechnen im Arbeiter; die 40. Vorschau ist nicht länger als die erste, UI-Aufruf 0,6 ms; offen: Messung am echten Fenster auf ruhiger Maschine beim Release (RM-213) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | „vor Schritt 3“ und alle Schrittsätze sprechen in sichtbaren Stellen statt Kennungen (Absage beim Verschieben, Löschnachfrage, Löschtitel, Umbauabsagen, Merkmalsfrage); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Formen, Skelett und Zeichnen öffnen ihren Schritt wieder, ein Zug ist eine ganze Geste mit lokalem Undo; an Figur und Pilz am Fenster geprüft; offen: drittes Modell (Drache), Themen, schmale Fenster und Projektwechsel am Fenster beim Release (RM-213) |
@@ -135,7 +135,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `rendering`-Fälle in der Release-CI auf Linux und macOS und in `latest` fahren — oder Roberts Entscheidung festhalten und Wächter nachziehen |
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, Regel mit Datum, veraltete Regeln und Registerzellen |
 | [RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung](#rm-350) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `continue-on-error: true` am Job `latest` oder eigener Workflow; Wächter in `test_packaging.py` |
-| [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
@@ -4029,6 +4028,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bytegleich). Ursache: die jüngste Datei als Rückfall stammt aus der Zeit vor
   v0.5.1; ein Kundenpunkt in allen sechs Sprachen.
 
+  **Teilstand 04.10.2026 (Claude, G2 `claude/rm312-matrix`):** Alle 575 auffälligen Zeilen der
+  Matrix vom 02.10. (426 Variantenfehler, 149 Ausgaben mit Fehlerbefund) liefen am heutigen Stand
+  noch einmal über den Kundenweg mit denselben Slicer- und Druckerpaaren: 235 drucken ohne Befund,
+  276 sagt Solidon vor dem Slicerstart mit Grund ab (zu groß, zu hoch, keine Anordnung), 8 hält
+  Solidon bei mehreren Druckdateien an, 6 enden mit der Meldung zur ersten Schicht; benannte
+  Slicer-Eigenheiten sind `chufang.3mf` (Turm gegen Teil, −101), Creality Print 7.3 (gut 1 mm Rand
+  je Seite) und ein SuperSlicer-Absturz beim Stützen. Kein Lauf endet mehr mit Absturz,
+  `gcode.shorter_than_model` oder `gcode.spool_left_out`. `image_00001_.glb` war ein Fehler des
+  Matrixwerkzeugs (Einheitenfrage), `carpet-corner-clip.step` war mit `783f62d2a` behoben; die 770
+  Markierungen sind Artefakte des Vergleichers oder erwartbar; der Creality-Zeitunterschied ist bis
+  auf 0,7 s zugeordnet (11 900 s Ladezeit, 1 357 s Reinigungsturm von 7.3). Neun Produktfehler
+  behoben und im echten Slicer belegt: Höhenprobe an Schneiden und letzter Stelle (`1e112c8af`,
+  `b4cdc2717`), Turm neben der Sperrfläche von P1S/P1P/X1/X1C (`f24e321f3`), schmale erste Schicht
+  (`f9b861cc1`), SuperSlicer mit `--dont-arrange` (`d44e712b3`), gedrehte Übergabe an die
+  Orca-Familie (`949b1bbd6`), Rand in einer Sperrfläche vor dem Export (`acab16345`), Drehung mit
+  Platz für den Rand (`2f939825a`), kreuzende Bahnen −101 (`08f15274b`). Entwicklungstor vor jedem
+  Commit grün. Grenze: Die tatsächliche Druckdauer am K1 lässt sich ohne Gerät nicht messen. Belege
+  unter `F:\solidon-review-reports\claude-2026-10-04\rm312-matrix\`.
+
 <a id="rm-366"></a>
 
 - [~] **RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug.**
@@ -4895,26 +4913,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   kann; vor dem nächsten Release-Tag. Bauplan §37.2. Beleg: `bericht-E.md` (H1),
   `sonden\e_sign_conclusion.txt`.
   Nachprüfung am Stand `6ce767031`: besteht noch. Im Arbeitsbaum nur entschärft, solange das Repository privat ist; `continue-on-error` fehlt weiter.
-
-<a id="rm-380"></a>
-
-- [ ] **RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei.**
-  Review 02.10.2026, Registerabgleich Geometrie, am HEAD `3fd3b1ace`. Beide Tests stammen aus
-  `a55e844ad`.
-  **Fehlerfall:** `pytest tests/test_kernel_process.py` am Stück: 1 failed, 79 passed, Exit 1 —
-  `KeyError: 'helper:display_simplify'` (`tests/test_kernel_process.py:1309`). Allein gefahren ist
-  der Test grün (Exit 0); direkt nach `test_the_coarse_preview_reduces_and_drills_in_the_helper`
-  (`:1183`) rot (1 failed, 1 passed, Exit 1). Der Vorschautest ruft `kernel_process.shutdown()`
-  und rechnet danach dieselbe Vorschau im Prozess (`:1216–1218`); der Fenstertest findet
-  anschließend keine `display_simplify`-Zählung — vermutlich weil die verkleinerte Vorschau aus
-  einem prozessweiten Speicher kommt oder die Zählung nach `shutdown` nicht neu angelegt wird.
-  Weil der Fenstertest (`qt_app`) nur beim Release läuft, fällt das im Entwicklungstor nicht auf.
-  **Fix:** Ursache am Zustand festmachen (Vorschau-Cache bzw. `statistics()` nach `shutdown`) und
-  im Fixture `offloaded` zurücksetzen; nicht die Zusicherung lockern. `.get(...)` statt `[...]`
-  allein wäre keine Behebung.
-  **Abnahme:** `tests/test_kernel_process.py` am Stück und in umgekehrter Reihenfolge grün; die
-  Zusicherung `>= 1` bleibt. Belege: `F:\solidon-review-reports\kp_order.txt`, `kp_file.txt`,
-  `register-geometrie.md`.
 
 <a id="rm-387"></a>
 

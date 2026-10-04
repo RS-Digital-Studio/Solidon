@@ -143,6 +143,17 @@ bis 0,9 s.
   Zusammenhangsrechnung, mit einem Faden 21 und 135 MB; Arbeitssatz und
   Dauer der Verfeinerung blieben gleich (`speicher.py`). Das geht nur, weil
   keine Rechnung BLAS ruft — sonst hinge ihr Ergebnis an der Fadenzahl.
+- **Nachgeladen wird vor dem Zurückstellen** (RM-380, 04.10.2026): Unter
+  Windows rechnet der Hilfsprozess eine Klasse tiefer, und der Planer teilt
+  streng nach Klasse zu. `component_labels` lud `trimesh.graph` (rund tausend
+  Module mit `scipy` und `PIL`, knapp eine CPU-Sekunde) erst zurückgestellt
+  nach; auf zwei Kernen, die vier Schleifen normaler Priorität auslasteten,
+  kam der Hilfsprozess in 300 s von 0,36 auf 0,92 CPU-Sekunden und wurde nicht
+  fertig. Im Entwicklungstor kamen so drei Fälle von `test_kernel_process.py`
+  in 120 s nicht zurück, die allein in einer Sekunde grün sind — ein
+  Verhungern, keine Rechenzeit: Die Rechnung selbst braucht Millisekunden. Mit
+  `PREPARATIONS` war derselbe Fall nach 6,2 s fertig, ganz ohne Zurückstellen
+  nach 2,9 s (`hunger.py`, `hunger-last.txt`).
 - **Was nicht hinein- oder herauskommt, rechnet hier; fehlender Speicher ist
   `MemoryError`** (Durchsicht RM-212, B2, 28.09.2026): Ein nicht anlegbarer
   oder nicht zu öffnender gemeinsamer Speicher und ein Hilfsprozess, der vor

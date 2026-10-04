@@ -9,6 +9,7 @@ braucht, steht ausdrücklich dabei.
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import zipfile
@@ -3181,6 +3182,47 @@ def test_an_orca_refusal_for_parts_off_the_plate_says_so(
     assert handover.signed_exit_code(4294967246) == -50
 
 
+@pytest.mark.parametrize(
+    ("program", "log"),
+    [
+        ("orca-slicer.exe", b"Slic3r::CLI::run found error, exit\n"),
+        (
+            "CrealityPrint.exe",
+            b"[error]   gcode path conflicts found between WipeTower and \xe7\x99\xbd\xe8\x89\xb2\n"
+            b"[error]   plate 1: found slicing result conflict!\n"
+            b"[error]   CLI command failed with error code -101\n",
+        ),
+    ],
+)
+def test_an_orca_refusal_for_crossing_paths_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, log: bytes
+) -> None:
+    """In der Slicer-Matrix (RM-312) endete chufang.3mf, Platte 2 (sieben Teile,
+    sechs Farben), an OrcaSlicer und Creality Print mit -101: Der Reinigungsturm
+    des Slicers stieß nach dessen eigener Anordnung an ein Teil
+    (``CLI_GCODE_PATH_CONFLICTS``). OrcaSlicer sagt auf der Konsole nur „found
+    error“, der Kunde las „Der Slicer hat keine Druckdatei geschrieben“."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    finished = _Finished(log)
+    finished.returncode = 4294967195
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    problem = raised.value
+    assert handover.signed_exit_code(4294967195) == -101
+    assert "kreuzen" in str(problem.detail)
+    assert "keine Druckdatei" not in str(problem.detail)
+    assert {action.id for action in problem.suggestions} >= {"export_only", "show_output"}
+    assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
+
+
 def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3497,6 +3539,45 @@ def test_an_unknown_arrange_flag_falls_back_and_reports(
     assert any(entry.code == "slicer.arranged_itself" for entry in again.findings)
 
 
+@pytest.mark.parametrize("program", ["superslicer.exe", "prusa-slicer-console.exe"])
+def test_the_prusa_family_keeps_a_holding_arrangement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str
+) -> None:
+    """Ohne ``--dont-arrange`` ordnet SuperSlicer auf der Konsole selbst an.
+
+    Gemessen in der Slicer-Matrix (RM-312) an SuperSlicer 2.5.59.13 mit dem
+    MINI-Profil: Solidons Anordnung lag 8,7 mm vom Rand, SuperSlicer schob
+    die Teile bis 1,05 mm an den Rand, und die Skirt lief bei y = -1,41 mm
+    vom Bett. Mit dem Schalter blieb die Lage, die Skirt bei 6,5 mm.
+    PrusaSlicer hielt die Lage schon ohne ihn und nimmt ihn an. Gesetzt nur,
+    wenn die Anordnung hält — sonst druckten zwei Teile übereinander.
+    """
+    profile = profiles.make_profile()
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"keine echte 3MF")
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        commands.append(list(command))
+        output = Path(command[command.index("--output") + 1])
+        output.write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", fake_run)
+    settings = print_settings.resolve(profile)
+    kept = handover.slice_model(model, settings, profile, setup, keep_arrangement=True)
+    handover.slice_model(model, settings, profile, setup, keep_arrangement=False)
+
+    assert len(commands) == 2
+    assert "--dont-arrange" in commands[0]
+    assert commands[0][-1].endswith(".3mf"), "das Modell bleibt das letzte Argument"
+    assert "--dont-arrange" not in commands[1], "eine Platte ohne Anordnung ordnet der Slicer"
+    assert not any(entry.code == "slicer.arranged_itself" for entry in kept.findings)
+
+
 def test_creality_print_slices_on_its_console_before_and_after_7_3(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3761,6 +3842,80 @@ def test_automatic_tower_position_reserves_the_brim_on_a_shifted_bed(
     assert float(positioned.written["wipe_tower_y"]) == pytest.approx(20 + margin)
 
 
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("program", ["bambu-studio.exe", "orca-slicer.exe"])
+def test_an_automatic_tower_keeps_out_of_the_beds_exclusion_area(
+    tmp_path: Path, rotation: int, program: str
+) -> None:
+    """Bambu P1S, P1P, X1 und X1 Carbon sperren vorn links 18 × 28 mm (``bed_exclude_area``).
+
+    Gemessen in der Slicer-Matrix (RM-312) mit Bambu Studio 02.08.02.61 am
+    P1S und der zweifarbigen ``carpet-corner-clip.step``: Der Turm begann bei
+    18/18 und reichte bis x = 17,2 mm in die Sperrfläche; Solidon meldete
+    danach selbst ``gcode.off_the_bed``. Der Turm samt Brim und Herstellerabstand
+    beginnt deshalb hinter der Sperrfläche, quer zu seiner unbekannten Tiefe.
+    """
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps(
+            {
+                "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+                "bed_exclude_area": ["0x0", "18x0", "18x28", "0x28"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps(
+            {
+                "enable_prime_tower": "1",
+                "prime_tower_width": "35",
+                "prime_tower_brim_width": "3",
+                "wipe_tower_rotation_angle": str(rotation),
+            }
+        ),
+        encoding="utf-8",
+    )
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    x = float(positioned.written["wipe_tower_x"])
+    y = float(positioned.written["wipe_tower_y"])
+    margin = 15 + 3
+    if rotation:
+        # Die Breite läuft entlang y, die Tiefe wächst von x nach links.
+        assert x == pytest.approx(256 - margin)
+        assert y == pytest.approx(28 + margin), "über der Sperrfläche, mit Abstand und Brim"
+    else:
+        assert x == pytest.approx(18 + margin), "rechts neben der Sperrfläche"
+        assert y == pytest.approx(margin)
+
+
+def test_an_exclusion_that_leaves_no_room_keeps_the_slicers_own_tower(tmp_path: Path) -> None:
+    """Passt der Turm neben keiner Sperrfläche, wird keine Lage erfunden."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps(
+            {
+                "printable_area": "0x0,120x0,120x120,0x120",
+                "bed_exclude_area": "0x0,80x0,80x120,0x120",
+            }
+        ),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps({"enable_prime_tower": "1", "prime_tower_width": "35"}), encoding="utf-8"
+    )
+    before = config.process.read_bytes()
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+
+    assert handover._orca_cli_tower_position(config, setup, ()) is config
+    assert config.process.read_bytes() == before
+
+
 @pytest.mark.parametrize(
     ("width", "brim", "initialized"),
     [(144, "3", True), (144.1, "3", False), (35, "nan", False), (35, "-1", False)],
@@ -4017,6 +4172,73 @@ def test_a_print_file_shorter_than_the_model_is_an_error() -> None:
     assert handover.too_short(half, 10.0, settings) is None, "volle Höhe: kein Befund"
     assert handover.too_short(half, 10.3, settings) is None, (
         "zwei Schichthöhen Luft für Rundung und erste Schicht"
+    )
+    # Genau an der Grenze, mit dem Rauschen einer Netzhöhe: „Rack system for
+    # Filament.3mf“ (Slicer-Matrix RM-312) war 22,000000000000014 mm hoch und
+    # bis 21,6 mm gedruckt — der Befund kam aus der letzten Stelle.
+    edge = 10.0 + 2.0 * settings.layers.layer_height + 1.4e-14
+    assert handover.too_short(half, edge, settings) is None, "die Grenze zählt mit"
+
+
+def _ridged_block(ridge_base: float) -> MeshData:
+    """Ein Block 20 × 10 × 10 mm mit einem Grat obendrauf, der 1 mm hoch spitz zuläuft.
+
+    Der Grat ist an seinem Fuß ``ridge_base`` breit und auf Höhe ``10 + h``
+    noch ``ridge_base · (1 - h)`` — schmaler als eine Bahn ab
+    ``h = 1 - Bahnbreite / ridge_base``. Mit ``ridge_base = 10`` ist der Körper
+    oben ein Satteldach über die ganze Breite.
+    """
+    from shapely.geometry import Polygon as Outline
+
+    half = ridge_base / 2.0
+    points = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]
+    if half < 5.0:
+        points.append((5.0 + half, 10.0))
+    points.append((5.0, 11.0))
+    if half < 5.0:
+        points.append((5.0 - half, 10.0))
+    points.append((0.0, 10.0))
+    body = trimesh.creation.extrude_polygon(Outline(points), height=20.0)
+    # Die Profilebene ist X/Y, gezogen wird in Z; um X gedreht steht das
+    # Profil in X/Z und der Grat oben, auf dem Bett ab z = 0.
+    body.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
+    return MeshData(body)
+
+
+def test_a_top_narrower_than_a_line_is_not_missing_from_the_print() -> None:
+    """Was schmaler als eine Bahn ist, druckt der Slicer nicht — kein Abschnitt unter dem Bett.
+
+    Gemessen in der Slicer-Matrix (RM-312) an ``bottom-single.stl``: Die
+    Oberkante läuft auf 109,6 mm Länge als Schneide aus, auf den letzten
+    0,5 mm schmaler als 0,4 mm. ElegooSlicer, Bambu Studio und SuperSlicer
+    druckten mit festen Bahnbreiten bis 78,0 mm statt 78,49 mm, und Solidon
+    meldete „was unter dem Druckbett lag, hat der Slicer nicht gedruckt“ mit
+    *Auf das Bett legen* — als Fehler, an einem Teil, das auf dem Bett lag.
+    Fehlt oben nur, was schmaler ist als eine Bahn, ist das kein Befund; fehlt
+    oben Material von Bahnbreite, bleibt er.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    line = settings.layers.line_width
+    layer = settings.layers.layer_height
+    # Gedruckt bis 10,4 mm (52 Schichten zu 0,2 mm).
+    printed = "G90\nM82\n" + "".join(
+        f"G1 Z{z / 10.0:g}\nG1 X{10 if z % 4 else 20} Y0 E{z / 10.0:g}\n" for z in range(2, 106, 2)
+    )
+    ridge = _ridged_block(1.0)
+    # Am Grat ist ab 10 + (1 - line / 1,0) mm keine Bahnbreite mehr übrig;
+    # das liegt unter Druckhöhe plus zwei Schichten Luft.
+    assert 10.0 + (1.0 - line / 1.0) < 10.4 + 2.0 * layer
+    assert handover.too_short(printed, 11.0, settings, meshes=[ridge]) is None, (
+        "nur die Schneide oben fehlt, und die ist schmaler als eine Bahn"
+    )
+    roof = _ridged_block(10.0)
+    short = handover.too_short(printed, 11.0, settings, meshes=[roof])
+    assert short is not None, "oben fehlt ein Dach von voller Breite — das ist ein Befund"
+    assert short.severity == "error"
+    assert handover.too_short(printed, 11.0, settings) is not None, (
+        "ohne Netze bleibt der Vergleich der Höhen, wie er war"
     )
 
 
