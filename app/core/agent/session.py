@@ -977,8 +977,13 @@ class AgentSession:
 
         before = scene
         draft = OperationDraft(op=spec.name, inputs=inputs, params=arguments)
+        # Ein Gewinde in einer Gewindepassung nimmt sein Gegenstück mit — wie
+        # im Fenster und auf der Kommandozeile (RM-184).
+        from app.core.counterpart import with_coupled_threads
+
+        drafts = with_coupled_threads(working, scene, self.profile, [draft])
         try:
-            applied = history.apply(spec.title, [draft])
+            applied = history.apply(spec.title, drafts)
         except AppError as error:
             # Ein Bedienfehler ist ein Aufruf, den das Modell hätte vermeiden
             # können — er zählt wie ein ungültiger. Ein `GeometryError` nicht:
@@ -999,7 +1004,10 @@ class AgentSession:
         # Schritt auf einen Körper zu lenken, den inzwischen der Nutzer
         # angelegt hat (Gesamtreview 05.09.2026, CORE-01). Ob sie beim
         # Annehmen noch frei sind, prüft :func:`app.core.agent.apply.accept`.
-        draft = replace(draft, outputs=history.operation(applied.ops[-1]).outputs)
+        drafts = [
+            replace(entry, outputs=history.operation(op_id).outputs)
+            for entry, op_id in zip(drafts, applied.ops[-len(drafts) :], strict=True)
+        ]
 
         result = self._evaluate(working)
         findings = checks.check(result, before, separate_parts=spec.leaves_separate_parts)
@@ -1012,7 +1020,7 @@ class AgentSession:
             history.undo()
             return f"{tr('Die Kette hält an')}: {checks.as_lines(findings)}", before
 
-        proposal.drafts.append(draft)
+        proposal.drafts.extend(drafts)
 
         # Konzept Agent-Vertiefung 3.1: die IDs der neuen Merkmale gehören in
         # die Antwort — sonst kennt das Modell die Bohrung nicht, die es

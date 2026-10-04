@@ -965,3 +965,19 @@ def resolve_tolerance(value: Tolerance, kind: FitKind, profile: Profile) -> floa
     chosen = profile.material if name == profile.material.id else material(name)
     field_name = _FIT_FIELD[kind]
     return float(getattr(chosen, field_name)) if field_name else 0.0
+
+
+def thread_share(value: str, profile: Profile, *, inner: bool, printed: bool) -> float:
+    """Was eine Hälfte einer Gewindepassung zum Spiel beiträgt, in Millimetern (§14).
+
+    Ein gedrucktes Gewinde aus der Bibliothek ist um das Spiel einer
+    Schiebepassung neben seinem Nennmaß gebaut, die Mutter weiter, der Bolzen
+    enger — ein gedrucktes Paar trägt es zweimal. Ein Gewinde, das so dasteht,
+    wie es gebaut ist (eingelesen, gemessen, über *Merkmal ändern* gesetzt),
+    trägt als Loch die Lochkorrektur und als Bolzen nichts. ``value`` ist ein
+    Verweis (``auto:``, ``auto:petg``) und wird wie in
+    :func:`resolve_tolerance` aufgelöst.
+    """
+    if printed:
+        return resolve_tolerance(value, "clearance", profile)
+    return resolve_tolerance(value, "thread", profile) if inner else 0.0

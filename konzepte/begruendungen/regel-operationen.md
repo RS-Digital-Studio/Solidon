@@ -853,6 +853,28 @@ einem Deckel aus Material, und ein Werkzeug, das dort um die Zugabe über die
 Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
 Ø 9,2 (Review, 21.09.2026).
 
+**Den Kragen trägt die Wand, nicht die Deckelnormale** (RM-226, Nachtrag
+04.10.2026). `_past_the_mouths` hob den Deckel längs seiner Normale an; an
+einer schrägen Mündung ist das ein gescherter Ring — an der Platte mit
+Oberseite z = 10 + x/4 um 14,04°, der Arkustangens der Neigung. In der Luft
+schneidet er nichts. Starr längs der Schräge versetzt, verdoppelt oder
+vervielfacht, liegt die mitbewegte Mündung aber im Material, und der Ring
+wurde Wand der Kopie: 98 von 192 Wanddreiecken kippten bis 14,03° aus der
+Senkrechten zur Achse. Vor der tangentialen Trennung (RM-226 Teil 2) las die
+Erkennung die ganze Wand deshalb als gekrümmte Fläche, und die Kopie hieß am
+Netz verloren (`duplicate_feature.feature_lost`, exakt eine Sackbohrung);
+danach zählte sie den Ring nicht mit — Tiefe 10,750 gegen 10,771 mm, die
+Senkung Ø 13,333 gegen 13,388 mm. Der exakte Kern schneidet die Bohrung als
+Zylinder bis in die verschobene Randebene (`clipped_bore_tool`), die Kette als
+Drehkörper ihrer Profile (`_exact_chain_tool_placed`). Jetzt setzt
+`_continued_walls` jede Randecke in den Schnitt ihrer zwei Wandebenen mit der
+verschobenen Deckelebene; am Facettenzylinder ist das die Achse, am Kegel die
+Mantellinie. Langloch und Tasche mit Lippe bleiben beim Kragen längs der
+Normale, weil der exakte Kern sie aus ihren Flächen ebenso anhebt
+(`edit.collared`); eine Wand, die fast parallel zum Deckel ausläuft (eine
+gerundete Mündungskante), auch — dort gibt es keine Fortsetzung, und die Ecke
+rutschte weiter als `GRAZING_SLIDE`-mal die Zugabe.
+
 **Die gerundete Mündungskante einer Zylindersenkung reist mit** (RM-259,
 Durchsicht 0.5.1): Versetzen, Verdoppeln, Muster und Entfernen der ganzen
 Kette fragen die Hohlraumflächen mit `mouth_blends=True`
@@ -1213,7 +1235,26 @@ und tut dasselbe — beim Verdoppeln einzeln und als Kette und im Muster.
 Wiedergefunden heißt: seitlich auf der Achse, auf die sie gesetzt wurde, bis
 zur Facettengrenze. Die Messung am Netz nimmt sonst auch einen
 angeschnittenen Zylinder über einer Seite als Bohrung, mit seiner Mitte bis
-1,25 mm daneben, und die Auswertung verwarf ihn danach still.
+1,25 mm daneben, und die Auswertung verwarf ihn danach still. **Und neu**
+(RM-226, Nachtrag 04.10.2026): Eine Durchgangsbohrung darf entlang ihrer
+Achse wandern, und längs dieser Achse verdoppelt liegt die Vorlage auf ihr.
+An `pegboard-gs-100-v2` fiel die 12 mm verschobene Kette in einen Durchbruch,
+nichts wurde abgetragen; der exakte Kern nannte alle drei Kopien verloren, das
+Netz zwei — die Kopie der Bohrung Ø 6 fand es in der Vorlage, deren Dreiecke
+danach den Namen der Kopie trugen. Die Ketten waren an beiden Kernen gleich.
+Der exakte Kern nimmt nur Merkmale mit neuem Namen; am Netz ist kein Fund eine
+Kopie, der in Art, Mitte und Durchmesser bis zur Facettengrenze auf einem
+Merkmal der Quelle liegt (`_already_there`) — ohne Freiheit entlang der Achse,
+damit eine Kopie in eine zweite Wand Kandidat bleibt
+(`test_a_copy_along_its_own_axis_into_the_air_is_lost_on_both_kernels`, vorher
+am Netz alle sechs Fälle rot). **Und eine Senkung findet sich an beiden Kernen
+über ihre Spitze wieder** (`_same_cone`): Mitte und Durchmesser beschreiben
+ihren weitesten Rand, und den schneidet an der neuen Stelle eine Seite ab. Eine
+Senkbohrung, 25 mm längs der schrägen Platte über die Stirn verdoppelt oder
+vervielfacht, maß dort Ø 12,54 bei z = 11,27 statt 13,33 bei 11,67; das Netz
+fand sie über die Spitze, der exakte Kern suchte an der Mitte und nannte sie
+verloren (`test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels`,
+ohne die Spitzensuche in `_exact_copy_result` acht von zwölf Fällen rot).
 
 **Und eine Bohrung, in deren Zylinder Material steht, ist keine** —
 `hole_is_clear` fragt die Dreiecksmitten des Körpers zwischen den Mündungen
@@ -1264,6 +1305,28 @@ tief im Material und reißt 2,3 mm hinter ihrem unteren Austritt trotzdem auf
 geschlossen (`test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
 `test_every_way_that_sets_a_bore_anew_asks_about_the_edge`,
 `test_a_widened_countersink_over_the_edge_says_so`).
+
+**Eine starr gesetzte Senkung unter einer Haut ragt nicht über die Kante**
+(RM-226, Nachtrag 04.10.2026). Am Austritt setzt `mouth_over_the_edge` den
+Kegel von der Spitze bis in die Fläche fort; liegt das weite Ende darunter,
+wächst der Kranz mit jedem Millimeter Haut. Eine Senkbohrung, 20 mm längs der
+60 mm langen schrägen Platte verdoppelt, versetzt oder als dritter Platz eines
+Musters, endet 5 mm unter der Oberseite mit dem weiten Ende bei x = 26,7; ihr
+gedachter Kranz reichte bis x = 33,3 über die Stirn bei x = 30, und beide Kerne
+sagten „über die Kante“. Jetzt fragt `_sink_under_a_skin` vorher, ob der Kreis
+des weiten Endes ringsum mindestens eine Facettengrenze unter der nächsten
+Fläche liegt (`prepare.ring_in_material`). Die Tiefe zählt: Der Kreis einer
+bündigen Senkung liegt in ihrer Mündungsfläche, ein Punkt neben der Kante hat
+dort zur Deckfläche den Abstand null längs ihrer Normale, und die über die
+Kante versetzte Senkung schwieg
+(`test_a_moved_countersink_over_the_edge_is_reported_once`). Und nur starr
+(`rigid`): Gekippt schneidet ein größerer Kegel bis zur alten Randebene, über
+den Kreis hinaus — die vergrabene Senkung der Rippenplatte läuft so aus der
+Seite. Plansenkung und Langloch fragen mit ihrem eigenen Durchmesser und
+meldeten an derselben Stelle nichts; reicht der Kreis seitlich hinaus (24 mm
+statt 20), bleibt es an beiden Kernen bei „über die Kante“
+(`test_a_copy_under_the_top_is_not_over_the_edge_on_both_kernels`,
+`test_a_buried_sink_reaching_past_the_end_is_over_the_edge_on_both_kernels`).
 
 **Den Zerfall zählt derselbe Weg gegen den Körper vor dem Schritt**
 (30.09.2026). `drill`, `slot_bore` und `resize_bore` zählen die Teile gegen den
@@ -1694,7 +1757,18 @@ versehentliche Kopie des gesamten Körpers" (Konzept §13.9). Drei Regeln:
   an der Stelle der Quelle (`_pattern_probe`) und ein exaktes Gegenstück
   (`_exact_place_tool`); die Merkmale der Kopie führt
   `transformed_features` nach, damit Achsen, Richtungen und Öffnungen
-  drehen und spiegeln wie beim ganzen Körper.
+  drehen und spiegeln wie beim ganzen Körper. Das exakte Gegenstück ist
+  starr wie beim Verdoppeln (RM-226, Nachtrag 04.10.2026): Die
+  Durchgangsbohrung endet an ihren mitbewegten Randebenen
+  (`_clipped_at_moved_rims`), und jede Kopie fragt die Säule
+  (`_exact_through_checked`, je Bohrung). Mit der ganzen Zielhülle als Tiefe
+  bohrte das Muster längs der schrägen Platte bis an die höhere Oberseite
+  durch — 69,9 mm³ mehr, durchgehend, ohne Satz —, die vervielfachte
+  Senkbohrung sagte exakt nichts, wo das Netz „geht nicht mehr durch“
+  meldete, und nach dem ersten Satz schwieg die Frage für jeden weiteren
+  Platz. Am Netz liegt die Säule im Werkzeug des Platzes wie bei allen
+  Geschwistern: Ohne meldete ein 32-Eck Ø 6,1, um 9,1 mm vervielfacht, „geht
+  nicht mehr durch“ bei unverändertem Volumen.
 - **Ein Platz, der nicht passt, entsteht nicht und wird genannt.**
   Überschneidung mit der Quelle oder einem anderen Platz, kein Material
   unter dem Werkzeug — beides ein Befund mit den Platznummern und einem
@@ -2156,3 +2230,7 @@ Durchmessers, weil ein Feld, das mit einer Absage begrüßt, keine Vorgabe ist.
 **Gedrehtes Langloch:** Wer eine Geste einlöst, baut die Wirkung, nicht den
 Hinweis auf die andere — ein Zug in neuer Richtung dreht das Langloch
 (`slot_hole.turned`), statt auf *Merkmal drehen* zu verweisen.
+
+**Langloch ohne Zugabe:** `slot_hole` schneidet ohne `FEATURE_OVERLAP`
+(`overlap=0.0`), damit beide Wege — Ziehen und Ändern — und beide Kerne
+dasselbe Langloch schneiden.

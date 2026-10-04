@@ -215,9 +215,9 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   `prepare.plug_placement`). „Nur das gewählte Merkmal" einer Kette geht erst
   ganz zu und wird frisch geschnitten. Verliert die Vereinigung des Stopfens
   Material, sagt `brep.edit.fill_bore` ab (`FILL_DID_NOT_HOLD`).
-- **Starr:** gleiche Länge, exakt bis zu den mitbewegten Randebenen;
-  `no_longer_through` meldet, was stehen bleibt; Einrücken bis zur
-  Facettengrenze ist Rauschen (`_seated`).
+- **Starr:** gleiche Länge, bis zu den mitbewegten Randebenen, Kragen längs
+  der Wand (`_continued_walls`); `no_longer_through` meldet, was stehen bleibt;
+  Einrücken bis zur Facettengrenze ist Rauschen (`_seated`).
 - **Eine Kette reist aus ihren Flächen**, mit Kragen `FEATURE_OVERLAP` an jeder
   Mündung ohne Materialseite davor (`_past_the_mouths`); Sacklochboden,
   Ringstufe und vergrabene Mündung bleiben bündig; ohne Flächenkörper füllt der
@@ -268,12 +268,12 @@ Körper sagt `TORUS_IS_THE_BODY`; zerfällt er, meldet `feature_lost`.
 Ein Gewinde wird geändert (`build.threaded`) oder verschlossen, je Kern mit
 denselben Werkzeugen; die Enden fragen die Nachbarschaft (`_thread_span`: hinter
 Material um `BOOLEAN_OVERLAP` früher, in der Luft außen hinaus, innen nicht).
-Das neue wird an seiner Stelle belegt, nicht behauptet. Innen nennt das Merkmal
-den Grund-Ø der Gänge (`_tool_diameter`), am Netz misst es sich an seinen Ecken.
-Sperren darf nur ein belegtes Linksgewinde (`types.thread_is_left_handed`, nie
-die Schätzung `fit`); linksgängig, mehrgängig, Steigung ohne Kern und Gewinde
-ohne Strecke sind Absagen mit Vorschlag. Ein Feld einer Merkmalsart steht nur an
-ihr (`actions._carried_by`).
+Das neue wird an seiner Stelle belegt; innen nennt das Merkmal den Grund-Ø der
+Gänge (`_tool_diameter`), am Netz misst es sich an seinen Ecken. Sperren darf
+nur ein belegtes Linksgewinde (`types.thread_is_left_handed`); linksgängig,
+mehrgängig, Steigung ohne Kern und Gewinde ohne Strecke sind Absagen mit
+Vorschlag. Das neue Maß fragt seine Wand (`_thread_wall`): Durchbruch sagt ab,
+eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 
 ## Gemeldet wird, was am Ergebnis steht
 
@@ -283,20 +283,19 @@ ihr (`actions._carried_by`).
 - **Eine Mündung unter Material** (`{op}.mouth_covered`: ab der Hälfte des
   Rands, `COVERED_SHARE`, nie nach einer Kantenprobe; exakt zusätzlich die Säule
   im Werkzeug).
-- **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt
-  seitlich auf der gesetzten Achse bis zur Facettengrenze.
+- **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
+  und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung, nicht die Achse.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
-  Schnittlänge; den Zerfall gegen den Körper vor dem Schritt,
-  `_split_counted_from`): Mitte, beide Enden eines Langlochs
-  (`prepare.slot_ends`), Austritte der Achse (erster Durchstoß, nicht der
-  Hüllquader) — einmal, an beiden Kernen; eine Senkung nur am weiten Ende, am
-  Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`). Eine
-  ungeschlossen überdeckte alte Öffnung zählt als Material
-  (`prepare.OpeningSpace`).
+  Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
+  Mitte, beide Enden eines Langlochs (`prepare.slot_ends`), Austritte der Achse
+  (erster Durchstoß) — einmal, an beiden Kernen; eine Senkung nur am weiten
+  Ende, am Austritt nur einen halben Radius tief (`prepare.mouth_over_the_edge`),
+  starr unter einer Haut nie. Eine ungeschlossen überdeckte alte Öffnung zählt
+  als Material (`prepare.OpeningSpace`).
 
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
@@ -312,8 +311,7 @@ behalten Marker und Ausdruck.
 
 `prepare.FEATURE_OVERLAP`, nie eine zweite Konstante gleichen Werts. `slot_hole`
 schließt auch die runde Bohrung vor dem ersten Zug (`closes_the_old`) und
-schneidet ohne Zugabe (`overlap=0.0`) — beide Wege und Kerne schneiden dasselbe
-Langloch.
+schneidet ohne Zugabe (`overlap=0.0`).
 
 ## Ein Füllkörper hat die Form des Werkzeugs, nicht die des Hohlraums
 

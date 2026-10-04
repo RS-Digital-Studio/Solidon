@@ -152,7 +152,7 @@ def read_profiles(payload: bytes, suffix: str) -> tuple[OutlineProfile, ...]:
     if not polygons:
         raise ValidationError(
             field="file",
-            detail=_("In dieser Zeichnung ist keine geschlossene Fläche."),
+            detail=_("In dieser Zeichnung ist keine geschlossene Kontur."),
             constraint="no_area",
             values={"suffix": suffix},
         )

@@ -62,6 +62,10 @@ Entscheidungen fern ihrer Schwelle: die Grenzprüfungen `_reaches` und
 `contact_band_limit`, Konvexität und Windung aus trimesh, das Vorzeichen in
 `transform.moved`.
 
+*Aus der Karte verschoben (RM-184, Budget):* `IntegerGrid.of(count=...)` darf bekannte Nullen auslassen: Die ursprüngliche
+Gesamtzahl bestimmt den Rasterexponenten und muss mindestens der Wertzahl
+entsprechen. Ohne Angabe gilt der bisherige Vertrag.
+
 ## Die Boolesche Rückfallkette (§17.2)
 
 *HEAD-Fassung — Stufen und Vermerke stehen heute im Docstring von `boolean.py` und in `operationen.md`.*

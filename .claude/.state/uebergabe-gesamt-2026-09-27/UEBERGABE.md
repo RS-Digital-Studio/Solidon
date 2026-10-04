@@ -1,5 +1,26 @@
 # Übergabe: Gesamtprüfung und RM-281 (Herstellerprofil) bis v0.5.1
 
+## Matrixwerkzeug für die Gesamtabnahme (04.10.2026, RM-281 Paket 3)
+
+Stand des Zweigs `claude/rm281-paket3`: `einheit.py` geht den Weg des
+Druckdialogs mit dessen eigenem Code (`_AdviceWorker._calculate`,
+`_PlateJob`/`_prepare_plate`, Aufruf aus `_SliceWorker`, `plates_findings`),
+mit Stufenprozess, Zeit ab der ersten Schicht gegen Solidons Schätzung,
+Stützweg je Körper (`support_ways`), Marken „Slicer stützt nicht“,
+„Stützvorschlag ohne Stütze“ und „Zeit ab Schicht 1 weicht ab“ und
+Auslegen über Platten, wenn die Übergabe „keine Anordnung“ meldet. Bilder mit
+Pillow. Aufruf aus dem Arbeitsbaum, Kerne über die Masken im Treiber:
+
+```
+python .claude/.state/uebergabe-gesamt-2026-09-27/treiber.py <code-wurzel> <ausgabe> probe|modelle|drucker [--arbeiter 2]
+python .claude/.state/uebergabe-gesamt-2026-09-27/bericht.py <ausgabe> > bericht.md
+```
+
+`probe` sind die drei Abnahmemodelle über die sieben Heimkombinationen; der
+Gesamtlauf ist `modelle` auf einem eingefrorenen Codestand (eigener
+Arbeitsbaum, nicht der laufende), weil der Treiber am Ende Code- und
+Profilstand gegen den Beginn prüft.
+
 ## JETZT (28.09.2026, 10:45)
 
 - **Gesamt-Nachtrag auf main** (Merge `99c0ac7bb`); die Release-Sitzung hat N6

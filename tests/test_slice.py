@@ -830,6 +830,55 @@ def test_the_rounded_end_of_a_rib_is_not_hidden_by_mitre_needles() -> None:
     assert 0.75 <= measured <= 1.0, f"das Stegende ist unter einem Millimeter, gemeldet {measured}"
 
 
+def test_a_crossing_mitre_needle_is_measured_instead_of_breaking_the_analysis() -> None:
+    """Die gefaste Aufweitung zweier Stücke überlappt sich, und keine Überlagerung rechnet.
+
+    Ausschnitt aus einer Schicht des Wizard Tower (``F:\\3D Dateien``,
+    04.10.2026): Die Aufweitung ist ein Multipolygon aus zwei Teilen, die
+    sich in einer Ecke kreuzen — ungültig. ``difference`` scheiterte direkt
+    („non-noded intersection“) und auf dem Raster („side location
+    conflict“), und die ``GEOSException`` riss die ganze Schichtanalyse mit:
+    kein Rat im Druckdialog, kein Befund im Prüfbericht. Als Fläche gültig
+    gemacht ist die Nadel dieselbe, und ihre Fläche zählt.
+    """
+    import shapely
+
+    from app.core.slice.analysis import _protrusion
+
+    opened = shapely.from_wkt(
+        "MULTIPOLYGON (((104.371417262 -12.798997161, 104.452653688 -12.748997161, "
+        "106.276041335 -12.748997161, 106.276041335 -15.593004258, "
+        "106.226041335 -15.618367313, 105.238115381 -13.890711246, "
+        "105.065218262 -13.669174217, 104.991130896 -13.544101309, "
+        "104.371417262 -12.798997161)), ((105.252407757 -13.909024395, "
+        "105.238115381 -13.890711246, 105.220937179 -13.860670509, "
+        "105.203481772 -13.830145003, 105.206550987 -13.828389933, "
+        "105.189856495 -13.764349713, 105.424211714 -13.703256208, "
+        "105.444076535 -13.743466283, 105.483399359 -13.786921824, "
+        "105.342834444 -13.984143248, 105.278830205 -13.938525737, "
+        "105.276718257 -13.940173994, 105.252407757 -13.909024395)))"
+    )
+    shape = shapely.from_wkt(
+        "POLYGON ((104.512172081 -12.89004001, 104.525834933 -12.762901053, "
+        "104.538144295 -12.748997161, 106.276041335 -12.748997161, "
+        "106.276041335 -15.488598606, 106.128411174 -15.403738432, "
+        "106.020809494 -15.259463862, 105.256257422 -13.922437519, "
+        "105.225319862 -13.900387503, 105.215114519 -13.861239716, "
+        "105.065218262 -13.669174217, 104.995029971 -13.550683655, "
+        "104.963917136 -13.531808205, 104.950986028 -13.49583368, "
+        "104.655665994 -13.140759706, 104.512172081 -12.89004001))"
+    )
+    assert not shapely.is_valid(opened), "der Fall braucht die sich kreuzende Aufweitung"
+    expected = shapely.difference(
+        shapely.make_valid(opened, method="structure", keep_collapsed=False), shape
+    ).area
+
+    measured = _protrusion(opened, shape, 0.898)
+
+    assert measured == pytest.approx(expected, abs=1e-6)
+    assert measured > 0.01, "die Nadel ragt über die Form hinaus und zählt"
+
+
 def test_above_the_interesting_width_it_stops_measuring() -> None:
     """§22.2 fragt, ob etwas zu dünn ist, nicht wie dick eine dicke Wand ist.
 

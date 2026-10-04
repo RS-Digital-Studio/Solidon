@@ -188,6 +188,7 @@ from app.core.registry import (
     variant_members,
 )
 from app.core.registry.params import body_keys, inactive_dependency
+from app.core.registry.surfaces import chooses_a_centre
 from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
@@ -2016,6 +2017,15 @@ def _has_stroke_param(spec: OperationSpec) -> bool:
     Zahlen, die niemand tippt.
     """
     return any(entry.kind == "strokes" for entry in spec.params.spec())
+
+
+def _offers_the_closest_spot(spec: OperationSpec) -> bool:
+    """Ob die Operation eine Stelle „wo sich die Teile am nächsten kommen“ kennt.
+
+    Gefragt am Feld, nicht am Namen (RM-184): *Prüfstück erzeugen* trägt es
+    für den Prüfausschnitt einer Passung.
+    """
+    return any(entry.name == "spot" and "closest" in entry.choices for entry in spec.params.spec())
 
 
 def _carries_a_drawing(spec: OperationSpec, given: Mapping[str, Any] | None) -> bool:
@@ -4186,8 +4196,7 @@ class MainWindow(QMainWindow):
             None,
             self.action_import_url,
             tr(
-                "Eine Modelldatei über ihre Adresse laden — für den Fall, dass sie "
-                "noch nicht auf dem Bett liegt."
+                "Eine Modelldatei über ihre Internetadresse laden, ohne sie vorher herunterzuladen."
             ),
             symbol="network",
         )
@@ -6005,7 +6014,7 @@ class MainWindow(QMainWindow):
             return
         del strokes[index]
         self.session.change_params(operation.id, {"strokes": strokes_to_text(strokes)})
-        self.announce(tr("Zug zurückgenommen — Strg+Z holt ihn wieder."))
+        self.announce(tr("Zug entfernt. Strg+Z holt ihn zurück."))
 
     def _suppress_along_after_error(self, error: AppError) -> None:
         """„Diesen Schritt mit ausschalten": dieselben Schritte und der, an dem es hielt."""
@@ -12892,7 +12901,7 @@ class MainWindow(QMainWindow):
         radius = self.sculpt_bar.radius.value_mm()
         if radius >= edge * BRUSH_TO_EDGE:
             return ""
-        return tr("Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.")
+        return tr("Das Netz ist für diesen Pinsel zu grob. Gleichen Sie erst die Dreiecke an.")
 
     def _sculpt_refinement_order(self) -> _PreviewOrder:
         """Die zum aktuellen Pinsel passende Vernetzung einmal vorbereiten."""
@@ -13156,7 +13165,7 @@ class MainWindow(QMainWindow):
 
     def _sculpt_preview_for(self, mesh: MeshData) -> SculptPreview:
         """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
-        anderes ist (*Jetzt vernetzen* mitten in der Sitzung)."""
+        anderes ist (*Dreiecke jetzt angleichen* mitten in der Sitzung)."""
         preview = self._sculpt_preview
         if preview is None or self._sculpt_preview_base is not mesh:
             preview = SculptPreview(
@@ -19559,6 +19568,11 @@ class MainWindow(QMainWindow):
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
+        # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
+        # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
+        # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
+        if len(chosen) >= 2 and _offers_the_closest_spot(spec):
+            values["spot"] = "closest"
         if spec.name == "translate_object" and chosen and self.session.last_result is not None:
             from app.core.geom.transform import reference_point
 
@@ -19801,8 +19815,7 @@ class MainWindow(QMainWindow):
                 source_objects=inputs,
                 centre_objects=(
                     tuple(result.scene.objects.values())
-                    if result is not None
-                    and spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                    if result is not None and chooses_a_centre(spec)
                     else ()
                 ),
                 extra=variant,
@@ -19894,6 +19907,18 @@ class MainWindow(QMainWindow):
                                 seed=dialog_seed,
                             ),
                         ),
+                        changes=changes,
+                    )
+                if picked.name in LID_OPS and len(targets) == 1 and targets[0]:
+                    # Ein Deckel mit Stift sind zwei Schritte (RM-184): Die
+                    # Vorschau zeigt auch den Stift, den *Übernehmen* baut.
+                    from app.core.lid_flow import lid_drafts
+
+                    planned = lid_drafts(
+                        self.session.displayed_document(), targets[0][0], params, op=picked.name
+                    )
+                    return _PreviewOrder(
+                        drafts=tuple(replace(draft, seed=dialog_seed) for draft in planned),
                         changes=changes,
                     )
                 return _PreviewOrder(
@@ -20312,8 +20337,7 @@ class MainWindow(QMainWindow):
             source_objects=entry.inputs,
             centre_objects=(
                 tuple(self.session.last_result.scene.objects.values())
-                if self.session.last_result is not None
-                and spec.name in {"pattern", "pattern_feature", "mirror_object"}
+                if self.session.last_result is not None and chooses_a_centre(spec)
                 else ()
             ),
             extra=None,

@@ -1970,11 +1970,23 @@ def _protrusion(
         # Nachkommastellen, :func:`_rings_from`), das ohnehin die Auflösung
         # der Konturen ist.
         boxes = shapely.box(*windows.T)
-        beyond = shapely.difference(
-            shapely.intersection(opened, boxes, grid_size=EPS_GEOM),
-            shapely.intersection(shape, boxes, grid_size=EPS_GEOM),
-            grid_size=EPS_GEOM,
-        )
+        try:
+            beyond = shapely.difference(
+                shapely.intersection(opened, boxes, grid_size=EPS_GEOM),
+                shapely.intersection(shape, boxes, grid_size=EPS_GEOM),
+                grid_size=EPS_GEOM,
+            )
+        except shapely.errors.GEOSException:
+            # **Die Aufweitung selbst kann ungültig sein**: Zwei gefast
+            # aufgeweitete Stücke überlappen sich, und ihr Multipolygon kreuzt
+            # sich an einer Nadel. Dann scheitert auch das Raster („side
+            # location conflict“), und die Ausnahme riss die ganze
+            # Schichtanalyse mit (Wizard Tower, 04.10.2026). Als Fläche gültig
+            # gemacht bleibt die Nadel, wo sie ist, und ihre Fläche zählt.
+            valid = shapely.make_valid(opened, method="structure", keep_collapsed=False)
+            beyond = shapely.difference(
+                shapely.intersection(valid, boxes), shapely.intersection(shape, boxes)
+            )
     return float(shapely.area(beyond).sum())
 
 
@@ -2508,9 +2520,11 @@ def _bridge_width(
     shape: ShapelyPolygon,
     previous: ShapelyPolygon | None,
     bridge_from: float = BRIDGE_FROM,
+    touching: ShapelyPolygon | None = None,
 ) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
-    muss (§22.2).
+    muss (§22.2). Mit ``touching`` nur die freien Flächen, die es berühren
+    (:func:`open_bridge_width`).
 
     Zwei Fragen, in dieser Reihenfolge. Erst: ist die ungestützte Fläche
     überhaupt breiter als zwei Bahnen? Ein Kegel unter 45 Grad legt je Schicht
@@ -2545,6 +2559,8 @@ def _bridge_width(
         return 0.0
     supported = previous.buffer(OVERHANG_MARGIN)
     free = shape.difference(supported)
+    if touching is not None:
+        free = unary_union([part for part in _areas_of(free) if part.intersects(touching)])
     # Brücken werden gegen die Schicht selbst gemessen, nicht gegen die
     # 45-Grad-Zugabe: was durch freie Luft spannt, ist eine Brücke, egal in
     # welchem Winkel.
@@ -3083,6 +3099,13 @@ class ModelSupport:
     island_on_model: bool = False
     """Setzt eine **Insel** auf dem Modell auf? Sie druckt ohne Stütze in die
     Luft, gleich wie klein sie ist, und ist deshalb nie eine Kanaldecke."""
+    open_pieces: frozenset[tuple[int, int]] = frozenset()
+    """Die Stücke, deren Säule außerhalb eines Kanals auf dem Modell aufsetzt —
+    an ihnen fragt der Rat, ob eine lange Brücke ihre Stütze auf dem Modell
+    braucht (:func:`open_bridge_width`)."""
+    open_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    """Diese Stücke wie ``channel_columns``: Grundriss, Höhe der Auflage, Höhe
+    des Stücks. Die Stützsperre spart ihre Säulen aus (:func:`channel_space`)."""
 
 
 def support_on_model(result: SliceResult) -> bool:
@@ -3092,6 +3115,44 @@ def support_on_model(result: SliceResult) -> bool:
     braucht.
     """
     return model_support(result).open_patch > EPS_GEOM
+
+
+def open_bridge_width(
+    result: SliceResult,
+    model: ModelSupport,
+    bridge_from: float = BRIDGE_FROM,
+    *,
+    above: float = 0.0,
+) -> float:
+    """Die längste Brücke, die über einem Stück außerhalb der Kanäle auf dem
+    Modell hängt, in mm (§22.2).
+
+    ``LayerInfo.bridge_width`` gilt der ganzen Schicht. An der Waschschüssel
+    (04.10.2026, Cura-Raster) war die Brücke von 17,3 mm das Gewölbe des
+    Kanals, und daneben hing auf derselben Schicht ein offenes Stück von
+    9,9 mm²; je für sich spannten sie 7,9 und 11,5 mm. Gemessen wird deshalb
+    nur die freie Fläche, die ein offenes Stück berührt, mit der Mindestwand,
+    mit der die Schicht gemessen wurde. Schichten, deren ganze Brücke nicht
+    über ``above`` reicht, werden nicht gefragt — ein Teil ihrer Fläche spannt
+    nie weiter.
+    """
+    pieces: dict[int, list[ShapelyPolygon]] = {}
+    for index, number in sorted(model.open_pieces):
+        if index > 0 and result.layers[index].bridge_width > above:
+            piece = result.layers[index].overhangs[number]
+            pieces.setdefault(index, []).append(ShapelyPolygon(piece.outline, piece.holes))
+    return max(
+        (
+            _bridge_width(
+                _material(result.layers[index]),
+                _material(result.layers[index - 1]),
+                bridge_from,
+                touching=unary_union(found),
+            )
+            for index, found in pieces.items()
+        ),
+        default=0.0,
+    )
 
 
 def model_support(
@@ -3315,6 +3376,16 @@ def _model_support(
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
+        open_pieces=frozenset(names[owner] for owner in landed if owner not in channels),
+        open_columns=tuple(
+            (
+                layers[names[owner][0]].overhangs[names[owner][1]],
+                float(layers[landed[owner][0]].z),
+                float(layers[names[owner][0]].z),
+            )
+            for owner in sorted(landed, key=lambda owner: names[owner])
+            if owner not in channels
+        ),
     )
 
 
@@ -3361,6 +3432,18 @@ def channel_space(
     reaches = shapely.buffer(footprints, CHANNEL_WIDTH / 2.0, quad_segs=CHANNEL_QUAD_SEGMENTS)
     lows = np.array([low for _outline, low, _high in columns])
     highs = np.array([high for _outline, _low, high in columns])
+    # **Die Sperre hält Stützen aus dem Kanal fern, nicht von einer Decke, die
+    # sie braucht.** Am Wedge-Lock (04.10.2026, Cura-Raster) lag ein Kanalstück
+    # von 7 mm² unter einer Brücke von 25 mm, deren Säule auf dem Modell
+    # aufsetzt; die Sperre um das Kanalstück füllte denselben Raum, und Cura
+    # stützte die Brücke gar nicht (0,0 statt 2,0 m). Die Säulen der übrigen
+    # Stücke auf dem Modell bleiben deshalb frei.
+    others = np.asarray(
+        [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in model.open_columns],
+        dtype=object,
+    )
+    other_lows = np.array([low for _outline, low, _high in model.open_columns])
+    other_highs = np.array([high for _outline, _low, high in model.open_columns])
     bottom = float(lows.min())
     top = float(highs.max())
     indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
@@ -3390,6 +3473,15 @@ def channel_space(
         kept = [part for part in _areas_of(free) if part.intersects(seeds)]
         if not kept:
             return None
+        crossing = (
+            (other_lows <= z_high + CHANNEL_SLAB) & (other_highs >= z_low)
+            if len(others)
+            else np.zeros(0, dtype=bool)
+        )
+        if crossing.any():
+            kept = _areas_of(unary_union(kept).difference(shapely.union_all(others[crossing])))
+            if not kept:
+                return None
         # **Eine Scheibe höher, in die Decke hinein.** Der Slicer fragt die
         # Sperre an der Überhangfläche, in deren eigener Schicht — und dort ist
         # die Decke Material, also kein freier Raum. Endete die Sperre unter

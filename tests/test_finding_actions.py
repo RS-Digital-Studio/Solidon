@@ -181,7 +181,7 @@ def test_the_report_offers_no_step_action_without_a_step() -> None:
 
 
 def test_a_smoothing_that_cost_too_much_offers_the_refinement_before_it() -> None:
-    """„Erst neu vernetzen, dann glätten." ist seit der Durchsicht 0.5.1 ein Knopf.
+    """„Erst die Kanten verfeinern, dann glätten." ist seit der Durchsicht 0.5.1 ein Knopf.
 
     ``mesh.smooth_shrank`` steht an einem Schritt, der durchlief; das Verfeinern
     gehört **davor**, wie die Reparatur vor einen gerundeten Schritt. Angeboten
