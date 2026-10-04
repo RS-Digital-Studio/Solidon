@@ -80,6 +80,53 @@ def test_surface_bound_accepts_different_triangle_partitions_without_moving_the_
     np.testing.assert_array_equal(before.raw.vertices, original)
 
 
+def test_a_divided_cell_asks_only_its_new_points(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-022: Eine geteilte Zelle fragt nur ihre Mitten und neuen Kantenmitten.
+
+    Die Ecken kennt sie schon von der Zelle, aus der sie entstand. Zwei
+    verschieden facettierte Zylinder zwingen die Schranke durch viele Teilungen;
+    je geteilte Zelle sind das vier Mitten und drei Kantenmitten statt
+    sechzehn Punkte. Sollwerte der Abweichung aus der Konstruktion: Kein Punkt
+    liegt weiter als die Sehnenhöhe des 35-Ecks ``r·(1 − cos(π/35))`` von der
+    anderen Haut, und jede Randecke des 48-Ecks so weit von der Kontur des
+    35-Ecks, wie shapely sie misst.
+    """
+    import math
+    from importlib import import_module
+
+    import shapely
+
+    from app.core.geom.difference import surface_distance_bound
+
+    module = import_module("app.core.geom.difference")
+    asked = []
+    original = module.on_surface
+
+    def counted(body, points, *, index=None):
+        asked.append(len(points))
+        return original(body, points, index=index)
+
+    monkeypatch.setattr(module, "on_surface", counted)
+    before, after = (
+        MeshData.of(trimesh.creation.cylinder(radius=5.0, height=10.0, sections=sections))
+        for sections in (48, 35)
+    )
+    result = surface_distance_bound(before, after, permitted_mm=0.05)
+    rims = [
+        vertices[(vertices[:, 2] > 0.0) & (np.hypot(vertices[:, 0], vertices[:, 1]) > 2.5)]
+        for vertices in (np.asarray(before.raw.vertices), np.asarray(after.raw.vertices))
+    ]
+    contour = shapely.Polygon(shapely.MultiPoint(rims[1][:, :2]).convex_hull).exterior
+    farthest = max(contour.distance(shapely.Point(x, y)) for x, y in rims[0][:, :2])
+    assert result.within_limit
+    assert result.lower_mm <= 5.0 * (1.0 - math.cos(math.pi / 35.0))
+    assert result.upper_mm >= farthest > 0.01
+    first = before.triangle_count + after.triangle_count
+    divided = (result.samples // 4 - first) // 4
+    assert divided > 1000
+    assert sum(asked) <= 4 * first + 7 * divided
+
+
 def test_an_exhausted_surface_check_never_certifies_the_shape() -> None:
     from app.core.geom.difference import surface_distance_bound
 
