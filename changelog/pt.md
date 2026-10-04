@@ -237,6 +237,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de Ctrl+Y, a linha de estado indica o passo refeito, como depois de Ctrl+Z.
 - As miniaturas dos exemplos e dos blocos mostram a altura para cima. Até agora as peças altas apontavam nelas para baixo.
 - Se o Solidon não conseguir guardar a opção «Incluir valores», o aviso aparece junto ao interruptor.
+- Se outros programas ocuparem todos os núcleos no Windows, um cálculo num modelo grande já não fica parado durante minutos.
 
 ## 0.5.1
 

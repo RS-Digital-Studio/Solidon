@@ -238,6 +238,7 @@ dans `website/version.json`.
 - Après Ctrl+Y, la ligne d'état nomme l'étape rétablie, comme après Ctrl+Z.
 - Les vignettes des exemples et des blocs montrent la hauteur vers le haut. Jusqu'ici, les pièces hautes y pointaient vers le bas.
 - Si Solidon ne peut pas enregistrer le choix « Inclure les valeurs », la remarque s'affiche directement à côté de l'interrupteur.
+- Si d'autres programmes occupent tous les cœurs sous Windows, un calcul sur un grand modèle ne reste plus bloqué pendant des minutes.
 
 ## 0.5.1
 

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-04 | [RM-380: Der Hilfsprozess verhungert nicht auf ausgelasteten Kernen, und seine Tests teilen keinen Plattencache (04.10.2026)](#rm-380-der-hilfsprozess-verhungert-nicht-auf-ausgelasteten-kernen-und-seine-tests-teilen-keinen-plattencache-04102026) |
 | 2026-10-04 | [RM-411: Langlöcher an schrägen und gestuften Trägern melden an beiden Kernen dasselbe (04.10.2026)](#rm-411-langlöcher-an-schrägen-und-gestuften-trägern-melden-an-beiden-kernen-dasselbe-04102026) |
 | 2026-10-04 | [RM-422: Langlöcher an ±X sind gedreht geprüft, und alte Projekte rechnen sie wie gespeichert (04.10.2026)](#rm-422-langlöcher-an-x-sind-gedreht-geprüft-und-alte-projekte-rechnen-sie-wie-gespeichert-04102026) |
 | 2026-10-04 | [RM-388: Schlüsselloch nach Bohrung und Drehdeckel am Randring sind als Originalwege geprüft (04.10.2026)](#rm-388-schlüsselloch-nach-bohrung-und-drehdeckel-am-randring-sind-als-originalwege-geprüft-04102026) |
@@ -40881,3 +40882,50 @@ Mindestdrucktempo in der Herstellerkette nennt, dass nicht verglichen wurde.
 
 Changelog: **ja** — der Zeitvergleich schlug seit der Slicer-Rückkopplung
 `d2efb2577` (ab v0.1.1) bei fast jedem Lauf an.
+
+## RM-380: Der Hilfsprozess verhungert nicht auf ausgelasteten Kernen, und seine Tests teilen keinen Plattencache (04.10.2026)
+
+<a id="rm-380-der-hilfsprozess-verhungert-nicht-auf-ausgelasteten-kernen-und-seine-tests-teilen-keinen-plattencache-04102026"></a>
+<a id="rm-380"></a>
+
+**RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei.**
+  Review 02.10.2026, Registerabgleich Geometrie, am HEAD `3fd3b1ace`. Beide Tests stammen aus
+  `a55e844ad`.
+  **Fehlerfall:** `pytest tests/test_kernel_process.py` am Stück: 1 failed, 79 passed, Exit 1 —
+  `KeyError: 'helper:display_simplify'` (`tests/test_kernel_process.py:1309`). Allein gefahren ist
+  der Test grün (Exit 0); direkt nach `test_the_coarse_preview_reduces_and_drills_in_the_helper`
+  (`:1183`) rot (1 failed, 1 passed, Exit 1). Der Vorschautest ruft `kernel_process.shutdown()`
+  und rechnet danach dieselbe Vorschau im Prozess (`:1216–1218`); der Fenstertest findet
+  anschließend keine `display_simplify`-Zählung — vermutlich weil die verkleinerte Vorschau aus
+  einem prozessweiten Speicher kommt oder die Zählung nach `shutdown` nicht neu angelegt wird.
+  Weil der Fenstertest (`qt_app`) nur beim Release läuft, fällt das im Entwicklungstor nicht auf.
+  **Fix:** Ursache am Zustand festmachen (Vorschau-Cache bzw. `statistics()` nach `shutdown`) und
+  im Fixture `offloaded` zurücksetzen; nicht die Zusicherung lockern. `.get(...)` statt `[...]`
+  allein wäre keine Behebung.
+  **Abnahme:** `tests/test_kernel_process.py` am Stück und in umgekehrter Reihenfolge grün; die
+  Zusicherung `>= 1` bleibt. Belege: `F:\solidon-review-reports\kp_order.txt`, `kp_file.txt`,
+  `register-geometrie.md`.
+
+**Abschluss 04.10.2026** (`claude/rm380-helfer`, `d7c9b8f37`, `d8b34c63e`). Zwei Ursachen.
+**Zustand zwischen den Fällen** war der prozessweite Plattencache der Suite: `Session()` baut
+`disk_backed_cache()`, und nach `test_applying_a_large_refinement_refines_in_the_helper` holte der
+Fenstertest dieselbe Verfeinerung von der Platte (drei Plattentreffer, gemessen) — am Ausgang
+`KeyError: 'helper:refine_conforming'`, im Befund vom 02.10. derselbe Mechanismus nach dem
+Vorschaufall. `tests/test_kernel_process.py::_ellipsoid_session` gibt der Sitzung vor dem Import
+einen Cache nur im Speicher; der Vorschaufall rechnet seinen Hauptfadenvergleich mit eigenem
+Cache, statt Bohrung und Verkleinerung aus dem Cache des Nebenfadens mit sich selbst zu
+vergleichen. **Die 120-s-Abbrüche im Tor waren ein Verhungern, keine Rechenzeit:**
+`component_labels` lud `trimesh.graph` (987 Module, knapp eine CPU-Sekunde) erst, nachdem sich der
+Hilfsprozess unter Windows auf BELOW_NORMAL gestellt hatte; auf zwei ausgelasteten Kernen nach
+301 s nicht fertig (CPU 0,36 → 0,92 s), mit `kernel_jobs.PREPARATIONS` (Nachladen in normaler
+Klasse vor dem Zurückstellen) nach 6,2 s. Die Zeitgrenze bleibt. Der Fehler lag in v0.5.1
+(`575841694`, `a55e844ad`). Wächter: `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
+verlangt für jede der zwölf Rechnungen, dass sie zurückgestellt kein Modul nachlädt
+(`tests/kernel_helper_probe.py`); Regel in `.claude/rules/kern.md`. Vorher rot: Datei allein
+1 failed/144 passed; Sitzungsfälle umgekehrt zwei rot; `[component_labels]` auf zwei ausgelasteten
+Kernen 120-s-Abbruch; Gegenprobe ohne Vorbereitung rot mit Modulliste. Nachher grün: Datei 20×
+allein je 145 passed, umgekehrt grün, 18 Nachbardateien unter `-n 10 --dist worksteal` 2× 2042
+passed, ganze Datei auf zwei ausgelasteten Kernen 145 passed (langsamster Fall 35,5 s),
+Entwicklungstor (`-n 5`) 23 658 passed, Exit 0. Belege: `F:\solidon-review-reports\claude-2026-10-04\rm380-helfer\`,
+Sonde und Messung im Repository unter
+`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/hunger.py`. Changelog: **ja**, der Fehler lag in v0.5.1.

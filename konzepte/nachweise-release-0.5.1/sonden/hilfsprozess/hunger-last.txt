@@ -1,0 +1,76 @@
+Last: 4 Schleifen, Affinität 0xc0000000, Klasse 0x20
+  Hilfsprozess 3728, Affinität 0xc0000000
+       5.0 s  CPU  1.58 s  Klasse 0x4000
+       6.2 s  CPU  1.58 s  Klasse 0x20
+1 component_labels, wie ausgeliefert: fertig nach 6.2 s (Ergebnis, helper=1, fallback=0)
+  Hilfsprozess 56440, Affinität 0xc0000000
+       5.1 s  CPU  0.36 s  Klasse 0x4000
+      10.1 s  CPU  0.36 s  Klasse 0x4000
+      15.1 s  CPU  0.36 s  Klasse 0x4000
+      20.2 s  CPU  0.36 s  Klasse 0x4000
+      25.2 s  CPU  0.36 s  Klasse 0x4000
+      30.2 s  CPU  0.36 s  Klasse 0x4000
+      35.2 s  CPU  0.38 s  Klasse 0x4000
+      40.2 s  CPU  0.38 s  Klasse 0x4000
+      45.2 s  CPU  0.38 s  Klasse 0x4000
+      50.2 s  CPU  0.38 s  Klasse 0x4000
+      55.3 s  CPU  0.38 s  Klasse 0x4000
+      60.3 s  CPU  0.38 s  Klasse 0x4000
+      65.3 s  CPU  0.41 s  Klasse 0x4000
+      70.3 s  CPU  0.41 s  Klasse 0x4000
+      75.3 s  CPU  0.41 s  Klasse 0x4000
+      80.4 s  CPU  0.41 s  Klasse 0x4000
+      85.4 s  CPU  0.41 s  Klasse 0x4000
+      90.4 s  CPU  0.42 s  Klasse 0x4000
+      95.4 s  CPU  0.44 s  Klasse 0x4000
+     100.4 s  CPU  0.44 s  Klasse 0x4000
+     105.5 s  CPU  0.44 s  Klasse 0x4000
+     110.5 s  CPU  0.44 s  Klasse 0x4000
+     115.5 s  CPU  0.44 s  Klasse 0x4000
+     120.5 s  CPU  0.44 s  Klasse 0x4000
+     125.5 s  CPU  0.44 s  Klasse 0x4000
+     130.6 s  CPU  0.44 s  Klasse 0x4000
+     135.6 s  CPU  0.44 s  Klasse 0x4000
+     140.6 s  CPU  0.47 s  Klasse 0x4000
+     145.6 s  CPU  0.48 s  Klasse 0x4000
+     150.6 s  CPU  0.50 s  Klasse 0x4000
+     155.7 s  CPU  0.50 s  Klasse 0x4000
+     160.7 s  CPU  0.52 s  Klasse 0x4000
+     165.7 s  CPU  0.52 s  Klasse 0x4000
+     170.7 s  CPU  0.52 s  Klasse 0x4000
+     175.7 s  CPU  0.52 s  Klasse 0x4000
+     180.7 s  CPU  0.52 s  Klasse 0x4000
+     185.8 s  CPU  0.53 s  Klasse 0x4000
+     190.8 s  CPU  0.53 s  Klasse 0x4000
+     195.8 s  CPU  0.53 s  Klasse 0x4000
+     200.8 s  CPU  0.55 s  Klasse 0x4000
+     205.8 s  CPU  0.55 s  Klasse 0x4000
+     210.8 s  CPU  0.55 s  Klasse 0x4000
+     215.9 s  CPU  0.55 s  Klasse 0x4000
+     220.9 s  CPU  0.58 s  Klasse 0x4000
+     225.9 s  CPU  0.61 s  Klasse 0x4000
+     230.9 s  CPU  0.64 s  Klasse 0x4000
+     235.9 s  CPU  0.69 s  Klasse 0x4000
+     241.0 s  CPU  0.72 s  Klasse 0x4000
+     246.0 s  CPU  0.73 s  Klasse 0x4000
+     251.0 s  CPU  0.75 s  Klasse 0x4000
+     256.0 s  CPU  0.78 s  Klasse 0x4000
+     261.1 s  CPU  0.80 s  Klasse 0x4000
+     266.1 s  CPU  0.84 s  Klasse 0x4000
+     271.1 s  CPU  0.86 s  Klasse 0x4000
+     276.1 s  CPU  0.86 s  Klasse 0x4000
+     281.1 s  CPU  0.86 s  Klasse 0x4000
+     286.1 s  CPU  0.86 s  Klasse 0x4000
+     291.1 s  CPU  0.86 s  Klasse 0x4000
+     296.2 s  CPU  0.92 s  Klasse 0x4000
+     301.2 s  CPU  0.92 s  Klasse 0x4000
+2 component_labels, ohne Vorbereitung: NICHT fertig nach 301.2 s (Ergebnis, helper=0, fallback=0)
+kernel helper 56440 died during component_labels (1 triangles): [WinError 6] Das Handle ist ungültig
+  Hilfsprozess 8844, Affinität 0xc0000000
+       2.9 s  CPU  1.38 s  Klasse 0x20
+3 component_labels, nicht zurückgestellt: fertig nach 2.9 s (Ergebnis, helper=1, fallback=0)
+  Hilfsprozess 48324, Affinität 0xc0000000
+       3.2 s  CPU  0.30 s  Klasse 0x20
+4 simplify_closed, wie ausgeliefert: fertig nach 3.2 s (Ergebnis, helper=1, fallback=0)
+Exception ignored while deallocating overlapped operation <_winapi.Overlapped object at 0x000002851EB86400>:
+PythonFinalizationError: I/O operations still in flight while destroying Overlapped object, the process may crash

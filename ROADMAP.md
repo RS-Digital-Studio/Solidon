@@ -135,7 +135,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `rendering`-Fälle in der Release-CI auf Linux und macOS und in `latest` fahren — oder Roberts Entscheidung festhalten und Wächter nachziehen |
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, Regel mit Datum, veraltete Regeln und Registerzellen |
 | [RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung](#rm-350) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `continue-on-error: true` am Job `latest` oder eigener Workflow; Wächter in `test_packaging.py` |
-| [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
@@ -4895,26 +4894,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   kann; vor dem nächsten Release-Tag. Bauplan §37.2. Beleg: `bericht-E.md` (H1),
   `sonden\e_sign_conclusion.txt`.
   Nachprüfung am Stand `6ce767031`: besteht noch. Im Arbeitsbaum nur entschärft, solange das Repository privat ist; `continue-on-error` fehlt weiter.
-
-<a id="rm-380"></a>
-
-- [ ] **RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei.**
-  Review 02.10.2026, Registerabgleich Geometrie, am HEAD `3fd3b1ace`. Beide Tests stammen aus
-  `a55e844ad`.
-  **Fehlerfall:** `pytest tests/test_kernel_process.py` am Stück: 1 failed, 79 passed, Exit 1 —
-  `KeyError: 'helper:display_simplify'` (`tests/test_kernel_process.py:1309`). Allein gefahren ist
-  der Test grün (Exit 0); direkt nach `test_the_coarse_preview_reduces_and_drills_in_the_helper`
-  (`:1183`) rot (1 failed, 1 passed, Exit 1). Der Vorschautest ruft `kernel_process.shutdown()`
-  und rechnet danach dieselbe Vorschau im Prozess (`:1216–1218`); der Fenstertest findet
-  anschließend keine `display_simplify`-Zählung — vermutlich weil die verkleinerte Vorschau aus
-  einem prozessweiten Speicher kommt oder die Zählung nach `shutdown` nicht neu angelegt wird.
-  Weil der Fenstertest (`qt_app`) nur beim Release läuft, fällt das im Entwicklungstor nicht auf.
-  **Fix:** Ursache am Zustand festmachen (Vorschau-Cache bzw. `statistics()` nach `shutdown`) und
-  im Fixture `offloaded` zurücksetzen; nicht die Zusicherung lockern. `.get(...)` statt `[...]`
-  allein wäre keine Behebung.
-  **Abnahme:** `tests/test_kernel_process.py` am Stück und in umgekehrter Reihenfolge grün; die
-  Zusicherung `>= 1` bleibt. Belege: `F:\solidon-review-reports\kp_order.txt`, `kp_file.txt`,
-  `register-geometrie.md`.
 
 <a id="rm-387"></a>
 

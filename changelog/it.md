@@ -237,6 +237,7 @@ scrive in `website/version.json`.
 - Dopo Ctrl+Y, la riga di stato indica il passaggio ripristinato, come dopo Ctrl+Z.
 - Le anteprime di esempi e blocchi mostrano l'altezza verso l'alto. Finora i pezzi alti vi puntavano verso il basso.
 - Se Solidon non riesce a salvare la scelta «Includi i valori», l'avviso compare direttamente accanto all'interruttore.
+- Se altri programmi occupano tutti i core su Windows, un calcolo su un modello grande non resta più fermo per minuti.
 
 ## 0.5.1
 

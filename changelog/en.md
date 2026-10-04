@@ -237,6 +237,7 @@ it into `website/version.json`.
 - After Ctrl+Y, the status line names the step that was redone, as it does after Ctrl+Z.
 - Preview images of examples and catalogue parts show height pointing up. Until now tall parts pointed downwards in them.
 - If Solidon cannot save the *Include values* choice, the note appears right at the switch.
+- If other programs keep every core busy under Windows, a calculation on a large model no longer stalls for minutes.
 
 ## 0.5.1
 
