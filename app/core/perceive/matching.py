@@ -806,6 +806,86 @@ def settled_by_surface(
     )
 
 
+def surface_places(
+    features: Mapping[FeatureId, Feature],
+    names: Collection[FeatureId],
+    mesh: Mesh | None,
+    movement: Transform | None,
+) -> dict[FeatureId, Any]:
+    """Wo die Oberfläche jedes dieser Merkmale liegt: der Schwerpunkt seiner Dreiecke.
+
+    Flächengewichtet, damit ihn die Teilung der Dreiecke nicht verschiebt;
+    ``movement`` bringt ihn in den Rahmen nach dem Schritt
+    (``geom.transform.moved_points``, ohne BLAS — der Ort entscheidet zwischen
+    Zwillingen). Ein Merkmal ohne Dreiecke oder mit Nummern, die dieses Netz
+    nicht hat, bekommt keinen Ort.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import moved_points
+
+    if not isinstance(mesh, MeshData) or not names:
+        return {}
+    body = mesh.raw
+    count = len(body.faces)
+    centres = np.asarray(body.triangles_center, dtype=float)
+    areas = np.asarray(body.area_faces, dtype=float)
+    places: dict[FeatureId, Any] = {}
+    for name in names:
+        feature = features.get(name)
+        if feature is None or not feature.face_indices:
+            continue
+        faces = np.asarray(feature.face_indices, dtype=np.int64)
+        if int(faces.min()) < 0 or int(faces.max()) >= count:
+            continue
+        weights = areas[faces]
+        total = float(weights.sum())
+        if not total > 0.0:
+            continue
+        place = (centres[faces] * weights[:, None]).sum(axis=0) / total
+        if movement is not None:
+            place = moved_points(place.reshape(1, 3), np.asarray(movement, dtype=float))[0]
+        places[name] = place
+    return places
+
+
+def settled_twins(
+    result: MatchResult,
+    before: Mapping[FeatureId, Feature],
+    old_mesh: Mesh | None,
+    after: Mapping[FeatureId, Feature],
+    new_mesh: Mesh | None,
+    diagonal: float,
+    *,
+    movement: Transform | None = None,
+) -> MatchResult:
+    """:func:`settled_by_surface` mit den Lagen beider Seiten — für jeden Weg,
+    der alte Merkmale den neuen eines Körpers zuordnet.
+
+    ``before`` trägt die Dreiecke der alten Merkmale auf ``old_mesh``, ``after``
+    die der neuen auf ``new_mesh``; ``movement`` ist die Bewegung des Schritts.
+    Wer nur einen Teil der alten Merkmale an ihren alten Dreiecken kennt, gibt
+    nur diesen Teil: Ein Zwilling ohne Ort wird nicht entschieden.
+
+    **Dieselbe Frage am Netz und am exakten Kern** (RM-226, Nachtrag
+    04.10.2026): Zwei gleiche Rundungen — die Wandstücke einer Tasche zwischen
+    zwei Schlitzen, zwei Stücke eines Kegelmantels — sind für :func:`match` ein
+    Merkmal zweimal. Die Auswertung am Netz entschied sie schon an der Lage
+    ihrer Oberfläche; der Neubau eines exakten Körpers und seine Auswertung
+    nicht — am Teppichclip hießen ``cone_4`` und ``cone_11`` nach einer
+    Bohrung anderswo ``cone_12`` und ``cone_13``.
+    """
+    if not result.ambiguous:
+        return result
+    return settled_by_surface(
+        result,
+        surface_places(before, set(result.ambiguous), old_mesh, movement),
+        surface_places(
+            after, {name for names in result.ambiguous.values() for name in names}, new_mesh, None
+        ),
+        diagonal,
+    )
+
+
 def require_injective(mapping: Mapping[str, str]) -> None:
     """Verhindert doppelte Nachfolger vor jeder Namen- und Erzeugerübernahme."""
     if len(set(mapping.values())) != len(mapping):

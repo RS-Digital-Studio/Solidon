@@ -104,6 +104,12 @@ Sie ist eine Provenienz-ID (§21.2); Passungen und Operationen hängen an ihr.
   statt Douglas-Peucker).
 - **Unter `perceive.features.MIN_ROUND_ARC` ist eine Rundform eine Kante**, an
   beiden Kernen (Entscheidung Robert); jede neue Rundform fragt dieselbe Zahl.
+- **Zwillinge behalten ihren Namen nach der Lage ihrer Oberfläche**
+  (`schichtanalyse.md`, „Stabile IDs“): Jeder Weg, der alte Merkmale neuen
+  zuordnet — die Auswertung an beiden Kernen, jeder exakte Neubau in
+  `geom/prepare_ops.py`, der Baustein am exakten Träger —, entscheidet sie
+  nach `match` über `perceive.matching.settled_twins`; sonst heißen zwei
+  gleiche Rundungen nach jeder Kopie anders.
 
 ## Was je Aufruf teuer ist, gehört nicht in eine Schleife über Flecken
 

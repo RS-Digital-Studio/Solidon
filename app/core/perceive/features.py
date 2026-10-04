@@ -14650,6 +14650,10 @@ def _merged_tori(
     zweimal *ja* und viermal *nein*. Der Fit muss deshalb nur noch beweisen,
     dass er überhaupt ein Ring ist — dass er unter der Gütegrenze bleibt, ab
     der eine Fläche als rund gilt.
+
+    **Auch über einen Durchbruch hinweg**: Zwei Bögen desselben Rings, die
+    ein Durchbruch trennt, sind ein Ring — der exakte Kern liest sie ebenso
+    (``brep.features._joined_tori``, RM-226 Nachtrag 04.10.2026).
     """
     if len(found) < 2:
         return found
