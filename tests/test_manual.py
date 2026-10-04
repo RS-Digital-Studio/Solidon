@@ -1408,11 +1408,12 @@ def test_a_generated_chapter_shows_its_title_in_the_window_too(qt_app: QApplicat
     reference = window.text.toPlainText()
     assert reference.startswith(str(CATEGORIES["holes"])), reference[:80]
     # Der Kategoriename kann auch ein Feldtitel sein; nur wirkliche
-    # Kapitelüberschriften zählen, keine gleichlautenden Klartextzeilen.
+    # Kapitelüberschriften zählen, keine gleichlautenden Klartextzeilen. Die
+    # Ebene ist Sache der Darstellung (Seitentitel ``h2``, Operationen ``h3``).
     headings = []
     block = window.text.document().begin()
     while block.isValid():
-        if block.blockFormat().headingLevel() == 1:
+        if block.blockFormat().headingLevel() > 0:
             headings.append(block.text())
         block = block.next()
     assert headings.count(str(CATEGORIES["holes"])) == 1, "und nicht zweimal"

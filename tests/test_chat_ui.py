@@ -1058,7 +1058,7 @@ def test_the_probe_says_what_a_useless_model_means(
     assert "führt aber nichts aus" in dialog.probe_result.text()
 
     dialog._probe_done(True, llm.Speed())
-    assert "brauchbar" in dialog.probe_result.text()
+    assert "Werkzeugprobe bestanden" in dialog.probe_result.text()
 
     dialog._probe_done(None, llm.Speed())
     assert "ollama serve" in dialog.probe_result.text(), "kein Ergebnis ist kein Urteil"
@@ -2018,7 +2018,7 @@ def test_a_model_on_a_graphics_card_gets_the_plain_answer(
     dialog = KeyDialog()
     dialog._probe_done(True, llm.Speed(tokens_per_second=850.0))
 
-    assert "brauchbar" in dialog.probe_result.text()
+    assert "Werkzeugprobe bestanden" in dialog.probe_result.text()
     assert "Prozessor" not in dialog.probe_result.text()
     assert "Grafikkarte" in dialog.probe_result.text()
     assert "Sekunden" not in dialog.probe_result.text(), (

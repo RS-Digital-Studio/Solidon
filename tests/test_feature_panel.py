@@ -1291,11 +1291,18 @@ def test_a_rounding_shows_its_radius_and_sends_the_diameter(
     """Das angezeigte Rundungsmaß gilt für Vorschau und Übernehmen, auch in Zoll."""
     from app.ui.labels import set_display_unit
 
+    # Eine Kantenrundung hat eine Achse; ohne sie ist es die Kugel einer
+    # verrundeten Ecke, an der *Merkmal ändern* absagt (RM-226).
     feature = Feature(
         id="fillet_1",
         kind="fillet",
         provenance="detected",
-        params={"radius": 11.96, "recess": recess, "centre": (0.0, 0.0, 0.0)},
+        params={
+            "radius": 11.96,
+            "recess": recess,
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+        },
     )
     panel = FeaturePanel()
     try:
