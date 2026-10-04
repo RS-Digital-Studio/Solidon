@@ -1065,6 +1065,27 @@ gleichen Radius, und auf den ganzen Verbund passt keine Form.
   so einer der 41 unveröffentlichten Ringe verloren, die das Freiformurteil
   tragen. Ein Ziel ersetzt nur seine eigenen Kandidaten, und die des ganzen
   Flecks nur, wenn es der ganze Fleck ist.
+- **Warum die Suche nach `TANGENTIAL_FIRST_SEEDS` und
+  `TANGENTIAL_FUTILE_SEEDS` vergeblichen Keimen endet:** Die Runde keimte an
+  jeder geknickten Naht eines Ziels, auch an organischen. Über den Korpus
+  kostete sie 97 s Wandzeit bei 691 s Prozesszeit der ganzen Erkennung; am
+  Baum mit Tablett 49 150 Keime und zwölf Sekunden in einem Krümmungsstück
+  aus 172 356 Dreiecken für sechs Splitter, die die Freiformprobe ohnehin
+  verwirft (Erkennung 3,5 s vor der Runde, 18,2 s mit ihr), am Minigolfteil
+  `xobj_1` 3 855 Keime ohne Treffer.
+  Die Keime laufen nach Nahtlänge; ein Verbund zeigt seinen ersten Zylinder
+  an den längsten Nähten. Gemessen je Ziel (225 Körper, 3 714 Ziele, 293 mit
+  Treffern): der erste Treffer meist am ersten Keim, spätestens am 756.
+  (Besteckkasten, ohne Wirkung auf die Merkmale), sonst bis zum 177.; die
+  längste Lücke danach 2 427 Keime (Rucksackhalter, eine echte Rundung
+  R 1,57, die eine Grenze von 1 024 kostete). Mit 1 024 und 4 096 verliert
+  nur der Baum seine Splitter, kein Körper ein Merkmal; die Runde spart rund
+  31 s, der Baum braucht 5,6 statt 18,2 s, das Minigolfteil 13,5 statt 17,8 s
+  (Lauf im Wechsel unter Fremdlast). Greift die erste Grenze, bleibt das Ziel,
+  was es ohne die Runde war. **Verworfen:** eine einzige Grenze für beide
+  Abschnitte (4 096 spart die Hälfte, 1 024 kostet die Rundung des
+  Rucksackhalters), ein Anteil erklärter Dreiecke (oben, Würfel 1,5 Prozent)
+  und eine Zielgröße (der Verbund am Elegoo-Erstdruck hat 47 199 Dreiecke).
 - **Was offen bleibt:** Fein vernetzte Rundungen (Durchbiegung 0,01 mm und
   feiner) zählt die Haut vor der sechsten Runde zur Freiform, wie vorher;
   ein breiter Mantelstreifen der Ebenenregel bleibt ohne Merkmal. Gemessen an

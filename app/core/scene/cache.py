@@ -176,7 +176,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 46 (RM-226): Ein Langloch ist am exakten Kern so tief wie seine ganze
 #:   Wand, über beide Bögen; ein Zylinder mit schrägem oder freiem Rand misst
 #:   seine Achsgrenzen an der Form statt an den Parametergrenzen.
-CACHE_FORMAT_VERSION: Final = 46
+#: - 47 (RM-226): Die tangentiale Trennung gibt ein Ziel nach
+#:   ``TANGENTIAL_FIRST_SEEDS`` vergeblichen Keimen auf, nach dem ersten
+#:   Stück nach ``TANGENTIAL_FUTILE_SEEDS`` in Folge.
+CACHE_FORMAT_VERSION: Final = 47
 
 
 @dataclass(frozen=True, slots=True)

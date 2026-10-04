@@ -908,6 +908,23 @@ SEAM_SPREAD: Final = 0.1
 #: diese Grenze nimmt nur, was schon für sich zu kurz ist.
 TANGENTIAL_MIN_LENGTH: Final = 0.4
 
+#: Wie viele vergebliche Keime :func:`_tangential_cylinders` an einem Ziel
+#: bis zum ersten Zylinderstück bearbeitet (``TANGENTIAL_FIRST_SEEDS``) und
+#: danach in Folge (``TANGENTIAL_FUTILE_SEEDS``). Die Keime laufen nach
+#: Nahtlänge, die längste zuerst, und ein Verbund aus Rundungen zeigt seinen
+#: ersten Zylinder an den längsten Nähten, den Mantellinien: Über den Korpus
+#: ``F:\3D Dateien`` (225 Körper, 293 Ziele mit Treffern) kam der erste
+#: Treffer meist am ersten Keim, spätestens am 756. (Besteckkasten, ein Stück
+#: ohne Wirkung auf die Merkmale), sonst bis zum 177.; zwischen zwei Treffern
+#: lagen höchstens 2 427 vergebliche (Rucksackhalter, eine echte Rundung
+#: R 1,57). Eine organische Haut keimt dagegen an fast jeder Naht — am Baum
+#: mit Tablett 49 150 Keime, zwölf Sekunden, für sechs Splitter, die die
+#: Freiformprobe ohnehin verwirft. Greift die erste Grenze, bleibt das Ziel,
+#: was es ohne die sechste Runde war. Arbeitsgrenzen, keine Toleranzen; sie
+#: gelten, solange die Keime nach Länge laufen.
+TANGENTIAL_FIRST_SEEDS: Final = 1024
+TANGENTIAL_FUTILE_SEEDS: Final = 4096
+
 #: Wie viele Nachbarflächen einer kugeligen Fläche selbst Kantenverrundungen
 #: mit ihrem Radius sein müssen (:func:`rounds_the_corner`), damit sie als Ecke
 #: gilt — die Stelle, an der verrundete Kanten zusammenlaufen. Zwei, weil eine
@@ -11062,7 +11079,9 @@ def _tangential_cylinders(
     Ausrundung mit wanderndem Radius), sind ganz verbraucht; eine Spalte und
     ein zu kleines oder zu kurzes Stück mit ihren Dreiecken. Am Würfel mit
     gerundeten Kanten (250 488 Dreiecke) keimten sonst über 4 000 Nähte für
-    keinen Zylinder.
+    keinen Zylinder. **Und ein Ziel, an dem :data:`TANGENTIAL_FIRST_SEEDS`
+    Keime vor dem ersten Stück oder :data:`TANGENTIAL_FUTILE_SEEDS` danach in
+    Folge nichts tragen, ist kein Verbund aus Rundungen**: Die Suche endet.
     """
     if check_cancelled is not None:
         check_cancelled()
@@ -11122,6 +11141,9 @@ def _tangential_cylinders(
     seen = np.zeros(count, dtype=np.int32)
     floods = 0
     found: list[list[int]] = []
+    # Vergebliche Keime seit dem Anfang oder dem letzten Treffer
+    # (:data:`TANGENTIAL_FIRST_SEEDS`, :data:`TANGENTIAL_FUTILE_SEEDS`).
+    futile = 0
 
     def flood(start: Sequence[int], accept: Callable[[np.ndarray], np.ndarray]) -> list[int]:
         """Die freien Fleckdreiecke, die ``accept`` zulässt und mit ``start`` zusammenhängen.
@@ -11179,6 +11201,9 @@ def _tangential_cylinders(
         first, second = (int(value) for value in sides[index])
         if claimed[first] or claimed[second] or (spent[first] and spent[second]):
             continue
+        if futile >= (TANGENTIAL_FUTILE_SEEDS if found else TANGENTIAL_FIRST_SEEDS):
+            break
+        futile += 1
         band = flood((first, second), upright_to(seed_axes[index]))
         if _face_count(body, band) < MIN_PATCH_FACES:
             # Nicht verbraucht: Dasselbe Dreieck liegt für die Achse seiner
@@ -11260,6 +11285,7 @@ def _tangential_cylinders(
             continue
         claimed[np.asarray(region, dtype=np.intp)] = True
         found.append(region)
+        futile = 0
     return found
 
 

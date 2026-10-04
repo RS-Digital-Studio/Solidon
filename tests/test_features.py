@@ -4101,6 +4101,41 @@ def test_a_round_that_borders_only_the_rest_of_its_target_does_not_stand() -> No
     assert _enclosed_rounds(touching, settled, flat) == {0, 9}
 
 
+def test_the_tangential_search_gives_up_on_a_skin_without_rounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine glatte Haut keimt nicht an jeder ihrer Nähte (RM-226).
+
+    Die sechste Runde keimte an jeder geknickten Naht eines Ziels — am Baum
+    mit Tablett aus dem Korpus 49 150 Keime, zwölf Sekunden, für sechs
+    Splitter, am Ellipsoid hier 592 Bänder für nichts. Ein Ziel, an dem
+    ``TANGENTIAL_FIRST_SEEDS`` Keime vor dem ersten Zylinderstück nichts
+    tragen, gibt sie auf. Die Grenzen selbst sind am Korpus gemessen (siehe
+    dort); hier stehen sie klein, damit das kleine Ellipsoid die Abkürzung
+    zeigt. Gezählt werden die Keime, deren Band für eine Einpassung reicht
+    (``_band_seed``); eine Zeitgrenze wäre maschinenabhängig. Das Ellipsoid
+    bleibt, was es war: eine gekrümmte Fläche.
+    """
+    from app.core.perceive.features import _band_seed
+
+    seeded = 0
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        nonlocal seeded
+        seeded += 1
+        return _band_seed(*args, **kwargs)
+
+    monkeypatch.setattr(features_module, "_band_seed", counted)
+    monkeypatch.setattr(features_module, "TANGENTIAL_FIRST_SEEDS", 64, raising=False)
+    monkeypatch.setattr(features_module, "TANGENTIAL_FUTILE_SEEDS", 128, raising=False)
+    forget_cache()
+    solid = trimesh.creation.icosphere(subdivisions=5, radius=10.0)
+    solid.apply_scale((1.0, 1.3, 0.7))
+    found = detect(MeshData.of(solid))
+    assert sorted(feature.kind for feature in found.values()) == ["curved_face"]
+    assert 0 < seeded <= 64
+
+
 def test_a_freeform_keeps_the_countersink_that_hangs_on_a_bore() -> None:
     """Der Preis, den ``_shapes_on_a_freeform`` bis zum 10.09.2026 offen trug.
 
