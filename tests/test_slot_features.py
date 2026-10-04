@@ -3306,6 +3306,82 @@ def test_a_slot_whose_end_opens_into_a_step_wall_is_no_slot_on_either_kernel(
         assert float(slots[0].params["depth"]) == pytest.approx(10.0, abs=0.01)
 
 
+@pytest.mark.parametrize(
+    ("operation", "slot", "shift"),
+    [
+        ("move_feature", (16.0, 0.0), 2.0),
+        ("move_feature", (10.0, 90.0), 8.0),
+        ("duplicate_feature", (10.0, 90.0), 12.0),
+    ],
+    ids=["move-along", "move-across", "duplicate-across"],
+)
+def test_a_slot_set_up_a_slanted_plate_says_the_same_on_both_kernels(
+    profile: Profile, operation: str, slot: tuple[float, float], shift: float
+) -> None:
+    """Starr versetzt endet ein Langloch an seinen mitbewegten Randebenen (RM-411).
+
+    Längs der schrägen Oberseite (z = 10 + x/4) liegt die Fläche an der neuen Stelle
+    höher als die mitgenommene obere Randebene: Es bleibt eine Haut, und das Langloch
+    geht nicht mehr durch. Das Netz sagte ``no_longer_through`` und nannte es nicht
+    mehr durchgehend; der exakte Kern sagte ``mouth_covered`` und nannte es weiter
+    durchgehend — sein einzelner Hohlraum fragte die Säule im Schlauch nicht
+    (``_exact_through_checked``), die Kette schon.
+    """
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.scene.cancel import NeverCancelled
+
+    load_operations()
+    length, angle = slot
+    carrier, _length, _probe = _raised_carrier(True)
+    slotted = edit.slot_bore(
+        carrier,
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=40.0,
+        length=length,
+        angle_deg=angle,
+        overlap=0.0,
+    )
+    said: dict[str, set[str]] = {}
+    for kernel in ("mesh", "brep"):
+        if kernel == "brep":
+            entry = SceneObject(
+                id="obj_1", name="Platte", mesh=slotted, kind="brep", features=features_of(slotted)
+            )
+        else:
+            mesh = MeshData.of(as_mesh_data(slotted).raw.copy())
+            entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+        original = next(feature for feature in entry.features.values() if feature.kind == "slot")
+        x, y, z = (float(value) for value in original.params["centre"])
+        spec = REGISTRY.get(operation)
+        # Die Merkmale, die die Operation selbst ausgibt — die Auskunft, die der
+        # Steckbrief bis zur nächsten Erkennung zeigt; keine Neuerkennung dazwischen.
+        result = spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(at_feature=original.id, x=x + shift, y=y, z=z),
+                profile=profile,
+                quality="fine",
+                seed=7,
+                progress=lambda fraction, text: None,
+                ask=lambda question, options: options[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+        said[kernel] = {finding.code for finding in result.findings}
+        placed = [
+            feature
+            for name, feature in result.outputs[0].features.items()
+            if feature.kind == "slot" and (operation == "move_feature" or name != original.id)
+        ]
+        assert [feature.params.get("through") for feature in placed] == [False], (kernel, placed)
+    assert said["mesh"] == said["brep"] == {f"{operation}.no_longer_through"}, said
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 @pytest.mark.parametrize("quality", ["draft", "fine"])
 @pytest.mark.parametrize("params", [{"x": 8.0}, {"diameter": 4.0}], ids=["moved", "narrow"])

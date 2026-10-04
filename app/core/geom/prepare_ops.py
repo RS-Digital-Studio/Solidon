@@ -4361,7 +4361,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper zuerst verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="10",
+    # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
+    cache_version="11",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4732,7 +4733,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
     # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="7",
+    # 8: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
+    cache_version="8",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -12581,6 +12583,11 @@ def _exact_move_cavity(
     result = _exact_cavity_result(
         ctx, source, placed, op="move_feature", expected=expected, findings=findings
     )
+    # **Dieselbe Säule wie an der Kette** (RM-411): Ein Langloch, längs einer
+    # schrägen Fläche versetzt, endet an seiner mitgenommenen Randebene unter der
+    # Fläche. Die Erkennung nannte es weiter durchgehend, und nur die Mündung
+    # meldete sich; das Netz sagt „geht nicht mehr durch“.
+    result = _exact_through_checked(ctx, result, feature.id, tool, "move_feature")
     return _exact_mouth_checked(result, "move_feature", source, feature, travel)
 
 
@@ -12613,6 +12620,8 @@ def _exact_duplicate_cavity(
     if nothing is not None:
         findings.append(nothing)
     result = _exact_copy_result(ctx, source, placed, [copy], findings)
+    # Dieselbe Säule wie beim Versetzen und an der Kette (RM-411).
+    result = _exact_through_checked(ctx, result, copy.id, tool, "duplicate_feature")
     return _exact_mouth_checked(result, "duplicate_feature", source, feature, travel)
 
 

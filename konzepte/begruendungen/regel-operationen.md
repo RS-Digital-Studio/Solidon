@@ -1184,6 +1184,15 @@ eine Bohrung in eine vergrabene Senkung durchgehend. **Und die Säule liegt im
 Werkzeug** (`_inscribed_radius`): Versetzt wird das Vieleck der Datei, und eine
 Säule 0,02 mm unter dem Durchmesser traf an einem 32-Eck jede Sehne — „geht
 nicht mehr durch" an einer glatt versetzten Bohrung einer Furnierplatte.
+**Und der einzelne Hohlraum fragt dieselbe Säule** (RM-411, 04.10.2026): Nur
+die Kette rief `_exact_through_checked`, `_exact_move_cavity` und
+`_exact_duplicate_cavity` nicht. An der schrägen Platte (z = 10 + x/4) blieb ein
+Langloch, 2 mm längs der Schräge versetzt, unter der mitgenommenen Randebene
+hinter einer Haut von 0,5 mm; das Netz sagte „geht nicht mehr durch“, der exakte
+Kern „Mündung zugedeckt“ und nannte das Langloch weiter durchgehend — quer
+versetzt und verdoppelt ebenso. Eine Bohrung traf das nicht, ihre Erkennung
+misst den Durchgang selbst
+(`test_a_slot_set_up_a_slanted_plate_says_the_same_on_both_kernels`).
 
 **Gemeldet wird, was am Ergebnis steht** (`_measured_on`). Der exakte Kern
 erkennt nach jeder Merkmalshandlung neu; das Netz trug beim Versetzen, Kippen
