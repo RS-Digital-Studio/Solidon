@@ -12,9 +12,13 @@ from app.core.knowledge.parts.registry import PartRegistry
 SHIPPED_MODULES: Final[tuple[str, ...]] = (
     "fasteners",
     "mechanics",
+    "closures",
     "mounting",
     "holders",
     "structure",
+    "panels",
+    "rods",
+    "channels",
     "containers",
     "profile_clamps",
     "seals",

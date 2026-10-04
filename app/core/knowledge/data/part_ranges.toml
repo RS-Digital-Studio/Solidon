@@ -20,6 +20,17 @@ passed = true
 date = "2026-10-04"
 
 [[parts]]
+name = "bayonet"
+version = "1"
+fingerprint = "9818b7470e7ac9ed56e0953d7cd83c18ecef42d876cdef4408bdb9d367f92b7a"
+corners = 512
+checked = 512
+excluded = 160
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
 name = "bearing_seat"
 version = "15"
 fingerprint = "a407513f4a5ba0da8595eb2e9c0668ca3969dbfe8062b33dbde29137d579bc90"
@@ -48,6 +59,28 @@ fingerprint = "3954f78fb1f1186d8cdd44beb2ddf42eefaa4cfeb2834e96a05794b87887889b"
 corners = 128
 checked = 128
 excluded = 16
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "channel_joint"
+version = "1"
+fingerprint = "f0ce992aa20959bcdd8b759eeef1d4f99695fb964f4839ab5ec5faa4ad463a6e"
+corners = 256
+checked = 256
+excluded = 120
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "detent_disc"
+version = "1"
+fingerprint = "bab5449b5e6d5984dc1ab15b59e29c4ef18d4136b3648cd83afcd8367ad59b92"
+corners = 256
+checked = 256
+excluded = 172
 failures = 0
 passed = true
 date = "2026-10-04"
@@ -158,6 +191,17 @@ fingerprint = "18b54861e6f13e52e603e8aa4176d51b591127e5606f8a24113c9fd85586b90f"
 corners = 512
 checked = 512
 excluded = 0
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "hose_barb"
+version = "1"
+fingerprint = "0c1d883eb752d2ff0ba2539aecc315384fe9a6307bdca7a58187e97ddc4915f2"
+corners = 128
+checked = 128
+excluded = 68
 failures = 0
 passed = true
 date = "2026-10-04"
@@ -378,6 +422,50 @@ fingerprint = "1ff2b37b7a573c8998a8cc4cdb57f7cc8354b9e006ba9a79c16ea15a2b13ff6f"
 corners = 32
 checked = 32
 excluded = 0
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "rod_connector"
+version = "1"
+fingerprint = "61eece58561673da992c8f650ea6bcee15ed322077ac0ad6edb5418116fc8a98"
+corners = 384
+checked = 384
+excluded = 48
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "room_floor"
+version = "1"
+fingerprint = "e783d5d9b31dcc67a245e49718d4c3fd34988a8c81718d9978813eee2b53dbd0"
+corners = 512
+checked = 512
+excluded = 312
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "room_pane"
+version = "1"
+fingerprint = "5e9e596c1ec12bb2781d9d54248db7e1fa795bdc9d2b452b043148b13770e95f"
+corners = 16
+checked = 16
+excluded = 0
+failures = 0
+passed = true
+date = "2026-10-04"
+
+[[parts]]
+name = "room_wall"
+version = "1"
+fingerprint = "047244c1baea28a5607015a0ca31139d62d9e260b2d7b66b58e51df5e9adf84f"
+corners = 256
+checked = 256
+excluded = 84
 failures = 0
 passed = true
 date = "2026-10-04"

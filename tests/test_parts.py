@@ -240,10 +240,16 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     ``holder_u``, ``holder_ring``, ``holder_fork`` und ``holder_shelf`` kamen
     am 02.10.2026 aus RM-399: die Halter-Vorlage, je Form ein Baustein, damit
     jeder Bereich unter der Eckengrenze bleibt.
+
+    Acht kamen am 04.10.2026 aus dem Dateiaudit (RM-184): ``bayonet`` und
+    ``detent_disc`` (Verschlüsse, die man dreht, je ein Paar über ``kind``),
+    ``rod_connector`` (Steckhülse und Zwei- bis Vierwegeverbinder),
+    ``hose_barb`` und ``channel_joint`` (Schlauchtülle und Kanalnaht) und
+    ``room_floor``, ``room_wall`` und ``room_pane`` (Raum- und Plattenvorlage).
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 38
+    assert len(building) == 46
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -303,7 +309,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_4786_cartesian_boundaries() -> None:
+def test_the_library_really_has_7106_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -318,9 +324,12 @@ def test_the_library_really_has_4786_cartesian_boundaries() -> None:
     je 512, rund und Gabel je 256 — vier Befestigungen mal sieben oder sechs
     zweiwertige Felder. Seit dem 03.10.2026 kommen 32 dazu: Die Profilnutfeder
     trägt zwei Herstellerprofile (RM-017), fünf Größen statt drei (48 → 80).
+    Seit dem 04.10.2026 die 2320 der acht Audit-Bausteine (RM-184):
+    Bajonett und Raumboden je 512, Stangenverbinder 384, Kanalnaht,
+    Rastdrehscheibe und Raumwand je 256, Schlauchtülle 128, Fensterscheibe 16.
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 4786
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 7106
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -7519,3 +7528,720 @@ def test_a_hyphenated_word_counts_whole_and_by_its_parts() -> None:
     parts = {spec.name for spec in PARTS.search("Alu-Profil")}
     assert parts == {spec.name for spec in PARTS.search("Profil")}
     assert {spec.name for spec in PARTS.search("qwertz-uiop")} == set()
+
+
+# --- RM-184: Bausteine aus dem Dateiaudit -------------------------------------------
+#
+# Je Baustein der Bezug zur Auditdatei und die Prüfung in Einbaulage: Ein Paar
+# wird zusammengesetzt und über seinen Weg bewegt, eine Aufnahme mit ihrem
+# Gegenstück gefüllt. Zwei einzeln gültige Körper belegen noch keine Passung
+# (Skill ``neuer-baustein``, „Spiel und Passung“).
+
+
+def _overlap(first: Any, second: Any) -> float:
+    """Wie viel Volumen zwei Körper gemeinsam haben — null, wenn sie sich nicht treffen."""
+    outcome = boolean("intersection", [as_mesh_data(first), as_mesh_data(second)], allow_empty=True)
+    return float(outcome.mesh.volume)
+
+
+def _touching(first: Any, second: Any) -> float:
+    """Die Schranke für „berührt nur“: Rechenrauschen über beiden Oberflächen."""
+    from app.core.units import EPS_GEOM
+
+    return EPS_GEOM * (as_mesh_data(first).raw.area + as_mesh_data(second).raw.area)
+
+
+def _rod(diameter: float, length: float, start: float, axis: str) -> Any:
+    """Eine runde Stange ab ``start`` entlang einer Achse, auf der Achshöhe null."""
+    body = shapes.moved(shapes.cylinder(diameter, length), (0.0, 0.0, start))
+    if axis == "x":
+        return shapes.turned(body, 90.0, (0.0, 1.0, 0.0))
+    return body
+
+
+@pytest.mark.parametrize("layout", ["elbow", "tee", "corner_3d", "cross"])
+def test_rods_of_the_plant_stand_meet_at_their_stops_without_touching(
+    layout: str, profile: Profile
+) -> None:
+    """Pflanzen-Ständerset (Audit Familie 5): Ø 16, Einstecktiefe 42, Wand 3.
+
+    Jede Stange geht bis zum Anschlag hinein und nicht weiter; die Enden
+    zweier Stangen berühren sich in keiner Bauform. Im Quellskript lag der
+    Anschlag 6 mm hinter der Mitte bei 8,45 mm Bohrungsradius — in der Ecke
+    stießen zwei Stangenenden ineinander.
+    """
+    from app.core.knowledge.parts.rods import ROD_LAYOUTS, rod_hub
+
+    play = profile.material.clearance
+    spec = PARTS.get("rod_connector")
+    params = spec.params(layout=layout, rod=16.0, depth=42.0, wall=3.0, play=play)
+    built = spec.fn(params)
+    body = built.mesh
+    hub = rod_hub(params)
+    axis_height = (16.0 + play) / 2.0 + 3.0
+    rods = []
+    for index, direction in enumerate(ROD_LAYOUTS[layout], start=1):
+        assert built.features[f"socket_{index}"].params["axis"] == direction
+        if direction[2] > 0.5:
+            rod = _rod(16.0, 42.0, 2.0 * hub, "z")
+        else:
+            rod = shapes.moved(_rod(16.0, 42.0, hub, "x"), (0.0, 0.0, axis_height))
+            turn = {(1, 0): 0.0, (0, 1): 90.0, (-1, 0): 180.0, (0, -1): 270.0}[
+                (round(direction[0]), round(direction[1]))
+            ]
+            rod = shapes.turned(rod, turn)
+        assert _overlap(body, rod) <= _touching(body, rod), f"{layout}: Stange {index} klemmt"
+        pushed = shapes.moved(rod, tuple(-0.5 * component for component in direction))
+        assert _overlap(body, pushed) > 1.0, f"{layout}: Stange {index} ohne Anschlag"
+        rods.append(rod)
+    for first, second in itertools.combinations(rods, 2):
+        assert _overlap(first, second) <= _touching(first, second), f"{layout}: Stangen stoßen"
+
+
+def test_a_rod_sleeve_takes_its_clamp_screw_into_the_rod() -> None:
+    """Die Klemmschraube schneidet ihr Gewinde in die Wand und drückt auf die Stange.
+
+    Ein Probekörper in der Wand auf halber Einstecktiefe trifft ohne Schraube
+    Material und mit Schraube das Kernloch.
+    """
+    spec = PARTS.get("rod_connector")
+    values = {"layout": "sleeve", "rod": 16.0, "depth": 42.0, "wall": 3.0}
+    with_screw = spec.fn(spec.params(screw="M5", **values))
+    without = spec.fn(spec.params(screw="none", **values))
+    screw = with_screw.features["screw_1"]
+    assert screw.params["diameter"] == pytest.approx(standards.screw("M5").tap)
+    probe = shapes.moved(shapes.cylinder(1.0, 1.0), (9.5, 0.0, 3.0 + 21.0))
+    assert _overlap(with_screw.mesh, probe) <= _touching(with_screw.mesh, probe)
+    assert _overlap(without.mesh, probe) > 0.5
+    assert with_screw.features["socket_1"].params["depth"] == pytest.approx(42.0)
+
+
+def test_a_rod_screw_thicker_than_the_rod_is_refused_with_advice() -> None:
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("rod_connector")
+    params = spec.params(layout="tee", rod=4.0, screw="M5")
+    assert spec.feasible is not None and spec.feasible(params) is not None
+    with pytest.raises(ValidationError) as caught:
+        spec.fn(params)
+    assert caught.value.field == "screw"
+    assert caught.value.constraint == "feasible"
+
+
+def test_a_hose_barb_keeps_its_passage_open_through_the_wall(profile: Profile) -> None:
+    """Pool-Wasserfall (Audit Familie 2): Schaft Ø 30, Kämme Ø 33, Durchgang Ø 24.
+
+    Auf eine 4-mm-Wand gesetzt reicht der Durchgang von der Rückseite der Wand
+    bis zur Spitze; ein Stab, zwei Zehntel enger, geht ganz hindurch, ohne
+    Material zu treffen. Bund und Widerhaken sind mit dem Träger ein Körper.
+    """
+    values = {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 4.0,
+        "hose": 30.0,
+        "grip": 1.5,
+        "count": 4,
+        "length": 35.0,
+        "wall": 3.0,
+        "collar": 3.0,
+        "through": 4.0,
+    }
+    carrier = OperationDraft(op="create_box", params={"width": 60.0, "depth": 60.0, "height": 4.0})
+    body = _carrier_with(profile, carrier, "hose_barb", values)
+    assert body.mesh.is_watertight and body.mesh.component_count == 1
+    passage = next(f for name, f in body.features.items() if name.endswith("passage_1"))
+    assert passage.params["diameter"] == pytest.approx(24.0)
+    probe = shapes.moved(shapes.cylinder(23.8, 50.0), (0.0, 0.0, -5.0))
+    assert _overlap(body.mesh, probe) <= _touching(body.mesh, probe)
+    assert float(body.mesh.bounds.maximum[2]) == pytest.approx(4.0 + 3.0 + 35.0, abs=1e-6)
+
+
+def test_a_hose_slides_over_the_ramps_and_grips_at_the_crests() -> None:
+    """Der Schlauch liegt am Schaft an und wird nur an den Kämmen geweitet.
+
+    Ein Schlauch mit dem Innendurchmesser des Schafts überdeckt sich mit der
+    Tülle nur an den Widerhaken; mit dem Kammdurchmesser gar nicht mehr. Die
+    steile Seite jedes Widerhakens zeigt zum Bund — bei 45 Grad druckt sie ohne
+    Stütze —, die Anlaufschräge zur Spitze ist mindestens doppelt so lang.
+    """
+    from app.core.knowledge.parts.build import subtract as build_subtract
+    from app.core.knowledge.parts.channels import hose_barb_outline
+
+    spec = PARTS.get("hose_barb")
+    params = spec.params(hose=12.0, grip=1.0, count=3, length=24.0, wall=1.5, collar=3.0)
+    barb = spec.host_add(params).mesh
+
+    def hose(inner: float) -> Any:
+        tube = shapes.moved(shapes.cylinder(inner + 6.0, 24.0), (0.0, 0.0, 3.0))
+        return build_subtract(tube, shapes.moved(shapes.cylinder(inner, 26.0), (0.0, 0.0, 2.0)))
+
+    assert _overlap(barb, hose(12.0)) > 1.0
+    wide = hose(14.05)
+    assert _overlap(barb, wide) <= _touching(barb, wide)
+    outline = hose_barb_outline(params)
+    for foot, crest, end in zip(outline[3:-1:2], outline[4::2], outline[5::2], strict=False):
+        assert crest[1] - foot[1] == pytest.approx(crest[0] - foot[0])
+        assert end[1] - crest[1] > 2.0 * (crest[0] - end[0]) - 1e-9
+
+
+def test_a_hose_barb_with_crowded_barbs_is_refused_with_advice() -> None:
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("hose_barb")
+    params = spec.params(hose=12.0, grip=3.0, count=6, length=10.0)
+    assert spec.feasible is not None and spec.feasible(params) is not None
+    with pytest.raises(ValidationError):
+        spec.fn(params)
+
+
+def _channel_segment(width: float, height: float, wall: float, length: float) -> Any:
+    """Ein Rinnensegment: U-Profil, offen nach oben, entlang +X ab null."""
+    from app.core.knowledge.parts.build import subtract as build_subtract
+
+    outer = shapes.moved(shapes.box(length, width, height), (length / 2.0, 0.0, 0.0))
+    inside = shapes.moved(
+        shapes.box(length + 2.0, width - 2.0 * wall, height), (length / 2.0, 0.0, wall)
+    )
+    return build_subtract(outer, inside)
+
+
+def test_two_gutter_segments_meet_in_the_outside_seam_without_a_step(profile: Profile) -> None:
+    """CC2-Auffangrinne (Audit Familie 8): Außenbreite 44, Seitenhöhe 25 und Boden 2.
+
+    Beide Segmente gleiten bis zum Steg in die Hülse und nicht weiter. Ein
+    Probekörper im Kanalquerschnitt läuft durch Segment, Steg und Segment, ohne
+    anzustoßen: Die Naht verengt den Kanal nicht, und es steht keine Stufe
+    gegen die Fließrichtung.
+    """
+    play = profile.material.clearance
+    spec = PARTS.get("channel_joint")
+    params = spec.params(
+        style="outer_sleeve",
+        width=44.0,
+        height=27.0,
+        wall=2.0,
+        overlap=18.0,
+        thickness=1.2,
+        play=play,
+    )
+    sleeve = spec.fn(params).mesh
+    floor = stop = 1.2
+    upper = shapes.turned(_channel_segment(44.0, 27.0, 2.0, 60.0), 180.0)
+    upper = shapes.moved(upper, (-stop / 2.0, 0.0, floor))
+    lower = shapes.moved(_channel_segment(44.0, 27.0, 2.0, 60.0), (stop / 2.0, 0.0, floor))
+    for segment in (upper, lower):
+        assert _overlap(sleeve, segment) <= _touching(sleeve, segment)
+    assert _overlap(sleeve, shapes.moved(lower, (-0.3, 0.0, 0.0))) > 1.0
+    channel = shapes.moved(
+        shapes.box(100.0, 44.0 - 4.0 - 0.1, 20.0), (0.0, 0.0, floor + 2.0 + 0.05)
+    )
+    for body in (sleeve, upper, lower):
+        assert _overlap(body, channel) <= _touching(body, channel)
+
+
+def test_the_inside_seam_lies_in_both_segments_and_says_how_much_it_narrows(
+    profile: Profile,
+) -> None:
+    """Die Einlage aus der Rinne: Wange 1,2 mm, Rampe 8 mm, Kante 0,4 mm.
+
+    Sie liegt in beiden Segmenten, ohne sie zu treffen, reicht bis an ihre
+    Oberkante, und ihr Befund nennt den Kanal, der an der Naht bleibt.
+    """
+    play = profile.material.clearance
+    spec = PARTS.get("channel_joint")
+    params = spec.params(
+        style="inner_insert",
+        width=44.0,
+        height=27.0,
+        wall=2.0,
+        overlap=18.0,
+        thickness=1.2,
+        ramp=8.0,
+        play=play,
+    )
+    built = spec.fn(params)
+    insert = shapes.moved(built.mesh, (0.0, 0.0, 2.0))
+    upper = shapes.turned(_channel_segment(44.0, 27.0, 2.0, 60.0), 180.0)
+    lower = _channel_segment(44.0, 27.0, 2.0, 60.0)
+    for segment in (upper, lower):
+        assert _overlap(insert, segment) <= _touching(insert, segment)
+    finding = next(f for f in built.findings if f.code == "parts.channel_narrowed")
+    assert finding.values["width_mm"] == pytest.approx(44.0 - 4.0 - play - 2.4)
+    assert finding.values["height_mm"] == pytest.approx(27.0 - 2.0 - 1.2)
+    bounds = as_mesh_data(built.mesh).bounds
+    assert float(bounds.minimum[0]) == pytest.approx(-18.0)
+    assert float(bounds.maximum[2]) == pytest.approx(25.0)
+    ramp = built.features["ramp_1"]
+    assert float(ramp.params["centre"][2]) == pytest.approx((1.2 + 0.4) / 2.0)
+
+
+def _bayonet_pair(play: float, **values: Any) -> tuple[Any, Any, dict[str, float]]:
+    from app.core.knowledge.parts.closures import bayonet_frame
+
+    spec = PARTS.get("bayonet")
+    socket = spec.fn(spec.params(kind="socket", play=play, **values)).mesh
+    plug_params = spec.params(kind="plug", play=play, **values)
+    plug = spec.fn(plug_params).mesh
+    frame = bayonet_frame(plug_params)
+    # Umgedreht auf die Aufnahme gesetzt: der Fuß des Kragens auf ihrem Rand.
+    placed = shapes.moved(shapes.turned(plug, 180.0, (1.0, 0.0, 0.0)), (0.0, 0.0, frame["rim"]))
+    return socket, placed, frame
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        # Filterkäfig aus dem Audit: Ø 75, drei Nocken, Einführtiefe 6, Drehweg 13°.
+        {
+            "diameter": 75.0,
+            "lugs": 3,
+            "lug_width": 6.0,
+            "lug_height": 3.5,
+            "entry": 6.0,
+            "turn": 13.0,
+        },
+        {
+            "diameter": 24.0,
+            "lugs": 2,
+            "lug_width": 4.0,
+            "lug_height": 2.0,
+            "entry": 3.0,
+            "turn": 40.0,
+        },
+    ],
+)
+def test_a_bayonet_goes_in_axially_then_turns_to_its_stop(
+    values: dict[str, Any], profile: Profile
+) -> None:
+    """Audit Familie 3: erst axial einsetzen, dann über den ganzen Drehweg schließen.
+
+    Geprüft wird der Weg, nicht nur die Endlage: in Schritten von oben bis auf
+    den Rand, dann in Schritten um den Drehweg — nirgends Material im Weg.
+    Danach hält es: weiter gedreht stößt die Nocke an, gezogen hängt sie am
+    Schlitz; in der Einsetzstellung lässt es sich wieder abziehen.
+    """
+    play = profile.material.clearance
+    socket, plug, frame = _bayonet_pair(play, wall=2.0, **values)
+    limit = _touching(socket, plug)
+    for lift in np.linspace(frame["collar"] + 1.0, 0.0, 6):
+        lifted = shapes.moved(plug, (0.0, 0.0, float(lift)))
+        assert _overlap(socket, lifted) <= limit, f"eingesetzt bis {lift:.2f} mm: Nocke stößt"
+    for angle in np.linspace(0.0, values["turn"], 5):
+        turned = shapes.turned(plug, float(angle))
+        assert _overlap(socket, turned) <= limit, f"gedreht um {angle:.1f}°: Nocke stößt"
+    locked = shapes.turned(plug, values["turn"])
+    beyond = shapes.turned(plug, values["turn"] + frame["margin"] + 2.0)
+    assert _overlap(socket, beyond) > 0.1, "kein Anschlag am Ende des Drehwegs"
+    assert _overlap(socket, shapes.moved(locked, (0.0, 0.0, play))) > 0.01, "hält nicht"
+    assert _overlap(socket, shapes.moved(plug, (0.0, 0.0, play))) <= limit
+
+
+def test_a_bayonet_with_too_many_lugs_for_its_turn_is_refused() -> None:
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("bayonet")
+    params = spec.params(diameter=12.0, lugs=4, lug_width=6.0, turn=60.0)
+    assert spec.feasible is not None and spec.feasible(params) is not None
+    with pytest.raises(ValidationError):
+        spec.fn(params)
+
+
+def _detent_pair(play: float, **values: Any) -> tuple[Any, Any, dict[str, float], Any]:
+    from app.core.knowledge.parts.closures import detent_frame
+
+    spec = PARTS.get("detent_disc")
+    base_params = spec.params(kind="base", play=play, **values)
+    base = spec.fn(base_params).mesh
+    disc = spec.fn(spec.params(kind="disc", play=play, **values)).mesh
+    frame = detent_frame(base_params)
+    # Die Scheibe liegt auf dem Boden der Führung.
+    return base, shapes.moved(disc, (0.0, 0.0, base_params.thickness)), frame, base_params
+
+
+def _probe(radius: float, degrees: float, height: float) -> Any:
+    """Ein dünner senkrechter Stab durch Boden und Scheibe an einem Punkt."""
+    from app.core.knowledge.parts.closures import polar
+
+    x, y, _z = polar(radius, degrees)
+    return shapes.moved(shapes.cylinder(0.6, height + 2.0), (x, y, -1.0))
+
+
+def test_the_detent_disc_of_the_spice_lid_opens_exactly_one_sector_per_position(
+    profile: Profile,
+) -> None:
+    """Gewürzdeckel (Audit Familie 4): Scheibe Ø 32, 3 mm dick, Zapfen Ø 6, Arme 1,1.
+
+    In jeder Raststellung sitzt die Scheibe ohne Durchdringung: Nase in ihrer
+    Mulde, Arme unter dem Kopf. Stellung null ist zu, Stellung k gibt genau die
+    Öffnung k frei und deckt die anderen ab. Zwischen zwei Stellungen drückt
+    die Nase gegen den Kragen — so rastet sie.
+    """
+    values = {
+        "diameter": 32.0,
+        "thickness": 3.0,
+        "positions": 3,
+        "window": 60.0,
+        "post": 6.0,
+        "arm": 1.1,
+    }
+    base, disc, frame, params = _detent_pair(profile.material.clearance, **values)
+    limit = _touching(base, disc)
+    spacing = frame["spacing"]
+    middle = (frame["window_inner"] + frame["window_outer"]) / 2.0
+    height = 2.0 * params.thickness
+    for position in range(3):
+        turned = shapes.turned(disc, position * spacing)
+        assert _overlap(base, turned) <= limit, f"Stellung {position}: Scheibe klemmt"
+        for opening in range(3):
+            probe = _probe(middle, opening * spacing, height)
+            through = bool(
+                _overlap(base, probe) <= _touching(base, probe)
+                and _overlap(turned, probe) <= _touching(turned, probe)
+            )
+            expected = opening == position and position > 0
+            assert through is expected, f"Stellung {position}, Öffnung {opening}"
+        between = shapes.turned(disc, (position + 0.5) * spacing)
+        assert _overlap(base, between) > 0.01, f"zwischen {position} und {position + 1}: keine Rast"
+    assert frame["head"] > frame["arm_inner"], "der Kopf hält die Arme"
+    assert frame["hub"] - frame["arm_outer"] >= frame["head"] - frame["arm_inner"], "Federraum"
+
+
+def test_the_detent_marks_count_the_positions() -> None:
+    """Tastbare Marken: Stellung k trägt k + 1 Rippen auf dem Kragen."""
+    import math
+
+    from app.core.knowledge.parts.closures import detent_frame
+    from app.core.slice.analysis import cross_section
+
+    spec = PARTS.get("detent_disc")
+    params = spec.params(kind="base", positions=3, thickness=3.0, arm=1.1, play=0.25)
+    base = as_mesh_data(spec.fn(params).mesh)
+    frame = detent_frame(params)
+    level = 2.0 * 3.0 + 0.25 + 1.1 / 2.0
+    section = cross_section(base, level)
+    assert section is not None
+    ribs = [
+        part
+        for part in getattr(section, "geoms", [section])
+        if math.hypot(part.centroid.x, part.centroid.y) > frame["guide"]
+    ]
+    assert len(ribs) == 1 + 2 + 3
+
+
+def _room(profile: Profile, **values: Any) -> dict[str, Any]:
+    """Boden, Rückwand und zwei Seitenwände in Raumlage, aus denselben Raummaßen."""
+    from app.core.geom import transform
+
+    length, depth, height, wall = (values[key] for key in ("length", "depth", "height", "wall"))
+    thickness = values.get("thickness", wall)
+    play = profile.material.clearance
+    floor_spec, wall_spec = PARTS.get("room_floor"), PARTS.get("room_wall")
+    floor = floor_spec.fn(
+        floor_spec.params(length=length, depth=depth, thickness=thickness, wall=wall, play=play)
+    ).mesh
+    back = wall_spec.fn(
+        wall_spec.params(
+            role="room_back", width=length, height=height, wall=wall, opening_width=0.0, play=play
+        )
+    ).mesh
+    side = wall_spec.fn(
+        wall_spec.params(
+            role="room_side",
+            width=depth,
+            height=height,
+            wall=wall,
+            opening="door",
+            opening_width=values.get("door", 0.0),
+            opening_height=values.get("door_height", 10.0),
+            play=play,
+        )
+    ).mesh
+
+    def placed(mesh: Any, matrix: list[list[float]]) -> Any:
+        raw = as_mesh_data(mesh).raw.copy()
+        transform.moved(raw, np.asarray(matrix, dtype=float))
+        return MeshData.of(raw)
+
+    # Die Platten liegen, wie sie gedruckt werden: X entlang der Wand, Y nach
+    # oben, die Innenseite bei Z = Wandstärke. In Raumlage zeigt die Innenseite
+    # der Rückwand nach vorn, die der Seitenwände zur Raummitte; die rechte ist
+    # die gespiegelte linke.
+    panel = depth - wall
+    return {
+        "floor": floor,
+        "back": placed(
+            back, [[1, 0, 0, 0], [0, 0, -1, depth / 2.0], [0, 1, 0, thickness], [0, 0, 0, 1]]
+        ),
+        "left": placed(
+            side,
+            [
+                [0, 0, 1, -length / 2.0],
+                [1, 0, 0, -depth / 2.0 + panel / 2.0],
+                [0, 1, 0, thickness],
+                [0, 0, 0, 1],
+            ],
+        ),
+        "right": placed(
+            side,
+            [
+                [0, 0, -1, length / 2.0],
+                [1, 0, 0, -depth / 2.0 + panel / 2.0],
+                [0, 1, 0, thickness],
+                [0, 0, 0, 1],
+            ],
+        ),
+    }
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        # Puppenhaus 1:10 aus dem Audit: Raum 240, Wand 4, Tür 90 breit, 200 hoch.
+        {
+            "length": 240.0,
+            "depth": 240.0,
+            "height": 240.0,
+            "wall": 4.0,
+            "door": 90.0,
+            "door_height": 200.0,
+        },
+        {"length": 120.0, "depth": 90.0, "height": 80.0, "wall": 2.0},
+    ],
+)
+def test_a_room_of_panels_goes_together_tongue_in_groove(
+    values: dict[str, Any], profile: Profile
+) -> None:
+    """Puppenhaus (Audit, DOCX ID 110): flach gedruckte Platten, gesteckt.
+
+    Boden, Rückwand und beide Seitenwände aus denselben Raummaßen stehen
+    ineinander, ohne sich zu durchdringen; jede Wand steht auf dem Boden, jede
+    Seitenwand an der Rückwand. Außen messen die Wände genau Raumlänge und
+    Raumtiefe.
+    """
+    room = _room(profile, **values)
+    for (first_name, first), (second_name, second) in itertools.combinations(room.items(), 2):
+        assert _overlap(first, second) <= _touching(first, second), f"{first_name}/{second_name}"
+    for name in ("back", "left", "right"):
+        lowered = shapes.moved(room[name], (0.0, 0.0, -0.1))
+        assert _overlap(room["floor"], lowered) > 0.1, f"{name} schwebt"
+    for name in ("left", "right"):
+        pushed = shapes.moved(room[name], (0.0, 0.1, 0.0))
+        assert _overlap(room["back"], pushed) > 0.01, f"{name} ohne Anschlag an der Rückwand"
+    assert float(room["left"].bounds.minimum[0]) == pytest.approx(-values["length"] / 2.0)
+    assert float(room["right"].bounds.maximum[0]) == pytest.approx(values["length"] / 2.0)
+    assert float(room["back"].bounds.maximum[1]) == pytest.approx(values["depth"] / 2.0)
+
+
+def test_a_window_pane_fits_its_rebate_and_cannot_fall_through() -> None:
+    """Fenster 100 breit, 120 hoch aus dem Puppenhausplan: Die Scheibe liegt im Falz.
+
+    Sie ist um das Spiel kleiner als der Falz und um zwei Falzbreiten größer
+    als die Öffnung — eingelegt berührt sie nichts, und durchfallen kann sie
+    nicht.
+    """
+    spec = PARTS.get("room_wall")
+    values = {
+        "width": 240.0,
+        "height": 240.0,
+        "wall": 4.0,
+        "opening_width": 100.0,
+        "opening_height": 120.0,
+    }
+    wall = spec.fn(spec.params(role="room_back", opening="window", play=0.25, **values))
+    pane_spec = PARTS.get("room_pane")
+    pane = pane_spec.fn(
+        pane_spec.params(opening_width=100.0, opening_height=120.0, wall=4.0, play=0.25)
+    ).mesh
+    low = (240.0 - 120.0) / 2.0
+    seated = shapes.moved(pane, (0.0, low + 60.0, 2.0))
+    assert _overlap(wall.mesh, seated) <= _touching(wall.mesh, seated)
+    assert _overlap(wall.mesh, shapes.moved(seated, (0.0, 0.0, -0.1))) > 0.1
+    assert float(as_mesh_data(pane).bounds.size[0]) == pytest.approx(100.0 + 8.0 - 0.25)
+
+
+def test_the_rm184_parts_are_found_under_their_customer_words() -> None:
+    """Die Wörter aus dem Audit führen zum Baustein."""
+    for word, name in (
+        ("Bajonett", "bayonet"),
+        ("Rastdrehscheibe", "detent_disc"),
+        ("Steckhülse", "rod_connector"),
+        ("Stangenverbinder", "rod_connector"),
+        ("Schlauchtülle", "hose_barb"),
+        ("Kanalnaht", "channel_joint"),
+        ("Raumboden", "room_floor"),
+        ("Raumwand", "room_wall"),
+        ("Fensterscheibe", "room_pane"),
+    ):
+        assert name in {spec.name for spec in PARTS.search(word)}, word
+
+
+def test_one_rod_parameter_turns_every_socket_of_every_connector(profile: Profile) -> None:
+    """Audit Familie 5, Abnahme: Eine Änderung des Stabmaßes wirkt auf jede Aufnahme.
+
+    Zwei Verbinder des Ständersets — T-Stück und Steckhülse — hängen am selben
+    Projektparameter. Von 16 auf 20 mm gedreht, wächst jede Bohrung beider
+    Teile mit; zwei Strg+Z nehmen Maß und Schritte zurück.
+    """
+    from app.core.scene.history import change_for
+    from app.core.types import Parameter
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Stangenverbinder",
+        [
+            OperationDraft(
+                op="create_rod_connector", params={"layout": "tee", "rod": "=@stab", "depth": 30.0}
+            ),
+            OperationDraft(
+                op="create_rod_connector",
+                params={"layout": "sleeve", "rod": "=@stab", "depth": 30.0},
+            ),
+        ],
+        changes=change_for(
+            history.document, parameters={"stab": Parameter(name="stab", value=16.0, unit="mm")}
+        ),
+    )
+
+    def sockets() -> list[float]:
+        result = evaluate(history.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+        found = [
+            float(feature.params["diameter"])
+            for body in result.scene.objects.values()
+            for name, feature in body.features.items()
+            if "socket_" in name
+        ]
+        assert len(found) == 3 + 1
+        return found
+
+    play = profile.material.clearance
+    assert sockets() == pytest.approx([16.0 + play] * 4)
+    history.apply(
+        "Stab",
+        [],
+        changes=change_for(
+            history.document, parameters={"stab": Parameter(name="stab", value=20.0, unit="mm")}
+        ),
+    )
+    assert sockets() == pytest.approx([20.0 + play] * 4)
+    history.undo()
+    history.undo()
+    assert not history.document.ops and not history.document.parameters
+
+
+def test_one_room_length_moves_floor_back_wall_and_their_grooves_together(
+    profile: Profile,
+) -> None:
+    """Puppenhaus (Audit, DOCX ID 110), Abnahme: Ein Raummaß bewegt die angrenzenden Platten.
+
+    Boden, Rückwand und Seitenwand hängen an Raumlänge, Raumtiefe, Raumhöhe und
+    Wandstärke. Wird die Raumlänge von 240 auf 300 mm gedreht, werden Boden und
+    Rückwand um 60 mm länger, die seitlichen Nuten des Bodens rücken mit, und
+    die Seitenwand — sie steht entlang der Tiefe — bleibt, wie sie ist.
+    """
+    from app.core.scene.history import change_for
+    from app.core.types import Parameter
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    sizes = {"raum_l": 240.0, "raum_t": 240.0, "raum_h": 240.0, "wand": 4.0}
+    history.apply(
+        "Raum",
+        [
+            OperationDraft(
+                op="create_room_floor",
+                params={
+                    "length": "=@raum_l",
+                    "depth": "=@raum_t",
+                    "wall": "=@wand",
+                    "thickness": "=@wand",
+                },
+            ),
+            OperationDraft(
+                op="create_room_wall",
+                params={
+                    "role": "room_back",
+                    "width": "=@raum_l",
+                    "height": "=@raum_h",
+                    "wall": "=@wand",
+                    "opening_width": 0.0,
+                },
+            ),
+            OperationDraft(
+                op="create_room_wall",
+                params={
+                    "role": "room_side",
+                    "width": "=@raum_t",
+                    "height": "=@raum_h",
+                    "wall": "=@wand",
+                    "opening": "door",
+                    "opening_width": 90.0,
+                    "opening_height": 200.0,
+                },
+            ),
+        ],
+        changes=change_for(
+            history.document,
+            parameters={
+                name: Parameter(name=name, value=value, unit="mm") for name, value in sizes.items()
+            },
+        ),
+    )
+
+    def measured() -> dict[str, tuple[float, float]]:
+        result = evaluate(history.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+        floor, back, side = result.scene.objects.values()
+        groove = next(f for name, f in floor.features.items() if name.endswith("groove_3"))
+        return {
+            "floor": (float(floor.mesh.bounds.size[0]), float(groove.params["centre"][0])),
+            "back": (float(back.mesh.bounds.size[0]), 0.0),
+            "side": (float(side.mesh.bounds.size[0]), 0.0),
+        }
+
+    before = measured()
+    assert before["floor"][1] == pytest.approx(240.0 / 2.0 - 4.0 / 2.0)
+    history.apply(
+        "Raumlänge",
+        [],
+        changes=change_for(
+            history.document,
+            parameters={"raum_l": Parameter(name="raum_l", value=300.0, unit="mm")},
+        ),
+    )
+    after = measured()
+    assert after["floor"][0] == pytest.approx(before["floor"][0] + 60.0)
+    assert after["floor"][1] == pytest.approx(before["floor"][1] + 30.0)
+    assert after["back"][0] == pytest.approx(before["back"][0] + 60.0)
+    assert after["side"][0] == pytest.approx(before["side"][0])
+    history.undo()
+    assert measured() == before
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        # Die kleinste baubare Tülle: Schlauch 3, ein Widerhaken, kurzer Schaft.
+        {"hose": 3.0, "grip": 0.3, "count": 1, "length": 5.0, "wall": 0.8, "collar": 1.0},
+        # Die größte: Schlauch 50, sechs Widerhaken, dicke Wand.
+        {"hose": 50.0, "grip": 3.0, "count": 6, "length": 80.0, "wall": 6.0, "collar": 10.0},
+        # Wasserfall-Tülle aus dem Audit: Schaft 30, Kämme 33, Durchgang 24.
+        {"hose": 30.0, "grip": 1.5, "count": 4, "length": 35.0, "wall": 3.0, "collar": 3.0},
+    ],
+)
+def test_the_hose_barb_body_holds_its_wall_at_the_edges_of_its_range(
+    values: dict[str, Any], profile: Profile
+) -> None:
+    """Die Tülle ist Trägeraufbau (``host_add``), und der Bereichsnachweis fährt nur das
+    Werkzeug durch die Wand. Ihr Körper wird deshalb hier an den Rändern seines Bereichs
+    gemessen: geschlossen, ein Körper, keine Selbstdurchdringung, die Wand zwischen
+    Durchgang und Schaft mindestens die eingetragene (höchstens die Profilgrenze)."""
+    spec = PARTS.get("hose_barb")
+    body = as_mesh_data(spec.host_add(spec.params(**values)).mesh)
+    assert body.is_watertight and body.component_count == 1
+    assert not has_self_intersections(body)
+    wall = local_wall_thickness(body)
+    assert wall is not None
+    assert wall >= min(values["wall"], profile.minimum_wall_thickness) - 1e-6

@@ -772,9 +772,19 @@ CASES = [
 # Die Gesamthöhe schließt Füße, Zapfen und bei der Einlage den Flansch ein.
 PART_CASES = {
     "barrel_hinge": ({"pin": 4.0, "width": 24.0, "reach": 12.0, "wall": 2.5}, "greater", None),
+    # Der Kragen des Bajonetts: Einstecktiefe und Nockenhöhe, unabhängig vom Spiel.
+    "bayonet": ({"kind": "plug", "diameter": 24.0, "lugs": 3}, "greater", 6.0 + 3.5),
     "bearing_seat": ({"size": "608", "removable": False}, "less", None),
     "cable_clip": ({"size": "cable-5", "width": 8.0, "wall": 2.0}, "greater", None),
     "cable_gland": ({"size": "cable-5", "wall": 3.0, "strain_relief": False}, "less", None),
+    # Die Hülse der Kanalnaht steht auf ihrem Boden: Nahtwand und Kanalhöhe.
+    "channel_joint": (
+        {"style": "outer_sleeve", "width": 44.0, "height": 27.0, "wall": 2.0, "thickness": 1.2},
+        "greater",
+        1.2 + 27.0,
+    ),
+    # Die Drehscheibe mit ihrem Griffsteg: zwei Scheibendicken.
+    "detent_disc": ({"kind": "disc", "diameter": 32.0, "thickness": 3.0}, "greater", 6.0),
     "dowel": ({"diameter": 4.0, "length": 8.0, "kind": "pin", "chamfer": 0.6}, "greater", None),
     "fit_ladder": (
         {"diameter": 6.0, "steps": 3, "height": 8.0, "first": 0.1, "step": 0.05},
@@ -785,6 +795,12 @@ PART_CASES = {
     "gusset": ({"legs": 12.0, "thickness": 2.0, "wall": 2.0}, "greater", None),
     "heatset_m4": ({"size": "M3", "lead_in": True, "extra_depth": 0.5}, "less", None),
     "hinge_eye": ({"pin": 3.0, "width": 8.0, "reach": 8.0, "wall": 2.0}, "greater", None),
+    # Die Tülle wächst mehr auf, als ihr Durchgang aus der Wand nimmt.
+    "hose_barb": (
+        {"hose": 12.0, "grip": 1.0, "count": 3, "length": 24.0, "wall": 1.5, "through": 3.0},
+        "greater",
+        None,
+    ),
     # Die Halter mit Klemme: Ihre Höhe ist die eingetragene, die Rückwand wächst
     # nicht; die Ablage trägt ihren Rand darüber.
     "holder_fork": (
@@ -869,6 +885,20 @@ PART_CASES = {
         "greater",
         None,
     ),
+    # Die Steckhülse: Boden und Einstecktiefe, unabhängig vom Spiel.
+    "rod_connector": (
+        {"layout": "sleeve", "rod": 16.0, "depth": 30.0, "wall": 3.0},
+        "greater",
+        3.0 + 30.0,
+    ),
+    # Die Raumplatten liegen flach: so hoch wie dick.
+    "room_floor": ({"length": 120.0, "depth": 90.0, "thickness": 4.0, "wall": 4.0}, "greater", 4.0),
+    "room_pane": ({"opening_width": 50.0, "opening_height": 40.0, "wall": 4.0}, "greater", 2.0),
+    "room_wall": (
+        {"role": "room_back", "width": 120.0, "height": 80.0, "wall": 4.0, "opening_width": 0.0},
+        "greater",
+        4.0,
+    ),
     "screw_hole": ({"size": "M3", "depth": 8.0, "countersink": True}, "less", None),
     "seal_gasket": (
         {"path_sketch": _circle(20.0), "section": "rectangle", "width": 2.6, "height": 2.4},
@@ -890,6 +920,9 @@ PART_CASES = {
     ),
 }
 STANDALONE = (
+    "bayonet",
+    "channel_joint",
+    "detent_disc",
     "fit_ladder",
     "holder_fork",
     "holder_ring",
@@ -903,6 +936,10 @@ STANDALONE = (
     "pipe_clamp",
     "profile_clamp_liner",
     "profile_clamp_shell",
+    "rod_connector",
+    "room_floor",
+    "room_pane",
+    "room_wall",
     "seal_gasket",
     "wall_ladder",
 )

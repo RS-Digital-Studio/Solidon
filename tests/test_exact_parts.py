@@ -2110,3 +2110,281 @@ def test_a_part_creator_that_is_no_template_stays_on_the_mesh(profile: Profile) 
     builtin.load()
     outcome = run("create_fit_ladder", None, profile)
     assert outcome.outputs[0].kind == "mesh"
+
+
+# --- RM-184: Bausteine aus dem Dateiaudit ---------------------------------------------
+
+
+def _pappus(outline: list[tuple[float, float]]) -> float:
+    """Volumen eines um Z gedrehten geschlossenen Umrisses (x = Radius) nach Pappus."""
+    area = moment = 0.0
+    for (x0, y0), (x1, y1) in zip(outline, [*outline[1:], outline[0]], strict=True):
+        cross = x0 * y1 - x1 * y0
+        area += cross
+        moment += (x0 + x1) * cross
+    area /= 2.0
+    centroid = moment / (6.0 * area)
+    return 2.0 * math.pi * abs(area) * abs(centroid)
+
+
+@pytest.mark.parametrize("screw", ["none", "M4"])
+@pytest.mark.parametrize("layout", ["sleeve", "tee", "corner_3d"])
+def test_rod_connector_exact_matches_its_analytic_volume(layout: str, screw: str) -> None:
+    """Stangenverbinder am exakten Kern: Knoten, Aufnahmen und Bohrungen analytisch.
+
+    Ohne Klemmschraube ist das Volumen geschlossen rechenbar: Knotenwürfel und
+    die Aufnahmen außerhalb von ihm, weniger die runden Bohrungen ab dem
+    Anschlag. Mit Schraube bleibt das Netz der Vergleich.
+    """
+    exact_kernel()
+    from app.core.knowledge.parts.rods import ROD_LAYOUTS
+
+    values: dict[str, object] = {
+        "layout": layout,
+        "rod": 16.0,
+        "depth": 30.0,
+        "wall": 3.0,
+        "screw": screw,
+        "play": 0.25,
+    }
+    produced = _built("rod_connector", True, **values)
+    body = _sound(produced.mesh)
+    bore_radius = (16.0 + 0.25) / 2.0
+    outer = 2.0 * bore_radius + 6.0
+    sockets = len(ROD_LAYOUTS[layout])
+    if layout == "sleeve":
+        expected = outer * outer * (3.0 + 30.0) - math.pi * bore_radius**2 * 30.0
+    else:
+        hub = bore_radius + 4.5
+        expected = (2.0 * hub) ** 3 + sockets * (
+            30.0 * outer * outer - math.pi * bore_radius**2 * 30.0
+        )
+    if screw == "none":
+        assert body.volume == pytest.approx(expected, rel=1e-9)
+    else:
+        assert body.volume < expected
+    assert {f"socket_{index}" for index in range(1, sockets + 1)} <= set(produced.features)
+    assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    mesh = _built("rod_connector", False, **values).mesh
+    assert mesh.is_watertight and mesh.component_count == 1
+    assert abs(mesh.volume - body.volume) <= 0.003 * body.volume
+    _roundtrip(body)
+
+
+def test_a_rod_sleeve_grows_on_an_exact_host_and_stays_exact(profile: Profile) -> None:
+    exact_kernel()
+    grown = run(
+        "insert_rod_connector", _host(), profile, layout="sleeve", rod=16.0, depth=20.0, **ON_TOP
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    assert {"rod_connector_socket_1", "rod_connector_stop_1"} <= set(grown.outputs[0].features)
+
+
+@pytest.mark.parametrize("name", ["rod_connector", "room_floor", "room_wall", "room_pane"])
+def test_the_rm184_templates_are_created_exactly_where_the_kernel_is_there(
+    name: str, profile: Profile
+) -> None:
+    """Stangenverbinder und Raumplatten sind Vorlagen und entstehen wie ein Grundkörper exakt."""
+    exact_kernel()
+    builtin.load()
+    outcome = run(f"create_{name}", None, profile)
+    (body,) = outcome.outputs
+    assert body.kind == "brep"
+    _sound(body.mesh)
+
+
+def test_hose_barb_exact_body_and_passage_match_their_analytic_volumes() -> None:
+    """Schlauchtülle exakt: der Drehkörper nach Pappus, weniger der Durchgang."""
+    exact_kernel()
+    from app.core.knowledge.parts.channels import hose_barb_outline
+
+    values: dict[str, object] = {
+        "hose": 30.0,
+        "grip": 1.5,
+        "count": 4,
+        "length": 35.0,
+        "wall": 3.0,
+        "collar": 3.0,
+        "through": 4.0,
+    }
+    builtin.load()
+    spec = PARTS.get("hose_barb")
+    params = spec.params(**values)
+    with building("brep"):
+        body = _sound(spec.host_add(params).mesh)
+        cutter = _sound(spec.fn(params).mesh)
+    passage = 24.0 / 2.0
+    expected = _pappus(list(hose_barb_outline(params))) - math.pi * passage**2 * (
+        3.0 + 35.0 + BOOLEAN_OVERLAP
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert cutter.volume == pytest.approx(
+        math.pi * passage**2 * (4.0 + 2.0 * BOOLEAN_OVERLAP), rel=1e-9
+    )
+    _roundtrip(body)
+
+
+def test_a_hose_barb_grows_on_an_exact_host_with_its_passage_through(profile: Profile) -> None:
+    """Auf einem exakten Träger: Tülle aufgebaut, Durchgang durch die ganze Wand, exakt."""
+    exact_kernel()
+    host = _host()
+    grown = run(
+        "insert_hose_barb",
+        host,
+        profile,
+        hose=12.0,
+        grip=1.0,
+        count=3,
+        length=24.0,
+        wall=1.5,
+        collar=3.0,
+        through=HOST[2],
+        **ON_TOP,
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    from app.core.brep import edit
+
+    probe = edit.moved(edit.cylinder(8.8, 40.0), (0.0, 0.0, -1.0))
+    assert float(edit.boolean("intersection", [body, probe]).volume) == pytest.approx(0.0, abs=1e-6)
+    assert "hose_barb_passage_1" in grown.outputs[0].features
+
+
+def test_channel_joint_exact_outside_is_box_minus_pockets_and_channel() -> None:
+    exact_kernel()
+    values: dict[str, object] = {
+        "style": "outer_sleeve",
+        "width": 44.0,
+        "height": 27.0,
+        "wall": 2.0,
+        "overlap": 18.0,
+        "thickness": 1.2,
+        "play": 0.25,
+    }
+    produced = _built("channel_joint", True, **values)
+    body = _sound(produced.mesh)
+    inner = 44.25
+    outer = inner + 2.4
+    length = 2.0 * 18.0 + 1.2
+    expected = (
+        length * outer * (1.2 + 27.0)
+        - 2.0 * 18.0 * inner * 27.0
+        - 1.2 * (44.0 - 4.0) * (27.0 - 2.0)
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    mesh = _built("channel_joint", False, **values).mesh
+    assert mesh.volume == pytest.approx(body.volume, rel=1e-9)
+    _roundtrip(body)
+
+
+def test_channel_joint_exact_inside_matches_the_mesh() -> None:
+    exact_kernel()
+    values: dict[str, object] = {"style": "inner_insert", "ramp": 8.0, "play": 0.25}
+    body = _sound(_built("channel_joint", True, **values).mesh)
+    mesh = _built("channel_joint", False, **values).mesh
+    assert mesh.volume == pytest.approx(body.volume, rel=1e-9)
+    _roundtrip(body)
+
+
+@pytest.mark.parametrize("kind", ["socket", "plug"])
+def test_bayonet_exact_matches_its_analytic_volume(kind: str) -> None:
+    """Bajonett exakt: Ring, Einführschlitze als Kreisstreifen, Drehschlitze als Sektoren."""
+    exact_kernel()
+    from app.core.knowledge.parts.closures import bayonet_frame
+
+    values: dict[str, object] = {
+        "kind": kind,
+        "diameter": 75.0,
+        "wall": 2.0,
+        "lugs": 3,
+        "lug_width": 6.0,
+        "lug_height": 3.5,
+        "entry": 6.0,
+        "turn": 13.0,
+        "play": 0.25,
+    }
+    produced = _built("bayonet", True, **values)
+    body = _sound(produced.mesh)
+    builtin.load()
+    frame = bayonet_frame(PARTS.get("bayonet").params(**values))
+    if kind == "socket":
+        inner, outer, rim = frame["bore"], frame["outer"], frame["rim"]
+        slot = frame["slot_top"] - frame["slot_bottom"]
+        sweep = math.radians(13.0 + 2.0 * frame["margin"])
+        half = (6.0 + 0.25) / 2.0
+        expected = math.pi * (outer**2 - inner**2) * rim - 3.0 * (
+            sweep / 2.0 * (outer**2 - inner**2) * slot
+            + (_strip(outer, half) - _strip(inner, half)) * (rim - frame["slot_top"])
+        )
+    else:
+        radius = 37.5
+        near = radius - 1.0
+        half = 3.0
+        lug = 6.0 * (frame["outer"] - near) - (_strip(radius, half) - 2.0 * half * near)
+        expected = math.pi * (radius**2 - (radius - 2.0) ** 2) * frame["collar"] + 3.0 * lug * 3.5
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    _roundtrip(body)
+
+
+@pytest.mark.parametrize("kind", ["base", "disc"])
+def test_detent_disc_exact_is_sound_and_matches_the_mesh(kind: str) -> None:
+    """Rastdrehscheibe exakt: gültig, ein Körper, und das Netz weicht nur um seine Sehnen ab."""
+    exact_kernel()
+    values: dict[str, object] = {"kind": kind, "play": 0.25}
+    produced = _built("detent_disc", True, **values)
+    body = _sound(produced.mesh)
+    mesh = _built("detent_disc", False, **values).mesh
+    assert mesh.is_watertight and mesh.component_count == 1
+    sag = 25.0 * (1.0 - math.cos(math.pi / shapes.SEGMENTS))
+    assert abs(mesh.volume - body.volume) <= sag * float(mesh.raw.area)
+    assert set(produced.features) == set(_built("detent_disc", False, **values).features)
+    _roundtrip(body)
+
+
+@pytest.mark.parametrize(
+    ("name", "values", "expected"),
+    [
+        (
+            "room_floor",
+            {"length": 120.0, "depth": 90.0, "thickness": 4.0, "wall": 4.0, "play": 0.25},
+            # Platte mit einer Wand Überstand hinten und seitlich, weniger der hinteren
+            # Nut über die ganze Breite und der zwei seitlichen bis an sie heran.
+            128.0 * 94.0 * 4.0 - 2.0 * (128.0 * 2.25 + 2.0 * 2.25 * (88.0 - 2.25 / 2.0)),
+        ),
+        (
+            "room_pane",
+            {"opening_width": 100.0, "opening_height": 120.0, "wall": 4.0, "play": 0.25},
+            (100.0 + 8.0 - 0.25) * (120.0 + 8.0 - 0.25) * 2.0,
+        ),
+    ],
+)
+def test_room_panels_exact_are_boxes_minus_their_grooves(
+    name: str, values: dict[str, object], expected: float
+) -> None:
+    exact_kernel()
+    produced = _built(name, True, **values)
+    body = _sound(produced.mesh)
+    mesh = _built(name, False, **values).mesh
+    assert mesh.volume == pytest.approx(body.volume, rel=1e-9)
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    _roundtrip(body)
+
+
+def test_room_wall_exact_matches_its_mesh_with_door_and_window() -> None:
+    exact_kernel()
+    for values in (
+        {"role": "room_back", "opening": "window", "opening_width": 100.0, "play": 0.25},
+        {
+            "role": "room_side",
+            "opening": "door",
+            "opening_width": 90.0,
+            "opening_height": 200.0,
+            "play": 0.25,
+        },
+    ):
+        body = _sound(_built("room_wall", True, **values).mesh)
+        mesh = _built("room_wall", False, **values).mesh
+        assert mesh.volume == pytest.approx(body.volume, rel=1e-9)
+        _roundtrip(body)

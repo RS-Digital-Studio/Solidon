@@ -491,6 +491,22 @@ def _aligned_plate() -> str:
     return _mesh_print(apply(_plate(), align_matrix(mover, target)))
 
 
+def _turned_closures() -> str:
+    """Bajonett und Rastdrehscheibe (RM-184): Schlitze und Sektoren unter krummen Winkeln.
+
+    Der Drehweg von 13 Grad, der halbe Öffnungswinkel eines Schlitzes und die
+    Tortenstücke der Sektoren gehen über Winkelfunktionen in die Ecken — das
+    ist der Ort, an dem eine Plattformfunktion die letzte Stelle verschöbe.
+    """
+    from app.core.knowledge.parts import builtin
+
+    parts = builtin.load()
+    bayonet, detent = parts.get("bayonet"), parts.get("detent_disc")
+    socket = bayonet.fn(bayonet.params(kind="socket", diameter=75.0, turn=13.0, play=0.25))
+    disc = detent.fn(detent.params(kind="disc", play=0.25))
+    return f"{_mesh_print(socket.mesh)}|{_mesh_print(disc.mesh)}"
+
+
 def _posed_plate() -> str:
     """Eine Stellung über zwei Knochen, mit Winkeln, die keine rechten sind."""
     from app.core.geom.pose import posed
@@ -897,6 +913,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "pattern_facets": _aligned_pattern_facets,
     "pattern_facets_tilted": lambda: _aligned_pattern_facets(True),
     "pose_armature": _posed_plate,
+    "turned_closures": _turned_closures,
     "prusa_support_angle": _automatic_support_angle,
     "remesh_mesh": _refined_plate,
     "rebuild_box": _rebuilt_box,
