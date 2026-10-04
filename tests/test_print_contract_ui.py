@@ -514,6 +514,51 @@ def test_full_preview_checks_both_actual_states_and_keeps_material_change(qt_app
         session.release()
 
 
+def test_a_waiting_apply_skips_the_print_review_of_the_preview(qt_app):
+    """RM-493 gegen die Prüfung der Vorschau: Wer übernimmt, wartet nur auf die Rechnung.
+
+    Ein Klick auf *Übernehmen* während der Vorschau ruft
+    ``Session.drop_preview_picture``: Das Ergebnis liegt dann im Cache, und der
+    Vergleich fürs Bild entfällt. Die genaue Prüfung beider Stände (feine
+    Auswertung und Schichtanalyse) lief trotzdem, und der Klick wartete auf sie.
+    Jetzt endet die Vorschau mit einer leeren Differenz ohne Prüfsatz — gleich,
+    ob der Klick vor oder während der Prüfung kam.
+    """
+    from app.core.scene import OperationDraft
+    from app.i18n import tr
+    from app.ui.session import Session
+
+    session = Session()
+    try:
+        session.apply("Platte", [OperationDraft(op="create_box", params={"name": "Platte"})])
+        assert session.wait_for_idle()
+        key = next(iter(session.last_result.scene.objects))
+        events = []
+        session.preview_async(
+            lambda difference: events.append(("checked", difference)),
+            [OperationDraft(op="translate_object", inputs=(key,), params={"dx": 3.0})],
+            pictured=lambda difference: events.append(("picture", difference)),
+        )
+        session.drop_preview_picture()
+        assert session.wait_for_idle(30_000)
+        assert events and events[-1][0] == "checked", events
+        final = events[-1][1]
+        assert final is not None, "eine erfolgreiche Rechnung ohne Bild ist eine leere Differenz"
+        basis = str(
+            tr(
+                "Grundlage: genaue Auswertung und Schichtanalyse beider Stände "
+                "mit demselben Druckziel."
+            )
+        )
+        # Ohne Vergleich trägt die Differenz gar keine Erklärung
+        # (``print_contract.ExplainedDifference`` entsteht erst beim Vergleich).
+        told = getattr(final, "explanation", "")
+        assert basis not in told, told
+        assert not final.changed
+    finally:
+        session.release()
+
+
 def test_candidate_review_names_a_print_finding_the_change_resolves(qt_app):
     """NM 8 (RM-090): Die Kandidatenszene wird genau ausgewertet und erneut geprüft.
 

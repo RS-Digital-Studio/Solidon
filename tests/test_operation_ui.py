@@ -1625,7 +1625,15 @@ def test_the_fx_field_takes_a_formula_without_equals_and_at(qt_app: QApplication
     Bis zur Durchsicht 0.5.0 wies das fx-Feld das ab: ohne ``=`` kein Ausdruck,
     ohne ``@`` ein unbekannter Name. Jetzt ergänzt es beides, zeigt das
     Ergebnis und gibt die gespeicherte Form mit ``@`` zurück.
+
+    Das Ergebnis steht wie jede Länge da (``expression_hint`` über
+    ``labels.length``): Anzeigeeinheit und das Dezimalzeichen aus Qts
+    Gebietsschema — der Sollwert kommt deshalb aus derselben Funktion, nicht
+    als „40.3“ oder „40,3“, die nur auf einem System stimmen.
     """
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import length
     from app.ui.op_dialog import ValueField
 
     spec = REGISTRY.get("create_box")
@@ -1633,10 +1641,12 @@ def test_the_fx_field_takes_a_formula_without_equals_and_at(qt_app: QApplication
     field = dialog._editors["width"]
     assert isinstance(field, ValueField)
 
-    field.toggle.setChecked(True)
-    field.text.setText("schraube_m4 + spiel")
+    field.toggle.click()
+    assert field.toggle.isChecked(), "der Klick muss in den Ausdrucksmodus schalten"
+    field.text.clear()
+    QTest.keyClicks(field.text, "schraube_m4 + spiel")
 
-    assert field.hint.text().startswith("= 40.3"), field.hint.text()
+    assert field.hint.text() == f"= {length(40.3)}", field.hint.text()
     assert field.value() == "=@schraube_m4 + @spiel"
 
 
@@ -3871,8 +3881,13 @@ def test_switching_to_an_expression_starts_from_millimetres(empty_window: MainWi
     darunter beschriftete es mit „mm", bezeugte den Fehler also selbst.
 
     Ein Anzeigefehler wäre halb so schlimm. Der Ausdruck landet im Dokument.
+
+    Der Hinweis nennt, was der Ausdruck ergibt, wie jede andere Länge — in der
+    Anzeigeeinheit (``expression_hint`` über ``labels.length``): unter „=40“
+    steht in Zoll „= 1,5748 in“. Er widerlegt den Ausdruck nicht, solange er
+    dieselbe Größe nennt; der alte Fehler („=1.5748“) ergäbe dort „0,062 in“.
     """
-    from app.ui.labels import set_display_unit
+    from app.ui.labels import length, set_display_unit
 
     spec = REGISTRY.get("create_box")
     entry = _length_param(spec)
@@ -3886,11 +3901,16 @@ def test_switching_to_an_expression_starts_from_millimetres(empty_window: MainWi
             "das Feld muss Zoll zeigen, sonst prüft der Test nichts"
         )
 
-        field.toggle.setChecked(True)
+        field.toggle.click()
+        assert field.toggle.isChecked(), "der Klick muss in den Ausdrucksmodus schalten"
 
         assert field.text.text() == f"={default_mm:g}", field.text.text()
-        # Und der Hinweis stimmt mit dem Ausdruck überein, statt ihn zu widerlegen.
-        assert f"{default_mm:g} mm" in field.hint.text(), field.hint.text()
+        # Und der Hinweis nennt dieselbe Größe wie der Ausdruck, statt ihn zu
+        # widerlegen — in der Einheit, die der Kunde eingestellt hat.
+        assert field.hint.text() == f"= {length(default_mm)}", field.hint.text()
+        assert length(default_mm) != length(default_mm / 25.4), (
+            "Größe und Anzeigewert müssen sich im Hinweis unterscheiden, sonst prüft er nichts"
+        )
         # Was der Stapel bekommt, ist der Ausdruck — wörtlich, in Millimetern.
         assert dialog.values()[entry.name] == f"={default_mm:g}"
     finally:
