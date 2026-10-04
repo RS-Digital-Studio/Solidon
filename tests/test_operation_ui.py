@@ -51,12 +51,14 @@ def test_the_value_of_an_expression_is_written_like_any_other_number() -> None:
     Länge schreibt sich wie überall (Anzeigeeinheit, Dezimalzeichen der
     Sprache), jede andere Zahl gerundet und mit dem Zeichen der Sprache.
     """
-    from app.ui.labels import length
+    from app.ui.labels import length, localised
     from app.ui.op_dialog import expression_hint
 
     assert expression_hint(-4.81259e-17, "mm") == f"= {length(0.0)}"
     assert expression_hint(-15.0, "mm") == f"= {length(-15.0)}"
-    assert expression_hint(2.5, "°") == "= 2,5 °"
+    # Das Dezimalzeichen kommt aus dem Gebietsschema von Qt wie in den
+    # Eingabefeldern — auf dem englischen Linux-Runner ein Punkt.
+    assert expression_hint(2.5, "°") == f"= {localised('2.5')} °"
     assert expression_hint(1e-12, "") == "= 0"
     assert expression_hint(12.0, "") == "= 12"
 
