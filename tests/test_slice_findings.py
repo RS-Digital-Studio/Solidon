@@ -286,6 +286,51 @@ def test_a_long_bridge_over_the_model_lets_its_supports_start_there() -> None:
     assert changed.support.placement == "everywhere"
 
 
+def tunnel_beside_a_ledge() -> MeshData:
+    """Der Tunnel aus :func:`tunnel_block` (20 mm, Decke auf 28 mm) und außen
+    auf derselben Höhe ein Sims 4 auf 4 mm über einer Stufe des Modells.
+
+    Die Tunneldecke ist eine Brücke von 20 mm, aber eine Kanaldecke; der Sims
+    setzt außerhalb eines Kanals auf dem Modell auf, ist aber keine Brücke.
+    """
+    return on_bed(
+        trimesh.boolean.difference(
+            [
+                brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0)),
+                brick(20.0, 50.0, 20.0, (0.0, 0.0, 18.0)),
+            ]
+        ),
+        brick(40.0, 40.0, 5.0, (50.0, 0.0, 37.5)),
+        brick(20.0, 40.0, 10.0, (-40.0, 0.0, 5.0)),
+        brick(4.0, 4.0, 2.0, (-32.0, 0.0, 29.0)),
+    )
+
+
+def test_a_long_bridge_counts_on_the_model_only_where_it_hangs_there() -> None:
+    """Die Brücke muss selbst über dem Modell hängen, nicht nur ihre Schicht.
+
+    An der Waschschüssel (04.10.2026, Cura-Raster) lag auf der Schicht der
+    Kanaldecke (17,3 mm) ein offenes Stück von 9,9 mm² neben dem Gewölbe; der
+    Rat schaltete „überall“ ein, und Cura stellte trotz Kanalsperre eine
+    Stützsäule von 42 mm in den Kanal (4,1 m Bahn, vorher keine).
+    """
+    result = slice_body(tunnel_beside_a_ledge(), 0.5)
+    need = advise.support_need(result)
+    ceiling = next(
+        index
+        for index, layer in enumerate(result.layers)
+        if layer.bridge_width > advise.SPAN_INTERESTING
+    )
+    assert any(index == ceiling for index, _number in need.model.channels), "die Decke ist Kanal"
+    assert any(index == ceiling for index, _number in need.model.open_pieces), (
+        "der Sims hängt auf derselben Schicht außen über dem Modell"
+    )
+    assert need.model.open_area < advise.OVERHANG_WORTH_SUPPORT, "der Sims ist klein"
+
+    assert placement_advice(tunnel_beside_a_ledge()) == "build_plate"
+    assert placement_advice(beam_over_a_plate()) is None, "die Brücke über dem Modell zählt"
+
+
 # --- Eine Decke im Kanal verlangt keine Stütze auf dem Modell -------------------
 
 

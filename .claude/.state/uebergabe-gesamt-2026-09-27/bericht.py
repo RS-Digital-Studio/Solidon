@@ -53,9 +53,11 @@ def state_of(entry: dict[str, Any]) -> tuple[str, list[str]]:
     details = " ".join(str(r.get("detail", "")) for r in runs)
     if any(not r.get("ok") for r in runs):
         if (
-            "größer als der Bauraum" in details
+            any(r.get("constraint") == "slicer_build_volume" for r in runs)
+            or "größer als der Bauraum" in details
             or "außerhalb seines Bauraums" in details
             or "größer als die Druckfläche" in details
+            or "höher, als dieser Drucker" in details
         ):
             return "passt nicht", [advice_flag] if advice_flag else []
         if "nur in seinem Fenster" in details:

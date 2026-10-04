@@ -107,7 +107,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Konstante nach und fährt die Waschschüssel im Slicer.
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
-  Brücke dort (`open_layers`); über dem Bett bleibt „nur vom Bett“.
+  Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
+  „nur vom Bett“.
 - **`support.block_channels`**, weil „nur vom Bett“ nicht in jedem Slicer den
   Kanal freihält: eine Stützsperre aus `analysis.channel_space` — freie Fläche
   um die Kanalsäulen **innerhalb der konvexen Hülle** der Schicht, jede Scheibe

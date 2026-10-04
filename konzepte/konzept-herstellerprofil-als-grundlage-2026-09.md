@@ -472,7 +472,11 @@ Cura-Raster sperrte zudem die Kanalsperre eines Kanalstücks darunter den Raum
 der Brücke. Behoben: Eine lange Brücke über dem Modell zählt wie ein großes
 Stück dort, und die Sperre spart die Säulen der Stücke auf dem Modell aus.
 Übernommen stützen jetzt Creality 2,9, Kobra 2 3,0, Elegoo 2,6, Prusa 1,8
-und Cura samt Sperre 1,8 m unter der Decke.
+und Cura samt Sperre 1,8 m unter der Decke. Gezählt wird die Brücke über dem
+offenen Stück selbst, nicht die der Schicht: In der ersten Fassung war es an
+der Waschschüssel (Cura-Raster) das Kanalgewölbe neben einem kleinen offenen
+Stück, und Cura stellte trotz Sperre eine Säule von 42 mm in den Kanal
+(4,1 m); je Stück bleibt es dort bei „nur vom Bett“ und null im Kanal.
 
 **Beim Prüfen gefunden und behoben:** Die Schichtanalyse brach am Wizard Tower
 mit einer `GEOSException` ab — eine sich kreuzende Aufweitung in

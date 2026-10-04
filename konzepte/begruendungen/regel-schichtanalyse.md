@@ -216,8 +216,14 @@ Modell aufsetzt. Weil die Decke unter den Flächengrenzen blieb, schlug derselbe
 Rat „nur vom Bett“ vor, und die beiden Vorschläge hoben sich auf: Übernommen
 lieferten Creality Print, OrcaSlicer (Kobra 2), PrusaSlicer und Cura null
 Stützbahn, ElegooSlicer 1,1 statt 2,6 m, Bambu Studio 0,8 statt 1,8 m.
-Seitdem zählt eine lange Brücke in einer Schicht mit einer Säule auf dem
-Modell (`ModelSupport.open_layers`) wie ein großes Stück dort. **Und die
+Seitdem zählt eine lange Brücke über einem Stück, dessen Säule auf dem
+Modell aufsetzt (`ModelSupport.open_pieces`, `analysis.open_bridge_width`),
+wie ein großes Stück dort. **Gemessen wird die Brücke dieses Stücks, nicht
+die der Schicht**: Die erste Fassung fragte die Schicht, und an der
+Waschschüssel (Cura-Raster) war deren Brücke von 17,3 mm das Gewölbe des
+Kanals, neben einem offenen Stück von 9,9 mm²; je für sich spannten sie
+7,9 und 11,5 mm. Der Rat schaltete „überall“ ein, und Cura stellte trotz
+Sperre eine Säule von 42 mm in den Kanal (4,1 m Bahn, vorher keine). **Und die
 Kanalsperre spart die Säulen der übrigen Stücke auf dem Modell aus**
 (`open_columns`): Im Cura-Raster lag am Wedge-Lock ein Kanalstück von 7 mm²
 unter derselben Brücke, die Sperre darum füllte deren Raum, und Cura stützte

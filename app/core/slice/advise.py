@@ -42,6 +42,7 @@ from app.core.slice.analysis import (
     model_support,
     narrow_share,
     narrowest_measured,
+    open_bridge_width,
     piece_area,
     smooth_outline_height,
     tapered_layers,
@@ -938,10 +939,14 @@ def _from_geometry(
     # unter den Flächengrenzen: Am Wedge-Lock (04.10.2026) hing eine Decke von
     # 25,7 mm auf 65 mm² über dem Modell, der Rat verlangte Stützen und schlug
     # zugleich „nur vom Bett“ vor. Creality Print, Kobra 2, PrusaSlicer und
-    # Cura stützten dann gar nichts, Elegoos Bäume die Hälfte.
-    long_bridge_on_model = any(
-        layer.bridge_width > SPAN_INTERESTING and index in model.open_layers
-        for index, layer in enumerate(result.layers)
+    # Cura stützten dann gar nichts, Elegoos Bäume die Hälfte. **Die Brücke
+    # selbst muss dort hängen**, nicht nur ihre Schicht: An der Waschschüssel
+    # war es das Gewölbe des Kanals neben einem kleinen offenen Stück, und
+    # Cura stellte mit „überall“ eine Säule in den Kanal (:func:`open_bridge_width`).
+    long_bridge_on_model = (
+        needs_support
+        and open_bridge_width(result, model, profile.minimum_wall_thickness, above=SPAN_INTERESTING)
+        > SPAN_INTERESTING
     )
     on_model = needs_support and (
         model.island_on_model

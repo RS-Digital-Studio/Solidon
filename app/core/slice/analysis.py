@@ -2520,9 +2520,11 @@ def _bridge_width(
     shape: ShapelyPolygon,
     previous: ShapelyPolygon | None,
     bridge_from: float = BRIDGE_FROM,
+    touching: ShapelyPolygon | None = None,
 ) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
-    muss (§22.2).
+    muss (§22.2). Mit ``touching`` nur die freien Flächen, die es berühren
+    (:func:`open_bridge_width`).
 
     Zwei Fragen, in dieser Reihenfolge. Erst: ist die ungestützte Fläche
     überhaupt breiter als zwei Bahnen? Ein Kegel unter 45 Grad legt je Schicht
@@ -2557,6 +2559,8 @@ def _bridge_width(
         return 0.0
     supported = previous.buffer(OVERHANG_MARGIN)
     free = shape.difference(supported)
+    if touching is not None:
+        free = unary_union([part for part in _areas_of(free) if part.intersects(touching)])
     # Brücken werden gegen die Schicht selbst gemessen, nicht gegen die
     # 45-Grad-Zugabe: was durch freie Luft spannt, ist eine Brücke, egal in
     # welchem Winkel.
@@ -3095,10 +3099,10 @@ class ModelSupport:
     island_on_model: bool = False
     """Setzt eine **Insel** auf dem Modell auf? Sie druckt ohne Stütze in die
     Luft, gleich wie klein sie ist, und ist deshalb nie eine Kanaldecke."""
-    open_layers: frozenset[int] = frozenset()
-    """Schichten mit einem Stück, dessen Säule außerhalb eines Kanals auf dem
-    Modell aufsetzt — daran fragt der Rat, ob eine lange Brücke ihre Stütze
-    auf dem Modell braucht (``advise._from_geometry``)."""
+    open_pieces: frozenset[tuple[int, int]] = frozenset()
+    """Die Stücke, deren Säule außerhalb eines Kanals auf dem Modell aufsetzt —
+    an ihnen fragt der Rat, ob eine lange Brücke ihre Stütze auf dem Modell
+    braucht (:func:`open_bridge_width`)."""
     open_columns: tuple[tuple[Polygon, float, float], ...] = ()
     """Diese Stücke wie ``channel_columns``: Grundriss, Höhe der Auflage, Höhe
     des Stücks. Die Stützsperre spart ihre Säulen aus (:func:`channel_space`)."""
@@ -3111,6 +3115,44 @@ def support_on_model(result: SliceResult) -> bool:
     braucht.
     """
     return model_support(result).open_patch > EPS_GEOM
+
+
+def open_bridge_width(
+    result: SliceResult,
+    model: ModelSupport,
+    bridge_from: float = BRIDGE_FROM,
+    *,
+    above: float = 0.0,
+) -> float:
+    """Die längste Brücke, die über einem Stück außerhalb der Kanäle auf dem
+    Modell hängt, in mm (§22.2).
+
+    ``LayerInfo.bridge_width`` gilt der ganzen Schicht. An der Waschschüssel
+    (04.10.2026, Cura-Raster) war die Brücke von 17,3 mm das Gewölbe des
+    Kanals, und daneben hing auf derselben Schicht ein offenes Stück von
+    9,9 mm²; je für sich spannten sie 7,9 und 11,5 mm. Gemessen wird deshalb
+    nur die freie Fläche, die ein offenes Stück berührt, mit der Mindestwand,
+    mit der die Schicht gemessen wurde. Schichten, deren ganze Brücke nicht
+    über ``above`` reicht, werden nicht gefragt — ein Teil ihrer Fläche spannt
+    nie weiter.
+    """
+    pieces: dict[int, list[ShapelyPolygon]] = {}
+    for index, number in sorted(model.open_pieces):
+        if index > 0 and result.layers[index].bridge_width > above:
+            piece = result.layers[index].overhangs[number]
+            pieces.setdefault(index, []).append(ShapelyPolygon(piece.outline, piece.holes))
+    return max(
+        (
+            _bridge_width(
+                _material(result.layers[index]),
+                _material(result.layers[index - 1]),
+                bridge_from,
+                touching=unary_union(found),
+            )
+            for index, found in pieces.items()
+        ),
+        default=0.0,
+    )
 
 
 def model_support(
@@ -3334,7 +3376,7 @@ def _model_support(
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
-        open_layers=frozenset(names[owner][0] for owner in landed if owner not in channels),
+        open_pieces=frozenset(names[owner] for owner in landed if owner not in channels),
         open_columns=tuple(
             (
                 layers[names[owner][0]].overhangs[names[owner][1]],
