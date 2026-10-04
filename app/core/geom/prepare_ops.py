@@ -422,8 +422,8 @@ class DrillParams(BaseParams):
         minimum=0.2,
         maximum=200.0,
         doc=_(
-            "Nenndurchmesser der Bohrung. Für eine Schraube gibt es *Schraubenloch* "
-            "in den Bausteinen — dort kommen die Maße aus der Normteiltabelle."
+            "Nenndurchmesser der Bohrung. Für eine Schraube gibt es den Baustein "
+            "„Schraubenloch mit Senkung“, dort kommen die Maße aus der Normteiltabelle."
         ),
     )
     x: float = param(

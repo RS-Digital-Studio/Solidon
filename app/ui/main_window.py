@@ -4186,8 +4186,7 @@ class MainWindow(QMainWindow):
             None,
             self.action_import_url,
             tr(
-                "Eine Modelldatei über ihre Adresse laden — für den Fall, dass sie "
-                "noch nicht auf dem Bett liegt."
+                "Eine Modelldatei über ihre Internetadresse laden, ohne sie vorher herunterzuladen."
             ),
             symbol="network",
         )
@@ -6005,7 +6004,7 @@ class MainWindow(QMainWindow):
             return
         del strokes[index]
         self.session.change_params(operation.id, {"strokes": strokes_to_text(strokes)})
-        self.announce(tr("Zug zurückgenommen — Strg+Z holt ihn wieder."))
+        self.announce(tr("Zug entfernt. Strg+Z holt ihn zurück."))
 
     def _suppress_along_after_error(self, error: AppError) -> None:
         """„Diesen Schritt mit ausschalten": dieselben Schritte und der, an dem es hielt."""
@@ -12892,7 +12891,7 @@ class MainWindow(QMainWindow):
         radius = self.sculpt_bar.radius.value_mm()
         if radius >= edge * BRUSH_TO_EDGE:
             return ""
-        return tr("Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.")
+        return tr("Das Netz ist für diesen Pinsel zu grob. Gleichen Sie erst die Dreiecke an.")
 
     def _sculpt_refinement_order(self) -> _PreviewOrder:
         """Die zum aktuellen Pinsel passende Vernetzung einmal vorbereiten."""
@@ -13156,7 +13155,7 @@ class MainWindow(QMainWindow):
 
     def _sculpt_preview_for(self, mesh: MeshData) -> SculptPreview:
         """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
-        anderes ist (*Jetzt vernetzen* mitten in der Sitzung)."""
+        anderes ist (*Dreiecke jetzt angleichen* mitten in der Sitzung)."""
         preview = self._sculpt_preview
         if preview is None or self._sculpt_preview_base is not mesh:
             preview = SculptPreview(

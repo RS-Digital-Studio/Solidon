@@ -1179,8 +1179,8 @@ def _sculpting_findings(
                 severity="warning",
                 message=_(
                     "Der feinste Pinsel ist kleiner als die Dreiecke darunter — dort "
-                    "entsteht keine Form, sondern eine verzogene Fläche. Erst gleichmäßig "
-                    "vernetzen."
+                    "entsteht keine Form, sondern eine verzogene Fläche. Erst die "
+                    "Dreiecke angleichen."
                 ),
                 object_id=object_id,
                 values={"brush_mm": round(finest, 3), "edge_mm": round(edge, 3)},

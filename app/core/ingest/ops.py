@@ -486,7 +486,7 @@ class LoadOutlineParams(BaseParams):
         kind="contours",
         default="",
         doc=_(
-            "Wählen Sie die Flächen in der Vorschau. Innenringe bleiben Löcher. "
+            "Wählen Sie die Konturen in der Vorschau. Innenringe bleiben Löcher. "
             "Bereits gespeicherte Gesamtauswahlen bleiben erhalten."
         ),
     )

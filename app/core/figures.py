@@ -625,19 +625,19 @@ def _ways(theme: Theme) -> str:
 
     ways = (
         (
-            _("Fremdes Modell anpassen"),
+            _("Weg 1: ein fremdes Modell anpassen"),
             (_("einlesen"), _("reparieren"), _("bohren"), _("exportieren")),
         ),
         (
-            _("Selbst konstruieren"),
+            _("Weg 2: selbst konstruieren"),
             (_("Maße benennen"), _("Grundkörper · Skizze"), _("Bausteine"), _("exportieren")),
         ),
         (
-            _("Erzeugtes aufbereiten"),
+            _("Weg 3: ein Modell aus Text oder Bild erzeugen"),
             (_("erzeugen"), _("Reparaturkette"), _("prüfen"), _("exportieren")),
         ),
         (
-            _("Organisch formen"),
+            _("Weg 4: eine Figur formen"),
             (_("Grundkörper"), _("verschmelzen"), _("ausformen"), _("exportieren")),
         ),
     )
@@ -1201,9 +1201,9 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
         alt=_(
             "Vier Abläufe untereinander: ein fremdes Modell anpassen (einlesen, "
             "reparieren, bohren, exportieren), selbst konstruieren (Maße benennen, "
-            "Grundkörper oder Skizze, Bausteine, exportieren) und Erzeugtes aufbereiten "
-            "(erzeugen, Reparaturkette, prüfen, exportieren) sowie organisch formen "
-            "(Grundkörper, verschmelzen, ausformen, exportieren)."
+            "Grundkörper oder Skizze, Bausteine, exportieren), ein Modell aus Text "
+            "oder Bild erzeugen (erzeugen, Reparaturkette, prüfen, exportieren) und "
+            "eine Figur formen (Grundkörper, verschmelzen, ausformen, exportieren)."
         ),
         caption=_("Zu jedem Weg liegt ein Beispielprojekt auf dem Startbildschirm."),
         build=_ways,
@@ -1477,8 +1477,8 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
         key="own-part",
         alt=_(
             "Der Dialog „Auswahl als Baustein speichern“: ganz oben die Zeile, "
-            "welche Schritte des Verlaufs mitgehen — ausgewählte oder der ganze "
-            "Stapel —, darunter Name, Gruppe und Beschreibung, dann je "
+            "welche Schritte des Verlaufs mitgehen, die ausgewählten oder alle. "
+            "Darunter Name, Gruppe und Beschreibung, dann je "
             "Projektparameter eine Zeile mit Beschriftung, Einheit, kleinstem "
             "und größtem Wert, Vorgabe und Platz im späteren Dialog. Unten die "
             "erkannten Merkmale mit dem Namen, unter dem sie später anklickbar "
