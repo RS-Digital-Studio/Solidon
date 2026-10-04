@@ -23,6 +23,7 @@ from app.core.scene import History, OperationDraft, ResultCache, evaluate, orpha
 from app.core.scene.cache import CACHE_FORMAT_VERSION, CachedResult, DiskCache
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import (
+    Document,
     Feature,
     FeatureContinuation,
     FeatureRef,
@@ -1661,11 +1662,15 @@ def test_native_face_names_do_not_depend_on_a_later_consumer(
             "Zylinder",
             [OperationDraft(op="create_brep_cylinder", params={"diameter": 45.0, "height": 17.0})],
         )
+        # Ohne Entlüftung, sonst ginge *Aushöhlen* den Netzweg, und der Fall
+        # prüfte keinen exakten Zylinder (``exactly_hollowable``).
         history.apply(
             "Aushöhlen",
             [
                 OperationDraft(
-                    op="hollow_object", inputs=("obj_1",), params={"wall": 2.0, "open_top": True}
+                    op="hollow_object",
+                    inputs=("obj_1",),
+                    params={"wall": 2.0, "open_top": True, "vents": 0},
                 )
             ],
         )
@@ -1693,6 +1698,7 @@ def test_native_face_names_do_not_depend_on_a_later_consumer(
     visible = evaluate(project.document, profile, sources=sources, cache=cache)
     assert visible.complete, visible.scene.report.findings
     body = visible.scene.objects["obj_1"]
+    assert body.kind == "brep", "der Fall gilt dem exakten Körper"
     top = next(
         feature
         for feature in body.features.values()
@@ -1736,6 +1742,163 @@ def test_native_face_names_do_not_depend_on_a_later_consumer(
     assert cold.scene.objects["obj_1"].features[top.id].params["centre"] == pytest.approx(
         after.params["centre"]
     )
+
+
+def shown_face_on_top(result: object, height: float) -> Feature:
+    """Die Fläche, die die Ansicht nach oben schauend auf ``height`` zeigt — die,
+    die der Kunde anklickt; genau eine, sonst ist der Fall falsch gebaut."""
+    entry = result.scene.objects["obj_1"]  # type: ignore[attr-defined]
+    faces = [
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "face"
+        and feature.params["normal"][2] > 0.99
+        and abs(feature.params["centre"][2] - height) < 1e-3
+    ]
+    assert len(faces) == 1, [feature.id for feature in faces]
+    return faces[0]
+
+
+@pytest.mark.parametrize("box", ["create_brep_box", "create_box"])
+def test_a_keyhole_chosen_on_the_top_face_after_a_bore_sits_in_the_top_face(
+    profile: Profile, box: str, tmp_path: Path
+) -> None:
+    """Der Originalweg F1 aus RM-388, über die Funktionen, die die Oberfläche ruft.
+
+    Quader 40 x 30 x 10, Deckfläche angeklickt, *Bohrung setzen* Ø 6; danach die
+    Deckfläche erneut angeklickt und *Baustein einsetzen* → Schlüsselloch. Den
+    Dialog belegt ``placement.values_for`` mit der angezeigten Fläche, übernommen
+    wird als Schritt wie über ``Session.apply``. Am exakten Quader tauschten nach
+    der Bohrung drei Flächen ihre Namen, und das Schlüsselloch saß in der
+    Vorderseite (Achse -Y); vor der Übernahme der Codex-Linien hielt die Kette
+    schon an der Bohrung an (``NativeReferenceLost``).
+    """
+    if box == "create_brep_box":
+        exact_kernel()
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.placement import values_for
+    from app.core.scene.project import load, save
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    shown = evaluate(project.document, profile, sources=ProjectSources(project))
+    drill = values_for(REGISTRY.get("drill_hole"), shown_face_on_top(shown, 10.0), "obj_1")
+    history.apply(
+        "Bohrung",
+        [OperationDraft(op="drill_hole", inputs=("obj_1",), params={**drill, "diameter": 6.0})],
+    )
+    drilled = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert drilled.complete, drilled.scene.report.findings
+    chosen = values_for(REGISTRY.get("insert_keyhole"), shown_face_on_top(drilled, 10.0), "obj_1")
+    history.apply(
+        "Schlüsselloch",
+        [OperationDraft(op="insert_keyhole", inputs=("obj_1",), params=chosen)],
+    )
+
+    def keyhole_of(document: Document) -> list[Feature]:
+        result = evaluate(document, profile, sources=ProjectSources(project))
+        assert result.complete, result.scene.report.findings
+        return [
+            feature
+            for name, feature in result.scene.objects["obj_1"].features.items()
+            if name.startswith("keyhole")
+        ]
+
+    def in_the_top_face(parts: list[Feature]) -> None:
+        assert parts, "das Schlüsselloch fehlt"
+        for feature in parts:
+            assert feature.params["axis"][2] == pytest.approx(1.0, abs=1e-3), feature.params
+            centre = feature.params["centre"]
+            assert abs(centre[0]) < 20.0 and abs(centre[1]) < 15.0, centre
+
+    in_the_top_face(keyhole_of(project.document))
+    assert history.undo() is not None
+    assert keyhole_of(project.document) == []
+    assert history.redo() is not None
+    in_the_top_face(keyhole_of(project.document))
+    reopened = load(save(project, tmp_path / "schluesselloch.p3d"))
+    in_the_top_face(keyhole_of(reopened.document))
+
+
+@pytest.mark.parametrize("cylinder", ["create_brep_cylinder", "create_cylinder"])
+def test_a_screw_lid_chosen_at_the_rim_of_a_hollowed_cylinder_is_made(
+    profile: Profile, cylinder: str, tmp_path: Path
+) -> None:
+    """Der Originalweg F3 aus RM-388, über die Funktionen, die die Oberfläche ruft.
+
+    Zylinder Ø 45 x 17, *Aushöhlen* mit *Oben öffnen* (Wand 2, ohne Entlüftung,
+    sonst rechnete auch der exakte Zylinder am Netz), den Randring angeklickt,
+    *Drehdeckel erzeugen*. Die Sperre am Menüeintrag fragt ``lid.reason_against``
+    an den angezeigten Merkmalen, der Dialog belegt sich über
+    ``placement.values_for``, übernommen wird über ``lid_flow.apply_lid`` wie in
+    ``Session.create_lid``. Am exakten Zylinder hieß der Randring in der Ansicht
+    ``face_2``, im Lauf war ``face_2`` der Boden: „Der Körper ist auf dieser Höhe
+    massiv“, kein Deckel.
+    """
+    exact = cylinder == "create_brep_cylinder"
+    if exact:
+        exact_kernel()
+    from app.core.bootstrap import load_operations
+    from app.core.geom.lid import reason_against
+    from app.core.lid_flow import apply_lid
+    from app.core.registry import REGISTRY
+    from app.core.scene.placement import values_for
+    from app.core.scene.project import load, save
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Zylinder", [OperationDraft(op=cylinder, params={"diameter": 45.0, "height": 17.0})]
+    )
+    history.apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=("obj_1",),
+                params={"wall": 2.0, "open_top": True, "vents": 0},
+            )
+        ],
+    )
+    shown = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert shown.complete, shown.scene.report.findings
+    entry = shown.scene.objects["obj_1"]
+    assert entry.kind == ("brep" if exact else "mesh")
+    rim = shown_face_on_top(shown, 17.0)
+    assert reason_against(entry, rim.id) is None, "Einsetzen ist frei"
+    applied = apply_lid(
+        project.document,
+        "obj_1",
+        dict(values_for(REGISTRY.get("screw_lid"), rim, "obj_1")),
+        op="screw_lid",
+    )
+    assert applied.fit is not None
+    made = {"obj_1", *applied.object_ids}
+    assert len(made) == 2
+
+    def bodies(document: Document) -> set[str]:
+        result = evaluate(document, profile, sources=ProjectSources(project))
+        assert result.complete, result.scene.report.findings
+        return set(result.scene.objects)
+
+    assert bodies(project.document) == made
+    # Der Ablauf hat seinen eigenen Verlauf geführt; Rückgängig und Wiederholen
+    # gehen über einen, der den Stapel des Dokuments liest, wie in der Sitzung.
+    afterwards = History(project.document)
+    assert afterwards.undo() is not None
+    assert bodies(project.document) == {"obj_1"}
+    assert afterwards.redo() is not None
+    assert bodies(project.document) == made
+    reopened = load(save(project, tmp_path / "drehdeckel.p3d"))
+    assert bodies(reopened.document) == made
+    assert [fit.name for fit in reopened.document.fits] == [applied.fit.name]
 
 
 @pytest.mark.parametrize("reverse", [False, True])
