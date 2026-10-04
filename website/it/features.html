@@ -108,8 +108,8 @@
         <div>
           <span class="kicker">Caratteristiche</span>
           <h3>In un STL altrui, un foro torna a essere un foro</h3>
-          <p>All’apertura, Solidon3D cerca nella maglia di triangoli ciò che un
-          tempo era progetto: fori, perni, svasature, cupole e sedi,
+          <p>All’apertura, Solidon3D cerca nella mesh di triangoli ciò che un
+          tempo era progetto: fori, perni, svasature, cupole e coppe,
           raccordi, gole, filettature, facce piane e spigoli aperti. Ogni
           caratteristica trovata riceve un’identità usata come riferimento nei passi successivi, e un clic mostra i suoi valori <b>misurati</b>, come quote nella vista e a destra nel pannello Selezione: posizione, diametro, profondità,
           asse.</p>
@@ -117,7 +117,7 @@
           <b>Nessuna modalità, nessun secondo dialogo</b>: l’anteprima
           nell’immagine segue mentre stai ancora digitando.</p>
           <p>Spostare, ruotare, duplicare, rimuovere, portare a misura: queste
-          azioni agiscono direttamente sull’elemento riconosciuto. Finora,
+          azioni agiscono direttamente sulla caratteristica riconosciuta. Finora,
           spostare un foro di tre millimetri voleva dire tapparlo e forarne uno
           nuovo a coordinate nuove — due passi, sei numeri a mano, e l’identità
           era persa. Ora è un passo solo, e gli accoppiamenti continuano a riferirsi a quel foro. I riferimenti che non si possono più risolvere vengono segnalati.</p>
@@ -127,13 +127,13 @@
           caratteristiche marcate dichiarano la loro distanza — nello spazio e
           per asse, senza strumento di misura.</p>
           <p class="note" data-kinds="hole,pin,cone,sphere">Non ogni tipo consente ogni azione. Spostare, duplicare e rimuovere valgono per fori,
-          perni, svasature, cupole e sedi; ruotare, per tutti tranne la superficie
+          perni, svasature, cupole e coppe; ruotare, per tutti tranne la superficie
           sferica — non ha un orientamento che si possa ruotare. Nei raccordi
           e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare
           il raggio o rimuoverli; una transizione che sfuma dolcemente nelle
           facce vicine, no. <b>Solidon3D spiega quali azioni sono
           disponibili nel punto selezionato e perché.</b></p>
-          <p>Puoi ripetere fori riconosciuti e altri elementi compatibili in
+          <p>Puoi ripetere fori riconosciuti e altre caratteristiche compatibili in
           fila, lungo un cerchio o con copie speculari. Da un solo foro nasce
           così una serie di fori a distanza regolare. Se cambi la misura
           dell'originale in un passo precedente della cronologia, le copie si
@@ -142,7 +142,7 @@
         <figure class="shot">
           <div class="stage">
             <a href="../bilder/beleg-merkmal-it.webp?v=0f812f8e"><img src="../bilder/beleg-merkmal-it.webp?v=0f812f8e" width="2560" height="1369" loading="lazy" decoding="async"
-                 alt="Un supporto importato con cinque fori riconosciuti; il foro 4 è selezionato. Nella vista le sue distanze dai bordi e il gruppo «Modifica foro» con diametro, posizione e profondità; a destra, nel pannello Selezione, la riga «Probabilmente adatto a M5» e sotto Sposta elemento, Allunga in asola, Ruota elemento, Duplica elemento, Rimuovi elemento, Svasa e Chiudi un foro."></a>
+                 alt="Un supporto importato con cinque fori riconosciuti; il foro 4 è selezionato. Nella vista le sue distanze dai bordi e il gruppo «Modifica foro» con diametro, posizione e profondità; a destra, nel pannello Selezione, la riga «Probabilmente adatto a M5» e sotto Sposta caratteristica, Allunga in asola, Ruota caratteristica, Duplica caratteristica, Rimuovi caratteristica, Svasa e Chiudi un foro."></a>
           </div>
           <figcaption>Un foro cliccato: le sue quote nella vista, le sue azioni a destra nel pannello Selezione.</figcaption>
         </figure>
@@ -299,7 +299,7 @@
           poi supporto a parete, gancio per pannello forato, clip per cavi,
           squadretta e piede. Le quote vengono da una tabella dei componenti
           normalizzati, non dall'istinto.</p>
-          <p class="note">Ogni blocco è verificato alle combinazioni dei suoi valori limite: <b>maglia chiusa, spessore minimo di parete e assenza di autointersezioni.</b></p>
+          <p class="note">Ogni blocco è verificato alle combinazioni dei suoi valori limite: <b>mesh chiusa, spessore minimo di parete e assenza di autointersezioni.</b></p>
           <p>Chi sceglie un blocco prima di indicare un punto viene
           interpellato da Solidon3D, invece di vederlo piazzato all'origine.
           Anche il catalogo si apre senza un modello caricato — per inserire un blocco, crea prima un solido o importa un modello con i pulsanti del catalogo.</p>
@@ -376,7 +376,7 @@
           <span class="kicker">Rapporto di verifica</span>
           <h3>Individua i rischi di stampa e correggili prima dello slicing</h3>
           <p>Ogni modello aperto riceve un rapporto: punti aperti, triangoli
-          orientati male, pareti sotto i due cordoni di estrusione, unità
+          orientati male, pareti sotto le due linee di estrusione, unità
           mancanti. Ordinato in errori, avvisi e note — e le voci localizzate indicano il punto interessato nel modello.</p>
           <p class="note">Ogni rilievo porta con sé un'azione proposta.
           <b>Qui un errore non finisce mai con «operazione non
@@ -396,7 +396,7 @@
           <span class="kicker">Analisi degli strati</span>
           <h3>Vedere ciò che vedrà la stampante</h3>
           <p>Solidon3D taglia il modello in strati e misura cosa ne segue:
-          aree senza supporto, isole sospese, pareti sotto i due cordoni,
+          aree senza supporto, isole sospese, pareti sotto le due linee,
           campate dei ponti e volume dei supporti. La ricerca
           dell'orientamento cerca una posizione che richieda meno supporti tra gli orientamenti valutati.</p>
           <p class="note">Nessuno slicer proprio — e nessun numero mescolato:
@@ -405,7 +405,7 @@
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Un disegno: una linea di analisi sale dal piano di stampa attraverso un pezzo; uno dopo l'altro compaiono tre rilievi — sbalzo di 90 gradi, isola sospesa e una parete sotto i due cordoni.">
+               aria-label="Un disegno: una linea di analisi sale dal piano di stampa attraverso un pezzo; uno dopo l'altro compaiono tre rilievi — sbalzo di 90 gradi, isola sospesa e una parete sotto le due linee.">
             <text class="ink" x="24" y="30" font-weight="600">Analisi degli strati</text>
 
             <rect class="body" x="60" y="80" width="48" height="120"/>
@@ -430,7 +430,7 @@
             </g>
             <g class="anim fig-find-3">
               <path class="warn" d="M368 168 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="183" font-size="12">Parete &lt; 2 cordoni</text>
+              <text class="ink" x="386" y="183" font-size="12">Parete &lt; 2 linee</text>
             </g>
           </svg>
           <figcaption>Tre rilievi che puoi esaminare prima dello slicing.</figcaption>
@@ -442,13 +442,13 @@
           <span class="kicker">Impostazioni di stampa</span>
           <h3>Passarlo allo slicer, con valori adatti al pezzo</h3>
           <p>Solidon3D non scrive G-code: lo fa il tuo slicer. Le impostazioni di stampa dicono prima cosa richiede questo pezzo: dalla geometria arrivano proposte come un brim quando la base è piccola o più tempo per strato quando in alto resta poca superficie — ognuna con il suo motivo, e ognuna si può togliere.</p>
-          <p><b>Apri nello slicer</b> passa il pezzo, se vuoi con i valori, a PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer o Cura. <b>Affetta</b> lascia calcolare il tuo slicer in background; ciò che misura compare poi nel rapporto di verifica.</p>
+          <p><b>Apri nello slicer</b> passa il pezzo, se vuoi con i valori, a PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer o Cura. <b>Esegui slicing</b> lascia calcolare il tuo slicer in background; ciò che misura compare poi nel rapporto di verifica.</p>
           <p class="note">I valori del G-code descrivono la stampa prevista. <b>La loro origine è indicata accanto alla stima di Solidon.</b> Tempo e consumo effettivi possono essere diversi.</p>
         </div>
         <figure class="shot">
           <div class="stage">
             <a href="../bilder/schritt-druck-it.webp?v=25242b24"><img src="../bilder/schritt-druck-it.webp?v=25242b24" width="1555" height="972" loading="lazy" decoding="async"
-                 alt="Le impostazioni di stampa sopra una figura importata: qualità, stampante, ugello e filamento, poi altezza strato, pareti, riempimento, temperature e supporti. In «Cosa richiede questo pezzo» Solidon3D propone un brim e un tempo minimo per strato più lungo; in basso i pulsanti Affetta e Apri nello slicer."></a>
+                 alt="Le impostazioni di stampa sopra una figura importata: qualità, stampante, ugello e filamento, poi altezza strato, pareti, riempimento, temperature e supporti. In «Cosa richiede questo pezzo» Solidon3D propone un brim e un tempo minimo per strato più lungo; in basso i pulsanti Esegui slicing e Apri nello slicer."></a>
           </div>
           <figcaption>Cosa richiede questo pezzo è nella finestra con il suo motivo — si applica ciò che è spuntato.</figcaption>
         </figure>
@@ -469,7 +469,7 @@
           materiale. L'accoppiamento
           resta nel progetto come relazione e viene riverificato a ogni
           modifica successiva.</p>
-          <p>E a chi serve un solo lato basta <b>Tagliare via</b>: un piano,
+          <p>E a chi serve un solo lato basta <b>Tronca</b>: un piano,
           un lato resta, la faccia di taglio viene chiusa. Così un supporto
           importato riceve una parete posteriore liscia, e una vaschetta
           diventa un bicchiere con le pareti tutte alla stessa altezza.</p>
@@ -546,9 +546,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="../bilder/beleg-filamentlager-it.webp?v=0c5ab9ac"><img src="../bilder/beleg-filamentlager-it.webp?v=0c5ab9ac" width="1049" height="699" loading="lazy" decoding="async"
-                 alt="Il magazzino filamenti, raggruppato per posizione: sei bobine sui ripiani «Armadio officina» e «Dry box», ciascuna con la bobina disegnata, tipo di materiale, grammi residui e posizione — una bobina a tre colori, una segnata «Poco filamento»; sopra il pulsante Esci dal magazzino e il campo di ricerca."></a>
+                 alt="Il magazzino filamenti, raggruppato per ubicazione: sei bobine sui ripiani «Armadio officina» e «Dry box», ciascuna con la bobina disegnata, tipo di materiale, grammi residui e posizione — una bobina a tre colori, una segnata «Poco filamento»; sopra il pulsante Esci dal magazzino e il campo di ricerca."></a>
           </div>
-          <figcaption>Il ripiano, raggruppato per posizione: la quantità rimanente
+          <figcaption>Il ripiano, raggruppato per ubicazione: la quantità rimanente
           si legge come avvolgimento e come numero, una bobina è sotto la
           soglia di avviso, una porta tre colori.</figcaption>
         </figure>
@@ -687,7 +687,7 @@
         <figure class="shot">
           <div class="stage">
             <a href="../bilder/schritt-start-it.webp?v=579d01b3"><img src="../bilder/schritt-start-it.webp?v=579d01b3" width="1472" height="920" loading="lazy" decoding="async"
-                 alt="La schermata iniziale: l’area dove rilasciare modelli e progetti, i pulsanti Nuovo progetto, Apri modello, Apri progetto e Manuale, il magazzino filamenti con sei bobine, sotto quattro tour guidati — uno per percorso — con immagine di anteprima, e inoltre Dare un riscontro e Sostieni Solidon volontariamente, e la sezione chiusa «Che altro sa fare?»."></a>
+                 alt="La schermata iniziale: l’area dove rilasciare modelli e progetti, i pulsanti Nuovo progetto, Apri modello, Apri progetto e Manuale, il magazzino filamenti con sei bobine, sotto quattro tour guidati — uno per via — con immagine di anteprima, e inoltre Dai un riscontro e Sostieni Solidon volontariamente, e la sezione chiusa «Che altro sa fare?»."></a>
           </div>
           <figcaption>Quattro dei dodici esempi presentano le vie principali; altri progetti mostrano
           singoli strumenti e il loro utilizzo.</figcaption>
@@ -814,7 +814,7 @@
         parametri, accoppiamenti e la cronologia modificabile.</p></div>
         </details>
         <details class="tool-card">
-          <summary>Misura, sezione, esplosione</summary>
+          <summary>Misura, sezione, esploso</summary>
           <div class="tool-content"><p>Strumenti nella vista, senza
         toccare la geometria.</p></div>
         </details>
