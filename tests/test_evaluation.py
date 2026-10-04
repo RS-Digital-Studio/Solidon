@@ -812,7 +812,7 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder.
     monkeypatch.setattr(
-        import_module("app.core.scene.evaluate"), "settled_by_surface", lambda result, *_: result
+        import_module("app.core.scene.evaluate"), "settled_twins", lambda result, *_, **__: result
     )
 
     load_operations()
@@ -883,7 +883,7 @@ def test_an_unreferenced_feature_never_becomes_a_question(
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder.
     monkeypatch.setattr(
-        import_module("app.core.scene.evaluate"), "settled_by_surface", lambda result, *_: result
+        import_module("app.core.scene.evaluate"), "settled_twins", lambda result, *_, **__: result
     )
 
     load_operations()
@@ -3198,7 +3198,7 @@ def test_a_contested_feature_never_gets_an_originator(
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder.
     monkeypatch.setattr(
-        import_module("app.core.scene.evaluate"), "settled_by_surface", lambda result, *_: result
+        import_module("app.core.scene.evaluate"), "settled_twins", lambda result, *_, **__: result
     )
     History(project.document).apply(
         "Haken",

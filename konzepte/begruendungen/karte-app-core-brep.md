@@ -326,9 +326,21 @@ Endpunktklammer auf null zurückgeführt werden, wenn der ursprüngliche
 degenerierte Rand tatsächlich den Spitzenknoten trägt. Ein kleiner echter
 Übertritt bleibt auch unterhalb von `EPS_GEOM` eine uneindeutige Doppelnappe.
 
-Angrenzende native Ringstücke mit gleichen Achsen, Mitten, Radien und
-Materialseiten bilden eine vollständige Merkmalsauswahl. Getrennte Stücke
-werden nicht allein wegen gleicher Träger vereinigt. Freie gerundete Seiten
+Native Ringstücke mit gleichen Achsen, Mitten, Radien und Materialseiten
+bilden ein Merkmal, auch wenn ein Durchbruch sie trennt (RM-226 Nachtrag
+04.10.2026). Bis dahin verband der exakte Kern nur angrenzende Stücke, das Netz
+legte Ringflecken schon nach ihrer Mitte zusammen (`_merged_tori`): An
+`pegboard-gs-100-v2` teilen zwei Durchbrüche die Kehle am Grund der Mulde in
+zwei Bögen; die 3MF des Herstellers trug einen Ring über beide (589 Dreiecke),
+der exakte Kern zwei (241 und 246). Angeglichen wurde der exakte Kern, weil ein
+Ring sein Träger ist: Wulst und Kehle bauen für Versetzen, Verdoppeln und
+Drehen den vollen Ring aus Achse, Mitte und Radien, nicht aus den gewählten
+Flächen. Die Gegenrichtung — auch am Netz nur Anstoßendes verbinden — wurde
+gemessen und verworfen: Im Erkennungszensus über `F:\3D Dateien` teilte sie an
+acht Netzen ganze Ringe in zwei oder vier Stücke (`parametric-laptop-riser`,
+ein Teil des Mini-Golf-Satzes, je zwei Teile von `elegoo_grease_tool` und
+`Elegoo_erster_Druck`, beide 3MF von gs-100) und las an drei weiteren Teilen
+des Mini-Golf-Satzes Rundflächen als Ringpaare. Freie gerundete Seiten
 verwenden `detect_curved_faces` und damit dieselbe Glättungs- und
 Innenseitenauskunft wie Netze. Deckt die Auswahl ganze native Flächen ab,
 kommen Fläche und Mitte aus ihren exakten Integralen; teilweise ausgewählte

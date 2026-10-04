@@ -189,7 +189,13 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   ein Bogen zwischen zwei seiner Ecken gehört zu ihm; Kegelläufe beginnen an
 #:   der Quadrik der Stützpunkte. Gespeicherte Erkennungen trügen alte
 #:   Verrundungen und Kegel.
-CACHE_FORMAT_VERSION: Final = 49
+#: - 50 (RM-226, Nachtrag 04.10.2026): Bögen desselben Rings sind am exakten
+#:   Kern ein Ring wie am Netz, auch über einen Durchbruch
+#:   (``brep.features._joined_tori``); Zwillinge behalten nach jedem exakten
+#:   Neubau und in der Auswertung des exakten Körpers ihre Namen nach der Lage
+#:   ihrer Oberfläche (``matching.settled_twins``). Gespeicherte exakte
+#:   Erkennungen und Ergebnisse trügen zwei Ringe und neue Namen für Zwillinge.
+CACHE_FORMAT_VERSION: Final = 50
 
 
 @dataclass(frozen=True, slots=True)

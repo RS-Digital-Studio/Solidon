@@ -112,8 +112,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Reste bekommen keinen erfundenen Träger. `measure_sources` nennt jedes native
   Maß; ganze Restflächen integrieren Fläche und Mitte, Teilflächen behalten den
   Netzweg, das offene Langloch bekommt seine Träger nachträglich
-  (`slots.native_open_slot_measures`). Getrennte Ringstücke nie allein wegen
-  gleicher Träger vereinigt; freie Rundungen über `detect_curved_faces`.
+  (`slots.native_open_slot_measures`). Ringstücke desselben Trägers sind ein
+  Merkmal, auch über einen Durchbruch, wie am Netz (`_joined_tori`,
+  `perceive.features._merged_tori`); freie Rundungen über `detect_curved_faces`.
 - **Luftkammern** (`_void_features`): Eine invertierte Außenschale ist kein
   Innenraum, ein Sacklangloch braucht eine echte Mündung, ein ganz innerer
   Langlochmantel samt Abschlüssen gehört zur Kammer; Inseln zählen nicht zum

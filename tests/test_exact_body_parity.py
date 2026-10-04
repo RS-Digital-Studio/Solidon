@@ -2894,3 +2894,242 @@ def test_a_copy_along_its_own_axis_into_a_second_wall_is_found_on_both_kernels(
             )
     assert said["mesh"] == said["brep"] == [], said
     assert volumes["mesh"] == pytest.approx(volumes["brep"], abs=0.1), volumes
+
+
+def _grooved_block() -> Any:
+    """Block 60 x 60 x 10 mit einer Ringrille, die zwei Schlitze in zwei Bögen teilen.
+
+    Die Rille ist der halbe Ring R 17 / r 3 um (0, 0, 10): ein Ring Ø 34 aus
+    einer Röhre Ø 6, als Kehle in die Oberseite gelegt. Zwei Schlitze, 8 breit
+    über |x| < 4, schneiden sie bei ±Y durch; es bleiben zwei Bögen desselben
+    Rings bei ±X, getrennt durch die Schlitzwände. Eine Bohrung Ø 6 durch bei
+    (20, −20) ist die Vorlage zum Verdoppeln.
+    """
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeTorus
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+
+    ring = Solid(
+        BRepPrimAPI_MakeTorus(gp_Ax2(gp_Pnt(0, 0, 10), gp_Dir(0, 0, 1)), 17.0, 3.0).Shape()
+    )
+    grooved = edit.boolean("difference", [edit.box(60.0, 60.0, 10.0), ring])
+    for side in (1.0, -1.0):
+        slot = edit.moved(edit.box(8.0, 18.0, 7.0), (0.0, side * 21.0, 4.0))
+        grooved = edit.boolean("difference", [grooved, slot])
+    return edit.cut_bore(
+        grooved, position=(20.0, -20.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=20.0
+    )
+
+
+def _slotted_pocket() -> Any:
+    """Block 60 x 60 x 20 mit einer Tasche Ø 26 ab z = 8, die zwei Schlitze teilen.
+
+    Die Schlitze, 8 breit über |x| < 4, laufen in ±Y bis an die Seiten des
+    Blocks; von der Taschenwand bleiben zwei Stücke R 13 bei ±X mit derselben
+    Achse, Mitte und demselben Radius — an beiden Kernen zwei Rundungen und für
+    die Zuordnung Zwillinge. Eine Bohrung Ø 6 durch bei (20, −20) ist die
+    Vorlage zum Verdoppeln.
+    """
+    from app.core.brep import edit
+
+    body = edit.boolean(
+        "difference",
+        [edit.box(60.0, 60.0, 20.0), edit.moved(edit.cylinder(26.0, 13.0), (0.0, 0.0, 8.0))],
+    )
+    for side in (1.0, -1.0):
+        slot = edit.moved(edit.box(8.0, 22.0, 13.0), (0.0, side * 19.0, 8.0))
+        body = edit.boolean("difference", [body, slot])
+    return edit.cut_bore(
+        body, position=(20.0, -20.0, 10.0), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=30.0
+    )
+
+
+def _round_sides(entry: SceneObject, kind: str) -> dict[str, tuple[float, ...]]:
+    """Je Merkmal der Art ``kind`` die Seiten seiner Oberfläche: die Vorzeichen von X
+    an seinen Dreiecksmitten. Ein Ring über beide Bögen liegt auf beiden Seiten."""
+    centres = np.asarray(as_mesh_data(entry.mesh).raw.triangles_center)
+    return {
+        name: tuple(
+            sorted({math.copysign(1.0, float(x)) for x in centres[list(feature.face_indices), 0]})
+        )
+        for name, feature in entry.features.items()
+        if feature.kind == kind
+    }
+
+
+def test_two_arcs_of_one_groove_are_one_ring_on_both_kernels() -> None:
+    """Zwei Bögen desselben Rings sind an beiden Kernen ein Ring (RM-226, Nachtrag).
+
+    An der Lochplatte ``pegboard-gs-100-v2`` teilen zwei Durchbrüche die Kehle
+    am Grund der Mulde in zwei Bögen. Das Netz aus der 3MF des Herstellers las
+    einen Ring über beide — ``perceive.features._merged_tori`` legt Ringflecken
+    nach ihrer Mitte zusammen —, der exakte Kern zwei, denn er verband nur
+    aneinanderstoßende Ringflächen. Ein Ring ist sein Träger: Wulst und Kehle
+    bauen den vollen Ring aus Achse, Mitte und Radien. Jetzt liest auch der
+    exakte Kern einen Ring Ø 34 aus der Röhre Ø 6 über beide Bögen, auf
+    denselben Dreiecken der gemeinsamen Vernetzung wie das Netz.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _grooved_block()
+    mesh = as_mesh_data(solid)
+    rings: dict[str, frozenset[int]] = {}
+    for kind, found in (("brep", features_of(solid)), ("mesh", detect(mesh))):
+        found_rings = [feature for feature in found.values() if feature.kind == "torus"]
+        assert len(found_rings) == 1, (kind, [len(ring.face_indices) for ring in found_rings])
+        (ring,) = found_rings
+        assert ring.params["diameter"] == pytest.approx(34.0, abs=0.01), kind
+        assert ring.params["tube_diameter"] == pytest.approx(6.0, abs=0.01), kind
+        assert ring.params["centre"] == pytest.approx((0.0, 0.0, 10.0), abs=0.01), kind
+        assert ring.params["recess"] is True, kind
+        entry = SceneObject(id="obj_1", name="Rille", mesh=mesh, kind=kind, features=dict(found))
+        assert _round_sides(entry, "torus") == {ring.id: (-1.0, 1.0)}, kind
+        rings[kind] = frozenset(int(index) for index in ring.face_indices)
+    assert rings["mesh"] == rings["brep"]
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("where", ["air", "material"])
+@pytest.mark.parametrize("shape", ["pocket", "groove"])
+def test_rounds_keep_their_names_and_places_through_a_copy_on_both_kernels(
+    shape: str, where: str, quality: Quality, profile: Profile
+) -> None:
+    """Ein Bezug auf eine Rundung behält sein Ziel, wenn woanders kopiert wird (RM-226, Nachtrag).
+
+    Zwei Wandstücke derselben Tasche sind für die Zuordnung Zwillinge: dieselbe
+    Art, Mitte, Achse und Größe. Die Auswertung am Netz entscheidet sie nach der
+    Lage ihrer Oberfläche (``matching.settled_by_surface``); der exakte Kern
+    ordnete nach seinem Neubau nur über den Merkmalsvektor zu, fand beide
+    mehrdeutig und gab ihnen neue Namen, ``fillet_3`` und ``fillet_4``. An
+    gs-100 traf es so die zwei Bögen der Kehle (``torus_3``, ``torus_4``), und
+    ein Bezug auf ``torus_1`` verlor sein Ziel. Geprüft an beiden Kernen und
+    Güten, an der Tasche und an der Rille aus :func:`_grooved_block` (ein Ring
+    über beide Bögen), die Bohrung einmal in die Luft verdoppelt (ohne Wirkung)
+    und einmal an eine zweite Stelle im Material: Jede Rundung heißt danach wie
+    vorher und liegt auf denselben Seiten, und beide Kerne sagen dieselben
+    Sätze. Das Netz betritt die Auswertung ohne Merkmale und wird dort erkannt
+    wie nach dem Laden; der exakte Körper bringt sie mit, wie ``load_step`` sie
+    gibt.
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    body, rounds = (
+        (_slotted_pocket(), "fillet") if shape == "pocket" else (_grooved_block(), "torus")
+    )
+    wanted = [(-1.0,), (1.0,)] if shape == "pocket" else [(-1.0, 1.0)]
+    said: dict[str, list[str]] = {}
+    for kind in ("mesh", "brep"):
+        mesh = body if kind == "brep" else as_mesh_data(body)
+        features = dict(features_of(body) if kind == "brep" else detect(mesh))
+        before = _round_sides(
+            SceneObject(id="obj_1", name="Teil", mesh=mesh, kind=kind, features=features), rounds
+        )
+        assert sorted(before.values()) == wanted, (kind, before)
+        entry = SceneObject(
+            id="obj_1",
+            name="Teil",
+            mesh=mesh,
+            kind=kind,
+            features=features if kind == "brep" else {},
+        )
+        bore = next(feature for feature in features.values() if feature.kind == "hole")
+        x, y, z = (float(value) for value in bore.params["centre"])
+        target = (x, y, z + 30.0) if where == "air" else (-20.0, -20.0, z)
+        params = {"at_feature": bore.id, "x": target[0], "y": target[1], "z": target[2]}
+        result, step = _evaluation("duplicate_feature", params, [entry], profile, quality=quality)
+        assert result.complete, kind
+        said[kind] = sorted(finding.code for finding in result.scene.report.findings)
+        (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+        assert _round_sides(output, rounds) == before, (kind, before)
+    expected = (
+        ["boolean.without_effect", "duplicate_feature.feature_lost"] if where == "air" else []
+    )
+    assert said["mesh"] == said["brep"] == expected, said
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("step", ["duplicate", "resize", "resize_with_entrance", "part"])
+def test_the_exact_rebuild_hands_both_twins_on_under_their_names(
+    step: str, quality: Quality, profile: Profile
+) -> None:
+    """Schon der Neubau gibt Zwillinge unter ihren Namen aus, nicht erst die Auswertung.
+
+    Die Auswertung ordnet die Merkmale eines exakten Körpers nur bis
+    ``FEATURE_LIMIT_COUNT`` neu zu; darüber gilt, was die Operation ausgibt.
+    Jeder Neubau, der danach alte Merkmale den neuen zuordnet, entscheidet
+    Zwillinge deshalb selbst nach der Lage ihrer Oberfläche, wie die
+    Auswertung — vorher gab er die zwei Wandstücke der Tasche aus
+    :func:`_slotted_pocket` als ``fillet_3`` und ``fillet_4`` aus. Vier Wege:
+    *Merkmal verdoppeln* der Bohrung an eine zweite Stelle
+    (``_exact_features_after``), *Bohrung ändern* auf Ø 8
+    (``_preserved_exact_features``), dasselbe an einer Senkbohrung mit
+    Einlauf (``_exact_rest_carried``) und eine Magnettasche in der Oberseite
+    (``knowledge.parts.ops._read_exactly``). Geprüft am Ergebnis der Operation
+    selbst.
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.sketch.planes import frame_of
+    from app.core.types import Scene
+
+    body = _slotted_pocket()
+    if step == "resize_with_entrance":
+        # Senkbohrung Ø 6 mit 90 Grad auf Ø 10 an der Oberseite, bei (-20, 20).
+        outline = [(0.0, -1.0), (3.0, -1.0), (3.0, 18.0), (6.0, 21.0), (0.0, 21.0), (0.0, -1.0)]
+        body = edit.bore_profile(body, outline, frame_of((0.0, 0.0, 1.0), (-20.0, 20.0, 0.0)))
+    entry = SceneObject(
+        id="obj_1", name="Tasche", mesh=body, kind="brep", features=dict(features_of(body))
+    )
+    before = _round_sides(entry, "fillet")
+    assert sorted(before.values()) == [(-1.0,), (1.0,)], before
+    holes = [feature for feature in entry.features.values() if feature.kind == "hole"]
+    if step == "resize_with_entrance":
+        (bore,) = [hole for hole in holes if float(hole.params["centre"][0]) < 0.0]
+    else:
+        (bore,) = [hole for hole in holes if float(hole.params["centre"][0]) > 0.0]
+    if step == "duplicate":
+        op = "duplicate_feature"
+        values: dict[str, Any] = {
+            "at_feature": bore.id,
+            "x": -20.0,
+            "y": -20.0,
+            "z": float(bore.params["centre"][2]),
+        }
+    elif step == "part":
+        # In der Oberseite bei (20, 20): fern von Tasche, Schlitzen und Bohrung.
+        op = "insert_magnet_pocket"
+        values = {"size": "8x3", "cover": 0.0, "press_lip": False}
+        values |= {"x": 20.0, "y": 20.0, "z": 20.0, "nx": 0.0, "ny": 0.0, "nz": 1.0}
+    else:
+        op = "resize_hole"
+        values = {
+            "at_feature": bore.id,
+            "diameter": 8.0,
+            "entrance_mode": "follow" if step == "resize_with_entrance" else "keep",
+        }
+    spec = REGISTRY.get(op)
+    result = spec.fn(
+        OpContext(
+            Scene(objects={entry.id: entry}),
+            [entry],
+            spec.params(**values),
+            profile,
+            quality,
+            1234,
+            lambda *_: None,
+            _unexpected_question,
+            NeverCancelled(),
+        )
+    )
+    (output,) = result.outputs
+    assert _round_sides(output, "fillet") == before

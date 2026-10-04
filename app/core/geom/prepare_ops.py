@@ -11181,7 +11181,12 @@ def _resize_bore_entrance(
         findings.extend(_widening_findings(source, feature, diameter))
     if source.kind == "brep":
         preserved = _exact_rest_carried(
-            source.features, found, preserved, changed_ids, as_mesh_data(changed)
+            source.features,
+            found,
+            preserved,
+            changed_ids,
+            as_mesh_data(changed),
+            old_body=as_mesh_data(source.mesh),
         )
     # Der Beleg für die bewusst geänderten Abschnitte reist mit dem Ergebnis
     # (§21.2) — wie beim Ändern ohne Einlauf. Ohne ihn hielt am exakten Körper
@@ -11273,6 +11278,8 @@ def _exact_rest_carried(
     kept: Mapping[FeatureId, Feature],
     changed_ids: set[FeatureId],
     body: MeshData,
+    *,
+    old_body: MeshData | None = None,
 ) -> dict[FeatureId, Feature]:
     """Die Merkmale des exakten Körpers, die der Einlauf-Neuschnitt nicht
     berührt hat — Flächen, Kanten, Verrundungen —, unter ihren alten Namen.
@@ -11284,9 +11291,10 @@ def _exact_rest_carried(
     — zwei Fassungen desselben Schritts, zwei Merkmalskarten (Review
     22.09.2026, A2). Der Weg ohne Einlauf ordnet die frische Topologie zu
     (``_preserved_exact_features``); hier dasselbe für alles, was nicht auf
-    den Dreiecken der Kette liegt.
+    den Dreiecken der Kette liegt. ``old_body`` trägt die alten Dreiecke, an
+    deren Lage Zwillinge entschieden werden (:func:`_exact_features_after`).
     """
-    from app.core.perceive.matching import apply_mapping, match
+    from app.core.perceive.matching import apply_mapping, match, settled_twins
 
     covered = {index for entry in kept.values() for index in entry.face_indices}
     rest = {
@@ -11302,6 +11310,7 @@ def _exact_rest_carried(
         if name not in changed_ids and name not in kept and entry.provenance == "detected"
     }
     matched = match(known, rest, body.bounds.centre, body.bounds.diagonal)
+    matched = settled_twins(matched, known, old_body, rest, body, body.bounds.diagonal)
     merged = dict(kept)
     for name, entry in apply_mapping(rest, matched, previous=known).items():
         target = name
@@ -12723,7 +12732,7 @@ def _exact_features_after(
     (:func:`_chain_mouths`).
     """
     from app.core.brep.features import features_of
-    from app.core.perceive.matching import apply_mapping, match
+    from app.core.perceive.matching import apply_mapping, match, settled_twins
 
     detected = features_of(solid, cancelled=cancelled)
     previous = {name: entry for name, entry in source.features.items() if name not in gone}
@@ -12758,6 +12767,19 @@ def _exact_features_after(
         bounds.centre,
         bounds.diagonal,
         check_cancelled=cancelled.raise_if_cancelled,
+    )
+    # **Zwillinge entscheidet die Lage ihrer Oberfläche** (RM-226, Nachtrag
+    # 04.10.2026), wie in der Auswertung: Die zwei Wandstücke einer Tasche
+    # zwischen zwei Schlitzen hießen nach einer Kopie, die sie nicht berührte,
+    # ``fillet_3`` und ``fillet_4``. Gemessen nur an den alten Merkmalen, die
+    # noch ihre alten Dreiecke tragen — die gesuchten stehen schon mit den neuen da.
+    matched = settled_twins(
+        matched,
+        {name: entry for name, entry in previous.items() if name not in intended},
+        as_mesh_data(source.mesh),
+        detected,
+        as_mesh_data(solid),
+        bounds.diagonal,
     )
     if lost:
         matched.orphaned = (*matched.orphaned, *lost)
@@ -17204,7 +17226,7 @@ def _preserved_exact_features(
     freigegeben hat. Ein Kandidat aus ``_bore_match_id`` allein ist noch kein
     Beleg; erst die Zuordnung ohne Konkurrenz macht ihn dazu.
     """
-    from app.core.perceive.matching import apply_mapping, match
+    from app.core.perceive.matching import apply_mapping, match, settled_twins
 
     bounds = solid.bounds
     wanted = _expected_bore(feature, diameter)
@@ -17247,6 +17269,17 @@ def _preserved_exact_features(
         bounds.diagonal,
         check_cancelled=check_cancelled,
     )
+    if original is not None:
+        # Zwillinge nach der Lage ihrer Oberfläche, wie nach jedem exakten
+        # Neubau (:func:`_exact_features_after`).
+        matched = settled_twins(
+            matched,
+            {name: entry for name, entry in previous.items() if name not in intended},
+            as_mesh_data(original),
+            detected,
+            as_mesh_data(solid),
+            bounds.diagonal,
+        )
     if found_id is None:
         matched.orphaned = (*matched.orphaned, feature.id)
     # Belegt ist ein Übergang erst, wenn die Zuordnung genau den erwarteten

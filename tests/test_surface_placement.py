@@ -2879,6 +2879,10 @@ def test_bore_originators_leave_ambiguous_native_candidates_unclaimed(profile, m
         return original(old, new, centre, diagonal, check_cancelled=check_cancelled)
 
     monkeypatch.setattr(module, "match", contested)
+    # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
+    # Oberfläche entschiede die erfundene sonst gleich wieder — am exakten
+    # Körper fragt die Auswertung sie ebenso (``matching.settled_twins``).
+    monkeypatch.setattr(module, "settled_twins", lambda result, *_, **__: result)
     history.apply(
         "Weitere Bohrung",
         [
