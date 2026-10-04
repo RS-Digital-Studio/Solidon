@@ -602,6 +602,27 @@ def test_export_refuses_a_halted_chain(tmp_path: Path, capsys: pytest.CaptureFix
     assert not list((tmp_path / "out").glob("*")), "geschrieben wurde wirklich nichts"
 
 
+def test_export_reads_back_what_it_wrote(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Die Kommandozeile nennt dieselbe Gegenprobe wie der Beleg im Fenster (RM-090).
+
+    Ein beschädigtes Ergebnis ließe sich hier nicht ohne Eingriff in den
+    Schreiber erzeugen; die Abweichung prüft ``test_export_readback.py``.
+    """
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path), "--printer", "centauri-carbon-2", "--material", "petg"])
+    main(["import", str(path), str(MESHES / "cube_clean.stl")])
+    capsys.readouterr()
+
+    code = main(["export", str(path), str(tmp_path / "out")])
+
+    printed = capsys.readouterr().out
+    assert code == 0, printed
+    assert "Gegenprobe:" in printed and "erneut eingelesen" in printed, printed
+    assert "1 von 1 Körpern" in printed
+
+
 def test_import_reads_every_format_the_window_reads(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

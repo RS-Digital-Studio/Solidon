@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from app.core.errors import UserError
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import StepNeed
 from app.core.scene.project import new_project, save
@@ -749,6 +750,42 @@ def test_revision_lineage_keeps_titles_through_insert_move_undo_and_roundtrip(tm
     restored = evaluate(reopened.document, profile, detect_features=False)
     assert original.complete and restored.complete
     assert original.object_hashes == restored.object_hashes
+
+
+def test_sentences_about_steps_name_positions_after_an_early_insert():
+    """RM-368 NM 3/4: Nach einem Einfügen vor Schritt 2 sprechen alle Sätze in Stellen.
+
+    Gegenprobe vor dem Fix: Absage beim Verschieben, Nachfrage vor dem Löschen
+    und Löschtitel nannten die Kennungen (7, 8 …) der umnummerierten Schritte,
+    während der Verlauf 3 und 4 zeigte.
+    """
+    from app.core.scene.history import named_steps, step_position
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply("Rumpf", [OperationDraft(op="create_box")])
+    history.apply("Kopf", [OperationDraft(op="create_sphere")])
+    history.apply(
+        "Kopf setzen",
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dz": 25.0})],
+    )
+    plan = history.plan_insert(2, "Halter", [OperationDraft(op="create_box")])
+    history.commit(plan)
+    head, placed = plan.new_id(2), plan.new_id(3)
+    assert (head, placed) != (3, 4), "der Fall braucht abweichende Kennungen"
+    order = history.document.ops
+    assert step_position(order, head) == 3 and step_position(order, placed) == 4
+
+    names, rest = named_steps([history.operation(placed)], order=order)
+    assert [str(name) for name in names] == ["4 Verschieben"] and rest == 0
+
+    with pytest.raises(UserError) as refused:
+        history.plan_move([placed], head)
+    detail = str(refused.value.detail)
+    assert "Schritt 4" in detail and "Schritt 3" in detail, detail
+    assert str(placed) not in detail.replace("Schritt 4", "").replace("Schritt 3", "")
+
+    removed = history.remove_operations([placed])
+    assert str(removed.title) == "Schritt löschen: 4 Verschieben"
 
 
 def test_revision_rows_show_positions_and_keep_stable_ids(qt_app):

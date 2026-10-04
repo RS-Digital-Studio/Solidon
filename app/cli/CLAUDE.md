@@ -51,7 +51,8 @@ schreibt die Datei nur bei einem gültigen Ergebnis — ein ungültiger
 Vorschlag endet mit Exit 1 und lässt sie unberührt. Eingefügt wird eine
 Operation, deshalb heißt das Einfügen `<op> … --before <schritt>` am
 Registerbefehl und nicht eigens. `info` nennt ausgeschaltete Schritte mit
-„(aus)" oder „(ruht)".
+„(aus)" oder „(ruht)". `export` liest die geschriebenen Dateien zurück
+(`export.readback`) und endet bei einer Abweichung mit Exit 1.
 
 ## Was hier anders ist als im Fenster
 

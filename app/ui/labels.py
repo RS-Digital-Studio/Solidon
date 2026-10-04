@@ -69,12 +69,13 @@ from app.i18n import TranslatableText, _, get_language, tr
 
 
 def step_number(document: Document | None, op_id: int) -> int:
-    """Sichtbare Position eines Schritts; interne Kennungen bleiben unverändert."""
-    if document is not None:
-        for position, entry in enumerate(document.ops, start=1):
-            if entry.id == op_id:
-                return position
-    return op_id
+    """Sichtbare Position eines Schritts; interne Kennungen bleiben unverändert.
+
+    Eine Quelle mit den Sätzen des Kerns: ``scene.history.step_position``.
+    """
+    from app.core.scene.history import step_position
+
+    return step_position(document.ops, op_id) if document is not None else op_id
 
 
 def localised(text: str) -> str:

@@ -8,7 +8,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
+from app.core.export.readback import Readback
 from app.core.geom.difference import SceneDifference
 from app.core.knowledge import profiles
 from app.core.scene import EvaluationResult
@@ -160,6 +162,19 @@ def handoff_state(findings: Iterable[Finding], incomplete: Iterable[str]) -> str
     if "warning" in severities:
         return tr("Entscheidung erforderlich")
     return tr("Bereit zur Übergabe")
+
+
+def finding_consequence(finding: Finding) -> str:
+    """Die Folge eines Befunds für das Druckziel, aus derselben Regel wie der Status.
+
+    Ein Fehler lässt die Übergabe nicht empfehlen, eine Warnung verlangt eine
+    Entscheidung, ein Hinweis ändert nichts daran (:func:`handoff_state`).
+    """
+    if finding.severity == "error":
+        return tr("Folge: Die Übergabe wird für das gewählte Druckziel nicht empfohlen.")
+    if finding.severity == "warning":
+        return tr("Folge: Ein Risiko für den Druck, das Sie vor der Übergabe beurteilen.")
+    return tr("Folge: Ein Hinweis; die Übergabe hängt nicht davon ab.")
 
 
 def check_summary(
@@ -319,30 +334,41 @@ def review_difference(
     lines.append(
         tr("Grundlage: genaue Auswertung und Schichtanalyse beider Stände mit demselben Druckziel.")
     )
-    complete = True
-    for title, findings, states in zip(
-        (tr("Vorher"), tr("Nachher")), reports, checked, strict=True
-    ):
-        _, missing = check_summary(states)
-        complete = complete and not missing
-        active = tuple(finding for finding in findings if finding.severity != "info")
-        lines.append(
-            tr("{state}: {count} Warnungen oder Fehler.").format(state=title, count=len(active))
+    # **Genannt wird, was sich ändert, nicht der ganze Bericht zweimal.** Bis
+    # 04.10.2026 stand jede Warnung beider Stände im Vorschauband — am
+    # Piratenschiff mit 32 Warnungen 64 Zeilen über dem Bild.
+    before, after = (
+        tuple(finding for finding in findings if finding.severity != "info") for findings in reports
+    )
+    missing = [note for states in checked for note in check_summary(states)[1]]
+    lines.append(
+        tr("Warnungen oder Fehler: {before} vorher, {after} nachher.").format(
+            before=len(before), after=len(after)
         )
-        lines.extend(f"{title}: {finding.message}" for finding in active)
-        lines.extend(f"{title}: {note}" for note in missing)
-    if complete:
-        remaining = {finding.code for finding in reports[1] if finding.severity != "info"}
-        resolved = tuple(
-            dict.fromkeys(
-                str(finding.message)
-                for finding in reports[0]
-                if finding.severity != "info" and finding.code not in remaining
-            )
+    )
+    known = {_identity(finding) for finding in before}
+    lines.extend(
+        _at_most(
+            [
+                tr("Neu im Nachherstand: {finding}").format(finding=str(finding.message))
+                for finding in after
+                if _identity(finding) not in known
+            ]
         )
+    )
+    if not missing:
+        remaining = {finding.code for finding in after}
         lines.extend(
-            tr("Im geprüften Nachherstand nicht mehr vorhanden: {finding}").format(finding=message)
-            for message in resolved
+            _at_most(
+                [
+                    tr("Im geprüften Nachherstand nicht mehr vorhanden: {finding}").format(
+                        finding=message
+                    )
+                    for message in dict.fromkeys(
+                        str(finding.message) for finding in before if finding.code not in remaining
+                    )
+                ]
+            )
         )
     else:
         lines.append(
@@ -351,11 +377,28 @@ def review_difference(
                 "belegen keine behobenen Befunde."
             )
         )
+        lines.extend(_at_most(list(dict.fromkeys(missing)), 2))
     difference.explanation = "\n".join(lines)
     difference.findings += tuple(
         finding for finding in reports[1] if finding not in difference.findings
     )
     return difference
+
+
+#: Wie viele gleichartige Zeilen die Änderungserklärung zeigt, bevor sie zählt.
+_SHOWN_LINES: Final = 4
+
+
+def _identity(finding: Finding) -> tuple[str, str | None, str]:
+    """Derselbe Befund in zwei Ständen: Kennung, Körper und Satz."""
+    return finding.code, finding.object_id, str(finding.message)
+
+
+def _at_most(lines: list[str], shown: int = _SHOWN_LINES) -> list[str]:
+    """Die ersten Zeilen und, was übrig bleibt, als Zahl."""
+    if len(lines) <= shown:
+        return lines
+    return [*lines[:shown], tr("… und {count} weitere.").format(count=len(lines) - shown)]
 
 
 def handoff_receipt(
@@ -370,8 +413,14 @@ def handoff_receipt(
     slicer: str = "",
     opened: Iterable[Path] = (),
     total_objects: int | None = None,
+    checked: Readback | None = None,
 ) -> Finding:
-    """Ein Beleg ausschließlich aus dem eingefrorenen Auftrag und echten Ausgabepfaden."""
+    """Ein Beleg ausschließlich aus dem eingefrorenen Auftrag und echten Ausgabepfaden.
+
+    ``checked`` ist die Gegenprobe des Kerns an den geschriebenen Dateien
+    (``export.readback``). Ohne sie sagt der Beleg ausdrücklich, dass keine
+    stattfand; weicht eine Datei ab, wird der Beleg selbst zur Warnung.
+    """
     bodies = tuple(objects)
     paths = tuple(written)
     launched = tuple(opened)
@@ -405,10 +454,7 @@ def handoff_receipt(
         if with_settings
         else tr("Druckeinstellungen: nicht mitgegeben"),
         tr("Orientierung: Lage des eingefrorenen Übergabeauftrags."),
-        tr(
-            "Datei erneut eingelesen und verglichen: nicht durchgeführt; "
-            "für diesen Weg liegt kein Gegenprüfergebnis vor."
-        ),
+        *_readback_lines(checked),
         tr(
             "Zahlen stammen aus Solidons Auftrag und Dateiausgabe. "
             "Eine G-Code-Prüfung ist ein eigener Schritt."
@@ -427,9 +473,30 @@ def handoff_receipt(
             or tr("keine gemeldet; dies ersetzt keine Gegenprüfung")
         )
     )
+    deviated = checked is not None and checked.state == "deviated"
     return Finding(
         "ui.handoff_receipt",
-        "info",
-        tr("Beleg der letzten Übergabe"),
+        "warning" if deviated else "info",
+        tr(
+            "Beleg der letzten Übergabe: Die erneut eingelesene Datei weicht ab. "
+            "Exportieren Sie erneut oder wählen Sie ein anderes Format."
+        )
+        if deviated
+        else tr("Beleg der letzten Übergabe"),
         values={"detail": "\n".join(details)},
     )
+
+
+def _readback_lines(checked: Readback | None) -> list[str]:
+    """Die Gegenprobe, wie der Kern sie gemeldet hat — oder ausdrücklich keine."""
+    if checked is None:
+        return [
+            tr(
+                "Datei erneut eingelesen und verglichen: nicht durchgeführt; "
+                "für diesen Weg liegt kein Gegenprüfergebnis vor."
+            )
+        ]
+    lines = [str(checked.summary())]
+    if checked.state == "deviated":
+        lines.extend(str(note) for note in checked.notes)
+    return lines

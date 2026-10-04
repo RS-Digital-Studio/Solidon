@@ -83,6 +83,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.core import expressions
+from app.core.action_effects import side_effect
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -1317,9 +1318,14 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
             )
             for key in _LINE_VALUES
             if key in finding.values
+            and key != "object"
             and not (finding.code in {"perceive.mended", "perceive.orphaned"} and key == "feature")
         ]
     )
+    if "object" in finding.values:
+        named = _object_named(finding, names or {})
+        if named:
+            extra.insert(0, named)
     if finding.code in PART_SETTING_CODES and "setting" in finding.values:
         extra.append(_setting_line(finding))
     if finding.object_id and "object" not in finding.values:
@@ -1330,6 +1336,27 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
     if not extra:
         return str(finding.message)
     return f"{finding.message} — {' · '.join(extra)}"
+
+
+def _object_named(finding: Finding, names: Mapping[str, str]) -> str:
+    """Der Körper aus ``values["object"]`` beim Namen — nie als Kennung (RM-396).
+
+    Der Wert ist je nach Befund ein Name (das Teil einer 3MF) oder eine
+    Kennung (die Umwandlung in ein Dreiecksmodell nennt ihre Ausgabe). Eine
+    Kennung ohne belegten Namen bleibt in den Einzelheiten; ein Name, der im
+    Satz schon steht, wird nicht wiederholt.
+    """
+    value = finding.values["object"]
+    text = str(value)
+    identifiers = {finding.object_id, str(finding.values.get("input_object", "")), *names}
+    if text in identifiers:
+        named = names.get(text, "")
+        text = named if named and named != str(value) else ""
+    else:
+        text = value_text("object", value)
+    if not text or text in str(finding.message):
+        return ""
+    return text
 
 
 def _setting_line(finding: Finding) -> str:
@@ -5560,6 +5587,14 @@ class ReportPanel(QWidget):
         layout.addWidget(self.finding_details_toggle)
         layout.addWidget(self.finding_details)
         layout.addWidget(self._offers)
+        # Was die vorgeschlagene Handlung außer ihrem Zweck verändert — der
+        # Satz kommt aus dem Kern (``core.action_effects``), sichtbar unter dem
+        # Hauptknopf, für die übrigen in Kurzhilfe und Beschreibung (Produktkompass 4.3).
+        self.offer_effect = QLabel("", self)
+        self.offer_effect.setWordWrap(True)
+        self.offer_effect.setTextFormat(Qt.TextFormat.PlainText)
+        self.offer_effect.hide()
+        layout.addWidget(self.offer_effect)
         layout.addStretch(1)
         # Leere Berichte bleiben oben kompakt. Bei Befunden gehört der freie
         # Platz der rollbaren Liste, nicht den Abständen zwischen Textzeilen.
@@ -5614,9 +5649,17 @@ class ReportPanel(QWidget):
             place = tr("Keine räumliche Stelle angegeben.")
         if located and len(bodies) <= 1:
             self.finding_place.setText(tr("Betroffene Stelle zeigen"))
+        from app.ui.print_contract import finding_consequence
+
+        # Die Reihenfolge der Befundkarte (Produktkompass 4.3): was — steht in der Zeile —,
+        # welche Folge, wo, worauf die Aussage beruht; die Handlung folgt.
         self.finding_context.setText(
             "\n".join(
-                (place, tr("Grundlage: {source}").format(source=origin_label(finding.source)))
+                (
+                    finding_consequence(finding),
+                    place,
+                    tr("Grundlage: {source}").format(source=origin_label(finding.source)),
+                )
             )
         )
         self.finding_details.setPlainText(item.toolTip().replace(" · ", "\n"))
@@ -5677,6 +5720,8 @@ class ReportPanel(QWidget):
         primary = next(
             (action for action in offered if action.primary), offered[0] if offered else None
         )
+        self.offer_effect.clear()
+        self.offer_effect.hide()
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
             button.setToolTip(str(finding.message) if finding is not None else "")
@@ -5686,6 +5731,18 @@ class ReportPanel(QWidget):
                 advice = unhandled_advice(as_error(finding, self._document), handlers)
                 if advice:
                     button.setToolTip("\n".join([str(finding.message), *advice]))
+            effect = side_effect(action.id)
+            if effect is not None:
+                effect_line = tr("Nebenfolge: {effect}").format(effect=str(effect))
+                button.setToolTip("\n".join((button.toolTip(), effect_line)).strip())
+                button.setAccessibleDescription(effect_line)
+                if action is primary:
+                    self.offer_effect.setText(
+                        tr("„{action}“: {effect}").format(
+                            action=str(action.label), effect=str(effect)
+                        )
+                    )
+                    self.offer_effect.show()
             if action is primary:
                 make_primary(button)
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene

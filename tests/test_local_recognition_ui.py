@@ -1300,6 +1300,7 @@ def test_local_report_action_availability_receives_the_group_at_every_entry(monk
         _live_objects=objects,
         _offer_row=SimpleNamespace(count=lambda: 0),
         _offers=Mock(),
+        offer_effect=Mock(),
         _show_finding_context=lambda _item: None,
         _set_slicer_primary=lambda _primary: None,
         list=SimpleNamespace(

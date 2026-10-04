@@ -20,7 +20,7 @@ nicht getroffen hat.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from itertools import pairwise
 from pathlib import Path
@@ -72,7 +72,15 @@ from app.core.errors import (
     OperationCancelled,
     OutOfBuildVolume,
 )
-from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf
+from app.core.export import (
+    handover,
+    manufacturer,
+    readback,
+    slicer_keys,
+    slicer_profiles,
+    threemf,
+)
+from app.core.export.readback import Readback
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
 from app.core.export.writer import (
     arrangement_holds,
@@ -2765,6 +2773,30 @@ class _OpenInSlicerWorker(Worker):
         self._opened: list[Path] = []
         self._written_plates: set[int] = set()
         self._receipt_findings: list[Finding] = []
+        self._plates_in: dict[Path, frozenset[int]] = {}
+
+    def _wrote(self, path: Path, plates: Iterable[int]) -> None:
+        """Eine fertige Datei und die Platten, deren Körper darin stehen."""
+        self._written.append(path)
+        self._plates_in[path] = frozenset(plates)
+        self._written_plates.update(self._plates_in[path])
+
+    def _readback(self) -> Readback:
+        """Die Gegenprobe des Kerns an genau den geschriebenen Dateien (RM-090)."""
+        return readback.read_back_bodies(
+            [
+                (
+                    path,
+                    [
+                        (str(body.name), body.mesh)
+                        for body in self._job.objects
+                        if body.plate in self._plates_in.get(path, frozenset())
+                    ],
+                )
+                for path in self._written
+            ],
+            self._job.profile,
+        )
 
     def _report_receipt(self, findings: Sequence[Finding], status: str) -> None:
         """Auch Teilübergaben nennen nur tatsächlich geschriebene und geöffnete Dateien."""
@@ -2772,6 +2804,7 @@ class _OpenInSlicerWorker(Worker):
             return
         self.receipt.emit(
             handoff_receipt(
+                checked=self._readback(),
                 document=self._job.document,
                 profile=self._job.profile,
                 objects=tuple(
@@ -2821,8 +2854,7 @@ class _OpenInSlicerWorker(Worker):
                 return
             try:
                 run = _prepare_plate(self._job, plate)
-                self._written.append(run.model)
-                self._written_plates.add(plate)
+                self._wrote(run.model, (plate,))
                 findings.extend(run.findings)
                 usage = prepare_usage(
                     [entry for entry in self._job.objects if entry.plate == plate],
@@ -2886,8 +2918,7 @@ class _OpenInSlicerWorker(Worker):
         """
         try:
             run = _prepare_plates(self._job)
-            self._written.append(run.model)
-            self._written_plates.update(self._job.plates)
+            self._wrote(run.model, self._job.plates)
             self._receipt_findings.extend(run.findings)
             usage = prepare_usage(
                 [entry for entry in self._job.objects if entry.plate in self._job.plates],

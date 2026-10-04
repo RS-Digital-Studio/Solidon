@@ -189,6 +189,96 @@ def test_batch_import_bundles_notes_and_keeps_every_body_and_original_detail(qt_
         panel.deleteLater()
 
 
+def test_nested_part_notes_bundle_per_wording_and_select_exactly_their_bodies(qt_app):
+    """RM-131 NM 1: gleiche Meldung zu enthaltenen Teilen bildet je Wortlaut ein Bündel.
+
+    Am Piratenschiff: zwei Teile an obj2/8/11/14, fünf an obj3/4, sieben an
+    obj6/7/13, dazu kleine Einzelteile an zwei Körpern. Jedes Bündel nennt
+    beim Aufklappen jede Originalmeldung mit dem Körpernamen und wählt beim
+    Klick genau seine Körper.
+    """
+    from app.core.errors import RESOLVE_INTERSECTIONS, SPLIT_BODIES
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+    from app.i18n import _
+    from app.ui.panels import _BODIES_ROLE
+
+    project = new_project()
+    history = History(project.document)
+    transaction = history.apply(
+        "Piratenschiff",
+        [OperationDraft(op="load", params={"source": f"source_{index}"}) for index in range(17)],
+    )
+    ops = list(transaction.ops)
+    bodies = {
+        f"obj_{op}": make_object(f"obj_{op}", f"Segel {number}") for number, op in enumerate(ops)
+    }
+
+    def nested(number: int, parts: int) -> Finding:
+        message = (
+            _("Das Modell besteht aus zwei Teilen, die ineinanderstecken.")
+            if parts == 2
+            else _(
+                "Das Modell besteht aus {components} Teilen, von denen manche ineinanderstecken.",
+                components=parts,
+            )
+        )
+        return Finding(
+            "ingest.multiple_components",
+            "info",
+            message,
+            object_id=f"obj_{ops[number]}",
+            op_id=ops[number],
+            values={"components": parts},
+            suggestions=(RESOLVE_INTERSECTIONS, SPLIT_BODIES),
+        )
+
+    groups = {2: (2, 8, 11, 14), 5: (3, 4), 7: (6, 7, 13)}
+    findings = [nested(number, parts) for parts, numbers in groups.items() for number in numbers]
+    findings += [
+        Finding(
+            "ingest.small_components",
+            "warning",
+            _("Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts."),
+            object_id=f"obj_{ops[number]}",
+            op_id=ops[number],
+            values={"count": 3},
+        )
+        for number in (1, 9)
+    ]
+    panel = ReportPanel()
+    try:
+        panel.show_result(
+            EvaluationResult(Scene(objects=bodies, report=Report(tuple(findings)))),
+            project.document,
+        )
+        selected: list[tuple[str, ...]] = []
+        panel.bundleActivated.connect(lambda _finding, keys: selected.append(tuple(keys)))
+        expected = {
+            frozenset(f"obj_{ops[number]}" for number in numbers)
+            for numbers in (*groups.values(), (1, 9))
+        }
+        seen = set()
+        assert panel.list.count() == len(expected)
+        for row in range(panel.list.count()):
+            item = panel.list.item(row)
+            members = frozenset(item.data(_BODIES_ROLE))
+            assert members in expected, item.text()
+            seen.add(members)
+            assert item.text().startswith(f"({len(members)})")
+            panel.list.setCurrentRow(row)
+            panel.finding_details_toggle.click()
+            details = panel.finding_details.toPlainText()
+            for key in members:
+                assert str(bodies[key].name) in details, (key, details)
+            panel.finding_place.click()
+            assert frozenset(selected[-1]) == members
+        assert seen == expected
+        assert panel._findings == findings, "keine Originalmeldung geht verloren"
+    finally:
+        panel.deleteLater()
+
+
 def test_real_evaluation_exposes_checks_and_invalidates_them_on_replacement(qt_app):
     from app.core.scene import OperationDraft
     from app.core.types import CheckState
@@ -213,6 +303,50 @@ def test_real_evaluation_exposes_checks_and_invalidates_them_on_replacement(qt_a
         old.deleteLater()
     finally:
         session.release()
+
+
+def test_unknown_imported_printer_is_named_and_a_profile_change_reassesses(qt_app):
+    """RM-090 NM 1/3: Ein unbekanntes Druckerprofil gilt nie als bestätigt.
+
+    Kopfzeile und Bericht nennen dieselbe fehlende Grundlage, der Status bleibt
+    „Bewertung unvollständig“ und nie „druckbereit“. Ein Wechsel auf ein
+    bekanntes Profil ist eine Transaktion und entfernt den Grund; Undo bringt
+    ihn zurück.
+    """
+    from app.core.scene import OperationDraft
+    from tests.ui_helpers import shown_window
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        session = window.session
+        session.project.document.printer = "fremder-drucker-aus-3mf"
+        session.apply("Quader", [OperationDraft(op="create_box")])
+        assert session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        # Die Kopfzeile kürzt sichtbar nach Platz; Volltext, Vorleser und Test
+        # lesen ``full_text`` (offscreen gibt es keine echte Schriftbreite).
+        assert "fremder-drucker-aus-3mf" in window.header.printer.full_text()
+        assert "unvollständig" in window.header.printer.full_text()
+        assert "Druckerprofil fehlt" in window.header.printer.toolTip()
+        summary = window.report.summary.text()
+        assert summary.startswith("Bewertung unvollständig"), summary
+        assert "druckbereit" not in summary.casefold()
+        assert "Druckerprofil fehlt" in window.report.review_scope.text()
+        assert session.change_scene_profile("centauri-carbon-2", session.project.document.material)
+        assert session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        assert "unvollständig" not in window.header.printer.full_text()
+        assert "Druckerprofil fehlt" not in window.report.review_scope.text()
+        session.undo()
+        assert session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        assert "Druckerprofil fehlt" in window.header.printer.toolTip()
+    finally:
+        # Ein geändertes Projekt fragt beim Schließen — offscreen wartete das ewig.
+        window._may_discard = lambda: True
+        with suppress(StopIteration):
+            next(windows)
 
 
 def test_layer_status_ignores_replaced_jobs_and_preserves_cancellation(qt_app):
@@ -374,10 +508,107 @@ def test_full_preview_checks_both_actual_states_and_keeps_material_change(qt_app
         assert final is not None
         assert "genaue Auswertung und Schichtanalyse" in final.explanation
         assert "Material „Platte“:" in final.explanation
-        assert "Vorher:" in final.explanation and "Nachher:" in final.explanation
+        assert "Warnungen oder Fehler: 0 vorher, 0 nachher." in final.explanation
         assert session.last_result.scene.objects[key].material != "petg"
     finally:
         session.release()
+
+
+def test_candidate_review_names_a_print_finding_the_change_resolves(qt_app):
+    """NM 8 (RM-090): Die Kandidatenszene wird genau ausgewertet und erneut geprüft.
+
+    Ein Quader, der breiter ist als das Bett, trägt die Warnung
+    ``arrange.out_of_build_volume``; die Vorschau von *Skalieren* auf die
+    Hälfte rechnet Vorher und Nachher fein samt Schichtanalyse und nennt den
+    Befund als behoben — nur weil beide Prüfungen vollständig liefen.
+    """
+    from app.core.scene import OperationDraft
+    from app.ui.session import Session
+
+    session = Session()
+    try:
+        bed = session.profile.printer.build_volume[0]
+        session.apply(
+            "Platte",
+            [OperationDraft(op="create_box", params={"name": "Platte", "width": bed * 1.5})],
+        )
+        assert session.wait_for_idle()
+        key = next(iter(session.last_result.scene.objects))
+        assert any(
+            finding.code == "arrange.out_of_build_volume" and finding.severity == "warning"
+            for finding in session.last_result.scene.report.findings
+        )
+        events = []
+        session.preview_async(
+            lambda difference: events.append(("checked", difference)),
+            [OperationDraft(op="scale_object", inputs=(key,), params={"factor": 0.5})],
+            pictured=lambda difference: events.append(("picture", difference)),
+        )
+        assert session.wait_for_idle(60_000)
+        assert [kind for kind, _ in events] == ["picture", "checked"]
+        text = events[-1][1].explanation
+        assert "genaue Auswertung und Schichtanalyse" in text
+        assert "Im geprüften Nachherstand nicht mehr vorhanden" in text, text
+        assert "noch nicht vollständig geprüft" not in text
+        assert len(text.splitlines()) <= 16, text
+        assert session.last_result.scene.objects[key].mesh.bounds.size[0] > bed, (
+            "die Vorschau ändert das Dokument nicht"
+        )
+    finally:
+        session.release()
+
+
+@pytest.mark.parametrize("lid", [None, "push"])
+def test_reopened_container_step_previews_unchanged_or_the_new_lid(qt_app, lid):
+    """RM-397 / RM-090 NM 5: Der Behälterschritt im Verlauf, ohne und mit Änderung.
+
+    Unverändert geöffnet sagt das Band, dass sich nichts ändert — nicht „Keine
+    Vorschau“, auch wenn der Kern vorab einen Hinweis zum Deckel meldet. Mit
+    Steckdeckel nennt die Erklärung beide Körper, die Körperzahl und die
+    Außenmaße aus denselben Szenen. Der echte Fensterweg: Vorschauauftrag,
+    Arbeiter, Antwort, Band.
+    """
+    from app.core.lid_flow import plan_container, plan_container_edit
+    from app.ui.main_window import _PreviewOrder
+    from tests.ui_helpers import shown_window, wait_until
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        session = window.session
+        plan = plan_container(
+            session.project.document, {"kernel": "mesh", "shape": "round", "lid": "screw"}
+        )
+        session.apply(plan.title, plan.drafts, changes=plan.document_change)
+        assert session.wait_for_idle(60_000)
+        operation = session.project.document.ops[0]
+        steps = len(session.project.document.ops)
+        if lid is None:
+            order = _PreviewOrder(change_op=operation.id, change_values=dict(operation.params))
+        else:
+            edit = plan_container_edit(session.project.document, operation, {"lid": lid})
+            order = _PreviewOrder(
+                change_op=operation.id,
+                change_values=dict(edit.values),
+                changes=edit.document_change,
+            )
+        approval = window._set_preview_order(window.feature_panel, order)
+        window._request_order_preview(approval)
+        assert session.wait_for_idle(60_000)
+        wait_until(qt_app, lambda: not approval.computing)
+        note = window.viewport.banner.note.text()
+        assert "Keine Vorschau" not in note, note
+        assert not approval.problem, approval.problem
+        if lid is None:
+            assert "ändert sich nichts" in note, note
+        else:
+            assert "Körperzahl: 2 → 2" in note, note
+            assert note.count("Außenmaß") == 2, note
+        assert len(session.project.document.ops) == steps, "die Vorschau ändert nichts"
+    finally:
+        window._may_discard = lambda: True
+        with suppress(StopIteration):
+            next(windows)
 
 
 @pytest.mark.parametrize("ending", ["cancel", "newer", "failure", "complete"])
@@ -442,3 +673,214 @@ def test_consumed_body_id_is_not_appended_to_a_named_finding(qt_app):
     assert _line_for(finding, {}) == str(finding.message)
     assert _line_for(finding, {"obj_1": "obj_1"}) == str(finding.message)
     assert _line_for(finding, {"obj_1": "Quader"}) == str(finding.message)
+
+
+def test_the_conversion_note_names_no_identifier(qt_app):
+    """RM-396: Der Umwandlungshinweis hängte über ``values["object"]`` „obj_0“ an.
+
+    Gegenprobe vor dem Fix (Sonde 04.10.2026): alle drei Zeilen endeten auf
+    „— obj_0“, auch wenn der Ausgabekörper einen Namen hatte.
+    """
+    from app.core.scene.evaluate import conversion_finding
+    from app.core.scene.history import Operation
+    from app.ui.panels import _line_for
+
+    source = make_object("obj_1", "Quader")
+    operation = Operation(id=3, op="union_objects", inputs=("obj_1", "obj_0"), outputs=("obj_0",))
+    finding = conversion_finding(operation, "Vereinigen", source, ("obj_0",))
+    for names in ({}, {"obj_1": "obj_1"}, {"obj_0": "obj_0", "obj_1": "obj_1"}):
+        line = _line_for(finding, names)
+        assert "obj_" not in line, line
+        assert line == str(finding.message)
+    named = _line_for(finding, {"obj_0": "Schale", "obj_1": "obj_1"})
+    assert named == f"{finding.message} — Schale"
+
+
+@pytest.mark.parametrize("export_format", ["stl", "3mf"])
+def test_file_export_receipt_carries_the_readback_of_the_written_files(
+    qt_app, tmp_path, export_format
+):
+    """NM 9/11: Der Beleg nennt die tatsächlich wieder eingelesenen Dateien (RM-090).
+
+    Gegenprobe ohne Fix: ``handoff_receipt`` schrieb fest „nicht durchgeführt“.
+    Hier läuft derselbe Arbeiter wie beim Menüexport, mit zwei Körpern, von
+    denen einer gewählt ist — der eingefrorene Umfang ist 1 von 2.
+    """
+    from app.core.scene import OperationDraft
+    from app.ui.main_window import _ExportWorker
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    session = Session()
+    try:
+        session.apply("Quader", [OperationDraft(op="create_box")])
+        session.apply("Zylinder", [OperationDraft(op="create_cylinder")])
+        assert session.wait_for_idle()
+        bodies = list(session.last_result.scene.objects.values())
+        assert len(bodies) == 2
+        worker = _ExportWorker(
+            bodies[:1],
+            tmp_path / f"teil.{export_format}",
+            export_format,
+            profile=session.profile,
+            sources=session.project.document.sources,
+            settings=None,
+            ui_settings=UiSettings(),
+            material=session.profile.material.id,
+            all_objects=bodies,
+            scene=session.last_result.scene,
+            document=session.project.document,
+            checked=[],
+        )
+        done = []
+        worker.done.connect(lambda written, findings: done.append(written))
+        worker.work()
+        assert done and done[0]
+        receipt = worker.receipt
+        assert receipt is not None and receipt.severity == "info"
+        detail = receipt.values["detail"]
+        assert "erneut eingelesen" in detail and "1 von 1 Körpern" in detail
+        assert "nicht durchgeführt" not in detail
+        assert "1 von 2 Körpern des eingefrorenen Auftrags" in detail
+        worker.deleteLater()
+    finally:
+        session.release()
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa"])
+def test_slicer_receipt_reads_back_the_files_it_opened(qt_app, monkeypatch, tmp_path, flavour):
+    """NM 9/11: *Im Slicer öffnen* liest die übergebene Datei vor dem Beleg zurück."""
+    from pathlib import Path
+
+    from app.core.knowledge import print_settings
+    from app.core.scene import OperationDraft
+    from app.ui import print_settings_dialog as module
+    from app.ui.session import Session
+
+    session = Session()
+    try:
+        session.apply("Quader", [OperationDraft(op="create_box")])
+        session.apply("Zylinder", [OperationDraft(op="create_cylinder")])
+        assert session.wait_for_idle()
+        bodies = tuple(session.last_result.scene.objects.values())
+        profile = session.profile
+        job = module._PlateJob(
+            bodies,
+            (0,),
+            tmp_path,
+            "Schiff",
+            module.handover.SlicerSetup(Path("Slicer.exe"), flavour),
+            print_settings.resolve(profile),
+            profile,
+            {},
+            with_settings=False,
+        )
+        worker = module._OpenInSlicerWorker(job)
+        opened = []
+        monkeypatch.setattr(
+            module.handover, "open_in_slicer", lambda path, setup: opened.append(path)
+        )
+        receipts = []
+        worker.receipt.connect(receipts.append)
+        worker.work()
+        assert opened and receipts
+        detail = receipts[0].values["detail"]
+        assert "erneut eingelesen" in detail and "2 von 2 Körpern" in detail, detail
+        assert receipts[0].severity == "info"
+        worker.deleteLater()
+    finally:
+        session.release()
+
+
+def test_finding_card_names_consequence_and_side_effect_and_tab_reaches_them(qt_app):
+    """NM 4 (RM-090, §4.3): Folge, Ort, Grundlage, Handlung und ihre Nebenfolge.
+
+    Die Nebenfolge kommt aus ``core.action_effects``; ohne sie stand *Auf dem
+    Bett anordnen* am Befund, ohne zu sagen, dass es alle Körper bewegt.
+    Tastatur: Von der Liste aus erreicht Tab Stelle, Einzelheiten und Knopf.
+    """
+    from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
+
+    from app.core.action_effects import SIDE_EFFECTS
+
+    ran = []
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {"arrange_on_bed": lambda error: ran.append(error)}
+
+    host = Host()
+    layout = QVBoxLayout(host)
+    panel = ReportPanel(host)
+    layout.addWidget(panel)
+    finding = Finding(
+        "arrange.collision",
+        "warning",
+        "Zwei Körper überschneiden sich.",
+        object_id="a",
+        location=(0.0, 0.0, 1.0),
+    )
+    try:
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((finding,)))
+            )
+        )
+        host.resize(420, 700)
+        host.show()
+        panel.list.setCurrentRow(0)
+        qt_app.processEvents()
+        context = panel.finding_context.text().splitlines()
+        assert context[0].startswith("Folge: Ein Risiko")
+        assert "Rumpf" in context[1] and context[2].startswith("Grundlage:")
+        assert not panel.offer_effect.isHidden()
+        assert str(SIDE_EFFECTS["arrange_on_bed"]) in panel.offer_effect.text()
+        assert "Auf dem Bett anordnen" in panel.offer_effect.text()
+        buttons = [
+            panel._offer_row.itemAt(index).widget() for index in range(panel._offer_row.count())
+        ]
+        assert buttons and "Nebenfolge:" in buttons[0].accessibleDescription()
+        panel.list.setFocus()
+        reached = []
+        for _round in range(12):
+            QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Tab)
+            qt_app.processEvents()
+            reached.append(QApplication.focusWidget())
+        for target in (panel.finding_place, panel.finding_details_toggle, buttons[0]):
+            assert target in reached, target
+        QTest.keyClick(buttons[0], Qt.Key.Key_Space)
+        assert ran, "die Leertaste löst die Handlung aus"
+        panel.list.clearSelection()
+        assert panel.offer_effect.isHidden()
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+def test_a_deviating_readback_turns_the_receipt_into_a_warning(tmp_path):
+    """Eine abweichende Gegenprobe macht den Beleg zur Warnung und nennt die Stelle."""
+    from app.core.export.readback import Readback
+    from app.core.knowledge import profiles
+    from app.core.scene.project import new_project
+    from app.i18n import _
+    from app.ui.print_contract import handoff_receipt
+
+    document = new_project("centauri-carbon-2", "petg").document
+    note = _(
+        "„{name}“ steht in „{file}“ nicht so, wie er geschrieben werden sollte.",
+        name="Deckel",
+        file="deckel.stl",
+    )
+    receipt = handoff_receipt(
+        document=document,
+        profile=profiles.make_profile(document.printer, document.material),
+        objects=(make_object("a", "Deckel"),),
+        written=(tmp_path / "deckel.stl",),
+        findings=(),
+        with_settings=False,
+        status="Dateien exportiert.",
+        checked=Readback("deviated", files=("deckel.stl",), expected=1, found=1, notes=(note,)),
+    )
+    assert receipt.severity == "warning"
+    assert "weicht ab" in str(receipt.message)
+    assert "„Deckel“ steht in „deckel.stl“" in receipt.values["detail"]

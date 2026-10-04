@@ -1775,6 +1775,7 @@ class History:
             )
 
         versions = {op_id: _copy_operation_matches(self.operation(op_id)) for op_id in removed_ids}
+        shown_order = tuple(self.document.ops)
         removed_set = set(removed_ids)
         # **Nach Kennungen, nicht nach dem, was gerade rechnet** (P7.3): Eine
         # Passung an einem Körper, den ein ausgeschalteter Schritt anlegt, ruht
@@ -1804,7 +1805,7 @@ class History:
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=_deletion_title(versions, self._registry),
+            title=_deletion_title(versions, self._registry, order=shown_order),
             ops=(),
             changes=changes,
         )
@@ -2156,7 +2157,7 @@ class History:
                     title=_("Hier lässt sich der Schritt nicht einfügen."),
                     detail=_(
                         "Er verbraucht einen Körper, den Schritt {number} danach noch braucht.",
-                        number=entry.id,
+                        number=step_position(self.document.ops, entry.id),
                     ),
                     values={"number": entry.id, "missing": ", ".join(entry.inputs)},
                     op_id=entry.id,
@@ -2205,7 +2206,7 @@ class History:
             order = _moved_order(operations, chosen, before)
             if [entry.id for entry in order] == [entry.id for entry in operations]:
                 continue
-            targets.append(MoveTarget(before, _order_problem(order, needs)))
+            targets.append(MoveTarget(before, _order_problem(order, needs, self.document.ops)))
         return tuple(targets)
 
     def plan_move(
@@ -2245,7 +2246,9 @@ class History:
                 constraint="unchanged",
                 suggestions=(CANCEL,),
             )
-        problem = _order_problem(order, dependencies.needs if dependencies is not None else ())
+        problem = _order_problem(
+            order, dependencies.needs if dependencies is not None else (), self.document.ops
+        )
         if problem is not None:
             raise problem
         self._reseed()
@@ -2262,6 +2265,7 @@ class History:
             title=_steps_title(
                 [versions[op_id] for op_id in chosen],
                 self._registry,
+                order=tuple(self.document.ops),
                 one=lambda step: _("Verschoben: {step}", step=step),
                 few=lambda count, steps: _(
                     "{count} Schritte verschoben: {steps}", count=count, steps=steps
@@ -2445,6 +2449,7 @@ class History:
             title=_steps_title(
                 [versions[op_id] for op_id in chosen],
                 self._registry,
+                order=tuple(self.document.ops),
                 one=lambda step: _("Ausgeschaltet: {step}", step=step),
                 few=lambda count, steps: _(
                     "{count} Schritte ausgeschaltet: {steps}", count=count, steps=steps
@@ -2530,6 +2535,7 @@ class History:
             title=_steps_title(
                 [versions[op_id] for op_id in targets],
                 self._registry,
+                order=tuple(self.document.ops),
                 one=lambda step: _("Eingeschaltet: {step}", step=step),
                 few=lambda count, steps: _(
                     "{count} Schritte eingeschaltet: {steps}", count=count, steps=steps
@@ -3094,15 +3100,25 @@ def _moved_order(
     return [*staying[:at], *moving, *staying[at:]]
 
 
-def _order_problem(order: Sequence[Operation], needs: Sequence[StepNeed]) -> UserError | None:
+def _order_problem(
+    order: Sequence[Operation],
+    needs: Sequence[StepNeed],
+    shown: Sequence[Operation] = (),
+) -> UserError | None:
     """Warum diese Folge nicht geht — oder ``None`` (P7.2).
 
     Drei Fälle, keiner wird umgebogen: ein Schritt vor dem, der seinen Körper
     anlegt; ein Schritt hinter dem, der seinen Körper vorher verbraucht; ein
     Schritt vor dem, dessen Merkmal er braucht. Gerechnet wird nach Kennungen
     über alle Schritte, auch die ausgeschalteten — die Folge muss auch nach
-    dem Einschalten stimmen.
+    dem Einschalten stimmen. Der Satz nennt die Schritte mit der Nummer, die
+    der Verlauf ``shown`` heute zeigt (:func:`step_position`); die Werte
+    behalten die Kennungen für die Handlungen.
     """
+
+    def number(op_id: OpId | None) -> int | str:
+        return "?" if op_id is None else step_position(shown, op_id)
+
     title = _("Dorthin lässt sich der Schritt nicht verschieben.")
     living: set[ObjectId] = set()
     consumers: dict[ObjectId, OpId] = {}
@@ -3116,8 +3132,8 @@ def _order_problem(order: Sequence[Operation], needs: Sequence[StepNeed]) -> Use
                     detail=_(
                         "Schritt {other} verbraucht vorher den Körper, an dem Schritt "
                         "{step} arbeitet.",
-                        step=entry.id,
-                        other=consumers[name],
+                        step=number(entry.id),
+                        other=number(consumers[name]),
                     ),
                     values={"step": entry.id, "other": consumers[name], "object": name},
                     op_id=entry.id,
@@ -3131,8 +3147,8 @@ def _order_problem(order: Sequence[Operation], needs: Sequence[StepNeed]) -> Use
                 title=title,
                 detail=_(
                     "Schritt {step} arbeitet an einem Körper, den erst Schritt {other} anlegt.",
-                    step=entry.id,
-                    other=other if other is not None else "?",
+                    step=number(entry.id),
+                    other=number(other),
                 ),
                 values={"step": entry.id, "other": other or 0, "object": name},
                 op_id=entry.id,
@@ -3151,14 +3167,14 @@ def _order_problem(order: Sequence[Operation], needs: Sequence[StepNeed]) -> Use
                 title=title,
                 detail=_(
                     "Schritt {step} braucht ein Merkmal, das erst Schritt {other} anlegt.",
-                    step=need.step,
-                    other=need.on,
+                    step=number(need.step),
+                    other=number(need.on),
                 )
                 if need.feature_id is not None
                 else _(
                     "Schritt {step} arbeitet an einem Körper, den erst Schritt {other} anlegt.",
-                    step=need.step,
-                    other=need.on,
+                    step=number(need.step),
+                    other=number(need.on),
                 ),
                 values={
                     "step": need.step,
@@ -3172,20 +3188,41 @@ def _order_problem(order: Sequence[Operation], needs: Sequence[StepNeed]) -> Use
     return None
 
 
-def step_name(entry: Operation, registry: Registry = REGISTRY) -> TranslatableText | str:
+def step_position(operations: Sequence[Operation], op_id: OpId) -> int:
+    """Die Nummer, unter der der Verlauf einen Schritt zeigt: seine Stelle, ab eins.
+
+    Kennungen bleiben nach Einfügen und Verschieben stabil und weichen dann von
+    der Reihenfolge ab (RM-368): Nach einem Einfügen vor Schritt 3 trägt der
+    sichtbare Schritt 3 die Kennung 9. Gelesen wird die Stelle; ohne Treffer
+    bleibt die Kennung. ``ui.labels.step_number`` fragt hier.
+    """
+    for position, entry in enumerate(operations, start=1):
+        if entry.id == op_id:
+            return position
+    return op_id
+
+
+def step_name(
+    entry: Operation, registry: Registry = REGISTRY, *, number: int | None = None
+) -> TranslatableText | str:
     """Ein Schritt beim Namen, wie der Verlauf ihn zeigt: Nummer und Titel.
 
-    Die Nummer ist das, wonach der Kunde im Verlauf sucht; ein Schritt, dessen
-    Operation das Register nicht kennt, behält sie allein.
+    Die Nummer ist das, wonach der Kunde im Verlauf sucht — seine Stelle
+    (:func:`step_position`), nicht die Kennung; ohne sie bleibt die Kennung.
+    Ein Schritt, dessen Operation das Register nicht kennt, behält sie allein.
     """
+    shown = entry.id if number is None else number
     try:
-        return _("{number} {title}", number=entry.id, title=registry.get(entry.op).title)
+        return _("{number} {title}", number=shown, title=registry.get(entry.op).title)
     except AppError:
-        return str(entry.id)
+        return str(shown)
 
 
 def named_steps(
-    entries: Sequence[Operation], registry: Registry = REGISTRY
+    entries: Sequence[Operation],
+    registry: Registry = REGISTRY,
+    *,
+    order: Sequence[Operation] | None = None,
 ) -> tuple[tuple[TranslatableText | str, ...], int]:
     """Welche Schritte beim Namen genannt werden, und wie viele danach nur als Zahl.
 
@@ -3194,11 +3231,22 @@ def named_steps(
     abhängige Schritte“. **Drei Namen und dann eine Zahl**, wie im Titel der
     Lösch-Transaktion (:func:`_deletion_title`); bleibt nur einer übrig, steht
     auch er da, denn „und 1 weitere“ ist länger als sein Name.
+
+    ``order`` ist der Verlauf, in dem der Kunde die Schritte sieht; seine
+    Stellen sind die Nummern (:func:`step_position`).
     """
-    named = tuple(step_name(entry, registry) for entry in entries)
+    named = tuple(_named(entry, registry, order) for entry in entries)
     if len(named) <= _NAMED_IN_TITLE + 1:
         return named, 0
     return named[:_NAMED_IN_TITLE], len(named) - _NAMED_IN_TITLE
+
+
+def _named(
+    entry: Operation, registry: Registry, order: Sequence[Operation] | None
+) -> TranslatableText | str:
+    """Nummer und Titel eines Schritts, die Nummer als Stelle in ``order``."""
+    number = step_position(order, entry.id) if order is not None else None
+    return step_name(entry, registry, number=number)
 
 
 def _steps_title(
@@ -3208,14 +3256,16 @@ def _steps_title(
     one: Callable[[TranslatableText | str], TranslatableText],
     few: Callable[[int, TranslatableText | str], TranslatableText],
     many: Callable[[int, TranslatableText | str, int], TranslatableText],
+    order: Sequence[Operation] | None = None,
 ) -> TranslatableText:
     """Welche Schritte eine Handlung am Verlauf betrifft, im Titel — drei Namen, dann eine Zahl.
 
     Dieselbe Form wie beim Löschen (:func:`_deletion_title`): Nummer und Titel
     je Schritt in der Folge des Stapels, damit der Kunde im Verlauf findet,
-    was gemeint ist.
+    was gemeint ist. Die Nummer ist die Stelle in ``order``, dem Verlauf vor
+    der Handlung.
     """
-    named = [step_name(entry, registry) for entry in entries]
+    named = [_named(entry, registry, order) for entry in entries]
     if len(named) == 1:
         return one(named[0])
     steps = named[0] if named else ""
@@ -3227,7 +3277,10 @@ def _steps_title(
 
 
 def _deletion_title(
-    versions: Mapping[OpId, Operation], registry: Registry = REGISTRY
+    versions: Mapping[OpId, Operation],
+    registry: Registry = REGISTRY,
+    *,
+    order: Sequence[Operation] | None = None,
 ) -> TranslatableText:
     """Was gelöscht wurde, steht im Titel — nicht nur, dass gelöscht wurde.
 
@@ -3250,14 +3303,16 @@ def _deletion_title(
 
     Ein Schritt, dessen Operation das Register nicht kennt, behält seine
     Nummer: Sie ist das, wonach der Kunde im Verlauf sucht, und sie stimmt
-    auch dann.
+    auch dann. Die Nummer ist die Stelle im Verlauf vor dem Löschen
+    (``order``, :func:`step_position`), nicht die Kennung.
     """
     named: list[TranslatableText | str] = []
     for op_id, entry in versions.items():
+        number = step_position(order, op_id) if order is not None else op_id
         try:
-            named.append(_("{number} {title}", number=op_id, title=registry.get(entry.op).title))
+            named.append(_("{number} {title}", number=number, title=registry.get(entry.op).title))
         except AppError:
-            named.append(str(op_id))
+            named.append(str(number))
 
     if len(named) == 1:
         return _("Schritt löschen: {step}", step=named[0])

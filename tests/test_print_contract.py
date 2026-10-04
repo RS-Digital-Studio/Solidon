@@ -171,7 +171,39 @@ def test_review_only_calls_findings_resolved_after_complete_checks(state):
     new = Finding("slice.bridge", "warning", "Neue lange Brücke")
     checks = (CheckState("slice.print_findings", "a", state=state),)
     reviewed = review_difference(ExplainedDifference(), [(old,), (new,)], [checks, checks])
-    assert "Vorher: Freistehende Insel" in reviewed.explanation
-    assert "Nachher: Neue lange Brücke" in reviewed.explanation
-    assert ("nicht mehr vorhanden" in reviewed.explanation) == (state == "completed")
+    assert "Warnungen oder Fehler: 1 vorher, 1 nachher." in reviewed.explanation
+    assert "Neu im Nachherstand: Neue lange Brücke" in reviewed.explanation
+    assert ("nicht mehr vorhanden: Freistehende Insel" in reviewed.explanation) == (
+        state == "completed"
+    )
     assert reviewed.findings == (new,)
+
+
+def test_review_names_only_what_changes_and_counts_the_rest():
+    """Am Piratenschiff standen 32 Warnungen je Stand im Vorschauband (RM-090).
+
+    Gegenprobe vor dem Umbau: 2 × 32 Zeilen. Genannt wird jetzt, was neu ist
+    oder wegfällt, je höchstens vier, der Rest als Zahl.
+    """
+    from app.core.types import CheckState
+    from app.ui.print_contract import ExplainedDifference, review_difference
+
+    staying = [
+        Finding("slice.island", "warning", f"Insel {index}", object_id=f"obj_{index}")
+        for index in range(30)
+    ]
+    gone = [Finding(f"wall.thin_{index}", "warning", f"Dünne Wand {index}") for index in range(6)]
+    new = [Finding(f"bridge.long_{index}", "warning", f"Brücke {index}") for index in range(6)]
+    checks = (CheckState("slice.print_findings", "a", state="completed"),)
+    reviewed = review_difference(
+        ExplainedDifference(),
+        [(*staying, *gone), (*staying, *new)],
+        [checks, checks],
+    )
+    lines = reviewed.explanation.splitlines()
+    assert len(lines) <= 14, lines
+    assert "Warnungen oder Fehler: 36 vorher, 36 nachher." in lines
+    assert sum("Neu im Nachherstand" in line for line in lines) == 4
+    assert sum("nicht mehr vorhanden" in line for line in lines) == 4
+    assert lines.count("… und 2 weitere.") == 2
+    assert not any("Insel" in line for line in lines), "Unverändertes wird nicht wiederholt"
