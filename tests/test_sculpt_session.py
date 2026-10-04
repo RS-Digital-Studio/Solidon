@@ -1782,7 +1782,7 @@ def test_loading_a_saved_gesture_cannot_replace_a_newer_tool(
 def test_refining_a_reopened_sculpt_inserts_before_it_and_keeps_local_strokes(
     window: MainWindow,
 ) -> None:
-    """Jetzt vernetzen verfeinert den Eingang, nicht einen später verschobenen Endstand."""
+    """*Dreiecke jetzt angleichen* verfeinert den Eingang, nicht den später verschobenen Stand."""
     from app.core.scene.history import OperationDraft
 
     target = with_a_body(window)

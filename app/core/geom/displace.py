@@ -415,8 +415,8 @@ class DisplaceParams(BaseParams):
     ),
     caveat=_(
         "Nicht auf ein grobes Netz: Ein Relief zeigt sich nur, wo Eckpunkte sind, und "
-        "unter einem Eckpunkt je zwei Bildpunkten bleibt vom Bild nichts übrig. Erst "
-        "gleichmäßig vernetzen."
+        "unter einem Eckpunkt je zwei Bildpunkten bleibt vom Bild nichts übrig. Erst die "
+        "Dreiecke angleichen."
     ),
 )
 def displace_image(ctx: OpContext) -> OpResult:
@@ -513,7 +513,7 @@ def _displacement_findings(
                 severity="warning",
                 message=_(
                     "Das Netz hat zu wenige Eckpunkte für dieses Bild — vom Relief bleibt "
-                    "kaum etwas übrig. Erst gleichmäßig vernetzen."
+                    "kaum etwas übrig. Erst die Dreiecke angleichen."
                 ),
                 object_id=object_id,
                 values={"vertices": carrying, "wanted": int(wanted * wanted)},

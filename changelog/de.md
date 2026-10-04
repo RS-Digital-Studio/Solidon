@@ -225,6 +225,7 @@ Nutzen da und sonst nichts.
 - Im Beispielprojekt zum zweiten Weg folgen die Schraubenlöcher Breite und Stärke.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - In allen Übersetzungen heißen Merkmale, Knöpfe und Druckbegriffe überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
+- Der Knopf, der den Verbrauch vom Filamentlager abbucht, heißt in den Übersetzungen jetzt wie eine Buchung, und Hinweise nennen Handlungen wie das Fenster, etwa *Dreiecke angleichen*.
 - Die Anrede ist einheitlich: Spanisch, Portugiesisch und Französisch siezen, Italienisch duzt. Drei spanische und portugiesische Meldungen, die das Gegenteil sagten, sind berichtigt.
 - Während ein Dialog seine Vorschau zeigt, kommen Leerzeichen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, und Haken und Knöpfe nehmen die Leertaste an.
 - Beim *Skalieren* bleibt ein Körper auf dem Bett stehen, statt unter die Platte zu sinken, und die Ansicht rahmt ihn nach, wenn er größer wird.

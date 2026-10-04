@@ -201,6 +201,7 @@ dans `website/version.json`.
 - Dans le projet d'exemple de la deuxième voie, les trous de vis suivent la largeur et l'épaisseur.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - Toutes les traductions emploient les mêmes mots pour les caractéristiques, les boutons et les termes d'impression, et les messages suivent la ponctuation de chaque langue.
+- Le bouton qui déduit la consommation du stock de filament s'appelle désormais « Déduire », et les indications nomment les actions comme la fenêtre, par exemple « Uniformiser les triangles ».
 - Le registre est cohérent : espagnol, portugais et français vouvoient, l'italien tutoie. Trois messages espagnols et portugais qui disaient le contraire sont corrigés.
 - Pendant qu'un dialogue affiche son aperçu, les espaces arrivent dans chaque champ de texte, y compris le questionnaire et le chat, et cases et boutons acceptent la barre d'espace.
 - Avec « Mettre à l'échelle », un corps reste posé sur le plateau au lieu de s'enfoncer sous la plaque, et la vue le recadre quand il grandit.

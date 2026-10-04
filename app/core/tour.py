@@ -413,9 +413,9 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # Verlauf und nicht gegen eine zweite gepflegte Zahl.
                 text=_(
                     "Im Verlauf stehen sechs Schritte: zwei Grundkörper, einer davon "
-                    "versetzt, beide weich verschmolzen, gleichmäßig vernetzt und zum "
-                    "Schluss auf das Bett gesetzt. Das Vernetzen ist der, den man "
-                    "auslässt und danach vermisst — ohne ihn hat der Pinsel zu wenige "
+                    "versetzt, beide weich verschmolzen, dann „Dreiecke angleichen“ und "
+                    "zum Schluss auf das Bett gesetzt. Das Angleichen wird gern "
+                    "ausgelassen und danach vermisst: Ohne es hat der Pinsel zu wenige "
                     "Eckpunkte."
                 ),
             ),
@@ -572,9 +572,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="viewport",
                 text=_(
                     "Der Umriss dieser Platte ist ein Kreis mit einer Bedingung: "
-                    "„Der Rand hat vom Mittelpunkt immer denselben Abstand.“ Nicht "
-                    "eine Kette aus Punkten, die zufällig rund aussieht — der Kern "
-                    "rechnet mit der Kurve selbst."
+                    "„Der Rand hat vom Mittelpunkt immer denselben Abstand.“ Solidon "
+                    "rechnet mit dem Kreis selbst und nicht mit einer Kette aus Punkten."
                 ),
             ),
             TourStep(
