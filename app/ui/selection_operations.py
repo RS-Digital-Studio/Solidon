@@ -103,6 +103,15 @@ Stellen zu finden.
 QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature", "pattern_feature")
 """Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
 
+QUICK_SEVERAL_FEATURES = ("group_pattern",)
+"""Bei mehreren markierten Merkmalszeilen eines Körpers (RM-504).
+
+Wer mehrere Einzelmerkmale markiert, hat sie meist als Gruppe gemeint — das
+kleine Wabenfeld, die drei Rillen, das Ornament, das die Erkennung ohne
+Erzeugerwissen nicht zusammenfasst. Der Dialog übernimmt die markierten
+Zeilen (``MainWindow._values_for_selection`` füllt ``at_features``).
+"""
+
 
 #: Bis zu so vielen sichtbaren Handlungen beginnt eine Gruppe offen; darüber
 #: zugeklappt. Es ist dieselbe Zahl wie ``MAX_SUBMENU_ENTRIES`` in
@@ -174,9 +183,17 @@ rollt, und was frei bleibt, zeigt das Modell.
 
 
 def quick_names(
-    bodies: int, feature_kind: str = "", *, left_out: frozenset[str] = frozenset()
+    bodies: int,
+    feature_kind: str = "",
+    *,
+    left_out: frozenset[str] = frozenset(),
+    features: int = 0,
 ) -> tuple[str, ...]:
     """Die Hauptaktionen für diese Auswahl, in ihrer Rangfolge.
+
+    ``features`` zählt die markierten Merkmale eines Körpers, wenn kein
+    einzelnes gewählt ist — mehrere Zeilen im Baum. Ab zweien steht vorn
+    :data:`QUICK_SEVERAL_FEATURES`.
 
     ``left_out`` nennt, was am gewählten Merkmal nicht angeboten wird, obwohl
     seine Art es trägt — am Kegel, der keine Senkung ist, *Senken* (R3). Die
@@ -214,6 +231,8 @@ def quick_names(
             for name in wanted
             if name in offered and name not in fields and name not in left_out
         )
+    if bodies == 1 and features > 1:
+        return QUICK_SEVERAL_FEATURES
     return QUICK_BODIES if bodies > 1 else QUICK_BODY
 
 
@@ -226,7 +245,13 @@ def all_quick_names() -> tuple[str, ...]:
     steht, wie :func:`quick_names` sie nennt.
     """
     found: list[str] = []
-    for group in (QUICK_BODIES, QUICK_BODY, *QUICK_FEATURES.values(), QUICK_FEATURE):
+    for group in (
+        QUICK_BODIES,
+        QUICK_BODY,
+        *QUICK_FEATURES.values(),
+        QUICK_FEATURE,
+        QUICK_SEVERAL_FEATURES,
+    ):
         found.extend(name for name in group if name not in found)
     return tuple(found)
 
@@ -733,8 +758,12 @@ class SelectionOperationsPanel(QWidget):
         label: str = "",
         part_selected: bool = False,
         left_out: frozenset[str] = frozenset(),
+        features: int = 0,
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
+
+        ``features`` ist die Zahl markierter Merkmale am gewählten Körper, wenn
+        kein einzelnes gewählt ist (:func:`quick_names`).
 
         ``feature_kind`` ist die Art des gewählten Merkmals — ``face``,
         ``hole`` und so fort — und leer, solange nur Körper gewählt sind. Sie
@@ -806,7 +835,9 @@ class SelectionOperationsPanel(QWidget):
         self._lay_out_quick(
             tuple(
                 name
-                for name in quick_names(selected, feature_kind, left_out=left_out)
+                for name in quick_names(
+                    selected, feature_kind, left_out=left_out, features=features
+                )
                 if self._buttons[name].isEnabled()
             )
         )

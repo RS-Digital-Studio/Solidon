@@ -1441,11 +1441,80 @@ wurden zusätzlich in einem frischen Prozess mit leerem Cache verglichen:
 Merkmalskennungen, Maße, Herkunft, Dreiecksauswahl und Volumen bleiben gleich.
 
 **Grenzen:** Kleine Felder unter der Mindestzahl sind ohne Erzeugerwissen
-mehrdeutig. Der native STEP-Leser bildet noch keine Muster; der sichtbare Weg
-über *Flächenbearbeitung beenden* führt in die Netzerkennung. Eine ausdrückliche
-Nutzerzuordnung und direkte STEP-Mustererkennung stehen als Rest in RM-504.
-Der Oberflächenanschluss ist am Code geprüft; die native Fensterabnahme bleibt
-dem Release vorbehalten.
+mehrdeutig; die Schwellen bleiben. Dafür gibt es die ausdrückliche
+Zusammenfassung und die Mustersuche am exakten Körper (beide unten). Der
+Oberflächenanschluss ist am Code geprüft; die native Fensterabnahme bleibt dem
+Release vorbehalten.
+
+### Ausdrücklich zusammenfassen statt Schwellen senken
+
+Eine Absenkung von `MIN_CELLS`, `MIN_STRIPS` oder `MIN_ROUND_CELLS` nähme
+Funktionsbohrungen, Magnettaschen und Schrift mit; was zusammengehört, sagt
+deshalb der Kunde. *Als Muster zusammenfassen* (`perceive.ops.group_pattern`)
+ist ein Schritt ohne Geometrieänderung. Er nimmt die markierten Merkmale
+(`at_features`, vorbelegt aus mehreren markierten Zeilen im Objektbaum;
+vorn in der Karte über `selection_operations.QUICK_SEVERAL_FEATURES`) und liest
+sie mit **derselben Zellenlesung** wie die Erkennung (`patterns._read_cells`):
+Gewählte Merkmale gelten als Zellmaterial, gleich wie groß; alles andere folgt
+der Regel „klein zwischen den Trägern“. Ungewählte Wände einer gewählten Zelle
+gehören deshalb dazu. Gemessen wird wie ein erkanntes Muster: deckungsgleiche
+Zellen im Gitter bekommen Stil, Gitter und Teilung, ein Stil von
+`apply_texture` nur in dessen Gitter; sonst ist es `other` mit dem Gitter
+`none` (ungleiche Zellen eines Ornaments), entfernbar und nicht neu zu
+zeichnen. Ab zwei Zellen (`LEAST_GROUPED_CELLS`); eine Zelle hat keine Teilung.
+
+Absagen mit Weg (`patterns.group_refusal`): zu wenige Zellen, ein Merkmal ohne
+Zelle auf einer Fläche, Bohrungen (`_a_bore`: durchgehend oder tiefer als
+`ROUND_DEPTH` mal so breit — dieselbe Grenze wie `_measure_cell`), zwei Träger,
+erhabene neben vertieften Zellen. Flache runde Taschen sind keine Bohrungen in
+diesem Sinn: ausdrücklich gewählt werden auch Magnettaschen ein Muster, ohne
+Wahl bleiben sie, was sie sind.
+
+Das Muster heißt `grouped_<Schritt>` (`evaluate._named_after_the_step`, an
+beiden Kernen) und bindet sich in jedem Folgeschritt wie eine Textur an seine
+Oberfläche (`patterns.bound_to_its_surface` in `rebound_textures`,
+`_textures_from_other_inputs`, beiden Zweigen von `_with_features` und
+`prepare_ops._features_after_split`). Die Einzelnamen bleiben reserviert; ein
+späterer Bezug auf eine einzelne Zelle hält mit Rückweg an. Der Befund
+`group_pattern.grouped` steht in `REMOVAL_CODES`, damit der Weggang der Zellen
+nicht zusätzlich als Verlust erscheint. *Merkmal ändern* bindet die neu
+gezeichneten Zellen an das Muster (`prepare_ops._resize_pattern`), und eine
+reine Tiefenänderung behält die belegten Umrisse (`texture_depth_tool`) — ein
+Feld unter den Schwellen fände die Erkennung danach nicht wieder, und das
+Neuzeichnen eines kleinen Felds mit ganzen Zellen sagte „die Teilung passt
+nicht ins Feld“.
+
+Gegenproben (`tests/test_pattern_grouping.py`): acht Waben des Halters (eine
+unter `MIN_CELLS`) werden ein Wabenmuster mit Teilung 10,4 und Schlüsselweite
+9; eine Wand je Zelle bringt die ganze Zelle; drei ungleiche Taschen werden
+`other`; zwölf flache Taschen nur gewählt ein Muster; Kernlöcher, Träger,
+eine einzelne Zelle und zwei Seiten sagen ab; Entfernen füllt alle Zellen,
+eine Tiefenänderung behält Name, Zellen und Umrisse (Volumen als Formel);
+Verlauf mit Verschieben, Projektdatei, leerem und Plattencache, Undo/Redo und
+gesperrtem Altbezug. Ohne die Bindung (`bound_to_its_surface` nur für
+Texturen) sind Verlaufs- und Schnitttest rot.
+
+Am Korpus: Ohne Wahl ändert sich an Gewürzdeckel, Wabenhalter, Magnetschaber,
+Schriftdekor, Kumiko-Schale und -Organizer, Carcassonne-Gitter, Topfdeckel,
+Würfel, `plate_holes.stl` und dem M6-STEP kein Merkmalsabdruck. Gewählt werden
+die fünf Magnettaschen des Schabers ein fremdes Muster, die Pips zweier
+Würfelseiten Muster ihrer Seite; die übrigen Würfelseiten haben keine erkannte
+Fläche und sagen `group_not_a_cell`, die Bohrungen des Halters und von
+`plate_holes.stl` `group_bores`.
+
+### Muster am exakten Körper
+
+`brep.features.features_of` fragt `patterns_instead_of_cells` an der
+Tessellierung — dieselbe Suche, dieselben Schwellen und dieselbe Nummerierung
+wie am Netz, nach dem Langloch und vor den freien Rundungen. Eine Wabenplatte
+aus STEP hatte vorher 90 Flächen, ihr Netzzwilling ein Muster. Entfernen
+bleibt am exakten Körper exakt. Gegenprobe (`tests/test_exact_patterns.py`):
+Waben durchgehend und blind, sechs Rillen, acht Waben und ein Lochblech, je als
+STEP und als binäre STL der Tessellierung über den echten Einleseweg; Art,
+Maße, Lage und Kennung stimmen bis 1e-3 mm. Ohne die neue Suche sind die vier
+Zwillingsfälle rot. Die neun STEP-Dateien des Korpus (Lochwandhalter, Katzen,
+Bautablett, Teppichklemme) bleiben unverändert und haben an beiden Kernen kein
+Muster.
 
 ## Gerichtete Schnitte und Dokumentationsbudget (RM-485)
 

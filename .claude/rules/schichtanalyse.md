@@ -490,13 +490,13 @@ als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
 
 ## Viele gleiche Zellen sind ein Muster, und die Grenze zur Bohrung ist eine Entscheidung
 
-**Erzeugte Texturen** sind unabhängig von der Zellzahl ein `pattern` mit
-stabiler Schrittkennung. `surface_triangles` belegt ihre Flächen vollständig;
-Folgeschritte binden sie neu und messen die Restgeometrie. Einzelzellen gehen
-darin auf, fremde Bohrungen bleiben frei. Reine Tiefenänderungen erhalten die
-Umrisse. Ändern und Entfernen stehen direkt im Texturpanel und nutzen Verlauf
-und Undo. Ohne Erzeugerwissen gelten die Erkennungsschwellen unten; ein STL
-enthält keine Herkunft.
+**Erzeugte Texturen und ausdrücklich zusammengefasste Zellen**
+(`group_pattern`) sind ab jeder Zellzahl ein `pattern` mit Schrittkennung
+(`bound_to_its_surface`); `surface_triangles` belegt ihre Flächen,
+Folgeschritte binden neu. Einzelzellen gehen darin auf, ihre Namen bleiben
+reserviert, fremde Bohrungen frei. Ohne Wahl gelten die Schwellen unten; die
+Zusammenfassung liest dieselben Zellen (`_read_cells`) ab zwei, Bohrungen
+(`_a_bore`) sagen ab. Der exakte Körper fragt dieselbe Suche.
 
 `perceive/patterns.py` faltet erst ab `MIN_CELLS` deckungsgleichen Zellen
 (Streifen `MIN_STRIPS`, Streuung `MIN_SCATTER`, Rauschen `MIN_NOISE`). Runde

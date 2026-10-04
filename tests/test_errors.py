@@ -375,6 +375,10 @@ _NOT_A_RANGE = frozenset(
         # Topologie und Suchbudget sind keine unzulässigen Zahlenwerte im Feld.
         "local_boundary", "local_budget", "local_seed", "local_ambiguous_seed",
         "local_no_feature", "local_topology",
+        # Eine Zusammenfassung als Muster (RM-504) sagt über die gewählten
+        # Merkmale ab, nicht über eine Zahl im Feld.
+        "group_too_few", "group_not_a_cell", "group_bores", "group_two_carriers",
+        "group_two_sides",
         # Der Arbeitsspeicher beim Neuvernetzen (mesh_ops._out_of_memory): Die
         # Kantenlänge liegt im Schema, nur dieser Rechner schafft sie nicht.
         "memory",

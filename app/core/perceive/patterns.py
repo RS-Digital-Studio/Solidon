@@ -68,7 +68,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal, NamedTuple
 
@@ -78,6 +78,7 @@ from app.core import units
 from app.core.geom.mesh import MeshData, unique_edges
 from app.core.types import Feature, FeatureId, MeasureSource, Vec3
 from app.core.units import EPS_GEOM
+from app.i18n import _
 
 #: Ab wie vielen deckungsgleichen Zellen ein Gitter ein Muster ist.
 #:
@@ -118,6 +119,20 @@ MIN_SCATTER: Final = 24
 #: ein Drittel Deckung. Ein Rauschen aus ``apply_texture`` hat bei seiner
 #: Vorgabe (2 mm Teilung auf 40 mal 30) über hundert Flecken.
 MIN_NOISE: Final = 40
+
+#: Ab wie vielen Zellen eine **ausdrückliche** Zusammenfassung ein Muster ist
+#: (:func:`grouped_pattern`, RM-504). Zwei: Eine Zelle allein hat keine
+#: Teilung, und alles darüber hat der Kunde selbst gewählt. Die Schwellen
+#: darüber gelten der Erkennung ohne Erzeugerwissen und bleiben, wie sie sind —
+#: drei Magnettaschen sind ohne Wahl drei Taschen.
+LEAST_GROUPED_CELLS: Final = 2
+
+#: Womit die Kennung eines ausdrücklich zusammengefassten Musters beginnt. Die
+#: Auswertung hängt die Kennung des Schritts an (``grouped_<Schritt>``), wie
+#: ``texture_<Schritt>`` bei einer selbst aufgebrachten Textur: Eine
+#: Nummernfolge verschöbe Folgebezüge, sobald eine frühere Zusammenfassung
+#: wegfällt, und ``pattern_<n>`` gehört der Erkennung.
+GROUPED_PREFIX: Final = "grouped"
 
 #: Wie viele der Zellen ihren nächsten Nachbarn in der Teilung haben müssen.
 #:
@@ -203,6 +218,11 @@ VORONOI_COVERAGE: Final = 0.5
 CELL_KINDS: Final[frozenset[str]] = frozenset(
     {"face", "hole", "pin", "fillet", "curved_face", "cone", "sphere", "torus"}
 )
+
+#: Was der Kunde als Zelle wählen kann (:func:`grouped_pattern`) — dieselben
+#: Arten wie in der Erkennung, dazu das offene Langloch, das eine am Rand
+#: angeschnittene Zelle ist (:func:`_cell_material`).
+GROUPABLE_KINDS: Final[tuple[str, ...]] = (*sorted(CELL_KINDS), "slot")
 
 #: Welche Zellarten rund sind, wenn ihre Mitglieder es sagen.
 ROUND_KINDS: Final[frozenset[str]] = frozenset({"hole", "pin", "sphere"})
@@ -388,8 +408,22 @@ def patterns_instead_of_cells(
     kept = {name: feature for name, feature in found.items() if name not in swallowed}
     for number, pattern in enumerate(patterns, start=1):
         name = f"pattern_{number}"
-        kept[name] = _feature_of(name, pattern)
+        kept[name] = feature_of_pattern(name, pattern)
     return kept
+
+
+def bound_to_its_surface(feature: Feature) -> bool:
+    """Ob dieses Muster seine Herkunft trägt und an seine Oberfläche gebunden wird.
+
+    Zwei Arten tun das: die selbst aufgebrachte Textur (``texture``) und die
+    ausdrücklich zusammengefassten Einzelzellen (``grouped``, RM-504). Beide
+    belegt nicht die Erkennung, sondern ein Schritt im Verlauf; ihre Dreiecke
+    bindet jeder Folgeschritt neu an die verbliebene Oberfläche
+    (:func:`rebound_textures`), auch unter den Erkennungsschwellen.
+    """
+    return feature.kind == "pattern" and bool(
+        feature.params.get("texture") or feature.params.get("grouped")
+    )
 
 
 def without_pattern_cells(found: Mapping[FeatureId, Feature]) -> dict[FeatureId, Feature]:
@@ -515,6 +549,12 @@ def bound_texture(mesh: MeshData, feature: Feature, indices: Sequence[int]) -> F
     selected = np.asarray(indices, dtype=np.int64)
     count = len(_components(body, selected)) if len(selected) else 0
     params = {**feature.params, "count": count}
+    if feature.params.get("grouped"):
+        # Zusammengefasste Zellen zählen wie ein erkanntes Muster: ganze Zellen
+        # und angeschnittene getrennt. Was ein Folgeschritt wegnimmt, geht
+        # zuerst von den ganzen ab — welche es war, sagt die Zahl nicht.
+        partial = min(int(feature.params.get("partial", 0)), count)
+        params.update(count=count - partial, partial=partial)
     sources = {**feature.measure_sources, "count": "facets"}
     if len(selected) and (params.get("carrier") != "cylinder" or "carrier_diameter" in sources):
         frame = frame_for(feature)
@@ -552,8 +592,10 @@ def rebound_textures(
 ) -> dict[FeatureId, Feature]:
     """Bindet erzeugte Texturen beider Körperarten an ihre verbliebene Oberfläche.
 
-    ``proven`` nennt ausschließlich bereits am Ergebnis belegte Indizes. Alle
-    übrigen benötigen ihre Dreiecke im Eingangsnetz, gegebenenfalls bewegt.
+    Dazu gehören ausdrücklich zusammengefasste Zellen (:func:`bound_to_its_surface`):
+    Auch sie belegt ein Schritt, nicht die Erkennung. ``proven`` nennt
+    ausschließlich bereits am Ergebnis belegte Indizes. Alle übrigen benötigen
+    ihre Dreiecke im Eingangsnetz, gegebenenfalls bewegt.
     """
     if source is not None and movement is not None:
         from app.core.geom.transform import apply
@@ -561,7 +603,7 @@ def rebound_textures(
         source = apply(source, movement)
     result = {}
     for name, feature in known.items():
-        if feature.kind != "pattern" or not feature.params.get("texture"):
+        if not bound_to_its_surface(feature):
             continue
         if name in proven:
             indices = feature.face_indices
@@ -615,7 +657,7 @@ def without_texture_cells(
     return kept
 
 
-def _feature_of(name: str, pattern: Pattern) -> Feature:
+def feature_of_pattern(name: str, pattern: Pattern) -> Feature:
     """Das Merkmal aus dem Fund — jede Zahl am Netz gemessen (``facets``)."""
     first = pattern.cells[0]
     depth = float(np.median([cell.depth for cell in pattern.cells]))
@@ -695,6 +737,17 @@ def _anchor_of(pattern: Pattern) -> Vec3:
     return _vec(chosen.centre)
 
 
+@dataclass(frozen=True, slots=True)
+class _CellReading:
+    """Die Zellen eines Körpers, einmal gelesen — für die Erkennung und für die Zusammenfassung."""
+
+    body: Any
+    owned: Mapping[FeatureId, Feature]
+    measure: _CellMeasure
+    cells: list[Cell]
+    pieces: list[EdgePiece]
+
+
 def find_patterns(
     mesh: MeshData,
     found: Mapping[FeatureId, Feature],
@@ -702,111 +755,11 @@ def find_patterns(
     check_cancelled: Callable[[], None] | None = None,
 ) -> list[Pattern]:
     """Alle Muster an diesem Körper, nach Lage sortiert (§21.2)."""
-    body = mesh.raw
-    triangle_count = len(body.faces)
-    owned = {
-        name: feature
-        for name, feature in found.items()
-        if feature.face_indices and (_cell_material(feature) or feature.kind == "face")
-    }
-    # Träger ist eine große ebene Fläche — oder ein großer Zylinder: Ein
-    # Rändel läuft um einen Griff, und der ist für die Erkennung ein Stift.
-    if triangle_count == 0 or not any(feature.kind in CARRIER_KINDS for feature in owned.values()):
+    reading = _read_cells(mesh, found, check_cancelled=check_cancelled)
+    if reading is None:
         return []
-    # Jedes Dreieck kennt sein Merkmal; -1 heißt: gehört zu keinem.
-    names = list(owned)
-    owner = np.full(triangle_count, -1, dtype=np.int64)
-    triangle_areas = np.asarray(body.area_faces, dtype=float)
-    areas = np.zeros(len(names), dtype=float)
-    for index, name in enumerate(names):
-        indices = np.asarray(owned[name].face_indices, dtype=np.int64)
-        indices = indices[(indices >= 0) & (indices < triangle_count)]
-        owner[indices] = index
-        areas[index] = float(triangle_areas[indices].sum())
-    # **Kandidat ist, was klein ist.** Eine Zelle hat höchstens den
-    # MIN_CELLS-ten Teil ihres Trägers, sonst gäbe es nicht MIN_CELLS davon —
-    # und der Träger ist höchstens die größte Trägerfläche des Körpers.
-    largest = max(
-        areas[index] for index, name in enumerate(names) if owned[name].kind in CARRIER_KINDS
-    )
-    limit = largest / MIN_CELLS
-    small = np.array(
-        [areas[index] <= limit and _cell_material(owned[name]) for index, name in enumerate(names)]
-    )
-    # Ein Stift, der mit einem zweiten die Achse teilt und in Streifen
-    # zerfällt, ist Boden oder Kopf der Zellen und kein Träger
-    # (:func:`_cell_floors`).
-    for index in _cell_floors(body, owned, names, small):
-        small[index] = True
-    candidate_features = np.flatnonzero(small)
-    measure = _CellMeasure(body, owned, names, owner)
-    # **Ein Stift als Träger nimmt beim Einpassen Wandstücke mit** — kleine
-    # Dreiecke quer zum Mantel, die keine ebene Fläche wurden und über die
-    # Nachbarschaft in seinen Fleck gerieten. Sie gehören der Zelle: Was
-    # nicht auf dem Zylinder liegt, ist kein Träger. Mit ihnen im Stift
-    # zerfiel eine Rille nach dem Ändern in drei Stücke (22.09.2026).
-    centroids = np.asarray(body.triangles_center, dtype=float)
-    for index, name in enumerate(names):
-        if owned[name].kind != "pin" or small[index]:
-            continue
-        frame = measure.frame_of(name)
-        if frame is None:
-            continue
-        own = np.flatnonzero(owner == index)
-        _flat, heights = frame.developed(centroids[own])
-        owner[own[np.abs(heights) > units.MAX_FACET_SAG]] = -1
-    # **Und umgekehrt: Was auf einem Träger liegt, ist Träger** — auch ohne
-    # Namen. Eine Boolesche Rechnung lässt auf dem Mantel Splitter, die kein
-    # Merkmal nahm; als Zellmaterial verbanden sie zwei Waben zu einer Zelle
-    # mit acht Ecken, die zu keinem Gitter passte (22.09.2026). Gemessen an
-    # der Mitte des Dreiecks, nicht an seiner Normalen: Die eines Splitters
-    # zeigt irgendwohin. Eine Wand liegt mit ihrer Mitte ein Drittel der
-    # Tiefe unter dem Träger — und was flacher ist als das, ist keine Zelle.
-    unowned = np.flatnonzero(owner < 0)
-    if len(unowned):
-        for index, name in enumerate(names):
-            if owned[name].kind not in CARRIER_KINDS or small[index]:
-                continue
-            frame = measure.frame_of(name)
-            if frame is None:
-                continue
-            # Die Höhe des Trägers: Am Zylinder ist sie der Radius selbst, die
-            # Mitte eines Stifts liegt auf seiner Achse. Auf der Ebene die
-            # Mitte der Fläche.
-            level = 0.0
-            if frame.kind == "plane":
-                centre = np.asarray(owned[name].params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
-                level = float(frame.developed(centre)[1][0])
-            _flat, heights = frame.developed(centroids[unowned])
-            on_carrier = np.abs(heights - level) <= max(frame.sag, units.MAX_FACET_SAG / 4.0)
-            owner[unowned[on_carrier]] = index
-            unowned = unowned[~on_carrier]
-            if len(unowned) == 0:
-                break
-    # **Auch, was kein Merkmal ist, kann Zellwand sein.** Die Wände einer
-    # Welle sind acht schmale Streifen je Periode, und die Flächensuche nennt
-    # sie nicht; die Wände eines Voronoi-Felds stehen zur Hälfte ohne Namen
-    # da. Eine Zelle besteht aus allem Kleinen zwischen ihren Trägern — was
-    # kein Träger und keine Sammelform ist, gehört dazu.
-    candidate = (owner < 0) | np.isin(owner, candidate_features)
-    # **Gezählt wird das Zellmaterial, nicht die Merkmale darunter.** Hier
-    # stand die Frage, ob es wenigstens MIN_CELLS kleine Merkmale gibt — vor
-    # den zwei Schritten darüber, die dem Stift sein Wandmaterial nehmen. Ein
-    # Kreuzrändel um einen Griff besteht aus Dreiecken ohne Namen: Nach dem
-    # Ändern auf 4 mm lagen sie im Stift, sieben Verrundungen standen daneben,
-    # und die Suche endete, bevor sie die Zellen sah (Fund aus „formops",
-    # 23.09.2026).
-    if not bool(candidate.any()):
-        return []
-    carrier_feature = np.array(
-        [owned[name].kind in CARRIER_KINDS and not small[index] for index, name in enumerate(names)]
-    )
-    if check_cancelled is not None:
-        check_cancelled()
-
-    cells, pieces = _cells(
-        body, measure, candidate, carrier_feature, check_cancelled=check_cancelled
-    )
+    body, owned, measure = reading.body, reading.owned, reading.measure
+    cells, pieces = reading.cells, reading.pieces
     if len(cells) < min(MIN_CELLS, MIN_STRIPS) and len(pieces) < MIN_STRIPS:
         return []
     if check_cancelled is not None:
@@ -873,6 +826,343 @@ def find_patterns(
         lambda index: _corner_key(body, np.asarray(patterns[index].face_indices)),
     )
     return [patterns[index] for index in order]
+
+
+def _read_cells(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    chosen: Collection[FeatureId] = frozenset(),
+    check_cancelled: Callable[[], None] | None = None,
+) -> _CellReading | None:
+    """Die Zellen und Randstücke dieses Körpers, am Netz vermessen — oder ``None``.
+
+    ``chosen`` sind Merkmale, die der Kunde ausdrücklich als Zellen gewählt
+    hat (:func:`grouped_pattern`): Sie gelten als Zellmaterial, gleich wie groß
+    sie sind, und tragen deshalb keine Zelle. Alles andere entscheidet dieselbe
+    Regel wie in der Erkennung — eine Zelle ist, was klein zwischen ihren
+    Trägern liegt —, und ohne ``chosen`` ist das die Erkennung, Bit für Bit.
+    """
+    body = mesh.raw
+    triangle_count = len(body.faces)
+    owned = {
+        name: feature
+        for name, feature in found.items()
+        if feature.face_indices and (_cell_material(feature) or feature.kind == "face")
+    }
+    # Träger ist eine große ebene Fläche — oder ein großer Zylinder: Ein
+    # Rändel läuft um einen Griff, und der ist für die Erkennung ein Stift.
+    if triangle_count == 0 or not any(feature.kind in CARRIER_KINDS for feature in owned.values()):
+        return None
+    # Jedes Dreieck kennt sein Merkmal; -1 heißt: gehört zu keinem.
+    names = list(owned)
+    owner = np.full(triangle_count, -1, dtype=np.int64)
+    triangle_areas = np.asarray(body.area_faces, dtype=float)
+    areas = np.zeros(len(names), dtype=float)
+    for index, name in enumerate(names):
+        indices = np.asarray(owned[name].face_indices, dtype=np.int64)
+        indices = indices[(indices >= 0) & (indices < triangle_count)]
+        owner[indices] = index
+        areas[index] = float(triangle_areas[indices].sum())
+    # **Kandidat ist, was klein ist.** Eine Zelle hat höchstens den
+    # MIN_CELLS-ten Teil ihres Trägers, sonst gäbe es nicht MIN_CELLS davon —
+    # und der Träger ist höchstens die größte Trägerfläche des Körpers.
+    largest = max(
+        areas[index] for index, name in enumerate(names) if owned[name].kind in CARRIER_KINDS
+    )
+    limit = largest / MIN_CELLS
+    small = np.array(
+        [
+            name in chosen or (areas[index] <= limit and _cell_material(owned[name]))
+            for index, name in enumerate(names)
+        ]
+    )
+    # Ein Stift, der mit einem zweiten die Achse teilt und in Streifen
+    # zerfällt, ist Boden oder Kopf der Zellen und kein Träger
+    # (:func:`_cell_floors`).
+    for index in _cell_floors(body, owned, names, small):
+        small[index] = True
+    candidate_features = np.flatnonzero(small)
+    measure = _CellMeasure(body, owned, names, owner)
+    # **Ein Stift als Träger nimmt beim Einpassen Wandstücke mit** — kleine
+    # Dreiecke quer zum Mantel, die keine ebene Fläche wurden und über die
+    # Nachbarschaft in seinen Fleck gerieten. Sie gehören der Zelle: Was
+    # nicht auf dem Zylinder liegt, ist kein Träger. Mit ihnen im Stift
+    # zerfiel eine Rille nach dem Ändern in drei Stücke (22.09.2026).
+    centroids = np.asarray(body.triangles_center, dtype=float)
+    for index, name in enumerate(names):
+        if owned[name].kind != "pin" or small[index]:
+            continue
+        frame = measure.frame_of(name)
+        if frame is None:
+            continue
+        own = np.flatnonzero(owner == index)
+        _flat, heights = frame.developed(centroids[own])
+        owner[own[np.abs(heights) > units.MAX_FACET_SAG]] = -1
+    # **Und umgekehrt: Was auf einem Träger liegt, ist Träger** — auch ohne
+    # Namen. Eine Boolesche Rechnung lässt auf dem Mantel Splitter, die kein
+    # Merkmal nahm; als Zellmaterial verbanden sie zwei Waben zu einer Zelle
+    # mit acht Ecken, die zu keinem Gitter passte (22.09.2026). Gemessen an
+    # der Mitte des Dreiecks, nicht an seiner Normalen: Die eines Splitters
+    # zeigt irgendwohin. Eine Wand liegt mit ihrer Mitte ein Drittel der
+    # Tiefe unter dem Träger — und was flacher ist als das, ist keine Zelle.
+    unowned = np.flatnonzero(owner < 0)
+    if len(unowned):
+        for index, name in enumerate(names):
+            if owned[name].kind not in CARRIER_KINDS or small[index]:
+                continue
+            frame = measure.frame_of(name)
+            if frame is None:
+                continue
+            # Die Höhe des Trägers: Am Zylinder ist sie der Radius selbst, die
+            # Mitte eines Stifts liegt auf seiner Achse. Auf der Ebene die
+            # Mitte der Fläche.
+            level = 0.0
+            if frame.kind == "plane":
+                centre = np.asarray(owned[name].params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+                level = float(frame.developed(centre)[1][0])
+            _flat, heights = frame.developed(centroids[unowned])
+            on_carrier = np.abs(heights - level) <= max(frame.sag, units.MAX_FACET_SAG / 4.0)
+            owner[unowned[on_carrier]] = index
+            unowned = unowned[~on_carrier]
+            if len(unowned) == 0:
+                break
+    # **Auch, was kein Merkmal ist, kann Zellwand sein.** Die Wände einer
+    # Welle sind acht schmale Streifen je Periode, und die Flächensuche nennt
+    # sie nicht; die Wände eines Voronoi-Felds stehen zur Hälfte ohne Namen
+    # da. Eine Zelle besteht aus allem Kleinen zwischen ihren Trägern — was
+    # kein Träger und keine Sammelform ist, gehört dazu.
+    candidate = (owner < 0) | np.isin(owner, candidate_features)
+    # **Gezählt wird das Zellmaterial, nicht die Merkmale darunter.** Hier
+    # stand die Frage, ob es wenigstens MIN_CELLS kleine Merkmale gibt — vor
+    # den zwei Schritten darüber, die dem Stift sein Wandmaterial nehmen. Ein
+    # Kreuzrändel um einen Griff besteht aus Dreiecken ohne Namen: Nach dem
+    # Ändern auf 4 mm lagen sie im Stift, sieben Verrundungen standen daneben,
+    # und die Suche endete, bevor sie die Zellen sah (Fund aus „formops",
+    # 23.09.2026).
+    if not bool(candidate.any()):
+        return None
+    carrier_feature = np.array(
+        [owned[name].kind in CARRIER_KINDS and not small[index] for index, name in enumerate(names)]
+    )
+    if check_cancelled is not None:
+        check_cancelled()
+
+    cells, pieces = _cells(
+        body, measure, candidate, carrier_feature, check_cancelled=check_cancelled
+    )
+    return _CellReading(body=body, owned=owned, measure=measure, cells=cells, pieces=pieces)
+
+
+def grouped_pattern(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    chosen: Collection[FeatureId],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Pattern:
+    """Das Muster aus ausdrücklich gewählten Einzelmerkmalen (RM-504).
+
+    **Die Wahl ersetzt die Mindestzahl, nicht die Messung.** Unter den
+    Schwellen der Erkennung ist ein Feld ohne Erzeugerwissen mehrdeutig —
+    vier Waben, drei Rillen, ein Ornament aus ungleichen Zellen —, und eine
+    pauschale Absenkung nähme Funktionsbohrungen, Magnettaschen und Schrift
+    mit. Hier hat der Kunde gesagt, was zusammengehört. Was eine Zelle ist,
+    sagt trotzdem dieselbe Lesung wie in der Erkennung (:func:`_read_cells`):
+    alles Kleine zwischen ihren Trägern, auch ungewählte Wände, die an einer
+    gewählten Zelle hängen.
+
+    **Gemessen wird wie ein erkanntes Muster**: Liegen deckungsgleiche Zellen
+    in einem Gitter, bekommt das Muster Stil, Gitter und Teilung — einen
+    Stil von ``apply_texture`` nur in dessen Gitter. Sonst ist es ein fremdes
+    Feld (``other``), entfernbar und nicht neu zu zeichnen. Runde tiefe oder
+    durchgehende Zellen sind Bohrungen und bleiben es; sie behalten ihre
+    Handlungen, und für mehrere gleiche gibt es *Auf alle anwenden*.
+
+    Was nicht geht, sagt ein Satz mit Rückweg (Regel 17): zu wenige Zellen,
+    ein Merkmal ohne Zelle auf einer Fläche, eine Bohrung, zwei Träger oder
+    erhabene neben vertieften Zellen.
+    """
+    wanted = frozenset(chosen)
+    usable = {
+        name
+        for name in wanted
+        if name in found and _cell_material(found[name]) and found[name].face_indices
+    }
+    if usable != wanted:
+        raise group_refusal("not_a_cell", wanted - usable)
+    reading = _read_cells(mesh, found, chosen=wanted, check_cancelled=check_cancelled)
+    if reading is None:
+        raise group_refusal("not_a_cell", wanted)
+    measure = reading.measure
+    if check_cancelled is not None:
+        check_cancelled()
+
+    cells = [cell for cell in reading.cells if wanted.intersection(cell.members)]
+    pieces = [
+        piece
+        for piece in reading.pieces
+        if wanted.intersection(
+            measure.names[int(index)]
+            for index in np.unique(measure.owner[piece.indices])
+            if index >= 0
+        )
+    ]
+    carriers = {cell.carrier[0] for cell in cells}
+    if not cells and pieces:
+        # Lauter Randstücke um einen Stift — die Riffelung eines Deckels
+        # (:func:`_rim_patterns`): gemessen am gemeinsamen Stift als ganze Zellen.
+        common = set.intersection(*(set(piece.carriers) for piece in pieces))
+        pins = sorted(name for name in common if reading.owned[name].kind == "pin")
+        if pins:
+            pin = pins[0]
+            if pin not in measure.seamed:
+                measure.seam_between(pin, [piece.indices for piece in pieces])
+            cells = [
+                cell for piece in pieces if (cell := measure(piece.indices, (pin,))) is not None
+            ]
+            pieces = []
+            carriers = {pin}
+    if len(carriers) > 1:
+        raise group_refusal("two_carriers", wanted)
+    clipped: list[Cell] = []
+    if carriers:
+        carrier = next(iter(carriers))
+        for piece in pieces:
+            if carrier not in piece.carriers:
+                continue
+            cell = measure(piece.indices, (carrier,), clipped=True)
+            if cell is not None:
+                clipped.append(cell)
+    covered = {name for cell in (*cells, *clipped) for name in cell.members}
+    missing = wanted - covered
+    if missing:
+        # Bohrung heißt hier, was ``_measure_cell`` als Bohrung stehen lässt:
+        # durchgehend oder tiefer als ``ROUND_DEPTH`` mal so breit. Eine flache
+        # Mulde, die an keiner Fläche mündet, ist kein Bohrungsfall — sie
+        # bekommt den Satz über die fehlende Zelle.
+        bores = {name for name in missing if _a_bore(found[name])}
+        if bores:
+            raise group_refusal("bores", bores)
+        raise group_refusal("not_a_cell", missing)
+    whole = [cell for cell in cells if not cell.clipped]
+    clipped.extend(cell for cell in cells if cell.clipped)
+    if len(whole) < LEAST_GROUPED_CELLS:
+        raise group_refusal("too_few", wanted)
+    first = whole[0]
+    if any(cell.raised != first.raised or cell.through != first.through for cell in whole):
+        raise group_refusal("two_sides", wanted)
+
+    pattern: Pattern | None = None
+    if all(_same_cell(first, cell) for cell in whole[1:]):
+        if first.style in _STRIPS:
+            found_rows = _rows_of(whole, least=LEAST_GROUPED_CELLS)
+            walls = sum(cell.wall_area for cell in whole)
+            straight = (
+                sum(cell.straight * cell.wall_area for cell in whole) / walls
+                if walls > 0.0
+                else 1.0
+            )
+            style = "rib" if straight >= STRAIGHT_SHARE else "wave"
+        else:
+            found_rows = _grid_of(np.array([cell.flat_centre for cell in whole], dtype=float))
+            style = first.style
+        if found_rows is not None:
+            lattice, angle, spacing = found_rows
+            expected = _GENERATOR_LATTICE.get(style)
+            if expected is not None and expected != lattice:
+                style = "other"
+            pitch = spacing * _PITCH_PER_SPACING.get(style, 1.0)
+            pattern = _field(first, whole, (), lattice, angle, pitch, style)
+    if pattern is None:
+        pattern = _scatter_field(first, whole, (), "other")
+    if clipped:
+        pattern = _with_partial(pattern, clipped)
+    return _with_coverage(pattern, _carrier_outline(reading.body, reading.owned[first.carrier[0]]))
+
+
+def _a_bore(feature: Feature) -> bool:
+    """Ob dieses runde Merkmal nach der Regel der Zellen eine Bohrung bleibt.
+
+    Dieselbe Grenze wie :func:`_measure_cell`: durchgehend, oder tiefer als
+    :data:`ROUND_DEPTH` mal so breit. Ohne gemessene Tiefe bleibt eine Bohrung
+    eine Bohrung — im Zweifel bleibt ein Merkmal, was es war.
+    """
+    if feature.kind not in ROUND_KINDS:
+        return False
+    if feature.params.get("through"):
+        return True
+    depth, diameter = feature.params.get("depth"), feature.params.get("diameter")
+    if not isinstance(depth, int | float) or not isinstance(diameter, int | float):
+        return feature.kind == "hole"
+    return float(depth) > float(diameter) * ROUND_DEPTH * (1.0 + SAME_MEASURE)
+
+
+def group_refusal(reason: str, names: Collection[FeatureId]) -> Any:
+    """Die Absage einer Zusammenfassung (:func:`grouped_pattern`) — Satz und Weg.
+
+    Zwei Sätze, der zweite ist der Weg; ``values["features"]`` nennt die
+    Merkmale, an denen es liegt, damit die Oberfläche sie zeigen kann. Die
+    Beschränkung trägt den Grund (``group_<Grund>``), wie ``local_error``
+    ihn für die örtliche Suche trägt.
+    """
+    from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
+
+    values = {"features": tuple(sorted(names))}
+    suggestions = (CORRECT_INPUT, CANCEL)
+    refusals = {
+        "too_few": ValidationError(
+            field="at_features",
+            constraint="group_too_few",
+            detail=_(
+                "Ein Muster braucht mindestens zwei Zellen. Wählen Sie im Objektbaum weitere "
+                "gleiche Merkmale dazu."
+            ),
+            values=values,
+            suggestions=suggestions,
+        ),
+        "not_a_cell": ValidationError(
+            field="at_features",
+            constraint="group_not_a_cell",
+            detail=_(
+                "Mindestens ein gewähltes Merkmal liegt nicht als Zelle auf einer Fläche. "
+                "Nehmen Sie es aus der Auswahl."
+            ),
+            values=values,
+            suggestions=suggestions,
+        ),
+        "bores": ValidationError(
+            field="at_features",
+            constraint="group_bores",
+            detail=_(
+                "Bohrungen bleiben Bohrungen und behalten ihre eigenen Handlungen. Nehmen Sie "
+                "sie aus der Auswahl."
+            ),
+            values=values,
+            suggestions=suggestions,
+        ),
+        "two_carriers": ValidationError(
+            field="at_features",
+            constraint="group_two_carriers",
+            detail=_(
+                "Die gewählten Zellen liegen auf verschiedenen Flächen. Fassen Sie die Zellen "
+                "jeder Fläche einzeln zusammen."
+            ),
+            values=values,
+            suggestions=suggestions,
+        ),
+        "two_sides": ValidationError(
+            field="at_features",
+            constraint="group_two_sides",
+            detail=_(
+                "Erhabene und vertiefte Zellen sind zwei Muster. Fassen Sie beide getrennt "
+                "zusammen."
+            ),
+            values=values,
+            suggestions=suggestions,
+        ),
+    }
+    return refusals[reason]
 
 
 def _cell_floors(
@@ -2735,13 +3025,16 @@ def _grid_of(flat: np.ndarray) -> tuple[str, float, float] | None:
     return lattice, angle, spacing
 
 
-def _rows_of(group: Sequence[Cell]) -> tuple[str, float, float] | None:
+def _rows_of(group: Sequence[Cell], *, least: int = MIN_STRIPS) -> tuple[str, float, float] | None:
     """Die Reihe der Streifen: Teilung quer zu ihrer Achse.
 
     Die Mitten schräg abgeschnittener Streifen wandern entlang des Streifens;
     was bleibt, ist ihr Abstand **quer** dazu, und der ist die Teilung.
     Gemessen an den Kanten, die der Achse folgen — nicht am Schwerpunkt, der
     an einem fünfeckig abgeschnittenen Streifen neben der Mittellinie liegt.
+    ``least`` ist die Zahl der Streifen, ab der eine Reihe zählt; weniger als
+    :data:`MIN_STRIPS` nur, wo der Kunde die Streifen selbst gewählt hat
+    (:func:`grouped_pattern`).
     """
     axes = np.array([cell.axis for cell in group], dtype=float)
     # Achsen gleichrichten, sonst hebt sich das Mittel auf.
@@ -2758,7 +3051,7 @@ def _rows_of(group: Sequence[Cell]) -> tuple[str, float, float] | None:
     positions = np.sort(np.array([_strip_position(cell, axis, across) for cell in group]))
     steps = np.diff(positions)
     steps = steps[steps > EPS_GEOM]
-    if len(steps) < MIN_STRIPS - 1:
+    if len(steps) < least - 1 or not len(steps):
         return None
     spacing = float(np.median(steps))
     regular = np.abs(steps - spacing) <= SAME_MEASURE * spacing
