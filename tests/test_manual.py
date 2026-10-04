@@ -20,8 +20,10 @@ einem modalen Meldungsfenster.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from html import escape, unescape
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -243,13 +245,32 @@ def test_the_website_reference_carries_every_operation_and_parameter(language: s
     stand. Geprüft wird deshalb die Referenz selbst — jede Operation und jedes
     ihrer dort einzeln aufgeführten Felder, in allen sechs Sprachfassungen.
     """
-    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
-    from app.i18n import source_text
+    from app.core.registry.surfaces import part_placement_params
+    from app.i18n import install_catalog, set_language
     from app.i18n.catalog import read_catalog
 
     html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
-    catalog = read_catalog(language)
+    # Übersetzt wie in der Anwendung, mit Kontext: „Bereich“ heißt als
+    # Musterfeld anders als ohne, „Verschluss“ steht nur mit Kontext im Katalog.
+    install_catalog(language, read_catalog(language))
+    set_language(language)
     missing: list[str] = []
+    try:
+        _collect_missing_reference(html, part_placement_params, missing)
+    finally:
+        set_language("de")
+
+    assert not missing, (
+        f"{WEBSITE_PAGES[language].name} hat eine veraltete Referenz:\n"
+        + "\n".join(missing)
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
+    )
+
+
+def _collect_missing_reference(
+    html: str, part_placement_params: Callable[[Any], frozenset[str]], missing: list[str]
+) -> None:
+    """Sammelt Operationen und Felder, die in der erzeugten Referenz der Seite fehlen."""
     for spec in REGISTRY.all():
         # Die unsichtbare Kennung ordnet auch gleichlautende Werkzeugtitel zu.
         marker = f'<h4 data-operation="{spec.name}"'
@@ -259,22 +280,17 @@ def test_the_website_reference_carries_every_operation_and_parameter(language: s
             continue
         end = html.find("<h4", start + len(marker))
         section = html[start : end if end >= 0 else len(html)]
-        parameters = spec.params.spec()
+        # Dieselbe Auswahl wie ``documentation`` und ``parameter_table``:
+        # Interne Felder (Migrationswerte, Flächenbezug der Platzierung) sind
+        # keine Eingaben und stehen nirgends; die Ortsfelder der Bausteine
+        # stehen einmal am Kategoriekopf.
+        parameters = tuple(entry for entry in spec.params.spec() if not entry.internal)
         if spec.category == "parts":
-            parameters = tuple(
-                entry for entry in parameters if entry.name not in PART_PLACEMENT_PARAMS
-            )
+            placement = part_placement_params(spec)
+            parameters = tuple(entry for entry in parameters if entry.name not in placement)
         for entry in parameters:
-            title = source_text(entry.title)
-            label = catalog.get(title, title)
-            if f"<td>{escape(label)}</td>" not in section:
+            if f"<td>{escape(str(entry.title))}</td>" not in section:
                 missing.append(f"{spec.name}.{entry.name}")
-
-    assert not missing, (
-        f"{WEBSITE_PAGES[language].name} hat eine veraltete Referenz:\n"
-        + "\n".join(missing)
-        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
-    )
 
 
 @pytest.mark.rendered
@@ -332,14 +348,16 @@ def test_the_website_page_carries_the_generated_reference(language: str) -> None
     set_language(language)
     try:
         html = page.read_text(encoding="utf-8")
+        visible = re.sub(r"<[^>]+>", "", html)
         missing: list[str] = []
         for spec in REGISTRY.all():
             if escape(str(spec.title)) not in html:
                 missing.append(f"{spec.name}: Titel")
             # Der Vorbehalt selbst und nicht die ganze Zeile: Im Handbuch
             # steht sein Vorwort halbfett, also als ``<strong>`` und nicht
-            # mit den Sternchen, die ``caveat_line`` setzt.
-            if spec.caveat and escape(str(spec.caveat)) not in html:
+            # mit den Sternchen, die ``caveat_line`` setzt. Verglichen wird der
+            # sichtbare Text — eine Hervorhebung darin steht als ``<em>``.
+            if spec.caveat and escape(markup.plain(str(spec.caveat))) not in visible:
                 missing.append(f"{spec.name}: Vorbehalt")
             schema = tuple(
                 replace(
