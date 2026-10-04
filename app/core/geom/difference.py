@@ -239,29 +239,55 @@ def surface_distance_bound(
         target_triangles = np.asarray(target_local.triangles)
         index = surface_index(target_local)
         cover = _FacetCover(target_local)
-        pending = [triangles]
+        # Mit jeder Zelle reisen Abstand und nächstes Dreieck ihrer Ecken.
+        # Eine geteilte Zelle kennt drei Ecken von ihrer Mutter, die drei
+        # Kantenmitten fragt die Mutter einmal für alle vier Töchter: je
+        # Teilung sieben Punkte statt sechzehn, an der Lochplatte mehr als
+        # die halbe Suchzeit. Die Schranken lesen dieselben Werte wie zuvor;
+        # ein unbekanntes Dreieck heißt -1.
+        pending: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = [
+            (
+                triangles,
+                np.zeros((len(triangles), 3)),
+                np.full((len(triangles), 3), -1, dtype=np.int64),
+            )
+        ]
         while pending:
             token.raise_if_cancelled()
             # Kurze Portionen halten Abbruch und Speicher unabhängig von der
             # Verfeinerung. Kleine Restgruppen teilen sich einen Suchaufruf:
             # jede einzeln kostete an der Lochplatte Tausende Baumabfragen.
-            pieces = []
+            pieces: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
             count = 0
             while pending and count < 1024:
-                piece = pending.pop()
+                piece, gaps, owners = pending.pop()
                 room = 1024 - count
-                pieces.append(piece[:room])
-                count += len(pieces[-1])
+                pieces.append((piece[:room], gaps[:room], owners[:room]))
+                count += len(pieces[-1][0])
                 if len(piece) > room:
-                    pending.append(piece[room:])
-            batch = pieces[0] if len(pieces) == 1 else np.concatenate(pieces)
+                    pending.append((piece[room:], gaps[room:], owners[room:]))
+            batch, known_gaps, known_owners = (
+                pieces[0]
+                if len(pieces) == 1
+                else tuple(np.concatenate(parts) for parts in zip(*pieces, strict=True))
+            )
             cells += len(batch)
             if cells > max_cells:
                 return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
             centres = batch.mean(axis=1)
-            points = np.concatenate((centres, batch.reshape(-1, 3)))
-            _, distances, targets = on_surface(target_local, points, index=index)
-            samples += len(points)
+            corner_gaps = known_gaps.reshape(-1).copy()
+            corner_owners = known_owners.reshape(-1).copy()
+            unknown = np.flatnonzero(corner_owners < 0)
+            _, found, nearest = on_surface(
+                target_local,
+                np.concatenate((centres, batch.reshape(-1, 3)[unknown])),
+                index=index,
+            )
+            corner_gaps[unknown] = found[len(batch) :]
+            corner_owners[unknown] = nearest[len(batch) :]
+            distances = np.concatenate((found[: len(batch)], corner_gaps))
+            targets = np.concatenate((nearest[: len(batch)], corner_owners))
+            samples += 4 * len(batch)
             if not np.isfinite(distances).all():
                 return SurfaceDistanceBound(lower, math.inf, permitted_mm, samples, False)
             lower = max(lower, max(0.0, float(distances.max()) - EPS_GEOM))
@@ -290,14 +316,31 @@ def surface_distance_bound(
             accepted = bounds <= permitted_mm
             if accepted.any():
                 upper = max(upper, float(bounds[accepted].max()))
-            undecided = batch[~accepted]
-            if len(undecided):
-                a, b, c = undecided[:, 0], undecided[:, 1], undecided[:, 2]
+            undecided = ~accepted
+            if undecided.any():
+                parents = batch[undecided]
+                a, b, c = parents[:, 0], parents[:, 1], parents[:, 2]
                 ab, bc, ca = (a + b) / 2.0, (b + c) / 2.0, (c + a) / 2.0
-                pending.extend(
-                    np.stack(corners, axis=1)
-                    for corners in ((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca))
+                _, middle, middle_owners = on_surface(
+                    target_local, np.concatenate((ab, bc, ca)), index=index
                 )
+                gap_ab, gap_bc, gap_ca = middle.reshape(3, -1)
+                owner_ab, owner_bc, owner_ca = middle_owners.reshape(3, -1)
+                gap_a, gap_b, gap_c = corner_gaps.reshape(-1, 3)[undecided].T
+                owner_a, owner_b, owner_c = corner_owners.reshape(-1, 3)[undecided].T
+                for child, child_gaps, child_owners in (
+                    ((a, ab, ca), (gap_a, gap_ab, gap_ca), (owner_a, owner_ab, owner_ca)),
+                    ((ab, b, bc), (gap_ab, gap_b, gap_bc), (owner_ab, owner_b, owner_bc)),
+                    ((ca, bc, c), (gap_ca, gap_bc, gap_c), (owner_ca, owner_bc, owner_c)),
+                    ((ab, bc, ca), (gap_ab, gap_bc, gap_ca), (owner_ab, owner_bc, owner_ca)),
+                ):
+                    pending.append(
+                        (
+                            np.stack(child, axis=1),
+                            np.stack(child_gaps, axis=1),
+                            np.stack(child_owners, axis=1),
+                        )
+                    )
     return SurfaceDistanceBound(lower, max(lower, upper), permitted_mm, samples, True)
 
 

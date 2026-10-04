@@ -24,7 +24,7 @@ from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import BaseParams, Feature, OpContext, OpResult, Profile, SceneObject, Source
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from tests.helpers import exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -537,7 +537,15 @@ CASES = [
         "posed",
         None,
     ),
-    Case("push_face", "box", {"face": "top", "distance": 2.0}, KEEP, "volume", 3840.0),
+    # Quader 20 x 16 x 10, Deckfläche um 2 mm hinaus: 20 x 16 x 12, sechs Flächen.
+    Case(
+        "push_face",
+        "box",
+        {"face": "top", "distance": 2.0},
+        KEEP,
+        "pushed",
+        (3840.0, (192.0, 192.0, 240.0, 240.0, 320.0, 320.0)),
+    ),
     Case("remesh_mesh", "box", {"edge": 4.0}, MESH, "refined", 3200.0),
     Case("remesh_uniform", "box", {"edge": 4.0, "deviation": 0.0}, MESH, "refined", 3200.0),
     Case(
@@ -1306,6 +1314,17 @@ def _assert_invariant(
                 # Der unveränderte Quader darf keine Verrundung bestehen.
                 tolerance = min(tolerance, difference / 4)
         assert volume == pytest.approx(expected, rel=0.0, abs=tolerance)
+    elif rule == "pushed":
+        # RM-226: *Fläche versetzen* ließ am exakten Körper die angesetzte
+        # Scheibe als eigene koplanare Fläche neben jeder Seitenwand stehen
+        # (160 + 32 statt 192 mm²), das Netz nannte je Wand eine. Beide Kerne
+        # nennen dieselben sechs ebenen Flächen mit denselben Inhalten.
+        expected_volume, expected_areas = expected
+        assert volume == pytest.approx(expected_volume, abs=1e-6)
+        kinds = sorted(feature.kind for feature in first.features.values())
+        assert kinds == ["face"] * len(expected_areas), kinds
+        areas = sorted(feature.params["area"] for feature in first.features.values())
+        assert areas == pytest.approx(expected_areas, abs=1e-6)
     elif rule == "greater":
         assert volume > expected + 0.1
         if case.name == "lattice_fill":
@@ -1724,3 +1743,503 @@ def test_every_operation_completes_with_its_declared_result(
         assert math.isfinite(entry.mesh.volume) and entry.mesh.volume > 0.0
         assert as_mesh_data(entry.mesh).is_watertight
     _assert_invariant(case, outputs, inputs, result)
+
+
+# --- RM-226: dieselbe Fläche heißt an beiden Kernen gleich -------------------
+
+
+def _arched_block(arc: float) -> Any:
+    """Quader 40 x 8, dessen Oberseite ein Kreisbogen über die ganze Breite ist.
+
+    Sehne 40, Öffnungswinkel ``arc``: Der Bogen trifft die senkrechten
+    Seitenwände unter 90° − arc/2 und damit nie tangential. Gebaut aus Quader
+    und Zylinder, unabhängig von Skizze und Extrusion; der Radius folgt aus
+    der Sehne, 20 / sin(arc/2) — R 382,15 / 191,34 / 77,27 bei 6 / 12 / 30 Grad.
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+
+    radius = 20.0 / math.sin(math.radians(arc / 2.0))
+    rise = radius * (1.0 - math.cos(math.radians(arc / 2.0)))
+    block = BRepPrimAPI_MakeBox(gp_Pnt(-20.0, -4.0, 0.0), 40.0, 8.0, 10.0 + rise + 1.0).Shape()
+    drum = BRepPrimAPI_MakeCylinder(
+        gp_Ax2(gp_Pnt(0.0, -5.0, 10.0 + rise - radius), gp_Dir(0.0, 1.0, 0.0)), radius, 10.0
+    ).Shape()
+    return Solid(BRepAlgoAPI_Common(block, drum).Shape())
+
+
+def _arched_section(arc: float) -> float:
+    """Querschnitt des gewölbten Quaders: Rechteck 40 x 10 plus Kreisabschnitt."""
+    radius = 20.0 / math.sin(math.radians(arc / 2.0))
+    angle = math.radians(arc)
+    return 40.0 * 10.0 + radius * radius / 2.0 * (angle - math.sin(angle))
+
+
+def _evaluated(
+    op: str, params: dict[str, Any], inputs: list[SceneObject], profile: Profile
+) -> list[SceneObject]:
+    """Vorbereitete Eingaben durch Verlauf und Auswertung, wie im Falltest oben."""
+    result, operation = _evaluation(op, params, inputs, profile)
+    assert result.complete, [
+        (finding.code, str(finding.message), finding.values)
+        for finding in result.scene.report.findings
+    ]
+    return [result.scene.objects[identifier] for identifier in operation.outputs]
+
+
+def _evaluation(
+    op: str, params: dict[str, Any], inputs: list[SceneObject], profile: Profile
+) -> tuple[Any, Any]:
+    """Auswertung und geprüfter Schritt, ohne Urteil — auch für eine erwartete Absage."""
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+
+    def seed(ctx: OpContext) -> OpResult:
+        """Die Referenzkörper betreten den echten Auswertungsweg."""
+        return OpResult(outputs=[dataclasses.replace(entry, id="") for entry in inputs])
+
+    registry.register(
+        OperationSpec(
+            name="matrix_input",
+            title="Referenzkörper",
+            category="primitive",
+            params=BaseParams,
+            fn=seed,
+            consumes=0,
+            produces=len(inputs),
+        )
+    )
+    history = History(project.document, registry=registry)
+    history.apply("Referenzkörper", [OperationDraft(op="matrix_input")])
+    history.apply(
+        "Geprüfter Auftrag",
+        [
+            OperationDraft(
+                op=op, inputs=tuple(entry.id for entry in inputs), params=params, seed=1234
+            )
+        ],
+    )
+    operation = project.document.ops[-1]
+    result = evaluate(
+        project.document,
+        profile,
+        registry=registry,
+        sources=ProjectSources(project),
+        ask=_unexpected_question,
+    )
+    return result, operation
+
+
+@pytest.mark.parametrize("arc", [6.0, 12.0, 30.0])
+def test_an_arched_top_is_one_curved_face_on_both_kernels(arc: float, profile: Profile) -> None:
+    """Eine gewölbte Oberseite ist an beiden Kernen eine gekrümmte Fläche (RM-226).
+
+    Der exakte Kern nannte jeden Zylinderausschnitt unter 300 Grad eine
+    Verrundung — an diesem Quader „Verrundung R 382 / 191 / 77“ bei 6, 12
+    und 30 Grad —, das Netz denselben Bogen eine gekrümmte Fläche. Am Netz
+    entscheidet nicht ``replaces_an_edge`` (ein flacher Buckel mitten auf
+    der Oberseite ersetzt auch keine Kante und heißt an beiden Kernen
+    Verrundung), sondern die Frage, ob der Zylinder in seinen Körper passt:
+    Ø 764 auf einem 40 mm breiten Quader ist keine Rundung. Jetzt fragt der
+    exakte Kern dieselbe. Geprüft am Eingang auf denselben Dreiecken und nach
+    *Fläche versetzen* an der Vorderseite, ohne Wechsel der Bauart (KEEP).
+    """
+    exact_kernel()
+    from collections import Counter
+
+    solid = _arched_block(arc)
+    expected = {"face": 5, "curved_face": 1}
+    tops: dict[str, set[int]] = {}
+    for kind in ("mesh", "brep"):
+        entry = _object(solid, kind)
+        assert Counter(feature.kind for feature in entry.features.values()) == expected, kind
+        (top,) = [feature for feature in entry.features.values() if feature.kind == "curved_face"]
+        tops[kind] = set(top.face_indices)
+        front = next(
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == "face" and feature.params["normal"][1] < -0.99
+        )
+        (pushed,) = _evaluated("push_face", {"face": front, "distance": 1.0}, [entry], profile)
+        assert pushed.kind == kind
+        assert Counter(feature.kind for feature in pushed.features.values()) == expected, kind
+        # 9 mm tief statt 8; das Netz liegt mit seinen Sehnen innen.
+        assert pushed.mesh.volume == pytest.approx(_arched_section(arc) * 9.0, rel=2e-3)
+    # Die Vernetzung des exakten Körpers ist der Netzzwilling: dieselben Dreiecke.
+    assert tops["brep"] == tops["mesh"]
+
+
+def _rounded_all_over(shape: str, radius: float) -> Any:
+    """Ein Körper, dessen Kanten alle mit ``radius`` verrundet sind (RM-226).
+
+    ``box``: Quader 40 x 30 x 20 — zwölf Kanten, acht Ecken. ``tee``: Balken
+    40 x 10 x 10 und Steg 10 x 10 x 40, vereinigt — 24 Kanten, davon die zwei
+    Innenkanten als Kehlen, zwölf Ecken. ``unified`` legt die koplanaren
+    Teilflächen der Vereinigung zusammen, die das Netz ohnehin als eine
+    Facette liest; ohne es führte der exakte Kern die Vorderseite des T als
+    vier Flächen.
+    """
+    from app.core.brep import edit
+
+    if shape == "box":
+        return edit.fillet(edit.box(40.0, 30.0, 20.0), radius, "all")
+    joined = edit.unified(
+        edit.boolean("union", [edit.box(40.0, 10.0, 10.0), edit.box(10.0, 10.0, 40.0)])
+    )
+    return edit.fillet(joined, radius, "all")
+
+
+def _through_stl(mesh: MeshData) -> MeshData:
+    """Dasselbe Netz als binäre STL hinaus und wie ein Import herein — Ecken in float32."""
+    from app.core.geom.mesh import read_mesh
+
+    stream = io.BytesIO()
+    trimesh.Trimesh(
+        vertices=np.asarray(mesh.raw.vertices), faces=np.asarray(mesh.raw.faces), process=False
+    ).export(stream, file_type="stl")
+    imported = read_mesh(stream.getvalue(), ".stl")
+    # Die Dreiecksfolge bleibt beim Rundlauf, sonst wären die Nummern nicht vergleichbar.
+    assert imported.triangle_count == mesh.triangle_count
+    assert np.allclose(imported.raw.triangles_center, mesh.raw.triangles_center, atol=1e-4)
+    return imported
+
+
+@pytest.mark.parametrize("form", ["twin", "stl"])
+@pytest.mark.parametrize(
+    ("shape", "radius", "edges", "corners"),
+    [("box", 3.0, 12, 8), ("box", 8.0, 12, 8), ("tee", 3.0, 24, 12), ("tee", 1.0, 24, 12)],
+)
+def test_a_body_rounded_all_over_carries_the_same_features_on_both_kernels(
+    shape: str, radius: float, edges: int, corners: int, form: str
+) -> None:
+    """Rundungen, die tangential ineinander übergehen, trennt auch das Netz (RM-226).
+
+    Kanten, Kugelecken und die ebenen Flächen zwischen ihnen gehen ohne Knick
+    und mit demselben Radius ineinander über; am Netz stand der ganze Verbund
+    deshalb als eine gekrümmte Fläche da — am gerundeten T 2 750 von 2 820
+    Dreiecken —, am exakten Kern als 24 Kantenrundungen, zwölf Ecken und die
+    Flächen dazwischen. Jetzt trennt das Netz an den Dreiecken, deren Ecken auf
+    einem Zylinder liegen, und nennt jede Kugelecke, an der verrundete Kanten
+    zusammenlaufen, wie der exakte Kern eine Verrundung.
+
+    Geprüft wird die volle Parität: jedes Merkmal mit derselben Art auf
+    denselben Dreiecken — die Vernetzung des exakten Körpers ist der
+    Netzzwilling, einmal so und einmal nach dem Weg durch eine binäre STL wie
+    beim Import — und jede Rundung mit dem gebauten Radius. Die Zahl der
+    Kanten und Ecken folgt aus der Konstruktion.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _rounded_all_over(shape, radius)
+    exact = features_of(solid)
+    mesh = as_mesh_data(solid)
+    found = detect(mesh if form == "twin" else _through_stl(mesh))
+
+    def table(features: dict[str, Feature]) -> dict[tuple[str, frozenset[int]], Feature]:
+        return {
+            (feature.kind, frozenset(int(index) for index in feature.face_indices)): feature
+            for feature in features.values()
+        }
+
+    native, twin = table(exact), table(found)
+    only_twin = sorted((kind, len(faces)) for kind, faces in twin.keys() - native.keys())
+    only_native = sorted((kind, len(faces)) for kind, faces in native.keys() - twin.keys())
+    assert (only_twin, only_native) == ([], [])
+    rounds = [key for key in native if key[0] == "fillet"]
+    assert sum(1 for key in rounds if "axis" in native[key].params) == edges
+    assert sum(1 for key in rounds if "axis" not in native[key].params) == corners
+    for key in rounds:
+        # Am Zwilling bis 1e-6 mm, nach der STL auf das float32-Raster der Ecken.
+        assert twin[key].params["radius"] == pytest.approx(
+            radius, abs=1e-6 if form == "twin" else 1e-4
+        )
+        assert ("axis" in twin[key].params) == ("axis" in native[key].params)
+
+
+def _dome_between_rounded_edges() -> Any:
+    """Quader 40 x 30 x 30, die vier senkrechten Kanten R 3, oben eine Kuppel R 60 (RM-226).
+
+    Die Kugel um (0, 0, −32) schneidet jede Seite unter der Deckfläche — an den
+    Ecken bei Z 22,5, mitten an der langen Seite bei 26,1, oben bei 28 —, die
+    Kuppel ersetzt also die ganze Deckfläche und grenzt an die vier Seiten und
+    an die vier verrundeten Kanten.
+    """
+    from app.core.brep import edit
+
+    box = edit.box(40.0, 30.0, 30.0)
+    upright = [
+        edit.edge_key(item) for item in edit.edges_of(box) if abs(item.middle[2] - 15.0) <= EPS_GEOM
+    ]
+    assert len(upright) == 4
+    rounded = edit.fillet(box, 3.0, "named", upright)
+    ball = edit.moved(edit.sphere(120.0), (0.0, 0.0, -32.0))
+    return edit.boolean("intersection", [rounded, ball])
+
+
+def test_a_dome_between_rounded_edges_stays_a_sphere_on_both_kernels() -> None:
+    """Eine Kuppel, an die verrundete Kanten stoßen, ist keine Ecke (RM-226).
+
+    Eine Kugelecke entsteht, wo Kanten mit **demselben** Radius zusammenlaufen,
+    und trägt deren Radius. Beide Kerne zählten nur, wie viele Zylinderstücke
+    an einer Kugel liegen: Am Minigolfteil Gövde75 aus dem Korpus hieß so eine
+    Kuppel Ø 178,6 zwischen Rundungen R 3 und R 7 „Verrundung R 89,3“. Hier
+    stoßen vier Rundungen R 3 an eine Kuppel R 60 — sie bleibt an beiden
+    Kernen die Kugel Ø 120, die Rundungen bleiben Kantenrundungen, und keine
+    Ecke entsteht.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _dome_between_rounded_edges()
+    for kind, found in (("brep", features_of(solid)), ("mesh", detect(as_mesh_data(solid)))):
+        domes = [feature for feature in found.values() if feature.kind == "sphere"]
+        assert [dome.params["diameter"] for dome in domes] == [pytest.approx(120.0, abs=1e-3)], kind
+        rounds = [feature for feature in found.values() if feature.kind == "fillet"]
+        assert [("axis" in item.params, item.params["radius"]) for item in rounds] == [
+            (True, pytest.approx(3.0, abs=1e-3))
+        ] * 4, kind
+
+
+def _pin_with_a_cove(cove: float) -> Any:
+    """Platte 60 x 60 x 6 mit Zapfen Ø 12 x 30, sein Fuß mit ``cove`` ausgekehlt (RM-022)."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Circle
+
+    from app.core.brep import edit
+
+    plate = edit.moved(edit.box(60.0, 60.0, 6.0), (0.0, 0.0, -6.0))
+    joined = edit.boolean("union", [plate, edit.cylinder(12.0, 30.0)])
+    foot = []
+    for item in edit.edges_of(joined):
+        curve = BRepAdaptor_Curve(item.edge)
+        if curve.GetType() != GeomAbs_Circle:
+            continue
+        circle = curve.Circle()
+        if abs(circle.Radius() - 6.0) <= EPS_GEOM and abs(circle.Location().Z()) <= EPS_GEOM:
+            foot.append(edit.edge_key(item))
+    assert foot
+    return edit.fillet(joined, cove, "named", foot)
+
+
+@pytest.mark.parametrize("cove", [2.0, 3.0, 4.0])
+def test_a_pin_with_a_cove_is_a_pin_and_a_ring_on_both_kernels(cove: float) -> None:
+    """Ein Zapfen mit Hohlkehle am Fuß heißt am Netz Zapfen und Kehle (RM-226, RM-022).
+
+    Mantel und Kehle gehen tangential ineinander über; am Netz lagen beide bei
+    R 3 und R 4 in einer gekrümmten Fläche, und der Nachbau fand keinen
+    Zapfen. Zapfen und Kehle tragen jetzt an beiden Kernen dieselben Maße aus
+    der Konstruktion: Ø 12 und Ring Ø 12 + 2·R aus einer Röhre Ø 2·R. Die
+    Kehle reicht am Netz nicht ganz bis an die Platte; ihre unterste Reihe
+    liest die Ebenenregel als Facette — sie darf fehlen, aber nichts
+    hinzunehmen.
+    """
+    exact_kernel()
+    from collections import Counter
+
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    solid = _pin_with_a_cove(cove)
+    exact = features_of(solid)
+    found = detect(as_mesh_data(solid))
+    assert Counter(feature.kind for feature in found.values()) == Counter(
+        feature.kind for feature in exact.values()
+    )
+    ((native_pin, twin_pin),) = [
+        (left, right)
+        for left in exact.values()
+        if left.kind == "pin"
+        for right in found.values()
+        if right.kind == "pin"
+    ]
+    assert set(twin_pin.face_indices) == set(native_pin.face_indices)
+    assert twin_pin.params["diameter"] == pytest.approx(12.0, abs=1e-6)
+    ((native_ring, twin_ring),) = [
+        (left, right)
+        for left in exact.values()
+        if left.kind == "torus"
+        for right in found.values()
+        if right.kind == "torus"
+    ]
+    assert set(twin_ring.face_indices) <= set(native_ring.face_indices)
+    for ring in (native_ring, twin_ring):
+        assert ring.params["diameter"] == pytest.approx(12.0 + 2.0 * cove, abs=1e-6)
+        assert ring.params["tube_diameter"] == pytest.approx(2.0 * cove, abs=1e-6)
+        assert ring.params["recess"] is True
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_corner_round_refuses_on_both_kernels_with_the_sentence_of_the_panel(
+    kind: str, profile: Profile
+) -> None:
+    """An einer Kugelecke gibt es keine Kante zurückzurechnen — an beiden Kernen gleich gesagt.
+
+    Die Ecke eines rundum verrundeten Quaders heißt an beiden Kernen
+    Verrundung, hat aber keine Achse und keine zwei Ebenen neben sich. Das
+    Merkmalfenster stellte *Entfernen* und *Radius ändern* trotzdem bereit;
+    danach sagte der exakte Kern „Wählen Sie genau eine vollständige
+    Rundungsfläche …“, und das Netz wäre an der fehlenden Achse gescheitert.
+    Jetzt stehen beide Zeilen grau mit ``edges.NOT_BETWEEN_TWO_PLANES``, und
+    die Operation sagt denselben Satz.
+    """
+    exact_kernel()
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry = _object(_rounded_all_over("box", 3.0), kind)
+    corner = next(
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "fillet" and "axis" not in feature.params
+    )
+    rows = {
+        action.title: action
+        for action in actions_for(corner, entry.features, mesh=as_mesh_data(entry.mesh))
+    }
+    for name in ("remove_feature", "resize_feature"):
+        title = REGISTRY.get(name).title
+        assert rows[title].op is None, name
+        assert str(rows[title].reason) == str(NOT_BETWEEN_TWO_PLANES), name
+    for operation, params in (
+        ("remove_feature", {"at_feature": corner.id}),
+        ("resize_feature", {"at_feature": corner.id, "diameter": 8.0}),
+    ):
+        result, _step = _evaluation(operation, params, [entry], profile)
+        assert not result.complete, operation
+        refusals = [
+            str(finding.message)
+            for finding in result.scene.report.findings
+            if finding.code == f"op.{operation}.GeometryError"
+        ]
+        assert refusals == [str(NOT_BETWEEN_TWO_PLANES)], operation
+
+
+@pytest.mark.parametrize("chamfer", [False, True])
+def test_a_slot_through_a_sloped_plate_is_as_deep_on_both_kernels(chamfer: bool) -> None:
+    """Ein Langloch durch eine schräge Platte ist an beiden Kernen gleich tief (RM-226).
+
+    Die Platte 40 x 40 x 6 ist unten um 4 Grad geneigt, das Langloch Ø 6
+    über 20 mm läuft quer zur Neigung hindurch; seine Wand reicht vom
+    tiefsten Punkt des tieferen Bogens (y = -10, Z 2 - 10 tan 4°) bis zur
+    Oberseite, mit Fase 0,75 an beiden Mündungen um 1,5 mm weniger. Der exakte
+    Kern maß nur den ersten Bogen — 3,51 statt 4,70 mm, mit Fase 2,01 statt
+    3,20 — und setzte die Mitte auf dessen halbe Höhe; das Netz misst die
+    ganze Wand. Über beide Bögen gemessen lag der tiefere Bogen dann noch
+    0,042 mm zu tief: Seine Parametergrenzen kamen aus der Näherung des
+    schrägen Randes, jetzt misst der exakte Kern an der Form
+    (``canonical._rims_on_grid``). Beide Kerne tragen dieselbe Tiefe und
+    dieselbe Mitte. Die Fase erklärte den Unterschied nicht: Beide Kerne
+    zählen sie nicht mit.
+    """
+    exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+    from tests.helpers import sloped_slot_plate
+
+    solid = sloped_slot_plate(chamfer=chamfer)
+    expected = 6.0 - (2.0 - 10.0 * math.tan(math.radians(4.0))) - (1.5 if chamfer else 0.0)
+    slots = {}
+    for kind, found in (("brep", features_of(solid)), ("mesh", detect(as_mesh_data(solid)))):
+        (slot,) = [feature for feature in found.values() if feature.kind == "slot"]
+        slots[kind] = slot
+        assert slot.params["depth"] == pytest.approx(expected, abs=1e-3), kind
+    # Die Mitte des Netzes liest die Endringe der vernetzten Wand; an der
+    # Fase liegen sie 0,0014 mm über der exakten — innerhalb der Durchbiegung
+    # der Vernetzung, vorher 0,59 mm daneben.
+    assert slots["brep"].params["centre"] == pytest.approx(
+        slots["mesh"].params["centre"], abs=MAX_FACET_SAG
+    )
+
+
+def _plate_with_a_slot_near_the_side(ledge: bool) -> Any:
+    """Platte 40 x 30 x 6 mit durchgehendem Langloch Ø 6 über 14 mm bei x = 10 (RM-226).
+
+    ``ledge`` setzt am Rand einen Steg 6 x 30 x 6 auf (x 14 bis 20): Eine Kopie
+    über die Seite trifft dann mit ihrer Achse Material und geht nicht mehr
+    durch — die Lage des Teppichclips, an dem der Fund auffiel.
+    """
+    from app.core.brep import edit
+
+    plate = edit.slot_bore(
+        edit.box(40.0, 30.0, 6.0),
+        position=(10.0, 0.0, 3.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+        length=14.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    if not ledge:
+        return plate
+    return edit.boolean("union", [plate, edit.moved(edit.box(6.0, 30.0, 6.0), (17.0, 0.0, 6.0))])
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("ledge", "shift", "said"),
+    [
+        (False, 9.0, ["bore.over_the_edge", "duplicate_feature.feature_lost"]),
+        (
+            False,
+            14.0,
+            ["boolean.without_effect", "bore.over_the_edge", "duplicate_feature.feature_lost"],
+        ),
+        (
+            True,
+            9.0,
+            [
+                "bore.over_the_edge",
+                "duplicate_feature.feature_lost",
+                "duplicate_feature.mouth_covered",
+            ],
+        ),
+    ],
+)
+def test_a_slot_copied_over_the_side_says_the_same_on_both_kernels(
+    kind: str, ledge: bool, shift: float, said: list[str], profile: Profile
+) -> None:
+    """Eine Langlochkopie über die Seite sagt an beiden Kernen dasselbe (RM-226).
+
+    Am Teppichclip sagte der exakte Kern zur 12 mm quer verdoppelten
+    Langlochkopie „nicht als eigenes Merkmal zu erkennen“, das Netz „geht
+    nicht mehr durch“ und danach „nicht mehr automatisch wiederzuerkennen“:
+    Am Netz prüfte ``_copies_found`` nur Bohrungen und Kegel nach, und den
+    Durchgang fragte es auch an einer Kopie, die es nicht gibt. Neben der Seite
+    (Verschiebung 12) stand die Kopie am Netz sogar als zweites Langloch im
+    Baum. Jetzt nennen beide Kerne die Kante, die verlorene Kopie und — wo das
+    Werkzeug ganz daneben liegt — den Schnitt ohne Wirkung, und im Baum steht
+    an beiden nur das Original. Die Kopie berührt es nie (x 7 bis 13 gegen
+    16 bis 22 und 21 bis 27). Unter dem Steg sagen beide zusätzlich, dass die
+    Mündung der Kopie unter Material liegt — am Netz schwieg dieser Satz,
+    weil „geht nicht mehr durch“ schon dastand.
+    """
+    exact_kernel()
+    load_operations()
+    entry = _object(_plate_with_a_slot_near_the_side(ledge), kind)
+    (slot,) = [feature for feature in entry.features.values() if feature.kind == "slot"]
+    centre = slot.params["centre"]
+    result, step = _evaluation(
+        "duplicate_feature",
+        {
+            "at_feature": slot.id,
+            "x": float(centre[0]) + shift,
+            "y": float(centre[1]),
+            "z": float(centre[2]),
+        },
+        [entry],
+        profile,
+    )
+    assert sorted(finding.code for finding in result.scene.report.findings) == said
+    (output,) = [result.scene.objects[identifier] for identifier in step.outputs]
+    assert [feature.kind for feature in output.features.values()].count("slot") == 1

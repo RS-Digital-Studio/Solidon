@@ -300,8 +300,6 @@ Leere; mehrdeutige Zuordnung hält an und fragt.
 - **Ein Verlust ohne Verweis** wird einmal je Körper und Schritt gemeldet
   (`perceive.orphaned`/`perceive.mended`, alle Kennungen in den Werten); **mit
   Verweis** bleibt er je Merkmal eine Warnung (§21.3).
-- Analysekarten laufen im Hintergrund, abbrechbar, im Budget §31; Farbskala
-  wahrnehmungsgleich, nie Regenbogen.
 
 ## Jede Schwelle der Erkennung wird an beiden Seiten gemessen
 
@@ -315,9 +313,7 @@ dort nur ihre Fehlgriffe. Im Zweifel bleibt ein Merkmal, was es war.
 
 Nur `refine.exhausted` lässt einen Kegel- oder Ringlauf aus, kein Sieb aus
 Fleckmerkmalen. Seine Residuen folgen `_cone_from_plan`/`_torus_from_plan`
-(`tests/test_refine.py`). Er rechnet schnell, weil sein Nein nur einen leeren
-Lauf auslässt und Abstand zu jedem Zweig und Abbruch hält, bestätigt vom
-Schatten — keine nachgeprüfte Vorauswahl (`kern.md`).
+(`tests/test_refine.py`).
 
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
@@ -328,7 +324,6 @@ Gewinde bleiben. **Nicht still**: `freeform_dropped` wird `perceive.freeform`
 (Regel 17), und der Satz nennt die Messung (überwiegend gekrümmt), keine
 Herkunft wie „Scan“. **Einen zweiten Zustand** („überwiegend rund“) **gibt es
 nicht** — er bräuchte eine zweite Schwelle in einer schmalen Lücke.
-Merkmalszahl und Fleckenrand trennen Konstruiertes nicht von Figuren.
 
 ### Die Haut wird nicht in Splitter zerlegt
 
@@ -356,9 +351,8 @@ Entscheidung Robert.
 
 Eine Rundform an der Mündung einer bleibenden Bohrung übersteht den Filter
 (`features.sits_at_the_mouth_of`). **Die Frage schärfen, nicht die Schwelle
-nachziehen.** Den Filter an Freiformen belegen — `plate_countersunk.stl`,
-`plate_countersunk_blind.stl` und `plate_chamfer_and_taper.stl` sind keine
-und erreichen ihn nie. Ein weggefiltertes Merkmal nimmt seine Nachbarschaft
+nachziehen.** Den Filter an Freiformen belegen, nicht an den Senkungsplatten
+des Korpus. Ein weggefiltertes Merkmal nimmt seine Nachbarschaft
 mit (`relations.cavity_chain_at`).
 
 ## Ohne Wendel ist ein Gewinde eine Fläche, deren Gänge ineinanderlaufen
@@ -380,6 +374,13 @@ gedruckten Gewinden ohne Wendelsuche und am Korpus je Stapel.
   (`features._through_the_piece`): nur für Dreiecke ganz im Inneren der
   Facette, nur wo die Nähte sich auf einen Radius einigen. Wer das lockert,
   verlangt null geänderte ungeteilte Körper.
+
+## Ein tangentialer Verbund wird an seinen Zylindern getrennt
+
+Was keine Runde davor teilt, trennt die sechste an Zylinderstücken mit allen
+Ecken bis zur Verschweißtoleranz auf dem Mantel (`_tangential_pieces`). Es
+zählt nur, was für sich steht: Züge gleichen Radius als Ganzes
+(`_drawn_chains`), kein Stück nur am unerklärten Rest (`_enclosed_rounds`).
 
 ## Ein Umriss mit wanderndem Radius ist eine gerundete Seite
 
@@ -474,7 +475,8 @@ als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
   (`features.replaces_an_edge`,
   gelesen von `geom/edges.py` in `sharp_corner`) stehen *Entfernen* und
   *Radius ändern* grau mit `edges.NOT_BETWEEN_TWO_PLANES`, und `sharp_corner`
-  sagt dasselbe. Der Name bleibt Verrundung.
+  sagt dasselbe. Der Name bleibt Verrundung. Eine Ecke ohne Achse steht
+  ebenso grau (`prepare_ops._refuse_a_corner`).
 - `actions.no_own_body` fragt, was `prepare_ops._tool_for` fragt
   (`NO_OWN_BODY`; `NO_BODY_FROM_FACES` über `has_own_body`), an allen
   Körperhandlungen. Kundentexte: zwei Sätze, der Rückweg im zweiten.

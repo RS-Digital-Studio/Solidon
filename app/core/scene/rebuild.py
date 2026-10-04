@@ -316,12 +316,84 @@ def _oriented_basis(source: SceneObject) -> np.ndarray | None:
     return None
 
 
+def _sinks_of(feature: Feature, features: tuple[Feature, ...], tolerance: float) -> list[Feature]:
+    """Die vertieften Kegel auf der Achse einer Bohrung — Kandidaten ihrer Senkung."""
+    params = feature.params
+    axis = np.array(params["axis"], dtype=float, copy=True)
+    axis /= math.sqrt(dot3(axis, axis))
+    centre = np.asarray(params["centre"], dtype=float)
+    cones = []
+    for cone in features:
+        if cone.kind != "cone" or not cone.params.get("recess", False):
+            continue
+        cone_axis = np.asarray(cone.params["axis"], dtype=float)
+        displacement = np.asarray(cone.params["centre"], dtype=float) - centre
+        if (
+            math.hypot(*np.cross(cone_axis, axis)) < EPS_GEOM
+            and math.hypot(*np.cross(displacement, axis)) <= tolerance
+        ):
+            cones.append(cone)
+    return cones
+
+
+def _drilled(
+    feature: Feature, features: tuple[Feature, ...], tolerance: float
+) -> tuple[OperationDraft, set[str]]:
+    """Ein erkanntes Loch als Abzug: Bohrung oder Langloch, mit eindeutiger Senkung.
+
+    Fertigungskompensation bleibt aus (CAD-Konzept §13.5). Zurück kommen der
+    Schritt und die Merkmale, die er erklärt.
+    """
+    from app.core.geom.prepare_ops import slot_angle_of
+
+    params = feature.params
+    axis = np.array(params["axis"], dtype=float, copy=True)
+    axis /= math.sqrt(dot3(axis, axis))
+    centre = np.asarray(params["centre"], dtype=float)
+    hole_depth = float(params["depth"])
+    mouth = centre + axis * hole_depth / 2.0
+    hole_params: dict[str, Any] = {
+        "diameter": params["diameter"],
+        "compensate": False,
+        "depth": 0.0 if params.get("through", False) else hole_depth,
+        **_position(mouth, axis),
+    }
+    explained = {feature.id}
+    if feature.kind == "slot":
+        hole_params.update(
+            slotted=True,
+            slot_length=params["length"],
+            slot_angle=slot_angle_of(feature, tuple(axis)),
+        )
+    else:
+        cones = _sinks_of(feature, features, tolerance)
+        if len(cones) == 1:
+            cone = cones[0]
+            cone_axis = np.asarray(cone.params["axis"], dtype=float)
+            cone_mouth = np.asarray(cone.params["centre"], dtype=float)
+            hole_params.update(
+                widening_diameter=cone.params["diameter"],
+                widening_depth=0.0,
+                transition_angle=cone.params["angle"],
+                **_position(
+                    cone_mouth,
+                    cone_axis,
+                ),
+            )
+            if not params.get("through", False):
+                # Die Bohrtiefe beginnt an der Mündung der Senkung. Der
+                # erkannte Zylindermantel beginnt erst unter ihrem Kegel.
+                floor = centre - cone_axis * hole_depth / 2.0
+                hole_params["depth"] = dot3(cone_mouth - floor, cone_axis)
+            explained.add(cone.id)
+    return OperationDraft("drill_brep_hole", ("obj_1",), hole_params), explained
+
+
 def _boxed(
     source: SceneObject,
     tolerance: float,
     basis: np.ndarray | None = None,
 ) -> tuple[list[OperationDraft], set[str]]:
-    from app.core.geom.prepare_ops import slot_angle_of
     from app.core.geom.primitive_ops import placement_values_of
 
     bounds = source.mesh.bounds
@@ -356,59 +428,11 @@ def _boxed(
     explained: set[str] = set()
     features = tuple(source.features.values())
     for feature in features:
-        params = feature.params
         if feature.kind not in {"hole", "slot"}:
             continue
-        axis = np.array(params["axis"], dtype=float, copy=True)
-        axis /= math.sqrt(dot3(axis, axis))
-        centre = np.asarray(params["centre"], dtype=float)
-        hole_depth = float(params["depth"])
-        mouth = centre + axis * hole_depth / 2.0
-        hole_params: dict[str, Any] = {
-            "diameter": params["diameter"],
-            "compensate": False,
-            "depth": 0.0 if params.get("through", False) else hole_depth,
-            **_position(mouth, axis),
-        }
-        if feature.kind == "slot":
-            hole_params.update(
-                slotted=True,
-                slot_length=params["length"],
-                slot_angle=slot_angle_of(feature, tuple(axis)),
-            )
-        else:
-            cones = []
-            for cone in features:
-                if cone.kind != "cone" or not cone.params.get("recess", False):
-                    continue
-                cone_axis = np.asarray(cone.params["axis"], dtype=float)
-                displacement = np.asarray(cone.params["centre"], dtype=float) - centre
-                if (
-                    math.hypot(*np.cross(cone_axis, axis)) < EPS_GEOM
-                    and math.hypot(*np.cross(displacement, axis)) <= tolerance
-                ):
-                    cones.append(cone)
-            if len(cones) == 1:
-                cone = cones[0]
-                cone_axis = np.asarray(cone.params["axis"], dtype=float)
-                cone_mouth = np.asarray(cone.params["centre"], dtype=float)
-                hole_params.update(
-                    widening_diameter=cone.params["diameter"],
-                    widening_depth=0.0,
-                    transition_angle=cone.params["angle"],
-                    **_position(
-                        cone_mouth,
-                        cone_axis,
-                    ),
-                )
-                if not params.get("through", False):
-                    # Die Bohrtiefe beginnt an der Mündung der Senkung. Der
-                    # erkannte Zylindermantel beginnt erst unter ihrem Kegel.
-                    floor = centre - cone_axis * hole_depth / 2.0
-                    hole_params["depth"] = dot3(cone_mouth - floor, cone_axis)
-                explained.add(cone.id)
-        drafts.append(OperationDraft("drill_brep_hole", ("obj_1",), hole_params))
-        explained.add(feature.id)
+        draft, claimed = _drilled(feature, features, tolerance)
+        drafts.append(draft)
+        explained |= claimed
     for feature in features:
         if feature.kind != "sphere" or not feature.params.get("recess", False):
             continue
@@ -431,14 +455,43 @@ def _boxed(
     return drafts, explained
 
 
+def _without_holes(
+    solid: Any, holes: list[Feature], sinks: dict[str, Feature], cancelled: CancelToken
+) -> Any:
+    """Der Körper ohne die genannten Löcher und ihre Senkungen — oder ``None``.
+
+    Die Nachbarflächen laufen über die Öffnung weiter (``edit.defeatured``),
+    wie beim Schließen eines Lochs.
+    """
+    from app.core.brep import edit
+
+    triangles = [index for feature in holes for index in feature.face_indices]
+    triangles.extend(
+        index
+        for feature in holes
+        if feature.id in sinks
+        for index in sinks[feature.id].face_indices
+    )
+    native = solid.faces_of_triangles(triangles) if triangles else ()
+    return edit.defeatured(solid, native, cancelled=cancelled) if native else None
+
+
 def _layered(
-    source: SceneObject, cancelled: CancelToken
+    source: SceneObject, tolerance: float, cancelled: CancelToken
 ) -> list[tuple[list[OperationDraft], set[str], SceneObject]]:
     """Echte Querschnitte zwischen ebenen Stufen werden bearbeitbare Skizzen.
 
     Die Seiten müssen entlang einer gemeinsamen Richtung verlaufen. Der
     Schnitt kommt aus P4.0; die abschließende Formprüfung bleibt unabhängig.
     Keine Schicht überbrückt eine ungemessene Stufe oder füllt einen Innenrand.
+
+    Zapfen, Rundungen und Löcher längs der Richtung stehen im Querschnitt als
+    Bögen und Innenränder. Was er nicht trägt, wird danach gebohrt, ohne
+    Kompensation (CAD-Konzept §13.5): Bohrungen und Langlöcher quer zur
+    Richtung und jede Bohrung mit Senkung.
+    Geschnitten wird dafür der Körper ohne diese Löcher, sonst zöge ein
+    Querschnitt durch eine Querbohrung sie über die ganze Schicht. Eine
+    Rundungsecke und ein Kegel ohne seine Bohrung stehen in keinem Querschnitt.
     """
     from app.core.brep.kernel import Solid
     from app.core.brep.section import plane_section
@@ -450,7 +503,22 @@ def _layered(
     if not isinstance(source.mesh, Solid):
         return []
     features = tuple(source.features.values())
-    if any(feature.kind not in {"face", "pin", "hole", "slot"} for feature in features):
+    if any(
+        feature.kind not in {"face", "pin", "hole", "slot", "fillet", "cone"}
+        for feature in features
+    ):
+        return []
+    sinks = {
+        feature.id: cones[0]
+        for feature in features
+        if feature.kind == "hole" and len(cones := _sinks_of(feature, features, tolerance)) == 1
+    }
+    sunk = {cone.id for cone in sinks.values()}
+    if any(
+        (feature.kind == "fillet" and "axis" not in feature.params)
+        or (feature.kind == "cone" and feature.id not in sunk)
+        for feature in features
+    ):
         return []
     parallel = exact_cos_degrees(EPS_ANGLE)
     perpendicular = exact_sin(math.radians(EPS_ANGLE))
@@ -470,6 +538,7 @@ def _layered(
     for axis in axes:
         cancelled.raise_if_cancelled()
         levels = []
+        drilled: list[Feature] = []
         for feature in features:
             params = feature.params
             if feature.kind == "face":
@@ -478,9 +547,24 @@ def _layered(
                     levels.append(dot3(np.asarray(params["centre"]) - origin, axis))
                 elif facing > perpendicular:
                     break
+            elif feature.kind == "cone":
+                # Eine Senkung reist mit ihrer Bohrung.
+                continue
+            elif feature.kind in {"hole", "slot"}:
+                facing = abs(dot3(axis, params["axis"]))
+                if facing >= parallel and feature.id not in sinks:
+                    continue
+                if perpendicular < facing < parallel:
+                    break
+                drilled.append(feature)
             elif abs(dot3(axis, params["axis"])) < parallel:
                 break
         else:
+            body = source.mesh
+            if drilled:
+                body = _without_holes(source.mesh, drilled, sinks, cancelled)
+                if body is None:
+                    continue
             projection = along(vertices - origin, axis)
             levels.extend((float(projection.min()), float(projection.max())))
             distinct: list[float] = []
@@ -503,7 +587,7 @@ def _layered(
                 if frame is None:
                     break
                 curves = plane_section(
-                    source.mesh,
+                    body,
                     tuple(foot + axis * ((upper - lower) / 2.0)),
                     frame.x_axis,
                     frame.y_axis,
@@ -533,6 +617,7 @@ def _layered(
                     )
             else:
                 if drafts:
+                    drafts.extend(_drilled(feature, features, tolerance)[0] for feature in drilled)
                     plans.append(
                         (
                             drafts,
@@ -971,17 +1056,21 @@ def propose(
             return
         body = result.scene.objects["obj_1"]
         check = check_shape(mesh, body, budget, cancelled=token)
-        relevant = {feature.id for feature in form.features.values() if feature.kind != "face"}
-        unexplained = tuple(
-            sorted(
-                (relevant - explained)
-                | _unexplained_planes(form, body, token, boundary_mm=budget.local_mm)
+        # Erklärt sein muss, was die Formprüfung besteht. Ein Kandidat, der an
+        # ihr scheitert, behält ihren Grund; seine Merkmale zu erkennen kostete
+        # am Winkel mit Querbohrungen sechs Sekunden für nichts.
+        if check.accepted:
+            relevant = {feature.id for feature in form.features.values() if feature.kind != "face"}
+            unexplained = tuple(
+                sorted(
+                    (relevant - explained)
+                    | _unexplained_planes(form, body, token, boundary_mm=budget.local_mm)
+                )
             )
-        )
-        if unexplained:
-            check = RebuildCheck(
-                False, "unexplained", check.volume_relative, check.surface, unexplained
-            )
+            if unexplained:
+                check = RebuildCheck(
+                    False, "unexplained", check.volume_relative, check.surface, unexplained
+                )
         candidates.append(RebuildCandidate(tuple(drafts), body, check))
 
     for index, (drafts, explained, form) in enumerate(plans):
@@ -997,7 +1086,7 @@ def propose(
         plans.extend(
             plan for form in forms for plan in _rounded(form, document, profile, budget, token)
         )
-        plans.extend(_layered(recovered_source, token))
+        plans.extend(_layered(recovered_source, budget.local_mm, token))
         for index, (drafts, explained, form) in enumerate(plans):
             if progress is not None:
                 progress(0.6 + 0.4 * index / len(plans), str(REGISTRY.get(drafts[0].op).title))

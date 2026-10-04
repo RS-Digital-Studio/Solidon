@@ -1091,18 +1091,22 @@ def fillet_blocked(
 
     **Nur mit Netz**, wie die Sperre am geteilten Hohlraum: Ohne Netz ist
     die Frage nach den Nachbarn nicht zu beantworten, und eine Vermutung
-    stellt keine Zeile grau.
+    stellt keine Zeile grau. Eine **Ecke** braucht keines: Wo verrundete
+    Kanten zusammenlaufen, heißt die Kugel an beiden Kernen Verrundung, hat
+    aber keine Achse und damit keine Kante, auf die sie sich zurückführen
+    ließe (RM-226) — die Operation sagt denselben Satz.
     """
     if feature.kind != "fillet":
         return None
     if feature.params.get("radial", False):
         return WALL_BLENDS_INTO_ITS_NEIGHBOURS if feature.params.get("tangent") else None
-    if mesh is None or features is None or not feature.face_indices:
-        return None
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+
     axis = feature.params.get("axis")
     if not isinstance(axis, list | tuple) or len(axis) != 3:
+        return NOT_BETWEEN_TWO_PLANES
+    if mesh is None or features is None or not feature.face_indices:
         return None
-    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
     from app.core.perceive.features import (
         nearly_flat_mask,
         planar_mask,

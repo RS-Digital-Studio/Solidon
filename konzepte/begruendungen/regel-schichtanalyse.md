@@ -949,6 +949,148 @@ Vorstand (`p42_korpus_erkennen.py`) und verlangt null geänderte Körper.
 [Hinweis zur Verdichtung: `p42_korpus_erkennen.py` ist eine Sonde außerhalb
 des Repositories; die Regel sagt deshalb nur „gegen den Vorstand“.]
 
+## Ein tangentialer Verbund wird an seinen Zylindern getrennt
+
+Anlass RM-226: Ein rundum verrundeter Körper stand am Netz als eine einzige
+gekrümmte Fläche da — am gerundeten T 2 750 von 2 820 Dreiecken, am Quader
+R 3 1 360 von 1 372 —, am exakten Kern als Kantenrundungen, Kugelecken,
+Ringe und Flächen. Kein Knick und kein Krümmungssprung trennt Rundungen
+gleichen Radius, und auf den ganzen Verbund passt keine Form.
+
+- **Warum an den Ecken und nicht am Normalenmoment:** Das Moment von
+  `fit_cylinder` neigt die Achse an verdrillt vernetzten Rundungen um 0,006
+  bis 0,024 Grad; die Ecken liegen dann bis 0,003 mm neben dem Zylinder,
+  obwohl sie auf 0,0000026 mm genau auf ihm sitzen. Erst die über die Ecken
+  nachgeschärfte Achse (`_sharpened_axis`, Gauß-Newton mit Cramerscher Regel)
+  hält die Verschweißtoleranz. Polsplitter einer Kugelecke liegen 0,0004 mm
+  daneben und verziehen eine lockere Einpassung; die wiederholte enge Stufe
+  gibt die Rundung ganz.
+- **Warum nicht aus einer Naht:** Ein Kreis durch die Ecken zweier Dreiecke
+  ist an langen, schmalen Dreiecken schlecht bestimmt — dieselbe Rundung des T
+  lieferte je Naht R 3 bis R 34. Der Keim nimmt das Band quer zur Achse.
+  Tangential anschließende ebene Dreiecke ziehen dessen linearen Kreis weg
+  (am nicht vereinigten T so weit, dass keines der 21 Dreiecke einer Rundung
+  bis `ROUND_WALL_TOLERANCE` darauf lag); `_seed_circle` lässt deshalb je
+  Runde die fernere Hälfte des Fehlerbereichs fallen. Ein Dreieck je Runde
+  brauchte am Quader R 8 bei 0,002 mm Durchbiegung bis zu 431 Runden für
+  einen Keim, halbierend höchstens zwölf.
+- **Warum die Flutung je Ring entdoppelt:** Ohne `np.unique` je Ring stand
+  ein Dreieck, das zwei Frontdreiecke erreichen, doppelt in der nächsten
+  Front, und seine Nachfolger vervielfachten sich — am Quader R 8 bei
+  0,0005 mm 124 s statt 3,8 s.
+- **Warum `TANGENTIAL_MIN_LENGTH` 0,4:** Gemessen an Quadern R 3 und R 8,
+  gerundeten T R 1 und R 3 und Zapfen mit Kehle R 2, 3 und 4, je als exakte
+  Vernetzung und als STL: echte Stücke mindestens halb so lang wie ihr Radius,
+  Spalten einer Kugel oder eines Rings höchstens 0,23-mal. Die Grenze nimmt
+  nicht jede Spalte: An einem großen Ring mit dünner Röhre und feiner
+  Vernetzung sind sie länger (unten, Züge).
+- **Warum ein kleines Band nicht verbraucht wird:** Die erste eingebaute
+  Fassung verbrauchte jedes Band unter `MIN_PATCH_FACES`; das T verlor seine
+  beiden Kehlen (je 26 Dreiecke), deren Dreiecke vorher in kleinen Bändern
+  fremder Achsen lagen. Der Vorbau ohne diese Zeile fand sie.
+- **Warum ein kurzes Band und ein Streifen es doch werden:** Ein Band, das
+  schon entlang der Achse zu kurz ist, enthält kein Stück, das lang genug
+  wäre; ein lockeres Stück, das ein Streifen ist, liegt auf einer Ausrundung
+  mit wanderndem Radius. Ohne ihren Verbrauch keimte am Würfel mit gerundeten
+  Kanten (`dice_w6_16mm_v00.stl`, 250 488 Dreiecke) jede der über 4 000 Nähte
+  einzeln für keinen Zylinder. Der Preis, gemessen vor den Zügen: am
+  Pegboard-Crimper 39 statt 41 Rundungen, am Elegoo-Erstdruck 348 statt 353.
+- **Warum nur, was einen Namen bekäme:** Zu kleine Rundungen und Streifen
+  nennt `_fillets_worth_naming` ohnehin nicht. Am Minigolfstück
+  (`obj_27_1.stl`) fand die Trennung sonst 1 457 Rundungen R 0,1 bis 0,2, die
+  danach jede einzeln eingepasst und verworfen wurden.
+- **Verworfen: Ein belegtes Stück ohne Kegellauf.** Es spart nichts — an
+  `chufang.3mf` (256 gleiche Rundungen) 7,12 gegen 7,11 s, am Elegoo-Erstdruck
+  4,62 gegen 4,66 s, dieselben Merkmale; die Regel über den Kegellauf bleibt
+  deshalb unangetastet.
+- **Warum nicht am Prisma:** An den Buchstabenwänden eines Schriftzugs keimte
+  jede Naht ein Band über die ganze Wand — am Herz mit Schrift
+  (20 468 Dreiecke) 320 Flecken, 3,3 s, kein Zylinder. Die Bögen eines
+  Prismas trennt die vierte Runde.
+- **Verworfen: eine Seitenprüfung** (endet das Stück an einer anderen Fläche,
+  deren nächste Reihe mehr als `ROUND_WALL_TOLERANCE` abweicht?). Sie sollte
+  Schwünge von Rundungen trennen, hing aber an der Dreiecksbreite neben der
+  Rundung (die Abweichung wächst mit ihrem Quadrat) und nahm echte Rundungen
+  R 10 am Schreibtisch-Organizer und R 3,8 und R 5 an `insert-top-triple`
+  mit, ohne Zeit zu sparen.
+- **Warum die Ecke Verrundung heißt:** So nennt sie der exakte Kern seit P1
+  (`brep.features._describe`); am Netz stand dieselbe Ecke als Kugel Ø 6. Die
+  Zahl `CORNER_NEIGHBOURS` steht seither einmal, in `perceive.features`.
+- **Warum die Ecke den Radius ihrer Kanten braucht:** Gezählt hatten beide
+  Kerne nur die Nachbarn. Am Minigolfteil `obj_12_Gövde75.stl` grenzte eine
+  Kuppel Ø 178,6 (72 Dreiecke, Mitte 1 049 mm außerhalb des Körpers) an
+  Rundungen R 3 und R 7 und hieß „Verrundung R 89,3“. Eine Kugelecke entsteht
+  nur, wo Kanten desselben Radius zusammenlaufen (OpenCASCADE baut bei
+  verschiedenen Radien keine Kugel); `rounds_the_corner` vergleicht bis
+  `ROUND_WALL_TOLERANCE`, an beiden Kernen.
+- **Warum Scheiben eines Zugs eine Fläche sind:** Am Elegoo-Fettwerkzeug und
+  -Erstdruck las die Trennung die Rundung R 0,5 entlang des geschwungenen
+  Umrisses als 342 Verrundungen von je 0,22 bis 0,29 mm Länge, die Achsen
+  von Scheibe zu Scheibe um 1,25 bis 2,56 Grad gedreht. Jede Scheibe liegt
+  bis zur Verschweißtoleranz (0,000084 mm) auf einem Zylinder und ist
+  0,44- bis 0,58-mal so lang wie ihr Radius — `TANGENTIAL_MIN_LENGTH` nimmt
+  sie nicht. Gemessene Drehungen zwischen berührenden Stücken gleichen
+  Radius: Gridfinity-Schale 3,0 Grad (zwölf Scheiben einer Ecke R 1,5),
+  Minigolfteile 1,0 bis 7,9 Grad; zwei Rundungen an einer Ecke (Regalteile,
+  Schaber) 89,9 und 90 Grad. Als ein Stück gefragt wurden aus den Zügen am
+  Elegoo-Erstdruck neun Ringe und acht Verrundungen statt 348
+  (`_drawn_chains`); ein Zug ohne Form bleibt gekrümmte Fläche. Der Preis: Ein
+  exakter Körper mit einem echten Vieleckzug (Rundung je Kante eines
+  60-Ecks) trüge 60 Zylinderflächen, das Netz liest eine gekrümmte Fläche —
+  am Netz sind gezogene Spline-Kanten und Vieleckzüge nicht zu unterscheiden,
+  und die gezogenen sind in STEP-Dateien die häufigen.
+- **Warum eine Rundform an etwas enden muss:** Am Baum mit Tablett
+  (`tree_with_tray_stl.stl`, 197 120 Dreiecke) fand die Trennung in einem
+  glatten Krümmungsstück aus 172 356 Dreiecken sechs Zylinderstücke von sechs
+  bis sieben Dreiecken (0,4 bis 0,76 mm², R 0,92 bis R 4,54, jedes Ende
+  ringsum ohne Knick). Sie verdünnten das Freiformurteil von 0,759 auf 0,678
+  unter die Schwelle 0,7, und der Baum zeigte 15 Rundungen, drei Kegel und
+  zwei gekrümmte Flächen. Ein Stück, das nur an den Rest grenzt, aus dem es
+  gelesen wurde, fällt jetzt (`_enclosed_rounds`); fünf der sechs fallen,
+  das sechste berührt den Rand seines Ziels, und das Urteil hält mit 0,745.
+  Im Korpus fallen sonst vier Einzelstücke mit krummen Radien (R 2,99 an
+  `obj_10`, R 3,67 an `obj_8`, R 3,95 an `xobj_9`, R 8,86 am Siebhalter) und
+  fünf Stücke, die nur an Zügen ohne Form hingen (vier am Pegboard-Crimper,
+  eines am Rucksackhalter).
+  **Verworfen**, weil je ein echter Fall daran hing: die Nachbarschaft allein
+  (am Würfel grenzen die zwölf Rundungen R 1 nur an Freiform), ein Hauturteil
+  je Fleck (1x1-Schale: 120 Splitter in 129 Stücken), verstreute Ecken und
+  fehlende Mantellinienkanten (Rundungen R 10, R 25 und R 27,5 an
+  `obj_30_Gövde79.stl`, R 0,5 am Elegoo-Erstdruck), der erklärte Anteil des
+  Ziels (am Würfel 1,5 Prozent der Dreiecke), das Verhältnis von lockerer zu
+  enger Stufe und von Band zu Stück (beide 1,3- bis 56-fach am Baum wie an
+  echten Rundungen).
+- **Warum nur die Ringkandidaten des Ziels fallen:** Die erste Fassung warf
+  mit jedem Ziel die Kandidaten aller Reststücke des Flecks weg; am Baum ging
+  so einer der 41 unveröffentlichten Ringe verloren, die das Freiformurteil
+  tragen. Ein Ziel ersetzt nur seine eigenen Kandidaten, und die des ganzen
+  Flecks nur, wenn es der ganze Fleck ist.
+- **Warum die Suche nach `TANGENTIAL_FIRST_SEEDS` und
+  `TANGENTIAL_FUTILE_SEEDS` vergeblichen Keimen endet:** Die Runde keimte an
+  jeder geknickten Naht eines Ziels, auch an organischen. Über den Korpus
+  kostete sie 97 s Wandzeit bei 691 s Prozesszeit der ganzen Erkennung; am
+  Baum mit Tablett 49 150 Keime und zwölf Sekunden in einem Krümmungsstück
+  aus 172 356 Dreiecken für sechs Splitter, die die Freiformprobe ohnehin
+  verwirft (Erkennung 3,5 s vor der Runde, 18,2 s mit ihr), am Minigolfteil
+  `xobj_1` 3 855 Keime ohne Treffer.
+  Die Keime laufen nach Nahtlänge; ein Verbund zeigt seinen ersten Zylinder
+  an den längsten Nähten. Gemessen je Ziel (225 Körper, 3 714 Ziele, 293 mit
+  Treffern): der erste Treffer meist am ersten Keim, spätestens am 756.
+  (Besteckkasten, ohne Wirkung auf die Merkmale), sonst bis zum 177.; die
+  längste Lücke danach 2 427 Keime (Rucksackhalter, eine echte Rundung
+  R 1,57, die eine Grenze von 1 024 kostete). Mit 1 024 und 4 096 verliert
+  nur der Baum seine Splitter, kein Körper ein Merkmal; die Runde spart rund
+  31 s, der Baum braucht 5,6 statt 18,2 s, das Minigolfteil 13,5 statt 17,8 s
+  (Lauf im Wechsel unter Fremdlast). Greift die erste Grenze, bleibt das Ziel,
+  was es ohne die Runde war. **Verworfen:** eine einzige Grenze für beide
+  Abschnitte (4 096 spart die Hälfte, 1 024 kostet die Rundung des
+  Rucksackhalters), ein Anteil erklärter Dreiecke (oben, Würfel 1,5 Prozent)
+  und eine Zielgröße (der Verbund am Elegoo-Erstdruck hat 47 199 Dreiecke).
+- **Was offen bleibt:** Fein vernetzte Rundungen (Durchbiegung 0,01 mm und
+  feiner) zählt die Haut vor der sechsten Runde zur Freiform, wie vorher;
+  ein breiter Mantelstreifen der Ebenenregel bleibt ohne Merkmal. Gemessen an
+  Quader R 8 und T R 3 bei 0,05 bis 0,0005 mm.
+
 ## Ein Umriss mit wanderndem Radius ist eine gerundete Seite
 
 *Ursprüngliche Überschrift: „Ein Umriss mit wanderndem Radius ist eine

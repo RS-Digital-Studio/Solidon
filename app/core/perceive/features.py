@@ -890,6 +890,55 @@ SEAM_RATIO: Final = 2.0
 #: gleich; Rauschen nicht.
 SEAM_SPREAD: Final = 0.1
 
+#: Wie lang ein Zylinderstück der tangentialen Trennung (:func:`_tangential_pieces`)
+#: entlang seiner Achse mindestens ist, als Anteil seines Radius (RM-226).
+#:
+#: Eine Spalte eines Rings oder einer Kugel zwischen zwei Meridianen ist
+#: örtlich ein Zylinder: Ihre Ecken liegen bis auf eine Abweichung zweiter
+#: Ordnung auf einem, und ihre Facetten sind symmetrische Trapeze mit Normalen
+#: quer zur Achse. Sie ist aber nur eine Facette breit. Gemessen an Quadern
+#: R 3 und R 8, gerundeten T R 1 und R 3 und Zapfen mit Kehle R 2, 3 und 4,
+#: je als exakte Vernetzung und als STL: Echte Stücke sind mindestens halb so
+#: lang wie ihr Radius (die 4 mm kurzen senkrechten Rundungen R 8), Spalten
+#: höchstens 0,23-mal. Eine Spalte über dieser Grenze gibt es an einem großen
+#: Ring mit dünner Röhre und feiner Vernetzung: Am Elegoo-Fettwerkzeug liegen
+#: die Scheiben einer Rundung R 0,5 entlang des Umrisses bis zur
+#: Verschweißtoleranz auf je einem Zylinder und sind 0,44- bis 0,58-mal so
+#: lang wie ihr Radius. Solche Scheiben fasst :func:`_drawn_chains` zusammen;
+#: diese Grenze nimmt nur, was schon für sich zu kurz ist.
+TANGENTIAL_MIN_LENGTH: Final = 0.4
+
+#: Wie viele vergebliche Keime :func:`_tangential_cylinders` an einem Ziel
+#: bis zum ersten Zylinderstück bearbeitet (``TANGENTIAL_FIRST_SEEDS``) und
+#: danach in Folge (``TANGENTIAL_FUTILE_SEEDS``). Die Keime laufen nach
+#: Nahtlänge, die längste zuerst, und ein Verbund aus Rundungen zeigt seinen
+#: ersten Zylinder an den längsten Nähten, den Mantellinien: Über den Korpus
+#: ``F:\3D Dateien`` (225 Körper, 293 Ziele mit Treffern) kam der erste
+#: Treffer meist am ersten Keim, spätestens am 756. (Besteckkasten, ein Stück
+#: ohne Wirkung auf die Merkmale), sonst bis zum 177.; zwischen zwei Treffern
+#: lagen höchstens 2 427 vergebliche (Rucksackhalter, eine echte Rundung
+#: R 1,57). Eine organische Haut keimt dagegen an fast jeder Naht — am Baum
+#: mit Tablett 49 150 Keime, zwölf Sekunden, für sechs Splitter, die die
+#: Freiformprobe ohnehin verwirft. Greift die erste Grenze, bleibt das Ziel,
+#: was es ohne die sechste Runde war. Arbeitsgrenzen, keine Toleranzen; sie
+#: gelten, solange die Keime nach Länge laufen.
+TANGENTIAL_FIRST_SEEDS: Final = 1024
+TANGENTIAL_FUTILE_SEEDS: Final = 4096
+
+#: Wie viele Nachbarflächen einer kugeligen Fläche selbst Kantenverrundungen
+#: mit ihrem Radius sein müssen (:func:`rounds_the_corner`), damit sie als Ecke
+#: gilt — die Stelle, an der verrundete Kanten zusammenlaufen. Zwei, weil eine
+#: Ecke aus mindestens zwei Kanten entsteht. Beide Kerne fragen diese Zahl
+#: (``brep.features._describe``, :func:`_corners_named_as_fillets`).
+#:
+#: **Nicht über die Größe.** Der erste Versuch maß den Anteil an der Vollkugel
+#: (Eckverrundung 0,125, volle Kugel 1,000) und trennte damit falsch: Eine
+#: Pfanne ist nie mehr als eine Halbkugel, eine flache Kalotte — eine
+#: Magnettasche etwa — kann selbst 0,1 abdecken. Gemessen an einer aus einem
+#: Quader geschnittenen Kugel: 1 Nachbar, 0 Verrundungen; an der Ecke eines
+#: rundum verrundeten Quaders: 3 Nachbarn, 3 Verrundungen.
+CORNER_NEIGHBOURS: Final = 2
+
 #: Ab welchem Anteil Kugeln und Ringe an **allen** Merkmalen das Modell eine
 #: Freiform ist — ein Scan, eine Figur, ein Segel.
 #:
@@ -1458,7 +1507,11 @@ def detect(
         # Tages zwei Antworten.
         worth_naming = _fillets_worth_naming(mesh, fitted.fillets)
         # Die Flächen zuerst ohne Träger und Innenlage — was das Muster gleich
-        # verschluckt, braucht beides nie (:func:`_face_candidates`).
+        # verschluckt, braucht beides nie (:func:`_face_candidates`). Ebene
+        # Reststücke der tangentialen Trennung zählen wie jede ebene Facette
+        # (``Fitted.flat``, RM-226).
+        if fitted.flat:
+            planar = set(planar).union(*fitted.flat)
         face_entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)
         face_entries = _largest_first(mesh.raw, face_entries)
         rest.reach(0.2)
@@ -1535,6 +1588,9 @@ def detect(
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_bores_marked(mesh, found, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        found = _corners_named_as_fillets(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         found = narrowings_marked(mesh, found, check_cancelled=check_cancelled)
@@ -2471,6 +2527,11 @@ class Fitted(NamedTuple):
     :data:`FREEFORM_SKIN_SHARE` der Oberfläche, über alle Flecken zusammen.
     Dann ist das Modell eine Freiform (:func:`is_a_freeform`), und seine
     Splitter wurden nicht eingepasst."""
+    flat: tuple[tuple[int, ...], ...] = ()
+    """Ebene Stücke, die erst die tangentiale Trennung von ihren Rundungen
+    gelöst hat (RM-226): Ebenen zwischen tangential anschließenden Rundungen,
+    die die Ebenenregel als Mantelstreifen las. :func:`detect` nimmt sie zu
+    den Ebenen."""
 
 
 def _cylinders(mesh: MeshData) -> Cylinders:
@@ -2549,6 +2610,7 @@ def _fitted(
         spheres: Spheres = []
         tori = _TorusCandidates(len(body.faces))
         stadiums: Stadiums = []
+        flat: list[tuple[int, ...]] = []
         areas = np.asarray(body.area_faces, dtype=float)
         total_area = float(areas.sum())
         freeform_skin = False
@@ -2776,6 +2838,75 @@ def _fitted(
                 for index in unresolved
             ),
         )
+
+        def divided(target: list[int], inside: list[list[int]]) -> list[bool]:
+            """Die sechste Runde an einem Ziel (RM-226): trennen, fragen, prüfen.
+
+            Jedes Stück der tangentialen Trennung wird gefragt wie jedes andere.
+            Danach zählt nur, was als eigene Rundform steht: Scheiben eines
+            gezogenen Zugs werden als Ganzes gefragt (:func:`_drawn_chains`), und
+            ein Stück, das nur an den unerklärten Rest seines Ziels grenzt, ist
+            ein Stück dieses Rests (:func:`_enclosed_rounds`). Was nicht steht,
+            trägt auch nichts ein — seine Einträge aus ``classify`` gehen wieder,
+            ebenso die Kugel- und Ringkandidaten der ebenen Reststücke. Steht
+            nichts, bleibt das Ziel, wie es war. Steht etwas, ersetzt es die
+            Ringkandidaten des Ziels und, war das Ziel der ganze Fleck, die
+            seiner Nachtrennungsstücke ``inside``.
+            """
+            pieces = _tangential_pieces(body, mesh, target, check_cancelled)
+            if not pieces:
+                return []
+            marks = (len(found), len(cones), len(spheres))
+            asked = list(pieces)
+            answered = [classify(piece) for piece in pieces]
+            here = {id(piece): fit for fit, piece in found[marks[0] :]}
+            chains = _drawn_chains(
+                _touching_pieces(body, pieces), [here.get(id(piece)) for piece in pieces]
+            )
+            if chains:
+                linked = {number for chain in chains for number in chain}
+                pieces = [piece for number, piece in enumerate(pieces) if number not in linked]
+                answered = [known for number, known in enumerate(answered) if number not in linked]
+                for chain in chains:
+                    (joined,) = in_body_order(
+                        body, [[index for number in chain for index in asked[number]]]
+                    )
+                    asked.append(joined)
+                    pieces.append(joined)
+                    answered.append(classify(joined))
+            plain = [
+                not known and _in_one_plane(body, piece)
+                for piece, known in zip(pieces, answered, strict=True)
+            ]
+            enclosed = _enclosed_rounds(_touching_pieces(body, pieces), answered, plain)
+            settled = [known and number not in enclosed for number, known in enumerate(answered)]
+            standing = any(settled)
+            # Was steht, bleibt eingetragen; neben ihm auch die Kandidaten des
+            # unerklärten Rests, auf den keine Form passte — sie zählen weiter
+            # für das Freiformurteil, an Stelle der Kandidaten des Ziels.
+            kept = {
+                id(piece)
+                for piece, known, answer, flat_piece in zip(
+                    pieces, settled, answered, plain, strict=True
+                )
+                if known or (standing and not answer and not flat_piece)
+            }
+            found[marks[0] :] = [entry for entry in found[marks[0] :] if id(entry[1]) in kept]
+            cones[marks[1] :] = [entry for entry in cones[marks[1] :] if id(entry[1]) in kept]
+            spheres[marks[2] :] = [entry for entry in spheres[marks[2] :] if id(entry[1]) in kept]
+            for piece in asked:
+                if id(piece) not in kept:
+                    tori.drop_patch(piece)
+            if standing:
+                for done in [target, *inside]:
+                    tori.drop_patch(done)
+                flat.extend(
+                    tuple(piece)
+                    for piece, flat_piece in zip(pieces, plain, strict=True)
+                    if flat_piece
+                )
+            return settled
+
         weighed = 0.0
         by_piece = share.part(0.6, 0.92)
         ordered_pieces = {
@@ -2897,7 +3028,28 @@ def _fitted(
                     if not split_apart and not any(arcs)
                     else []
                 )
-                if any(classified) or any(arcs) or any(seams):
+                # **Sechste Runde, für einen tangentialen Verbund** (RM-226): Rundungen,
+                # Kugelecken und Ringe gleichen Radius gehen ineinander über, ohne
+                # Knick und ohne Krümmungssprung — ein rundum verrundeter Quader,
+                # ein Zapfen mit Kehle. Getrennt wird an den Ecken, die auf einem
+                # Zylinder liegen (:func:`_tangential_pieces`); jedes Stück wird
+                # gefragt wie jedes andere, und es zählt nur, was danach als
+                # eigene Rundform steht (``divided``). Nicht auf einer Haut: Eine
+                # Figur ist kein Verbund aus Rundungen.
+                # Hat die Nachtrennung nichts erkannt, waren ihre Schnitte für einen
+                # solchen Verbund Splitter an den Tangentialnähten: Sie trennten am
+                # gerundeten T von jeder Rundung den Randstreifen ab. Dann nimmt die
+                # Runde den ganzen Fleck.
+                # Was danach eben übrig bleibt, ist eine Fläche zwischen Rundungen,
+                # die die Ebenenregel als Mantelstreifen las (``flat``).
+                tangential: list[bool] = []
+                if not freeform_skin and not any(arcs) and not any(seams):
+                    if any(classified):
+                        for target in leftovers:
+                            tangential.extend(divided(target, []))
+                    else:
+                        tangential.extend(divided(patch, leftovers))
+                if any(classified) or any(arcs) or any(seams) or any(tangential):
                     # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
                     # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
                     tori.drop_patch(patch)
@@ -2940,7 +3092,9 @@ def _fitted(
         spheres = _in_numbering_order(body, spheres, lambda fit: (fit.radius,))
         rings = _in_numbering_order(body, rings, lambda fit: (fit.ring_radius, fit.tube_radius))
         fillets = _in_numbering_order(body, fillets, lambda fit: (fit.radius,))
-        return Fitted(found, cones, spheres, rings, fillets, helices, stadiums, freeform_skin)
+        return Fitted(
+            found, cones, spheres, rings, fillets, helices, stadiums, freeform_skin, tuple(flat)
+        )
 
 
 def detect_holes(
@@ -3038,11 +3192,23 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     Zapfen zählen dort), aber ein Merkmal, das nicht in seinen Körper passt,
     gehört in keine Liste und in kein Kontextmenü.
     """
-    axis = np.asarray(fit.axis, dtype=float)
-    if float(np.max(np.abs(axis))) <= EPS_GEOM:
-        return True
     radius = fit.radius if fit.radial_min is None else fit.radial_min
-    first, second = _plane_basis(axis)
+    return cylinder_fits_in_the_body(mesh, fit.axis, radius)
+
+
+def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: float) -> bool:
+    """Ob ein Zylinder mit diesem Radius quer zu seiner Achse in den Körper passt.
+
+    Die Frage hinter :func:`_fits_in_the_body`, ohne Einpassung gestellt —
+    **der exakte Kern fragt sie mit seinem Topologiemaß an seiner eigenen
+    Vernetzung** (``brep.features._oversized_rounds_dropped``, RM-226). Ohne
+    sie hieß ein Bogen R 382 über 6 Grad auf einem 40 mm breiten Quader exakt
+    „Verrundung R 382“ und am Netzzwilling „gekrümmte Fläche“.
+    """
+    direction = np.asarray(axis, dtype=float)
+    if float(np.max(np.abs(direction))) <= EPS_GEOM:
+        return True
+    first, second = _plane_basis(direction)
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     extreme: np.ndarray = remembered(
         "body_extreme_points",
@@ -5048,6 +5214,116 @@ def _partial_bores_marked(
         else:
             kept[identifier] = replace(feature, params={**feature.params, "partial": True})
     return kept
+
+
+def rounds_the_corner(sphere_radius: float, cylinder_radius: float) -> bool:
+    """Ob ein Zylinderstück mit diesem Radius an einer Kugelecke liegt (RM-226).
+
+    Eine Kugelecke entsteht, wo verrundete Kanten **desselben** Radius
+    zusammenlaufen: Sie ist das Stück der rollenden Kugel, das die Kanten
+    verbindet, und trägt deren Radius — mit verschiedenen Radien wird die Ecke
+    keine Kugel. Eine Kuppel, an die Rundungen stoßen, ist deshalb keine Ecke.
+    Gezählt hatten beide Kerne nur die Nachbarn, und am Minigolfteil Gövde75
+    hieß eine Kuppel Ø 178,6 zwischen Rundungen R 3 und R 7 „Verrundung
+    R 89,3“. Verglichen wird bis :data:`ROUND_WALL_TOLERANCE`, der Formtoleranz
+    einer runden Wand; beide Kerne fragen hier (``brep.features``,
+    :func:`_corners_named_as_fillets`).
+    """
+    return abs(sphere_radius - cylinder_radius) <= ROUND_WALL_TOLERANCE
+
+
+def _corners_named_as_fillets(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Eine Kugelecke, an der verrundete Kanten zusammenlaufen, heißt Verrundung (RM-226).
+
+    Dieselbe Regel wie am exakten Kern (``brep.features._describe``): Grenzen
+    an eine Kugel mindestens :data:`CORNER_NEIGHBOURS` Zylinderstücke unter
+    einer vollen Umdrehung mit ihrem Radius (:func:`rounds_the_corner`), ist
+    sie die Ecke eines verrundeten Körpers — der Kunde sieht eine verrundete
+    Ecke und will ihren Radius, keine „Kuppel Ø 6“. Ein Zylinderstück ist hier
+    jeder Zylinderträger einer Kantenrundung, eines Langlochs oder einer
+    angeschnittenen Bohrung; jeder zählt einmal, wie am exakten Kern jede
+    Fläche. Die Ecke behält Dreiecke, Mitte und Träger der Kugel und bekommt
+    wie dort keine Achse und die Länge null; ihre Nummer folgt auf die letzte
+    Verrundung, in der Folge der Kugeln. Was nicht an gleich verrundete
+    Kanten grenzt — eine Pfanne, eine Kuppel —, bleibt Kugel.
+
+    Erst nach dem Langloch und den angeschnittenen Bohrungen: Beide tragen
+    dann ihr endgültiges Wort.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    spheres = sorted(
+        (key for key, feature in found.items() if feature.kind == "sphere"), key=_serial
+    )
+    if not spheres:
+        return dict(found)
+    count = len(mesh.raw.faces)
+    carrier = np.full(count, -1, dtype=np.int64)
+    radii: list[float] = []
+    for feature in found.values():
+        rounded = (
+            feature.kind == "slot"
+            or (feature.kind == "fillet" and "axis" in feature.params)
+            or (feature.kind in ("hole", "pin") and bool(feature.params.get("partial")))
+        )
+        if not rounded:
+            continue
+        for patch in feature.surface_patches:
+            if patch.kind == "cylinder" and patch.face_indices:
+                carrier[np.asarray(patch.face_indices, dtype=np.intp)] = len(radii)
+                # Ein Vektor an dieser Stelle ist kein Radius; NaN gleicht keinem.
+                value = patch.params["radius"]
+                radii.append(float(value) if isinstance(value, int | float) else math.nan)
+    carriers = len(radii)
+    if carriers < CORNER_NEIGHBOURS:
+        return dict(found)
+    ball = np.full(count, -1, dtype=np.int64)
+    for number, key in enumerate(spheres):
+        ball[np.asarray(found[key].face_indices, dtype=np.intp)] = number
+    pairs = np.asarray(mesh.raw.face_adjacency, dtype=np.intp).reshape(-1, 2)
+    touching = np.concatenate(
+        (
+            np.column_stack((ball[pairs[:, 0]], carrier[pairs[:, 1]])),
+            np.column_stack((ball[pairs[:, 1]], carrier[pairs[:, 0]])),
+        )
+    )
+    touching = touching[(touching[:, 0] >= 0) & (touching[:, 1] >= 0)]
+    codes = np.unique(touching[:, 0] * carriers + touching[:, 1])
+    neighbours = [0] * len(spheres)
+    for code in codes.tolist():
+        number, other = divmod(int(code), carriers)
+        if rounds_the_corner(float(found[spheres[number]].params["diameter"]) / 2.0, radii[other]):
+            neighbours[number] += 1
+    corners = [key for number, key in enumerate(spheres) if neighbours[number] >= CORNER_NEIGHBOURS]
+    if not corners:
+        return dict(found)
+    following = max(
+        (_serial(key) for key, feature in found.items() if feature.kind == "fillet"), default=0
+    )
+    kept = {key: feature for key, feature in found.items() if key not in corners}
+    for offset, key in enumerate(corners, start=1):
+        sphere = found[key]
+        diameter = float(sphere.params["diameter"])
+        name = f"fillet_{following + offset}"
+        kept[name] = replace(
+            sphere,
+            id=name,
+            kind="fillet",
+            params={**sphere.params, "radius": diameter / 2.0, "length": 0.0},
+            measure_sources={**sphere.measure_sources, "radius": "fit", "length": "fit"},
+        )
+    return kept
+
+
+def _serial(key: FeatureId) -> int:
+    """Die laufende Nummer einer Kennung wie ``fillet_12`` — null, wo keine steht."""
+    tail = key.rsplit("_", 1)[-1]
+    return int(tail) if tail.isdigit() else 0
 
 
 def narrowings_marked(
@@ -10566,6 +10842,656 @@ def _pieces_at_a_seam(
     return in_body_order(body, pieces)
 
 
+#: Wie weit der erste Keim der tangentialen Trennung im Querschnitt reicht, in
+#: Vielfachen der Ausdehnung seiner Keimnaht: genug Streifen für eine
+#: Einpassung, ohne über eine Rundung von 90 Grad hinaus in die Nachbarform zu
+#: greifen.
+_SEED_REACH: Final = 3.0
+
+#: Wie oft die Achse eines Zylinderstücks über seine Ecken nachgeschärft wird
+#: (:func:`_sharpened_axis`) — höchstens; ein Schritt unter der Rundung endet früher.
+_SHARPEN_STEPS: Final = 6
+
+#: Der Neigungsschritt der Zahlenableitung beim Nachschärfen, im Bogenmaß.
+_SHARPEN_TILT: Final = 1e-7
+
+
+def _tangential_pieces(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: Sequence[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
+    """Die Stücke eines tangentialen Verbunds aus Rundungen (RM-226) — oder nichts.
+
+    Gefragt wird nur für ein Stück, auf das keine Form passt und das weder
+    Krümmung, Prisma noch Naht geteilt haben (:func:`_fitted`, sechste Runde).
+    Ein rundum verrundeter Quader, ein verrundetes T, ein Zapfen mit Kehle:
+    Zylinder, Kugelecken und Ringe gehen tangential ineinander über und haben
+    oft denselben Radius, also trennt sie weder ein Knick noch ein
+    Krümmungssprung. Am Netz stand der ganze Verbund als eine gekrümmte
+    Fläche da (am T 2 750 von 2 820 Dreiecken), am exakten Körper als 24
+    Verrundungen und zwölf Ecken.
+
+    Getrennt wird an den Ecken, nicht an den Nähten: Zuerst fallen die
+    Zylinderstücke heraus (:func:`_tangential_cylinders`), der Rest zerfällt
+    an ihnen in zusammenhängende Stücke — Kugelecken, Ringe, Übergänge.
+    :func:`_fitted` fragt danach jedes Stück wie jedes andere. Ohne Zylinder
+    kommt nichts zurück, und der Fleck bleibt, wie er war.
+
+    **Ein Prisma nicht** (:func:`_prism_axis`): Seine Bögen hat die vierte
+    Runde schon an jedem Radiuswechsel getrennt und einzeln gefragt
+    (:func:`_arcs_of_a_prism`). Hier keimte dagegen jede Naht ein Band über
+    die ganze Wand — an den Buchstabenwänden eines Schriftzugs (Herz mit
+    Schrift, 20 468 Dreiecke) 320 Flecken mit zusammen 3,3 s für keinen
+    Zylinder.
+    """
+    if _prism_axis(body, patch) is not None:
+        return []
+    cylinders = _tangential_cylinders(body, mesh, patch, check_cancelled)
+    if not cylinders:
+        return []
+    taken = np.zeros(len(body.faces), dtype=bool)
+    for piece in cylinders:
+        taken[np.asarray(piece, dtype=np.intp)] = True
+    rest = [
+        int(index)
+        for index in np.unique(np.asarray(list(patch), dtype=np.intp))
+        if not taken[index]
+    ]
+    remainder = _connected_patches(body, rest, check_cancelled) if rest else []
+    return in_body_order(body, [*cylinders, *remainder])
+
+
+def _in_one_plane(body: trimesh.Trimesh, piece: Sequence[int]) -> bool:
+    """Ob ein Reststück der tangentialen Trennung eben ist (RM-226).
+
+    Jede Normale bis :data:`EPS_ANGLE` wie die erste — dieselbe Streuung, die
+    :func:`_planar_face_entries` einer Fläche zugesteht. Ein Mantelstreifen
+    kommt hier nicht an: Die Trennung nimmt jedes Dreieck, dessen Ecken auf
+    einem ihrer Zylinder liegen, und die Streifen eines Zylinders, den sie
+    nicht fand, hängen zusammen und knicken gegeneinander.
+    """
+    normals = np.asarray(body.face_normals, dtype=float)[np.asarray(piece, dtype=np.intp)]
+    if not len(normals):
+        return False
+    alike = (normals * normals[0]).sum(axis=1) >= units.exact_cos_degrees(EPS_ANGLE)
+    return bool(alike.all())
+
+
+def _touching_pieces(body: trimesh.Trimesh, pieces: Sequence[Sequence[int]]) -> list[set[int]]:
+    """Je Stück einer Trennung die Stücke, an die es über eine Kante grenzt (RM-226).
+
+    Die Stücke decken ihr Ziel ganz ab; ein Nachbar, der in keinem liegt,
+    liegt außerhalb des Ziels und steht als ``-1`` da. Gesucht wird über den
+    Nachbarindex des Körpers und die sortierten Dreiecke der Stücke, nie über
+    ein Feld in Netzgröße je Ziel.
+    """
+    neighbours, _rows = _neighbour_index(body)
+    members = np.concatenate([np.asarray(piece, dtype=np.int64) for piece in pieces])
+    labels = np.repeat(
+        np.arange(len(pieces), dtype=np.int64),
+        np.fromiter((len(piece) for piece in pieces), dtype=np.int64, count=len(pieces)),
+    )
+    order = np.argsort(members, kind="stable")
+    members, labels = members[order], labels[order]
+    touching: list[set[int]] = []
+    for number, piece in enumerate(pieces):
+        around = neighbours[np.asarray(piece, dtype=np.int64)].ravel()
+        around = around[around >= 0]
+        position = np.minimum(np.searchsorted(members, around), len(members) - 1)
+        beside = np.where(members[position] == around, labels[position], -1)
+        touching.append({int(other) for other in np.unique(beside) if other != number})
+    return touching
+
+
+def _drawn_chains(
+    touching: Sequence[set[int]], fits: Sequence[CylinderFit | None]
+) -> list[list[int]]:
+    """Zylinderstücke einer Trennung, die zusammen eine gezogene Fläche sind (RM-226).
+
+    Eine Rundung entlang einer gekrümmten Kante — ein Rohr um einen Bogen,
+    eine Kante entlang eines geschwungenen Umrisses — ist vernetzt eine Folge
+    kurzer Scheiben, jede bis zur Verschweißtoleranz ein Zylinder, die nächste
+    um einen Facettenschritt gedreht. Die Trennung las jede als eigene
+    Verrundung: am Elegoo-Fettwerkzeug 342 Scheiben R 0,5 von je 0,22 bis
+    0,29 mm Länge, um 1,25 bis 2,56 Grad gegeneinander gedreht, an einer
+    Gridfinity-Schale die Ecke eines R-1,5-Rands als zwölf Scheiben um je
+    3,0 Grad. Am exakten Körper ist das eine Fläche — ein Ring oder eine
+    gezogene Fläche —, keine Reihe von Kantenrundungen.
+
+    Zwei Stücke gehören zusammen, wenn sie sich eine Kante teilen, denselben
+    Radius tragen (bis :data:`ROUND_WALL_TOLERANCE`) und ihre Achsen weniger
+    als :data:`CURVATURE_LIMIT` gegeneinander gedreht sind: Um diesen Winkel
+    knicken die beiden Mäntel dort, wo sie sich treffen, und ein Knick darunter
+    ist die Stufe einer Rundung, keine Kante — dieselbe Grenze, an der ein
+    Fleck endet. Zwei Rundungen, die an einer Ecke zusammenstoßen, drehen um
+    die Ecke (an den Regalteilen und am Schaber 90 Grad); die Scheiben eines
+    Zugs drehen um einen Facettenschritt (gemessen 1,0 bis 7,9 Grad).
+    Parallele Achsen trennen hier nicht: Rundung und Kehle gleichen Radius,
+    die sich zu einem S berühren, sind zwei Merkmale. Zurück kommen die Ketten
+    mit mindestens zwei Gliedern; :func:`_fitted` fragt jede als ein Stück.
+    """
+    least = units.exact_cos_degrees(CURVATURE_LIMIT)
+    most = units.exact_cos_degrees(EPS_ANGLE)
+    parent = list(range(len(fits)))
+
+    def root(number: int) -> int:
+        while parent[number] != number:
+            parent[number] = parent[parent[number]]
+            number = parent[number]
+        return number
+
+    for number, fit in enumerate(fits):
+        if fit is None:
+            continue
+        for other in touching[number]:
+            partner = fits[other] if other > number else None
+            if partner is None or abs(fit.radius - partner.radius) > ROUND_WALL_TOLERANCE:
+                continue
+            cosine = abs(sum(a * b for a, b in zip(fit.axis, partner.axis, strict=True)))
+            if least < cosine <= most:
+                parent[root(other)] = root(number)
+    groups: dict[int, list[int]] = {}
+    for number in range(len(fits)):
+        groups.setdefault(root(number), []).append(number)
+    return [group for group in groups.values() if len(group) > 1]
+
+
+def _enclosed_rounds(
+    touching: Sequence[set[int]], settled: Sequence[bool], flat: Sequence[bool]
+) -> set[int]:
+    """Belegte Stücke, die nur an den unerklärten Rest ihres Ziels grenzen (RM-226).
+
+    Eine Rundform endet an etwas: an einer Fläche, an einer anderen Rundform,
+    an einem Knick oder Krümmungssprung, also am Rand ihres Ziels. Ein
+    Zylinderstück, das ringsum in den Rest übergeht, aus dem es gelesen wurde,
+    ist ein Stück dieses Rests. Am Baum mit Tablett lagen sechs solche Stücke
+    von sechs bis sieben Dreiecken in einem glatten Krümmungsstück aus
+    172 356 Dreiecken, mit sechs verschiedenen Radien zwischen R 0,92 und
+    R 4,54 — genug, um das Freiformurteil zu kippen (Anteil 0,759 → 0,678).
+
+    Ein Stück steht, solange es an den Rand des Ziels (``-1``), an ein ebenes
+    Reststück oder an ein stehendes Stück grenzt. Was fällt, nimmt anderen
+    ihren Halt; gefragt wird, bis nichts mehr fällt. Das Ergebnis hängt nicht
+    an der Reihenfolge: Fallen nimmt nur Halt weg.
+    """
+    standing = list(settled)
+    enclosed: set[int] = set()
+    changed = True
+    while changed:
+        changed = False
+        for number, beside in enumerate(touching):
+            if not standing[number]:
+                continue
+            if any(other < 0 or standing[other] or flat[other] for other in beside):
+                continue
+            standing[number] = False
+            enclosed.add(number)
+            changed = True
+    return enclosed
+
+
+def _tangential_cylinders(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: Sequence[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
+    """Die Zylinderstücke eines tangentialen Flecks, belegt an ihren Ecken (RM-226).
+
+    **Ein Keim je geknickter Naht**, die längste zuerst — die Mantellinien
+    langer Rundungen vor den Splittern einer Kugelecke. Die Achse des Keims
+    ist das Kreuzprodukt der beiden Facettennormalen. Um ihn liegt ein
+    Prismaband: alle verbundenen freien Dreiecke, deren Normale bis
+    :data:`FLAT_ANGLE` quer zu dieser Achse steht. Liegt an den zwei
+    Keimdreiecken kein solcher Nachbar, bleibt das Band unter
+    :data:`MIN_PATCH_FACES`, und die Naht keimt gar nicht — an einer
+    Kugelecke fast jede. Der erste Kreis geht durch die Ecken der
+    Banddreiecke nahe der Keimnaht (:func:`_band_seed`) — aus einer einzigen
+    Naht ist ein Kreis an langen, schmalen Dreiecken schlecht bestimmt: Am
+    gerundeten T lieferten die Nähte derselben Rundung R 3 bis R 34.
+
+    **Dann entscheiden die Ecken.** Das Stück wächst neu über Dreiecke, deren
+    Normale quer zur Achse steht und deren drei Ecken auf dem eingepassten
+    Zylinder liegen: erst bis :data:`ROUND_WALL_TOLERANCE`, dann bis zur
+    zehnfachen und zuletzt, bis es stillsteht, bis zur einfachen
+    Verschweißtoleranz, mit neuer Einpassung nach jedem Schritt. Eingepasst
+    wird über die Ecken (:func:`_sharpened_axis`), nicht über das
+    Normalenmoment von :func:`fit_cylinder`: Das neigt die Achse an
+    verdrillt vernetzten Rundungen um bis zu 0,024 Grad, und die Ecken lägen
+    dann bis zu 0,003 mm daneben, obwohl sie auf 0,0000026 mm genau auf dem
+    Zylinder sitzen. Mitgenommene Polsplitter einer Kugelecke (0,0004 mm
+    daneben) verziehen die Achse der lockeren Stufe; erst die wiederholte
+    enge Stufe gibt die Rundung ganz. Den vollen Zylinderfit bekommt nur das
+    fertige Stück — je Keim und Stufe gerechnet, war er zwei Drittel der
+    Laufzeit.
+
+    Angenommen wird ein Stück, das ein gezeichneter Bogen ist — alle Ecken bis
+    zur Verschweißtoleranz auf dem Kreis, die Bedingung von
+    :func:`_exactly_an_arc` —, mindestens :data:`MIN_ROUND_ARC` zeigt, in den
+    Körper passt (:func:`cylinder_fits_in_the_body`), mindestens
+    :data:`TANGENTIAL_MIN_LENGTH` seines Radius lang ist und als Verrundung
+    überhaupt einen Namen bekäme (:func:`_fillets_worth_naming`: nicht zu
+    klein, kein Streifen). **Was verworfen ist, keimt nicht noch einmal**:
+    Ein Band, das schon entlang der Achse zu kurz ist (ein Ring einer Kugel
+    oder eines Wulsts), und eines, dessen lockeres Stück ein Streifen ist (eine
+    Ausrundung mit wanderndem Radius), sind ganz verbraucht; eine Spalte und
+    ein zu kleines oder zu kurzes Stück mit ihren Dreiecken. Am Würfel mit
+    gerundeten Kanten (250 488 Dreiecke) keimten sonst über 4 000 Nähte für
+    keinen Zylinder. **Und ein Ziel, an dem :data:`TANGENTIAL_FIRST_SEEDS`
+    Keime vor dem ersten Stück oder :data:`TANGENTIAL_FUTILE_SEEDS` danach in
+    Folge nichts tragen, ist kein Verbund aus Rundungen**: Die Suche endet.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    indices = np.unique(np.asarray(list(patch), dtype=np.intp))
+    if _face_count(body, indices) < 2 * MIN_PATCH_FACES:
+        return []
+    count = len(body.faces)
+    member = np.zeros(count, dtype=bool)
+    member[indices] = True
+    # Die Nähte des Flecks über den Nachbarindex des Körpers, nicht über alle
+    # Paare des Netzes: Ein Durchgang über ``face_adjacency`` je Fleck wäre bei
+    # vielen Flecken ein Ganznetz-Durchlauf je Fleck. Jede Naht einmal, von
+    # ihrem Dreieck mit der kleineren Nummer aus gesehen.
+    neighbours, rows = _neighbour_index(body)
+    if not neighbours.shape[1]:
+        return []
+    beside = neighbours[indices]
+    own = np.broadcast_to(indices[:, None], beside.shape)
+    inner = (beside > own) & member[np.where(beside >= 0, beside, 0)]
+    rows_of_seams = rows[indices][inner]
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows_of_seams])
+    bends = (angles > FLAT_ANGLE) & (angles < CURVATURE_LIMIT)
+    if not bends.any():
+        return []
+    bending = rows_of_seams[bends]
+    sides = np.column_stack((own[inner][bends], beside[inner][bends]))
+    vertices = np.asarray(body.vertices, dtype=float)
+    faces = np.asarray(body.faces, dtype=np.intp)
+    normals = np.asarray(body.face_normals, dtype=float)
+    areas = np.asarray(body.area_faces, dtype=float)
+    upright = units.exact_sin_degrees(FLAT_ANGLE)
+    # Die Keimachsen aller Nähte in einem Zug, und welche Naht überhaupt ein
+    # Band trägt: einen weiteren Nachbarn quer zur Achse an einem der zwei
+    # Keimdreiecke — ohne ihn bleibt es bei zweien, unter MIN_PATCH_FACES.
+    seed_axes = np.cross(normals[sides[:, 0]], normals[sides[:, 1]])
+    seed_axes = seed_axes / np.sqrt((seed_axes * seed_axes).sum(axis=1))[:, None]
+    around_seed = np.concatenate((neighbours[sides[:, 0]], neighbours[sides[:, 1]]), axis=1)
+    beside = (around_seed >= 0) & (around_seed != sides[:, :1]) & (around_seed != sides[:, 1:])
+    reached = np.where(beside, around_seed, 0)
+    beside &= member[reached]
+    tilt = np.abs((normals[reached] * seed_axes[:, None, :]).sum(axis=2))
+    carries_a_band = (beside & (tilt <= upright)).any(axis=1)
+    if not carries_a_band.any():
+        return []
+    seams = np.asarray(body.face_adjacency_edges, dtype=np.intp)[bending]
+    along_seam = vertices[seams[:, 1]] - vertices[seams[:, 0]]
+    seam_lengths = np.sqrt((along_seam * along_seam).sum(axis=1))
+    order = np.lexsort((bending, -seam_lengths))
+    order = order[carries_a_band[order]]
+    extents = np.asarray(body.extents, dtype=float)
+    diagonal = math.sqrt(float((extents * extents).sum()))
+    weld = weld_tolerance(diagonal)
+    claimed = np.zeros(count, dtype=bool)
+    spent = np.zeros(count, dtype=bool)
+    # Wer in welcher Flutung schon gesehen wurde, als Nummer der Flutung: ein
+    # Feld für alle, statt je Flutung eines in Netzgröße.
+    seen = np.zeros(count, dtype=np.int32)
+    floods = 0
+    found: list[list[int]] = []
+    # Vergebliche Keime seit dem Anfang oder dem letzten Treffer
+    # (:data:`TANGENTIAL_FIRST_SEEDS`, :data:`TANGENTIAL_FUTILE_SEEDS`).
+    futile = 0
+
+    def flood(start: Sequence[int], accept: Callable[[np.ndarray], np.ndarray]) -> list[int]:
+        """Die freien Fleckdreiecke, die ``accept`` zulässt und mit ``start`` zusammenhängen.
+
+        Gefragt wird nur an den Dreiecken der wachsenden Front, nie am ganzen
+        Fleck: Ein Keim kostet so viel, wie sein Stück groß ist.
+        """
+        nonlocal floods
+        front = np.unique(np.asarray(start, dtype=np.intp))
+        if not len(front):
+            return []
+        floods += 1
+        seen[front] = floods
+        taken = [front]
+        while len(front):
+            # Je Ring einmal entdoppelt: Ein Dreieck, das zwei Frontdreiecke
+            # zugleich erreichen, stünde sonst zweimal in der nächsten Front,
+            # und seine Nachfolger vervielfachten sich von Ring zu Ring.
+            around = neighbours[front].ravel()
+            around = np.unique(around[around >= 0])
+            around = around[member[around] & ~claimed[around] & (seen[around] != floods)]
+            seen[around] = floods
+            if not len(around):
+                break
+            front = around[accept(around)]
+            taken.append(front)
+        return [int(triangle) for triangle in np.sort(np.concatenate(taken))]
+
+    def upright_to(axis: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
+        """Ob die Normale bis :data:`FLAT_ANGLE` quer zur Achse steht."""
+        return lambda triangles: np.abs((normals[triangles] * axis).sum(axis=1)) <= upright
+
+    def on_the_cylinder(
+        axis: np.ndarray, centre: np.ndarray, radius: float, limit: float
+    ) -> Callable[[np.ndarray], np.ndarray]:
+        """Normale quer zur Achse und alle drei Ecken bis ``limit`` auf dem Mantel."""
+
+        def accept(triangles: np.ndarray) -> np.ndarray:
+            relative = vertices[faces[triangles]] - centre
+            radial = relative - ((relative * axis).sum(axis=2))[:, :, None] * axis
+            off = np.abs(np.sqrt((radial * radial).sum(axis=2)) - radius).max(axis=1)
+            return np.asarray(upright_to(axis)(triangles) & (off <= limit), dtype=bool)
+
+        return accept
+
+    def axial_extent(region: Sequence[int], axis: np.ndarray) -> float:
+        """Wie lang das Stück entlang der Achse ist, über seine Ecken."""
+        corners = vertices[np.unique(faces[np.asarray(region, dtype=np.intp)])]
+        along = (corners * axis).sum(axis=1)
+        return float(along.max() - along.min())
+
+    for index in order.tolist():
+        if check_cancelled is not None:
+            check_cancelled()
+        first, second = (int(value) for value in sides[index])
+        if claimed[first] or claimed[second] or (spent[first] and spent[second]):
+            continue
+        if futile >= (TANGENTIAL_FUTILE_SEEDS if found else TANGENTIAL_FIRST_SEEDS):
+            break
+        futile += 1
+        band = flood((first, second), upright_to(seed_axes[index]))
+        if _face_count(body, band) < MIN_PATCH_FACES:
+            # Nicht verbraucht: Dasselbe Dreieck liegt für die Achse seiner
+            # eigenen Rundung in einem anderen, größeren Band.
+            continue
+        seed, axis = _band_seed(vertices, faces, normals, areas, band, (first, second))
+        if _face_count(body, seed) < MIN_PATCH_FACES:
+            continue
+        circle = _seed_circle(vertices, faces, seed, axis)
+        if circle is None:
+            continue
+        centre, radius = circle
+        if 2.0 * radius > diagonal:
+            # Ein Kreis, weiter als der ganze Körper, passt nie in ihn
+            # (:func:`cylinder_fits_in_the_body`) — eine fast ebene Stelle.
+            continue
+        if axial_extent(band, axis) < TANGENTIAL_MIN_LENGTH * radius:
+            # Schon das ganze Band ist entlang der Achse zu kurz; jedes Stück
+            # darin wäre es auch. Verbraucht wird das Band, sonst keimte jede
+            # Naht desselben Rings noch einmal.
+            spent[np.asarray(band, dtype=np.intp)] = True
+            continue
+        error = math.inf
+        region: list[int] = seed
+        loose: list[int] = []
+        for stage, limit in enumerate((ROUND_WALL_TOLERANCE, 10.0 * weld, weld, weld, weld)):
+            accept = on_the_cylinder(axis, centre, radius, limit)
+            previous = np.asarray(region, dtype=np.intp)
+            start = previous[accept(previous)]
+            grown = flood(start, accept) if len(start) else []
+            if _face_count(body, grown) < MIN_PATCH_FACES:
+                spent[np.asarray(loose, dtype=np.intp)] = True
+                region = []
+                break
+            if stage > 2 and grown == region:
+                # Steht still: Achse und Fehler der letzten Stufe gelten weiter.
+                break
+            region = grown
+            if stage == 0:
+                loose = region
+                if axial_extent(region, axis) < TANGENTIAL_MIN_LENGTH * radius or _a_sliver(
+                    body, region
+                ):
+                    # Eine Spalte eines Rings oder einer Kugel, schon locker zu
+                    # kurz — oder ein Streifen, schon locker zu schmal für eine
+                    # Fläche; die engeren Stufen machen ihn nicht breiter. Ein
+                    # Streifen liegt auf einer Ausrundung, deren Radius wandert:
+                    # Verbraucht wird ihr ganzes Band, sonst keimte jeder
+                    # Streifen daneben noch einmal.
+                    spent[np.asarray(band, dtype=np.intp)] = True
+                    spent[np.asarray(region, dtype=np.intp)] = True
+                    region = []
+                    break
+            sharpened = _sharpened_axis(
+                vertices[np.unique(faces[np.asarray(region, dtype=np.intp)])], axis
+            )
+            if sharpened is None:
+                region = []
+                break
+            axis, centre, radius, error = sharpened
+        if not region or error > weld:
+            continue
+        if _too_small_to_make(2.0 * radius) or _a_sliver(body, region):
+            # Was für kein Werkzeug groß genug oder zu schmal ist, wird auch
+            # keine Verrundung (:func:`_fillets_worth_naming`) — am
+            # Minigolfstück 1 457 Rundungen R 0,1 bis 0,2, am Würfel zwölf
+            # Streifen von elf Grad, jedes danach noch eingepasst und verworfen.
+            spent[np.asarray(region, dtype=np.intp)] = True
+            continue
+        # Den vollen Zylinderfit rechnet ``classify`` am angenommenen Stück;
+        # hier entscheiden die nachgeschärfte Achse und ihr Kreis, die teure
+        # Frage nach dem Körper zuletzt.
+        if span_about(body, axis, centre, region) < MIN_ROUND_ARC:
+            continue
+        if axial_extent(region, axis) < TANGENTIAL_MIN_LENGTH * radius:
+            spent[np.asarray(region, dtype=np.intp)] = True
+            continue
+        if not cylinder_fits_in_the_body(mesh, tuple(float(value) for value in axis), radius):
+            continue
+        claimed[np.asarray(region, dtype=np.intp)] = True
+        found.append(region)
+        futile = 0
+    return found
+
+
+def _band_seed(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    normals: np.ndarray,
+    areas: np.ndarray,
+    band: Sequence[int],
+    seam: tuple[int, int],
+) -> tuple[list[int], np.ndarray]:
+    """Die Banddreiecke, deren Ecken im Querschnitt nahe der Keimnaht liegen — und die Achse.
+
+    Die Achse des Bandes ist der Eigenvektor seines flächengewichteten
+    Normalenmoments mit dem kleinsten Eigenwert (:func:`units.symmetric_eigen3`,
+    ohne LAPACK). Quer dazu projiziert liegen die Ecken eines Prismas auf
+    seinem Umriss; der Keim nimmt, was dort höchstens :data:`_SEED_REACH`-mal
+    so weit von der Mitte der Keimnaht liegt wie deren eigene Ecken.
+    """
+    chosen = np.asarray(band, dtype=np.intp)
+    weighted = normals[chosen] * areas[chosen][:, None]
+    moment = [
+        [float((weighted[:, row] * normals[chosen][:, column]).sum()) for column in range(3)]
+        for row in range(3)
+    ]
+    _values, vectors = units.symmetric_eigen3(moment)
+    axis = np.asarray(vectors[0], dtype=float)
+    corners = vertices[faces[chosen]]
+    flat = corners - ((corners * axis).sum(axis=2))[:, :, None] * axis
+    own = vertices[faces[np.asarray(seam, dtype=np.intp)]].reshape(-1, 3)
+    own_flat = own - ((own * axis).sum(axis=1))[:, None] * axis
+    middle = own_flat.mean(axis=0)
+    offset = own_flat - middle
+    reach = _SEED_REACH * math.sqrt(float((offset * offset).sum(axis=1).max()))
+    gap = flat - middle
+    distance = np.sqrt((gap * gap).sum(axis=2)).max(axis=1)
+    return [int(triangle) for triangle in chosen[distance <= reach]], axis
+
+
+def _seed_circle(
+    vertices: np.ndarray, faces: np.ndarray, seed: Sequence[int], axis: np.ndarray
+) -> tuple[np.ndarray, float] | None:
+    """Der erste Kreis eines Keims, ohne die Dreiecke, die tangential von ihm weglaufen.
+
+    Mit dem Band kommen auch ebene Dreiecke in den Keim, die quer zur Achse
+    stehen: die Flächen, in die eine Rundung tangential übergeht. Ihre fernen
+    Ecken liegen Millimeter neben dem Kreis und ziehen die lineare Einpassung
+    (:func:`_circle_across`) mit — am gerundeten T R 3 so weit, dass von den
+    21 Dreiecken einer Rundung keines mehr bis :data:`ROUND_WALL_TOLERANCE`
+    auf ihm lag. Deshalb fällt je Runde jedes Dreieck, dessen fernste Ecke in
+    der ferneren Hälfte des Fehlerbereichs liegt, bis alle übrigen bis
+    :data:`ROUND_WALL_TOLERANCE` auf dem Kreis liegen; bleiben weniger als
+    :data:`MIN_PATCH_FACES`, gibt es keinen. Ein Dreieck je Runde brauchte
+    am fein vernetzten Quader R 8 (Durchbiegung 0,002 mm) bis zu 431 Runden
+    für einen Keim aus 468 Dreiecken, halbierend höchstens zwölf. Zurück
+    kommen Mitte und Radius.
+    """
+    first, second = _across_pair(axis)
+    corners = vertices[faces[np.asarray(seed, dtype=np.intp)]]
+    origin = corners.reshape(-1, 3).mean(axis=0)
+    relative = corners - origin
+    # Je Dreieck seine drei Ecken im Querschnitt, einmal gerechnet; eine
+    # gemeinsame Ecke zählt je Dreieck mit.
+    x = (relative * first).sum(axis=2)
+    y = (relative * second).sum(axis=2)
+    keep = np.ones(len(x), dtype=bool)
+    while int(keep.sum()) >= MIN_PATCH_FACES:
+        circle = _kasa_circle(x[keep].ravel(), y[keep].ravel())
+        if circle is None:
+            return None
+        centre_x, centre_y, radius = circle
+        dx, dy = x - centre_x, y - centre_y
+        off = np.abs(np.sqrt(dx * dx + dy * dy) - radius).max(axis=1)
+        worst = float(off[keep].max())
+        if worst <= ROUND_WALL_TOLERANCE:
+            return origin + centre_x * first + centre_y * second, radius
+        # Die fernere Hälfte des Fehlerbereichs fällt, mindestens das fernste
+        # Dreieck: Nach wenigen Runden steht der Kreis oder es bleibt zu wenig.
+        keep &= off < max(ROUND_WALL_TOLERANCE, worst / 2.0)
+    return None
+
+
+def _sharpened_axis(
+    points: np.ndarray, axis: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, float, float] | None:
+    """Die Achse eines Zylinders über seine Ecken nachgeführt: Achse, Mitte, Radius, Fehler.
+
+    Für eine Achse liegen die quer projizierten Ecken auf einem Kreis, den
+    :func:`_circle_across` linear einpasst. Gauß-Newton über die zwei
+    Neigungen der Achse senkt die Abstände der Ecken von diesem Kreis; die
+    Ableitung ist eine Differenz über :data:`_SHARPEN_TILT`, das 2x2-System
+    löst die Cramersche Regel — nur Grundrechenarten und Wurzeln, auf jeder
+    Maschine dieselben Bits. Höchstens :data:`_SHARPEN_STEPS` Schritte, und
+    keiner mehr, sobald ein Schritt keine Ecke um mehr als :data:`EPS_GEOM`
+    bewegt: Danach schwankt nur noch das Rauschen der Ecken (am gerundeten T
+    um 0,0000003 mm), und jeder weitere Schritt kostete drei Einpassungen.
+    Der Fehler ist der größte Eckenabstand vom Zylinder in mm; ``None`` ohne
+    Kreis.
+    """
+    current = np.asarray(axis, dtype=float)
+    current = current / math.sqrt(float((current * current).sum()))
+    offsets = points - points.mean(axis=0)
+    reach = math.sqrt(float((offsets * offsets).sum(axis=1).max()))
+    for _step in range(_SHARPEN_STEPS):
+        base = _circle_across(points, current)
+        if base is None:
+            return None
+        first, second = _across_pair(current)
+        columns = []
+        for direction in (first, second):
+            tilted = current + _SHARPEN_TILT * direction
+            tilted = tilted / math.sqrt(float((tilted * tilted).sum()))
+            moved = _circle_across(points, tilted)
+            if moved is None:
+                return None
+            columns.append((moved[2] - base[2]) / _SHARPEN_TILT)
+        one, two = columns
+        a11 = float((one * one).sum())
+        a12 = float((one * two).sum())
+        a22 = float((two * two).sum())
+        b1 = -float((one * base[2]).sum())
+        b2 = -float((two * base[2]).sum())
+        determinant = a11 * a22 - a12 * a12
+        if determinant <= EPS_GEOM * EPS_GEOM * max(a11 * a22, EPS_GEOM):
+            break
+        u = (b1 * a22 - b2 * a12) / determinant
+        v = (a11 * b2 - a12 * b1) / determinant
+        current = current + u * first + v * second
+        current = current / math.sqrt(float((current * current).sum()))
+        if max(abs(u), abs(v)) * reach <= EPS_GEOM:
+            break
+    final = _circle_across(points, current)
+    if final is None:
+        return None
+    centre, radius, distances = final
+    return current, centre, radius, float(distances.max())
+
+
+def _across_pair(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Zwei Einheitsvektoren quer zur Achse und zueinander — in reiner Gleitkommarechnung."""
+    ax, ay, az = float(axis[0]), float(axis[1]), float(axis[2])
+    hx, hy, hz = (1.0, 0.0, 0.0) if abs(ax) < 0.9 else (0.0, 1.0, 0.0)
+    fx, fy, fz = ay * hz - az * hy, az * hx - ax * hz, ax * hy - ay * hx
+    length = math.sqrt(fx * fx + fy * fy + fz * fz)
+    fx, fy, fz = fx / length, fy / length, fz / length
+    return (
+        np.asarray((fx, fy, fz), dtype=float),
+        np.asarray((ay * fz - az * fy, az * fx - ax * fz, ax * fy - ay * fx), dtype=float),
+    )
+
+
+def _circle_across(
+    points: np.ndarray, axis: np.ndarray
+) -> tuple[np.ndarray, float, np.ndarray] | None:
+    """Der Kreis der quer zur Achse projizierten Punkte: Mitte, Radius, Abstände.
+
+    Eingepasst von :func:`_kasa_circle`. Die Mitte liegt in der Ebene durch
+    den Schwerpunkt der Punkte; ``None`` ohne bestimmten Kreis.
+    """
+    first, second = _across_pair(axis)
+    origin = points.mean(axis=0)
+    relative = points - origin
+    x = (relative * first).sum(axis=1)
+    y = (relative * second).sum(axis=1)
+    circle = _kasa_circle(x, y)
+    if circle is None:
+        return None
+    centre_x, centre_y, radius = circle
+    dx, dy = x - centre_x, y - centre_y
+    centre = origin + centre_x * first + centre_y * second
+    return centre, radius, np.abs(np.sqrt(dx * dx + dy * dy) - radius)
+
+
+def _kasa_circle(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float] | None:
+    """Der Kreis durch ebene Punkte, linear eingepasst: Mitte x, Mitte y, Radius.
+
+    Über ``x² + y² + D·x + E·y + F = 0`` und die drei Normalgleichungen,
+    gelöst mit der Cramerschen Regel — nur Grundrechenarten, kein LAPACK.
+    ``None`` ohne bestimmten Kreis.
+    """
+    z = -(x * x + y * y)
+    sxx, sxy, syy = float((x * x).sum()), float((x * y).sum()), float((y * y).sum())
+    sx, sy, size = float(x.sum()), float(y.sum()), float(len(x))
+    bx, by, bz = float((x * z).sum()), float((y * z).sum()), float(z.sum())
+    whole = _determinant3(((sxx, sxy, sx), (sxy, syy, sy), (sx, sy, size)))
+    if abs(whole) <= EPS_GEOM * EPS_GEOM:
+        return None
+    d = _determinant3(((bx, sxy, sx), (by, syy, sy), (bz, sy, size))) / whole
+    e = _determinant3(((sxx, bx, sx), (sxy, by, sy), (sx, bz, size))) / whole
+    f = _determinant3(((sxx, sxy, bx), (sxy, syy, by), (sx, sy, bz))) / whole
+    centre_x, centre_y = -d / 2.0, -e / 2.0
+    squared = centre_x * centre_x + centre_y * centre_y - f
+    if squared <= 0.0:
+        return None
+    return centre_x, centre_y, math.sqrt(squared)
+
+
+def _determinant3(rows: Sequence[Sequence[float]]) -> float:
+    """Die Determinante einer 3x3-Matrix, ausgeschrieben."""
+    return (
+        rows[0][0] * (rows[1][1] * rows[2][2] - rows[1][2] * rows[2][1])
+        - rows[0][1] * (rows[1][0] * rows[2][2] - rows[1][2] * rows[2][0])
+        + rows[0][2] * (rows[1][0] * rows[2][1] - rows[1][1] * rows[2][0])
+    )
+
+
 def _arcs_of_a_prism(
     body: trimesh.Trimesh,
     piece: Sequence[int],
@@ -10592,17 +11518,7 @@ def _arcs_of_a_prism(
     kommen aus ``face_adjacency_angles`` wie bei der Nachtrennung.
     """
     indices = np.asarray(piece, dtype=np.intp)
-    if _face_count(body, indices) < MIN_PATCH_FACES:
-        return []
-    normals = np.asarray(body.face_normals, dtype=float)[indices]
-    first = normals[0]
-    across = int(np.argmin(np.abs((normals * first).sum(axis=1))))
-    axis = np.cross(first, normals[across])
-    length = math.sqrt(float(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]))
-    if length < units.exact_sin_degrees(MIN_ROUND_ARC):
-        return []
-    axis = axis / length
-    if float(np.abs((normals * axis).sum(axis=1)).max()) > UPRIGHT_TO_AXIS:
+    if _face_count(body, indices) < MIN_PATCH_FACES or _prism_axis(body, indices) is None:
         return []
     radii = face_radii(body, check_cancelled)
     neighbours, rows = _neighbour_index(body)
@@ -10634,6 +11550,30 @@ def _arcs_of_a_prism(
     if len(groups) < 2:
         return []
     return in_body_order(body, [ordered[np.asarray(group)].tolist() for group in groups])
+
+
+def _prism_axis(body: trimesh.Trimesh, piece: Sequence[int] | np.ndarray) -> np.ndarray | None:
+    """Die Achse, quer zu der jede Normale des Stücks steht — oder ``None``: kein Prisma.
+
+    Im Vertrag von :data:`UPRIGHT_TO_AXIS` wie bei :func:`fit_cylinder`. Die
+    Achse ist das Kreuzprodukt der ersten Normale mit der, die am meisten quer
+    zu ihr steht; steht keine um :data:`MIN_ROUND_ARC` quer, trägt das Stück
+    keinen Bogen, der zählte. Gefragt von :func:`_arcs_of_a_prism`, und von
+    der tangentialen Trennung, die ein Prisma der vierten Runde überlässt.
+    """
+    normals = np.asarray(body.face_normals, dtype=float)[np.asarray(piece, dtype=np.intp)]
+    if not len(normals):
+        return None
+    first = normals[0]
+    across = int(np.argmin(np.abs((normals * first).sum(axis=1))))
+    axis = np.cross(first, normals[across])
+    length = math.sqrt(float(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]))
+    if length < units.exact_sin_degrees(MIN_ROUND_ARC):
+        return None
+    axis = axis / length
+    if float(np.abs((normals * axis).sum(axis=1)).max()) > UPRIGHT_TO_AXIS:
+        return None
+    return np.asarray(axis, dtype=float)
 
 
 def _exactly_an_arc(

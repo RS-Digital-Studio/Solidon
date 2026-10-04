@@ -160,14 +160,31 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Nachbauten, Folgeschritte oder Merkmalsbindungen mehr steuern.
 #: - 42 (RM-226): Kugelige Eckrundungen tragen ebenfalls den Trägermittelpunkt
 #:   statt des Flächenschwerpunkts; Nachbau und Folgeoperationen lesen ihn.
-#: - 43 (RM-504): Der exakte Körper liest Muster an seiner Tessellierung; ein
-#:   gespeicherter STEP-Import trüge sonst weiter Einzelflächen. Ausdrücklich
-#:   zusammengefasste Zellen binden sich wie Texturen an ihre Oberfläche.
-#: - 44 (RM-411): Ein exaktes Langloch verlangt den geschlossenen Mantel wie am
-#:   Netz; zwei Bögen, deren Mantel über eine weitere Wand läuft, sind keines.
-#:   Gespeicherte Merkmale nannten dort ein Langloch, und ein exakter Stopfen,
-#:   der den Körper verlöre, ist jetzt eine Absage statt eines Ergebnisses.
-CACHE_FORMAT_VERSION: Final = 44
+#: - 43 (RM-226): Ein Zylinder, der quer zu seiner Achse nicht in seinen
+#:   Körper passt, ist auch am exakten Kern keine Verrundung, sondern eine
+#:   gekrümmte Fläche wie am Netz; gespeicherte exakte Merkmale nennen ihn noch
+#:   ``fillet``. Auf ``main`` stand die 43 zugleich für RM-504 (unten).
+#: - 44 (RM-226): Das Netz trennt tangential verbundene Rundungen an ihren
+#:   Zylindern, nennt Kugelecken zwischen verrundeten Kanten Verrundung und die
+#:   Ebenen dazwischen Fläche; gespeicherte Netzmerkmale führen dort noch eine
+#:   einzige gekrümmte Fläche.
+#: - 45: Zusammenführung beider Linien. RM-504 (auf ``main`` die 43): Der
+#:   exakte Körper liest Muster an seiner Tessellierung; ein gespeicherter
+#:   STEP-Import trüge sonst weiter Einzelflächen. Ausdrücklich
+#:   zusammengefasste Zellen binden sich wie Texturen an ihre Oberfläche. Ein
+#:   Eintrag aus nur einer der beiden Linien kennt die andere Änderung nicht.
+#: - 46 (RM-226): Ein Langloch ist am exakten Kern so tief wie seine ganze
+#:   Wand, über beide Bögen; ein Zylinder mit schrägem oder freiem Rand misst
+#:   seine Achsgrenzen an der Form statt an den Parametergrenzen.
+#: - 47 (RM-226): Die tangentiale Trennung gibt ein Ziel nach
+#:   ``TANGENTIAL_FIRST_SEEDS`` vergeblichen Keimen auf, nach dem ersten
+#:   Stück nach ``TANGENTIAL_FUTILE_SEEDS`` in Folge.
+#: - 48 (RM-411): Zusammenführung mit der Langlochlinie (auf ``main`` die 44).
+#:   Ein exaktes Langloch verlangt den geschlossenen Mantel wie am Netz; zwei
+#:   Bögen, deren Mantel über eine weitere Wand läuft, sind keines. Gespeicherte
+#:   Merkmale nannten dort ein Langloch, und ein exakter Stopfen, der den Körper
+#:   verlöre, ist jetzt eine Absage statt eines Ergebnisses.
+CACHE_FORMAT_VERSION: Final = 48
 
 
 @dataclass(frozen=True, slots=True)

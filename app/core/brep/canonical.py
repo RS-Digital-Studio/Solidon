@@ -611,6 +611,35 @@ def _torus_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> To
     return TorusSurface(candidate, normal.Dot(gp_Vec(middle, point)) < 0.0)
 
 
+def _rims_on_grid(face: Any) -> bool:
+    """Ob jede Randkante eines Zylinders Mantellinie oder Querkreis ist (RM-226).
+
+    Nur dann sind die Parametergrenzen der Fläche genau: Eine Strecke auf dem
+    Zylinder liegt längs der Achse, ein Kreis quer zu ihr. Schneidet eine
+    schräge Ebene den Mantel, ist der Rand eine Ellipse oder ein Spline, und
+    die Parametergrenzen kommen aus seiner Näherung im Parameterraum: Am
+    tieferen Bogen eines Langlochs durch eine um 4 Grad geneigte Platte lag
+    das untere Ende 0,042 mm zu tief (-4,2584 statt -4,3007). Dann misst
+    :func:`_axial_limits` an der Originalform.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Line
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    walk = TopExp_Explorer(face, TopAbs_EDGE)
+    while walk.More():
+        edge = TopoDS.Edge(walk.Current())
+        walk.Next()
+        if BRep_Tool.Degenerated_s(edge):
+            continue
+        if BRepAdaptor_Curve(edge).GetType() not in (GeomAbs_Line, GeomAbs_Circle):
+            return False
+    return True
+
+
 def _axial_limits(
     face: Any, position: Any, target: Any, cancelled: CancelToken | None
 ) -> tuple[float, float, float] | None:
@@ -1141,7 +1170,7 @@ def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | No
         radial = gp_Vec(origin, point)
         radial.Subtract(axis.Multiplied(radial.Dot(axis)))
         inward = normal.Dot(radial) < 0.0
-        if kind == GeomAbs_Cylinder:
+        if kind == GeomAbs_Cylinder and _rims_on_grid(face):
             first, last = float(adaptor.FirstVParameter()), float(adaptor.LastVParameter())
             turn = abs(float(adaptor.LastUParameter() - adaptor.FirstUParameter()))
         else:

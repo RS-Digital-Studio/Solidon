@@ -111,18 +111,6 @@ class _ThroughQuestion:
     last: float
 
 
-#: Wie viele Nachbarflächen einer kugeligen Fläche selbst Kantenverrundungen
-#: sein müssen, damit sie als Ecke gilt — die Stelle, an der verrundete Kanten
-#: zusammenlaufen. Zwei, weil eine Ecke aus mindestens zwei Kanten entsteht.
-#:
-#: **Nicht über die Größe.** Der erste Versuch maß den Anteil an der Vollkugel
-#: (Eckverrundung 0,125, volle Kugel 1,000) und trennte damit falsch: Eine
-#: Pfanne ist nie mehr als eine Halbkugel, eine flache Kalotte — eine
-#: Magnettasche etwa — kann selbst 0,1 abdecken. Gemessen an einer aus einem
-#: Quader geschnittenen Kugel: 1 Nachbar, 0 Verrundungen; an der Ecke eines
-#: rundum verrundeten Quaders: 3 Nachbarn, 3 Verrundungen.
-CORNER_NEIGHBOURS = 2
-
 # Die drei Toleranzen des Langlochs kommen von der Netzseite und stehen nur
 # dort: Wie parallel zwei Bogenachsen sein müssen, wie gleich zwei Radien und
 # ab welchem Winkel eine Fläche zum Mantel gehört. Dieselbe Frage, dieselbe
@@ -237,6 +225,7 @@ def features_of(
         solid, found, named, surfaces, inside, reach, tolerance, cancelled=cancelled
     )
     found = _short_arcs_dropped(found, named, surfaces)
+    found = _oversized_rounds_dropped(solid, found, named, surfaces)
     found = _slots_instead_of_half_bores(
         solid,
         found,
@@ -1137,6 +1126,54 @@ def _short_arcs_dropped(
     return kept
 
 
+def _oversized_rounds_dropped(
+    solid: Solid,
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    surfaces: dict[int, Surface | None],
+) -> dict[FeatureId, Feature]:
+    """Ein Zylinder, der nicht in seinen Körper passt, ist keine Rundform (RM-226).
+
+    **Dieselbe Frage wie am Netz**
+    (:func:`app.core.perceive.features.cylinder_fits_in_the_body`): Dort muss
+    jeder eingepasste Zylinder quer zu seiner Achse in den Körper passen, sonst
+    ist er Oberfläche. Ein Bogen R 382 über 6 Grad auf einem 40 mm breiten
+    Quader ist örtlich ein Zylinder, als Merkmal aber eine gewölbte Fläche — am
+    Netz hieß er so, am exakten Körper „Verrundung R 382“, denn jeder
+    Ausschnitt unter :func:`_full_turn` ist dort eine. Gefragt wird mit dem
+    Topologiemaß an der eigenen Vernetzung, nach der Nahtzusammenführung; was
+    fällt, bleibt Oberfläche und kommt am Ende von :func:`features_of` über
+    dieselbe Restflächenerkennung wie am Netz.
+
+    **Nicht ``replaces_an_edge``**: Ein flacher Buckel mitten auf einer
+    Deckfläche ersetzt auch keine Kante und heißt an beiden Kernen Verrundung;
+    die Frage nach der Kante stellen Panel und Bearbeitung, nicht der Name.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import cylinder_fits_in_the_body
+
+    faces_of: dict[FeatureId, list[int]] = {}
+    for index, identifier in named.items():
+        faces_of.setdefault(identifier, []).append(index)
+    kept = dict(found)
+    mesh = None
+    for identifier, indices in faces_of.items():
+        feature = kept.get(identifier)
+        if feature is None or feature.kind not in ("fillet", "hole", "pin"):
+            continue
+        if not all(isinstance(surfaces.get(index), CylinderSurface) for index in indices):
+            continue
+        if mesh is None:
+            mesh = as_mesh_data(solid)
+        radius = float(feature.params["diameter"]) / 2.0
+        if cylinder_fits_in_the_body(mesh, feature.params["axis"], radius):
+            continue
+        del kept[identifier]
+        for index in indices:
+            del named[index]
+    return kept
+
+
 def _cylinder_group_extent(
     solid: Solid, group: list[int], surfaces: dict[int, Surface | None]
 ) -> tuple[float, float, float]:
@@ -1567,11 +1604,27 @@ def _one_slot(
 
     surface = surface_of(first)
     first_v, last_v = surface.first, surface.last
-    depth = abs(last_v - first_v)
-    # Die Mitte liegt auf halbem Weg zwischen den Achsen, auf halber Tiefe des
-    # **ersten** Bogens — der zweite hat denselben Mantel, aber vielleicht
-    # einen anderen Parameterursprung (siehe :func:`_across_between`).
-    first_centre = _axis_point(one, (first_v + last_v) / 2.0)
+    # **Die Tiefe ist die Spanne beider Bögen** (RM-226), auf die Achse des
+    # ersten gelegt — der zweite hat vielleicht einen anderen
+    # Parameterursprung (siehe :func:`_across_between`) und eine gespiegelte
+    # Achse. Durch eine schräge Platte ist jeder Bogen anders hoch; gemessen
+    # wurde nur der erste: an der um 4 Grad geneigten Platte 3,51 statt
+    # 4,70 mm, mit Fase 2,01 statt 3,20. Das Netz misst die ganze Wand.
+    partner = surface_of(second)
+    origin, way = one.Location(), one.Axis().Direction()
+    offset, turn = other.Location(), other.Axis().Direction()
+    shift = (
+        (offset.X() - origin.X()) * way.X()
+        + (offset.Y() - origin.Y()) * way.Y()
+        + (offset.Z() - origin.Z()) * way.Z()
+    )
+    sign = turn.X() * way.X() + turn.Y() * way.Y() + turn.Z() * way.Z()
+    ends = (first_v, last_v, shift + sign * partner.first, shift + sign * partner.last)
+    low, high = min(ends), max(ends)
+    depth = high - low
+    # Die Mitte liegt auf halbem Weg zwischen den Achsen, auf halber Tiefe der
+    # ganzen Wand.
+    first_centre = _axis_point(one, (low + high) / 2.0)
     centre: Vec3 = (
         first_centre[0] + across[0] / 2.0,
         first_centre[1] + across[1] / 2.0,
@@ -1644,7 +1697,7 @@ def _describe(
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_REVERSED
 
-    from app.core.perceive.features import MIN_ROUND_ARC
+    from app.core.perceive.features import CORNER_NEIGHBOURS, MIN_ROUND_ARC
 
     # **Dieselbe Schranke wie am Netz** (RM-210, :func:`_short_arcs_dropped`):
     # Torus- und Kegelstücke unter dem Mindestbogen sind schon hier keine
@@ -1825,7 +1878,10 @@ def _describe(
         ball = surface.sphere
         radius = float(ball.Radius())
         hollow = surface.inward
-        if _rounded_neighbours(solid, neighbours, face, cancelled=cancelled) >= CORNER_NEIGHBOURS:
+        if (
+            _rounded_neighbours(solid, neighbours, face, radius, cancelled=cancelled)
+            >= CORNER_NEIGHBOURS
+        ):
             # **Als Verrundung, nicht als Kugel.** Was hier steht, ist die
             # Ecke, an der drei verrundete Kanten zusammentreffen. Sie ist
             # gerechnet ein Kugelstück und benannt eine Verrundung: „Kuppel
@@ -2047,10 +2103,17 @@ def _point_in_material(inside: Any, point: Any) -> bool:
 
 
 def _rounded_neighbours(
-    solid: Solid, neighbours: Any, face: Any, *, cancelled: CancelToken | None = None
+    solid: Solid,
+    neighbours: Any,
+    face: Any,
+    radius: float,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> int:
     """Wie viele Flächen an dieser hier grenzen und selbst Kantenverrundungen
-    sind — zylindrisch und weniger als eine volle Umdrehung.
+    mit ihrem ``radius`` sind — zylindrisch, weniger als eine volle Umdrehung
+    und mit dem Radius einer Kugelecke (``perceive.features.rounds_the_corner``,
+    dieselbe Frage wie am Netz).
 
     Eine Fläche wird nur einmal gezählt, auch wenn sie über zwei Kanten
     anstößt; die Nachbarkarte gibt sie als nacktes Handle zurück, und
@@ -2059,6 +2122,8 @@ def _rounded_neighbours(
     """
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
+
+    from app.core.perceive.features import rounds_the_corner
 
     seen: set[int] = set()
     walk = TopExp_Explorer(face, TopAbs_EDGE)
@@ -2079,6 +2144,8 @@ def _rounded_neighbours(
         surface = solid.surface(number, cancelled=cancelled)
         if not isinstance(surface, CylinderSurface):
             continue
-        if surface.turn < _full_turn():
+        if surface.turn < _full_turn() and rounds_the_corner(
+            radius, float(surface.cylinder.Radius())
+        ):
             rounded += 1
     return rounded

@@ -400,6 +400,12 @@ Volumen beweisen keine Parität.
 - Gleiche Form sagt der Abstand zur Fläche (`_same_surface_patch`), nie die
   Vernetzung. Ein strittiges Dreieck gehört dem innersten Merkmal oder keinem
   (`CONTESTED`), nie nach der Reihenfolge der Erkennung.
+- Ein Zylinder, der quer zu seiner Achse nicht in den Körper passt, ist an
+  beiden Kernen keine Rundform, sondern Oberfläche
+  (`perceive.features.cylinder_fits_in_the_body`); ob eine Rundung eine Kante
+  ersetzt (`replaces_an_edge`), fragen Panel und Bearbeitung, nicht der Name.
+- Eine Kugel an Rundungen ihres Radius (`perceive.features.rounds_the_corner`)
+  heißt an beiden Kernen Eckverrundung, ohne Achse.
 - `native` heißt belegt: am offenen Langloch Durchmesser, Achse, Bogenmitte,
   Richtung, nie Mündung und Weg.
 

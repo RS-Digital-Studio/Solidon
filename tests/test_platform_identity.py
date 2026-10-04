@@ -849,6 +849,34 @@ def _rebuilt_box() -> str:
     return fingerprint([drafts[0].params[key] for key in sorted(drafts[0].params)])
 
 
+def _tangential_rounds() -> str:
+    """Die tangentiale Trennung am rundum verrundeten T (RM-226): wer welche Rundung trägt.
+
+    Gezählt werden die Entscheidungen — Art und Dreiecke je Merkmal —, nicht
+    die eingepassten Maße: Die Trennung wählt zwischen Keimen, Bändern,
+    Kreisen und Reststücken, und keine dieser Wahlen darf an der letzten
+    Stelle einer Rechnung hängen. Der Merker wird vorher geleert, sonst
+    antwortete der zweite Lauf aus dem ersten.
+    """
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect, forget_cache
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    joined = edit.unified(
+        edit.boolean("union", [edit.box(40.0, 10.0, 10.0), edit.box(10.0, 10.0, 40.0)])
+    )
+    forget_cache()
+    found = detect(as_mesh_data(edit.fillet(joined, 3.0, "all")))
+    decisions = sorted(
+        (feature.kind, tuple(sorted(int(index) for index in feature.face_indices)))
+        for feature in found.values()
+    )
+    assert sum(kind == "fillet" for kind, _faces in decisions) == 36, "die Probe muss trennen"
+    return hashlib.sha256(repr(decisions).encode()).hexdigest()[:16]
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "bound_surface": _bound_surface,
@@ -877,6 +905,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "rotate_object": _turned_plate,
     "section_cut": _slanted_cut,
     "step_assembly": _step_assembly,
+    "tangential_rounds": _tangential_rounds,
     "thicken": _thickened_skin,
     "support_columns": _support_columns,
 }

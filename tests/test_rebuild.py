@@ -18,12 +18,18 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def imported(name: str):
+    return imported_payload(name, (MESHES / name).read_bytes())
+
+
+def imported_payload(name: str, payload: bytes):
+    """Ein Projekt, das ``payload`` als Datei ``name`` in Millimetern einliest."""
     from dataclasses import replace
 
+    from app.core.bootstrap import load_operations
     from app.core.ingest.plan import import_plan
 
+    load_operations()
     project = new_project("centauri-carbon-2", "petg")
-    payload = (MESHES / name).read_bytes()
     project.sources["src_1"] = payload
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path=f"sources/{name}", sha256=""
@@ -114,6 +120,149 @@ def test_planar_steps_have_an_exact_construction_without_filling_the_air(
     assert any(draft.op == "sketch_extrude" for draft in chosen.drafts)
     assert chosen.result.mesh.volume == pytest.approx(proposal.source.mesh.volume, rel=1e-6)
     assert chosen.check.surface is not None and chosen.check.surface.within_limit
+
+
+def _as_stl(solid) -> bytes:
+    """Der exakte Körper als binäre STL, wie ein fremdes Programm sie schriebe."""
+    import io
+
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import as_mesh_data
+
+    twin = as_mesh_data(solid)
+    stream = io.BytesIO()
+    trimesh.Trimesh(
+        vertices=np.asarray(twin.raw.vertices), faces=np.asarray(twin.raw.faces), process=False
+    ).export(stream, file_type="stl")
+    return stream.getvalue()
+
+
+def _stepped_part(name: str):
+    """Gestufte Grundformen aus Konzept §§8.2 und 13.5, am exakten Kern gebaut."""
+    import math
+
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Line
+
+    from app.core.brep import edit
+
+    def drilled(solid, x: float, top: float, depth: float):
+        tool = edit.moved(edit.cylinder(4.0, depth), (x, 0.0, top - depth))
+        return edit.boolean("difference", [solid, tool])
+
+    def straight(solid, direction, near) -> tuple[str, ...]:
+        return tuple(
+            edit.edge_key(edge)
+            for edge in edit.edges_of(solid)
+            if BRepAdaptor_Curve(edge.edge).GetType() == GeomAbs_Line
+            and abs(sum(a * b for a, b in zip(edge.direction, direction, strict=True))) > 0.999
+            and near(edge.middle)
+        )
+
+    upright = edit.moved(edit.box(4.0, 20.0, 30.0), (-18.0, 0.0, 0.0))
+    bracket = edit.unified(edit.boolean("union", [edit.box(40.0, 20.0, 4.0), upright]))
+    high = edit.moved(edit.box(30.0, 20.0, 8.0), (15.0, 0.0, 0.0))
+    steps = edit.unified(edit.boolean("union", [edit.box(60.0, 20.0, 4.0), high]))
+    if name == "bracket":
+        return drilled(drilled(bracket, 5.0, 4.0, 4.0), 12.0, 4.0, 4.0)
+    if name == "stepped_plate":
+        return drilled(drilled(steps, -15.0, 4.0, 4.0), 15.0, 8.0, 8.0)
+    if name == "ledge":
+        cut = edit.moved(edit.box(10.0, 30.0, 4.0), (15.0, 0.0, 6.0))
+        return edit.boolean("difference", [edit.box(40.0, 30.0, 10.0), cut])
+    if name == "pocket":
+        cut = edit.moved(edit.box(16.0, 12.0, 4.0), (0.0, 0.0, 6.0))
+        return drilled(edit.boolean("difference", [edit.box(40.0, 30.0, 10.0), cut]), 0.0, 6.0, 6.0)
+    if name == "stairs":
+        blocks = [
+            edit.moved(edit.box(10.0, 20.0, 5.0 * (n + 1)), (-10.0 + 10.0 * n, 0.0, 0.0))
+            for n in range(3)
+        ]
+        return edit.unified(edit.boolean("union", blocks))
+    if name == "bracket_drilled_through_both_legs":
+        body = drilled(drilled(bracket, 5.0, 4.0, 4.0), 12.0, 4.0, 4.0)
+        for z in (15.0, 24.0):
+            body = edit.bore(body, position=(-18.0, 0.0, z), axis="x", diameter=4.0)
+        return body
+    if name == "bracket_with_cove_and_holes":
+        inner = straight(
+            bracket, (0.0, 1.0, 0.0), lambda m: math.dist((m[0], m[2]), (-16.0, 4.0)) < 1e-6
+        )
+        assert len(inner) == 1
+        coved = edit.fillet(bracket, 3.0, "named", inner)
+        return drilled(drilled(coved, 5.0, 4.0, 4.0), 12.0, 4.0, 4.0)
+    if name == "stepped_plate_with_round_corners":
+        corners = straight(
+            steps,
+            (0.0, 0.0, 1.0),
+            lambda m: abs(abs(m[0]) - 30.0) < 1e-6 and abs(abs(m[1]) - 10.0) < 1e-6,
+        )
+        assert len(corners) == 4
+        return edit.fillet(steps, 3.0, "named", corners)
+    assert name == "stepped_plate_countersunk"
+    shaft = edit.moved(edit.cylinder(4.0, 6.0), (-15.0, 0.0, -1.0))
+    sink = edit.moved(edit.cone(4.0, 8.0, 2.0), (-15.0, 0.0, 2.0))
+    return edit.boolean("difference", [edit.boolean("difference", [steps, shaft]), sink])
+
+
+@pytest.mark.parametrize(
+    "name, least_drilled, widened",
+    [
+        ("bracket", 0, None),
+        ("stepped_plate", 0, None),
+        ("ledge", 0, None),
+        ("pocket", 0, None),
+        ("stairs", 0, None),
+        ("bracket_drilled_through_both_legs", 2, None),
+        ("bracket_with_cove_and_holes", 2, None),
+        ("stepped_plate_with_round_corners", 0, None),
+        ("stepped_plate_countersunk", 1, 8.0),
+    ],
+)
+def test_steps_and_shoulders_from_a_mesh_are_rebuilt_as_sketches_and_extrusions(
+    name: str, least_drilled: int, widened: float | None, profile: Profile
+):
+    """Stufen und Absätze aus einer STL werden Skizze plus Extrusion je Höhe (RM-022).
+
+    Die Grundformen neben Brücke und Inselturm: Winkel, Stufenplatte, Absatz,
+    Tasche und Treppe; dazu, was ein Querschnitt nicht trägt und deshalb
+    danach gebohrt wird — Bohrungen quer zur Stufenrichtung und Senkungen —,
+    und Rundungen längs der Stufenrichtung, die im Querschnitt als Bögen
+    stehen. Sollwert ist der gebaute Körper: sein Volumen, die Formgrenze, die
+    Senkung Ø 8. Der Vollquader besteht nie. Keine Zusage für jede STL.
+    """
+    from app.core.scene.rebuild import RebuildBudget, propose
+
+    solid = _stepped_part(name)
+    project = imported_payload("part.stl", _as_stl(solid))
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+    assert proposal.accepted, [
+        (entry.check.reason, entry.check.unexplained) for entry in proposal.candidates
+    ]
+    chosen = proposal.accepted[0]
+    drills = [draft for draft in chosen.drafts if draft.op == "drill_brep_hole"]
+    assert any(draft.op == "sketch_extrude" for draft in chosen.drafts)
+    assert len(drills) >= least_drilled
+    assert all(draft.params["compensate"] is False for draft in drills)
+    if widened is not None:
+        assert [draft.params.get("widening_diameter") for draft in drills] == [
+            pytest.approx(widened, abs=0.05)
+        ]
+    assert chosen.result.mesh.volume == pytest.approx(solid.volume, rel=1e-4)
+    assert chosen.check.surface is not None and chosen.check.surface.within_limit
+    assert all(
+        not entry.check.accepted
+        for entry in proposal.candidates
+        if [draft.op for draft in entry.drafts] == ["create_brep_box"]
+    )
 
 
 @pytest.mark.parametrize("name", ("openscad_ascii.stl", "plate_countersunk_blind.stl"))
@@ -307,6 +456,66 @@ def test_a_post_with_fillet_is_extended_to_its_support_plane(profile: Profile, r
     ]
     assert chosen.drafts[1].params["height"] == pytest.approx(30.0, abs=1e-6)
     assert chosen.result.mesh.volume == pytest.approx(source.volume, abs=1e-6)
+
+
+def test_a_post_with_a_cove_from_a_mesh_is_rebuilt_like_the_exact_one(profile: Profile):
+    """Derselbe Zapfen mit Hohlkehle, als STL eingelesen, wird gleich nachgebaut (RM-022).
+
+    Mantel und Kehle gehen tangential ineinander über; am Netz lagen beide bis
+    zur tangentialen Trennung (RM-226) in einer gekrümmten Fläche, und der
+    Nachbau fand keinen Zapfen — jeder Kandidat blieb mit unerklärten Flächen
+    stehen. Jetzt liest das Netz Zapfen und Kehle wie der exakte Kern, und der
+    Nachbau nimmt dieselbe Folge wie aus der STEP-Datei. Sollwert aus der
+    Konstruktion: das Volumen des exakten Körpers.
+    """
+    import io
+    import math
+
+    import numpy as np
+    import trimesh
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Circle
+
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.rebuild import RebuildBudget, propose
+
+    plate = edit.moved(edit.box(60.0, 60.0, 6.0), (0.0, 0.0, -6.0))
+    sharp = edit.boolean("union", [plate, edit.cylinder(12.0, 30.0)])
+    foot = [
+        edge
+        for edge in edit.edges_of(sharp)
+        if BRepAdaptor_Curve(edge.edge).GetType() == GeomAbs_Circle
+        and math.dist(edge.middle, (0.0, 0.0, 0.0)) < 1e-6
+    ]
+    assert len(foot) == 1
+    solid = edit.fillet(sharp, 3.0, "named", (edit.edge_key(foot[0]),))
+    twin = as_mesh_data(solid)
+    stream = io.BytesIO()
+    trimesh.Trimesh(
+        vertices=np.asarray(twin.raw.vertices), faces=np.asarray(twin.raw.faces), process=False
+    ).export(stream, file_type="stl")
+    project = imported_payload("post_with_a_cove.stl", stream.getvalue())
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+    kinds = sorted(feature.kind for feature in proposal.source.features.values())
+    assert kinds == ["face"] * 7 + ["pin", "torus"]
+    assert proposal.accepted, [
+        (entry.check.reason, entry.check.unexplained) for entry in proposal.candidates
+    ]
+    chosen = proposal.accepted[0]
+    assert [draft.op for draft in chosen.drafts] == [
+        "create_brep_box",
+        "create_brep_cylinder",
+        "union_objects",
+        "fillet_edges",
+    ]
+    assert chosen.result.mesh.volume == pytest.approx(solid.volume, abs=1e-3)
 
 
 def test_rebuild_is_one_transaction_with_parameters_sources_and_disk_round_trip(

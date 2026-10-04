@@ -4858,7 +4858,9 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         cancelled=ctx.cancelled,
         tool=cutting,
     )
-    findings += lost
+    # Der Durchgang steht an dieser Stelle der Befunde, sobald feststeht, dass
+    # es die Kopie gibt.
+    through_at = len(findings)
 
     copy = dataclasses.replace(
         feature,
@@ -4871,11 +4873,20 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     findings += _edge_findings(body, [copy])
     kept: dict[FeatureId, Feature] = {copy.id: copy}
     if cavity:
-        travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
         kept, missing = _copies_found(
             "duplicate_feature", placed.mesh, kept, check_cancelled=ctx.cancelled.raise_if_cancelled
         )
         findings += missing
+        if copy.id not in kept:
+            # **Was es nicht gibt, geht auch nicht mehr durch** (RM-226): Der
+            # exakte Kern sagt an einer verlorenen Kopie nur, dass sie verloren
+            # ist (``_exact_copy_result``); am Teppichclip sagte das Netz
+            # stattdessen „geht nicht mehr durch“ zu einer Kopie, die es nicht
+            # gab.
+            lost = []
+    findings[through_at:through_at] = lost
+    if cavity:
+        travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
         findings += _mouth_covered(
             "duplicate_feature", body, placed.mesh, feature, source.features, travel, findings
         )
@@ -11908,7 +11919,10 @@ def _copies_found(
     die Bohrungskopien als verloren, das Netz trug sie ungeprüft mit ihren
     Maßen weiter — und das Merkmalfenster zeigte zwei Bohrungen, die nicht
     da sind. Nachgemessen wird mit :func:`_measured_on`; Kopien anderer Art
-    reichen durch, wie sie sind.
+    reichen durch, wie sie sind. **Ein Langloch ebenso** (RM-226): Am
+    Teppichclip lief eine 12 mm quer verdoppelte Langlochkopie über die Seite;
+    der exakte Kern nannte sie verloren, das Netz trug sie weiter, und neben
+    der Seite stand sie als zweites Langloch im Baum.
 
     **Wiedergefunden heißt: auf ihrer Achse.** Die Messung am Netz nimmt auch
     einen angeschnittenen Zylinder als Bohrung; an der Kopie über der Seite lag
@@ -11926,7 +11940,7 @@ def _copies_found(
     cavities = [
         copy
         for copy in copies.values()
-        if copy.kind in ("hole", "cone") and is_a_cavity(copy) and copy.recognised
+        if copy.kind in ("hole", "cone", "slot") and is_a_cavity(copy) and copy.recognised
     ]
     measured = _measured_on(mesh, cavities, check_cancelled=check_cancelled)
     kept: dict[FeatureId, Feature] = {}
@@ -20190,6 +20204,7 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
     Und wieder zwei Kerne: Der exakte nimmt die Rundungsfläche als Ding
     (``BRepAlgoAPI_Defeaturing``), das Netz legt den Zwickel dazu.
     """
+    _refuse_a_corner(source.features[name])
     if source.features[name].params.get("tangent", False):
         from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS
 
@@ -20223,6 +20238,7 @@ def _reshape_the_fillet(
     radius: float,
 ) -> OpResult:
     """Den Radius einer erkannten Rundung ändern."""
+    _refuse_a_corner(source.features[name])
     if is_close(radius, float(source.features[name].params["radius"])):
         return OpResult(
             outputs=[source],
@@ -20252,6 +20268,23 @@ def _reshape_the_fillet(
         cancelled=ctx.cancelled,
     )
     return _after_the_fillet(source, name, outcome, radius=radius, ctx=ctx)
+
+
+def _refuse_a_corner(feature: Feature) -> None:
+    """Eine Eckrundung wird weder entfernt noch geändert — an beiden Kernen derselbe Satz.
+
+    Wo verrundete Kanten zusammenlaufen, ist die Rundung eine Kugel ohne
+    Achse (RM-226); unter ihr liegt keine Kante, auf die sie sich
+    zurückführen ließe. Das Merkmalfenster stellt beide Zeilen mit diesem Satz
+    grau (``perceive.actions.fillet_blocked``), und die Operation sagt ihn,
+    wenn Chat oder Kommandozeile sie trotzdem rufen. Vorher sagte der exakte
+    Kern „Wählen Sie genau eine vollständige Rundungsfläche …“, und das Netz
+    scheiterte an der fehlenden Achse.
+    """
+    if "axis" not in feature.params:
+        from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
 
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:

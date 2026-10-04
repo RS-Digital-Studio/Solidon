@@ -100,7 +100,8 @@ unveränderten Ergebnis (`HasSourceDeviation`).
 - **Maße von der Originalfläche**: Achse, Kugelzentrum, Kegelspitze und Nappe
   (Halbwinkel im Bogenmaß, über beide Nappen getrimmt kein Kegel,
   Spitzenparameter nur in der Endpunktklammer auf null), Endlagen über Abstände
-  (`AddOptimal` hat Zuschlag), Winkel aus den Randkurven, Radien nur angezeigt
+  (`AddOptimal` hat Zuschlag; am Zylinder, sobald ein Rand weder Mantellinie
+  noch Querkreis ist, `canonical._rims_on_grid`), Winkel aus den Randkurven, Radien nur angezeigt
   gerundet. Kugel: Materialseite aus Hautnormale und Radiale; `centre` ist
   auch an einer Eckrundung der Mittelpunkt ihrer Trägerkugel.
 - **Orientierung**: `TopAbs_REVERSED` dreht die Ebenennormale; Bohrung gegen
@@ -127,14 +128,19 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Nennmaße ohne Fase); auf schräger Fläche macht OpenCASCADE ihre Bögen zu
   BSplines — was `partial_cone_patch` als Kegelstück liest, trägt die Fase.
   `MIN_ROUND_ARC` fragt `_describe` am nativen Umfang, einen Zylinder erst nach
-  der Nahtzusammenführung (`_short_arcs_dropped`).
+  der Nahtzusammenführung (`_short_arcs_dropped`). Tiefe und Mitte über beide
+  Bögen, auf die Achse des ersten gelegt (`_one_slot`), wie am Netz.
 - **Bohrung**: Mitte auf der Achse in der Mitte der V-Spanne. Nicht
   durchgehend, wenn eine Nachbarfläche über die Achse oder einen der
   `THROUGH_RINGS` in die Mündung reicht — gemessen, nicht geschnitten.
 - **Zylindrische Rundung**: `centre` ist dieselbe begrenzte Achsmitte wie im
   Netzfit, auch bei zusammengeführten Teilflächen. Der Flächenschwerpunkt
   dient nur der Materialseitenprobe. Kugelige Eckrundungen tragen die
-  Trägerkugelmitte ohne erfundene Achse.
+  Trägerkugelmitte ohne erfundene Achse; Ecke ist eine Kugel ab
+  `perceive.features.CORNER_NEIGHBOURS` verrundeten Nachbarn ihres Radius
+  (`rounds_the_corner`), dieselbe Frage wie am Netz. Ein Zylinder, der quer zu seiner
+  Achse nicht in den Körper passt, ist wie am Netz keine Rundform
+  (`_oversized_rounds_dropped` fragt `perceive.features.cylinder_fits_in_the_body`).
   Werkzeuge: Material über trägen `profiles.for_object`, Profil aus
   `geom.prepare.drill_outline`, analytisch rotiert;
   `revolved_bore_tool`/`clipped_bore_tool` schneiden an den echten Randebenen

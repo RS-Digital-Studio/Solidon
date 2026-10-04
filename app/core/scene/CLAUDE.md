@@ -364,10 +364,11 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   Abdruck bleibt; Rechnen verlangt die Prüfsumme; fremder Inhalt, Größe oder
   ein Pfad außerhalb des Projektordners werden abgewiesen.
 - **Nachbau**: Dokumentkopien prüfen Kandidaten aus Einzel-/Auftragskörpern,
-  gerundeten Stützebenen und gestuften Querschnitten am vollständigen Original.
-  Unbekannte begrenzte Flächen sperren die Übernahme. `commit` vergleicht den
-  geprüften Dokument-/Operationsstand und aktiv verknüpfte Quellen erneut
-  (`SourceAccess`); Maße, Attribute und Passungsfolgen bilden eine Transaktion.
+  gerundeten Stützebenen und gestuften Querschnitten (Querbohrung, Senkung
+  gebohrt: `_without_holes`) am Original. Unbekannte Flächen sperren nach
+  bestandener Formprüfung. `commit` vergleicht den geprüften Stand und
+  verknüpfte Quellen erneut (`SourceAccess`); Maße, Attribute und
+  Passungsfolgen sind eine Transaktion.
 - **Mitreisende Profile** (Regel in `dateiformat.md`): `save` erneuert sie
   (`MAX_CARRIED_PROFILES`), `profiles.carry`, `scene_profile`,
   `carried_findings`; alle Wege fragen dieselbe Rückfallfunktion.
