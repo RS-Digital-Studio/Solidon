@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import errno
+import json
 import os
 import subprocess
 import sys
@@ -43,6 +44,7 @@ from app.core.geom import kernel_jobs, kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.scene.cancel import CancelSignal
 from app.i18n.catalog import available_languages
+from tests.kernel_helper_probe import LOADED_MARK, serve_and_note_loads
 
 ROOT = Path(__file__).resolve().parent.parent
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -212,13 +214,26 @@ def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
     job: str,
     case: Callable[[], tuple[dict[str, np.ndarray], dict[str, Any]]],
     offloaded: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Dieselbe Rechnung, dieselben Eingänge, dieselbe ``manifold3d``-Fassung: dieselben Bytes.
 
     Das ist die Zusage, unter der der Hilfsprozess überhaupt rechnen darf —
     Cache, Determinismus (Regel 6) und jede Zahl im Prüfbericht hängen daran.
     Verglichen wird Byte für Byte, nicht auf eine Toleranz.
+
+    **Und zurückgestellt lädt sie nichts nach** (RM-380): Was eine Rechnung an
+    Modulen braucht, lädt der Hilfsprozess vorher in normaler Klasse
+    (``kernel_jobs.PREPARATIONS``). Unter Windows rechnet er eine Klasse tiefer,
+    und auf ausgelasteten Kernen verhungerte dort das Nachladen von
+    ``trimesh.graph`` — im Entwicklungstor kam ``component_labels`` in 120 s
+    nicht zurück, allein gefahren in einer Sekunde. Gemessen wird im
+    Hilfsprozess um den Aufruf aus ``JOBS`` (``tests/kernel_helper_probe.py``).
     """
+    mark = tmp_path / "geladen.jsonl"
+    monkeypatch.setenv(LOADED_MARK, str(mark))
+    monkeypatch.setattr(kernel_process, "_SERVE", serve_and_note_loads)
     arrays, values = case()
     here = kernel_jobs.JOBS[job](arrays, dict(values), lambda: None)
 
@@ -228,6 +243,8 @@ def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
     assert here[1] == there[1]
     assert kernel_process.statistics().get(f"helper:{job}") == 1, "im Hilfsprozess gerechnet"
     assert here[0] or here[1].get("gap") is not None, "der Fall tut etwas"
+    noted = [json.loads(line) for line in mark.read_text(encoding="utf-8").splitlines()]
+    assert noted == [{"job": job, "loaded": []}], "zurückgestellt nichts nachgeladen"
 
 
 def test_the_public_ways_give_the_same_mesh_through_the_helper(offloaded: None) -> None:

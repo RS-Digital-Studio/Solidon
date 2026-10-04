@@ -1,0 +1,13 @@
+ohne eigene Last (die Kerne teilen sich weiter mit der Maschine)
+  Hilfsprozess 35964, Affinität 0xc0000000
+       1.5 s  CPU  1.36 s  Klasse 0x20
+1 component_labels, wie ausgeliefert: fertig nach 1.5 s (Ergebnis, helper=1, fallback=0)
+  Hilfsprozess 61844, Affinität 0xc0000000
+       2.0 s  CPU  1.28 s  Klasse 0x20
+2 component_labels, ohne Vorbereitung: fertig nach 2.0 s (Ergebnis, helper=1, fallback=0)
+  Hilfsprozess 9424, Affinität 0xc0000000
+       1.5 s  CPU  1.36 s  Klasse 0x20
+3 component_labels, nicht zurückgestellt: fertig nach 1.5 s (Ergebnis, helper=1, fallback=0)
+  Hilfsprozess 82140, Affinität 0xc0000000
+       0.3 s  CPU  0.31 s  Klasse 0x20
+4 simplify_closed, wie ausgeliefert: fertig nach 0.3 s (Ergebnis, helper=1, fallback=0)

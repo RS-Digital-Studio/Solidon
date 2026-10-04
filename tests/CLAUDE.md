@@ -91,7 +91,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
-| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und — untätig — mit einem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme, sterbende und abweisende; verspätetes Ende, Ressourcenfreigabe, bleibende Absage, ursprüngliche Startursache, Startkontingent und Generationswechsel auch am öffentlichen Aufruf; ENOSPC gegenüber echtem Speichermangel über pack/copied und den öffentlichen Call-/Serve-Transfer; Schwelle null, Aufruf aus einem Nebenfaden. Das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob; `test_packaging.py` prüft dessen eigenes Endebudget und harte Stopfehler mit Attrappen |
+| Rechnet der Hilfsprozess des Netzkerns bitgleich und zurückgestellt ohne Nachladen, endet er beim Abbrechen und — untätig — mit einem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme, sterbende und abweisende; verspätetes Ende, Ressourcenfreigabe, bleibende Absage, ursprüngliche Startursache, Startkontingent und Generationswechsel auch am öffentlichen Aufruf; ENOSPC gegenüber echtem Speichermangel über pack/copied und den öffentlichen Call-/Serve-Transfer; Schwelle null, Aufruf aus einem Nebenfaden. Das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob; `test_packaging.py` prüft dessen eigenes Endebudget und harte Stopfehler mit Attrappen |
 | Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` — Windows-Jobobjekt, gehaltene Griffe, echte OS-Abfrage; negative Kontrollen treffen dasselbe Assert; ohne Fenster oder Leistungsmarken |
 
 ## Helfer
@@ -105,6 +105,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien; ob die ausgelieferte Datei gegen den echten Schlüssel trägt, prüft `test_the_published_version_file_is_signed` |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
 | `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`, ohne OPcache: `WITHOUT_OPCACHE`) |
+| `kernel_helper_probe.py` | Ein Hilfsprozess des Netzkerns, der je Rechnung mitschreibt, was sie zurückgestellt nachlädt; lädt oben nur die Standardbibliothek, denn `spawn` lädt das Modul des Startziels mit |
 | `agent_cases.py` · `scripted_backend.py` | Fälle der Agenten-Suite · Sprach- und Mesh-Modell mit vorgeschriebenen Antworten |
 
 ## Stolperfallen

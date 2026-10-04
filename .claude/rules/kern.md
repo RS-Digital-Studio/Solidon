@@ -157,6 +157,11 @@ ihn ruft, hält das Fenster an (RM-212).
   BLAS-Faden (`HELPER_ENVIRONMENT`, spart je Bibliothek einen Puffer je
   Rechenkern), und über BLAS hinge das Ergebnis an der Fadenzahl.
   `test_the_jobs_call_no_blas` hält es.
+- **Eine Rechnung lädt zurückgestellt nichts nach**: Was sie an Modulen
+  braucht, steht in `kernel_jobs.PREPARATIONS` und lädt vorher in normaler
+  Klasse — unter Windows verhungert ein Import eine Klasse tiefer auf
+  ausgelasteten Kernen (RM-380). `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
+  misst es je Rechnung im Hilfsprozess.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
   Verfeinerung die erwartete des Ergebnisses.
 - **Ein voller Datenträger pausiert, er schaltet nicht ab** (RM-436): ENOSPC
