@@ -23,6 +23,7 @@ from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
     CHANGE_SELECTION,
+    CHANGE_SIZE,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
     RECOUNT_AND_RETRY,
@@ -7351,7 +7352,9 @@ class ResizeFeatureParams(BaseParams):
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: Mantel und Musterstopfen teilen achsparallele Facetten samt ihrer
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
-    cache_version="16",
+    # 17: Ein geändertes Gewinde misst die Wand, die es lässt — Absage beim
+    # Durchbruch, Befund ``thread.thin_wall`` unter der Mindestwand (RM-184).
+    cache_version="17",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -15008,6 +15011,119 @@ def _thread_checked(feature: Feature, diameter: float, pitch: float) -> tuple[fl
     return diameter, wanted_pitch
 
 
+#: Wie viele Strahlen je Messring und an welchen Stellen der Strecke die Wand
+#: um ein Gewinde gemessen wird: 24 Richtungen treffen die Seitenwände eines
+#: Quaders senkrecht, fünf Ringe die Mitte und beide Enden innerhalb der Gänge.
+_WALL_RAYS: Final = 24
+_WALL_RINGS: Final = (-0.4, -0.2, 0.0, 0.2, 0.4)
+
+
+def _thread_wall(
+    source: SceneObject, feature: Feature, diameter: float, pitch: float, profile: Profile
+) -> list[Finding]:
+    """Die Wand, die das neue Gewinde übrig lässt — Absage, wenn es durchbricht (RM-184).
+
+    Ein Innengewinde, das wächst, frisst die Wand um sich; ein Außengewinde,
+    das schrumpft, den Kern über einer Bohrung in seiner Achse. Gemessen wird
+    mit Strahlen quer zur Achse an der Tessellation, an beiden Kernen gleich:
+    innen der erste Austritt aus dem Material jenseits der alten Gänge, außen
+    der letzte Eintritt diesseits von ihnen. Das neue Gewinde reicht innen bis
+    zu seinem Nenn-Ø, außen bis zu seinem Kern (``shapes.RIDGE_SHARE``).
+
+    Gemeldet wird nur, was diese Änderung dünner macht als das Profil verlangt
+    (``Profile.minimum_wall_thickness``) — wie bei der Nachbarwand einer
+    Bohrung. Die Zahl entscheidet über einen Satz, nicht über Geometrie; die
+    Tessellation weicht höchstens um ``MAX_FACET_SAG`` ab.
+    """
+    from app.core.knowledge.parts import shapes
+    from app.core.sketch.planes import frame_of
+
+    internal = bool(feature.params.get("internal", False))
+    centre, axis, length = _thread_frame(feature)
+    inner, outer = _thread_bounds(feature, source)
+    mesh = as_mesh_data(source.mesh)
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    frame = frame_of((float(axis[0]), float(axis[1]), float(axis[2])), (0.0, 0.0, 0.0))
+    across = np.asarray(frame.x_axis, dtype=np.float64), np.asarray(frame.y_axis, dtype=np.float64)
+    reach: float | None = None
+    for share in _WALL_RINGS:
+        origin = centre + axis * (share * length)
+        for index in range(_WALL_RAYS):
+            cosine, sine = units.circle_point(_WALL_RAYS, index)
+            way = across[0] * cosine + across[1] * sine
+            distances, hit = ray_hits_along(triangles, origin, way)
+            facing = (normals[hit] * way).sum(axis=1)
+            if internal:
+                # Der erste Austritt hinter den alten Gängen ist die Außenwand.
+                exits = distances[(facing > 0.0) & (distances > outer - MAX_FACET_SAG)]
+                if len(exits):
+                    found = float(exits.min())
+                    reach = found if reach is None else min(reach, found)
+            else:
+                # Der letzte Eintritt vor dem Kern ist der Rand einer Bohrung darin.
+                entries = distances[(facing < 0.0) & (distances < inner + MAX_FACET_SAG)]
+                if len(entries):
+                    found = float(entries.max())
+                    reach = found if reach is None else max(reach, found)
+    if reach is None:
+        return []
+    minimum = profile.minimum_wall_thickness
+    if internal:
+        wall, before = reach - diameter / 2.0, reach - outer
+        largest = 2.0 * (reach - minimum)
+    else:
+        core = diameter / 2.0 - pitch * shapes.RIDGE_SHARE
+        wall, before = core - reach, inner - reach
+        largest = 2.0 * (reach + minimum + pitch * shapes.RIDGE_SHARE)
+    if wall <= EPS_GEOM:
+        raise ValidationError(
+            field="diameter",
+            detail=(
+                _(
+                    "So groß bricht das Gewinde durch die Wand des Teils. Mit der "
+                    "Mindestwand des Materials geht es bis {largest}.",
+                    largest=format_length(largest),
+                )
+                if internal
+                else _(
+                    "So klein bricht das Gewinde in die Bohrung in seiner Mitte durch. Mit "
+                    "der Mindestwand des Materials geht es ab {largest}.",
+                    largest=format_length(largest),
+                )
+            ),
+            values={
+                "feature": feature.id,
+                "diameter": diameter,
+                "largest": largest,
+                "minimum": minimum,
+            },
+            constraint="thread_wall",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if wall >= minimum - EPS_GEOM or wall >= before - EPS_GEOM:
+        return []
+    return [
+        Finding(
+            code="thread.thin_wall",
+            severity="warning",
+            message=_(
+                "Um das neue Gewinde bleiben {wall} Wand, das Material braucht {minimum}. "
+                "Die Wand kann beim Drucken offen bleiben oder beim Schrauben reißen.",
+                wall=format_length(wall),
+                minimum=format_length(minimum),
+            ),
+            feature_ids=(feature.id,),
+            values={
+                "wall_mm": round(wall, 3),
+                "minimum_mm": round(minimum, 3),
+                "field": "diameter",
+            },
+            suggestions=(CHANGE_SIZE,),
+        )
+    ]
+
+
 def _material_at(source: SceneObject, point: np.ndarray) -> bool:
     """Liegt dieser Punkt im Material des Körpers — je Kern gefragt.
 
@@ -16152,6 +16268,7 @@ def _resize_thread(
                 )
             ],
         )
+    walls = _thread_wall(source, feature, diameter, pitch, ctx.profile)
     centre, axis, low, high, start, stop = _thread_span(
         source, feature, outside=not internal, internal=internal
     )
@@ -16231,7 +16348,7 @@ def _resize_thread(
         face_indices=(),
         surface_patches=(),
     )
-    findings: list[Finding] = []
+    findings: list[Finding] = list(walls)
     if source.kind != "brep":
         findings.extend(cleared.findings)
     return _thread_result(ctx, source, body, feature, changed, findings)

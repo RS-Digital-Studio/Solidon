@@ -2442,7 +2442,11 @@ class Session(QObject):
 
         **Innerhalb von** :meth:`one_step` wird gesammelt statt geschrieben:
         Die Schritte gehen am Ende als eine Transaktion in den Verlauf.
+
+        **Ein Gewinde in einer Gewindepassung nimmt sein Gegenstück mit**
+        (:meth:`with_coupled_threads`) — dieselbe Ergänzung wie in der Vorschau.
         """
+        drafts = self.with_coupled_threads(drafts)
         gathering = self._gathering
         if gathering is not None and drafts and changes is None:
             gathering.add(title, drafts, origin)
@@ -2467,6 +2471,27 @@ class Session(QObject):
             return False
         self._changed()
         return True
+
+    def with_coupled_threads(self, drafts: list[OperationDraft]) -> list[OperationDraft]:
+        """Die Entwürfe, ergänzt um das Gegengewinde jedes geänderten Gewindes (RM-184).
+
+        *Merkmal ändern* an einem Gewinde, das in einer Gewindepassung steht,
+        ändert das andere Teil mit — dieselbe Steigung, der Durchmesser, den
+        die Passung verlangt (``counterpart.coupled_thread_drafts``). Vorschau
+        und Übernehmen fragen hier, damit das Bild zeigt, was übernommen wird,
+        und jeder Weg dorthin (Merkmalfenster, Dialog, Palette, Karte) dasselbe
+        tut; die Kommandozeile fragt dieselbe Kernfunktion. Gefragt wird am
+        gezeigten Stand: Mit Einfügemarke gibt es dort keine Passungen
+        (:meth:`displayed_document`) und nichts zu koppeln.
+        """
+        result = self.last_result
+        if result is None or not any(draft.op == "resize_feature" for draft in drafts):
+            return drafts
+        from app.core.counterpart import with_coupled_threads
+
+        return with_coupled_threads(
+            self.displayed_document(), result.scene, self.evaluation_profile, drafts
+        )
 
     @contextmanager
     def one_step(self, title: TranslatableText | str | None = None) -> Iterator[None]:
@@ -4256,6 +4281,8 @@ class Session(QObject):
         bekommt ``None``, wenn die Vorschau an einer Rückfrage anhielt — vor
         dem Satz dazu, der dann keine Absage ist (RM-389).
         """
+        if drafts is not None:
+            drafts = self.with_coupled_threads(drafts)
         self._preview_generation += 1
         generation = self._preview_generation
         # **Ein Token je Arbeiter, kein geteiltes.** Ein gemeinsames mit
@@ -4397,6 +4424,7 @@ class Session(QObject):
         result = self.last_result
         before = result.scene if result is not None else None
         if change_op is None:
+            drafts = self.with_coupled_threads(list(drafts))
             steps = [(draft.op, draft.params, tuple(draft.inputs)) for draft in drafts]
         else:
             entry = next((op for op in self.project.document.ops if op.id == change_op), None)

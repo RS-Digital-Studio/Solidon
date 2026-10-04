@@ -32,7 +32,7 @@ und hängt die Passung an dieselbe Transaktion.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -51,11 +51,13 @@ from app.core.types import (
     ObjectId,
     OpId,
     Origin,
+    Profile,
     Scene,
     TransactionId,
     thread_is_left_handed,
     thread_is_tapered,
 )
+from app.core.units import is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -593,6 +595,100 @@ def attach_thread_fit(
     )
     _log.info("thread counterpart: %s ↔ %s as fit %s", feature.id, made, fit.name)
     return applied
+
+
+def coupled_thread_drafts(
+    document: Document,
+    scene: Scene,
+    profile: Profile,
+    object_id: ObjectId,
+    params: Mapping[str, Any],
+) -> tuple[OperationDraft, ...]:
+    """Die Schritte am Gegengewinde, wenn ein Gewinde in einer Passung sein Maß ändert.
+
+    *Merkmal ändern* an einem Gewinde (``resize_feature``) ändert genau ein
+    Teil. Steht das Gewinde in einer aktiven Gewindepassung, passt die andere
+    Hälfte danach nicht mehr — die Schraube greift nicht in die größere Mutter,
+    und der Prüfbericht meldet es erst hinterher. Deshalb geht die andere
+    Hälfte mit, **in derselben Transaktion**: dieselbe Steigung, und der
+    Durchmesser, den die Passung verlangt (``fits.target`` — das Spiel aus dem
+    Material des Lochs, §12). Innen das Spiel weiter, außen enger.
+
+    Kein Schritt, wo nichts gekoppelt ist: kein Gewinde, keine Passung, eine
+    Passung, die sich nicht messen lässt (die meldet der Prüfbericht selbst),
+    oder ein Gegenstück, das schon das verlangte Maß hat.
+    """
+    from app.core.scene.fits import resolve, target
+
+    entry = scene.objects.get(object_id)
+    feature_id = str(params.get("at_feature", ""))
+    feature = entry.features.get(feature_id) if entry is not None else None
+    if feature is None or feature.kind != "thread":
+        return ()
+    # Ein Ausdruck (``=@gewinde``) steht erst nach der Auswertung fest; dann
+    # koppelt nichts, und die Passungsprüfung meldet, was nicht mehr passt.
+    named_diameter, named_pitch = params.get("diameter"), params.get("pitch", 0.0)
+    if not isinstance(named_diameter, int | float) or not isinstance(named_pitch, int | float):
+        return ()
+    diameter = float(named_diameter)
+    pitch = float(named_pitch) or float(feature.params.get("pitch", 0.0))
+    if diameter <= 0.0 or pitch <= 0.0:
+        return ()
+    own = FeatureRef(object_id, feature_id)
+    drafts: list[OperationDraft] = []
+    for fit in active_fits(document):
+        if fit.kind != "thread" or own not in (fit.a, fit.b):
+            continue
+        other_ref = fit.b if fit.a == own else fit.a
+        other = resolve(scene, other_ref)
+        if other is None or other.kind != "thread" or other_ref.object_id == object_id:
+            continue
+        try:
+            wanted, _materials = target(scene, fit, profile)
+        except ValueError:
+            continue
+        inner = bool(feature.params.get("internal", False))
+        partner = diameter - wanted if inner else diameter + wanted
+        if is_close(partner, float(other.params.get("diameter", 0.0))) and is_close(
+            pitch, float(other.params.get("pitch", 0.0))
+        ):
+            continue
+        drafts.append(
+            OperationDraft(
+                op="resize_feature",
+                inputs=(other_ref.object_id,),
+                params={"at_feature": other_ref.feature_id, "diameter": partner, "pitch": pitch},
+            )
+        )
+    return tuple(drafts)
+
+
+def with_coupled_threads(
+    document: Document, scene: Scene, profile: Profile, drafts: Sequence[OperationDraft]
+) -> list[OperationDraft]:
+    """Die Entwürfe, ergänzt um das Gegengewinde jedes geänderten Gewindes.
+
+    Die eine Stelle für Fenster (Vorschau und Übernehmen) und Kommandozeile.
+    Ein Gegenstück, das schon ein eigener Entwurf ändert, bleibt bei dessen
+    Werten; keines kommt zweimal.
+    """
+    targeted = {
+        (draft.inputs[0], draft.params.get("at_feature"))
+        for draft in drafts
+        if draft.op == "resize_feature" and draft.inputs
+    }
+    coupled: list[OperationDraft] = []
+    for draft in drafts:
+        if draft.op != "resize_feature" or len(draft.inputs) != 1:
+            continue
+        for partner in coupled_thread_drafts(
+            document, scene, profile, draft.inputs[0], draft.params
+        ):
+            key = (partner.inputs[0], partner.params.get("at_feature"))
+            if key not in targeted:
+                targeted.add(key)
+                coupled.append(partner)
+    return [*drafts, *coupled]
 
 
 def _made_feature(

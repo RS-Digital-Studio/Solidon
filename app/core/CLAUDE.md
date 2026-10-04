@@ -106,6 +106,11 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
   `attach_thread_fit` hängt die Gewindepassung an. `_made_feature` nimmt das
   **erzeugte** Merkmal, nicht das daneben erkannte zweite; der Schritt bleibt
   beim Nachtragen der letzte, ein geänderter Verlauf bekommt einen Befund.
+  **Ein geändertes Gewinde nimmt sein Gegenstück mit**: `with_coupled_threads`
+  ergänzt jedes `resize_feature` an einem Gewinde einer aktiven Gewindepassung
+  um den Schritt am anderen Teil (gleiche Steigung, Durchmesser aus
+  `fits.target`) — gefragt von `Session.apply`/`preview_async`, der
+  Kommandozeile `run` und dem Agentenzug, damit jeder Weg dieselbe Transaktion baut.
 
 **Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten,
 Bildanleitungen und Referenz aus dem Register, gegliedert in fünf Teile über
