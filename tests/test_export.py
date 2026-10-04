@@ -49,7 +49,8 @@ from app.core.types import (
     Source,
     SourceOrigin,
 )
-from app.core.units import MAX_FACET_SAG
+from app.core.units import MAX_FACET_SAG, format_length
+from app.i18n import source_text
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1800,6 +1801,39 @@ def test_a_rim_beyond_the_bed_edge_is_said() -> None:
     assert check_adhesion_on_bed([beside], brim, profile) == [], "das sagt die Bauraumprüfung"
     none = print_settings.with_path(settings, "adhesion.kind", "none")
     assert check_adhesion_on_bed([edge], none, profile) == []
+
+
+def test_a_rim_reaching_into_a_bed_exclusion_is_said() -> None:
+    """Der Centauri Carbon 2 sperrt vorn rechts 10 mal 20 mm (``bed_exclude_area``).
+    In der Slicer-Matrix (RM-312) stand ein Teil von Rack system for
+    Filament.3mf 3 mm davor; der Auto-Brim des ElegooSlicers lief 5 mm breit
+    hinein, und erst die G-Code-Prüfung sagte es. Die Prüfung vor dem Export
+    fragte nur den Bettrand."""
+    profile = profiles.make_profile()
+    half = profile.printer.build_volume[0] / 2.0
+    corner = (
+        (half - 10.0, -half),
+        (half, -half),
+        (half, -half + 20.0),
+        (half - 10.0, -half + 20.0),
+    )
+    profile = replace(profile, printer=replace(profile.printer, bed_exclusions=(corner,)))
+    settings = print_settings.resolve(profile)
+    brim = print_settings.with_path(settings, "adhesion.kind", "brim")
+    brim = print_settings.with_path(brim, "adhesion.brim_width", 5.0)
+    # 3 mm vor der Sperrfläche, 10 mm vom vorderen Bettrand.
+    near = _boxed("Nah", (10.0, 10.0, 5.0), (half - 18.0, -half + 15.0)).mesh
+    # 8 mm vor der Sperrfläche: Der Rand bleibt draußen.
+    far = _boxed("Fern", (10.0, 10.0, 5.0), (half - 23.0, -half + 15.0)).mesh
+
+    [found] = check_adhesion_on_bed([near, far], brim, profile, ["Nah", "Fern"])
+
+    assert found.code == "arrange.adhesion_off_bed" and found.object_id == "Nah"
+    assert found.values["distance"] == format_length(5.0 - 3.0)
+    assert "Sperrfläche" in source_text(found.message)
+    assert found.suggestions, "Regel 17: Anordnen"
+    none = print_settings.with_path(settings, "adhesion.kind", "none")
+    assert check_adhesion_on_bed([near], none, profile) == []
 
 
 def test_a_part_too_tall_for_the_printer_is_named_as_such() -> None:

@@ -1464,6 +1464,7 @@
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "Le rayon selon lequel une surface est courbée. Les arêtes vives sont mises en évidence ; les faces planes n'ont pas de rayon.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "Le rayon selon lequel une surface est courbée. Les arêtes vives sont mises en évidence ; les faces planes n'ont pas de rayon. Là où une caractéristique a été reconnue, sa cote mesurée est indiquée ; sinon, une estimation à partir des faces voisines.",
   "Der Rand dieser Fläche ist am Netz nicht eindeutig. „Projizieren“ holt die Kanten über einen Schnitt.": "Le bord de cette face est ambigu sur le maillage. « Projeter » reprend les arêtes par une coupe.",
+  "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus.": "La marge autour d'une pièce entre dans une zone exclue ou dépasse de la surface d'impression.",
   "Der Rand um ein Teil reicht über das Bett hinaus.": "La marge autour d'une pièce dépasse du plateau.",
   "Der Rest steht im Prüfbericht.": "Le reste figure dans le rapport de contrôle.",
   "Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.": "Le diamètre du tube doit être inférieur au diamètre de l'anneau.",

@@ -1464,6 +1464,7 @@
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "Il raggio con cui una superficie è curvata. Gli spigoli vivi sono evidenziati; le facce piane non hanno raggio.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "Il raggio con cui una superficie è curvata. Gli spigoli vivi sono evidenziati; le facce piane non hanno raggio. Dove è stata riconosciuta una caratteristica, viene indicata la sua misura rilevata; altrimenti una stima dalle facce adiacenti.",
   "Der Rand dieser Fläche ist am Netz nicht eindeutig. „Projizieren“ holt die Kanten über einen Schnitt.": "Il bordo di questa faccia è ambiguo sulla mesh. «Proietta» ricava gli spigoli da una sezione.",
+  "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus.": "Il margine intorno a un pezzo entra in una zona esclusa o sporge oltre l'area di stampa.",
   "Der Rand um ein Teil reicht über das Bett hinaus.": "Il margine intorno a un pezzo sporge oltre il piano.",
   "Der Rest steht im Prüfbericht.": "Il resto è nel rapporto di verifica.",
   "Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.": "Il diametro del tubo deve essere minore del diametro dell'anello.",

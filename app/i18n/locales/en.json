@@ -1464,6 +1464,7 @@
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "The radius a surface is curved with. Sharp edges are highlighted; flat faces have no radius.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "The radius a surface is curved with. Sharp edges are highlighted; flat faces have no radius. Where a feature was recognised, its measured size is shown — otherwise an estimate from the neighbouring faces.",
   "Der Rand dieser Fläche ist am Netz nicht eindeutig. „Projizieren“ holt die Kanten über einen Schnitt.": "The boundary of this face is ambiguous on the mesh. “Project” brings in the edges through a section.",
+  "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus.": "The margin around a part reaches into an excluded area or beyond the printable area.",
   "Der Rand um ein Teil reicht über das Bett hinaus.": "The margin around a part reaches beyond the bed.",
   "Der Rest steht im Prüfbericht.": "The rest is in the report.",
   "Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.": "The tube diameter must be smaller than the ring diameter.",

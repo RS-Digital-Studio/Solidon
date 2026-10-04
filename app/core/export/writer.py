@@ -59,6 +59,7 @@ from app.core.types import (
     MaterialSlot,
     Mesh,
     ObjectId,
+    PrinterProfile,
     PrintSettings,
     Profile,
     Scene,
@@ -564,13 +565,19 @@ def check_adhesion_on_bed(
             max(-half[axis] - (box.minimum[axis] - reach), box.maximum[axis] + reach - half[axis])
             for axis in (0, 1)
         )
+        message = _("Der Rand um ein Teil reicht über das Bett hinaus.")
+        if over <= EPS_GEOM:
+            over = _rim_into_blocked_area(mesh, reach, profile.printer)
+            message = _(
+                "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus."
+            )
         if over <= EPS_GEOM:
             continue
         findings.append(
             Finding(
                 code="arrange.adhesion_off_bed",
                 severity="warning",
-                message=_("Der Rand um ein Teil reicht über das Bett hinaus."),
+                message=message,
                 object_id=object_ids[index] if index < len(object_ids) else None,
                 values={"distance": format_length(over)},
                 # Regel 17: Anordnen hält zum Bettrand den Abstand der Haftung
@@ -579,6 +586,32 @@ def check_adhesion_on_bed(
             )
         )
     return findings
+
+
+def _rim_into_blocked_area(mesh: MeshData, reach: float, printer: PrinterProfile) -> float:
+    """Wie weit der Rand eines Teils in eine Sperrfläche oder über die Kontur reicht.
+
+    Der Bettrand allein genügt nicht: Der Centauri Carbon 2 sperrt vorn rechts
+    eine Ecke, und in der Slicer-Matrix (RM-312) lief der Auto-Brim des
+    ElegooSlicers dort hinein, ohne dass die Prüfung vor dem Export etwas
+    sagte. Gemessen wird an der Aufsicht des Teils gegen das Bettrechteck ohne
+    die freigegebene Fläche (:func:`build_area.printable_area`).
+    """
+    from shapely.geometry import box as rectangle
+
+    if not printer.bed_exclusions and not printer.printable_area:
+        return 0.0
+    width, depth, _height = printer.build_volume
+    blocked = rectangle(-width / 2.0, -depth / 2.0, width / 2.0, depth / 2.0).difference(
+        build_area.printable_area(printer)
+    )
+    if blocked.is_empty:
+        return 0.0
+    bounds = mesh.bounds
+    reached = rectangle(*bounds.minimum[:2], *bounds.maximum[:2]).buffer(reach)
+    if not reached.intersects(blocked):
+        return 0.0
+    return reach - float(build_area.footprint(mesh).distance(blocked))
 
 
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:

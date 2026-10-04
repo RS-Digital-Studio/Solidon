@@ -1464,6 +1464,7 @@
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "O raio com que uma superfície é curvada. As arestas vivas são realçadas; as faces planas não têm raio.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "O raio com que uma superfície é curvada. As arestas vivas são realçadas; as faces planas não têm raio. Onde uma característica foi reconhecida, é indicada a sua medida real; caso contrário, uma estimativa a partir das faces vizinhas.",
   "Der Rand dieser Fläche ist am Netz nicht eindeutig. „Projizieren“ holt die Kanten über einen Schnitt.": "O bordo desta face é ambíguo na malha. «Projetar» traz as arestas através de um corte.",
+  "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus.": "A margem à volta de uma peça entra numa zona excluída ou ultrapassa a área de impressão.",
   "Der Rand um ein Teil reicht über das Bett hinaus.": "A margem à volta de uma peça ultrapassa a mesa.",
   "Der Rest steht im Prüfbericht.": "O resto está no relatório de verificação.",
   "Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.": "O diâmetro do tubo tem de ser menor do que o diâmetro do anel.",

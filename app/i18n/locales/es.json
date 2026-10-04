@@ -1464,6 +1464,7 @@
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "El radio con el que se curva una superficie. Las aristas vivas se resaltan; las caras planas no tienen radio.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "El radio con el que se curva una superficie. Las aristas vivas se resaltan; las caras planas no tienen radio. Donde se ha reconocido una característica, se indica su medida real; en caso contrario, una estimación a partir de las caras vecinas.",
   "Der Rand dieser Fläche ist am Netz nicht eindeutig. „Projizieren“ holt die Kanten über einen Schnitt.": "El borde de esta cara es ambiguo en la malla. «Proyectar» trae las aristas mediante un corte.",
+  "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus.": "El margen alrededor de una pieza entra en una zona excluida o sobresale del área de impresión.",
   "Der Rand um ein Teil reicht über das Bett hinaus.": "El margen alrededor de una pieza sobresale de la placa.",
   "Der Rest steht im Prüfbericht.": "El resto está en el informe de comprobación.",
   "Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.": "El diámetro del tubo debe ser menor que el diámetro del anillo.",
