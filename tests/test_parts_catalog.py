@@ -113,6 +113,46 @@ def test_the_rm398_parts_write_their_scad_with_the_chosen_size(
     assert small != large
 
 
+@pytest.mark.parametrize(
+    ("name", "field", "values"),
+    [
+        ("bayonet", "kind", ("socket", "plug")),
+        ("detent_disc", "kind", ("base", "disc")),
+        ("rod_connector", "layout", ("sleeve", "cross")),
+        ("channel_joint", "style", ("outer_sleeve", "inner_insert")),
+        ("room_wall", "role", ("room_back", "room_side")),
+    ],
+)
+def test_the_rm184_parts_write_their_scad_for_each_half_and_layout(
+    name: str, field: str, values: tuple[str, str]
+) -> None:
+    """Checkliste „neuer Baustein“, Punkt 4, für die Audit-Bausteine: Jede Hälfte und
+    jede Bauform schreibt ihre Wahl und den Körper, den die Anwendung baut."""
+    spec = PARTS.get(name)
+    first, second = (scad.to_scad(spec, spec.params(**{field: value})) for value in values)
+
+    assert f"module {name}()" in first and first.rstrip().endswith(f"{name}();")
+    assert f'{field} = "{values[0]}";' in first
+    assert f'{field} = "{values[1]}";' in second
+    assert first != second
+
+
+def test_the_hose_barb_shows_and_writes_the_barb_around_its_passage() -> None:
+    """Die Tülle ist Trägeraufbau: Vorschau und SCAD zeigen sie samt Durchgang, nicht nur
+    das Werkzeug durch die Wand."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.parts.build import subtract
+
+    spec = PARTS.get("hose_barb")
+    params = spec.params()
+    barb = subtract(as_mesh_data(spec.host_add(params).mesh), as_mesh_data(spec.fn(params).mesh))
+    drawn = preview.render(spec, params)
+    assert drawn.triangles == as_mesh_data(barb).triangle_count
+    text = scad.to_scad(spec)
+    assert "module hose_barb_host_add()" in text
+    assert text.count("polyhedron(") == 2
+
+
 # --- own parts (§24.5) ---------------------------------------------------------------
 
 

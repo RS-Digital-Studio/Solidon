@@ -295,6 +295,28 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "screws": _("Schraublöcher"),
     "pegboard": _("Lochwand-Haken"),
     "clamp": _("Klemme"),
+    # Die Hälften der Paare aus dem Dateiaudit (RM-184): Bajonett und
+    # Rastdrehscheibe stehen je in einem Baustein, die Wahl ist die Hälfte.
+    "socket": _("Aufnahme mit Schlitzen"),
+    "plug": _("Kragen mit Nocken"),
+    "base": _("Führung mit Zapfen"),
+    "disc": _("Drehscheibe"),
+    # Die Bauformen des Stangenverbinders, nach ihrer Wegezahl.
+    "sleeve": _("Steckhülse"),
+    "straight": _("Gerade, zwei Wege"),
+    "elbow": _("Winkel, zwei Wege"),
+    "tee": _("T-Stück, drei Wege"),
+    "corner_3d": _("Raumecke, drei Wege"),
+    "cross": _("Kreuz, vier Wege"),
+    # Die zwei Bauarten der Kanalnaht. Eigene Schlüssel: „inside“ und
+    # „outside“ meinen beim Aushöhlen, wohin die Wand wächst.
+    "outer_sleeve": _("Hülse außen"),
+    "inner_insert": _("Einlage innen"),
+    # Die Platten und Öffnungen der Raumvorlage.
+    "room_back": _("Rückwand"),
+    "room_side": _("Seitenwand"),
+    "window": _("Fenster"),
+    "door": _("Tür"),
 }
 
 

@@ -1341,6 +1341,26 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "screws": _("Zwei Laschen neben dem Halter mit gesenkten Löchern zum Anschrauben."),
     "pegboard": _("Zwei Haken mit Rastzunge für die Lochwand."),
     "clamp": _("Ein Bügel, der über die Kante einer Platte greift — ohne Bohren."),
+    # Bajonett und Rastdrehscheibe: die Hälfte eines Paars aus denselben Maßen.
+    "socket": _("Das Rohr mit den L-Schlitzen, an das Teil, das verschlossen wird."),
+    "plug": _("Der Kragen mit den Nocken, an den Deckel."),
+    "base": _("Boden mit Zapfen, Kragen, Rastmulden und den Öffnungen der Stellungen."),
+    "disc": _("Die Scheibe mit Fenster, die auf die Führung geklipst wird."),
+    # Die Bauformen des Stangenverbinders.
+    "sleeve": _("Eine Aufnahme, senkrecht auf ihrem Boden."),
+    "straight": _("Zwei Aufnahmen in einer Linie — eine Muffe mit Anschlag in der Mitte."),
+    "elbow": _("Zwei Aufnahmen im rechten Winkel."),
+    "tee": _("Drei Aufnahmen in einer Ebene: zwei in einer Linie, eine quer dazu."),
+    "corner_3d": _("Drei Aufnahmen in drei Richtungen: zwei liegend, eine nach oben."),
+    "cross": _("Vier Aufnahmen in einer Ebene, über Kreuz."),
+    # Die Bauarten der Kanalnaht.
+    "outer_sleeve": _("Die Hülse umgreift beide Segmente; der Kanal bleibt, wie er ist."),
+    "inner_insert": _("Die Einlage liegt in beiden Segmenten und verengt den Kanal um ihre Wand."),
+    # Die Platten und Öffnungen der Raumvorlage.
+    "room_back": _("Die Wand hinten, über die ganze Raumlänge, mit Nuten für die Seitenwände."),
+    "room_side": _("Eine Wand links oder rechts, mit Feder in die Nut der Rückwand."),
+    "window": _("Mittig in der Wand, innen mit Falz für die Scheibe."),
+    "door": _("Vom Boden aus nach oben, ohne Schwelle."),
 }
 
 

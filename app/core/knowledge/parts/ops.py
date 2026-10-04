@@ -1486,7 +1486,9 @@ EXACT_PARTS: Final = frozenset(
         "printed_nut",
         # Mechanik
         "barrel_hinge",
+        "bayonet",
         "bearing_seat",
+        "detent_disc",
         "dowel",
         "hinge_eye",
         "latch",
@@ -1514,6 +1516,13 @@ EXACT_PARTS: Final = frozenset(
         "profile_tongue",
         "cable_gland",
         "cable_clip",
+        "hose_barb",
+        "channel_joint",
+        # Stangen und Raumplatten
+        "rod_connector",
+        "room_floor",
+        "room_wall",
+        "room_pane",
         # Organizer
         "organizer_tray",
         "organizer_divider",
