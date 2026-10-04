@@ -19,11 +19,15 @@ from app.ui.main_window import MainWindow
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 from tools.file_acceptance import (
+    MOST_FEATURE_TRIES,
     NO_LENGTH_FIELD,
+    REFUSED,
     ROOT,
     STEPS,
+    UNCHANGEABLE,
     Case,
     bore_ids,
+    case_stage,
     cases_from_manifest,
     cases_from_source,
     changed_value,
@@ -35,7 +39,9 @@ from tools.file_acceptance import (
     outside_the_repository,
     passed,
     ranked_features,
+    size_field_first,
     summary,
+    values_to_try,
     write_json,
 )
 
@@ -67,6 +73,29 @@ def test_the_inventory_counts_like_the_audit(tmp_path: Path) -> None:
     assert Path(cases[3].path).parent == out / "archive-models"
     # Die Originale bleiben, wo sie sind.
     assert (source / "haus.p3d.vor-reparatur").read_bytes() == b"projekt"
+
+
+def test_an_inventory_without_cases_fails_instead_of_counting_nothing(tmp_path: Path) -> None:
+    """Ein Bestand mit null Fällen endet nicht mit 0 — ein Lauf darüber prüfte nichts.
+
+    ``--source`` auf ``audit.py`` statt auf einen Ordner zählte null Fälle und
+    meldete Erfolg. Daneben die Gegenprobe: ein Ordner mit einem Modell.
+    """
+    from tools.file_acceptance import main
+
+    script = tmp_path / "audit.py"
+    script.write_text("# kein Bestand\n", encoding="utf-8")
+    empty = tmp_path / "leer"
+    empty.mkdir()
+    stock = tmp_path / "bestand"
+    stock.mkdir()
+    (stock / "a.stl").write_bytes(b"solid a\nendsolid a\n")
+    for source, code in ((script, 2), (empty, 1), (stock, 0)):
+        out = tmp_path / f"ausgabe-{source.name}"
+        assert main(["inventory", "--source", str(source), "--out", str(out)]) == code
+        assert (out / "cases.json").exists() is (code == 0)
+    written = json.loads((tmp_path / "ausgabe-bestand" / "cases.json").read_text(encoding="utf-8"))
+    assert [case["relative"] for case in written] == ["a.stl"]
 
 
 def test_a_manifest_keeps_the_audit_numbers(tmp_path: Path) -> None:
@@ -131,6 +160,53 @@ def test_the_floor_of_a_chamber_comes_before_cones_pins_and_faces() -> None:
     ]
 
 
+def test_every_kind_comes_up_within_the_tries() -> None:
+    """Am 1x1-tray verbrauchten Kegel und Rundungen ohne Längenfeld alle zwölf Versuche.
+
+    Ein Maß trugen dort nur die vier Wülste. Je Art höchstens drei: Kammerboden
+    und Kanal, je drei Kegel, Rundungen und Wülste, dann die erste Fläche —
+    alles innerhalb der Versuche. Die Merkmale wie am 1x1-tray.
+    """
+    features = {f"cone_{n}": "cone" for n in range(1, 5)}
+    features |= {f"fillet_{n}": "fillet" for n in range(1, 8)}
+    features |= {f"torus_{n}": "torus" for n in range(1, 5)}
+    features |= {f"face_{n}": "face" for n in range(1, 18)}
+    ranked = ranked_features({"obj_1": features}, {"obj_1": {"face_2", "face_11"}})
+    assert ranked[:MOST_FEATURE_TRIES] == [
+        ("obj_1", "face_2"),
+        ("obj_1", "face_11"),
+        ("obj_1", "cone_1"),
+        ("obj_1", "cone_2"),
+        ("obj_1", "cone_3"),
+        ("obj_1", "fillet_1"),
+        ("obj_1", "fillet_2"),
+        ("obj_1", "fillet_3"),
+        ("obj_1", "torus_1"),
+        ("obj_1", "torus_2"),
+        ("obj_1", "torus_3"),
+        ("obj_1", "face_1"),
+    ]
+
+
+def test_a_size_comes_before_a_position() -> None:
+    """Am Drillholder stand „Merkmal verschieben — X“ vorn, und jede Bohrung wurde verschoben.
+
+    Die Maßänderung nimmt das erste Feld, das keine Lage nennt; trägt das
+    Fenster nur Lagen, das erste.
+    """
+    bore = [
+        "Merkmal verschieben — X",
+        "Merkmal verschieben — Y",
+        "Merkmal verschieben — Z",
+        "Bohrung ändern — Durchmesser",
+        "Bohrung ändern — X",
+    ]
+    assert size_field_first(bore) == 3
+    assert size_field_first(["Kammer ändern — Breite innen", "Kammer ändern — Tiefe"]) == 0
+    assert size_field_first(["Merkmal verschieben — X", "Merkmal verschieben — Y"]) == 0
+    assert size_field_first([]) == 0
+
+
 def test_a_feature_without_a_length_field_hands_over_to_the_next() -> None:
     """Am 1x1-bin stand vorn ein Kegel ohne Längenfeld — dann gilt das nächste Merkmal."""
     objects = {"obj_1": {"cone_1": "cone", "pin_2": "pin", "face_7": "face"}}
@@ -183,6 +259,43 @@ def test_the_changed_number_is_a_tenth_more_and_at_least_half_a_millimetre(
     before: float, after: float
 ) -> None:
     assert changed_value(before) == pytest.approx(after, abs=0.005)
+
+
+def test_a_refused_change_tries_less_and_then_the_next_feature() -> None:
+    """Am 1x1-bin brach die breitere Kammer durch die Wand — dann gilt weniger, dann das Nächste.
+
+    Zuerst ein Zehntel mehr, dann ebenso viel weniger, solange die Zahl
+    positiv bleibt; sagt die Vorschau beides ab, ist das Merkmal kein Fall der
+    Maßänderung, wie eines ohne Längenfeld.
+    """
+    assert values_to_try(36.0) == pytest.approx((39.6, 32.4))
+    assert values_to_try(3.0) == pytest.approx((3.5, 2.5))
+    assert values_to_try(0.4) == pytest.approx((0.9,)), "weniger bliebe nicht positiv"
+    assert values_to_try(0.0) == pytest.approx((1.0,))
+    ranked = [("obj_1", "face_9"), ("obj_1", "hole_1")]
+
+    def cycle(chosen: tuple[str, str]) -> dict[str, object]:
+        return {"note": REFUSED} if chosen[1] == "face_9" else {"feature": chosen[1]}
+
+    tried, record = first_with_a_length_field(ranked, cycle)
+    assert tried == ["face_9", "hole_1"]
+    assert record == {"feature": "hole_1"}
+
+
+def test_a_case_where_no_feature_took_a_change_is_no_deviation() -> None:
+    """Abweichung heißt: übernommen, und eine Prüfung widerspricht.
+
+    Am 1x1-tray trug keines der zwölf versuchten Merkmale eine Änderung, und
+    der Fall hieß „abweichung“, obwohl kein Schritt etwas geprüft hatte.
+    """
+    unchecked = dict.fromkeys(
+        ("changed", "undo_restores_import", "redo_restores_applied", "preview_shows_result")
+    )
+    assert case_stage({"note": REFUSED, "checks": unchecked}) == UNCHANGEABLE
+    assert case_stage({"note": NO_LENGTH_FIELD, "checks": unchecked}) == UNCHANGEABLE
+    good = dict.fromkeys(unchecked, True)
+    assert case_stage({"checks": good}) == "done"
+    assert case_stage({"checks": {**good, "undo_restores_import": False}}) == "abweichung"
 
 
 def test_the_checks_read_the_digests_of_every_step() -> None:
@@ -296,6 +409,53 @@ def test_the_window_flow_changes_every_bore_and_takes_it_back(
     assert isinstance(checks, dict)
     assert checks["changed"] is True and checks["preview_shows_result"] is True
     assert (tmp_path / "04-applied.png").exists()
+
+
+def test_the_window_flow_narrows_a_chamber_whose_wider_wall_would_break(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Ein Kasten 38 × 28 × 20 mit 1 mm Wand: Ein Zehntel breiter bräche die Wand.
+
+    Innen 36 breit; 39,6 läge über der Außenwand, die Vorschau sagt ab, und der
+    Lauf nimmt 32,4 — Übernehmen, Rückgängig und Wiederholen gehen durch. Am
+    1x1-bin wartete der Lauf auf ein Bild, das es nicht geben konnte, und brach
+    nach sechs Minuten ab.
+    """
+    import trimesh
+    from PySide6.QtWidgets import QApplication
+
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from tools.file_acceptance import WindowFlow
+
+    outer = trimesh.creation.box(extents=(38.0, 28.0, 20.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    inner = trimesh.creation.box(extents=(36.0, 26.0, 20.0))
+    inner.apply_translation((0.0, 0.0, 12.0))
+    box = tmp_path / "kasten.stl"
+    boolean("difference", [MeshData.of(outer), MeshData.of(inner)]).mesh.raw.export(box)
+    data: dict[str, object] = {
+        "stage": "start",
+        "errors": [],
+        "questions": [],
+        "dialogs": [],
+        "states": {},
+    }
+    flow = WindowFlow(QApplication.instance(), window, window.session, tmp_path, data, lambda: None)
+    flow.prepare()
+    flow.run(Case(1, "kasten.stl", str(box), ".stl", bores=False))
+
+    assert data["stage"] == "done", (data.get("errors"), data.get("selection"))
+    checks = data["checks"]
+    assert isinstance(checks, dict) and passed(checks), checks
+    selection = data["selection"]
+    assert isinstance(selection, dict)
+    changed = selection["changed"]
+    assert (changed["before"], changed["after"]) == pytest.approx((36.0, 32.4))
+    refusals = data["refusals"]
+    assert isinstance(refusals, list) and [entry["value"] for entry in refusals] == [39.6]
+    assert "durchbrechen" in refusals[0]["reason"]
+    assert refusals[0]["feature"] == selection["feature"]
 
 
 @pytest.mark.windowed

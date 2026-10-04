@@ -18,9 +18,10 @@ Fall) und seinem Kundenweg an der Bohrung (``detail_ui.py``). Je Fall:
 2. **Erkennung**: Merkmale je Körper nach Art, dazu die funktionalen Gruppen.
 3. **Maßänderung** an einem repräsentativen Merkmal (Bohrung vor Langloch vor
    Gewinde vor Kegel vor Zapfen vor Fläche): gewählt mit einem Klick in den
-   Objektbaum, geändert am ersten Längenfeld des Merkmalfensters — gesetzt
-   über das Feld wie im Kundenweg des Audits (``detail_ui.py``), nicht
-   getippt; ob das Tippen dasselbe tut, gehört zur Fensterabnahme.
+   Objektbaum, geändert am ersten Längenfeld des Merkmalfensters, das ein Maß
+   und keine Lage nennt — gesetzt über das Feld wie im Kundenweg des Audits
+   (``detail_ui.py``), nicht getippt; ob das Tippen dasselbe tut, gehört zur
+   Fensterabnahme.
 4. **Vorschau**, **Übernehmen** (der Knopf des Merkmalfensters),
    **Rückgängig**, **Wiederholen**.
 
@@ -71,7 +72,8 @@ BORE_CASES: tuple[str, ...] = ("drill-holder",)
 
 #: Welches Merkmal für die Maßänderung steht: das erste dieser Arten, das ein
 #: Längenfeld trägt. ``group`` ist der Boden einer Kammer, einer Nut oder eines
-#: Kanals (*Kammer ändern*, RM-184).
+#: Kanals (*Kammer ändern*, RM-184). Wulst, Kugel und Muster ändert *Merkmal
+#: ändern* ebenso — am 1x1-tray trugen nur die Wülste ein Maß.
 FEATURE_PRIORITY: tuple[str, ...] = (
     "hole",
     "slot",
@@ -80,14 +82,36 @@ FEATURE_PRIORITY: tuple[str, ...] = (
     "cone",
     "pin",
     "fillet",
+    "torus",
+    "sphere",
+    "pattern",
     "face",
 )
 
 #: Wie viele Merkmale höchstens versucht werden, bis eines ein Längenfeld hat.
 MOST_FEATURE_TRIES = 12
 
+#: Wie viele Merkmale einer Art höchstens darunter sind: Am 1x1-tray trugen
+#: vier Kegel und sieben Rundungen kein Längenfeld und verbrauchten die
+#: Versuche, bevor ein Wulst drankam.
+MOST_TRIES_PER_KIND = 3
+
 #: Was ein Durchgang notiert, wenn das Merkmalfenster kein Längenfeld zeigt.
 NO_LENGTH_FIELD = "kein Längenfeld am Merkmal"
+
+#: Was ein Durchgang notiert, wenn die Vorschau jede versuchte Zahl absagt —
+#: am 1x1-bin brach die breitere Kammer durch die Wand.
+REFUSED = "jede Maßänderung abgesagt"
+
+#: Die Stufe eines Falls, an dem kein versuchtes Merkmal eine Änderung trug —
+#: keine Abweichung, denn geprüft wurde nichts. Warum, sagen ``tried`` und
+#: ``refusals`` im Ergebnis.
+UNCHANGEABLE = "kein Merkmal ließ sich ändern"
+
+#: Feldtitel, die eine Lage nennen und kein Maß. Am Drillholder stand
+#: „Merkmal verschieben — X“ vor „Bohrung ändern — Durchmesser“, und der Lauf
+#: verschob jede Bohrung, statt ihr Maß zu ändern.
+POSITION_TITLES: frozenset[str] = frozenset({"X", "Y", "Z"})
 
 #: Wie lange ein Fall höchstens dauern darf (Sekunden), Import und Schritte zusammen.
 CASE_TIMEOUT = 600.0
@@ -270,7 +294,8 @@ def ranked_features(
     sie stehen als ``group`` in :data:`FEATURE_PRIORITY`: Am 1x1-bin trägt
     keine Fläche ein Längenfeld, die Kammer schon. Zuerst die Art, bei
     gleicher Art der Körper, dann die Nummer — so trifft jeder Lauf dieselben
-    Merkmale.
+    Merkmale. Je Art höchstens :data:`MOST_TRIES_PER_KIND`, damit jede Art an
+    die Reihe kommt.
     """
     ranked: list[tuple[int, str, int, str]] = []
     for object_id, features in objects.items():
@@ -288,7 +313,13 @@ def ranked_features(
                     feature_id,
                 )
             )
-    return [(object_id, feature_id) for _rank, object_id, _number, feature_id in sorted(ranked)]
+    chosen: list[tuple[str, str]] = []
+    per_kind: dict[int, int] = {}
+    for rank, object_id, _number, feature_id in sorted(ranked):
+        if per_kind.get(rank, 0) < MOST_TRIES_PER_KIND:
+            per_kind[rank] = per_kind.get(rank, 0) + 1
+            chosen.append((object_id, feature_id))
+    return chosen
 
 
 def choose_feature(objects: Mapping[str, Mapping[str, str]]) -> tuple[str, str] | None:
@@ -305,16 +336,17 @@ def first_with_a_length_field(
     """Der erste Durchgang an einem Merkmal mit Längenfeld, und wer davor versucht wurde.
 
     **Ein Merkmal ohne Längenfeld ist kein Fall der Maßänderung**: Am 1x1-bin
-    stand vorn ein Kegel, dessen Merkmalfenster nur einen Winkel trägt.
-    Versucht wird das nächste, höchstens ``tries`` Merkmale; hat keines ein
-    Längenfeld, bleibt der letzte Durchgang mit seinem Vermerk stehen.
+    stand vorn ein Kegel, dessen Merkmalfenster nur einen Winkel trägt. Ebenso
+    wenig eines, an dem die Vorschau jede versuchte Zahl absagt (:data:`REFUSED`).
+    Versucht wird das nächste, höchstens ``tries`` Merkmale; trägt keines,
+    bleibt der letzte Durchgang mit seinem Vermerk stehen.
     """
     tried: list[str] = []
     record: dict[str, Any] | None = None
     for chosen in candidates[:tries]:
         record = cycle(chosen)
         tried.append(chosen[1])
-        if record.get("note") != NO_LENGTH_FIELD:
+        if record.get("note") not in (NO_LENGTH_FIELD, REFUSED):
             break
     return tried, record
 
@@ -340,6 +372,32 @@ def changed_value(value: float) -> float:
         return 1.0
     step = max(abs(value) * 0.1, 0.5)
     return round(value + step, 2)
+
+
+def size_field_first(names: Sequence[str]) -> int:
+    """Welches Längenfeld die Maßänderung nimmt: das erste, das keine Lage nennt.
+
+    Ein Feld heißt „<Handlung> — <Feld>“ (``accessibleName``, :data:`POSITION_TITLES`);
+    trägt das Merkmalfenster nur Lagen, bleibt es beim ersten.
+    """
+    for index, name in enumerate(names):
+        if name.rpartition(" — ")[2].strip() not in POSITION_TITLES:
+            return index
+    return 0
+
+
+def values_to_try(value: float) -> tuple[float, ...]:
+    """Die Zahlen einer Maßänderung, in der Folge, in der sie versucht werden.
+
+    Zuerst mehr (:func:`changed_value`), dann ebenso viel weniger — eine
+    größere Kammer bricht durch eine dünne Wand, eine kleinere nie. Weniger
+    nur, solange die Zahl positiv bleibt.
+    """
+    larger = changed_value(value)
+    if abs(value) < 1e-9:
+        return (larger,)
+    smaller = round(value - max(abs(value) * 0.1, 0.5), 2)
+    return (larger, smaller) if smaller > 0.0 else (larger,)
 
 
 def mesh_digest(vertices: Any, faces: Any) -> str:
@@ -401,6 +459,19 @@ def passed(checks: Mapping[str, bool | None]) -> bool:
     if checks.get("undo_restores_import") is None or checks.get("redo_restores_applied") is None:
         return False
     return all(value is not False for value in checks.values())
+
+
+def case_stage(record: Mapping[str, Any]) -> str:
+    """Die Stufe eines Falls nach seinem letzten Durchgang.
+
+    ``done`` oder ``abweichung`` nur, wenn eine Änderung übernommen und geprüft
+    wurde; trägt der letzte Durchgang einen Vermerk (kein Längenfeld, jede Zahl
+    abgesagt), hat sich kein Merkmal ändern lassen (:data:`UNCHANGEABLE`). Am
+    1x1-tray hieß das „abweichung“, obwohl kein Schritt etwas geprüft hatte.
+    """
+    if record.get("note"):
+        return UNCHANGEABLE
+    return "done" if passed(record.get("checks", {})) else "abweichung"
 
 
 # --- Bericht ----------------------------------------------------------------------
@@ -770,18 +841,24 @@ class WindowFlow:
                         raise
                     self.data["bores"].append(record)
                     self.persist()
-        tried, cycle = first_with_a_length_field(
-            ranked_features(objects, anchors),
-            lambda chosen: self._cycle(*chosen, "", restore=False),
-        )
+        # Die Absagen aller versuchten Merkmale, nicht nur die des letzten.
+        refusals: list[dict[str, Any]] = []
+
+        def attempt(chosen: tuple[str, str]) -> dict[str, Any]:
+            record = self._cycle(*chosen, "", restore=False)
+            refusals.extend({"feature": chosen[1], **entry} for entry in record.get("refusals", []))
+            return record
+
+        tried, cycle = first_with_a_length_field(ranked_features(objects, anchors), attempt)
         if cycle is None:
             self.data["stage"] = "kein Merkmal"
             self.persist()
             return
         self.data["tried"] = tried
         self.data["selection"] = cycle["selection"]
+        self.data["refusals"] = refusals
         self.data["checks"] = cycle["checks"]
-        self.data["stage"] = "done" if passed(cycle["checks"]) else "abweichung"
+        self.data["stage"] = case_stage(cycle)
         self.persist()
 
     def _recognition(self) -> list[dict[str, Any]]:
@@ -854,37 +931,38 @@ class WindowFlow:
             }
             record["note"] = NO_LENGTH_FIELD
             return record
-        spin = fields[0]
+        spin = fields[size_field_first([spin.accessibleName() for spin in fields])]
         before = spin.value_mm()
-        after = changed_value(before)
+        preview: dict[str, str] | None = None
+        taken: float | None = None
+        refusals: list[dict[str, Any]] = []
+        for after in values_to_try(before):
+            spin.setFocus()
+            outcome, detail = self._previewed(spin, after, f"{prefix}Vorschau {after}")
+            if outcome == "shown":
+                taken, preview = after, detail
+                break
+            refusals.append({"value": after, "reason": detail})
         record["selection"]["changed"] = {
             "name": spin.accessibleName(),
             "before": before,
-            "after": after,
+            "after": taken,
         }
-        spin.setFocus()
-        viewport = self.window.viewport
-        shown = viewport.difference
-        spin.set_value_mm(after)
-        preview: dict[str, str] | None = None
-        try:
-            self.wait_for(
-                lambda: (
-                    viewport.difference is not None
-                    and viewport.difference is not shown
-                    and not viewport._difference_pending
-                ),
-                f"{prefix}Vorschau",
-                STEP_TIMEOUT,
-            )
-            difference = viewport.difference
-            preview = {
-                key: body_digest(entry.result.mesh)
-                for key, entry in difference.entries.items()
-                if entry.result is not None
+        if refusals:
+            record["refusals"] = refusals
+        if taken is None:
+            # Keine Zahl trägt: zurück zum gemessenen Wert, und das nächste
+            # Merkmal ist dran (:func:`first_with_a_length_field`).
+            spin.set_value_mm(before)
+            self.pump(0.5)
+            record["checks"] = {
+                "changed": None,
+                "undo_restores_import": None,
+                "redo_restores_applied": None,
+                "preview_shows_result": None,
             }
-        except TimeoutError:
-            record["note"] = "keine Vorschau"
+            record["note"] = REFUSED
+            return record
         states["03-preview"] = self.shot(f"{prefix}03-preview")
         previous = self.session.last_result
         QTest.mouseClick(self.window.feature_panel._apply, Qt.MouseButton.LeftButton)
@@ -906,6 +984,49 @@ class WindowFlow:
             self.window.action_undo()
             self.new_result(previous, f"{prefix}zurück zum Import")
         return record
+
+    def _previewed(self, spin: Any, value: float, label: str) -> tuple[str, Any]:
+        """Eine Zahl ins Feld und warten, bis die Vorschau sie zeigt oder absagt.
+
+        ``("shown", Abdrücke)`` mit einem neuen Bild ohne Problem,
+        ``("refused", Satz)`` mit dem Satz, den die Freigabe trägt
+        (``MainWindow._preview_approval.problem``), ``("none", …)`` ohne beides
+        bis :data:`STEP_TIMEOUT`. Gewartet wird auf eine **neue** Freigabe:
+        Die Absage der vorigen Zahl gilt nicht für diese.
+        """
+        viewport = self.window.viewport
+        shown = viewport.difference
+        before = getattr(self.window, "_preview_approval", None)
+        heard: dict[str, str] = {}
+
+        def settled() -> bool:
+            approval = getattr(self.window, "_preview_approval", None)
+            fresh = approval is not None and approval is not before
+            problem = str(getattr(approval, "problem", "") or "") if fresh else ""
+            if fresh and problem and not getattr(approval, "computing", False):
+                heard["refused"] = problem
+                return True
+            difference = viewport.difference
+            return (
+                difference is not None
+                and difference is not shown
+                and not viewport._difference_pending
+                and not problem
+            )
+
+        spin.set_value_mm(value)
+        try:
+            self.wait_for(settled, label, STEP_TIMEOUT)
+        except TimeoutError:
+            return "none", "keine Vorschau"
+        if "refused" in heard:
+            return "refused", heard["refused"]
+        difference = viewport.difference
+        return "shown", {
+            key: body_digest(entry.result.mesh)
+            for key, entry in difference.entries.items()
+            if entry.result is not None
+        }
 
 
 # --- Einstieg -------------------------------------------------------------------------
@@ -933,11 +1054,25 @@ def main(argv: Iterable[str] | None = None) -> int:
     arguments = parser.parse_args(list(argv) if argv is not None else None)
     out = outside_the_repository(arguments.out)
     if arguments.command == "inventory":
+        # **Ein leerer Bestand ist keine Abnahme**: Mit ``--source`` auf
+        # ``audit.py`` statt auf einen Ordner zählte der Bestand null Fälle und
+        # endete mit 0 — ein Lauf darüber hätte nichts geprüft und nichts gesagt.
+        if arguments.source is not None and not arguments.source.is_dir():
+            print(
+                f"{arguments.source} ist kein Ordner: --source nimmt einen Bestand wie"
+                " F:\\3D Dateien, --manifest das Manifest des Dateiaudits.",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 2
         cases = (
             cases_from_manifest(arguments.manifest)
             if arguments.manifest
             else cases_from_source(arguments.source, out)
         )
+        if not cases:
+            print("Kein Fall gefunden — der Bestand ist leer.", file=sys.stderr, flush=True)
+            return 1
         write_json(out / "cases.json", [asdict(case) for case in cases])
         print(
             f"{len(cases)} Fälle, davon {sum(case.bores for case in cases)} mit jeder Bohrung",
