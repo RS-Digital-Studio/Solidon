@@ -249,6 +249,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma caixa de diálogo não pode aplicar, o motivo aparece também sob os seus campos, não só na faixa por cima da vista.
 - Depois de Ctrl+Y, a linha de estado indica o passo refeito, como depois de Ctrl+Z.
 - As miniaturas dos exemplos e dos blocos mostram a altura para cima. Até agora as peças altas apontavam nelas para baixo.
+- Os exemplos incluídos abrem com a sua impressora e o seu material. Até agora eram calculados para a impressora genérica.
 - Se o Solidon não conseguir guardar a opção «Incluir valores», o aviso aparece junto ao interruptor.
 - Se outros programas ocuparem todos os núcleos no Windows, um cálculo num modelo grande já não fica parado durante minutos.
 - Os comprimentos nas mensagens usam o separador decimal do seu idioma.

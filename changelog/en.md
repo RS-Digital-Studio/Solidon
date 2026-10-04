@@ -249,6 +249,7 @@ it into `website/version.json`.
 - When a dialog cannot apply, the reason also appears below its fields, not only in the bar above the view.
 - After Ctrl+Y, the status line names the step that was redone, as it does after Ctrl+Z.
 - Preview images of examples and catalogue parts show height pointing up. Until now tall parts pointed downwards in them.
+- Bundled examples open with your printer and material. Until now they were calculated for the generic printer.
 - If Solidon cannot save the *Include values* choice, the note appears right at the switch.
 - If other programs keep every core busy under Windows, a calculation on a large model no longer stalls for minutes.
 - Lengths in messages use the decimal separator of your language.

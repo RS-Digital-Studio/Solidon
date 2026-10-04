@@ -249,6 +249,7 @@ scrive in `website/version.json`.
 - Se una finestra di dialogo non può applicare, il motivo compare anche sotto i suoi campi, non solo nella fascia sopra la vista.
 - Dopo Ctrl+Y, la riga di stato indica il passaggio ripristinato, come dopo Ctrl+Z.
 - Le anteprime di esempi e blocchi mostrano l'altezza verso l'alto. Finora i pezzi alti vi puntavano verso il basso.
+- Gli esempi inclusi si aprono con la tua stampante e il tuo materiale. Finora venivano calcolati per la stampante generica.
 - Se Solidon non riesce a salvare la scelta «Includi i valori», l'avviso compare direttamente accanto all'interruttore.
 - Se altri programmi occupano tutti i core su Windows, un calcolo su un modello grande non resta più fermo per minuti.
 - Le lunghezze nei messaggi usano il separatore decimale della tua lingua.

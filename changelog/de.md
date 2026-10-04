@@ -274,6 +274,7 @@ Nutzen da und sonst nichts.
 - Kann ein Dialog nicht übernehmen, steht der Grund auch unter seinen Feldern und nicht nur im Band über dem Bild.
 - Nach Strg+Y nennt die Statuszeile den Schritt, der wieder angewendet wurde, wie nach Strg+Z.
 - Vorschaubilder von Beispielen und Bausteinen zeigen die Höhe nach oben. Bisher wiesen hohe Teile darin nach unten.
+- Mitgelieferte Beispiele öffnen mit Ihrem Drucker und Material. Bisher rechneten sie mit dem allgemeinen Drucker.
 - Kann Solidon die Wahl *Werte mitgeben* nicht speichern, steht der Hinweis direkt am Schalter.
 - Lasten andere Programme den Rechner unter Windows voll aus, bleibt eine Rechnung an einem großen Modell nicht mehr minutenlang stehen.
 - Längen in Meldungen stehen mit dem Dezimalzeichen Ihrer Sprache.

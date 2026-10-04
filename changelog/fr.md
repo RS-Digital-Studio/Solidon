@@ -250,6 +250,7 @@ dans `website/version.json`.
 - Quand une boîte de dialogue ne peut pas appliquer, la raison s'affiche aussi sous ses champs, pas seulement dans le bandeau au-dessus de la vue.
 - Après Ctrl+Y, la ligne d'état nomme l'étape rétablie, comme après Ctrl+Z.
 - Les vignettes des exemples et des blocs montrent la hauteur vers le haut. Jusqu'ici, les pièces hautes y pointaient vers le bas.
+- Les exemples fournis s'ouvrent avec votre imprimante et votre matériau. Jusqu'ici, ils étaient calculés pour l'imprimante générique.
 - Si Solidon ne peut pas enregistrer le choix « Inclure les valeurs », la remarque s'affiche directement à côté de l'interrupteur.
 - Si d'autres programmes occupent tous les cœurs sous Windows, un calcul sur un grand modèle ne reste plus bloqué pendant des minutes.
 - Les longueurs dans les messages utilisent le séparateur décimal de votre langue.
