@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import KW_ONLY, dataclass, replace
 from itertools import pairwise
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -1040,10 +1040,14 @@ class PlateRun:
     mit mehr Teilen, als auf ein Bett passen, ist der Normalfall (§25), und ein
     Auftrag, von dem nur die erste Platte geslicet wird, ist kein Auftrag,
     sondern eine Teilmenge, über die niemand entschieden hat.
+
+    Nach Platte und Datei nur mit Namen: Neue Felder kommen dazwischen, und
+    eine Slotliste an dritter Stelle landete still in ``meshes``.
     """
 
     plate: int
     model: Path
+    _: KW_ONLY
     meshes: tuple[MeshData, ...] | None = None
     object_ids: tuple[str, ...] = ()
     name_bindings: tuple[_CliNameBinding, ...] = ()

@@ -4459,7 +4459,7 @@ def test_slicer_result_and_inventory_use_the_same_frozen_material_quantities(
     outcome = handover.SliceOutcome(produced, raw, findings=gcode.findings_for(raw))
     monkeypatch.setattr(handover, "slice_model", lambda *_args, **_kwargs: outcome)
     worker = module._SliceWorker(
-        [module.PlateRun(0, produced, ())],
+        [module.PlateRun(0, produced, slots=())],
         dialog.settings,
         dialog.session.profile,
         handover.SlicerSetup(tmp_path / "slicer", "orca"),

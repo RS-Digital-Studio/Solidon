@@ -73,8 +73,13 @@ def test_export_offers_only_successful_3mf(qt_app, tmp_path, monkeypatch, succes
             raise FileWriteError("model", detail="locked")
         return [tmp_path / "model"], []
 
+    def files():
+        # Einzeldateien bringen ihren Plan für die Gegenprobe mit; ohne Plan
+        # liest sie die Körper zurück, wie bei der Baugruppe.
+        return (*write(), None)
+
     monkeypatch.setattr(worker, "_assembly", write)
-    monkeypatch.setattr(worker, "_files", write)
+    monkeypatch.setattr(worker, "_files", files)
     offered = []
     worker.usageReady.connect(offered.append)
     worker.work()
@@ -117,7 +122,7 @@ def test_plate_outputs_offer_only_completed_plates(qt_app, tmp_path, monkeypatch
         lambda _job, plate: printing.PlateRun(
             plate,
             tmp_path / f"{plate}.3mf",
-            tuple(objects[plate].material_slots),
+            slots=tuple(objects[plate].material_slots),
         ),
     )
 
