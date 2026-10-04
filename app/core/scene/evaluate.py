@@ -1868,7 +1868,7 @@ HALVES_IN_PLACE: Final = "prepare.halves_in_place"
 #: Befunde, mit denen eine Operation selbst sagt, welche Merkmale sie entfernt
 #: hat (``Finding.feature_ids``). Deren Verlust ohne Verweis meldet die
 #: Zuordnung danach nicht ein zweites Mal als ``perceive.orphaned`` (RM-217).
-REMOVAL_CODES: Final = frozenset({"remove_feature.gone"})
+REMOVAL_CODES: Final = frozenset({"remove_feature.gone", "group_pattern.grouped"})
 
 
 def _conversion_findings(
@@ -3799,6 +3799,22 @@ def _motion_of(
     return cast(Transform, matrix), moved_source
 
 
+def _named_after_the_step(feature: Feature, operation: Operation) -> Feature:
+    """Ein gebundenes Muster, das dieser Schritt eben erzeugt hat, unter seiner Kennung.
+
+    Die Schrittkennung bleibt auch dann gleich, wenn eine frühere Textur
+    wegfällt; nachzählende Namen würden Folgebezüge verschieben. Ausdrücklich
+    zusammengefasste Zellen (RM-504) tragen ihr eigenes Wort
+    (``patterns.GROUPED_PREFIX``), damit eine Textur und eine Zusammenfassung
+    nie einen Namen teilen.
+    """
+    from app.core.perceive.patterns import GROUPED_PREFIX
+
+    prefix = GROUPED_PREFIX if feature.params.get("grouped") else "texture"
+    target = f"{prefix}_{operation.id}"
+    return dataclasses.replace(feature, id=target, created_by=operation.id)
+
+
 def _textures_from_other_inputs(
     mesh: MeshData,
     kept: Mapping[FeatureId, Feature],
@@ -3807,15 +3823,13 @@ def _textures_from_other_inputs(
 ) -> dict[FeatureId, Feature]:
     """Bewahrt belegte Texturreste weiterer vereinigter oder geschnittener Körper."""
     from app.core.geom.mesh import as_mesh_data
-    from app.core.perceive.patterns import bound_texture, rebound_textures
+    from app.core.perceive.patterns import bound_texture, bound_to_its_surface, rebound_textures
 
     textures = dict(kept)
     owned = {index for feature in textures.values() for index in feature.face_indices}
     for source in inputs:
         watch.raise_if_cancelled()
-        if not any(
-            f.kind == "pattern" and f.params.get("texture") for f in source.features.values()
-        ):
+        if not any(bound_to_its_surface(f) for f in source.features.values()):
             continue
         found = rebound_textures(
             mesh,
@@ -3960,9 +3974,9 @@ def _with_features(
         # Auch am exakten Körper zählt die belegte Oberfläche; die native
         # Flächenerkennung allein kennt den erzeugenden Texturschritt nicht.
         native_textures: dict[FeatureId, Feature] = {}
-        if texture_sources or any(
-            f.kind == "pattern" and f.params.get("texture") for f in previous.values()
-        ):
+        from app.core.perceive.patterns import bound_to_its_surface
+
+        if texture_sources or any(bound_to_its_surface(f) for f in previous.values()):
             from app.core.geom.mesh import as_mesh_data
             from app.core.perceive.patterns import rebound_textures, without_texture_cells
 
@@ -3998,6 +4012,28 @@ def _with_features(
                     **native_textures,
                 },
             )
+        # Was die Operation eben selbst als gebundenes Muster ausgibt — die
+        # Zusammenfassung von Einzelzellen am exakten Körper (RM-504) —, heißt
+        # nach ihrem Schritt, wie am Netz; eine Nummernfolge verschöbe Bezüge.
+        made_here = {
+            name: _named_after_the_step(feature, operation)
+            for name, feature in exact_entry.features.items()
+            if bound_to_its_surface(feature) and feature.created_by is None and name not in previous
+        }
+        if made_here:
+            named = {feature.id: feature for feature in made_here.values()}
+            exact_entry = dataclasses.replace(
+                exact_entry,
+                features={
+                    **{
+                        name: feature
+                        for name, feature in exact_entry.features.items()
+                        if name not in made_here
+                    },
+                    **named,
+                },
+            )
+            native_textures = {**native_textures, **named}
         wanted: Mapping[FeatureId, tuple[str, ...]] = (
             dict.fromkeys(referenced, ()) if needed is None else needed
         )
@@ -4564,6 +4600,7 @@ def _with_features(
     # Zellgrenze ein Muster. Ihr Beleg ist die tatsächliche Oberfläche.
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.patterns import (
+        bound_to_its_surface,
         rebound_textures,
         without_pattern_cells,
         without_texture_cells,
@@ -4575,10 +4612,7 @@ def _with_features(
     # Ausgabe als Beleg für eine frisch erzeugte Textur.
     texture_known = {
         name: dataclasses.replace(feature, face_indices=previous[name].face_indices)
-        if feature.kind == "pattern"
-        and feature.params.get("texture")
-        and not feature.face_indices
-        and name in previous
+        if bound_to_its_surface(feature) and not feature.face_indices and name in previous
         else feature
         for name, feature in known.items()
         if name not in announced_gone
@@ -4603,15 +4637,13 @@ def _with_features(
     )
     textures = _textures_from_other_inputs(mesh, textures, texture_sources, watch)
     declared = {
-        name: feature for name, feature in declared.items() if not feature.params.get("texture")
+        name: feature for name, feature in declared.items() if not bound_to_its_surface(feature)
     }
     for name, feature in tuple(textures.items()):
         if feature.created_by is None:
-            # Die Schrittkennung bleibt auch dann gleich, wenn eine frühere
-            # Textur wegfällt. Nachzählende Namen würden Folgebezüge verschieben.
-            target = f"texture_{operation.id}"
             del textures[name]
-            textures[target] = dataclasses.replace(feature, id=target, created_by=operation.id)
+            stamped = _named_after_the_step(feature, operation)
+            textures[stamped.id] = stamped
     if textures:
         detected = {**without_texture_cells(detected, textures, mesh=mesh), **textures}
         declared.update(textures)

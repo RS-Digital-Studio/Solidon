@@ -149,7 +149,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | einzige Auswahlhandlungskarte unter Bericht/Chat, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper |
+| `selection_operations.py` | einzige Auswahlhandlungskarte unter Bericht/Chat, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |

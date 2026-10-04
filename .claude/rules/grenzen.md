@@ -109,7 +109,9 @@ Robert).
   Kategorie-Rang und Kürzel sind kein Häufigkeitssignal.
 - **Das Merkmal hat Vorrang vor der Menge** — wer eine Bohrung anklickt,
   meint sie, nicht den Körper darunter; bei mehreren markierten Zeilen gibt der
-  Baum kein gewähltes Merkmal zurück.
+  Baum kein gewähltes Merkmal zurück. Mehrere markierte Merkmalszeilen eines
+  Körpers bieten vorn *Als Muster zusammenfassen* (`QUICK_SEVERAL_FEATURES`,
+  `MainWindow._several_features_chosen`).
 - **Eine Art ohne eigene Zeile bekommt die generischen Merkmalshandlungen**
   (ändern, verschieben, entfernen) — **nur, soweit das Register sie an ihr
   anbietet:** `quick_names` schneidet gegen `REGISTRY.for_feature(kind)`; wo es
@@ -327,7 +329,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Siebenundsechzig von hundertzweiundsiebzig Operationen tragen einen (die Zahl prüft
+Achtundsechzig von hundertdreiundsiebzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),

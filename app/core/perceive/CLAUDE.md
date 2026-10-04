@@ -19,13 +19,13 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; die Blockzahl hält die kalibrierte Spitzenschätzung mit `BATCH_PEAK_FACTOR` innerhalb `BATCH_BYTES`; `_run` meldet nach jeder Solverrunde; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`); `_vector_norm` führt dessen reelle Vektornorm unmittelbar als Skalarprodukt und Wurzel aus, mit unveränderter Rechenfolge |
 | `helix.py` | Gewinde am eingelesenen Netz: Spektrum `_best_pitch` (beide Vorzeichen), Kantenleser `_measured_helix`; was eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne. Bausteingewinde laufen nie hindurch (§24.1) |
 | `slots.py` | Langlöcher, topologisch: zwei Halbzylinder, zwei ebene Flanken (Gegenprobe `tests/test_slot_features.py`); `slots_from_stadiums`, `open_slots_instead_of_fillets`, `native_open_slot_measures`, Paarsuche `_PairPlan` |
-| `patterns.py` | Muster (§25): `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung; `cylinder_facet_groups` ordnet die Mantelnormalen plattformgleich über die Winkelnaht, `cylinder_facet_lines` liest daraus die achsparallelen Facettengeraden — dieselben für Stopfen (`FacetPolygon` mit Ecken am Schnitt der Facetten, Stirnenden `Frame.ends`) und Quellausrichtung |
+| `patterns.py` | Muster (§25): Erkennung `find_patterns` und ausdrückliche Zusammenfassung `grouped_pattern` über dieselbe Zellenlesung `_read_cells`, Absagen `group_refusal`; `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung; `cylinder_facet_groups` ordnet die Mantelnormalen plattformgleich über die Winkelnaht, `cylinder_facet_lines` liest daraus die achsparallelen Facettengeraden — dieselben für Stopfen (`FacetPolygon` mit Ecken am Schnitt der Facetten, Stirnenden `Frame.ends`) und Quellausrichtung |
 | `relations.py` | Nachbarschaften: Hohlraumketten (unten), Rohrwand (`sleeve_at`, `thinnest_sleeve`), Dreieckseigentum (`cell_owner_table`, `CONTESTED`), Gleichartigkeit (`alike_for_actions`, `_same_surface_patch`), Gruppensätze (`group_evidence_texts`, `group_reason_texts` — das Panel liest sie von hier) |
 | `matching.py` | Stabile Bezeichner (§21.3): `match`, `settled_by_surface` (Zwillinge nach der Lage ihrer Oberfläche), `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features`; `planar_source`, `planar_faces`, `pieces_in_place` prüfen die räumliche Herkunft ebener Restflächen gemeinsam für Auswertung und Abschneiden |
 | `match_records.py` | JSON-Struktur und körperqualifizierte Antwortschlüssel; Domänen `group:`, `native-group:`, `edge-answer:`, `recognition-answer:` als Konstanten |
 | `match_decisions.py` | Ganze Zuordnungsentscheidungen wiedererkennen und atomar prüfen; `resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei, eine Netzantwort nie für die native Frage; keine zweite Zuordnung |
 | `local.py` | Begrenzte Suche am großen Netz (unten) |
-| `ops.py` | `detect_region`: die örtliche Suche als Operation — ändert keine Geometrie, erhält IDs, Provenienz, Erzeuger; übereinanderliegende Flächen fragt `ctx.ask` |
+| `ops.py` | `detect_region`: die örtliche Suche als Operation — ändert keine Geometrie, erhält IDs, Provenienz, Erzeuger; übereinanderliegende Flächen fragt `ctx.ask`. `group_pattern`: gewählte Einzelmerkmale als Muster `grouped_<Schritt>`, ohne Geometrieänderung |
 | `recognition_time.py` | Zeitspanne der Vollerkennung aus einer Rechenprobe je Prozess — nur Anzeige, keine Uhr in `detect` (§15.1) |
 | `surfaces.py` | Teilträger (`SurfacePatch`): `valid_patch`, `planar_patch`, `clipped_patches`, `reindexed_patches` |
 | `actions.py` | Was der Kunde an einem Merkmal tun kann und was nicht (unten) |
@@ -63,6 +63,9 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
   `without_pattern_cells` faltet nur vollständig in einem belegten Muster
   enthaltene Einzelmerkmale. `detect_region` behält bei überlappenden Funden
   die bereits belegte Textur samt Herkunft; Teilmerkmale werden nicht gekürzt.
+- **Ausdrücklich zusammengefasste Zellen** (`grouped`) binden sich wie
+  erzeugte Texturen (`bound_to_its_surface`); der exakte Körper fragt
+  dieselbe Mustersuche (`brep.features.features_of`).
 - **Erzeugte Texturen**: `patterns.rebound_textures` bindet ihre belegten
   Dreiecke neu; `without_texture_cells` faltet die Einzelformen und misst
   verbleibende Trägerflächen nach. Der Oberflächenbeleg gilt auch für kleine
