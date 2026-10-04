@@ -4884,9 +4884,11 @@ class HistoryPanel(QWidget):
                 for op_id in transaction.ops:
                     if op_id in replanned:
                         continue
-                    child = QListWidgetItem(
-                        f"    {self._positions.get(op_id, '')}  {titles.get(op_id, '')}"
-                    )
+                    # Ein gelöschter Schritt hat keine Stelle (RM-368) und steht
+                    # eingerückt wie seine Geschwister, ohne Lücke für die Nummer.
+                    position = self._positions.get(op_id)
+                    number = f"{position}  " if position is not None else ""
+                    child = QListWidgetItem(f"    {number}{titles.get(op_id, '')}")
                     child.setData(GROUP_ROLE, transaction.id)
                     child_symbol = _op_icon_name(
                         next((entry.op for entry in document.ops if entry.id == op_id), "")

@@ -150,7 +150,9 @@ def test_incomplete_bounds_explain_unknown_distance_and_reserved_tessellation(
     wait_for(qt_app, lambda: dialog.proposal is not None)
     assert "unbekannt" in dialog.details.text()
     assert "Vernetzung" in dialog.details.text()
-    assert "Facetten" in dialog.details.text()
+    # Die Facetten des Originals heißen für den Kunden „flache Dreiecke“
+    # (``oberflaeche.md``, Wortliste); die Zusage ist, dass sie mitzählen.
+    assert "flachen Dreiecke" in dialog.details.text()
     assert not dialog.take.isEnabled()
 
 

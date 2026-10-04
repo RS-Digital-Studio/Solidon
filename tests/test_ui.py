@@ -6439,10 +6439,20 @@ def test_a_double_click_on_a_folded_step_says_where_the_single_ones_are(
     Was ein Doppelklick auslöst, entscheidet die Verbindung, und die ist Teil
     der Zusage.
     """
-    from app.core.types import Document, Transaction
+    from app.core.types import Document, Operation, Transaction
     from app.ui.panels import HistoryPanel
 
-    document = Document(format_version=7, app_version="0.0.1")
+    # Die Schritte stehen im Stapel, wie in jedem Dokument: Eine Transaktion,
+    # deren Schritt fehlt, ist ein gelöschter, und der trägt keine Nummer mehr
+    # (RM-368).
+    document = Document(
+        format_version=7,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="drill_hole"),
+            *(Operation(id=number, op="split_bodies") for number in (2, 3, 4, 5)),
+        ],
+    )
     document.transactions.append(Transaction(id=1, title="Bohrung setzen", ops=(1,)))
     document.transactions.append(Transaction(id=2, title="Teilung in vier", ops=(2, 3, 4, 5)))
 
@@ -6583,10 +6593,16 @@ def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:
     „(Nutzer)" an jeder Zeile ist in einem Projekt ohne Agenten an jeder
     Zeile — und was überall steht, liest niemand. Der Agent wird genannt.
     """
-    from app.core.types import Document, Origin, Transaction
+    from app.core.types import Document, Operation, Origin, Transaction
     from app.ui.panels import HistoryPanel
 
-    document = Document(format_version=7, app_version="0.0.1")
+    # Beide Schritte stehen im Stapel; ohne ihn wären sie gelöscht und
+    # trügen keine Nummer (RM-368).
+    document = Document(
+        format_version=7,
+        app_version="0.0.1",
+        ops=[Operation(id=1, op="drill_hole"), Operation(id=2, op="create_lid")],
+    )
     document.transactions.append(Transaction(id=1, title="Bohrung setzen", ops=(1,)))
     document.transactions.append(
         Transaction(id=2, title="Deckel erzeugen", ops=(2,), origin=Origin(by="agent"))
@@ -6638,12 +6654,23 @@ def test_the_history_keeps_the_title_of_a_deleted_child(qt_app: QApplication) ->
     panel = HistoryPanel()
     panel.show_document(document)
 
-    deleted = next(
-        panel.list.item(row).text()
+    from app.ui.panels import GROUP_ROLE
+
+    children = [
+        item.text()
         for row in range(panel.list.count())
-        if tr("gelöscht") in panel.list.item(row).text() and "1" in panel.list.item(row).text()
-    )
+        if (item := panel.list.item(row)).data(GROUP_ROLE) == "t1"
+        and not item.text().lstrip().startswith(("▸", "▾"))
+    ]
+    deleted = next(text for text in children if tr("gelöscht") in text)
+    kept = next(text for text in children if tr("gelöscht") not in text)
     assert _op_title(removed.op) in deleted, "die Zeile zeigte nur eine Nummer"
+    # Ein gelöschter Schritt hat keine Stelle mehr: Seine Kennung stünde sonst
+    # als Nummer neben den Stellen der übrigen (RM-368). Er steht eingerückt
+    # wie sein Geschwister, nicht um die fehlende Nummer weiter.
+    assert not deleted.strip()[0].isdigit(), deleted
+    indent = len(kept) - len(kept.lstrip())
+    assert len(deleted) - len(deleted.lstrip()) == indent, (deleted, kept)
 
 
 def test_history_context_delete_uses_the_visible_multiple_selection(
@@ -11449,8 +11476,8 @@ def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window)
     notice._expiry.start(1000)
     window.session.evaluationCancelled.emit()
     expected = tr(
-        "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
-        "eine Änderung am Stapel rechnet weiter."
+        "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand; "
+        "die nächste Änderung rechnet weiter."
     )
     assert window._announcement == expected
     assert window.status_message.text() == expected
@@ -14356,12 +14383,22 @@ def test_a_finding_says_which_body_it_means(qt_app: QApplication) -> None:
         values={"wall_mm": 2.0, "removed_cm3": 14.3},
     )
 
-    plain = _line_for(finding)
-    assert "obj_2" in plain, "ohne Namensliste bleibt die Kennung stehen"
-
     named = _line_for(finding, {"obj_2": "Klotz B"})
     assert "Klotz B" in named, "mit Namensliste der Name"
     assert "obj_2" not in named
+
+    # **Zwei Körper, zwei Zeilen** — die Zusage dieses Tests, gelesen an den
+    # Namen, unter denen der Bericht sie kennt (``ReportPanel._names`` trägt
+    # auch die verbrauchter Körper).
+    other = dataclasses.replace(finding, object_id="obj_1")
+    names = {"obj_1": "Klotz A", "obj_2": "Klotz B"}
+    assert _line_for(other, names) != _line_for(finding, names)
+
+    # **Eine Kennung ist kein Name** (RM-396): Ohne Namen steht sie nicht im
+    # Kundensatz, sondern bleibt in den Befunddaten — „Ausgehöhlt. — obj_2“
+    # lehrte den Kunden ein Wort aus dem Code.
+    for unnamed in ({}, {"obj_2": "obj_2"}):
+        assert "obj_2" not in _line_for(finding, unnamed), unnamed
 
 
 def test_a_finding_writes_its_numbers_with_their_unit(qt_app: QApplication) -> None:
