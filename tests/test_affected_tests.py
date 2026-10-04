@@ -25,6 +25,18 @@ from tools.affected_tests import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_inherited_addopts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Kindläufe erben nichts vom äußeren Lauf.
+
+    Wer die Suite mit ``PYTEST_ADDOPTS="-n 5"`` startet, gab das an jeden
+    echten Kindprozess weiter: „1 passed“ statt „1 passed, 1 deselected“, und
+    drei Fälle wurden rot, ohne dass sich am Werkzeug etwas geändert hatte.
+    Ein Fall, der die Variable prüft, setzt sie selbst.
+    """
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+
+
 def _write(root: Path, relative: str, text: str) -> Path:
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
