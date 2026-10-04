@@ -602,6 +602,34 @@ def _stable_arctan(values: np.ndarray) -> np.ndarray:
     return np.asarray(np.where(inverse, _PI_2 - result, result))
 
 
+#: Bis zu welchem Betrag :func:`stable_sin_cos` einen Winkel annimmt. Die Reihe
+#: hält dort die volle Stellenzahl; mehr als eine halbe Drehung je Seite
+#: braucht keine ihrer Aufrufer.
+STABLE_ANGLE_LIMIT: Final = 4.0
+
+
+def stable_sin_cos(angles: np.ndarray | float) -> tuple[np.ndarray, np.ndarray]:
+    """Sinus und Kosinus vieler Winkel (Bogenmaß) — auf jeder Maschine dieselben Bits.
+
+    Die Taylorreihen nach Horner, fünfzehn Glieder, elementweise in
+    Grundrechenarten: ``np.sin`` und ``math.sin`` runden je nach CPU anders
+    (RM-187), und :func:`app.core.units.exact_sin` rechnet je Punkt in
+    ``decimal`` — für die zehntausend Ecken einer gebogenen Schrift zu teuer.
+    Bis :data:`STABLE_ANGLE_LIMIT` ist der Restfehler kleiner als eine Stelle
+    (``4^31 / 31!`` < ``1e-15``); darüber ist es eine Absage, keine Näherung.
+    """
+    t = np.asarray(angles, dtype=np.float64)
+    if t.size and float(np.max(np.abs(t))) > STABLE_ANGLE_LIMIT:
+        raise ValueError("stable_sin_cos takes angles up to four radians")
+    square = t * t
+    sine = np.ones_like(t)
+    cosine = np.ones_like(t)
+    for k in range(15, 0, -1):
+        sine = 1.0 - square / float((2 * k) * (2 * k + 1)) * sine
+        cosine = 1.0 - square / float((2 * k - 1) * (2 * k)) * cosine
+    return t * sine, cosine
+
+
 def stable_arccos(values: np.ndarray | float) -> np.ndarray:
     """``arccos`` aus Grundrechenarten und :func:`_stable_arctan` — auf jeder
     Maschine dieselben Bits (RM-166).
@@ -2478,9 +2506,12 @@ def lifted_caps(raw: trimesh.Trimesh, caps: Sequence[tuple[Any, Any, float]]) ->
 
     Je Deckel ``(Dreiecke, Richtung, Strecke)``: Seine Punkte werden um die
     Strecke entlang der Richtung kopiert, der Deckel wandert auf die Kopie, und
-    zwischen altem und neuem Rand entsteht die Wand. Die alten Randpunkte
-    bleiben bei den Flächen darunter; das Netz bleibt geschlossen, und was
-    davor war, behält seine Punkte und Dreiecke in derselben Reihenfolge.
+    zwischen altem und neuem Rand entsteht die Wand. Die Richtung ist ein
+    Vektor für alle Punkte oder einer je Punkt, in der Folge von ``np.unique``
+    seiner Dreiecke — so setzt ``prepare_ops._continued_walls`` die Wand selbst
+    fort. Die alten Randpunkte bleiben bei den Flächen darunter; das Netz
+    bleibt geschlossen, und was davor war, behält seine Punkte und Dreiecke in
+    derselben Reihenfolge.
 
     Der Netz-Zwilling von ``brep.edit.collared`` (ein Prisma über einer ebenen
     Fläche) und die eine Stelle, an der das am Netz geschieht: für die

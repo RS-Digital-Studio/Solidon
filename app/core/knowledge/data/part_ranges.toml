@@ -132,7 +132,7 @@ date = "2026-10-04"
 [[parts]]
 name = "heatset_m4"
 version = "17"
-fingerprint = "b0745e318e1685c99f58b75fcc1545650fd262d1fc55fc9fdafc3c641a3f51e0"
+fingerprint = "ec4b86d45c32c7b5191817ae24410bc7324a9f01c58c333bd7e12e5a63693997"
 corners = 36
 checked = 36
 excluded = 0
@@ -154,7 +154,7 @@ date = "2026-10-04"
 [[parts]]
 name = "holder_fork"
 version = "22"
-fingerprint = "d0769a20951c88c9a6d32b5449f3bd0b821bc293dfea0913deb70a7dd90c99e6"
+fingerprint = "a410855337d84899252299cc8e6e17410693708608a71a4b3496d516638c2573"
 corners = 256
 checked = 256
 excluded = 64
@@ -165,7 +165,7 @@ date = "2026-10-04"
 [[parts]]
 name = "holder_ring"
 version = "22"
-fingerprint = "277b0e4bede21adb486ec2faa7a77af8af88611a2c59d243049dbdb97beed845"
+fingerprint = "4d233e3817dec9d0ca62cc14aa262776c0d83bcb3f144bcbca69543c6fd32c2f"
 corners = 256
 checked = 256
 excluded = 0
@@ -176,7 +176,7 @@ date = "2026-10-04"
 [[parts]]
 name = "holder_shelf"
 version = "22"
-fingerprint = "fbd288abe7d622867e13f5f82138f63bc4691f1cda116a48140d1fff07de5f0c"
+fingerprint = "20a2461b4066b7aa2a4eb1fc6b3b6f7992dc5e53c5ecfb7d734c2556fde7597b"
 corners = 512
 checked = 512
 excluded = 0
@@ -187,7 +187,7 @@ date = "2026-10-04"
 [[parts]]
 name = "holder_u"
 version = "22"
-fingerprint = "206538d7538bde291b2a8dd65fd76ab02a1474bb5e636e04bad88e01ecc1eef7"
+fingerprint = "06736627c45e53a9f0e83b44d9375ddafc868147feccdbe1de70cf59b21e6ec4"
 corners = 512
 checked = 512
 excluded = 0
@@ -264,7 +264,7 @@ date = "2026-10-04"
 [[parts]]
 name = "nut_trap"
 version = "15"
-fingerprint = "09083a492b7aff472d505cb61afa2f234eba484f235eb4a6e1700b2a7ff8fdc9"
+fingerprint = "fb70bb50eabffdd8f35196d8a9e66b953b216702def58f706198a662cc40b5c4"
 corners = 112
 checked = 112
 excluded = 0
@@ -352,7 +352,7 @@ date = "2026-10-04"
 [[parts]]
 name = "printed_nut"
 version = "21"
-fingerprint = "a0c4a440498ca09951ed5190e050e2b553e2ff74c0cb2ca3957aa58ebb5e03eb"
+fingerprint = "aee963ca05e574fef3cd0b0a3877892fd10fbdc39bf5ca14c3c131886a8202de"
 corners = 14
 checked = 14
 excluded = 0
@@ -363,7 +363,7 @@ date = "2026-10-04"
 [[parts]]
 name = "printed_screw"
 version = "21"
-fingerprint = "5e472d40c4674ca74998c6d0e2c3891755b2bb4d8a38a1eda56ef79ed2641652"
+fingerprint = "5f5a13df61a3f0fb0a864eb5ecccd4f5afdf77eec85d4f0899176a8da118f03f"
 corners = 56
 checked = 56
 excluded = 0
@@ -374,7 +374,7 @@ date = "2026-10-04"
 [[parts]]
 name = "printed_thread"
 version = "20"
-fingerprint = "f1041425002abd2dfceae46a1bcb3b797739885e895c2fc9ad322267ab6f9621"
+fingerprint = "d2a586c1651f6eb15153069b577c8fcf0c27d1f131a03ccd908431404b78484f"
 corners = 56
 checked = 56
 excluded = 0
@@ -473,7 +473,7 @@ date = "2026-10-04"
 [[parts]]
 name = "screw_hole"
 version = "15"
-fingerprint = "f2fd4427e21e72a4fe5039556fbb7240a9c4bc7c9b16b8e215d648542cf18b6f"
+fingerprint = "16d76dd8fd286f0a1805502c783354cfcf348d6a234c9eed53a38ae4b77bbe38"
 corners = 224
 checked = 224
 excluded = 0

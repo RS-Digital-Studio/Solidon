@@ -27,6 +27,7 @@ verschiedenen Rechenwerken herauskommen.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import json
 import math
@@ -384,6 +385,164 @@ def _changed_chamber() -> str:
     return _mesh_print(result.outputs[0].mesh)
 
 
+def _bent_lettering() -> str:
+    """Schrift auf dem Bogen und um die Rundung, dazu eine Einlage (RM-184).
+
+    Bogen und Biegung gehen über Sinus und Kosinus in jede Ecke der Buchstaben
+    (``label_layout``); die Dose ist ein ``lathe``-Zylinder, damit nicht schon
+    der Eingang die Plattform trägt.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Feature
+
+    arced = _registered("label_text", _plate(), text="RS 7", size=6.0, z=8.0, arc_radius=27.5)
+    drum = lathe.cylinder(radius=20.0, height=40.0, sections=180)
+    drum.vertices = np.asarray(drum.vertices) + np.array([0.0, 0.0, 20.0])
+    features = {
+        "pin_1": Feature(
+            id="pin_1",
+            kind="pin",
+            provenance="detected",
+            params={"centre": (0.0, 0.0, 20.0), "axis": (0.0, 0.0, 1.0), "diameter": 40.0},
+        )
+    }
+    wrapped = _registered_outputs(
+        "inlay_text",
+        MeshData.of(drum),
+        features,
+        text="SALZ",
+        size=9.0,
+        depth=0.7,
+        wrap="around",
+        x=20.0,
+        z=21.5,
+        nx=1.0,
+        nz=0.0,
+        angle=7.5,
+    )
+    return "|".join(_mesh_print(mesh) for mesh in (arced, *wrapped))
+
+
+def _fit_pieces() -> str:
+    """Der Prüfausschnitt einer Passung an der engsten Stelle (RM-184)."""
+    from app.core.geom.mesh import MeshData
+
+    pin = lathe.cylinder(radius=3.0, height=20.0, sections=64)
+    pin.vertices = np.asarray(pin.vertices) + np.array([-12.0, 4.0, 6.0])
+    pieces = _registered_outputs(
+        "test_piece", _plate(), {}, others=[MeshData.of(pin)], size=9.0, spot="closest"
+    )
+    return "|".join(_mesh_print(mesh) for mesh in pieces)
+
+
+def _counter_form() -> str:
+    """Gegenform mit Griffmulde (RM-184): ein schräg liegender Zapfen in der Platte."""
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import moved, rotation
+
+    tool = lathe.cylinder(radius=4.5, height=18.0, sections=72)
+    moved(tool, rotation("y", 17.5))
+    tool.vertices = np.asarray(tool.vertices) + np.array([-3.0, 1.5, 7.0])
+    outputs = _registered_outputs(
+        "cut_counter_form", _plate(), {}, others=[MeshData.of(tool)], grip=9.0
+    )
+    return _mesh_print(outputs[0])
+
+
+def _hinged_lid() -> str:
+    """Konturdeckel mit Scharnier (RM-184): rundes Gehäuse, Kragen beschnitten, aufgeklappt.
+
+    Dazu der lose Stift in der Bohrung eines Deckels mit Stift — Lage, Kragenraum
+    und Stift laufen über Quadratwurzeln und Vierteldrehungen, nie über Winkel.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE
+    from app.core.geom.mesh import MeshData
+
+    outer = lathe.cylinder(radius=38.5, height=30.0, sections=96)
+    inner = lathe.cylinder(radius=35.5, height=30.0, sections=96)
+    inner.vertices = np.asarray(inner.vertices) + np.array([0.0, 0.0, 2.0])
+    housing = boolean("difference", [MeshData.of(outer), MeshData.of(inner)], quality="fine").mesh
+    printed = _registered_outputs(
+        "create_lid",
+        housing,
+        {},
+        hinge="barrel",
+        collar=8.0,
+        thickness=3.0,
+        hinge_side="hinge_left",
+    )
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    entry = SceneObject(id="obj_1", name="Ring", mesh=housing, features={})
+
+    def run(name: str, source: SceneObject, **params: object) -> list[SceneObject]:
+        spec = REGISTRY.get(name)
+        return spec.fn(
+            OpContext(
+                scene=Scene(objects={source.id: source}, profile=profile),
+                inputs=[source],
+                params=spec.params(**params),
+                profile=profile,
+                quality="fine",
+                seed=20260922,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        ).outputs
+
+    loose = run("create_lid", entry, hinge="loose_pin", collar=8.0, thickness=3.0)
+    lid = dataclasses.replace(loose[1], id="obj_2")
+    pin = run("pin_for_bore", lid, at_feature=HINGE_HOLE_FEATURE)[1]
+    return "|".join(_mesh_print(mesh) for mesh in (*printed, loose[1].mesh, pin.mesh))
+
+
+def _registered_outputs(
+    name: str,
+    source: Any,
+    features: dict[str, Any],
+    *,
+    others: list[Any] | None = None,
+    **params: object,
+) -> list[Any]:
+    """Wie :func:`_registered`, mit Merkmalen am ersten Eingang und allen Ausgängen."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    entries = [SceneObject(id="obj_1", name="Teil", mesh=source, features=features)]
+    entries += [
+        SceneObject(id=f"obj_{index}", name=f"Teil {index}", mesh=mesh)
+        for index, mesh in enumerate(others or [], start=2)
+    ]
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    spec = REGISTRY.get(name)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in entries}, profile=profile),
+            inputs=entries,
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=20260922,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return [entry.mesh for entry in result.outputs]
+
+
 def _changed_bore() -> str:
     """Der Änderungsweg aus RM-187: Senkbohrung mit Nachbarloch, auf Ø 6 verkleinert."""
     from app.core.knowledge import profiles
@@ -737,6 +896,59 @@ def _curved_mouth() -> str:
     return f"{_mesh_print(plug)}|{_mesh_print(tool)}"
 
 
+_SLOPED: list[Any] = []
+
+
+def _carried_collar() -> str:
+    """Der Kragen einer Bohrung, den ihre Wand an der schrägen Mündung trägt (RM-226).
+
+    Je Randecke der Schnitt ihrer zwei Wandebenen mit der verschobenen
+    Deckelebene (``prepare_ops._continued_walls``) — die Lage jeder neuen Ecke.
+    Platte 40 x 20 mit Oberseite z = 10 + x/4 aus festen Ecken, Bohrung Ø 6 als
+    48-Eck; Körper und Bohrung entstehen einmal und außerhalb des Rauschens,
+    unter ihm laufen nur Hohlraumkörper und Kragen, starr um 10 mm längs X.
+    """
+    from app.core.deferred import trimesh
+    from app.core.geom import prepare_ops
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    if not _SLOPED:
+        corners = np.array(
+            [
+                (-20.0, -10.0, 0.0),
+                (20.0, -10.0, 0.0),
+                (20.0, 10.0, 0.0),
+                (-20.0, 10.0, 0.0),
+                (-20.0, -10.0, 5.0),
+                (20.0, -10.0, 15.0),
+                (20.0, 10.0, 15.0),
+                (-20.0, 10.0, 5.0),
+            ]
+        )
+        sides = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4)]
+        sides += [(3, 7, 6), (3, 6, 2), (0, 4, 7), (0, 7, 3), (1, 2, 6), (1, 6, 5)]
+        plate = MeshData.of(trimesh.Trimesh(corners, np.array(sides), process=False))
+        bore = lathe.cylinder(radius=3.0, height=40.0, sections=48)
+        bore.apply_translation((0.0, 0.0, 10.0))
+        mesh = boolean("difference", [plate, MeshData.of(bore)]).mesh
+        hole = next(feature for feature in detect(mesh).values() if feature.kind == "hole")
+        _SLOPED.extend((mesh, hole))
+    mesh, hole = _SLOPED
+    cavity = prepare_ops._body_from_faces(mesh, hole.face_indices, allowed_rings=(2,))
+    assert cavity is not None, "die Bohrung muss einen Hohlraumkörper hergeben"
+    tool = prepare_ops._past_the_mouths(mesh, cavity, travel=np.array([10.0, 0.0, 0.0]), walls=True)
+    corners = np.asarray(tool.raw.vertices)
+    radial = np.hypot(corners[:, 0], corners[:, 1])
+    rim = radial > 1.0
+    assert len(corners) > len(cavity.raw.vertices), "beide Mündungen müssen einen Kragen tragen"
+    assert float(np.abs(radial[rim] - radial[rim].max()).max()) < 1e-9, (
+        "die Wand muss den Kragen tragen, nicht die Deckelnormale"
+    )
+    return _mesh_print(tool)
+
+
 def _aligned_pattern_facets(tilted: bool = False) -> str:
     """Die Facettenkorrektur vor einer Musteränderung, mit unabhängig gebautem Eingang."""
     from app.core.geom.prepare_ops import _aligned_facets
@@ -922,17 +1134,22 @@ def _tangential_rounds() -> str:
 
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
+    "bent_lettering": _bent_lettering,
     "bound_surface": _bound_surface,
+    "carried_collar": _carried_collar,
     "container_hinge": lambda: _container("hinged"),
     "container_screw": lambda: _container("screw"),
     "container_rectangular": lambda: _container("push", "rectangular"),
+    "counter_form": _counter_form,
     "corner_chamfer": lambda: _worked_corner(False),
     "corner_fillet": lambda: _worked_corner(True),
     "curved_mouth": _curved_mouth,
     "differently_split_contact_edge": _differently_split_contact_edge,
     "drill_hole": _drilled_along_the_face,
     "fill_band": _bore_wall_band,
+    "hinged_lid": _hinged_lid,
     "fill_bridged": _top_with_holes,
+    "fit_pieces": _fit_pieces,
     "import_repair": _mended_import,
     "inverted_hollow": _inverted_hollow,
     "orient_for_print": lambda: _oriented_plate(True),

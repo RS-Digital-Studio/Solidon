@@ -1316,6 +1316,19 @@ class History:
                     values={"op": draft.op, "taken": taken},
                     suggestions=(CANCEL,),
                 )
+            # Und die Vergabe rückt über sie hinweg: Ein Ablauf nennt die
+            # Kennung seines ersten neuen Körpers (``next_object_id``), und
+            # der nächste Entwurf ohne eigene bekam sonst genau sie ein
+            # zweites Mal (RM-184, Deckel mit Stift).
+            fresh = next(self._next_object)
+            named = [
+                int(match.group(1))
+                for entry in outputs
+                if (match := _OBJECT_PATTERN.match(entry)) is not None
+            ]
+            self._next_object: itertools.count[int] = itertools.count(
+                max([fresh, *(index + 1 for index in named)])
+            )
         return Operation(
             id=next(self._next_op),
             op=draft.op,
@@ -1493,8 +1506,17 @@ class History:
         op_id: OpId,
         params: Mapping[str, Any],
         changes: DocumentChange | None = None,
+        *,
+        also: Mapping[OpId, Mapping[str, Any]] | None = None,
+        appended: Sequence[OperationDraft] = (),
     ) -> Operation:
         """Gibt einer Operation des Stapels andere Parameter (§15.4, §11).
+
+        ``also`` ändert weitere Schritte in derselben Transaktion (je Schritt
+        die vollständigen neuen Werte), ``appended`` setzt neue Schritte ans
+        Ende — so geht das Gegengewinde einer Gewindepassung mit, wenn ein
+        gespeicherter Gewindeschritt sich ändert (``counterpart.coupled_step_change``,
+        RM-184). Ein Strg+Z nimmt alles zurück.
 
         Genau das macht den Stapel zum Stapel statt zu einer Liste von Dingen,
         die passiert sind: eine Bohrung zwei Millimeter weiter links ist
@@ -1588,11 +1610,20 @@ class History:
             outputs = entry.outputs
 
         changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
+        pairs = [(entry, changed)]
+        for other_id, values in (also or {}).items():
+            other = self.operation(other_id)
+            self._check_params(other.op, self._spec_of(other).params.spec(), values)
+            pairs.append((other, dataclasses.replace(other, params=dict(values))))
         _log.info("changed parameters of op %s (%s)", op_id, entry.op)
-        _transaction, (swapped,) = self._swap_operations(
-            spec.title, ((entry, changed),), along=changes
-        )
-        return swapped
+        if not appended:
+            _transaction, swapped = self._swap_operations(spec.title, pairs, along=changes)
+            return swapped[0]
+        # Neue Schritte und geänderte Fassungen in einer Transaktion: ``apply``
+        # plant die neuen, die Fassungen reisen in ihren ``edited_ops``.
+        swap, swapped = self._swap_change(pairs, along=changes)
+        self.apply(spec.title, appended, changes=swap)
+        return swapped[0]
 
     def bind_parameters(
         self,
@@ -1892,14 +1923,31 @@ class History:
 
         ``along`` bringt alle zusätzlichen Dokumentänderungen derselben Geste
         mit, etwa benannte Maße und das neue Passungspaar eines Deckels."""
+        changes, swapped = self._swap_change(pairs, along)
+        self._reseed()
+        self._forget_undone()
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=title,
+            ops=(),
+            changes=changes,
+        )
+        self.document.transactions.append(transaction)
+        self._settle(changes.after)
+        return transaction, swapped
+
+    def _swap_change(
+        self,
+        pairs: Sequence[tuple[Operation, Operation]],
+        along: DocumentChange | None = None,
+    ) -> tuple[DocumentChange, tuple[Operation, ...]]:
+        """Die Dokumentänderung, die alte und neue Fassungen trägt — ohne sie anzulegen."""
         swapped = tuple(
             _copy_operation_matches(
                 changed, previous_outputs=entry.outputs, previous_inputs=entry.inputs
             )
             for entry, changed in pairs
         )
-        self._reseed()
-        self._forget_undone()
         changes = DocumentChange(
             before=dataclasses.replace(
                 along.before if along is not None else DocumentState(),
@@ -1916,15 +1964,7 @@ class History:
                 },
             ),
         )
-        transaction = Transaction(
-            id=f"t{next(self._next_transaction)}",
-            title=title,
-            ops=(),
-            changes=changes,
-        )
-        self.document.transactions.append(transaction)
-        self._settle(changes.after)
-        return transaction, swapped
+        return changes, swapped
 
     def use_part_states(self, states: Mapping[str, str]) -> Transaction | None:
         """Rechnet benutzte Bausteine mit einem anderen Stand desselben

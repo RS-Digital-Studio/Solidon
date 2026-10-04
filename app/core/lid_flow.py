@@ -103,6 +103,65 @@ def fit_for_lid(operation: Operation, existing: Sequence[Fit]) -> Fit:
     )
 
 
+#: Wie die Passung des Scharniers heißt, wenn sie die erste ihres Namens ist.
+HINGE_FIT_NAME = "scharnier"
+
+
+def lid_drafts(
+    document: Document,
+    object_id: ObjectId,
+    params: Mapping[str, object],
+    *,
+    op: str = "create_lid",
+) -> list[OperationDraft]:
+    """Die Schritte eines Deckels: der Deckel — und mit Stift der Stift dazu (RM-184).
+
+    Ein Deckel mit Stift sind drei Teile (Audit §6: Ring, Deckel, Stift). Der
+    Stift ist ein eigener Schritt (*Stift für Bohrung*) an der Scharnierbohrung
+    des Deckels und folgt ihr, wenn der Deckelschritt sich ändert. Vorschau und
+    Übernehmen fragen beide hier.
+    """
+    from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE
+
+    draft = OperationDraft(op=op, inputs=(object_id,), params=dict(params))
+    if op != "create_lid" or params.get("hinge") != "loose_pin":
+        return [draft]
+    lid_id = History(document).next_object_id()
+    return [
+        dataclasses.replace(draft, outputs=(object_id, lid_id)),
+        OperationDraft(
+            op="pin_for_bore", inputs=(lid_id,), params={"at_feature": HINGE_HOLE_FEATURE}
+        ),
+    ]
+
+
+def hinge_fits_for_lid(steps: Sequence[Operation], existing: Sequence[Fit]) -> list[Fit]:
+    """Die Passung des Scharniers: Bolzen in Bohrung, mitgedruckt oder mit Stift.
+
+    Wie die Kragenpassung mit ``auto:`` — das Spiel kommt aus dem Material,
+    in dem Gehäuse und Deckel gedruckt werden.
+    """
+    from app.core.geom.lid_hinge import BORE_PIN_FEATURE, HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
+
+    lid = steps[0]
+    hinge = lid.params.get("hinge", "none") if lid.op == "create_lid" else "none"
+    if hinge == "barrel":
+        pin_ref = FeatureRef(lid.outputs[0], HINGE_PIN_FEATURE)
+    elif hinge == "loose_pin" and len(steps) > 1 and len(steps[1].outputs) > 1:
+        pin_ref = FeatureRef(steps[1].outputs[1], BORE_PIN_FEATURE)
+    else:
+        return []
+    return [
+        Fit(
+            name=_unused_name(existing, HINGE_FIT_NAME),
+            a=pin_ref,
+            b=FeatureRef(lid.outputs[1], HINGE_HOLE_FEATURE),
+            kind="clearance",
+            tolerance=AUTO_TOLERANCE_PREFIX,
+        )
+    ]
+
+
 def apply_lid(
     document: Document,
     object_id: ObjectId,
@@ -120,13 +179,11 @@ def apply_lid(
     """
     history = History(document)
     title = _("Drehdeckel erzeugen") if op == "screw_lid" else _("Deckel erzeugen")
-    applied = history.apply(
-        title,
-        [OperationDraft(op=op, inputs=(object_id,), params=dict(params))],
-        origin or Origin(by="user"),
-    )
+    drafts = lid_drafts(document, object_id, params, op=op)
+    applied = history.apply(title, drafts, origin or Origin(by="user"))
 
-    made = document.ops[-1].outputs
+    steps = document.ops[-len(drafts) :]
+    made = steps[0].outputs
     if len(made) < 2:
         # Die Operation hat keinen zweiten Körper geliefert — dann gibt es
         # nichts zu paaren, und ein Fit ins Leere wäre schlimmer als keiner.
@@ -134,7 +191,8 @@ def apply_lid(
         return LidApplied(object_ids=list(made), transaction=applied.id)
 
     box_id, lid_id = made[0], made[1]
-    fit = fit_for_lid(document.ops[-1], document.fits)
+    fit = fit_for_lid(steps[0], document.fits)
+    hinges = hinge_fits_for_lid(steps, [*document.fits, fit])
     # Die Passung gehört in dieselbe Transaktion wie die Geometrie: sie ist
     # keine Operation, also reist sie als DocumentChange mit (§15.5). Ohne das
     # ließe ein Undo den Deckel verschwinden und die Passung stehen — sie
@@ -143,13 +201,15 @@ def apply_lid(
     # Nachgetragen und nicht mitgegeben, weil erst der Verlauf die Objekt-IDs
     # vergibt: vor ``apply`` gibt es nichts, worauf ein ``FeatureRef`` zeigen
     # könnte.
-    changes = change_for(document, fits=[*document.fits, fit])
-    document.fits.append(fit)
+    changes = change_for(document, fits=[*document.fits, fit, *hinges])
+    document.fits.extend([fit, *hinges])
     document.transactions[-1] = dataclasses.replace(applied, changes=changes)
+    # Gehäuse, Deckel und — mit Stift — der Stift, jeder einmal.
+    bodies = list(dict.fromkeys(entry for step in steps for entry in step.outputs))
 
     _log.info("lid flow: %s ↔ %s as fit %s", box_id, lid_id, fit.name)
     return LidApplied(
-        object_ids=list(made),
+        object_ids=bodies,
         fit=fit if fit in active_fits(document) else None,
         transaction=applied.id,
         findings=[
@@ -170,6 +230,7 @@ def apply_lid(
 
 __all__ = [
     "FIT_NAME",
+    "HINGE_FIT_NAME",
     "ContainerEdit",
     "ContainerPlan",
     "LidApplied",
@@ -177,6 +238,8 @@ __all__ = [
     "change_for_container_edit",
     "fit_for_container",
     "fit_for_lid",
+    "hinge_fits_for_lid",
+    "lid_drafts",
     "plan_container",
     "plan_container_edit",
     "unique_name",
@@ -304,7 +367,7 @@ def plan_container(document: Document, values: Mapping[str, Any]) -> ContainerPl
 
 def fit_for_container(operation: Operation, existing: Sequence[Fit]) -> Fit:
     """Das Passungspaar der aktuellen Deckelart, aus den echten Ausgabekennungen."""
-    from app.core.geom.container_ops import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
+    from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
 
     pairs = {
         "screw": (NECK_THREAD_FEATURE, CAP_THREAD_FEATURE),
@@ -325,7 +388,7 @@ def fit_for_container(operation: Operation, existing: Sequence[Fit]) -> Fit:
 
 
 def _belongs_to_container(fit: Fit, operation: Operation) -> bool:
-    from app.core.geom.container_ops import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
+    from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE
 
     return (
         len(operation.outputs) >= 2

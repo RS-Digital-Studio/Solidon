@@ -34,6 +34,8 @@ dans `website/version.json`.
 - Dans le rapport, « Reconstruire le modèle » refait une pièce importée, équerres, gorges et fraisures comprises, la compare à l'original dans la limite choisie et l'applique en une étape.
 - Le « Collier avec garnitures » démarre avec le matériau du projet dans les deux champs de matériau. Jusqu'ici, les deux étaient vides.
 - La recherche de pièces trouve la « Languette pour profilé aluminium » aussi sous écrou en T, et sa description dit en quoi elle diffère d'un écrou en T fileté.
+- Un couvercle de « Créer un couvercle » peut recevoir une charnière, imprimée en place ou avec une goupille de « Goupille pour perçage », et son col est rogné pour s'ouvrir librement.
+- Avec « Creuser la contre-forme », un insert reçoit des logements d'outils dont ils ressortent tout droit.
 
 ### Imprimer et transmettre au slicer
 
@@ -102,6 +104,8 @@ dans `website/version.json`.
 - Après export ou « Ouvrir dans le slicer … », Solidon relit le fichier. Le compte rendu du rapport donne fichiers, cible d'impression, matériau, réglages et si le fichier correspond à la demande.
 - Exporté en 3MF depuis la ligne de commande, un corps d'une seule couleur garde son filament à la réouverture.
 - Pour les réglages de pièces individuelles, la ligne de commande indique de quelles pièces il s'agit et quelle valeur elles reçoivent.
+- Les supports acceptés pour un long pont au-dessus de la pièce y arrivent maintenant. Avant, « Depuis le plateau uniquement » s'ajoutait et plusieurs slicers imprimaient le pont sans support.
+- Les petites pièces couchées, comme les vis, ne reçoivent plus de supports proposés là où une arête de coupe montrait à tort un point flottant.
 
 ### Perçages, trous oblongs et découpe
 
@@ -138,6 +142,12 @@ dans `website/version.json`.
 - Solidon reconnaît chaque champ de nervures, de nid d'abeille ou de picots d'un fichier importé comme un seul motif, et « Détecter les caractéristiques ici » regroupe les cellules d'un champ.
 - Un petit champ que Solidon ne lit que comme caractéristiques isolées devient un motif avec « Regrouper en motif ». Les motifs des fichiers STEP sont reconnus directement.
 - Les morceaux d'une division automatique sont aussi numérotés dans les projets d'anciennes versions, et une coupe supprimée ou désactivée ne compte plus.
+- Un perçage dupliqué, déplacé ou répété le long d'une face inclinée reste le même perçage sur les pièces STL et STEP, avec les mêmes cotes et messages.
+- Après « Répéter la caractéristique », une copie sur une pièce STEP ne perce plus jusqu'au dessus, et un perçage STL grossièrement facetté reste débouchant.
+- Un filetage grandit ou rétrécit avec « Modifier la caractéristique » sans percer la paroi, et le filetage opposé d'un ajustement fileté suit.
+- Une paire de filetages imprimés réussit son contrôle d'ajustement : les deux filetages indiquent la cote construite, et le contrôle attend le jeu des deux moitiés.
+- Avec « Vérifier le chemin d'assemblage », les pièces peuvent aussi tourner, ou être insérées puis tournées comme une baïonnette.
+- Une pièce de « Créer une éprouvette » découpe la même fenêtre dans les deux pièces d'un ajustement et indique le jeu.
 
 ### Congés et chanfreins
 
@@ -169,6 +179,7 @@ dans `website/version.json`.
 - L'entrée « Créer à partir d'une esquisse … » commence tout de suite à dessiner, le plan de dessin montre son origine, et un double-clic dans l'historique rouvre un dessin en mode dessin.
 - Dans « Sculpter » et l'éditeur de squelette, la barre affiche épaisseur de paroi ou surplomb en carte légendée et signale un trait hors du volume d'impression. Après pliage, elle évalue l'impression.
 - Une texture appliquée se sélectionne en entier. Le panneau de sélection propose alors « Modifier la texture » et « Retirer la texture ».
+- Le texte suit un arc ou entoure une face arrondie, et « Incruster du texte » le pose à fleur dans sa propre couleur.
 
 ### Générer avec l'IA
 

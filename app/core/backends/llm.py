@@ -2341,12 +2341,23 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: 0.35.1, ``num_ctx`` 32 768, ``num_predict`` 1, ``keep_alive`` 0, ein
 #: Ausgabetoken. SHA-256 der Anfrage:
 #: ``0ba0af27ea66ae4dd8e5258ff4c7738c09e8a1f022e0e08351ef3aff97c98c06``.
-#: Am 04.10.2026 mit *Kammer ändern* (RM-184, funktionale Gruppen) derselbe
-#: Aufruf: **8 330 Token bei 185 Werkzeugen**, 25,4 % des Fensters — qwen3:14b
-#: (bdbd181c33f2), Ollama 0.35.1, ``num_ctx`` 32 768, ``num_predict`` 1,
-#: ``keep_alive`` 0, ein Ausgabetoken. SHA-256 der Anfrage:
-#: ``fb1d91a9e0fe428f64959e7279d263c5dc0bee067368d99c2647013b26e754b0``.
-PROMPT_TOKENS: Final = 8330
+#: Am 04.10.2026 mit *Schrift einlegen* und den Abläufen aus dem Dateiaudit
+#: (RM-184: drehender Fügeweg, Prüfausschnitt einer Passung, Schrift auf Bogen
+#: und Rundung) derselbe Aufruf: **8 330 Token bei 185 Werkzeugen**, 25,4 %
+#: des Fensters — qwen3:14b, Ollama 0.35.1, ``num_ctx`` 32 768,
+#: ``num_predict`` 1, ``keep_alive`` 0, ein Ausgabetoken. SHA-256 der Anfrage:
+#: ``fde40c864e0c61de6949d749a3de15523ea8e4b0efa9020c863df44f81f8a0cf``.
+#: Mit *Gegenform einlassen* (RM-184) derselbe Aufruf: **8 361 Token bei 186
+#: Werkzeugen**, 25,5 % des Fensters; SHA-256
+#: ``0414aa80760535459915458d4f30f50233b0c4ad520e6eebe8782ec55685e97a``.
+#: Mit *Stift für Bohrung* und dem Scharnier an *Deckel erzeugen* (RM-184):
+#: **8 394 Token bei 187 Werkzeugen**, 25,6 % des Fensters; SHA-256
+#: ``8c6e6097e5aee4c30cd3189d0d9f583fd70b04911ae4d99d17f97d96a78456eb``.
+#: Mit *Kammer ändern* (RM-184, funktionale Gruppen) aus dem Zweig der
+#: Gruppen dazu, derselbe Aufruf an qwen3:14b: **8 424 Token bei 188
+#: Werkzeugen**, 25,7 % des Fensters; SHA-256
+#: ``14d6b51c937fcc064e37f5b12bfb24f8e04e9a2859d19d919f7be1b404746c9d``.
+PROMPT_TOKENS: Final = 8424
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2373,9 +2384,9 @@ TURN_TOKENS: Final = 9061
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die Zählung vom 04.10.2026 mit *Kammer ändern* enthält genau diese 185
+#: Die Zählung vom 04.10.2026 mit *Kammer ändern* enthält genau diese 188
 #: Werkzeuge; Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 185
+PROMPT_TOOL_COUNT: Final = 188
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

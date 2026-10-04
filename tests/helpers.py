@@ -1471,6 +1471,38 @@ def sloped_slot_plate(*, chamfer: bool, slotted: bool = True) -> Any:
     return edit.chamfer(plate, 0.75, selected_edges=edit.native_edge_indices(plate, rims))
 
 
+def slanted_plate(width: float = 20.0, length: float = 40.0) -> Any:
+    """Exakte Platte ``length`` x ``width``, Unterseite z = 0, Oberseite schräg z = 10 + x/4.
+
+    Der Träger aus RM-411 und RM-226: Ihre mittlere Höhe ist 10, das Volumen
+    also ``10 · length · width``; eine Kopie längs X landet unter einer höheren
+    Fläche. Unter 80 mm Länge bleibt die Oberseite über der Unterseite.
+    """
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid, boolean_builder
+
+    base = edit.box(length, width, 20.0)
+    plane = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0.0, 0.0, 10.0), gp_Dir(-0.25, 0.0, 1.0))).Face()
+    below = BRepPrimAPI_MakeHalfSpace(plane, gp_Pnt(0.0, 0.0, 0.0)).Solid()
+    builder = boolean_builder("intersection", base.shape, below)
+    builder.Build()
+    return Solid(builder.Shape())
+
+
+def stepped_plate() -> Any:
+    """Exakte Grundplatte 40 x 20 x 10 mit Aufsatz x 5 … 15 bis z = 20 (RM-411), 10 000 mm³."""
+    edit = exact_kernel()
+    return edit.boolean(
+        "union",
+        [edit.box(40.0, 20.0, 10.0), edit.moved(edit.box(10.0, 20.0, 10.0), (10, 0, 10))],
+    )
+
+
 def seal_cube(kind: str = "mesh") -> SceneObject:
     """Baut den Trägerkörper der Dichtungsprüfungen an beiden Kernarten."""
     if kind == "brep":

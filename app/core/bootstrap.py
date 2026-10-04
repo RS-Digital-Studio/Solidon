@@ -34,7 +34,10 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.lattice",
     "app.core.geom.texture_ops",
     "app.core.geom.lid",
+    "app.core.geom.lid_hinge",
     "app.core.geom.container_ops",
+    # RM-184: Taschen eines Werkzeugeinsatzes aus den Teilen selbst.
+    "app.core.geom.counter_form_ops",
     # Verrunden und Fasen stehen hier und nicht beim zweiten Kern: Sie
     # bedienen beide Rechenwege und wählen nach dem Körper, den sie bekommen
     # (Entscheidung Robert, 10.09.2026 — „alles soll immer bearbeitbar sein").

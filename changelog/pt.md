@@ -33,6 +33,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No relatório, «Reconstruir modelo» refaz uma peça importada, também esquadros, gargantas e escareamentos, compara-a com o original dentro do limite escolhido e aplica-a num só passo.
 - A «Abraçadeira com insertos» começa com o material do projeto nos dois campos de material. Até agora ambos ficavam vazios.
 - A pesquisa de peças encontra a «Lingueta para perfil de alumínio» também como porca em T, e a sua descrição diz em que se distingue de uma porca em T com rosca.
+- Uma tampa de «Criar tampa» pode ter dobradiça, impressa no lugar ou com um pino de «Pino para furo», e o colar é cortado para abrir livremente.
+- Com «Rebaixar contraforma», um inserto recebe alojamentos para ferramentas que voltam a sair a direito.
 
 ### Imprimir e entregar ao slicer
 
@@ -101,6 +103,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Após exportar ou «Abrir no slicer …», o Solidon volta a ler o ficheiro. O registo no relatório indica ficheiros, destino de impressão, material, definições e se o ficheiro corresponde ao pedido.
 - Exportado como 3MF na linha de comandos, um corpo de uma só cor mantém o seu filamento ao ser reaberto.
 - Para definições de peças individuais, a linha de comandos indica que peças são e que valor recebem.
+- Se aceitar suportes para uma ponte longa sobre a própria peça, eles chegam agora também aí. Antes juntava-se «Só da mesa», e vários slicers imprimiam a ponte sem suporte.
+- As peças pequenas deitadas, como parafusos, já não recebem suportes propostos onde uma aresta de corte mostrava por engano um ponto a flutuar.
 
 ### Furos, furos oblongos e divisão
 
@@ -137,6 +141,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Solidon reconhece cada campo de nervuras, favo de mel ou saliências de um ficheiro importado como um só padrão, e «Reconhecer características neste local» junta as células de um campo.
 - Um campo pequeno que o Solidon só lê como características soltas passa a ser um padrão com «Agrupar como padrão». Os padrões em ficheiros STEP são reconhecidos diretamente.
 - As peças de uma divisão automática também são numeradas em projetos de versões anteriores, e um corte apagado ou desativado deixa de contar.
+- Um furo que duplica, desloca ou repete ao longo de uma face inclinada continua a ser o mesmo furo em peças STL e STEP, com as mesmas medidas e mensagens.
+- Após «Repetir característica», uma cópia numa peça STEP já não fura até ao topo, e um furo STL de facetas grosseiras continua a contar como passante.
+- Uma rosca aumenta ou diminui com «Alterar característica» sem romper a parede, e a rosca oposta de um ajuste roscado muda com ela.
+- Um par de roscas impressas passa a verificação de ajuste: as duas roscas indicam a medida com que são construídas, e a verificação espera a folga das duas metades.
+- Com «Verificar o percurso de montagem», as peças também podem rodar, ou ser inseridas e depois rodadas como uma baioneta.
+- Uma peça de «Criar peça de ensaio» recorta a mesma janela das duas partes de um ajuste e indica a folga.
 
 ### Arredondar e chanfrar
 
@@ -168,6 +178,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A entrada «Criar a partir de um esboço …» começa logo a desenhar, o plano de desenho mostra a sua origem, e um duplo clique no histórico reabre um desenho no modo de desenho.
 - Em «Modelar» e no editor de esqueleto, a barra mostra espessura de parede ou saliência como mapa com legenda e avisa de um traço fora do volume de impressão. Depois de dobrar, diz como imprime.
 - Uma textura aplicada seleciona-se por inteiro. O painel de seleção oferece então «Alterar textura» e «Remover textura».
+- O texto segue um arco ou contorna uma superfície arredondada, e «Incrustar texto» coloca-o à face na sua própria cor.
 
 ### Gerar com IA
 

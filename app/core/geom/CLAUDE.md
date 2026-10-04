@@ -22,6 +22,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
 | Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
 | Arkuskosinus (Knickwinkel, Bogenspanne) | `mesh.stable_arccos` |
+| Sinus und Kosinus vieler Winkel | `mesh.stable_sin_cos` |
 | Ausgleichsebene, symmetrische 3x3-Eigenwerte | `units.plane_fit`, `units.symmetric_eigen3` |
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
@@ -145,8 +146,10 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 **Wandungen** — `chamber_ops.py` (*Kammer ändern*) · `hollow.py` (Aushöhlen mit
 Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
-GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen) · `container_ops.py`
-(Behälter, Deckel und Einsätze; Transaktionsentwurf in `core/lid_flow.py`)
+GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
+Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
+Einsätze; Entwurf in `core/lid_flow.py`) · `counter_form_ops.py` (Taschen aus
+dem Schatten der Teile)
 
 **Druckvorbereitung** — `prepare.py`, `prepare_ops.py` (Bohrungen, Teilen,
 Anordnen, Kollisionen, §18.6; Merkmalshandlungen, `pattern_feature`; die
@@ -155,12 +158,6 @@ Nullnormalenrichtung am BRep teilt `drill_outward_axis_from_bounds` mit
 `mouth_cap.py` (Deckel einer gekrümmten Mündung als Höhenfeld, `None` ohne
 glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 (`mirror_plane`) · `pins.py` (Passstifte, `first_pin`)
-
-Die schnelle Orientierung bewertet die genaue Rangfolge und prüft Passung
-und Stand nur bis zur ersten brauchbaren Lage. Gleiche Formen teilen die
-Suche; ohne Stand bleibt die beste passende Lage mit `orient.no_footing`.
-Orientierung und Anordnung belegen mitgeführte Merkmale je Ausgang durch
-`FeatureContinuation`.
 
 **Kanten und Flächen** — `edge_ops.py`, `face_ops.py` (der Körper wählt den
 Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `choose` für die Gruppen
@@ -183,7 +180,8 @@ Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `col
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen
 der Richtung, `opposite_side`; negative Innenhäute und die belegte, nicht
 offene Höhlung (`MeshData.cavity_open`) werden übersprungen, auch wenn eine
-Entlüftung die Häute verbindet)
+Entlüftung die Häute verbindet) · `label_layout.py` (Schrift auf Bogen und
+Rundung, Radius aus `measured_radius`)
 
 ## Stolperfallen
 
@@ -308,7 +306,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 - Die schnelle FDM-Ausrichtung nimmt die erste passende Lage, die
   `slice.orientation.standing_check` am Original trägt. Ohne stehende Lage
   sagt `NoStandingOrientationError` vor jeder Bewegung ab; Resin braucht
-  diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split.
+  diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split;
+  `orient.no_footing` und `FeatureContinuation` erklären die Begründungen.
 - `arrange_on_bed` packt in der Ecke, `_into_the_middle` zentriert nur freie
   Flächen (`occupied`, `arrange.narrow_margin`). Erste angefangene Platte mit
   Platz, sonst neue; leere nehmen auch Übergröße (`settle`). `_fits_alone`
@@ -394,7 +393,3 @@ Grundoperationen/IntegerGrid-Raster und liefern je Richtung bitgleiche Werte.
 Der Reserveplatz prüft Stand vor Bauraumpassung. Eigenkreuzungen prüfen alle
 koplanaren Überlagerungen; gemeinsame Kanten und widerlegte Kollinearität
 ersparen nur bereits entschiedene Restfragen.
-
-`IntegerGrid.of(count=...)` darf bekannte Nullen auslassen: Die ursprüngliche
-Gesamtzahl bestimmt den Rasterexponenten und muss mindestens der Wertzahl
-entsprechen. Ohne Angabe gilt der bisherige Vertrag.

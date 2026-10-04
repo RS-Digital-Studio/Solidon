@@ -58,6 +58,8 @@ Nutzen da und sonst nichts.
 - Im Prüfbericht baut *Modell nachbauen* ein eingelesenes Teil nach, auch Winkel, Kehlen und Senkungen, vergleicht es in der gewählten Grenze mit dem Original und übernimmt es in einem Schritt.
 - Die *Profilklemme mit Einlagen* beginnt mit dem Material des Projekts in beiden Materialfeldern. Bisher waren beide leer.
 - Die Bausteinsuche findet die *Nutfeder für Aluprofil* auch unter Nutenstein und T-Nut, und ihre Beschreibung sagt, worin sie sich von einem Nutenstein mit Gewinde unterscheidet.
+- Ein Deckel aus *Deckel erzeugen* bekommt auf Wunsch ein Scharnier, mitgedruckt oder mit Stift aus *Stift für Bohrung*, und sein Kragen ist zum Aufklappen gekürzt.
+- Mit *Gegenform einlassen* bekommt ein Einsatz Taschen für Werkzeuge, aus denen sie gerade wieder herauskommen.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -126,6 +128,8 @@ Nutzen da und sonst nichts.
 - Nach Export oder *Im Slicer öffnen …* liest Solidon die Datei noch einmal ein. Der Beleg im Prüfbericht nennt Dateien, Druckziel, Material, Druckwerte und ob die Datei dem Auftrag entspricht.
 - Auf der Kommandozeile als 3MF exportiert, behält ein einfarbiger Körper beim erneuten Öffnen sein Filament.
 - Die Kommandozeile nennt bei Druckwerten für einzelne Teile, welche Teile es sind und welchen Wert sie bekommen.
+- Übernehmen Sie Stützen für eine lange Brücke über dem Teil selbst, kommen sie jetzt auch dort an. Bisher kam „Nur vom Bett“ dazu, und mehrere Slicer druckten die Brücke ohne Stütze.
+- Kleine liegende Teile wie Schrauben bekommen keine Stützen mehr vorgeschlagen, wo eine Schnittkante fälschlich eine schwebende Stelle ergab.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -162,6 +166,12 @@ Nutzen da und sonst nichts.
 - Rippen-, Waben- und Noppenfelder einer eingelesenen Datei erkennt Solidon je als ein Muster, und *Merkmale an dieser Stelle erkennen* fasst die Zellen eines Felds zusammen.
 - Ein kleines Feld, das Solidon nur als einzelne Merkmale liest, fassen Sie mit *Als Muster zusammenfassen* zu einem Muster zusammen. Muster in STEP-Dateien erkennt Solidon direkt.
 - Auch in Projekten aus älteren Versionen zählen die Stücke einer automatischen Teilung durch, und ein gelöschter oder ausgeschalteter Schnitt zählt nicht mehr mit.
+- Eine Bohrung, die Sie längs einer schrägen Fläche verdoppeln, versetzen oder vervielfachen, bleibt an STL- und STEP-Teilen dieselbe Bohrung mit denselben Maßen und Meldungen.
+- Nach *Merkmal vervielfachen* bohrt eine Kopie an STEP-Teilen nicht mehr bis an die Oberseite durch, und eine grob facettierte STL-Bohrung gilt weiter als durchgehend.
+- Ein Gewinde wird mit *Merkmal ändern* größer oder kleiner, ohne durch die Wand zu brechen, und das Gegengewinde einer Gewindepassung ändert sich mit.
+- Ein gedrucktes Gewindepaar besteht seine Passungsprüfung: Beide Gewinde nennen ihr gebautes Maß, und die Prüfung erwartet das Spiel beider Hälften.
+- Beim *Fügeweg prüfen* drehen Teile auch, oder sie werden erst eingesetzt und dann gedreht wie ein Bajonett.
+- Ein Stück aus *Prüfstück erzeugen* schneidet dasselbe Fenster aus beiden Teilen einer Passung und nennt das Spiel.
 
 ### Verrunden und Fasen
 
@@ -193,6 +203,7 @@ Nutzen da und sonst nichts.
 - Der Eintrag *Aus Skizze erzeugen …* beginnt sofort zu zeichnen, die Zeichenebene zeigt ihren Nullpunkt, und ein Doppelklick im Verlauf öffnet eine Zeichnung wieder im Zeichenmodus.
 - Beim *Formen* und im Skeletteditor zeigt die Leiste Wandstärke oder Überhang als Karte mit Legende und meldet einen Zug über den Bauraum. Nach dem Beugen sagt sie, wie es sich druckt.
 - Eine aufgebrachte Textur wählen Sie als Ganzes. Im Auswahlfenster stehen dann *Textur ändern* und *Textur entfernen*.
+- Schrift folgt einem Bogen oder läuft um eine Rundung, und *Schrift einlegen* setzt sie bündig in eigener Farbe ein.
 
 ### Erzeugen mit KI
 

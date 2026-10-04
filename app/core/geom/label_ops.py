@@ -18,7 +18,9 @@ Umriss ist ein Umriss, ob ihn eine Schrift gezeichnet hat oder Inkscape.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final, Literal, cast
 
@@ -35,10 +37,12 @@ from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
     boolean,
+    deepest,
     fell_apart,
     without_effect,
 )
 from app.core.geom.glyphs import FONT_FOLDER
+from app.core.geom.label_layout import WRAPS, Wrap, bent_outlines, measured_radius, wrapped
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
@@ -196,6 +200,50 @@ _STYLE = _(
     "Fett trägt bei kleinen Buchstaben dickere Striche und bleibt lesbar, wo der "
     "normale Schnitt schon verschmiert."
 )
+_ARC = _(
+    "Legt die Zeile auf einen Kreisbogen dieses Radius — etwa um den Rand eines "
+    "Deckels. Positiv wölbt sie sich nach oben, negativ nach unten, null lässt sie gerade."
+)
+_WRAP = _(
+    "Biegt die Schrift um eine runde Fläche, damit sie anliegt: um eine stehende "
+    "Rundung herum wie an einem Becher oder längs einer liegenden wie an einem Griff."
+)
+_WRAP_RADIUS = _(
+    "Radius der Rundung. Null misst ihn an der angeklickten Stelle; negativ heißt hohl, "
+    "die Schrift sitzt dann innen in einem Ring."
+)
+
+
+def arc_radius_param() -> Any:
+    """Der Bogen der Zeile — dasselbe Feld an *Text aufbringen* und *Schrift einlegen*."""
+    return param(
+        title=_("Bogen"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        doc=_ARC,
+    )
+
+
+def wrap_param() -> Any:
+    """Die Lage zur Rundung des Trägers — flach, um sie herum oder an ihr entlang."""
+    return param(title=_("Rundung"), default="flat", choices=WRAPS, doc=_WRAP)
+
+
+def wrap_radius_param() -> Any:
+    """Der Radius der Rundung; null misst ihn am Träger (:func:`_wrap_radius`)."""
+    return param(
+        title=_("Radius der Rundung"),
+        default=0.0,
+        unit="mm",
+        minimum=-10000.0,
+        maximum=10000.0,
+        placement="advanced",
+        depends_on=("wrap", ("around", "along")),
+        doc=_WRAP_RADIUS,
+    )
+
 
 #: Darunter lohnt die Beschriftung auf keiner Maschine mehr.
 #:
@@ -373,6 +421,31 @@ def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
     return MeshData.of(concatenated(parts))
 
 
+def line_shapes(
+    text: str, size: float, font: str, style: str, arc_radius: float = 0.0
+) -> list[Any]:
+    """Die Umrisse der Zeile — gerade wie gesetzt, auf einem Bogen um die Mitte gelegt.
+
+    Gerade bleiben sie, wo der Satz sie hinlegt (die Mitte rechnet danach der
+    Körper, :func:`local_text_body`). Auf einem Bogen werden sie vorher auf
+    ihre Mitte gerückt, denn der Bogen geht durch den Ursprung: Die Mitte der
+    Zeile ist dann der Scheitel des Bogens und die angeklickte Stelle.
+    """
+    shapes = outlines(text, size, font, style)
+    if not arc_radius or not shapes:
+        return shapes
+    from shapely.affinity import translate
+
+    left = min(float(shape.bounds[0]) for shape in shapes)
+    right = max(float(shape.bounds[2]) for shape in shapes)
+    low = min(float(shape.bounds[1]) for shape in shapes)
+    high = max(float(shape.bounds[3]) for shape in shapes)
+    centred = [
+        translate(shape, xoff=-(left + right) / 2.0, yoff=-(low + high) / 2.0) for shape in shapes
+    ]
+    return bent_outlines(centred, arc_radius)
+
+
 def local_text_body(
     text: str,
     size: float,
@@ -382,13 +455,18 @@ def local_text_body(
     style: str = FONT_STYLES[0],
     mode: Literal["raised", "engraved", "body"] = "body",
     angle: float = 0.0,
+    arc_radius: float = 0.0,
 ) -> MeshData:
-    """Dieselben zentrierten Buchstaben für Operation und Platzierungsvorschau."""
+    """Dieselben zentrierten Buchstaben für Operation und Platzierungsvorschau.
+
+    Mit ``arc_radius`` liegt die Zeile auf einem Bogen (:func:`line_shapes`);
+    ihr Scheitel sitzt dann im Ursprung, nicht die Mitte ihres Hüllquaders.
+    """
     if not text.strip():
         raise ValidationError(
             field="text", detail=_("Ohne Text gibt es nichts aufzubringen."), constraint="empty"
         )
-    shapes = outlines(text, size, font, style)
+    shapes = line_shapes(text, size, font, style, arc_radius)
     height = depth + (BOOLEAN_OVERLAP if mode != "body" else 0.0)
     body = label_solid(shapes, height) if shapes else None
     if body is None:
@@ -398,7 +476,9 @@ def local_text_body(
             value=text,
             constraint="no_outline",
         )
-    middle = body.bounds.centre
+    # Auf dem Bogen ist die Mitte schon gerückt (Scheitel im Ursprung); die
+    # gerade Zeile rückt wie seit je auf die Mitte ihres Hüllquaders.
+    middle = body.bounds.centre if not arc_radius else (0.0, 0.0, 0.0)
     lift = -BOOLEAN_OVERLAP if mode == "raised" else -depth if mode == "engraved" else 0.0
     result = apply(body, translation((-middle[0], -middle[1], lift)))
     return apply(result, rotation("z", angle)) if angle else result
@@ -497,6 +577,11 @@ class LabelParams(BaseParams):
             "den Körper wieder austritt — für Fahnen, Schilder und Anhänger."
         ),
     )
+    # **Bahn und Rundung** (RM-184, Audit §9): Vorgaben gerade und flach — ein
+    # Schritt von vor diesen Feldern bleibt, was er war.
+    arc_radius: float = arc_radius_param()
+    wrap: str = wrap_param()
+    wrap_radius: float = wrap_radius_param()
     slot: int = param(
         title=_("Filament"),
         default=0,
@@ -854,6 +939,212 @@ def _exact_letters(
     return lettering.letters(found, height, cancelled=cancelled)
 
 
+def _wrap_radius(
+    params: Any, features: Mapping[str, Any], position: Vec3, normal: Vec3
+) -> tuple[float, dict[str, float]]:
+    """Der Radius der Rundung — genannt, oder einmal an der Stelle gemessen und festgehalten.
+
+    Gemessen wird an den erkannten Merkmalen des Trägers
+    (:func:`label_layout.measured_radius`): eine Rundung, deren Mantel durch
+    die Stelle geht und deren Achse quer zur Zeile (``around``) oder längs
+    (``along``) liegt. Findet sich keine, sagt die Operation ab und fragt nach
+    dem Radius — geraten wird nicht (Regel 21).
+    """
+    wrap = cast(Wrap, params.wrap)
+    if wrap == "flat":
+        return 0.0, {}
+    if params.wrap_radius:
+        return float(params.wrap_radius), {}
+    length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
+    found: float | None = None
+    if length > EPS_GEOM:
+        from app.core.sketch.planes import frame_of
+
+        unit = np.asarray(normal, dtype=float) / length
+        frame = frame_of((float(unit[0]), float(unit[1]), float(unit[2])), position)
+        axis = np.asarray(frame.y_axis if wrap == "around" else frame.x_axis, dtype=float)
+        found = measured_radius(features, position, normal, axis)
+    if found is None:
+        raise ValidationError(
+            field="wrap_radius",
+            detail=_(
+                "An dieser Stelle findet Solidon keine Rundung mit passender Achse. "
+                "Tragen Sie den Radius der Rundung ein oder wählen Sie „Flach“."
+            ),
+            constraint="no_round",
+            suggestions=(CORRECT_INPUT,),
+        )
+    return found, {"wrap_radius": found}
+
+
+def _placed_tool(
+    body: MeshData, position: Vec3, normal: Vec3, angle: float, wrap: str, radius: float
+) -> MeshData:
+    """Die Buchstaben an ihren Ort — flach wie seit je, oder vorher um die Rundung gebogen.
+
+    Gebogen wird **nach** der Drehung in der Fläche: Die Achse der Rundung
+    gehört dem Träger, nicht der Schrift — gedreht läuft eine Zeile schräg um
+    den Becher, statt die Achse mitzunehmen.
+    """
+    if wrap == "flat" or not radius:
+        return place(body, position, normal, angle)
+    turned = apply(body, rotation("z", angle)) if angle else body
+    return place(wrapped(turned, radius, cast(Wrap, wrap)), position, normal, 0.0)
+
+
+def _sides(
+    body: Any, position: Vec3, normal: Vec3, both_sides: bool
+) -> tuple[list[tuple[Vec3, Vec3]], Finding | None]:
+    """Vorderseite und, wenn verlangt, die Gegenseite (:func:`opposite_side`)."""
+    sides = [(position, normal)]
+    if not both_sides:
+        return sides, None
+    back = opposite_side(as_mesh_data(body), position, normal)
+    if back is None:
+        return sides, _no_back_side()
+    sides.append((back, (-normal[0], -normal[1], -normal[2])))
+    return sides, None
+
+
+def _polygon_pieces(shapes: Sequence[Any]) -> list[tuple[tuple[tuple[float, float], ...], ...]]:
+    """Ebene Umrisse in der Form, die ``brep.lettering`` liest: Ringe aus Strecken.
+
+    Außenrand und Löcher je Umriss; jede Strecke ein Stück aus zwei Punkten.
+    So baut der exakte Kern dieselben gebogenen Buchstaben wie das Netz.
+    """
+    found: list[tuple[tuple[tuple[float, float], ...], ...]] = []
+    for shape in shapes:
+        for ring in (shape.exterior, *shape.interiors):
+            points = [(float(x), float(y)) for x, y in ring.coords]
+            found.append(tuple(pairwise(points)))
+    return found
+
+
+def _faceted_finding(radius: float) -> Finding:
+    """Die gebogene Schrift am exakten Körper ist facettiert — gesagt, nicht versteckt."""
+    from app.core.units import MAX_FACET_SAG
+
+    return Finding(
+        code="label.faceted",
+        severity="info",
+        message=_(
+            "Die Schrift auf der Rundung besteht aus kleinen ebenen Flächen; sie weicht "
+            "höchstens {sag} von der Rundung ab.",
+            sag=format_length(MAX_FACET_SAG),
+        ),
+        values={"radius_mm": round(radius, 3)},
+    )
+
+
+def _exact_tools(
+    params: Any,
+    source: SceneObject,
+    mode: Placement,
+    *,
+    both_sides: bool,
+    letter_slot: int,
+    cancelled: Any,
+) -> tuple[list[Any], dict[str, float], Finding | None, Finding | None]:
+    """Die Buchstaben als exakte Werkzeuge am Ort — gerade, auf dem Bogen oder gebogen.
+
+    Gerade aus den Kurven der Schrift (``brep.lettering``), auf dem Bogen aus
+    denselben gebogenen Vielecken wie am Netz, um eine Rundung als genähte
+    Facetten (``brep.edit.faceted``) — der Kern biegt keine Prismen.
+    ``letter_slot`` färbt die Flächen der Buchstaben (erhaben, eigene Spule).
+    """
+    from dataclasses import replace
+
+    from app.core.brep import edit, lettering
+    from app.core.geom.ops import as_transform
+
+    body = cast(Any, source.mesh)
+    position = (params.x, params.y, params.z)
+    normal = (params.nx, params.ny, params.nz)
+    sides, missing_back = _sides(body, position, normal, both_sides)
+    radius, answered = _wrap_radius(params, source.features, position, normal)
+    height = params.depth + BOOLEAN_OVERLAP
+    lift = -BOOLEAN_OVERLAP if mode == "raised" else -params.depth
+    tools: list[Any] = []
+    faceted: Finding | None = None
+    if radius:
+        local = local_text_body(
+            params.text,
+            params.size,
+            params.font,
+            params.depth,
+            style=params.style,
+            mode=mode,
+            arc_radius=params.arc_radius,
+        )
+        for where, facing in sides:
+            cancelled.raise_if_cancelled()
+            tools.append(
+                edit.faceted(
+                    _placed_tool(local, where, facing, params.angle, params.wrap, radius),
+                    cancelled=cancelled,
+                )
+            )
+        faceted = _faceted_finding(radius)
+    else:
+        if params.arc_radius:
+            shapes = line_shapes(
+                params.text, params.size, params.font, params.style, params.arc_radius
+            )
+            letters = lettering.letters(_polygon_pieces(shapes), height, cancelled=cancelled)
+            centre: Any = (0.0, 0.0, 0.0)
+        else:
+            letters = _exact_letters(
+                params.text, params.size, params.font, params.style, height, cancelled=cancelled
+            )
+            centre = letters.bounds.centre
+        tools = [
+            edit.transformed(
+                letters,
+                as_transform(placement_matrix(centre, lift, where, facing, params.angle)),
+                cancelled=cancelled,
+            )
+            for where, facing in sides
+        ]
+    if letter_slot:
+        tools = [replace(tool, face_slots=(letter_slot,) * tool.face_count) for tool in tools]
+    return tools, answered, missing_back, faceted
+
+
+def _mesh_tools(
+    params: Any, source: SceneObject, mode: Placement, *, both_sides: bool
+) -> tuple[list[MeshData], dict[str, float], Finding | None]:
+    """Die Buchstaben als Netzwerkzeuge am Ort — derselbe Weg wie :func:`_exact_tools`."""
+    position = (params.x, params.y, params.z)
+    normal = (params.nx, params.ny, params.nz)
+    radius, answered = _wrap_radius(params, source.features, position, normal)
+    # Zentriert auf dem angeklickten Punkt, nicht dort beginnend: eine
+    # Beschriftung wächst um ihren Ort herum, und genau das erwartet, wer eine
+    # anbringt.
+    #
+    # Wohin sie reicht, hängt an der Art. Erhaben: die Tiefe steht über der
+    # Fläche, nur die Überlappung reicht hinein. Graviert: die Tiefe reicht
+    # hinein, nur die Überlappung steht über — sonst nimmt der Schnitt die
+    # Überlappung weg und lässt die Buchstaben als Kratzer zurück.
+    body = local_text_body(
+        params.text,
+        params.size,
+        params.font,
+        params.depth,
+        style=params.style,
+        mode=mode,
+        arc_radius=params.arc_radius,
+    )
+    sides, missing_back = _sides(source.mesh, position, normal, both_sides)
+    # **Die Rückseite trägt dieselbe Schrift, von außen lesbar** — gespiegelt
+    # zur Vorderseite, weil sie in die andere Richtung schaut. ``place``
+    # richtet sie mit der umgekehrten Normalen aufrecht aus.
+    tools = [
+        _placed_tool(body, where, facing, params.angle, params.wrap, radius)
+        for where, facing in sides
+    ]
+    return tools, answered, missing_back
+
+
 def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> OpResult:
     """Text am exakten Körper — die Schrift aus ihren Kurven, der Körper bleibt exakt (P2.8).
 
@@ -866,47 +1157,23 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
     wirkungslos, danebengefallen, im Körper versteckt — fragen dieselben
     Kennzahlen am exakten Körper.
     """
-    from dataclasses import replace
-
     from app.core.brep import edit
-    from app.core.geom.ops import as_transform
 
     mode = cast(Placement, params.mode)
-    height = params.depth + BOOLEAN_OVERLAP
-    letters = _exact_letters(
-        params.text, params.size, params.font, params.style, height, cancelled=ctx.cancelled
-    )
     body = cast(Any, source.mesh)
     slots = list(source.material_slots)
     if params.slot:
         # Wie am Netz: erhaben tragen die Buchstaben den Slot in die
         # Vereinigung, vertieft bekommen ihn Wände und Böden der Rillen.
-        if mode == "raised":
-            letters = replace(letters, face_slots=(params.slot,) * letters.face_count)
         slots = _with_slot_named(slots, params.slot)
-    lift = -BOOLEAN_OVERLAP if mode == "raised" else -params.depth
-    position = (params.x, params.y, params.z)
-    normal = (params.nx, params.ny, params.nz)
-    sides = [(position, normal)]
-    missing_back: Finding | None = None
-    if params.both_sides:
-        # Gefunden an der Tessellation, gesetzt am exakten Körper — dieselbe
-        # Frage wie am Netz (:func:`opposite_side`).
-        back = opposite_side(as_mesh_data(body), position, normal)
-        if back is None:
-            missing_back = _no_back_side()
-        else:
-            sides.append((back, (-normal[0], -normal[1], -normal[2])))
-    tools = [
-        edit.transformed(
-            letters,
-            as_transform(
-                placement_matrix(letters.bounds.centre, lift, where, facing, params.angle)
-            ),
-            cancelled=ctx.cancelled,
-        )
-        for where, facing in sides
-    ]
+    tools, answered, missing_back, faceted = _exact_tools(
+        params,
+        source,
+        mode,
+        both_sides=params.both_sides,
+        letter_slot=params.slot if mode == "raised" else 0,
+        cancelled=ctx.cancelled,
+    )
     kind: BooleanKind = "union" if mode == "raised" else "difference"
     ctx.cancelled.raise_if_cancelled()
     cut_slot = params.slot if mode == "engraved" else 0
@@ -923,9 +1190,10 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
         ],
         findings=[
             finding
-            for finding in (nothing, apart, buried, missing_back, fine)
+            for finding in (nothing, apart, buried, missing_back, fine, faceted)
             if finding is not None
         ],
+        answered=answered,
     )
 
 
@@ -972,34 +1240,8 @@ def label_text(ctx: OpContext) -> OpResult:
         return _label_exact(ctx, params, source)
 
     mode = cast(Placement, params.mode)
-
-    # Zentriert auf dem angeklickten Punkt, nicht dort beginnend: eine
-    # Beschriftung wächst um ihren Ort herum, und genau das erwartet, wer eine
-    # anbringt.
-    #
-    # Wohin sie reicht, hängt an der Art. Erhaben: die Tiefe steht über der
-    # Fläche, nur die Überlappung reicht hinein. Graviert: die Tiefe reicht
-    # hinein, nur die Überlappung steht über — sonst nimmt der Schnitt die
-    # Überlappung weg und lässt die Buchstaben als Kratzer zurück.
-    body = local_text_body(
-        params.text, params.size, params.font, params.depth, style=params.style, mode=mode
-    )
-
-    position = (params.x, params.y, params.z)
-    normal = (params.nx, params.ny, params.nz)
-    placed = place(body, position, normal, params.angle)
+    tools, answered, missing_back = _mesh_tools(params, source, mode, both_sides=params.both_sides)
     body_mesh = as_mesh_data(source.mesh)
-    # **Die Rückseite trägt dieselbe Schrift, von außen lesbar** — gespiegelt
-    # zur Vorderseite, weil sie in die andere Richtung schaut. ``place``
-    # richtet sie mit der umgekehrten Normalen aufrecht aus.
-    tools = [placed]
-    missing_back: Finding | None = None
-    if params.both_sides:
-        back = opposite_side(body_mesh, position, normal)
-        if back is None:
-            missing_back = _no_back_side()
-        else:
-            tools.append(place(body, back, (-normal[0], -normal[1], -normal[2]), params.angle))
     slots = list(source.material_slots)
     if params.slot:
         # §20: Erhaben tragen die Buchstaben einen eigenen Slot in die
@@ -1046,6 +1288,7 @@ def label_text(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={}, material_slots=slots)],
         solver=outcome.solver,
+        answered=answered,
         findings=[
             *outcome.findings,
             *([nothing] if nothing is not None else []),
@@ -1062,6 +1305,230 @@ def label_text(ctx: OpContext) -> OpResult:
                 else []
             ),
         ],
+    )
+
+
+@op_params
+class InlayParams(BaseParams):
+    text: str = param(title=_("Text"), doc=_("Was eingelegt werden soll."))
+    size: float = param(
+        title=_("Schriftgröße"),
+        default=8.0,
+        unit="mm",
+        minimum=MIN_SIZE,
+        maximum=200.0,
+        doc=_SIZE,
+    )
+    depth: float = param(
+        title=_("Tiefe"),
+        default=0.6,
+        unit="mm",
+        minimum=0.1,
+        maximum=10.0,
+        # **Vorn, anders als beim Aufbringen**: Bei einer Einlage ist die Tiefe
+        # die Menge der zweiten Farbe — drei Schichten decken, eine scheint durch.
+        doc=_("Wie tief die Einlage reicht. Drei Schichten decken die Farbe darunter ab."),
+    )
+    slot: int = param(
+        title=_("Filament"),
+        default=1,
+        minimum=0,
+        maximum=MAX_SLOTS - 1,
+        kind="filament",
+        doc=_(
+            "Die Spule der Einlage. Der Träger behält seine; der 3MF-Export gibt beide "
+            "Teile mit ihrem Filament an den Slicer."
+        ),
+    )
+    arc_radius: float = arc_radius_param()
+    wrap: str = wrap_param()
+    wrap_radius: float = wrap_radius_param()
+    font: str = param(
+        title=_("Schrift"),
+        default=FONTS[0],
+        choices=FONTS,
+        placement="advanced",
+        doc=_FONT,
+    )
+    style: str = param(
+        title=_("Schnitt"),
+        default=FONT_STYLES[0],
+        choices=FONT_STYLES,
+        placement="advanced",
+        doc=_STYLE,
+        depends_on=("font", FONTS_WITH_ALL_STYLES),
+    )
+    x: float = param(
+        title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
+    )
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
+    )
+    nx: float = param(title=_("Richtung X"), default=0.0, placement="advanced", doc=_FACING)
+    ny: float = param(title=_("Richtung Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    nz: float = param(title=_("Richtung Z"), default=1.0, placement="advanced", doc=_FACING_MORE)
+    angle: float = param(
+        title=_("Drehung"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        placement="advanced",
+        doc=_("Dreht die Schrift in der Fläche, auf der sie liegt."),
+    )
+    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
+
+
+def _no_inlay() -> ValidationError:
+    """Die Schrift trifft den Träger nicht — es gibt nichts einzulegen (Regel 17)."""
+    return ValidationError(
+        field="x",
+        detail=_(
+            "Die Schrift trifft den Körper nicht, es gibt nichts einzulegen. Klicken Sie "
+            "die Fläche an, auf die sie soll."
+        ),
+        constraint="empty",
+        suggestions=(CORRECT_INPUT,),
+    )
+
+
+def _inlay_too_thin(depth: float, profile: Profile | None) -> Finding | None:
+    """Eine Einlage unter einer Schichthöhe entsteht im Druck nicht."""
+    if profile is None or profile.printer.is_resin:
+        return None
+    layer = profile.printer.layer_height
+    if depth >= layer - EPS_GEOM:
+        return None
+    return Finding(
+        code="label.inlay_thin",
+        severity="warning",
+        message=_(
+            "Die Einlage ist dünner als eine Schicht ({layer}) und entsteht im Druck nicht. "
+            "Wählen Sie mindestens eine Schichthöhe Tiefe.",
+            layer=format_length(layer),
+        ),
+        values={"depth_mm": depth, "layer_mm": layer},
+        suggestions=(CORRECT_INPUT,),
+    )
+
+
+@register_op(
+    name="inlay_text",
+    title=_("Schrift einlegen"),
+    category="label",
+    params=InlayParams,
+    consumes=1,
+    produces=2,
+    keeps_inputs=1,
+    applies_to=["face"],
+    doc=_(
+        "Legt Text bündig in eine Fläche ein: Die Buchstaben werden aus dem Körper "
+        "geschnitten und als eigenes Teil in einer zweiten Farbe zurückgesetzt — ohne "
+        "Spalt, ohne Überlappung, die Oberfläche bleibt eben."
+    ),
+    caveat=_(
+        "Für einen Drucker mit mehreren Filamenten. Wer von Hand wechselt, nimmt *Text "
+        "aufbringen* mit einem Filament für die Schrift."
+    ),
+)
+def inlay_text(ctx: OpContext) -> OpResult:
+    """Die bündige Schrifteinlage (RM-184, Audit §9 „Schild und bündige Einlage“).
+
+    Am Screen-Cover der Werkstatt: weiße Schrift 0,6 mm tief in schwarzer
+    Platte, Rahmen und Griff unverändert. Gebaut wird aus **einem** Werkzeug,
+    den Buchstaben von ``depth`` unter der Fläche bis um die Überlappung
+    darüber: Der Träger verliert, was das Werkzeug in ihm einnimmt, und genau
+    das ist die Einlage — Schnitt und Schnittmenge desselben Paars teilen jede
+    Fläche, also bleibt kein Spalt und nichts liegt doppelt, und die Einlage
+    endet an der Oberfläche des Trägers, auch auf einer Rundung.
+
+    **Zwei Körper, nicht ein Körper mit bemalten Dreiecken**: Eine Farbe auf
+    der Oberfläche reicht im Slicer so tief, wie er will; ein eigener Körper
+    mit eigener Spule ist das, was das Screen-Cover-Projekt im Slicer eingestellt
+    hatte (Audit Fall 134, Teil-Extruderzuordnung).
+    """
+    params = cast(InlayParams, ctx.params)
+    source = ctx.inputs[0]
+    if not params.text.strip():
+        raise ValidationError(
+            field="text",
+            detail=_("Ohne Text gibt es nichts einzulegen."),
+            constraint="empty",
+            suggestions=(CORRECT_INPUT,),
+        )
+    from app.core.types import BRepBody
+
+    exact = isinstance(source.mesh, BRepBody)
+    findings: list[Finding] = []
+    solver = None
+    faceted: Finding | None = None
+    if exact:
+        from app.core.brep import edit
+
+        tools, answered, _missing, faceted = _exact_tools(
+            params, source, "engraved", both_sides=False, letter_slot=0, cancelled=ctx.cancelled
+        )
+        body = cast(Any, source.mesh)
+        ctx.cancelled.raise_if_cancelled()
+        carrier: Any = edit.unified(edit.boolean("difference", [body, *tools]))
+        ctx.cancelled.raise_if_cancelled()
+        inlay: Any = edit.unified(edit.boolean("intersection", [body, *tools]))
+        if inlay.volume <= EPS_GEOM:
+            raise _no_inlay()
+        inlay = dataclasses.replace(inlay, face_slots=(params.slot,) * inlay.face_count)
+    else:
+        mesh_tools, answered, _missing = _mesh_tools(params, source, "engraved", both_sides=False)
+        body_mesh = as_mesh_data(source.mesh)
+        tool = mesh_tools[0]
+        cut = boolean("difference", [body_mesh, tool], quality=ctx.quality, cancelled=ctx.cancelled)
+        common = boolean(
+            "intersection",
+            [body_mesh, tool],
+            quality=ctx.quality,
+            allow_empty=True,
+            cancelled=ctx.cancelled,
+        )
+        if not common.mesh.triangle_count or common.mesh.volume <= EPS_GEOM:
+            raise _no_inlay()
+        carrier = cut.mesh
+        inlay = with_slot(common.mesh, params.slot)
+        findings.extend([*cut.findings, *common.findings])
+        solver = deepest([cut.solver, common.solver])
+    nothing = without_effect(
+        cast(Any, source.mesh) if exact else as_mesh_data(source.mesh),
+        carrier,
+        "difference",
+        ctx.profile,
+    )
+    findings.extend(
+        finding
+        for finding in (
+            nothing,
+            faceted,
+            _inlay_too_thin(params.depth, ctx.profile),
+            _too_fine(params.text, params.size, params.font, params.style, ctx.profile),
+        )
+        if finding is not None
+    )
+    _log.info("inlaid %r into %s", params.text, source.id)
+    return OpResult(
+        outputs=[
+            dataclasses.replace(source, mesh=carrier, features={}),
+            SceneObject(
+                id="",
+                name=params.name or _("Einlage {text}", text=params.text.strip()[:20]),
+                mesh=inlay,
+                kind="brep" if exact else "mesh",
+                material=source.material,
+                material_slots=_with_slot_named(list(source.material_slots), params.slot),
+            ),
+        ],
+        solver=solver,
+        findings=findings,
+        answered=answered,
     )
 
 
