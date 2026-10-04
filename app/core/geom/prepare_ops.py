@@ -5160,7 +5160,9 @@ class _PatternPlace:
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 4: jede Instanz einer Kette trägt ihre gerundete Mündungskante (RM-259).
     # 6: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
-    cache_version="6",
+    # 7: exakt endet eine Durchgangsbohrung an ihren mitbewegten Randebenen, und
+    # jede Kopie fragt die Säule; am Netz im Werkzeug ihres Platzes (RM-226).
+    cache_version="7",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -5598,11 +5600,15 @@ def _mesh_pattern_result(
         findings.extend(outcome.findings)
         stages.append(outcome.solver)
     copies: dict[FeatureId, Feature] = {}
+    through_lost: dict[FeatureId, list[Finding]] = {}
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
         findings.extend(_edge_findings(body, place.copies))
         for copy in place.copies:
             if copy.params.get("through"):
+                # Die Säule im Werkzeug des Platzes, wie beim Verdoppeln (RM-133):
+                # Was erst hinter seinem Ende steht, liegt hinter Luft.
+                tool = place.probe if is_a_cavity(place.unit.feature) else None
                 lost = _throughness_lost(
                     placed,
                     copy,
@@ -5611,15 +5617,26 @@ def _mesh_pattern_result(
                     quality=ctx.quality,
                     seed=seed,
                     cancelled=ctx.cancelled,
+                    tool=tool,
                 )
-                findings.extend(lost)
                 if lost:
-                    copy = dataclasses.replace(copy, params={**copy.params, "through": False})
+                    through_lost[copy.id] = lost
             copies[copy.id] = copy
     copies, missing = _copies_found(
         "pattern_feature", placed, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
     )
     findings.extend(missing)
+    for name, lost in through_lost.items():
+        # **Erst nachgemessen, dann nicht mehr durchgehend** — wie beim
+        # Verdoppeln (RM-220): Die Messung am Ergebnis nannte die Bohrung einer
+        # vervielfachten Senkbohrung wieder durchgehend, während der Satz „geht
+        # nicht mehr durch“ dastand. Und was es nicht gibt, geht auch nicht mehr
+        # durch (RM-226): Eine verlorene Kopie trägt nur ihren eigenen Satz.
+        if name in copies:
+            findings.extend(lost)
+            copies[name] = dataclasses.replace(
+                copies[name], params={**copies[name].params, "through": False}
+            )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -5656,24 +5673,26 @@ def _exact_pattern_result(
 
     solid = _exact_body(source)
     faces_bodies: dict[str, Any] = {}
+    rims: dict[str, tuple[_Rim, ...]] = {}
     material: list[Any] = []
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
         if not is_a_cavity(place.unit.feature):
-            material.append(_exact_place_tool(source, solid, place, faces_bodies))
+            material.append(_exact_place_tool(source, solid, place, faces_bodies, rims))
     placed = solid
     if material:
         placed = edit.unified(edit.boolean("union", [placed, *material]))
     hollow = [place for place in kept if is_a_cavity(place.unit.feature)]
+    tools = None
     if hollow:
         # Alle Hohlräume in einer Differenz, wie bisher — und wie beim
         # Verdoppeln wiederholt, wenn sie still scheitert
         # (:func:`_exact_chain_cut_holding`).
         base = placed
-        placed, _tools = _exact_chain_cut_holding(
+        placed, tools = _exact_chain_cut_holding(
             base,
             lambda overlap: _pattern_hollow_tool(
-                source, solid, hollow, faces_bodies, overlap=overlap
+                source, solid, hollow, faces_bodies, rims, overlap=overlap
             ),
         )
     copies = [copy for place in kept for copy in place.copies]
@@ -5690,6 +5709,16 @@ def _exact_pattern_result(
     result = _exact_copy_result(
         ctx, source, placed, copies, findings, op="pattern_feature", mouths=mouths
     )
+    if tools is not None:
+        # **Dieselbe Säule je Kopie wie beim Verdoppeln** (RM-226, Nachtrag):
+        # Die Bohrung einer Senkbohrung, längs der Schräge vervielfacht, mündet
+        # in ihren Kegel und heißt für die Erkennung durchgehend; das Netz sagte
+        # „geht nicht mehr durch“ (``_mesh_pattern_result``), der exakte Kern
+        # nichts.
+        for place in hollow:
+            for copy in place.copies:
+                if copy.params.get("through"):
+                    result = _exact_through_checked(ctx, result, copy.id, tools, "pattern_feature")
     result.findings = [dataclasses.replace(entry, object_id=source.id) for entry in result.findings]
     return result
 
@@ -5699,6 +5728,7 @@ def _pattern_hollow_tool(
     solid: Any,
     places: Sequence[_PatternPlace],
     faces_bodies: dict[str, Any],
+    rims: dict[str, tuple[_Rim, ...]],
     *,
     overlap: float,
 ) -> Any:
@@ -5706,7 +5736,8 @@ def _pattern_hollow_tool(
     from app.core.brep import edit
 
     tools = [
-        _exact_place_tool(source, solid, place, faces_bodies, overlap=overlap) for place in places
+        _exact_place_tool(source, solid, place, faces_bodies, rims, overlap=overlap)
+        for place in places
     ]
     return edit.boolean("union", tools) if len(tools) > 1 else tools[0]
 
@@ -5716,10 +5747,16 @@ def _exact_place_tool(
     solid: Any,
     place: _PatternPlace,
     faces_bodies: dict[str, Any],
+    rims: dict[str, tuple[_Rim, ...]],
     *,
     overlap: float = FEATURE_OVERLAP,
 ) -> Any:
-    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung."""
+    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung.
+
+    ``faces_bodies`` und ``rims`` merken je Merkmal, was an der Quelle gelesen
+    wird: Flächenkörper und Endringe sind an jedem Platz und in jedem Versuch
+    dieselben (die Endringe kosten je Lesung einige Millisekunden).
+    """
     from app.core.brep import edit
 
     feature = place.unit.feature
@@ -5740,8 +5777,21 @@ def _exact_place_tool(
         own = _exact_own_cavity(source, feature)
         if own is not None:
             return _own_placed(own, place.matrix, overlap)
+        # **Und starr wie beim Verdoppeln** (RM-226, Nachtrag 04.10.2026): Die
+        # Durchgangsbohrung endet an ihren mitbewegten Randebenen
+        # (:func:`_exact_rigid_cut`). Mit der ganzen Zielhülle als Tiefe bohrte
+        # sie längs einer schrägen Platte bis an die höhere Oberseite durch —
+        # 69,9 mm³ mehr und durchgehend, wo das Netz „geht nicht mehr durch“ sagt.
+        if feature.id not in rims:
+            rims[feature.id] = _through_rims(source, feature)
         axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
-        return _exact_cavity_tool(solid, copy, centre, axis)
+        tool = _exact_cavity_tool(solid, copy, centre, axis, reach=overlap)
+        return _clipped_at_moved_rims(
+            tool,
+            rims[feature.id],
+            lambda plane: _plane_placed(plane, place.matrix),
+            overlap,
+        )
     if feature.id not in faces_bodies:
         faces_bodies[feature.id] = _exact_body_from_faces(source, feature)
     return edit.transformed(faces_bodies[feature.id], as_transform(place.matrix))
@@ -13602,10 +13652,13 @@ def _exact_through_checked(
     output = result.outputs[0]
     bore = output.features.get(bore_id)
     code = f"{op}.no_longer_through"
+    # Je Bohrung gefragt: Im Muster stehen mehrere Kopien, jede mit eigenem Satz.
     if (
         bore is None
         or not bore.params.get("through")
-        or any(finding.code == code for finding in result.findings)
+        or any(
+            finding.code == code and bore_id in finding.feature_ids for finding in result.findings
+        )
     ):
         return result
     slim = dataclasses.replace(
@@ -13679,34 +13732,19 @@ def _exact_rigid_cut(
     dickeres Material (RM-220, 25.09.2026). Ohne flache Ränder bleibt es beim
     Hüllschnitt.
     """
-    from app.core.brep import edit
-
     own = _exact_own_cavity(source, feature)
     if own is not None:
         return _exact_own_cut(solid, own, travel)
-    rims = (
-        _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
-        if feature.params.get("through")
-        else ()
-    )
-    if len(rims) != 2:
-        rims = ()
+    rims = _through_rims(source, feature)
+
+    def seated(plane: SectionPlane) -> SectionPlane:
+        normal = np.asarray(plane.normal, dtype=np.float64)
+        shift = units.dot3(normal, _seated(travel, normal))
+        return dataclasses.replace(plane, position=plane.position + shift)
 
     def tool_with(overlap: float) -> Any:
         tool = _exact_cavity_tool(solid, feature, target, axis, reach=overlap)
-        if not rims:
-            return tool
-        planes = []
-        for rim in rims:
-            normal = np.asarray(rim.plane.normal, dtype=np.float64)
-            shift = units.dot3(normal, _seated(travel, normal))
-            # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
-            # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
-            extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
-            planes.append(
-                dataclasses.replace(rim.plane, position=rim.plane.position + shift + extra)
-            )
-        return edit.clipped_bore_tool(tool, tuple(planes))
+        return _clipped_at_moved_rims(tool, rims, seated, overlap)
 
     # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken,
     # ihre Teilungsnähte gehören nicht zum Mantel (``slot_bore``) — deshalb
@@ -13718,6 +13756,40 @@ def _exact_rigid_cut(
         overlaps=CUT_OVERLAPS if rims else (1.0,),
         unify=feature.kind == "slot",
     )
+
+
+def _through_rims(source: SceneObject, feature: Feature) -> tuple[_Rim, ...]:
+    """Die zwei Endringe einer Durchgangsbohrung oder eines Langlochs, an denen
+    ihr starr bewegtes Werkzeug endet — leer an einem Sackloch oder ohne zwei
+    flache Ränder; dann bleibt es beim Hüllschnitt (:func:`_exact_rigid_cut`,
+    :func:`_exact_place_tool`)."""
+    if not feature.params.get("through"):
+        return ()
+    rims = _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+    return rims if len(rims) == 2 else ()
+
+
+def _clipped_at_moved_rims(
+    tool: Any,
+    rims: Sequence[_Rim],
+    moved: Callable[[SectionPlane], SectionPlane],
+    overlap: float,
+) -> Any:
+    """``tool`` an den Randebenen ``rims`` begrenzt, nachdem ``moved`` sie an den
+    neuen Platz gebracht hat — das starre Werkzeug einer Bohrung, die versetzt,
+    verdoppelt oder vervielfacht wird."""
+    from app.core.brep import edit
+
+    if not rims:
+        return tool
+    planes = []
+    for rim in rims:
+        plane = moved(rim.plane)
+        # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
+        # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
+        extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
+        planes.append(dataclasses.replace(plane, position=plane.position + extra))
+    return edit.clipped_bore_tool(tool, tuple(planes))
 
 
 def _exact_slot_body(source: SceneObject, feature: Feature) -> Any | None:

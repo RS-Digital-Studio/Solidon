@@ -2497,15 +2497,17 @@ def _placed_alike_on_both_kernels(
 
 @pytest.mark.parametrize("quality", ["draft", "fine"])
 @pytest.mark.parametrize("sunk", [False, True], ids=["bore", "sunk"])
-@pytest.mark.parametrize("op", ["move_feature"])
+@pytest.mark.parametrize("op", ["move_feature", "pattern_feature"])
 def test_a_bore_moved_or_patterned_along_a_slanted_plate_is_the_same_on_both_kernels(
     op: str, sunk: bool, quality: Quality, profile: Profile
 ) -> None:
-    """*Merkmal versetzen* längs der Schräge, ein Geschwister der Kopie.
+    """*Merkmal versetzen* und *Merkmal vervielfachen* längs der Schräge, Geschwister der Kopie.
 
-    Dieselbe Platte (z = 10 + x/4), dieselben 10 mm längs X; der Hohlraum an der
-    alten Stelle ist zu. Das Werkzeug der Quelle sitzt starr am neuen Platz, und
-    beide Kerne sagen „geht nicht mehr durch“.
+    Dieselbe Platte (z = 10 + x/4), dieselben 10 mm längs X. Versetzt ist der
+    Hohlraum an der alten Stelle zu; vervielfacht bleibt die Quelle und der Platz
+    2 der Reihe trägt die Kopie. Beide setzen das Werkzeug der Quelle starr und
+    sagen an beiden Kernen „geht nicht mehr durch“ — das Muster dazu, dass es
+    steht.
     """
     exact_kernel()
     load_operations()
@@ -2522,3 +2524,42 @@ def test_a_bore_moved_or_patterned_along_a_slanted_plate_is_the_same_on_both_ker
     else:
         codes = ["pattern_feature.done", "pattern_feature.no_longer_through"]
     _placed_alike_on_both_kernels(op, op, body, travel, codes, expected, quality, profile)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_every_place_of_a_sunk_bore_pattern_along_a_slope_gets_its_own_finding(
+    quality: Quality, profile: Profile
+) -> None:
+    """Drei Plätze einer Senkbohrung längs der Schräge, jede Kopie mit eigenem Satz (RM-226).
+
+    Die Bohrung einer Senkbohrung mündet in ihren Kegel und heißt für die
+    Erkennung durchgehend, auch wo der Kegel unter Material liegt; exakt fragt
+    deshalb je Kopie die Säule (``_exact_through_checked``). Sie schwieg, sobald
+    irgendein Satz desselben Codes dastand: Platz 3 blieb am exakten Kern
+    durchgehend und ohne Satz, das Netz nannte ihn. 70 mm lang, weil die
+    Kantenprüfung den Kegel bis an die Oberseite denkt, auch wo er unter einer
+    Haut endet — an 60 mm reichte er beim dritten Platz über die Stirn, und
+    beide Kerne sagten „über die Kante“.
+    """
+    exact_kernel()
+    load_operations()
+    from app.core.geom.prepare import FEATURE_OVERLAP
+    from tests.helpers import slanted_plate
+
+    lift = FEATURE_OVERLAP * math.sqrt(1.0 + 1.0 / 16.0)
+    body = _sunk_bore(slanted_plate(length=70.0))
+    # 70 x 20 bei mittlerer Höhe 10, die Quelle bis zur Oberseite, zwei Kopien
+    # bis zur gehobenen Randebene.
+    expected = 14000.0 - _sunk_cavity(0.0) - 2.0 * _sunk_cavity(lift)
+    codes = ["pattern_feature.done", *["pattern_feature.no_longer_through"] * 2]
+    _placed_alike_on_both_kernels(
+        "three_places",
+        "pattern_feature",
+        body,
+        (10.0, 0.0, 0.0),
+        codes,
+        expected,
+        quality,
+        profile,
+        count=3,
+    )

@@ -1716,7 +1716,18 @@ versehentliche Kopie des gesamten Körpers" (Konzept §13.9). Drei Regeln:
   an der Stelle der Quelle (`_pattern_probe`) und ein exaktes Gegenstück
   (`_exact_place_tool`); die Merkmale der Kopie führt
   `transformed_features` nach, damit Achsen, Richtungen und Öffnungen
-  drehen und spiegeln wie beim ganzen Körper.
+  drehen und spiegeln wie beim ganzen Körper. Das exakte Gegenstück ist
+  starr wie beim Verdoppeln (RM-226, Nachtrag 04.10.2026): Die
+  Durchgangsbohrung endet an ihren mitbewegten Randebenen
+  (`_clipped_at_moved_rims`), und jede Kopie fragt die Säule
+  (`_exact_through_checked`, je Bohrung). Mit der ganzen Zielhülle als Tiefe
+  bohrte das Muster längs der schrägen Platte bis an die höhere Oberseite
+  durch — 69,9 mm³ mehr, durchgehend, ohne Satz —, die vervielfachte
+  Senkbohrung sagte exakt nichts, wo das Netz „geht nicht mehr durch“
+  meldete, und nach dem ersten Satz schwieg die Frage für jeden weiteren
+  Platz. Am Netz liegt die Säule im Werkzeug des Platzes wie bei allen
+  Geschwistern: Ohne meldete ein 32-Eck Ø 6,1, um 9,1 mm vervielfacht, „geht
+  nicht mehr durch“ bei unverändertem Volumen.
 - **Ein Platz, der nicht passt, entsteht nicht und wird genannt.**
   Überschneidung mit der Quelle oder einem anderen Platz, kein Material
   unter dem Werkzeug — beides ein Befund mit den Platznummern und einem
