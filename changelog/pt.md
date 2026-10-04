@@ -113,6 +113,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se no slicer se cruzam os percursos de duas peças, ou de uma peça e da torre de purga, a mensagem diz isso e propõe saídas.
 - Se a aba estiver em automático, o Solidon avisa antes de exportar quando ela pode passar da mesa ou entrar numa zona de exclusão, e propõe uma largura fixa.
 - Os suportes e a saia junto à borda da mesa contam na verificação antes da exportação, com o alargamento da primeira camada de suporte que o perfil do slicer indica.
+- Os ficheiros STL exportados a partir de peças STEP não contêm triângulos sem área.
 
 ### Furos, furos oblongos e divisão
 
@@ -158,6 +159,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo escareado que, depois de duplicar, deslocar ou repetir, termina todo dentro do material já não avisa que sai pela aresta.
 - Se o escareado de uma cópia passa de um lado, o Solidon volta a encontrar a cópia da mesma forma em peças STL e STEP.
 - Se duplicar um furo ao longo do seu próprio eixo para o vazio, o original mantém o nome em peças STL, e a cópia é dada como perdida como em peças STEP.
+- Uma garganta ou um cordão que uma abertura divide em dois arcos aparece nas peças STEP como um único anel na árvore, como nas peças STL e 3MF.
+- Características iguais em peças STEP, como dois troços de uma superfície cónica, mantêm o nome quando fura, duplica, altera um furo ou insere uma peça noutro sítio.
 
 ### Arredondar e chanfrar
 

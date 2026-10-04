@@ -4097,6 +4097,60 @@ def test_a_corner_fillet_leaves_no_degenerate_triangles() -> None:
     )
 
 
+def test_a_tessellation_triangle_whose_corners_lie_on_one_line_is_left_out() -> None:
+    """Drei Ecken auf einer Linie sind auch kein Dreieck (RM-226, Nachtrag 04.10.2026).
+
+    ``BRepMesh`` legt an einer schmalen Fläche mitunter ein Dreieck über drei
+    Knoten einer geraden Kante, an ``pegboard-gs-100-v2.step`` viermal. Das
+    Netz ist damit dicht, aber nur bis zur ersten Booleschen: ``manifold3d``
+    löst solche Dreiecke auf, und der Netzzwilling las danach zwei Eckkegel
+    nicht mehr, die er nur an ihnen erkannt hatte. Nachgestellt an einem Würfel
+    10 x 10 x 10, dessen Vorderseite einen Knoten mitten auf der unteren Kante
+    trägt und mit einem solchen Dreieck an die Unterseite anschließt: Es fällt
+    weg, das Dreieck der Unterseite an dieser Kante wird am Knoten geteilt, und
+    beide Hälften gehören weiter zur Unterseite. Der Würfel bleibt dicht und
+    behält sein Volumen 1000.
+    """
+    import numpy as np
+
+    from app.core.brep.kernel import _tessellated_body, face_sources
+
+    vertices = np.asarray(
+        [
+            (0, 0, 0),
+            (10, 0, 0),
+            (10, 10, 0),
+            (0, 10, 0),
+            (0, 0, 10),
+            (10, 0, 10),
+            (10, 10, 10),
+            (0, 10, 10),
+            (5, 0, 0),
+        ],
+        dtype=float,
+    )
+    sides = {
+        "unten": [(0, 2, 1), (0, 3, 2)],
+        "oben": [(4, 5, 6), (4, 6, 7)],
+        "vorn": [(0, 8, 4), (8, 1, 5), (8, 5, 4), (0, 1, 8)],
+        "hinten": [(2, 3, 7), (2, 7, 6)],
+        "links": [(0, 4, 7), (0, 7, 3)],
+        "rechts": [(1, 2, 6), (1, 6, 5)],
+    }
+    triangles = np.asarray([row for rows in sides.values() for row in rows], dtype=np.int64)
+    owners = np.asarray(
+        [number for number, rows in enumerate(sides.values()) for _row in rows], dtype=np.int64
+    )
+    mesh = _tessellated_body(vertices, triangles, owners, None)
+    body = mesh.raw
+    assert int(np.sum(body.area_faces <= EPS_GEOM)) == 0
+    assert body.is_watertight
+    assert body.volume == pytest.approx(1000.0, abs=1e-9)
+    counted = np.bincount(face_sources(mesh), minlength=len(sides))
+    # Unten zwei plus eine Hälfte mehr, vorn das flächenlose weniger.
+    assert counted.tolist() == [3, 2, 3, 2, 2, 2]
+
+
 # --- was der Netz-Zwilling meldete und dieser nicht ------------------------------
 
 

@@ -1108,8 +1108,25 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
         owners.extend([face_index] * triangulation.NbTriangles())
     if not corners:
         return MeshData.of(trimesh.Trimesh())
-    vertices = np.asarray(points, dtype=float)
-    triangles = np.asarray(corners, dtype=np.int64)
+    return _tessellated_body(
+        np.asarray(points, dtype=float),
+        np.asarray(corners, dtype=np.int64),
+        np.asarray(owners, dtype=np.int64),
+        np.asarray(point_solids, dtype=np.int64) if solid_of_face is not None else None,
+    )
+
+
+def _tessellated_body(
+    vertices: Any, triangles: Any, owners: Any, point_solids: Any | None
+) -> MeshData:
+    """Die Knoten und Dreiecke aller Flächen als ein Netz — ohne Dreiecke ohne Fläche.
+
+    ``owners`` nennt je Dreieck seine native Fläche, ``point_solids`` je Knoten
+    den Körper eines Verbunds (``None`` bei einem Körper).
+    """
+    import numpy as np
+    import trimesh
+
     # **Ein Dreieck mit doppeltem Knoten ist keines.** Am Pol einer
     # Kugelfläche fällt eine ganze Parameterlinie auf einen Punkt zusammen —
     # Längen- und Breitengrad treffen sich dort —, und ``BRepMesh`` erzeugt
@@ -1143,17 +1160,58 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
     kept = ~degenerate
     if not kept.any():
         return MeshData.of(trimesh.Trimesh())
-    attributes: dict[str, Any] = {_FACE_ATTRIBUTE: np.asarray(owners, dtype=np.int64)[kept]}
-    if solid_of_face is None:
-        body = trimesh.Trimesh(
-            vertices=vertices, faces=triangles[kept], face_attributes=attributes, process=True
-        )
-    else:
-        body = _welded_per_solid(
-            vertices, triangles[kept], np.asarray(point_solids, dtype=np.int64), attributes
-        )
+
+    def built(rows: Any) -> Any:
+        attributes: dict[str, Any] = {_FACE_ATTRIBUTE: owners[rows]}
+        if point_solids is None:
+            return trimesh.Trimesh(
+                vertices=vertices, faces=triangles[rows], face_attributes=attributes, process=True
+            )
+        return _welded_per_solid(vertices, triangles[rows], point_solids, attributes)
+
+    # **Drei Ecken auf einer Linie sind auch keines** (RM-226, Nachtrag
+    # 04.10.2026). ``BRepMesh`` legt an einer schmalen Fläche mitunter ein
+    # Dreieck über drei Knoten einer geraden Kante: die Ecken verschieden, die
+    # Fläche null. An der Lochplatte ``pegboard-gs-100-v2.step`` sind es vier, an
+    # den Ecken, wo ein Eckkegel Ø 2 tangential an zwei Fasen stößt. Das Netz
+    # bleibt damit dicht, aber nur bis zur ersten Booleschen: ``manifold3d``
+    # löst diese Dreiecke auf, und die Erkennung des Netzzwillings, die den
+    # Eckkegel allein an ihnen von den Fasen trennte, verlor ihn nach jedem
+    # Schritt — auch nach einer Kopie, die nichts schnitt. Wie der Import
+    # (``geom.repair``, entartete Dreiecke) gibt die Tessellierung sie nicht
+    # weiter: Ohne sie bleibt ein Knoten auf der langen Kante des Nachbarn, und
+    # ``_stitched`` teilt dessen Dreieck dort. Schließt das nicht, bleibt das
+    # Netz, wie ``BRepMesh`` es gab.
+    empty = kept & _without_area(at)
+    if empty.any():
+        cleaned = _stitched(MeshData.of(built(kept & ~empty)))
+        if cleaned.is_watertight:
+            _log.info(
+                "tessellated a B-Rep body into %d triangles, %d without area left out",
+                len(cleaned.raw.faces),
+                int(empty.sum()),
+            )
+            return cleaned
+    body = built(kept)
     _log.info("tessellated a B-Rep body into %d triangles", len(body.faces))
     return _stitched(MeshData.of(body))
+
+
+def _without_area(corners: Any) -> Any:
+    """Je Dreieck, ob seine drei Ecken auf einer Linie liegen.
+
+    Die Höhe über der längsten Kante bis ``EPS_GEOM``: das doppelte Flächenmaß
+    aus dem Kreuzprodukt gegen ``EPS_GEOM`` mal die längste Kante, je Zeile
+    über ``np.cross`` und Normen entlang einer Achse — auf jeder Maschine
+    dieselben Bits.
+    """
+    import numpy as np
+
+    doubled = np.linalg.norm(
+        np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1
+    )
+    longest = np.linalg.norm(corners - np.roll(corners, 1, axis=1), axis=2).max(axis=1)
+    return doubled <= EPS_GEOM * longest
 
 
 def _solid_of_faces(shape: Any, faces: Any) -> list[int] | None:

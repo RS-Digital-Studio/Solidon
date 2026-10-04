@@ -791,10 +791,21 @@ def test_a_ring_split_at_native_seams_keeps_one_complete_feature() -> None:
     assert set(ring.face_indices) == set(range(divided.triangle_count))
 
 
-def test_disconnected_fragments_on_the_same_torus_remain_separate_features() -> None:
-    """Gleiche Achse und Radien ersetzen keine tatsächliche Verbindung."""
+def test_fragments_of_one_torus_are_one_feature_on_both_kernels() -> None:
+    """Stücke desselben Rings sind ein Ring, auch auf zwei getrennten Körpern — wie am Netz.
+
+    Ein Quader schneidet den Ring R 17 / r 3 in zwei C-förmige Körper. Bis zum
+    04.10.2026 hielt der exakte Kern Ringstücke ohne gemeinsame Kante
+    auseinander und las hier zwei Ringe, das Netz derselben Vernetzung einen:
+    ``perceive.features._merged_tori`` legt Ringflecken nach ihrer Mitte
+    zusammen. Ein Ring ist sein Träger — seine Handlungen bauen den vollen Ring
+    aus Achse, Mitte und Radien (RM-226, Nachtrag) —, also lesen jetzt beide
+    Kerne einen Ring auf denselben Dreiecken, in beiden Hälften.
+    """
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
     from OCP.gp import gp_Pnt
+
+    from app.core.perceive.features import detect
 
     ring = _ring()
     tool = BRepPrimAPI_MakeBox(gp_Pnt(-20, -5, 0), 55, 4, 10).Shape()
@@ -803,9 +814,19 @@ def test_disconnected_fragments_on_the_same_torus_remain_separate_features() -> 
     assert cut.IsDone()
     source = Solid(cut.Shape())
     assert source.solid_count == 2
-    features = [feature for feature in features_of(source).values() if feature.kind == "torus"]
-    assert len(features) == 2
-    assert not set(features[0].face_indices).intersection(features[1].face_indices)
+    mesh = as_mesh_data(source)
+    found: dict[str, frozenset[int]] = {}
+    for kind, features in (("brep", features_of(source)), ("mesh", detect(mesh))):
+        rings = [feature for feature in features.values() if feature.kind == "torus"]
+        assert len(rings) == 1, (kind, [len(feature.face_indices) for feature in rings])
+        (only,) = rings
+        assert only.params["diameter"] == pytest.approx(34.0, abs=0.01), kind
+        assert only.params["tube_diameter"] == pytest.approx(6.0, abs=0.01), kind
+        found[kind] = frozenset(int(index) for index in only.face_indices)
+    assert found["brep"] == found["mesh"]
+    # Der Schnitt liegt bei -5 < y < -1 um die Ringmitte y = -3: Beide Hälften tragen den Ring.
+    lateral = np.asarray(mesh.raw.triangles_center)[sorted(found["brep"]), 1]
+    assert (lateral > -1.0).any() and (lateral < -5.0).any()
 
 
 def test_curved_surface_detection_obeys_cancellation_before_mesh_access() -> None:

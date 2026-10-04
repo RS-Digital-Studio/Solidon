@@ -114,6 +114,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si en el slicer se cruzan las trayectorias de dos piezas, o de una pieza y la torre de purga, el aviso lo dice y ofrece salidas.
 - Si el borde de adherencia está en automático, Solidon avisa antes de exportar cuando puede crecer fuera de la placa o en una zona prohibida, y propone un ancho fijo.
 - Los soportes y la falda junto al borde de la placa cuentan en la comprobación antes de exportar, con el ensanche de la primera capa de soporte que indica el perfil del slicer.
+- Los archivos STL exportados desde piezas STEP no contienen triángulos sin superficie.
 
 ### Taladros, ranuras y división
 
@@ -159,6 +160,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un taladro avellanado que tras duplicar, desplazar o repetir termina por completo dentro del material ya no avisa de que sobresale del borde.
 - Si el avellanado de una copia sobrepasa un lado, Solidon vuelve a encontrar la copia igual en piezas STL y STEP.
 - Si duplica un taladro a lo largo de su propio eje hacia el vacío, el original conserva su nombre en piezas STL, y la copia se da por perdida como en piezas STEP.
+- Una garganta o un cordón que una abertura divide en dos arcos aparece en piezas STEP como un solo anillo en el árbol, igual que en piezas STL y 3MF.
+- Las características iguales en piezas STEP, como dos trozos de una superficie cónica, conservan su nombre cuando taladra, duplica, cambia un taladro o inserta una pieza en otro sitio.
 
 ### Redondear y achaflanar
 

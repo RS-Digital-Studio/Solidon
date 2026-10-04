@@ -930,6 +930,7 @@ def _read_exactly(ctx: OpContext, outcome: OpResult) -> OpResult:
         declared_partners,
         match,
         on_their_partners,
+        settled_twins,
     )
 
     body = outcome.outputs[0]
@@ -949,6 +950,19 @@ def _read_exactly(ctx: OpContext, outcome: OpResult) -> OpResult:
     partners = set(seen.mapping.values())
     remaining = {name: entry for name, entry in detected.items() if name not in partners}
     matched = match(carried, remaining, bounds.centre, bounds.diagonal, check_cancelled=watch)
+    if matched.ambiguous and ctx.inputs and ctx.inputs[0].kind == "brep":
+        # Zwillinge nach der Lage ihrer Oberfläche wie in jedem zuordnenden Weg
+        # (``kern.md``). Die durchgereichten Merkmale tragen keine Dreiecke
+        # mehr; ihre Orte stehen am Träger vor dem ersten Ziel.
+        host = ctx.inputs[0]
+        matched = settled_twins(
+            matched,
+            {name: entry for name, entry in host.features.items() if name in carried},
+            as_mesh_data(host.mesh),
+            remaining,
+            as_mesh_data(solid),
+            bounds.diagonal,
+        )
     features = {
         **apply_mapping(remaining, matched, previous=carried, reserved=set(declared)),
         **on_their_partners(declared, detected, seen),

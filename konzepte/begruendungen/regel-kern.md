@@ -40,6 +40,26 @@ Warum die Summen in der Ordnung des Körpers laufen:
 Die Regel, dass keine Wahl an der Ordnung hängen darf, stammt aus RM-210. Die
 Grenze `MIN_ROUND_ARC` ist eine Entscheidung Roberts vom 23.09.2026.
 
+Warum jeder zuordnende Weg Zwillinge selbst entscheidet (04.10.2026, RM-226
+Nachtrag): Nur die Auswertung am Netz fragte die Lage der Oberfläche
+(`matching.settled_by_surface`). Die Auswertung eines exakten Körpers und jeder
+Neubau, der danach alte Merkmale neuen zuordnet (`prepare_ops`:
+`_exact_features_after`, `_preserved_exact_features`, `_exact_rest_carried`;
+der Baustein am exakten Träger, `knowledge.parts.ops._read_exactly`), ordneten
+nur über den Merkmalsvektor zu, fanden zwei gleiche Rundungen mehrdeutig und
+gaben ihnen neue Namen: Die zwei Wandstücke einer geschlitzten Tasche hießen
+nach einer Kopie, die sie nicht berührte, `fillet_3` und `fillet_4`, an der
+Lochplatte `pegboard-gs-100-v2` die zwei Bögen der Kehle `torus_3` und
+`torus_4`, am Teppichclip zwei Kegelstücke nach einer Bohrung anderswo
+`cone_12` und `cone_13`; ein Verweis auf das alte Merkmal hielt an. Die
+Operation fragt selbst, nicht nur die Auswertung: Über `FEATURE_LIMIT_COUNT`
+ordnet die Auswertung nicht neu zu, und dann gilt die Ausgabe des Neubaus. Den
+Ort eines alten Merkmals messen seine alten Dreiecke am alten Körper; was der
+Neubau schon an seiner Stelle wiedergefunden hat, trägt Nummern des neuen und
+bleibt draußen, und ein Baustein misst am Träger vor dem ersten Ziel, weil er
+dessen Merkmale ohne Dreiecke durchreicht (`tests/test_exact_body_parity.py`,
+Tasche aus `_slotted_pocket`).
+
 ## Was je Aufruf teuer ist, gehört nicht in eine Schleife über Flecken
 
 ### `scipy.spatial.ConvexHull`

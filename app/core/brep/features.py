@@ -279,7 +279,7 @@ def features_of(
     if fillets:
         found = open_slots_instead_of_fillets(mesh, found, fillets)
 
-    found = _joined_tori(found, mesh, cancelled=cancelled)
+    found = _joined_tori(found, cancelled=cancelled)
 
     # **Viele gleiche Zellen sind auch am exakten Körper ein Muster** (RM-504).
     # Dieselbe Frage wie am Netz (``perceive.patterns``), an denselben
@@ -541,29 +541,30 @@ def _cone_apex_end(
 
 
 def _joined_tori(
-    found: dict[FeatureId, Feature], mesh: Any, *, cancelled: CancelToken | None = None
+    found: dict[FeatureId, Feature], *, cancelled: CancelToken | None = None
 ) -> dict[FeatureId, Feature]:
-    """Angrenzende Teilflächen desselben exakten Rings bilden eine einzige Auswahl.
+    """Teilflächen desselben exakten Rings bilden ein Merkmal.
 
-    Geometrische Gleichheit allein verbindet keine getrennten Ringstücke.
-    Die tatsächliche Tessellierungsnachbarschaft belegt zusätzlich den Anschluss.
+    Ein Ring ist sein Träger — Achse, Mitte, Radien, Materialseite: Seine
+    Handlungen bauen den vollen Ring aus diesen Kennzahlen (Wulst und Kehle in
+    ``geom.prepare_ops``), und das Netz legt seine Flecken nach derselben Mitte
+    zusammen (``perceive.features._merged_tori``), auch über einen Durchbruch
+    hinweg. Bis zum 04.10.2026 verband der exakte Kern nur angrenzende Flächen:
+    An ``pegboard-gs-100-v2`` trennen die Durchbrüche der Mulde die Kehle an
+    ihrem Grund in zwei Bögen, der exakte Kern las zwei Ringe, die 3MF des
+    Herstellers einen, und die zwei Zwillinge hießen nach jeder Kopie anders
+    (RM-226, Nachtrag). Gleich heißt hier gleich bis ``EPS_GEOM``: Stücke
+    eines Trägers tragen dieselben nativen Kennzahlen.
     """
     import numpy as np
 
     rings = {name: feature for name, feature in found.items() if feature.kind == "torus"}
     if len(rings) < 2:
         return found
-    owners = {index: name for name, feature in rings.items() for index in feature.face_indices}
     graph: dict[FeatureId, set[FeatureId]] = {name: set() for name in rings}
-    pairs = set()
-    for first, second in mesh.raw.face_adjacency:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        left, right = owners.get(int(first)), owners.get(int(second))
-        if left is None or right is None or left == right:
-            continue
-        pairs.add(tuple(sorted((left, right))))
-    for left, right in sorted(pairs):
+    names = sorted(rings)
+    pairs = [(left, right) for number, left in enumerate(names) for right in names[number + 1 :]]
+    for left, right in pairs:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         one, two = rings[left].params, rings[right].params

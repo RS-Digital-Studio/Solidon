@@ -138,6 +138,7 @@ Nutzen da und sonst nichts.
 - Kreuzen sich im Slicer die Bahnen zweier Teile oder eines Teils und des Reinigungsturms, sagt die Meldung das und bietet Auswege an.
 - Steht der Brim auf automatisch, warnt Solidon vor dem Export, wenn er über das Bett oder in eine Sperrfläche wachsen kann, und bietet eine feste Brimbreite an.
 - Stützen und Skirt am Bettrand zählen in der Prüfung vor dem Export mit der Verbreiterung der ersten Stützschicht, die das Slicerprofil nennt.
+- Aus STEP-Teilen exportierte STL-Dateien enthalten keine Dreiecke ohne Fläche.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -183,6 +184,8 @@ Nutzen da und sonst nichts.
 - Eine Senkbohrung, die nach dem Verdoppeln, Versetzen oder Vervielfachen ganz im Material endet, meldet nicht mehr, sie rage über die Kante.
 - Reicht die Senkung einer Kopie über eine Seite hinaus, findet Solidon die Kopie an STL- und STEP-Teilen gleich wieder.
 - Verdoppeln Sie eine Bohrung entlang ihrer eigenen Achse ins Leere, behält das Original an STL-Teilen seinen Namen, und die Kopie heißt verloren wie an STEP-Teilen.
+- Eine Kehle oder ein Wulst, den ein Durchbruch in zwei Bögen teilt, steht an STEP-Teilen als ein Ring im Baum, wie an STL- und 3MF-Teilen.
+- Gleiche Merkmale an STEP-Teilen, etwa zwei Stücke einer Kegelfläche, behalten ihre Namen, wenn Sie anderswo bohren, verdoppeln, eine Bohrung ändern oder einen Baustein einsetzen.
 
 ### Verrunden und Fasen
 

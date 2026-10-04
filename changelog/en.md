@@ -113,6 +113,7 @@ it into `website/version.json`.
 - If the paths of two parts, or of a part and the wipe tower, cross in the slicer, the message says so and offers ways out.
 - If the brim is set to automatic, Solidon warns before export when it could grow past the bed or into an exclusion area, and offers a fixed brim width.
 - Supports and skirt at the bed edge count in the check before export, with the first support layer expansion the slicer profile gives.
+- STL files exported from STEP parts contain no triangles without area.
 
 ### Holes, slots and splitting
 
@@ -158,6 +159,8 @@ it into `website/version.json`.
 - A countersunk hole that ends fully inside the material after duplicating, moving or repeating no longer reports that it sticks out over the edge.
 - If a copy's countersink reaches past a side, Solidon finds the copy again the same way on STL and STEP parts.
 - If you duplicate a hole along its own axis into empty space, the original keeps its name on STL parts, and the copy is called lost as on STEP parts.
+- A groove or bead split into two arcs by an opening shows as one ring in the tree on STEP parts, as on STL and 3MF parts.
+- Identical features on STEP parts, such as two pieces of one cone surface, keep their names when you drill, duplicate, change a hole or insert a part elsewhere.
 
 ### Fillets and chamfers
 

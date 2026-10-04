@@ -113,6 +113,7 @@ scrive in `website/version.json`.
 - Se nello slicer si incrociano i percorsi di due pezzi, o di un pezzo e della torre di spurgo, il messaggio lo dice e propone vie d'uscita.
 - Se il brim è su automatico, Solidon avvisa prima dell'esportazione quando può uscire dal piano o entrare in una zona esclusa, e propone una larghezza fissa.
 - I supporti e lo skirt al bordo del piano contano nel controllo prima dell'esportazione, con l'allargamento del primo strato di supporto indicato dal profilo dello slicer.
+- I file STL esportati da pezzi STEP non contengono triangoli senza area.
 
 ### Fori, asole e divisione
 
@@ -158,6 +159,8 @@ scrive in `website/version.json`.
 - Un foro svasato che dopo la duplicazione, lo spostamento o la ripetizione finisce tutto nel materiale non segnala più di sporgere oltre il bordo.
 - Se la svasatura di una copia supera un lato, Solidon ritrova la copia allo stesso modo su pezzi STL e STEP.
 - Se duplichi un foro lungo il suo asse nel vuoto, l'originale mantiene il suo nome sui pezzi STL, e la copia risulta persa come sui pezzi STEP.
+- Una gola o un cordone diviso in due archi da un'apertura compare nei pezzi STEP come un unico anello nell'albero, come nei pezzi STL e 3MF.
+- Le caratteristiche uguali nei pezzi STEP, come due parti di una superficie conica, mantengono il loro nome quando fori, duplichi, cambi un foro o inserisci un componente altrove.
 
 ### Raccordi e smussi
 

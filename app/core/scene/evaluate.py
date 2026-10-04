@@ -111,7 +111,7 @@ from app.core.perceive.matching import (
     planar_source,
     question_for,
     resolve,
-    settled_by_surface,
+    settled_twins,
     transformed_features,
 )
 from app.core.perceive.relations import thinnest_sleeve
@@ -2571,46 +2571,6 @@ def _divided_partners(
     )
 
 
-def _surface_places(
-    features: Mapping[FeatureId, Feature],
-    names: Collection[FeatureId],
-    mesh: Mesh | None,
-    movement: Transform | None,
-) -> dict[FeatureId, Any]:
-    """Wo die Oberfläche jedes dieser Merkmale liegt: der Schwerpunkt seiner Dreiecke.
-
-    Flächengewichtet, damit ihn die Teilung der Dreiecke nicht verschiebt;
-    ``movement`` bringt ihn in den Rahmen nach dem Schritt. Ein Merkmal ohne
-    Dreiecke oder mit Nummern, die dieses Netz nicht hat, bekommt keinen Ort.
-    """
-    import numpy as np
-
-    if not isinstance(mesh, MeshData) or not names:
-        return {}
-    body = mesh.raw
-    count = len(body.faces)
-    centres = np.asarray(body.triangles_center, dtype=float)
-    areas = np.asarray(body.area_faces, dtype=float)
-    matrix = np.asarray(movement, dtype=float) if movement is not None else None
-    places: dict[FeatureId, Any] = {}
-    for name in names:
-        feature = features.get(name)
-        if feature is None or not feature.face_indices:
-            continue
-        faces = np.asarray(feature.face_indices, dtype=np.int64)
-        if int(faces.min()) < 0 or int(faces.max()) >= count:
-            continue
-        weights = areas[faces]
-        total = float(weights.sum())
-        if not total > 0.0:
-            continue
-        place = (centres[faces] * weights[:, None]).sum(axis=0) / total
-        if matrix is not None:
-            place = matrix[:3, :3] @ place + matrix[:3, 3]
-        places[name] = place
-    return places
-
-
 def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
     """Die reine Verschiebung zwischen zwei Hüllquadern — oder ``None``.
 
@@ -4076,6 +4036,25 @@ def _with_features(
                 mesh.bounds.diagonal,
                 check_cancelled=watch.raise_if_cancelled,
             )
+            # **Zwillinge nach der Lage ihrer Oberfläche, wie am Netz unten**
+            # (RM-226, Nachtrag 04.10.2026): Zwei gleiche Rundungen haben für
+            # die Zuordnung dieselbe Mitte, Achse und Größe; ohne diese Frage
+            # bekamen sie nach jedem Neubau frische Namen, und ein Bezug hielt an.
+            if matched.ambiguous and origin_mesh is not None:
+                from app.core.geom.mesh import as_mesh_data
+
+                moving = transform
+                if moving is None and previous_bounds is not None:
+                    moving = _shift_between(previous_bounds, mesh.bounds)
+                matched = settled_twins(
+                    matched,
+                    previous,
+                    as_mesh_data(origin_mesh),
+                    exact_entry.features,
+                    as_mesh_data(exact_entry.mesh),
+                    mesh.bounds.diagonal,
+                    movement=moving,
+                )
             matched = _continued_match_result(matched, continued)
             watch.raise_if_cancelled()
             if set(matched.ambiguous) & referenced:
@@ -4938,19 +4917,18 @@ def _with_features(
     # unter neuen Namen zurück oder als Frage an den Kunden (Durchsicht 0.5.1,
     # Siebhalter und Rankenclip). Gemessen an den alten Dreiecken im
     # Eingangsnetz, samt der Bewegung des Schritts; nur bei einem Eingang,
-    # denn nur dann zeigen die Nummern dorthin.
-    if matched.ambiguous:
-        matched = settled_by_surface(
-            matched,
-            _surface_places(features_before, set(matched.ambiguous), origin_mesh, feature_movement),
-            _surface_places(
-                detected,
-                {name for names in matched.ambiguous.values() for name in names},
-                mesh,
-                None,
-            ),
-            mesh.bounds.diagonal,
-        )
+    # denn nur dann zeigen die Nummern dorthin. Dieselbe Frage stellt der
+    # exakte Weg oben und der Neubau eines exakten Körpers
+    # (``matching.settled_twins``).
+    matched = settled_twins(
+        matched,
+        features_before,
+        origin_mesh,
+        detected,
+        mesh,
+        mesh.bounds.diagonal,
+        movement=feature_movement,
+    )
     # **Auch eine erkannte Fläche, die der Schritt geteilt hat, behält ihren
     # Namen am größten Stück** (R4) — nach *Teilen* in jeder Hälfte, in der ein
     # Stück von ihr liegt; gleich große Stücke fragt die Zuordnung darunter,
