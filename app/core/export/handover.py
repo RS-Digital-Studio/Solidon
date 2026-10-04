@@ -6398,6 +6398,8 @@ def slice_model(
         if produced is None:
             first_layer_error = _empty_first_layer_error(setup, completed.stdout, completed.stderr)
             if first_layer_error is not None:
+                if _first_layer_narrower_than_a_line(meshes, settings):
+                    raise _narrow_first_layer_error(setup, first_layer_error.values)
                 raise first_layer_error
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
@@ -6481,6 +6483,11 @@ def slice_model(
                     values={"output": output},
                     suggestions=(REPAIR_AND_RETRY, SHOW_LOCATIONS, SHOW_SLICER_OUTPUT),
                 )
+            # Die Orca-Familie nennt eine leere erste Schicht nicht, sie endet
+            # mit -100 und „found error“. Die Geometrie belegt die Ursache:
+            # ElegooSlicer an ``Cat_2.stp`` (RM-312), mit Arachne druckte er.
+            if setup.flavour == "orca" and _first_layer_narrower_than_a_line(meshes, settings):
+                raise _narrow_first_layer_error(setup, {"output": output})
             # ``CHOOSE_SLICER`` zuerst: Auf einem Rechner mit mehreren Slicern
             # ist der Wechsel der kürzeste Ausweg — genau dieser Fall stand
             # als Sackgasse da, mit zwei arbeitenden Slicern neben dem einen,
@@ -6505,6 +6512,8 @@ def slice_model(
         if not analysis.extrudes:
             first_layer_error = _empty_first_layer_error(setup, completed.stdout, completed.stderr)
             if first_layer_error is not None:
+                if _first_layer_narrower_than_a_line(meshes, settings):
+                    raise _narrow_first_layer_error(setup, first_layer_error.values)
                 raise first_layer_error
             # Eine große Datei ohne eine einzige Förderbewegung. Der Slicer ist
             # durchgelaufen und hat den Rückgabewert 0 gemeldet, aber das
@@ -7270,6 +7279,70 @@ def _empty_first_layer_error(setup: SlicerSetup, *streams: bytes) -> ExternalToo
             SHOW_LOCATIONS,
             PLACE_ON_BED,
             replace(OPEN_PRINT_SETTINGS, label=_("Brim oder Raft prüfen …")),
+            SHOW_SLICER_OUTPUT,
+        ),
+    )
+
+
+def _first_layer_narrower_than_a_line(meshes: Sequence[Mesh], settings: PrintSettings) -> bool:
+    """Trägt die erste Schicht eines Teils keine Bahn fester Breite?
+
+    Gefragt am Querschnitt auf halber Höhe der ersten Schicht: Ist das Teil
+    dort nirgends anderthalb Erstschichtbahnen breit (nach innen um drei
+    Viertel einer Bahn versetzt bleibt nichts), schließen Wände mit fester
+    Bahnbreite (``classic``) keine Schleife, und der Slicer sagt ab. Gemessen
+    an ``Cat_2.stp`` (Slicer-Matrix RM-312): bei 0,1 mm 79 mm² Fläche in
+    Stegen von höchstens 0,6 mm; ElegooSlicer (Erstschichtbahn 0,5 mm) endete
+    mit -100, SuperSlicer (0,42 mm) mit „no extrusions in the first layer“,
+    beide druckten mit Arachne. Mit veränderlicher Bahnbreite ist das keine
+    belegte Ursache. Gefragt wird erst nach einer Absage.
+    """
+    if settings.shell.wall_generator != "classic":
+        return False
+    from app.core.slice.analysis import cross_sections
+
+    inset = 0.75 * settings.layers.first_layer_line_width
+    for mesh in meshes:
+        data = as_mesh_data(mesh)
+        if not data.triangle_count:
+            continue
+        height = float(data.bounds.minimum[2]) + settings.layers.first_layer_height / 2.0
+        section = cross_sections(data, [height])[0]
+        if section is None or section.buffer(-inset).is_empty:
+            return True
+    return False
+
+
+def _narrow_first_layer_error(setup: SlicerSetup, values: Mapping[str, Any]) -> ExternalToolError:
+    """Die Absage einer ersten Schicht, die schmaler ist als eine Bahn — mit dem Weg dorthin.
+
+    Dieselbe Bindung wie :func:`_empty_first_layer_error` (``constraint``,
+    ``part_name``), aber das Feld ist die Wandbahn: Auf das Bett legen hilft
+    einem Teil nicht, das darauf liegt.
+    """
+    part_name = values.get("part_name")
+    detail = (
+        _(
+            "Die erste Schicht des Teils „{name}“ ist schmaler als eine Bahn; mit fester "
+            "Bahnbreite legt der Slicer dort nichts. Stellen Sie die Wandbahnen auf Arachne "
+            "oder geben Sie dem Teil einen Raft.",
+            name=part_name,
+        )
+        if isinstance(part_name, str)
+        else _(
+            "Die erste Schicht eines Teils ist schmaler als eine Bahn; mit fester Bahnbreite "
+            "legt der Slicer dort nichts. Stellen Sie die Wandbahnen auf Arachne oder geben "
+            "Sie dem Teil einen Raft."
+        )
+    )
+    return ExternalToolError(
+        tool=setup.name,
+        title=SLICER_FAILED,
+        detail=detail,
+        values={**values, "constraint": "empty_first_layer", "field": "shell.wall_generator"},
+        suggestions=(
+            SHOW_LOCATIONS,
+            replace(OPEN_PRINT_SETTINGS, label=_("Wandbahnen prüfen …")),
             SHOW_SLICER_OUTPUT,
         ),
     )

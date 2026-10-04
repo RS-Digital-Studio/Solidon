@@ -4265,7 +4265,9 @@ class PrintSettingsDialog(QDialog):
         def open_print_settings(error: AppError) -> None:
             if error.values.get("constraint") == "empty_first_layer":
                 if context is not None and context == self._print_context():
-                    self._lift("adhesion.kind")
+                    # Haftung bei einer leeren ersten Schicht, Wandbahnen bei
+                    # einer, die schmaler ist als eine Bahn (RM-312).
+                    self._lift(str(error.values.get("field") or "adhesion.kind"))
             elif parent_print_settings is not None:
                 parent_print_settings(error)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -469,3 +470,161 @@ def test_near_names_stay_distinct_in_xml_parser_and_worker(tmp_path, monkeypatch
     assert delivered.values["part_name"] == second
     assert second in str(delivered.detail)
     assert objects[0].name == first and objects[1].name == second
+
+
+def standing_wedge():
+    """Ein Keil 20 mm lang, der auf seiner Schneide steht: unten 0 mm, oben 10 mm breit.
+
+    Auf halber Höhe der ersten Schicht (0,1 mm) ist er 0,1 mm breit — schmaler
+    als jede Bahn. So steht `Cat_2.stp` auf dem Bett (Slicer-Matrix RM-312):
+    bei 0,1 mm Höhe 79 mm² Fläche, nach innen um eine halbe Erstschichtbahn
+    (0,25 mm) nichts mehr.
+    """
+    from shapely.geometry import Polygon as Outline
+
+    body = trimesh.creation.extrude_polygon(Outline([(0, 10), (10, 10), (5, 0)]), height=20.0)
+    body.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
+    return MeshData.of(body)
+
+
+@pytest.mark.parametrize(("lines", "narrow"), [(1.2, True), (1.4, True), (2.0, False)])
+def test_a_first_layer_needs_room_for_one_and_a_half_lines(lines, narrow):
+    """Eine Wand fester Breite schließt erst ab anderthalb Bahnen eine Schleife.
+
+    `Cat_2.stp` stand auf Stegen von höchstens 0,6 mm: Mit 0,5 mm (ElegooSlicer)
+    und mit 0,42 mm Erstschichtbahn (SuperSlicer) blieb die erste Schicht
+    leer, obwohl um eine halbe Bahn nach innen noch 3 mm² übrig blieben.
+    """
+    profile = profiles.make_profile("prusa-mini", "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "shell.wall_generator", "classic"
+    )
+    width = lines * settings.layers.first_layer_line_width
+    strip = trimesh.creation.box(extents=(width, 30.0, 5.0))
+    strip.apply_translation((0.0, 0.0, 2.5))
+    assert handover._first_layer_narrower_than_a_line([MeshData.of(strip)], settings) is narrow
+    variable = print_settings.with_choice(settings, "shell.wall_generator", "arachne")
+    assert not handover._first_layer_narrower_than_a_line([MeshData.of(strip)], variable)
+
+
+def narrow_attempt(tmp_path, monkeypatch, *, generator, flavour, mesh, **kwargs):
+    _box, model, profile, setup = prepare(
+        tmp_path, "OrcaSlicer.exe" if flavour == "orca" else "PrusaSlicer.exe", flavour
+    )
+    if flavour == "orca":
+        # Konfiguration und Aufruf gestellt wie in
+        # test_other_families_do_not_borrow_a_prusa_diagnosis; der
+        # Fehlerzweig von slice_model bleibt echt.
+        monkeypatch.setattr(
+            handover,
+            "write_config",
+            lambda *args, **kwargs: SimpleNamespace(
+                paths=(), written={}, findings=[], origin_at_centre=False, machine_shift=None
+            ),
+        )
+        monkeypatch.setattr(handover, "_command", lambda *args, **kwargs: [])
+        monkeypatch.setattr(handover, "_orca_cli_tower_position", lambda config, *args: config)
+        monkeypatch.setattr(handover, "_readback_materials", lambda *args: ({}, {}))
+    answer = subprocess.CompletedProcess([], kwargs.get("code", 1), b"", kwargs.get("stderr", b""))
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **_kw: answer)
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "shell.wall_generator", generator
+    )
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(
+            model, settings, profile, setup, model_meshes=(mesh,), output_dir=tmp_path / "gcode"
+        )
+    return raised.value
+
+
+def assert_narrow(problem, name):
+    assert problem.values.get("constraint") == "empty_first_layer"
+    assert problem.values.get("field") == "shell.wall_generator"
+    assert "schmaler als eine Bahn" in str(problem.detail)
+    if name is not None:
+        assert problem.values["part_name"] == name
+        assert name in str(problem.detail)
+    actions = {entry.id for entry in problem.suggestions}
+    assert {"open_print_settings", "show_output"} <= actions
+    assert "place_on_bed" not in actions, "das Teil liegt auf dem Bett"
+
+
+def test_a_prusa_first_layer_narrower_than_a_line_says_so_and_points_at_the_walls(
+    tmp_path, monkeypatch
+):
+    """`Cat_2.stp` an SuperSlicer (RM-312): leer, weil mit fester Bahnbreite nichts hineinpasst.
+
+    Mit Arachne druckte derselbe Lauf; *Auf das Bett legen* half nicht, das
+    Teil lag darauf. Mit Arachne bleibt die Absage, wie RM-483 sie fasst.
+    """
+    problem = narrow_attempt(
+        tmp_path,
+        monkeypatch,
+        generator="classic",
+        flavour="prusa",
+        mesh=standing_wedge(),
+        stderr=native_record("Cica_2"),
+    )
+    assert_narrow(problem, "Cica_2")
+    from app.core.errors import OPEN_PRINT_SETTINGS
+    from app.ui.dialogs import offered_actions
+
+    shown = offered_actions(problem, {OPEN_PRINT_SETTINGS.id: lambda _error: None})
+    assert [str(action.label) for action in shown] == ["Wandbahnen prüfen …"]
+
+    variable = narrow_attempt(
+        tmp_path,
+        monkeypatch,
+        generator="arachne",
+        flavour="prusa",
+        mesh=standing_wedge(),
+        stderr=native_record("Cica_2"),
+    )
+    assert_empty(variable, "Cica_2")
+
+
+def test_an_orca_refusal_with_a_first_layer_narrower_than_a_line_names_the_cause(
+    tmp_path, monkeypatch
+):
+    """ElegooSlicer endete an `Cat_2.stp` mit -100 und „found error, exit“ (RM-312).
+
+    Am Mitschnitt belegt: mit `wall_generator = classic` -100, mit Arachne eine
+    Druckdatei, mit oder ohne Brim gleich. Ohne Teilnamen in der Ausgabe nennt
+    der Satz die Ursache ohne Namen. Ein Würfel bekommt weiter die allgemeine
+    Absage (`test_other_families_do_not_borrow_a_prusa_diagnosis`).
+    """
+    problem = narrow_attempt(
+        tmp_path,
+        monkeypatch,
+        generator="classic",
+        flavour="orca",
+        mesh=standing_wedge(),
+        code=0xFFFFFF9C,
+        stderr=b"Slic3r::CLI::run found error, exit\n",
+    )
+    assert_narrow(problem, None)
+    assert "eines Teils" in str(problem.detail)
+    box, *_rest = prepare(tmp_path)
+    generic = narrow_attempt(
+        tmp_path,
+        monkeypatch,
+        generator="classic",
+        flavour="orca",
+        mesh=box,
+        code=0xFFFFFF9C,
+        stderr=b"Slic3r::CLI::run found error, exit\n",
+    )
+    assert generic.values.get("constraint") != "empty_first_layer"
+    with_arachne = narrow_attempt(
+        tmp_path,
+        monkeypatch,
+        generator="arachne",
+        flavour="orca",
+        mesh=standing_wedge(),
+        code=0xFFFFFF9C,
+        stderr=b"Slic3r::CLI::run found error, exit\n",
+    )
+    assert with_arachne.values.get("constraint") != "empty_first_layer", (
+        "mit veränderlicher Bahnbreite ist die schmale erste Schicht nicht belegt die Ursache"
+    )

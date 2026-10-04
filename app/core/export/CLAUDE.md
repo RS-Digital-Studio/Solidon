@@ -324,7 +324,9 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
 ## Grenzen
 
 Prusas Erstschichtabsage wird vor der Ausgabekürzung gelesen
-(`handover._empty_first_layer_error`). Der native Name bleibt wörtlich und
+(`_empty_first_layer_error`); eine erste Schicht unter anderthalb Bahnen
+nennt die Wandbahnen, auch für Orca (`_first_layer_narrower_than_a_line`).
+Der native Name bleibt wörtlich und
 muss eindeutig zur vorbereiteten Platte gehören; ungebundene Meldungen
 bieten keine Handlung an einer zufällig gewählten Szeneauswahl.
 
@@ -335,5 +337,5 @@ bieten keine Handlung an einer zufällig gewählten Szeneauswahl.
 ## Der Raftkontakt
 
 `adhesion.raft_gap` bleibt vom Stützabstand getrennt; `None` bewahrt die
-Slicer-Vorgabe, null ist ein Wert. `raft_gap_active` entscheidet je Familie.
-Native Herkunft und Cura-Kopplung stehen in der oben verknüpften Langkarte.
+Slicer-Vorgabe, null ist ein Wert. `raft_gap_active` entscheidet je Familie;
+native Herkunft und Cura-Kopplung: Herleitung.

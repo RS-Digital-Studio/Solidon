@@ -604,6 +604,18 @@ CLI-Kopie eine eindeutige Kennzeichnung. `PlateRun.name_bindings` verbindet
 genau diese ausgegebenen Namen mit den eingefrorenen Szenenkennungen. Das
 Projekt und seine Materialzuordnung bleiben unverändert.
 
+**Eine erste Schicht, schmaler als anderthalb Bahnen, ist eine eigene
+Ursache** (`_first_layer_narrower_than_a_line`, Slicer-Matrix RM-312):
+`Cat_2.stp` steht auf Stegen von höchstens 0,6 mm. Mit fester Bahnbreite
+(Herstellerprozess des Centauri Carbon 2, MINI-Profil von SuperSlicer) legt der
+Slicer dort keine Schleife; ElegooSlicer endet mit -100 und „found error“ ohne
+Grund, SuperSlicer mit „no extrusions in the first layer“. Mit Arachne druckten
+beide, ein Brim änderte nichts. Gefragt wird erst nach einer Absage, am
+Querschnitt auf halber Höhe der ersten Schicht, nach innen um drei Viertel einer
+Erstschichtbahn versetzt; die Meldung nennt die Wandbahnen und den Raft statt
+*Auf das Bett legen*, und *Druckeinstellungen öffnen* hebt die Zeile der
+Wandbahnen hervor. Bei veränderlicher Bahnbreite bleibt die Absage aus RM-483.
+
 
 
 ## Der Raftkontakt hat eine eigene Herkunft
