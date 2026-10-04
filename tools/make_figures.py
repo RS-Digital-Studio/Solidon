@@ -234,6 +234,27 @@ def wait_until_uncovered(
         settle(QApplication.instance(), 20)  # type: ignore[arg-type]
 
 
+def show_sample_printer(widget: QWidget) -> None:
+    """Den Beispielnamen des Druckers in der Kopfzeile wie im Druckdialog zeigen.
+
+    Seit die Kopfzeile das Druckziel nennt, stand der allgemeine Drucker dort
+    in fünf Sprachen deutsch, während der Druckdialog im selben Handbuch ihn
+    übersetzt zeigte (:data:`SAMPLE_PRINTER`). Umgestellt wird nur der
+    sichtbare Text, wie im Dialog; Profil und Projekt bleiben.
+    """
+    from app.i18n import get_language
+
+    printer = getattr(getattr(widget.window(), "header", None), "printer", None)
+    language = get_language()
+    if printer is None or language not in SAMPLE_PRINTER or language == "de":
+        return
+    shown = printer.full_text()
+    if SAMPLE_PRINTER["de"] in shown:
+        printer.setText(shown.replace(SAMPLE_PRINTER["de"], SAMPLE_PRINTER[language]))
+        for _ in range(5):
+            QApplication.processEvents()
+
+
 def grab_uncovered(widget: QWidget, rect: QRect | None = None, *, seconds: float = 30.0) -> QPixmap:
     """Ein Bildschirmbild nur nach freier Vor- und Nachprüfung zurückgeben.
 
@@ -245,6 +266,7 @@ def grab_uncovered(widget: QWidget, rect: QRect | None = None, *, seconds: float
     """
     deadline = time.monotonic() + seconds
     other = ""
+    show_sample_printer(widget)
     for _attempt in range(10):
         wait_until_uncovered(widget, rect, seconds=max(0.0, deadline - time.monotonic()))
         screen = widget.screen() or QApplication.primaryScreen()
