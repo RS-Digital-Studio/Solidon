@@ -126,11 +126,12 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.export import handover, manufacturer
+from app.core.export import handover, manufacturer, readback
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
     ExportFormat,
+    ExportPlan,
     check_before_export,
     clearance_margin,
     plan_export,
@@ -1439,11 +1440,12 @@ class _ExportWorker(Worker):
                 if self._format == "3mf" and self._inventory_settings is not None
                 else ()
             )
+            plan: ExportPlan | None = None
             if self._format == "3mf":
                 written, findings = self._assembly()
             else:
                 self._begin_write()
-                written, findings = self._files()
+                written, findings, plan = self._files()
         except OperationCancelled:
             if self._writing:
                 raise
@@ -1453,7 +1455,21 @@ class _ExportWorker(Worker):
             self.failed.emit(error)
             return
         if written:
+            # Die Gegenprobe des Kerns an genau den geschriebenen Dateien
+            # (RM-090): Ein gelungenes Schreiben ist noch keine.
+            checked = (
+                readback.read_back(readback.expected_for_plan(plan, written, self._format))
+                if plan is not None
+                else readback.read_back_bodies(
+                    [
+                        (path, [(str(body.name), body.mesh) for body in self._objects])
+                        for path in written
+                    ],
+                    self._profile,
+                )
+            )
             self.receipt = handoff_receipt(
+                checked=checked,
                 document=self._document,
                 profile=self._profile,
                 objects=self._objects,
@@ -1549,7 +1565,7 @@ class _ExportWorker(Worker):
         )
         return [written_path], list(findings)
 
-    def _files(self) -> tuple[list[Path], list[Finding]]:
+    def _files(self) -> tuple[list[Path], list[Finding], ExportPlan]:
         """Ein fester Name für einen Körper; bei mehreren zählt das
         Namensschema aus §29, damit auf der Platte lesbar bleibt, welches Teil
         welches ist. Geschweifte Klammern im Namen sind Zeichen, keine
@@ -1579,7 +1595,7 @@ class _ExportWorker(Worker):
             document=self._document,
             checked=self._checked,
         )
-        return write_plan(plan, self._target.parent, self._format), list(plan.findings)
+        return write_plan(plan, self._target.parent, self._format), list(plan.findings), plan
 
 
 class _PartImportWorker(Worker):
@@ -7927,7 +7943,7 @@ class MainWindow(QMainWindow):
                     "Mit dem gewählten Schritt werden auch diese abhängigen Schritte gelöscht:"
                 )
                 back = tr("Strg+Z stellt alle gemeinsam wieder her.")
-            names, rest = named_steps(dependents)
+            names, rest = named_steps(dependents, order=self.session.project.document.ops)
             lines = [f"· {name}" for name in names]
             if rest:
                 lines.append("· " + tr("und {count} weitere").format(count=rest))

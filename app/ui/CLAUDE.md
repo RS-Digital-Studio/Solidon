@@ -361,12 +361,12 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   Auswertungsarbeiter. `PrintTarget` hält übersetzbare Texte für Sprachwechsel
   ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
   und wiederholt offene Prüfungen nicht.
-- **Änderung und Übergabe**: `ExplainedDifference` erklärt dieselben Szenen wie
-  die Kerndifferenz. Übergabebelege stammen aus dem eingefrorenen Arbeiterauftrag;
-  geschriebene Dateien und erfolgreiche Slicerstarts bleiben getrennte Angaben.
-  Fehlende Gegenprüfungen werden ausdrücklich genannt. Gleichlautende Import-
-  befunde dürfen über Ladeschritte derselben Transaktion gebündelt werden; alle
-  Originalwerte und Körper bleiben zugänglich.
+- **Befundkarte**: Folge, Ort, Grundlage; Nebenfolge aus `core.action_effects`.
+- **Änderung und Übergabe**: `ExplainedDifference` erklärt die Szenen der
+  Kerndifferenz, `review_difference` nur Neues und Weggefallenes. Belege aus
+  dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
+  `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
+  gebündelt; Originalwerte und Körper bleiben zugänglich.
 
 ## Testen
 

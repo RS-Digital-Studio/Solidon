@@ -40,6 +40,7 @@ from app.branding import (
 from app.core import activation, manual
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
+from app.core.export import readback
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
 from app.core.ingest.archive import is_archive, model_from_archive
 from app.core.ingest.loader import (
@@ -788,7 +789,13 @@ def command_export(args: argparse.Namespace) -> int:
     written = write_plan(plan, Path(args.directory), args.export_format)
     for target in written:
         print(tr("Geschrieben: {path}", path=target))
-    return 0
+    # Dieselbe Gegenprobe wie im Fenster (RM-090): die Datei zurücklesen.
+    # Weicht sie ab, endet der Befehl mit 1 — ein Skript soll es merken.
+    checked = readback.read_back(readback.expected_for_plan(plan, written, args.export_format))
+    print(str(checked.summary()))
+    for note in checked.notes if checked.state == "deviated" else ():
+        print(str(note))
+    return 1 if checked.state == "deviated" else 0
 
 
 # --- argument parsing -----------------------------------------------------------
