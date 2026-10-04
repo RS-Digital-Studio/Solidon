@@ -512,6 +512,47 @@ def test_the_brush_strength_is_not_named_like_a_wall_thickness(
         set_language("de")
 
 
+def test_a_narrow_sculpt_bar_moves_its_tail_into_a_second_row(qt_app: QApplication) -> None:
+    """Ist die Leiste zu schmal, rücken Zustand und *Fertig* in eine zweite Zeile.
+
+    Am echten Fenster (1 100 Punkte breit, Fensterabnahme 04.10.2026, RM-366)
+    stand die Leiste in einer Zeile und kürzte jedes Wort: „Auftrage“,
+    „Neu ansetze“, „2 Züge, eine Eta“. Ein halbes Wort ist schlechter als eine
+    zweite Zeile. Breit wird sie wieder eine Zeile, und ihre Wunschbreite bleibt
+    die der einen Zeile — sonst wüchse sie nie zurück (``ansicht.md``).
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.sculpt_bar import SculptBar
+
+    # Im Fenster ist die Leiste ein Kind und bekommt die Breite, die die
+    # untere Zone hat — auch weniger als ihr Mindestmaß. Ein Fenster der
+    # obersten Ebene klemmte sie dagegen an ihr Mindestmaß.
+    host = QWidget()
+    bar = SculptBar(host)
+    try:
+        bar.show_count(2, 1)
+        host.resize(3000, 400)
+        host.show()
+        QApplication.processEvents()
+        roomy = bar.sizeHint().width()
+        bar.setGeometry(0, 0, roomy + 40, 200)
+        QApplication.processEvents()
+        assert abs(bar.done.y() - bar.tool.y()) < bar.tool.height(), "breit eine Zeile"
+        bar.setGeometry(0, 0, int(roomy * 0.6), 200)
+        QApplication.processEvents()
+        assert bar.done.y() > bar.tool.y() + bar.tool.height() // 2, (
+            "Fertig steht in der zweiten Zeile"
+        )
+        assert bar.state.y() > bar.tool.y() + bar.tool.height() // 2
+        assert bar.sizeHint().width() >= roomy, "die Wunschbreite bleibt die einer Zeile"
+        bar.setGeometry(0, 0, roomy + 40, 200)
+        QApplication.processEvents()
+        assert abs(bar.done.y() - bar.tool.y()) < bar.tool.height(), "breit wieder eine Zeile"
+    finally:
+        host.deleteLater()
+
+
 # --- der Pinselring -------------------------------------------------------------
 
 
