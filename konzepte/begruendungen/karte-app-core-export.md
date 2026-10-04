@@ -383,6 +383,13 @@ Jede sieht etwas, das die anderen durchlassen:
 | `verify_settings` | Hat der Slicer die geschriebenen Werte übernommen? |
 | `spools_left_out` | Sind **alle übergebenen Spulen** gedruckt worden? |
 
+`too_short` zählt mit den Netzen der Platte nur, was über der gedruckten
+Höhe noch eine Bahnbreite trägt (`_printable_above`): Eine Oberkante, die als
+Schneide ausläuft, druckt ein Slicer mit festen Bahnbreiten nicht. An
+`bottom-single.stl` (Slicer-Matrix, RM-312) endeten ElegooSlicer, Bambu
+Studio und SuperSlicer bei 78,0 statt 78,49 mm, und der Befund schickte den
+Kunden mit *Auf das Bett legen* zu einem Teil, das auf dem Bett lag.
+
 Die vierte fragt gegen `expected_tools`, und das kommt aus
 `threemf.tools_in_use` — den Werkzeugen, die die **Flächen** einer Platte
 benutzen, nicht den deklarierten Slots. Ein Körper darf einen Slot tragen, den

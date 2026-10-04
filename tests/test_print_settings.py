@@ -9,6 +9,7 @@ braucht, steht ausdrücklich dabei.
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import zipfile
@@ -4099,6 +4100,73 @@ def test_a_single_spool_is_never_a_missing_one() -> None:
     assert handover.spools_left_out(gcode.analyze(_ONE_TOOL), (0,), _slots(1), "orca") is None
     assert handover.spools_left_out(gcode.analyze(_ONE_TOOL), (), _slots(2), "orca") is None, (
         "ohne Angabe entfällt der Vergleich, geraten wird nichts (Regel 21)"
+    )
+    # Genau an der Grenze, mit dem Rauschen einer Netzhöhe: „Rack system for
+    # Filament.3mf“ (Slicer-Matrix RM-312) war 22,000000000000014 mm hoch und
+    # bis 21,6 mm gedruckt — der Befund kam aus der letzten Stelle.
+    edge = 10.0 + 2.0 * settings.layers.layer_height + 1.4e-14
+    assert handover.too_short(half, edge, settings) is None, "die Grenze zählt mit"
+
+
+def _ridged_block(ridge_base: float) -> MeshData:
+    """Ein Block 20 × 10 × 10 mm mit einem Grat obendrauf, der 1 mm hoch spitz zuläuft.
+
+    Der Grat ist an seinem Fuß ``ridge_base`` breit und auf Höhe ``10 + h``
+    noch ``ridge_base · (1 - h)`` — schmaler als eine Bahn ab
+    ``h = 1 - Bahnbreite / ridge_base``. Mit ``ridge_base = 10`` ist der Körper
+    oben ein Satteldach über die ganze Breite.
+    """
+    from shapely.geometry import Polygon as Outline
+
+    half = ridge_base / 2.0
+    points = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]
+    if half < 5.0:
+        points.append((5.0 + half, 10.0))
+    points.append((5.0, 11.0))
+    if half < 5.0:
+        points.append((5.0 - half, 10.0))
+    points.append((0.0, 10.0))
+    body = trimesh.creation.extrude_polygon(Outline(points), height=20.0)
+    # Die Profilebene ist X/Y, gezogen wird in Z; um X gedreht steht das
+    # Profil in X/Z und der Grat oben, auf dem Bett ab z = 0.
+    body.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
+    return MeshData(body)
+
+
+def test_a_top_narrower_than_a_line_is_not_missing_from_the_print() -> None:
+    """Was schmaler als eine Bahn ist, druckt der Slicer nicht — kein Abschnitt unter dem Bett.
+
+    Gemessen in der Slicer-Matrix (RM-312) an ``bottom-single.stl``: Die
+    Oberkante läuft auf 109,6 mm Länge als Schneide aus, auf den letzten
+    0,5 mm schmaler als 0,4 mm. ElegooSlicer, Bambu Studio und SuperSlicer
+    druckten mit festen Bahnbreiten bis 78,0 mm statt 78,49 mm, und Solidon
+    meldete „was unter dem Druckbett lag, hat der Slicer nicht gedruckt“ mit
+    *Auf das Bett legen* — als Fehler, an einem Teil, das auf dem Bett lag.
+    Fehlt oben nur, was schmaler ist als eine Bahn, ist das kein Befund; fehlt
+    oben Material von Bahnbreite, bleibt er.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    line = settings.layers.line_width
+    layer = settings.layers.layer_height
+    # Gedruckt bis 10,4 mm (52 Schichten zu 0,2 mm).
+    printed = "G90\nM82\n" + "".join(
+        f"G1 Z{z / 10.0:g}\nG1 X{10 if z % 4 else 20} Y0 E{z / 10.0:g}\n" for z in range(2, 106, 2)
+    )
+    ridge = _ridged_block(1.0)
+    # Am Grat ist ab 10 + (1 - line / 1,0) mm keine Bahnbreite mehr übrig;
+    # das liegt unter Druckhöhe plus zwei Schichten Luft.
+    assert 10.0 + (1.0 - line / 1.0) < 10.4 + 2.0 * layer
+    assert handover.too_short(printed, 11.0, settings, meshes=[ridge]) is None, (
+        "nur die Schneide oben fehlt, und die ist schmaler als eine Bahn"
+    )
+    roof = _ridged_block(10.0)
+    short = handover.too_short(printed, 11.0, settings, meshes=[roof])
+    assert short is not None, "oben fehlt ein Dach von voller Breite — das ist ein Befund"
+    assert short.severity == "error"
+    assert handover.too_short(printed, 11.0, settings) is not None, (
+        "ohne Netze bleibt der Vergleich der Höhen, wie er war"
     )
 
 

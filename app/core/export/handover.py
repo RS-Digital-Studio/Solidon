@@ -5470,8 +5470,17 @@ def _creality_cli(setup: SlicerSetup) -> bool:
     return _is_creality_print(setup) and setup.executable not in _REFUSES_THE_CLI_FLAG
 
 
+#: So viele Ebenen fragt :func:`_printable_above` je Teil höchstens ab. Fehlt
+#: mehr Höhe, liegt Material von Bahnbreite fast immer schon an der untersten.
+TOP_PROBE_LAYERS: Final = 64
+
+
 def too_short(
-    payload: str | gcode.GcodeAnalysis, model_height: float, settings: PrintSettings
+    payload: str | gcode.GcodeAnalysis,
+    model_height: float,
+    settings: PrintSettings,
+    *,
+    meshes: Sequence[Mesh] = (),
 ) -> Finding | None:
     """Ist die Druckdatei niedriger als das Modell? (§28.2, Regel 14)
 
@@ -5487,6 +5496,15 @@ def too_short(
     höchsten Teils. Zwei Schichthöhen Luft, weil die oberste Schicht auf das
     Raster gerundet wird und die erste dicker sein darf; ein Raft macht die
     Datei höher, nie niedriger, und stört den Vergleich darum nicht.
+
+    **Was schmaler als eine Bahn ist, fehlt nicht.** Läuft ein Teil oben als
+    Schneide aus, legt ein Slicer mit festen Bahnbreiten dort keine Bahn — an
+    ``bottom-single.stl`` (Slicer-Matrix, RM-312) endeten ElegooSlicer, Bambu
+    Studio und SuperSlicer bei 78,0 statt 78,49 mm, und dieser Befund schickte
+    den Kunden mit *Auf das Bett legen* zu einem Teil, das auf dem Bett lag.
+    Mit den Netzen der Platte (``meshes``) zählt deshalb nur, was über der
+    gedruckten Höhe noch eine Bahnbreite trägt (:func:`_printable_above`);
+    ohne sie bleibt der Vergleich der Höhen.
     """
     analysis = payload if isinstance(payload, gcode.GcodeAnalysis) else gcode.analyze(payload)
     extent = analysis.extent
@@ -5494,7 +5512,12 @@ def too_short(
         return None
     printed_height = float(extent.maximum[2])
     allowance = 2.0 * settings.layers.layer_height
-    if printed_height >= model_height - allowance:
+    # Die Grenze zählt mit (Regel 6): An „Rack system for Filament.3mf“ stand
+    # 21,6 mm Druck gegen 22,000000000000014 mm Modell, und der Befund kam aus
+    # der letzten Stelle der Netzhöhe.
+    if printed_height >= model_height - allowance - EPS_GEOM:
+        return None
+    if meshes and not _printable_above(meshes, printed_height + allowance, settings):
         return None
     return Finding(
         code="gcode.shorter_than_model",
@@ -5511,6 +5534,36 @@ def too_short(
         },
         source="gcode",
     )
+
+
+def _printable_above(meshes: Sequence[Mesh], height: float, settings: PrintSettings) -> bool:
+    """Trägt ein Teil über ``height`` (gemessen von seinem Fuß) noch eine Bahnbreite?
+
+    Gefragt wird am Querschnitt, ob nach innen um eine halbe Bahnbreite
+    versetzt etwas übrig bleibt — dann passt dort eine ganze Bahn. Die Ebenen
+    stehen im Schichtabstand von ``height`` aufwärts, je Teil höchstens
+    :data:`TOP_PROBE_LAYERS`; die unterste mit Material von Bahnbreite beendet
+    die Frage. Jedes Teil steht im Slicer auf dem Bett, darum zählt die Höhe
+    von seinem eigenen Fuß.
+    """
+    from app.core.slice.analysis import cross_sections
+
+    inset = settings.layers.line_width / 2.0
+    step = settings.layers.layer_height
+    for mesh in meshes:
+        data = as_mesh_data(mesh)
+        bottom = float(data.bounds.minimum[2])
+        top = float(data.bounds.maximum[2])
+        start = bottom + height
+        if start >= top:
+            continue
+        count = min(TOP_PROBE_LAYERS, max(1, math.ceil((top - start) / step)))
+        spacing = (top - start) / count
+        heights = [start + spacing * index for index in range(count)]
+        for section in cross_sections(data, heights):
+            if section is not None and not section.buffer(-inset).is_empty:
+                return True
+    return False
 
 
 def fan_in_off_layers(
@@ -6439,7 +6492,11 @@ def slice_model(
         # Die dritte: Ist überhaupt das ganze Modell darin? ``None`` heißt
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
         # er wird nie geraten.
-        short = too_short(analysis, model_height, settings) if model_height is not None else None
+        short = (
+            too_short(analysis, model_height, settings, meshes=meshes)
+            if model_height is not None
+            else None
+        )
         fan = fan_in_off_layers(analysis, settings, setup.flavour)
         # Die vierte: Sind alle übergebenen Spulen darin? Die drei darüber
         # sehen eine Datei, der ein ganzes Filament fehlt, nicht an — sie hat
