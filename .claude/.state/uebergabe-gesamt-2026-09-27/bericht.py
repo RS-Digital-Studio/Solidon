@@ -36,7 +36,12 @@ def _advice_flag(entry: dict[str, Any]) -> str | None:
 
 
 def state_of(entry: dict[str, Any]) -> tuple[str, list[str]]:
-    if entry.get("skip"):
+    skip = str(entry.get("skip") or "")
+    if skip.startswith("nicht geprüft"):
+        # Kein Körper nach dem Laden (Rückfrage, Ladefehler) ist kein geprüftes
+        # Modell (RM-312, ``image_00001_.glb``) und keine fehlende Profilzuordnung.
+        return "nicht geprüft", [skip]
+    if skip:
         return "kein Profil", []
     advice_flag = _advice_flag(entry)
     if entry.get("error"):
@@ -298,8 +303,8 @@ def main() -> int:
     lines += [
         "## Je Slicer und Drucker",
         "",
-        "| Slicer | Drucker | ok | Befund | passt nicht | nur Fenster | kein Druck | kein Profil |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Slicer | Drucker | ok | Befund | passt nicht | nur Fenster | kein Druck | kein Profil | nicht geprüft |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for (slicer, printer), counts in sorted(
         grid.items(),
@@ -309,7 +314,7 @@ def main() -> int:
         ),
     ):
         lines.append(
-            f"| {slicer} | {printer} | {counts['ok']} | {counts['Befund']} | {counts['passt nicht']} | {counts['nur Fenster']} | {counts['kein Druck']} | {counts['kein Profil']} |"
+            f"| {slicer} | {printer} | {counts['ok']} | {counts['Befund']} | {counts['passt nicht']} | {counts['nur Fenster']} | {counts['kein Druck']} | {counts['kein Profil']} | {counts['nicht geprüft']} |"
         )
     lines.append("")
 

@@ -130,6 +130,23 @@ FILAMENT_GROUPS = ("temperature", "cooling", "retraction", "filament")
 LOADED: dict[str, object] = {}
 
 
+def _recording_ask(question: object, choices: Any) -> object:
+    """Eine Rückfrage beim Laden wird festgehalten, nicht beantwortet (RM-312).
+
+    ``image_00001_.glb`` fragt nach der Einheit (Regel 21: unplausible Meter).
+    Am 02.10. lief das in ``AmbiguityError``, null Körper und sieben leere
+    Variantenlisten, und die Ergebnisdatei galt als vollständig. Die Matrix
+    rät keine Kundenantwort; das Modell zählt als „nicht geprüft“ mit Frage
+    und Wahlmöglichkeiten.
+    """
+    from app.core.errors import AmbiguityError
+
+    LOADED.setdefault("questions", []).append(
+        {"question": str(question)[:400], "choices": [str(choice) for choice in choices]}
+    )
+    raise AmbiguityError(question, candidates=tuple(choices))
+
+
 def load(model: Path) -> tuple[list[Any], list[str]]:
     """Die Körper, wie sie nach ``solidon3d import`` in der Szene stehen, dazu die Befunde."""
     project = new_project("centauri-carbon-2", MATERIAL)
@@ -150,7 +167,7 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
     history.apply(plan.title, [plan.draft])
     scene_profile = profiles.scene_profile("centauri-carbon-2", MATERIAL)
     sources = ProjectSources(project, base_dir=model.parent)
-    result = evaluate(project.document, scene_profile, sources=sources)
+    result = evaluate(project.document, scene_profile, sources=sources, ask=_recording_ask)
     objects = [
         entry for entry in result.scene.objects.values() if as_mesh_data(entry.mesh).triangle_count
     ]
@@ -177,7 +194,18 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
                     )
                 ],
             )
-            result = evaluate(project.document, scene_profile, sources=sources)
+            result = evaluate(project.document, scene_profile, sources=sources, ask=_recording_ask)
+            # Scheitert das Ausrichten, hält die Kette an, und die Szene ist der
+            # letzte ganze Stand davor — so sieht sie auch der Kunde im
+            # Druckdialog. Die Matrix rechnet damit weiter, sagt es aber an
+            # jeder Zeile (``carpet-corner-clip.step`` am 02.10., RM-407).
+            failed = sorted(
+                f"{f.code}: {str(f.message)[:200]}"
+                for f in result.scene.report.findings
+                if f.severity == "error" and f.code.startswith("op.orient_for_print")
+            )
+            if failed:
+                LOADED["orient_failed"] = failed
             objects = [
                 entry
                 for entry in result.scene.objects.values()
@@ -402,8 +430,16 @@ def same(left: str, right: str) -> bool:
             index += 1
         return "".join(out).strip()
 
+    # Ein Profilwert, der selbst Anführungszeichen trägt (Creality:
+    # ``filament_notes = "\"\""``), steht im G-Code noch einmal gequotet;
+    # einmal entpackt gleicht er dem Wert (RM-312: 115 Creality-Zeilen).
+    if plain(right) == left.strip() or plain(left) == right.strip():
+        return True
     left, right = plain(left), plain(right)
     if left == right or left.replace("x", ",") == right.replace("x", ","):
+        return True
+    # Creality schreibt Listen mit Leerzeichen nach dem Komma („96x96, 300x300“).
+    if left.replace(", ", ",") == right.replace(", ", ","):
         return True
     try:
         return abs(float(left.rstrip("%")) - float(right.rstrip("%"))) < 1e-6
@@ -417,11 +453,44 @@ BAMBU_CONSOLE_LIMITS = frozenset(
 )
 STARTCODE_KEYS = frozenset({"machine_start_gcode", "start_gcode"})
 
+#: Was OrcaSlicer 2.4.2 einsetzt, wo ein Herstellerprofil einen Prozentwert in
+#: einen Schlüssel ohne Prozentangabe schreibt (Anycubic Kobra 2: „50%“, „100%“,
+#: „60%“). Gemessen am Konfigurationsblock der Matrix (RM-312), dieselben
+#: Rückfälle führt Solidons Grundlage (``manufacturer.PROGRAM_DEFAULTS``).
+ORCA_PERCENT_FALLBACK = {
+    "initial_layer_speed": "30",
+    "support_interface_speed": "80",
+    "support_object_xy_distance": "0.35",
+}
+FIRST_QUOTED = re.compile(r'^"((?:[^"\\]|\\.)*)"')
+
+
+def slicer_keys_program(slicer: str) -> str:
+    """Die Programmmarke des Matrix-Slicers (``orcaslicer``, ``bambustudio`` …)."""
+    from app.core import discover
+
+    return discover.program_mark(Path(SLICERS[slicer]).name)
+
+
+def first_entry(found: str) -> str:
+    """Der erste Eintrag einer Liste im G-Code — gequotete Einträge als Ganzes.
+
+    Ein Filament-Startcode beginnt selbst mit „;“; am Semikolon geschnitten
+    blieb nur „"“ übrig (RM-312: 77 Zeilen „filament_start_gcode weicht ab“).
+    """
+    quoted = FIRST_QUOTED.match(found.strip())
+    if quoted:
+        return quoted.group(0)
+    return found.split(",")[0].split(";")[0]
+
 
 def against_chain(
     block: dict[str, str],
     wanted: dict[str, tuple[str, str]],
     handed: dict[str, str] | None = None,
+    *,
+    program: str = "",
+    filament: str = "",
 ) -> dict[str, Any]:
     """Jeder Schlüssel der Herstellerkette gegen einen Konfigurationsblock.
 
@@ -447,8 +516,16 @@ def against_chain(
     missing_keys: list[str] = []
     compared_keys: list[str] = []
     single = len(str(block.get("filament_settings_id", "")).split(";")) <= 1
+    # Trägt die Modelldatei ihr eigenes Filament (``dice_w6_16mm_v00.3mf``:
+    # „Sunlu PETG @MMU“), druckt Solidon dessen Werte, nicht das PLA der Kette
+    # (RM-312: 57 Zeilen mit allen Filamentschlüsseln). Verglichen werden dann
+    # nur Maschine und Prozess.
+    printed_filament = first_entry(str(block.get("filament_settings_id", ""))).strip('"')
+    foreign_filament = bool(filament) and filament not in printed_filament
     for key, (kind, value) in sorted(wanted.items()):
         if key in gcode_lesen.TECHNICAL or key in slicer_profiles.DESCRIBING_KEYS:
+            continue
+        if kind == "filament" and foreign_filament:
             continue
         # Mit einem Filament setzt die Konsole den Prime Tower selbst auf 0 —
         # auch im Lauf mit dem Herstellerprofil allein (Abnahme Stufe B).
@@ -474,7 +551,15 @@ def against_chain(
                 else:
                     differences[key] = [kind, value[:120], str(found)[:120]]
             continue
-        first = str(found).split(",")[0].split(";")[0]
+        first = first_entry(str(found))
+        if (
+            program == "orcaslicer"
+            and value.endswith("%")
+            and key in ORCA_PERCENT_FALLBACK
+            and same(first, ORCA_PERCENT_FALLBACK[key])
+        ):
+            normalised[key] = [kind, value, first]
+            continue
         # PrusaSlicer liest alte Ja/Nein-Werte als Aufzählung: Sovols Bündel
         # schreibt ``ensure_vertical_shell_thickness = 1``, gedruckt wird
         # ``enabled`` — dieselbe Einstellung (27.09.2026).
@@ -711,6 +796,10 @@ def plate_run(
             suggestions=[
                 str(getattr(s, "label", s))[:60] for s in getattr(problem, "suggestions", ())
             ],
+            # Die Antwort des Slicers gehört zur Einordnung (RM-312): Am 02.10.
+            # stand nur „keine Druckdatei“ da, und die Ursache ließ sich erst
+            # im Nachlauf finden (zu lange Pfade, „No such file“).
+            slicer_output=str((getattr(problem, "values", None) or {}).get("output", ""))[-1500:],
         )
     except Exception as problem:  # noqa: BLE001 — eine Messung berichtet alles
         row.update(
@@ -883,6 +972,78 @@ def minutes_from(header: dict[str, str]) -> float | None:
 # --- Bewertung ------------------------------------------------------------------------------------
 
 
+def rim_fragments(row: dict[str, Any]) -> int:
+    """Offene Randstücke der ersten Schicht unter 10 mm (Brim und Skirt).
+
+    Ein Zug ist eine Folge von Förderbewegungen derselben Randart ohne
+    Leerfahrt; offen heißt Anfang und Ende mehr als 1 mm auseinander.
+    """
+    path = row.get("gcode")
+    if not path or not Path(path).exists():
+        return 0
+    import math
+
+    rim = re.compile(r"skirt|brim", re.IGNORECASE)
+    x = y = last_e = 0.0
+    absolute = True
+    kind = "?"
+    layer = -1
+    current: dict[str, Any] | None = None
+    runs: list[dict[str, Any]] = []
+    with Path(path).open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if stripped.startswith(";"):
+                if gcode_lesen.LAYER_MARK.match(stripped):
+                    layer += 1
+                    if layer > 1:
+                        break
+                typed = gcode_lesen.TYPE_MARK.match(stripped)
+                if typed:
+                    kind = typed.group("type")
+                    current = None
+                continue
+            code = stripped.split(";", 1)[0].strip().upper()
+            if code.startswith("M82"):
+                absolute = True
+            elif code.startswith("M83"):
+                absolute = False
+            match = gcode_lesen.COMMAND.match(code)
+            if match is None:
+                continue
+            words = {
+                m.group("name").upper(): float(m.group("value"))
+                for m in gcode_lesen.WORD.finditer(code[match.end() :])
+            }
+            number = float(match.group("number"))
+            if number == 92.0:
+                last_e = words.get("E", last_e)
+                continue
+            if number not in (0.0, 1.0, 2.0, 3.0):
+                continue
+            nx, ny = words.get("X", x), words.get("Y", y)
+            pushed = 0.0
+            if "E" in words:
+                pushed = words["E"] - last_e if absolute else words["E"]
+                if absolute:
+                    last_e = words["E"]
+            moved = math.hypot(nx - x, ny - y)
+            if layer >= 0 and rim.search(kind) and moved > 0:
+                if pushed > 0:
+                    if current is None:
+                        current = {"start": (x, y), "end": (nx, ny), "length": 0.0}
+                        runs.append(current)
+                    current["length"] += moved
+                    current["end"] = (nx, ny)
+                else:
+                    current = None
+            x, y = nx, ny
+    return sum(
+        1 for run in runs if math.dist(run["start"], run["end"]) > 1.0 and run["length"] < 10.0
+    )
+
+
+
 def flags_for(
     variant: str,
     row: dict[str, Any],
@@ -890,6 +1051,8 @@ def flags_for(
     narrow: dict[str, Any],
     *,
     support_accepted: bool = False,
+    auto: dict[str, Any] | None = None,
+    orient_failed: bool = False,
 ) -> list[str]:
     """Wo ein Lauf auffällt — gegen den Standardlauf (der ohne Vorschläge das Herstellerprofil ist).
 
@@ -951,24 +1114,43 @@ def flags_for(
             found.append(f"{vendor}keine Bettvermessung im Startcode")
         if row.get("start_purge_mm", 0) < 1:
             found.append(f"{vendor}keine Spüllinie")
+    # Fehlerbefunde der Übergabe sind immer bedeutsam (RM-312): 52 von 149
+    # Zeilen mit Fehlerbefund trugen am 02.10. keine Markierung, ihre
+    # Druckdateien wurden gelöscht und fehlten der Einordnung.
+    for code in row.get("slice_findings") or []:
+        if code.startswith("error:"):
+            found.append(f"Fehlerbefund {code.removeprefix('error:')}")
+    if orient_failed:
+        found.append("Ausrichtung gescheitert, ungedreht weitergerechnet")
     share = row.get("first_layer_support_share", 0)
     if variant == "stuetzen_auto" and (row.get("support_m") or 0.0) < SUPPORT_WORTH_METRES:
         # Solidon verlangt Stützen, der Slicer findet mit seiner eigenen Schwelle
         # nichts zu stützen — das Urteil des Herstellers widerspricht (Paket 3).
         found.append(f"Slicer stützt nicht ({row.get('support_m') or 0.0:.2f} m)")
     if base is not None and base.get("ok"):
-        if share > 0.15 and base.get("first_layer_support_share", 0) < 0.05:
-            found.append(f"Stütze in Schicht 1 ({share:.0%})")
-        own = (row.get("first_layers") or [{}])[0].get("runs", {})
-        ref = (base.get("first_layers") or [{}])[0].get("runs", {})
-        rim_own = sum(v for k, v in own.items() if gcode_lesen.kind_of(k) == "rim")
-        rim_ref = sum(v for k, v in ref.items() if gcode_lesen.kind_of(k) == "rim")
-        if rim_ref and rim_own > 3 * rim_ref:
-            found.append(f"Rand zerrissen ({rim_own} statt {rim_ref} Züge)")
+        # Stütze in Schicht 1 ist bedeutsam, wo der Slicer selbst nicht stützt
+        # (RM-312: 138 von 138 markierten Vorschlagsläufen stützte auch
+        # ``stuetzen_auto``; Stützsäulen stehen auf dem Bett).
+        slicer_supports = auto is not None and auto.get("ok") and (auto.get("support_m") or 0) > 0
+        if (
+            variant == "vorschlaege"
+            and share > 0.15
+            and base.get("first_layer_support_share", 0) < 0.05
+            and not slicer_supports
+        ):
+            found.append(f"Stütze in Schicht 1 ({share:.0%}) gegen das Urteil des Slicers")
+        # Ein Brim besteht aus geschlossenen Schleifen; zerrissen ist ein Rand
+        # erst mit kurzen offenen Stücken (RM-312: 91 von 110 Zeilen mit
+        # „mehr Züge“ trugen nur geschlossene Schleifen, keine ein Stück unter
+        # 10 mm außer zwei von 277).
+        torn = rim_fragments(row)
+        if torn:
+            found.append(f"Rand zerrissen ({torn} offene Stücke unter 10 mm)")
         minutes, before = row.get("print_minutes"), base.get("print_minutes")
-        if minutes and before and minutes > 1.5 * before:
-            found.append(f"Zeit ×{minutes / before:.1f}")
-    elif share > 0.15:
+        more_support = (row.get("support_m") or 0) > (base.get("support_m") or 0) + 0.5
+        if minutes and before and minutes > 1.5 * before and not more_support:
+            found.append(f"Zeit ×{minutes / before:.1f} ohne zusätzliche Stütze")
+    elif share > 0.15 and variant == "vorschlaege":
         found.append(f"Stütze in Schicht 1 ({share:.0%})")
     fast = max(
         (
@@ -978,8 +1160,15 @@ def flags_for(
         ),
         default=0.0,
     )
-    if narrow.get("narrow_share", {}).get("r1.5", 0) >= 0.05 and fast > 60:
-        found.append(f"schmale Stege mit {fast:.0f} mm/s in Schicht 1")
+    # Im Standardlauf ist das Tempo das des Herstellers; ob Solidons Rat es
+    # bremst, zeigt nur der Lauf mit Vorschlägen (RM-312: 57 von 66 markierten
+    # Kombinationen boten die langsame erste Schicht an).
+    if (
+        variant == "vorschlaege"
+        and narrow.get("narrow_share", {}).get("r1.5", 0) >= 0.05
+        and fast > 60
+    ):
+        found.append(f"schmale Stege mit {fast:.0f} mm/s in Schicht 1 trotz Vorschlägen")
     chain_check = row.get("chain") or row.get("chain_project")
     if variant == "standard" and chain_check and chain_check.get("differences"):
         found.append(
@@ -1157,7 +1346,26 @@ def main() -> int:
         load_findings=load_findings,
         load_seconds=round(time.perf_counter() - started, 1),
         oriented=LOADED.get("turned", {}),
+        orient_failed=LOADED.get("orient_failed", []),
+        questions=LOADED.get("questions", []),
     )
+    if not objects:
+        # Kein Körper ist kein geprüftes Modell (RM-312, ``image_00001_.glb``):
+        # jede Kombination trägt den Grund, der Bericht zählt „nicht geprüft“.
+        reason = (
+            "nicht geprüft: Rückfrage beim Laden"
+            if LOADED.get("questions")
+            else "nicht geprüft: kein Körper nach dem Laden"
+        )
+        result["not_tested"] = reason
+        result["combos"] = [
+            {"slicer": slicer, "printer": printer, "skip": reason, "complete": True}
+            for slicer, printer in combos(SPEC)
+        ]
+        result["seconds"] = round(time.perf_counter() - started, 1)
+        result["done"] = True
+        save()
+        return 0
     if "narrow" not in result:
         try:
             result["narrow"] = narrow_webs(objects)
@@ -1256,6 +1464,8 @@ def main() -> int:
                             project_block(written)
                             if written.suffix == ".3mf" and written.exists()
                             else None,
+                            program=slicer_keys_program(slicer),
+                            filament=str(entry.get("filament") or ""),
                         )
                     elif (
                         row.get("written")
@@ -1266,13 +1476,17 @@ def main() -> int:
                         # Kein G-Code (Creality Print rechnet über die Konsole keine 3MF):
                         # dann die Projektdatei, die das Fenster lädt.
                         row["chain_project"] = against_chain(
-                            project_block(Path(row["written"])), wanted
+                            project_block(Path(row["written"])),
+                            wanted,
+                            program=slicer_keys_program(slicer),
+                            filament=str(entry.get("filament") or ""),
                         )
                     runs.append(row)
                 entry["variants"][variant] = runs
             # Bewerten je Platte gegen den Standardlauf derselben Platte.
             flagged = []
             base_runs = {r["plate"]: r for r in entry["variants"]["standard"]}
+            auto_runs = {r["plate"]: r for r in entry["variants"].get("stuetzen_auto", [])}
             for variant, runs in entry["variants"].items():
                 for row in runs:
                     base = None if variant == "standard" else base_runs.get(row["plate"])
@@ -1282,6 +1496,8 @@ def main() -> int:
                         base,
                         result.get("narrow", {}),
                         support_accepted=taken is not None and taken.support.style != "none",
+                        auto=auto_runs.get(row["plate"]),
+                        orient_failed=bool(result.get("orient_failed")),
                     )
                     if significant(row["flags"]):
                         flagged.append((variant, row))
