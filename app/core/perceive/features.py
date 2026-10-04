@@ -2555,6 +2555,10 @@ def _fitted(
         #: Die Dreiecke, die als Stücke eines wandernden Umrisses eingepasst
         #: wurden (RM-243) — sie fallen nach der Zusammenlegung.
         outline = np.zeros(len(body.faces), dtype=bool)
+        #: Die Dreiecke der ganzen Flecken, die ein wandernder Umriss sind —
+        #: an ihnen fragt :func:`_between_corners_of`, ob ein Nachbarfleck
+        #: dazugehört (RM-254).
+        wandering = np.zeros(len(body.faces), dtype=bool)
         #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
         #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
         #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
@@ -2847,6 +2851,7 @@ def _fitted(
                     _wandering_outline(body, pieces, check_cancelled) if any(classified) else None
                 )
                 if standing is not None:
+                    wandering[np.asarray(patch, dtype=np.intp)] = True
                     for number, (piece, known) in enumerate(zip(pieces, classified, strict=True)):
                         if known and number not in standing:
                             outline[np.asarray(piece, dtype=np.intp)] = True
@@ -2912,6 +2917,15 @@ def _fitted(
         if check_cancelled is not None:
             check_cancelled()
         rings = _merged_tori(body, tori.entries, check_cancelled=check_cancelled)
+        if wandering.any():
+            # **Ein Bogen zwischen zwei Ecken eines wandernden Umrisses gehört
+            # zu ihm** (RM-254): ein eigener Fleck derselben Seitenwand, den
+            # Ecken vom Umriss trennen und der deshalb nie unter dessen Stücken
+            # stand — am Screen-Cover das Wandband R 13,73 einer Stufe im
+            # Buchstaben. Er bleibt nur, wenn er gezeichnet ist.
+            for fit, patch in found:
+                if _between_corners_of(body, fit, patch, wandering, check_cancelled):
+                    outline[np.asarray(patch, dtype=np.intp)] = True
         if outline.any():
             found = _off_the_outline(found, outline)
             cones = _off_the_outline(cones, outline)
@@ -10746,8 +10760,12 @@ def _wandering_outline(
     Achse wie in :func:`_same_cylinder`, und eines liegt auf dem Kreis des
     anderen (:func:`_lies_on_the_cylinder`). Beide Richtungen zu verlangen
     ist zu streng — am verrauschten Korbbogen verlören dann echte Bögen ihre
-    Bestätigung. Ein gezeichneter Bogen (:func:`_exactly_an_arc`) ist ohnehin
-    einer. Ein
+    Bestätigung. **Bestätigen kann nur ein Kreis, den sein eigenes Stück
+    festlegt** (:func:`_carries_its_radius`, RM-254): Auf dem Kreis eines
+    kurzen Stücks, das ihn nur ungefähr trifft, liegt jedes glatte Nachbarstück
+    — am Screen-Cover zwei Buchstabenstücke R 11,27 und R 10,46, am
+    Schmierwerkzeug Paare R 2,4, deren Vereinigung R 3,5 ergibt. Ein
+    gezeichneter Bogen (:func:`_exactly_an_arc`) ist ohnehin einer. Ein
     Umriss mit wanderndem Radius trägt dagegen auf jedem Stück einen eigenen
     Kreis. Gezählt werden nur diese unbestätigten Kreise von Stücken mit
     Gewicht (:data:`MIN_PATCH_FACES`).
@@ -10823,9 +10841,17 @@ def _wandering_outline(
             continue
         if check_cancelled is not None:
             check_cancelled()
-        if _lies_on_the_cylinder(
-            body, fits[one], pieces[other], check_cancelled=check_cancelled
-        ) or _lies_on_the_cylinder(body, fits[other], pieces[one], check_cancelled=check_cancelled):
+        if (
+            _carries_its_radius(body, fits[one], pieces[one])
+            and _lies_on_the_cylinder(
+                body, fits[one], pieces[other], check_cancelled=check_cancelled
+            )
+        ) or (
+            _carries_its_radius(body, fits[other], pieces[other])
+            and _lies_on_the_cylinder(
+                body, fits[other], pieces[one], check_cancelled=check_cancelled
+            )
+        ):
             confirmed.update((one, other))
     circles = [number for number in numbers if number not in confirmed]
     if len(circles) < 3:
@@ -10900,6 +10926,111 @@ def _wandering_outline(
     # Ein Kreis mit einem engeren Nachbarn und einem weiteren: zwei Wechsel in
     # dieselbe Richtung.
     return confirmed if smaller & larger else None
+
+
+def _carries_its_radius(body: trimesh.Trimesh, fit: CylinderFit, piece: Sequence[int]) -> bool:
+    """Ob ein Stück den Radius seines Kreises auf :data:`CYLINDER_TOLERANCE` festlegt (RM-254).
+
+    Ein Stück mit der Sehne ``L`` hat die Pfeilhöhe ``L²/8R``. Liegen seine
+    Ecken bis ``e`` neben dem Kreis (``fit_error``), passt derselbe Abstand
+    auch auf Kreise, deren Pfeilhöhe um ``e`` anders ist — der Radius ist also
+    nur auf ``8·R·e/L²`` relativ bestimmt. Ist das mehr, als
+    :func:`_same_cylinder` zwei Radien auseinanderliegen lässt, sagt „das
+    andere Stück liegt auf diesem Kreis" nichts: Es läge ebenso auf dem Kreis
+    eines Nachbarn mit anderem Radius.
+
+    Gemessen am 04.10.2026: Die Buchstabenstücke R 11,27 und R 10,46 am
+    Screen-Cover legen ihren Radius auf 11 und 12 Prozent fest, die Stücke
+    R 2,4 am Schmierwerkzeug auf 18 bis 23; die Stücke der 24 verrauschten
+    Korbbögen, die einen anderen bestätigen, auf höchstens 3,7, die Stücke,
+    die am Schmierwerkzeug die Bögen R 4,2 und R 6,75 bestätigen, auf
+    höchstens 0,4.
+    """
+    if fit.fit_error is None:
+        return False
+    span = min(angular_span(body, fit, list(piece)), 180.0)
+    chord = 2.0 * fit.radius * units.exact_sin_degrees(span / 2.0)
+    return 8.0 * fit.radius * fit.fit_error <= CYLINDER_TOLERANCE * chord * chord
+
+
+def _between_corners_of(
+    body: trimesh.Trimesh,
+    fit: CylinderFit,
+    patch: Sequence[int],
+    wandering: np.ndarray,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Ob ein Rundstück zwischen zwei Ecken eines wandernden Umrisses liegt (RM-254).
+
+    ``wandering`` markiert die Dreiecke der Flecken, die
+    :func:`_wandering_outline` als gerundete Seite gelesen hat. Ein eigener
+    Fleck, der an **beiden** Enden seines Bogens an einen solchen grenzt, ist
+    dieselbe Seitenwand, nur durch Ecken abgesetzt — am Screen-Cover das
+    0,4 mm hohe Wandband R 13,73 einer Stufe im Buchstaben, dessen Radius je
+    Dreieck selbst von 8 bis 14 mm wandert. Er gehört zum Umriss, außer er ist
+    gezeichnet (:func:`_exactly_an_arc`): Ein CAD-Umriss setzt Bögen auch
+    zwischen Ecken.
+
+    Beide Enden heißt: Ecken (Nähte ab :data:`CURVATURE_LIMIT`) längs der
+    Achse (:data:`PARALLEL_AXES`, wie die axialen Seiten in
+    :func:`_radial_boundaries_are_planar`) auf beiden Seiten der Bogenmitte,
+    gemessen längs der Tangente dort — ohne Winkelfunktion, für jeden Bogen
+    unter einem vollen Umlauf (:data:`FULL_TURN_SPAN`; ein ganzer Zylinder hat
+    keine Enden). Eine Naht quer zur Achse ist die Stirnkante des Streifens:
+    Am Gartenschlauchhalter stoßen zwei von vier Bändern R 6,3 eines
+    Kreismusters mit ihrer Stirn an einen wandernden Fleck, und deren
+    Berührungen liegen über die ganze Breite verteilt, also auch auf beiden
+    Seiten der Mitte.
+    """
+    faces = np.asarray(patch, dtype=np.intp)
+    if bool(wandering[faces].all()):
+        return False
+    if angular_span(body, fit, list(patch)) >= FULL_TURN_SPAN:
+        return False
+    neighbours, rows = _neighbour_index(body)
+    beside = neighbours[faces].ravel()
+    seams = rows[faces].ravel()
+    present = beside >= 0
+    beside, seams = beside[present], seams[present]
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[faces] = True
+    axis = np.asarray(fit.axis, dtype=float)
+    centre = np.asarray(fit.centre, dtype=float)
+    # Nur über eine Ecke an einem Ende des Bogens: Eine Naht unter
+    # CURVATURE_LIMIT ist ein glatter Übergang, und eine Naht quer zur Achse
+    # ist eine Stirnkante des Streifens, kein Ende seines Bogens.
+    sharp = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[seams]) >= (
+        CURVATURE_LIMIT
+    )
+    ends = np.asarray(body.face_adjacency_edges)[seams]
+    vertices = np.asarray(body.vertices, dtype=float)
+    vectors = vertices[ends[:, 1]] - vertices[ends[:, 0]]
+    along = np.abs(vectors[:, 0] * axis[0] + vectors[:, 1] * axis[1] + vectors[:, 2] * axis[2])
+    axial = along >= PARALLEL_AXES * np.sqrt((vectors * vectors).sum(axis=1))
+    chosen = wandering[beside] & ~inside[beside] & sharp & axial
+    if not bool(chosen.any()):
+        return False
+
+    def across(points: np.ndarray) -> np.ndarray:
+        """Die Punkte quer zur Achse, vom Kreismittelpunkt aus."""
+        relative = points - centre
+        along = relative[:, 0] * axis[0] + relative[:, 1] * axis[1] + relative[:, 2] * axis[2]
+        result: np.ndarray = relative - along[:, None] * axis
+        return result
+
+    corners = across(vertices[np.unique(np.asarray(body.faces)[faces])])
+    lengths = np.sqrt((corners * corners).sum(axis=1))
+    middle = (corners[lengths > EPS_GEOM] / lengths[lengths > EPS_GEOM][:, None]).sum(axis=0)
+    size = math.sqrt(float((middle * middle).sum()))
+    if size <= EPS_GEOM:
+        return False
+    middle = middle / size
+    tangent = _cross3(axis, middle)
+    contacts = across((vertices[ends[chosen, 0]] + vertices[ends[chosen, 1]]) / 2.0)
+    sides = contacts[:, 0] * tangent[0] + contacts[:, 1] * tangent[1] + contacts[:, 2] * tangent[2]
+    if not (bool((sides > EPS_GEOM).any()) and bool((sides < -EPS_GEOM).any())):
+        return False
+    return not _exactly_an_arc(body, list(patch), check_cancelled)
 
 
 def _off_the_outline[Fit](

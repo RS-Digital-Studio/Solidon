@@ -4704,9 +4704,9 @@ def test_an_elliptic_extrusion_stays_one_curved_face() -> None:
     assert [f.kind for f in found.values() if f.kind != "face"] == ["curved_face"]
 
 
-def _restless_ellipse(amount: float) -> MeshData:
+def _restless_ellipse(amount: float, seed: int = 8) -> MeshData:
     """Die halbe Ellipse von oben, jede Ecke um bis zu ``amount`` radial verrückt."""
-    rng = np.random.default_rng(8)
+    rng = np.random.default_rng(seed)
     bow = []
     for turn in range(-90, 91):
         x = 20.0 + 10.0 * math.cos(math.radians(turn))
@@ -4840,6 +4840,146 @@ def test_a_single_change_of_radius_leaves_a_construction_alone(
     )
     assert len(unruled) >= 3, "ohne Rundungen prüft der Test nichts"
     assert ruled == unruled
+
+
+def test_a_short_piece_that_does_not_fix_its_radius_confirms_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bestätigen kann nur ein Kreis, den sein eigenes Stück festlegt (RM-254).
+
+    Die Ellipse von oben, die Ecken um ±4 µm verrauscht — so weit liegen die
+    Buchstabenstücke am Screen-Cover neben ihren Kreisen. Zwei kurze Stücke
+    am Rand der Ellipse passen je auf einen Kreis (R 12,06 und R 12,51), legen
+    ihren Radius aber nur auf 12 und 29 Prozent fest; eines liegt trotzdem auf
+    dem Kreis des anderen, und bis zum 04.10.2026 blieb ihre Vereinigung als
+    Verrundung R 12,08 im wandernden Umriss stehen.
+    """
+    forget_cache()
+    found = detect(_restless_ellipse(0.004, seed=0))
+    assert not [f for f in found.values() if f.kind == "fillet"]
+    assert "curved_face" in {f.kind for f in found.values()}
+
+    # Ohne die Frage nach dem eigenen Stück bestätigen sie einander wieder.
+    monkeypatch.setattr(features_module, "_carries_its_radius", lambda *_args: True)
+    forget_cache()
+    rows = [f for f in detect(_restless_ellipse(0.004, seed=0)).values() if f.kind == "fillet"]
+    assert rows, "ohne die Regel prüft der Test nichts"
+
+
+@pytest.mark.parametrize("inside", [True, False])
+def test_a_piece_fixes_its_radius_through_its_sagitta(inside: bool) -> None:
+    """Die Grenze von ``_carries_its_radius`` ist die Pfeilhöhe, nachgerechnet.
+
+    Ein Stück eines gezeichneten Bogens R 10 über 12 Grad (Sehne
+    ``L = 2·R·sin 6°``): Liegt es bis ``e`` neben seinem Kreis, ist der Radius
+    auf ``8·R·e/L²`` bestimmt. Bei ``CYLINDER_TOLERANCE`` liegt die Grenze —
+    knapp darunter trägt das Stück seinen Radius, knapp darüber nicht.
+    """
+    from app.core.perceive.features import CYLINDER_TOLERANCE, _carries_its_radius
+
+    outline = [(0.0, -10.0), *_arc((0.0, 0.0), 10.0, -6.0, 6.0), (0.0, 10.0)]
+    body = _extruded(outline).raw
+    normals = np.asarray(body.face_normals)
+    centres = np.asarray(body.triangles_center)
+    piece = [int(i) for i in np.flatnonzero((np.abs(normals[:, 2]) < 0.5) & (centres[:, 0] > 9.0))]
+    fit = fit_cylinder(body, piece)
+    assert fit is not None
+    assert fit.radius == pytest.approx(10.0, rel=1e-6)
+    chord = 2.0 * 10.0 * math.sin(math.radians(6.0))
+    limit = CYLINDER_TOLERANCE * chord * chord / (8.0 * fit.radius)
+    error = limit * (0.99 if inside else 1.01)
+    assert _carries_its_radius(body, dataclasses.replace(fit, fit_error=error), piece) is inside
+
+
+def _ellipse_with_a_band(band_noise: float) -> MeshData:
+    """Die verrauschte Ellipse von oben, in der Mitte ein Band zwischen zwei Ecken.
+
+    Statt der Ellipse zwischen −10 und +10 Grad läuft ein Bogen R 1,63 in
+    sechs Streifen, der an beiden Enden mit einer Ecke an sie stößt — wie das
+    0,4 mm hohe Wandband R 13,73 am Screen-Cover zwischen zwei Ecken eines
+    Buchstabens. ``band_noise`` verrückt die Ecken des Bands radial.
+    """
+    rng = np.random.default_rng(8)
+
+    def on_ellipse(turn: int) -> tuple[float, float]:
+        x = 20.0 + 10.0 * math.cos(math.radians(turn))
+        y = 8.0 + 8.0 * math.sin(math.radians(turn))
+        push = 0.001 * (2.0 * rng.random() - 1.0) / math.hypot(x - 20.0, y - 8.0)
+        return (x + (x - 20.0) * push, y + (y - 8.0) * push)
+
+    first = [on_ellipse(turn) for turn in range(-90, -9)]
+    last = [on_ellipse(turn) for turn in range(10, 91)]
+    (x1, y1), (x2, y2) = first[-1], last[0]
+    radius = math.hypot(x1 - 29.0, y1 - 8.0)
+    a1, a2 = math.atan2(y1 - 8.0, x1 - 29.0), math.atan2(y2 - 8.0, x2 - 29.0)
+    band = []
+    for step in range(1, 6):
+        angle = a1 + (a2 - a1) * step / 6
+        push = band_noise * (2.0 * rng.random() - 1.0)
+        band.append(
+            (29.0 + (radius + push) * math.cos(angle), 8.0 + (radius + push) * math.sin(angle))
+        )
+    return _extruded([(0.0, 0.0), *first, *band, *last, (0.0, 16.0)])
+
+
+def test_a_band_between_two_corners_of_a_restless_outline_belongs_to_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Bogen zwischen zwei Ecken eines wandernden Umrisses gehört zu ihm (RM-254).
+
+    Das Band ist ein eigener Fleck — Ecken trennen es von den beiden
+    Ellipsenhälften, die als gerundete Seiten gelten —, und als Ganzes passt
+    es auf einen Kreis. Um ±3 µm verrauscht ist es kein gezeichneter Bogen
+    und keine Verrundung; ohne die Regel stünde es als R 1,63 da. Gezeichnet
+    (exakt auf dem Kreis) bleibt es eine: Ein CAD-Umriss setzt Bögen auch
+    zwischen Ecken.
+    """
+    forget_cache()
+    found = detect(_ellipse_with_a_band(0.003))
+    assert not [f for f in found.values() if f.kind == "fillet"]
+
+    forget_cache()
+    drawn = [f for f in detect(_ellipse_with_a_band(0.0)).values() if f.kind == "fillet"]
+    assert [round(float(f.params["radius"]), 2) for f in drawn] == [1.63]
+
+    monkeypatch.setattr(features_module, "_between_corners_of", lambda *_args: False)
+    forget_cache()
+    rows = [f for f in detect(_ellipse_with_a_band(0.003)).values() if f.kind == "fillet"]
+    assert [round(float(f.params["radius"]), 2) for f in rows] == [1.63]
+
+
+def test_a_band_touching_a_restless_outline_at_one_end_stays() -> None:
+    """Nur zwischen **zwei** Ecken gehört das Band zum Umriss (RM-254).
+
+    Dasselbe verrauschte Band, gefragt mit nur einer wandernden Hälfte daneben:
+    Ein Bogen, der an einem Ende an einen Umriss stößt und am anderen an etwas
+    anderes, ist nicht dessen Seitenwand.
+    """
+    from app.core.perceive.features import _between_corners_of
+
+    mesh = _ellipse_with_a_band(0.003)
+    body = mesh.raw
+    normals = np.asarray(body.face_normals)
+    centres = np.asarray(body.triangles_center)
+    side = (np.abs(normals[:, 2]) < 0.5) & (centres[:, 0] > 1e-6)
+    band = [
+        int(i)
+        for i in np.flatnonzero(
+            side & (centres[:, 0] > 29.0) & (np.abs(centres[:, 1] - 8.0) < 1.38)
+        )
+    ]
+    lower = side & (centres[:, 1] < 8.0) & ~np.isin(np.arange(len(centres)), band)
+    upper = side & (centres[:, 1] > 8.0) & ~np.isin(np.arange(len(centres)), band)
+    fit = fit_cylinder(body, band)
+    assert fit is not None and fit.good
+    assert _between_corners_of(body, fit, band, lower | upper)
+    assert not _between_corners_of(body, fit, band, lower)
+    assert not _between_corners_of(body, fit, band, upper)
+    # Eine Stirnkante ist kein Ende des Bogens: Stößt das Band nur mit Boden
+    # und Deckel an einen wandernden Fleck, liegen die Berührungen über die
+    # ganze Breite verteilt — wie am Gartenschlauchhalter.
+    caps = np.abs(normals[:, 2]) >= 0.5
+    assert not _between_corners_of(body, fit, band, caps)
 
 
 def test_the_circle_pairs_of_an_outline_are_those_of_the_double_loop() -> None:

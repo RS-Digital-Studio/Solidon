@@ -389,16 +389,17 @@ gedruckten Gewinden ohne Wendelsuche und am Korpus je Stapel.
 
 - **Ein bestätigter Kreis ist ein Bogen** und hält die Folge an: ein zweites
   Stück wie in `_same_cylinder`, eines auf dem Kreis des anderen
-  (`_lies_on_the_cylinder`), oder ein gezeichneter Bogen. Eine Richtung
-  genügt (Preis: RM-254).
+  (`_lies_on_the_cylinder`), dessen Stück ihn festlegt
+  (`_carries_its_radius`), oder ein gezeichneter Bogen. Eine Richtung genügt.
+- **Ein Bogen zwischen zwei axialen Ecken des Umrisses gehört zu ihm**
+  (`_between_corners_of`), außer gezeichnet.
 - **Zwei Wechsel in dieselbe Richtung sind ein Verlauf**: unbestätigte,
   tangential folgende Kreise (über Splitter und formlose Stücke hinweg) mit
   Schritten unter `CURVATURE_JUMP`, ein engerer und ein weiterer Nachbar. Eine
   Untergrenze für den Schritt trennt nicht.
 - Im wandernden Fleck bleiben bestätigte und gezeichnete Kreise; zurückgezogen
   wird nach der Zusammenlegung nur, was ganz auf vorgemerkten Dreiecken liegt
-  (`_off_the_outline`). `test_features.py` hält jede Bedingung einzeln — außer
-  `CURVATURE_JUMP` und dem Durchlaufen formloser Stücke, die kein Test hält.
+  (`_off_the_outline`).
 
 ## Eine Verengung ist keine Senkung
 
