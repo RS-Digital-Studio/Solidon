@@ -2658,10 +2658,18 @@ def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) ->
         first = dialog.advice_view.topLevelItem(0)
         assert first is not None and first.text(0)
         return
+    assert not dialog.apply_button.isVisibleTo(dialog), "kein Knopf ohne Arbeit"
+    # Zugeklappt (RM-514) steht der Satz in der Zeile der Klappe …
+    summary = dialog._advice_summary
+    assert summary is not None and summary.isVisibleTo(dialog)
+    assert dialog.advice_state.text(), "der Satz steht da"
+    assert summary.text() == dialog.advice_state.text()
+    # … und aufgeklappt an der Stelle der Tabelle.
+    assert dialog.advice_toggle is not None
+    dialog.advice_toggle.setChecked(True)
     assert not dialog.advice_view.isVisibleTo(dialog), "keine leere Tabelle"
     assert not dialog.apply_button.isVisibleTo(dialog), "kein Knopf ohne Arbeit"
     assert dialog.advice_state.isVisibleTo(dialog)
-    assert dialog.advice_state.text(), "der Satz steht an ihrer Stelle"
 
 
 # --- Aussehen und gestufte Tiefe ----------------------------------------------------
@@ -6654,6 +6662,18 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = tmp_path / "orca-slicer.exe"
     dialog.slicer_box.setVisible(True)
+    # **Mit Zeilen, die sich einblenden.** Seit RM-514 steht im Kasten nur,
+    # was eine Wahl ist; ohne gefundene Profile bliebe er leer, und es gäbe
+    # nichts, wofür der Dialog wachsen müsste. Zwei Zeilen wie nach einer
+    # nachgereichten Profilsuche.
+    for choice, (title, path) in (
+        (dialog.machine_choice, ("Orca Drucker 0.4 nozzle", "m.json")),
+        (dialog.process_choice, ("0.20mm Standard", "p.json")),
+    ):
+        choice.blockSignals(True)
+        choice.addItem(title, path)
+        choice.blockSignals(False)
+    dialog._show_profile_rows()
     dialog.resize(dialog.sizeHint())
     # **Gezeigt, sonst misst die zweite Zusicherung nichts.** Vor dem ersten
     # Anzeigen hat kein Widget eine gelegte Höhe: Das Feld meldete 0, und
@@ -7346,16 +7366,29 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
     """
     dialog = PrintSettingsDialog(session, UiSettings())
     dialog.tabs_toggle.setChecked(True)
+    # Der Profilkasten mit Zeilen, wie nach einer Profilsuche, und offen.
+    for choice, (title, path) in (
+        (dialog.machine_choice, ("Orca Drucker 0.4 nozzle", "m.json")),
+        (dialog.process_choice, ("0.20mm Standard", "p.json")),
+    ):
+        choice.blockSignals(True)
+        choice.addItem(title, path)
+        choice.blockSignals(False)
+    dialog.slicer_box.setVisible(True)
+    dialog._show_profile_rows()
+    dialog._open_slicer_section()
     dialog.show()
     qt_app.processEvents()
 
     breiten: set[int] = set()
     reiterbreiten: set[int] = set()
+    kastenbreiten: set[int] = set()
     kanten_je_block: list[set[int]] = []
     for form in dialog.findChildren(QFormLayout):
         block: set[int] = set()
         besitzer = form.parentWidget()
         im_reiter = besitzer is not None and dialog.tabs.isAncestorOf(besitzer)
+        im_kasten = besitzer is not None and dialog.slicer_box.isAncestorOf(besitzer)
         for row in range(form.rowCount()):
             marke = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
             feld = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
@@ -7364,7 +7397,9 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
             label, widget = marke.widget(), feld.widget()
             if widget is None or label is None or not widget.isVisibleTo(dialog):
                 continue
-            (reiterbreiten if im_reiter else breiten).add(label.width())
+            (reiterbreiten if im_reiter else kastenbreiten if im_kasten else breiten).add(
+                label.width()
+            )
             block.add(widget.mapTo(dialog, widget.rect().topLeft()).x())
         if block:
             kanten_je_block.append(block)
@@ -7377,12 +7412,14 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
     # zweite Spaltenbreite: Sie entsteht, sobald ein Formular seine Beschriftung
     # allein ausrechnet, und genau daran begannen die Felder an zehn Stellen.
     #
-    # **Die Reiter sind dabei ein Kasten für sich** (``align_forms(apart=…)``):
-    # Ihre Seiten teilen eine Spalte, der übrige Dialog eine zweite. Die
-    # längste Beschriftung eines verborgenen Reiters zog sonst die Vorderseite
-    # auf 170 Punkte, wo 110 reichen.
+    # **Reiter und Profilkasten sind dabei je ein Kasten für sich**
+    # (``align_forms(apart=…)``): Ihre Zeilen teilen eine Spalte, der übrige
+    # Dialog eine eigene. Die längste Beschriftung eines verborgenen Reiters
+    # oder des zugeklappten Profilkastens zog sonst die Vorderseite auf 170
+    # Punkte, wo 120 reichen.
     assert len(breiten) == 1, f"{len(breiten)} Beschriftungsbreiten: {sorted(breiten)}"
     assert len(reiterbreiten) == 1, f"{len(reiterbreiten)} in den Reitern: {sorted(reiterbreiten)}"
+    assert len(kastenbreiten) == 1, f"{len(kastenbreiten)} im Profilkasten: {sorted(kastenbreiten)}"
     for block in kanten_je_block:
         assert len(block) == 1, f"in einem Block springen die Kanten: {sorted(block)}"
 
@@ -8279,8 +8316,13 @@ def test_without_a_manufacturer_profile_one_sentence_says_it_and_no_field_stands
     fehlte das Druckerprofil.
     """
     dialog._slicer_path = Path("C:/Programme/Prusa3D/PrusaSlicer/prusa-slicer.exe")
-    fremd = _profile("Fremder Drucker 0.4 nozzle", "machine", printer_model="Fremder", nozzle=0.4)
-    dialog._profiles_found([fremd])
+    # Zwei fremde Drucker: Steht genau einer zur Wahl, ist er die Wahl
+    # (``_profiles_found``), und dann gäbe es den Fall ohne Profil nicht.
+    fremde = [
+        _profile(f"Fremder Drucker {name} 0.4 nozzle", "machine", printer_model=name, nozzle=0.4)
+        for name in ("A", "B")
+    ]
+    dialog._profiles_found(fremde)
 
     drucker = dialog.printer_choice.currentText()
     satz = dialog.foundation_note.text()

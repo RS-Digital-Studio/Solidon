@@ -2648,8 +2648,12 @@ class PrintSettingsDialog(QDialog):
         self.process_choice.currentIndexChanged.connect(self._advice_scene_changed)
         # Zuletzt, wenn jede Zeile steht: eine Beschriftungsspalte für den
         # ganzen Dialog. Zehn Formulare rechneten sie bis hierhin einzeln, und
-        # die Felder begannen an zehn Stellen (B8/B11).
-        align_forms(self, apart=(self.tabs,))
+        # die Felder begannen an zehn Stellen (B8/B11). Reiter und Profilkasten
+        # sind Kästen mit eigener Klappe und eigener Kante: „Filamentprofil“
+        # aus dem zugeklappten Kasten zog die Vorderseite sonst auf 168 Punkte,
+        # wo 120 reichen, und in 560 Punkten Breite fehlten der Druckerauswahl
+        # die 40, die „Allgemeiner FDM-Drucker 220 mm“ braucht.
+        align_forms(self, apart=(self.tabs, self.slicer_box))
         even_fields(self)
         self._built = True
         self._mark_origins()
@@ -2743,6 +2747,14 @@ class PrintSettingsDialog(QDialog):
         # nirgends einen Weg, sie zu ändern. Wer eine fremde Datei öffnete,
         # arbeitete für immer gegen deren Bauraum (§12).
         self.printer_choice = PrinterComboBox(self)
+        # Schmaler als sein längster Eintrag, wie im Erststart und in den
+        # Einstellungen: Sonst verlangte das Feld 414 Punkte, und in der
+        # Handbuchbreite von 560 schnitt der Dialog Qualität, Drucker und
+        # „Filamente …“ rechts ab (Portugiesisch).
+        self.printer_choice.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.printer_choice.setMinimumContentsLength(20)
         # Nach Verfahren gruppiert wie im Erststart (RM-071): Ein Resin-Drucker
         # stand hier flach zwischen den FDM-Geräten.
         add_printer_choices(
@@ -6040,8 +6052,10 @@ class PrintSettingsDialog(QDialog):
         make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
         self.save_button = QPushButton(tr("Druckdatei speichern …"), self)
         self.save_button.clicked.connect(self._save_gcode)
-        self._hold_the_save()
+        # Erst einfügen, dann verbergen: ``addButton`` zeigt den Knopf wieder,
+        # und er stand vor dem ersten Slicen sichtbar und gesperrt da.
         buttons.addButton(self.save_button, QDialogButtonBox.ButtonRole.ActionRole)
+        self._hold_the_save()
         buttons.rejected.connect(self.reject)
 
         # Der Weg zu einem Slicer, sichtbar nur, solange keiner da ist.
