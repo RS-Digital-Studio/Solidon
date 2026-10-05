@@ -1206,8 +1206,25 @@ def test_the_nozzle_limit_compares_the_material_request(maximum: float, expected
         assert matches[0].values["possible"] == pytest.approx(maximum)
 
 
+def _table_on_corner_feet(top: float):
+    """Vier Füße 10 × 10 mm (kleine Standflächen) bündig an den Ecken einer
+    Platte ``top`` mm im Quadrat — wie die Waschschüssel, deren Füße am Rand
+    stehen: Der Rand um die erste Schicht reicht so weit wie die Platte."""
+    reach = (top - 10.0) / 2.0
+    feet = []
+    for x in (-reach, reach):
+        for y in (-reach, reach):
+            foot = trimesh.creation.box(extents=(10.0, 10.0, 2.0))
+            foot.apply_translation((x, y, 1.0))
+            feet.append(foot)
+    plate = trimesh.creation.box(extents=(top, top, 2.0))
+    plate.apply_translation((0.0, 0.0, 3.0))
+    mesh = MeshData.of(trimesh.boolean.union([*feet, plate]))
+    return mesh, slice_body(mesh, 0.2)
+
+
 def _table_on_a_foot(top: float):
-    """Ein Fuß 10 × 10 mm (kleine Standfläche), darauf eine Platte ``top`` mm im Quadrat."""
+    """Ein Fuß 10 × 10 mm in der Mitte, darauf eine Platte ``top`` mm im Quadrat."""
     foot = trimesh.creation.box(extents=(10.0, 10.0, 2.0))
     foot.apply_translation((0.0, 0.0, 1.0))
     plate = trimesh.creation.box(extents=(top, top, 2.0))
@@ -1230,7 +1247,7 @@ def test_a_brim_is_suggested_only_as_wide_as_the_bed_allows(top, width) -> None:
     CuraEngine druckte den Rand neben das Bett (04.10.2026)."""
     profile = profiles.make_profile("prusa-mini", "pla")
     settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "skirt")
-    mesh, result = _table_on_a_foot(top)
+    mesh, result = _table_on_corner_feet(top)
 
     entries = advise.advise(settings, profile, result, bounds=mesh.bounds)
     kinds = [entry.value for entry in entries if entry.path == "adhesion.kind"]
@@ -1252,3 +1269,26 @@ def test_a_brim_is_suggested_only_as_wide_as_the_bed_allows(top, width) -> None:
         assert kinds == ["brim"] and widths == [pytest.approx(math.floor(measured * 10.0) / 10.0)]
         assert 3.5 < widths[0] <= measured
         assert "settings.brim_no_room" not in findings
+
+
+def test_the_brim_room_is_measured_around_the_first_layer() -> None:
+    """RM-312: Brim und Skirt liegen um die erste Schicht, nicht um die Aufsicht.
+
+    Dieselbe Platte (179,6 mm auf dem MINI, 0,2 mm Luft) auf einem Fuß in der
+    Mitte: Um den Fuß hat ein Brim Platz, und vorgeschlagen wird der des
+    Profils. Gemessen an der Aufsicht hieß es „kein Platz“ — wie beim
+    garden-hose-holder, der oben breiter ist als am Fuß. Die Gegenprobe mit
+    Füßen an den Ecken steht im Test darüber."""
+    profile = profiles.make_profile("prusa-mini", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "skirt")
+    mesh, result = _table_on_a_foot(179.6)
+
+    entries = advise.advise(settings, profile, result, bounds=mesh.bounds)
+    kinds = [entry.value for entry in entries if entry.path == "adhesion.kind"]
+    widths = [entry.value for entry in entries if entry.path == "adhesion.brim_width"]
+    findings = [item.code for item in advise.located_warnings(result, profile)]
+
+    # Fuß 10 mm, Bett 180 mm: (180 - 10) / 2 = 85 mm um ihn, die Platte passt dabei.
+    assert advise.brim_room(result, profile) == pytest.approx(85.0, abs=0.01)
+    assert kinds == ["brim"] and not widths
+    assert "settings.brim_no_room" not in findings

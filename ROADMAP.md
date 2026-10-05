@@ -99,7 +99,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-506 — Funktionen findet man über eine sichtbare Suche und eine Karte, die mit dem Häufigen beginnt](#rm-506) | Bedienung und Darstellung | Suchfeld oben, Gruppenfolge und Sortierung der Karte, Reparieren am Körper, Kanten im Leertext, Weg 3 in die Einladung |
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
@@ -3751,13 +3751,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Basis-SHA und Inhalt), eingepflegt auf den Stand von G1 (13:03) und an `image_00001_.glb` und
   `1x1-bin.stl` erprobt (`‹B›\werkzeugprobe\`).
 
-  **Teilstand 04.10.2026 (Fehlalarm nach 0.5.2 zu beheben):** Die Randprüfung misst Brim und Skirt
-  von der Aufsicht des ganzen Teils aus, die Slicer legen sie um die erste Schicht; Teile, die oben
-  breiter sind als am Fuß, bekommen eine Warnung, obwohl der Rand auf dem Bett bleibt
-  (garden-hose-holder am MINI ohne Stützen; Waschschüssel am Kobra 2 mit Auto-Brim-Warnung, Brim im
-  G-Code 4,5 mm, 21 mm vom Rand). Richtig: Brim und Skirt vom Umriss der ersten Schicht, nur den
-  Stützfuß von der Aufsicht messen. Beleg
-  `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\bericht.md` (Nachtrag 2).
+  **Teilstand 05.10.2026 (Fehlalarm nach 0.5.2 behoben):** Die Randprüfung maß Brim und Skirt von
+  der Aufsicht des ganzen Teils aus, die Slicer legen sie um die erste Schicht; Teile, die oben
+  breiter sind als am Fuß, bekamen eine Warnung, obwohl der Rand auf dem Bett blieb (Beleg
+  `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\bericht.md`, Nachtrag 2). Jetzt
+  trägt `build_area.RimReach` zwei Reichweiten: `layer` (Brim und Skirt um den Schnitt der ersten
+  Schicht, `writer._first_layer_outline`) und `top` (Stützfuß und Skirt um die Aufsicht);
+  `check_adhesion_on_bed` warnt nach der weiteren, die Sperrflächenprobe misst am selben Umriss.
+  Der Brimvorschlag fragt `build_area.rim_room`: der breiteste Rand um die erste Schicht, während das
+  ganze Teil in einer Drehung aufs Bett passt (`advise.brim_room`). Echte Läufe über den Kundenweg
+  (Matrixeinheit, Kerne `FFFFF0FF`): garden-hose-holder am MINI mit SuperSlicer und PrusaSlicer
+  ohne Stützen ohne Befund, Skirt im G-Code x 32,65–164,56 mm auf 180 mm; mit Stützen weiter die
+  Stützfußwarnung, im G-Code Stütze −0,22–180,22 mm, Skirt −2,46–182,46 mm (`gcode.off_the_bed`,
+  zu Recht). Waschschüssel am Kobra 2 mit OrcaSlicer ohne Stützen ohne Auto-Brim-Warnung (vorher
+  bei allen drei Varianten). Tests: Tisch auf einem Mittelfuß (`test_advise.py`, 85 mm Platz, Brim
+  vorgeschlagen), breites Teil auf schmalem Fuß (`test_export.py`), beide vorher rot.
+
+  **Offen (05.10.):** Der Stützfuß zählt die ganze Aufsicht, die Slicer stützen nur die Überhänge.
+  Die Waschschüssel am Kobra 2 mit Stützen bekommt deshalb weiter die Stützfußwarnung, obwohl die
+  erste Stützschicht im G-Code 15 mm vom Rand bleibt (Nachtrag 2: x 15,1–196,9, y 23,1–194,4 mm auf
+  220 mm). Richtig: den Fuß aus den Stützflächen der Schichtanalyse messen.
 
 <a id="rm-502"></a>
 

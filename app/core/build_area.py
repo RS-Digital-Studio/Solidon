@@ -479,6 +479,64 @@ def free_margin(points: np.ndarray, printer: PrinterProfile) -> float:
     return -_turned_overhang(hull, right - left, back - front) / 2.0
 
 
+def rim_room(
+    first: np.ndarray, whole: np.ndarray, printer: PrinterProfile, *, around_whole: float = 0.0
+) -> float:
+    """Wie breit ein Rand um die erste Schicht höchstens sein darf, damit das
+    ganze Teil samt ``around_whole`` in einer Drehung noch auf die Druckfläche
+    passt, in mm (RM-312).
+
+    Brim und Skirt legt der Slicer um die erste Schicht, nicht um die
+    Aufsicht: Ein Tisch auf einem Fuß in der Mitte hat für den Brim viel Platz,
+    auch wenn die Platte das Bett fast ausfüllt; eine Schüssel auf Füßen am
+    Rand nicht. ``first`` und ``whole`` sind Punkte in XY wie bei
+    :func:`free_margin`; beide werden um denselben Punkt gedreht, dann wird je
+    Achse verschoben, soweit beide Bedingungen es zulassen. Negativ heißt:
+    Schon das Teil passt in keiner Drehung. Gleiches Winkelraster wie
+    :func:`size_excess`, eine Messung, keine Geometrie.
+    """
+    from shapely.affinity import rotate
+
+    left, front, right, back = printable_area(printer).bounds
+    first_hull = MultiPoint(np.asarray(first, dtype=float)[:, :2]).convex_hull
+    whole_hull = MultiPoint(np.asarray(whole, dtype=float)[:, :2]).convex_hull
+    origin = whole_hull.centroid
+    best = float("-inf")
+    for degrees in range(0, 90, SIZE_ANGLE_STEP_DEGREES):
+        whole_bounds = rotate(whole_hull, degrees, origin=origin).bounds
+        first_bounds = rotate(first_hull, degrees, origin=origin).bounds
+        for width, depth in ((right - left, back - front), (back - front, right - left)):
+            rooms = [
+                _room_along(
+                    (whole_bounds[axis], whole_bounds[axis + 2]),
+                    (first_bounds[axis], first_bounds[axis + 2]),
+                    length,
+                    around_whole,
+                )
+                for axis, length in ((0, width), (1, depth))
+            ]
+            best = max(best, min(rooms))
+    if best == float("-inf"):
+        return free_margin(whole, printer) - around_whole
+    return best
+
+
+def _room_along(
+    whole: tuple[float, float], first: tuple[float, float], length: float, around_whole: float
+) -> float:
+    """Der breiteste Rand um ``first`` auf einer Strecke ``length``, während
+    ``whole`` mit ``around_whole`` auf ihr bleibt; ``-inf``, wenn ``whole``
+    nicht passt. Aus den vier Grenzen der Verschiebung (Teil und Rand je
+    Seite)."""
+    if whole[1] - whole[0] + 2.0 * around_whole > length + EPS_GEOM:
+        return float("-inf")
+    return min(
+        (length - (first[1] - first[0])) / 2.0,
+        length - around_whole - (whole[1] - first[0]),
+        length - around_whole - (first[1] - whole[0]),
+    )
+
+
 def size_excess_uncertainty(mesh: Mesh) -> float:
     """Obere Schranke des XY-Messfehlers aus dem Winkelraster.
 
@@ -505,7 +563,12 @@ class RimReach:
     """Wie weit die erste Schicht über ein Teil hinausreicht, und woraus."""
 
     reach: float
-    """In mm über die Aufsicht des Teils hinaus."""
+    """In mm über die Aufsicht des Teils hinaus — die weiteste der beiden
+    unten, für Abstände und Anordnen, wo nur ein Umriss gefragt wird."""
+    layer: float = 0.0
+    """Über den Umriss der ersten Schicht: Brim und Skirt um ihn (RM-312)."""
+    top: float = 0.0
+    """Über die Aufsicht: der Stützfuß unter Überhängen und der Skirt um ihn."""
     auto_brim: bool = False
     """Der Auto-Brim der Orca-Familie zählt mit seiner Höchstbreite."""
     support_foot: bool = False
@@ -532,6 +595,12 @@ def rim_of(
     nur eine Art. Die eine Rechnung für Übergabe (``writer.rim_reach``,
     ``check_adhesion_on_bed``) und Druckvorschläge (``advise``: Brim und Skirt
     nur, wo das Bett Platz lässt).
+
+    **Zwei Umrisse, zwei Reichweiten** (RM-312): Brim und Skirt liegen um die
+    erste Schicht (``layer``), der Stützfuß unter den Überhängen und damit um
+    die Aufsicht (``top``). Gemessen von der Aufsicht allein bekam ein Teil,
+    das oben breiter ist als am Fuß, eine Warnung, obwohl der Rand auf dem Bett
+    blieb (garden-hose-holder am MINI, Waschschüssel am Kobra 2).
     """
     adhesion = settings.adhesion
     auto = adhesion.kind == "auto" and flavour == "orca"
@@ -542,22 +611,23 @@ def rim_of(
     else:
         band = 0.0
     supported = settings.support.style != "none"
-    foot = False
-    if supported and support_foot is not None and support_foot > band:
-        band = support_foot
-        foot = True
+    footing = support_foot if supported and support_foot is not None else 0.0
     written = "adhesion.kind" in settings.chosen or "adhesion.kind" in settings.accepted
     skirt = adhesion.skirt_loops > 0 and (
         adhesion.kind == "skirt"
         or (flavour in ("prusa", "orca") and not written and adhesion.kind != "raft")
     )
-    reach = band
+    around = 0.0
     if skirt:
         line = settings.layers.first_layer_line_width or settings.layers.line_width
-        reach += adhesion.skirt_distance + adhesion.skirt_loops * line
+        around = adhesion.skirt_distance + adhesion.skirt_loops * line
+    layer = band + around if band > 0.0 or skirt else 0.0
+    top = footing + around if footing > 0.0 else 0.0
     return RimReach(
-        reach,
+        max(band, footing) + around if layer or top else 0.0,
+        layer=layer,
+        top=top,
         auto_brim=auto,
-        support_foot=foot,
+        support_foot=footing > band,
         support_foot_unknown=supported and support_foot is None,
     )
