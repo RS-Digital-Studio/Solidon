@@ -3240,12 +3240,21 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
 
     relative = vertices - extreme[0]
     flat = np.column_stack((relative @ first, relative @ second))
-    rectangle = multipoints(flat).minimum_rotated_rectangle
+    # **GEOS setzt an entarteten Punktmengen Gleitkomma-Merker** — doppelte
+    # oder auf einer Linie liegende Ecken, wie sie jeder Quader liefert. numpy
+    # meldet sie nach dem Aufruf als RuntimeWarning, auf macOS arm64 bei 64
+    # Tests des Tag-Laufs 0.5.2, unter Windows und Linux nie; das Rechteck
+    # selbst ist auf allen dreien dasselbe. Ein nicht endliches Maß zählt wie
+    # die größte Ausdehnung der Projektion, die die erste Prüfung schon kennt.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rectangle = multipoints(flat).minimum_rotated_rectangle
     if rectangle.geom_type == "Polygon":
         corners = np.asarray(rectangle.exterior.coords, dtype=float)
         across = float(np.linalg.norm(corners[2] - corners[0]))
     else:
         across = float(rectangle.length)
+    if not np.isfinite(across):
+        across = float(distance.max())
     return radius * 2.0 <= across + EPS_GEOM
 
 
