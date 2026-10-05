@@ -1506,6 +1506,7 @@ def test_the_save_button_says_what_it_is_waiting_for(dialog: PrintSettingsDialog
     Beschreibung für den Bildschirmleser ist die zweite Kodierung.
     """
     assert not dialog.save_button.isEnabled(), "nothing has been sliced yet"
+    assert dialog.save_button.isHidden(), "RM-514: er erscheint mit der Druckdatei"
     for channel, value in (
         ("tooltip", dialog.save_button.toolTip()),
         ("status tip", dialog.save_button.statusTip()),
@@ -1519,6 +1520,7 @@ def test_the_save_button_says_what_it_is_waiting_for(dialog: PrintSettingsDialog
     # Fehlers: Er sagt, etwas fehle, während es da ist.
     dialog._release_the_save()
     assert dialog.save_button.isEnabled()
+    assert not dialog.save_button.isHidden(), "mit der Datei steht er da"
     assert not dialog.save_button.toolTip()
     assert not dialog.save_button.accessibleDescription()
 

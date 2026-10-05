@@ -8539,6 +8539,12 @@ class PrintSettingsDialog(QDialog):
         self.save_button.setToolTip(reason)
         self.save_button.setStatusTip(reason)
         self.save_button.setAccessibleDescription(reason)
+        # **Und er steht erst da, wenn es die Datei gibt** (RM-514): Er ist der
+        # zweite Schritt nach *Slicen*, und mit mehreren Slicern standen vorn
+        # sonst 16 statt höchstens 15 Bedienelemente. Die Düse nach hinten zu
+        # legen hätte die Reihenfolge Slicer, Drucker, Düse gebrochen
+        # (Entscheidung Robert, 29.09.2026); gestufte Tiefe nach §2.4 nicht.
+        self.save_button.setVisible(False)
 
     def _release_the_save(self) -> None:
         """Freigeben — und den Grund wegnehmen, der nicht mehr gilt.
@@ -8548,6 +8554,7 @@ class PrintSettingsDialog(QDialog):
         """
         self._result_context = self._print_context()
         reason = self._printer_selection_issue()
+        self.save_button.setVisible(not self.session.profile.printer.is_resin)
         self.save_button.setEnabled(not reason)
         self.save_button.setToolTip(reason)
         self.save_button.setStatusTip(reason)
