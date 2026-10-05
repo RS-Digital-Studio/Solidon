@@ -14,6 +14,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
+from app.i18n.keys import native_keys
+
 #: Deutsch ist die Quellsprache: ihre Texte sind die Message-IDs, sie braucht
 #: keinen Katalog. Welche Sprachen es sonst gibt, sagt nicht diese Datei,
 #: sondern das Katalogverzeichnis — :func:`app.i18n.catalog.available_languages`.
@@ -44,6 +46,10 @@ def language_name(language: str) -> str:
 
 _catalogs: dict[str, dict[str, str]] = {}
 _language: str = SOURCE_LANGUAGE
+#: Für welche Tastatur Kürzel im Text geschrieben werden (``sys.platform``).
+#: Leer heißt: wie die Quelle, „Strg+Z“. Erst der Start der Anwendung stellt
+#: die echte Plattform ein (:mod:`app.i18n.keys`).
+_key_platform: str = ""
 
 
 class Figure(str):
@@ -164,7 +170,7 @@ class TranslatableText:
         nennt, meint sie aber für den ganzen Satz.
         """
         catalog = _catalogs.get(language or _language, {})
-        text = catalog.get(self._key(), self.msgid)
+        text = native_keys(catalog.get(self._key(), self.msgid), _key_platform)
         if not self.values:
             return text
         mark = "," if "," in catalog.get("0,1", "0,1") else "."
@@ -208,6 +214,17 @@ def set_language(language: str) -> None:
 
 def get_language() -> str:
     return _language
+
+
+def set_key_platform(platform: str) -> None:
+    """Stellt ein, für welche Tastatur Kürzel im Text stehen (``sys.platform``, leer: Quelle)."""
+    global _key_platform
+    _key_platform = platform
+
+
+def key_platform() -> str:
+    """Die eingestellte Tastatur der Kürzel; leer heißt wie die Quelle."""
+    return _key_platform
 
 
 def install_catalog(language: str, catalog: dict[str, str]) -> None:

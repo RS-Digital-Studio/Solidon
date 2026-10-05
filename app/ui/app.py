@@ -53,7 +53,7 @@ from app.core.backends.resources import release_warm_before_exit
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.geom import kernel_process
 from app.core.log import configure, get_logger
-from app.i18n import set_language, tr
+from app.i18n import set_key_platform, set_language, tr
 from app.i18n.catalog import install_language
 from app.ui import app_events, cursors, start_check, window_chrome
 from app.ui.icons import application_icon
@@ -331,6 +331,8 @@ def build_application(
     settings = load_settings()
     install_language(settings.language)
     set_language(settings.language)
+    # Kürzel im Text so, wie die Tastatur sie beschriftet: ⌘Z auf dem Mac.
+    set_key_platform(sys.platform)
     install_qt_translations(application, settings.language)
 
     report(tr("Das Erscheinungsbild wird gesetzt …"), 0.6)
@@ -503,6 +505,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
     install_language(settings.language)
     set_language(settings.language)
+    set_key_platform(sys.platform)
     install_qt_translations(application, settings.language)
     # **Das Thema, bevor irgendetwas zu sehen ist.** Gesetzt hat es bisher erst
     # ``build_application`` — und dazwischen liegen der Ladebildschirm und das
