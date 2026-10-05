@@ -626,12 +626,30 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
     Das ist bei der Sprache dasselbe wie der Kundenzustand; bei anderen
     Zuständen ist es das nicht, und dann wäre eine solche Fixture falsch —
     siehe den Hinweis zum Stylesheet unten.
+
+    **Mit der Sprache gilt ihre Zahlenschreibweise, und zwar schon vor dem
+    Test.** ``app/ui/app.py`` setzt ``QLocale`` auf die Anzeigesprache,
+    ``qt_app`` tut es einmal für den Lauf. Ein Test ohne Fenster, der über
+    ``labels.length`` schreibt, las bis dahin die Locale des Rechners, wenn
+    kein Fenstertest im selben Arbeiter vor ihm lief: auf Windows mit
+    deutschem System ein Komma, auf dem Linux-Runner einen Punkt
+    (``test_print_contract``). Gesetzt wird nur, wenn sie abweicht —
+    ``QLocale.setDefault`` ist nicht threadsicher, und Arbeiter früherer
+    Tests können noch laufen.
     """
-    yield
     try:
         from app.i18n import SOURCE_LANGUAGE, set_language
     except ImportError:  # pragma: no cover - ohne die Kataloge gibt es nichts zu räumen
+        yield
         return
+    try:
+        from PySide6.QtCore import QLocale
+    except ImportError:  # pragma: no cover - ohne Qt gibt es keine Zahlenschreibweise
+        pass
+    else:
+        if QLocale().name() != QLocale(SOURCE_LANGUAGE).name():
+            QLocale.setDefault(QLocale(SOURCE_LANGUAGE))
+    yield
     set_language(SOURCE_LANGUAGE)
 
 
