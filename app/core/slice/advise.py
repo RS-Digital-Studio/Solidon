@@ -1682,20 +1682,24 @@ BRIM_LEAST_LINES: Final = 3
 
 def brim_room(result: SliceResult, profile: Profile) -> float | None:
     """Wie breit ein Rand um dieses Teil auf dem Bett des Druckers höchstens
-    sein kann, gedreht wie es am besten passt, in mm (:func:`build_area.free_margin`).
+    sein kann, gedreht wie es am besten passt, in mm (:func:`build_area.rim_room`).
 
-    Gefragt am Umriss aller Schichten. ``None`` ohne Schicht. Knapp unter null
-    heißt nicht „passt nicht“: Die Waschschüssel hat am Schnitt des Druckdialogs
-    minus 0,06 mm, an ihrem Netz 0,14 mm — ein Brim passt in beiden Fällen nicht."""
-    rings = [
-        np.asarray(contour.outline, dtype=float)
+    Der Rand liegt um die unterste Schicht, das ganze Teil muss dabei aufs
+    Bett passen (RM-312): Ein Tisch auf einem Fuß in der Mitte hat Platz für
+    den Brim, eine Schüssel auf Füßen am Rand nicht. ``None`` ohne Schicht.
+    Knapp unter null heißt nicht „passt nicht“: Die Waschschüssel hat am
+    Schnitt des Druckdialogs minus 0,06 mm, an ihrem Netz 0,14 mm — ein Brim
+    passt in beiden Fällen nicht."""
+    layers = [
+        [np.asarray(contour.outline, dtype=float) for contour in layer.contours]
         for layer in result.layers
-        for contour in layer.contours
-        if len(contour.outline) >= 3
     ]
-    if not rings:
+    layers = [[ring for ring in rings if len(ring) >= 3] for rings in layers]
+    layers = [rings for rings in layers if rings]
+    if not layers:
         return None
-    return build_area.free_margin(np.concatenate(rings), profile.printer)
+    whole = np.concatenate([ring for rings in layers for ring in rings])
+    return build_area.rim_room(np.concatenate(layers[0]), whole, profile.printer)
 
 
 def _skirt_where_it_fits(

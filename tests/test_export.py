@@ -1909,6 +1909,57 @@ def test_the_support_foot_and_its_skirt_are_warned_at_the_bed_edge() -> None:
     )
 
 
+def _wide_on_a_foot(profile: Profile, gap: float) -> MeshData:
+    """Ein Teil, das oben breiter ist als am Fuß: Fuß 10 × 10 mm, darüber eine
+    Platte 30 × 30 mm, deren rechte Kante ``gap`` mm vor dem Bettrand liegt;
+    der Fuß steht 10 mm weiter innen."""
+    half = profile.printer.build_volume[0] / 2.0
+    centre = half - gap - 15.0
+    foot = trimesh.creation.box((10.0, 10.0, 2.0))
+    foot.apply_translation((centre, 0.0, 1.0))
+    plate = trimesh.creation.box((30.0, 30.0, 3.0))
+    plate.apply_translation((centre, 0.0, 3.5))
+    return MeshData.of(trimesh.boolean.union([foot, plate]))
+
+
+def test_brim_and_skirt_are_measured_around_the_first_layer() -> None:
+    """RM-312: Brim und Skirt legen die Slicer um die erste Schicht, gemessen
+    wurde an der Aufsicht. Teile, die oben breiter sind als am Fuß, bekamen
+    eine Warnung, obwohl der Rand auf dem Bett blieb (garden-hose-holder am
+    MINI ohne Stützen; Waschschüssel am Kobra 2: Brim im G-Code 4,5 mm, 21 mm
+    vom Rand). Der Stützfuß liegt unter den Überhängen und wird weiter an der
+    Aufsicht gemessen."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    brim = print_settings.with_path(settings, "adhesion.kind", "brim")
+    brim = print_settings.with_path(brim, "adhesion.brim_width", 5.0)
+    skirt = print_settings.with_path(settings, "adhesion.kind", "skirt")
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_distance", 2.0)
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_loops", 1)
+    auto = print_settings.with_path(settings, "adhesion.kind", "auto")
+    auto = print_settings.with_path(auto, "adhesion.brim_gap", 0.0)
+    auto = print_settings.with_path(auto, "adhesion.skirt_loops", 0)
+    line = skirt.layers.first_layer_line_width
+    # Platte 2 mm vor dem Rand, Fuß 12 mm.
+    wide = _wide_on_a_foot(profile, 2.0)
+
+    assert check_adhesion_on_bed([wide], brim, profile) == [], "5 mm Brim um den Fuß"
+    assert check_adhesion_on_bed([wide], skirt, profile) == [], "Skirt um den Fuß"
+    assert [
+        f.code for f in check_adhesion_on_bed([_near_the_edge(profile, 2.0)], brim, profile)
+    ] == ["arrange.adhesion_off_bed"], "Gegenprobe: ein Quader bis zur selben Kante"
+    [auto_found] = check_adhesion_on_bed([wide], auto, profile, flavour="orca")
+    assert auto_found.values["distance"] == format_length(writer.ORCA_AUTO_BRIM_MAX - 12.0)
+    supported = print_settings.with_path(skirt, "support.style", "grid")
+    [foot_found] = check_adhesion_on_bed(
+        [wide], supported, profile, flavour="prusa", support_foot=3.0
+    )
+    assert foot_found.values["field"] == "adhesion.skirt_loops"
+    assert foot_found.values["distance"] == format_length(3.0 + 2.0 + line - 2.0), (
+        "der Stützfuß und sein Skirt von der Aufsicht"
+    )
+
+
 def test_the_profiles_skirt_beside_a_brim_counts_until_solidon_writes_the_kind() -> None:
     """Prusa und Orca drucken Skirt und Brim nebeneinander, wenn das Profil
     beide nennt; schreibt Solidon eine Haftungsart, nullt die Übergabe die

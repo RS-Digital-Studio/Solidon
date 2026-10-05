@@ -81,6 +81,8 @@ if TYPE_CHECKING:
     # Nur für die Signatur: zur Laufzeit zieht ``handover`` die
     # G-Code-Auswertung mit, und ein Export soll nicht davon abhängen, dass
     # ein Slicer im Spiel ist.
+    from shapely.geometry.base import BaseGeometry
+
     from app.core.brep.kernel import Solid
     from app.core.export.handover import PartSplit, SlicerSetup
     from app.core.knowledge.parts.registry import PartSpec
@@ -597,8 +599,7 @@ def check_adhesion_on_bed(
     findings: list[Finding] = []
     for index, mesh in enumerate(meshes):
         rim = rims[index]
-        reach = rim.reach
-        if reach <= 0.0:
+        if rim.reach <= 0.0:
             continue
         box = mesh.bounds
         if any(
@@ -606,13 +607,30 @@ def check_adhesion_on_bed(
             for axis in (0, 1)
         ):
             continue
-        over = max(
-            max(-half[axis] - (box.minimum[axis] - reach), box.maximum[axis] + reach - half[axis])
-            for axis in (0, 1)
-        )
-        message = _("Der Rand um ein Teil reicht über das Bett hinaus.")
+        # Brim und Skirt um die erste Schicht, der Stützfuß um die Aufsicht
+        # (RM-312); gewarnt wird nach dem, was weiter hinausreicht.
+        outlines = []
+        if rim.layer > 0.0:
+            part = per_part[index] if per_part is not None else settings
+            outlines.append((_first_layer_outline(mesh, part), rim.layer, False))
+        if rim.top > 0.0:
+            outlines.append((build_area.footprint(mesh), rim.top, True))
+        over, message, by_foot = 0.0, _("Der Rand um ein Teil reicht über das Bett hinaus."), False
+        for outline, reach, from_top in outlines:
+            low_x, low_y, high_x, high_y = outline.bounds
+            beyond = max(
+                -half[0] - (low_x - reach),
+                high_x + reach - half[0],
+                -half[1] - (low_y - reach),
+                high_y + reach - half[1],
+            )
+            if beyond > over + EPS_GEOM:
+                over, by_foot = beyond, from_top
         if over <= EPS_GEOM:
-            over = _rim_into_blocked_area(mesh, reach, profile.printer)
+            for outline, reach, from_top in outlines:
+                blocked = _rim_into_blocked_area(outline, reach, profile.printer)
+                if blocked > over + EPS_GEOM:
+                    over, by_foot = blocked, from_top
             message = _(
                 "Der Rand um ein Teil reicht in eine Sperrfläche oder über die Druckfläche hinaus."
             )
@@ -623,7 +641,7 @@ def check_adhesion_on_bed(
         # macht (Waschschüssel auf 220 auf 220 mm: 0,15 mm), hilft nur ein
         # schmalerer Rand oder ein größeres Bett.
         suggestions: tuple[Action, ...] = (ARRANGE_ON_BED, OPEN_PRINT_SETTINGS, CHOOSE_PRINTER)
-        if rim.auto_brim:
+        if rim.auto_brim and not by_foot:
             # Ob der Slicer die Höchstbreite wirklich wählt, weiß erst er —
             # gewarnt wird vor dem, was er wählen darf; der Kunde entscheidet
             # zwischen fester Breite und mehr Abstand.
@@ -634,7 +652,7 @@ def check_adhesion_on_bed(
             )
             values["field"] = "adhesion.kind"
             suggestions = (FIX_BRIM_WIDTH, ARRANGE_ON_BED, CHOOSE_PRINTER)
-        elif rim.support_foot:
+        elif by_foot:
             message = _(
                 "Die erste Stützschicht und der Skirt um sie reichen über das Bett oder in "
                 "eine Sperrfläche."
@@ -667,14 +685,32 @@ def check_adhesion_on_bed(
     return findings
 
 
-def _rim_into_blocked_area(mesh: MeshData, reach: float, printer: PrinterProfile) -> float:
-    """Wie weit der Rand eines Teils in eine Sperrfläche oder über die Kontur reicht.
+def _first_layer_outline(mesh: MeshData, settings: PrintSettings) -> BaseGeometry:
+    """Der Umriss der ersten Schicht, um den Brim und Skirt liegen (RM-312).
+
+    Geschnitten auf halber Höhe der ersten Schicht, wie
+    ``handover._first_layer_narrower_than_a_line``. Ohne Schnitt — ein Netz,
+    das dort nichts trägt — gilt die Aufsicht, die vorsichtigere Antwort.
+    """
+    from app.core.slice.analysis import cross_sections
+
+    data = as_mesh_data(mesh)
+    height = float(data.bounds.minimum[2]) + settings.layers.first_layer_height / 2.0
+    section = cross_sections(data, [height])[0]
+    if section is None or section.is_empty:
+        return build_area.footprint(mesh)
+    return section
+
+
+def _rim_into_blocked_area(outline: BaseGeometry, reach: float, printer: PrinterProfile) -> float:
+    """Wie weit der Rand um einen Umriss in eine Sperrfläche oder über die Kontur reicht.
 
     Der Bettrand allein genügt nicht: Der Centauri Carbon 2 sperrt vorn rechts
     eine Ecke, und in der Slicer-Matrix (RM-312) lief der Auto-Brim des
     ElegooSlicers dort hinein, ohne dass die Prüfung vor dem Export etwas
-    sagte. Gemessen wird an der Aufsicht des Teils gegen das Bettrechteck ohne
-    die freigegebene Fläche (:func:`build_area.printable_area`).
+    sagte. Gemessen wird am Umriss, um den der Rand liegt (erste Schicht oder
+    Aufsicht), gegen das Bettrechteck ohne die freigegebene Fläche
+    (:func:`build_area.printable_area`).
     """
     from shapely.geometry import box as rectangle
 
@@ -686,11 +722,10 @@ def _rim_into_blocked_area(mesh: MeshData, reach: float, printer: PrinterProfile
     )
     if blocked.is_empty:
         return 0.0
-    bounds = mesh.bounds
-    reached = rectangle(*bounds.minimum[:2], *bounds.maximum[:2]).buffer(reach)
+    reached = rectangle(*outline.bounds).buffer(reach)
     if not reached.intersects(blocked):
         return 0.0
-    return reach - float(build_area.footprint(mesh).distance(blocked))
+    return reach - float(outline.distance(blocked))
 
 
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
