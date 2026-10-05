@@ -1523,6 +1523,7 @@ def bind_surface(
 
             middle = prepared.area.centroid
             target = np.asarray(to_world(prepared.frame, (float(middle.x), float(middle.y))))
+        prepared = _at_its_mouth(prepared, _vec(target), source.features)
         placed = at_point(prepared, _vec(target), references=chosen_edges)
         if changed_reference:
             updated = bound_surface_values(spec, source, placed)
@@ -2533,10 +2534,6 @@ def _seat_at(
     der Achse durch diese Ebene, und nur eine Fläche zählt, deren eigene
     Öffnung die Achse umschließt.
     """
-    from shapely.geometry import Point, Polygon
-
-    from app.core.sketch.planes import to_plane
-
     beyond = reach > EPS_GEOM
     for _distance, entry, point in _seat_candidates(
         feature, features, mouth, direction, reach=reach
@@ -2551,29 +2548,109 @@ def _seat_at(
                 # der Deckel über einem flachen Sackloch, kein Sitz.
                 continue
             return replace(prepared, centres=_others(prepared, feature)), point
-        # **Und die Kanten der eigenen Öffnung zählen nicht mit.** Ein Langloch
-        # hat zwei gerade Flanken, und die sind vom Merkmal aus die nächsten
-        # Bezugskanten überhaupt: Gemessen an einer Platte 60 x 40 mit einem
-        # Langloch Ø 6 auf 20 kamen minus 3,00 und minus 3,30 zurück, also seine eigene
-        # halbe Breite. Gefragt ist der Abstand zum **Rand des Teils**; was in
-        # einer Aussparung liegt, ist keine Antwort darauf.
         border = _opening_around(prepared, point)
         if border is None:
             continue
-        area = prepared.area
-        available = Polygon(area.exterior, [ring for ring in area.interiors if ring != border])
-        edges = tuple(
-            edge
-            for edge in prepared.edges
-            if edge.id != f"axis_{feature.id}"
-            and not (
-                border.distance(Point(to_plane(prepared.frame, edge.start))) <= EPS_GEOM
-                and border.distance(Point(to_plane(prepared.frame, edge.end))) <= EPS_GEOM
-            )
+        return _with_the_opening_filled(prepared, border, feature), point
+    return None
+
+
+def _with_the_opening_filled(
+    prepared: PreparedSurface, border: Any, feature: Feature
+) -> PreparedSurface:
+    """Die Fläche, in der die eigene Öffnung eines Merkmals gefüllt ist.
+
+    Die Mitte einer Bohrung liegt in ihrer Aussparung; erst mit gefüllter
+    Öffnung nimmt :func:`at_point` sie an (:func:`seat_of`).
+
+    **Und die Kanten der eigenen Öffnung zählen nicht mit.** Ein Langloch hat
+    zwei gerade Flanken, und die sind vom Merkmal aus die nächsten
+    Bezugskanten überhaupt: Gemessen an einer Platte 60 x 40 mit einem
+    Langloch Ø 6 auf 20 kamen minus 3,00 und minus 3,30 zurück, also seine
+    eigene halbe Breite. Gefragt ist der Abstand zum **Rand des Teils**; was in
+    einer Aussparung liegt, ist keine Antwort darauf.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from app.core.sketch.planes import to_plane
+
+    area = prepared.area
+    available = Polygon(area.exterior, [ring for ring in area.interiors if ring != border])
+    edges = tuple(
+        edge
+        for edge in prepared.edges
+        if edge.id != f"axis_{feature.id}"
+        and not (
+            border.distance(Point(to_plane(prepared.frame, edge.start))) <= EPS_GEOM
+            and border.distance(Point(to_plane(prepared.frame, edge.end))) <= EPS_GEOM
         )
-        return replace(
-            prepared, area=available, edges=edges, centres=_others(prepared, feature)
-        ), point
+    )
+    return replace(prepared, area=available, edges=edges, centres=_others(prepared, feature))
+
+
+def _at_its_mouth(
+    prepared: PreparedSurface, point: Vec3, features: Mapping[str, Feature]
+) -> PreparedSurface:
+    """Die Fläche wie beim Setzen, wenn der Punkt die Mündungsmitte einer Bohrung ist.
+
+    Die Platzierung setzt einen Baustein, der in Bohrungen gehört, über
+    :func:`seat_of` in die gewählte Bohrung, und gespeichert wird deren
+    Mitte (``PlacementFlow._begin_on_a_face``). Beim Rechnen bereitet
+    :func:`bind_surface` die Trägerfläche frisch vor, **mit** der Öffnung, und
+    :func:`at_point` lehnte die Mitte als „außerhalb der gewählten Fläche“
+    ab — jedes Gewinde, jede Einpressbuchse und Mutternfalle, die so gesetzt
+    wurde, hielt an (Kundenmeldung zu 0.5.2, Bohrung aus STEP und aus
+    *Schraubenloch mit Senkung*).
+
+    Gefüllt wird nur die Öffnung, deren Bohrung ihre Achse durch den Punkt
+    schickt, auf :data:`~app.core.units.MAX_FACET_SAG` — die Achse einer
+    Netzbohrung ist eingepasst. Ein Punkt in einer Aussparung ohne Bohrung
+    oder neben der Achse bleibt abgelehnt: Dorthin setzt kein Klick, und wer
+    dort landet, weil sich die Geometrie unter dem Bezug geändert hat, soll es
+    erfahren statt still über der Luft zu sitzen.
+    """
+    from shapely.geometry import Point
+
+    from app.core.sketch.planes import to_plane
+
+    if not prepared.planar or prepared.area.covers(Point(to_plane(prepared.frame, point))):
+        return prepared
+    border = _opening_around(prepared, point)
+    if border is None:
+        return prepared
+    bore = bore_through(point, prepared.frame.normal, features)
+    return prepared if bore is None else _with_the_opening_filled(prepared, border, bore)
+
+
+def bore_through(point: Vec3, direction: Vec3, features: Mapping[str, Feature]) -> Feature | None:
+    """Die Bohrung oder das Langloch, dessen Achse durch diesen Punkt läuft — in dieser Richtung.
+
+    Die eine Frage hinter zwei Antworten: :func:`_at_its_mouth` füllt beim
+    Rechnen die Öffnung, deren Mündung der gespeicherte Punkt ist, und ein
+    Baustein, der dort nichts abträgt, sagt, dass die Bohrung weiter ist als
+    er (``parts.bore_too_wide`` in ``knowledge/parts/ops.py``).
+
+    Auf der Achse heißt: quer zu ihr höchstens
+    :data:`~app.core.units.MAX_FACET_SAG` entfernt — die Achse einer
+    Netzbohrung ist eingepasst. Die Richtung muss auf der Achse liegen wie
+    eine Trägerfläche auf ihr (``_SEAT_PARALLEL``), das Vorzeichen zählt nicht.
+    """
+    for feature in features.values():
+        if feature.kind not in ("hole", "slot"):
+            continue
+        axis = vec3_or_none(feature.params.get("axis"))
+        centre = vec3_or_none(feature.params.get("centre"))
+        if axis is None or centre is None:
+            continue
+        length = math.hypot(*axis)
+        if length <= EPS_GEOM or abs(dot3(axis, direction)) / length < _SEAT_PARALLEL:
+            continue
+        unit = tuple(value / length for value in axis)
+        offset = tuple(p - c for p, c in zip(point, centre, strict=True))
+        along = dot3(offset, unit)
+        across = tuple(o - along * u for o, u in zip(offset, unit, strict=True))
+        if math.hypot(*across) <= MAX_FACET_SAG:
+            return feature
     return None
 
 

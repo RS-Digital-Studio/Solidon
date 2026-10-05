@@ -191,6 +191,7 @@ MEINT_DEN_SCHRITT: dict[str, str | None] = {
     "displace.applied": "strength",
     "hollow.done": "wall",
     "thread.thin_wall": "diameter",
+    "parts.bore_too_wide": "size",
 }
 
 

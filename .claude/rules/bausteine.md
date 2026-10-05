@@ -43,6 +43,15 @@ Ausgabeformat, Normteilmaße aus der Tabelle, Vorschaubild gerendert von
   Breite (zwei Schlüssellöcher oder eines mittig, `holders._keyholes`), statt
   den Halter über sein Maß hinaus zu verbreitern.
 
+## Ein Baustein in einer Bohrung misst sich an ihrer Wand
+
+Sitzt ein Baustein für Bohrungen in einer (ihre Achse durch seine Mündung,
+`ops._seated_bore`), ist ihre Öffnung kein Rand der Fläche — die Randprüfung
+lässt sie aus. Ob er wirkt, sagt sein Radius gegen ihren, nicht das abgetragene
+Volumen: In einem Sackloch schneidet ein zu enges Gewinde nur unter dem Boden.
+Erreicht er die Wand nicht, meldet er `parts.bore_too_wide` mit dem Satz aus
+`at_hole_advice` und *Größe ändern*.
+
 ## Ein abgezogener Baustein liegt unter seiner Mündung
 
 Der Ursprung ist die Fläche, auf die geklickt wurde; was abgetragen wird,

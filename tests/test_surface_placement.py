@@ -164,6 +164,245 @@ def _top(mesh):
     return int(np.argmax(np.asarray(mesh.raw.face_normals)[:, 2]))
 
 
+def _carrier_with_a_bore(profile, carrier):
+    """Ein Projekt mit einer Bohrung, wie der Kunde sie hatte.
+
+    Aus dem Korpus (glatt oder gesenkt) oder ein exakter Quader in den Maßen
+    seines STEP-Teils mit *Schraubenloch mit Senkung* M6, mit oder ohne
+    Senkkopf. Zurück kommen Projekt, Verlauf, Quellen, Träger und Bohrung.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+    from tests.helpers import MESHES
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    if carrier.endswith(".stl"):
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="import", path=f"sources/{carrier}", sha256=""
+        )
+        project.sources["src_1"] = (MESHES / carrier).read_bytes()
+        history.apply(
+            "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+        )
+    else:
+        exact_kernel()
+        history.apply(
+            "Träger",
+            [
+                OperationDraft(
+                    op="create_brep_box", params={"width": 34.13, "depth": 40.74, "height": 14.15}
+                )
+            ],
+        )
+        box = evaluate(project.document, profile).scene.objects["obj_1"]
+        top = next(
+            identifier
+            for identifier, feature in box.features.items()
+            if feature.kind == "face" and feature.params["normal"][2] > 0.9
+        )
+        history.apply(
+            "Schraubenloch",
+            [
+                OperationDraft(
+                    op="insert_screw_hole",
+                    inputs=("obj_1",),
+                    params={
+                        "at_feature": top,
+                        "size": "M6",
+                        "countersink": carrier.endswith("countersunk"),
+                    },
+                )
+            ],
+        )
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources)
+    assert before.complete, before.scene.report.findings
+    source = before.scene.objects["obj_1"]
+    bore = next(
+        feature
+        for _identifier, feature in sorted(source.features.items())
+        if feature.kind == "hole"
+    )
+    return project, history, sources, source, bore
+
+
+def _seated_in_the_bore(history, source, bore, name, **chosen):
+    """Den Baustein so in die Bohrung setzen, wie die Platzierung es im Fenster tut.
+
+    ``PlacementFlow._begin_on_a_face`` sitzt über ``seat_of`` in der Mündung,
+    ``_set_values`` legt Lage und Flächenbezug in den Schritt; ``chosen``
+    überschreibt danach, was der Kunde im Dialog ändert.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import OperationDraft
+
+    seated = placement.seat_of(as_mesh_data(source.mesh), bore, source.features)
+    assert seated is not None, "die Bohrung hat eine Mündungsfläche"
+    prepared, mouth = seated
+    hit = placement.at_point(prepared, mouth)
+    spec = REGISTRY.get(name)
+    values = dict(placement.values_for(spec, bore, source.id))
+    values.update(placement.surface_values(spec, hit, feature=bore, source=source))
+    values.update(placement.bound_surface_values(spec, source, hit))
+    assert values["surface_anchor"], "die Platzierung speichert den Flächenbezug"
+    values.update(chosen)
+    history.apply(spec.title, [OperationDraft(op=name, inputs=(source.id,), params=values)])
+    return values
+
+
+@pytest.mark.parametrize(
+    "carrier",
+    ["plate_holes.stl", "plate_countersunk.stl", "screw_hole", "screw_hole_countersunk"],
+)
+def test_a_part_seated_in_the_chosen_bore_is_built_there(profile, carrier):
+    """Ein Baustein, den die Platzierung selbst in die gewählte Bohrung setzt, wird gebaut.
+
+    Kundenmeldung zu 0.5.2: Bohrung angeklickt, *Druckbares Gewinde* aus dem
+    Katalog, und jeder Versuch endete mit „Dieser Punkt liegt außerhalb der
+    gewählten Fläche“ — an einer STEP-Bohrung, an einem *Schraubenloch mit
+    Senkung* aus dem Katalog, an einem Netz. Die Platzierung setzt den
+    Baustein über ``seat_of`` in die Mündung; deren Fläche hat die eigene
+    Öffnung gefüllt, und der gespeicherte Punkt ist die Mitte der Bohrung.
+    Beim Rechnen bereitete ``bind_surface`` dieselbe Fläche **mit** Öffnung
+    vor, und die Mitte lag in der Luft.
+
+    Der Weg wird gegangen wie im Fenster, für jeden Baustein, der in
+    Bohrungen gehört, und an beiden Kernen mit und ohne Senkung. Er muss
+    rechnen, und was er erzeugt, sitzt auf der Achse der Bohrung.
+    """
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene import evaluate
+
+    load_operations()
+    names = [
+        spec.name
+        for spec in REGISTRY.all()
+        if spec.consumes and (part := part_of(spec.name)) is not None and part.at_hole
+    ]
+    assert len(names) >= 4, names
+    for name in names:
+        project, history, sources, source, bore = _carrier_with_a_bore(profile, carrier)
+        suggested = "size" in placement.values_for(REGISTRY.get(name), bore, source.id)
+        _seated_in_the_bore(history, source, bore, name)
+
+        after = evaluate(project.document, profile, sources=sources)
+
+        assert after.complete, (
+            name,
+            [
+                (finding.code, str(finding.message))
+                for finding in after.scene.report.findings
+                if finding.severity == "error"
+            ],
+        )
+        step = project.document.ops[-1].id
+        made = [
+            feature
+            for entry in after.scene.objects.values()
+            for feature in entry.features.values()
+            if feature.created_by == step
+            and feature.params.get("centre") is not None
+            and feature.params.get("axis") is not None
+        ]
+        assert made, f"{name} meldet kein rundes Merkmal"
+        codes = [finding.code for finding in after.scene.report.findings]
+        if suggested:
+            assert "parts.bore_too_wide" not in codes, (name, "die vorgeschlagene Größe passt")
+        if name in {"insert_printed_thread", "insert_heatset_m4"}:
+            # Beide bleiben im Radius ihrer Bohrung oder knapp darüber, und jede
+            # Bohrung liegt mindestens 5 mm vom Rand: Über die Öffnung, in der
+            # sie sitzen, reichen sie nicht „über den Rand der Fläche“.
+            assert "part.over_the_edge" not in codes, name
+        axis = np.asarray(bore.params["axis"], dtype=float)
+        axis /= np.linalg.norm(axis)
+        for feature in made:
+            offset = np.asarray(feature.params["centre"], dtype=float) - bore.params["centre"]
+            across = offset - np.dot(offset, axis) * axis
+            assert np.linalg.norm(across) == pytest.approx(0.0, abs=1e-6), (name, feature.id)
+
+
+@pytest.mark.parametrize(
+    ("carrier", "size", "named"),
+    [("plate_holes.stl", "M4", "M6"), ("screw_hole", "M6", "M8")],
+)
+def test_a_thread_in_a_wider_bore_names_the_bore_not_the_body(profile, carrier, size, named):
+    """Ein Gewinde, das in seiner Bohrung nichts abträgt, sagt, dass sie zu weit ist.
+
+    Der zweite Teil der Kundenmeldung zu 0.5.2: *Schraubenloch mit Senkung*
+    M6 bohrt Ø 6,6, ein *Druckbares Gewinde* M6 reicht nur bis 6 mm plus
+    Spiel. Gemeldet wurde „das Werkzeug liegt neben dem Körper“ — es lag in
+    der Bohrung, und der Kunde suchte an der falschen Stelle. Der Befund nennt
+    die Bohrung, den Satz über passende Gewinde und *Größe ändern*.
+    """
+    from app.core.scene import evaluate
+
+    load_operations()
+    project, history, sources, source, bore = _carrier_with_a_bore(profile, carrier)
+    _seated_in_the_bore(history, source, bore, "insert_printed_thread", size=size)
+
+    after = evaluate(project.document, profile, sources=sources)
+
+    assert after.complete, after.scene.report.findings
+    codes = {finding.code: finding for finding in after.scene.report.findings}
+    assert "boolean.without_effect" not in codes, "nicht „neben dem Körper“"
+    assert "parts.bore_too_wide" in codes, sorted(codes)
+    finding = codes["parts.bore_too_wide"]
+    assert finding.values["field"] == "size"
+    assert [action.id for action in finding.suggestions] == ["change_step"]
+    assert named in str(finding.message), str(finding.message)
+
+
+def test_a_saved_point_in_a_bore_but_off_its_axis_stays_refused():
+    """Gefüllt wird nur die Öffnung, deren Achse durch den gespeicherten Punkt geht.
+
+    Gegenstück zu ``test_a_part_seated_in_the_chosen_bore_is_built_there``:
+    Ein Bezug, der einen Millimeter neben der Mitte in derselben Bohrung landet
+    (Ø 5,2), hat keine Mündung gemeint — er bleibt eine Absage mit Vorschlag,
+    statt dass der Baustein still über der Luft sitzt.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+    from app.core.scene.cancel import NeverCancelled
+    from tests.helpers import MESHES
+
+    load_operations()
+    mesh = MeshData.of(trimesh.load_mesh(MESHES / "plate_holes.stl"))
+    features = detect(mesh)
+    bore = next(feature for _name, feature in sorted(features.items()) if feature.kind == "hole")
+    source = _plate_object(mesh, features)
+    seated = placement.seat_of(as_mesh_data(source.mesh), bore, features)
+    assert seated is not None
+    prepared, mouth = seated
+    hit = placement.at_point(prepared, mouth)
+    spec = REGISTRY.get("insert_printed_thread")
+    values = placement.bound_surface_values(spec, source, hit)
+
+    def bound(shift: float) -> placement.SurfaceBinding:
+        moved = dict(values, surface_distance_1=float(values["surface_distance_1"]) + shift)
+        return placement.bind_surface(
+            spec,
+            moved,
+            {source.id: source},
+            {source.id: "plate"},
+            ask=lambda *_: pytest.fail("Eindeutiger Bezug fragt nicht"),
+            announce=None,
+            cancelled=NeverCancelled(),
+        )
+
+    centred = bound(0.0).placed
+    assert centred is not None and centred.point == pytest.approx(mouth)
+    with pytest.raises(ValidationError, match="außerhalb"):
+        bound(1.0)
+
+
+def _plate_object(mesh, features):
+    from app.core.types import SceneObject
+
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=features)
+
+
 @pytest.mark.parametrize("painted", [False, True])
 def test_native_surface_snapshot_keeps_exact_normals_and_owns_its_caches(profile, painted):
     """Die vorhandene Attributkopie hält Topologie, Merkmalsdreiecke und Arbeitercache getrennt."""
