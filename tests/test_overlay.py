@@ -26,6 +26,7 @@ from app.ui.overlay import (
     LEFT_WIDTH,
     MARGIN,
     RIGHT_MAX,
+    RIGHT_SHARE,
     RIGHT_WIDTH,
     OverlayHost,
     card_stylesheet,
@@ -273,7 +274,7 @@ def test_the_zones_sit_on_top_and_take_nothing_away(window: MainWindow) -> None:
     assert right.geometry().top() == MARGIN
     # Der Anschluss nutzt dieselbe responsive Breite wie die Kartenplatzierung;
     # die unabhängigen Maßgrenzen prüft die anschließende Breitenmatrix.
-    assert right.geometry().width() == card_width(RIGHT_WIDTH, RIGHT_MAX, width)
+    assert right.geometry().width() == card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
 
     # Die Werkzeugzeile ist so breit, wie sie sein muss, und liegt mittig.
     assert bottom.geometry().bottom() <= height - MARGIN
@@ -292,10 +293,10 @@ def test_the_work_cards_use_full_hd_and_grow_with_large_screens() -> None:
     """Maße und Befunde bekommen Raum, ohne auf 4K zu Wänden zu werden."""
     widths = (640, 800, 1200, 1920, 2560, 3072, 3840)
     left = [card_width(LEFT_WIDTH, LEFT_MAX, width) for width in widths]
-    right = [card_width(RIGHT_WIDTH, RIGHT_MAX, width) for width in widths]
+    right = [card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE) for width in widths]
 
     assert 295 <= left[3] <= 310, f"Full HD links: {left[3]} statt etwa 300"
-    assert 395 <= right[3] <= 410, f"Full HD rechts: {right[3]} statt etwa 400"
+    assert 510 <= right[3] <= 525, f"Full HD rechts: {right[3]} statt etwa 518"
     assert left == sorted(left) and right == sorted(right), "breiter darf keine Karte schrumpfen"
     assert left[-1] <= LEFT_MAX and right[-1] <= RIGHT_MAX
 

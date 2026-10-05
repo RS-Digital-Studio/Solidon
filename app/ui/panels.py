@@ -46,6 +46,7 @@ from PySide6.QtGui import (
     QPainterPath,
     QPen,
     QPixmap,
+    QResizeEvent,
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -58,6 +59,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -190,7 +192,7 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
-from app.ui.overlay import LEFT_WIDTH, FittedScroller, rows_height
+from app.ui.overlay import LEFT_WIDTH, ContentScroller, FittedScroller, rows_height
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import (
     NORMAL,
@@ -5619,6 +5621,8 @@ class ReportPanel(QWidget):
         Genau das tat ``_resort`` nach dem ersten ``add_findings``."""
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
+        self._alert_counts = (0, 0)
+        """Dieselben getrennt, Fehler zuerst — siehe :meth:`alert_counts`."""
         self.list = _ReportList(self)
         self.list.setObjectName("reportFindings")
         self.list.setAccessibleName(tr("Befunde"))
@@ -6643,8 +6647,11 @@ class ReportPanel(QWidget):
             # bündelt — die Kopfzeile sagt sonst „6 Hinweise" über 123.
             counts[finding.severity] += item.data(_BUNDLE_ROLE) or 1
         alerts = counts["error"] + counts["warning"]
-        if alerts != self._alerts:
+        # Auch bei gleicher Summe gemeldet: Aus einem Fehler kann eine Warnung
+        # werden, und der Reiter zählt beide getrennt.
+        if (counts["error"], counts["warning"]) != self._alert_counts:
             self._alerts = alerts
+            self._alert_counts = (counts["error"], counts["warning"])
             self.alertsChanged.emit(alerts)
         # Der Knopf zum Slicer steht, sobald kein Fehler mehr im Weg ist und
         # ein Körper da ist — auch neben Warnungen und Hinweisen, die den
@@ -6699,6 +6706,10 @@ class ReportPanel(QWidget):
         dasteht, wird zur Tapete.
         """
         return self._alerts
+
+    def alert_counts(self) -> tuple[int, int]:
+        """Fehler und Warnungen getrennt — der Reiter zeigt je eine Marke."""
+        return self._alert_counts
 
     def _measure_up(self, result: EvaluationResult | None) -> None:
         """Die Kennzahlen über den Befunden — wasserdicht, Volumen, Teile.
@@ -7534,6 +7545,82 @@ class _ActionRow:
     step: int | None = None
     in_view: frozenset[str] = frozenset()
     """Die Felder, die gerade weichen, weil die Maßgruppe im Bild sie trägt."""
+    coordinates: list[_CoordinateRow] = dataclasses.field(default_factory=list)
+    """Die Zeilen, in denen X, Y und Z einer Stelle nebeneinander stehen."""
+
+
+#: Die Felder einer Stelle, die nebeneinander stehen dürfen — in dieser Folge.
+COORDINATE_FIELDS: Final = ("x", "y", "z")
+
+
+class _CoordinateRow(QWidget):
+    """X, Y und Z einer Stelle nebeneinander — untereinander, wo es zu eng wird.
+
+    Seit RM-511 trägt die rechte Karte die Felder der Auswahl und ist breit
+    genug für drei Zahlen in einer Zeile (Robert, 05.10.2026: „breiter machen
+    … und es dann auch sinnvoll nutzen“). An einer Bohrung spart das bei
+    *Verschieben* und *Verdoppeln* je zwei Zeilen. In einer schmalen Karte —
+    ein kleines Fenster — stehen sie wieder untereinander, statt eine Zahl
+    abzuschneiden; entschieden wird an der Breite, die die Zeile bekommt.
+    """
+
+    def __init__(self, pairs: list[tuple[QLabel, QWidget]], parent: QWidget) -> None:
+        super().__init__(parent)
+        self._pairs = pairs
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(TIGHT)
+        self._grid.setVerticalSpacing(TIGHT)
+        self._across: bool | None = None
+        self._arrange(across=True)
+
+    def across(self) -> bool:
+        """Ob die drei Felder gerade nebeneinander stehen."""
+        return bool(self._across)
+
+    def _needed(self) -> int:
+        """Wie breit die Zeile sein muss, damit kein Feld unter sein Mindestmaß fällt."""
+        widths = sum(
+            label.sizeHint().width() + editor.minimumSizeHint().width()
+            for label, editor in self._pairs
+        )
+        return widths + self._grid.horizontalSpacing() * (2 * len(self._pairs) - 1)
+
+    def _arrange(self, *, across: bool) -> None:
+        if across == self._across:
+            return
+        self._across = across
+        for label, editor in self._pairs:
+            self._grid.removeWidget(label)
+            self._grid.removeWidget(editor)
+        for column in range(2 * len(self._pairs)):
+            self._grid.setColumnStretch(column, 0)
+        for index, (label, editor) in enumerate(self._pairs):
+            if across:
+                self._grid.addWidget(label, 0, 2 * index)
+                self._grid.addWidget(editor, 0, 2 * index + 1)
+                self._grid.setColumnStretch(2 * index + 1, 1)
+            else:
+                self._grid.addWidget(label, index, 0)
+                self._grid.addWidget(editor, index, 1)
+        if not across:
+            self._grid.setColumnStretch(1, 1)
+
+    def follow_fields(self) -> None:
+        """Die Zeile verschwindet mit ihren Feldern — sonst bliebe eine leere Lücke."""
+        _set_shown(self, any(not editor.isHidden() for _label, editor in self._pairs))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        """So schmal wie ein Paar: Untereinander geht immer."""
+        hint = super().minimumSizeHint()
+        narrow = max(label.sizeHint().width() for label, _editor in self._pairs) + max(
+            editor.minimumSizeHint().width() for _label, editor in self._pairs
+        )
+        return QSize(narrow + self._grid.horizontalSpacing(), hint.height())
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt-Name
+        super().resizeEvent(event)
+        self._arrange(across=event.size().width() >= self._needed())
 
 
 #: Wie viele Maßgruppen verschiedener Bauart auf ihre Wiederkehr warten
@@ -7765,6 +7852,17 @@ class ColumnScroller(QScrollArea):
         if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
             self.updateGeometry()
         return super().eventFilter(watched, event)
+
+
+class SelectionScroller(ColumnScroller, ContentScroller):
+    """Der Rollbereich im Reiter *Auswahl*: nur senkrecht, und er wünscht alles.
+
+    Die Breite regelt :class:`ColumnScroller`, den Wunsch
+    :class:`~app.ui.overlay.ContentScroller` — so wächst die rechte Karte mit
+    der Auswahl bis an den Platz, den das Fenster hat, und rollt erst danach.
+    Der Parameterbereich links behält Qts Wunsch; er teilt sich seine Spalte
+    mit drei Nachbarn, und die Spalte verteilt selbst.
+    """
 
 
 class FeaturePanel(QWidget):
@@ -9320,6 +9418,9 @@ class FeaturePanel(QWidget):
             # Feld unter seine Beschriftung, und beide bleiben ganz.
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
             form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            names = [str(field.name) for field in action.fields]
+            pending: list[tuple[QLabel, QWidget]] = []
+            waiting: list[QLabel] = []
             for field in action.fields:
                 name = str(field.name)
                 editor = self._build_field(field, box)
@@ -9341,14 +9442,28 @@ class FeaturePanel(QWidget):
                 # ist die Zusage, die überall trägt (:meth:`_fill_row`).
                 label.setBuddy(editor)
                 row.labels[name] = label
-                form.addRow(label, editor)
+                # X, Y und Z einer Stelle teilen sich eine Zeile
+                # (:class:`_CoordinateRow`); ihre Ablehnungssätze folgen
+                # darunter, je an ihrem Feld benannt.
+                start = names.index(name) - len(pending)
+                together = (
+                    names[start : start + len(COORDINATE_FIELDS)] == list(COORDINATE_FIELDS)
+                    and name in COORDINATE_FIELDS
+                )
+                if together:
+                    pending.append((label, editor))
+                else:
+                    form.addRow(label, editor)
                 if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                     refusal = QLabel(box)
                     refusal.setObjectName(f"feature-field-refusal-{name}")
                     refusal.setWordWrap(True)
                     refusal.setVisible(False)
                     row.refusals[name] = refusal
-                    form.addRow(refusal)
+                    if together:
+                        waiting.append(refusal)
+                    else:
+                        form.addRow(refusal)
                     editor.valueRefused.connect(
                         partial(self._refresh_row_refusal, editor, refusal, row)
                     )
@@ -9358,6 +9473,13 @@ class FeaturePanel(QWidget):
                 self._watch(editor, row)
                 if isinstance(editor, RowCheckBox):
                     caption_toggles(label, editor)
+                if len(pending) == len(COORDINATE_FIELDS):
+                    coordinates = _CoordinateRow(pending, box)
+                    row.coordinates.append(coordinates)
+                    form.addRow(coordinates)
+                    for refusal in waiting:
+                        form.addRow(refusal)
+                    pending, waiting = [], []
             layout.addLayout(form)
         else:
             button = QPushButton(str(action.title), box)
@@ -9475,6 +9597,8 @@ class FeaturePanel(QWidget):
             refusal = row.refusals.get(name)
             if refusal is not None:
                 _set_shown(refusal, active and bool(refusal.text()))
+        for coordinates in row.coordinates:
+            coordinates.follow_fields()
 
     def _in_the_view(self, row: _ActionRow) -> frozenset[str]:
         """Die Felder dieser Zeile, die die Maßgruppe im Bild gerade selbst trägt.

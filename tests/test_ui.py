@@ -3196,16 +3196,16 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
-def test_the_selection_window_starts_closed_and_opens_on_a_selection(
+def test_the_selection_tab_starts_behind_and_comes_forward_on_a_selection(
     window: MainWindow,
 ) -> None:
     """Ein Bereich, der beim Start nichts zeigt, ist Fläche ohne Auskunft.
 
     Gemessen an vier Videoaufnahmen (03.09.2026): Das Fenster stand offen und
     leer am rechten Rand und nahm der Ansicht 165 von 1280 Punkten für einen
-    einzigen Satz ab. Wer eine Datei öffnet, hat noch nichts gewählt — es geht
-    bei der **ersten** Auswahl auf, wo es eine gerade gestellte Frage
-    beantwortet.
+    einzigen Satz ab. Seit RM-511 ist es der erste Reiter der rechten Karte;
+    beim Start steht der Prüfbericht vorn, und die **erste** Auswahl holt den
+    Reiter *Auswahl* nach vorn, wo er eine gerade gestellte Frage beantwortet.
 
     **Seit dem 07.09.2026 zählt dazu auch ein gewählter Körper** (Konzept „Ein
     Ort für die Auswahl", A). Bis dahin galt „ein Körper ist kein Merkmal", und
@@ -3213,7 +3213,9 @@ def test_the_selection_window_starts_closed_and_opens_on_a_selection(
     Auswahl, und ein Kunde mit einem gewählten Halter stünde sonst vor einem
     Fenster, das seine Handlungen hat und sie nicht zeigt.
     """
-    assert window.feature_dock.isHidden(), "beim Start zu"
+    assert window.right.indexOf(window.feature_dock) == 0, "der erste Reiter"
+    assert window.right.tabText(0) == tr("Auswahl")
+    assert not window.feature_dock.is_current(), "beim Start steht der Bericht vorn"
 
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -3221,35 +3223,24 @@ def test_the_selection_window_starts_closed_and_opens_on_a_selection(
     object_id, entry = next(iter(result.scene.objects.items()))
     window.object_tree.select_object(object_id)
     QApplication.processEvents()
-    assert not window.feature_dock.isHidden(), "beim gewählten Körper geht es auf"
+    assert window.feature_dock.is_current(), "beim gewählten Körper kommt er nach vorn"
 
     hole = next(
         identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
     )
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
-    assert not window.feature_dock.isHidden(), "und beim Merkmal darin bleibt es"
+    assert window.feature_dock.is_current(), "und beim Merkmal darin bleibt er vorn"
 
 
 def _close_the_feature_window(window: MainWindow) -> None:
-    """Das Merkmalfenster zumachen wie mit seinem Kreuz — am gezeigten Hauptfenster.
-
-    Das Merkmalfenster ist seit ``9d8d33395`` ein natives Fenster, weil es über
-    der Grafikfläche liegt (``overlay.hold_above_the_view``). Solange das
-    Hauptfenster nie gezeigt wurde, ist sein ``QWindow`` oberste Ebene, und
-    ``close()`` geht an ihm vorbei — kein Schließereignis, kein Verbergen, das
-    Fenster bleibt offen. Im Betrieb steht das Hauptfenster; also hier auch.
-    """
-    window.show()
-    QApplication.processEvents()
-    handle = window.feature_dock.windowHandle()
-    assert handle is None or not handle.isTopLevel(), "das Merkmalfenster hängt im Hauptfenster"
-    window.feature_dock.close()
+    """Den Reiter *Auswahl* verlassen wie mit einem Klick auf *Prüfbericht*."""
+    window.right.setCurrentWidget(window.report)
     QApplication.processEvents()
 
 
-def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWindow) -> None:
-    """Wer es zumacht, hat für **diese** Auswahl entschieden.
+def test_a_left_selection_tab_stays_behind_for_this_selection(window: MainWindow) -> None:
+    """Wer den Reiter verlässt, hat für **diese** Auswahl entschieden.
 
     Ein Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe,
     sondern eine Wiederholung derselben Frage. Bis zum 07.09.2026 galt das
@@ -3273,30 +3264,30 @@ def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWin
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, holes[0])
     QApplication.processEvents()
-    assert not window.feature_dock.isHidden()
+    assert window.feature_dock.is_current()
 
     _close_the_feature_window(window)
-    assert window.feature_dock.dismissed, "das Zumachen ist gemerkt"
+    assert window.feature_dock.dismissed, "das Verlassen ist gemerkt"
 
     # Dasselbe Merkmal noch einmal ist keine neue Auswahl — hier gilt die
-    # Zusage, und das Fenster bleibt zu.
+    # Zusage, und der Bericht bleibt vorn.
     window.object_tree.select_feature(object_id, holes[0])
     QApplication.processEvents()
-    assert window.feature_dock.isHidden(), "bei derselben Auswahl springt nichts auf"
+    assert window.right.currentWidget() is window.report, "bei derselben Auswahl springt nichts"
 
     window.object_tree.select_feature(object_id, holes[1])
     QApplication.processEvents()
-    assert not window.feature_dock.isHidden(), (
+    assert window.feature_dock.is_current(), (
         "die nächste Auswahl bringt es zurück — sonst wären die Handlungen dauerhaft weg"
     )
 
 
-def test_reopening_the_feature_window_takes_the_decision_back(window: MainWindow) -> None:
-    """Der Schalter unter *Ansicht* ist der Ausweg, und er hebt das Zumachen auf.
+def test_coming_back_to_the_selection_tab_takes_the_decision_back(window: MainWindow) -> None:
+    """Ein Klick auf den Reiter *Auswahl* hebt das Verlassen auf.
 
-    Wer es zumacht, sagt „nicht jetzt"; wer es über den Schalter wieder
-    aufmacht, sagt das Gegenteil. Danach geht es auch wieder von selbst auf —
-    sonst müsste er es für jedes weitere Merkmal erneut aufmachen.
+    Wer ihn verlässt, sagt „nicht jetzt"; wer ihn wieder anklickt, sagt das
+    Gegenteil. Danach kommt er auch wieder von selbst nach vorn — sonst müsste
+    der Kunde ihn für jedes weitere Merkmal erneut holen.
     """
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -3311,10 +3302,10 @@ def test_reopening_the_feature_window_takes_the_decision_back(window: MainWindow
     _close_the_feature_window(window)
     assert window.feature_dock.dismissed
 
-    window.feature_dock.toggleViewAction().trigger()
+    window.right.setCurrentWidget(window.feature_dock)
     QApplication.processEvents()
-    assert not window.feature_dock.isHidden(), "der Schalter öffnet es"
-    assert not window.feature_dock.dismissed, "und nimmt das Zumachen zurück"
+    assert window.feature_dock.is_current(), "der Klick holt ihn"
+    assert not window.feature_dock.dismissed, "und nimmt das Verlassen zurück"
 
 
 def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
@@ -4059,20 +4050,23 @@ def test_delete_without_a_feature_still_takes_the_body(window: MainWindow) -> No
     assert [step.op for step in window.session.project.document.ops] == ["load", "delete_object"]
 
 
-def test_the_feature_panel_is_a_window_of_its_own(window: MainWindow) -> None:
-    """Robert am 03.09.2026: „ein extra panel nicht die bestehenden erweitern."
+def test_the_selection_is_the_first_tab_of_the_right_card(window: MainWindow) -> None:
+    """Robert am 05.10.2026: „rechts das Auswahlpanel, der Prüfbericht und Chat da als Tab“.
 
-    Es hing zuerst als Abschnitt in der linken Spalte. Jetzt ist es ein Dock:
-    eigener Titel, abziehbar, mit einem Schalter im Ansichtsmenü — und die
-    linke Spalte ist wieder die, die sie war.
+    Bis 0.5.2 ein eigenes Dock neben der Karte, abziehbar und mit einem
+    Schalter im Ansichtsmenü — zwei Spalten rechts. Jetzt ist die Auswahl der
+    erste Reiter derselben Karte; ein Dock gibt es nicht mehr, also auch
+    keinen Schalter dafür. Die linke Spalte bleibt, was sie war.
     """
     from PySide6.QtWidgets import QDockWidget, QPushButton
 
-    dock = window.feature_dock
-    assert isinstance(dock, QDockWidget)
-    assert dock.widget() is not None, "das Panel steckt darin"
-    assert dock.features() & QDockWidget.DockWidgetFeature.DockWidgetFloatable, "abziehbar"
-    assert window.feature_panel in dock.findChildren(type(window.feature_panel))
+    assert not window.findChildren(QDockWidget), "kein Dock mehr"
+    page = window.feature_dock
+    assert window.right.indexOf(page) == 0, "der erste Reiter der rechten Karte"
+    assert window.feature_panel in page.findChildren(type(window.feature_panel))
+    assert window.selection_operations in page.findChildren(type(window.selection_operations))
+    view_entries = [action.text().replace("&", "") for action in window._view_menu.actions()]
+    assert tr("Auswahl") not in view_entries, "kein Schalter für ein Fenster, das es nicht gibt"
 
     beschriftungen = [
         knopf.text().replace("&", "")
@@ -15779,14 +15773,15 @@ def test_the_report_tab_counts_what_needs_attention(window: MainWindow) -> None:
     und im Fenster sah man einen Reiter, der aussah wie vorher. Wer die Tour
     oder den Chat offen hatte, erfuhr von der Warnung nichts.
 
-    Gezählt werden Fehler und Warnungen, keine Hinweise: „Doppelte Punkte
-    wurden verschweißt" ist eine Auskunft und keine Aufforderung.
+    Gezählt werden Fehler und Warnungen getrennt, je als Marke mit Zeichen und
+    Zahl (Regel 18), keine Hinweise: „Doppelte Punkte wurden verschweißt" ist
+    eine Auskunft und keine Aufforderung. Ohne Befund steht keine Marke.
     """
     from app.core.types import Finding
 
     index = window.right.indexOf(window.report)
-    plain = window.right.tabText(index)
-    assert "·" not in plain, "ohne Befunde steht dort nur der Name"
+    bar = window.right_tabs
+    assert bar.tabButton(index, bar.ButtonPosition.RightSide) is None, "ohne Befunde nur der Name"
 
     window.report.add_findings(
         [
@@ -15796,17 +15791,67 @@ def test_the_report_tab_counts_what_needs_attention(window: MainWindow) -> None:
     )
 
     assert window.report.alerts() == 1, "eine Warnung, der Hinweis zählt nicht"
-    assert window.right.tabText(index) == f"{plain} · 1"
+    badge = bar.badge(index)
+    assert badge is not None and bar.tabButton(index, bar.ButtonPosition.RightSide) is badge
+    assert badge.warnings.text().endswith(" 1") and not badge.warnings.isHidden()
+    assert badge.errors.isHidden(), "keine Marke für null Fehler"
+    assert bar.tabToolTip(index) == tr("1 Warnung")
+
+    window.report.add_findings(
+        [Finding(code="slice.thin_wall", severity="error", message="zu dünn")]
+    )
+    assert badge.errors.text().endswith(" 1") and not badge.errors.isHidden()
+    assert bar.tabToolTip(index) == f"{tr('1 Fehler')}, {tr('1 Warnung')}"
 
 
-def test_a_stopped_chain_opens_the_report_even_during_a_tour(window: MainWindow) -> None:
-    """Die Meldung sagt „siehe Prüfbericht" — dann muss er auch aufgehen.
+def test_a_new_warning_signals_the_report_tab_without_taking_the_card(
+    window: MainWindow,
+) -> None:
+    """Robert, 05.10.2026: Warnungen und Fehler holen den Bericht nicht nach vorn.
 
-    Der Vorrang der Tour ist richtig, solange es um eine Warnung im Ablauf
-    geht. Hält die Kette an, verweist die Statusleiste ausdrücklich auf den
-    Bericht; ein Verweis auf ein Fenster, das die Anwendung selbst zuhält,
-    ist keiner.
+    Der Reiter blinkt stattdessen — gelb bei einer Warnung, rot bei einem
+    Fehler — und hört auf, sobald der Kunde im Bericht war. Eine Warnung, die
+    er dort gesehen hat, blinkt nicht nach jeder Auswertung wieder; eine
+    weitere ist wieder neu. Offscreen steht die Tönung ohne Blinken gleich
+    fest (``motion.animations_enabled``).
     """
+    from app.core.types import Finding
+    from app.ui.palette import ROLES
+
+    index = window.right.indexOf(window.report)
+    bar = window.right_tabs
+    window.right.setCurrentWidget(window.chat)
+
+    window.report.add_findings([Finding(code="a", severity="warning", message="eins")])
+    assert window.right.currentWidget() is window.chat, "die Warnung nimmt die Karte nicht"
+    assert bar.signalled() == index
+    tint = bar.tint()
+    assert tint is not None and tint.name() == ROLES["warning"], "gelb bei einer Warnung"
+
+    window.report.add_findings([Finding(code="b", severity="error", message="zwei")])
+    tint = bar.tint()
+    assert tint is not None and tint.name() == ROLES["error"], "rot, sobald ein Fehler dazukommt"
+
+    window.right.setCurrentWidget(window.report)
+    assert bar.signalled() == -1 and bar.tint() is None, "im Bericht gewesen heißt: gesehen"
+    window.right.setCurrentWidget(window.chat)
+    window._mark_report_tab()
+    assert bar.signalled() == -1, "Gesehenes blinkt nicht wieder"
+
+    window.report.add_findings([Finding(code="c", severity="warning", message="drei")])
+    tint = bar.tint()
+    assert tint is not None and tint.name() == ROLES["warning"], "die neue Warnung allein: gelb"
+
+
+def test_the_status_counter_brings_the_report_even_during_a_tour(window: MainWindow) -> None:
+    """Wer den Zähler anklickt, will den Bericht sehen — auch neben einer Tour.
+
+    Von selbst kommt der Bericht nicht mehr nach vorn, auch nicht, wenn die
+    Kette anhält: Sein Reiter blinkt rot (Robert, 05.10.2026). Nach vorn holt
+    ihn eine Bitte des Kunden, und die überstimmt die laufende Anleitung
+    (``force``); ohne sie lässt ``_focus_report`` die Tour stehen.
+    """
+
     from app.core import examples
     from app.core.tour import tour_for
 
@@ -15824,10 +15869,10 @@ def test_a_stopped_chain_opens_the_report_even_during_a_tour(window: MainWindow)
     assert window.tour.active, "die Anleitung läuft"
 
     window._focus_report()
-    assert window.right.currentWidget() is window.tour, "eine Warnung lässt die Anleitung stehen"
+    assert window.right.currentWidget() is window.tour, "ohne Bitte bleibt die Anleitung"
 
     window._focus_report(force=True)
-    assert window.right.currentWidget() is window.report, "ein Abbruch holt den Bericht nach vorn"
+    assert window.right.currentWidget() is window.report, "die Bitte holt den Bericht"
 
 
 def test_the_object_tree_offers_the_keyboard_a_starting_point(window: MainWindow) -> None:
@@ -22378,12 +22423,14 @@ def test_new_model_clears_previous_tour_only_after_confirmed_project_change(
     project = window.session.project
     window.feature_dock.forget_dismissal()
     window.feature_dock.reveal()
-    assert not window.feature_dock.isHidden()
+    assert window.feature_dock.isVisibleTo(window)
     window.action_new()
     assert window.tour.active
-    assert window.feature_dock.isHidden()
+    assert not window.feature_dock.isVisibleTo(window), "die Startfläche deckt die Karte"
     window.feature_dock.reveal()
-    assert window.feature_dock.isHidden(), "Ein spätes Auswahlsignal holt das Dock nicht zurück"
+    assert not window.feature_dock.isVisibleTo(window), (
+        "Ein spätes Auswahlsignal holt die Auswahl nicht über die Startfläche"
+    )
     monkeypatch.setattr(module, "confirm_unsaved", lambda *_: "cancel")
     paths = [MESHES / "cube_clean.stl", MESHES / "cube_clean.stl"]
     load = (
@@ -22395,7 +22442,9 @@ def test_new_model_clears_previous_tour_only_after_confirmed_project_change(
     assert window.session.project is project
     assert window.tour.active
     window._show_start_screen(False)
-    assert not window.feature_dock.isHidden(), "Rückkehr ohne Wechsel stellt die Auswahl wieder her"
+    assert window.feature_dock.isVisibleTo(window), (
+        "Rückkehr ohne Wechsel stellt die Auswahl wieder her"
+    )
     window.action_new()
     monkeypatch.setattr(module, "confirm_unsaved", lambda *_: "discard")
     load()

@@ -452,11 +452,16 @@ def test_every_control_the_texts_name_is_one_the_application_says() -> None:
 FENSTER_HEISST_ANDERS: tuple[tuple[str, str, str], ...] = (
     (
         "Merkmalfenster",
-        "Auswahlfenster",
+        "unter Auswahl",
         "Das Dock heißt seit dem 07.09.2026 „Auswahl“ (ein Ort für die "
-        "Auswahl), und das Handbuch nennt es Auswahlfenster. Fünf Sätze "
-        "schickten den Kunden bis zum 14.09.2026 an ein Fenster, dessen Name "
-        "nirgends im Fenster steht.",
+        "Auswahl). Fünf Sätze schickten den Kunden bis zum 14.09.2026 an ein "
+        "Fenster, dessen Name nirgends im Fenster steht.",
+    ),
+    (
+        "Auswahlfenster",
+        "unter Auswahl",
+        "Seit RM-511 (05.10.2026) ist die Auswahl ein Reiter der rechten Karte "
+        "und kein Fenster mehr; ein Satz schickt den Kunden „rechts unter Auswahl“.",
     ),
 )
 

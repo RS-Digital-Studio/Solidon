@@ -106,7 +106,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-510 — Das Auswahlfenster stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit](#rm-510) | Bedienung und Darstellung | Schnellhandlungen als Knöpfe, flache Liste, Akkordeon am Merkmal, Filament hinter die Handlungen, keine doppelten Knöpfe |
-| [RM-511 — Rechts steht eine Spalte, und leere Karten geben ihren Platz frei](#rm-511) | Bedienung und Darstellung | Rechts eine Karte mit den Reitern Auswahl, Prüfbericht und Chat; Reiterkorrektur der Kartenhöhe |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz](#rm-513) | Bedienung und Darstellung | Vorderseitengrenze 4, Einleitung ein Satz, „Wann nicht?“ als Klappe, Nullwerte mit Namen, fx nur mit Parametern |
 | [RM-514 — Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar](#rm-514) | Bedienung und Darstellung | Fünf Werte vorn, ein Profilsatz ohne leere Felder, Grund unter der Tabelle, eindeutige Beschriftungen, Lücke über den Knöpfen |
@@ -3913,7 +3912,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Folge; der Vertrag aus RM-090 (Produktkompass §4.3) wird so fortgeschrieben.
   **Abnahme:** In der Lage von main-window.png höchstens 100 Wörter im Bericht und über
   der Liste höchstens 12; in der Lage von report.png mindestens drei Befundzeilen; kein
-  Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick.
+  Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick; bei
+  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch (aus RM-511
+  übernommen; seit RM-511 folgt die Karte dem Inhalt, gemessen 252 px ohne Befund).
 
 <a id="rm-509"></a>
 
@@ -3962,24 +3963,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Rollen, höchstens vier Zahlenfelder sichtbar; bei 1000 px Höhe mindestens 18 Einträge
   sichtbar; kein abgeschnittener Platzhalter in sechs Sprachen; je Merkmalsart keine
   zwei Knöpfe mit demselben Ziel. Überschneidung RM-204, RM-232.
-
-<a id="rm-511"></a>
-
-- [ ] **RM-511 — Rechts steht eine Spalte, und leere Karten geben ihren Platz frei.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Berichtskarte und angedocktes Auswahlfenster stehen nebeneinander (26 % der
-  Fensterbreite, freie Mitte 62 % bei 2560 px, bei 1280 px gerechnet 22 %); `fenster.md`
-  beschreibt eine Spalte. Bei „Bereit zur Übergabe“ sind 46–51 % der Berichtskarte leer;
-  vermutete Ursache: `natural_height` zieht den höchsten Reiter nur bei einer Zone ab,
-  die selbst ein `QTabWidget` ist (`overlay.py:677`).
-  **Fix:** Reiterkorrektur für jedes `QTabWidget` in einer Zone; rechts eine Karte mit
-  den Reitern Auswahl, Prüfbericht und Chat statt Karte plus Dock; eine Auswahl holt den
-  Reiter Auswahl nach vorn, eine neue Warnung den Prüfbericht.
-  **Entschieden (Robert, 05.10.2026):** „rechts das Auswahlpanel, der Prüfbericht und
-  Chat da als Tab“. Das freie Andocken des Auswahlfensters entfällt; Bauplan §2.5 und
-  `fenster.md` ziehen nach.
-  **Abnahme:** In allen Reitern höchstens 24 px Leerraum unter dem letzten Element; bei
-  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch; zwischen
-  1280 und 2560 px Breite eine rechte Spalte, freie Mitte mindestens 70 %.
 
 <a id="rm-512"></a>
 

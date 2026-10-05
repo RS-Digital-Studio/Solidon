@@ -491,9 +491,9 @@ def test_missing_saved_feature_is_preserved_in_the_multi_editor(qt_app: QApplica
     assert field.list.item(1).data(Qt.ItemDataRole.UserRole) == "missing"
 
 
-def test_embedded_picker_fits_the_narrow_selection_dock(qt_app: QApplication) -> None:
+def test_embedded_picker_fits_the_narrow_selection_tab(qt_app: QApplication) -> None:
     """Ein schmaler Rollbereich hält Pfeil und Lagerknopf vollständig erreichbar."""
-    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtCore import QPoint
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QScrollArea
 
@@ -520,13 +520,16 @@ def test_embedded_picker_fits_the_narrow_selection_dock(qt_app: QApplication) ->
     width = max(
         244, window.quick_filament.inventory_button.minimumSizeHint().width() + 2 * NORMAL + 20
     )
-    window.resizeDocks([window.feature_dock], [width], Qt.Orientation.Horizontal)
+    # Die rechte Karte ist so schmal, wie ein schmales Fenster sie macht
+    # (``overlay.card_width``): Die Enge-Grenze gibt ihr 42 % der Breite.
+    from app.ui.overlay import CARD_PADDING, NARROW_CARD_SHARE
+
+    window.resize(int((width + 2 * CARD_PADDING + 4) / NARROW_CARD_SHARE) + 1, 800)
     QTest.qWait(100)
     # Der Rollbereich liegt seit dem 13.09.2026 in einer Spalte, unter der die
-    # Knopfzeile des Merkmalfensters fest steht (`_build_feature_dock`); das
-    # Dock-Widget ist diese Spalte, der Rollbereich ihr erstes Kind.
-    column = window.feature_dock.widget()
-    assert column is not None
+    # Knopfzeile des Merkmalfensters fest steht (`_build_feature_dock`); der
+    # Reiter *Auswahl* ist diese Spalte, der Rollbereich ihr erstes Kind.
+    column = window.feature_dock
     scroller = column.findChild(QScrollArea)
     assert isinstance(scroller, QScrollArea)
     assert scroller.horizontalScrollBar().maximum() == 0

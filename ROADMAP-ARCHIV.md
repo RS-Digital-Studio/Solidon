@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-511: Rechts steht eine Karte mit den Reitern Auswahl, Prüfbericht und Chat (05.10.2026)](#rm-511-rechts-steht-eine-karte-mit-den-reitern-auswahl-prüfbericht-und-chat-05102026) |
 | 2026-10-04 | [RM-017: Nutfedermaße an realen Aluminiumprofilen prüfen — am echten Fenster abgenommen (04.10.2026)](#rm-017-nutfedermaße-an-realen-aluminiumprofilen-prüfen--am-echten-fenster-abgenommen-04102026) |
 | 2026-10-04 | [RM-197: Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell — am echten Fenster abgenommen (04.10.2026)](#rm-197-maßeditor-im-bild-kein-bezugswechsel-am-etikett-beschriftungen-mit-abstand-zum-modell--am-echten-fenster-abgenommen-04102026) |
 | 2026-10-04 | [RM-199: Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster — am echten Fenster abgenommen (04.10.2026)](#rm-199-der-durchmesser-steht-doppelt-im-bild-und-rechts-im-auswahlfenster--am-echten-fenster-abgenommen-04102026) |
@@ -41755,3 +41756,50 @@ Sonde und Messung im Repository unter
   Speichern, Abbruch während des Lesens. Changelog: nein, nur Nachweis.
 
 **Abschluss:** Fensterabnahme 04.10.2026: Am Piratenschiff wählt jede Sammelzeile genau ihre Körper, auch die über 17 (Wahl beim Drücken, `b993d1bd1`), und die Einzelheiten nennen jeden Körper mit seinen Werten; 17 STL kommen als ein Verlaufseintrag in ihrer Lage (373,15 × 351,07 × 115 mm), *Modell einfügen* erhält den vorhandenen Körper, Strg+Z/Strg+Y und Speichern/Öffnen stimmen, ein Abbruch beim Lesen lässt nichts zurück, und eine offene Formsitzung weist den Import mit Rückweg ab. Belege `F:\solidon-review-reports\claude-2026-10-04\fensterabnahme\rm131-*\`. Bildnachweise unter `F:\solidon-review-reports\claude-2026-10-04\fensterabnahme\`.
+
+## RM-511: Rechts steht eine Karte mit den Reitern Auswahl, Prüfbericht und Chat (05.10.2026)
+
+<a id="rm-511-rechts-steht-eine-karte-mit-den-reitern-auswahl-prüfbericht-und-chat-05102026"></a>
+<a id="rm-511"></a>
+
+**RM-511 — Rechts steht eine Spalte, und leere Karten geben ihren Platz frei.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Berichtskarte und angedocktes Auswahlfenster stehen nebeneinander (26 % der
+  Fensterbreite, freie Mitte 62 % bei 2560 px, bei 1280 px gerechnet 22 %); `fenster.md`
+  beschreibt eine Spalte. Bei „Bereit zur Übergabe“ sind 46–51 % der Berichtskarte leer;
+  vermutete Ursache: `natural_height` zieht den höchsten Reiter nur bei einer Zone ab,
+  die selbst ein `QTabWidget` ist (`overlay.py:677`).
+  **Fix:** Reiterkorrektur für jedes `QTabWidget` in einer Zone; rechts eine Karte mit
+  den Reitern Auswahl, Prüfbericht und Chat statt Karte plus Dock; eine Auswahl holt den
+  Reiter Auswahl nach vorn, eine neue Warnung den Prüfbericht.
+  **Entschieden (Robert, 05.10.2026):** „rechts das Auswahlpanel, der Prüfbericht und
+  Chat da als Tab“. Das freie Andocken des Auswahlfensters entfällt; Bauplan §2.5 und
+  `fenster.md` ziehen nach.
+  **Abnahme:** In allen Reitern höchstens 24 px Leerraum unter dem letzten Element; bei
+  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch; zwischen
+  1280 und 2560 px Breite eine rechte Spalte, freie Mitte mindestens 70 %.
+
+**Umsetzung:** Das Dock `_FeatureDock` ist der Reiter 0 der rechten Karte
+(`main_window._SelectionPage`): Eine neue Auswahl holt ihn nach vorn, Verlassen gilt bis
+zum Auswahlwechsel, ein Klick zurück hebt es auf; kein Dock, kein Schalter unter *Ansicht*.
+Warnungen und Fehler holen den Prüfbericht nicht mehr nach vorn (Robert, 05.10.2026:
+„Warnungen und Fehler nicht“): `tab_signal.SignalTabBar` trägt je Schwere eine Marke mit
+Zeichen und Zahl und blinkt bei Neuem knapp fünf Sekunden sanft, gelb bei Warnung, rot bei
+Fehler, getönt bis zum Ansehen. `_focus_report` nur noch auf Bitte (Statuszähler, Wahl
+nach Anhalten, angefordertes Ergebnis wie Slicen und G-Code). `overlay.CurrentPageTabs`
+misst die Karte an der vorderen Seite statt an der höchsten, `overlay.ContentScroller`
+lässt die Auswahl ihren ganzen Inhalt wünschen (vorher rastete die Höhenrechnung über die
+Sichthöhe bei 597 statt 810 px ein). Die Karte ist breiter (Robert: „breiter machen, wo
+wir mehr Platz haben, und es sinnvoll nutzen“): Grund 440, Anteil 27 %, Full HD 518,
+Deckel 600; dort stehen X, Y, Z einer Stelle in einer Zeile (`panels._CoordinateRow`),
+in schmalen Karten untereinander. Texte, Handbuch und Abbildung nennen „rechts unter
+Auswahl“; Bauplan §2.5/§2.6 und `fenster.md` nachgezogen.
+
+**Nachweis (echtes Fenster, Windows, Sonde):** Leerraum unter dem letzten Element je
+Reiter 0/0/8 px; Prüfbericht ohne Befund 252 statt rund 530 px; Bohrung von plate_holes
+bei 1920 × 1080 810 px ohne Rollen (vorher 717 mit Rollen), mit drei Koordinatenzeilen
+weniger; neue Warnung bei vorn stehender Auswahl: Auswahl bleibt, Reiter gelb, Fehler
+dazu rot, nach dem Ansehen still. Übernommen in RM-508: Berichtskarte ≤ 120 px bei nur
+Hinweisen (der Kopf selbst ist RM-508). Entfallen durch Roberts Breitenentscheid: „freie
+Mitte mindestens 70 %“ (bei 1920 jetzt 55 %). Fenstertests beim Release.
+Changelog: zum nächsten Release (eine Karte mit drei Reitern, Marken und Blinken am
+Prüfbericht, breitere Karte mit Koordinaten in einer Zeile).

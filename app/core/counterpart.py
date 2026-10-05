@@ -291,9 +291,9 @@ def attach_fit(
                 code="parts.counterpart_unpaired",
                 severity="warning",
                 message=_(
-                    "Der Verlauf hat sich seit dem Einsetzen geändert. Die Passung wurde "
-                    "nicht nachgetragen. Prüfen Sie die beiden Hälften im aktuellen Modell "
-                    "und tragen Sie die Passung bei Bedarf im Auswahlfenster ein."
+                    "Der Verlauf hat sich seit dem Einsetzen geändert, deshalb fehlt die "
+                    "Passung. Prüfen Sie die beiden Hälften und tragen Sie die Passung bei "
+                    "Bedarf rechts unter Auswahl ein."
                 ),
                 values={"pair": pair.key},
             )
@@ -314,7 +314,7 @@ def attach_fit(
                 message=_(
                     "Die beiden Hälften stehen, eine Passung dazwischen gibt es "
                     "nicht: Eines der Merkmale ist unter seinem Namen nicht zu "
-                    "finden. Sie lässt sich im Auswahlfenster nachtragen."
+                    "finden. Sie lässt sich rechts unter Auswahl nachtragen."
                 ),
                 values={"pair": pair.key},
             )
@@ -554,9 +554,9 @@ def attach_thread_fit(
                 code="parts.counterpart_unpaired",
                 severity="warning",
                 message=_(
-                    "Der Verlauf hat sich seit dem Einsetzen geändert. Die Passung wurde "
-                    "nicht nachgetragen. Prüfen Sie die beiden Hälften im aktuellen Modell "
-                    "und tragen Sie die Passung bei Bedarf im Auswahlfenster ein."
+                    "Der Verlauf hat sich seit dem Einsetzen geändert, deshalb fehlt die "
+                    "Passung. Prüfen Sie die beiden Hälften und tragen Sie die Passung bei "
+                    "Bedarf rechts unter Auswahl ein."
                 ),
                 values={"pair": "thread"},
             )
@@ -573,7 +573,7 @@ def attach_thread_fit(
                 message=_(
                     "Die beiden Hälften stehen, eine Passung dazwischen gibt es "
                     "nicht: Eines der Merkmale ist unter seinem Namen nicht zu "
-                    "finden. Sie lässt sich im Auswahlfenster nachtragen."
+                    "finden. Sie lässt sich rechts unter Auswahl nachtragen."
                 ),
                 values={"pair": "thread"},
             )

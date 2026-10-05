@@ -203,7 +203,7 @@ class GroupPatternParams(BaseParams):
     ),
     caveat=_(
         "Durchgehende und tiefe Bohrungen bleiben Bohrungen mit ihren eigenen Handlungen; "
-        "mehrere gleiche ändert das Auswahlfenster gemeinsam."
+        "mehrere gleiche lassen sich rechts unter Auswahl gemeinsam ändern."
     ),
 )
 def group_pattern(ctx: OpContext) -> OpResult:

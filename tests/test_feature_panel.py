@@ -79,6 +79,50 @@ def test_measuring_keeps_footer_actions_hidden_through_a_feature_switch(qt_app) 
         panel.deleteLater()
 
 
+def test_a_place_stands_on_one_line_where_the_card_has_room(qt_app: QApplication) -> None:
+    """X, Y und Z einer Stelle nebeneinander, wo die Zeile ihr Mindestmaß hat (RM-511).
+
+    Robert, 05.10.2026: die rechte Karte breiter machen „und es dann auch
+    sinnvoll nutzen“. An einer Bohrung spart die Zeile bei *Verschieben* und
+    *Verdoppeln* je zwei Zeilen. In einer schmalen Karte stehen die drei Felder
+    wieder untereinander, statt eine Zahl abzuschneiden — und die Zeile
+    verlangt nie mehr Mindestbreite als ein Paar, sonst erzwänge sie selbst die
+    breite Karte. Verschwinden alle drei Felder, geht die Zeile mit.
+    """
+    from app.ui.panels import _CoordinateRow
+
+    load_operations()
+    mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
+    found = features.detect(mesh)
+    hole = next(key for key, feature in found.items() if feature.kind == "hole")
+    panel = FeaturePanel()
+    try:
+        panel.show_feature(hole, found[hole], features=found, mesh=mesh)
+        rows = [row for row in panel._shown_rows.values() if row.op == "move_feature"]
+        assert rows, "an einer Bohrung steht *Merkmal verschieben*"
+        (place,) = rows[0].coordinates
+        assert isinstance(place, _CoordinateRow)
+        assert [label.buddy() for label, _editor in place._pairs] == [
+            rows[0].widgets[name] for name in ("x", "y", "z")
+        ], "jede Beschriftung gehört weiter zu ihrem Feld"
+
+        place.resize(place._needed() + 20, place.sizeHint().height())
+        assert place.across(), "mit Platz in einer Zeile"
+        place.resize(place._needed() - 20, place.sizeHint().height())
+        assert not place.across(), "zu eng: untereinander"
+        assert place.minimumSizeHint().width() < place._needed(), (
+            "die Zeile erzwingt nicht selbst die breite Karte"
+        )
+
+        for _label, editor in place._pairs:
+            editor.hide()
+        place.follow_fields()
+        assert place.isHidden(), "ohne Felder keine leere Lücke"
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
 def test_texture_fields_keep_expressions_and_hidden_parameters(qt_app: QApplication) -> None:
     """Ein vorhandenes Rechteck behält seine Breitenbindung und seinen Ort."""
     from types import SimpleNamespace

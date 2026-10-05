@@ -2145,7 +2145,7 @@ class FilamentPanel(QWidget):
                 # Zeile oft auf „…" (:class:`_WithinTheWidth`).
                 said = tr(
                     "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
-                    "rechts im Auswahlfenster, sobald er gewählt ist."
+                    "rechts unter Auswahl, sobald er gewählt ist."
                 )
                 item.setToolTip(f"{label}\n{said}")
                 self.list.addItem(item)

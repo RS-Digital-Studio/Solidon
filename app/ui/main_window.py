@@ -60,7 +60,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -335,17 +334,23 @@ from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog
-from app.ui.overlay import CARD_PADDING, CardColumn, OverlayHost, card_stylesheet
+from app.ui.overlay import (
+    CARD_PADDING,
+    CardColumn,
+    CurrentPageTabs,
+    OverlayHost,
+    card_stylesheet,
+)
 from app.ui.palette import text_colour
 from app.ui.panels import (
     SEVERITY_MARKER,
-    ColumnScroller,
     FeaturePanel,
     HistoryPanel,
     MeasurementLabel,
     ObjectTree,
     ParameterPanel,
     ReportPanel,
+    SelectionScroller,
     as_error,
     collapsible,
     describe_selection,
@@ -393,6 +398,7 @@ from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropp
 from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
+from app.ui.tab_signal import SignalTabBar
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -762,91 +768,81 @@ class _ActionNotice(SketchSelectionBadge):
         return super().eventFilter(watched, event)
 
 
-class _FeatureDock(QDockWidget):
-    """Das Merkmalsfenster — merkt sich, wenn der Kunde es **selbst** zumacht.
+class _SelectionPage(QWidget):
+    """Der Reiter „Auswahl“: Maße und Handlungen des Gewählten (RM-511).
 
-    Es startet zu und geht beim ersten gewählten Merkmal von selbst auf. Wer
-    es danach schließt, hat entschieden; von da an öffnet nur noch der
-    Schalter unter *Ansicht*. Ein Fenster, das nach jedem Klick wieder
-    aufspringt, ist keine Hilfe, sondern dieselbe Frage noch einmal.
+    Bis 0.5.2 ein eigenes Dock neben der Karte mit Prüfbericht und Chat — zwei
+    Spalten rechts, zusammen ein Viertel der Fensterbreite. Robert am
+    05.10.2026: „rechts das Auswahlpanel, der Prüfbericht und Chat da als
+    Tab“. Seitdem ist es der erste Reiter derselben Karte.
 
-    Warum das nicht über ``visibilityChanged`` läuft: Qt beantwortet
-    ``isVisible()`` mit „nein", solange das Hauptfenster nicht angezeigt ist,
-    und feuert das Signal dann gar nicht. Im Testlauf ist nie etwas angezeigt.
-    ``closeEvent`` und ``hideEvent`` kommen in beiden Lagen an — das eine beim
-    Kreuz, das andere beim Schalter.
+    **Wer den Reiter verlässt, hat für diese Auswahl entschieden** (Konzept
+    „Ein Ort für die Auswahl“, D): Ein Klick auf *Prüfbericht* wird nicht vom
+    nächsten Neuaufbau derselben Auswahl zurückgenommen, erst eine neue
+    Auswahl holt den Reiter wieder nach vorn (:meth:`forget_dismissal`).
+
+    Der Zustand hängt am Reiterwechsel (``currentChanged``), nicht an
+    ``hideEvent``: Der Stapel verbirgt eine Seite auch, solange das Fenster
+    selbst nicht gezeigt ist, und in jedem Test ist es das nicht.
     """
 
-    #: Es ist zugegangen. Wer eine Vorschau hat, die zu diesem Fenster gehört,
-    #: räumt sie hier ab — das Fenster, in dem man sie zurücknehmen könnte, ist
-    #: gerade verschwunden.
     closed = Signal()
+    """Der Reiter ist nicht mehr vorn. Eine Vorschau, die hierher gehört, fällt —
+    die Felder, in denen man sie übernehmen oder zurücknehmen könnte, sind weg."""
 
-    # Als Klassenwerte, nicht erst im Rumpf: ``setVisible`` ist überschrieben
-    # und kann von Qt schon aus ``super().__init__`` heraus gerufen werden —
-    # dann stünden die Felder noch nicht.
-    dismissed = False
-    _watching = False
-    _workspace_visible = True
-    _workspace_was_open = False
-
-    def __init__(self, title: str, parent: QWidget | None = None) -> None:
-        super().__init__(title, parent)
+    def __init__(self, tabs: QTabWidget, fallback: QWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("selectionPage")
+        self._tabs = tabs
+        self._fallback = fallback
+        self.dismissed = False
+        self._watching = False
+        self._workspace_visible = True
+        self._was_current = False
+        tabs.currentChanged.connect(self._current_changed)
 
     def start_watching(self) -> None:
-        """Ab hier zählt ein Zumachen als Entscheidung — nicht das erste Verbergen."""
+        """Ab hier zählt ein Reiterwechsel als Entscheidung — nicht der Aufbau."""
         self._watching = True
+        self._was_current = self.is_current()
+
+    def is_current(self) -> bool:
+        """Ob der Reiter vorn ist."""
+        return self._tabs.currentWidget() is self
 
     def reveal(self) -> None:
-        """Zeigt das Fenster, es sei denn, der Kunde hat es zugemacht.
-
-        Gefragt wird ``isHidden()`` und nicht ``isVisible()``: Das eine ist der
-        gesetzte Zustand, das andere hängt am Hauptfenster.
-        """
-        if not self._workspace_visible or self.dismissed or not self.isHidden():
+        """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen."""
+        if not self._workspace_visible or self.dismissed:
             return
-        self.show()
+        self._tabs.setCurrentWidget(self)
+
+    def leave(self) -> None:
+        """Wie ein Klick auf den Prüfbericht: Der Reiter geht nach hinten."""
+        if self.is_current():
+            self._tabs.setCurrentWidget(self._fallback)
 
     def set_workspace_visible(self, visible: bool) -> None:
-        """Die Startansicht verbirgt das Dock ohne eine Schließentscheidung vorzutäuschen."""
-        if visible == self._workspace_visible:
-            return
-        if not visible:
-            self._workspace_was_open = not self.isHidden()
+        """Auf der Startfläche holt keine Auswahl den Reiter nach vorn."""
         self._workspace_visible = visible
-        super().setVisible(visible and self._workspace_was_open and not self.dismissed)
 
     def forget_dismissal(self) -> None:
-        """Ein neues Merkmal ist gewählt — das Zumachen von vorhin gilt nicht mehr.
+        """Eine neue Auswahl — das Verlassen von vorhin gilt nicht mehr.
 
-        **Der Merker gehört der Auswahl, nicht der Sitzung** (Konzept „Ein Ort
-        für die Auswahl", D). Die Zusage darüber — „ein Fenster, das nach jedem
-        Klick wieder aufspringt, ist keine Hilfe" — bleibt für den Fall
-        bestehen, für den sie geschrieben wurde: Wer zumacht, sieht es bei
-        **dieser** Auswahl nicht wieder. Auf Dauer wäre sie etwas anderes,
-        nämlich der Verlust aller Handlungen an der Auswahl, sobald das
-        Fenster sie trägt.
+        **Der Merker gehört der Auswahl, nicht der Sitzung**: Wer den Reiter
+        verlässt, sieht ihn bei dieser Auswahl nicht wieder von selbst; auf
+        Dauer wäre es der Verlust aller Handlungen an jeder späteren Auswahl.
         """
         self.dismissed = False
 
-    def setVisible(self, visible: bool) -> None:  # noqa: N802 - Qt name
-        """Der Trichter, durch den jedes Auf und Zu läuft.
-
-        Das Kreuz, der Schalter unter *Ansicht* und ``reveal()`` enden alle
-        hier — Ereignisse dagegen nicht: ``showEvent`` und ``hideEvent``
-        bleiben aus, solange das Hauptfenster nicht angezeigt ist, und
-        ``visibilityChanged`` ebenso (gemessen am 03.09.2026, beides).
-
-        Zumachen heißt „nicht jetzt", Aufmachen heißt das Gegenteil. Deshalb
-        setzt dieselbe Zeile den Merker in beide Richtungen.
-        """
-        if visible and not self._workspace_visible:
-            return
-        if self._watching:
-            self.dismissed = not visible
-        super().setVisible(visible)
-        if self._watching and not visible:
+    def _current_changed(self, _index: int) -> None:
+        """Verlassen heißt „nicht jetzt“, Zurückkommen heißt das Gegenteil."""
+        current = self.is_current()
+        if self._watching and current:
+            self.dismissed = False
+        elif self._watching and self._was_current:
+            self.dismissed = True
             self.closed.emit()
+        self._was_current = current
 
 
 #: Ab wie vielen Dreiecken das Merkmalfenster seine Kernauskünfte im Arbeiter
@@ -3536,7 +3532,16 @@ class MainWindow(QMainWindow):
         self.tour.pointsAt.connect(self._flash_area)
         self.tour.followRequested.connect(self._open_example)
 
-        self.right = QTabWidget(self)
+        # So hoch wie der Reiter, der vorn steht (``overlay.CurrentPageTabs``):
+        # Der leere Bericht stand sonst in der Höhe des Chats.
+        self.right = CurrentPageTabs(self)
+        self.right_tabs = SignalTabBar(self.right)
+        """Die Reiterleiste: Zähler am Prüfbericht, sanftes Blinken (RM-511)."""
+        self.right.setTabBar(self.right_tabs)
+        self._report_seen = (0, 0)
+        """Fehler und Warnungen, die der Kunde im Bericht schon gesehen hat."""
+        self._report_counts = (0, 0)
+        """Fehler und Warnungen beim letzten Zählen — „neu“ heißt: mehr als da."""
         # Bei gewählten Körpern teilt sich die Karte ihre Höhe mit den
         # Auswahlhandlungen. Der Bericht hat eine eigene rollbare Liste und
         # darf deshalb auf Laptop-Höhe nachgeben; sein Größenhinweis von rund
@@ -3552,6 +3557,7 @@ class MainWindow(QMainWindow):
         # Bericht, und der Reiter sah aus wie vorher.
         self.report.alertsChanged.connect(self._mark_report_tab)
         self.report.alertsChanged.connect(self._mark_status_alerts)
+        self.right.currentChanged.connect(self._report_looked_at)
         # Der Reiter wird einmal angelegt und danach nur noch ein- und
         # ausgeblendet, nie entfernt: ``removeTab`` machte das Panel elternlos,
         # und ein elternloses Widget gehört dem Speicherbereiniger — der es
@@ -3937,10 +3943,9 @@ class MainWindow(QMainWindow):
         # frei für das, wofür es gedacht ist — den Zeichenmodus etwa.
         # §2.5 nennt für die Statusleiste auch „Warnungen", und die standen
         # dort nie. Solange die rechte Spalte offen ist, trägt ihr Reiter die
-        # Zahl; ist sie zu, erreichte eine neue Warnung niemanden mehr —
-        # ``_focus_report`` steigt bei unsichtbarer Spalte zu Recht aus, und
-        # danach kam nichts. Der Knopf erscheint genau dann und holt beides
-        # zurück: die Spalte und den Bericht.
+        # Zahl; ist sie zu, erreichte eine neue Warnung niemanden mehr. Der
+        # Knopf erscheint genau dann und holt beides zurück: die Spalte und
+        # den Bericht.
         self.alert_button = QToolButton(self)
         self.alert_button.setAutoRaise(True)
         self.alert_button.setAccessibleName(tr("Offene Befunde"))
@@ -8116,7 +8121,6 @@ class MainWindow(QMainWindow):
         dialog.exec()
         if dialog.findings:
             self.report.add_findings(list(dialog.findings))
-            self._focus_report()
         if dialog.written:
             self._announce_written(dialog.written)
 
@@ -8738,7 +8742,6 @@ class MainWindow(QMainWindow):
         if not findings:
             return
         self.report.add_findings(findings)
-        self._focus_report()
 
     def action_check_gcode(self) -> None:
         """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung
@@ -9374,7 +9377,6 @@ class MainWindow(QMainWindow):
         self._exporting = False
         self._set_progress_state("export", active=False)
         self.report.add_findings(list(findings))
-        self._focus_report()
         attempt = self._export_attempt
         if attempt is None:
             return
@@ -9405,12 +9407,10 @@ class MainWindow(QMainWindow):
         self._write_failure = None
         if findings:
             self.report.add_findings(list(findings))
-            self._focus_report()
         if not written:
             return
         if worker.receipt is not None:
             self.report.add_findings([worker.receipt])
-            self._focus_report()
         self._announce_written(
             written, scope=export_scope(len(worker._objects), len(worker._all_objects))
         )
@@ -14248,12 +14248,10 @@ class MainWindow(QMainWindow):
     def _build_feature_dock(self) -> None:
         """Der **eine Ort für die Auswahl**: ihre Maße und ihre Handlungen.
 
-        Robert am 03.09.2026, nachdem es zuerst ein Abschnitt der linken Spalte
-        war: „bei dem Panel mit den merkmalen hab ich gedacht ein extra panel
-        nicht die bestehenden erweitern." Ein Dock ist genau das — es steht
-        angedockt da, lässt sich abziehen und irgendwohin stellen, bleibt
-        offen und hat seine eigene Breite. Die linke Spalte bleibt, wie sie
-        war.
+        Von September 2026 bis 0.5.2 ein eigenes Dock rechts neben der Karte
+        mit Prüfbericht und Chat; seit RM-511 der erste Reiter dieser Karte
+        (:class:`_SelectionPage`). Zwei Spalten nahmen der Ansicht zusammen ein
+        Viertel der Breite, und das Dock ließ sich abziehen und verlieren.
 
         **Seit dem 07.09.2026 trägt es beides** (Konzept „Ein Ort für die
         Auswahl", A): oben die Maße des Gewählten als änderbare Felder,
@@ -14266,9 +14264,8 @@ class MainWindow(QMainWindow):
         Zeile „1 Objekt gewählt" über Merkmalshandlungen; und ein Knopf
         *Merkmale*, der nichts tat, als vom einen Ort zum anderen zu führen.
 
-        *Warum rechts und nicht in der Spalte:* Die Felder mit Zahlen brauchen
-        Breite und Ruhe, und die Overlay-Karten liegen über der Ansicht und
-        verdecken sie.
+        *Warum rechts und nicht links:* Die Felder mit Zahlen brauchen Breite
+        und Ruhe; die linke Spalte trägt Baum, Parameter und Verlauf.
 
         **Mit Rollbereich**, und das ist keine Vorsorge: An einer Bohrung sind
         es vier Handlungen mit zusammen sechs Feldern und vier Knöpfen, und
@@ -14286,7 +14283,7 @@ class MainWindow(QMainWindow):
 
         # Rollt nur senkrecht; die Mindestbreite des Inhalts ist die der
         # Spalte (RM-488: sonst ein waagrechter Balken, Felder ohne Pfeile).
-        scroller = ColumnScroller(self)
+        scroller = SelectionScroller(self)
         scroller.setWidget(inside)
 
         # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
@@ -14298,49 +14295,27 @@ class MainWindow(QMainWindow):
         # `fenster.md` für die Karten schon kennt („Was unter der Liste
         # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
         # Weg hinaus, den die Karte anbietet").
-        column = QWidget(self)
+        column = _SelectionPage(self.right, self.report, self)
         stack = QVBoxLayout(column)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.setSpacing(0)
         stack.addWidget(scroller, 1)
         stack.addWidget(self.feature_panel.footer())
 
-        # „Auswahl", nicht „Merkmal": Das Fenster steht auch an einem
-        # gewählten Körper, seit es dessen Handlungen trägt. Ein Titel, der
-        # ein Merkmal verspricht, wäre dort die falsche Auskunft.
-        self.feature_dock = _FeatureDock(tr("Auswahl"), self)
-        self.feature_dock.setObjectName("featureDock")
-        self.feature_dock.setWidget(column)
-        self.feature_dock.setAllowedAreas(
-            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
-        )
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.feature_dock)
-        # **Beim Start zu.** Es stand offen und leer am rechten Rand und nahm
-        # der Ansicht 165 von 1280 Punkten für einen einzigen Satz ab —
-        # gemessen an vier Videoaufnahmen (3d-druck-06, 03.09.2026). Wer eine
-        # Datei öffnet, hat noch nichts gewählt; ein Bereich, der beim Start
-        # nichts zeigt, ist Fläche ohne Auskunft.
-        #
-        # Es geht bei der **ersten** Auswahl von selbst auf — dort beantwortet
-        # es eine Frage, die gerade gestellt wurde. Seit es die Handlungen
-        # trägt (Konzept A), gilt das auch für einen gewählten Körper und
-        # nicht mehr nur für ein Merkmal: Sonst stünde ein Kunde mit einem
-        # gewählten Halter vor einem Fenster, das seine Handlungen hat und
-        # sie nicht zeigt.
-        #
-        # Wer es zumacht, hat für **diese Auswahl** entschieden (Konzept D);
-        # die nächste bringt es zurück. Ein Fenster, das nach jedem Klick
-        # wieder aufspringt, ist keine Hilfe — eines, das nach einem Klick
-        # aufs Kreuz alle Handlungen bis zum Neustart wegnimmt, aber auch
-        # nicht.
-        self.feature_dock.hide()
+        # „Auswahl", nicht „Merkmal": Der Reiter steht auch an einem gewählten
+        # Körper, seit er dessen Handlungen trägt. Er ist der erste der Karte,
+        # vorn steht beim Start aber der Prüfbericht — wer eine Datei öffnet,
+        # hat noch nichts gewählt; die erste Auswahl holt ihn nach vorn.
+        self.feature_dock = column
+        self.right.insertTab(0, column, tr("Auswahl"))
+        self.right.setCurrentWidget(self.report)
         self.feature_dock.start_watching()
         self._feature_shown: str | None = None
         """Welches Merkmal das Fenster zuletzt zeigte.
 
         Nur dafür da, einen **Wechsel** der Auswahl zu erkennen: Er hebt ein
-        früheres Zumachen auf (:meth:`_FeatureDock.forget_dismissal`). Ein
-        zweiter Klick auf dasselbe Merkmal ist keiner."""
+        früheres Verlassen des Reiters auf (:meth:`_SelectionPage.forget_dismissal`).
+        Ein zweiter Klick auf dasselbe Merkmal ist keiner."""
         self._bodies_shown: tuple[str, ...] = ()
         """Und dasselbe für die Körperauswahl — sie öffnet das Fenster ebenso,
         seit es die Handlungen trägt."""
@@ -14421,19 +14396,11 @@ class MainWindow(QMainWindow):
         ``SLOT_FEATURE_RENAMED``). Der Baum stellt nur eine Auswahl wieder her,
         deren Kennung es noch gibt; das umbenannte Merkmal wird über seine
         Stelle wiedergefunden (:meth:`_reselect_the_renamed`)."""
-        # Wer das Fenster zumacht, während eine Vorschau darauf wartet, hätte
+        # Wer den Reiter verlässt, während eine Vorschau darauf wartet, hätte
         # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
         # Ereignisfilter (gemessen am 03.09.2026: alle sechs Zustände blieben).
         self.feature_dock.closed.connect(self._feature_dock_closed)
-        # Der Eintrag kommt von Qt selbst und trägt damit denselben Namen wie
-        # das Fenster; wer es zugemacht hat, findet es hier wieder.
-        entry = self.feature_dock.toggleViewAction()
-        entry.setStatusTip(
-            tr("Zeigt Maße und Handlungen der Auswahl — als eigenes Fenster, frei platzierbar.")
-        )
-        self._view_menu.addSeparator()
-        self._view_menu.addAction(entry)
 
     def _on_feature_moved(self, feature_id: str, centre: Any) -> None:
         """Ein Zug am Griff hat ein Merkmal versetzt (§18.11, Regel 2).
@@ -14501,7 +14468,7 @@ class MainWindow(QMainWindow):
             self._quiet_placement.move_to((values["x"], values["y"], values["z"]))
             return
         if not self.feature_panel.take_values("move_feature", values):
-            self.announce(tr("Die neue Stelle steht rechts im Auswahlfenster."))
+            self.announce(tr("Die neue Stelle steht rechts unter Auswahl."))
         if self.viewport.slot_drag_waits():
             # **Wartet ein Langlochzug, gehört die Stelle zu ihm.** Ziehen und
             # Versetzen sind dann ein Schritt (``slot_hole`` nimmt beides), und
@@ -14530,7 +14497,7 @@ class MainWindow(QMainWindow):
         if not self.feature_panel.take_values(
             "rotate_feature", {"axis": axis, "angle": float(angle)}
         ):
-            self.announce(tr("Achse und Winkel stehen rechts im Auswahlfenster."))
+            self.announce(tr("Achse und Winkel stehen rechts unter Auswahl."))
 
     def _on_feature_turned(self, feature_id: str, axis: str, angle: float) -> None:
         """Ein Zug am Ring hat ein Merkmal gekippt — mit dem **gerasteten**
@@ -14593,7 +14560,7 @@ class MainWindow(QMainWindow):
             return
 
         if not self.feature_panel.take_values("slot_hole", values):
-            self.announce(tr("Die Länge des Langlochs steht rechts im Auswahlfenster."))
+            self.announce(tr("Die Länge des Langlochs steht rechts unter Auswahl."))
             return
         if self.object_tree.selected_feature() != feature_id:
             return
@@ -18262,7 +18229,7 @@ class MainWindow(QMainWindow):
             self._set_preview_order(self._quiet_host or self.feature_panel, order)
 
     def _feature_dock_closed(self) -> None:
-        """Eine Maßgruppe im Bild behält ihre Vorschau auch bei geschlossenem Panel."""
+        """Eine Maßgruppe im Bild behält ihre Vorschau auch hinter einem anderen Reiter."""
         if self._quiet_host is None:
             self._drop_feature_preview()
 
@@ -22962,12 +22929,10 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
-            # Statusleiste sagt warum. Und der Bericht kommt nach vorn, auch
-            # wenn eine Tour läuft: die Meldung verweist auf ihn, und ein
-            # Verweis auf etwas Zugehaltenes ist keiner.
+            # Statusleiste sagt warum, und der Reiter des Berichts blinkt rot
+            # (:meth:`_mark_report_tab`) — auch neben einer Tour.
             self.announce(tr("Die Kette hält an — siehe Prüfbericht."))
             self._halted = True
-            self._focus_report(force=True)
         else:
             # **Ein Zustand gilt, solange er gilt.** Rechnet die Kette wieder
             # durch, ist die Absage von vorhin keine Auskunft mehr, sondern
@@ -22977,8 +22942,6 @@ class MainWindow(QMainWindow):
             if self._halted:
                 self._halted = False
                 self.announce("")
-            if self.report.worst_severity(result) in ("warning", "error"):
-                self._focus_report()
 
     def _on_import_failed(self, error: AppError) -> None:
         """Was der ``except``-Zweig von ``open_path`` getan hat, nur später.
@@ -25790,18 +25753,41 @@ class MainWindow(QMainWindow):
         for menu in self._workspace_menus:
             menu.menuAction().setVisible(not show)
 
-    def _mark_report_tab(self, alerts: int) -> None:
-        """Schreibt die Zahl der Fehler und Warnungen an den Reiter.
+    def _mark_report_tab(self, _alerts: int = 0) -> None:
+        """Zählt Fehler und Warnungen am Reiter und lässt ihn bei neuen blinken.
 
-        Eine Zahl und kein Punkt: Regel 18 verlangt eine zweite Kodierung
-        neben der Farbe, und „3" sagt mehr als ein Fleck. Bei null bleibt es
-        beim bloßen Namen — ein Zähler, der immer dasteht, wird Tapete.
+        Je Schwere eine Marke mit Zeichen und Zahl: Regel 18 verlangt eine
+        zweite Kodierung neben der Farbe, und „! 3" sagt mehr als ein Fleck.
+        Bei null steht keine — ein Zähler, der immer dasteht, wird Tapete.
+
+        **Neu heißt: mehr, als der Kunde im Bericht gesehen hat** (Robert,
+        05.10.2026: „wenn man im Prüfbericht drin war aufheben“). Eine Warnung,
+        die er kennt, blinkt nicht nach jeder Auswertung wieder; verschwindet
+        sie und kommt zurück, ist sie wieder neu.
         """
         index = self.right.indexOf(self.report)
         if index < 0:
             return
-        name = tr("Prüfbericht")
-        self.right.setTabText(index, f"{name} · {alerts}" if alerts else name)
+        errors, warnings = self.report.alert_counts()
+        before_errors, before_warnings = self._report_counts
+        self._report_counts = (errors, warnings)
+        self.right_tabs.show_counts(index, errors, warnings)
+        if self.right.currentWidget() is self.report:
+            self._report_seen = (errors, warnings)
+            return
+        seen_errors, seen_warnings = self._report_seen
+        self._report_seen = (min(seen_errors, errors), min(seen_warnings, warnings))
+        self.right_tabs.signal(
+            index,
+            error=errors > self._report_seen[0],
+            warning=warnings > self._report_seen[1],
+            fresh=errors > before_errors or warnings > before_warnings,
+        )
+
+    def _report_looked_at(self, _index: int) -> None:
+        """Wer den Bericht vor sich hat, hat seine Meldungen gesehen."""
+        if self.right.currentWidget() is self.report:
+            self._report_seen = self.report.alert_counts()
 
     def _mark_status_alerts(self, alerts: int = -1) -> None:
         """Der Warnungszähler in der Statusleiste — nur wenn er gebraucht wird.
@@ -25852,6 +25838,14 @@ class MainWindow(QMainWindow):
         „siehe Prüfbericht", und ein Verweis auf ein Fenster, das die
         Anwendung selbst zuhält, ist keiner. Für eine Warnung im normalen
         Ablauf bleibt es beim Vorrang der Anleitung.
+
+        **Nur auf eine Bitte des Kunden** — den Zähler in der Statusleiste, die
+        Wahl *Prüfbericht* nach einem Anhalten, ein Ergebnis, das er angefordert
+        hat und das nur im Bericht steht. Warnungen und Fehler holen ihn nicht
+        nach vorn (Robert, 05.10.2026): Der Bericht teilt sich seine Karte mit
+        dem Reiter *Auswahl* (RM-511), und wer an einer Bohrung eine Zahl nach
+        der anderen ändert, verlöre sonst seine Felder. Sein Reiter zählt und
+        blinkt stattdessen (:meth:`_mark_report_tab`).
         """
         if not self.right_column.isVisible():
             return
@@ -25900,9 +25894,9 @@ class MainWindow(QMainWindow):
         wer den Satz zum ersten Mal liest, sucht ihn. Ein Rahmen für eine
         Sekunde beantwortet die Frage, ohne sie gestellt zu haben.
 
-        Zeigt der Schritt auf den Prüfbericht, wird der Reiter gleich
-        mitgeholt: er teilt sich die Spalte mit der Tour, und ihn suchen zu
-        lassen hieße, die Tour aus dem Blick zu nehmen.
+        Zeigt der Schritt auf einen Reiter der rechten Karte, etwa den
+        Prüfbericht, wird er gleich mitgeholt: er teilt sich die Karte mit der
+        Tour, und ihn suchen zu lassen hieße, die Tour aus dem Blick zu nehmen.
 
         Welches Widget ein Name meint, sagt :mod:`app.ui.guide_targets` —
         dieselbe Auflösung, mit der die Bildanleitungen ihre Rahmen setzen.
@@ -25916,8 +25910,10 @@ class MainWindow(QMainWindow):
         except MissingTargetError as missing:
             _log.warning("tour flash without target: %s", missing)
             return
-        if area is self.report:
-            self.right.setCurrentWidget(self.report)
+        # Jeder Reiter der rechten Karte, nicht nur der Bericht: Seit RM-511
+        # steht dort auch die Auswahl.
+        if self.right.indexOf(area) >= 0:
+            self.right.setCurrentWidget(area)
         # **Und die andere Bauart derselben Zusage.** Der Bericht teilt sich
         # eine Spalte mit der Tour und wird über den Reiter geholt; Objektbaum,
         # Parameter und Verlauf sitzen in einklappbaren Abschnitten (§2.5).

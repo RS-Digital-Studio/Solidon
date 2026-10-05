@@ -68,8 +68,7 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   Körper-/Merkmalbezüge vor Vorschau und Übernahme in gespeicherte cx/cy/cz auf.
   Vorhandene Koordinaten und Ausdrücke bleiben beim Wiederöffnen unverändert.
 - **Startansicht** — Die Vorwahl ersetzt kein Projekt und erhält dessen Tour.
-  Erst ein wirklicher Projektwechsel beendet die alte Tour. Das Auswahl-Dock
-  bleibt auf der Startseite verborgen, ohne die Schließentscheidung zu ändern.
+  Erst ein wirklicher Projektwechsel beendet die alte Tour.
 - **Import** — `import_model_async` → `_ReadWorker`, Plan im Arbeiter →
   `pictureChanged` (das Modell vor seiner Erkennung), `importConfirmed`,
   `importRejected`, `importFailed`; STEP-Baugruppen über
@@ -149,7 +148,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | einzige Auswahlhandlungskarte unter Bericht/Chat, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES` |
+| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
@@ -244,6 +243,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18) |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
+| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht |
 | `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
 
 ### Hilfe und Bedienung

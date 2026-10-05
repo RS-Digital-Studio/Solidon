@@ -181,27 +181,26 @@ mehr wert als eine gute Einstellmöglichkeit.**
 ### 2.5 Fensterschema
 
 Die 3D-Ansicht füllt die verfügbare Arbeitsfläche. Kompakte Karten liegen
-darüber; das Auswahlfenster kann daneben angedockt oder frei platziert werden.
-Leere oder zugeklappte Bereiche geben ihren Platz frei.
+darüber. Leere oder zugeklappte Bereiche geben ihren Platz frei.
 
 - **Links über der Ansicht:** einklappbare Abschnitte für Objekte,
   Projektparameter, Verlauf und Filamente; Filamente sind anfangs zugeklappt.
-- **Rechts über der Ansicht:** eine Karte mit Reitern für Prüfbericht und Chat,
-  bei Bedarf zusätzlich Tour oder Skizzenbedingungen. Fehler und Warnungen
-  tragen einen sichtbaren Zähler. Bei Warnungen oder Fehlern wechselt die
-  sichtbare Karte zum Prüfbericht; eine laufende Tour behält bei normalen
-  Warnungen Vorrang. Hält die Auswertung an, kommt der Prüfbericht auch vor
-  einer laufenden Tour nach vorn. Eine bewusst ausgeblendete Karte bleibt
-  verborgen; der Warnungszähler in der Statusleiste führt zum Bericht zurück.
-- **Auswahlfenster:** Maße und passende Handlungen des gewählten Körpers oder
-  Merkmals stehen gemeinsam an einem Ort. Das Fenster öffnet sich bei der
-  ersten Auswahl; bewusstes Schließen gilt bis zum Wechsel der Auswahl.
-  Es ist verschiebbar, an beiden Seiten andockbar und in niedrigen Fenstern
-  vollständig über einen Rollbereich bedienbar.
+- **Rechts über der Ansicht:** eine Karte mit den Reitern Auswahl, Prüfbericht
+  und Chat, bei Bedarf zusätzlich Tour oder Skizzenbedingungen. Sie ist
+  breiter als die linke und wächst in großen Fenstern mit.
+- **Auswahl:** Maße und passende Handlungen des gewählten Körpers oder
+  Merkmals stehen gemeinsam an einem Ort. Eine neue Auswahl holt den Reiter
+  nach vorn; wer ihn verlässt, hat für diese Auswahl entschieden. In niedrigen
+  Fenstern ist er vollständig über einen Rollbereich bedienbar.
+- **Prüfbericht:** Sein Reiter zählt Fehler und Warnungen, je mit Zeichen und
+  Zahl. Warnungen und Fehler holen ihn nicht nach vorn: Bei einer neuen
+  Meldung blinkt der Reiter kurz, gelb bei einer Warnung, rot bei einem
+  Fehler, und bleibt getönt, bis der Bericht angesehen wurde. Nach vorn kommt
+  er auf Bitte des Nutzers, etwa über den Zähler in der Statusleiste.
 - **Unten über der Ansicht:** Werkzeugleiste und die zum offenen Werkzeug
   gehörenden Bedienelemente. Die Statusleiste nennt Auswahl, Maße, Fortschritt
   und Warnungen.
-- **F9 blendet die Bericht-/Chatkarte ein oder aus.** Ein Warnungszähler in der
+- **F9 blendet die rechte Karte ein oder aus.** Ein Warnungszähler in der
   Statusleiste führt auch bei ausgeblendeter Karte zum Prüfbericht zurück.
 - Keine Betriebsarten-Umschaltung zwischen „Bearbeiten“ und „Konstruieren“.
   Alle Werkzeuge arbeiten an derselben Szene.
@@ -210,9 +209,9 @@ Leere oder zugeklappte Bereiche geben ihren Platz frei.
 
 - **Befehlspalette** über eine Taste: alles aus dem Register per Suche
   erreichbar, mit Kürzel daneben — so lernt man die Kürzel nebenbei.
-- **Auswahlfenster am Merkmal**: Klick auf eine Bohrung bietet genau die Ops
-  an, die auf Bohrungen anwendbar sind — rechts im Auswahlfenster, das nach
-  dem Klick offen bleibt, nicht in einem Menü, das zufällt. Der kürzeste Weg
+- **Auswahl am Merkmal**: Klick auf eine Bohrung bietet genau die Ops
+  an, die auf Bohrungen anwendbar sind — rechts im Reiter *Auswahl*, der nach
+  dem Klick vorn bleibt, nicht in einem Menü, das zufällt. Der kürzeste Weg
   vom Sehen zum Tun. Der Rechtsklick führt keine Operation aus; er zeigt, was
   es nur dort gibt: den Schritt, aus dem die Stelle stammt, das Zeichnen auf
   dieser Fläche, das Ausblenden des Körpers.

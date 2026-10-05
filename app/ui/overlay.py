@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTabWidget,
     QTreeView,
     QVBoxLayout,
@@ -170,7 +171,13 @@ LEFT_WIDTH = 300
 #: rechts daneben, die Spalte trägt nur noch Prüfbericht, Chat und Tour — die
 #: Breite für zwei Karten stand vor einer. 400 ist ein Satz breit und lässt
 #: dem Bild, was die zweite Karte nicht mehr braucht.
-RIGHT_WIDTH = 400
+#:
+#: **Seit RM-511 wieder eine Karte für alles rechts** — Auswahl, Prüfbericht
+#: und Chat als Reiter, das Dock daneben ist weg. Robert, 05.10.2026: „bisschen
+#: breiter machen, wo wir mehr Platz haben“. Die Grundbreite trägt eine
+#: Koordinatenzeile X, Y, Z nebeneinander; darüber wächst die Karte mit ihrem
+#: eigenen Anteil (:data:`RIGHT_SHARE`).
+RIGHT_WIDTH = 440
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -183,7 +190,13 @@ RIGHT_WIDTH = 400
 #: bei 5000 Pixeln eine Wand.
 GROWTH_SHARE = 0.13
 LEFT_MAX = 420
-RIGHT_MAX = 520
+
+#: Der Anteil der rechten Karte. Größer als links, weil sie seit RM-511 auch
+#: die Felder der Auswahl trägt: Auf Full HD sind das 518 Punkte — genug, dass
+#: X, Y und Z einer Stelle nebeneinander stehen (``panels._CoordinateRow``
+#: braucht 452 für die Zeile) —, ab 2222 Punkten Fensterbreite der Deckel.
+RIGHT_SHARE = 0.27
+RIGHT_MAX = 600
 
 #: In einem schmalen Fenster dürfen die beiden Karten einander nicht
 #: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als
@@ -288,15 +301,17 @@ def living[T: QWidget](zone: QWidget, wanted: type[T]) -> list[T]:
     return [child for child in zone.findChildren(wanted) if isValid(child)]
 
 
-def card_width(base: int, cap: int, window: int) -> int:
+def card_width(base: int, cap: int, window: int, share: float = GROWTH_SHARE) -> int:
     """Wie breit eine Karte in einem Fenster dieser Breite sein soll.
 
-    Auf Full HD kommt der Grundwert heraus. Darüber wächst die Karte anteilig,
-    bis sie den Deckel erreicht. Darunter darf sie nicht so breit bleiben,
+    Mindestens der Grundwert ``base``.
+    Darüber, wo das Fenster mehr hergibt, wächst die Karte mit ``share``
+    anteilig, bis sie den Deckel erreicht: links ab etwa 2300 Punkten, rechts
+    mit :data:`RIGHT_SHARE` schon auf Full HD. Darunter darf sie nicht so breit bleiben,
     dass beide Seiten einander überdecken: Die schmale Grenze erhält zwischen
     ihnen einen sichtbaren Griff auf den Viewport.
     """
-    grown = min(max(base, window * GROWTH_SHARE), cap)
+    grown = min(max(base, window * share), cap)
     narrow = max(window * NARROW_CARD_SHARE, 0)
     return int(min(grown, narrow))
 
@@ -538,6 +553,92 @@ def rows_height(view: QAbstractItemView) -> int:
     return wanted + chrome
 
 
+class CurrentPageTabs(QTabWidget):
+    """Ein Reiterwidget, das so hoch sein will wie die Seite, die vorn steht.
+
+    Qt misst einen Reiterstapel an seiner größten Seite: ``QStackedLayout``
+    nimmt für Wunschhöhe **und** Breitenhöhe das Maximum aller Seiten. Seit
+    RM-511 teilen sich Auswahl, Prüfbericht und Chat die rechte Karte, und ein
+    Bericht ohne Befunde stand in der Höhe des Chats — gemessen am echten
+    Fenster bei Full HD rund 530 Punkte Karte für 225 Punkte Inhalt.
+
+    Gerechnet wird der Rahmen (Reiterleiste, Rand) als Unterschied zwischen
+    Qts Wunsch für das Ganze und dem für den Stapel, und dazu die vordere
+    Seite. Die Breitenhöhe meldet es immer, weil die Karte darüber ihre Höhe
+    aus ihr liest; eine Seite ohne eigene nimmt ihre Wunschhöhe.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.currentChanged.connect(self._page_changed)
+
+    def _page_changed(self, _index: int) -> None:
+        self.updateGeometry()
+
+    def _stack(self) -> QStackedWidget | None:
+        return self.findChild(QStackedWidget, "qt_tabwidget_stackedwidget")
+
+    def _chrome_height(self, whole: QSize, stack: QStackedWidget) -> int:
+        return max(whole.height() - stack.sizeHint().height(), 0)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        whole = super().sizeHint()
+        page, stack = self.currentWidget(), self._stack()
+        if page is None or stack is None:
+            return whole
+        return QSize(whole.width(), self._chrome_height(whole, stack) + page.sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        least = super().minimumSizeHint()
+        page, stack = self.currentWidget(), self._stack()
+        if page is None or stack is None:
+            return least
+        chrome = max(least.height() - stack.minimumSizeHint().height(), 0)
+        return QSize(least.width(), chrome + page.minimumSizeHint().height())
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt-Name
+        return self.currentWidget() is not None or super().hasHeightForWidth()
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt-Name
+        page, stack = self.currentWidget(), self._stack()
+        if page is None or stack is None:
+            return super().heightForWidth(width)
+        # Der Rand links und rechts, wie er gerade gelegt ist; vor dem ersten
+        # Legen der des Rahmens, den das Stilblatt zeichnet.
+        side = self.width() - stack.width() if 0 < stack.width() <= self.width() else 2
+        inner = page.heightForWidth(max(width - side, 0)) if page.hasHeightForWidth() else -1
+        if inner < 0:
+            inner = page.sizeHint().height()
+        return self._chrome_height(super().sizeHint(), stack) + inner
+
+
+class ContentScroller(QScrollArea):
+    """Ein Rollbereich, der seinen ganzen Inhalt wünscht; legen darf Qt ihn selbst.
+
+    Anders als :class:`FittedScroller` setzt Qt die Größe des Inhalts hier
+    selbst (``widgetResizable``); geändert ist nur der Wunsch. Die Karte, in
+    der er steht, misst ihre Höhe daran, und ``natural_height`` zählt ihn
+    deshalb nicht ein zweites Mal. Mit Qts eigenem Wunsch — der Höhe, die der
+    Inhalt beim Einsetzen hatte — rechnete ``natural_height`` den Rest über die
+    gerade gelegte Sichthöhe nach, und das rastete in der Mitte ein: an einer
+    Bohrung bei Full HD 597 von 810 Punkten, obwohl Platz war (RM-511, am
+    echten Fenster gemessen).
+    """
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        hint = super().sizeHint()
+        content = self.widget()
+        if content is None:
+            return hint
+        width = self.viewport().width()
+        if content.hasHeightForWidth() and width > 0:
+            height = content.heightForWidth(width)
+        else:
+            height = content.sizeHint().height()
+        height = max(height, content.minimumSizeHint().height())
+        return QSize(hint.width(), height + 2 * self.frameWidth())
+
+
 class FittedScroller(QScrollArea):
     """Ein Rollbereich, der seinen ganzen Inhalt wünscht und erst rollt, wenn die Zone knapp ist.
 
@@ -672,9 +773,9 @@ def natural_height(zone: QWidget, width: int | None = None) -> int:
     if width is not None and zone.hasHeightForWidth():
         wanted = max(wanted, zone.heightForWidth(width))
     # Ein direkt gemessener Reiter reserviert den größten Seitenwunsch.
-    # Elternlayouts berücksichtigen schon die aktuelle Seite über ihre
-    # Breitenhöhe; dort darf dieselbe Differenz nicht noch einmal abgezogen werden.
-    tabs = [zone] if isinstance(zone, QTabWidget) else []
+    # Ein ``CurrentPageTabs`` misst schon selbst nur die Seite, die vorn steht;
+    # dort darf dieselbe Differenz nicht noch einmal abgezogen werden.
+    tabs = [zone] if isinstance(zone, QTabWidget) and not isinstance(zone, CurrentPageTabs) else []
     for tab in tabs:
         current = tab.currentWidget()
         if current is None or not tab.isVisibleTo(zone):
@@ -712,7 +813,9 @@ def natural_height(zone: QWidget, width: int | None = None) -> int:
     for area in living(zone, QScrollArea):
         # Ein ``FittedScroller`` wünscht schon seinen ganzen Inhalt; der steht
         # damit in ``zone.sizeHint()`` und zählte hier ein zweites Mal.
-        if isinstance(area, (QAbstractItemView, FittedScroller)) or not area.isVisibleTo(zone):
+        if isinstance(area, (QAbstractItemView, FittedScroller, ContentScroller)) or (
+            not area.isVisibleTo(zone)
+        ):
             continue
         inner = area.widget()
         viewport = area.viewport()
@@ -1060,7 +1163,7 @@ class OverlayHost(QWidget):
 
         if self.right.isVisibleTo(self):
             self._share_room(self.right, room)
-            card = card_width(RIGHT_WIDTH, RIGHT_MAX, width)
+            card = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
             wanted = min(natural_height(self.right, width=card), room)
             self._move(
                 self.right,
@@ -1122,9 +1225,10 @@ class OverlayHost(QWidget):
         showing_left = self.left is not None and self.left.isVisibleTo(self)
         showing_right = self.right is not None and self.right.isVisibleTo(self)
         width = self.width()
+        right = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
         setter(
             card_width(LEFT_WIDTH, LEFT_MAX, width) + 2 * MARGIN if showing_left else 0,
-            card_width(RIGHT_WIDTH, RIGHT_MAX, width) + 2 * MARGIN if showing_right else 0,
+            right + 2 * MARGIN if showing_right else 0,
             self._bottom_room(),
         )
 

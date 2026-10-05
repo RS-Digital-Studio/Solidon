@@ -122,38 +122,35 @@ def _window(theme: Theme) -> str:
         canvas.label(20, top + 18, str(title), size=11, bold=True)
         canvas.line(20, top + 30, 120, top + 30, stroke=colours.muted, weight=2.0)
 
-    canvas.box(158, 46, 214, 202, stroke=colours.accent, weight=2.0)
+    canvas.box(158, 46, 226, 202, stroke=colours.accent, weight=2.0)
     canvas.label(
-        265, 140, str(_("Viewport")), anchor="middle", size=13, bold=True, colour=colours.accent
+        271, 140, str(_("Viewport")), anchor="middle", size=13, bold=True, colour=colours.accent
     )
     # Mittig wie das ``Viewport``-Wort darüber — beide teilen die x-Mitte.
-    canvas.caption(265, 158, str(_("das Modell, immer sichtbar")), size=10, anchor="middle")
+    canvas.caption(271, 158, str(_("das Modell, immer sichtbar")), size=10, anchor="middle")
 
-    canvas.box(380, 46, 104, 202, fill=colours.fill, dashed=True)
-    canvas.wrapped(432, 68, str(_("Prüfbericht")), anchor="middle", width=14, size=10)
-    canvas.label(432, 104, str(_("oder")), anchor="middle", size=9, colour=colours.muted)
-    canvas.label(432, 122, str(_("Chat")), anchor="middle", size=10, bold=True)
+    # Rechts **eine** Karte mit drei Reitern, und sie heißen, wie sie im
+    # Fenster heißen (RM-511). Bis 0.5.2 standen dort zwei Spalten: die Karte
+    # mit Prüfbericht und Chat und daneben über die volle Höhe das Dock
+    # „Auswahl“. Die Reiter stehen als eine umbrechende Zeile, weil ihre Namen
+    # in den Sprachen sehr verschieden lang sind — „Informe de comprobación“.
+    canvas.box(392, 46, 198, 202, fill=colours.fill, dashed=True)
+    tabs = " · ".join(str(name) for name in (_("Auswahl"), _("Prüfbericht"), _("Chat")))
+    used = canvas.wrapped(491, 68, tabs, anchor="middle", width=26, size=10)
+    canvas.line(402, 62 + used, 580, 62 + used, stroke=colours.muted, weight=1.0)
     canvas.wrapped(
-        432,
-        146,
-        str(_("Zwei Reiter, ganz ausblendbar")),
-        width=14,
+        491,
+        84 + used,
+        str(_("Maße und Handlungen der gewählten Stelle")),
+        width=24,
         anchor="middle",
         colour=colours.muted,
     )
-
-    # Das Fenster „Auswahl" ist ein eigenes Dock: ganz außen und über die
-    # volle Höhe, nicht unter dem Prüfbericht. Es steht hier, weil es dort
-    # steht — und es heißt, wie es im Fenster heißt. Hier stand „Merkmal",
-    # und die Handlungen an der Auswahl, die seit dem 13.09.2026 darunter
-    # stehen, fehlten (RM-136).
-    canvas.box(492, 46, 98, 202, fill=colours.fill)
-    canvas.label(541, 76, str(_("Auswahl")), anchor="middle", size=10, bold=True)
     canvas.wrapped(
-        541,
-        98,
-        str(_("Maße und Handlungen der gewählten Stelle")),
-        width=13,
+        491,
+        212,
+        str(_("Drei Reiter, ganz ausblendbar")),
+        width=24,
         anchor="middle",
         colour=colours.muted,
     )
@@ -169,9 +166,9 @@ def _window(theme: Theme) -> str:
     # hier nach; die Reihenfolge ist die der Leiste.
     # Zweizeilig, seit die Ansicht schmaler ist: einzeilig lief die Zeile über
     # den Rand ihres Kastens hinaus, und zwar nur in der Zeichnung.
-    canvas.box(158, 250, 214, 30, fill=colours.fill)
+    canvas.box(158, 250, 226, 30, fill=colours.fill)
     canvas.wrapped(
-        265,
+        271,
         262,
         str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Trennen")),
         width=36,
@@ -1157,10 +1154,8 @@ _CATALOGUED: Final[tuple[Figure, ...]] = (
         alt=_(
             "Das Fenster: oben die Werkzeugleiste mit Projekt, Drucker und Filamenten, "
             "links Objekte, Parameter, Verlauf und Filamente untereinander, in der Mitte "
-            "der Viewport mit dem Modell und darunter die Werkzeugzeile, daneben wahlweise "
-            "Prüfbericht oder Chat und ganz rechts über die volle Höhe das Fenster "
-            "„Auswahl“ mit Maßen und Handlungen der gewählten Stelle, unten die "
-            "Statusleiste."
+            "der Viewport mit dem Modell und darunter die Werkzeugzeile, rechts eine Karte "
+            "mit den Reitern Auswahl, Prüfbericht und Chat, unten die Statusleiste."
         ),
         caption=_("Vier Bereiche, keine Betriebsarten. Rechts lässt sich ganz ausblenden."),
         build=_window,

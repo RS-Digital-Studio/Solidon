@@ -2441,11 +2441,11 @@ def reset_feature_demo(
         session.wait_for_idle(120_000)
     object_id, _feature_id, _feature = _feature_demo_target(session, target_id)
     window.object_tree.select_object(object_id)
-    window.feature_dock.hide()
-    # Das Verbergen gehört dem Aufnahmewerkzeug, nicht dem Nutzer. Der Dock
-    # merkt ein gewöhnliches ``hide`` sonst als „selbst geschlossen“ und
-    # verweigert beim sichtbaren Bohrungsklick sein automatisches Öffnen.
-    window.feature_dock.dismissed = False
+    window.feature_dock.leave()
+    # Das Verlassen gehört dem Aufnahmewerkzeug, nicht dem Nutzer. Der Reiter
+    # *Auswahl* merkt es sonst als Entscheidung und kommt beim sichtbaren
+    # Bohrungsklick nicht von selbst nach vorn.
+    window.feature_dock.forget_dismissal()
     settle(app, 20)
 
 
@@ -2461,20 +2461,20 @@ def prepare_feature_demo_scene(
     if scene == "mesh":
         object_id, _feature_id, _feature = _feature_demo_target(session, target_id)
         window.object_tree.select_object(object_id)
-        window.feature_dock.hide()
-        window.feature_dock.dismissed = False
+        window.feature_dock.leave()
+        window.feature_dock.forget_dismissal()
         settle(app, 20)
         return
     if scene == "recognise":
         object_id, _feature_id, _feature = _feature_demo_target(session, target_id)
         window.object_tree.select_object(object_id)
-        window.feature_dock.hide()
-        window.feature_dock.dismissed = False
+        window.feature_dock.leave()
+        window.feature_dock.forget_dismissal()
         settle(app, 20)
         return
     if not panel_visible:
-        window.feature_dock.hide()
-        window.feature_dock.dismissed = False
+        window.feature_dock.leave()
+        window.feature_dock.forget_dismissal()
 
 
 def shoot_storyboard(
@@ -3635,8 +3635,8 @@ def shoot_loop(
 #   Seiten in der falschen Sprache.
 # * **Je Sprache eine Aufnahme.** Die Oberfläche spricht die Sprache der Seite.
 # * **Das ganze Fenster, maximiert, die Kamera eng am Teil** (Bildstandard, siehe
-#   ``WEB_VIDEO_WIDTH``): Das Modell füllt die 3D-Ansicht, Maßgruppe,
-#   Auswahlfenster und Prüfbericht stehen im selben Bild.
+#   ``WEB_VIDEO_WIDTH``): Das Modell füllt die 3D-Ansicht, Maßgruppe und
+#   der Reiter *Auswahl* stehen im selben Bild.
 
 
 @dataclass(frozen=True, slots=True)

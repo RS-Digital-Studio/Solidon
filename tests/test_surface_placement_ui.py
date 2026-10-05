@@ -1920,12 +1920,12 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
     try:
         _a_selected_hole(window)
         assert window._op_dialog is None, "ein angeklicktes Loch öffnet keinen Dialog mehr"
-        # Zugemacht **nach** der Auswahl: Eine neue Auswahl bringt das Fenster
+        # Verlassen **nach** der Auswahl: Eine neue Auswahl holt den Reiter
         # zurück (Konzept D, ``_on_selection``); der Weg ins Bild tut es nicht.
-        window.feature_dock.hide()
+        window.feature_dock.leave()
         flow = _measures_in_the_view(window)
         assert flow is not None and flow.active, "die Auswahl zeigt die Maße im Bild"
-        assert window.feature_dock.isHidden(), "das geschlossene Panel bleibt geschlossen"
+        assert not window.feature_dock.is_current(), "der verlassene Reiter bleibt hinten"
         assert flow._surface is not None, "die Trägerfläche steht"
         assert flow._tool_context is not None, "und ihr Werkzeugkörper auch"
         assert flow._accept.isEnabled(), "sonst verspricht die Leiste etwas, das nicht geht"
@@ -3058,14 +3058,14 @@ def test_the_flow_runs_on_a_host_without_a_window(
 
 
 def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplication) -> None:
-    """Die Maßgruppe und der gemeinsame Abschluss bleiben bei geschlossenem Panel nutzbar."""
+    """Die Maßgruppe und der gemeinsame Abschluss bleiben hinter einem anderen Reiter nutzbar."""
     from PySide6.QtTest import QTest
 
     from app.ui.labels import LengthSpin
 
     window = _window_with_a_renderer()
     try:
-        window.feature_dock.hide()
+        window.feature_dock.leave()
         _a_selected_hole(window)
         flow = _measures_in_the_view(window)
         assert flow is not None and flow.active
@@ -3081,12 +3081,12 @@ def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplicati
         QTest.keyClicks(editor, QLocale().toString(diameter, "f", 2))
         # Ohne Eingabetaste: Die übernimmt seit ``5a90d4361`` selbst, sobald
         # Werkzeug und Vorschau stehen (Kunde Weg b). Geprüft wird hier der
-        # Knopf der Maßgruppe bei geschlossenem Panel.
+        # Knopf der Maßgruppe hinter einem anderen Reiter.
         assert flow.dialog.begun and flow.active
         before = len(window.session.project.document.ops)
         _display_measure_preview(window, flow)
-        window.feature_dock.show()
-        window.feature_dock.close()
+        window.right.setCurrentWidget(window.feature_dock)
+        window.feature_dock.leave()
         assert flow.active and window._quiet_placement is flow
         assert window.viewport.is_difference_applied(window._preview_approval.difference)
         flow._measure_accept.click()
@@ -4547,15 +4547,15 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
             monkeypatch.setattr(placement, "seat_for_bore_step", lambda *_args: None)
         window.object_tree.select_object(owner)
         window.object_tree.select_feature(owner, hole)
-        # Zugemacht **nach** der Auswahl (Konzept D: die nächste Auswahl bringt
-        # das Fenster zurück, der Weg ins Bild nicht).
-        window.feature_dock.hide()
+        # Verlassen **nach** der Auswahl (Konzept D: die nächste Auswahl holt
+        # den Reiter zurück, der Weg ins Bild nicht).
+        window.feature_dock.leave()
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._change_op == drill.id
         assert flow.dialog.values() == original
         caption = flow._measure_group.findChild(QLabel, "feature-measure-source")
         assert caption is not None and "Am fertigen Teil:" in caption.text()
-        assert not flow.dialog.begun and window.feature_dock.isHidden()
+        assert not flow.dialog.begun and not window.feature_dock.is_current()
         assert set(flow._result.scene.objects) == {owner}
         assert not any(
             f.kind == "hole" for f in flow._result.scene.objects[owner].features.values()

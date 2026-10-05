@@ -35,13 +35,12 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Formen/Skelett haben denselben lokalen Undo-Weg für Menü und Strg+Z; leerer
   Editor nimmt keinen Dokument-Schritt zurück. Zeichnen hat eigene Kürzel
   und deaktiviert die globale Aktion.
-- Höchstens drei sichtbare Zonen: links einklappbarer Baum/Parameter/Verlauf,
-  Mitte Viewport, rechts Chat oder Bericht (wechselbar/ausblendbar). Neue
-  Warnung öffnet Bericht. Keine Betriebsarten (`AGENTS.md`).
-- Auswahlhandlungen stehen in einer zweiten Karte unter der rechten Karte:
-  eigener Rand, gleicher Stil, `MARGIN` Abstand und durchsichtige Lücke über
-  `overlay.CardColumn`-Maske. Für F9, Warnungszähler und Höhenverteilung bleibt
-  dies eine Zone; zweite Karte folgt dem Inhalt.
+- Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
+  mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
+  Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
+- Warnungen holen den Bericht nie nach vorn, sie nähmen der Auswahl die Felder:
+  `SignalTabBar` zählt und blinkt bis zum Ansehen; `_focus_report` nur auf Bitte.
+- Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.
 - `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
   kein Fokus, keine Klicks, kein RichText; mindestens acht Sekunden, lange
   Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.
@@ -66,7 +65,7 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
   dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
   derselben Runde. Bei neuen Signalen die teuren Aufrufe zählen.
-- Tour ist ein Angebot: dritter rechter Reiter für Beispielprojekte
+- Tour ist ein Angebot: zusätzlicher rechter Reiter für Beispielprojekte
   (`ui/tour.py`, Schritte `core/tour.py`), Erkennung über `projectChanged`,
   Weiter auch ohne Erkennung. Warnung lässt aktive Tour stehen, Projektwechsel
   räumt sie ab. Erkennungswerte müssen zu `make_examples.py` passen
