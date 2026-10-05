@@ -525,9 +525,8 @@ def foundation_findings(
                 code="slicer.filament_variant_unresolved",
                 severity="warning",
                 message=_(
-                    "Die gebundene Spule „{slot}“ hat keine eindeutige Variante für "
-                    "{variant}. Wählen Sie das passende Spulenprofil im Druckdialog; "
-                    "bis dahin gelten die Projektwerte.",
+                    "Die gebundene Spule „{slot}“ hat keine eindeutige Variante für {variant}. "
+                    "Bis Sie das Spulenprofil wählen, gelten die Projektwerte.",
                     slot=slot.name or str(slot.index + 1),
                     variant=foundation.variant_name,
                 ),
@@ -595,10 +594,8 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                 code="slicer.machine_mismatch",
                 severity="warning",
                 message=_(
-                    "Das gewählte Maschinenprofil gehört zu einem anderen Drucker "
-                    "und wird deshalb nicht übergeben — sein Bauraum, seine Düse "
-                    "und sein Startcode wären die einer fremden Maschine. Wählen "
-                    "Sie in den Druckeinstellungen das Profil dieses Druckers."
+                    "Das gewählte Maschinenprofil gehört zu einem anderen Drucker und wird "
+                    "deshalb nicht übergeben."
                 ),
                 values={"machine": setup.machine_profile, "printer": profile.printer.title},
                 suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
@@ -617,12 +614,8 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                 code="slicer.machine_mismatch",
                 severity="warning",
                 message=_(
-                    "Der Slicer ist auf einen anderen Drucker eingestellt. Die Datei "
-                    "trägt deshalb keine Maschinenangaben — Startcode, "
-                    "Schichtwechselcode und Maschinengrenzen fehlen, und der Slicer "
-                    "füllt sie mit eigenen Vorgaben, die er anschließend ablehnen "
-                    "kann. Stellen Sie den Slicer auf denselben Drucker um oder "
-                    "wählen Sie das Maschinenprofil in den Druckeinstellungen."
+                    "Der Slicer ist auf einen anderen Drucker eingestellt. Der Datei fehlen "
+                    "deshalb Startcode und Maschinengrenzen."
                 ),
                 values={"machine": chosen, "printer": profile.printer.title},
                 suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
@@ -640,10 +633,8 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                 code="slicer.printer_unknown",
                 severity="warning",
                 message=_(
-                    "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein "
-                    "Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt "
-                    "deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein "
-                    "oder übergeben Sie an einen Slicer, der ihn kennt.",
+                    "{slicer} kennt {printer} nicht, deshalb trägt die Datei keine "
+                    "Maschinenangaben. Der Drucker lässt sich im Slicer einrichten.",
                     slicer=setup.name,
                     printer=profile.printer.title,
                 ),
@@ -656,10 +647,8 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
             code="slicer.machine_unset",
             severity="warning",
             message=_(
-                "In diesem Slicer ist noch kein Drucker eingerichtet. Die Datei trägt "
-                "deshalb keine Maschinenangaben — Startcode, Schichtwechselcode und "
-                "Maschinengrenzen fehlen. Wählen Sie das Maschinenprofil in den "
-                "Druckeinstellungen oder richten Sie den Drucker im Slicer ein."
+                "In diesem Slicer ist noch kein Drucker eingerichtet, deshalb fehlen der Datei "
+                "Startcode und Maschinengrenzen."
             ),
             values={"slicer": setup.name, "printer": profile.printer.title},
             suggestions=(CHECK_SLICER_PROFILE, EXPORT_ONLY),
@@ -2456,9 +2445,8 @@ def unreachable_overrides(
                 code="slicer.overrides_unassigned",
                 severity="warning",
                 message=_(
-                    "Gespeicherte Filamentwerte sind keinem aktuellen Material eindeutig "
-                    "zugeordnet und werden nicht verwendet. Öffnen Sie die Werte der "
-                    "betroffenen Spule und übernehmen oder ersetzen Sie die alten Werte."
+                    "Gespeicherte Filamentwerte passen zu keinem aktuellen Material und bleiben "
+                    "ungenutzt. Die Werte der Spule öffnen und übernehmen oder ersetzen."
                 ),
                 values={"slots": len(unassigned)},
             )
@@ -2489,9 +2477,8 @@ def unreachable_overrides(
             code="slicer.overrides_unreachable",
             severity="warning",
             message=_(
-                "Diese Übergabe verwendet nur das erste Filament. Weitere Farben "
-                "und Materialien werden damit nicht gedruckt. Wählen Sie für die "
-                "Mehrfilament-Übergabe etwa OrcaSlicer oder Bambu Studio."
+                "Diese Übergabe verwendet nur das erste Filament, weitere Farben und Materialien "
+                "werden nicht gedruckt. OrcaSlicer oder Bambu Studio können mehrere."
             ),
             values={"slots": len(affected), "slicer": setup.name},
             # Regel 17: Der Satz nennt einen anderen Slicer, und der Knopf wählt ihn.
@@ -6640,9 +6627,8 @@ def slice_model(
                 code="slicer.arranged_itself",
                 severity="warning",
                 message=_(
-                    "Dieser Slicer nimmt die Anordnungsvorgabe nicht an und hat die "
-                    "Teile selbst angeordnet — die Plattenbelegung aus Solidon gilt "
-                    "für diese Druckdatei nicht."
+                    "Dieser Slicer hat die Teile selbst angeordnet, die Plattenbelegung aus "
+                    "Solidon gilt für diese Druckdatei nicht."
                 ),
                 values={"slicer": setup.name},
                 source="gcode",
@@ -6905,8 +6891,8 @@ def cura_profile_beside(
             code="handover.cura_profile_unbound",
             severity="warning",
             message=_(
-                "In Cura ist kein Drucker eingerichtet, zu dem das Profil passt. Richten Sie "
-                "Ihren Drucker in Cura ein und wählen Sie dann noch einmal „Im Slicer öffnen“."
+                "In Cura ist kein Drucker eingerichtet, zu dem das Profil passt. Nach dem "
+                "Einrichten noch einmal „Im Slicer öffnen“ wählen."
             ),
             values={"slicer": setup.name},
             suggestions=(CHOOSE_SLICER,),

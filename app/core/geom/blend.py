@@ -462,8 +462,8 @@ def blend_union(ctx: OpContext) -> OpResult:
                 code="blend.still_apart",
                 severity="warning",
                 message=_(
-                    "Die Körper berühren sich nicht und liegen weiter auseinander als der "
-                    "Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden."
+                    "Die Körper liegen weiter auseinander, als der Übergang breit ist, und "
+                    "bleiben unverbunden."
                 ),
                 object_id=ctx.inputs[0].id,
                 values={"components": merged.component_count},

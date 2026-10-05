@@ -1125,9 +1125,8 @@ def _sculpting_findings(
             code="sculpt.no_effect",
             severity="warning",
             message=_(
-                "Diese Formsitzung hat den Körper nicht verändert — kein Zug hat einen Punkt "
-                "der Fläche bewegt. Entweder liegen die Züge neben der Fläche, oder ihre "
-                "Stärke ist für dieses Teil zu klein."
+                "Diese Formsitzung hat den Körper nicht verändert. Die Züge liegen neben der "
+                "Fläche oder sind für dieses Teil zu schwach."
             ),
             object_id=object_id,
             values={"strokes": len(strokes), "stages": len(parts)},
@@ -1139,10 +1138,8 @@ def _sculpting_findings(
                 code="sculpt.subtle",
                 severity="warning",
                 message=_(
-                    "Die größte Bewegung dieser Sitzung bleibt unter einer Schichthöhe: "
-                    "In der Höhe druckt sich das kaum, seitlich entscheidet der Slicer. "
-                    "Sollte es mehr werden, liegen die Züge neben der Fläche, oder ihre "
-                    "Stärke ist für dieses Teil zu klein."
+                    "Die Züge bewegen die Fläche unter einer Schichthöhe, das druckt sich kaum. "
+                    "Vielleicht liegen sie daneben oder sind zu schwach."
                 ),
                 object_id=object_id,
                 values={
@@ -1159,10 +1156,8 @@ def _sculpting_findings(
                 code="sculpt.strokes_missed",
                 severity="warning",
                 message=_(
-                    "Ein Teil der Züge hat die Fläche nicht erreicht und trägt nichts ab. "
-                    "Meist wurde die Form darunter nachträglich verschoben. In älteren "
-                    "Sitzungen wirkte auch ein Zug nicht, der in eine eben gegrabene Mulde "
-                    "gesetzt wurde. Diese Stellen neu formen."
+                    "Ein Teil der Züge hat die Fläche nicht erreicht, meist weil die Form "
+                    "darunter verschoben wurde. Diese Stellen neu formen."
                 ),
                 object_id=object_id,
                 values={"missed": len(missed), "strokes": len(strokes)},
@@ -1177,9 +1172,8 @@ def _sculpting_findings(
                 code="sculpt.too_coarse",
                 severity="warning",
                 message=_(
-                    "Der feinste Pinsel ist kleiner als die Dreiecke darunter — dort "
-                    "entsteht keine Form, sondern eine verzogene Fläche. Erst die "
-                    "Dreiecke angleichen."
+                    "Der feinste Pinsel ist kleiner als die Dreiecke darunter, dort entsteht nur "
+                    "eine verzogene Fläche. Erst „Dreiecke angleichen“."
                 ),
                 object_id=object_id,
                 values={"brush_mm": round(finest, 3), "edge_mm": round(edge, 3)},
@@ -1195,9 +1189,8 @@ def _sculpting_findings(
                 code="sculpt.consider_baking",
                 severity="info",
                 message=_(
-                    "Diese Sitzung ist groß genug, dass jede Auswertung spürbar dauert. "
-                    "Der Stand lässt sich festschreiben — danach sind die Züge nicht mehr "
-                    "änderbar."
+                    "Diese Sitzung macht jede Auswertung spürbar langsamer. Der Stand lässt sich "
+                    "festschreiben, danach sind die Züge nicht mehr änderbar."
                 ),
                 object_id=object_id,
                 values={"strokes": len(strokes), "stages": len(parts)},
@@ -1318,9 +1311,8 @@ def _damage_findings(
                 code="sculpt.pierced",
                 severity="warning",
                 message=_(
-                    "Ein Zug hat die Fläche durch die Wand dahinter gedrückt — der Körper "
-                    "durchdringt sich dort selbst. So gedruckt bleibt die Stelle offen oder "
-                    "doppelt. Den Zug schwächer setzen oder zurücknehmen."
+                    "Ein Zug hat die Fläche durch die Wand dahinter gedrückt, gedruckt bleibt "
+                    "die Stelle offen oder doppelt."
                 ),
                 object_id=object_id,
                 values=values,
@@ -1338,8 +1330,8 @@ def _damage_findings(
             code="sculpt.thin_wall",
             severity="warning",
             message=_(
-                "Ein Zug hat die Wand dünner gemacht, als dieses Material sicher druckt. "
-                "Den Zug schwächer setzen oder an dieser Stelle Material auftragen."
+                "Ein Zug hat die Wand dünner gemacht, als dieses Material sicher druckt. Dort "
+                "hilft Material auftragen."
             ),
             object_id=object_id,
             values={"thickness_mm": round(thickness, 2), "minimum_mm": round(minimum, 2)},

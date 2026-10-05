@@ -1874,8 +1874,8 @@ def _smoothing_cost(
             code="mesh.smooth_shrank",
             severity="warning",
             message=_(
-                "Das Glätten hat den Körper deutlich verkleinert — an einem groben Netz "
-                "zieht es die Ecken zusammen. Erst die Kanten verfeinern, dann glätten."
+                "Das Glätten hat den Körper deutlich verkleinert, weil es an einem groben Netz "
+                "die Ecken zusammenzieht."
             ),
             object_id=object_id,
             values=values,
@@ -1938,9 +1938,8 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 code="mesh.remesh_dense",
                 severity="info",
                 message=_(
-                    "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles "
-                    "danach rechnet entsprechend länger. Eine größere Kantenlänge hält "
-                    "es kleiner."
+                    "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach "
+                    "rechnet entsprechend länger."
                 ),
                 object_id=source.id,
                 # Der Satz nennt den Weg, und der Knopf öffnet den Schritt mit dem
@@ -2223,9 +2222,8 @@ def _simplification_findings(
                 code="mesh.already_below_target",
                 severity="info",
                 message=_(
-                    "Der Körper hat schon weniger Dreiecke als das Ziel — es gibt nichts zu "
-                    "verringern. Ein Ziel unterhalb der vorhandenen Zahl gibt dem Schritt "
-                    "etwas zu tun; sonst kann er wegbleiben."
+                    "Der Körper hat schon weniger Dreiecke als das Ziel, es gibt nichts zu "
+                    "verringern."
                 ),
                 object_id=object_id,
                 values={
@@ -2330,9 +2328,8 @@ def _deviation_findings(
                 code="mesh.components_split",
                 severity="warning",
                 message=_(
-                    "Der Körper ist dabei in {count} Teile zerfallen. „Reparieren“ setzt "
-                    "zusammen, was noch zusammenpasst; bleibt zu viel übrig, war das Ziel "
-                    "zu niedrig.",
+                    "Der Körper ist dabei in {count} Teile zerfallen. Bleibt nach dem Reparieren "
+                    "zu viel übrig, war das Ziel zu niedrig.",
                     count=after.component_count,
                 ),
                 object_id=object_id,

@@ -1818,10 +1818,8 @@ def warnings_for(
                 code="settings.bed_below_material",
                 severity="warning",
                 message=_(
-                    "Dieses Material will ein wärmeres Bett, als dieser Drucker heizen "
-                    "kann — gedruckt wird mit dem Höchstwert der Maschine. Die erste "
-                    "Schicht braucht dann mehr Haftung: Brim oder Raft wählen, sonst "
-                    "löst sich das Teil beim Abkühlen."
+                    "Dieses Material braucht ein wärmeres Bett, als der Drucker heizt. Ohne Brim "
+                    "oder Raft löst sich das Teil beim Abkühlen."
                 ),
                 values={
                     "material": profile.material.title,
@@ -1846,9 +1844,8 @@ def warnings_for(
                 code="settings.chamber_without_enclosure",
                 severity="warning",
                 message=_(
-                    "Dieses Material will einen geheizten Bauraum, und dieser Drucker "
-                    "hat keinen — die Bauraumtemperatur bleibt aus. Das Teil vor Zugluft "
-                    "abschirmen, oder einen Drucker mit geschlossenem Bauraum wählen."
+                    "Dieses Material will einen geheizten Bauraum, den dieser Drucker nicht hat. "
+                    "Das Teil vor Zugluft schützen."
                 ),
                 values={
                     "material": profile.material.title,
@@ -1909,10 +1906,8 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
                 code="settings.wall_below_nozzle",
                 severity="warning",
                 message=_(
-                    "Die dünnste Stelle ist schmaler als die hier angesetzte "
-                    "Mindestbahnbreite. Die Materialbahnen im Slicer prüfen; "
-                    "fehlen sie dort, eine kleinere Düse wählen oder die Stelle "
-                    "verbreitern."
+                    "Die dünnste Stelle ist schmaler als eine Bahn und fehlt im Slicer "
+                    "womöglich. Eine kleinere Düse hilft."
                 ),
                 values={
                     "width_mm": thin,
@@ -1999,10 +1994,8 @@ def _from_spans(result: SliceResult) -> list[Finding]:
             code="slice.long_bridge",
             severity="warning",
             message=_(
-                "Hier spannt eine Decke frei durch die Luft. Der Slicer legt dafür gerade "
-                "Bahnen quer über die Öffnung; sie hängen durch und bleiben als Fäden "
-                "stehen. Ein Übergang unter 45 Grad statt einer waagerechten Schulter "
-                "vermeidet das — sonst hilft nur eine Stütze."
+                "Hier spannt eine Decke frei, ihre Bahnen hängen durch. Ein Übergang unter 45 "
+                "Grad oder eine Stütze hilft."
             ),
             values={
                 "span_mm": round(layer.bridge_width, 1),

@@ -692,9 +692,8 @@ def _pose_findings(
                 code="pose.no_armature",
                 severity="warning",
                 message=_(
-                    "Für eine Stellung fehlt noch das Skelett — dieser Schritt bewegt nichts. "
-                    "Die Knochen entstehen im Skeletteditor: zwei Klicks je Knochen, dann "
-                    "Fertig."
+                    "Für eine Stellung fehlt das Skelett, der Schritt bewegt nichts. Im "
+                    "Skeletteditor setzen zwei Klicks einen Knochen."
                 ),
                 object_id=object_id,
             )

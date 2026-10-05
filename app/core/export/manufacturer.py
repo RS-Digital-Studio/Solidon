@@ -2397,9 +2397,8 @@ def findings(foundation: Foundation) -> list[Finding]:
                 code="slicer.process_variant_unresolved",
                 severity="warning",
                 message=_(
-                    "Das Profil „{profile}“ ordnet die Düsenvariante „{variant}“ nicht "
-                    "eindeutig zu. Bis Sie Düse und Profile im Druckdialog wählen, "
-                    "gelten Solidons Werte.",
+                    "Das Profil „{profile}“ ordnet die Düsenvariante „{variant}“ nicht eindeutig "
+                    "zu. Bis Sie Düse und Profile wählen, gelten Solidons Werte.",
                     profile=foundation.unresolved_in,
                     variant=foundation.unresolved_variant,
                 ),
@@ -2434,9 +2433,8 @@ def findings(foundation: Foundation) -> list[Finding]:
                 code="slicer.filament_from_table",
                 severity="warning",
                 message=_(
-                    "Für dieses Material ist kein Slicerprofil gewählt. Die Materialwerte "
-                    "kommen aus Solidons Tabelle; wählen Sie bei Bedarf ein Filamentprofil "
-                    "im Druckdialog."
+                    "Für dieses Material ist kein Slicerprofil gewählt, die Werte kommen aus "
+                    "Solidons Tabelle."
                 ),
                 values={"source": "solidon_table"},
                 suggestions=(OPEN_PRINT_SETTINGS,),

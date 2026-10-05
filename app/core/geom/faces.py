@@ -584,8 +584,8 @@ def tangent_faces_finding(count: int) -> Finding:
         code="draft.tangent_faces",
         severity="info",
         message=_(
-            "Tangential anschließende Flächen, etwa gerundete Ecken, sind mit angestellt — "
-            "ohne sie gäbe es zwischen ihnen und den gewählten Flächen keine Kante."
+            "Tangential anschließende Flächen wie gerundete Ecken sind mit angestellt, sonst "
+            "gäbe es dort keine Kante."
         ),
         values={"faces": count},
     )

@@ -443,8 +443,7 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
                 severity="error",
                 message=_(
                     "Ein Merkmal dieser Passung gibt es nicht mehr, oder es ist nach einem "
-                    "späteren Schritt nicht mehr erkennbar. Der Verlauf zeigt, welcher "
-                    "Schritt es verändert hat."
+                    "späteren Schritt nicht mehr erkennbar."
                 ),
                 values={"fit": fit.name, "a": str(fit.a), "b": str(fit.b)},
                 # Ein Merkmal, das es nicht mehr gibt, lässt sich nicht
@@ -835,9 +834,8 @@ def _mesh_clearance(
         code="fit.mesh_uncertain",
         severity="warning",
         message=_(
-            "Die geschätzten Kreismaße passen, die tatsächlichen Netzflächen belegen das Spiel "
-            "aber nicht. Die Verbindung in Einbaulage prüfen oder eine genauer aufgelöste "
-            "Datei verwenden."
+            "Die geschätzten Kreismaße passen, die Netzflächen belegen das Spiel aber nicht. In "
+            "Einbaulage prüfen oder eine feinere Datei verwenden."
         ),
         values={
             "fit": fit.name,

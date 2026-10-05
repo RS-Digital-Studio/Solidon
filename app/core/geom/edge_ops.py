@@ -759,10 +759,8 @@ def _exact_group_skipped_finding(
         code="edges.exact_group_skipped",
         severity="warning",
         message=_(
-            "Einige Kanten dieser Auswahl sind nicht verrundet: Der exakte Kern konnte die "
-            "Rundung dort nicht bilden. Die übrigen Kanten sind verrundet. Soll die Rundung "
-            "auch dort sitzen, versuchen Sie einen kleineren Radius, verrunden Sie diese "
-            "Kanten in einem eigenen Schritt, oder beenden Sie die Flächenbearbeitung."
+            "An einigen Kanten ließ sich die Rundung nicht bilden, die übrigen sind verrundet. "
+            "Ein kleinerer Radius kann helfen."
         ),
         values={"skipped": skipped, "worked": worked},
         location=outline[0][0],
@@ -787,10 +785,8 @@ def _thin_wall_finding(
         code="edges.thin_wall",
         severity="warning",
         message=_(
-            "Einige Kanten dieser Auswahl sind nicht verrundet: Die Wand neben ihnen ist nicht "
-            "dicker als dieser Radius. Dort passt nur ein Radius unter {largest}. Die übrigen "
-            "Kanten sind verrundet. Soll die Rundung auch dort sitzen, wählen Sie einen "
-            "kleineren Radius.",
+            "Einige Kanten sind nicht verrundet, weil die Wand daneben zu dünn ist. Dort passt "
+            "nur ein Radius unter {largest}.",
             largest=format_length(max(wall, 0.0)),
         ),
         values={
@@ -1182,10 +1178,8 @@ def _group_that_fits(
                 code="edges.unmapped",
                 severity="warning",
                 message=_(
-                    "An {skipped} Stellen hat der exakte Körper keine eigene Kante, etwa weil "
-                    "der Knick innerhalb einer Fläche liegt. Diese Stellen blieben unverändert. "
-                    "Am Dreiecksmodell lassen sie sich mitbearbeiten: Beenden Sie dafür die "
-                    "Flächenbearbeitung.",
+                    "An {skipped} Stellen fehlt eine eigene Kante, etwa weil der Knick in einer "
+                    "Fläche liegt. Sie blieben unverändert.",
                     skipped=len(unmapped),
                 ),
                 values={"skipped": len(unmapped), "worked": len(kept)},
@@ -1326,18 +1320,18 @@ def _too_small_to_see(
         severity="warning",
         message=(
             _(
-                "Der Wulst ist zu klein, um im Druck anzukommen. Wählen Sie einen "
-                "größeren Radius, oder prüfen Sie, ob die gewählten Kanten noch da sind."
+                "Der Wulst ist mit diesem Radius zu klein für den Druck, oder die gewählten "
+                "Kanten gibt es nicht mehr."
             )
             if kind == "bead"
             else _(
-                "Die Verrundung ist zu klein, um im Druck anzukommen. Wählen Sie einen "
-                "größeren Radius, oder prüfen Sie, ob die gewählten Kanten noch da sind."
+                "Die Verrundung ist mit diesem Radius zu klein für den Druck, oder die gewählten "
+                "Kanten gibt es nicht mehr."
             )
             if kind == "fillet"
             else _(
-                "Die Fase ist zu klein, um im Druck anzukommen. Wählen Sie eine größere "
-                "Breite, oder prüfen Sie, ob die gewählten Kanten noch da sind."
+                "Die Fase ist in dieser Breite zu klein für den Druck, oder die gewählten Kanten "
+                "gibt es nicht mehr."
             )
         ),
         # ``removed_mm3`` sagt, wie knapp es war: eine glatte Null heißt, dass

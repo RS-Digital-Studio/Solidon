@@ -5631,8 +5631,8 @@ def _places_miss(places: Sequence[_PatternPlace], sources: int) -> Finding:
         code="pattern_feature.no_target",
         severity="warning",
         message=_(
-            "Einige Plätze des Musters treffen kein Material — sie lägen neben dem Teil "
-            "oder in der Luft und sind ausgelassen. Welche, steht in „instances“."
+            "Einige Plätze des Musters treffen kein Material und sind ausgelassen. Welche, steht "
+            "in „instances“."
         ),
         feature_ids=tuple(dict.fromkeys(place.unit.feature.id for place in places)),
         values={"instances": _place_list(places, sources)},
@@ -8315,8 +8315,7 @@ def _depth_plan(closed: MeshData, wish: _DepthWish, profile: Profile, radius: fl
                 code="bore.breaks_out",
                 severity="warning",
                 message=_(
-                    "Bei dieser Tiefe tritt die Bohrung auf der anderen Seite des Materials "
-                    "aus. Wählen Sie eine geringere Tiefe, wenn sie geschlossen bleiben soll."
+                    "Bei dieser Tiefe tritt die Bohrung auf der anderen Seite des Materials aus."
                 ),
                 values={"largest": round(max(0.0, first_exit - minimum), 3)},
                 suggestions=(CORRECT_INPUT,),
@@ -8331,9 +8330,8 @@ def _depth_plan(closed: MeshData, wish: _DepthWish, profile: Profile, radius: fl
                     code="bore.floor_thin",
                     severity="warning",
                     message=_(
-                        "Unter dem Boden der Bohrung bleiben nur {thickness:.2f} mm Material. "
-                        "Das Materialprofil verlangt mindestens {minimum:.2f} mm. Wählen Sie "
-                        "eine geringere Tiefe.",
+                        "Unter dem Boden der Bohrung bleiben nur {thickness:.2f} mm, das "
+                        "Material verlangt {minimum:.2f} mm.",
                         thickness=thickness,
                         minimum=minimum,
                     ),
@@ -9938,9 +9936,8 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
                 code="resize.cavity_sections_kept",
                 severity="warning" if swallowed else "info",
                 message=_(
-                    "Die Bohrung und ihre Senkungen bilden einen gemeinsamen Hohlraum. "
-                    "Geändert wurde nur dieser Durchmesser. Prüfen Sie die übrigen "
-                    "Abschnitte oder korrigieren Sie die Eingabe."
+                    "Die Bohrung und ihre Senkungen bilden einen gemeinsamen Hohlraum. Geändert "
+                    "wurde nur dieser Durchmesser."
                 ),
                 feature_ids=tuple(section.id for section in chain),
                 values={"diameter": diameter, "previous": float(feature.params["diameter"])},
@@ -9969,9 +9966,7 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
                 severity="warning",
                 message=_(
                     "Über dieser Bohrung sitzt eine Senkung mit {outer:.2f} mm. Mit "
-                    "{diameter:.2f} mm ist die Bohrung nicht mehr enger als sie — die "
-                    "Senkung verschwindet. Ziehen Sie die Senkung mit, oder bleiben Sie "
-                    "unter ihrem Maß.",
+                    "{diameter:.2f} mm verschwindet sie in der Bohrung.",
                     outer=outer,
                     diameter=diameter,
                 ),
@@ -9985,9 +9980,8 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
             code="resize.widening_kept",
             severity="info",
             message=_(
-                "Über dieser Bohrung sitzt eine Senkung mit {outer:.2f} mm. Sie ist "
-                "stehen geblieben und sitzt jetzt nicht mehr im gemessenen Verhältnis "
-                "zur Bohrung.",
+                "Die Senkung mit {outer:.2f} mm über dieser Bohrung ist geblieben und steht "
+                "nicht mehr im alten Verhältnis zur Bohrung.",
                 outer=outer,
             ),
             feature_ids=(feature.id, widening.id),
@@ -10021,9 +10015,8 @@ def _narrowing_after_resize(feature: Feature, narrowing: Feature, diameter: floa
             code="resize.narrowing_swallowed",
             severity="warning",
             message=_(
-                "Die Verengung an der Mündung ({opening:.2f} mm Öffnung) verschwindet bei "
-                "diesem Durchmesser. Soll sie bleiben, wählen Sie einen größeren Durchmesser "
-                "oder „Senkung, Stufen und Verengung mitnehmen“.",
+                "Bei diesem Durchmesser verschwindet die Verengung an der Mündung ({opening:.2f} "
+                "mm Öffnung). „Senkung, Stufen und Verengung mitnehmen“ erhält sie.",
                 opening=opening,
             ),
             feature_ids=(narrowing.id, feature.id),
@@ -10034,8 +10027,8 @@ def _narrowing_after_resize(feature: Feature, narrowing: Feature, diameter: floa
         code="resize.narrowing_kept",
         severity="info",
         message=_(
-            "An der Mündung dieser Bohrung sitzt eine Verengung, und sie geht nicht mit. "
-            "Sehen Sie nach, ob die Öffnung noch passt."
+            "An der Mündung dieser Bohrung sitzt eine Verengung, die nicht mitgeht. Die Öffnung "
+            "passt vielleicht nicht mehr."
         ),
         feature_ids=(narrowing.id, feature.id),
         values=values,
@@ -10072,9 +10065,8 @@ def _slot_turned(
         code="slot_hole.turned",
         severity="info",
         message=_(
-            "Das Langloch liegt jetzt {angle:.1f} Grad anders als vorher; die alte "
-            "Richtung ist geschlossen. Wollten Sie es nur verlängern, lassen Sie "
-            "die Richtung, wie sie stand.",
+            "Das Langloch liegt jetzt {angle:.1f} Grad anders, die alte Richtung ist "
+            "geschlossen. Zum bloßen Verlängern die Richtung lassen.",
             angle=turned,
         ),
         feature_ids=(feature.id,),
@@ -11918,9 +11910,8 @@ def _mouth_covered(
                 code=f"{op}.mouth_covered",
                 severity="warning",
                 message=_(
-                    "An der neuen Stelle liegt die Mündung unter Material — von außen "
-                    "ist die Bohrung zu. Legen Sie die Stelle auf die Fläche, von der "
-                    "sie ausgeht."
+                    "An der neuen Stelle liegt die Mündung unter Material, von außen ist die "
+                    "Bohrung zu."
                 ),
                 feature_ids=(feature.id,),
                 # Der Satz nennt die Handlung, und sie steht als Knopf daneben
@@ -12809,10 +12800,7 @@ def _through_lost_finding(op: str, feature: Feature, centre: Vec3) -> Finding:
     return Finding(
         code=f"{op}.no_longer_through",
         severity="warning",
-        message=_(
-            "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle "
-            "nicht mehr — ihre Achse durchquert das Material dort nicht ganz."
-        ),
+        message=_("Diese Bohrung ging durch das Teil, an der neuen Stelle nicht mehr ganz."),
         feature_ids=(feature.id,),
         location=centre,
         # Regel 17: Stelle und Tiefe stehen im Schritt, der Ort fliegt mit.
@@ -12828,9 +12816,8 @@ def _cavity_lost_finding(op: str, feature: Feature) -> Finding:
         code=f"{op}.feature_lost",
         severity="warning",
         message=_(
-            "Das Merkmal wurde gesetzt, lässt sich am Ergebnis aber nicht mehr als "
-            "Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf "
-            "es verweisen, verlieren ihren Bezug."
+            "Das Merkmal ist gesetzt, aber am Ergebnis nicht wiederzufinden, spätere Schritte "
+            "verlieren den Bezug. Strg+Z nimmt den Schritt zurück."
         ),
         feature_ids=(feature.id,),
         values={"feature": feature.id, "kind": feature.kind},
@@ -12854,8 +12841,8 @@ def _copy_lost_finding(op: str, copy: Feature) -> Finding:
         code=f"{op}.feature_lost",
         severity="warning",
         message=_(
-            "Die Kopie ist am Ergebnis nicht als eigenes Merkmal zu erkennen — meist liegt sie "
-            "nicht ganz im Teil. Setzen Sie sie an eine andere Stelle."
+            "Die Kopie ist am Ergebnis nicht als eigenes Merkmal zu erkennen, meist weil sie "
+            "nicht ganz im Teil liegt."
         ),
         feature_ids=(copy.id,),
         values={"feature": copy.id, "kind": copy.kind},
@@ -15480,8 +15467,8 @@ def _thread_wall(
             code="thread.thin_wall",
             severity="warning",
             message=_(
-                "Um das neue Gewinde bleiben {wall} Wand, das Material braucht {minimum}. "
-                "Die Wand kann beim Drucken offen bleiben oder beim Schrauben reißen.",
+                "Um das neue Gewinde bleiben {wall} Wand, das Material braucht {minimum}. Sie "
+                "kann offen bleiben oder beim Schrauben reißen.",
                 wall=format_length(wall),
                 minimum=format_length(minimum),
             ),
@@ -15725,8 +15712,8 @@ def _remove_thread(ctx: OpContext, source: SceneObject, feature: Feature) -> OpR
             code="remove_feature.gone",
             severity="info",
             message=_(
-                "Das Gewinde ist entfernt: außen bleibt der Kern, innen ist die Bohrung "
-                "geschlossen. Spätere Schritte, die auf es verweisen, finden es nicht mehr."
+                "Das Gewinde ist entfernt: Außen bleibt der Kern, innen ist die Bohrung zu. "
+                "Spätere Schritte finden es nicht mehr."
             ),
             feature_ids=(feature.id,),
             values={"feature": feature.id, "kind": feature.kind, "removed": 1},
@@ -15943,9 +15930,8 @@ def _facets_refused(source: SceneObject) -> Finding:
         code="pattern.facets_unaligned",
         severity="warning",
         message=_(
-            "Die Mantelfläche unter diesem Muster ließ sich nicht genau ausrichten; im "
-            "Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen "
-            "Sie es dann noch einmal."
+            "Die Mantelfläche unter diesem Muster ließ sich nicht genau ausrichten, im Ergebnis "
+            "können sich Dreiecke schneiden."
         ),
         object_id=source.id,
         suggestions=(REPAIR_AND_RETRY,),
@@ -17209,9 +17195,8 @@ def _bore_no_longer_a_feature(feature: Feature, diameter: float) -> Finding:
         code="resize_hole.feature_lost",
         severity="warning",
         message=_(
-            "Die Bohrung wurde geändert, lässt sich in dieser Größe aber nicht mehr "
-            "als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die "
-            "auf sie verweisen, verlieren ihren Bezug."
+            "Die geänderte Bohrung ist nicht mehr als Merkmal zu erkennen, spätere Schritte "
+            "verlieren den Bezug. Strg+Z nimmt den Schritt zurück."
         ),
         feature_ids=(feature.id,),
         values={"feature": feature.id, "diameter": format_length(diameter)},
@@ -18105,9 +18090,8 @@ def _exact_gave_way(wall: float) -> Finding:
         code="hollow.exact_fallback",
         severity="warning",
         message=_(
-            "Der exakte Kern fand für diese Form keine gleichmäßige Innenwand. Die Wand "
-            "entstand am Dreiecksmodell über das Raster; das Teil ist danach ein "
-            "Dreiecksmodell."
+            "Mit Flächen und Kanten gelang keine gleichmäßige Innenwand. Sie entstand auf einem "
+            "Raster, das Teil ist jetzt ein Dreiecksmodell."
         ),
         values={"wall_mm": round(wall, 2)},
     )
@@ -18136,9 +18120,8 @@ def _walls_collide(wall: float, eroded: float) -> Finding:
         code="hollow.walls_collide",
         severity="warning",
         message=_(
-            "Der exakte Kern findet für diese Form keine gleichmäßige Innenwand. Das Teil "
-            "bleibt, wie es war. Eine dünnere Wand oder andere offene Flächen wählen, "
-            "oder am Dreiecksmodell aushöhlen."
+            "Mit Flächen und Kanten fand sich keine gleichmäßige Innenwand, das Teil bleibt "
+            "unverändert. Am Dreiecksmodell lässt es sich aushöhlen."
         ),
         values={"wall_mm": round(wall, 2), "eroded_mm": round(eroded, 3)},
         suggestions=(*_THINNER[:1], CHANGE_SELECTION, CANCEL),
@@ -18594,8 +18577,8 @@ def _fit_in_the_piece(
             code="prepare.test_piece_gap",
             severity="info",
             message=_(
-                "Im Ausschnitt stehen die Teile an der engsten Stelle {gap} auseinander — "
-                "so viel Spiel hat die Passung, bevor der Drucker etwas dazutut.",
+                "Im Ausschnitt stehen die Teile an der engsten Stelle {gap} auseinander, so viel "
+                "Spiel hat die Passung vor dem Druck.",
                 gap=format_length(gap),
             ),
             values={"gap_mm": round(gap, 3)},
@@ -19804,8 +19787,8 @@ def cut_away(ctx: OpContext) -> OpResult:
                 code="cut_away.uncapped",
                 severity="warning",
                 message=_(
-                    "Die Schnittfläche bleibt offen: Das Modell ist schon vor dem Schnitt "
-                    "nicht geschlossen. Reparieren Sie es und schneiden Sie danach erneut."
+                    "Die Schnittfläche bleibt offen, weil das Modell schon vor dem Schnitt nicht "
+                    "geschlossen war."
                 ),
                 object_id=source.id,
                 suggestions=(REPAIR_AND_RETRY,),

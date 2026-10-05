@@ -497,8 +497,7 @@ def _parts_united_first(
                 message=(
                     _(
                         "Teile des Modells stecken ineinander und ließen sich nicht vereinigen, "
-                        "weil sich eine Oberfläche selbst kreuzt. Wo der Schritt durch beide "
-                        "Teile geht, kann Material stehen bleiben."
+                        "weil sich eine Oberfläche kreuzt. Dort kann Material stehen bleiben."
                     )
                     if crossing
                     else _(
@@ -1078,9 +1077,8 @@ def _findings_for(
                     code="boolean.voxel",
                     severity="warning",
                     message=_(
-                        "Auf einem Raster gerechnet: Die Maße sind gerundet, und das Volumen "
-                        "weicht deutlich vom genauen Ergebnis ab. An einem reparierten Modell "
-                        "rechnet der Schritt genau."
+                        "Auf einem Raster gerechnet: Maße sind gerundet, und das Volumen weicht "
+                        "deutlich ab."
                     ),
                     values={
                         "deviation_mm3": deviation,

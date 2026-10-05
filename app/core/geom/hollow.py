@@ -536,9 +536,8 @@ def _opening_misses(opening: Opening) -> Finding:
         code="hollow.opening_misses",
         severity="warning",
         message=_(
-            "Unter dieser Fläche liegt kein Hohlraum, sie bleibt geschlossen. Dort ist "
-            "das Teil dünner als zwei Wände — eine dünnere Wand oder eine andere "
-            "Fläche wählen."
+            "Unter dieser Fläche liegt kein Hohlraum, sie bleibt geschlossen. Das Teil ist dort "
+            "dünner als zwei Wände."
         ),
         feature_ids=(opening.name,) if opening.name else (),
         suggestions=(CORRECT_INPUT, CHANGE_SELECTION),
@@ -784,9 +783,8 @@ def _raster_findings(
                 code="hollow.coarse_grid",
                 severity="warning",
                 message=_(
-                    "Für diese Wandstärke ist das Raster zu grob — die stehende Wand "
-                    "kann spürbar dicker werden als eingetragen. Eine Wand ab einem "
-                    "Millimeter trifft das Raster genau."
+                    "Für diese Wandstärke ist das Raster zu grob, die Wand wird womöglich "
+                    "dicker. Ab einem Millimeter trifft es genau."
                 ),
                 values={
                     "wall_mm": round(wall, 2),
@@ -807,9 +805,8 @@ def _raster_findings(
                     code="hollow.closed_cavities",
                     severity="warning",
                     message=_(
-                        "Nicht jeder Hohlraum ist offen: Teile des Innenraums bleiben "
-                        "geschlossen und drücken beim Drucken die Decke hoch. Weitere "
-                        "Öffnungen oder Entlüftungen setzen."
+                        "Teile des Innenraums bleiben geschlossen und drücken beim Drucken die "
+                        "Decke hoch."
                     ),
                     values={
                         "count": len(closed),

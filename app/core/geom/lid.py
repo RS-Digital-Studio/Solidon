@@ -1474,8 +1474,8 @@ def _hinge_findings(plan: _HingePlan, params: LidParams) -> list[Finding]:
                 code="parts.lid_hinge",
                 severity="info",
                 message=_(
-                    "Das Scharnier wird mitgedruckt und kommt beweglich aus dem Drucker. "
-                    "Der Kragen ist dort gekürzt, wo er beim Öffnen an die Wand käme."
+                    "Das Scharnier kommt beweglich aus dem Drucker. Der Kragen ist gekürzt, wo "
+                    "er beim Öffnen anstieße."
                 ),
                 values={
                     "pin_mm": round(params.hinge_pin, 3),
@@ -1489,8 +1489,8 @@ def _hinge_findings(plan: _HingePlan, params: LidParams) -> list[Finding]:
             code="parts.lid_hinge",
             severity="info",
             message=_(
-                "Gehäuse und Deckel tragen Augen für einen Stift. *Stift für Bohrung* baut "
-                "ihn passend; ein Stück Filament oder ein Nagel tut es auch."
+                "Gehäuse und Deckel tragen Augen für einen Stift. „Stift für Bohrung“ baut ihn, "
+                "Filament oder ein Nagel tun es auch."
             ),
             values={
                 "pin_mm": round(params.hinge_pin, 3),
