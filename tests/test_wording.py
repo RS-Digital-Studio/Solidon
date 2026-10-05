@@ -748,9 +748,9 @@ def test_no_new_customer_text_uses_jargon_or_a_machine_pattern() -> None:
     Geprüft werden die Kundentexte, die ``test_text_length`` nach Aufrufort
     einordnet. Was heute trifft, steht in ``tests/data/text_patterns.json``.
     """
-    from tests.test_text_length import _application_sources, customer_texts
+    from tests.test_text_length import application_sources, customer_texts
 
-    texte = {entry.text for entry in customer_texts(_application_sources())}
+    texte = {entry.text for entry in customer_texts(application_sources())}
     bestand = json.loads(MUSTER_DATEI.read_text(encoding="utf-8"))
     probleme = muster_probleme(muster_funde(texte), bestand, MUSTER_BESTAND)
     assert not probleme, "\n".join(probleme[:30])
