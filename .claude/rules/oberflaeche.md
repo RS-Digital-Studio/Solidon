@@ -127,6 +127,12 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   Schritt ändern“). Keine Nebensatzketten, keine doppelten Vorschläge; im
   Prüfbericht verdrängt jede lange Zeile die nächste. Jeder angefasste Text
   wird gekürzt, alle Kataloge ziehen mit — den Bestand nicht in einem Zug.
+- **Die Länge hängt am Ort** (RM-509, `test_text_length.py`, Art nach
+  Aufrufort): Befund 20 Wörter und zwei Sätze, Fehlerdetail 25/2,
+  Bausteinänderung 20/1, Vorbehalt 20/2, erster Satz einer `doc` 15,
+  Parameter-`doc` und Kurzhilfe 25/2, Ansage, Leertext und Tourschritt 20,
+  Druckrat-Grund 60 Zeichen. Menü, Statuszeile, Palette und Dialogkopf zeigen
+  nur den ersten Satz; geschnitten wird überall mit `surfaces.sentences`.
 - **Nicht nach einem Sprachmodell klingen** (Entscheidung Robert; Kunden
   schreiben Robert persönlich). Die sieben Merkmale: nummerierte Listen, wo
   Fließtext reicht; Rückspiegeln dessen, was der andere schrieb; Dreierfiguren

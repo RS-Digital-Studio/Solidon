@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from app.core import expressions, manual
 from app.core.errors import AppError
 from app.core.registry import OperationSpec, inactive_dependency
-from app.core.registry.surfaces import chooses_a_centre, normal_fields_of
+from app.core.registry.surfaces import chooses_a_centre, first_sentence, normal_fields_of
 from app.core.types import ParamSpec
 from app.core.units import (
     DEGREE_UNIT,
@@ -59,7 +59,6 @@ from app.core.units import (
     to_mm,
 )
 from app.i18n import tr
-from app.ui.command_palette import first_sentence
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.labels import (
     BoundedSpin,
@@ -200,7 +199,7 @@ def lead_sentence(spec: OperationSpec) -> str:
     Vor dem ersten Feld standen bis zu 118 Wörter — die ganze Beschreibung und
     die Grenze dazu. Den Rest trägt der Tooltip derselben Zeile, die Grenze
     die zugeklappte Klappe „Wann nicht?“. Gekürzt wird wie in der
-    Befehlspalette (:func:`app.ui.command_palette.first_sentence`), damit
+    Befehlspalette (:func:`app.core.registry.surfaces.first_sentence`), damit
     beide Orte denselben Satz zeigen.
     """
     return first_sentence(str(spec.doc or "")).strip()

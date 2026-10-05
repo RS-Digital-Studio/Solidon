@@ -187,7 +187,7 @@ from app.core.registry import (
     variant_members,
 )
 from app.core.registry.params import body_keys, inactive_dependency
-from app.core.registry.surfaces import chooses_a_centre
+from app.core.registry.surfaces import chooses_a_centre, first_sentence
 from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
@@ -5082,10 +5082,13 @@ class MainWindow(QMainWindow):
         # Grenze. Zwölf Operationen tragen einen ``caveat``, und gelesen hat
         # ihn allein das Handbuch — also niemand in dem Augenblick, in dem er
         # zählt. In die Statuszeile passt er nicht: die ist eine Zeile, und
-        # abgeschnitten wäre eine Warnung schlimmer als keine.
-        action.setStatusTip(str(spec.doc))
+        # abgeschnitten wäre eine Warnung schlimmer als keine. **Nur der erste
+        # Satz** (RM-509): Ein Menü-Tooltip trug bis zu 116 Wörter; der Rest
+        # steht im Dialog und im Handbuch.
+        sentence = first_sentence(str(spec.doc))
+        action.setStatusTip(sentence)
         warning = caveat_line(spec)
-        action.setToolTip(f"{spec.doc}\n\n{warning}" if warning else str(spec.doc))
+        action.setToolTip(f"{sentence}\n\n{warning}" if warning else sentence)
         action.triggered.connect(
             weak_slot(self, lambda view, entry: view.launch_operation(entry), spec)
         )
@@ -12390,8 +12393,8 @@ class MainWindow(QMainWindow):
         )
         for spec in specs:
             action = self._finish_menu.addAction(str(spec.title))
-            action.setToolTip(str(spec.doc))
-            action.setStatusTip(str(spec.doc))
+            action.setToolTip(first_sentence(str(spec.doc)))
+            action.setStatusTip(first_sentence(str(spec.doc)))
             action.triggered.connect(weak_slot(self, MainWindow._finish_sketch_as, spec.name))
             self._finish_actions[spec.name] = action
 

@@ -21,7 +21,7 @@ Dialogs“ und „Bedingte Felder“.
   und der Ersatz für eine Zeichnung (Grundform samt Maßen) hinten. Über dem
   ersten Feld stehen die Platzierungsanweisung als erste Zeile in normaler
   Schrift, der erste Satz der `doc` (`op_dialog.lead_sentence`, dieselbe
-  Kürzung wie die Palette, `command_palette.first_sentence`; die ganze `doc`
+  Kürzung wie Palette und Menü, `surfaces.first_sentence`; die ganze `doc`
   im Tooltip) und die Grenze zugeklappt unter „Wann nicht?“ (`remember=`).
 - **Ein vorbelegter Wert kommt nach vorn, außer er ist eine Richtung oder die
   Stelle — und nur, solange vorn Platz ist:** `_promoted_fields` holt
