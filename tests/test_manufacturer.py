@@ -2596,6 +2596,118 @@ def test_a_part_that_switches_supports_on_carries_the_tree_tip(
     ]
 
 
+# --- Was die Konsole ablehnt ------------------------------------------------------
+
+
+def _rejected_by_the_console(bestand: Path, executable_name: str) -> handover.SlicerSetup:
+    """Der Bestand mit den Werten aus Orcas Profil des Anycubic Kobra S1 Max 0,8
+    (``retraction_distances_when_cut = 0``, ``filament_flush_temp = nil``) und
+    Bambus ``tree_support_wall_count = -1``, wie Creality Print es mitliefert."""
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine = vendor / "machine" / "fdm_machine_common.json"
+    document = json.loads(machine.read_text(encoding="utf-8"))
+    document.update(retraction_distances_when_cut=["0"], long_retractions_when_cut=["0"])
+    _write(machine, document)
+    filament = vendor / "filament" / "ECC2" / "pla.json"
+    document = json.loads(filament.read_text(encoding="utf-8"))
+    document["filament_flush_temp"] = ["nil"]
+    _write(filament, document)
+    process = vendor / "process" / "fdm_process_common.json"
+    document = json.loads(process.read_text(encoding="utf-8"))
+    document["tree_support_wall_count"] = "-1"
+    _write(process, document)
+    executable = bestand.with_name(executable_name)
+    executable.write_bytes(b"")
+    return _setup(executable)
+
+
+@pytest.mark.parametrize(
+    ("executable_name", "expected"),
+    [
+        # OrcaSlicer 2.4.2 und ElegooSlicer: alle drei abgelehnt, gemessen an der Konsole.
+        ("orca-slicer.exe", {"retraction": "18", "flush": "0", "walls": "0"}),
+        ("elegoo-slicer.exe", {"retraction": "18", "flush": "0", "walls": "0"}),
+        # Bambu Studio kennt -1 Wände (automatisch) und lehnt die zwei anderen ab.
+        ("bambu-studio.exe", {"retraction": "18", "flush": "0", "walls": "-1"}),
+        # Creality Print kennt filament_flush_temp nicht und lehnt nur die zwei anderen ab.
+        ("CrealityPrint.exe", {"retraction": "18", "flush": "nil", "walls": "0"}),
+        # Anycubic Slicer Next prüft nicht: Alles bleibt, wie der Hersteller es schreibt.
+        ("AnycubicSlicerNext.exe", {"retraction": "0", "flush": "nil", "walls": "-1"}),
+    ],
+)
+def test_a_value_the_console_rejects_goes_out_as_the_programs_default(
+    bestand: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    executable_name: str,
+    expected: dict[str, str],
+) -> None:
+    """OrcaSlicer schnitt am Kobra S1 Max nichts: „Param values in 3mf/config
+    error: filament_flush_temp: nil not in range [0,1500];
+    retraction_distances_when_cut: 0 not in range [10,18]“ — Werte aus Orcas
+    eigenem Anycubic-Profil, die das Fenster ungeprüft lädt. Abgelehnt wird je
+    Programm verschieden; was es ablehnt, geht als seine Vorgabe hinaus, in
+    Konsole und Projektdatei, und die Grundlage sagt es."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _rejected_by_the_console(bestand, executable_name)
+    settings = print_settings.resolve(_cc2())
+    out = tmp_path / "out"
+    out.mkdir()
+
+    config = handover.write_config(settings, _cc2(), setup, out)
+    machine = json.loads(config.machine.read_text(encoding="utf-8"))
+    process = json.loads(config.process.read_text(encoding="utf-8"))
+    filament = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    project = handover.project_settings(settings, _cc2(), setup)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+
+    for written in (machine, project):
+        assert written["retraction_distances_when_cut"] == [expected["retraction"]]
+        assert written["long_retractions_when_cut"] == ["0"], "der Schalter bleibt beim Hersteller"
+    for written in (filament, project):
+        assert written["filament_flush_temp"] == [expected["flush"]]
+    for written in (process, project):
+        assert str(written["tree_support_wall_count"]) == expected["walls"]
+    replaced = {
+        entry.values["setting"]: (entry.values["value"], entry.values["default"])
+        for entry in manufacturer.findings(foundation)
+        if entry.code == "slicer.profile_value_replaced"
+    }
+    assert replaced == {
+        key: (old, new)
+        for key, old, new in (
+            ("retraction_distances_when_cut", "0", expected["retraction"]),
+            ("filament_flush_temp", "nil", expected["flush"]),
+            ("tree_support_wall_count", "-1", expected["walls"]),
+        )
+        if old != new
+    }
+
+
+def test_the_console_limits_keep_every_other_entry() -> None:
+    """Je Spule und Extruder ein Eintrag: ersetzt wird nur, was abgelehnt wird,
+    die Liste behält ihre Länge; ``nil`` gilt, wo das Programm es erlaubt."""
+    values = {
+        "retraction_distances_when_cut": ["0", "15", "18"],
+        "filament_flush_temp": ["220", "nil"],
+        "fan_max_speed": "1000",
+        "line_width": "0.42",
+    }
+
+    replaced = slicer_keys.console_replacements(values, "orcaslicer")
+
+    assert replaced == {
+        "retraction_distances_when_cut": (["0", "15", "18"], ["18", "15", "18"]),
+        "filament_flush_temp": (["220", "nil"], ["220", "0"]),
+        "fan_max_speed": ("1000", "100"),
+    }
+    bambu = slicer_keys.console_replacements(
+        {"retraction_distances_when_cut": ["nil"]}, "bambustudio"
+    )
+    assert bambu == {}, "Bambu Studio führt den Abstand leer"
+    assert slicer_keys.console_replacements(values, "anycubicslicernext") == {}
+
+
 # --- Düsenart-Fassungen (Anycubic Slicer Next) --------------------------------------
 
 

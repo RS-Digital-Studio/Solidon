@@ -1029,6 +1029,7 @@
   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "A greyscale image used as a height map. Lighter areas are raised higher.",
   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "The main window with a loaded model in the viewport, the object tree on the left and the report on the right.",
   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "The Solidon3D main window with model, history and report",
+  "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "The manufacturer profile sets {key} = {value}, which the slicer refuses. Solidon passes on its default {default}.",
   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "The manufacturer profile does not support bridges, and only the slicer knows which ceiling it treats as a bridge.",
   "Das Installationsprogramm ließ sich nicht starten.": "The installer could not be started.",
   "Das Kennzeichen für eine Hilfslinie ist wahr oder falsch.": "The guide-line flag is either true or false.",

@@ -3464,7 +3464,22 @@ def project_settings(
     ]
     resolved.setdefault("printer_model", profile.printer.title)
     resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
-    return resolved
+    # Das Fenster warnt sonst beim Öffnen: „Invalid values found in the 3MF“.
+    return _within_console_limits(resolved, program)
+
+
+def _within_console_limits(document: dict[str, object], program: str) -> dict[str, object]:
+    """Ein Herstellerwert, den die Konsole ablehnt, geht als Vorgabe des Programms hinaus.
+
+    Sonst schneidet die Konsole gar nichts: OrcaSlicer am Kobra S1 Max bricht
+    an Anycubics ``retraction_distances_when_cut = 0`` und
+    ``filament_flush_temp = nil`` ab, mit und ohne Stützen
+    (``slicer_keys.CONSOLE_LIMITS``). Der Befund dazu steht an der Grundlage
+    (``slicer.profile_value_replaced``).
+    """
+    for key, (_old, new) in slicer_keys.console_replacements(document, program).items():
+        document[key] = new
+    return document
 
 
 def window_findings(setup: SlicerSetup) -> list[Finding]:
@@ -3603,7 +3618,7 @@ def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
         document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     # Nach dem Auffüllen, damit kein geerbter Wert ihn überschreibt.
     document["name"] = _machine_name(setup)
-    return document
+    return _within_console_limits(document, slicer_keys.program_of(setup.executable))
 
 
 #: Schlüssel, die ein Solidon-Feld nur mitbedient, weil Solidon sie nicht eigens
@@ -3998,7 +4013,7 @@ def _orca_process(
         # deshalb über ``binding`` aus der Kette statt aus ``document``.
         document.update(slicer_profiles.binding(base, roots=_profile_roots(setup)))
     document.pop("inherits", None)
-    return document
+    return _within_console_limits(document, slicer_keys.program_of(setup.executable))
 
 
 def _orca_filament(
@@ -4152,6 +4167,7 @@ def _orca_filament(
     # Ein eigener Wert geht in jede Düsenart-Fassung — sonst druckt der
     # Slicer die Fassung des Herstellers statt der Wahl.
     document.update(slicer_keys.with_nozzle_kinds(document, program, own_values))
+    _within_console_limits(document, program)
     if plate is not None:
         # Die Platte ist bekannt: Die Temperaturen der übrigen Platten bleiben,
         # wie der Hersteller sie setzt — auch seine Nullen, mit denen er eine
