@@ -197,6 +197,14 @@ Jeder Befund beantwortet in derselben Reihenfolge:
    Schichtanalyse oder eingelesener G-Code?
 5. **Welche Handlung** ist geeignet, und was kann sie zusätzlich verändern?
 
+**Fortgeschrieben (Entscheidung Robert, 05.10.2026, RM-508):** Folge, Ort und
+Grundlage stehen unter dem gewählten Befund als eine Zeile („Hinweis · Dose ·
+intern geschätzt“). Das Wort für die Schwere ist die Folge; ein eigener
+Folgesatz steht nur bei echter Folge — ein Fehler lässt die Übergabe nicht
+empfehlen. Die Nebenfolge steht sichtbar unter der Handlung, wo diese etwas
+verändert; „ändert nichts“ und „erst beim Übernehmen“ stehen in Kurzhilfe und
+Beschreibung des Knopfes.
+
 Technische Angaben wie Solver, Toleranzquelle und Dreieckszahl bleiben unter
 „Einzelheiten“ erreichbar. Der erste Satz spricht Kundensprache:
 

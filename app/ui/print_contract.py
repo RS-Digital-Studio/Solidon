@@ -165,16 +165,17 @@ def handoff_state(findings: Iterable[Finding], incomplete: Iterable[str]) -> str
 
 
 def finding_consequence(finding: Finding) -> str:
-    """Die Folge eines Befunds für das Druckziel, aus derselben Regel wie der Status.
+    """Ein eigener Folgesatz, wo die Folge mehr ist als das Wort für die Schwere.
 
-    Ein Fehler lässt die Übergabe nicht empfehlen, eine Warnung verlangt eine
-    Entscheidung, ein Hinweis ändert nichts daran (:func:`handoff_state`).
+    Die Folge steht als erstes Wort der Befundzeile („Warnung · Dose · intern
+    geschätzt“, ``panels.finding_meta``; Entscheidung Robert, 05.10.2026). Ein
+    Satz kommt nur dazu, wo der Befund allein das Druckziel kippt: Ein Fehler
+    lässt die Übergabe nicht empfehlen (:func:`handoff_state`). Für Warnung und
+    Hinweis sagten die Sätze, was das Wort schon sagt — unter jedem Befund.
     """
     if finding.severity == "error":
         return tr("Folge: Die Übergabe wird für das gewählte Druckziel nicht empfohlen.")
-    if finding.severity == "warning":
-        return tr("Folge: Ein Risiko für den Druck, das Sie vor der Übergabe beurteilen.")
-    return tr("Folge: Ein Hinweis; die Übergabe hängt nicht davon ab.")
+    return ""
 
 
 def check_summary(

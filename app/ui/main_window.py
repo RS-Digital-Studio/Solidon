@@ -3515,8 +3515,7 @@ class MainWindow(QMainWindow):
         self.report.bundleActivated.connect(self._on_bundle_activated)
         self.report.actionOnBodies.connect(self._run_on_chosen_bodies)
         self.report.slicerRequested.connect(self.action_print_settings)
-        self.report.rebuildRequested.connect(self.action_rebuild)
-        self.object_tree.selectionChanged.connect(self._update_rebuild_selection)
+        self.report.exportRequested.connect(self.action_export)
         self.chat = ChatPanel(self)
         self.chat.requestSent.connect(self._on_request_sent)
         self.chat.accepted.connect(self._on_proposal_accepted)
@@ -3594,6 +3593,7 @@ class MainWindow(QMainWindow):
         self.selection_operations.catalogRequested.connect(self.action_catalog)
         self.selection_operations.matchingPartsRequested.connect(self.open_matching_parts)
         self.selection_operations.paletteRequested.connect(self.open_palette)
+        self.selection_operations.rebuildRequested.connect(self._rebuild_chosen_body)
         from app.ui.filament_assignment import QuickFilamentPicker
 
         self.quick_filament = QuickFilamentPicker(self)
@@ -5467,6 +5467,9 @@ class MainWindow(QMainWindow):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
             self._pick_hint(action, ready, locked, missing=halted or "")
+        # Der Knopf im Prüfbericht folgt dem Menüeintrag: dieselbe Sperre,
+        # derselbe Grund (RM-508).
+        self.report.follow_export(self.export_action.isEnabled(), self.export_action.toolTip())
         # Derselbe Registervertrag wie Menü und Palette, ohne eine dritte
         # Freigabelogik. Das Panel hält seine Knöpfe über Auswahlwechsel hinweg
         # und ändert hier nur Zustand und Hinweise.
@@ -5489,6 +5492,7 @@ class MainWindow(QMainWindow):
             # Mehrere markierte Merkmalszeilen eines Körpers bieten vorn das
             # Zusammenfassen als Muster an (RM-504).
             features=self._several_features_chosen(),
+            rebuild=self._rebuild_allowed(chosen, locked, gesturing),
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
@@ -7679,8 +7683,29 @@ class MainWindow(QMainWindow):
         )
         show_error(error, parent, {**self.error_handlers(), STOP_INSERTING.id: stop_inserting_then})
 
-    def _update_rebuild_selection(self, *_args: Any) -> None:
-        self.report.set_rebuild_selection(self.object_tree.selected_objects())
+    def _rebuild_chosen_body(self) -> None:
+        """*Modell nachbauen* aus der Karte der Handlungen: genau der gewählte Körper."""
+        chosen = self.object_tree.selected_objects()
+        if len(chosen) == 1:
+            self.action_rebuild(chosen[0])
+
+    def _rebuild_allowed(self, chosen: int, locked: bool, gesturing: bool) -> bool:
+        """Ob *Modell nachbauen* am gewählten Körper geht (RM-508).
+
+        Bis dahin ein Knopf im Prüfbericht, auch ohne Auswahl, gesperrt und mit
+        einem Satz darunter; jetzt eine Hauptaktion am einen gewählten Körper.
+        Die Bedingungen sind die, unter denen :meth:`action_rebuild` nicht
+        absagt — der Knopf bietet nicht an, was der Klick dann verweigert.
+        """
+        result = self.session.last_result
+        return (
+            chosen == 1
+            and not locked
+            and not gesturing
+            and result is not None
+            and result.complete
+            and result.stopped_at is None
+        )
 
     def action_rebuild(self, object_id: str) -> None:
         """Bericht → geprüfter Kandidat → sichtbarer Vergleich → eine Transaktion."""

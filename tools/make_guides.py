@@ -1008,7 +1008,7 @@ def story_print_a_model(run: GuideRun) -> None:
 
     if report.list.count() == 0:
         raise SystemExit(f"{BROKEN_MODEL.name}: der Prüfbericht meldet nichts")
-    report.list.setCurrentRow(0)
+    _choose_finding(report, 0)
     run.settle(10)
     run.capture(3)
 
@@ -1239,6 +1239,14 @@ def _open_dialog(run: GuideRun, what: str) -> Any:
     return dialog
 
 
+def _choose_finding(report: Any, row: int) -> None:
+    """Einen Befund wählen, wie der Kunde es tut: Hinweise allein stehen
+    zugeklappt (RM-508), ihre Zahl im Kopf des Berichts öffnet sie."""
+    if not report.list_toggle.isChecked():
+        report.list_toggle.click()
+    report.list.setCurrentRow(row)
+
+
 def _finding_row(report: Any, code: str) -> int:
     """Die Zeile des Prüfberichts mit diesem Befund — über den Code, nicht über den Satz."""
     for row in range(report.list.count()):
@@ -1306,7 +1314,7 @@ def story_split_a_large_part(run: GuideRun) -> None:
     _import(run, OVERSIZED_MODEL)
     report = run.window.report
     run.window.right.setCurrentWidget(report)
-    report.list.setCurrentRow(_finding_row(report, "arrange.out_of_build_volume"))
+    _choose_finding(report, _finding_row(report, "arrange.out_of_build_volume"))
     run.settle(10)
     run.capture(1)
     run.capture(2)
@@ -1321,7 +1329,7 @@ def story_split_a_large_part(run: GuideRun) -> None:
     run.settle(30)
     run.capture(3)
     run.window.right.setCurrentWidget(report)
-    report.list.setCurrentRow(_finding_row(report, "prepare.halves_in_place"))
+    _choose_finding(report, _finding_row(report, "prepare.halves_in_place"))
     run.settle(10)
     run.capture(4)
     guide_targets.widget_for(run.window, "report.action").click()
@@ -1691,7 +1699,7 @@ def story_repair_a_model(run: GuideRun) -> None:
     run.window.right.setCurrentWidget(report)
     run.settle(10)
     run.capture(1)
-    report.list.setCurrentRow(0)
+    _choose_finding(report, 0)
     run.settle(10)
     run.capture(2)
     guide_targets.widget_for(run.window, "report.action").click()
@@ -1699,7 +1707,7 @@ def story_repair_a_model(run: GuideRun) -> None:
     run.capture(3)
     _import(run, CROSSING_MODEL)
     run.window.right.setCurrentWidget(report)
-    report.list.setCurrentRow(_finding_row(report, "ingest.multiple_components"))
+    _choose_finding(report, _finding_row(report, "ingest.multiple_components"))
     run.settle(10)
     run.capture(4)
     guide_targets.widget_for(run.window, "report.action").click()
