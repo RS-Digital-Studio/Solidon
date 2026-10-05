@@ -219,9 +219,21 @@ def _bundled(folder: Path, mark: str) -> Iterator[Path]:
     Schreibweise des Herstellers (``OrcaSlicer``, ``BambuStudio``), das Programm
     die des Startnamens (``orca-slicer``). Das Debian-Paket von Anycubic Slicer
     Next legt eine Ebene tiefer ab: ``share/AnycubicSlicerNext/resources/profiles``.
+
+    **``share/cura`` gehört Cura.** Aus dem Paketverwalter liegt es neben
+    ``share/PrusaSlicer``. Angeboten wurde es jedem Programm, und PrusaSlicer
+    und Orca bekamen Curas Ordner als Herstellerbestand — ohne einen ihrer
+    Drucker.
+
+    **Ein Mac-Bündel schreibt ``Contents/Resources`` groß.** Auf dem üblichen
+    APFS trifft ``resources`` trotzdem, auf einem Volume mit Unterscheidung der
+    Schreibweise nicht; gefragt wird deshalb zuerst die Schreibweise des Bündels.
     """
+    if folder.name == "Contents" and folder.parent.suffix.lower() == ".app":
+        yield folder / "Resources" / "profiles"
     yield folder / "resources" / "profiles"
-    yield folder / "share" / "cura"
+    if mark == "cura":
+        yield folder / "share" / "cura"
     try:
         shared = sorted((folder / "share").iterdir())
     except OSError:

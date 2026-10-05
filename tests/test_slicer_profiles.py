@@ -4532,6 +4532,56 @@ def test_a_distribution_package_keeps_its_profiles_under_share(
 
 
 @pytest.mark.parametrize(
+    ("program", "below_share"),
+    [
+        ("prusa-slicer", ("PrusaSlicer", "profiles")),
+        ("orca-slicer", ("OrcaSlicer", "profiles")),
+    ],
+)
+def test_a_distribution_package_beside_cura_keeps_its_own_profiles(
+    tmp_path: Path, program: str, below_share: tuple[str, ...]
+) -> None:
+    """Cura aus dem Paketverwalter legt seinen Bestand nach ``/usr/share/cura``.
+
+    Der Ordner gehört Cura. Angeboten wurde er jedem Programm und vor
+    ``share/<Programm>``: PrusaSlicer und Orca daneben bekamen Curas Ordner als
+    Herstellerbestand und darin keinen ihrer Drucker (Durchsicht 0.5.3, Fund 1).
+    """
+    prefix = tmp_path / "usr"
+    executable = prefix / "bin" / program
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"")
+    cura = prefix / "bin" / "cura"
+    cura.write_bytes(b"")
+    (prefix / "share" / "cura" / "resources" / "definitions").mkdir(parents=True)
+    profiles = prefix.joinpath("share", *below_share)
+    profiles.mkdir(parents=True)
+
+    assert sp.install_root(executable) == profiles
+    assert sp.install_root(cura) == prefix / "share" / "cura", "Cura behält seinen Ordner"
+
+
+def test_a_mac_bundle_hands_out_its_resources_in_its_own_spelling(tmp_path: Path) -> None:
+    """Ein Mac-Bündel trägt seinen Bestand unter ``Contents/Resources/profiles``.
+
+    Gesucht wurde ``resources/profiles``. Auf dem üblichen APFS ohne
+    Unterscheidung der Schreibweise traf das, auf einem case-sensitiv
+    formatierten Volume nicht — dort fehlte der Herstellerbestand von Orca,
+    Bambu, Elegoo, Creality und Anycubic. Verglichen wird der Text: Auf einem
+    Dateisystem ohne Unterscheidung nennt ``is_dir`` auch die falsche
+    Schreibweise vorhanden, und ``WindowsPath`` vergleicht sie gleich.
+    """
+    contents = tmp_path / "OrcaSlicer.app" / "Contents"
+    executable = contents / "MacOS" / "OrcaSlicer"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"")
+    profiles = contents / "Resources" / "profiles"
+    profiles.mkdir(parents=True)
+
+    assert str(sp.install_root(executable)) == str(profiles)
+
+
+@pytest.mark.parametrize(
     ("app_id", "flavour", "inside", "command"),
     [
         ("com.prusa3d.PrusaSlicer", "prusa", "bin/prusa-slicer", "/app/bin/prusa-slicer"),
