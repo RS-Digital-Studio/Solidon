@@ -492,6 +492,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   nicht, weil GitHub seit dem Vormittag keinen Job startet (Zahlung oder Ausgabenlimit des Kontos),
   auch keinen auf `main`.
 
+  **Gemessen am 05.10.2026 abends (Läufe 37361577881 und 37362456615, Wegwerfzweig):** Das
+  veröffentlichte 0.5.2 startet über LaunchServices mit Quarantäne auf beiden Runnern
+  (Intel offscreen, ARM mit Fenster und 3D-Ansicht) in rund 30 s bis zum Fenster, Developer-ID-
+  wie ad-hoc-signiert gleich; Gatekeeper hält am Runner nichts auf. Der Verdacht auf
+  Schreib-und-Ausführ-Speicher ist **widerlegt**: Ein verschiebbares Python 3.14.8 mit cffi 2.1.1
+  und wgpu 0.32.0, ad hoc mit Hardened Runtime ohne Entitlements signiert
+  (`flags=0x10002(adhoc,runtime)`), erzeugt auf dem Intel-Runner cffi- und ctypes-Rückrufe und
+  bekommt von wgpu einen Metal-Adapter („Apple Paravirtual device“); ARM ebenso. Eine
+  Entitlement-Änderung wäre damit geraten. Offen bleibt der Unterschied zwischen dem Runner und
+  einem echten Intel-Mac mit Fenster — die erfragten Angaben des Kunden entscheiden.
+  Messweg: `hardened_probe.py` und `mac-hardened-diag.yml` im selben Ordner.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 
 <a id="rm-107"></a>

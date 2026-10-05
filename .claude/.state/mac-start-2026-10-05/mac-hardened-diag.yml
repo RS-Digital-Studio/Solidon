@@ -1,0 +1,61 @@
+# Wegwerfzweig für RM-104 (Kundenmeldung: Intel-Mac startet 0.5.2 erst ad hoc
+# signiert). Baut nichts und prüft nichts am Produkt. Nach der Auswertung
+# Zweig löschen.
+name: Mac-Start und Hardened Runtime messen
+
+on:
+  push:
+    branches: [diag/mac-hardened]
+
+permissions:
+  contents: read
+
+jobs:
+  hardened:
+    name: Hardened Runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26-intel, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+      - name: Messen
+        run: python .claude/.state/mac-start-2026-10-05/hardened_probe.py treiber
+      - name: Sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardened-${{ matrix.os }}
+          path: diag-out/
+          retention-days: 7
+
+  start:
+    name: Start 0.5.2 (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-26-intel, arch: x86_64 }
+          - { os: macos-latest, arch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Messen
+        run: python3 .claude/.state/mac-start-2026-10-05/mac_start.py ${{ matrix.arch }} nein
+      - name: Sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-start-${{ matrix.arch }}
+          path: diag-out/
+          retention-days: 7
