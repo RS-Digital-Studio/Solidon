@@ -5379,7 +5379,13 @@ def off_the_bed(
             area = translate(area, xoff=across, yoff=along)
     # Jede Sperrfläche ist ein Rechteck mit Fläche (``gcode.exclusion_areas``),
     # so wie der Slicer sie liest; ohne Fläche hätte er sie schon übergangen.
-    for (left, front), _right_front, (right, back), _left_back in analysis.excluded_areas:
+    # Nennt die Datei Sperrflächen, die sich nicht lesen lassen (``None``),
+    # wird ohne sie geprüft, und der Prüfbericht sagt es — „keine“ wäre eine
+    # Entwarnung für eine Bahn, die mitten durch eine fährt.
+    if analysis.excluded_areas is None:
+        unread = _("Die Sperrflächen der Druckdatei sind unlesbar, geprüft wurde ohne sie.")
+        note = unread if note is None else _("{bed} {exclusions}", bed=note, exclusions=unread)
+    for (left, front), _right_front, (right, back), _left_back in analysis.excluded_areas or ():
         area = area.difference(box(left, front, right, back))
     warning = None
     if note is not None:
