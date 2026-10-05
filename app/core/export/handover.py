@@ -285,7 +285,9 @@ class SlicerSetup:
 
     @property
     def name(self) -> str:
-        return self.executable.stem
+        """Wie Meldungen den Slicer nennen: der Dateistamm, ein Flatpak nach
+        seinem Programm (:func:`discover.flatpak_title`) statt „com.prusa3d“."""
+        return discover.flatpak_title(self.executable) or self.executable.stem
 
 
 def _profile_roots(setup: SlicerSetup) -> tuple[Path, ...]:

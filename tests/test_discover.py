@@ -1345,6 +1345,119 @@ def test_a_host_file_counts_from_inside_the_sandbox(
     assert asked == [("-f", host_only)]
 
 
+def test_a_file_inside_a_flatpak_installation_stands_for_its_launcher(
+    flatpak_exports: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Im Dateidialog lässt sich auch die Programmdatei der Installation wählen
+    (``/var/lib/flatpak/app/<Kennung>/…/files/bin/orca-slicer``), in Solidons
+    Flatpak ist der Ordner seit 0.5.3 lesbar freigegeben. ``flatpak_app`` kannte
+    den Ort, ``sandboxed`` nicht: Der Arbeitsordner lag im System-``/tmp``, das
+    der Slicer nicht sieht, und Orca startete ohne seine Laufzeit (Durchsicht
+    0.5.3, Fund 3). Gemerkt wird der Starter, und auch ungemerkt gilt der Pfad
+    als eingesperrt."""
+    installation = tmp_path / "flatpak"
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(installation),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    orca = "com.orcaslicer.OrcaSlicer"
+    inside = installation / "app" / orca / "current" / "active" / "files" / "bin" / "orca-slicer"
+    stored: dict[str, str] = {}
+    monkeypatch.setattr(discover, "_load", lambda: dict(stored))
+    monkeypatch.setattr(discover, "_store", lambda entries: stored.update(entries))
+
+    discover.remember_path("slicer", str(inside))
+
+    assert Path(stored["slicer:path"]) == flatpak_exports / orca
+    stored["slicer:path"] = str(inside)
+    assert Path(discover.remembered_path("slicer")) == flatpak_exports / orca, "auch ein alter Wert"
+    assert discover.sandboxed(inside)
+    assert discover.sandboxed(flatpak_exports / orca)
+    missing = installation / "app" / "com.example.Fehlt" / "current" / "active" / "files" / "x"
+    assert discover.host_program(missing) == missing, "ohne Starter bleibt der Pfad"
+
+
+@pytest.mark.parametrize(
+    ("app_id", "title"),
+    [
+        ("com.prusa3d.PrusaSlicer", "PrusaSlicer"),
+        ("com.orcaslicer.OrcaSlicer", "OrcaSlicer"),
+        ("io.github.softfever.OrcaSlicer", "OrcaSlicer"),
+        ("com.bambulab.BambuStudio", "BambuStudio"),
+        ("com.ultimaker.cura", "Cura"),
+    ],
+)
+def test_a_flatpak_slicer_is_named_after_its_program(
+    flatpak_exports: Path, app_id: str, title: str
+) -> None:
+    """Meldungen und Listen nannten einen Slicer-Flatpak „com.prusa3d“ — den
+    Dateistamm der Kennung (Durchsicht 0.5.3, Fund 5). Das letzte Glied ist der
+    Programmname; Curas Kennung schreibt ihn klein."""
+    from app.core.export.handover import SlicerSetup
+
+    launcher = flatpak_exports / app_id
+
+    assert discover.flatpak_title(launcher) == title
+    assert SlicerSetup(executable=launcher, flavour="orca").name == title
+    assert discover.flatpak_title("/usr/bin/prusa-slicer") == "", "kein Flatpak, kein Name daraus"
+
+
+def test_a_slicer_installed_for_the_system_is_read_without_asking_the_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Aus Solidons Flatpak fragte ``flatpak_files`` nach der Nutzerinstallation
+    den Rechner (``flatpak-spawn --host test -d``, bis fünf Sekunden), erst danach
+    die sichtbare Systeminstallation. Ein systemweit installierter Slicer — der
+    Normalfall mit Flathub — kostete so je Bestandsfrage einen Prozessstart, und
+    der Druckdialog fragt je Filament im Hauptfaden (Durchsicht 0.5.3, Fund 6)."""
+    orca = "com.orcaslicer.OrcaSlicer"
+    user, system = tmp_path / "user", tmp_path / "system"
+    files = system / "app" / orca / "current" / "active" / "files"
+    files.mkdir(parents=True)
+    asked: list[Path] = []
+
+    def host(_flag: str, path: Path) -> bool:
+        asked.append(path)
+        return False
+
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(user), str(system)))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "_host_test", host)
+
+    for _ in range(3):
+        assert discover.flatpak_files(orca) == files
+
+    assert asked == []
+
+
+def test_a_hidden_slicer_is_asked_about_once_per_application(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sieht Solidons Flatpak eine Installation nicht, fragt es den Rechner — nur
+    für die Protokollzeile. Einmal je Kennung, nicht bei jedem Filament; nach
+    einer Installation fragt es wieder (``forget_cache``)."""
+    orca = "com.orcaslicer.OrcaSlicer"
+    asked: list[Path] = []
+
+    def host(_flag: str, path: Path) -> bool:
+        asked.append(path)
+        return True
+
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(tmp_path / "system"),))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "_host_test", host)
+
+    with caplog.at_level("INFO", logger=discover._log.name):
+        for _ in range(3):
+            assert discover.flatpak_files(orca) is None
+            assert discover.flatpak_data(orca) is None
+
+    assert len(asked) == 2, "je Ordner einmal"
+    assert caplog.text.count("hidden from this sandbox") == 2
+    discover.forget_cache()
+    assert discover.flatpak_files(orca) is None
+    assert len(asked) == 3
+
+
 # --- ein Slicer im Mac-Bündel -------------------------------------------------------
 
 
