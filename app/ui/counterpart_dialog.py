@@ -182,7 +182,6 @@ class CounterpartDialog(QDialog):
             box.setCurrentIndex(max(0, box.findData(entry.default)))
             box.setAccessibleName(str(entry.title))
             box.setToolTip(str(entry.doc))
-            box.setStatusTip(str(entry.doc))
             box.setAccessibleDescription(str(entry.doc))
             return box
         spin = LengthSpin(self) if entry.unit == "mm" else NumberSpin(self)
@@ -197,7 +196,6 @@ class CounterpartDialog(QDialog):
             spin.setValue(float(entry.default))
         spin.setAccessibleName(str(entry.title))
         spin.setToolTip(str(entry.doc))
-        spin.setStatusTip(str(entry.doc))
         spin.setAccessibleDescription(str(entry.doc))
         return spin
 

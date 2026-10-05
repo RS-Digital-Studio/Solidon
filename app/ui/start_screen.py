@@ -185,7 +185,6 @@ class DropArea(QPushButton):
             "Liest {formats}. Auch ein Verweis aus dem Browser geht.", formats=self.formats
         )
         self.setToolTip(self._tip)
-        self.setStatusTip(self._tip)
         self.setAccessibleDescription(self._tip)
 
         # Die Antwort auf eine Datei, die Solidon nicht liest (RM-358 W1-6):
@@ -595,7 +594,7 @@ class FooterLink(QPushButton):
     Feedback und Unterstützung standen als Karten so groß wie die vier
     Einstiege da (A17) — zwei Nebenwege sahen aus wie zwei weitere Anfänge.
     Hier sind sie flache Knöpfe unter allem anderen; was sie öffnen und warum,
-    sagen Kurzhilfe, Statuszeile und Bildschirmleser.
+    sagen Kurzhilfe und Bildschirmleser.
     """
 
     def __init__(self, title: str, detail: str, symbol: str, parent: QWidget | None = None) -> None:
@@ -606,7 +605,6 @@ class FooterLink(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setToolTip(detail)
-        self.setStatusTip(detail)
         self.setAccessibleName(title)
         self.setAccessibleDescription(detail)
         self._symbol = symbol
@@ -811,12 +809,10 @@ class StartScreen(QWidget):
         # zuerst gelesen hat.
         self.import_button = QPushButton(tr("Modell einfügen …"), self)
         self.import_button.setToolTip(tr("Eine STL-, 3MF- oder andere Modelldatei einfügen."))
-        self.import_button.setStatusTip(self.import_button.toolTip())
         make_large_target(self.import_button)
         self.import_button.clicked.connect(self.importRequested)
         self.open_button = QPushButton(tr("Öffnen …"), self)
         self.open_button.setToolTip(tr("Ein gespeichertes Projekt öffnen (.p3d)."))
-        self.open_button.setStatusTip(self.open_button.toolTip())
         make_large_target(self.open_button)
         self.open_button.clicked.connect(self.browseRequested)
 
@@ -836,7 +832,6 @@ class StartScreen(QWidget):
         self.manual_button.setToolTip(
             tr("Wo fange ich an? Anleitungen in Bildern, vom ersten Klick bis zum Druck.")
         )
-        self.manual_button.setStatusTip(self.manual_button.toolTip())
         self.manual_button.setFlat(True)
         make_large_target(self.manual_button)
         self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -848,12 +848,11 @@ class FirstRunDialog(QDialog):
     def _say_why_locked(self, why: str) -> None:
         """Den Programme-Knopf sperren und sagen, warum — oder ihn freigeben.
 
-        Ein leerer Grund gibt frei. Alle drei Kanäle (Regel 18): Der Tooltip
+        Ein leerer Grund gibt frei. Kurzhilfe und Beschreibung (Regel 18): Der Tooltip
         allein erreicht nicht, wer den Knopf mit der Tastatur anfährt.
         """
         self.install_button.setEnabled(not why)
         self.install_button.setToolTip(why)
-        self.install_button.setStatusTip(why)
         self.install_button.setAccessibleDescription(why)
 
     def _show(self, found: object) -> None:
@@ -1173,7 +1172,6 @@ class FirstRunDialog(QDialog):
         for button in (self.start, self.open_button, self.inventory_button):
             button.setEnabled(valid)
             button.setToolTip(reason)
-            button.setStatusTip(reason)
             button.setAccessibleDescription(reason)
         if not valid:
             self.printer_state.setText(reason)

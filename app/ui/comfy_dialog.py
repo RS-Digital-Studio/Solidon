@@ -343,7 +343,6 @@ class ComfySetupDialog(QDialog):
         reason = "" if enabled else reason or tr("ComfyUI-Ordner wird geprüft …")
         self.start_button.setEnabled(enabled)
         self.start_button.setToolTip(reason)
-        self.start_button.setStatusTip(reason)
         self.start_button.setAccessibleDescription(reason)
 
     def _refresh_folder_state(self) -> None:

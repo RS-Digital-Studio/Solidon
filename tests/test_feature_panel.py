@@ -811,7 +811,7 @@ def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> N
     assert not panel._in_view.isEnabled(), "und der Weg ins Bild führt in dieselbe Absage"
     gesperrt = [feld.accessibleName() for feld in felder if feld.isEnabled()]
     assert not gesperrt, f"{len(gesperrt)} Felder nehmen weiter Zahlen an: {gesperrt}"
-    assert panel._apply.toolTip() == grund and panel._apply.statusTip() == grund
+    assert panel._apply.toolTip() == grund and panel._apply.accessibleDescription() == grund
     assert panel._lock_note.text() == grund, "der Grund steht als Zeile, nicht nur im Tooltip"
     assert panel._lock_note.isVisibleTo(panel), "und er steht sichtbar da"
 
@@ -855,7 +855,6 @@ def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -
     assert spin.isEnabled() and panel._in_view.isEnabled()
     assert not panel.can_accept() and not panel._apply.isEnabled()
     assert panel._apply.toolTip() == reason
-    assert panel._apply.statusTip() == reason
     assert panel._apply.accessibleDescription() == reason
     assert panel._lock_note.isVisibleTo(panel) and panel._lock_note.text() == reason
     panel._apply.click()
@@ -2142,7 +2141,9 @@ def test_the_group_evidence_stands_once_and_not_at_every_handling(
     # ist der Grund, aus dem es keine Rückfrage gibt (Regel 19).
     for schluessel in mit_gruppe:
         panel._arm(schluessel)
-        assert "Strg+Z" in panel._every.statusTip(), f"{schluessel} ohne Rücknahmezusage"
+        assert "Strg+Z" in panel._every.accessibleDescription(), (
+            f"{schluessel} ohne Rücknahmezusage"
+        )
 
 
 def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
@@ -3760,7 +3761,7 @@ def test_measure_source_is_shared_by_tree_caption_fields_and_accessibility(
         hint = editor.toolTip()
         assert "Ausgangswert:" in hint and "eingepasst" in hint
         assert "Konstruktionsmaß ist nicht bekannt" in hint
-        assert editor.statusTip() == editor.accessibleDescription() == hint
+        assert editor.accessibleDescription() == hint and not editor.statusTip()
         assert "eingepasst" in _feature_tip(identifier, feature, None)
         editor.set_value_mm(10.0)
         assert editor.toolTip() == hint

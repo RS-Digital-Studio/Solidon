@@ -1239,7 +1239,7 @@ def test_taking_over_from_the_slicer_says_what_is_missing(qt_app: QApplication) 
     try:
         button = dialog._ok_button
         assert not button.isEnabled()
-        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        said = (button.toolTip(), button.accessibleDescription())
         assert all(text.strip() for text in said), said
 
         item = dialog.list.item(0)
@@ -1266,7 +1266,7 @@ def test_the_resting_reverse_button_says_what_it_waits_for(inventory: InventoryV
 
     button = inventory.reverse_button
     assert not button.isEnabled()
-    said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
-    assert said[0] == said[1] == said[2]
+    said = (button.toolTip(), button.accessibleDescription())
+    assert said[0] == said[1]
     assert "Noch keine Buchungen" in said[0] or "wählen" in said[0], said[0]
     assert inventory.reverse_hint.text() == said[0]

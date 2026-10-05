@@ -468,8 +468,10 @@ class ManualWindow(QMainWindow):
                 if page.generated
                 else str(manual.PART_TITLES[page.part])
             )
-            item.setToolTip(str(page.title))
-            item.setStatusTip(f"{page.title} — {art}")
+            # Statustipps stehen nur an Menüaktionen (RM-509): Name und Art
+            # tragen Kurzhilfe und Beschreibung.
+            item.setToolTip(f"{page.title} — {art}")
+            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, art)
             self.contents.addItem(item)
         if self._visible:
             self.contents.setCurrentRow(self._row_of(0))

@@ -129,7 +129,6 @@ class BindingDialog(QDialog):
         self.bind_button.setEnabled(chosen > 0)
         reason = "" if chosen else tr("Wählen Sie mindestens eine Zahl.")
         self.bind_button.setToolTip(reason)
-        self.bind_button.setStatusTip(reason)
         self.bind_button.setAccessibleDescription(reason)
 
     def chosen(self) -> Mapping[tuple[OpId, str, int, str], str]:

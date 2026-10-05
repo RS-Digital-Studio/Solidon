@@ -1665,7 +1665,6 @@ def test_an_empty_result_says_what_to_do(qt_app: QApplication) -> None:
     assert dialog.list.count() == 0
     assert "Filter" in dialog.count.text(), "der Satz nennt den Weg heraus"
     assert dialog._ok_button.toolTip() == dialog.count.text()
-    assert dialog._ok_button.statusTip() == dialog.count.text()
     assert dialog._ok_button.accessibleDescription() == dialog.count.text()
     assert not dialog._ok_button.isEnabled(), "ohne Treffer gibt es nichts zu übernehmen"
 
@@ -2100,9 +2099,9 @@ def test_the_panel_buttons_say_why_they_rest(qt_app: QApplication) -> None:
     try:
         for button in (panel.settings_button, panel.delete_button):
             assert not button.isEnabled()
-            said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+            said = (button.toolTip(), button.accessibleDescription())
             assert all(text.strip() for text in said), (button.text(), said)
-            assert said[0] == said[1] == said[2]
+            assert said[0] == said[1]
         assert "Im Projekt" in panel.settings_button.toolTip()
         assert "Im Regal" in panel.delete_button.toolTip()
     finally:

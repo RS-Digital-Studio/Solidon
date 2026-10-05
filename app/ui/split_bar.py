@@ -192,7 +192,6 @@ class SplitBar(QWidget):
         )
         for button, description in ((self.apply, text), (self.clear, clear_text)):
             button.setToolTip(description)
-            button.setStatusTip(description)
             button.setAccessibleDescription(description)
 
     def values(self) -> dict[str, int | str]:

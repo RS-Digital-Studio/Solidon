@@ -839,7 +839,7 @@ def test_a_locked_booking_says_why_on_every_channel(qt_app: QApplication) -> Non
     try:
         button = dialog.book_button
         assert not button.isEnabled(), "ohne Spule gibt es nichts abzuziehen"
-        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        said = (button.toolTip(), button.accessibleDescription())
         assert all(text.strip() for text in said), said
     finally:
         dialog.release()
@@ -871,7 +871,7 @@ def test_the_resting_booking_button_says_why(qt_app: QApplication) -> None:
         notice.offer(_request(_spool()))
         button = notice.review
         assert not button.isEnabled(), "die Prüfung läuft noch"
-        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        said = (button.toolTip(), button.accessibleDescription())
         assert all(text.strip() for text in said), said
         _wait(notice)
     finally:

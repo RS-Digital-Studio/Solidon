@@ -660,7 +660,7 @@ class SupportNotice(ViewNotice):
     der Form jedes Nebenknopfs.
 
     **Zweite Kodierung überall** (Regel 18): Das Herz steht neben einem Satz,
-    das Kreuz trägt Namen, Tooltip und Statuszeile („Hinweis schließen"), und
+    das Kreuz trägt Namen und Tooltip („Hinweis schließen"), und
     ein Bildschirmleser findet den Satz als Beschreibung der Zeile und ihres
     Knopfs. Mit der Tabulatortaste ist sie erreichbar, denn sie steht in der
     Fokuskette hinter der Ansicht, auf der sie liegt.
@@ -699,7 +699,6 @@ class SupportNotice(ViewNotice):
         self.close_button.setAccessibleName(str(feedback.SUPPORT_CLOSE))
         self.close_button.setAccessibleDescription(hint)
         self.close_button.setToolTip(hint)
-        self.close_button.setStatusTip(hint)
         self.close_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.close_button.clicked.connect(self._dismiss)
 

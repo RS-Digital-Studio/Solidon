@@ -323,7 +323,6 @@ class OutlineDialog(QDialog):
             field.setAccessibleName(str(spec.title))
             field.setAccessibleDescription(str(spec.doc))
             field.setToolTip(str(spec.doc))
-            field.setStatusTip(str(spec.doc))
             field.setEnabled(not selection_only)
             natural_width = field.sizeHint().width()
             field.setMinimumWidth(natural_width)

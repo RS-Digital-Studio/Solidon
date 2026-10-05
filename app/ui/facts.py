@@ -101,7 +101,6 @@ class PrintFacts(QToolButton):
         )
         way = tr("Klicken öffnet die Druckeinstellungen.")
         self.setToolTip(f"{hint} {way}")
-        self.setStatusTip(way)
         self.setAccessibleName(tr("Materialverbrauch und Druckdauer"))
         self.setAccessibleDescription(f"{hint} {way}")
 

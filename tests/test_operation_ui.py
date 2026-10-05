@@ -4034,8 +4034,8 @@ def test_every_parameter_explains_itself_at_both_halves_of_its_row(
                     continue
                 if caption.toolTip() != sentence:
                     silent.append(f"{spec.name}.{name}: Beschriftung trägt {caption.toolTip()!r}")
-                if caption.statusTip() != sentence:
-                    silent.append(f"{spec.name}.{name}: Beschriftung ohne statusTip")
+                if caption.statusTip():
+                    silent.append(f"{spec.name}.{name}: Statustipp an der Beschriftung")
         finally:
             dialog.reject()
             dialog.deleteLater()
@@ -4434,7 +4434,8 @@ def test_the_window_can_block_apply_with_a_reason(qt_app: QApplication) -> None:
     dialog.block_apply("Der Körper ist nicht geschlossen — erst reparieren, dann aushöhlen.")
     assert not button.isEnabled()
     assert button.toolTip() == "Der Körper ist nicht geschlossen — erst reparieren, dann aushöhlen."
-    assert button.statusTip() == button.toolTip() == button.accessibleDescription()
+    assert button.toolTip() == button.accessibleDescription()
+    assert not button.statusTip()
     seen: list[bool] = []
     dialog.accepted.connect(lambda: seen.append(True))
     dialog.accept()
@@ -7096,7 +7097,6 @@ def test_hollowing_an_open_body_does_not_offer_apply(
         button = dialog._accept_button
         assert not button.isEnabled(), "Übernehmen führt hier sicher in den Halt"
         assert button.toolTip() == satz
-        assert button.statusTip() == satz
         assert button.accessibleDescription() == satz
     finally:
         dialog.reject()

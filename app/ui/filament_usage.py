@@ -802,9 +802,8 @@ class UsageDialog(QDialog):
         self.book_button.setEnabled(not reason)
         self.repeat_button.setVisible(bool(self._bookings))
         self.repeat_button.setEnabled(not busy)
-        # Der Grund an allen drei Kanälen (Regel 18) — die Statuszeile fehlte.
+        # Der Grund in Kurzhilfe und Beschreibung (Regel 18).
         self.book_button.setToolTip(reason)
-        self.book_button.setStatusTip(reason)
         self.book_button.setAccessibleDescription(reason)
         # Die Korrektur trägt frei ihren Handlungssatz, gesperrt denselben Grund.
         corrects = str(
@@ -814,7 +813,6 @@ class UsageDialog(QDialog):
             )
         )
         self.correct_button.setToolTip(reason)
-        self.correct_button.setStatusTip(reason)
         self.correct_button.setAccessibleDescription(reason or corrects)
         self.state.setText(reason)
         self.state.setVisible(bool(reason))
@@ -1138,12 +1136,10 @@ class UsageNotice(QWidget):
             self.state.setText(state)
         self.state.setVisible(bool(state))
         busy = self._tasks.worker is not None
-        # Der ruhende Knopf nennt seinen Grund an allen drei Kanälen (Regel
-        # 18); bis hierhin stand er nur als Knopftext da, und die Statuszeile
-        # fehlte immer.
+        # Der ruhende Knopf nennt seinen Grund in Kurzhilfe und Beschreibung
+        # (Regel 18); bis hierhin stand er nur als Knopftext da.
         said = state or (str(tr("Der Bestand wird gerade geprüft.")) if busy else "")
         self.review.setToolTip(said)
-        self.review.setStatusTip(said)
         self.review.setAccessibleDescription(said)
         self.state.set_actions_enabled(not busy)
         self.review.setEnabled(not busy)

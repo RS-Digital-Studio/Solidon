@@ -878,7 +878,7 @@ def test_the_setup_dialog_prefills_what_it_finds(
     try:
         assert not dialog.start_button.isEnabled()
         assert dialog.start_button.toolTip()
-        assert dialog.start_button.statusTip()
+        assert not dialog.start_button.statusTip()
         assert dialog.start_button.accessibleDescription()
         _wait_for_comfy_probe(dialog, qt_app)
         assert dialog.folder.text() == str(comfyui)

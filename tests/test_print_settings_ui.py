@@ -1509,7 +1509,6 @@ def test_the_save_button_says_what_it_is_waiting_for(dialog: PrintSettingsDialog
     assert dialog.save_button.isHidden(), "RM-514: er erscheint mit der Druckdatei"
     for channel, value in (
         ("tooltip", dialog.save_button.toolTip()),
-        ("status tip", dialog.save_button.statusTip()),
         ("accessible description", dialog.save_button.accessibleDescription()),
     ):
         assert value.strip(), f"the disabled save button carries no {channel}"
@@ -2460,7 +2459,6 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
     assert not dialog.slice_button.isEnabled(), "abgelaufen sperrt vor dem Klick"
     reason = dialog.slice_button.toolTip()
     assert reason, "der Grund steht am Knopf"
-    assert dialog.slice_button.statusTip() == reason
     assert dialog.slice_button.accessibleDescription() == reason
 
     monkeypatch.setattr(store, "TRIAL_FROM", None)
@@ -2504,7 +2502,7 @@ def test_slicing_greys_out_until_the_profiles_are_chosen(
 
     assert not dialog.slice_button.isEnabled()
     assert dialog.slice_button.toolTip() == dialog._machine_missing_line()
-    assert dialog.slice_button.statusTip() == dialog.slice_button.toolTip()
+    assert dialog.slice_button.accessibleDescription() == dialog.slice_button.toolTip()
 
     dialog.machine_choice.addItem("Drucker", "m1")
     dialog.machine_choice.setCurrentIndex(0)
@@ -2831,8 +2829,8 @@ def test_the_explanation_arrives_at_the_field_and_at_its_label(
         # Der Satz darf ihn nicht verdrängen — beides oder keins.
         if isinstance(editor, _ColourButton) and "#" not in editor.toolTip():
             fehlt.append(f"{field.path}: der Farbwert ist aus dem Tooltip gefallen")
-        if editor.statusTip() != satz:
-            fehlt.append(f"{field.path}: statusTip {editor.statusTip()!r}")
+        if editor.statusTip():
+            fehlt.append(f"{field.path}: Statustipp am Feld")
         if editor.accessibleDescription() != satz:
             fehlt.append(f"{field.path}: accessibleDescription fehlt")
     assert not fehlt, "\n".join(fehlt)
@@ -2917,7 +2915,7 @@ def test_a_dialog_built_after_a_language_change_speaks_that_language(
         assert tr(source_text(hoehe.title)) in texte
         assert source_text(hoehe.title) not in texte
         assert gebaut._editors[hoehe.path].suffix().strip() == "mm"
-        assert gebaut._editors[hoehe.path].statusTip() == tr(source_text(hoehe.note))
+        assert gebaut._editors[hoehe.path].accessibleDescription() == tr(source_text(hoehe.note))
     finally:
         set_language(vorher)
 
@@ -2967,14 +2965,13 @@ def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
     dialog._slicer_path = Path(slicer) if slicer else None
     dialog._mark_fields_this_slicer_ignores()
     editor = dialog._editors["filament.colour"]
-    own_status, own_description = editor.statusTip(), editor.accessibleDescription()
+    own_description = editor.accessibleDescription()
     for colour in ("#123456", "#987654"):
         monkeypatch.setattr(QColorDialog, "getColor", lambda *_args, value=colour: QColor(value))
         editor.click()
         dialog._mark_fields_this_slicer_ignores()
         assert dialog.settings.filament.colour == colour
         assert colour.upper() in editor.toolTip()
-        assert editor.statusTip() == own_status
         assert editor.accessibleDescription() == own_description
 
 
@@ -3072,7 +3069,6 @@ def test_chamber_field_names_missing_hardware_and_recovers_after_selection(
     if reason is not None:
         for widget in (editor, dialog._labels["temperature.chamber"]):
             assert widget.toolTip() == str(reason)
-            assert widget.statusTip() == str(reason)
             assert widget.accessibleDescription() == str(reason)
     dialog._foundation = manufacturer.Foundation(dialog.settings, chamber_control=True)
     dialog._mark_fields_this_slicer_ignores()
@@ -6278,7 +6274,6 @@ def test_the_print_dialog_stands_before_the_slicer_search_comes_back(
             assert not knopf.isEnabled(), "während der Suche wird nicht geslicet"
             grund = knopf.toolTip()
             assert "gesucht" in grund, grund
-            assert knopf.statusTip() == grund, "Regel 18: der Grund steht in jedem Kanal"
             assert knopf.accessibleDescription() == grund
 
         # Und der Kunde darf währenddessen alles andere tun.
@@ -7815,7 +7810,6 @@ def test_the_head_offers_the_way_back(dialog: PrintSettingsDialog) -> None:
     assert dialog.share_settings.isChecked(), "vorbelegt wie der bisherige Weg"
     for channel, value in (
         ("tooltip", dialog.share_settings.toolTip()),
-        ("status tip", dialog.share_settings.statusTip()),
         ("accessible description", dialog.share_settings.accessibleDescription()),
     ):
         assert "Geometrie" in value, f"der {channel} sagt, was ohne Haken hinausgeht: {value!r}"
@@ -8178,9 +8172,9 @@ def test_no_locked_button_in_this_dialog_stays_silent(dialog: PrintSettingsDialo
     for button in dialog.findChildren(QPushButton):
         if not button.isVisibleTo(dialog) or not button.text() or button.isEnabled():
             continue
-        # Alle drei Kanäle, wie bei den Nachbarn: Ein Grund, den nur die Maus
+        # Beide Kanäle, wie bei den Nachbarn: Ein Grund, den nur die Maus
         # findet, ist für den Bildschirmleser keiner (Regel 18).
-        if not (button.toolTip() and button.statusTip() and button.accessibleDescription()):
+        if not (button.toolTip() and button.accessibleDescription()):
             stumm.append(button.text())
     assert not stumm, f"gesperrt und ohne Grund: {stumm}"
 

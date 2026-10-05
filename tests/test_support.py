@@ -1157,7 +1157,7 @@ def test_an_empty_message_says_why_sending_rests(qt_app) -> None:
     dialog = SupportDialog()
     try:
         assert not dialog.send.isEnabled()
-        said = (dialog.send.toolTip(), dialog.send.statusTip(), dialog.send.accessibleDescription())
+        said = (dialog.send.toolTip(), dialog.send.accessibleDescription())
         assert all(text.strip() for text in said), said
         dialog.message.setPlainText("Der Deckel sitzt schief.")
         assert dialog.send.isEnabled()
@@ -1178,7 +1178,7 @@ def test_the_ways_out_say_why_they_rest_while_the_session_is_prepared(qt_app) ->
         assert dialog._session_pending(), "ohne laufende Vorbereitung prüft der Test nichts"
         button = dialog.save_folder
         assert not button.isEnabled()
-        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        said = (button.toolTip(), button.accessibleDescription())
         assert all(text.strip() for text in said), said
 
         # Und frei wieder ohne Sperrgrund — sonst sagte er „wird vorbereitet"

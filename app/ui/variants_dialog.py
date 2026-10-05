@@ -162,7 +162,6 @@ class VariantsDialog(QDialog):
         # Drei Kanäle, weil ein Satz, den nur die Maus findet, für einen
         # Bildschirmleser keiner ist (Regel 18).
         self.mark.setToolTip(marking)
-        self.mark.setStatusTip(marking)
         self.mark.setAccessibleDescription(marking)
 
         form = QFormLayout()
@@ -258,13 +257,12 @@ class VariantsDialog(QDialog):
     def _lock_build(self, why: str) -> None:
         """Den Erzeugen-Knopf sperren und sagen, warum — oder ihn freigeben.
 
-        Ein leerer Grund gibt frei. Alle drei Kanäle, weil ein Grund, den nur
+        Ein leerer Grund gibt frei. Kurzhilfe und Beschreibung, weil ein Grund, den nur
         die Maus findet, für einen Bildschirmleser keiner ist (Regel 18).
         """
         button = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
         button.setEnabled(not why)
         button.setToolTip(why)
-        button.setStatusTip(why)
         button.setAccessibleDescription(why)
 
     def _build(self) -> None:

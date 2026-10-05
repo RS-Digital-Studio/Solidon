@@ -2516,7 +2516,6 @@ class ObjectTree(QWidget):
                 # Wort und nicht auf die Zahl daneben.
                 child.setToolTip(0, tip)
                 child.setToolTip(1, tip)
-                child.setStatusTip(0, tip.replace("\n", " · "))
                 child.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, tip)
                 # Nur Flächen tragen ein eigenes Filament — `paint_slot` gilt
                 # für `face` und `curved_face` und für nichts sonst. Eine
@@ -2567,7 +2566,6 @@ class ObjectTree(QWidget):
                             "{count} gleichartige Merkmale — anklicken zum Auf- und Zuklappen."
                         ).format(count=alike[label])
                         roof.setToolTip(0, note)
-                        roof.setStatusTip(0, note)
                         roof.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, note)
                         # Das gemeinsame Maß sagt seine Herkunft wie jedes Kind.
                         roof.setData(
@@ -2707,7 +2705,6 @@ class ObjectTree(QWidget):
         item.setIcon(FILAMENT_COLUMN, filament_chip(colour, assigned, self.tree))
         hint = f"{name} — {tr('zum Ändern anklicken')}"
         item.setToolTip(FILAMENT_COLUMN, hint)
-        item.setStatusTip(FILAMENT_COLUMN, hint)
         # Regel 18: Der Bildschirmleser bekommt den Namen, nicht die Farbe.
         item.setData(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleDescriptionRole, hint)
         item.setData(FILAMENT_COLUMN, Qt.ItemDataRole.UserRole, feature_id)
@@ -3879,7 +3876,6 @@ class ParameterPanel(QWidget):
         details.setAutoRaise(True)
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         details.setToolTip(note)
-        details.setStatusTip(note)
         # Mit dem Maß im Namen (RM-359 F9): Dreimal „Parameter ändern“ und
         # dreimal „Einheit“ hießen für einen Vorleser drei gleiche Knöpfe.
         details.setAccessibleName(tr("{name} ändern", name=title))
@@ -4008,7 +4004,6 @@ class ParameterPanel(QWidget):
                 count=len(spots),
             )
             self.bind_button.setToolTip(note)
-            self.bind_button.setStatusTip(note)
             self.bind_button.setAccessibleDescription(note)
         if shown != (not self.bind_button.isHidden()):
             _set_shown(self.bind_button, shown)
@@ -5595,7 +5590,6 @@ class BodyChoiceDialog(QDialog):
         self.ok_button.setEnabled(not empty)
         why = tr("Kein Körper ausgewählt.") if empty else ""
         self.ok_button.setToolTip(why)
-        self.ok_button.setStatusTip(why)
         self.ok_button.setAccessibleDescription(why)
 
     def chosen(self) -> tuple[str, ...]:
@@ -5994,7 +5988,6 @@ class ReportPanel(QWidget):
         self.to_slicer.setToolTip(
             tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
         )
-        self.to_slicer.setStatusTip(self.to_slicer.toolTip())
         self.to_slicer.clicked.connect(self.slicerRequested)
         self.export_button = QPushButton(tr("Exportieren …"), self._footer)
         self.export_button.setToolTip(
@@ -6003,7 +5996,6 @@ class ReportPanel(QWidget):
                 "mit der Prüfung aus dem Bericht davor."
             )
         )
-        self.export_button.setStatusTip(self.export_button.toolTip())
         self.export_button.clicked.connect(self.exportRequested)
         for button in (self.to_slicer, self.export_button):
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -6260,7 +6252,6 @@ class ReportPanel(QWidget):
         """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund."""
         self.export_button.setEnabled(allowed)
         self.export_button.setToolTip(tip)
-        self.export_button.setStatusTip(tip)
         self.export_button.setAccessibleDescription(tip)
 
     def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
@@ -7550,12 +7541,10 @@ def _explain_source(editor: QWidget, field: Any) -> None:
     current = editor.toolTip()
     hint = f"{current}\n{source}" if current else source
     editor.setToolTip(hint)
-    editor.setStatusTip(hint)
     editor.setAccessibleDescription(hint)
     inner = getattr(editor, "spin", None)
     if isinstance(inner, QWidget):
         inner.setToolTip(hint)
-        inner.setStatusTip(hint)
         inner.setAccessibleDescription(hint)
 
 
@@ -8422,7 +8411,6 @@ class FeaturePanel(QWidget):
         self._cancel = make_danger(QPushButton(tr("Abbrechen"), self._footer))
         self._cancel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
-        self._cancel.setStatusTip(self._cancel.toolTip())
         self._cancel.clicked.connect(self.cancelRequested)
         self._cancel.setVisible(False)
         below.addWidget(self._cancel)
@@ -8774,7 +8762,6 @@ class FeaturePanel(QWidget):
         set_level(heading, "section")
         reason = QLabel(said, box)
         reason.setWordWrap(True)
-        reason.setStatusTip(said)
         fit_wrapped(reason)
         form.addRow(heading)
         form.addRow(reason)
@@ -8824,7 +8811,6 @@ class FeaturePanel(QWidget):
         heading = QLabel(name if said_below else f"{name}  ·  {measure}")
         hint = feature_measure_tip(feature)
         heading.setToolTip(hint)
-        heading.setStatusTip(hint)
         heading.setAccessibleDescription(hint)
         heading.setWordWrap(True)
         fit_wrapped(heading)
@@ -8889,7 +8875,6 @@ class FeaturePanel(QWidget):
             )
             note = QLabel(said, self)
             note.setWordWrap(True)
-            note.setStatusTip(said)
             fit_wrapped(note)
             self._rows.insertWidget(self._rows.count() - 1, note)
             self._built.append(note)
@@ -8933,9 +8918,9 @@ class FeaturePanel(QWidget):
         # eine Frage ohne Antwort (RM-510).
         if not any(action.op for action in actions) and feature.kind != "face":
             catalog = QPushButton(tr("Baustein einsetzen …"), self)
-            catalog.setStatusTip(
-                tr("Öffnet den Katalog — Bohrung, Mutternfalle, Magnettasche und die übrigen.")
-            )
+            opens = tr("Öffnet den Katalog — Bohrung, Mutternfalle, Magnettasche und die übrigen.")
+            catalog.setToolTip(opens)
+            catalog.setAccessibleDescription(opens)
             catalog.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             catalog.clicked.connect(lambda _checked=False: self.catalogRequested.emit())
             self._rows.insertWidget(self._rows.count() - 1, catalog)
@@ -8964,7 +8949,6 @@ class FeaturePanel(QWidget):
             ),
         ):
             button = QPushButton(text, self)
-            button.setStatusTip(tip)
             button.setToolTip(tip)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.clicked.connect(
@@ -8995,7 +8979,6 @@ class FeaturePanel(QWidget):
         toggle.setAccessibleName(str(protection.title))
         toggle.setChecked(protected)
         toggle.setEnabled(protection.possible)
-        toggle.setStatusTip(str(protection.explanation))
         toggle.setToolTip(str(protection.explanation))
         toggle.setAccessibleDescription(str(protection.explanation))
         toggle.toggled.connect(lambda on: self.protectionToggled.emit(feature_id, bool(on)))
@@ -9371,7 +9354,6 @@ class FeaturePanel(QWidget):
             for widget in (choice, form.labelForField(choice)):
                 if widget is not None:
                     widget.setToolTip(note)
-                    widget.setStatusTip(note)
                     widget.setAccessibleDescription(note)
             target.setText(text)
             self.limit_fit(self._fit_reason)
@@ -9395,7 +9377,6 @@ class FeaturePanel(QWidget):
             note = reason or ("" if chosen else tr("Wählen Sie die gewünschte Passungsart."))
             self._fit_button.setEnabled(not reason and chosen)
             self._fit_button.setToolTip(note)
-            self._fit_button.setStatusTip(note)
             self._fit_button.setAccessibleDescription(
                 note or tr("Speichert die Prüfbeziehung. Rückgängig entfernt sie wieder.")
             )
@@ -9411,8 +9392,8 @@ class FeaturePanel(QWidget):
         Sackgasse, die Regel 19 meint. Der Grund steht jetzt **vorher** da.
 
         Zwei Kodierungen, wie überall (Regel 18): die Knöpfe sind grau, und
-        derselbe Satz steht als Zeile darüber — dazu in Kurzhilfe,
-        Statuszeile und zugänglicher Beschreibung.
+        derselbe Satz steht als Zeile darüber — dazu in Kurzhilfe und
+        zugänglicher Beschreibung.
         """
         self._locked = reason
         self._settle_lock()
@@ -9456,11 +9437,9 @@ class FeaturePanel(QWidget):
         _set_shown(self._lock_note, bool(control_reason) and bool(self._built))
         if control_reason:
             self._apply.setToolTip(control_reason)
-            self._apply.setStatusTip(control_reason)
             self._apply.setAccessibleDescription(control_reason)
         elif (entry := self._runs.get(self._armed or "")) is not None:
             self._apply.setToolTip(entry.title)
-            self._apply.setStatusTip(f"{entry.title} — {entry.reason}")
             self._apply.setAccessibleDescription(entry.reason)
 
     def _active_field_refusal(self) -> str:
@@ -9499,10 +9478,8 @@ class FeaturePanel(QWidget):
             if reason:
                 fit_wrapped(label)
         label.setToolTip(reason)
-        label.setStatusTip(reason)
         label.setAccessibleDescription(reason)
         _set_shown(label, bool(reason))
-        editor.setStatusTip(reason or editor.toolTip())
         description = (
             f"{editor.toolTip()}\n{reason}"
             if reason and editor.toolTip()
@@ -9561,7 +9538,6 @@ class FeaturePanel(QWidget):
         if reason:
             for button in (self._in_view, self._apply, self._cancel):
                 button.setToolTip(reason)
-                button.setStatusTip(reason)
                 button.setAccessibleDescription(reason)
             return
         # **Der Weg zurück ohne Neuauswahl** (Robert, 11.09.2026, für die
@@ -9569,7 +9545,6 @@ class FeaturePanel(QWidget):
         # einem Strg+Z rechnet die Kette wieder, und dann tragen die Knöpfe
         # wieder ihre eigene Auskunft statt der Absage von vorhin.
         self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
-        self._cancel.setStatusTip(self._cancel.toolTip())
         self._cancel.setAccessibleDescription(self._cancel.toolTip())
         self._settle_in_view()
         if self._armed is not None:
@@ -9619,7 +9594,6 @@ class FeaturePanel(QWidget):
             # ein Satz, und ein Satz gehört nicht in eine Formularspalte.
             name = QLabel(f"{action.title} — {action.reason}", box)
             name.setWordWrap(True)
-            name.setStatusTip(str(action.reason))
             name.setAccessibleDescription(str(action.reason))
             fit_wrapped(name)
             layout.addWidget(name)
@@ -9752,7 +9726,6 @@ class FeaturePanel(QWidget):
             deeper = QPushButton(tr("{fields} ändern …").replace("{fields}", named), box)
             self._mark(deeper, f"{key}|elsewhere")
             deeper.setToolTip(tr("Öffnet den vollständigen Dialog dieses Schritts."))
-            deeper.setStatusTip(deeper.toolTip())
             deeper.setAccessibleDescription(deeper.toolTip())
             deeper.clicked.connect(weak_slot(self, FeaturePanel._ask_for_the_step, int(step)))
             holder = box.layout()
@@ -9832,8 +9805,8 @@ class FeaturePanel(QWidget):
             # Bohrung stehen vier davon (Robert, 10.09.2026: „die beschreibungen
             # die über den buttons zum übernehmen dastehen auch in einen
             # tooltipp passen bei der überschrift von den werten mit einem i für
-            # infos"). Weg ist sie damit nicht: Der Tooltip trägt sie, die
-            # Statuszeile ebenso, und ``setAccessibleDescription`` reicht sie an
+            # infos"). Weg ist sie damit nicht: Der Tooltip trägt sie, und
+            # ``setAccessibleDescription`` reicht sie an
             # den Bildschirmleser weiter — Qt liest einen Tooltip nicht von
             # selbst vor.
             head = QHBoxLayout()
@@ -9946,7 +9919,6 @@ class FeaturePanel(QWidget):
             self._explanations.pop(id(box), None)
             for widget in (row.dot, row.title):
                 widget.setToolTip("")
-                widget.setStatusTip("")
             row.title.setAccessibleDescription("")
             # Sichtbar bleibt es, wenn gleich ein Text kommt: aus- und wieder
             # einblenden wäre zwei Wechsel im sichtbaren Fenster für nichts.
@@ -9966,7 +9938,6 @@ class FeaturePanel(QWidget):
                 label = row.labels[name]
                 label.setText(str(field.label))
                 label.setToolTip(editor.toolTip())
-                label.setStatusTip(editor.statusTip())
                 label.setAccessibleDescription(editor.accessibleDescription())
                 # Die Überschrift der Handlung kommt vor den Feldnamen, weil
                 # „Durchmesser" allein nicht sagt, welcher — an einer Bohrung
@@ -10253,7 +10224,6 @@ class FeaturePanel(QWidget):
         self._explanations[id(box)] = gathered
         for widget in (dot, title):
             widget.setToolTip(gathered)
-            widget.setStatusTip(gathered)
         # **Der Bildschirmleser bekommt ihn am Titel**, nicht am Zeichen: Der
         # Kreis ist ein Bild, die Überschrift ist die Sache, zu der der Absatz
         # gehört. Am Zeichen allein fände ihn niemand, der die Zeile vorgelesen
@@ -10475,7 +10445,6 @@ class FeaturePanel(QWidget):
             self._every.setText(
                 str(tr("Auf alle {count} gleichartigen anwenden")).format(count=entry.members)
             )
-            self._every.setStatusTip(promise)
             self._every.setAccessibleDescription(promise)
         else:
             # **Ein Haken, der nicht gilt, wird auch nicht gehalten.** Sonst
@@ -10566,7 +10535,6 @@ class FeaturePanel(QWidget):
         if self._into_view is None:
             return
         promise = str(tr("Maßlinien zu Kanten und Mitten in der Szene — dort einstellen."))
-        self._in_view.setStatusTip(promise)
         self._in_view.setToolTip(promise)
         self._in_view.setAccessibleName(str(tr("Im Bild einstellen")))
         self._in_view.setAccessibleDescription(promise)
@@ -10753,7 +10721,6 @@ class FeaturePanel(QWidget):
             group.current.setText(caption)
             hint = feature_measure_tip(feature)
             group.current.setToolTip(hint)
-            group.current.setStatusTip(hint)
             group.current.setAccessibleDescription(hint)
             _set_shown(group.current, bool(caption))
             if caption:
@@ -10772,7 +10739,6 @@ class FeaturePanel(QWidget):
             label = group.labels[name]
             label.setText(str(field.label))
             label.setToolTip(editor.toolTip())
-            label.setStatusTip(editor.statusTip())
             label.setAccessibleDescription(editor.accessibleDescription())
             editor.setAccessibleName(f"{action.title} — {field.label}")
             editor.setProperty(FIELD_PROPERTY, name)

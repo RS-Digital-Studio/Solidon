@@ -1160,9 +1160,9 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
     panel = ChatPanel()
     panel.show_proposal(ProposalPreview(proposal=proposal))
     assert "8 Schritte" in panel.cost_line.text()
-    # Alle drei Kodierungen, nicht nur die Maus (Regel 18).
+    # Beide Kodierungen, nicht nur die Maus (Regel 18).
     assert panel.cost_line.toolTip() == detail
-    assert panel.cost_line.statusTip() == detail
+    assert not panel.cost_line.statusTip()
     assert panel.cost_line.accessibleDescription() == detail
     assert panel.questions_toggle.text() == "Rückfragen (1) …"
     assert not panel.questions_view.isVisibleTo(panel)
