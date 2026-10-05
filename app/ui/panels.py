@@ -7969,9 +7969,11 @@ class FeaturePanel(QWidget):
         # Der leere Zustand ist ein Satz und keine leere Fläche: Wer nichts
         # gewählt hat, soll lesen, was ihn hierher bringt (§2.7).
         self._empty = QLabel(
+            # Fläche, Kante, Bohrung: die drei, an denen rechts etwas steht
+            # (RM-506). Die Kante fehlte, obwohl Verrunden und Fase dort ansetzen.
             tr(
-                "Kein Merkmal gewählt. Klicken Sie eine Bohrung, eine Fläche oder eine "
-                "Verrundung an — im Objektbaum oder im Bild."
+                "Kein Merkmal gewählt. Klicken Sie eine Fläche, eine Kante oder eine "
+                "Bohrung an — im Objektbaum oder im Bild."
             ),
             self,
         )

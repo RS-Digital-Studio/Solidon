@@ -80,6 +80,39 @@ def test_the_header_names_the_printer_and_no_filament(qt_app: QApplication) -> N
         assert material not in label.text(), "die Kopfzeile nennt kein Filament"
 
 
+def test_empty_measurements_leave_their_room_to_the_printer(qt_app: QApplication) -> None:
+    """Ohne Körper gibt die leere Maßangabe ihren Platz dem Drucker.
+
+    Die Spalte der Maße dehnte sich auch leer mit: Bei 1600 Bildpunkten und
+    dem Suchfeld in der Leiste (RM-506) stand dort eine leere Fläche, und der
+    Drucker las sich „Allge…0 mm · FDM“.
+    """
+    header = HeaderBar()
+    profile = profiles.make_profile(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
+    header.show_project("Unbenannt", None, "mm")
+    header.show_profile(profile)
+    full = str(profile.printer.title)
+    needed = (
+        header.printer.fontMetrics().horizontalAdvance(full)
+        + header.printer_button.sizeHint().width()
+        + 24
+    )
+    # Titel und Drucker teilen 2 : 3 — breit genug für den Drucker, wenn die
+    # leere Spalte nichts nimmt, zu schmal, wenn sie drei Teile behält.
+    header.resize(needed * 5 // 3 + 24, header.sizeHint().height())
+    header.show()
+    QApplication.processEvents()
+
+    assert header.bounds.width() == 0, f"leere Maße {header.bounds.width()} px breit"
+    assert header.printer.text() == full, header.printer.text()
+
+    result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
+    header.show_project("Halter", result, "mm")
+    assert header.bounds.full_text() and header._layout.columnStretch(1) > 0, "Maße dehnen"
+    header.show_project("Unbenannt", None, "mm")
+    assert header._layout.columnStretch(1) == 0, "wieder leer, wieder ohne Dehnung"
+
+
 def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
     window: MainWindow,
     qt_app: QApplication,

@@ -488,6 +488,7 @@ class HeaderBar(QWidget):
             self._divider.show()
         self._compact = compact
         self._stretch_the_plate_column()
+        self._stretch_the_bounds_column()
         self._layout.invalidate()
         self._layout.activate()
         self.updateGeometry()
@@ -522,6 +523,21 @@ class HeaderBar(QWidget):
         # nächsten Durchlauf sein Wunschmaß statt der gesetzten Breite.
         if self._layout.columnStretch(3) != wanted:
             self._layout.setColumnStretch(3, wanted)
+
+    def _stretch_the_bounds_column(self) -> None:
+        """Die Spalte der Maße dehnt sich nur, wenn dort Maße stehen.
+
+        Ohne Körper ist die Angabe leer und nahm trotzdem drei Teile der
+        Dehnung: Bei 1600 Bildpunkten mit dem Suchfeld in der Leiste (RM-506)
+        stand dort eine leere Fläche von 211 Bildpunkten, und daneben las man
+        „Allge…0 mm · FDM“. Wie beim Plattenwähler rechnet das Gitter eine
+        Spalte ohne Dehnung unter ``Ignored`` mit null Breite.
+        """
+        if not self._layout.count():
+            return
+        wanted = 3 if self.bounds.full_text() else 0
+        if self._layout.columnStretch(1) != wanted:
+            self._layout.setColumnStretch(1, wanted)
 
     def _reflow(self) -> None:
         """Zieht nach, wenn ein neuer Text sein semantisches Minimum ändert."""
@@ -604,6 +620,7 @@ class HeaderBar(QWidget):
         """
         self.title.setText(project_name(name))
         self.bounds.setText(bounds_text(result, unit))
+        self._stretch_the_bounds_column()
         self._reflow()
 
     def show_profile(self, profile: Profile, result: EvaluationResult | None = None) -> None:

@@ -1825,7 +1825,7 @@ def test_apostrophe_guard_control_checks_separate_entries(
 def test_italian_empty_feature_hint_uses_second_person() -> None:
     """Auch der Leersatz gibt eine direkte Handlungsanweisung mit tu."""
     key = (
-        "Kein Merkmal gewählt. Klicken Sie eine Bohrung, eine Fläche oder eine Verrundung an — "
+        "Kein Merkmal gewählt. Klicken Sie eine Fläche, eine Kante oder eine Bohrung an — "
         "im Objektbaum oder im Bild."
     )
     value = read_catalog("it").get(key)

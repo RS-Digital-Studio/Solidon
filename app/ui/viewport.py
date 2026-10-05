@@ -3462,7 +3462,8 @@ class EmptySceneInvitation(QFrame):
 
     chosen = Signal(str)
     """Welcher Einstieg gewählt wurde: ein Operationsname oder ``draw``, ``parts``,
-    ``chat`` — bei angehaltener Kette ``correct_step`` oder ``report``."""
+    ``import``, ``generate``, ``chat`` — bei angehaltener Kette ``correct_step``
+    oder ``report``."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3490,15 +3491,29 @@ class EmptySceneInvitation(QFrame):
         entries += [
             ("draw", tr("Zeichnen")),
             ("parts", tr("Bausteine")),
+        ]
+        # **Die zweite Zeile bringt ein Modell mit, statt eines zu bauen**
+        # (RM-506): Weg 1 und Weg 3 aus §2.2 standen hier nur als Satz über das
+        # Hineinziehen; *Aus Text oder Bild …* gab es nur unter *Datei*. Der
+        # Dialog dahinter sagt selbst, was dem Generator noch fehlt — ihn erst
+        # bei eingerichtetem Generator zu zeigen hieße, beim Leeren der Szene
+        # das Netz zu fragen.
+        bring = [
+            ("import", tr("Modell einfügen …")),
+            ("generate", tr("Aus Text oder Bild …")),
             ("chat", tr("Im Chat beschreiben")),
         ]
-        for key, text in entries:
-            button = QPushButton(text, self)
-            button.setAccessibleName(text)
-            button.clicked.connect(lambda _checked=False, chosen=key: self.chosen.emit(chosen))
-            row.addWidget(button)
-            self.buttons[key] = button
+        bring_row = QHBoxLayout()
+        bring_row.setSpacing(TIGHT)
+        for target, choices in ((row, entries), (bring_row, bring)):
+            for key, text in choices:
+                button = QPushButton(text, self)
+                button.setAccessibleName(text)
+                button.clicked.connect(lambda _checked=False, chosen=key: self.chosen.emit(chosen))
+                target.addWidget(button)
+                self.buttons[key] = button
         outer.addLayout(row)
+        outer.addLayout(bring_row)
         halt_row = QHBoxLayout()
         halt_row.setSpacing(TIGHT)
         self.halt_buttons: dict[str, QPushButton] = {}

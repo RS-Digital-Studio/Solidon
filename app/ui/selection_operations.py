@@ -36,14 +36,18 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.core.registry import (
+    CATEGORIES,
+    MENU_GROUPS,
     REGISTRY,
     OperationSpec,
     catalogue_operations,
     caveat_line,
+    folded_categories,
     group_title,
     shown_of_twins,
 )
-from app.i18n import tr
+from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD, menu_rank
+from app.i18n import sort_key, tr
 from app.ui.icons import icon, icon_name_for
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.overlay import ContentScroller
@@ -139,12 +143,39 @@ OPEN_UP_TO: Final = 12
 #: Am Körper und an der Fläche gab es Färben zweimal, als Wähler und als Knopf.
 PICKER_HANDLES: Final = frozenset({"assign_slot", "clear_filament", "paint_slot"})
 
-#: Was ohne Auswahl von den Handlungen für alle Körper in der Karte steht.
-#:
-#: Robert, 05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten, machen
-#: ja alle ziemlich das gleiche und nur ohne Auswahl.“ Anordnen und
-#: Überschneidungen prüfen bleiben über Menü und Befehlspalette erreichbar.
-SCENE_ACTIONS_IN_THE_CARD: Final = frozenset({"orient_for_print"})
+#: An welcher Merkmalsart der Knopf unten *Passende Bausteine …* heißt und den
+#: Katalog auf das filtert, was dort ansetzt (Robert, 05.10.2026; der Filter
+#: ist ``catalog.parts_for_feature``).
+MATCHING_PARTS_AT: Final = frozenset({"hole"})
+
+
+#: Kategorien, die ein Werkzeug der Werkzeugzeile schon trägt — *Bewegen*
+#: verschiebt, dreht und skaliert. In der Karte stehen sie am Ende ihrer
+#: Gruppe: Vorn steht, was es nur hier gibt (RM-506; gemessen bei 1600 x 1000
+#: lag *Verrunden* sonst 58 px unter dem Ausschnitt, hinter sieben
+#: Transformationen).
+TOOL_STRIP_CATEGORIES: Final = frozenset({"transform"})
+
+
+def _card_group(spec: OperationSpec) -> tuple[tuple[int, int, int, int], str]:
+    """Wo eine Handlung in der Karte steht: Rang und Titel ihrer Gruppe.
+
+    **Dieselbe Folge wie die Menüleiste, in jeder Sprache** (RM-506): Die
+    Gruppen standen nach ``str.casefold`` ihres Titels, auf Deutsch also
+    „Ändern“ mit 32 Einträgen am Ende, in jeder Sprache anders. Jetzt gilt
+    ``MENU_GROUPS``. Eine Kategorie, die das Menü in ein Untermenü faltet
+    (``folded_categories``), ist hier eine eigene Gruppe hinter den direkten
+    ihrer Menügruppe — so wird „Ändern“ am Körper keine Wand.
+    """
+    group = str(group_title(spec.category))
+    rank = menu_rank(group)
+    if spec.category not in folded_categories(spec.category):
+        return (rank, 0, 0, 0), group
+    categories = next((members for _title, members in MENU_GROUPS if spec.category in members), ())
+    place = categories.index(spec.category) if spec.category in categories else len(categories)
+    behind = int(spec.category in TOOL_STRIP_CATEGORIES)
+    return (rank, 1, behind, place), str(CATEGORIES.get(spec.category, spec.category))
+
 
 #: Wie hoch eine Zeile der Operationsliste ist (RM-510).
 #:
@@ -374,6 +405,10 @@ class SelectionOperationsPanel(QWidget):
 
     operationRequested = Signal(object)
     catalogRequested = Signal()
+    matchingPartsRequested = Signal(str)
+    """Der Katalog, gefiltert auf diese Merkmalsart (:data:`MATCHING_PARTS_AT`)."""
+    paletteRequested = Signal(str)
+    """Die Befehlspalette mit diesem Suchtext — „In allen Funktionen suchen“."""
 
     def __init__(self, specs: Iterable[OperationSpec], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -511,6 +546,15 @@ class SelectionOperationsPanel(QWidget):
         self._nothing.setWordWrap(True)
         set_level(self._nothing, "caption")
         self._nothing.setVisible(False)
+        # **Ohne Treffer weiter in allen Funktionen** (RM-506): Die Suche hier
+        # kennt nur, was zur Auswahl passt; wer „gewinde“ an einem Körper
+        # sucht, findet nichts, obwohl es das gibt. Der Knopf öffnet die
+        # Befehlspalette mit demselben Wort.
+        self._everywhere = QPushButton(tr("In allen Funktionen suchen"), self)
+        self._everywhere.setVisible(False)
+        self._everywhere.clicked.connect(
+            lambda _checked=False: self.paletteRequested.emit(self._query.strip())
+        )
 
         content = QWidget(self)
         content_layout = QVBoxLayout(content)
@@ -520,13 +564,16 @@ class SelectionOperationsPanel(QWidget):
         content_layout.setSpacing(NORMAL)
 
         grouped: dict[str, list[OperationSpec]] = {}
+        ranks: dict[str, tuple[int, int, int, int]] = {}
         for spec in operations:
             # Was oben stehen kann, steht nicht auch darunter: zwei Knöpfe für
             # dieselbe Handlung sind eine Frage ohne Antwort.
             if spec.name in self._quick_buttons:
                 continue
-            grouped.setdefault(str(group_title(spec.category)), []).append(spec)
-        for title in sorted(grouped, key=str.casefold):
+            rank, title = _card_group(spec)
+            ranks[title] = min(rank, ranks.get(title, rank))
+            grouped.setdefault(title, []).append(spec)
+        for title in sorted(grouped, key=lambda name: (ranks[name], sort_key(name))):
             # **Jede Gruppe ein Abschnitt, der sich zuklappen lässt** — mit
             # der Kopfzeile und der Linie darunter, die auch die linke Spalte
             # trägt (:func:`collapsible`). Eine graue Zwischenüberschrift über
@@ -542,7 +589,7 @@ class SelectionOperationsPanel(QWidget):
             box_layout.setVerticalSpacing(0)
             self._grids[title] = box_layout
             buttons: list[QToolButton] = []
-            for spec in sorted(grouped[title], key=lambda entry: str(entry.title).casefold()):
+            for spec in sorted(grouped[title], key=lambda entry: sort_key(entry.title)):
                 button = self._operation_button(spec, box)
                 button.setObjectName("operationRow")
                 button.setAutoRaise(True)
@@ -592,7 +639,9 @@ class SelectionOperationsPanel(QWidget):
         )
         self.catalog_button.setStatusTip(self.catalog_button.toolTip())
         self.catalog_button.setAccessibleDescription(self.catalog_button.toolTip())
-        self.catalog_button.clicked.connect(self.catalogRequested)
+        self.catalog_button.clicked.connect(self._catalog_clicked)
+        self._catalog_kind = ""
+        """Die Merkmalsart, auf die der Knopf den Katalog filtert — oder keine."""
 
         separate = QHBoxLayout()
         separate.setContentsMargins(0, 0, 0, 0)
@@ -630,6 +679,7 @@ class SelectionOperationsPanel(QWidget):
         layout.addLayout(quick)
         layout.addWidget(self.search)
         layout.addWidget(self._nothing)
+        layout.addWidget(self._everywhere)
         layout.addWidget(self.scroller, 1)
         layout.addLayout(separate)
         layout.addWidget(self.print_section)
@@ -957,7 +1007,13 @@ class SelectionOperationsPanel(QWidget):
         # einer Verrundung oder einem Zapfen führt der Knopf in einen Katalog,
         # aus dem nichts an diese Stelle passt — und er stand dabei unter einer
         # Liste, für die man scrollen muss.
-        self.catalog_button.setVisible(feature_kind in ("", "face"))
+        # **An einer Bohrung die passenden** (Robert, 05.10.2026): dieselbe
+        # Stelle, ein Knopf, der Katalog auf das gefiltert, was dort ansetzt.
+        self._catalog_kind = feature_kind if feature_kind in MATCHING_PARTS_AT else ""
+        self.catalog_button.setText(
+            tr("Passende Bausteine …") if self._catalog_kind else tr("Bausteine")
+        )
+        self.catalog_button.setVisible(feature_kind in ("", "face") or bool(self._catalog_kind))
         if not feature_kind:
             left_out = frozenset()
         if self._feature_kind != feature_kind or self._left_out != left_out:
@@ -1073,9 +1129,18 @@ class SelectionOperationsPanel(QWidget):
         self._lay_out_quick(())
         self.summary.setText(tr("Nichts gewählt"))
         self.summary.setVisible(True)
+        self._catalog_kind = ""
+        self.catalog_button.setText(tr("Bausteine"))
         self.catalog_button.setVisible(True)
         self._take_availability(availability)
         self._filter()
+
+    def _catalog_clicked(self, _checked: bool = False) -> None:
+        """Der Katalog — gefiltert, wo der Knopf *Passende Bausteine …* heißt."""
+        if self._catalog_kind:
+            self.matchingPartsRequested.emit(self._catalog_kind)
+        else:
+            self.catalogRequested.emit()
 
     def _say_there_is_nothing(self, found: int, searching: bool) -> None:
         """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
@@ -1104,6 +1169,7 @@ class SelectionOperationsPanel(QWidget):
                     tr("Wählen Sie einen Körper oder eine Fläche — Bausteine gehen auch so.")
                 )
             return
+        self._everywhere.setVisible(searching and found == 0 and not self._nothing_chosen)
         if found > 0:
             self.search.setVisible(True)
             self.scroller.setVisible(True)

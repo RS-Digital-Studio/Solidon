@@ -983,6 +983,10 @@ class RepairParams(BaseParams):
     # Kontextmenü an einer angeklickten offenen Stelle aus Ausblenden — für
     # den häufigsten Defekt fehlte der kürzeste Weg vom Sehen zum Tun (§2.6).
     applies_to=("edge_loop",),
+    # **Und am ganzen Körper** (RM-506): Die Operation repariert den Körper,
+    # nicht die eine Kante — und wer ein offenes Modell eingelesen hat, sucht
+    # *Reparieren* am Modell, nicht an einer Stelle, die er erst finden muss.
+    also_on_body=True,
     shortcut="Ctrl+Shift+R",
     doc=_(
         "Schließt Löcher, entfernt fehlerhafte Dreiecke, gleicht die Außenseiten an und "

@@ -1164,3 +1164,31 @@ def test_enter_never_starts_a_command_that_only_the_description_matched(
     assert palette.list.currentRow() == 1, "der erste ausführbare Treffer gleicher Güte"
     assert palette.chosen() == "fillet_edges_free"
     palette.close()
+
+
+def test_the_palette_opens_with_a_search_text_and_names_each_place(
+    qt_app: QApplication,
+) -> None:
+    """RM-506: Ein Suchtext von außen, und jeder Treffer nennt seinen Ort.
+
+    „In allen Funktionen suchen“ unter der Karte öffnet die Palette mit dem
+    Wort, das dort nichts fand. Der Ort steht in Kurzhilfe und Beschreibung
+    jeder Zeile — so lernt man ihn nebenbei wie das Kürzel.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    palette = CommandPalette(parent=None, query="verrunden")
+    try:
+        assert palette.search.text() == "verrunden"
+        assert palette.list.count() > 0
+        item = palette.list.item(0)
+        assert item is not None
+        assert "Ort:" in item.toolTip() or "Ort:" in str(
+            item.data(Qt.ItemDataRole.AccessibleDescriptionRole)
+        ), item.toolTip()
+    finally:
+        palette.close()
+        palette.deleteLater()
