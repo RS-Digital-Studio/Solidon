@@ -86,6 +86,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-504 — Importierte Texturen als gemeinsame Auswahl](#rm-504) | Geometrie, Erkennung und Druckvorbereitung | Zusammenfassung kleiner Felder und STEP-Muster gebaut und belegt (04.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
+| [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: Mündung der Waschschüssel frei halten oder ihre 16-mm-Brücke stützen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut: `make_guides` meidet Text in Fenster, Menüs und Dialogen und setzt die Nummer bei vollem Dialog in den Bildrand; offen: Feldabnahme nach §11 mit einem Kunden ohne CAD, dazu die Anleitungsbilder beim Release neu erzeugen und Schritt 3 beider Anleitungen ansehen |
@@ -2916,6 +2917,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die Marke „Stützvorschlag ohne Stütze“ nach Volumen statt Metern (B7).
   **Abnahme:** jede Kombination geschnitten oder mit Absage samt Ausweg, kein Druck neben dem
   Bett, Block gleich Herstellerkette außer ausgewiesenen Abweichungen, kein Fehlalarm.
+
+<a id="rm-527"></a>
+
+- [ ] **RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze.** Seit
+  0.5.3 ist eine Decke als Ganzes Kanal oder Brücke (`slice/analysis.py`, `_Ceilings`), und
+  die Kanalsperre nimmt keiner Brücke mehr die Stütze. An der Waschschüssel im Raster des
+  Centauri Carbon 2 spannt aber ein offenes Stück an der Mündung des Wasserkanals 16,3 mm und
+  bekommt mit Sperre keine Stütze (ohne Sperre 0,47 m), obwohl der Rat dort „überall“
+  verlangt. Jede Freigabe ließe Stütze in die Kanalmündung. **Entscheidung Robert:** Mündung
+  frei halten oder die Brücke stützen. Daneben: Gewölbe knapp über 30 mm (Gewürzbehälter
+  34 mm) liegen mit ihrer Flächenmehrheit nahe der Hälfte; im Korpus kippt keines, in einem
+  anderen Raster könnte es. Belege lokal unter
+  `F:\solidon-review-reports\claude-2026-10-05\release-0.5.3\fix-kanalsperre.md`.
+  **Abnahme:** nach der Entscheidung die Waschschüssel in Anycubic, Elegoo und Orca mit freiem
+  Kanal und der entschiedenen Mündung, der Korpus ohne neue Kanalstücke.
 
 ## Bedienung und Darstellung
 
