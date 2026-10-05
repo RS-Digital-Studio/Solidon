@@ -1730,39 +1730,37 @@ OLLAMA_SUGGESTIONS: Final = (
         "qwen3.5:9b",
         6.6,
         _(
-            "Belegt 7,4 GB Grafikspeicher und passt ab 10 GB ganz auf die Karte; auf einer "
-            "8-GB-Karte rechnet ein Teil auf dem Prozessor, jede Anfrage dauert dann zwei- "
-            "bis dreimal so lange. Einzelne Anweisungen: sieben von acht richtig. "
-            "Von 39 Testaufträgen 21, von zehn mehrteiligen zwei; fragt bei Unklarem "
-            "seltener nach. Rund 6 Sekunden je Anfrage."
+            "Belegt 7,4 GB Grafikspeicher und passt ab 10 GB ganz auf die Karte, auf einer "
+            "8-GB-Karte rechnet ein Teil auf dem Prozessor, und jede Anfrage dauert zwei- bis "
+            "dreimal so lange. Einzelne Anweisungen sieben von acht richtig, Testaufträge 21 von "
+            "39, mehrteilige zwei von zehn, fragt seltener nach, rund 6 Sekunden je Anfrage."
         ),
     ),
     (
         "qwen3:14b",
         9.3,
         _(
-            "Belegt 13,6 GB Grafikspeicher. Einzelne Anweisungen: acht von acht richtig. "
-            "Von 39 Testaufträgen 22, von zehn mehrteiligen zwei; denkt vor jeder Antwort "
-            "nach, rund 18 Sekunden je Anfrage."
+            "Belegt 13,6 GB Grafikspeicher und denkt vor jeder Antwort nach, rund 18 Sekunden je "
+            "Anfrage. Einzelne Anweisungen acht von acht richtig, Testaufträge 22 von 39, "
+            "mehrteilige zwei von zehn."
         ),
     ),
     (
         "gpt-oss:20b",
         13.8,
         _(
-            "Belegt 12,9 GB Grafikspeicher. Einzelne Anweisungen: sieben von acht richtig. "
-            "Von 39 Testaufträgen nur 10, von zehn mehrteiligen keinen — gut für einzelne "
-            "Anweisungen; rund 7 Sekunden je Anfrage."
+            "Belegt 12,9 GB Grafikspeicher, rund 7 Sekunden je Anfrage, gut für einzelne "
+            "Anweisungen mit sieben von acht richtig. Testaufträge nur 10 von 39, mehrteilige "
+            "keiner von zehn."
         ),
     ),
     (
         "qwen3:30b-a3b",
         18.6,
         _(
-            "Braucht mehr als 16 GB Grafikspeicher; auf einer 16-GB-Karte rechnet ein "
-            "Drittel auf dem Prozessor, und es bleibt bei rund 17 Sekunden je Anfrage. "
-            "Einzelne Anweisungen: acht von acht richtig; mit den Testaufträgen nicht "
-            "gemessen."
+            "Braucht mehr als 16 GB Grafikspeicher, auf einer 16-GB-Karte rechnet ein Drittel "
+            "auf dem Prozessor bei rund 17 Sekunden je Anfrage. Einzelne Anweisungen acht von "
+            "acht richtig, Testaufträge nicht gemessen."
         ),
     ),
 )
@@ -2104,12 +2102,11 @@ def local_model_expectation(model: str | None = None) -> TranslatableText:
         else _("{model}, gemessen auf einer RTX 4080: {note}", model=name, note=note)
     )
     return _(
-        "{measured} Passt das Modell nicht ganz in den Grafikspeicher, rechnet der "
-        "Prozessor mit — gemessen wurden dort 7,8 Token je Sekunde beim Einlesen, und "
-        "eine Antwort beginnt erst nach vielen Minuten; nach zehn Minuten bricht "
-        "Solidon ab. Welcher Weg hier rechnet, sagt „Werkzeuge prüfen“ unter "
-        "„Bearbeiten → Chat einrichten“. Für zügige Antworten braucht es eine "
-        "geeignete Grafikkarte oder einen Schlüssel für ein gehostetes Modell.",
+        "{measured} Passt das Modell nicht ganz in den Grafikspeicher, rechnet der Prozessor mit "
+        "7,8 Token je Sekunde beim Einlesen mit, und nach zehn Minuten ohne Antwort bricht "
+        "Solidon ab. Für zügige Antworten braucht es eine geeignete Grafikkarte oder einen "
+        "Schlüssel für ein gehostetes Modell, und welcher Weg hier rechnet, sagt „Werkzeuge "
+        "prüfen“ unter „Bearbeiten → Chat einrichten“.",
         measured=measured,
     )
 
@@ -2501,24 +2498,17 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     # ohne Absage.
     if speed.prompt_minutes * 60.0 < LOCAL_TIMEOUT_SECONDS:
         return _(
-            "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
-            "gemessene {rate} Token je Sekunde beim Einlesen. Der zuletzt gemessene "
-            "Auftrag dieser Anwendung umfasst rund {tokens} Token; bei diesem Umfang "
-            "dauert es hier etwa {minutes} Minuten, bis eine Antwort beginnt. Für "
-            "zügige Antworten braucht es eine geeignete Grafikkarte oder einen "
+            "Dieses Modell rechnet auf dem Prozessor mit gemessenen {rate} Token je Sekunde beim "
+            "Einlesen. Beim letzten Auftrag von rund {tokens} Token beginnt eine Antwort nach "
+            "etwa {minutes} Minuten, schneller geht es mit einer Grafikkarte oder einem "
             "Schlüssel für ein gehostetes Modell."
         )
     return _(
-        "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
-        "gemessene {rate} Token je Sekunde beim Einlesen. Der zuletzt gemessene Auftrag "
-        "dieser Anwendung umfasst rund {tokens} Token; bei diesem Umfang dauert es "
-        "hier etwa {minutes} Minuten, bis eine Antwort überhaupt beginnt. Seitdem "
-        "ergänzte Werkzeuge können die Wartezeit verlängern. Das "
-        "überschreitet Solidons Zehn-Minuten-Grenze; dieser vollständige "
-        "Auftrag kann so nicht abgeschlossen werden. Für zügige Antworten braucht es eine "
-        "geeignete "
-        "Grafikkarte oder einen Schlüssel für ein gehostetes Modell — alles "
-        "außer dem Chat bleibt ohne beides benutzbar."
+        "Dieses Modell rechnet auf dem Prozessor mit gemessenen {rate} Token je Sekunde, beim "
+        "letzten Auftrag von rund {tokens} Token beginnt eine Antwort erst nach etwa {minutes} "
+        "Minuten. Das überschreitet Solidons Zehn-Minuten-Grenze und wird so nicht "
+        "abgeschlossen, der Chat braucht eine geeignete Grafikkarte oder einen Schlüssel für ein "
+        "gehostetes Modell, alles andere geht auch ohne."
     )
 
 
