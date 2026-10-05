@@ -530,17 +530,20 @@ def test_the_selection_card_keeps_the_menu_limit_on_its_open_groups(
     qt_app.processEvents()
 
     over: dict[str, int] = {}
-    folded = 0
+    listed_in_all = 0
     for title, (_section, toggle, buttons) in panel._groups.items():
         listed = sum(not button.isHidden() for button in buttons)
-        if not listed:
-            continue
-        if not toggle.isChecked():
-            folded += 1
+        listed_in_all += listed
+        if not listed or not toggle.isChecked():
             continue
         if listed > MAX_SUBMENU_ENTRIES:
             over[title] = listed
-    assert folded, "ohne eine zugeklappte Gruppe misst der Test eine leere Karte"
+    # **Seit RM-506 teilt die Karte eine große Kategorie in Untergruppen von
+    # höchstens zwölf, offen** (``folded_categories``); zugeklappt beginnt nur
+    # noch, was trotzdem darüber läge. Die Zusicherung über die Grundmenge:
+    # Die Karte trägt mehr Handlungen, als ein Menü fasst — sonst prüfte die
+    # Grenze nichts.
+    assert listed_in_all > MAX_SUBMENU_ENTRIES, "ohne volle Karte misst der Test nichts"
     assert not over, (
         f"Diese Gruppen zeigen offen mehr als {MAX_SUBMENU_ENTRIES} Handlungen: {over}. "
         "OPEN_UP_TO in selection_operations.py klappt sie zu."
@@ -2034,15 +2037,29 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     # „Handlungen rechts (…) → Titel", und die Karte muss den Knopf tragen.
     # Alles andere liegt in der Leiste, und dort, wo der Kern es nennt.
     from app.core.registry import in_the_menu_bar
+    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
 
     in_the_panel = set(window.selection_operations._buttons)
+    in_the_palette = {entry.name for entry in window.palette_rows()}
     verglichen = 0
     rechts = 0
+    palette = 0
     for name, action in window._op_actions.items():
         spec = REGISTRY.get(name)
         genannt = blank(menu_path(spec))
         if not in_the_menu_bar(spec.category):
             assert action not in gebaut, f"{name}: steht rechts und trotzdem in der Leiste"
+            if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:
+                # **Der dritte Ort** (RM-506): Eine Handlung für alle Körper
+                # steht nur ohne Auswahl, und dort trägt die Karte allein
+                # ``SCENE_ACTIONS_IN_THE_CARD`` — die übrigen nennt der Weg als
+                # Befehlspalette, und dort muss ihre Zeile stehen.
+                assert genannt == f"Befehlspalette → {blank(str(spec.title))}", (
+                    f"{name}: nennt „{genannt}“"
+                )
+                assert name in in_the_palette, f"{name}: in der Palette genannt, dort keine Zeile"
+                palette += 1
+                continue
             assert genannt.startswith("Handlungen rechts"), f"{name}: nennt „{genannt}“"
             assert genannt.endswith(f"→ {blank(str(spec.title))}"), f"{name}: „{genannt}“"
             assert name in in_the_panel, f"{name}: rechts genannt, rechts kein Knopf"
@@ -2055,6 +2072,9 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
         )
         verglichen += 1
     assert rechts, "keine Handlung rechts — dann prüft dieser Test die zweite Hälfte nicht"
+    assert palette, (
+        "keine Handlung nur in der Palette — dann prüft dieser Test den dritten Ort nicht"
+    )
 
     # **Kein Schwellenwert, sondern die Zusage selbst** (8b, 29.08.2026). Hier
     # stand „mindestens 60", dann „mindestens 50" — eine Zahl, die bei jedem

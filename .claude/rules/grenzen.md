@@ -210,10 +210,10 @@ jedes Paar in jeder Sprache ohne Fenster.
 Netz-Zwilling steht in der Befehlspalette, der Agent liest an ihm „Zweite
 Wahl“). *Bohrung setzen* und *Aushöhlen* fragen die Körperart ihres Eingangs
 (`operationen.md`, „Den Kern wählt der Körper, nicht der Kunde“;
-`hollow_object`: oben offen ohne Entlüftung bleibt exakt, sonst Netzweg mit
-Hinweis über `evaluate.exact_became_mesh`). Ohne exakten Kern bleiben die
-Netz-Erzeuger sichtbar — ein erklärter Weg, kein stilles Scheitern;
-gespeicherte Schritte behalten ihren Kern.
+`hollow_object`: oben offen bleibt exakt, eine Entlüftung zählt dort nicht,
+sonst Netzweg mit Hinweis über `evaluate.exact_became_mesh`). Ohne exakten
+Kern bleiben die Netz-Erzeuger sichtbar — ein erklärter Weg, kein stilles
+Scheitern; gespeicherte Schritte behalten ihren Kern.
 
 **Der Wechsel steht am Schritt, nicht im Dialog:** `History.change_kernel` aus
 dem Kontextmenü des Verlaufs (`HistoryPanel.kernelSwitchRequested`,
@@ -307,6 +307,9 @@ es kein Bild.
   (`wordless` am `QAction`), getrennt mit dem Zeichen, das der Satz nicht schon
   führt (Gedankenstrich vor dem Zweck, Doppelpunkt vor einem Grund mit
   Gedankenstrich).
+- **Die Kopfzeile geht vor:** Erst verlieren die sieben Knöpfe ihr Wort, dann
+  die Suche *Funktion suchen …*, die als Lupe bleibt (`_fit_toolbar`, drei
+  Formen); gemerkt wird je Form, was sie ohne die Kopfzeile braucht.
 - **Keiner der sieben Umschalter verschwindet:** `ToolStrip.set_tool_usable`
   graut ihn mit Grund (Explosion: „Dafür braucht es zwei Körper in der
   Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller — eine

@@ -9,7 +9,11 @@ vorbei.
 
 **Die Zahl ist die Aussage, die Farbe zeigt nur, dass sie neu ist** (Regel
 18): Jede Marke trägt das Zeichen ihrer Schwere neben der Zahl, und der Reiter
-nennt beides im Tooltip und für den Bildschirmleser.
+nennt beides im Tooltip und für den Bildschirmleser. **Dass etwas ungesehen
+ist, sagt nicht die Tönung allein** (Durchsicht 0.5.3, Fund 4): Ihr Kontrast
+zur Karte lag bei 1,2 bis 1,7 : 1, nach dem Blinken war „neu“ nur noch eine
+Farbe. Ein Punkt in der Schriftfarbe vor dem Namen und das Wort „ungelesen“
+in Tooltip und zugänglichem Namen stehen dazu, bis der Reiter vorn war.
 """
 
 from __future__ import annotations
@@ -17,8 +21,8 @@ from __future__ import annotations
 import math
 from typing import Final
 
-from PySide6.QtCore import QRectF, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QPainter, QPaintEvent
+from PySide6.QtCore import QAbstractAnimation, QPointF, QRectF, Qt, QVariantAnimation
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabBar, QWidget
 
 from app.i18n import tr
@@ -38,6 +42,10 @@ CYCLES: Final = 4
 #: deckend sie nach dem Blinken stehen bleibt.
 TINT_MAX: Final = 0.45
 TINT_REST: Final = 0.3
+
+#: Der Punkt vor dem Namen eines Reiters mit ungesehenen Meldungen — Halbmesser
+#: in Logikpunkten. Er sitzt im linken Polster des Reiters (``ROOMY``).
+UNSEEN_DOT: Final = 3.0
 
 
 def count_phrases(errors: int, warnings: int, infos: int = 0) -> list[str]:
@@ -118,6 +126,8 @@ class SignalTabBar(QTabBar):
         self._strength = 0.0
         self._pulse: QVariantAnimation | None = None
         self._badges: dict[int, AlertBadge] = {}
+        self._words: dict[int, str] = {}
+        """Die Zahlen je Reiter in Worten — für Tooltip und zugänglichen Namen."""
         self.currentChanged.connect(self._seen)
 
     # --- Zähler --------------------------------------------------------------
@@ -141,14 +151,40 @@ class SignalTabBar(QTabBar):
         self.setTabButton(index, side, None)
         if errors or warnings:
             self.setTabButton(index, side, badge)
-        words = counted(errors, warnings)
-        self.setTabToolTip(index, words)
-        name = self.tabText(index)
-        self.setAccessibleTabName(index, f"{name}, {words}" if words else name)
+        self._words[index] = counted(errors, warnings)
+        self._describe(index)
 
     def badge(self, index: int) -> AlertBadge | None:
         """Die Marken am Reiter ``index`` — für Prüfungen."""
         return self._badges.get(index)
+
+    def unseen(self, index: int) -> bool:
+        """Ob der Reiter ``index`` gerade ungesehene Meldungen ankündigt."""
+        return index == self._signalled and self._colour is not None
+
+    def _describe(self, index: int) -> None:
+        """Tooltip und zugänglicher Name: die Zahlen, und „ungelesen“, solange ungesehen.
+
+        Der Punkt vor dem Namen (:meth:`paintEvent`) sagt es dem Auge, diese
+        Sätze sagen es der Maus und dem Bildschirmleser — die Tönung allein
+        wäre eine Aussage nur über Farbe (Regel 18).
+        """
+        if not 0 <= index < self.count():
+            return
+        words = self._words.get(index, "")
+        name = self.tabText(index)
+        if not words:
+            self.setTabToolTip(index, "")
+            self.setAccessibleTabName(index, name)
+            return
+        if self.unseen(index):
+            self.setTabToolTip(index, tr("{counts}, ungelesen", counts=words))
+            self.setAccessibleTabName(
+                index, tr("{tab}, {counts}, ungelesen", tab=name, counts=words)
+            )
+            return
+        self.setTabToolTip(index, words)
+        self.setAccessibleTabName(index, tr("{tab}, {counts}", tab=name, counts=words))
 
     # --- Blinken ---------------------------------------------------------------
 
@@ -171,8 +207,12 @@ class SignalTabBar(QTabBar):
             self.update()
             return
         self._stop()
+        before = self._signalled
         self._signalled = index
         self._colour = colour
+        self._describe(index)
+        if before not in (-1, index):
+            self._describe(before)
         if not animations_enabled():
             self._settle()
             return
@@ -184,14 +224,20 @@ class SignalTabBar(QTabBar):
         animation.valueChanged.connect(self._breathe)
         animation.finished.connect(self._settle)
         self._pulse = animation
-        animation.start()
+        # Gelöscht, sobald sie steht: Ohne die Regel blieb jede beendete
+        # Animation als Kind der Leiste liegen, eine je neuer Meldung
+        # (Durchsicht 0.5.3; ``CLAUDE.md``: Bewegung endet mit DeleteWhenStopped).
+        animation.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def calm(self) -> None:
         """Kein Reiter macht mehr auf etwas aufmerksam."""
         self._stop()
+        before = self._signalled
         self._signalled = -1
         self._colour = None
         self._strength = 0.0
+        if before >= 0:
+            self._describe(before)
         self.update()
 
     def signalled(self) -> int:
@@ -218,10 +264,10 @@ class SignalTabBar(QTabBar):
         self.update()
 
     def _stop(self) -> None:
+        # Angehalten löscht sie sich selbst (``DeleteWhenStopped``).
         if self._pulse is not None:
             pulse, self._pulse = self._pulse, None
             pulse.stop()
-            pulse.deleteLater()
 
     def _seen(self, index: int) -> None:
         if index == self._signalled:
@@ -236,6 +282,9 @@ class SignalTabBar(QTabBar):
         self._badges = {
             (spot + 1 if spot >= index else spot): badge for spot, badge in self._badges.items()
         }
+        self._words = {
+            (spot + 1 if spot >= index else spot): words for spot, words in self._words.items()
+        }
 
     def tabRemoved(self, index: int) -> None:  # noqa: N802 - Qt-Name
         super().tabRemoved(index)
@@ -248,6 +297,22 @@ class SignalTabBar(QTabBar):
             for spot, badge in self._badges.items()
             if spot != index
         }
+        self._words = {
+            (spot - 1 if spot > index else spot): words
+            for spot, words in self._words.items()
+            if spot != index
+        }
+
+    def unseen_mark(self) -> QRectF | None:
+        """Wo der Punkt für Ungesehenes steht — ``None`` ohne. Für Prüfungen."""
+        index = self._signalled
+        if not self.unseen(index) or not self.isTabVisible(index):
+            return None
+        tab = QRectF(self.tabRect(index))
+        centre = QPointF(tab.left() + UNSEEN_DOT + SPACE, tab.center().y())
+        return QRectF(
+            centre.x() - UNSEEN_DOT, centre.y() - UNSEEN_DOT, 2 * UNSEEN_DOT, 2 * UNSEEN_DOT
+        )
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 - Qt-Name
         tint = self.tint()
@@ -260,6 +325,17 @@ class SignalTabBar(QTabBar):
             painter.drawRoundedRect(area, SPACE, SPACE)
             painter.end()
         super().paintEvent(event)
+        # **Der Punkt ist die zweite Kodierung für „ungesehen“** (Regel 18):
+        # eine Form in der Schriftfarbe, über die ganze Zeit, nicht nur während
+        # des Blinkens — die ruhende Tönung hatte gegen die Karte 1,2 bis 1,7 : 1.
+        mark = self.unseen_mark()
+        if mark is not None:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(self.palette().color(QPalette.ColorRole.WindowText))
+            painter.drawEllipse(mark)
+            painter.end()
 
 
 __all__ = ["CYCLES", "CYCLE_MS", "AlertBadge", "SignalTabBar", "counted"]

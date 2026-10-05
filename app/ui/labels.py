@@ -62,7 +62,7 @@ from app.core.units import (
     from_mm,
     to_mm,
 )
-from app.i18n import TranslatableText, _, get_language, tr
+from app.i18n import Figure, TranslatableText, _, get_language, tr
 
 # Die Zuordnung Kategorie → Menü (MENU_GROUPS, group_title) lebt seit der
 # Agent-Vertiefung (4.3) im Register: neben Leiste und Kontextmenü braucht sie
@@ -1025,10 +1025,24 @@ def compact_length(value_mm: float, unit: LengthUnit | None = None) -> str:
     :func:`length` — eine Anzeige, die zwischen zwei Schreibweisen springt,
     weil das Fenster schmaler wurde, ist schlimmer als eine lange.
     """
-    text = format_length(value_mm, unit or display_unit(), with_unit=False)
+    return localised(compact_figure(value_mm, unit))
+
+
+def compact_figure(
+    value_mm: float, unit: LengthUnit | None = None, with_unit: bool = False
+) -> Figure:
+    """:func:`compact_length` für den Platzhalter eines übersetzbaren Satzes.
+
+    Als :class:`~app.i18n.Figure` bekommt die Zahl ihr Dezimalzeichen erst beim
+    Einsetzen; ein aufbewahrter Satz wie das Druckziel folgt so dem nächsten
+    Sprachwechsel, ohne neu gebaut zu werden.
+    """
+    shown = unit or display_unit()
+    text = format_length(value_mm, shown, with_unit=False)
     if "." in text:
         text = text.rstrip("0").rstrip(".")
-    return localised(text or "0")
+    text = text or "0"
+    return Figure(f"{text} {shown}" if with_unit else text)
 
 
 def area(value_mm2: float, unit: LengthUnit | None = None) -> str:

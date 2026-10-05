@@ -41,6 +41,7 @@ from PySide6.QtCore import (
     QLibraryInfo,
     QLocale,
     QObject,
+    Qt,
     QTimer,
     QTranslator,
 )
@@ -277,6 +278,20 @@ def _adapter_probe_failed(detail: str) -> None:
     _log.warning("the adapter probe did not come back: %s", detail)
 
 
+def reach_every_control_by_tab(application: QApplication) -> None:
+    """Die Tabulatortaste erreicht jedes Bedienelement — auf jeder Plattform gleich.
+
+    macOS lässt ohne die Systemeinstellung „Tastaturnavigation“ nur Textfelder
+    und Listen anspringen (``Qt.TabFocusBehavior.TabFocusTextControls``). Unter
+    Fusion behalten Knöpfe und Haken ``StrongFocus`` und bleiben erreichbar,
+    Werkzeugknöpfe mit ``TabFocus`` nicht: die Köpfe der Klappen, die Pfeile
+    des Akkordeons im Merkmalfenster, die Zeilen der Karte der Handlungen. Am
+    Mac lagen dahinter Felder, die nur die Maus erreichte (Durchsicht 0.5.3,
+    Fund 5). Windows und Linux haben diese Vorgabe ohnehin.
+    """
+    application.styleHints().setTabFocusBehavior(Qt.TabFocusBehavior.TabFocusAllControls)
+
+
 def build_application(
     argv: list[str] | None = None,
     progress: Callable[[str, float], None] | None = None,
@@ -322,6 +337,7 @@ def build_application(
     # Vor dem ersten Arbeiter: Kein Faden außer diesem räumt Ringe mit
     # Qt-Objekten ab (``leash.collect_in_main_thread``, RM-021).
     collect_in_main_thread(application)
+    reach_every_control_by_tab(application)
     application.setApplicationName(APP_NAME)
     application.setApplicationVersion(APP_VERSION)
     application.setOrganizationDomain(APP_ID)
@@ -493,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
     # Vor dem ersten Arbeiter (die Adapterprobe unten): Ringe mit Qt-Objekten
     # räumt nur der Hauptfaden ab (``leash.collect_in_main_thread``, RM-021).
     collect_in_main_thread(application)
+    reach_every_control_by_tab(application)
     application.setWindowIcon(application_icon())
 
     # Vor allem anderen: eine abgelaufene Demo startet nicht mehr

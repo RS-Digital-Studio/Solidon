@@ -769,10 +769,17 @@ def _openers() -> list[tuple[str, str, Callable[[object], None]]]:
     def open_generator(window: object) -> None:
         window._generate(None)  # type: ignore[attr-defined]
 
+    def open_palette(window: object) -> None:
+        # Über *Funktion suchen …* oben, seit RM-506 der häufigste Weg.
+        window.function_search.click()  # type: ignore[attr-defined]
+
     return [
         ("Bausteinkatalog", "app.ui.catalog.PartCatalog.exec", open_catalogue),
         # Nichtmodal (RM-371): gezeigt mit ``show``, geschlossen wie vom Kunden.
         ("Erzeugen-Dialog", "app.ui.generate_dialog.GenerateDialog.show", open_generator),
+        # Jede geschlossene Palette blieb als Kind am Fenster stehen, mit allen
+        # ihren Zeilen (Durchsicht 0.5.3, Fund 9).
+        ("Befehlspalette", "app.ui.command_palette.CommandPalette.exec", open_palette),
     ]
 
 
@@ -858,6 +865,56 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
         f"{name} geöffnet hatten — der Fensterbaum wird nicht freigegeben"
     )
     assert all(watch() is None for watch in dialogs), "keine Dialoghülle bleibt nach dem Fenster"
+
+
+@pytest.mark.parametrize("owner", ["Bausteinkatalog", "Auswahlkarte"])
+def test_a_card_lets_go_with_its_last_reference(
+    owner: str, qt_app: QApplication, unpinned_windows: None
+) -> None:
+    """Die letzte Referenz genügt: Kein Knopf der Karte hält sie über einen Rückruf.
+
+    Der Schließweg oben löscht nativ und sieht deshalb keinen Ring mehr. Ein
+    Lambda an *Alle Bausteine zeigen*, *Modell nachbauen* und *In allen
+    Funktionen suchen* hielt Katalog und Auswahlkarte über die C++-Grenze fest,
+    auch über ``gc.collect`` hinaus (Durchsicht 0.5.3, Fund 11; ``wartezeit.md``,
+    „Ein Rückruf an ein eigenes Kind hält schwach“). Gelöscht wird hier nichts
+    von Hand: Was überlebt, hält ein Rückruf.
+    """
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.ui.catalog import PartCatalog
+    from app.ui.selection_operations import SelectionOperationsPanel
+
+    load_operations()
+    watchers: list[weakref.ReferenceType[QWidget]] = []
+    for _ in range(HOW_MANY):
+        card: QWidget = (
+            PartCatalog()
+            if owner == "Bausteinkatalog"
+            else SelectionOperationsPanel(REGISTRY.all())
+        )
+        release = getattr(type(card), "release", None)
+        if callable(release):
+            release(card)
+        watchers.append(weakref.ref(card))
+        del card
+    application = QApplication.instance()
+    try:
+        for _ in range(EVENT_ROUNDS):
+            application.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        gc.collect()
+        alive = [watch for watch in watchers if watch() is not None]
+        assert not alive, f"{len(alive)} von {HOW_MANY} {owner} überlebten ihre letzte Referenz"
+    finally:
+        # Ein rotes Ergebnis lässt die Überlebenden nicht dem nächsten Test.
+        for watch in watchers:
+            survivor = watch()
+            if survivor is not None:
+                survivor.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 @pytest.mark.parametrize("withdrawn", [False, True])

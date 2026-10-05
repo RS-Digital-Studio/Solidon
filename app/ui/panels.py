@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import dataclasses
 import math
-import re
 import weakref
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from functools import partial
-from itertools import pairwise
+from itertools import islice, pairwise
 from typing import Any, Final, NamedTuple, cast, override
 
 from PySide6.QtCore import (
@@ -138,6 +137,7 @@ from app.core.perceive.groups import FunctionalGroup
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
+from app.core.registry.surfaces import first_sentence
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import (
@@ -379,11 +379,6 @@ _TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 #: (:func:`headline`). Die gewählte Zeile steht ganz da (RM-508).
 _LINE_ROLE = int(Qt.ItemDataRole.UserRole) + 7
 
-#: Wo ein Satz endet: ein Schlusszeichen vor Leerraum und einem Großbuchstaben
-#: oder einer Ziffer, nicht hinter einem einzelnen Buchstaben — „0,16 mm.“
-#: endet, „z. B.“ nicht, und eine Übersetzung mit „e.g. the“ auch nicht.
-_SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\s\w\.)(?<!^\w\.)\s+(?=[\d¿¡A-ZÀ-ÞÄÖÜ])")
-
 
 def headline(message: str) -> str:
     """Der erste Satz einer Meldung — die Zeile, die man beim Überfliegen liest.
@@ -393,8 +388,13 @@ def headline(message: str) -> str:
     Materialbahnen im Slicer prüfen; fehlen sie dort, …“), und lange Zeilen
     verdrängten die nächsten. Die Liste zeigt je Befund seinen ersten Satz;
     die gewählte Zeile steht ganz da, ihre Handlungen darunter.
+
+    Wo ein Satz endet, sagt :func:`~app.core.registry.surfaces.first_sentence`,
+    dieselbe Regel, mit der Menü, Palette und der Längenwächter schneiden
+    (RM-509): Eine eigene hier schnitt hinter „ca.“ und „Nr.“ und ließ einen
+    Folgesatz in Anführungszeichen stehen (Durchsicht 0.5.3, Fund 6).
     """
-    return _SENTENCE_END.split(message, maxsplit=1)[0]
+    return first_sentence(message)
 
 
 def _bundled(
@@ -5633,12 +5633,21 @@ class _ReportList(QListWidget):
     """Die Mindesthöhe beim letzten Legen der Zeilen — siehe :meth:`updateGeometries`."""
 
     def _least_rows(self) -> int:
-        """Die ersten drei sichtbaren Zeilen samt Rahmen, oder 0 ohne Zeile."""
+        """Die ersten drei sichtbaren Zeilen samt Rahmen, oder 0 ohne Zeile.
+
+        Gemessen werden nur diese drei: Die Rechnung läuft in
+        ``minimumSizeHint`` und ``updateGeometries``, und über alle Zeilen
+        kostete sie offscreen bei 300 Befunden 11,6 ms je Aufruf (Durchsicht
+        0.5.3).
+        """
+        visible = (row for row in range(self.count()) if not self.item(row).isHidden())
         rows = [
-            max(self.visualRect(self.indexFromItem(item)).height(), self.sizeHintForRow(row))
-            for row in range(self.count())
-            if not (item := self.item(row)).isHidden()
-        ][:LEAST_REPORT_ROWS]
+            max(
+                self.visualRect(self.indexFromItem(self.item(row))).height(),
+                self.sizeHintForRow(row),
+            )
+            for row in islice(visible, LEAST_REPORT_ROWS)
+        ]
         return sum(rows) + 2 * self.frameWidth() if rows else 0
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Schnittstelle
@@ -9794,7 +9803,7 @@ class FeaturePanel(QWidget):
             toggle.setAutoRaise(True)
             toggle.setArrowType(Qt.ArrowType.RightArrow)
             toggle.setAccessibleName(str(action.title))
-            toggle.toggled.connect(partial(self._row_toggled, row))
+            toggle.toggled.connect(weak_slot(self, FeaturePanel._row_toggled, row, forward=True))
             row.toggle = toggle
             group_title = _RowTitle(str(action.title), toggle, box)
             group_title.setWordWrap(True)

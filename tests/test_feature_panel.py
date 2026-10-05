@@ -140,6 +140,11 @@ def test_a_place_stands_on_one_line_where_the_card_has_room(qt_app: QApplication
             rows[0].widgets[name] for name in ("x", "y", "z")
         ], "jede Beschriftung gehört weiter zu ihrem Feld"
 
+        # **Gezeigt, sonst entscheidet nichts:** Die Zeile ordnet sich in ihrem
+        # ``resizeEvent``, und ein nie gezeigtes Widget bekommt es erst beim
+        # Zeigen — ungezeigt blieb sie in jeder Breite nebeneinander.
+        panel.show()
+        qt_app.processEvents()
         place.resize(place._needed() + 20, place.sizeHint().height())
         assert place.across(), "mit Platz in einer Zeile"
         place.resize(place._needed() - 20, place.sizeHint().height())
@@ -1162,6 +1167,61 @@ def test_the_return_key_in_a_field_does_what_the_button_below_does(
     assert len(gesehen) == 1, "hinter einem Halt schreibt auch die Eingabetaste nichts"
 
 
+def test_the_tab_key_reaches_every_heading_and_arrow_on_every_platform(
+    qt_app: QApplication,
+) -> None:
+    """Klappen und Akkordeon-Pfeile erreicht die Tabulatortaste auch am Mac.
+
+    macOS lässt ohne „Tastaturnavigation“ nur Textfelder anspringen
+    (``TabFocusTextControls``); Werkzeugknöpfe mit ``TabFocus`` fielen aus der
+    Kette, und hinter ihnen lagen seit RM-510/RM-514 Felder, die nur die Maus
+    erreichte (Durchsicht 0.5.3, Fund 5). Die Anwendung schaltet die Kette auf
+    alle Bedienelemente (``app.reach_every_control_by_tab``), in ``main`` und
+    in ``build_application``. Nachgestellt wird die Mac-Vorgabe über
+    ``QStyleHints``.
+    """
+    import inspect
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QLineEdit, QToolButton, QVBoxLayout
+
+    import app.ui.app as app_module
+    from app.ui.panels import collapsible
+
+    hints = qt_app.styleHints()
+    before = hints.tabFocusBehavior()
+    hints.setTabFocusBehavior(Qt.TabFocusBehavior.TabFocusTextControls)
+    root = QWidget()
+    try:
+        app_module.reach_every_control_by_tab(qt_app)
+        layout = QVBoxLayout(root)
+        first = QLineEdit(root)
+        arrow = QToolButton(root)
+        arrow.setObjectName("actionHeading")
+        section = collapsible("Weitere Einstellungen", QLineEdit(), open_now=False)
+        section.setParent(root)
+        for widget in (first, arrow, section):
+            layout.addWidget(widget)
+        root.show()
+        qt_app.processEvents()
+        first.setFocus()
+        qt_app.processEvents()
+        reached = []
+        for _ in range(3):
+            root.focusNextChild()
+            qt_app.processEvents()
+            reached.append(qt_app.focusWidget())
+        heading = section.findChild(QToolButton, "sectionHeading")
+        assert arrow in reached, "der Pfeil einer Handlung"
+        assert heading is not None and heading in reached, "der Kopf einer Klappe"
+    finally:
+        hints.setTabFocusBehavior(before)
+        root.hide()
+        root.deleteLater()
+    for start in (app_module.main, app_module.build_application):
+        assert "reach_every_control_by_tab(application)" in inspect.getsource(start)
+
+
 def test_the_tab_key_goes_down_the_panel_like_the_eye(qt_app: QApplication) -> None:
     """Die Fokuskette folgt dem Layout, nicht der Entstehungsreihenfolge.
 
@@ -1959,7 +2019,11 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
 
     Vier graue Zeilen mit Begründung sind eine Sackgasse mit Erklärung; eine
     Sackgasse bleibt es trotzdem. Der Katalog lag hinter Rechtsklick und
-    Untermenü.
+    Untermenü. **Seit RM-510 trägt ihn an der Fläche der Hauptknopf *Bausteine*
+    der Karte darunter** (``test_ui.py``,
+    ``test_a_face_offers_the_catalogue_from_the_panel``): Zwei Knöpfe mit einem
+    Ziel wären eine Frage ohne Antwort. Das Merkmalfenster selbst bietet, was
+    nur es hat: an dieser Fläche zeichnen, und ein Loch oder eine Aussparung.
     """
     from app.i18n import tr
 
@@ -1968,20 +2032,16 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
 
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
-    gerufen: list[bool] = []
-    panel.catalogRequested.connect(lambda: gerufen.append(True))
+    gerufen: list[tuple[str, bool]] = []
+    panel.sketchRequested.connect(lambda feature_id, cut: gerufen.append((feature_id, cut)))
 
-    buttons = [
-        widget
-        for widget in panel._built
-        if isinstance(widget, QPushButton) and widget.text() == tr("Baustein einsetzen …")
-    ]
-    assert len(buttons) == 1, "der Katalog hat genau einen eigenen Weg"
-    knopf = buttons[0]
-    assert knopf.isEnabled() and not knopf.isHidden()
-    knopf.click()
-
-    assert gerufen == [True], "der Knopf öffnet den Katalog"
+    knoepfe = {widget.text(): widget for widget in panel._built if isinstance(widget, QPushButton)}
+    assert tr("Baustein einsetzen …") not in knoepfe, "ein Ziel, ein Knopf (RM-510)"
+    for text, cut in ((tr("Hier zeichnen"), False), (tr("Loch oder Aussparung zeichnen …"), True)):
+        knopf = knoepfe[text]
+        assert knopf.isEnabled() and not knopf.isHidden()
+        knopf.click()
+        assert gerufen[-1] == (identifier, cut), text
 
 
 def test_a_face_offers_the_seam_protection_toggle(qt_app: QApplication) -> None:
@@ -2627,16 +2687,17 @@ def test_a_hole_says_which_screw_fits(qt_app: QApplication) -> None:
 
     „Ist das eine M5?" ist die Frage vor jedem Druck. Der Durchmesser steht im
     Panel ohnehin; ihn zu zeigen und die Normgröße zu verschweigen wäre die
-    halbe Auskunft.
+    halbe Auskunft. Das Maß trägt seine Einheit (RM-516): Ohne sie las sich der
+    Satz in Zoll als Millimeter.
     """
     from app.core.scene.placement import bore_advice
 
     identifier, feature = a_hole()
-    from app.ui.labels import localised
+    from app.ui.labels import length, localised
 
     diameter = float(feature.params["diameter"])
     erwartet, _choices = bore_advice(
-        diameter, feature=feature, ask=False, measured=localised(f"{diameter:.2f}")
+        diameter, feature=feature, ask=False, measured=length(diameter)
     )
 
     panel = FeaturePanel()
@@ -2644,6 +2705,8 @@ def test_a_hole_says_which_screw_fits(qt_app: QApplication) -> None:
 
     texte = " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
     assert erwartet in texte, texte
+    # Zwei Nachkommastellen in Millimetern (``units._UNIT_DECIMALS``), dahinter die Einheit.
+    assert f"{localised(f'{diameter:.2f}')} mm" in texte, texte
 
 
 def test_only_a_hole_gets_the_screw_line(qt_app: QApplication) -> None:
@@ -2763,9 +2826,16 @@ def test_every_field_group_says_what_it_belongs_to(qt_app: QApplication) -> None
         layout = row.layout()
         kopf = layout.itemAt(0).layout()
         assert kopf is not None, "die Überschrift steht nicht mehr zuerst"
-        erstes = kopf.itemAt(0).widget()
-        assert isinstance(erstes, QLabel) and erstes.text() == "Merkmal verschieben", (
-            f"zuerst steht {erstes!r} statt der Überschrift"
+        # Vorn der Pfeil, der die Handlung aufklappt (RM-510), gleich dahinter
+        # ihr Titel — beide vor den Feldern, und der Pfeil heißt für den
+        # Bildschirmleser wie die Handlung.
+        from PySide6.QtWidgets import QToolButton
+
+        pfeil, titel = kopf.itemAt(0).widget(), kopf.itemAt(1).widget()
+        assert isinstance(pfeil, QToolButton) and pfeil.objectName() == "actionHeading"
+        assert pfeil.accessibleName() == "Merkmal verschieben"
+        assert isinstance(titel, QLabel) and titel.text() == "Merkmal verschieben", (
+            f"nach dem Pfeil steht {titel!r} statt der Überschrift"
         )
     finally:
         panel.deleteLater()
@@ -3908,13 +3978,14 @@ def test_original_bore_measures_hide_slot_fields_until_enabled(
         built = panel.measure_fields(op, owner, feature=feature)
         assert built is not None
         _, _group, editors = built
+        # Die Richtung steht seit RM-513 hinten im Dialog des Schritts, nicht in
+        # der Maßgruppe; gezogen wird sie im Bild (``slot_handle``).
+        assert "slot_angle" not in editors
         assert editors["slot_length"].isHidden()
-        assert editors["slot_angle"].isHidden()
         editors["slotted"].setChecked(True)
         assert not editors["slot_length"].isHidden()
-        assert not editors["slot_angle"].isHidden()
         editors["slotted"].setChecked(False)
-        assert editors["slot_length"].isHidden() and editors["slot_angle"].isHidden()
+        assert editors["slot_length"].isHidden()
     finally:
         owner.deleteLater()
         panel.deleteLater()

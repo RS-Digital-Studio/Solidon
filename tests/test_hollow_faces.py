@@ -40,6 +40,9 @@ WALL = 2.0
 #: Material des Quaders mit offener Ober- und Vorderseite: Hohlraum 36 auf 28 auf 18.
 TOP_AND_FRONT_OPEN = A * B * C - (A - 2 * WALL) * (B - WALL) * (C - WALL)
 
+#: Material des Quaders mit offener Oberseite, Wand innen: Hohlraum 36 auf 26 auf 18.
+TOP_OPEN = A * B * C - (A - 2 * WALL) * (B - 2 * WALL) * (C - WALL)
+
 #: Außen, Oberseite offen, runde Stöße: Minkowski-Summe mit der Kugel vom
 #: Radius der Wand, oberhalb der Öffnungsebene abgeschnitten, ohne den Quader.
 OUTSIDE_TOP_OPEN = (
@@ -205,6 +208,24 @@ def test_open_top_outside_stays_exact_without_openings(profile: Profile) -> None
     output = result.outputs[0]
     assert output.kind == "brep"
     assert float(output.mesh.volume) == pytest.approx(OUTSIDE_TOP_OPEN, rel=1e-9)
+
+
+@pytest.mark.parametrize("vents", [0, 1, 6])
+def test_an_open_top_stays_exact_whatever_the_vents_say(profile: Profile, vents: int) -> None:
+    """*Oben öffnen* am exakten Körper bleibt exakt, gleich was unter *Entlüftungen* steht.
+
+    Eine offene Dose ist ihre eigene Entlüftung (``hollow._hollow_inward`` bohrt
+    dann keine), und bei *Oben öffnen* steht das Feld nicht da. Ein Schritt aus
+    0.5.2 trägt dort die Vorgabe 1; gezählt schickte sie den exakten Körper auf
+    den Netzweg (Durchsicht 0.5.3, Fund 2).
+    """
+    load_operations()
+
+    result = run("hollow_object", _exact_box(), profile, wall=WALL, open_top=True, vents=vents)
+
+    output = result.outputs[0]
+    assert output.kind == "brep"
+    assert float(output.mesh.volume) == pytest.approx(TOP_OPEN, rel=1e-9)
 
 
 def test_a_wall_too_thick_for_the_body_says_so_and_leaves_it(profile: Profile) -> None:

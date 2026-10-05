@@ -332,14 +332,19 @@ def _silent_buttons(dialog: QDialog) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("missing", ["tooltip", "status", "accessible", "none"])
+@pytest.mark.parametrize("missing", ["tooltip", "accessible", "none"])
 def test_the_button_guard_finds_each_missing_channel(qt_app: QApplication, missing: str) -> None:
-    """Ein absichtlich stummer Knopf beweist den Wächter für jeden der drei Kanäle."""
+    """Ein absichtlich stummer Knopf beweist den Wächter für jeden seiner zwei Kanäle.
+
+    Kurzhilfe und Beschreibung für den Bildschirmleser; einen Statustipp
+    tragen seit RM-509 nur Menüaktionen (``test_text_length.py``,
+    ``test_status_tips_stand_only_at_menu_actions``), und der Knopf hier hat
+    deshalb keinen.
+    """
     dialog = QDialog()
     button = QPushButton("Übernehmen", dialog)
     button.setEnabled(False)
     button.setToolTip(" " if missing == "tooltip" else "Wählen Sie einen Körper.")
-    button.setStatusTip(" " if missing == "status" else "Wählen Sie einen Körper.")
     button.setAccessibleDescription(" " if missing == "accessible" else "Wählen Sie einen Körper.")
     try:
         dialog.show()

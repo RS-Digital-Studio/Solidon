@@ -3526,6 +3526,7 @@ def test_the_caveat_reaches_every_surface_that_offers_the_operation(
     Grenze: Eine Stichprobe wäre grün, sobald eine einzige durchkommt.
     """
     from app.core.registry import caveat_line, tool_schemas
+    from app.core.registry.surfaces import first_sentence
 
     specs = _with_caveat()
     assert len(specs) >= 5, "die Prüfung braucht Operationen mit Grenze"
@@ -3541,9 +3542,13 @@ def test_the_caveat_reaches_every_surface_that_offers_the_operation(
 
         # Der Menüeintrag: im Tooltip, nicht in der Statuszeile — die ist eine
         # Zeile, und abgeschnitten wäre eine Warnung schlimmer als keine.
+        # Davor der erste Satz der ``doc``, wie in Menü und Palette (RM-509).
         action = empty_window._operation_action(QMenu(empty_window), spec)
         assert str(spec.caveat) in action.toolTip(), f"{spec.name}: kein Tooltip"
-        assert str(spec.doc) in action.toolTip(), f"{spec.name}: der Satz fehlt daneben"
+        assert first_sentence(str(spec.doc)) in action.toolTip(), (
+            f"{spec.name}: der Satz fehlt daneben"
+        )
+        assert str(spec.caveat) not in action.statusTip(), f"{spec.name}: Grenze in der Statuszeile"
 
         # Und der Dialog, in dem sie gerade angewendet wird — zugeklappt unter
         # „Wann nicht?“ (RM-513), ganz im Tooltip der Überschrift.

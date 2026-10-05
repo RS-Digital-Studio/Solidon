@@ -361,7 +361,7 @@ class PartCatalog(QDialog):
         self.filter_note.setWordWrap(True)
         self.show_all = QPushButton(tr("Alle Bausteine zeigen"), self)
         self.show_all.setAutoDefault(False)
-        self.show_all.clicked.connect(lambda _checked=False: self.show_for_feature(None))
+        self.show_all.clicked.connect(self._show_every_part)
         self.filter_row = QWidget(self)
         filter_layout = QHBoxLayout(self.filter_row)
         filter_layout.setContentsMargins(0, 0, 0, 0)
@@ -859,6 +859,14 @@ class PartCatalog(QDialog):
         self.filter_note.setText(tr("Passend für: {kind}", kind=title) if kind else "")
         self.filter_row.setVisible(kind is not None)
         self.show_parts(self.search.text())
+
+    def _show_every_part(self) -> None:
+        """*Alle Bausteine zeigen* hebt den Merkmalsfilter auf.
+
+        Eine Methode statt eines Lambdas: Am eigenen Kind hielte es den Katalog
+        stark (``wartezeit.md``, „Ein Rückruf an ein eigenes Kind hält schwach“).
+        """
+        self.show_for_feature(None)
 
     def feature_kind(self) -> str | None:
         """Nach welcher Merkmalsart gerade gefiltert wird — sonst ``None``."""

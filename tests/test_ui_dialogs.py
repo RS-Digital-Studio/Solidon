@@ -340,13 +340,23 @@ def test_an_open_advanced_section_never_overlaps_the_action_buttons(
 
         schema = dialog.spec.params.spec()
         values = dialog.values()
+        # Neben dem Mehrfachwähler ``at_features`` reist das Altfeld
+        # ``at_feature`` unsichtbar mit (``_hide_legacy_feature_field``): Seine
+        # Werte stehen im Wähler, eine zweite Zeile dafür wäre ein Zwilling.
+        from app.ui.op_dialog import FeatureSetField
+
+        legacy = (
+            {"at_feature"}
+            if isinstance(dialog._editors.get("at_features"), FeatureSetField)
+            else set()
+        )
         advanced = [
             dialog._editors[entry.name]
             for entry in schema
             if entry.placement == "advanced"
             and not entry.internal
             and inactive_dependency(entry, schema, values) is None
-            and entry.name not in {"surface_distance_1", "surface_distance_2"}
+            and entry.name not in {"surface_distance_1", "surface_distance_2", *legacy}
         ]
         assert advanced and all(editor.isVisibleTo(dialog) for editor in advanced)
         for entry in schema:

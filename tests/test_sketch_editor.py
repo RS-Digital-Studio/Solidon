@@ -8475,6 +8475,13 @@ def _run_with_drawings(
     assert dialog is not None
     combo = dialog._editors[switch[0]]
     assert isinstance(combo, QComboBox)
+    if not combo.isVisibleTo(dialog):
+        # Seit RM-513 steht die Wahl des oberen Umrisses beim Übergang hinten;
+        # der Kunde klappt *Weitere Einstellungen* auf, und Wahl und Zeichenfeld
+        # stehen dort beieinander (RM-183: nie das Feld hinter der Klappe).
+        dialog.advanced.setChecked(True)
+        QApplication.processEvents()
+    assert combo.isVisibleTo(dialog)
     combo.setCurrentIndex(combo.findData(switch[1]))
     QApplication.processEvents()
     second = dialog._editors[field]

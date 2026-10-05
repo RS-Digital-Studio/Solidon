@@ -646,12 +646,27 @@ class CurrentPageTabs(QTabWidget):
         return QSize(whole.width(), self._chrome_height(whole, stack) + page.sizeHint().height())
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        """Das Mindestmaß der vorderen Seite samt Rahmen, in beiden Richtungen.
+
+        Auch in der Breite: Die Karte darüber wird so breit wie ihre vordere
+        Seite mindestens verlangt (``OverlayHost._right_width``, RM-488). Der
+        Stapel verlangte die breiteste aller Seiten, und die Karte hätte für
+        den Prüfbericht auch dann Platz gemacht, wenn die Auswahl vorn steht.
+        """
         least = super().minimumSizeHint()
         page, stack = self.currentWidget(), self._stack()
         if page is None or stack is None:
             return least
         chrome = max(least.height() - stack.minimumSizeHint().height(), 0)
-        return QSize(least.width(), chrome + page.minimumSizeHint().height())
+        # Qt nimmt die breitere von Stapel und Reiterleiste (mit Rollknöpfen
+        # höchstens 200) und legt den Rahmen darum; dieselbe Rechnung mit der
+        # vorderen Seite statt des Stapels.
+        bar = self.tabBar().minimumSizeHint().width() if not self.tabBar().isHidden() else 0
+        if self.usesScrollButtons():
+            bar = min(bar, 200)
+        frame = max(least.width() - max(stack.minimumSizeHint().width(), bar), 0)
+        width = max(page.minimumSizeHint().width(), bar) + frame
+        return QSize(width, chrome + page.minimumSizeHint().height())
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt-Name
         return self.currentWidget() is not None or super().hasHeightForWidth()
@@ -1222,7 +1237,7 @@ class OverlayHost(QWidget):
 
         if self.right.isVisibleTo(self):
             self._share_room(self.right, room)
-            card = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
+            card = self._right_width(width)
             wanted = min(natural_height(self.right, width=card), room)
             self._move(
                 self.right,
@@ -1241,6 +1256,24 @@ class OverlayHost(QWidget):
             )
 
         self._tell_the_view_about_the_zones()
+
+    def _right_width(self, width: int) -> int:
+        """Wie breit die rechte Karte wird — nie schmaler als ihre vordere Seite.
+
+        **Die Spalte wird breiter, statt abzuschneiden** (RM-488): Ein Knopftext
+        oder ein Haken lässt sich nicht kürzen, und ein Rollbereich, der nur
+        senkrecht rollt, schnitt ihn rechts ab, ohne Balken (offscreen an einer
+        gewählten Fläche: „Loch oder Aussparung zeichnen …“ 30 Punkte zu breit).
+        Bis 0.5.2 gab das Dock des Hauptfensters diese Breite von selbst her;
+        seit der Reiter *Auswahl* in dieser Karte steht (RM-511), rechnet sie
+        die Zone selbst — höchstens bis an den Fensterrand. Ansicht und Zonen
+        lesen dieselbe Zahl (:meth:`_tell_the_view_about_the_zones`).
+        """
+        card = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
+        if self.right is None:
+            return card
+        least = self.right.minimumSizeHint().width()
+        return max(card, min(least, width - 2 * EDGE))
 
     def _tell_the_view_about_the_zones(self) -> None:
         """Die Ansicht darf sagen, dass sie den Zonen ausweichen will.
@@ -1284,7 +1317,7 @@ class OverlayHost(QWidget):
         showing_left = self.left is not None and self.left.isVisibleTo(self)
         showing_right = self.right is not None and self.right.isVisibleTo(self)
         width = self.width()
-        right = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
+        right = self._right_width(width)
         setter(
             card_width(LEFT_WIDTH, LEFT_MAX, width) + EDGE + MARGIN if showing_left else 0,
             right + EDGE + MARGIN if showing_right else 0,

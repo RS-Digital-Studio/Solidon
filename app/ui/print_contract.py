@@ -17,7 +17,7 @@ from app.core.scene import EvaluationResult
 from app.core.types import CheckState, Document, Finding, Profile, Scene, SceneObject
 from app.core.units import format_length
 from app.i18n import TranslatableText, _, tr
-from app.ui.labels import length, printer_title
+from app.ui.labels import compact_figure, display_unit, length, printer_title
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,19 +142,24 @@ def print_target(document: Document, result: EvaluationResult | None) -> PrintTa
         _("Orientierung: aktuelle Lage der Körper zum Druckbett."),
     ]
     if printer is not None:
+        # Bauraum und Düse in der Anzeigeeinheit, wie der Druckdialog die Düse
+        # zeigt; als ``Figure``, damit der aufbewahrte Satz der Sprache folgt.
+        unit = display_unit()
+        width, depth, height = printer.build_volume
         details.insert(
             1,
             _(
-                "Bauraum: {x} × {y} × {z} mm",
-                x=f"{printer.build_volume[0]:g}",
-                y=f"{printer.build_volume[1]:g}",
-                z=f"{printer.build_volume[2]:g}",
+                "Bauraum: {x} × {y} × {z}",
+                x=compact_figure(width, unit),
+                y=compact_figure(depth, unit),
+                z=compact_figure(height, unit, with_unit=True),
             ),
         )
         if not printer.is_resin:
             # Der Name nennt die Düse nicht mehr (``printer_title``); gewählt
             # wird sie im Druckdialog, und hier steht, mit welcher gerechnet wird.
-            details.insert(2, _("Düse: {nozzle}", nozzle=format_length(printer.nozzle_diameter)))
+            nozzle = format_length(printer.nozzle_diameter, unit)
+            details.insert(2, _("Düse: {nozzle}", nozzle=nozzle))
     details.extend(dict.fromkeys(missing))
     return PrintTarget(title, tuple(details), tuple(dict.fromkeys(missing)), tuple(names))
 

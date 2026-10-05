@@ -65,7 +65,14 @@ def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
     route: str,
     phase: str,
 ) -> None:
-    """Alle Berichtsauswahlen beachten denselben Besitz wie Baum und Viewport."""
+    """Alle Berichtsauswahlen beachten denselben Besitz wie Baum und Viewport.
+
+    Und sie wählen den Körper, ohne den Reiter *Auswahl* nach vorn zu holen
+    (``_SelectionPage.held``): Wer im Bericht klickt, liest dort weiter
+    (Durchsicht 0.5.3, Fund 1).
+    """
+    from contextlib import contextmanager
+
     from app.ui.placement_flow import QuietHost
 
     host = None if phase == "absent" else QuietHost({"diameter": 7.0}, lambda values: False)
@@ -76,12 +83,25 @@ def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
     selection = ["obj_1"]
     awaiting = object()
 
+    holding: list[bool] = []
+    held_when_selected: list[bool] = []
+
+    @contextmanager
+    def held() -> Iterator[None]:
+        holding.append(True)
+        try:
+            yield
+        finally:
+            holding.pop()
+
     def select(objects: list[str]) -> None:
         selection[:] = objects
+        held_when_selected.append(bool(holding))
         events.append(("selection", tuple(objects)))
 
     state = SimpleNamespace(
         _quiet_host=host,
+        feature_dock=SimpleNamespace(held=held),
         _finding_awaiting_map=awaiting,
         _quiet_selection_allowed=lambda: MainWindow._quiet_selection_allowed(state),
         _quiet_command_allowed=lambda: MainWindow._quiet_command_allowed(state),
@@ -117,6 +137,7 @@ def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
         assert "refused" not in events
         if route != "bundle":
             assert ("tool", "analysis") in events
+        assert held_when_selected and all(held_when_selected), "der Bericht bleibt vorn"
     assert state._quiet_host is host
     if host is not None:
         assert host.values() == {"diameter": 7.0}
@@ -1575,6 +1596,21 @@ def _cut_off_in_the_column(window: MainWindow) -> list[str]:
     return cut
 
 
+@pytest.fixture
+def without_gliding(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Karten ohne Gleiten: gemessen wird die Lage, nicht ein Zwischenstand.
+
+    Die rechte Karte wächst mit der Mindestbreite ihrer vorderen Seite
+    (RM-488, seit RM-511 in der Zone gerechnet) und gleitet dabei
+    (``overlay.MOVE_MS``); eine Messung gleich nach der Wahl träfe sie
+    unterwegs. Dieselbe Vorsicht wie in ``test_overlay.py``.
+    """
+    from app.ui import overlay
+
+    monkeypatch.setattr(overlay, "MOVE_MS", 0)
+
+
+@pytest.mark.usefixtures("without_gliding")
 @pytest.mark.parametrize("size", [(1280, 720), (1920, 1080)], ids=["1280", "1920"])
 def test_the_selection_column_fits_every_field_it_shows(
     window: MainWindow, size: tuple[int, int]
@@ -1605,6 +1641,7 @@ def test_the_selection_column_fits_every_field_it_shows(
     assert not cut, f"Kante: ragt über die Spalte: {cut}"
 
 
+@pytest.mark.usefixtures("without_gliding")
 @pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
 def test_the_selection_column_fits_in_every_language(qt_app: QApplication, language: str) -> None:
     """RM-488 in jeder Sprache: Eine längere Übersetzung verbreitert die Spalte, schneidet nie.
@@ -2495,6 +2532,11 @@ def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
         )
         item = panel.list.item(0)
         assert "Formdetail" in item.text() and "Halter" in item.text()
+        # **Erst die Befunde** (RM-508): Ungewählt steht der erste Satz mit dem
+        # Körper; die gewählte Zeile steht ganz da, mit Klick und Erhalt.
+        assert "Anklicken" not in item.text(), "ungewählt nur der erste Satz"
+        panel.list.setCurrentRow(0)
+        assert item.isSelected()
         assert "Anklicken zeigt den Körper und den Schritt" in item.text()
         assert "Bearbeitung bleibt erhalten" in item.text()
         assert "Merkmal" not in item.text() and "Nachfolger" not in item.text()

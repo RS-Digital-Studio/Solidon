@@ -546,6 +546,12 @@ GCODE_SUFFIXES: Final = _CORE_GCODE_SUFFIXES
 #: aussehen.
 TOOLBAR_HYSTERESIS: Final = 80
 
+#: Die drei Formen der Werkzeugleiste, von breit nach schmal (D6, RM-506):
+#: Wörter an den sieben Knöpfen und an der Suche, nur an der Suche, an keinem.
+TOOLBAR_WORDS: Final = 2
+TOOLBAR_SEARCH_WORDS: Final = 1
+TOOLBAR_SIGNS: Final = 0
+
 #: Wie lange nach dem letzten Pinselzug gewartet wird, bevor die Wandstärke
 #: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den
 #: Pinsel zu verzögern, damit eine Zahl aktuell ist, die sich beim nächsten Zug
@@ -788,22 +794,53 @@ class _SelectionPage(QWidget):
     Der Zustand hängt am Reiterwechsel (``currentChanged``), nicht an
     ``hideEvent``: Der Stapel verbirgt eine Seite auch, solange das Fenster
     selbst nicht gezeigt ist, und in jedem Test ist es das nicht.
+
+    **Zwei Lagen, in denen eine Auswahl den Reiter nicht holt** (Durchsicht
+    0.5.3): eine Auswahl, die der Prüfbericht trifft (:meth:`held` — wer dort
+    einen Befund anklickt, liest den Bericht weiter), und eine laufende Tour,
+    die vorn steht — sie holt ihre Reiter selbst (``_flash_area``), wie sie
+    auch dem Bericht nicht weicht (``_focus_report``).
     """
 
     closed = Signal()
     """Der Reiter ist nicht mehr vorn. Eine Vorschau, die hierher gehört, fällt —
     die Felder, in denen man sie übernehmen oder zurücknehmen könnte, sind weg."""
 
-    def __init__(self, tabs: QTabWidget, fallback: QWidget, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        tabs: QTabWidget,
+        fallback: QWidget,
+        parent: QWidget | None = None,
+        *,
+        tour: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("selectionPage")
         self._tabs = tabs
         self._fallback = fallback
+        self._tour = tour
         self.dismissed = False
         self._watching = False
         self._workspace_visible = True
         self._was_current = False
+        self._held = 0
         tabs.currentChanged.connect(self._current_changed)
+
+    @contextmanager
+    def held(self) -> Iterator[None]:
+        """Auswahlen in diesem Block holen den Reiter nicht nach vorn.
+
+        Für die Wege aus dem Prüfbericht — Befundklick, Sammelzeile, *Stelle
+        zeigen* —: Sie wählen den Körper, um ihn zu zeigen, und der Kunde
+        liest danach weiter im Bericht. Bis zur Durchsicht 0.5.3 holte jeder
+        Befund an einem anderen Körper den Reiter *Auswahl* nach vorn und nahm
+        dem Kunden die Befundzeile samt ihren Handlungen weg.
+        """
+        self._held += 1
+        try:
+            yield
+        finally:
+            self._held -= 1
 
     def start_watching(self) -> None:
         """Ab hier zählt ein Reiterwechsel als Entscheidung — nicht der Aufbau."""
@@ -815,8 +852,19 @@ class _SelectionPage(QWidget):
         return self._tabs.currentWidget() is self
 
     def reveal(self) -> None:
-        """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen."""
-        if not self._workspace_visible or self.dismissed:
+        """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen.
+
+        Auch nicht aus einem Weg des Prüfberichts heraus (:meth:`held`) und
+        nicht über eine laufende Tour, die vorn steht.
+        """
+        if not self._workspace_visible or self.dismissed or self._held:
+            return
+        tour = self._tour
+        if (
+            tour is not None
+            and self._tabs.currentWidget() is tour
+            and getattr(tour, "active", False)
+        ):
             return
         self._tabs.setCurrentWidget(self)
 
@@ -835,7 +883,10 @@ class _SelectionPage(QWidget):
         **Der Merker gehört der Auswahl, nicht der Sitzung**: Wer den Reiter
         verlässt, sieht ihn bei dieser Auswahl nicht wieder von selbst; auf
         Dauer wäre es der Verlust aller Handlungen an jeder späteren Auswahl.
+        Eine Auswahl aus dem Prüfbericht (:meth:`held`) ist keine solche.
         """
+        if self._held:
+            return
         self.dismissed = False
 
     def _current_changed(self, _index: int) -> None:
@@ -2734,9 +2785,8 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_status_bar()
         self._build_menus()
-        # **Nach den Menüs, weil das Dock seinen Ein-/Ausschalter dort
-        # einhängt.** Vorher stand der Aufruf im Zentrum und lief in ein Menü,
-        # das es noch nicht gab — die Anwendung kam gar nicht erst hoch.
+        # Nach dem Zentrum, das Karte, Bericht und Tour baut: Der Reiter
+        # *Auswahl* setzt sich dort vor sie (RM-511).
         self._build_feature_dock()
         # Nach den Menüs, denn die Kopfzeile entsteht in der Werkzeugleiste:
         # ein Aufruf aus ``_build_central`` heraus fände sie noch nicht.
@@ -3605,8 +3655,8 @@ class MainWindow(QMainWindow):
         self.selection_operations.add_print_widget(self.quick_filament)
         self.feature_panel.set_print_host(self.selection_operations.print_rows())
 
-        # Eine Karte, nicht zwei: Die Spalte trägt jetzt allein Bericht, Chat
-        # und Tour und teilt ihre Höhe mit nichts mehr. Der Formatverlust,
+        # Eine Karte, nicht zwei: Die Spalte trägt allein Auswahl, Bericht,
+        # Chat und Tour und teilt ihre Höhe mit nichts mehr. Der Formatverlust,
         # den P1 behoben hat, kann damit nicht wiederkommen — die zweite
         # Rechnung, die ihn verursachte, gibt es nicht mehr.
         self.right_card = QWidget(self)
@@ -4915,10 +4965,12 @@ class MainWindow(QMainWindow):
         # gar keins ist keine. :meth:`_fit_toolbar` entscheidet das bei jeder
         # Größenänderung neu.
         self._toolbar_wide = True
-        #: Wie breit die Leiste mit Wörtern zuletzt sein wollte — die Marke,
-        #: gegen die zurückgeschaltet wird. Ohne sie misst die Hysterese ihre
-        #: eigene Wirkung und schwingt.
-        self._toolbar_full_width = 0
+        self._toolbar_form = TOOLBAR_WORDS
+        #: Was jede Form ohne die Kopfzeile braucht — die Marken, gegen die
+        #: zurückgeschaltet wird. Ohne sie misst die Hysterese ihre eigene
+        #: Wirkung und schwingt; mit der Kopfzeile darin veralten sie, sobald
+        #: ein Projekt einen längeren Namen trägt.
+        self._toolbar_needs: dict[int, int] = {}
         # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
         # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
         # ihren Satz selbst.
@@ -4991,15 +5043,18 @@ class MainWindow(QMainWindow):
         # im Menü, aus derselben Aktion, damit eine andere Belegung mitgeht.
         keys = self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
         searching = tr("Funktion suchen …")
-        self.function_search = QPushButton(
-            icon("search", toolbar), f"{searching}   {keys}" if keys else searching, toolbar
-        )
+        self._search_words = f"{searching}   {keys}" if keys else searching
+        self.function_search = QPushButton(icon("search", toolbar), self._search_words, toolbar)
         self.function_search.setObjectName("functionSearch")
         self.function_search.setAccessibleName(tr("Funktion suchen"))
         hint = tr("Öffnet die Befehlspalette: jede Funktion mit Ort und Kürzel.")
-        self.function_search.setToolTip(hint)
+        # Name und Kürzel auch im Tooltip: In der schmalsten Form der Leiste
+        # bleibt von der Suche nur die Lupe (:meth:`_fit_toolbar`).
+        self.function_search.setToolTip(
+            self._button_tip(tr("Funktion suchen"), self._palette_action, hint)
+        )
         self.function_search.setAccessibleDescription(hint)
-        self.function_search.clicked.connect(lambda _checked=False: self.open_palette(""))
+        self.function_search.clicked.connect(self.action_command_palette)
         toolbar.addSeparator()
         toolbar.addWidget(self.function_search)
 
@@ -5686,16 +5741,22 @@ class MainWindow(QMainWindow):
         """
         if locked:
             return
+        # **Beide Texte zurück, jeder seinen.** Der Tooltip trägt unter dem Satz
+        # die Grenze (``caveat_line``), die Statuszeile nur den Satz; aus der
+        # Statuszeile zurückgestellt, verlor der Tooltip die Grenze nach der
+        # ersten Sperre für immer (Durchsicht 0.5.3).
         stored = action.property("tip_before_kind")
         if reason is not None:
             if stored is None:
                 action.setProperty("tip_before_kind", action.statusTip())
+                action.setProperty("tooltip_before_kind", action.toolTip())
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
             action.setStatusTip(str(stored))
-            action.setToolTip(str(stored))
+            action.setToolTip(str(action.property("tooltip_before_kind") or stored))
             action.setProperty("tip_before_kind", None)
+            action.setProperty("tooltip_before_kind", None)
 
     def _reason_locked(
         self, spec: OperationSpec, kinds: list[str], objects: int, chosen: int
@@ -9355,6 +9416,8 @@ class MainWindow(QMainWindow):
             return
         result = self.session.last_result
         if result is None or result.stopped_at is not None:
+            # Der Kunde wollte exportieren, und die Antwort steht im Bericht.
+            self._focus_report()
             self.announce(tr("Nicht exportiert: Die Kette hält an — siehe Prüfbericht."))
             return
         self._start_export(target, export_format)
@@ -9435,6 +9498,9 @@ class MainWindow(QMainWindow):
         self._exporting = False
         self._set_progress_state("export", active=False)
         self.report.add_findings(list(findings))
+        # Ein angefordertes Ergebnis, das ganz nur im Bericht steht: Der Dialog
+        # zeigt die ersten Sätze und verweist dorthin (Durchsicht 0.5.3, Fund 3).
+        self._focus_report()
         attempt = self._export_attempt
         if attempt is None:
             return
@@ -14221,9 +14287,14 @@ class MainWindow(QMainWindow):
             self.object_tree.select_object(lone)
         commands = self.window_commands()
         palette = CommandPalette(self.palette_rows(commands), parent=self, query=query)
-        if palette.exec() != CommandPalette.DialogCode.Accepted:
-            return
-        name = palette.chosen()
+        try:
+            if palette.exec() != CommandPalette.DialogCode.Accepted:
+                return
+            name = palette.chosen()
+        finally:
+            # Ein Kind des Fensters: Ungelöscht blieb jede geschlossene Palette
+            # mit allen Zeilen stehen, bis das Fenster ging.
+            palette.deleteLater()
         if not name:
             return
         if name in commands:
@@ -14375,7 +14446,7 @@ class MainWindow(QMainWindow):
         # `fenster.md` für die Karten schon kennt („Was unter der Liste
         # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
         # Weg hinaus, den die Karte anbietet").
-        column = _SelectionPage(self.right, self.report, self)
+        column = _SelectionPage(self.right, self.report, self, tour=self.tour)
         stack = QVBoxLayout(column)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.setSpacing(0)
@@ -16320,10 +16391,17 @@ class MainWindow(QMainWindow):
         living = result.scene.objects if result is not None else {}
         chosen = [str(entry) for entry in bodies if str(entry) in living]
         if chosen:
-            self.object_tree.select_objects(chosen)
+            # Gezeigt, nicht zur Arbeit gewählt: Der Bericht bleibt vorn.
+            with self.feature_dock.held():
+                self.object_tree.select_objects(chosen)
 
     def _on_finding_activated(self, finding: Finding) -> None:
-        """Ein Berichtsklick bindet zuerst den Körper, dann Karte und tatsächlichen Ort."""
+        """Ein Berichtsklick bindet zuerst den Körper, dann Karte und tatsächlichen Ort.
+
+        Die Wahl des Körpers holt den Reiter *Auswahl* nicht nach vorn
+        (``_SelectionPage.held``): Wer im Bericht einen Befund anklickt, will
+        die Stelle sehen und danach die Befundzeile mit ihren Handlungen lesen.
+        """
         if not self._quiet_command_allowed():
             return
         self._finding_awaiting_map = None
@@ -16339,7 +16417,8 @@ class MainWindow(QMainWindow):
         if kind is not None:
             self.tools.activate("analysis")
             self.analysis_bar.show_map(kind)
-        self.object_tree.select_object(entry.id)
+        with self.feature_dock.held():
+            self.object_tree.select_object(entry.id)
         if self.object_tree.selected() != entry.id:
             return
         target = None if kind == "deviation" else maps.location_of(entry, finding)
@@ -16407,7 +16486,9 @@ class MainWindow(QMainWindow):
         entry = self._entry_of(error)
         if entry is None:
             return
-        self.object_tree.select_object(entry.id)
+        # Eine Handlung des Berichts zeigt etwas; er bleibt vorn.
+        with self.feature_dock.held():
+            self.object_tree.select_object(entry.id)
         if self.object_tree.selected() == entry.id:
             self.tools.activate("layers")
 
@@ -16425,7 +16506,8 @@ class MainWindow(QMainWindow):
         place = error.values.get("location")
         if entry is None or not isinstance(place, (tuple, list)) or len(place) != 3:
             return
-        self.object_tree.select_object(entry.id)
+        with self.feature_dock.held():
+            self.object_tree.select_object(entry.id)
         if self.object_tree.selected() != entry.id:
             return
         self.viewport.clear_finding_mark()
@@ -24504,7 +24586,8 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(object_id) if result and object_id else None
         if entry is None:
             return
-        self.object_tree.select_object(entry.id)
+        with self.feature_dock.held():
+            self.object_tree.select_object(entry.id)
         self.tools.activate("analysis")
         self.analysis_bar.show_map("defects")
         self._analysis_map("defects", entry.id)
@@ -25034,7 +25117,8 @@ class MainWindow(QMainWindow):
         object_id = self._object_of(error)
         if object_id is None:
             return
-        self.object_tree.select_object(object_id)
+        with self.feature_dock.held():
+            self.object_tree.select_object(object_id)
         self.tools.activate("analysis")
         self.analysis_bar.show_map("support")
         self._analysis_map("support", object_id)
@@ -25955,19 +26039,19 @@ class MainWindow(QMainWindow):
     def _focus_report(self, force: bool = False) -> None:
         """Den Prüfbericht nach vorn holen.
 
-        ``force`` überstimmt die laufende Tour. Gebraucht wird das genau
-        einmal: wenn die Kette anhält. Die Statusleiste sagt dann wörtlich
-        „siehe Prüfbericht", und ein Verweis auf ein Fenster, das die
-        Anwendung selbst zuhält, ist keiner. Für eine Warnung im normalen
-        Ablauf bleibt es beim Vorrang der Anleitung.
+        ``force`` überstimmt die laufende Tour — für eine ausdrückliche Bitte
+        um den Bericht (der Zähler in der Statusleiste, die Wahl *Prüfbericht*
+        nach einem Anhalten). Ohne sie behält die Anleitung den Vorrang.
 
         **Nur auf eine Bitte des Kunden** — den Zähler in der Statusleiste, die
         Wahl *Prüfbericht* nach einem Anhalten, ein Ergebnis, das er angefordert
-        hat und das nur im Bericht steht. Warnungen und Fehler holen ihn nicht
-        nach vorn (Robert, 05.10.2026): Der Bericht teilt sich seine Karte mit
-        dem Reiter *Auswahl* (RM-511), und wer an einer Bohrung eine Zahl nach
-        der anderen ändert, verlöre sonst seine Felder. Sein Reiter zählt und
-        blinkt stattdessen (:meth:`_mark_report_tab`).
+        hat und das nur im Bericht steht (Exportprüfung, Slicen, gelesener
+        G-Code). Warnungen und Fehler einer Auswertung holen ihn nicht nach vorn
+        (Robert, 05.10.2026): Der Bericht teilt sich seine Karte mit dem Reiter
+        *Auswahl* (RM-511), und wer an einer Bohrung eine Zahl nach der anderen
+        ändert, verlöre sonst seine Felder. Sein Reiter zählt und blinkt
+        stattdessen (:meth:`_mark_report_tab`); auch ein Anhalten der Kette
+        meldet sich so.
         """
         if not self.right_column.isVisible():
             return
@@ -26434,44 +26518,76 @@ class MainWindow(QMainWindow):
         # doppelter Skalierung (``QT_SCALE_FACTOR=2`` auf einem 1440er Schirm)
         # mitsamt einer Größenänderung, mitten in ``__init__``. Ohne diese
         # Zeile endete der Start dort mit ``AttributeError`` (Durchsicht
-        # 0.5.1, RM-238). Gekürzt wird beim ersten Zeigen ohnehin.
-        if hasattr(self, "toolbar"):
+        # 0.5.1, RM-238). Gekürzt wird beim ersten Zeigen ohnehin. Gefragt
+        # wird nach der Kopfzeile: Sie entsteht als Letztes der Leiste, und
+        # :meth:`_fit_toolbar` misst sie mit.
+        if hasattr(self, "header"):
             self._fit_toolbar()
 
     def _fit_toolbar(self) -> None:
-        """Kürzt die Werkzeugleiste, statt sie überlaufen zu lassen (D6).
+        """Kürzt die Werkzeugleiste, statt sie überlaufen zu lassen (D6, RM-506).
 
-        Passt die Leiste in ihrer breiten Form nicht mehr ins Fenster,
-        verlieren die Knöpfe ihr Wort und behalten ihr Zeichen. Der Name geht
-        dabei nicht verloren — er steht am ``QAction``, im Tooltip und im
-        ``statusTip``, also dort, wo ihn Bildschirmleser und Statuszeile
-        ohnehin lesen (`grenzen.md`, „Ein Zeichen darf allein stehen").
+        Drei Formen, von breit nach schmal: Wörter an den sieben Knöpfen und an
+        der Suche, Wörter nur an der Suche, nur Zeichen. Wer kürzt, verliert
+        sein Wort und behält sein Zeichen; der Name steht weiter am
+        ``QAction``, im Tooltip und beim Bildschirmleser (`grenzen.md`, „Ein
+        Zeichen darf allein stehen"). Die Kopfzeile geht vor: Projekt, Drucker
+        und Platte bestimmen jede Toleranz im Stapel, und sie verlangt ihren
+        Leseraum (``header.READABLE_HEADER_WIDTH``) als Wunschmaß.
 
-        **Zwei Schwellen, nicht eine.** Umgeschaltet wird bei knapp, zurück
+        **Gemerkt wird, was eine Form ohne die Kopfzeile braucht.** Die Marke
+        der Wortform enthielt die Kopfzeile ihres Augenblicks: Mit leerem
+        Projekt gemessen, schaltete die Leiste bei 1920 Pixeln nach einem
+        langen Projektnamen auf Wörter zurück, und die ganze Kopfzeile fiel ins
+        Überlaufmenü. Seit RM-506 steht dazu die Suche in der Leiste; ohne
+        eigene schmale Form drückte sie die Kopfzeile bei 1024 Pixeln auf ein
+        Drittel und unter 800 hinaus (Durchsicht 0.5.3).
+
+        **Zwei Schwellen, nicht eine.** Schmaler wird es bei knapp, breiter
         erst bei deutlich mehr Platz; sonst flackert die Leiste, wenn jemand
-        das Fenster genau an der Grenze zieht. Dieselbe Vorsicht wie bei jeder
-        Hysterese: Ein Rand, an dem zwei Antworten stimmen, ist ein Rand, an
-        dem beide falsch aussehen.
+        das Fenster genau an der Grenze zieht. Gemessen wird jede Form, solange
+        sie steht: Eine Hysterese, die ihre eigene Wirkung misst, schwingt.
         """
         room = self.toolbar.width()
         if room <= 0:
             return
-        if self._toolbar_wide:
+        self._measure_toolbar_afresh()
+        header = self.header.sizeHint().width()
+        while self._toolbar_form < TOOLBAR_WORDS:
+            need = self._toolbar_needs.get(self._toolbar_form + 1)
+            if need is None or need + header + TOOLBAR_HYSTERESIS > room:
+                break
+            self._set_toolbar_form(self._toolbar_form + 1)
+        while True:
             wanted = self.toolbar.sizeHint().width()
-            if wanted > room:
-                # **Die Breite der Wortform merken, bevor sie verschwindet.**
-                # Der erste Anlauf verglich den Platz mit der Wunschbreite des
-                # *aktuellen* Stils — und die ist ohne Wörter kleiner. Die
-                # Leiste schaltete deshalb sofort zurück, wurde wieder zu
-                # breit, schaltete wieder um: gemessen sprang sie über sieben
-                # Fensterbreiten viermal hin und her. Eine Hysterese, die ihre
-                # eigene Wirkung misst, ist keine.
-                self._toolbar_full_width = wanted
-                self._toolbar_wide = False
-                self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        elif room > self._toolbar_full_width + TOOLBAR_HYSTERESIS:
-            self._toolbar_wide = True
-            self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            self._toolbar_needs[self._toolbar_form] = wanted - header
+            if wanted <= room or self._toolbar_form == TOOLBAR_SIGNS:
+                break
+            self._set_toolbar_form(self._toolbar_form - 1)
+
+    def _set_toolbar_form(self, form: int) -> None:
+        """Stellt eine der drei Formen der Werkzeugleiste her (:meth:`_fit_toolbar`)."""
+        self._toolbar_form = form
+        self._toolbar_wide = form == TOOLBAR_WORDS
+        self.toolbar.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            if form == TOOLBAR_WORDS
+            else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        self.function_search.setText(self._search_words if form > TOOLBAR_SIGNS else "")
+        self._measure_toolbar_afresh()
+
+    def _measure_toolbar_afresh(self) -> None:
+        """Die Leiste fragt ihre Teile neu, bevor :meth:`_fit_toolbar` misst.
+
+        Ihr Wunschmaß bleibt sonst stehen, bis eine Ereignisrunde die Änderung
+        nachreicht: Eine neue Kopfzeile meldet ihren Leseraum erst später, ein
+        noch nicht gezeigtes Kind gar nicht — und jede Form maß dann wie die
+        vorige.
+        """
+        layout = self.toolbar.layout()
+        if layout is not None:
+            layout.invalidate()
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt name
         super().showEvent(event)

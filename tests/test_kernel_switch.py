@@ -130,7 +130,7 @@ def test_drilling_an_exact_body_stays_exact_without_a_toggle(profile: Profile) -
     ("params", "expected"),
     [
         ({"open_top": True, "vents": 0}, "brep"),
-        ({"open_top": True, "vents": 2}, "mesh"),
+        ({"open_top": True, "vents": 2}, "brep"),
         ({"open_top": False, "vents": 0}, "mesh"),
         ({"open_top": True, "vents": 0, "open_at": "face_1"}, "mesh"),
     ],
@@ -138,7 +138,11 @@ def test_drilling_an_exact_body_stays_exact_without_a_toggle(profile: Profile) -
 def test_hollowing_follows_the_table(
     profile: Profile, params: dict[str, Any], expected: str
 ) -> None:
-    """Konzept §10.1: Oberseite offen ohne Entlüftung bleibt exakt, sonst der Netzweg."""
+    """Konzept §10.1: Oberseite offen bleibt exakt, sonst der Netzweg.
+
+    Eine Entlüftung zählt bei offener Oberseite nicht — die offene Dose braucht
+    keine, und das Feld steht dann nicht da (Durchsicht 0.5.3, Fund 2).
+    """
     _kernel()
     result = _evaluated(
         profile,

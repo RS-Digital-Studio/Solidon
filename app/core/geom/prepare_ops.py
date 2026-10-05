@@ -17787,7 +17787,10 @@ class HollowParams(BaseParams):
     # bisherigen Wegen neu der Befund ``hollow.closed_cavities`` (P6.3,
     # 23.09.2026). Die Geometrie gespeicherter Schritte ist unverändert.
     # 3: Der Körper sagt, ob sein Innenraum offen ist (``MeshData.cavity_open``).
-    cache_version="3",
+    # 4: Bei offener Oberseite zählt eine Entlüftung nicht mehr gegen den
+    # exakten Weg (``exactly_hollowable``); ein exakter Körper, oben offen und
+    # mit Entlüftung gespeichert, rechnet jetzt exakt statt am Netz.
+    cache_version="4",
     title=_("Aushöhlen"),
     category="prepare",
     params=HollowParams,
@@ -17833,10 +17836,10 @@ def hollow_object(ctx: OpContext) -> OpResult:
         if outward:
             return _exact_hollow_open(ctx, source, (), outward=True)
         # **Die Entscheidungstabelle** (P2.8, Konzept §10.1): Der exakte Weg
-        # öffnet immer die Oberseite und kennt weder eine andere Öffnung noch
-        # Entlüftungen. Genau dieser Auftrag bleibt exakt; jeder andere geht
-        # den Netzweg, und ``evaluate.exact_became_mesh`` sagt es vor der
-        # Übernahme im Vorschauband.
+        # öffnet immer die Oberseite und kennt keine andere Öffnung; eine
+        # Entlüftung braucht die offene Dose nicht. Genau dieser Auftrag bleibt
+        # exakt; jeder andere geht den Netzweg, und ``evaluate.exact_became_mesh``
+        # sagt es vor der Übernahme im Vorschauband.
         from app.core.brep.ops import shell_exact
 
         return shell_exact(ctx)
@@ -18129,9 +18132,17 @@ def _walls_collide(wall: float, eroded: float) -> Finding:
 
 
 def exactly_hollowable(params: HollowParams) -> bool:
-    """Trifft dieser Auftrag den exakten Weg — Oberseite offen, keine andere Öffnung, keine
-    Entlüftung? Die Tabelle aus Konzept §10.1, an einer Stelle für Operation und Vorschau."""
-    return bool(params.open_top) and not str(params.open_at).strip() and int(params.vents) == 0
+    """Trifft dieser Auftrag den exakten Weg — Oberseite offen, keine andere Öffnung?
+
+    Die Tabelle aus Konzept §10.1, an einer Stelle für Operation und Vorschau.
+    **Eine Entlüftung zählt bei offener Oberseite nicht:** Eine offene Dose ist
+    ihre eigene Entlüftung, der Netzweg bohrt dann keine (``hollow._hollow_inward``),
+    und das Feld steht bei *Oben öffnen* nicht da (``depends_on``). Gezählt
+    schickte die Vorgabe 1 eines Schritts aus 0.5.2 einen exakten Körper auf den
+    Netzweg, mit einem Grund, den der Kunde nicht sehen konnte (Durchsicht 0.5.3,
+    Fund 2).
+    """
+    return bool(params.open_top) and not str(params.open_at).strip()
 
 
 def _opening_direction(source: SceneObject, open_at: str) -> Vec3 | None:

@@ -373,6 +373,42 @@ def test_an_open_project_gives_the_header_readable_room_before_toolbar_words(
     )
 
 
+def test_the_search_gives_way_to_the_header_and_keeps_its_name(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Die Suche (RM-506) kürzt wie die sieben Knöpfe, bevor die Kopfzeile weicht.
+
+    Mit ihrem festen Wort drückte sie die Kopfzeile bei 1024 Pixeln auf ein
+    Drittel und bei 800 ins Überlaufmenü (Durchsicht 0.5.3). In der schmalsten
+    Form bleibt die Lupe; Name, Kürzel und Zweck stehen im Tooltip und beim
+    Bildschirmleser. Wo Platz ist, trägt sie ihr Wort wieder.
+    """
+    from PySide6.QtGui import QKeySequence
+
+    from app.i18n import tr
+
+    body = make_object(slots=(0, 1) * 6)
+    result = EvaluationResult(scene=Scene(objects={"obj_1": body}))
+    window.header.show_project("Halter.p3d*", result, "mm")
+    window.header.show_profile(window.session.profile, result)
+    search = window.function_search
+    keys = window._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+    assert keys, "ohne Kürzel prüft der Tooltip nur den Namen"
+
+    window.resize(800, 720)
+    qt_app.processEvents()
+    assert window.header.isVisibleTo(window.toolbar), "die Kopfzeile bleibt in der Leiste"
+    assert search.isVisibleTo(window.toolbar), "die Suche bleibt sichtbar"
+    assert not search.text(), "schmal steht nur die Lupe"
+    assert search.accessibleName() == tr("Funktion suchen")
+    assert tr("Funktion suchen") in search.toolTip() and keys in search.toolTip()
+
+    window.resize(1920, 1080)
+    qt_app.processEvents()
+    assert search.text().startswith(tr("Funktion suchen …")), "breit trägt sie ihr Wort"
+    assert window.header.isVisibleTo(window.toolbar)
+
+
 def test_the_plate_filter_never_lies_over_the_printer(qt_app: QApplication) -> None:
     """Der Plattenwähler bekommt seine Spalte auch dann, wenn er erst später dasteht.
 

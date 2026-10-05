@@ -757,6 +757,42 @@ def test_a_queued_export_report_is_discarded_after_cancel(
     assert "Keine Datei wurde geschrieben" in window._announcement
 
 
+def test_the_export_check_brings_the_report_forward_before_it_asks(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Frage vor dem Export verweist auf den Bericht, also steht er vorn.
+
+    ``confirm_export`` zeigt die ersten Befunde und sagt „Der Rest steht im
+    Prüfbericht.“ Seit RM-511 teilt sich der Bericht seine Karte mit *Auswahl*,
+    und Warnungen einer Auswertung holen ihn nicht nach vorn — die
+    Exportprüfung ist aber ein Ergebnis, das der Kunde angefordert hat
+    (``fenster.md``, Export; Durchsicht 0.5.3, Fund 3).
+    """
+    shown: list[object] = []
+
+    def asked(*_args: object) -> bool:
+        shown.append(window.right.currentWidget())
+        return False
+
+    monkeypatch.setattr(
+        main_window_module,
+        "check_before_export",
+        lambda *args, **kwargs: [Finding("fit.collision", "warning", "Überschneidung")],
+    )
+    monkeypatch.setattr(main_window_module, "confirm_export", asked)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    # Gezeigt: ``_focus_report`` holt nichts in eine Spalte, die niemand sieht.
+    window.show()
+    window._show_start_screen(False)
+    window.right.setCurrentWidget(window.feature_dock)
+    target = tmp_path / "gefragt.stl"
+    window._start_export(target, "stl")
+    wait_for_export(window)
+    assert shown == [window.report], "beim Fragen steht der Bericht vorn"
+    assert not target.exists()
+
+
 @pytest.mark.parametrize("ending", ["close", "release"])
 def test_ending_the_window_cancels_the_export_preflight(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ending: str

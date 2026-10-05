@@ -525,6 +525,8 @@ def main_host(*, deleted=False, current=True):
         tools=SimpleNamespace(activate=lambda tool: events.append(("tool", tool))),
         analysis_bar=SimpleNamespace(show_map=lambda kind: events.append(("map", kind))),
         _analysis_map=lambda *args: events.append(("analysis", args)),
+        # Wählt der Bericht, bleibt er vorn (``_SelectionPage.held``).
+        feature_dock=SimpleNamespace(held=nullcontext),
     )
     host._object_of = lambda error: mw.MainWindow._object_of(host, error)
     host._entry_of = lambda error: mw.MainWindow._entry_of(host, error)

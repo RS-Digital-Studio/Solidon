@@ -159,8 +159,8 @@ class VariantsDialog(QDialog):
             "Druck ist das die einzige Stelle, an der er noch steht. Wo kein Platz "
             "dafür ist, sagt es der Bericht."
         )
-        # Drei Kanäle, weil ein Satz, den nur die Maus findet, für einen
-        # Bildschirmleser keiner ist (Regel 18).
+        # Kurzhilfe und Beschreibung, weil ein Satz, den nur die Maus findet,
+        # für einen Bildschirmleser keiner ist (Regel 18).
         self.mark.setToolTip(marking)
         self.mark.setAccessibleDescription(marking)
 

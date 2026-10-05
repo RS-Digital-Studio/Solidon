@@ -6507,13 +6507,10 @@ class SketchPanel(QWidget):
         self.offset_distance.set_value_mm(2.0)
         offset_note = tr("Um wie viel versetzt wird. Negativ ist nach innen.")
         self.offset_distance.setToolTip(offset_note)
-        # Beim Vorleser derselbe Satz wie im Tooltip
-        # (Regel 18): Dieses Feld und die Rasterweite darunter sind die zwei
-        # einzigen nackten mm-Felder des Bereichs, und wofür welches ist, war
-        # ohne Hover nicht zu erkennen (Robert, 26.08.2026). Ein sichtbares
-        # Wort scheitert an der 900er-Breitengrenze — gemessen: als Wort am
-        # Knopf 1017, als Label davor 971 —, also antwortet die Statuszeile
-        # ohne Wartezeit, sobald der Zeiger das Feld nur berührt.
+        # Beim Vorleser derselbe Satz wie im Tooltip (Regel 18). Wofür das
+        # Feld ist, war ohne Hover nicht zu erkennen (Robert, 26.08.2026);
+        # sichtbar steht jetzt „Versatz:“ davor, in der Zeile, die erst mit
+        # einer Auswahl erscheint (``selection_tools``).
         self.offset_distance.setAccessibleDescription(offset_note)
         self.offset_distance.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         # Ohne Namen liest ein Vorleser hier „Drehfeld, 2,00 mm" vor. Der

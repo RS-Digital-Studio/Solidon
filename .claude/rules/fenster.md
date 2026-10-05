@@ -40,10 +40,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
   Linke und rechte Karte liegen bündig an Fensterrand und Leiste
   (`overlay.EDGE`, Entscheidung Robert), rund ist nur die freie Ecke; die
-  rechte ist 400 breit, 25 % des Fensters, höchstens 540.
-- Warnungen holen den Bericht nie nach vorn, sie nähmen der Auswahl die Felder:
-  `SignalTabBar` zählt und blinkt bis zum Ansehen; `_focus_report` nur auf Bitte.
+  rechte ist 400 breit, 25 % des Fensters, höchstens 540, nie schmaler als
+  ihre vordere Seite (RM-488).
+- Befunde und Halt holen den Bericht nie nach vorn: `SignalTabBar` zählt, blinkt
+  und markiert Ungesehenes; `_focus_report` nur auf Bitte (Statuszähler,
+  *Prüfbericht*, Exportprüfung, Slicen, G-Code).
 - Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.
+  Nicht aus dem Bericht (`_SelectionPage.held`), nicht über eine Tour.
 - `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
   kein Fokus, keine Klicks, kein RichText; mindestens acht Sekunden, lange
   Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.
@@ -95,11 +98,9 @@ werden:
   Schätzung wieder; am Speicherfehler steht er zuletzt und nicht hervorgehoben —
   vorn steht, was der Satz nennt.
 - **Export** (§29): Eine geschriebene Datei holt kein Undo zurück. Der Export
-  prüft, zeigt die Befunde im Prüfbericht und fragt dann
-  (`dialogs.confirm_export`) — nur ab `warning` (der Lizenzhinweis §16.3 ist
-  `info`), Weitergehen ist die Vorgabe, und der Bericht steht daneben, nicht im
-  Dialog: Der Prüfbericht bekommt die Befunde und rückt nach vorn, der Dialog
-  zeigt die ersten Sätze und verweist dorthin.
+  prüft, bringt den Bericht nach vorn und fragt erst ab
+  `warning` (`dialogs.confirm_export`; der Lizenzhinweis §16.3 ist `info`),
+  Weitergehen als Vorgabe; der Dialog nennt die ersten Sätze.
 - **Slicer-Übergabe:** `confirm_handover` fragt vor *Slicen* und *Im Slicer
   öffnen* nur bei **Fehlern** der gewählten Platten, nicht bei Warnungen — die
   Übergabe ist oft der Blick ins gewohnte Programm; Weitergehen ist die Vorgabe.

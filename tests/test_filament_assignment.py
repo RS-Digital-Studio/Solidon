@@ -533,6 +533,15 @@ def test_embedded_picker_fits_the_narrow_selection_tab(qt_app: QApplication) -> 
     assert isinstance(scroller, QScrollArea)
     assert scroller.horizontalScrollBar().maximum() == 0
     quick = window.quick_filament
+    # Der Wähler wartet zugeklappt unter der Liste (RM-510); erreichbar heißt:
+    # ein Klick auf „Filament und Druck“, dann stehen Pfeil und Lagerknopf da.
+    from PySide6.QtWidgets import QToolButton
+
+    heading = window.selection_operations.print_section.findChild(QToolButton, "sectionHeading")
+    assert heading is not None and not heading.isChecked()
+    heading.click()
+    QApplication.processEvents()
+    assert scroller.horizontalScrollBar().maximum() == 0, "auch aufgeklappt rollt nichts quer"
     for control in (quick.picker, quick.inventory_button):
         right = control.mapTo(scroller.viewport(), QPoint(control.width(), 0)).x()
         assert right <= scroller.viewport().width()

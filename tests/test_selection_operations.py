@@ -239,16 +239,22 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
 
     # **Ohne Auswahl bleibt die Karte stehen: für die Bausteine** (Entscheidung
     # Robert, 18.09.2026) **und für die Handlungen, die alle Körper nehmen**
-    # (Robert, 27.09.2026). Bis zum 18.09. verschwand sie ganz, und damit der
-    # einzige sichtbare Zugang zum Katalog.
+    # (Robert, 27.09.2026), davon aber nur ``SCENE_ACTIONS_IN_THE_CARD``
+    # (RM-506): Anordnen und Überschneidungen stehen in der Palette. Bis zum
+    # 18.09. verschwand die Karte ganz, und damit der einzige sichtbare Zugang
+    # zum Katalog.
+    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
+
     panel.set_context(0, _availability(0))
     QApplication.processEvents()
     assert not panel.isHidden()
     assert not panel.search.isVisible(), "ohne Auswahl gibt es nichts zu durchsuchen"
     assert panel.catalog_button.isVisible(), "der Weg zu den Bausteinen bleibt"
     for_all = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
+    in_the_card = for_all & SCENE_ACTIONS_IN_THE_CARD
+    assert in_the_card, "ohne Handlung für alle prüft der Test nichts"
     shown = {name for name, button in panel._buttons.items() if button.isVisible()}
-    assert shown == for_all, shown
+    assert shown == in_the_card, shown
 
 
 def test_quick_actions_reflow_when_the_selection_column_narrows(qt_app: QApplication) -> None:
@@ -577,7 +583,7 @@ def test_every_group_folds_and_a_search_hit_unfolds_it(qt_app: QApplication) -> 
 
 
 def test_a_group_over_the_menu_limit_starts_folded_unless_opened_by_hand(
-    qt_app: QApplication,
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Was ein Menü nicht mehr zeigte, beginnt in der Karte zugeklappt.
 
@@ -591,6 +597,8 @@ def test_a_group_over_the_menu_limit_starts_folded_unless_opened_by_hand(
     einen Körper nicht wieder zu — die Regel gilt nur, solange niemand
     entschieden hat.
     """
+    from app.ui import selection_operations
+
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.set_context(1, _availability(1))
@@ -600,17 +608,41 @@ def test_a_group_over_the_menu_limit_starts_folded_unless_opened_by_hand(
     def listed(title: str) -> int:
         return sum(not button.isHidden() for button in panel._groups[title][2])
 
-    big = [title for title in panel._groups if listed(title) > OPEN_UP_TO]
+    # **Seit RM-506 liegt am Körper keine Gruppe mehr über zwölf**: Große
+    # Kategorien teilt die Karte in Untergruppen von höchstens einem Menü.
+    # Die Regel gilt weiter für jede, die darüber läge; geprüft wird sie mit
+    # einer Grenze, die eine Gruppe am Körper überschreitet und an der Fläche
+    # einhält — dieselbe Stufenfrage wie mit zwölf.
+    at_the_body = {title: listed(title) for title in panel._groups}
+    panel.set_context(1, _availability(1), feature_kind="face")
+    qt_app.processEvents()
+    at_the_face = {title: listed(title) for title in panel._groups}
+    staged = sorted(
+        (
+            (at_the_body[title] - at_the_face[title], title)
+            for title in panel._groups
+            if 0 < at_the_face[title] < at_the_body[title]
+        ),
+        reverse=True,
+    )
+    assert staged, "ohne eine Gruppe, die an der Fläche schrumpft, prüft der Test nichts"
+    limit = at_the_face[staged[0][1]]
+    monkeypatch.setattr(selection_operations, "OPEN_UP_TO", limit)
+    panel.set_context(1, _availability(1))
+    qt_app.processEvents()
+
+    big = [title for title in panel._groups if listed(title) > limit]
     assert big, "ohne eine Gruppe über der Grenze prüft der Test nichts"
     for title, (_section, toggle, _buttons) in panel._groups.items():
         if listed(title):
-            assert toggle.isChecked() == (listed(title) <= OPEN_UP_TO), title
+            assert toggle.isChecked() == (listed(title) <= limit), title
 
-    title = big[0]
+    title = staged[0][1]
+    assert title in big
     toggle = panel._groups[title][1]
     panel.set_context(1, _availability(1), feature_kind="face")
     qt_app.processEvents()
-    assert listed(title) <= OPEN_UP_TO, f"{title} hat an einer Fläche weniger Einträge"
+    assert listed(title) <= limit, f"{title} hat an einer Fläche weniger Einträge"
     assert toggle.isChecked(), f"{title} steht an der Fläche offen"
 
     panel.set_context(1, _availability(1))

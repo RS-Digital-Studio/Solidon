@@ -3314,6 +3314,44 @@ def test_coming_back_to_the_selection_tab_takes_the_decision_back(window: MainWi
     assert not window.feature_dock.dismissed, "und nimmt das Verlassen zurück"
 
 
+def test_a_finding_click_shows_its_body_and_keeps_the_report_in_front(window: MainWindow) -> None:
+    """Ein Befund an einem anderen Körper wählt ihn, und der Bericht bleibt vorn.
+
+    Seit RM-511 teilen sich Auswahl und Prüfbericht eine Karte. Der Befundklick
+    wählt den Körper, um ihn zu zeigen; bis zur Durchsicht 0.5.3 (Fund 1) holte
+    das den Reiter *Auswahl* nach vorn, sobald es ein anderer Körper war als
+    der zuletzt gezeigte, und die Befundzeile samt ihren Handlungen war weg.
+    Dasselbe gilt für eine Sammelzeile. Eine Auswahl im Baum holt den Reiter
+    weiterhin — sie ist eine Wahl zur Arbeit.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    window.session.import_model_async(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    first, second = list(result.scene.objects)[:2]
+    window.object_tree.select_object(first)
+    QApplication.processEvents()
+    assert window.feature_dock.is_current(), "die Auswahl im Baum holt den Reiter"
+    _close_the_feature_window(window)
+
+    finding = Finding(code="probe.warning", severity="warning", message="offen", object_id=second)
+    window.report.add_findings([finding])
+    window.report.findingActivated.emit(finding)
+    QApplication.processEvents()
+    assert window.object_tree.selected_objects() == (second,), "der Befund zeigt seinen Körper"
+    assert window.right.currentWidget() is window.report, "und der Bericht bleibt vorn"
+
+    window.report.bundleActivated.emit(finding, (first, second))
+    QApplication.processEvents()
+    assert set(window.object_tree.selected_objects()) == {first, second}
+    assert window.right.currentWidget() is window.report, "die Sammelzeile ebenso"
+
+    window.object_tree.select_object(first)
+    QApplication.processEvents()
+    assert window.feature_dock.is_current(), "eine neue Wahl im Baum holt den Reiter wieder"
+
+
 def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
     """Zwei Zeilen im Baum markieren und den Abstand lesen — ohne Messwerkzeug.
 
@@ -3595,11 +3633,15 @@ def test_applying_to_all_alike_holes_leaves_each_hole_where_it_is(window: MainWi
     )
 
 
-def test_a_face_offers_the_catalogue_from_the_panel(window: MainWindow) -> None:
+def test_a_face_offers_the_catalogue_from_the_panel(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Der Katalog aus der Fläche heraus — derselbe wie aus dem Objektbaum.
 
     Ein zweiter Weg dorthin, kein zweiter Katalog: Beide Signale hängen am
-    selben Empfänger.
+    selben Empfänger. **An der Fläche trägt ihn der Hauptknopf *Bausteine* der
+    Karte** (RM-510): Ein zweiter Knopf mit demselben Ziel im Merkmalfenster
+    darüber wäre eine Frage ohne Antwort; dort steht das Zeichnen.
     """
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -3618,7 +3660,13 @@ def test_a_face_offers_the_catalogue_from_the_panel(window: MainWindow) -> None:
         widget.text() for widget in window.feature_panel._built if isinstance(widget, QPushButton)
     ]
     assert knoepfe, "an der Fläche steht ein Weg statt vier grauer Zeilen"
-    assert tr("Baustein einsetzen …") in knoepfe
+    assert tr("Baustein einsetzen …") not in knoepfe, "ein Ziel, ein Knopf"
+    opened: list[bool] = []
+    monkeypatch.setattr(window, "_open_catalog", lambda: opened.append(True))
+    catalog = window.selection_operations.catalog_button
+    assert not catalog.isHidden() and catalog.text() == tr("Bausteine")
+    catalog.click()
+    assert opened == [True], "der Knopf öffnet den Katalog des Fensters"
 
 
 def test_a_changed_number_previews_before_it_changes_anything(window: MainWindow) -> None:
@@ -4304,6 +4352,12 @@ def test_a_feature_placement_stays_with_its_selected_place(
     # Maßgruppe das Übernehmen; geprüft wird hier der Weg über das Panel —
     # also die Maße beenden, dann tippen, Vorschau abwarten, übernehmen.
     window.end_quiet_placement()
+    # Offen ist genau die scharfe Handlung (RM-510): Wer die Bohrung ändern
+    # will, klickt ihren Kopf, und *Übernehmen* meint dann sie.
+    resize = next(row for row in panel._shown_rows.values() if row.op == "resize_hole")
+    assert resize.toggle is not None
+    resize.toggle.click()
+    assert panel._armed == resize.key
     diameter = next(
         field
         for field in panel.findChildren(LengthSpin)
@@ -4547,9 +4601,21 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
         QApplication.processEvents()
 
     assert not panel._measuring
-    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), (
-        "mit dem Ende des Messens stehen die Felder wieder rechts"
-    )
+    _the_resize_row_comes_back(panel, shown)
+
+
+def _the_resize_row_comes_back(panel: Any, shown: Any) -> None:
+    """Mit dem Ende des Messens steht *Bohrung ändern* wieder rechts (RM-199).
+
+    Zugeklappt und mit ihren Werten: Offen ist genau die scharfe Handlung, und
+    die bleibt, was sie war (RM-510). Ein Klick auf den Kopf öffnet die Felder.
+    """
+    row = next(row for row in panel._shown_rows.values() if row.op == "resize_hole")
+    assert row.toggle is not None and row.toggle.isVisibleTo(panel), "der Kopf steht wieder"
+    assert row.summary is not None and row.summary.text(), "zugeklappt nennt sie ihre Werte"
+    assert not any("Bohrung ändern" in name for name in shown()), "zugeklappt, nicht offen"
+    row.toggle.click()
+    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), sorted(shown())
 
 
 def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
@@ -4597,7 +4663,7 @@ def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
         QApplication.processEvents()
 
     assert window._quiet_placement is None and not panel._measuring
-    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), sorted(shown())
+    _the_resize_row_comes_back(panel, shown)
 
     window.object_tree.select_feature(object_id, holes[0])
     for _ in range(40):
@@ -4781,6 +4847,15 @@ def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
         elif next_action == "operation":
             from PySide6.QtWidgets import QDoubleSpinBox
 
+            # Offen ist nur die scharfe Handlung (RM-510): Erst der Kopf
+            # öffnet *Merkmal drehen*, dann steht sein Winkel da.
+            rotate = next(
+                row
+                for row in window.feature_panel._shown_rows.values()
+                if row.op == "rotate_feature"
+            )
+            assert rotate.toggle is not None
+            rotate.toggle.click()
             angle = next(
                 field
                 for field in window.feature_panel.findChildren(QDoubleSpinBox)
@@ -7960,7 +8035,14 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     assert report.list.count() >= FILTER_FROM, "ohne Filterzeile prüft dieser Test nichts"
     window.resize(1024, 720)
     window.show()
-    QApplication.processEvents()
+    # Seit RM-511 ist der Bericht ein Reiter neben *Auswahl*, und die Auswahl
+    # der zwei Körper hat *Auswahl* nach vorn geholt. Ein verdeckter Reiter
+    # legt nichts an; gemessen wird, was der Kunde nach dem Klick auf
+    # *Prüfbericht* sieht — nach mehreren Runden, denn die Karten setzen ihre
+    # Höhe einmal je Ereignisdurchlauf (``fenster.md``).
+    window.right.setCurrentWidget(report)
+    for _ in range(10):
+        QApplication.processEvents()
     assert report.search.geometry().bottom() < report.list.geometry().top(), (
         "Filter und Liste dürfen nicht übereinanderliegen: "
         f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
@@ -8215,7 +8297,8 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
 
     window.object_tree.select_object(object_id)
     QApplication.processEvents()
-    assert vorn() == set(QUICK_BODY), "ohne Merkmal zählt wieder die Menge"
+    # Wieder der eine Körper, also wieder mit *Modell nachbauen* (RM-508).
+    assert vorn() == {*QUICK_BODY, REBUILD}, "ohne Merkmal zählt wieder die Menge"
 
 
 def test_a_divider_of_an_organizer_answers_as_the_organizer(window: MainWindow) -> None:
@@ -13471,8 +13554,19 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
         if action not in built and not in_the_menu_bar(REGISTRY.get(name).category)
     ]
     assert rechts, "keine Handlung rechts — dann prüft dieser Test den zweiten Ort nicht"
+    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
+
+    palette = {entry.name for entry in window.palette_rows()}
     for name in rechts:
-        assert menu_path(REGISTRY.get(name)).startswith("Handlungen rechts"), name
+        spec = REGISTRY.get(name)
+        if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:
+            # **Eine Handlung für alle Körper ohne Platz in der Karte nennt die
+            # Palette** (RM-506): Sie steht nur ohne Auswahl, und dort trägt die
+            # Karte allein *Druckoptimal ausrichten*.
+            assert menu_path(spec) == f"Befehlspalette → {spec.title}", name
+            assert name in palette, f"{name}: in der Palette genannt, dort keine Zeile"
+            continue
+        assert menu_path(spec).startswith("Handlungen rechts"), name
 
 
 def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
@@ -15832,8 +15926,12 @@ def test_a_new_warning_signals_the_report_tab_without_taking_the_card(
     weitere ist wieder neu. Offscreen steht die Tönung ohne Blinken gleich
     fest (``motion.animations_enabled``).
     """
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QColor, QPalette
+
     from app.core.types import Finding
     from app.ui.palette import ROLES
+    from app.ui.tab_signal import counted
 
     index = window.right.indexOf(window.report)
     bar = window.right_tabs
@@ -15844,6 +15942,24 @@ def test_a_new_warning_signals_the_report_tab_without_taking_the_card(
     assert bar.signalled() == index
     tint = bar.tint()
     assert tint is not None and tint.name() == ROLES["warning"], "gelb bei einer Warnung"
+    # **Ungesehen nicht nur als Farbe** (Regel 18; Durchsicht 0.5.3, Fund 4):
+    # ein Punkt in der Schriftfarbe vor dem Namen, „ungelesen“ in Tooltip und
+    # zugänglichem Namen — die ruhende Tönung allein hatte 1,2 bis 1,7 : 1.
+    # Gezeigt, damit die Leiste ihre Breite hat und der Reiter im Bild liegt.
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
+    mark = bar.unseen_mark()
+    assert mark is not None and QRectF(bar.tabRect(index)).contains(mark)
+    picture = bar.grab().toImage()
+    assert picture.rect().contains(mark.center().toPoint())
+    ink = bar.palette().color(QPalette.ColorRole.WindowText)
+    assert QColor(picture.pixel(mark.center().toPoint())).name() == ink.name(), "der Punkt steht da"
+    counts = tr("1 Warnung")
+    assert bar.tabToolTip(index) == tr("{counts}, ungelesen", counts=counts)
+    assert bar.accessibleTabName(index) == tr(
+        "{tab}, {counts}, ungelesen", tab=bar.tabText(index), counts=counts
+    )
 
     window.report.add_findings([Finding(code="b", severity="error", message="zwei")])
     tint = bar.tint()
@@ -15851,6 +15967,11 @@ def test_a_new_warning_signals_the_report_tab_without_taking_the_card(
 
     window.right.setCurrentWidget(window.report)
     assert bar.signalled() == -1 and bar.tint() is None, "im Bericht gewesen heißt: gesehen"
+    assert bar.unseen_mark() is None, "gesehen: kein Punkt"
+    assert tr("ungelesen") not in bar.accessibleTabName(index)
+    assert bar.accessibleTabName(index) == tr(
+        "{tab}, {counts}", tab=bar.tabText(index), counts=counted(1, 1)
+    )
     window.right.setCurrentWidget(window.chat)
     window._mark_report_tab()
     assert bar.signalled() == -1, "Gesehenes blinkt nicht wieder"
@@ -15858,6 +15979,45 @@ def test_a_new_warning_signals_the_report_tab_without_taking_the_card(
     window.report.add_findings([Finding(code="c", severity="warning", message="drei")])
     tint = bar.tint()
     assert tint is not None and tint.name() == ROLES["warning"], "die neue Warnung allein: gelb"
+
+
+def test_a_finished_blink_leaves_no_animation_behind(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jede neue Meldung startet ein Blinken; ist es vorbei, ist es weg.
+
+    Bis zur Durchsicht 0.5.3 blieb jede beendete ``QVariantAnimation`` als Kind
+    der Reiterleiste liegen — gemessen 20 nach 20 Zyklen. Bewegung endet mit
+    ``DeleteWhenStopped`` (``app/ui/CLAUDE.md``). Offscreen blinkt nichts, also
+    wird die Bewegung hier eingeschaltet und auf wenige Millisekunden verkürzt.
+    """
+    from PySide6.QtCore import QVariantAnimation
+    from PySide6.QtWidgets import QTabWidget, QWidget
+
+    from app.ui import tab_signal
+
+    monkeypatch.setattr(tab_signal, "animations_enabled", lambda: True)
+    monkeypatch.setattr(tab_signal, "CYCLE_MS", 5)
+    monkeypatch.setattr(tab_signal, "CYCLES", 1)
+    tabs = QTabWidget()
+    bar = tab_signal.SignalTabBar(tabs)
+    tabs.setTabBar(bar)
+    tabs.addTab(QWidget(), "Auswahl")
+    tabs.addTab(QWidget(), "Bericht")
+    tabs.setCurrentIndex(0)
+    try:
+        for _ in range(5):
+            bar.signal(1, error=False, warning=True, fresh=True)
+            assert bar._pulse is not None, "es blinkt"
+            wait_until(qt_app, lambda: bar._pulse is None)
+            bar.calm()
+        for _ in range(3):
+            qt_app.processEvents()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        qt_app.processEvents()
+        assert not bar.findChildren(QVariantAnimation), "keine beendete Animation bleibt liegen"
+    finally:
+        tabs.deleteLater()
 
 
 def test_the_status_counter_brings_the_report_even_during_a_tour(window: MainWindow) -> None:
@@ -15948,18 +16108,29 @@ def test_a_menu_entry_gets_its_description_back_when_it_works_again(window: Main
     Sonst bleibt „Wählen Sie dafür ein Objekt aus" an einem Eintrag stehen,
     der längst geht — und der Beschreibungssatz, den er eigentlich trägt, wäre
     für immer weg.
+
+    **Zurück kommt, was der Eintrag beim Bau trug** (``_operation_action``):
+    in der Statuszeile der erste Satz der ``doc`` (RM-509), im Tooltip dazu
+    die Grenze aus ``caveat_line``. Zurückgestellt wurde der Tooltip aus der
+    Statuszeile, und die Grenze fehlte nach der ersten Sperre — an jedem Start
+    (Durchsicht 0.5.3). Geprüft deshalb an einem Eintrag mit Grenze.
     """
     from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import caveat_line, first_sentence
 
     window._update_actions()
     name = next(
         entry
         for entry, action in window._op_actions.items()
-        if not action.isEnabled() and REGISTRY.get(entry).consumes == 1
+        if not action.isEnabled()
+        and REGISTRY.get(entry).consumes == 1
+        and REGISTRY.get(entry).caveat
+        and window._reason_locked(REGISTRY.get(entry), [], 1, 1) is None
     )
     spec = REGISTRY.get(name)
     action = window._op_actions[name]
-    assert action.toolTip() != str(spec.doc), "der gesperrte Eintrag nennt keinen Grund"
+    sentence = first_sentence(str(spec.doc))
+    assert action.toolTip() != sentence, "der gesperrte Eintrag nennt seinen Grund"
 
     # Derselbe Eintrag, aber jetzt liegt genug vor: ein Objekt in der Szene und
     # eines ausgewählt. Geprüft wird die Rückstellung und nicht der Szenenaufbau
@@ -15973,9 +16144,10 @@ def test_a_menu_entry_gets_its_description_back_when_it_works_again(window: Main
     # Beschreibungssatz zurückgibt.
     window._kind_hint(action, window._reason_locked(spec, [], 1, spec.consumes), False)
 
-    assert action.toolTip().strip() == str(spec.doc).strip(), (
-        "Der Grund blieb stehen, obwohl der Eintrag wieder geht — dann ist der "
-        "Beschreibungssatz für immer weg."
+    assert action.statusTip() == sentence
+    assert action.toolTip() == f"{sentence}\n\n{caveat_line(spec)}", (
+        "Der Grund blieb stehen oder die Grenze fehlt, obwohl der Eintrag wieder "
+        "geht — dann ist der Beschreibungssatz für immer weg."
     )
 
 
@@ -16628,14 +16800,16 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     window.session.wait_for_idle()
     body = next(iter(window.session.last_result.scene.objects))
     # Seit P2.8 bohrt *Bohrung setzen* am exakten Körper exakt; was ihn zum
-    # Netz macht, ist ein Aushöhlen mit Entlüftung (Konzept §10.1).
+    # Netz macht, ist ein geschlossenes Aushöhlen mit Entlüftung (Konzept
+    # §10.1). Oben offen bleibt er exakt, auch mit Entlüftung im Schritt
+    # (Durchsicht 0.5.3, Fund 2).
     window.session.apply(
         "Aushöhlen",
         [
             OperationDraft(
                 op="hollow_object",
                 inputs=[body],
-                params={"wall": 2.0, "open_top": True, "vents": 2},
+                params={"wall": 2.0, "open_top": False, "vents": 2},
             )
         ],
     )
@@ -20975,6 +21149,7 @@ def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
     nebeneinander: derselbe Ansichtspunkt, derselbe Abstand, dieselbe Marke am
     selben Körper — nur der Titel ist der des Fehlers.
     """
+    from contextlib import nullcontext
     from types import SimpleNamespace
 
     calls: list[tuple[str, Any]] = []
@@ -20997,6 +21172,9 @@ def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
         _quiet_command_allowed=lambda: True,
         _entry_of=lambda _error: entry,
         _finding_awaiting_map=object(),
+        # *Stelle zeigen* wählt den Körper, ohne den Bericht zu verdecken
+        # (``_SelectionPage.held``).
+        feature_dock=SimpleNamespace(held=nullcontext),
     )
     view._show_finding_at = lambda *args: MainWindow._show_finding_at(view, *args)  # type: ignore[arg-type]
     place = (1.0, 2.0, 3.0)

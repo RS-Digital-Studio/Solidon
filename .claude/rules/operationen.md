@@ -417,11 +417,11 @@ Flächen ist keine (`not_evidenced`).
 `openings` nennt fehlende Flächen, `vents` bohrt in einen sonst geschlossenen
 Hohlraum; `open_at` bleibt für gespeicherte Schritte, mit `openings` eine
 Absage; Resin erweitert `vents`. Ein offener Hohlraum bekommt keine Entlüftung.
-Exakt (`shell_exact` bei offener Oberseite ohne Entlüftung, sonst Netzweg mit
-Befund; `MakeThickSolidByJoin`) zählt nur ein gültiger, geschlossener und
-veränderter Körper; ohne Innenwand fragt das Raster nach Platz —
-`hollow.too_thin` oder `exact_fallback` (fragen über `ctx.ask`, Dreiecksmodell
-mit Befund, oder lassen). Nie still der Netzweg.
+Exakt (`shell_exact` bei offener Oberseite, sonst Netzweg mit Befund;
+`MakeThickSolidByJoin`) zählt nur ein gültiger, geschlossener und veränderter
+Körper; ohne Innenwand fragt das Raster nach Platz — `hollow.too_thin` oder
+`exact_fallback` (fragen über `ctx.ask`, Dreiecksmodell mit Befund, oder
+lassen). Nie still der Netzweg.
 
 ## Menütiefe: gefaltet wird hinten, nicht beim Größten
 

@@ -548,7 +548,7 @@ class SelectionOperationsPanel(QWidget):
         tip = tr("Baut den Körper aus erkannten Formen nach; seine Maße werden danach änderbar.")
         rebuild.setToolTip(tip)
         rebuild.setAccessibleDescription(tip)
-        rebuild.clicked.connect(lambda _checked=False: self.rebuildRequested.emit())
+        rebuild.clicked.connect(self.rebuildRequested)
         rebuild.hide()
         self._quick_buttons[REBUILD] = rebuild
         self.rebuild_button = rebuild
@@ -577,9 +577,7 @@ class SelectionOperationsPanel(QWidget):
         # Befehlspalette mit demselben Wort.
         self._everywhere = QPushButton(tr("In allen Funktionen suchen"), self)
         self._everywhere.setVisible(False)
-        self._everywhere.clicked.connect(
-            lambda _checked=False: self.paletteRequested.emit(self._query.strip())
-        )
+        self._everywhere.clicked.connect(self._search_everywhere)
 
         content = QWidget(self)
         content_layout = QVBoxLayout(content)
@@ -1087,6 +1085,14 @@ class SelectionOperationsPanel(QWidget):
             quick.append(REBUILD)
         self._lay_out_quick(tuple(quick))
         self._filter()
+
+    def _search_everywhere(self) -> None:
+        """*In allen Funktionen suchen*: die Befehlspalette mit demselben Wort.
+
+        Eine Methode statt eines Lambdas: Am eigenen Kind hielte es die Karte
+        stark (``wartezeit.md``, „Ein Rückruf an ein eigenes Kind hält schwach“).
+        """
+        self.paletteRequested.emit(self._query.strip())
 
     def _filter(self, query: str | None = None) -> None:
         """Nur die Darstellung filtern; Registereinträge und Knöpfe bleiben bestehen.

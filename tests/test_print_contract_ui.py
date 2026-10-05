@@ -124,7 +124,16 @@ def test_empty_report_stays_compact_beside_a_taller_hidden_tab(qt_app):
         qt_app.processEvents()
         collapsed = natural_height(tabs)
         assert collapsed < 400, "ein verborgener Reiter bestimmt nicht die Kartenhöhe"
-        assert panel.summary.height() <= panel.summary.heightForWidth(panel.summary.width()) + 2
+        # Seit RM-508 steht der Zustand in der Kopfzeile neben seinen Klappen:
+        # so hoch wie die Zeile, nicht höher.
+        row = max(
+            widget.sizeHint().height()
+            for widget in (panel.review_symbol, panel.list_toggle, panel.review_toggle)
+            if not widget.isHidden()
+        )
+        assert panel.summary.height() <= (
+            max(panel.summary.heightForWidth(panel.summary.width()), row) + 2
+        )
         panel.review_toggle.click()
         qt_app.processEvents()
         assert natural_height(tabs) <= collapsed + 4 * TARGET_SIZE + 20
@@ -612,9 +621,9 @@ def test_reopened_container_step_previews_unchanged_or_the_new_lid(qt_app, lid):
 
     Unverändert geöffnet sagt das Band, dass sich nichts ändert — nicht „Keine
     Vorschau“, auch wenn der Kern vorab einen Hinweis zum Deckel meldet. Mit
-    Steckdeckel nennt die Erklärung beide Körper, die Körperzahl und die
-    Außenmaße aus denselben Szenen. Der echte Fensterweg: Vorschauauftrag,
-    Arbeiter, Antwort, Band.
+    Steckdeckel nennt die Erklärung beide Körper und ihre Außenmaße aus
+    denselben Szenen, die gleich bleibende Körperzahl nicht (RM-516). Der echte
+    Fensterweg: Vorschauauftrag, Arbeiter, Antwort, Band.
     """
     from app.core.lid_flow import plan_container, plan_container_edit
     from app.ui.main_window import _PreviewOrder
@@ -650,8 +659,13 @@ def test_reopened_container_step_previews_unchanged_or_the_new_lid(qt_app, lid):
         if lid is None:
             assert "ändert sich nichts" in note, note
         else:
-            assert "Körperzahl: 2 → 2" in note, note
-            assert note.count("Außenmaß") == 2, note
+            # Seit RM-516 nennt das Band nur, was sich ändert: Die Körperzahl
+            # bleibt (zwei vorher, zwei nachher) und steht nicht da, das
+            # Außenmaß beider Körper schon, je mit Vorher und Nachher.
+            assert "Körperzahl" not in note, note
+            change = next(line for line in note.splitlines() if "„Behälter“" in line)
+            assert "„Deckel“" in change, note
+            assert change.count("→") == 2, note
         assert len(session.project.document.ops) == steps, "die Vorschau ändert nichts"
     finally:
         window._may_discard = lambda: True
@@ -956,13 +970,21 @@ def _report_with(findings, *, width=440, height=500):
 
 
 def test_the_head_is_one_line_and_counts_leave_out_zeros(qt_app):
-    """Status, Zähler und Prüfumfang in einer Zeile; „0 x Fehler“ steht nicht da."""
+    """Status, Zähler und Prüfumfang in einer Zeile; „0 x Fehler“ steht nicht da.
+
+    **Eine Zeile, solange sie passt** (RM-508, ``ReportPanel._fit_head``): Ob
+    sie bei 440 Punkten passt, hängt an der Schrift — offscreen und mit der
+    Schrift der Linux-CI nicht. Geprüft wird deshalb in zwei Breiten, die in
+    jeder Schrift eindeutig sind: breit eine Zeile, schmal steht der
+    Prüfumfang darunter, und die Zähler bleiben ganz.
+    """
     panel = _report_with(
         [
             Finding("a.warn", "warning", "Eine Warnung.", object_id="a"),
             Finding("a.note", "info", "Ein Hinweis.", object_id="a"),
             Finding("b.note", "info", "Noch ein Hinweis.", object_id="a"),
-        ]
+        ],
+        width=1600,
     )
     try:
         qt_app.processEvents()
@@ -970,11 +992,21 @@ def test_the_head_is_one_line_and_counts_leave_out_zeros(qt_app):
         assert panel.list_toggle.text() == "1 Warnung · 2 Hinweise"
         assert "0" not in panel.list_toggle.text()
         assert panel.review_reason.isHidden(), "eine vollständige Bewertung braucht keinen Grund"
-        tops = {
-            widget.mapTo(panel, widget.rect().center()).y() // 8
-            for widget in (panel.summary, panel.list_toggle, panel.review_toggle)
-        }
-        assert len(tops) == 1, "eine Zeile"
+
+        def tops() -> set[int]:
+            return {
+                widget.mapTo(panel, widget.rect().center()).y() // 8
+                for widget in (panel.summary, panel.list_toggle, panel.review_toggle)
+            }
+
+        assert len(tops()) == 1, "eine Zeile"
+        panel.resize(300, 500)
+        qt_app.processEvents()
+        assert len(tops()) == 2, "zu schmal: der Prüfumfang steht darunter"
+        assert panel.list_toggle.text() == "1 Warnung · 2 Hinweise", "die Zähler bleiben ganz"
+        panel.resize(1600, 500)
+        qt_app.processEvents()
+        assert len(tops()) == 1, "wieder breit: wieder eine Zeile"
         assert not panel.facts.isVisibleTo(panel), "die Kennzahlen stehen im Prüfumfang"
         panel.review_toggle.click()
         qt_app.processEvents()
@@ -1125,6 +1157,52 @@ def test_the_list_keeps_three_rows_when_the_room_is_short(qt_app):
             if viewport.contains(panel.list.visualItemRect(panel.list.item(row)))
         )
         assert whole >= LEAST_REPORT_ROWS, whole
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_the_least_height_reads_only_the_rows_it_keeps(qt_app, monkeypatch):
+    """Die Mindesthöhe misst die drei Zeilen, die sie hält, nicht jede (Durchsicht 0.5.3).
+
+    Sie läuft in ``minimumSizeHint`` und ``updateGeometries``; über alle Zeilen
+    gerechnet kostete sie bei 300 Befunden offscreen 11,6 ms je Aufruf. Die
+    erste Zeile ist verborgen: Gezählt werden sichtbare, und die Höhe bleibt
+    die der ersten drei davon.
+    """
+    from app.ui.panels import LEAST_REPORT_ROWS
+
+    findings = [
+        Finding(f"a.note_{index}", "info", f"Hinweis {index}.", object_id="a")
+        for index in range(40)
+    ]
+    panel = _report_with(findings, width=360, height=600)
+    try:
+        qt_app.processEvents()
+        listing = panel.list
+        listing.item(0).setHidden(True)
+        # Die Liste legt ihre Zeilen über einen Nullzeitgeber; ein noch
+        # ausstehendes Legen riefe die Rechnung mitten im Messen ein zweites Mal.
+        for _round in range(4):
+            qt_app.processEvents()
+        measured: list[int] = []
+        sized = listing.sizeHintForRow
+
+        def counted(row: int) -> int:
+            measured.append(row)
+            return sized(row)
+
+        monkeypatch.setattr(listing, "sizeHintForRow", counted)
+        least = listing._least_rows()
+        kept = [1, 2, 3][:LEAST_REPORT_ROWS]
+        # Ein Zeilenmaß kann ein Legen nachholen, und das fragt die Mindesthöhe
+        # noch einmal; auch dann nur dieselben drei Zeilen.
+        assert measured[: len(kept)] == kept and set(measured) <= set(kept), measured
+        expected = sum(
+            max(listing.visualRect(listing.indexFromItem(listing.item(row))).height(), sized(row))
+            for row in kept
+        )
+        assert least == expected + 2 * listing.frameWidth()
     finally:
         panel.close()
         panel.deleteLater()

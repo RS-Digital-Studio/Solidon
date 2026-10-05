@@ -79,6 +79,43 @@ def test_cached_target_follows_language_without_reading_the_scene_again():
         set_language(original)
 
 
+def test_the_target_names_build_volume_and_nozzle_in_the_display_unit():
+    """Bauraum und Düse in der Anzeigeeinheit, wie der Druckdialog die Düse zeigt.
+
+    „Düse: 0,40 mm“ stand auch bei eingestellten Zoll, und der Bauraum trug
+    sein „mm“ im Katalogtext (Durchsicht 0.5.3, Fund 13; ``oberflaeche.md``,
+    „Die Einheit gehört in den Wert“). Die Sollwerte rechnen aus dem Profil:
+    25,4 mm je Zoll, vier Stellen in Zoll, zwei in Millimetern
+    (``units._UNIT_DECIMALS``), der Bauraum ohne Nullen am Ende.
+    """
+    from app.ui.labels import set_display_unit
+
+    document = new_project("centauri-carbon-2", "petg").document
+    printer = profiles.printer_profiles()["centauri-carbon-2"]
+    x, y, z = printer.build_volume
+
+    def inches(value: float) -> str:
+        return f"{value / 25.4:.4f}".rstrip("0").rstrip(".").replace(".", ",")
+
+    def millimetres(value: float) -> str:
+        return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+    try:
+        set_display_unit("in")
+        details = print_target(document, None).details
+        assert f"Bauraum: {inches(x)} × {inches(y)} × {inches(z)} in" in details, details
+        nozzle = f"{printer.nozzle_diameter / 25.4:.4f}".replace(".", ",")
+        assert f"Düse: {nozzle} in" in details, details
+        assert "mm" not in details, details
+        set_display_unit("mm")
+        details = print_target(document, None).details
+        assert f"Bauraum: {millimetres(x)} × {millimetres(y)} × {millimetres(z)} mm" in details
+        nozzle = f"{printer.nozzle_diameter:.2f}".replace(".", ",")
+        assert f"Düse: {nozzle} mm" in details, details
+    finally:
+        set_display_unit("mm")
+
+
 @pytest.mark.parametrize(
     "severity, incomplete, expected",
     [
@@ -408,10 +445,22 @@ def test_the_place_is_named_and_shown_only_where_the_finding_has_one():
         ("Zum Beispiel z. B. eine Bohrung.", "Zum Beispiel z. B. eine Bohrung."),
         ("Use a finer nozzle, e.g. the 0.2 mm one.", "Use a finer nozzle, e.g. the 0.2 mm one."),
         ("Deckel erzeugt — das Spiel kommt aus dem Materialprofil.", None),
+        ("Das Teil ist ca. 20 mm zu breit. Das Teil drehen.", "Das Teil ist ca. 20 mm zu breit."),
+        (
+            "Schritt Nr. 4 hält die Kette an. Den Schritt ändern.",
+            "Schritt Nr. 4 hält die Kette an.",
+        ),
+        ("Die Kette hält an. „Schritt korrigieren“ öffnet ihn.", "Die Kette hält an."),
     ],
 )
 def test_a_report_row_reads_as_its_first_sentence(message, expected):
-    """Die Liste zeigt je Befund seinen ersten Satz; die gewählte Zeile steht ganz da (RM-508)."""
+    """Die Liste zeigt je Befund seinen ersten Satz; die gewählte Zeile steht ganz da (RM-508).
+
+    Wo ein Satz endet, sagt dieselbe Regel, mit der der Längenwächter zählt
+    (``surfaces.sentences``, RM-509): „ca.“ und „Nr.“ beenden keinen, ein Satz
+    in Anführungszeichen beginnt einen. Eine eigene Regel der Liste schnitt
+    „Das Teil ist ca.“ ab (Durchsicht 0.5.3, Fund 6).
+    """
     from app.ui.panels import headline
 
     assert headline(message) == (message if expected is None else expected)

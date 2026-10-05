@@ -643,7 +643,10 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
     assert "PLA Schwarz — 2 Körper" in zeilen, f"zwei Körper tragen es: {zeilen}"
     assert "PETG Rot — 1 Körper" in zeilen, f"einer trägt es: {zeilen}"
-    assert sum(line.startswith("PETG Rot") for line in zeilen) == 1
+    # Die Regalzeile heißt seit RM-513 nur noch „PETG Rot“ (C16: das Material
+    # steht nicht zweimal, ein unbekannter Bestand gar nicht).
+    assert sum(line.startswith("PETG Rot —") for line in zeilen) == 1, zeilen
+    assert zeilen.count("PETG Rot") == 1, f"im Regal steht die Spule einmal: {zeilen}"
     regal = [panel.list.item(index) for index in range(panel.list.count())]
     assert not any(" g übrig" in item.text() for item in regal), "Altbestand wird nicht geraten"
     assert any("Bestand unbekannt" in (item.toolTip() or "") for item in regal), (
@@ -764,10 +767,11 @@ def test_a_used_filament_separates_colour_from_print_values(
         for index in range(panel.list.count())
         if "Körper" in panel.list.item(index).text()
     )
+    # Die Regalzeile nennt nur den Namen (RM-513, C16).
     regal = next(
         panel.list.item(index)
         for index in range(panel.list.count())
-        if panel.list.item(index).text().startswith("PETG Rot ·")
+        if panel.list.item(index).text() == "PETG Rot"
     )
 
     assert benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "Druckwerte müssen erreichbar sein"
@@ -829,10 +833,9 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
     filaments.save(filaments.CatalogueFilament("PLA Weiß", "#f2f2f0"))
     panel = FilamentPanel()
     panel.show_scene([])
+    # Die Regalzeile nennt nur den Namen (RM-513, C16).
     row = next(
-        index
-        for index in range(panel.list.count())
-        if panel.list.item(index).text().startswith("PLA Weiß ·")
+        index for index in range(panel.list.count()) if panel.list.item(index).text() == "PLA Weiß"
     )
     panel.list.setCurrentRow(row)
 
@@ -846,8 +849,7 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
         "aus dem Katalog, nicht nur aus der Liste"
     )
     assert not any(
-        panel.list.item(index).text().startswith("PLA Weiß ·")
-        for index in range(panel.list.count())
+        panel.list.item(index).text() == "PLA Weiß" for index in range(panel.list.count())
     )
     assert filaments.catalogue(include_archived=True)[0].archived
 
